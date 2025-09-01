@@ -11,6 +11,7 @@
 ## terrain
 
 - "3D field inspection" (https://skfb.ly/oJx7N) by matousekfoto is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+- https://polyhaven.com/a/gravel_floor
 
 ## human
 
