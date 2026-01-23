@@ -36,7 +36,7 @@ class NetworkManager {
   private maxReconnectAttempts = 5
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-  connect(serverUrl: string = 'ws://localhost:8080') {
+  connect(serverUrl: string = 'ws://192.168.0.17:8080') {
     if (this.socket?.readyState === WebSocket.OPEN) {
       console.log('Already connected, skipping connection attempt')
       return

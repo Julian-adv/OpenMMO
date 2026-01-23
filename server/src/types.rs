@@ -46,6 +46,8 @@ pub enum ClientMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ServerMessage {
+    #[serde(rename = "join_success")]
+    JoinSuccess { player: Player },
     #[serde(rename = "player_joined")]
     PlayerJoined { player: Player },
     #[serde(rename = "player_left")]
