@@ -1,5 +1,5 @@
 use crate::game_state::GameState;
-use crate::types::{ClientMessage, Player, PlayerId};
+use crate::types::{ClientMessage, Player, PlayerId, ServerMessage};
 use futures_util::{SinkExt, StreamExt};
 use serde_json;
 use std::sync::Arc;
@@ -30,12 +30,23 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         info!("Received message: {}", text);
-                        if let Err(e) = handle_client_message(
-                            &text, 
-                            &game_state, 
+                        match handle_client_message(
+                            &text,
+                            &game_state,
                             &mut player_id
                         ).await {
-                            error!("Error handling client message: {} - message was: {}", e, text);
+                            Ok(Some(response)) => {
+                                // Send direct response to this client
+                                if let Ok(json) = serde_json::to_string(&response) {
+                                    if let Err(e) = ws_sender.send(Message::Text(json)).await {
+                                        error!("Failed to send direct response to client: {}", e);
+                                    }
+                                }
+                            }
+                            Ok(None) => {}
+                            Err(e) => {
+                                error!("Error handling client message: {} - message was: {}", e, text);
+                            }
                         }
                     }
                     Some(Ok(Message::Close(_))) => {
@@ -89,23 +100,27 @@ async fn handle_client_message(
     message: &str,
     game_state: &Arc<GameState>,
     player_id: &mut Option<PlayerId>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Option<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = serde_json::from_str(message)?;
 
     match client_msg {
         ClientMessage::Join { player_name } => {
             if player_id.is_some() {
                 warn!("Player already joined, ignoring join request");
-                return Ok(());
+                return Ok(None);
             }
 
             let player = Player::new(player_name);
             let id = player.id.clone();
-            
+
+            // Send join_success directly to this client
+            let response = ServerMessage::JoinSuccess { player: player.clone() };
+
             game_state.add_player(player).await;
             *player_id = Some(id);
-            
+
             info!("Player joined with ID: {:?}", player_id);
+            return Ok(Some(response));
         }
 
         ClientMessage::PlayerMove { position } => {
@@ -125,5 +140,5 @@ async fn handle_client_message(
         }
     }
 
-    Ok(())
+    Ok(None)
 }

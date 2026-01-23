@@ -15,7 +15,7 @@ async fn main() {
 
     let game_state = Arc::new(GameState::new());
     
-    let addr = "127.0.0.1:8080";
+    let addr = "0.0.0.0:8080";
     let listener = match TcpListener::bind(addr).await {
         Ok(listener) => {
             info!("MMORPG Server listening on: {}", addr);

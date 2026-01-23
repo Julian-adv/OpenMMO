@@ -9,6 +9,14 @@
   import PlayerControl, { type PlayerState } from './PlayerControl.svelte'
   import SplatTerrain from './SplatTerrain.svelte'
 
+  interface Props {
+    serverUrl: string
+    playerName: string
+    password: string
+  }
+
+  let { serverUrl, playerName, password: _password }: Props = $props()
+
   let currentPlayer = $state<Player | null>(null)
   let otherPlayers = $state(new Map())
   let camera = $state<THREE.PerspectiveCamera | undefined>(undefined)
@@ -147,11 +155,11 @@
     lastFrameTime = performance.now()
     gameLoopId = requestAnimationFrame(gameLoop)
 
-    networkManager.connect()
+    networkManager.connect(serverUrl)
 
-    // Join the game with a default player name
+    // Join the game with the player name from login
     setTimeout(() => {
-      networkManager.joinGame('Player')
+      networkManager.joinGame(playerName)
     }, 1000)
 
     // Initialize camera position after a short delay to ensure camera ref is available
