@@ -131,6 +131,7 @@ class NetworkManager {
         const player: Player = {
           ...message.player,
           position: playerPosition,
+          targetPosition: playerPosition.clone(),
           maxHealth: message.player.max_health,
         }
         gameStore.update((state) => {
@@ -164,12 +165,13 @@ class NetworkManager {
         break
 
       case 'player_moved': {
-        const position = new Vector3(
+        const targetPosition = new Vector3(
           message.position.x,
           message.position.y,
           message.position.z
         )
-        updatePlayer(message.player_id, { position })
+        // Set targetPosition for interpolation instead of directly setting position
+        updatePlayer(message.player_id, { targetPosition })
         break
       }
 
@@ -190,6 +192,7 @@ class NetworkManager {
               const player: Player = {
                 ...serverPlayer,
                 position: playerPos,
+                targetPosition: playerPos.clone(),
                 maxHealth: serverPlayer.max_health,
               }
               newOtherPlayers.set(serverPlayer.id, player)

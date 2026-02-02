@@ -1,4 +1,9 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+
+  const STORAGE_KEY_SERVER = 'onlinerpg_lastServerUrl'
+  const STORAGE_KEY_PLAYER = 'onlinerpg_lastPlayerName'
+
   interface Props {
     onLogin: (serverUrl: string, playerName: string, password: string) => void
   }
@@ -10,6 +15,18 @@
   let password = $state('')
   let isConnecting = $state(false)
   let errorMessage = $state('')
+
+  onMount(() => {
+    const savedServerUrl = localStorage.getItem(STORAGE_KEY_SERVER)
+    const savedPlayerName = localStorage.getItem(STORAGE_KEY_PLAYER)
+
+    if (savedServerUrl) {
+      serverUrl = savedServerUrl
+    }
+    if (savedPlayerName) {
+      playerName = savedPlayerName
+    }
+  })
 
   function handleSubmit(event: Event) {
     event.preventDefault()
@@ -31,6 +48,10 @@
 
     errorMessage = ''
     isConnecting = true
+
+    // Save to localStorage for next time
+    localStorage.setItem(STORAGE_KEY_SERVER, serverUrl.trim())
+    localStorage.setItem(STORAGE_KEY_PLAYER, playerName.trim())
 
     onLogin(serverUrl.trim(), playerName.trim(), password.trim())
   }

@@ -270,6 +270,9 @@
     }
     isMoving = true
 
+    // Send target position to server when movement starts
+    networkManager.sendPlayerMove(clickPosition)
+
     updatePlayerState()
   }
 

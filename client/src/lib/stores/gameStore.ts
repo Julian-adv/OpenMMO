@@ -5,6 +5,7 @@ export interface Player {
   id: string
   name: string
   position: Vector3
+  targetPosition?: Vector3 // For remote player interpolation
   level: number
   health: number
   maxHealth: number
