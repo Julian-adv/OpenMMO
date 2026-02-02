@@ -137,11 +137,13 @@ class NetworkManager {
           // If we don't have a current player yet, this might be us
           if (!state.currentPlayer) {
             console.log('Setting current player from player_joined:', player)
-            state.currentPlayer = player
+            return { ...state, currentPlayer: player }
           } else if (message.player.id !== state.currentPlayer.id) {
             // This is another player
-            state.otherPlayers.set(message.player.id, player)
+            const newOtherPlayers = new Map(state.otherPlayers)
+            newOtherPlayers.set(message.player.id, player)
             addChatMessage(`${message.player.name} joined the game`)
+            return { ...state, otherPlayers: newOtherPlayers }
           }
           return state
         })
@@ -152,8 +154,10 @@ class NetworkManager {
         gameStore.update((state) => {
           const player = state.otherPlayers.get(message.player_id)
           if (player) {
-            state.otherPlayers.delete(message.player_id)
+            const newOtherPlayers = new Map(state.otherPlayers)
+            newOtherPlayers.delete(message.player_id)
             addChatMessage(`${player.name} left the game`)
+            return { ...state, otherPlayers: newOtherPlayers }
           }
           return state
         })
@@ -175,7 +179,7 @@ class NetworkManager {
 
       case 'game_state':
         gameStore.update((state) => {
-          state.otherPlayers.clear()
+          const newOtherPlayers = new Map<string, Player>()
           Object.values(message.players).forEach((serverPlayer) => {
             if (serverPlayer.id !== state.currentPlayer?.id) {
               const playerPos = new Vector3(
@@ -188,10 +192,10 @@ class NetworkManager {
                 position: playerPos,
                 maxHealth: serverPlayer.max_health,
               }
-              state.otherPlayers.set(serverPlayer.id, player)
+              newOtherPlayers.set(serverPlayer.id, player)
             }
           })
-          return state
+          return { ...state, otherPlayers: newOtherPlayers }
         })
         break
     }

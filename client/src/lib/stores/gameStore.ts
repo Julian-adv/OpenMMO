@@ -29,11 +29,16 @@ export const gameStore = writable<GameState>(initialGameState)
 export const updatePlayer = (playerId: string, playerData: Partial<Player>) => {
   gameStore.update((state) => {
     if (state.currentPlayer && state.currentPlayer.id === playerId) {
-      state.currentPlayer = { ...state.currentPlayer, ...playerData }
+      return {
+        ...state,
+        currentPlayer: { ...state.currentPlayer, ...playerData },
+      }
     } else {
       const existingPlayer = state.otherPlayers.get(playerId)
       if (existingPlayer) {
-        state.otherPlayers.set(playerId, { ...existingPlayer, ...playerData })
+        const newOtherPlayers = new Map(state.otherPlayers)
+        newOtherPlayers.set(playerId, { ...existingPlayer, ...playerData })
+        return { ...state, otherPlayers: newOtherPlayers }
       }
     }
     return state
@@ -42,10 +47,11 @@ export const updatePlayer = (playerId: string, playerData: Partial<Player>) => {
 
 export const addChatMessage = (message: string) => {
   gameStore.update((state) => {
-    state.chatMessages.push(message)
-    if (state.chatMessages.length > 100) {
-      state.chatMessages = state.chatMessages.slice(-100)
+    const newMessages = [...state.chatMessages, message]
+    return {
+      ...state,
+      chatMessages:
+        newMessages.length > 100 ? newMessages.slice(-100) : newMessages,
     }
-    return state
   })
 }
