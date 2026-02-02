@@ -1,6 +1,6 @@
-mod types;
-mod game_state;
 mod connection;
+mod game_state;
+mod types;
 
 use connection::handle_connection;
 use game_state::GameState;
@@ -14,7 +14,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let game_state = Arc::new(GameState::new());
-    
+
     let addr = "0.0.0.0:8080";
     let listener = match TcpListener::bind(addr).await {
         Ok(listener) => {
@@ -36,7 +36,7 @@ async fn main() {
             Ok((stream, addr)) => {
                 info!("New connection from: {}", addr);
                 let game_state_clone = Arc::clone(&game_state);
-                
+
                 tokio::spawn(async move {
                     handle_connection(stream, game_state_clone).await;
                 });

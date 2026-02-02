@@ -24,7 +24,11 @@ impl Player {
         Self {
             id: Uuid::new_v4().to_string(),
             name,
-            position: Position { x: 0.0, y: 0.0, z: 0.0 },
+            position: Position {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
             level: 1,
             health: 100,
             max_health: 100,
@@ -53,9 +57,15 @@ pub enum ServerMessage {
     #[serde(rename = "player_left")]
     PlayerLeft { player_id: String },
     #[serde(rename = "player_moved")]
-    PlayerMoved { player_id: String, position: Position },
+    PlayerMoved {
+        player_id: String,
+        position: Position,
+    },
     #[serde(rename = "chat_message")]
-    ChatMessage { player_name: String, message: String },
+    ChatMessage {
+        player_name: String,
+        message: String,
+    },
     #[serde(rename = "game_state")]
     GameState { players: HashMap<String, Player> },
 }

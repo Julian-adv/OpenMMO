@@ -30,22 +30,26 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         info!("Received message: {}", text);
-                        match handle_client_message(
-                            &text,
-                            &game_state,
-                            &mut player_id
-                        ).await {
-                            Ok(Some(response)) => {
-                                // Send direct response to this client
-                                if let Ok(json) = serde_json::to_string(&response) {
-                                    if let Err(e) = ws_sender.send(Message::Text(json)).await {
-                                        error!("Failed to send direct response to client: {}", e);
+                        match handle_client_message(&text, &game_state, &mut player_id).await
+                        {
+                            Ok(responses) => {
+                                // Send all direct responses to this client
+                                for response in responses {
+                                    if let Ok(json) = serde_json::to_string(&response) {
+                                        if let Err(e) = ws_sender.send(Message::Text(json)).await {
+                                            error!(
+                                                "Failed to send direct response to client: {}",
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
-                            Ok(None) => {}
                             Err(e) => {
-                                error!("Error handling client message: {} - message was: {}", e, text);
+                                error!(
+                                    "Error handling client message: {} - message was: {}",
+                                    e, text
+                                );
                             }
                         }
                     }
@@ -92,7 +96,7 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
     if let Some(id) = player_id {
         game_state.remove_player(&id).await;
     }
-    
+
     info!("Connection handler finished");
 }
 
@@ -100,27 +104,32 @@ async fn handle_client_message(
     message: &str,
     game_state: &Arc<GameState>,
     player_id: &mut Option<PlayerId>,
-) -> Result<Option<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = serde_json::from_str(message)?;
 
     match client_msg {
         ClientMessage::Join { player_name } => {
             if player_id.is_some() {
                 warn!("Player already joined, ignoring join request");
-                return Ok(None);
+                return Ok(vec![]);
             }
 
             let player = Player::new(player_name);
             let id = player.id.clone();
 
             // Send join_success directly to this client
-            let response = ServerMessage::JoinSuccess { player: player.clone() };
+            let mut responses = vec![ServerMessage::JoinSuccess {
+                player: player.clone(),
+            }];
 
-            game_state.add_player(player).await;
+            // add_player returns game_state if there are other players
+            if let Some(game_state_msg) = game_state.add_player(player).await {
+                responses.push(game_state_msg);
+            }
             *player_id = Some(id);
 
             info!("Player joined with ID: {:?}", player_id);
-            return Ok(Some(response));
+            return Ok(responses);
         }
 
         ClientMessage::PlayerMove { position } => {
@@ -140,5 +149,5 @@ async fn handle_client_message(
         }
     }
 
-    Ok(None)
+    Ok(vec![])
 }

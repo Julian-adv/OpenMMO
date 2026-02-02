@@ -16,7 +16,7 @@ pub struct GameState {
 impl GameState {
     pub fn new() -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
-        
+
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
@@ -27,19 +27,22 @@ impl GameState {
         self.broadcast_tx.subscribe()
     }
 
-    pub async fn add_player(&self, player: Player) {
+    pub async fn add_player(&self, player: Player) -> Option<ServerMessage> {
         let player_id = player.id.clone();
         let player_name = player.name.clone();
-        
+
         {
             let mut players = self.players.write().await;
             players.insert(player_id.clone(), player.clone());
         }
 
         info!("Player {} ({}) joined the game", player_name, player_id);
-        
-        let _ = self.broadcast_tx.send(ServerMessage::PlayerJoined { player });
-        
+
+        let _ = self
+            .broadcast_tx
+            .send(ServerMessage::PlayerJoined { player });
+
+        // Return game_state to be sent directly to the new player only
         let current_players = self.players.read().await;
         if current_players.len() > 1 {
             let other_players: HashMap<String, Player> = current_players
@@ -47,22 +50,24 @@ impl GameState {
                 .filter(|(id, _)| *id != &player_id)
                 .map(|(id, player)| (id.clone(), player.clone()))
                 .collect();
-            
+
             if !other_players.is_empty() {
-                let _ = self.broadcast_tx.send(ServerMessage::GameState { 
-                    players: other_players 
+                return Some(ServerMessage::GameState {
+                    players: other_players,
                 });
             }
         }
+
+        None
     }
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
         let mut players = self.players.write().await;
-        
+
         if let Some(player) = players.remove(player_id) {
             info!("Player {} ({}) left the game", player.name, player_id);
-            let _ = self.broadcast_tx.send(ServerMessage::PlayerLeft { 
-                player_id: player_id.clone() 
+            let _ = self.broadcast_tx.send(ServerMessage::PlayerLeft {
+                player_id: player_id.clone(),
             });
         } else {
             warn!("Attempted to remove non-existent player: {}", player_id);
@@ -71,7 +76,7 @@ impl GameState {
 
     pub async fn update_player_position(&self, player_id: &PlayerId, new_position: Position) {
         let mut players = self.players.write().await;
-        
+
         if let Some(player) = players.get_mut(player_id) {
             player.position = new_position.clone();
             let _ = self.broadcast_tx.send(ServerMessage::PlayerMoved {
@@ -85,7 +90,7 @@ impl GameState {
 
     pub async fn send_chat_message(&self, player_id: &PlayerId, message: String) {
         let players = self.players.read().await;
-        
+
         if let Some(player) = players.get(player_id) {
             info!("Chat message from {}: {}", player.name, message);
             let _ = self.broadcast_tx.send(ServerMessage::ChatMessage {
