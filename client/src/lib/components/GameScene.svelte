@@ -20,6 +20,7 @@
   let currentPlayer = $state<Player | null>(null)
   let otherPlayers = $state(new Map())
   let camera = $state<THREE.PerspectiveCamera | undefined>(undefined)
+  let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let groundMesh = $state<THREE.Mesh | undefined>(undefined)
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let cameraInitialized = $state(false)
@@ -27,6 +28,9 @@
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
   const CAMERA_OFFSET = { x: 0, y: 5, z: 5 } // Relative to player
+
+  // Light follow system - offset relative to player
+  const LIGHT_OFFSET = { x: 10, y: 10, z: 10 }
 
   // Game loop
   let gameLoopId = $state<number | null>(null)
@@ -87,6 +91,9 @@
       // Update camera with preserved offset
       updateCameraWithOffset(cameraOffset)
 
+      // Update directional light to follow player
+      updateLightPosition()
+
       lastFrameTime = currentTime
     }
 
@@ -136,6 +143,25 @@
 
     // Update camera target to look at player
     cameraTarget = [playerPos.x, playerPos.y, playerPos.z]
+  }
+
+  function updateLightPosition() {
+    if (!currentPlayer || !directionalLight) return
+
+    const playerPos = currentPlayer.position
+
+    // Update light position to follow player with fixed offset
+    directionalLight.position.set(
+      playerPos.x + LIGHT_OFFSET.x,
+      playerPos.y + LIGHT_OFFSET.y,
+      playerPos.z + LIGHT_OFFSET.z
+    )
+
+    // Update shadow camera target to look at player
+    if (directionalLight.target) {
+      directionalLight.target.position.set(playerPos.x, playerPos.y, playerPos.z)
+      directionalLight.target.updateMatrixWorld()
+    }
   }
 
   // Stop game loop
@@ -207,7 +233,20 @@
   />
 </T.PerspectiveCamera>
 
-<T.DirectionalLight position={[10, 10, 10]} intensity={1.5} castShadow />
+<T.DirectionalLight
+  bind:ref={directionalLight}
+  position={[10, 10, 10]}
+  intensity={1.5}
+  castShadow
+  shadow.camera.left={-50}
+  shadow.camera.right={50}
+  shadow.camera.top={50}
+  shadow.camera.bottom={-50}
+  shadow.camera.near={0.5}
+  shadow.camera.far={100}
+  shadow.mapSize.width={2048}
+  shadow.mapSize.height={2048}
+/>
 <T.AmbientLight intensity={0.4} />
 
 <Grid
