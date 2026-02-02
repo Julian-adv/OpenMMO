@@ -59,6 +59,9 @@
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
 
+  // Load sword model
+  const swordGltf = useLoader(GLTFLoader).load('/models/sword.glb')
+
   // Animation system - following gpt-all-in-one.html approach
   let mixer: THREE.AnimationMixer | null = null
   let currentAction: THREE.AnimationAction | null = null
@@ -141,6 +144,85 @@
           child.receiveShadow = true
         }
       })
+
+      // Attach sword to right hand if sword model is loaded
+      if ($swordGltf) {
+        console.log('Attaching sword to hand')
+
+        // Find the right hand bone (main hand bone, not finger bones)
+        let rightHandBone: THREE.Bone | undefined
+        cloned.traverse((obj) => {
+          if (obj instanceof THREE.Bone) {
+            const boneName = obj.name.toLowerCase()
+            // Match only the main hand bone, exclude finger bones (thumb, index, middle, ring, pinky)
+            if (
+              (boneName.includes('righthand') ||
+                boneName.includes('right_hand') ||
+                boneName.includes('hand_r') ||
+                boneName.includes('hand.r')) &&
+              !boneName.includes('thumb') &&
+              !boneName.includes('index') &&
+              !boneName.includes('middle') &&
+              !boneName.includes('ring') &&
+              !boneName.includes('pinky')
+            ) {
+              console.log(`Found main right hand bone: ${obj.name}`)
+              rightHandBone = obj
+            }
+          }
+        })
+
+        if (rightHandBone) {
+          // Clone the sword model
+          const swordClone = $swordGltf.scene.clone()
+
+          // Debug: Log sword model info
+          console.log('Sword model info:', {
+            position: swordClone.position,
+            rotation: swordClone.rotation,
+            scale: swordClone.scale,
+            children: swordClone.children.length,
+          })
+
+          // Debug: Log all meshes in sword
+          let meshCount = 0
+          swordClone.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              meshCount++
+              console.log('Sword mesh:', {
+                name: child.name,
+                geometry: child.geometry,
+                material: child.material,
+                visible: child.visible,
+              })
+              child.castShadow = true
+              child.receiveShadow = true
+            }
+          })
+          console.log(`Total sword meshes: ${meshCount}`)
+
+          // Adjust sword position and rotation to fit in hand
+          // Try much larger scale to make it visible (sword might be very small)
+          // swordClone.position.set(0, 0.1, 0)
+          // swordClone.rotation.set(-Math.PI / 2, 0, 0)
+          // swordClone.scale.set(100, 100, 100)
+
+          // Attach sword to hand bone
+          rightHandBone.add(swordClone)
+          console.log('Sword attached successfully to', rightHandBone.name)
+          console.log('Hand bone position:', rightHandBone.position)
+        } else {
+          console.warn('Could not find right hand bone')
+          // Log all bone names to help with debugging
+          const boneNames: string[] = []
+          cloned.traverse((obj) => {
+            if (obj instanceof THREE.Bone) {
+              boneNames.push(obj.name)
+            }
+          })
+          console.log('Available bones:', boneNames)
+        }
+      }
 
       // Filter animations to only include tracks that match model nodes
       const animations = $gltf.animations || []

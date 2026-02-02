@@ -5,7 +5,7 @@
 
   let { onLogin }: Props = $props()
 
-  let serverUrl = $state('ws://192.168.0.17:8080')
+  let serverUrl = $state('ws://127.0.0.1:8080')
   let playerName = $state('')
   let password = $state('')
   let isConnecting = $state(false)
