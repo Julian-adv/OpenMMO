@@ -2,13 +2,7 @@
 
 ## Code Quality Workflow
 
-When modifying code in this project, always follow these steps:
-
-1. **Make code changes** - Edit the necessary files
-2. **Format code** - Execute `npm run format` to format code with Prettier
-3. **Run linting** - Execute `npm run lint` in the client directory to check for code style issues
-4. **Fix any lint errors** - Address all ESLint warnings and errors
-5. **Run type checking** - Execute `npm run check` to verify TypeScript types
+Before committing code changes, always use the `commit-agent` to ensure code quality checks are performed automatically.
 
 ## Common Commands
 

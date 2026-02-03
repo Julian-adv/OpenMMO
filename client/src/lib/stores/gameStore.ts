@@ -11,11 +11,18 @@ export interface Player {
   maxHealth: number
 }
 
+export interface ChatBubble {
+  playerId: string
+  message: string
+  timestamp: number
+}
+
 export interface GameState {
   isConnected: boolean
   currentPlayer: Player | null
   otherPlayers: Map<string, Player>
   chatMessages: string[]
+  chatBubbles: Map<string, ChatBubble> // playerId -> ChatBubble
 }
 
 const initialGameState: GameState = {
@@ -23,6 +30,7 @@ const initialGameState: GameState = {
   currentPlayer: null,
   otherPlayers: new Map(),
   chatMessages: [],
+  chatBubbles: new Map(),
 }
 
 export const gameStore = writable<GameState>(initialGameState)
@@ -54,5 +62,25 @@ export const addChatMessage = (message: string) => {
       chatMessages:
         newMessages.length > 100 ? newMessages.slice(-100) : newMessages,
     }
+  })
+}
+
+export const addChatBubble = (playerId: string, message: string) => {
+  gameStore.update((state) => {
+    const newChatBubbles = new Map(state.chatBubbles)
+    newChatBubbles.set(playerId, {
+      playerId,
+      message,
+      timestamp: Date.now(),
+    })
+    return { ...state, chatBubbles: newChatBubbles }
+  })
+}
+
+export const removeChatBubble = (playerId: string) => {
+  gameStore.update((state) => {
+    const newChatBubbles = new Map(state.chatBubbles)
+    newChatBubbles.delete(playerId)
+    return { ...state, chatBubbles: newChatBubbles }
   })
 }

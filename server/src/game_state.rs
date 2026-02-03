@@ -94,7 +94,7 @@ impl GameState {
         if let Some(player) = players.get(player_id) {
             info!("Chat message from {}: {}", player.name, message);
             let _ = self.broadcast_tx.send(ServerMessage::ChatMessage {
-                player_name: player.name.clone(),
+                player_id: player_id.clone(),
                 message,
             });
         } else {

@@ -309,11 +309,21 @@
 
   // Keyboard event handlers
   function handleKeyDown(event: KeyboardEvent) {
+    // Ignore keyboard input when typing in input fields
+    const target = event.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return
+    }
     keysPressed.add(event.code)
     event.preventDefault()
   }
 
   function handleKeyUp(event: KeyboardEvent) {
+    // Ignore keyboard input when typing in input fields
+    const target = event.target as HTMLElement
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      return
+    }
     keysPressed.delete(event.code)
     event.preventDefault()
   }
