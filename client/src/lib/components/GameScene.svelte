@@ -4,7 +4,12 @@
   import * as THREE from 'three'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
-  import { gameStore, type Player } from '../stores/gameStore'
+  import {
+    gameStore,
+    type Player,
+    type ChatBubble,
+    removeChatBubble,
+  } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import PlayerModel from './PlayerModel.svelte'
   import PlayerControl, { type PlayerState } from './PlayerControl.svelte'
@@ -20,6 +25,7 @@
 
   let currentPlayer = $state<Player | null>(null)
   let otherPlayers = $state(new Map())
+  let chatBubbles = $state<Map<string, ChatBubble>>(new Map())
   let camera = $state<THREE.PerspectiveCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let groundMesh = $state<THREE.Mesh | undefined>(undefined)
@@ -208,10 +214,23 @@
     })
   }
 
+  const CHAT_BUBBLE_DURATION = 5000 // 5 seconds
+
   gameStore.subscribe((state) => {
     currentPlayer = state.currentPlayer
     otherPlayers = state.otherPlayers
+    chatBubbles = state.chatBubbles
   })
+
+  // Check for expired chat bubbles periodically
+  function checkExpiredChatBubbles() {
+    const now = Date.now()
+    for (const [playerId, bubble] of chatBubbles) {
+      if (now - bubble.timestamp > CHAT_BUBBLE_DURATION) {
+        removeChatBubble(playerId)
+      }
+    }
+  }
 
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
@@ -336,6 +355,9 @@
     lastFrameTime = performance.now()
     gameLoopId = requestAnimationFrame(gameLoop)
 
+    // Start chat bubble expiration checker
+    const chatBubbleCheckInterval = setInterval(checkExpiredChatBubbles, 1000)
+
     networkManager.connect(serverUrl)
 
     // Join the game with the player name from login
@@ -372,6 +394,7 @@
 
     return () => {
       stopGameLoop()
+      clearInterval(chatBubbleCheckInterval)
       networkManager.disconnect()
     }
   })
@@ -438,6 +461,7 @@
     speed={currentPlayerState.speed}
     rotation={currentPlayerState.direction}
     cameraPosition={camera.position}
+    chatBubble={chatBubbles.get(currentPlayer.id)?.message}
   />
 {/if}
 
@@ -461,6 +485,7 @@
       speed={remoteState.speed}
       rotation={remoteState.rotation}
       cameraPosition={camera.position}
+      chatBubble={chatBubbles.get(player.id)?.message}
     />
   {/each}
 {/if}

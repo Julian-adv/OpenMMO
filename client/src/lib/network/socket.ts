@@ -1,4 +1,10 @@
-import { gameStore, updatePlayer, addChatMessage } from '../stores/gameStore'
+import { get } from 'svelte/store'
+import {
+  gameStore,
+  updatePlayer,
+  addChatMessage,
+  addChatBubble,
+} from '../stores/gameStore'
 import type { Player } from '../stores/gameStore'
 import { Vector3 } from 'three'
 
@@ -26,7 +32,7 @@ type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
   | { type: 'player_left'; player_id: string }
   | { type: 'player_moved'; player_id: string; position: Position }
-  | { type: 'chat_message'; player_name: string; message: string }
+  | { type: 'chat_message'; player_id: string; message: string }
   | { type: 'game_state'; players: Record<string, ServerPlayer> }
   | { type: 'join_success'; player: ServerPlayer }
 
@@ -175,9 +181,16 @@ class NetworkManager {
         break
       }
 
-      case 'chat_message':
-        addChatMessage(`${message.player_name}: ${message.message}`)
+      case 'chat_message': {
+        const state = get(gameStore)
+        const playerName =
+          state.currentPlayer?.id === message.player_id
+            ? state.currentPlayer.name
+            : (state.otherPlayers.get(message.player_id)?.name ?? 'Unknown')
+        addChatMessage(`${playerName}: ${message.message}`)
+        addChatBubble(message.player_id, message.message)
         break
+      }
 
       case 'game_state':
         gameStore.update((state) => {

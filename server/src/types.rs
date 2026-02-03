@@ -62,10 +62,7 @@ pub enum ServerMessage {
         position: Position,
     },
     #[serde(rename = "chat_message")]
-    ChatMessage {
-        player_name: String,
-        message: String,
-    },
+    ChatMessage { player_id: String, message: String },
     #[serde(rename = "game_state")]
     GameState { players: HashMap<String, Player> },
 }

@@ -17,6 +17,7 @@
     speed: number
     rotation: number
     cameraPosition: Vector3
+    chatBubble?: string
   }
 
   let {
@@ -27,22 +28,25 @@
     speed: _speed,
     rotation,
     cameraPosition,
+    chatBubble,
   }: Props = $props()
 
-  // Calculate nametag rotation to face camera in world space
-  function calculateNametagRotation(): [number, number, number] {
+  // Calculate rotation to face camera in world space
+  function calculateBillboardRotation(
+    heightOffset: number
+  ): [number, number, number] {
     if (!cameraPosition) {
       return [0, 0, 0]
     }
 
-    // Calculate vector from nametag world position to camera
-    const nametagWorldX = position.x
-    const nametagWorldY = position.y + 2.5 // 2.5 is nametag height
-    const nametagWorldZ = position.z
+    // Calculate vector from world position to camera
+    const worldX = position.x
+    const worldY = position.y + heightOffset
+    const worldZ = position.z
 
-    const dx = cameraPosition.x - nametagWorldX
-    const dy = cameraPosition.y - nametagWorldY
-    const dz = cameraPosition.z - nametagWorldZ
+    const dx = cameraPosition.x - worldX
+    const dy = cameraPosition.y - worldY
+    const dz = cameraPosition.z - worldZ
 
     // Calculate yaw angle (y rotation) first - horizontal direction to camera
     const yaw = Math.atan2(dx, dz)
@@ -54,6 +58,16 @@
     const pitch = -Math.atan2(dy, horizontalDistance)
 
     return [pitch, yaw, 0]
+  }
+
+  // Calculate nametag rotation to face camera in world space
+  function calculateNametagRotation(): [number, number, number] {
+    return calculateBillboardRotation(2.5)
+  }
+
+  // Calculate chat bubble rotation to face camera in world space
+  function calculateChatBubbleRotation(): [number, number, number] {
+    return calculateBillboardRotation(3.2)
   }
 
   // Load animated model
@@ -361,3 +375,28 @@
   anchorX="center"
   anchorY="middle"
 />
+
+<!-- Chat bubble (appears above player when they send a message) -->
+{#if chatBubble}
+  <!-- Chat bubble background -->
+  <T.Mesh
+    position={[position.x, position.y + 3.2, position.z]}
+    rotation={calculateChatBubbleRotation()}
+  >
+    <T.PlaneGeometry
+      args={[Math.min(chatBubble.length * 0.15 + 0.4, 4), 0.5]}
+    />
+    <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} />
+  </T.Mesh>
+  <!-- Chat bubble text -->
+  <Text
+    text={chatBubble.length > 25 ? chatBubble.slice(0, 25) + '...' : chatBubble}
+    position={[position.x, position.y + 3.2, position.z + 0.01]}
+    rotation={calculateChatBubbleRotation()}
+    fontSize={0.25}
+    color="#ffffff"
+    anchorX="center"
+    anchorY="middle"
+    maxWidth={3.5}
+  />
+{/if}
