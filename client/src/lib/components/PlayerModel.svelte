@@ -18,7 +18,7 @@
     speed: number
     rotation: number
     totalDistance?: number
-    cameraPosition: Vector3
+    camera: THREE.PerspectiveCamera | undefined
     chatBubble?: string
   }
 
@@ -30,7 +30,7 @@
     speed: _speed,
     rotation,
     totalDistance,
-    cameraPosition,
+    camera,
     chatBubble,
   }: Props = $props()
 
@@ -38,7 +38,7 @@
   function calculateBillboardRotation(
     heightOffset: number
   ): [number, number, number] {
-    if (!cameraPosition) {
+    if (!camera) {
       return [0, 0, 0]
     }
 
@@ -47,9 +47,9 @@
     const worldY = position.y + heightOffset
     const worldZ = position.z
 
-    const dx = cameraPosition.x - worldX
-    const dy = cameraPosition.y - worldY
-    const dz = cameraPosition.z - worldZ
+    const dx = camera.position.x - worldX
+    const dy = camera.position.y - worldY
+    const dz = camera.position.z - worldZ
 
     // Calculate yaw angle (y rotation) first - horizontal direction to camera
     const yaw = Math.atan2(dx, dz)
@@ -388,5 +388,5 @@
 
 <!-- Chat bubble (appears above player when they send a message) -->
 {#if chatBubble}
-  <ChatBubble {position} {cameraPosition} message={chatBubble} />
+  <ChatBubble {position} {camera} message={chatBubble} />
 {/if}

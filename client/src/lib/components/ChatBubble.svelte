@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { T } from '@threlte/core'
+  import { T, useTask } from '@threlte/core'
   import { Text } from '@threlte/extras'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
 
   interface Props {
     position: Vector3
-    cameraPosition: Vector3
+    camera: THREE.PerspectiveCamera | undefined
     message: string
   }
 
-  let { position, cameraPosition, message }: Props = $props()
+  let { position, camera, message }: Props = $props()
 
   const HEIGHT_OFFSET = 3.2
   const PADDING_X = 0.4
@@ -19,30 +19,32 @@
   let textBounds = $state({ width: 1, height: 0.3 })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let textRef = $state<any>(null)
+  let bubbleGroup = $state<THREE.Group | undefined>(undefined)
 
   function handleTextSync() {
     if (textRef?.textRenderInfo?.blockBounds) {
       const [minX, minY, maxX, maxY] = textRef.textRenderInfo.blockBounds
       textBounds = {
         width: maxX - minX,
-        height: maxY - minY
+        height: maxY - minY,
       }
     }
   }
 
   // Calculate rotation to face camera in world space
   function calculateBillboardRotation(): [number, number, number] {
-    if (!cameraPosition) {
+    if (!camera) {
       return [0, 0, 0]
     }
 
     const worldX = position.x
-    const worldY = position.y + HEIGHT_OFFSET
+    // Camera is targeting the player's feet, so compute rotation from the feet.
+    const rotationOriginY = position.y
     const worldZ = position.z
 
-    const dx = cameraPosition.x - worldX
-    const dy = cameraPosition.y - worldY
-    const dz = cameraPosition.z - worldZ
+    const dx = camera.position.x - worldX
+    const dy = camera.position.y - rotationOriginY
+    const dz = camera.position.z - worldZ
 
     const yaw = Math.atan2(dx, dz)
     const horizontalDistance = Math.sqrt(dx * dx + dz * dz)
@@ -105,33 +107,32 @@
 </script>
 
 <!-- Chat bubble background -->
-<T.Mesh
+<T.Group
+  bind:ref={bubbleGroup}
   position={[position.x, position.y + HEIGHT_OFFSET, position.z]}
   rotation={calculateBillboardRotation()}
 >
-  <T.ShapeGeometry args={[bubbleShape]} />
-  <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} />
-</T.Mesh>
+  <T.Mesh position={[0, 0, 0]}>
+    <T.ShapeGeometry args={[bubbleShape]} />
+    <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} />
+  </T.Mesh>
 
-<!-- Chat bubble border (white line) -->
-<T.LineLoop
-  position={[position.x, position.y + HEIGHT_OFFSET, position.z + 0.001]}
-  rotation={calculateBillboardRotation()}
->
-  <T is={createBorderGeometry(bubbleShape)} />
-  <T.LineBasicMaterial color="#ffffff" />
-</T.LineLoop>
+  <!-- Chat bubble border (white line) -->
+  <T.LineLoop position={[0, 0, 0.001]}>
+    <T is={createBorderGeometry(bubbleShape)} />
+    <T.LineBasicMaterial color="#ffffff" />
+  </T.LineLoop>
 
-<!-- Chat bubble text -->
-<Text
-  bind:ref={textRef}
-  text={displayText}
-  position={[position.x, position.y + HEIGHT_OFFSET, position.z + 0.01]}
-  rotation={calculateBillboardRotation()}
-  fontSize={0.25}
-  color="#ffffff"
-  anchorX="center"
-  anchorY="middle"
-  maxWidth={3.5}
-  onsync={handleTextSync}
-/>
+  <!-- Chat bubble text -->
+  <Text
+    bind:ref={textRef}
+    text={displayText}
+    position={[0, 0, 0.01]}
+    fontSize={0.25}
+    color="#ffffff"
+    anchorX="center"
+    anchorY="middle"
+    maxWidth={3.5}
+    onsync={handleTextSync}
+  />
+</T.Group>
