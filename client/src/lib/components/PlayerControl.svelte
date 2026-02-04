@@ -4,6 +4,14 @@
   import * as THREE from 'three'
   import { gameStore, type Player } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
+  import {
+    calculateMovementStep,
+    initMovementState,
+    DEFAULT_MOVEMENT_CONFIG,
+    type Position,
+    type MovementState,
+    type MovementConfig,
+  } from '../utils/movementUtils'
 
   export interface PlayerState {
     state: 'idle' | 'moving'
@@ -24,26 +32,18 @@
   let keysPressed = $state(new Set<string>())
 
   // Movement system
-  let movementTarget = $state<{ x: number; y: number; z: number } | null>(null)
+  let movementTarget = $state<Position | null>(null)
   let isMoving = $state(false)
-  let movementStartPosition = $state<{
-    x: number
-    y: number
-    z: number
-  } | null>(null)
-  const MOVEMENT_SPEED = 3 // units per second
-  const ACCELERATION = 6 // units per second squared
-  const DECELERATION = 6 // units per second squared (same as acceleration for smooth feel)
+  let movementState = $state<MovementState | null>(null)
 
-  // Pre-calculate constant distances
-  const ACCELERATION_DISTANCE =
-    (MOVEMENT_SPEED * MOVEMENT_SPEED) / (2 * ACCELERATION)
-  const DECELERATION_DISTANCE =
-    (MOVEMENT_SPEED * MOVEMENT_SPEED) / (2 * DECELERATION)
+  // Use the same movement config as remote players
+  const MOVEMENT_CONFIG: MovementConfig = {
+    ...DEFAULT_MOVEMENT_CONFIG,
+  }
 
   // Character rotation and current speed
   let playerRotation = $state(0)
-  let currentSpeed = $state(0) // Current movement speed
+  let currentSpeed = $state(0)
 
   // Current player state
   let playerState = $state<PlayerState>({
@@ -76,7 +76,7 @@
 
     const newState: PlayerState = {
       state: isMoving ? 'moving' : 'idle',
-      speed: currentSpeed, // Use actual current speed instead of fixed MOVEMENT_SPEED
+      speed: currentSpeed,
       direction: playerRotation,
       position: currentPosition,
     }
@@ -84,7 +84,7 @@
     // Only update if state actually changed
     if (
       newState.state !== playerState.state ||
-      Math.abs(newState.speed - playerState.speed) > 0.01 || // Small tolerance for speed changes
+      Math.abs(newState.speed - playerState.speed) > 0.01 ||
       newState.direction !== playerState.direction ||
       Math.abs(newState.position.x - playerState.position.x) > 0.01 ||
       Math.abs(newState.position.z - playerState.position.z) > 0.01
@@ -96,12 +96,7 @@
 
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
-    if (
-      !isMoving ||
-      !movementTarget ||
-      !currentPlayer ||
-      !movementStartPosition
-    ) {
+    if (!isMoving || !movementTarget || !currentPlayer || !movementState) {
       // Reset speed when not moving
       if (currentSpeed > 0) {
         currentSpeed = 0
@@ -110,39 +105,28 @@
       return
     }
 
-    const dx = movementTarget.x - movementStartPosition.x
-    const dz = movementTarget.z - movementStartPosition.z
-    const totalDistance = Math.sqrt(dx * dx + dz * dz)
-
-    // Calculate current position
-    const currentX = currentPlayer.position.x
-    const currentZ = currentPlayer.position.z
-    const remainingDx = movementTarget.x - currentX
-    const remainingDz = movementTarget.z - currentZ
-    const remainingDistance = Math.sqrt(
-      remainingDx * remainingDx + remainingDz * remainingDz
-    )
-
-    // Determine which phase we're in and update speed directly
-    const traveledDistance = totalDistance - remainingDistance
-    const deltaTimeSeconds = deltaTime / 1000 // Convert milliseconds to seconds
-
-    if (traveledDistance < ACCELERATION_DISTANCE) {
-      // Acceleration phase - increase speed
-      currentSpeed = Math.min(
-        currentSpeed + ACCELERATION * deltaTimeSeconds,
-        MOVEMENT_SPEED
-      )
-    } else if (remainingDistance > DECELERATION_DISTANCE) {
-      // Cruise phase - maintain max speed
-      currentSpeed = MOVEMENT_SPEED
-    } else {
-      // Deceleration phase - decrease speed
-      currentSpeed = Math.max(currentSpeed - DECELERATION * deltaTimeSeconds, 0)
+    const currentPos: Position = {
+      x: currentPlayer.position.x,
+      y: currentPlayer.position.y,
+      z: currentPlayer.position.z,
     }
 
-    // Check if we've reached the destination
-    if (remainingDistance < 0.01 || currentSpeed <= 0.001) {
+    const deltaTimeSeconds = deltaTime / 1000
+
+    // Use the shared movement calculation
+    const result = calculateMovementStep(
+      currentPos,
+      movementState,
+      MOVEMENT_CONFIG,
+      deltaTimeSeconds
+    )
+
+    // Update movement state speed
+    movementState.currentSpeed = result.newSpeed
+    currentSpeed = result.newSpeed
+    playerRotation = result.rotation
+
+    if (result.arrived) {
       // Movement complete
       gameStore.update((state) => {
         if (state.currentPlayer && movementTarget) {
@@ -160,27 +144,22 @@
 
       isMoving = false
       movementTarget = null
-      movementStartPosition = null
+      movementState = null
       currentSpeed = 0
     } else {
       // Continue movement
-      const direction = {
-        x: remainingDx / remainingDistance,
-        z: remainingDz / remainingDistance,
-      }
-
-      const moveDistance = currentSpeed * deltaTimeSeconds
-      const newX = currentX + direction.x * moveDistance
-      const newZ = currentZ + direction.z * moveDistance
-
       gameStore.update((state) => {
         if (state.currentPlayer) {
-          state.currentPlayer.position.set(newX, movementTarget!.y, newZ)
+          state.currentPlayer.position.set(
+            result.newPos.x,
+            result.newPos.y,
+            result.newPos.z
+          )
         }
         return state
       })
     }
-    updatePlayerState() // Call updatePlayerState immediately after setting isMoving = false
+    updatePlayerState()
   }
 
   // Keyboard movement system
@@ -192,8 +171,7 @@
     // Cancel click-to-move if keyboard input detected
     if (keysPressed.size > 0 && movementTarget) {
       movementTarget = null
-      movementStartPosition = null
-      // isMoving will be set by keyboard movement below
+      movementState = null
     }
 
     // Calculate movement direction based on pressed keys
@@ -214,8 +192,8 @@
     // Apply keyboard movement if any keys are pressed
     if (moveX !== 0 || moveZ !== 0) {
       // Use fixed speed for keyboard movement (instant response)
-      currentSpeed = MOVEMENT_SPEED
-      const speed = MOVEMENT_SPEED * (1000 / 120 / 1000) // Adjust for frame rate (120 FPS target)
+      currentSpeed = MOVEMENT_CONFIG.maxSpeed
+      const speed = MOVEMENT_CONFIG.maxSpeed * (1000 / 120 / 1000) // Adjust for frame rate (120 FPS target)
       const newX = currentPlayer.position.x + moveX * speed
       const newZ = currentPlayer.position.z + moveZ * speed
 
@@ -249,25 +227,23 @@
   }
 
   // Handle click-to-move
-  export function handleClickToMove(clickPosition: {
-    x: number
-    y: number
-    z: number
-  }) {
+  export function handleClickToMove(clickPosition: Position) {
     if (!currentPlayer || isMoving || keysPressed.size > 0) return
 
-    // Calculate rotation to face target direction
-    const dx = clickPosition.x - currentPlayer.position.x
-    const dz = clickPosition.z - currentPlayer.position.z
-    playerRotation = Math.atan2(dx, dz)
-
-    // Set movement target and start moving
-    movementTarget = clickPosition
-    movementStartPosition = {
+    const currentPos: Position = {
       x: currentPlayer.position.x,
       y: currentPlayer.position.y,
       z: currentPlayer.position.z,
     }
+
+    // Calculate rotation to face target direction
+    const dx = clickPosition.x - currentPos.x
+    const dz = clickPosition.z - currentPos.z
+    playerRotation = Math.atan2(dx, dz)
+
+    // Initialize movement state using shared utility
+    movementState = initMovementState(currentPos, clickPosition, 0)
+    movementTarget = clickPosition
     isMoving = true
 
     // Send target position to server when movement starts
@@ -296,7 +272,7 @@
 
     if (intersects.length > 0) {
       const point = intersects[0].point
-      const clickPosition = {
+      const clickPosition: Position = {
         x: point.x,
         y: 0, // Position player on ground level
         z: point.z,

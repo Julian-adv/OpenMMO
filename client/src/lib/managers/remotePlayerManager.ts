@@ -1,15 +1,14 @@
 import { SvelteMap } from 'svelte/reactivity'
 import type { Player } from '../stores/gameStore'
-
-// Movement settings for remote players (should match PlayerControl)
-const REMOTE_MOVEMENT_SPEED = 3 // units per second (same as local player)
-const REMOTE_ACCELERATION = 6 // units per second squared
-const REMOTE_DECELERATION = 6 // units per second squared
-const ACCEL_DISTANCE =
-  (REMOTE_MOVEMENT_SPEED * REMOTE_MOVEMENT_SPEED) / (2 * REMOTE_ACCELERATION)
-const DECEL_DISTANCE =
-  (REMOTE_MOVEMENT_SPEED * REMOTE_MOVEMENT_SPEED) / (2 * REMOTE_DECELERATION)
-const MOVEMENT_THRESHOLD = 0.05 // Distance threshold to consider "stopped"
+import {
+  calculateMovementStep,
+  initMovementState,
+  hasTargetChanged,
+  DEFAULT_MOVEMENT_CONFIG,
+  type Position,
+  type MovementState,
+  type MovementConfig,
+} from '../utils/movementUtils'
 
 export interface RemotePlayerState {
   state: 'idle' | 'moving'
@@ -17,17 +16,11 @@ export interface RemotePlayerState {
   rotation: number
 }
 
-export interface Position {
-  x: number
-  y: number
-  z: number
-}
+export type { Position }
 
-interface MovementData {
-  startPos: Position
-  targetPos: Position
-  totalDistance: number
-  currentSpeed: number
+// Use the same movement config as local player
+const MOVEMENT_CONFIG: MovementConfig = {
+  ...DEFAULT_MOVEMENT_CONFIG,
 }
 
 class RemotePlayerManager {
@@ -38,7 +31,7 @@ class RemotePlayerManager {
   positions = new SvelteMap<string, Position>()
 
   // Remote player movement data (for acceleration/deceleration)
-  private movementData = new SvelteMap<string, MovementData>()
+  private movementData = new SvelteMap<string, MovementState>()
 
   // Move remote players toward their target positions with acceleration/deceleration
   update(deltaTime: number, otherPlayers: Map<string, Player>) {
@@ -61,101 +54,48 @@ class RemotePlayerManager {
 
       // Get or initialize movement data
       let movement = this.movementData.get(playerId)
-      const targetChanged =
-        !movement ||
-        movement.targetPos.x !== targetPos.x ||
-        movement.targetPos.y !== targetPos.y ||
-        movement.targetPos.z !== targetPos.z
+      const targetChanged = hasTargetChanged(movement, targetPos)
 
       if (targetChanged) {
         // New target - initialize movement from current position
-        const tdx = targetPos.x - currentPos.x
-        const tdy = targetPos.y - currentPos.y
-        const tdz = targetPos.z - currentPos.z
-        const totalDistance = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz)
-
-        movement = {
-          startPos: { ...currentPos },
-          targetPos: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-          totalDistance,
-          currentSpeed: movement?.currentSpeed ?? 0,
-        }
+        movement = initMovementState(
+          currentPos,
+          targetPos,
+          movement?.currentSpeed ?? 0
+        )
         this.movementData.set(playerId, movement)
       }
 
       // movement is guaranteed to be defined after above block
       if (!movement) return
 
-      // Calculate distances
-      const dx = targetPos.x - currentPos.x
-      const dy = targetPos.y - currentPos.y
-      const dz = targetPos.z - currentPos.z
-      const remainingDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      // Calculate movement step
+      const result = calculateMovementStep(
+        currentPos,
+        movement,
+        MOVEMENT_CONFIG,
+        dt
+      )
 
-      if (remainingDistance > MOVEMENT_THRESHOLD) {
-        const traveledDistance = movement.totalDistance - remainingDistance
+      // Update movement state
+      movement.currentSpeed = result.newSpeed
+      this.movementData.set(playerId, movement)
 
-        // Determine speed based on phase (acceleration, cruise, deceleration)
-        let newSpeed = movement.currentSpeed
-        if (traveledDistance < ACCEL_DISTANCE) {
-          // Acceleration phase
-          newSpeed = Math.min(
-            newSpeed + REMOTE_ACCELERATION * dt,
-            REMOTE_MOVEMENT_SPEED
-          )
-        } else if (remainingDistance > DECEL_DISTANCE) {
-          // Cruise phase
-          newSpeed = REMOTE_MOVEMENT_SPEED
-        } else {
-          // Deceleration phase
-          newSpeed = Math.max(newSpeed - REMOTE_DECELERATION * dt, 0.1)
-        }
+      // Update position
+      this.positions.set(playerId, result.newPos)
 
-        movement.currentSpeed = newSpeed
-        this.movementData.set(playerId, movement)
-
-        // Calculate rotation (direction of movement)
-        const rotation = Math.atan2(dx, dz)
-
-        // Move at current speed
-        const moveDistance = newSpeed * dt
-        let newPos
-        if (moveDistance >= remainingDistance) {
-          newPos = { x: targetPos.x, y: targetPos.y, z: targetPos.z }
-        } else {
-          const dirX = dx / remainingDistance
-          const dirY = dy / remainingDistance
-          const dirZ = dz / remainingDistance
-          newPos = {
-            x: currentPos.x + dirX * moveDistance,
-            y: currentPos.y + dirY * moveDistance,
-            z: currentPos.z + dirZ * moveDistance,
-          }
-        }
-
-        this.positions.set(playerId, newPos)
-        this.states.set(playerId, {
-          state: 'moving',
-          speed: newSpeed,
-          rotation,
-        })
-      } else {
-        // Arrived at destination
-        this.positions.set(playerId, {
-          x: targetPos.x,
-          y: targetPos.y,
-          z: targetPos.z,
-        })
-
-        if (movement) {
-          movement.currentSpeed = 0
-          this.movementData.set(playerId, movement)
-        }
-
+      // Update state for animation
+      if (result.arrived) {
         this.states.set(playerId, {
           state: 'idle',
           speed: 0,
-          rotation: this.states.get(playerId)?.rotation ?? 0,
+          rotation: this.states.get(playerId)?.rotation ?? result.rotation,
+        })
+      } else {
+        this.states.set(playerId, {
+          state: 'moving',
+          speed: result.newSpeed,
+          rotation: result.rotation,
         })
       }
     })
