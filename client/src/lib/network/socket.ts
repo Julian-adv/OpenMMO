@@ -159,10 +159,8 @@ class NetworkManager {
               message.player.position,
               message.player.rotation
             )
-            const newOtherPlayers = new Map(state.otherPlayers)
-            newOtherPlayers.set(message.player.id, player)
+            state.otherPlayers.set(message.player.id, player)
             addChatMessage(`${message.player.name} joined the game`)
-            return { ...state, otherPlayers: newOtherPlayers }
           }
           return state
         })
@@ -173,10 +171,8 @@ class NetworkManager {
         gameStore.update((state) => {
           const player = state.otherPlayers.get(message.player_id)
           if (player) {
-            const newOtherPlayers = new Map(state.otherPlayers)
-            newOtherPlayers.delete(message.player_id)
+            state.otherPlayers.delete(message.player_id)
             addChatMessage(`${player.name} left the game`)
-            return { ...state, otherPlayers: newOtherPlayers }
           }
           return state
         })
@@ -206,7 +202,7 @@ class NetworkManager {
 
       case 'game_state':
         gameStore.update((state) => {
-          const newOtherPlayers = new Map<string, Player>()
+          state.otherPlayers.clear()
           Object.values(message.players).forEach((serverPlayer) => {
             if (serverPlayer.id !== state.currentPlayer?.id) {
               const playerPos = new Vector3(
@@ -226,10 +222,10 @@ class NetworkManager {
                 serverPlayer.position,
                 serverPlayer.rotation
               )
-              newOtherPlayers.set(serverPlayer.id, player)
+              state.otherPlayers.set(serverPlayer.id, player)
             }
           })
-          return { ...state, otherPlayers: newOtherPlayers }
+          return state
         })
         break
     }
