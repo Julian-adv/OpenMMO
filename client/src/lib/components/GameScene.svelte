@@ -3,12 +3,12 @@
   import { OrbitControls, Grid } from '@threlte/extras'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
   import { gameStore, type Player, type ChatBubble } from '../stores/gameStore'
   import {
     startChatBubbleChecker,
     stopChatBubbleChecker,
   } from '../managers/chatBubbleManager'
+  import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { networkManager } from '../network/socket'
   import PlayerModel from './PlayerModel.svelte'
   import PlayerControl, { type PlayerState } from './PlayerControl.svelte'
@@ -56,161 +56,12 @@
   let currentPlayerModel = $state<PlayerModel | null>(null)
   let otherPlayerModels = $state<PlayerModel[]>([])
 
-  // Remote player movement states (for animation)
-  let remotePlayerStates = new SvelteMap<
-    string,
-    { state: 'idle' | 'moving'; speed: number; rotation: number }
-  >()
-
-  // Interpolated positions for remote players (separate from store for reactivity)
-  let remotePlayerPositions = new SvelteMap<
-    string,
-    { x: number; y: number; z: number }
-  >()
-
-  // Remote player movement data (for acceleration/deceleration)
-  let remotePlayerMovement = new SvelteMap<
-    string,
-    {
-      startPos: { x: number; y: number; z: number }
-      targetPos: { x: number; y: number; z: number }
-      totalDistance: number
-      currentSpeed: number
-    }
-  >()
-
-  // Movement settings for remote players (should match PlayerControl)
-  const REMOTE_MOVEMENT_SPEED = 3 // units per second (same as local player)
-  const REMOTE_ACCELERATION = 6 // units per second squared
-  const REMOTE_DECELERATION = 6 // units per second squared
-  const ACCEL_DISTANCE = (REMOTE_MOVEMENT_SPEED * REMOTE_MOVEMENT_SPEED) / (2 * REMOTE_ACCELERATION)
-  const DECEL_DISTANCE = (REMOTE_MOVEMENT_SPEED * REMOTE_MOVEMENT_SPEED) / (2 * REMOTE_DECELERATION)
-  const MOVEMENT_THRESHOLD = 0.05 // Distance threshold to consider "stopped"
-
   // Reference to PlayerControl component
   let playerControl: PlayerControl
 
   // Handle player state changes from PlayerControl
   function handlePlayerStateChange(newState: PlayerState) {
     currentPlayerState = newState
-  }
-
-  // Move remote players toward their target positions with acceleration/deceleration
-  function updateRemotePlayers(deltaTime: number) {
-    const dt = deltaTime / 1000 // Convert to seconds
-
-    otherPlayers.forEach((player, playerId) => {
-      if (!player.targetPosition) return
-
-      // Get current interpolated position or initialize from player position
-      let currentPos = remotePlayerPositions.get(playerId)
-      if (!currentPos) {
-        currentPos = {
-          x: player.position.x,
-          y: player.position.y,
-          z: player.position.z,
-        }
-      }
-
-      const targetPos = player.targetPosition
-
-      // Get or initialize movement data
-      let movement = remotePlayerMovement.get(playerId)
-      const targetChanged =
-        !movement ||
-        movement.targetPos.x !== targetPos.x ||
-        movement.targetPos.y !== targetPos.y ||
-        movement.targetPos.z !== targetPos.z
-
-      if (targetChanged) {
-        // New target - initialize movement from current position
-        const tdx = targetPos.x - currentPos.x
-        const tdy = targetPos.y - currentPos.y
-        const tdz = targetPos.z - currentPos.z
-        const totalDistance = Math.sqrt(tdx * tdx + tdy * tdy + tdz * tdz)
-
-        movement = {
-          startPos: { ...currentPos },
-          targetPos: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
-          totalDistance,
-          currentSpeed: movement?.currentSpeed ?? 0,
-        }
-        remotePlayerMovement.set(playerId, movement)
-      }
-
-      // movement is guaranteed to be defined after above block
-      if (!movement) return
-
-      // Calculate distances
-      const dx = targetPos.x - currentPos.x
-      const dy = targetPos.y - currentPos.y
-      const dz = targetPos.z - currentPos.z
-      const remainingDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
-
-      if (remainingDistance > MOVEMENT_THRESHOLD) {
-        const traveledDistance = movement.totalDistance - remainingDistance
-
-        // Determine speed based on phase (acceleration, cruise, deceleration)
-        let newSpeed = movement.currentSpeed
-        if (traveledDistance < ACCEL_DISTANCE) {
-          // Acceleration phase
-          newSpeed = Math.min(newSpeed + REMOTE_ACCELERATION * dt, REMOTE_MOVEMENT_SPEED)
-        } else if (remainingDistance > DECEL_DISTANCE) {
-          // Cruise phase
-          newSpeed = REMOTE_MOVEMENT_SPEED
-        } else {
-          // Deceleration phase
-          newSpeed = Math.max(newSpeed - REMOTE_DECELERATION * dt, 0.1)
-        }
-
-        movement.currentSpeed = newSpeed
-        remotePlayerMovement.set(playerId, movement)
-
-        // Calculate rotation (direction of movement)
-        const rotation = Math.atan2(dx, dz)
-
-        // Move at current speed
-        const moveDistance = newSpeed * dt
-        let newPos
-        if (moveDistance >= remainingDistance) {
-          newPos = { x: targetPos.x, y: targetPos.y, z: targetPos.z }
-        } else {
-          const dirX = dx / remainingDistance
-          const dirY = dy / remainingDistance
-          const dirZ = dz / remainingDistance
-          newPos = {
-            x: currentPos.x + dirX * moveDistance,
-            y: currentPos.y + dirY * moveDistance,
-            z: currentPos.z + dirZ * moveDistance,
-          }
-        }
-
-        remotePlayerPositions.set(playerId, newPos)
-        remotePlayerStates.set(playerId, {
-          state: 'moving',
-          speed: newSpeed,
-          rotation,
-        })
-      } else {
-        // Arrived at destination
-        remotePlayerPositions.set(playerId, {
-          x: targetPos.x,
-          y: targetPos.y,
-          z: targetPos.z,
-        })
-
-        if (movement) {
-          movement.currentSpeed = 0
-          remotePlayerMovement.set(playerId, movement)
-        }
-
-        remotePlayerStates.set(playerId, {
-          state: 'idle',
-          speed: 0,
-          rotation: remotePlayerStates.get(playerId)?.rotation ?? 0,
-        })
-      }
-    })
   }
 
   gameStore.subscribe((state) => {
@@ -235,7 +86,7 @@
       }
 
       // Update remote player interpolation
-      updateRemotePlayers(deltaTime)
+      remotePlayerManager.update(deltaTime, otherPlayers)
 
       // Update player model animations
       if (currentPlayerModel) {
@@ -454,12 +305,12 @@
 
 {#if cameraInitialized && camera}
   {#each [...otherPlayers.values()] as player, index (player.id)}
-    {@const remoteState = remotePlayerStates.get(player.id) || {
+    {@const remoteState = remotePlayerManager.states.get(player.id) || {
       state: 'idle',
       speed: 0,
       rotation: 0,
     }}
-    {@const interpolatedPos = remotePlayerPositions.get(player.id)}
+    {@const interpolatedPos = remotePlayerManager.positions.get(player.id)}
     {@const displayPosition = interpolatedPos
       ? new THREE.Vector3(interpolatedPos.x, interpolatedPos.y, interpolatedPos.z)
       : player.position}
