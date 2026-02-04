@@ -39,4 +39,7 @@ logs/
 # Temporary files
 *.tmp
 *.temp
-.claude/
+
+# Claude Code (keep agents for sharing)
+.claude/*
+!.claude/agents/
