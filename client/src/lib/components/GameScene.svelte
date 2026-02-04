@@ -300,7 +300,7 @@
     speed={currentPlayerState.speed}
     rotation={currentPlayerState.rotation}
     totalDistance={currentPlayerState.totalDistance}
-    cameraPosition={camera.position}
+    {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
   />
 {/if}
@@ -320,7 +320,7 @@
       speed={remotePlayer?.speed ?? 0}
       rotation={remotePlayer?.rotation ?? 0}
       totalDistance={remotePlayer?.totalDistance}
-      cameraPosition={camera.position}
+      {camera}
       chatBubble={chatBubbles.get(player.id)?.message}
     />
   {/each}
