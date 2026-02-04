@@ -74,14 +74,21 @@ impl GameState {
         }
     }
 
-    pub async fn update_player_position(&self, player_id: &PlayerId, new_position: Position) {
+    pub async fn update_player_position(
+        &self,
+        player_id: &PlayerId,
+        new_position: Position,
+        new_rotation: f32,
+    ) {
         let mut players = self.players.write().await;
 
         if let Some(player) = players.get_mut(player_id) {
             player.position = new_position.clone();
+            player.rotation = new_rotation;
             let _ = self.broadcast_tx.send(ServerMessage::PlayerMoved {
                 player_id: player_id.clone(),
                 position: new_position,
+                rotation: new_rotation,
             });
         } else {
             warn!("Attempted to move non-existent player: {}", player_id);

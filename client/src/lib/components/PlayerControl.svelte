@@ -140,7 +140,7 @@
       })
 
       // Send final position to server
-      networkManager.sendPlayerMove(movementTarget)
+      networkManager.sendPlayerMove(movementTarget, playerRotation)
 
       isMoving = false
       movementTarget = null
@@ -213,11 +213,14 @@
       })
 
       // Send position to server periodically
-      networkManager.sendPlayerMove({
-        x: newX,
-        y: 0, // Keep player on ground level
-        z: newZ,
-      })
+      networkManager.sendPlayerMove(
+        {
+          x: newX,
+          y: 0, // Keep player on ground level
+          z: newZ,
+        },
+        playerRotation
+      )
     } else {
       isMoving = false
       currentSpeed = 0
@@ -247,7 +250,7 @@
     isMoving = true
 
     // Send target position to server when movement starts
-    networkManager.sendPlayerMove(clickPosition)
+    networkManager.sendPlayerMove(clickPosition, playerRotation)
 
     updatePlayerState()
   }

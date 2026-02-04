@@ -132,9 +132,11 @@ async fn handle_client_message(
             return Ok(responses);
         }
 
-        ClientMessage::PlayerMove { position } => {
+        ClientMessage::PlayerMove { position, rotation } => {
             if let Some(id) = player_id {
-                game_state.update_player_position(id, position).await;
+                game_state
+                    .update_player_position(id, position, rotation)
+                    .await;
             } else {
                 warn!("Received move from unauthenticated client");
             }

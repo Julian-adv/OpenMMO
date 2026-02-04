@@ -101,6 +101,16 @@ class RemotePlayerManager {
     })
   }
 
+  // Initialize remote player state with position and rotation
+  initPlayer(playerId: string, position: Position, rotation: number) {
+    this.positions.set(playerId, { ...position })
+    this.states.set(playerId, {
+      state: 'idle',
+      speed: 0,
+      rotation,
+    })
+  }
+
   // Clean up data for players that have left
   removePlayer(playerId: string) {
     this.states.delete(playerId)

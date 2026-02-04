@@ -7,6 +7,7 @@ import {
 } from '../stores/gameStore'
 import type { Player } from '../stores/gameStore'
 import { Vector3 } from 'three'
+import { remotePlayerManager } from '../managers/remotePlayerManager'
 
 type Position = {
   x: number
@@ -18,6 +19,7 @@ type ServerPlayer = {
   id: string
   name: string
   position: Position
+  rotation: number
   level: number
   health: number
   max_health: number
@@ -25,13 +27,18 @@ type ServerPlayer = {
 
 type ClientMessage =
   | { type: 'join'; player_name: string }
-  | { type: 'player_move'; position: Position }
+  | { type: 'player_move'; position: Position; rotation: number }
   | { type: 'chat_message'; message: string }
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
   | { type: 'player_left'; player_id: string }
-  | { type: 'player_moved'; player_id: string; position: Position }
+  | {
+      type: 'player_moved'
+      player_id: string
+      position: Position
+      rotation: number
+    }
   | { type: 'chat_message'; player_id: string; message: string }
   | { type: 'game_state'; players: Record<string, ServerPlayer> }
   | { type: 'join_success'; player: ServerPlayer }
@@ -146,7 +153,12 @@ class NetworkManager {
             console.log('Setting current player from player_joined:', player)
             return { ...state, currentPlayer: player }
           } else if (message.player.id !== state.currentPlayer.id) {
-            // This is another player
+            // This is another player - initialize with rotation
+            remotePlayerManager.initPlayer(
+              message.player.id,
+              message.player.position,
+              message.player.rotation
+            )
             const newOtherPlayers = new Map(state.otherPlayers)
             newOtherPlayers.set(message.player.id, player)
             addChatMessage(`${message.player.name} joined the game`)
@@ -208,6 +220,12 @@ class NetworkManager {
                 targetPosition: playerPos.clone(),
                 maxHealth: serverPlayer.max_health,
               }
+              // Initialize remote player with rotation from server
+              remotePlayerManager.initPlayer(
+                serverPlayer.id,
+                serverPlayer.position,
+                serverPlayer.rotation
+              )
               newOtherPlayers.set(serverPlayer.id, player)
             }
           })
@@ -217,11 +235,15 @@ class NetworkManager {
     }
   }
 
-  sendPlayerMove(position: { x: number; y: number; z: number }) {
+  sendPlayerMove(
+    position: { x: number; y: number; z: number },
+    rotation: number
+  ) {
     if (this.socket?.readyState === WebSocket.OPEN) {
       const message: ClientMessage = {
         type: 'player_move',
         position,
+        rotation,
       }
       this.socket.send(JSON.stringify(message))
     }

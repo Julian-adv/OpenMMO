@@ -14,6 +14,7 @@ pub struct Player {
     pub id: String,
     pub name: String,
     pub position: Position,
+    pub rotation: f32,
     pub level: u32,
     pub health: u32,
     pub max_health: u32,
@@ -29,6 +30,7 @@ impl Player {
                 y: 0.0,
                 z: 0.0,
             },
+            rotation: 0.0,
             level: 1,
             health: 100,
             max_health: 100,
@@ -42,7 +44,7 @@ pub enum ClientMessage {
     #[serde(rename = "join")]
     Join { player_name: String },
     #[serde(rename = "player_move")]
-    PlayerMove { position: Position },
+    PlayerMove { position: Position, rotation: f32 },
     #[serde(rename = "chat_message")]
     ChatMessage { message: String },
 }
@@ -60,6 +62,7 @@ pub enum ServerMessage {
     PlayerMoved {
         player_id: String,
         position: Position,
+        rotation: f32,
     },
     #[serde(rename = "chat_message")]
     ChatMessage { player_id: String, message: String },
