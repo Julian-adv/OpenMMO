@@ -32,6 +32,7 @@ export interface PlayerState {
   state: 'idle' | 'moving'
   speed: number
   rotation: number
+  totalDistance?: number // Total distance for current movement (used for animation selection)
 }
 
 // Default movement configuration

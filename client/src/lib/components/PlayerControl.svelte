@@ -59,7 +59,7 @@
   })
 
   // Update player state and notify parent
-  function updatePlayerState() {
+  function updatePlayerState(totalDistance?: number) {
     const currentPosition = currentPlayer
       ? {
           x: currentPlayer.position.x,
@@ -73,6 +73,7 @@
       speed: currentSpeed,
       rotation: playerRotation,
       position: currentPosition,
+      totalDistance: isMoving ? totalDistance : undefined,
     }
 
     // Only update if state actually changed
@@ -140,6 +141,7 @@
       movementTarget = null
       movementState = null
       currentSpeed = 0
+      updatePlayerState()
     } else {
       // Continue movement
       gameStore.update((state) => {
@@ -152,8 +154,8 @@
         }
         return state
       })
+      updatePlayerState(movementState.totalDistance)
     }
-    updatePlayerState()
   }
 
   // Keyboard movement system
@@ -220,7 +222,8 @@
       currentSpeed = 0
     }
 
-    updatePlayerState()
+    // Keyboard movement uses large distance to always show RUN animation
+    updatePlayerState(isMoving ? 100 : undefined)
   }
 
   // Handle click-to-move
@@ -246,7 +249,7 @@
     // Send target position to server when movement starts
     networkManager.sendPlayerMove(clickPosition, playerRotation)
 
-    updatePlayerState()
+    updatePlayerState(movementState.totalDistance)
   }
 
   // Handle canvas click events

@@ -16,6 +16,7 @@
     playerState: 'idle' | 'moving'
     speed: number
     rotation: number
+    totalDistance?: number
     cameraPosition: Vector3
     chatBubble?: string
   }
@@ -27,6 +28,7 @@
     playerState,
     speed: _speed,
     rotation,
+    totalDistance,
     cameraPosition,
     chatBubble,
   }: Props = $props()
@@ -84,19 +86,35 @@
 
   let validAnimations: THREE.AnimationClip[] = []
   let lastPlayerState: 'idle' | 'moving' | undefined = undefined
-  let _lastSpeed = 0
+  let currentMovementAnimationIndex: number | undefined = undefined // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
 
-  // Movement speed constants (should match PlayerControl)
-  const MOVEMENT_SPEED = 3
-  const _WALKING_THRESHOLD = MOVEMENT_SPEED * 0.9
+  // Distance thresholds for animation selection
+  const WALK_DISTANCE_THRESHOLD = 3 // Distance <= 3 units: walk
+  const JOG_DISTANCE_THRESHOLD = 8 // Distance <= 8 units: jog, > 8: run
+
+  // Select movement animation based on total distance
+  function selectMovementAnimation(distance: number | undefined): number {
+    if (distance === undefined) {
+      return AnimationIndex.JOG // Default to jog if no distance
+    }
+    if (distance <= WALK_DISTANCE_THRESHOLD) {
+      return AnimationIndex.WALK
+    } else if (distance <= JOG_DISTANCE_THRESHOLD) {
+      return AnimationIndex.JOG
+    } else {
+      return AnimationIndex.RUN
+    }
+  }
 
   function playAnimationForState() {
     if (!mixer || validAnimations.length === 0) return
 
-    // Select animation based on player state and speed
+    // Select animation based on player state and distance
     let clip: THREE.AnimationClip
     if (playerState === 'idle') {
+      // Reset movement animation lock when idle
+      currentMovementAnimationIndex = undefined
       // Randomly select between idle animations
       const idleIndices = [
         AnimationIndex.IDLE1,
@@ -108,15 +126,11 @@
         idleIndices[Math.floor(Math.random() * idleIndices.length)]
       clip = validAnimations[idleIndex]
     } else if (playerState === 'moving') {
-      // Randomly select between moving animations
-      const movingIndices = [
-        AnimationIndex.WALK,
-        AnimationIndex.JOG,
-        AnimationIndex.RUN,
-      ]
-      const movingIndex =
-        movingIndices[Math.floor(Math.random() * movingIndices.length)]
-      clip = validAnimations[movingIndex]
+      // Lock animation at the start of movement based on total distance
+      if (currentMovementAnimationIndex === undefined) {
+        currentMovementAnimationIndex = selectMovementAnimation(totalDistance)
+      }
+      clip = validAnimations[currentMovementAnimationIndex]
     } else {
       return // Unknown state
     }

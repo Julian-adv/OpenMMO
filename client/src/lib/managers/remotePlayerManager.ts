@@ -78,6 +78,7 @@ class PlayerStateManager {
           state: 'idle',
           speed: 0,
           rotation: currentPlayer?.rotation ?? result.rotation,
+          totalDistance: undefined,
         })
       } else {
         this.players.set(playerId, {
@@ -85,6 +86,7 @@ class PlayerStateManager {
           state: 'moving',
           speed: result.newSpeed,
           rotation: result.rotation,
+          totalDistance: movement.totalDistance,
         })
       }
     })

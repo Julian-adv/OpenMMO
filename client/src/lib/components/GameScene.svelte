@@ -299,6 +299,7 @@
     playerState={currentPlayerState.state}
     speed={currentPlayerState.speed}
     rotation={currentPlayerState.rotation}
+    totalDistance={currentPlayerState.totalDistance}
     cameraPosition={camera.position}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
   />
@@ -318,6 +319,7 @@
       playerState={remotePlayer?.state ?? 'idle'}
       speed={remotePlayer?.speed ?? 0}
       rotation={remotePlayer?.rotation ?? 0}
+      totalDistance={remotePlayer?.totalDistance}
       cameraPosition={camera.position}
       chatBubble={chatBubbles.get(player.id)?.message}
     />
