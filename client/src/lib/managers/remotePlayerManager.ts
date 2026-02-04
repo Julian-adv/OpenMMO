@@ -10,13 +10,12 @@ import {
   type MovementConfig,
 } from '../utils/movementUtils'
 
-export interface RemotePlayerState {
+export interface RemotePlayer {
+  position: Position
   state: 'idle' | 'moving'
   speed: number
   rotation: number
 }
-
-export type { Position }
 
 // Use the same movement config as local player
 const MOVEMENT_CONFIG: MovementConfig = {
@@ -24,11 +23,7 @@ const MOVEMENT_CONFIG: MovementConfig = {
 }
 
 class RemotePlayerManager {
-  // Remote player movement states (for animation)
-  states = new SvelteMap<string, RemotePlayerState>()
-
-  // Interpolated positions for remote players (separate from store for reactivity)
-  positions = new SvelteMap<string, Position>()
+  players = new SvelteMap<string, RemotePlayer>()
 
   // Remote player movement data (for acceleration/deceleration)
   private movementData = new SvelteMap<string, MovementState>()
@@ -41,7 +36,8 @@ class RemotePlayerManager {
       if (!player.targetPosition) return
 
       // Get current interpolated position or initialize from player position
-      let currentPos = this.positions.get(playerId)
+      const currentPlayer = this.players.get(playerId)
+      let currentPos = currentPlayer?.position
       if (!currentPos) {
         currentPos = {
           x: player.position.x,
@@ -81,18 +77,17 @@ class RemotePlayerManager {
       movement.currentSpeed = result.newSpeed
       this.movementData.set(playerId, movement)
 
-      // Update position
-      this.positions.set(playerId, result.newPos)
-
-      // Update state for animation
+      // Update player
       if (result.arrived) {
-        this.states.set(playerId, {
+        this.players.set(playerId, {
+          position: result.newPos,
           state: 'idle',
           speed: 0,
-          rotation: this.states.get(playerId)?.rotation ?? result.rotation,
+          rotation: currentPlayer?.rotation ?? result.rotation,
         })
       } else {
-        this.states.set(playerId, {
+        this.players.set(playerId, {
+          position: result.newPos,
           state: 'moving',
           speed: result.newSpeed,
           rotation: result.rotation,
@@ -103,8 +98,8 @@ class RemotePlayerManager {
 
   // Initialize remote player state with position and rotation
   initPlayer(playerId: string, position: Position, rotation: number) {
-    this.positions.set(playerId, { ...position })
-    this.states.set(playerId, {
+    this.players.set(playerId, {
+      position: { ...position },
       state: 'idle',
       speed: 0,
       rotation,
@@ -113,15 +108,13 @@ class RemotePlayerManager {
 
   // Clean up data for players that have left
   removePlayer(playerId: string) {
-    this.states.delete(playerId)
-    this.positions.delete(playerId)
+    this.players.delete(playerId)
     this.movementData.delete(playerId)
   }
 
   // Reset all data
   reset() {
-    this.states.clear()
-    this.positions.clear()
+    this.players.clear()
     this.movementData.clear()
   }
 }

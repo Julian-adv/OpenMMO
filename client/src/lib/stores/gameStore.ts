@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store'
+import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
 
 export interface Player {
@@ -28,7 +29,7 @@ export interface GameState {
 const initialGameState: GameState = {
   isConnected: false,
   currentPlayer: null,
-  otherPlayers: new Map(),
+  otherPlayers: new SvelteMap(),
   chatMessages: [],
   chatBubbles: new Map(),
 }
@@ -45,9 +46,7 @@ export const updatePlayer = (playerId: string, playerData: Partial<Player>) => {
     } else {
       const existingPlayer = state.otherPlayers.get(playerId)
       if (existingPlayer) {
-        const newOtherPlayers = new Map(state.otherPlayers)
-        newOtherPlayers.set(playerId, { ...existingPlayer, ...playerData })
-        return { ...state, otherPlayers: newOtherPlayers }
+        state.otherPlayers.set(playerId, { ...existingPlayer, ...playerData })
       }
     }
     return state

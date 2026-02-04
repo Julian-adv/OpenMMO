@@ -305,23 +305,18 @@
 
 {#if cameraInitialized && camera}
   {#each [...otherPlayers.values()] as player, index (player.id)}
-    {@const remoteState = remotePlayerManager.states.get(player.id) || {
-      state: 'idle',
-      speed: 0,
-      rotation: 0,
-    }}
-    {@const interpolatedPos = remotePlayerManager.positions.get(player.id)}
-    {@const displayPosition = interpolatedPos
-      ? new THREE.Vector3(interpolatedPos.x, interpolatedPos.y, interpolatedPos.z)
+    {@const remotePlayer = remotePlayerManager.players.get(player.id)}
+    {@const displayPosition = remotePlayer
+      ? new THREE.Vector3(remotePlayer.position.x, remotePlayer.position.y, remotePlayer.position.z)
       : player.position}
     <PlayerModel
       bind:this={otherPlayerModels[index]}
       position={displayPosition}
       name={player.name}
       isCurrentPlayer={false}
-      playerState={remoteState.state}
-      speed={remoteState.speed}
-      rotation={remoteState.rotation}
+      playerState={remotePlayer?.state ?? 'idle'}
+      speed={remotePlayer?.speed ?? 0}
+      rotation={remotePlayer?.rotation ?? 0}
       cameraPosition={camera.position}
       chatBubble={chatBubbles.get(player.id)?.message}
     />

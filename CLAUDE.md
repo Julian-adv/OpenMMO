@@ -27,6 +27,14 @@ npm run build          # Build for production
 - Add keys to Svelte `{#each}` blocks
 - Use block scopes in switch cases to avoid lexical declaration errors
 
+## Refactoring Policy
+
+This project is in early development. Do NOT worry about backwards compatibility:
+- When renaming or removing exports, find and update ALL usages across the codebase
+- Do not leave deprecated aliases, re-exports, or compatibility shims
+- Do not add `@deprecated` comments - just remove unused code directly
+- If something is no longer needed, delete it completely
+
 ## Notes
 
 - ESLint is configured to work with JavaScript, TypeScript, and Svelte files
