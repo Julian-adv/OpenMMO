@@ -27,6 +27,13 @@ export interface MovementResult {
   arrived: boolean
 }
 
+export interface PlayerState {
+  position: Position
+  state: 'idle' | 'moving'
+  speed: number
+  rotation: number
+}
+
 // Default movement configuration
 export const DEFAULT_MOVEMENT_CONFIG: MovementConfig = {
   maxSpeed: 3, // units per second

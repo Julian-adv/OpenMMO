@@ -8,22 +8,16 @@ import {
   type Position,
   type MovementState,
   type MovementConfig,
+  type PlayerState,
 } from '../utils/movementUtils'
-
-export interface RemotePlayer {
-  position: Position
-  state: 'idle' | 'moving'
-  speed: number
-  rotation: number
-}
 
 // Use the same movement config as local player
 const MOVEMENT_CONFIG: MovementConfig = {
   ...DEFAULT_MOVEMENT_CONFIG,
 }
 
-class RemotePlayerManager {
-  players = new SvelteMap<string, RemotePlayer>()
+class PlayerStateManager {
+  players = new SvelteMap<string, PlayerState>()
 
   // Remote player movement data (for acceleration/deceleration)
   private movementData = new SvelteMap<string, MovementState>()
@@ -119,4 +113,4 @@ class RemotePlayerManager {
   }
 }
 
-export const remotePlayerManager = new RemotePlayerManager()
+export const remotePlayerManager = new PlayerStateManager()

@@ -11,8 +11,9 @@
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { networkManager } from '../network/socket'
   import PlayerModel from './PlayerModel.svelte'
-  import PlayerControl, { type PlayerState } from './PlayerControl.svelte'
+  import PlayerControl from './PlayerControl.svelte'
   import SplatTerrain from './SplatTerrain.svelte'
+  import { type PlayerState } from '../utils/movementUtils'
 
   interface Props {
     serverUrl: string
@@ -48,7 +49,7 @@
   let currentPlayerState = $state<PlayerState>({
     state: 'idle',
     speed: 0,
-    direction: 0,
+    rotation: 0,
     position: { x: 0, y: 0, z: 0 },
   })
 
@@ -297,7 +298,7 @@
     isCurrentPlayer={true}
     playerState={currentPlayerState.state}
     speed={currentPlayerState.speed}
-    rotation={currentPlayerState.direction}
+    rotation={currentPlayerState.rotation}
     cameraPosition={camera.position}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
   />

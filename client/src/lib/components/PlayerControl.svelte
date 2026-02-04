@@ -11,14 +11,8 @@
     type Position,
     type MovementState,
     type MovementConfig,
+    type PlayerState,
   } from '../utils/movementUtils'
-
-  export interface PlayerState {
-    state: 'idle' | 'moving'
-    speed: number
-    direction: number
-    position: { x: number; y: number; z: number }
-  }
 
   interface Props {
     onStateChange: (state: PlayerState) => void
@@ -49,7 +43,7 @@
   let playerState = $state<PlayerState>({
     state: 'idle',
     speed: 0,
-    direction: 0,
+    rotation: 0,
     position: { x: 0, y: 0, z: 0 },
   })
 
@@ -77,7 +71,7 @@
     const newState: PlayerState = {
       state: isMoving ? 'moving' : 'idle',
       speed: currentSpeed,
-      direction: playerRotation,
+      rotation: playerRotation,
       position: currentPosition,
     }
 
@@ -85,7 +79,7 @@
     if (
       newState.state !== playerState.state ||
       Math.abs(newState.speed - playerState.speed) > 0.01 ||
-      newState.direction !== playerState.direction ||
+      newState.rotation !== playerState.rotation ||
       Math.abs(newState.position.x - playerState.position.x) > 0.01 ||
       Math.abs(newState.position.z - playerState.position.z) > 0.01
     ) {
