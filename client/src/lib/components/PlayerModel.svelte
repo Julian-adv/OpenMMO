@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { T, useLoader } from '@threlte/core'
+  import { T, useLoader, useTask } from '@threlte/core'
   import { Text } from '@threlte/extras'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
@@ -65,8 +65,37 @@
 
   // Calculate nametag rotation to face camera in world space
   function calculateNametagRotation(): [number, number, number] {
-    return calculateBillboardRotation(2.5)
+    return calculateBillboardRotation(nametagHeight)
   }
+
+  let nametagScale = $state(1)
+  let nametagHeight = $state(2.2)
+
+  useTask(() => {
+    if (!camera) return
+
+    const nametagPos = new THREE.Vector3(position.x, position.y + 2.2, position.z)
+    const dist = camera.position.distanceTo(nametagPos)
+    
+    // Min distance (zoom in) = 5
+    // Max distance (zoom out) = 20
+    const minDist = 5
+    const maxDist = 20
+    
+    // Scale: 0.5 to 1.0
+    const minScale = 0.5
+    const maxScale = 1.0
+
+    // Height: 1.8 to 2.2
+    const minHeight = 1.8
+    const maxHeight = 2.2
+    
+    let t = (dist - minDist) / (maxDist - minDist)
+    t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
+    
+    nametagScale = minScale + t * (maxScale - minScale)
+    nametagHeight = minHeight + t * (maxHeight - minHeight)
+  })
 
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
@@ -378,8 +407,9 @@
 <!-- Name tag (separate from character to avoid rotation inheritance) -->
 <Text
   text={name}
-  position={[position.x, position.y + 2.5, position.z]}
+  position={[position.x, position.y + nametagHeight, position.z]}
   rotation={calculateNametagRotation()}
+  scale={[nametagScale, nametagScale, nametagScale]}
   fontSize={0.3}
   color={isCurrentPlayer ? '#4299e1' : '#ffffff'}
   anchorX="center"

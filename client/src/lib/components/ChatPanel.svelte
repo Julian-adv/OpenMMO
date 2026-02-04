@@ -115,11 +115,14 @@
   .chat-messages {
     flex: 1;
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 10px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 5px;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .message {
@@ -127,6 +130,9 @@
     font-size: 12px;
     line-height: 1.4;
     word-wrap: break-word;
+    word-break: break-all;
+    text-align: left;
+    max-width: 100%;
   }
 
   .chat-input {

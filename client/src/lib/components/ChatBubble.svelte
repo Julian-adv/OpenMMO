@@ -12,11 +12,11 @@
 
   let { position, camera, message }: Props = $props()
 
-  const HEIGHT_OFFSET = 3.2
   const PADDING_X = 0.4
   const PADDING_Y = 0.2
 
   let textBounds = $state({ width: 1, height: 0.3 })
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let textRef = $state<any>(null)
   let bubbleGroup = $state<THREE.Group | undefined>(undefined)
@@ -52,6 +52,42 @@
 
     return [pitch, yaw, 0]
   }
+
+  useTask(() => {
+    if (!bubbleGroup || !camera) return
+
+    // Update Rotation
+    const [rx, ry, rz] = calculateBillboardRotation()
+    bubbleGroup.rotation.set(rx, ry, rz)
+
+    // Update Scale and Position
+    // Calculate distance from camera to bubble center
+    // Use a fixed approximate height for distance calculation to avoid circular dependency
+    const bubblePos = new THREE.Vector3(position.x, position.y + 2.8, position.z)
+    const dist = camera.position.distanceTo(bubblePos)
+    
+    // Min distance (zoom in) = 5
+    // Max distance (zoom out) = 20
+    const minDist = 5
+    const maxDist = 20
+    
+    // Scale: 0.5 to 1.0
+    const minScale = 0.5
+    const maxScale = 1.0
+
+    // Height: 2.4 to 3.7 (Nametag is 1.8 to 2.2)
+    const minHeight = 2.4
+    const maxHeight = 3.7
+    
+    let t = (dist - minDist) / (maxDist - minDist)
+    t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
+    
+    const currentScale = minScale + t * (maxScale - minScale)
+    const heightOffset = minHeight + t * (maxHeight - minHeight)
+    
+    bubbleGroup.scale.set(currentScale, currentScale, currentScale)
+    bubbleGroup.position.set(position.x, position.y + heightOffset, position.z)
+  })
 
   // Create rounded rectangle shape for chat bubble with tail
   function createRoundedRectShape(
@@ -109,8 +145,6 @@
 <!-- Chat bubble background -->
 <T.Group
   bind:ref={bubbleGroup}
-  position={[position.x, position.y + HEIGHT_OFFSET, position.z]}
-  rotation={calculateBillboardRotation()}
 >
   <T.Mesh position={[0, 0, 0]}>
     <T.ShapeGeometry args={[bubbleShape]} />
@@ -134,5 +168,7 @@
     anchorY="middle"
     maxWidth={3.5}
     onsync={handleTextSync}
+    overflowWrap="break-word"
+    whiteSpace="normal"
   />
 </T.Group>
