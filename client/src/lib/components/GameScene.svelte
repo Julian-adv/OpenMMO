@@ -4,12 +4,11 @@
   import * as THREE from 'three'
   import { onMount } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
+  import { gameStore, type Player, type ChatBubble } from '../stores/gameStore'
   import {
-    gameStore,
-    type Player,
-    type ChatBubble,
-    removeChatBubble,
-  } from '../stores/gameStore'
+    startChatBubbleChecker,
+    stopChatBubbleChecker,
+  } from '../managers/chatBubbleManager'
   import { networkManager } from '../network/socket'
   import PlayerModel from './PlayerModel.svelte'
   import PlayerControl, { type PlayerState } from './PlayerControl.svelte'
@@ -214,23 +213,11 @@
     })
   }
 
-  const CHAT_BUBBLE_DURATION = 5000 // 5 seconds
-
   gameStore.subscribe((state) => {
     currentPlayer = state.currentPlayer
     otherPlayers = state.otherPlayers
     chatBubbles = state.chatBubbles
   })
-
-  // Check for expired chat bubbles periodically
-  function checkExpiredChatBubbles() {
-    const now = Date.now()
-    for (const [playerId, bubble] of chatBubbles) {
-      if (now - bubble.timestamp > CHAT_BUBBLE_DURATION) {
-        removeChatBubble(playerId)
-      }
-    }
-  }
 
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
@@ -356,7 +343,7 @@
     gameLoopId = requestAnimationFrame(gameLoop)
 
     // Start chat bubble expiration checker
-    const chatBubbleCheckInterval = setInterval(checkExpiredChatBubbles, 1000)
+    startChatBubbleChecker()
 
     networkManager.connect(serverUrl)
 
@@ -394,7 +381,7 @@
 
     return () => {
       stopGameLoop()
-      clearInterval(chatBubbleCheckInterval)
+      stopChatBubbleChecker()
       networkManager.disconnect()
     }
   })

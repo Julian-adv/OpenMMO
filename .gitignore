@@ -8,6 +8,7 @@ client/.env.local
 client/.env.production
 client/package-lock.json
 client/*.tsbuildinfo
+client/vite.config.d.ts
 
 # Server (Rust)
 server/target/
