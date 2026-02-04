@@ -4,8 +4,6 @@ import {
   type ChatBubble,
 } from '../stores/gameStore'
 
-export const CHAT_BUBBLE_DURATION = 5000 // 5 seconds
-
 let chatBubbles: Map<string, ChatBubble> = new Map()
 let checkInterval: ReturnType<typeof setInterval> | null = null
 
@@ -17,7 +15,7 @@ const unsubscribe = gameStore.subscribe((state) => {
 function checkExpiredChatBubbles() {
   const now = Date.now()
   for (const [playerId, bubble] of chatBubbles) {
-    if (now - bubble.timestamp > CHAT_BUBBLE_DURATION) {
+    if (now - bubble.timestamp > bubble.duration) {
       removeChatBubble(playerId)
     }
   }

@@ -13,6 +13,22 @@
   let { position, cameraPosition, message }: Props = $props()
 
   const HEIGHT_OFFSET = 3.2
+  const PADDING_X = 0.4
+  const PADDING_Y = 0.2
+
+  let textBounds = $state({ width: 1, height: 0.3 })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let textRef = $state<any>(null)
+
+  function handleTextSync() {
+    if (textRef?.textRenderInfo?.blockBounds) {
+      const [minX, minY, maxX, maxY] = textRef.textRenderInfo.blockBounds
+      textBounds = {
+        width: maxX - minX,
+        height: maxY - minY
+      }
+    }
+  }
 
   // Calculate rotation to face camera in world space
   function calculateBillboardRotation(): [number, number, number] {
@@ -77,14 +93,14 @@
     return geometry
   }
 
-  const bubbleWidth = $derived(Math.min(message.length * 0.15 + 0.4, 4))
-  const bubbleHeight = 0.5
+  const bubbleWidth = $derived(Math.min(textBounds.width + PADDING_X, 4))
+  const bubbleHeight = $derived(textBounds.height + PADDING_Y)
   const cornerRadius = 0.1
   const bubbleShape = $derived(
     createRoundedRectShape(bubbleWidth, bubbleHeight, cornerRadius)
   )
   const displayText = $derived(
-    message.length > 25 ? message.slice(0, 25) + '...' : message
+    message.length > 100 ? message.slice(0, 100) + '...' : message
   )
 </script>
 
@@ -108,6 +124,7 @@
 
 <!-- Chat bubble text -->
 <Text
+  bind:ref={textRef}
   text={displayText}
   position={[position.x, position.y + HEIGHT_OFFSET, position.z + 0.01]}
   rotation={calculateBillboardRotation()}
@@ -116,4 +133,5 @@
   anchorX="center"
   anchorY="middle"
   maxWidth={3.5}
+  onsync={handleTextSync}
 />
