@@ -1,6 +1,6 @@
 # OnlineRPG
 
-An online RPG game supporting up to 10,000 concurrent connections
+An simple online RPG prototype.
 
 ## Tech Stack
 
