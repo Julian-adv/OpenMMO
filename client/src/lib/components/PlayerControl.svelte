@@ -295,12 +295,17 @@
   }
 
   function handleKeyUp(event: KeyboardEvent) {
+    // Always remove from tracked keys on keyup, to prevent stuck keys
+    // especially when focus changes (e.g. Enter to open chat)
+    if (keysPressed.has(event.code)) {
+      keysPressed.delete(event.code)
+    }
+
     // Ignore keyboard input when typing in input fields
     const target = event.target as HTMLElement
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
       return
     }
-    keysPressed.delete(event.code)
     event.preventDefault()
   }
 
