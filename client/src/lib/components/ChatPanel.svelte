@@ -31,7 +31,18 @@
       sendMessage()
     }
   }
+
+  function handleGlobalKeydown(event: KeyboardEvent) {
+    if (event.key === 'Enter' && document.activeElement !== chatInput) {
+      event.preventDefault()
+      chatInput?.focus()
+    }
+  }
+
+  let chatInput: HTMLInputElement
 </script>
+
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="chat-panel">
   <div class="chat-header">
@@ -53,6 +64,7 @@
   <div class="chat-input">
     <input
       type="text"
+      bind:this={chatInput}
       bind:value={messageInput}
       onkeydown={handleKeyDown}
       placeholder="Type a message..."
