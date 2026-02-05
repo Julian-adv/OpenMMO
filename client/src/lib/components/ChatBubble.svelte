@@ -31,34 +31,8 @@
     }
   }
 
-  // Calculate rotation to face camera in world space
-  function calculateBillboardRotation(): [number, number, number] {
-    if (!camera) {
-      return [0, 0, 0]
-    }
-
-    const worldX = position.x
-    // Camera is targeting the player's feet, so compute rotation from the feet.
-    const rotationOriginY = position.y
-    const worldZ = position.z
-
-    const dx = camera.position.x - worldX
-    const dy = camera.position.y - rotationOriginY
-    const dz = camera.position.z - worldZ
-
-    const yaw = Math.atan2(dx, dz)
-    const horizontalDistance = Math.sqrt(dx * dx + dz * dz)
-    const pitch = -Math.atan2(dy, horizontalDistance)
-
-    return [pitch, yaw, 0]
-  }
-
   useTask(() => {
     if (!bubbleGroup || !camera) return
-
-    // Update Rotation
-    const [rx, ry, rz] = calculateBillboardRotation()
-    bubbleGroup.rotation.set(rx, ry, rz)
 
     // Update Scale and Position
     // Calculate distance from camera to bubble center
@@ -91,6 +65,11 @@
 
     bubbleGroup.scale.set(currentScale, currentScale, currentScale)
     bubbleGroup.position.set(position.x, position.y + heightOffset, position.z)
+
+    // Update Rotation
+    // Make the bubble parallel to the camera screen plane
+    // This handles X, Y, and Z rotations automatically and prevents distortion at screen edges
+    bubbleGroup.quaternion.copy(camera.quaternion)
   })
 
   // Create rounded rectangle shape for chat bubble with tail

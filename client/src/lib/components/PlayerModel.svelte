@@ -34,45 +34,12 @@
     chatBubble,
   }: Props = $props()
 
-  // Calculate rotation to face camera in world space
-  function calculateBillboardRotation(
-    heightOffset: number
-  ): [number, number, number] {
-    if (!camera) {
-      return [0, 0, 0]
-    }
-
-    // Calculate vector from world position to camera
-    const worldX = position.x
-    const worldY = position.y + heightOffset
-    const worldZ = position.z
-
-    const dx = camera.position.x - worldX
-    const dy = camera.position.y - worldY
-    const dz = camera.position.z - worldZ
-
-    // Calculate yaw angle (y rotation) first - horizontal direction to camera
-    const yaw = Math.atan2(dx, dz)
-
-    // Calculate horizontal distance for pitch calculation
-    const horizontalDistance = Math.sqrt(dx * dx + dz * dz)
-
-    // Calculate pitch angle (x rotation) - vertical angle to camera
-    const pitch = -Math.atan2(dy, horizontalDistance)
-
-    return [pitch, yaw, 0]
-  }
-
-  // Calculate nametag rotation to face camera in world space
-  function calculateNametagRotation(): [number, number, number] {
-    return calculateBillboardRotation(nametagHeight)
-  }
-
   let nametagScale = $state(1)
   let nametagHeight = $state(2.2)
+  let nametagGroup = $state<THREE.Group | undefined>(undefined)
 
   useTask(() => {
-    if (!camera) return
+    if (!camera || !nametagGroup) return
 
     const nametagPos = new THREE.Vector3(position.x, position.y + 2.2, position.z)
     const dist = camera.position.distanceTo(nametagPos)
@@ -95,6 +62,11 @@
     
     nametagScale = minScale + t * (maxScale - minScale)
     nametagHeight = minHeight + t * (maxHeight - minHeight)
+
+    // Update nametag group transform
+    nametagGroup.position.set(position.x, position.y + nametagHeight, position.z)
+    nametagGroup.scale.set(nametagScale, nametagScale, nametagScale)
+    nametagGroup.quaternion.copy(camera.quaternion)
   })
 
   // Load animated model
@@ -405,16 +377,15 @@
 {/if}
 
 <!-- Name tag (separate from character to avoid rotation inheritance) -->
-<Text
-  text={name}
-  position={[position.x, position.y + nametagHeight, position.z]}
-  rotation={calculateNametagRotation()}
-  scale={[nametagScale, nametagScale, nametagScale]}
-  fontSize={0.3}
-  color={isCurrentPlayer ? '#4299e1' : '#ffffff'}
-  anchorX="center"
-  anchorY="middle"
-/>
+<T.Group bind:ref={nametagGroup}>
+  <Text
+    text={name}
+    fontSize={0.3}
+    color={isCurrentPlayer ? '#4299e1' : '#ffffff'}
+    anchorX="center"
+    anchorY="middle"
+  />
+</T.Group>
 
 <!-- Chat bubble (appears above player when they send a message) -->
 {#if chatBubble}
