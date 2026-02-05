@@ -63,28 +63,32 @@
     // Update Scale and Position
     // Calculate distance from camera to bubble center
     // Use a fixed approximate height for distance calculation to avoid circular dependency
-    const bubblePos = new THREE.Vector3(position.x, position.y + 2.8, position.z)
+    const bubblePos = new THREE.Vector3(
+      position.x,
+      position.y + 2.0,
+      position.z
+    )
     const dist = camera.position.distanceTo(bubblePos)
-    
+
     // Min distance (zoom in) = 5
     // Max distance (zoom out) = 20
     const minDist = 5
     const maxDist = 20
-    
+
     // Scale: 0.5 to 1.0
     const minScale = 0.5
     const maxScale = 1.0
 
     // Height: 2.4 to 3.7 (Nametag is 1.8 to 2.2)
-    const minHeight = 2.4
-    const maxHeight = 3.7
-    
+    const minHeight = 1.9
+    const maxHeight = 2.6
+
     let t = (dist - minDist) / (maxDist - minDist)
     t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
-    
+
     const currentScale = minScale + t * (maxScale - minScale)
     const heightOffset = minHeight + t * (maxHeight - minHeight)
-    
+
     bubbleGroup.scale.set(currentScale, currentScale, currentScale)
     bubbleGroup.position.set(position.x, position.y + heightOffset, position.z)
   })
@@ -97,7 +101,7 @@
   ): THREE.Shape {
     const shape = new THREE.Shape()
     const x = -width / 2
-    const y = -height / 2
+    const y = radius
 
     shape.moveTo(x + radius, y)
     // Bottom edge with curved tail in the center
@@ -137,15 +141,14 @@
   const bubbleShape = $derived(
     createRoundedRectShape(bubbleWidth, bubbleHeight, cornerRadius)
   )
+  const bubbleCenterY = $derived(cornerRadius + bubbleHeight / 2)
   const displayText = $derived(
     message.length > 100 ? message.slice(0, 100) + '...' : message
   )
 </script>
 
 <!-- Chat bubble background -->
-<T.Group
-  bind:ref={bubbleGroup}
->
+<T.Group bind:ref={bubbleGroup}>
   <T.Mesh position={[0, 0, 0]}>
     <T.ShapeGeometry args={[bubbleShape]} />
     <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} />
@@ -161,7 +164,7 @@
   <Text
     bind:ref={textRef}
     text={displayText}
-    position={[0, 0, 0.01]}
+    position={[0, bubbleCenterY, 0.01]}
     fontSize={0.25}
     color="#ffffff"
     anchorX="center"
