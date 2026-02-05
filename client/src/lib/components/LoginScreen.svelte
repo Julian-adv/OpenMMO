@@ -20,9 +20,15 @@
     const savedServerUrl = localStorage.getItem(STORAGE_KEY_SERVER)
     const savedPlayerName = localStorage.getItem(STORAGE_KEY_PLAYER)
 
-    if (savedServerUrl) {
-      serverUrl = savedServerUrl
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const hostname = window.location.hostname
+    const port = window.location.port
+    if (port) {
+      serverUrl = `${protocol}//${hostname}:${parseInt(port) - 1}`
+    } else {
+      serverUrl = `${protocol}//${hostname}:8080`
     }
+
     if (savedPlayerName) {
       playerName = savedPlayerName
     }
@@ -143,11 +149,7 @@
     font-weight: 700;
     text-align: center;
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   form {
@@ -167,11 +169,7 @@
     font-size: 14px;
     font-weight: 500;
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .form-group input {
@@ -182,11 +180,7 @@
     color: #ffffff;
     font-size: 14px;
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     transition:
       border-color 0.2s,
       box-shadow 0.2s;
@@ -214,11 +208,7 @@
     color: #fc8181;
     font-size: 13px;
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .login-button {
@@ -234,11 +224,7 @@
       transform 0.2s,
       box-shadow 0.2s;
     font-family:
-      -apple-system,
-      BlinkMacSystemFont,
-      'Segoe UI',
-      Roboto,
-      sans-serif;
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .login-button:hover:not(:disabled) {
