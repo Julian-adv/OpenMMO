@@ -13,7 +13,8 @@
   })
 
   $effect(() => {
-    if (chatContainer) {
+    // Auto-scroll to bottom when new messages arrive
+    if (chatContainer && chatMessages.length) {
       chatContainer.scrollTop = chatContainer.scrollHeight
     }
   })
