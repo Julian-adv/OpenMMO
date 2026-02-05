@@ -88,6 +88,9 @@
     chatBubbles = state.chatBubbles
   })
 
+  // Monster models reference
+  let monsterModels = $state<Monster[]>([])
+
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
     const deltaTime = currentTime - lastFrameTime
@@ -115,6 +118,13 @@
       for (const playerModel of otherPlayerModels) {
         if (playerModel) {
           playerModel.updateAnimation()
+        }
+      }
+
+      // Update monster animations
+      for (const monsterModel of monsterModels) {
+        if (monsterModel) {
+          monsterModel.update(deltaTime / 1000) // Convert ms to seconds for THREE.AnimationMixer
         }
       }
 
@@ -351,6 +361,6 @@
   {/each}
 {/if}
 
-{#each [...monsterManager.monsters.values()] as monster (monster.id)}
-  <Monster position={monster.position} />
+{#each [...monsterManager.monsters.values()] as monster, index (monster.id)}
+  <Monster bind:this={monsterModels[index]} position={monster.position} />
 {/each}
