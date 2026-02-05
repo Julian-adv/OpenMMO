@@ -4,6 +4,9 @@ import tseslint from 'typescript-eslint'
 import sveltePlugin from 'eslint-plugin-svelte'
 
 export default [
+  {
+    ignores: ['dist/', 'public/', '.svelte-kit/'],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   ...sveltePlugin.configs['flat/recommended'],
