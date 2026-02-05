@@ -23,6 +23,7 @@
 ## Commit & Pull Request Guidelines
 - Commits: Use imperative, present-tense summaries (e.g., "Add HeightmapTerrain component"). Group related changes; keep scope focused.
 - PRs: Include purpose, linked issues, and usage notes. For UI changes, add screenshots or short clips from the Vite preview. Ensure `npm run lint` (client) and `cargo build` (server) pass.
+- Safety: ALWAYS ask the user for confirmation before executing a commit command, even if "Yolo Mode" or any autonomous mode is enabled.
 
 ## Security & Configuration Tips
 - Default server bind: `127.0.0.1:8080` in `server/src/main.rs`. Adjust if exposing externally and review firewall rules.
