@@ -10,9 +10,11 @@
   } from '../managers/chatBubbleManager'
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { networkManager } from '../network/socket'
+  import { monsterManager } from '../managers/monsterManager'
   import PlayerModel from './PlayerModel.svelte'
   import PlayerControl from './PlayerControl.svelte'
   import SplatTerrain from './SplatTerrain.svelte'
+  import Monster from './Monster.svelte'
   import { type PlayerState } from '../utils/movementUtils'
 
   interface Props {
@@ -31,6 +33,21 @@
   let groundMesh = $state<THREE.Mesh | undefined>(undefined)
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let cameraInitialized = $state(false)
+
+  // Monster Spawning Logic
+  let monsterSpawnerStarted = false
+
+  $effect(() => {
+    if (currentPlayer && !monsterSpawnerStarted) {
+      monsterSpawnerStarted = true
+      // Spawn a monster 5 units away on X axis
+      monsterManager.spawn('scp939', {
+        x: currentPlayer.position.x + 5,
+        y: currentPlayer.position.y,
+        z: currentPlayer.position.z,
+      })
+    }
+  })
 
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
@@ -172,7 +189,11 @@
 
     // Update shadow camera target to look at player
     if (directionalLight.target) {
-      directionalLight.target.position.set(playerPos.x, playerPos.y, playerPos.z)
+      directionalLight.target.position.set(
+        playerPos.x,
+        playerPos.y,
+        playerPos.z
+      )
       directionalLight.target.updateMatrixWorld()
     }
   }
@@ -309,7 +330,11 @@
   {#each [...otherPlayers.values()] as player, index (player.id)}
     {@const remotePlayer = remotePlayerManager.players.get(player.id)}
     {@const displayPosition = remotePlayer
-      ? new THREE.Vector3(remotePlayer.position.x, remotePlayer.position.y, remotePlayer.position.z)
+      ? new THREE.Vector3(
+          remotePlayer.position.x,
+          remotePlayer.position.y,
+          remotePlayer.position.z
+        )
       : player.position}
     <PlayerModel
       bind:this={otherPlayerModels[index]}
@@ -325,3 +350,7 @@
     />
   {/each}
 {/if}
+
+{#each [...monsterManager.monsters.values()] as monster (monster.id)}
+  <Monster position={monster.position} />
+{/each}

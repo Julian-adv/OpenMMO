@@ -17,7 +17,6 @@
   let errorMessage = $state('')
 
   onMount(() => {
-    const savedServerUrl = localStorage.getItem(STORAGE_KEY_SERVER)
     const savedPlayerName = localStorage.getItem(STORAGE_KEY_PLAYER)
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
