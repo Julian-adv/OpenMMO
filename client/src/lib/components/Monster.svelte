@@ -5,9 +5,10 @@
 
   interface Props {
     position: { x: number; y: number; z: number }
+    rotation?: number
   }
 
-  let { position }: Props = $props()
+  let { position, rotation = 0 }: Props = $props()
 
   const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
 
@@ -55,7 +56,7 @@
 {#if model}
   <T.Group
     position={[position.x, position.y, position.z]}
-    rotation={[0, 0, 0]}
+    rotation={[0, rotation, 0]}
     scale={[1, 1, 1]}
   >
     <T is={model} castShadow receiveShadow />

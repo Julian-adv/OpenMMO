@@ -352,5 +352,9 @@
 {/if}
 
 {#each [...monsterManager.monsters.values()] as monster, index (monster.id)}
-  <Monster bind:this={monsterModels[index]} position={monster.position} />
+  <Monster
+    bind:this={monsterModels[index]}
+    position={monster.position}
+    rotation={monster.rotation}
+  />
 {/each}
