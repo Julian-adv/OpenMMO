@@ -71,7 +71,7 @@ class MonsterManager {
     const gameState = get(gameStore)
     const myPlayerId = gameState.currentPlayer?.id
 
-    for (const monster of [...this.monsters.values()]) {
+    for (const monster of this.monsters.values()) {
       // Only control monsters that YOU own
       if (monster.ownerId === myPlayerId) {
         this.updateMonsterAI(monster, deltaTime)
