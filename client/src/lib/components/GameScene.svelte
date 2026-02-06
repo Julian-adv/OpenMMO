@@ -111,13 +111,13 @@
 
       // Update player model animations
       if (currentPlayerModel) {
-        currentPlayerModel.updateAnimation()
+        currentPlayerModel.update(deltaTime / 1000)
       }
 
       // Update other player model animations
       for (const playerModel of otherPlayerModels) {
         if (playerModel) {
-          playerModel.updateAnimation()
+          playerModel.update(deltaTime / 1000)
         }
       }
 
