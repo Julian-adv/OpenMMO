@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { T, useLoader, useTask } from '@threlte/core'
+  import { T, useLoader } from '@threlte/core'
   import { Text } from '@threlte/extras'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
@@ -38,37 +38,6 @@
   let nametagHeight = $state(2.2)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
 
-  useTask(() => {
-    if (!camera || !nametagGroup) return
-
-    const nametagPos = new THREE.Vector3(position.x, position.y + 2.2, position.z)
-    const dist = camera.position.distanceTo(nametagPos)
-    
-    // Min distance (zoom in) = 5
-    // Max distance (zoom out) = 20
-    const minDist = 5
-    const maxDist = 20
-    
-    // Scale: 0.5 to 1.0
-    const minScale = 0.5
-    const maxScale = 1.0
-
-    // Height: 1.8 to 2.2
-    const minHeight = 1.8
-    const maxHeight = 2.2
-    
-    let t = (dist - minDist) / (maxDist - minDist)
-    t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
-    
-    nametagScale = minScale + t * (maxScale - minScale)
-    nametagHeight = minHeight + t * (maxHeight - minHeight)
-
-    // Update nametag group transform
-    nametagGroup.position.set(position.x, position.y + nametagHeight, position.z)
-    nametagGroup.scale.set(nametagScale, nametagScale, nametagScale)
-    nametagGroup.quaternion.copy(camera.quaternion)
-  })
-
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
 
@@ -79,7 +48,7 @@
   let mixer: THREE.AnimationMixer | null = null
   let currentAction: THREE.AnimationAction | null = null
   let modelRoot = $state<THREE.Group | null>(null)
-  let clock = new THREE.Clock()
+  // Clock removed, using passed deltaTime
 
   let validAnimations: THREE.AnimationClip[] = []
   let lastPlayerState: 'idle' | 'moving' | undefined = undefined
@@ -332,13 +301,50 @@
     }
   })
 
-  // Function to update mixer and animation state - called from GameScene gameLoop
-  export function updateAnimation() {
+  // Function to update mixer and animation state and nametag - called from GameScene gameLoop
+  export function update(deltaTime: number) {
+    // Update nametag logic (formerly in useTask)
+    if (camera && nametagGroup) {
+      const nametagPos = new THREE.Vector3(
+        position.x,
+        position.y + 2.2,
+        position.z
+      )
+      const dist = camera.position.distanceTo(nametagPos)
+
+      // Min distance (zoom in) = 5
+      // Max distance (zoom out) = 20
+      const minDist = 5
+      const maxDist = 20
+
+      // Scale: 0.5 to 1.0
+      const minScale = 0.5
+      const maxScale = 1.0
+
+      // Height: 1.8 to 2.2
+      const minHeight = 1.8
+      const maxHeight = 2.2
+
+      let t = (dist - minDist) / (maxDist - minDist)
+      t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
+
+      nametagScale = minScale + t * (maxScale - minScale)
+      nametagHeight = minHeight + t * (maxHeight - minHeight)
+
+      // Update nametag group transform
+      nametagGroup.position.set(
+        position.x,
+        position.y + nametagHeight,
+        position.z
+      )
+      nametagGroup.scale.set(nametagScale, nametagScale, nametagScale)
+      nametagGroup.quaternion.copy(camera.quaternion)
+    }
+
     if (!mixer) return
 
-    // Update mixer
+    // Update mixer with provided deltaTime
     if (currentAction) {
-      const deltaTime = clock.getDelta()
       mixer.update(deltaTime)
 
       const clip = currentAction.getClip()
