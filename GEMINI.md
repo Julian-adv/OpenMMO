@@ -1,5 +1,9 @@
 # Gemini Development Guidelines
 
+## Commit Guidelines
+
+- **User Confirmation Required**: You must obtain explicit confirmation from the user before committing any changes to the repository. Present the commit message and the files to be staged, then wait for approval.
+
 ## Code Quality Workflow
 
 Before committing code changes, always run the appropriate check commands (`npm run check`, `npm run lint`, `npm run format`) to ensure code quality.
