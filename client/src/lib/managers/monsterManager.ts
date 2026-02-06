@@ -28,6 +28,23 @@ class MonsterManager {
     return id
   }
 
+  spawnWithId(
+    id: string,
+    type: MonsterData['type'],
+    position: { x: number; y: number; z: number }
+  ) {
+    if (this.monsters.has(id)) return
+
+    this.monsters.set(id, {
+      id,
+      type,
+      position,
+      rotation: 0,
+      state: 'idle',
+    })
+    console.log(`Spawned monster ${id} (synced) at`, position)
+  }
+
   remove(id: string) {
     this.monsters.delete(id)
   }

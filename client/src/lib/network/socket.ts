@@ -8,6 +8,7 @@ import {
 import type { Player } from '../stores/gameStore'
 import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
+import { monsterManager } from '../managers/monsterManager'
 
 type Position = {
   x: number
@@ -29,19 +30,30 @@ type ClientMessage =
   | { type: 'join'; player_name: string }
   | { type: 'player_move'; position: Position; rotation: number }
   | { type: 'chat_message'; message: string }
+  | {
+    type: 'request_spawn_monster'
+    monster_type: string
+    position: Position
+    rotation: number
+  }
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
   | { type: 'player_left'; player_id: string }
   | {
-      type: 'player_moved'
-      player_id: string
-      position: Position
-      rotation: number
-    }
+    type: 'player_moved'
+    player_id: string
+    position: Position
+    rotation: number
+  }
   | { type: 'chat_message'; player_id: string; message: string }
-  | { type: 'game_state'; players: Record<string, ServerPlayer> }
+  | {
+    type: 'game_state'
+    players: Record<string, ServerPlayer>
+    monsters?: Record<string, any>
+  }
   | { type: 'join_success'; player: ServerPlayer }
+  | { type: 'monster_spawned'; monster: any }
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -227,6 +239,31 @@ class NetworkManager {
           })
           return state
         })
+
+        // Sync monsters if provided
+        if (message.monsters) {
+          // Ideally we should sync full state, but for now let's just spawn them if they don't exist
+          // Or we can clear and respawn?
+          // For simplicity, let's just make sure they are spawned
+          Object.values(message.monsters).forEach((monster: any) => {
+            if (!monsterManager.monsters.has(monster.id)) {
+              monsterManager.spawnWithId(
+                monster.id,
+                monster.monster_type,
+                monster.position
+              )
+            }
+          })
+        }
+        break
+
+      case 'monster_spawned':
+        console.log('Monster spawned from server:', message.monster)
+        monsterManager.spawnWithId(
+          message.monster.id,
+          message.monster.monster_type,
+          message.monster.position
+        )
         break
     }
   }
@@ -264,6 +301,22 @@ class NetworkManager {
       }
       this.socket.send(JSON.stringify(message))
       // Don't create currentPlayer here, wait for server response
+    }
+  }
+
+  requestSpawnMonster(
+    type: string,
+    position: { x: number; y: number; z: number },
+    rotation: number
+  ) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      const message: ClientMessage = {
+        type: 'request_spawn_monster',
+        monster_type: type,
+        position,
+        rotation,
+      }
+      this.socket.send(JSON.stringify(message))
     }
   }
 

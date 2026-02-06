@@ -38,6 +38,16 @@ impl Player {
     }
 }
 
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Monster {
+    pub id: String,
+    pub monster_type: String,
+    pub position: Position,
+    pub rotation: f32,
+    pub state: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ClientMessage {
@@ -47,6 +57,12 @@ pub enum ClientMessage {
     PlayerMove { position: Position, rotation: f32 },
     #[serde(rename = "chat_message")]
     ChatMessage { message: String },
+    #[serde(rename = "request_spawn_monster")]
+    RequestSpawnMonster {
+        monster_type: String,
+        position: Position,
+        rotation: f32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -67,7 +83,12 @@ pub enum ServerMessage {
     #[serde(rename = "chat_message")]
     ChatMessage { player_id: String, message: String },
     #[serde(rename = "game_state")]
-    GameState { players: HashMap<String, Player> },
+    GameState {
+        players: HashMap<String, Player>,
+        monsters: HashMap<String, Monster>,
+    },
+    #[serde(rename = "monster_spawned")]
+    MonsterSpawned { monster: Monster },
 }
 
 pub type PlayerId = String;

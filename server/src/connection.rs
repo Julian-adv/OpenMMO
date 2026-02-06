@@ -149,6 +149,20 @@ async fn handle_client_message(
                 warn!("Received chat message from unauthenticated client");
             }
         }
+
+        ClientMessage::RequestSpawnMonster {
+            monster_type,
+            position,
+            rotation,
+        } => {
+            if player_id.is_some() {
+                game_state
+                    .spawn_monster(monster_type, position, rotation)
+                    .await;
+            } else {
+                warn!("Received spawn request from unauthenticated client");
+            }
+        }
     }
 
     Ok(vec![])

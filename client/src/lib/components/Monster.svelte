@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T, useLoader } from '@threlte/core'
-  import { GLTFLoader } from 'three/examples/jsm/Addons.js'
+  import { SkeletonUtils, GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as THREE from 'three'
 
   interface Props {
@@ -13,6 +13,7 @@
 
   let mixer: THREE.AnimationMixer | undefined
   let currentAction: THREE.AnimationAction | undefined
+  let model: THREE.Group | undefined = $state(undefined)
 
   // Export update function to be called from parent
   export function update(deltaTime: number) {
@@ -23,8 +24,12 @@
 
   $effect(() => {
     if ($gltf) {
-      // Setup mixer
-      mixer = new THREE.AnimationMixer($gltf.scene)
+      // Clone the model for this instance
+      const clonedScene = SkeletonUtils.clone($gltf.scene) as THREE.Group
+      model = clonedScene
+
+      // Setup mixer on the cloned scene
+      mixer = new THREE.AnimationMixer(clonedScene)
 
       // Find idle animation
       const idleClip = $gltf.animations.find((clip) => clip.name === '939_Idle')
@@ -47,12 +52,12 @@
   })
 </script>
 
-{#if $gltf}
+{#if model}
   <T.Group
     position={[position.x, position.y, position.z]}
     rotation={[0, 0, 0]}
     scale={[1, 1, 1]}
   >
-    <T is={$gltf.scene} castShadow receiveShadow />
+    <T is={model} castShadow receiveShadow />
   </T.Group>
 {/if}

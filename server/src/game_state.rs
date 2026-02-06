@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{info, warn};
+use uuid::Uuid;
 
 pub type GameStateSender = broadcast::Sender<ServerMessage>;
 pub type GameStateReceiver = broadcast::Receiver<ServerMessage>;
@@ -10,6 +11,7 @@ pub type GameStateReceiver = broadcast::Receiver<ServerMessage>;
 #[derive(Clone)]
 pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
+    monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
     broadcast_tx: GameStateSender,
 }
 
@@ -19,6 +21,7 @@ impl GameState {
 
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
+            monsters: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
         }
     }
@@ -52,8 +55,10 @@ impl GameState {
                 .collect();
 
             if !other_players.is_empty() {
+                let monsters = self.monsters.read().await.clone();
                 return Some(ServerMessage::GameState {
                     players: other_players,
+                    monsters,
                 });
             }
         }
@@ -107,6 +112,36 @@ impl GameState {
         } else {
             warn!("Chat message from non-existent player: {}", player_id);
         }
+    }
+
+    pub async fn spawn_monster(
+        &self,
+        monster_type: String,
+        position: Position,
+        rotation: f32,
+    ) {
+        let mut monsters = self.monsters.write().await;
+
+        if monsters.len() >= 10 {
+            warn!("Monster spawn rejected: limit reached ({})", monsters.len());
+            return;
+        }
+
+        let id = format!("monster_{}", Uuid::new_v4());
+        let monster = crate::types::Monster {
+            id: id.clone(),
+            monster_type: monster_type.clone(),
+            position,
+            rotation,
+            state: "idle".to_string(),
+        };
+
+        monsters.insert(id.clone(), monster.clone());
+        info!("Spawned monster {} (Total: {})", id, monsters.len());
+
+        let _ = self
+            .broadcast_tx
+            .send(ServerMessage::MonsterSpawned { monster });
     }
 
     #[allow(dead_code)]

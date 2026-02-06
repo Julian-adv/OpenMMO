@@ -34,18 +34,27 @@
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let cameraInitialized = $state(false)
 
-  // Monster Spawning Logic
-  let monsterSpawnerStarted = false
-
+  // Monster Spawning Logic - Server Controlled
   $effect(() => {
-    if (currentPlayer && !monsterSpawnerStarted) {
-      monsterSpawnerStarted = true
-      // Spawn a monster 5 units away on X axis
-      monsterManager.spawn('scp939', {
-        x: currentPlayer.position.x + 5,
-        y: currentPlayer.position.y,
-        z: currentPlayer.position.z,
-      })
+    if (currentPlayer) {
+      const interval = setInterval(() => {
+        if (!currentPlayer) return
+
+        // Random position around the player (distance 5-15)
+        const angle = Math.random() * Math.PI * 2
+        const distance = 5 + Math.random() * 10
+        const x = currentPlayer.position.x + Math.cos(angle) * distance
+        const z = currentPlayer.position.z + Math.sin(angle) * distance
+
+        // Request spawn from server
+        networkManager.requestSpawnMonster(
+          'scp939',
+          { x, y: 0, z }, // Assuming flat ground for now
+          Math.random() * Math.PI * 2
+        )
+      }, 10000) // Every 10 seconds
+
+      return () => clearInterval(interval)
     }
   })
 
