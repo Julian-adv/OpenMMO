@@ -3,7 +3,6 @@ import { networkManager } from '../network/socket'
 import { get } from 'svelte/store'
 import { gameStore } from '../stores/gameStore'
 
-
 export interface MonsterData {
   id: string
   type: 'scp939'
@@ -39,7 +38,11 @@ class MonsterManager {
       moveSpeed: 3.5, // slightly faster than player? or slower?
       stateTimer: 0,
     })
-    console.log(`Spawned monster ${id} (synced) at`, position, `Owner: ${ownerId}`)
+    console.log(
+      `Spawned monster ${id} (synced) at`,
+      position,
+      `Owner: ${ownerId}`
+    )
   }
 
   remove(id: string) {
@@ -102,7 +105,11 @@ class MonsterManager {
 
       case 'moving':
         if (monster.targetPosition) {
-          const reached = this.moveTowards(monster, monster.targetPosition, deltaTime)
+          const reached = this.moveTowards(
+            monster,
+            monster.targetPosition,
+            deltaTime
+          )
 
           // Broadcast movement every frame? Or just destination?
           // For smoother sync, we update every frame locally, but maybe broadcast less frequently?
@@ -119,7 +126,12 @@ class MonsterManager {
             if (Math.random() < 0.5) {
               monster.state = 'idle'
               monster.stateTimer = 0
-              networkManager.sendMonsterMove(monster.id, monster.position, monster.rotation, 'idle')
+              networkManager.sendMonsterMove(
+                monster.id,
+                monster.position,
+                monster.rotation,
+                'idle'
+              )
             } else {
               this.transitionToMove(monster)
             }
@@ -139,7 +151,7 @@ class MonsterManager {
     monster.targetPosition = {
       x: monster.position.x + Math.cos(angle) * distance,
       y: monster.position.y,
-      z: monster.position.z + Math.sin(angle) * distance
+      z: monster.position.z + Math.sin(angle) * distance,
     }
 
     // Look at target
@@ -158,7 +170,7 @@ class MonsterManager {
 
   private moveTowards(
     monster: MonsterData,
-    target: { x: number, y: number, z: number },
+    target: { x: number; y: number; z: number },
     deltaTime: number // in ms
   ): boolean {
     const dx = target.x - monster.position.x
@@ -188,7 +200,7 @@ class MonsterManager {
   ) {
     const monster = this.monsters.get(id)
     if (monster) {
-      // If I strictly follow network, I snap. 
+      // If I strictly follow network, I snap.
       // Better: Set target and let update loop interpolate
       // For now, simple snap to avoid drift complexity
       monster.position = position
