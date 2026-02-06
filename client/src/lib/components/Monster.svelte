@@ -3,10 +3,12 @@
   import { SkeletonUtils, GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as THREE from 'three'
 
+  import type { MonsterData } from '../types/Monster'
+
   interface Props {
     position: { x: number; y: number; z: number }
     rotation?: number
-    monsterState?: 'idle' | 'moving' | 'attack'
+    monsterState?: MonsterData['state']
   }
 
   let { position, rotation = 0, monsterState = 'idle' }: Props = $props()
@@ -42,7 +44,11 @@
 
   $effect(() => {
     if (mixer && $gltf) {
-      const clipName = monsterState === 'moving' ? '939_Running' : '939_Idle'
+      let clipName = '939_Idle'
+      if (monsterState === 'walk') clipName = '939_Walking'
+      if (monsterState === 'run') clipName = '939_Running'
+      // if (monsterState === 'attack') clipName = '939_Attack1'
+
       const clip = $gltf.animations.find((c) => c.name === clipName)
 
       if (clip) {
@@ -55,13 +61,15 @@
           currentAction = newAction
         }
       } else {
-        console.warn(`Animation ${clipName} not found`)
+        console.warn(
+          `Animation ${clipName} not found used for state ${monsterState}`
+        )
         // Fallback: play first animation if available and nothing is playing
         if (!currentAction && $gltf.animations.length > 0) {
-           const firstClip = $gltf.animations[0]
-           const newAction = mixer.clipAction(firstClip)
-           newAction.play()
-           currentAction = newAction
+          const firstClip = $gltf.animations[0]
+          const newAction = mixer.clipAction(firstClip)
+          newAction.play()
+          currentAction = newAction
         }
       }
     }

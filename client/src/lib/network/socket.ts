@@ -8,7 +8,8 @@ import {
 import type { Player } from '../stores/gameStore'
 import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
-import { monsterManager, type MonsterData } from '../managers/monsterManager'
+import { monsterManager } from '../managers/monsterManager'
+import type { MonsterData } from '../types/Monster'
 
 type Position = {
   x: number
@@ -40,46 +41,46 @@ type ClientMessage =
   | { type: 'player_move'; position: Position; rotation: number }
   | { type: 'chat_message'; message: string }
   | {
-      type: 'request_spawn_monster'
-      monster_type: string
-      position: Position
-      rotation: number
-    }
+    type: 'request_spawn_monster'
+    monster_type: string
+    position: Position
+    rotation: number
+  }
   | {
-      type: 'monster_move'
-      monster_id: string
-      position: Position
-      rotation: number
-      state: string
-      target_position: Position
-    }
+    type: 'monster_move'
+    monster_id: string
+    position: Position
+    rotation: number
+    state: string
+    target_position: Position
+  }
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
   | { type: 'player_left'; player_id: string }
   | {
-      type: 'player_moved'
-      player_id: string
-      position: Position
-      rotation: number
-    }
+    type: 'player_moved'
+    player_id: string
+    position: Position
+    rotation: number
+  }
   | { type: 'chat_message'; player_id: string; message: string }
   | {
-      type: 'game_state'
-      players: Record<string, ServerPlayer>
-      monsters?: Record<string, ServerMonster>
-    }
+    type: 'game_state'
+    players: Record<string, ServerPlayer>
+    monsters?: Record<string, ServerMonster>
+  }
   | { type: 'join_success'; player: ServerPlayer }
   | { type: 'monster_spawned'; monster: ServerMonster }
   | {
-      type: 'monster_moved'
-      monster_id: string
-      position: Position
-      rotation: number
-      state: string
-      target_position: Position
-      owner_id?: string
-    }
+    type: 'monster_moved'
+    monster_id: string
+    position: Position
+    rotation: number
+    state: string
+    target_position: Position
+    owner_id?: string
+  }
   | { type: 'monster_removed'; monster_id: string }
 
 class NetworkManager {

@@ -2,18 +2,12 @@ import { SvelteMap } from 'svelte/reactivity'
 import { networkManager } from '../network/socket'
 import { get } from 'svelte/store'
 import { gameStore } from '../stores/gameStore'
+import type { MonsterData } from '../types/Monster'
 
-export interface MonsterData {
-  id: string
-  type: 'scp939'
-  position: { x: number; y: number; z: number }
-  rotation: number
-  state: 'idle' | 'moving' | 'attack'
-  ownerId?: string
-  targetPosition?: { x: number; y: number; z: number }
-  moveSpeed: number
-  stateTimer: number
-}
+const WALK_SPEED = 1.0
+const RUN_SPEED = 8.0
+const MIN_MOVE_DIST = 2.0
+const MAX_MOVE_DIST = 10.0
 
 class MonsterManager {
   monsters = new SvelteMap<string, MonsterData>()
@@ -35,7 +29,7 @@ class MonsterManager {
       rotation: 0,
       state: 'idle',
       ownerId,
-      moveSpeed: 3.5, // slightly faster than player? or slower?
+      moveSpeed: 3.5, // default
       stateTimer: 0,
     })
     console.log(
@@ -79,7 +73,7 @@ class MonsterManager {
         this.monsters.set(monster.id, { ...monster })
       } else {
         // Interpolate remote monsters (Basic lerp for now)
-        if (monster.state === 'moving' && monster.targetPosition) {
+        if ((monster.state === 'walk' || monster.state === 'run') && monster.targetPosition) {
           this.moveTowards(monster, monster.targetPosition, deltaTime)
           // Trigger reactivity with new reference
           this.monsters.set(monster.id, { ...monster })
@@ -103,7 +97,8 @@ class MonsterManager {
         }
         break
 
-      case 'moving':
+      case 'walk':
+      case 'run':
         if (monster.targetPosition) {
           const reached = this.moveTowards(
             monster,
@@ -135,9 +130,22 @@ class MonsterManager {
   }
 
   private transitionToMove(monster: MonsterData) {
-    monster.state = 'moving'
+    // 1. Determine distance first
     const angle = Math.random() * Math.PI * 2
-    const distance = Math.random() * 5 // Max 5 meters
+    const distance = MIN_MOVE_DIST + Math.random() * (MAX_MOVE_DIST - MIN_MOVE_DIST)
+
+    // 2. Probability Logic
+    // d=2(MIN) -> walk chance 80% (P=0.8)
+    // d=10(MAX) -> walk chance 20% (P=0.2) => run chance 80%
+    // Linear equation: P(walk) = slope * distance + intercept
+    // slope = (0.2 - 0.8) / (10 - 2) = -0.6 / 8 = -0.075
+    // intercept: 0.8 = -0.075 * 2 + b => b = 0.8 + 0.15 = 0.95
+    const walkProbability = -0.075 * distance + 0.95
+    const isWalking = Math.random() < walkProbability
+
+    monster.state = isWalking ? 'walk' : 'run'
+    // Speed constant usage
+    monster.moveSpeed = isWalking ? WALK_SPEED : RUN_SPEED
 
     monster.targetPosition = {
       x: monster.position.x + Math.cos(angle) * distance,
@@ -155,7 +163,7 @@ class MonsterManager {
       monster.id,
       monster.position,
       monster.rotation,
-      'moving',
+      monster.state,
       monster.targetPosition
     )
   }
@@ -170,6 +178,8 @@ class MonsterManager {
     const distance = Math.sqrt(dx * dx + dz * dz)
 
     const moveStep = (monster.moveSpeed * deltaTime) / 1000
+
+
 
     if (distance <= moveStep) {
       monster.position = { ...target }
@@ -196,6 +206,14 @@ class MonsterManager {
       monster.position = position
       monster.rotation = rotation
       monster.state = state as MonsterData['state']
+
+      // Update moveSpeed based on state for remote monsters
+      if (monster.state === 'run') {
+        monster.moveSpeed = RUN_SPEED
+      } else if (monster.state === 'walk') {
+        monster.moveSpeed = WALK_SPEED
+      }
+
       monster.targetPosition = targetPosition
       this.monsters.set(id, { ...monster })
     }
