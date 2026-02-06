@@ -10,23 +10,6 @@ export interface MonsterData {
 
 class MonsterManager {
   monsters = new SvelteMap<string, MonsterData>()
-  private nextId = 1
-
-  spawn(
-    type: MonsterData['type'],
-    position: { x: number; y: number; z: number }
-  ) {
-    const id = `monster_${this.nextId++}`
-    this.monsters.set(id, {
-      id,
-      type,
-      position,
-      rotation: 0,
-      state: 'idle',
-    })
-    console.log(`Spawned monster ${id} at`, position)
-    return id
-  }
 
   spawnWithId(
     id: string,
@@ -51,7 +34,6 @@ class MonsterManager {
 
   reset() {
     this.monsters.clear()
-    this.nextId = 1
   }
 }
 
