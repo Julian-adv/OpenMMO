@@ -118,6 +118,7 @@ impl GameState {
         monster_type: String,
         position: Position,
         rotation: f32,
+        owner_id: Option<String>,
     ) {
         let mut monsters = self.monsters.write().await;
 
@@ -133,6 +134,7 @@ impl GameState {
             position,
             rotation,
             state: "idle".to_string(),
+            owner_id,
         };
 
         monsters.insert(id.clone(), monster.clone());
@@ -141,6 +143,29 @@ impl GameState {
         let _ = self
             .broadcast_tx
             .send(ServerMessage::MonsterSpawned { monster });
+    }
+
+    pub async fn update_monster_position(
+        &self,
+        monster_id: String,
+        new_position: Position,
+        rotation: f32,
+        state: String,
+    ) {
+        let mut monsters = self.monsters.write().await;
+
+        if let Some(monster) = monsters.get_mut(&monster_id) {
+            monster.position = new_position.clone();
+            monster.rotation = rotation;
+            monster.state = state.clone();
+
+            let _ = self.broadcast_tx.send(ServerMessage::MonsterMoved {
+                monster_id,
+                position: new_position,
+                rotation,
+                state,
+            });
+        }
     }
 
     #[allow(dead_code)]

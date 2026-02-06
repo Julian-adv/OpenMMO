@@ -155,12 +155,27 @@ async fn handle_client_message(
             position,
             rotation,
         } => {
-            if player_id.is_some() {
+            if let Some(id) = player_id {
                 game_state
-                    .spawn_monster(monster_type, position, rotation)
+                    .spawn_monster(monster_type, position, rotation, Some(id.clone()))
                     .await;
             } else {
                 warn!("Received spawn request from unauthenticated client");
+            }
+        }
+
+        ClientMessage::MonsterMove {
+            monster_id,
+            position,
+            rotation,
+            state,
+        } => {
+            if player_id.is_some() {
+                game_state
+                    .update_monster_position(monster_id, position, rotation, state)
+                    .await;
+            } else {
+                warn!("Received monster move from unauthenticated client");
             }
         }
     }

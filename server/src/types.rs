@@ -46,6 +46,7 @@ pub struct Monster {
     pub position: Position,
     pub rotation: f32,
     pub state: String,
+    pub owner_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -62,6 +63,13 @@ pub enum ClientMessage {
         monster_type: String,
         position: Position,
         rotation: f32,
+    },
+    #[serde(rename = "monster_move")]
+    MonsterMove {
+        monster_id: String,
+        position: Position,
+        rotation: f32,
+        state: String,
     },
 }
 
@@ -89,6 +97,13 @@ pub enum ServerMessage {
     },
     #[serde(rename = "monster_spawned")]
     MonsterSpawned { monster: Monster },
+    #[serde(rename = "monster_moved")]
+    MonsterMoved {
+        monster_id: String,
+        position: Position,
+        rotation: f32,
+        state: String,
+    },
 }
 
 pub type PlayerId = String;
