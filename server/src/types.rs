@@ -104,6 +104,8 @@ pub enum ServerMessage {
         rotation: f32,
         state: String,
     },
+    #[serde(rename = "monster_removed")]
+    MonsterRemoved { monster_id: String },
 }
 
 pub type PlayerId = String;

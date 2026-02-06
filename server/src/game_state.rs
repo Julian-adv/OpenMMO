@@ -66,6 +66,8 @@ impl GameState {
     }
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
+        self.remove_monsters_by_owner(player_id).await;
+
         let mut players = self.players.write().await;
 
         if let Some(player) = players.remove(player_id) {
@@ -75,6 +77,24 @@ impl GameState {
             });
         } else {
             warn!("Attempted to remove non-existent player: {}", player_id);
+        }
+    }
+
+    pub async fn remove_monsters_by_owner(&self, owner_id: &str) {
+        let mut monsters = self.monsters.write().await;
+
+        let owned_ids: Vec<String> = monsters
+            .iter()
+            .filter(|(_, m)| m.owner_id.as_deref() == Some(owner_id))
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for monster_id in owned_ids {
+            monsters.remove(&monster_id);
+            info!("Removed monster {} (owner {} disconnected)", monster_id, owner_id);
+            let _ = self
+                .broadcast_tx
+                .send(ServerMessage::MonsterRemoved { monster_id });
         }
     }
 
