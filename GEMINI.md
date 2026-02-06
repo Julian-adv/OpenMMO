@@ -27,6 +27,11 @@ npm run build          # Build for production
 - Add keys to Svelte `{#each}` blocks
 - Use block scopes in switch cases to avoid lexical declaration errors
 
+## Architecture & Performance
+
+- **Avoid `useTask`**: Do not use Threlte's `useTask` for update logic.
+- **Game Loop**: Use the centralized game loop in `GameScene.svelte`. Expose an `update(deltaTime)` method in your components and call it from the main loop to ensure deterministic execution order and performance throttling.
+
 ## Refactoring Policy
 
 This project is in early development. Do NOT worry about backwards compatibility:
