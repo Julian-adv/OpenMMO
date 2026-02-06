@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { T, useTask } from '@threlte/core'
+  import { T } from '@threlte/core'
   import { Text } from '@threlte/extras'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
@@ -31,7 +31,7 @@
     }
   }
 
-  useTask(() => {
+  export function update() {
     if (!bubbleGroup || !camera) return
 
     // Update Scale and Position
@@ -70,7 +70,7 @@
     // Make the bubble parallel to the camera screen plane
     // This handles X, Y, and Z rotations automatically and prevents distortion at screen edges
     bubbleGroup.quaternion.copy(camera.quaternion)
-  })
+  }
 
   // Create rounded rectangle shape for chat bubble with tail
   function createRoundedRectShape(

@@ -37,6 +37,7 @@
   let nametagScale = $state(1)
   let nametagHeight = $state(2.2)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
+  let chatBubbleInstance = $state<ChatBubble | null>(null)
 
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
@@ -341,6 +342,10 @@
       nametagGroup.quaternion.copy(camera.quaternion)
     }
 
+    if (chatBubbleInstance) {
+      chatBubbleInstance.update()
+    }
+
     if (!mixer) return
 
     // Update mixer with provided deltaTime
@@ -395,5 +400,10 @@
 
 <!-- Chat bubble (appears above player when they send a message) -->
 {#if chatBubble}
-  <ChatBubble {position} {camera} message={chatBubble} />
+  <ChatBubble
+    bind:this={chatBubbleInstance}
+    {position}
+    {camera}
+    message={chatBubble}
+  />
 {/if}
