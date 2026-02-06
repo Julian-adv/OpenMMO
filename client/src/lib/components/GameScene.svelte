@@ -356,5 +356,6 @@
     bind:this={monsterModels[index]}
     position={monster.position}
     rotation={monster.rotation}
+    monsterState={monster.state}
   />
 {/each}

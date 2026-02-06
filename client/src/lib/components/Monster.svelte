@@ -6,14 +6,15 @@
   interface Props {
     position: { x: number; y: number; z: number }
     rotation?: number
+    monsterState?: 'idle' | 'moving' | 'attack'
   }
 
-  let { position, rotation = 0 }: Props = $props()
+  let { position, rotation = 0, monsterState = 'idle' }: Props = $props()
 
   const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
 
-  let mixer: THREE.AnimationMixer | undefined
-  let currentAction: THREE.AnimationAction | undefined
+  let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
+  let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
   let model: THREE.Group | undefined = $state(undefined)
 
   // Export update function to be called from parent
@@ -26,27 +27,41 @@
   $effect(() => {
     if ($gltf) {
       // Clone the model for this instance
-      const clonedScene = SkeletonUtils.clone($gltf.scene) as THREE.Group
-      model = clonedScene
-
-      // Setup mixer on the cloned scene
-      mixer = new THREE.AnimationMixer(clonedScene)
-
-      // Find idle animation
-      const idleClip = $gltf.animations.find((clip) => clip.name === '939_Idle')
-
-      if (idleClip) {
-        currentAction = mixer.clipAction(idleClip)
-        currentAction.play()
-      } else {
-        console.warn(
-          '939_Idle animation not found in model',
+      if (!model) {
+        const clonedScene = SkeletonUtils.clone($gltf.scene) as THREE.Group
+        model = clonedScene
+        // Setup mixer on the cloned scene
+        mixer = new THREE.AnimationMixer(clonedScene)
+        console.log(
+          'Monster animations:',
           $gltf.animations.map((c) => c.name)
         )
-        // Fallback: play first animation if available
-        if ($gltf.animations.length > 0) {
-          currentAction = mixer.clipAction($gltf.animations[0])
-          currentAction.play()
+      }
+    }
+  })
+
+  $effect(() => {
+    if (mixer && $gltf) {
+      const clipName = monsterState === 'moving' ? '939_Running' : '939_Idle'
+      const clip = $gltf.animations.find((c) => c.name === clipName)
+
+      if (clip) {
+        const newAction = mixer.clipAction(clip)
+        if (newAction !== currentAction) {
+          if (currentAction) {
+            currentAction.fadeOut(0.2)
+          }
+          newAction.reset().fadeIn(0.2).play()
+          currentAction = newAction
+        }
+      } else {
+        console.warn(`Animation ${clipName} not found`)
+        // Fallback: play first animation if available and nothing is playing
+        if (!currentAction && $gltf.animations.length > 0) {
+           const firstClip = $gltf.animations[0]
+           const newAction = mixer.clipAction(firstClip)
+           newAction.play()
+           currentAction = newAction
         }
       }
     }
