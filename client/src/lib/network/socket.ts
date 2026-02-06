@@ -51,6 +51,7 @@ type ClientMessage =
       position: Position
       rotation: number
       state: string
+      target_position: Position
     }
 
 type ServerMessage =
@@ -76,6 +77,8 @@ type ServerMessage =
       position: Position
       rotation: number
       state: string
+      target_position: Position
+      owner_id?: string
     }
   | { type: 'monster_removed'; monster_id: string }
 
@@ -297,7 +300,8 @@ class NetworkManager {
           message.monster_id,
           message.position,
           message.rotation,
-          message.state
+          message.state,
+          message.target_position
         )
         break
 
@@ -326,7 +330,8 @@ class NetworkManager {
     monsterId: string,
     position: { x: number; y: number; z: number },
     rotation: number,
-    state: string
+    state: string,
+    targetPosition: { x: number; y: number; z: number }
   ) {
     if (this.socket?.readyState === WebSocket.OPEN) {
       const message: ClientMessage = {
@@ -335,6 +340,7 @@ class NetworkManager {
         position,
         rotation,
         state,
+        target_position: targetPosition,
       }
       this.socket.send(JSON.stringify(message))
     }

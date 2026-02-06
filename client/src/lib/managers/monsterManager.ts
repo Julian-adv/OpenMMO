@@ -71,7 +71,7 @@ class MonsterManager {
     const gameState = get(gameStore)
     const myPlayerId = gameState.currentPlayer?.id
 
-    for (const monster of this.monsters.values()) {
+    for (const monster of [...this.monsters.values()]) {
       // Only control monsters that YOU own
       if (monster.ownerId === myPlayerId) {
         this.updateMonsterAI(monster, deltaTime)
@@ -111,16 +111,6 @@ class MonsterManager {
             deltaTime
           )
 
-          // Broadcast movement every frame? Or just destination?
-          // For smoother sync, we update every frame locally, but maybe broadcast less frequently?
-          // For now, let's broadcast every frame (simple, but bandwidth heavy)
-          networkManager.sendMonsterMove(
-            monster.id,
-            monster.position,
-            monster.rotation,
-            monster.state
-          )
-
           if (reached) {
             // 50% Idle, 50% Move again
             if (Math.random() < 0.5) {
@@ -130,7 +120,8 @@ class MonsterManager {
                 monster.id,
                 monster.position,
                 monster.rotation,
-                'idle'
+                'idle',
+                monster.position
               )
             } else {
               this.transitionToMove(monster)
@@ -164,7 +155,8 @@ class MonsterManager {
       monster.id,
       monster.position,
       monster.rotation,
-      'moving'
+      'moving',
+      monster.targetPosition
     )
   }
 
@@ -196,19 +188,15 @@ class MonsterManager {
     id: string,
     position: { x: number; y: number; z: number },
     rotation: number,
-    state: string
+    state: string,
+    targetPosition: { x: number; y: number; z: number }
   ) {
     const monster = this.monsters.get(id)
     if (monster) {
-      // If I strictly follow network, I snap.
-      // Better: Set target and let update loop interpolate
-      // For now, simple snap to avoid drift complexity
       monster.position = position
       monster.rotation = rotation
       monster.state = state as MonsterData['state']
-
-      // If it's a remote monster, maybe we can deduce target?
-      // But for now, snap is safest for 'monster_moved'
+      monster.targetPosition = targetPosition
       this.monsters.set(id, { ...monster })
     }
   }

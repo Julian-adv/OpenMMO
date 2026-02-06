@@ -171,6 +171,7 @@ impl GameState {
         new_position: Position,
         rotation: f32,
         state: String,
+        target_position: Position,
     ) {
         let mut monsters = self.monsters.write().await;
 
@@ -184,6 +185,8 @@ impl GameState {
                 position: new_position,
                 rotation,
                 state,
+                target_position,
+                owner_id: monster.owner_id.clone(),
             });
         }
     }

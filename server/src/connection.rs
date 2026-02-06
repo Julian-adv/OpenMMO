@@ -73,6 +73,15 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
             broadcast_msg = game_receiver.recv() => {
                 match broadcast_msg {
                     Ok(server_msg) => {
+                        // Filter out monster move updates for the owner
+                        if let ServerMessage::MonsterMoved { owner_id: Some(ref owner), .. } = server_msg {
+                            if let Some(ref current_player) = player_id {
+                                if owner == current_player {
+                                    continue;
+                                }
+                            }
+                        }
+
                         if let Ok(json) = serde_json::to_string(&server_msg) {
                             if let Err(e) = ws_sender.send(Message::Text(json)).await {
                                 error!("Failed to send message to client: {}", e);
@@ -169,10 +178,11 @@ async fn handle_client_message(
             position,
             rotation,
             state,
+            target_position,
         } => {
             if player_id.is_some() {
                 game_state
-                    .update_monster_position(monster_id, position, rotation, state)
+                    .update_monster_position(monster_id, position, rotation, state, target_position)
                     .await;
             } else {
                 warn!("Received monster move from unauthenticated client");

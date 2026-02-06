@@ -70,6 +70,7 @@ pub enum ClientMessage {
         position: Position,
         rotation: f32,
         state: String,
+        target_position: Position,
     },
 }
 
@@ -103,6 +104,8 @@ pub enum ServerMessage {
         position: Position,
         rotation: f32,
         state: String,
+        target_position: Position,
+        owner_id: Option<String>,
     },
     #[serde(rename = "monster_removed")]
     MonsterRemoved { monster_id: String },
