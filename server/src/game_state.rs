@@ -47,20 +47,19 @@ impl GameState {
 
         // Return game_state to be sent directly to the new player only
         let current_players = self.players.read().await;
-        if current_players.len() > 1 {
-            let other_players: HashMap<String, Player> = current_players
-                .iter()
-                .filter(|(id, _)| *id != &player_id)
-                .map(|(id, player)| (id.clone(), player.clone()))
-                .collect();
+        let other_players: HashMap<String, Player> = current_players
+            .iter()
+            .filter(|(id, _)| *id != &player_id)
+            .map(|(id, player)| (id.clone(), player.clone()))
+            .collect();
 
-            if !other_players.is_empty() {
-                let monsters = self.monsters.read().await.clone();
-                return Some(ServerMessage::GameState {
-                    players: other_players,
-                    monsters,
-                });
-            }
+        let monsters = self.monsters.read().await.clone();
+
+        if !other_players.is_empty() || !monsters.is_empty() {
+            return Some(ServerMessage::GameState {
+                players: other_players,
+                monsters,
+            });
         }
 
         None

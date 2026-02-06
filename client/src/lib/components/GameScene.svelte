@@ -34,30 +34,6 @@
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let cameraInitialized = $state(false)
 
-  // Monster Spawning Logic - Server Controlled
-  $effect(() => {
-    if (currentPlayer) {
-      const interval = setInterval(() => {
-        if (!currentPlayer) return
-
-        // Random position around the player (distance 5-15)
-        const angle = Math.random() * Math.PI * 2
-        const distance = 5 + Math.random() * 10
-        const x = currentPlayer.position.x + Math.cos(angle) * distance
-        const z = currentPlayer.position.z + Math.sin(angle) * distance
-
-        // Request spawn from server
-        networkManager.requestSpawnMonster(
-          'scp939',
-          { x, y: 0, z }, // Assuming flat ground for now
-          Math.random() * Math.PI * 2
-        )
-      }, 10000) // Every 10 seconds
-
-      return () => clearInterval(interval)
-    }
-  })
-
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
   const CAMERA_OFFSET = { x: 0, y: 5, z: 5 } // Relative to player
@@ -135,6 +111,11 @@
         if (monsterModel) {
           monsterModel.update(deltaTime / 1000) // Convert ms to seconds for THREE.AnimationMixer
         }
+      }
+
+      // Update monster spawning logic
+      if (currentPlayer) {
+        monsterManager.update(deltaTime, currentPlayer.position)
       }
 
       // Update camera with preserved offset
