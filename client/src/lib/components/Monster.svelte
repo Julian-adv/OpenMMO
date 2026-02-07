@@ -8,14 +8,26 @@
 
   import type { MonsterData } from '../types/Monster'
 
+  interface FloatingText {
+    id: number
+    text: string
+    color: string
+    y: number // Relative height offset
+    opacity: number
+    life: number // 0 to 1
+  }
+
   interface Props {
     position: { x: number; y: number; z: number }
     rotation: number
     monsterState: MonsterData['state']
     id: string
+    lastDamageInfo?: MonsterData['lastDamageInfo']
+    camera?: THREE.Camera
   }
 
-  let { position, rotation, monsterState, id }: Props = $props()
+  let { position, rotation, monsterState, id, lastDamageInfo, camera }: Props =
+    $props()
 
   const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
 
@@ -28,6 +40,18 @@
   let isDeadAnimationFinished = $state(false)
   let lastMonsterState = $state<MonsterData['state'] | undefined>(undefined)
   let lastDeadAnimFinished = $state(false)
+  let floatingTexts = $state<FloatingText[]>([])
+  let nextTextId = 0
+  let lastDamageTrigger = $state(0)
+  let textRefs = new Map<number, THREE.Group>()
+
+  function bindTextRef(id: number, ref: THREE.Group | undefined) {
+    if (ref) {
+      textRefs.set(id, ref)
+    } else {
+      textRefs.delete(id)
+    }
+  }
 
   function playAnimation() {
     if (!mixer || !$gltf) return
@@ -82,7 +106,6 @@
     }
   }
 
-  // Export update function to be called from parent
   export function update(deltaTime: number, camera?: THREE.Camera) {
     // 1. Sync animation with state
     if (
@@ -94,7 +117,53 @@
       playAnimation()
     }
 
-    // 2. Update mixer
+    // 2. Check for new damage
+    if (lastDamageInfo && lastDamageInfo.trigger !== lastDamageTrigger) {
+      lastDamageTrigger = lastDamageInfo.trigger
+
+      const text = lastDamageInfo.hit ? `${lastDamageInfo.damage}` : 'Miss'
+      const color = lastDamageInfo.hit ? '#ff4d4d' : '#a0aec0'
+
+      // Use reassignment for better Svelte 5 reactivity
+      floatingTexts = [
+        ...floatingTexts,
+        {
+          id: nextTextId++,
+          text,
+          color,
+          y: 2.5, // Start height offset from monster base
+          opacity: 1,
+          life: 1.0,
+        },
+      ]
+    }
+
+    // 3. Update floating texts
+    if (floatingTexts.length > 0) {
+      floatingTexts = floatingTexts
+        .map((t) => ({
+          ...t,
+          life: t.life - deltaTime,
+          y: t.y + deltaTime * 1.5,
+          opacity: Math.max(0, Math.min(1, t.life * 2)),
+        }))
+        .filter((t) => t.life > 0)
+
+      // Manual sync for perfect billboarding (Screen-aligned)
+      if (camera) {
+        floatingTexts.forEach((t) => {
+          const ref = textRefs.get(t.id)
+          if (ref) {
+            // Position relative to monster, but set in world space for simplicity
+            // or we could put them inside the group. Here we use world space to match previous working style
+            ref.position.set(position.x, position.y + t.y, position.z)
+            ref.quaternion.copy(camera.quaternion)
+          }
+        })
+      }
+    }
+
+    // 4. Update mixer
     if (mixer) {
       mixer.update(deltaTime)
 
@@ -188,3 +257,34 @@
     />
   {/if}
 </T.Group>
+
+<!-- Floating Damage Text -->
+<!-- position={[text.x, position.y + text.y, text.z]}
+      quaternion={[
+        camera.quaternion.x,
+        camera.quaternion.y,
+        camera.quaternion.z,
+        camera.quaternion.w,
+      ]} -->
+
+<!-- Floating Damage Text -->
+{#each floatingTexts as text (text.id)}
+  <T.Group
+    position={[position.x, position.y + text.y, position.z]}
+    on:create={({ ref }) => {
+      textRefs.set(text.id, ref)
+      return () => {
+        textRefs.delete(text.id)
+      }
+    }}
+  >
+    <Text
+      text={text.text}
+      fontSize={0.3}
+      color={text.color}
+      fillOpacity={text.opacity}
+      anchorX="center"
+      anchorY="middle"
+    />
+  </T.Group>
+{/each}

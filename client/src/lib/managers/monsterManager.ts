@@ -62,7 +62,12 @@ class MonsterManager {
     }
   }
 
-  handleMonsterAttacked(monsterId: string, playerId: string, hit: boolean) {
+  handleMonsterAttacked(
+    monsterId: string,
+    playerId: string,
+    hit: boolean,
+    damage: number
+  ) {
     const monster = this.monsters.get(monsterId)
     if (!monster || monster.state === 'dead') return
 
@@ -70,6 +75,8 @@ class MonsterManager {
     monster.impactDelay = 540
     monster.targetPlayerId = playerId
     monster.isLastHitSuccess = hit
+    // Temporarily store damage to show at impact
+    monster.pendingDamage = damage
 
     const gameState = get(gameStore)
     const myPlayerId = gameState.currentPlayer?.id
@@ -113,6 +120,13 @@ class MonsterManager {
         monster.impactDelay -= deltaTime
         if (monster.impactDelay <= 0) {
           monster.impactDelay = 0
+
+          // Trigger damage display
+          monster.lastDamageInfo = {
+            damage: monster.pendingDamage || 0,
+            hit: !!monster.isLastHitSuccess,
+            trigger: (monster.lastDamageInfo?.trigger || 0) + 1,
+          }
 
           if (monster.isDeadPending) {
             // Death impact!

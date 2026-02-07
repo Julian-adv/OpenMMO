@@ -369,7 +369,8 @@ class NetworkManager {
         monsterManager.handleMonsterAttacked(
           message.monster_id,
           message.player_id,
-          message.hit
+          message.hit,
+          message.damage
         )
         break
       }

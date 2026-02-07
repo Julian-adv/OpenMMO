@@ -13,6 +13,12 @@ export interface MonsterData {
   impactDelay?: number // Delay until hit state starts
   isLastHitSuccess?: boolean // Whether the last attack was a hit
   isDeadPending?: boolean // Death packet received, waiting for impact delay
+  lastDamageInfo?: {
+    damage: number
+    hit: boolean
+    trigger: number
+  }
+  pendingDamage?: number // Temporary storage for impact sync
   health: number
   maxHealth: number
 }

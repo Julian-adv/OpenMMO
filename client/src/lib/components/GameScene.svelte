@@ -388,5 +388,7 @@
     position={monster.position}
     rotation={monster.rotation}
     monsterState={monster.state}
+    lastDamageInfo={monster.lastDamageInfo}
+    {camera}
   />
 {/each}
