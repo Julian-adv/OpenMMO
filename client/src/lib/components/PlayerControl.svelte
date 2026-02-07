@@ -21,9 +21,10 @@
     camera: THREE.PerspectiveCamera
     groundMesh: THREE.Mesh
     monsterMeshes: THREE.Group[]
+    attackCooldown?: number
   }
 
-  let { onStateChange, camera, groundMesh, monsterMeshes }: Props = $props()
+  let { onStateChange, camera, groundMesh, monsterMeshes, attackCooldown }: Props = $props()
 
   let currentPlayer = $state<Player | null>(null)
   let keysPressed = $state(new Set<string>())
@@ -36,6 +37,7 @@
   let lastChaseUpdate = 0
   let lastSentPosition = $state<Position | null>(null)
   let attackTimer = 0
+  let attackCounter = $state(0)
 
   // Use the same movement config as remote players
   const MOVEMENT_CONFIG: MovementConfig = {
@@ -99,6 +101,7 @@
       rotation: playerRotation,
       position: currentPosition,
       movementMode,
+      attackCounter: targetMonsterId ? attackCounter : undefined,
     }
 
     // Only update if state actually changed
@@ -108,7 +111,8 @@
       newState.rotation !== playerState.rotation ||
       Math.abs(newState.position.x - playerState.position.x) > 0.01 ||
       Math.abs(newState.position.z - playerState.position.z) > 0.01 ||
-      newState.movementMode !== playerState.movementMode
+      newState.movementMode !== playerState.movementMode ||
+      newState.attackCounter !== playerState.attackCounter
     ) {
       playerState = newState
       onStateChange(newState)
@@ -195,8 +199,13 @@
           if (dist > 2.5) {
             // Range too far, stop attacking
             targetMonsterId = null
+            attackCounter = 0
             if (playerState.state === 'attack') {
-              const idleState = { ...playerState, state: 'idle' } as PlayerState
+              const idleState = {
+                ...playerState,
+                state: 'idle',
+                attackCounter: 0,
+              } as PlayerState
               playerState = idleState
               onStateChange(idleState)
             }
@@ -207,9 +216,12 @@
             playerRotation = Math.atan2(dx, dz)
 
             attackTimer += deltaTime
-            if (attackTimer >= 1500) {
+            const cooldownMs = attackCooldown ? attackCooldown * 1000 : 1500
+            if (attackTimer >= cooldownMs) {
               attackTimer = 0
+              attackCounter++
               networkManager.sendPlayerAttack(targetMonsterId)
+              updatePlayerState()
             }
 
             if (playerState.state !== 'attack') {
@@ -227,13 +239,18 @@
       } else {
         // Target lost
         targetMonsterId = null
+        attackCounter = 0
         if (isMoving) {
           isMoving = false
           movementTarget = null
           movementState = null
           updatePlayerState()
         } else if (playerState.state === 'attack') {
-          const idleState = { ...playerState, state: 'idle' } as PlayerState
+          const idleState = {
+            ...playerState,
+            state: 'idle',
+            attackCounter: 0,
+          } as PlayerState
           playerState = idleState
           onStateChange(idleState)
         }
@@ -328,6 +345,7 @@
 
     if (keysPressed.size > 0 && targetMonsterId) {
       targetMonsterId = null
+      attackCounter = 0
     }
 
     // Calculate movement direction based on pressed keys
@@ -458,6 +476,7 @@
 
     // 3. Set attacking target for persistent attack
     targetMonsterId = monsterId
+    attackCounter = 1 // Start at 1
     attackTimer = 0
   }
 
@@ -543,6 +562,7 @@
 
       // Normal click-to-move, clear attack target
       targetMonsterId = null // Clear persistent attack/chase
+      attackCounter = 0
       handleClickToMove(clickPosition)
     }
   }

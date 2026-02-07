@@ -35,6 +35,7 @@ export interface PlayerState {
   speed: number
   rotation: number
   movementMode?: MovementMode
+  attackCounter?: number
 }
 
 /**
