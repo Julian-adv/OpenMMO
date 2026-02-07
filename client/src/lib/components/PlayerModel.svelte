@@ -9,7 +9,7 @@
   import { SvelteSet } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import { timeScale } from '../stores/timeStore'
-  import { ANIMATION_ORDER, AnimationIndex } from '../types/animations'
+  import { ANIMATION_ORDER, AnimationIndex, AnimationName } from '../types/animations'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
 
@@ -18,11 +18,13 @@
     name: string
     isCurrentPlayer: boolean
     playerState: 'idle' | 'moving' | 'attack'
+    attackCounter?: number
     speed: number
     rotation: number
     movementMode?: MovementMode
     camera: THREE.PerspectiveCamera | undefined
     chatBubble?: string
+    onAttackDuration?: (duration: number) => void
   }
 
   let {
@@ -30,11 +32,13 @@
     name,
     isCurrentPlayer,
     playerState,
+    attackCounter,
     speed: _speed,
     rotation,
     movementMode,
     camera,
     chatBubble,
+    onAttackDuration,
   }: Props = $props()
 
   let nametagScale = $state(1)
@@ -59,6 +63,7 @@
   let lastPlayerState = $state<'idle' | 'moving' | 'attack' | undefined>(
     undefined
   )
+  let lastAttackCounter = $state(0)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
 
@@ -112,11 +117,11 @@
     // Setup new action
     newAction.reset()
     newAction.loop =
-      playerState === 'idle'
+      playerState === 'idle' || playerState === 'attack'
         ? THREE.LoopOnce
         : THREE.LoopRepeat
     newAction.clampWhenFinished =
-      playerState === 'idle'
+      playerState === 'idle' || playerState === 'attack'
     newAction.paused = false
 
     // If there's a current action and it's different, crossfade to the new one
@@ -246,6 +251,12 @@
         const foundClip = animations.find((clip) => clip.name === targetName)
         if (foundClip) {
           console.log(`✅ Found animation: ${targetName}`)
+          
+          // Report attack animation duration if it's the one we use for attacking
+          if (targetName === AnimationName.SLASH1 && onAttackDuration) {
+            onAttackDuration(foundClip.duration)
+          }
+          
           return foundClip
         } else {
           console.log(`❌ Missing animation: ${targetName}`)
@@ -388,15 +399,15 @@
 
     // Update animation state
     if (validAnimations.length > 0) {
-      // Only update animation if the player state has changed
+      // Only update animation if the player state has changed or attack counter increased
       // Note: idle transitions are handled above by OVERLAP_BEFORE_END logic
-      if (lastPlayerState !== playerState) {
+      if (
+        lastPlayerState !== playerState ||
+        (playerState === 'attack' && lastAttackCounter !== attackCounter)
+      ) {
         lastPlayerState = playerState
+        if (attackCounter !== undefined) lastAttackCounter = attackCounter
         playAnimationForState()
-      } else if (playerState === 'attack' && currentAction && currentAction.loop === THREE.LoopOnce) {
-        // Safety check: if we are in attack state but loop is somehow Once, fix it
-        currentAction.loop = THREE.LoopRepeat
-        currentAction.play()
       }
     }
   }

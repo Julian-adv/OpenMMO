@@ -35,6 +35,7 @@
   let groundMesh = $state<THREE.Mesh | undefined>(undefined)
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let cameraInitialized = $state(false)
+  let playerAttackDuration = $state(1.5) // Default 1.5s
 
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
@@ -334,6 +335,7 @@
     monsterMeshes={monsterModels
       .map((m) => m?.getMeshGroup())
       .filter((g) => g !== undefined) as THREE.Group[]}
+    attackCooldown={playerAttackDuration}
   />
 {/if}
 
@@ -344,11 +346,13 @@
     name={currentPlayer.name}
     isCurrentPlayer={true}
     playerState={currentPlayerState.state}
+    attackCounter={currentPlayerState.attackCounter}
     speed={currentPlayerState.speed}
     rotation={currentPlayerState.rotation}
     movementMode={currentPlayerState.movementMode}
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
+    onAttackDuration={(duration) => (playerAttackDuration = duration)}
   />
 {/if}
 

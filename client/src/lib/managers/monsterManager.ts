@@ -48,7 +48,7 @@ class MonsterManager {
     if (!monster) return
 
     // Set impact delay (e.g., 400ms for player's slash to land)
-    monster.impactDelay = 550
+    monster.impactDelay = 540
     monster.targetPlayerId = playerId
 
     const gameState = get(gameStore)
