@@ -38,7 +38,6 @@ impl Player {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Monster {
     pub id: String,
@@ -115,6 +114,8 @@ pub enum ServerMessage {
     PlayerAttacked {
         player_id: String,
         monster_id: String,
+        hit: bool,
+        roll: u8,
     },
 }
 

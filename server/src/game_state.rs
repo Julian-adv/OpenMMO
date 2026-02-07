@@ -91,7 +91,10 @@ impl GameState {
 
         for monster_id in owned_ids {
             monsters.remove(&monster_id);
-            info!("Removed monster {} (owner {} disconnected)", monster_id, owner_id);
+            info!(
+                "Removed monster {} (owner {} disconnected)",
+                monster_id, owner_id
+            );
             let _ = self
                 .broadcast_tx
                 .send(ServerMessage::MonsterRemoved { monster_id });
@@ -137,10 +140,19 @@ impl GameState {
         let players = self.players.read().await;
 
         if let Some(player) = players.get(player_id) {
-            info!("Player {} attacked monster {}", player.name, monster_id);
+            info!("Player {} attacking monster {}", player.name, monster_id);
+
+            // Roll d20: 1-20
+            let roll = rand::random::<u8>() % 20 + 1;
+            let hit = roll > 10;
+
+            info!("Dice roll: {}, Hit: {}", roll, hit);
+
             let _ = self.broadcast_tx.send(ServerMessage::PlayerAttacked {
                 player_id: player_id.clone(),
                 monster_id,
+                hit,
+                roll,
             });
         } else {
             warn!("Attack from non-existent player: {}", player_id);

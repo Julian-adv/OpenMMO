@@ -11,4 +11,5 @@ export interface MonsterData {
   stateTimer: number
   hitTrigger?: number // Keep for backward compat or remove if not needed
   impactDelay?: number // Delay until hit state starts
+  isLastHitSuccess?: boolean // Whether the last attack was a hit
 }

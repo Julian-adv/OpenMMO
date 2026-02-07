@@ -67,7 +67,13 @@ type ServerMessage =
       position: Position
       rotation: number
     }
-  | { type: 'player_attacked'; player_id: string; monster_id: string }
+  | {
+      type: 'player_attacked'
+      player_id: string
+      monster_id: string
+      hit: boolean
+      roll: number
+    }
   | { type: 'chat_message'; player_id: string; message: string }
   | {
       type: 'game_state'
@@ -226,6 +232,7 @@ class NetworkManager {
           const player = state.otherPlayers.get(message.player_id)
           if (player) {
             state.otherPlayers.delete(message.player_id)
+            remotePlayerManager.removePlayer(message.player_id) // Add cleanup here
             addChatMessage(`${player.name} left the game`)
           }
           return state
@@ -257,6 +264,7 @@ class NetworkManager {
       case 'game_state':
         gameStore.update((state) => {
           state.otherPlayers.clear()
+          remotePlayerManager.reset() // Clear all remote player states
           Object.values(message.players).forEach((serverPlayer) => {
             if (serverPlayer.id !== state.currentPlayer?.id) {
               const playerPos = new Vector3(
@@ -325,20 +333,28 @@ class NetworkManager {
         monsterManager.remove(message.monster_id)
         break
 
-      case 'player_attacked':
-        // Handle other player attack animation
-        // This will be handled via gameStore update or event, but for now we might need a way to notify GameScene
-        // Or update remote player state directly?
-        // RemotePlayerManager handles state updates... but attack is a transient event usually.
-        // Let's assume we can update the player state in GameScene via a store or callback?
-        // Actually, let's update gameStore or use a dedicated event bus.
-        // For simplicity, let's add an 'attack' state to remotePlayerManager.
-        console.log('Player attacked:', message.player_id)
+      case 'player_attacked': {
+        console.log('Player attacked:', message.player_id, 'Hit:', message.hit)
         remotePlayerManager.handleAttack(message.player_id)
 
+        // Show hit/miss in chat for debugging
+        const gameState = get(gameStore)
+        const attackerName =
+          gameState.currentPlayer?.id === message.player_id
+            ? 'You'
+            : gameState.otherPlayers.get(message.player_id)?.name || 'Unknown'
+        addChatMessage(
+          `${attackerName} rolled ${message.roll}: ${message.hit ? 'HIT' : 'MISSED'}!`
+        )
+
         // Notify monsterManager that monster_id was attacked by player_id
-        monsterManager.handleMonsterAttacked(message.monster_id, message.player_id)
+        monsterManager.handleMonsterAttacked(
+          message.monster_id,
+          message.player_id,
+          message.hit
+        )
         break
+      }
     }
   }
 

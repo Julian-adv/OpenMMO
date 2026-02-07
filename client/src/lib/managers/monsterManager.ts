@@ -43,13 +43,14 @@ class MonsterManager {
     this.monsters.delete(id)
   }
 
-  handleMonsterAttacked(monsterId: string, playerId: string) {
+  handleMonsterAttacked(monsterId: string, playerId: string, hit: boolean) {
     const monster = this.monsters.get(monsterId)
     if (!monster) return
 
     // Set impact delay (e.g., 400ms for player's slash to land)
     monster.impactDelay = 540
     monster.targetPlayerId = playerId
+    monster.isLastHitSuccess = hit
 
     const gameState = get(gameStore)
     const myPlayerId = gameState.currentPlayer?.id
@@ -93,17 +94,20 @@ class MonsterManager {
         monster.impactDelay -= deltaTime
         if (monster.impactDelay <= 0) {
           monster.impactDelay = 0
-          monster.state = 'hit'
-          monster.stateTimer = 0
-          // Force immediate update to network if owner
-          if (monster.ownerId === myPlayerId) {
-            networkManager.sendMonsterMove(
-              monster.id,
-              monster.position,
-              monster.rotation,
-              'hit',
-              monster.position
-            )
+
+          if (monster.isLastHitSuccess) {
+            monster.state = 'hit'
+            monster.stateTimer = 0
+            // Force immediate update to network if owner
+            if (monster.ownerId === myPlayerId) {
+              networkManager.sendMonsterMove(
+                monster.id,
+                monster.position,
+                monster.rotation,
+                'hit',
+                monster.position
+              )
+            }
           }
         }
       }
@@ -260,7 +264,7 @@ class MonsterManager {
               }
 
               // Update network to sync movement
-              // Throttle network updates for performance if needed, 
+              // Throttle network updates for performance if needed,
               // but for now let's send it to keep it responsive.
               networkManager.sendMonsterMove(
                 monster.id,

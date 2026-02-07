@@ -30,6 +30,7 @@ class PlayerStateManager {
   update(deltaTime: number, otherPlayers: Map<string, Player>) {
     const dt = deltaTime / 1000 // Convert to seconds
 
+    // Update players
     otherPlayers.forEach((player, playerId) => {
       // Get current interpolated position or initialize from player position
       const currentPlayer = this.players.get(playerId)
@@ -98,7 +99,9 @@ class PlayerStateManager {
         // Check for queued attacks upon arrival
         const queue = this.attackQueue.get(playerId)
         if (queue && queue.length > 0) {
-          console.log(`[RemotePlayerManager] Executing queued attack for ${playerId} upon arrival`)
+          console.log(
+            `[RemotePlayerManager] Executing queued attack for ${playerId} upon arrival`
+          )
           queue.shift() // Consume one attack
           if (queue.length === 0) {
             this.attackQueue.delete(playerId)
