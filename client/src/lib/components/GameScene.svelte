@@ -16,6 +16,7 @@
   import SplatTerrain from './SplatTerrain.svelte'
   import Monster from './Monster.svelte'
   import { type PlayerState } from '../utils/movementUtils'
+  import { cameraDistance } from '../stores/cameraStore'
 
   interface Props {
     serverUrl: string
@@ -36,7 +37,15 @@
 
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
-  const CAMERA_OFFSET = { x: 0, y: 5, z: 5 } // Relative to player
+
+  // Initial camera position relative to player (Distance 10, 45 degree pitch)
+  const INITIAL_DISTANCE = 10
+  const INITIAL_PITCH = Math.PI / 4
+  const CAMERA_OFFSET = {
+    x: 0,
+    y: INITIAL_DISTANCE * Math.sin(INITIAL_PITCH),
+    z: INITIAL_DISTANCE * Math.cos(INITIAL_PITCH),
+  }
 
   // Light follow system - offset relative to player
   const LIGHT_OFFSET = { x: 10, y: 10, z: 10 }
@@ -146,6 +155,14 @@
       y: currentCameraPos.y - playerPos.y,
       z: currentCameraPos.z - playerPos.z,
     }
+
+    // Calculate and update camera distance
+    const distance = Math.sqrt(
+      distanceVector.x * distanceVector.x +
+        distanceVector.y * distanceVector.y +
+        distanceVector.z * distanceVector.z
+    )
+    cameraDistance.set(distance)
 
     return distanceVector
   }
