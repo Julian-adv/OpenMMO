@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { getDefaultServerUrl } from '../utils/networkUtils'
 
   const STORAGE_KEY_SERVER = 'onlinerpg_lastServerUrl'
   const STORAGE_KEY_PLAYER = 'onlinerpg_lastPlayerName'
@@ -19,14 +20,7 @@
   onMount(() => {
     const savedPlayerName = localStorage.getItem(STORAGE_KEY_PLAYER)
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const hostname = window.location.hostname
-    const port = window.location.port
-    if (port) {
-      serverUrl = `${protocol}//${hostname}:${parseInt(port) - 1}`
-    } else {
-      serverUrl = `${protocol}//${hostname}:8080`
-    }
+    serverUrl = getDefaultServerUrl()
 
     if (savedPlayerName) {
       playerName = savedPlayerName

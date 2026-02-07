@@ -11,6 +11,7 @@ import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
 import type { MonsterData } from '../types/Monster'
+import { getDefaultServerUrl } from '../utils/networkUtils'
 
 type Position = {
   x: number
@@ -94,8 +95,15 @@ class NetworkManager {
   private lastServerUrl: string = ''
   private lastPlayerName: string = ''
 
-  connect(serverUrl: string = 'ws://192.168.0.17:8080') {
-    this.lastServerUrl = serverUrl
+  connect(serverUrl?: string) {
+    if (serverUrl) {
+      this.lastServerUrl = serverUrl
+    } else if (!this.lastServerUrl) {
+      this.lastServerUrl = getDefaultServerUrl()
+    }
+
+    const targetUrl = this.lastServerUrl
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       console.log('Already connected, skipping connection attempt')
       return
@@ -106,8 +114,8 @@ class NetworkManager {
       return
     }
 
-    console.log('Attempting to connect to:', serverUrl)
-    this.socket = new WebSocket(serverUrl)
+    console.log('Attempting to connect to:', targetUrl)
+    this.socket = new WebSocket(targetUrl)
 
     this.socket.onopen = () => {
       console.log('Connected to server')
