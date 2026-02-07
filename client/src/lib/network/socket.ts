@@ -4,6 +4,7 @@ import {
   updatePlayer,
   addChatMessage,
   addChatBubble,
+  resetGameStore,
 } from '../stores/gameStore'
 import type { Player } from '../stores/gameStore'
 import { Vector3 } from 'three'
@@ -90,8 +91,11 @@ class NetworkManager {
   private reconnectAttempts = 0
   private maxReconnectAttempts = 5
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private lastServerUrl: string = ''
+  private lastPlayerName: string = ''
 
   connect(serverUrl: string = 'ws://192.168.0.17:8080') {
+    this.lastServerUrl = serverUrl
     if (this.socket?.readyState === WebSocket.OPEN) {
       console.log('Already connected, skipping connection attempt')
       return
@@ -382,6 +386,7 @@ class NetworkManager {
   }
 
   joinGame(playerName: string) {
+    this.lastPlayerName = playerName
     if (this.socket?.readyState === WebSocket.OPEN) {
       console.log('Sending join request for player:', playerName)
       const message: ClientMessage = {
@@ -418,6 +423,31 @@ class NetworkManager {
       this.socket.close()
       this.socket = null
     }
+  }
+
+  reconnect() {
+    console.log('Manual reconnection requested. Resetting state...')
+    this.disconnect()
+    resetGameStore()
+    monsterManager.reset()
+    remotePlayerManager.reset()
+
+    // Save references to rejoin after connection
+    const serverUrl = this.lastServerUrl
+    const playerName = this.lastPlayerName
+
+    this.connect(serverUrl)
+
+    // Wait for socket to open then join
+    const checkInterval = setInterval(() => {
+      if (this.socket?.readyState === WebSocket.OPEN) {
+        clearInterval(checkInterval)
+        this.joinGame(playerName)
+      }
+    }, 100)
+
+    // Safety timeout
+    setTimeout(() => clearInterval(checkInterval), 5000)
   }
 }
 

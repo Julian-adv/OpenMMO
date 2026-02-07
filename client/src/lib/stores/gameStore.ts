@@ -37,6 +37,14 @@ const initialGameState: GameState = {
 
 export const gameStore = writable<GameState>(initialGameState)
 
+export const resetGameStore = () => {
+  gameStore.set({
+    ...initialGameState,
+    otherPlayers: new SvelteMap(),
+    chatBubbles: new Map(),
+  })
+}
+
 export const updatePlayer = (playerId: string, playerData: Partial<Player>) => {
   gameStore.update((state) => {
     if (state.currentPlayer && state.currentPlayer.id === playerId) {

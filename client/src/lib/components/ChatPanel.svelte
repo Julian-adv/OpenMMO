@@ -48,7 +48,16 @@
 <div class="chat-panel">
   <div class="chat-header">
     <h3>Chat</h3>
-    <div class="connection-status" class:connected={isConnected}>
+    <div
+      class="connection-status"
+      class:connected={isConnected}
+      onclick={() => !isConnected && networkManager.reconnect()}
+      role="button"
+      tabindex="0"
+      onkeydown={(e) =>
+        e.key === 'Enter' && !isConnected && networkManager.reconnect()}
+      aria-label={isConnected ? 'Connected' : 'Click to reconnect'}
+    >
       {isConnected ? '🟢' : '🔴'}
       {isConnected ? 'Connected' : 'Disconnected'}
     </div>
@@ -119,10 +128,24 @@
     display: flex;
     align-items: center;
     gap: 5px;
+    cursor: pointer;
+    user-select: none;
+    padding: 2px 5px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+  }
+
+  .connection-status:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
 
   .connection-status.connected {
     color: #68d391;
+    cursor: default;
+  }
+
+  .connection-status.connected:hover {
+    background: transparent;
   }
 
   .chat-messages {
