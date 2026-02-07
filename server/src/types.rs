@@ -46,6 +46,8 @@ pub struct Monster {
     pub rotation: f32,
     pub state: String,
     pub owner_id: Option<String>,
+    pub health: u32,
+    pub max_health: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -110,12 +112,15 @@ pub enum ServerMessage {
     },
     #[serde(rename = "monster_removed")]
     MonsterRemoved { monster_id: String },
+    #[serde(rename = "monster_dead")]
+    MonsterDead { monster_id: String },
     #[serde(rename = "player_attacked")]
     PlayerAttacked {
         player_id: String,
         monster_id: String,
         hit: bool,
         roll: u8,
+        damage: u32,
     },
 }
 
