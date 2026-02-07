@@ -543,79 +543,83 @@
   function handleCanvasClick(event: MouseEvent) {
     if (!currentPlayer) return
 
-    // Calculate mouse position in normalized device coordinates (-1 to +1)
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect()
-    const mouse = new Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    )
+    
+    // Define 5 points to raycast: center, up, right, down, left (10px offsets)
+    const offsets = [
+      { dx: 0, dy: 0 },    // Center
+      { dx: 0, dy: -10 },  // Up (Screen coordinates: -y is up)
+      { dx: 10, dy: 0 },   // Right
+      { dx: 0, dy: 10 },   // Down
+      { dx: -10, dy: 0 },  // Left
+    ]
 
-    // Create raycaster
     const raycaster = new Raycaster()
-    raycaster.setFromCamera(mouse, camera)
 
-    // 1. Check intersection with monsters first
+    // 1. Check intersection with monsters using 5 rays
     if (monsterMeshes.length > 0) {
-      const monsterIntersects = raycaster.intersectObjects(monsterMeshes, true)
-      if (monsterIntersects.length > 0) {
-        // Find the root object that has the monsterId
-        let object: THREE.Object3D | null = monsterIntersects[0].object
-        let monsterId: string | undefined
+      for (const offset of offsets) {
+        const mouseNDC = new Vector2(
+          ((event.clientX - rect.left + offset.dx) / rect.width) * 2 - 1,
+          -((event.clientY - rect.top + offset.dy) / rect.height) * 2 + 1
+        )
 
-        while (object) {
-          if (object.userData && object.userData.monsterId) {
-            monsterId = object.userData.monsterId
-            break
+        raycaster.setFromCamera(mouseNDC, camera)
+        const monsterIntersects = raycaster.intersectObjects(monsterMeshes, true)
+
+        if (monsterIntersects.length > 0) {
+          // Find the root object that has the monsterId
+          let object: THREE.Object3D | null = monsterIntersects[0].object
+          let monsterId: string | undefined
+
+          while (object) {
+            if (object.userData && object.userData.monsterId) {
+              monsterId = object.userData.monsterId
+              break
+            }
+            object = object.parent
           }
-          object = object.parent
-        }
 
-        if (monsterId) {
-          // Check if monster is dead
-          const monsterData = monsterManager.monsters.get(monsterId)
-          if (monsterData?.state === 'dead') {
-            console.log('Cannot attack a dead monster')
-            return
+          if (monsterId) {
+            // Check if monster is dead
+            const monsterData = monsterManager.monsters.get(monsterId)
+            if (monsterData?.state === 'dead') {
+              continue // Try other rays if this hit a dead one, or just ignore
+            }
+
+            const hitPoint = monsterIntersects[0].point
+            const dist = new THREE.Vector3(
+              currentPlayer.position.x,
+              0,
+              currentPlayer.position.z
+            ).distanceTo(new THREE.Vector3(hitPoint.x, 0, hitPoint.z))
+
+            if (dist < 2.0) {
+              handleAttack(monsterId)
+              isMoving = false
+              movementTarget = null
+              targetMonsterId = monsterId
+            } else {
+              targetMonsterId = monsterId
+              lastChaseUpdate = Date.now()
+              handleClickToMove({
+                x: hitPoint.x,
+                y: 0,
+                z: hitPoint.z,
+              })
+            }
+            return // Successfully targeted a monster, exit function
           }
-
-          // Calculate distance to monster
-          // If we traveled up the hierarchy, using parent position might be safer if we have ref to it
-          // But raycast point is exact hit point. Let's use intersection point for distance?
-          // The user requirement says "get close (<2m)".
-          // We should probably use the monster's root position, but we only have meshes here.
-          // Getting position from intersection point is easiest
-          const hitPoint = monsterIntersects[0].point
-
-          const dist = new THREE.Vector3(
-            currentPlayer.position.x,
-            0,
-            currentPlayer.position.z
-          ).distanceTo(new THREE.Vector3(hitPoint.x, 0, hitPoint.z))
-
-          if (dist < 2.0) {
-            handleAttack(monsterId)
-            // Stop any movement
-            isMoving = false
-            movementTarget = null
-            targetMonsterId = monsterId
-          } else {
-            // Chase logic
-            targetMonsterId = monsterId
-            lastChaseUpdate = Date.now()
-
-            // Target the monster directly as per user request
-            handleClickToMove({
-              x: hitPoint.x,
-              y: 0,
-              z: hitPoint.z,
-            })
-          }
-          return // Stop checks
         }
       }
     }
 
-    // 2. Check intersection with ground
+    // 2. Check intersection with ground (only use the center ray)
+    const centerNDC = new Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    )
+    raycaster.setFromCamera(centerNDC, camera)
     const intersects = raycaster.intersectObject(groundMesh)
 
     if (intersects.length > 0) {
