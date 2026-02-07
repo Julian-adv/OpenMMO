@@ -60,7 +60,7 @@
       let clipName = '939_Idle'
       if (monsterState === 'walk') clipName = '939_Walking'
       if (monsterState === 'run') clipName = '939_Running'
-      // if (monsterState === 'attack') clipName = '939_Attack1'
+      if (monsterState === 'attack') clipName = '939_Attack1'
 
       const clip = $gltf.animations.find((c) => c.name === clipName)
 

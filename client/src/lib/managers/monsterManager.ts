@@ -43,6 +43,31 @@ class MonsterManager {
     this.monsters.delete(id)
   }
 
+  handleMonsterAttacked(monsterId: string, playerId: string) {
+    const monster = this.monsters.get(monsterId)
+    const gameState = get(gameStore)
+    const myPlayerId = gameState.currentPlayer?.id
+
+    // Only respond if we own this monster
+    if (monster && monster.ownerId === myPlayerId) {
+      // If monster is already attacking someone else, maybe it shouldn't switch? 
+      // For now, let's switch to the latest attacker.
+      monster.targetPlayerId = playerId
+      monster.state = 'attack'
+      monster.stateTimer = 0
+      monster.moveSpeed = RUN_SPEED // Chase the player
+      
+      // Update network
+      networkManager.sendMonsterMove(
+        monster.id,
+        monster.position,
+        monster.rotation,
+        monster.state,
+        monster.position // Placeholder for target position if not moving yet
+      )
+    }
+  }
+
   reset() {
     this.monsters.clear()
     this.timeSinceLastSpawn = 0
@@ -74,7 +99,9 @@ class MonsterManager {
       } else {
         // Interpolate remote monsters (Basic lerp for now)
         if (
-          (monster.state === 'walk' || monster.state === 'run') &&
+          (monster.state === 'walk' ||
+            monster.state === 'run' ||
+            monster.state === 'attack') &&
           monster.targetPosition
         ) {
           this.moveTowards(monster, monster.targetPosition, deltaTime)
@@ -124,6 +151,96 @@ class MonsterManager {
             } else {
               this.transitionToMove(monster)
             }
+          }
+        } else {
+          monster.state = 'idle'
+        }
+        break
+
+      case 'attack':
+        if (monster.targetPlayerId) {
+          const gameState = get(gameStore)
+          let targetPlayer:
+            | { position: { x: number; y: number; z: number } }
+            | undefined
+
+          if (gameState.currentPlayer?.id === monster.targetPlayerId) {
+            targetPlayer = gameState.currentPlayer
+          } else {
+            targetPlayer = gameState.otherPlayers.get(monster.targetPlayerId)
+          }
+
+          if (targetPlayer) {
+            const dx = targetPlayer.position.x - monster.position.x
+            const dz = targetPlayer.position.z - monster.position.z
+            const distSq = dx * dx + dz * dz
+            const ATTACK_RANGE = 2.0
+            const ATTACK_RANGE_SQ = ATTACK_RANGE * ATTACK_RANGE
+            const CHASE_RANGE = 25.0
+            const CHASE_RANGE_SQ = CHASE_RANGE * CHASE_RANGE
+
+            if (distSq > CHASE_RANGE_SQ) {
+              // Target too far, stop chasing
+              monster.state = 'idle'
+              monster.targetPlayerId = undefined
+              monster.stateTimer = 0
+              networkManager.sendMonsterMove(
+                monster.id,
+                monster.position,
+                monster.rotation,
+                'idle',
+                monster.position
+              )
+              return
+            }
+
+            // Look at player
+            monster.rotation = Math.atan2(dx, dz)
+
+            if (distSq <= ATTACK_RANGE_SQ) {
+              // Within range - wait for attack animation/cooldown
+              if (monster.stateTimer >= 1500) {
+                // Attack every 1.5s
+                monster.stateTimer = 0
+                console.log(
+                  `Monster ${monster.id} attacks player ${monster.targetPlayerId}`
+                )
+
+                networkManager.sendMonsterMove(
+                  monster.id,
+                  monster.position,
+                  monster.rotation,
+                  'attack',
+                  monster.position
+                )
+              }
+            } else {
+              // Out of range - move towards player
+              monster.moveSpeed = RUN_SPEED
+              const dist = Math.sqrt(distSq)
+              const moveStep = (monster.moveSpeed * deltaTime) / 1000
+
+              monster.position = {
+                x: monster.position.x + (dx / dist) * moveStep,
+                y: monster.position.y,
+                z: monster.position.z + (dz / dist) * moveStep,
+              }
+
+              // Update network to sync movement
+              // Throttle network updates for performance if needed, 
+              // but for now let's send it to keep it responsive.
+              networkManager.sendMonsterMove(
+                monster.id,
+                monster.position,
+                monster.rotation,
+                'attack',
+                targetPlayer.position
+              )
+            }
+          } else {
+            // Target lost
+            monster.state = 'idle'
+            monster.targetPlayerId = undefined
           }
         } else {
           monster.state = 'idle'

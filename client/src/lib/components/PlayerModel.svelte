@@ -109,11 +109,11 @@
     // Setup new action
     newAction.reset()
     newAction.loop =
-      playerState === 'idle' || playerState === 'attack'
+      playerState === 'idle'
         ? THREE.LoopOnce
         : THREE.LoopRepeat
     newAction.clampWhenFinished =
-      playerState === 'idle' || playerState === 'attack'
+      playerState === 'idle'
     newAction.paused = false
 
     // If there's a current action and it's different, crossfade to the new one
@@ -375,9 +375,14 @@
     // Update animation state
     if (validAnimations.length > 0) {
       // Only update animation if the player state has changed
+      // Note: idle transitions are handled above by OVERLAP_BEFORE_END logic
       if (lastPlayerState !== playerState) {
         lastPlayerState = playerState
         playAnimationForState()
+      } else if (playerState === 'attack' && currentAction && currentAction.loop === THREE.LoopOnce) {
+        // Safety check: if we are in attack state but loop is somehow Once, fix it
+        currentAction.loop = THREE.LoopRepeat
+        currentAction.play()
       }
     }
   }

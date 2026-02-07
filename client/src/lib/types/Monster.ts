@@ -6,6 +6,7 @@ export interface MonsterData {
   state: 'idle' | 'walk' | 'run' | 'attack'
   ownerId?: string
   targetPosition?: { x: number; y: number; z: number }
+  targetPlayerId?: string // Who the monster is attacking
   moveSpeed: number
   stateTimer: number
 }

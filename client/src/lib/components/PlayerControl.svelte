@@ -32,9 +32,10 @@
   let movementTarget = $state<Position | null>(null)
   let isMoving = $state(false)
   let movementState = $state<MovementState | null>(null)
-  let attackTargetId = $state<string | null>(null)
+  let targetMonsterId = $state<string | null>(null)
   let lastChaseUpdate = 0
   let lastSentPosition = $state<Position | null>(null)
+  let attackTimer = 0
 
   // Use the same movement config as remote players
   const MOVEMENT_CONFIG: MovementConfig = {
@@ -83,7 +84,7 @@
     // Determine movement mode based on distance or if chasing a monster
     let movementMode: MovementMode | undefined
     if (isMoving) {
-      if (attackTargetId) {
+      if (targetMonsterId) {
         movementMode = 'run'
       } else if (totalDistance !== undefined) {
         movementMode = getMovementMode(totalDistance)
@@ -116,17 +117,16 @@
 
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
-    // Check if we are chasing a target
-    if (attackTargetId && currentPlayer && isMoving) {
+    // If we have a target monster
+    if (targetMonsterId && currentPlayer) {
       // Find the monster object
       let monsterObj: THREE.Object3D | undefined
-
-      // We need to find the object with userData.monsterId === attackTargetId
+      // TODO: Optimize lookup
       for (const group of monsterMeshes) {
         if (group) {
           let found = false
           group.traverse((child) => {
-            if (child.userData.monsterId === attackTargetId) {
+            if (child.userData.monsterId === targetMonsterId) {
               found = true
             }
           })
@@ -145,84 +145,98 @@
           currentPlayer.position.z
         )
         const targetVector = new THREE.Vector3(monsterPos.x, 0, monsterPos.z)
-
         const dist = currentPos.distanceTo(targetVector)
 
-        if (dist < 2.0) {
-          // Reached attack range
-          isMoving = false
-          movementTarget = null
-          movementState = null
-          currentSpeed = 0
-
-          updatePlayerState()
-
-          // Attack AFTER clearing movement state to avoid overwrite
-          handleAttack(attackTargetId)
-          attackTargetId = null
-
-          return
-        } else {
-          // Update target position to tracking point (throttled)
-          const now = Date.now()
-          if (now - lastChaseUpdate >= 1000) {
-            lastChaseUpdate = now
-            const newTarget = { x: monsterPos.x, y: 0, z: monsterPos.z }
-
-            // Only update if target has moved significantly
-            if (
-              !movementTarget ||
-              Math.abs(movementTarget.x - newTarget.x) > 0.1 ||
-              Math.abs(movementTarget.z - newTarget.z) > 0.1
-            ) {
-              movementTarget = newTarget
-
-              // Update movement state target if it exists
-              if (movementState) {
-                movementState.targetPos = { ...movementTarget }
-
-                // Recalculate total distance based on new target
-                const dx = movementTarget.x - currentPlayer.position.x
-                const dy = movementTarget.y - currentPlayer.position.y
-                const dz = movementTarget.z - currentPlayer.position.z
-                const newTotalDist = Math.sqrt(dx * dx + dy * dy + dz * dz)
-
-                movementState.totalDistance = newTotalDist
-                // Update start position to current position to avoid jumps in interpolation
-                movementState.startPos = {
-                  x: currentPlayer.position.x,
-                  y: currentPlayer.position.y,
-                  z: currentPlayer.position.z,
+        if (isMoving) {
+          // PHASE 1: CHASING
+          if (dist < 2.0) {
+            // Reached attack range - Transition to Combat
+            isMoving = false
+            movementTarget = null
+            movementState = null
+            currentSpeed = 0
+            updatePlayerState()
+            handleAttack(targetMonsterId)
+            return
+          } else {
+            // Update target position to tracking point (throttled)
+            const now = Date.now()
+            if (now - lastChaseUpdate >= 1000) {
+              lastChaseUpdate = now
+              const newTarget = { x: monsterPos.x, y: 0, z: monsterPos.z }
+              if (
+                !movementTarget ||
+                Math.abs(movementTarget.x - newTarget.x) > 0.1 ||
+                Math.abs(movementTarget.z - newTarget.z) > 0.1
+              ) {
+                movementTarget = newTarget
+                if (movementState) {
+                  movementState.targetPos = { ...movementTarget }
+                  const dx = movementTarget.x - currentPlayer.position.x
+                  const dy = movementTarget.y - currentPlayer.position.y
+                  const dz = movementTarget.z - currentPlayer.position.z
+                  movementState.totalDistance = Math.sqrt(
+                    dx * dx + dy * dy + dz * dz
+                  )
+                  movementState.startPos = { ...currentPos }
+                } else {
+                  movementState = initMovementState(
+                    currentPos,
+                    movementTarget,
+                    currentSpeed
+                  )
                 }
-              } else {
-                // Fallback: movementState missing but we are chasing? Re-init.
-                console.warn(
-                  '[PlayerControl] Chase active but movementState missing. Re-initializing.'
-                )
-                const currentPos = {
-                  x: currentPlayer.position.x,
-                  y: currentPlayer.position.y,
-                  z: currentPlayer.position.z,
-                }
-                movementState = initMovementState(
-                  currentPos,
-                  movementTarget,
-                  currentSpeed
-                )
+                sendPlayerMove(movementTarget, playerRotation)
               }
-
-              // Send update to server
-              sendPlayerMove(movementTarget, playerRotation)
             }
+          }
+        } else {
+          // PHASE 2: COMBAT (In Range)
+          if (dist > 2.5) {
+            // Range too far, stop attacking
+            targetMonsterId = null
+            if (playerState.state === 'attack') {
+              const idleState = { ...playerState, state: 'idle' } as PlayerState
+              playerState = idleState
+              onStateChange(idleState)
+            }
+          } else {
+            // Still in range, rotate to face monster
+            const dx = monsterPos.x - currentPlayer.position.x
+            const dz = monsterPos.z - currentPlayer.position.z
+            playerRotation = Math.atan2(dx, dz)
+
+            attackTimer += deltaTime
+            if (attackTimer >= 1500) {
+              attackTimer = 0
+              networkManager.sendPlayerAttack(targetMonsterId)
+            }
+
+            if (playerState.state !== 'attack') {
+              const attackState = {
+                ...playerState,
+                state: 'attack',
+                rotation: playerRotation,
+              } as PlayerState
+              playerState = attackState
+              onStateChange(attackState)
+            }
+            return // No movement processing while in combat
           }
         }
       } else {
-        // Monster lost? Cancel chase
-        attackTargetId = null
-        isMoving = false
-        movementTarget = null
-        movementState = null
-        updatePlayerState()
+        // Target lost
+        targetMonsterId = null
+        if (isMoving) {
+          isMoving = false
+          movementTarget = null
+          movementState = null
+          updatePlayerState()
+        } else if (playerState.state === 'attack') {
+          const idleState = { ...playerState, state: 'idle' } as PlayerState
+          playerState = idleState
+          onStateChange(idleState)
+        }
         return
       }
     }
@@ -280,9 +294,8 @@
       updatePlayerState()
 
       // If we were chasing a target (and for some reason arrived without triggering distance check above), attack it now
-      if (attackTargetId) {
-        handleAttack(attackTargetId)
-        attackTargetId = null
+      if (targetMonsterId) {
+        handleAttack(targetMonsterId)
       }
     } else {
       // Continue movement
@@ -310,7 +323,11 @@
     if (keysPressed.size > 0 && movementTarget) {
       movementTarget = null
       movementState = null
-      attackTargetId = null // Cancel chase
+      targetMonsterId = null // Cancel chase/combat
+    }
+
+    if (keysPressed.size > 0 && targetMonsterId) {
+      targetMonsterId = null
     }
 
     // Calculate movement direction based on pressed keys
@@ -439,14 +456,9 @@
     // 2. Send attack packet
     networkManager.sendPlayerAttack(monsterId)
 
-    // 3. Reset to idle after animation (approx 1s)
-    setTimeout(() => {
-      if (playerState.state === 'attack') {
-        const idleState = { ...playerState, state: 'idle' } as PlayerState
-        playerState = idleState
-        onStateChange(idleState)
-      }
-    }, 1000)
+    // 3. Set attacking target for persistent attack
+    targetMonsterId = monsterId
+    attackTimer = 0
   }
 
   // Handle canvas click events
@@ -500,10 +512,10 @@
             // Stop any movement
             isMoving = false
             movementTarget = null
-            attackTargetId = null
+            targetMonsterId = monsterId
           } else {
             // Chase logic
-            attackTargetId = monsterId
+            targetMonsterId = monsterId
             lastChaseUpdate = Date.now()
 
             // Target the monster directly as per user request
@@ -530,7 +542,7 @@
       }
 
       // Normal click-to-move, clear attack target
-      attackTargetId = null
+      targetMonsterId = null // Clear persistent attack/chase
       handleClickToMove(clickPosition)
     }
   }

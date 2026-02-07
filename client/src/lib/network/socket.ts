@@ -327,6 +327,9 @@ class NetworkManager {
         // For simplicity, let's add an 'attack' state to remotePlayerManager.
         console.log('Player attacked:', message.player_id)
         remotePlayerManager.handleAttack(message.player_id)
+
+        // Notify monsterManager that monster_id was attacked by player_id
+        monsterManager.handleMonsterAttacked(message.monster_id, message.player_id)
         break
     }
   }
