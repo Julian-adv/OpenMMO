@@ -19,6 +19,7 @@
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
   let model: THREE.Group | undefined = $state(undefined)
+  let group = $state<THREE.Group>()
 
   // Export update function to be called from parent
   export function update(deltaTime: number) {
@@ -89,12 +90,13 @@
 
   // Export the model group for raycasting from parent
   export function getMeshGroup() {
-    return model
+    return group
   }
 </script>
 
 {#if model}
   <T.Group
+    bind:ref={group}
     position={[position.x, position.y, position.z]}
     rotation={[0, rotation, 0]}
     scale={[1, 1, 1]}

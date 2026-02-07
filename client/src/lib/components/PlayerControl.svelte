@@ -30,6 +30,7 @@
   let movementTarget = $state<Position | null>(null)
   let isMoving = $state(false)
   let movementState = $state<MovementState | null>(null)
+  let attackTargetId = $state<string | null>(null)
 
   // Use the same movement config as remote players
   const MOVEMENT_CONFIG: MovementConfig = {
@@ -92,6 +93,102 @@
 
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
+    // Check if we are chasing a target
+    if (attackTargetId && currentPlayer && isMoving) {
+      // Find the monster object
+      let monsterObj: THREE.Object3D | undefined
+
+      // We need to find the object with userData.monsterId === attackTargetId
+      for (const group of monsterMeshes) {
+        if (group) {
+          let found = false
+          group.traverse((child) => {
+            if (child.userData.monsterId === attackTargetId) {
+              found = true
+            }
+          })
+          if (found) {
+            monsterObj = group
+            break
+          }
+        }
+      }
+
+      if (monsterObj) {
+        const monsterPos = monsterObj.position
+        const currentPos = new THREE.Vector3(
+          currentPlayer.position.x,
+          0,
+          currentPlayer.position.z
+        )
+        const targetVector = new THREE.Vector3(monsterPos.x, 0, monsterPos.z)
+
+        const dist = currentPos.distanceTo(targetVector)
+
+        if (dist < 2.0) {
+          // Reached attack range
+          isMoving = false
+          movementTarget = null
+          movementState = null
+          currentSpeed = 0
+
+          updatePlayerState()
+
+          // Attack AFTER clearing movement state to avoid overwrite
+          handleAttack(attackTargetId)
+          attackTargetId = null
+
+          return
+        } else {
+          // Update target position to tracking point
+          // Just target the monster directly
+          movementTarget = { x: monsterPos.x, y: 0, z: monsterPos.z }
+
+          // Update movement state target if it exists
+          if (movementState) {
+            movementState.targetPos = { ...movementTarget }
+
+            // Recalculate total distance based on new target
+            const dx = movementTarget.x - currentPlayer.position.x
+            const dy = movementTarget.y - currentPlayer.position.y
+            const dz = movementTarget.z - currentPlayer.position.z
+            const newTotalDist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
+            movementState.totalDistance = newTotalDist
+            // Update start position to current position to avoid jumps in interpolation
+            movementState.startPos = {
+              x: currentPlayer.position.x,
+              y: currentPlayer.position.y,
+              z: currentPlayer.position.z,
+            }
+          } else {
+            // Fallback: movementState missing but we are chasing? Re-init.
+            console.warn(
+              '[PlayerControl] Chase active but movementState missing. Re-initializing.'
+            )
+            const currentPos = {
+              x: currentPlayer.position.x,
+              y: currentPlayer.position.y,
+              z: currentPlayer.position.z,
+            }
+            movementState = initMovementState(
+              currentPos,
+              movementTarget,
+              currentSpeed
+            )
+          }
+        }
+      } else {
+        // Monster lost? Cancel chase
+        attackTargetId = null
+        isMoving = false
+        movementTarget = null
+        movementState = null
+        updatePlayerState()
+        return
+      }
+    }
+
     if (!isMoving || !movementTarget || !currentPlayer || !movementState) {
       // Reset speed when not moving
       if (currentSpeed > 0) {
@@ -143,6 +240,12 @@
       movementState = null
       currentSpeed = 0
       updatePlayerState()
+
+      // If we were chasing a target (and for some reason arrived without triggering distance check above), attack it now
+      if (attackTargetId) {
+        handleAttack(attackTargetId)
+        attackTargetId = null
+      }
     } else {
       // Continue movement
       gameStore.update((state) => {
@@ -169,6 +272,7 @@
     if (keysPressed.size > 0 && movementTarget) {
       movementTarget = null
       movementState = null
+      attackTargetId = null // Cancel chase
     }
 
     // Calculate movement direction based on pressed keys
@@ -229,7 +333,16 @@
 
   // Handle click-to-move
   export function handleClickToMove(clickPosition: Position) {
-    if (!currentPlayer || isMoving || keysPressed.size > 0) return
+    if (!currentPlayer || isMoving || keysPressed.size > 0) {
+      // Allow overriding current movement with new click
+      if (currentPlayer && isMoving && !keysPressed.size) {
+        // Proceed
+      } else {
+        return
+      }
+    }
+
+    if (!currentPlayer) return
 
     const currentPos: Position = {
       x: currentPlayer.position.x,
@@ -311,8 +424,38 @@
         }
 
         if (monsterId) {
-          handleAttack(monsterId)
-          return // Stop here, don't move
+          // Calculate distance to monster
+          // If we traveled up the hierarchy, using parent position might be safer if we have ref to it
+          // But raycast point is exact hit point. Let's use intersection point for distance?
+          // The user requirement says "get close (<2m)".
+          // We should probably use the monster's root position, but we only have meshes here.
+          // Getting position from intersection point is easiest
+          const hitPoint = monsterIntersects[0].point
+
+          const dist = new THREE.Vector3(
+            currentPlayer.position.x,
+            0,
+            currentPlayer.position.z
+          ).distanceTo(new THREE.Vector3(hitPoint.x, 0, hitPoint.z))
+
+          if (dist < 2.0) {
+            handleAttack(monsterId)
+            // Stop any movement
+            isMoving = false
+            movementTarget = null
+            attackTargetId = null
+          } else {
+            // Chase logic
+            attackTargetId = monsterId
+
+            // Target the monster directly as per user request
+            handleClickToMove({
+              x: hitPoint.x,
+              y: 0,
+              z: hitPoint.z,
+            })
+          }
+          return // Stop checks
         }
       }
     }
@@ -328,7 +471,8 @@
         z: point.z,
       }
 
-      // Use existing click-to-move logic
+      // Normal click-to-move, clear attack target
+      attackTargetId = null
       handleClickToMove(clickPosition)
     }
   }
