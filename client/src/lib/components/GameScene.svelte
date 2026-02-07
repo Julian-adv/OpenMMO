@@ -17,6 +17,7 @@
   import Monster from './Monster.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import { cameraDistance } from '../stores/cameraStore'
+  import { timeScale } from '../stores/timeStore'
 
   interface Props {
     serverUrl: string
@@ -87,10 +88,13 @@
 
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
-    const deltaTime = currentTime - lastFrameTime
+    const rawDeltaTime = currentTime - lastFrameTime
 
     // Throttle to 60fps
-    if (deltaTime >= FRAME_TIME) {
+    if (rawDeltaTime >= FRAME_TIME) {
+      // Apply time scale for slow motion debugging
+      const deltaTime = rawDeltaTime * $timeScale
+
       // Calculate camera offset before player movement
       const cameraOffset = calculateCameraOffset()
 
