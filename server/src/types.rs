@@ -72,6 +72,8 @@ pub enum ClientMessage {
         state: String,
         target_position: Position,
     },
+    #[serde(rename = "player_attack")]
+    PlayerAttack { monster_id: String },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -109,6 +111,11 @@ pub enum ServerMessage {
     },
     #[serde(rename = "monster_removed")]
     MonsterRemoved { monster_id: String },
+    #[serde(rename = "player_attacked")]
+    PlayerAttacked {
+        player_id: String,
+        monster_id: String,
+    },
 }
 
 pub type PlayerId = String;

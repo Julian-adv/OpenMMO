@@ -188,6 +188,14 @@ async fn handle_client_message(
                 warn!("Received monster move from unauthenticated client");
             }
         }
+
+        ClientMessage::PlayerAttack { monster_id } => {
+            if let Some(id) = player_id {
+                game_state.broadcast_player_attack(id, monster_id).await;
+            } else {
+                warn!("Received attack from unauthenticated client");
+            }
+        }
     }
 
     Ok(vec![])

@@ -133,6 +133,20 @@ impl GameState {
         }
     }
 
+    pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
+        let players = self.players.read().await;
+
+        if let Some(player) = players.get(player_id) {
+            info!("Player {} attacked monster {}", player.name, monster_id);
+            let _ = self.broadcast_tx.send(ServerMessage::PlayerAttacked {
+                player_id: player_id.clone(),
+                monster_id,
+            });
+        } else {
+            warn!("Attack from non-existent player: {}", player_id);
+        }
+    }
+
     pub async fn spawn_monster(
         &self,
         monster_type: String,
