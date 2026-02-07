@@ -7,11 +7,12 @@
 
   interface Props {
     position: { x: number; y: number; z: number }
-    rotation?: number
-    monsterState?: MonsterData['state']
+    rotation: number
+    monsterState: MonsterData['state']
+    id: string
   }
 
-  let { position, rotation = 0, monsterState = 'idle' }: Props = $props()
+  let { position, rotation, monsterState, id }: Props = $props()
 
   const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
 
@@ -37,6 +38,8 @@
           if ((child as THREE.Mesh).isMesh) {
             child.castShadow = true
             child.receiveShadow = true
+            // Add user data to identify as monster part
+            child.userData.monsterId = id
           }
         })
 
@@ -83,6 +86,11 @@
       }
     }
   })
+
+  // Export the model group for raycasting from parent
+  export function getMeshGroup() {
+    return model
+  }
 </script>
 
 {#if model}

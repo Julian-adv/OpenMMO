@@ -16,11 +16,12 @@
 
   interface Props {
     onStateChange: (state: PlayerState) => void
-    camera?: THREE.PerspectiveCamera
-    groundMesh?: THREE.Mesh
+    camera: THREE.PerspectiveCamera
+    groundMesh: THREE.Mesh
+    monsterMeshes: THREE.Group[]
   }
 
-  let { onStateChange, camera, groundMesh }: Props = $props()
+  let { onStateChange, camera, groundMesh, monsterMeshes }: Props = $props()
 
   let currentPlayer = $state<Player | null>(null)
   let keysPressed = $state(new Set<string>())
@@ -252,9 +253,35 @@
     updatePlayerState(movementState.totalDistance)
   }
 
+  // Handle attack logic
+  function handleAttack(monsterId: string) {
+    console.log('Attacking monster:', monsterId)
+    // 1. Set local player state to attack
+    const newPlayerState = {
+      ...playerState,
+      state: 'attack',
+    } as PlayerState
+
+    // Force immediate update
+    playerState = newPlayerState
+    onStateChange(newPlayerState)
+
+    // 2. Send attack packet
+    networkManager.sendPlayerAttack(monsterId)
+
+    // 3. Reset to idle after animation (approx 1s)
+    setTimeout(() => {
+      if (playerState.state === 'attack') {
+        const idleState = { ...playerState, state: 'idle' } as PlayerState
+        playerState = idleState
+        onStateChange(idleState)
+      }
+    }, 1000)
+  }
+
   // Handle canvas click events
   function handleCanvasClick(event: MouseEvent) {
-    if (!camera || !groundMesh || !currentPlayer) return
+    if (!currentPlayer) return
 
     // Calculate mouse position in normalized device coordinates (-1 to +1)
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect()
@@ -267,7 +294,30 @@
     const raycaster = new Raycaster()
     raycaster.setFromCamera(mouse, camera)
 
-    // Check intersection with ground
+    // 1. Check intersection with monsters first
+    if (monsterMeshes.length > 0) {
+      const monsterIntersects = raycaster.intersectObjects(monsterMeshes, true)
+      if (monsterIntersects.length > 0) {
+        // Find the root object that has the monsterId
+        let object: THREE.Object3D | null = monsterIntersects[0].object
+        let monsterId: string | undefined
+
+        while (object) {
+          if (object.userData && object.userData.monsterId) {
+            monsterId = object.userData.monsterId
+            break
+          }
+          object = object.parent
+        }
+
+        if (monsterId) {
+          handleAttack(monsterId)
+          return // Stop here, don't move
+        }
+      }
+    }
+
+    // 2. Check intersection with ground
     const intersects = raycaster.intersectObject(groundMesh)
 
     if (intersects.length > 0) {

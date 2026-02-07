@@ -14,7 +14,7 @@
     position: Vector3
     name: string
     isCurrentPlayer: boolean
-    playerState: 'idle' | 'moving'
+    playerState: 'idle' | 'moving' | 'attack'
     speed: number
     rotation: number
     totalDistance?: number
@@ -46,14 +46,16 @@
   const swordGltf = useLoader(GLTFLoader).load('/models/sword.glb')
 
   // Animation system - following gpt-all-in-one.html approach
-  let mixer: THREE.AnimationMixer | null = null
-  let currentAction: THREE.AnimationAction | null = null
+  let mixer = $state<THREE.AnimationMixer | null>(null)
+  let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
   // Clock removed, using passed deltaTime
 
-  let validAnimations: THREE.AnimationClip[] = []
-  let lastPlayerState: 'idle' | 'moving' | undefined = undefined
-  let currentMovementAnimationIndex: number | undefined = undefined // Locked animation for current movement
+  let validAnimations = $state<THREE.AnimationClip[]>([])
+  let lastPlayerState = $state<'idle' | 'moving' | 'attack' | undefined>(
+    undefined
+  )
+  let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
 
   // Distance thresholds for animation selection
@@ -75,10 +77,11 @@
   }
 
   function playAnimationForState() {
+    // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
 
     // Select animation based on player state and distance
-    let clip: THREE.AnimationClip
+    let clip: THREE.AnimationClip | undefined
     if (playerState === 'idle') {
       // Reset movement animation lock when idle
       currentMovementAnimationIndex = undefined
@@ -98,16 +101,28 @@
         currentMovementAnimationIndex = selectMovementAnimation(totalDistance)
       }
       clip = validAnimations[currentMovementAnimationIndex]
+    } else if (playerState === 'attack') {
+      // Use slash1 animation
+      currentMovementAnimationIndex = undefined
+      // Find index for slash1 or fallback
+      // Assuming AnimationIndex.SLASH1 exists and maps correctly
+      clip = validAnimations[AnimationIndex.SLASH1]
     } else {
       return // Unknown state
     }
+
+    if (!clip) return
 
     const newAction = mixer.clipAction(clip)
 
     // Setup new action
     newAction.reset()
-    newAction.loop = playerState === 'idle' ? THREE.LoopOnce : THREE.LoopRepeat
-    newAction.clampWhenFinished = playerState === 'idle'
+    newAction.loop =
+      playerState === 'idle' || playerState === 'attack'
+        ? THREE.LoopOnce
+        : THREE.LoopRepeat
+    newAction.clampWhenFinished =
+      playerState === 'idle' || playerState === 'attack'
     newAction.paused = false
 
     // If there's a current action and it's different, crossfade to the new one
@@ -220,7 +235,8 @@
       }
 
       // Filter animations to only include tracks that match model nodes
-      const animations = $gltf.animations || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const animations: THREE.AnimationClip[] = ($gltf as any).animations || []
       console.log(`Found ${animations.length} animation clips`)
 
       // Collect all node names in the cloned model

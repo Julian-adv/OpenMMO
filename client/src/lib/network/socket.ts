@@ -54,6 +54,7 @@ type ClientMessage =
     state: string
     target_position: Position
   }
+  | { type: 'player_attack'; monster_id: string }
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
@@ -64,6 +65,7 @@ type ServerMessage =
     position: Position
     rotation: number
   }
+  | { type: 'player_attacked'; player_id: string; monster_id: string }
   | { type: 'chat_message'; player_id: string; message: string }
   | {
     type: 'game_state'
@@ -310,6 +312,28 @@ class NetworkManager {
         console.log('Monster removed from server:', message.monster_id)
         monsterManager.remove(message.monster_id)
         break
+
+      case 'player_attacked':
+        // Handle other player attack animation
+        // This will be handled via gameStore update or event, but for now we might need a way to notify GameScene
+        // Or update remote player state directly?
+        // RemotePlayerManager handles state updates... but attack is a transient event usually.
+        // Let's assume we can update the player state in GameScene via a store or callback?
+        // Actually, let's update gameStore or use a dedicated event bus.
+        // For simplicity, let's add an 'attack' state to remotePlayerManager.
+        console.log('Player attacked:', message.player_id)
+        remotePlayerManager.handleAttack(message.player_id)
+        break
+    }
+  }
+
+  sendPlayerAttack(monsterId: string) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      const message: ClientMessage = {
+        type: 'player_attack',
+        monster_id: monsterId,
+      }
+      this.socket.send(JSON.stringify(message))
     }
   }
 

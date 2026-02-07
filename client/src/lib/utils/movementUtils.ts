@@ -29,7 +29,7 @@ export interface MovementResult {
 
 export interface PlayerState {
   position: Position
-  state: 'idle' | 'moving'
+  state: 'idle' | 'moving' | 'attack'
   speed: number
   rotation: number
   totalDistance?: number // Total distance for current movement (used for animation selection)

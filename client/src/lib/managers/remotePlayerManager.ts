@@ -113,6 +113,34 @@ class PlayerStateManager {
     this.players.clear()
     this.movementData.clear()
   }
+
+  handleAttack(playerId: string) {
+    const player = this.players.get(playerId)
+    if (player) {
+      // Set state to attack
+      // Note: We might need a way to revert to idle after animation
+      // For now, let's just set it and let the update loop or a timer reset it?
+      // Actually, since we update position every frame in update(), if the player is moving, it will be overwritten to 'moving' next frame if target changed?
+      // But if idle, it stays idle.
+      // Let's set it to attack.
+      this.players.set(playerId, {
+        ...player,
+        state: 'attack',
+      })
+
+      // Auto-reset to idle after a short delay (e.g. 1 sec or animation duration)
+      // This is a simple hack to ensure it doesn't get stuck if no movement updates come
+      setTimeout(() => {
+        const p = this.players.get(playerId)
+        if (p && p.state === 'attack') {
+          this.players.set(playerId, {
+            ...p,
+            state: 'idle'
+          })
+        }
+      }, 1000)
+    }
+  }
 }
 
 export const remotePlayerManager = new PlayerStateManager()

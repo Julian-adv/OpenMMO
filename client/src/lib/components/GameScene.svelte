@@ -70,7 +70,7 @@
   let otherPlayerModels = $state<PlayerModel[]>([])
 
   // Reference to PlayerControl component
-  let playerControl: PlayerControl
+  let playerControl = $state<PlayerControl>()
 
   // Handle player state changes from PlayerControl
   function handlePlayerStateChange(newState: PlayerState) {
@@ -324,13 +324,18 @@
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
 <!-- <TerrainField /> -->
 
-<!-- PlayerControl component handles input and updates player state -->
-<PlayerControl
-  bind:this={playerControl}
-  onStateChange={handlePlayerStateChange}
-  {camera}
-  {groundMesh}
-/>
+{#if camera && groundMesh}
+  <!-- PlayerControl component handles input and updates player state -->
+  <PlayerControl
+    bind:this={playerControl}
+    onStateChange={handlePlayerStateChange}
+    {camera}
+    {groundMesh}
+    monsterMeshes={monsterModels
+      .map((m) => m?.getMeshGroup())
+      .filter((g) => g !== undefined) as THREE.Group[]}
+  />
+{/if}
 
 {#if currentPlayer && cameraInitialized && camera}
   <PlayerModel
@@ -375,6 +380,7 @@
 {#each [...monsterManager.monsters.values()] as monster, index (monster.id)}
   <Monster
     bind:this={monsterModels[index]}
+    id={monster.id}
     position={monster.position}
     rotation={monster.rotation}
     monsterState={monster.state}
