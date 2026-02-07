@@ -45,27 +45,24 @@ class MonsterManager {
 
   handleMonsterAttacked(monsterId: string, playerId: string) {
     const monster = this.monsters.get(monsterId)
+    if (!monster) return
+
+    // Set impact delay (e.g., 400ms for player's slash to land)
+    monster.impactDelay = 550
+    monster.targetPlayerId = playerId
+
     const gameState = get(gameStore)
     const myPlayerId = gameState.currentPlayer?.id
 
-    // Only respond if we own this monster
-    if (monster && monster.ownerId === myPlayerId) {
-      // If monster is already attacking someone else, maybe it shouldn't switch? 
-      // For now, let's switch to the latest attacker.
-      monster.targetPlayerId = playerId
-      monster.state = 'attack'
-      monster.stateTimer = 0
-      monster.moveSpeed = RUN_SPEED // Chase the player
-      
-      // Update network
-      networkManager.sendMonsterMove(
-        monster.id,
-        monster.position,
-        monster.rotation,
-        monster.state,
-        monster.position // Placeholder for target position if not moving yet
-      )
+    // Only respond with state changes if we own this monster
+    if (monster.ownerId === myPlayerId) {
+      // We will transition to 'hit' in the update loop after impactDelay
+      // but we can set the targetPlayerId now to ensure retaliation
+      monster.moveSpeed = RUN_SPEED
     }
+
+    // Trigger reactivity
+    this.monsters.set(monsterId, { ...monster })
   }
 
   reset() {
@@ -91,13 +88,33 @@ class MonsterManager {
     const myPlayerId = gameState.currentPlayer?.id
 
     for (const monster of this.monsters.values()) {
+      // Impact Delay Handling (Global for all clients to keep visuals synced)
+      if (monster.impactDelay !== undefined && monster.impactDelay > 0) {
+        monster.impactDelay -= deltaTime
+        if (monster.impactDelay <= 0) {
+          monster.impactDelay = 0
+          monster.state = 'hit'
+          monster.stateTimer = 0
+          // Force immediate update to network if owner
+          if (monster.ownerId === myPlayerId) {
+            networkManager.sendMonsterMove(
+              monster.id,
+              monster.position,
+              monster.rotation,
+              'hit',
+              monster.position
+            )
+          }
+        }
+      }
+
       // Only control monsters that YOU own
       if (monster.ownerId === myPlayerId) {
         this.updateMonsterAI(monster, deltaTime)
         // Trigger reactivity with new reference
         this.monsters.set(monster.id, { ...monster })
       } else {
-        // Interpolate remote monsters (Basic lerp for now)
+        // Interpolate remote monsters
         if (
           (monster.state === 'walk' ||
             monster.state === 'run' ||
@@ -116,6 +133,22 @@ class MonsterManager {
     monster.stateTimer += deltaTime
 
     switch (monster.state) {
+      case 'hit':
+        // Wait for stagger animation to finish (approx 800ms)
+        if (monster.stateTimer >= 800) {
+          monster.state = 'attack'
+          monster.stateTimer = 0
+          // Notify network of state change
+          networkManager.sendMonsterMove(
+            monster.id,
+            monster.position,
+            monster.rotation,
+            'attack',
+            monster.position
+          )
+        }
+        break
+
       case 'idle':
         // 1 second interval check
         if (monster.stateTimer >= 1000) {

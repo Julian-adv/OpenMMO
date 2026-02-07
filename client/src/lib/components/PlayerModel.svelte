@@ -7,6 +7,8 @@
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
+  import { get } from 'svelte/store'
+  import { timeScale } from '../stores/timeStore'
   import { ANIMATION_ORDER, AnimationIndex } from '../types/animations'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
@@ -39,6 +41,7 @@
   let nametagHeight = $state(2.2)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
   let chatBubbleInstance = $state<ChatBubble | null>(null)
+  let animDebugInfo = $state('')
 
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
@@ -355,6 +358,17 @@
 
     if (!mixer) return
 
+    // Update debug info for slow mode
+    const currentTS = get(timeScale)
+    if (currentTS < 1.0 && currentAction) {
+      const time = currentAction.time.toFixed(2)
+      const duration = currentAction.getClip().duration.toFixed(2)
+      const animName = currentAction.getClip().name
+      animDebugInfo = `[${animName}] ${time}s / ${duration}s`
+    } else {
+      animDebugInfo = ''
+    }
+
     // Update mixer with provided deltaTime
     if (currentAction) {
       mixer.update(deltaTime)
@@ -408,6 +422,16 @@
     anchorX="center"
     anchorY="middle"
   />
+  {#if animDebugInfo}
+    <Text
+      text={animDebugInfo}
+      fontSize={0.2}
+      color="#ffff00"
+      position.y={0.4}
+      anchorX="center"
+      anchorY="middle"
+    />
+  {/if}
 </T.Group>
 
 <!-- Chat bubble (appears above player when they send a message) -->

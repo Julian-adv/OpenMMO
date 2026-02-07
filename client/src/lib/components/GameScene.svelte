@@ -122,7 +122,7 @@
       // Update monster animations
       for (const monsterModel of monsterModels) {
         if (monsterModel) {
-          monsterModel.update(deltaTime / 1000) // Convert ms to seconds for THREE.AnimationMixer
+          monsterModel.update(deltaTime / 1000, camera) // Convert ms to seconds for THREE.AnimationMixer
         }
       }
 

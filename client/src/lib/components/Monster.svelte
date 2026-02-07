@@ -1,7 +1,10 @@
 <script lang="ts">
   import { T, useLoader } from '@threlte/core'
+  import { Text } from '@threlte/extras'
   import { SkeletonUtils, GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as THREE from 'three'
+  import { get } from 'svelte/store'
+  import { timeScale } from '../stores/timeStore'
 
   import type { MonsterData } from '../types/Monster'
 
@@ -20,11 +23,30 @@
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
   let model: THREE.Group | undefined = $state(undefined)
   let group = $state<THREE.Group>()
+  let nametagGroup = $state<THREE.Group | undefined>(undefined)
+  let animDebugInfo = $state('')
 
   // Export update function to be called from parent
-  export function update(deltaTime: number) {
+  export function update(deltaTime: number, camera?: THREE.Camera) {
     if (mixer) {
       mixer.update(deltaTime)
+
+      // Update debug info for slow mode
+      const currentTS = get(timeScale)
+      if (currentTS < 1.0 && currentAction) {
+        const time = currentAction.time.toFixed(2)
+        const duration = currentAction.getClip().duration.toFixed(2)
+        const animName = currentAction.getClip().name
+        animDebugInfo = `[${animName}] ${time}s / ${duration}s`
+      } else {
+        animDebugInfo = ''
+      }
+    }
+
+    // Update nametag to face camera
+    if (camera && nametagGroup) {
+      nametagGroup.position.set(position.x, position.y + 2.5, position.z)
+      nametagGroup.quaternion.copy(camera.quaternion)
     }
   }
 
@@ -61,6 +83,7 @@
       if (monsterState === 'walk') clipName = '939_Walking'
       if (monsterState === 'run') clipName = '939_Running'
       if (monsterState === 'attack') clipName = '939_Attack1'
+      if (monsterState === 'hit') clipName = '939_AddStagger1'
 
       const clip = $gltf.animations.find((c) => c.name === clipName)
 
@@ -104,3 +127,25 @@
     <T is={model} castShadow receiveShadow />
   </T.Group>
 {/if}
+
+<!-- Name tag / Debug info -->
+<T.Group bind:ref={nametagGroup}>
+  {#if animDebugInfo}
+    <Text
+      text={id}
+      fontSize={0.2}
+      color="#ffffff"
+      position.y={0.3}
+      anchorX="center"
+      anchorY="middle"
+    />
+    <Text
+      text={animDebugInfo}
+      fontSize={0.2}
+      color="#ffff00"
+      position.y={0.6}
+      anchorX="center"
+      anchorY="middle"
+    />
+  {/if}
+</T.Group>
