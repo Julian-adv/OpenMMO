@@ -34,6 +34,7 @@
   let movementState = $state<MovementState | null>(null)
   let attackTargetId = $state<string | null>(null)
   let lastChaseUpdate = 0
+  let lastSentPosition = $state<Position | null>(null)
 
   // Use the same movement config as remote players
   const MOVEMENT_CONFIG: MovementConfig = {
@@ -43,6 +44,12 @@
   // Character rotation and current speed
   let playerRotation = $state(0)
   let currentSpeed = $state(0)
+
+  // Wrapper for sending move packets to track last sent position
+  function sendPlayerMove(position: Position, rotation: number) {
+    lastSentPosition = { ...position }
+    networkManager.sendPlayerMove(position, rotation)
+  }
 
   // Current player state
   let playerState = $state<PlayerState>({
@@ -205,7 +212,7 @@
               }
 
               // Send update to server
-              networkManager.sendPlayerMove(movementTarget, playerRotation)
+              sendPlayerMove(movementTarget, playerRotation)
             }
           }
         }
@@ -264,7 +271,7 @@
       })
 
       // Send final position to server
-      networkManager.sendPlayerMove(movementTarget, playerRotation)
+      sendPlayerMove(movementTarget, playerRotation)
 
       isMoving = false
       movementTarget = null
@@ -345,7 +352,7 @@
       })
 
       // Send position to server periodically
-      networkManager.sendPlayerMove(
+      sendPlayerMove(
         {
           x: newX,
           y: 0, // Keep player on ground level
@@ -392,7 +399,7 @@
     isMoving = true
 
     // Send target position to server when movement starts
-    networkManager.sendPlayerMove(clickPosition, playerRotation)
+    sendPlayerMove(clickPosition, playerRotation)
 
     updatePlayerState(movementState.totalDistance)
   }
@@ -400,6 +407,25 @@
   // Handle attack logic
   function handleAttack(monsterId: string) {
     console.log('Attacking monster:', monsterId)
+
+    // Ensure position sync: send final move packet if current position differs from last sent
+    if (currentPlayer) {
+      const currentPos: Position = {
+        x: currentPlayer.position.x,
+        y: currentPlayer.position.y,
+        z: currentPlayer.position.z,
+      }
+
+      const shouldSendMove =
+        !lastSentPosition ||
+        Math.abs(currentPos.x - lastSentPosition.x) > 0.01 ||
+        Math.abs(currentPos.z - lastSentPosition.z) > 0.01
+
+      if (shouldSendMove) {
+        sendPlayerMove(currentPos, playerRotation)
+      }
+    }
+
     // 1. Set local player state to attack
     const newPlayerState = {
       ...playerState,
