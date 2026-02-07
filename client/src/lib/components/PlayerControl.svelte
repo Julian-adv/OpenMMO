@@ -31,6 +31,7 @@
   let isMoving = $state(false)
   let movementState = $state<MovementState | null>(null)
   let attackTargetId = $state<string | null>(null)
+  let lastChaseUpdate = 0
 
   // Use the same movement config as remote players
   const MOVEMENT_CONFIG: MovementConfig = {
@@ -140,42 +141,57 @@
 
           return
         } else {
-          // Update target position to tracking point
-          // Just target the monster directly
-          movementTarget = { x: monsterPos.x, y: 0, z: monsterPos.z }
+          // Update target position to tracking point (throttled)
+          const now = Date.now()
+          if (now - lastChaseUpdate >= 1000) {
+            lastChaseUpdate = now
+            const newTarget = { x: monsterPos.x, y: 0, z: monsterPos.z }
 
-          // Update movement state target if it exists
-          if (movementState) {
-            movementState.targetPos = { ...movementTarget }
+            // Only update if target has moved significantly
+            if (
+              !movementTarget ||
+              Math.abs(movementTarget.x - newTarget.x) > 0.1 ||
+              Math.abs(movementTarget.z - newTarget.z) > 0.1
+            ) {
+              movementTarget = newTarget
 
-            // Recalculate total distance based on new target
-            const dx = movementTarget.x - currentPlayer.position.x
-            const dy = movementTarget.y - currentPlayer.position.y
-            const dz = movementTarget.z - currentPlayer.position.z
-            const newTotalDist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+              // Update movement state target if it exists
+              if (movementState) {
+                movementState.targetPos = { ...movementTarget }
 
-            movementState.totalDistance = newTotalDist
-            // Update start position to current position to avoid jumps in interpolation
-            movementState.startPos = {
-              x: currentPlayer.position.x,
-              y: currentPlayer.position.y,
-              z: currentPlayer.position.z,
+                // Recalculate total distance based on new target
+                const dx = movementTarget.x - currentPlayer.position.x
+                const dy = movementTarget.y - currentPlayer.position.y
+                const dz = movementTarget.z - currentPlayer.position.z
+                const newTotalDist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
+                movementState.totalDistance = newTotalDist
+                // Update start position to current position to avoid jumps in interpolation
+                movementState.startPos = {
+                  x: currentPlayer.position.x,
+                  y: currentPlayer.position.y,
+                  z: currentPlayer.position.z,
+                }
+              } else {
+                // Fallback: movementState missing but we are chasing? Re-init.
+                console.warn(
+                  '[PlayerControl] Chase active but movementState missing. Re-initializing.'
+                )
+                const currentPos = {
+                  x: currentPlayer.position.x,
+                  y: currentPlayer.position.y,
+                  z: currentPlayer.position.z,
+                }
+                movementState = initMovementState(
+                  currentPos,
+                  movementTarget,
+                  currentSpeed
+                )
+              }
+
+              // Send update to server
+              networkManager.sendPlayerMove(movementTarget, playerRotation)
             }
-          } else {
-            // Fallback: movementState missing but we are chasing? Re-init.
-            console.warn(
-              '[PlayerControl] Chase active but movementState missing. Re-initializing.'
-            )
-            const currentPos = {
-              x: currentPlayer.position.x,
-              y: currentPlayer.position.y,
-              z: currentPlayer.position.z,
-            }
-            movementState = initMovementState(
-              currentPos,
-              movementTarget,
-              currentSpeed
-            )
           }
         }
       } else {
@@ -447,6 +463,7 @@
           } else {
             // Chase logic
             attackTargetId = monsterId
+            lastChaseUpdate = Date.now()
 
             // Target the monster directly as per user request
             handleClickToMove({

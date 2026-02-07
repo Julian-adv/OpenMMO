@@ -73,7 +73,12 @@ class PlayerStateManager {
 
       // Update player
       // Preserve attack state if active
-      const currentState = currentPlayer?.state === 'attack' ? 'attack' : (result.arrived ? 'idle' : 'moving')
+      const currentState =
+        currentPlayer?.state === 'attack'
+          ? 'attack'
+          : result.arrived
+            ? 'idle'
+            : 'moving'
 
       if (result.arrived) {
         this.players.set(playerId, {
@@ -138,7 +143,7 @@ class PlayerStateManager {
         if (p && p.state === 'attack') {
           this.players.set(playerId, {
             ...p,
-            state: 'idle'
+            state: 'idle',
           })
         }
       }, 1000)
