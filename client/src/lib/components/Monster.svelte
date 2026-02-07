@@ -31,6 +31,15 @@
       // Clone the model for this instance
       if (!model) {
         const clonedScene = SkeletonUtils.clone($gltf.scene) as THREE.Group
+
+        // Enable shadows on all meshes
+        clonedScene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true
+            child.receiveShadow = true
+          }
+        })
+
         model = clonedScene
         // Setup mixer on the cloned scene
         mixer = new THREE.AnimationMixer(clonedScene)
