@@ -25,6 +25,7 @@
   let group = $state<THREE.Group>()
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
   let animDebugInfo = $state('')
+  let isDeadAnimationFinished = $state(false)
 
   // Export update function to be called from parent
   export function update(deltaTime: number, camera?: THREE.Camera) {
@@ -69,10 +70,16 @@
         model = clonedScene
         // Setup mixer on the cloned scene
         mixer = new THREE.AnimationMixer(clonedScene)
-        console.log(
-          'Monster animations:',
-          $gltf.animations.map((c) => c.name)
-        )
+
+        mixer.addEventListener('finished', (e) => {
+          console.log(`Animation finished: ${e.action.getClip().name}`)
+          if (e.action.getClip().name === '939_Die') {
+            isDeadAnimationFinished = true
+          }
+        })
+
+        const animationNames = $gltf.animations.map((c) => c.name)
+        console.log(`Monster ${id} animations:`, animationNames)
       }
     }
   })
@@ -84,6 +91,9 @@
       if (monsterState === 'run') clipName = '939_Running'
       if (monsterState === 'attack') clipName = '939_Attack1'
       if (monsterState === 'hit') clipName = '939_AddStagger1'
+      if (monsterState === 'dead') {
+        clipName = isDeadAnimationFinished ? '939_Dead' : '939_Die'
+      }
 
       const clip = $gltf.animations.find((c) => c.name === clipName)
 
@@ -91,9 +101,34 @@
         const newAction = mixer.clipAction(clip)
         if (newAction !== currentAction) {
           if (currentAction) {
-            currentAction.fadeOut(0.2)
+            // If going to dead state, stop all previous actions immediately to be sure
+            if (monsterState === 'dead') {
+              mixer.stopAllAction()
+            } else {
+              currentAction.fadeOut(0.2)
+            }
           }
-          newAction.reset().fadeIn(0.2).play()
+
+          newAction.reset()
+          if (monsterState !== 'dead') {
+            newAction.fadeIn(0.2)
+          }
+          newAction.play()
+
+          if (monsterState === 'dead') {
+            if (clipName === '939_Die') {
+              newAction.setLoop(THREE.LoopOnce, 1)
+              newAction.clampWhenFinished = true
+            } else {
+              newAction.setLoop(THREE.LoopRepeat, Infinity)
+              newAction.clampWhenFinished = false
+            }
+          } else {
+            newAction.setLoop(THREE.LoopRepeat, Infinity)
+            newAction.clampWhenFinished = false
+            isDeadAnimationFinished = false
+          }
+
           currentAction = newAction
         }
       } else {

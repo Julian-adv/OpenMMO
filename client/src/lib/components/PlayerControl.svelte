@@ -4,6 +4,7 @@
   import * as THREE from 'three'
   import { gameStore, type Player } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
+  import { monsterManager } from '../managers/monsterManager'
   import {
     calculateMovementStep,
     initMovementState,
@@ -123,6 +124,28 @@
   export function updatePlayerMovement(deltaTime: number) {
     // If we have a target monster
     if (targetMonsterId && currentPlayer) {
+      // Check if monster is dead
+      const monsterData = monsterManager.monsters.get(targetMonsterId)
+      if (monsterData?.state === 'dead') {
+        targetMonsterId = null
+        attackCounter = 0
+        if (isMoving) {
+          isMoving = false
+          movementTarget = null
+          movementState = null
+          updatePlayerState()
+        } else if (playerState.state === 'attack') {
+          const idleState = {
+            ...playerState,
+            state: 'idle',
+            attackCounter: 0,
+          } as PlayerState
+          playerState = idleState
+          onStateChange(idleState)
+        }
+        return
+      }
+
       // Find the monster object
       let monsterObj: THREE.Object3D | undefined
       // TODO: Optimize lookup
@@ -441,6 +464,9 @@
 
   // Handle attack logic
   function handleAttack(monsterId: string) {
+    const monsterData = monsterManager.monsters.get(monsterId)
+    if (monsterData?.state === 'dead') return
+
     console.log('Attacking monster:', monsterId)
 
     // Ensure position sync: send final move packet if current position differs from last sent
@@ -512,6 +538,13 @@
         }
 
         if (monsterId) {
+          // Check if monster is dead
+          const monsterData = monsterManager.monsters.get(monsterId)
+          if (monsterData?.state === 'dead') {
+            console.log('Cannot attack a dead monster')
+            return
+          }
+
           // Calculate distance to monster
           // If we traveled up the hierarchy, using parent position might be safer if we have ref to it
           // But raycast point is exact hit point. Let's use intersection point for distance?

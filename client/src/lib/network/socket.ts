@@ -36,6 +36,8 @@ type ServerMonster = {
   rotation: number
   state: string
   owner_id?: string
+  health: number
+  max_health: number
 }
 
 type ClientMessage =
@@ -73,6 +75,7 @@ type ServerMessage =
       monster_id: string
       hit: boolean
       roll: number
+      damage: number
     }
   | { type: 'chat_message'; player_id: string; message: string }
   | {
@@ -92,6 +95,7 @@ type ServerMessage =
       owner_id?: string
     }
   | { type: 'monster_removed'; monster_id: string }
+  | { type: 'monster_dead'; monster_id: string }
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -301,7 +305,9 @@ class NetworkManager {
                 monster.id,
                 monster.monster_type as MonsterData['type'],
                 monster.position,
-                monster.owner_id
+                monster.owner_id,
+                monster.health,
+                monster.max_health
               )
             }
           })
@@ -314,7 +320,9 @@ class NetworkManager {
           message.monster.id,
           message.monster.monster_type as MonsterData['type'],
           message.monster.position,
-          message.monster.owner_id
+          message.monster.owner_id,
+          message.monster.health,
+          message.monster.max_health
         )
         break
 
@@ -333,6 +341,11 @@ class NetworkManager {
         monsterManager.remove(message.monster_id)
         break
 
+      case 'monster_dead':
+        console.log('Monster dead from server:', message.monster_id)
+        monsterManager.handleMonsterDead(message.monster_id)
+        break
+
       case 'player_attacked': {
         console.log('Player attacked:', message.player_id, 'Hit:', message.hit)
         remotePlayerManager.handleAttack(message.player_id)
@@ -343,9 +356,14 @@ class NetworkManager {
           gameState.currentPlayer?.id === message.player_id
             ? 'You'
             : gameState.otherPlayers.get(message.player_id)?.name || 'Unknown'
-        addChatMessage(
-          `${attackerName} rolled ${message.roll}: ${message.hit ? 'HIT' : 'MISSED'}!`
-        )
+
+        if (message.hit) {
+          addChatMessage(
+            `${attackerName} rolled ${message.roll}: HIT for ${message.damage} damage!`
+          )
+        } else {
+          addChatMessage(`${attackerName} rolled ${message.roll}: MISSED!`)
+        }
 
         // Notify monsterManager that monster_id was attacked by player_id
         monsterManager.handleMonsterAttacked(

@@ -18,7 +18,9 @@ class MonsterManager {
     id: string,
     type: MonsterData['type'],
     position: { x: number; y: number; z: number },
-    ownerId?: string
+    ownerId?: string,
+    health: number = 10,
+    maxHealth: number = 10
   ) {
     if (this.monsters.has(id)) return
 
@@ -31,6 +33,8 @@ class MonsterManager {
       ownerId,
       moveSpeed: 3.5, // default
       stateTimer: 0,
+      health,
+      maxHealth,
     })
     console.log(
       `Spawned monster ${id} (synced) at`,
@@ -43,9 +47,24 @@ class MonsterManager {
     this.monsters.delete(id)
   }
 
+  handleMonsterDead(id: string) {
+    const monster = this.monsters.get(id)
+    if (monster) {
+      // If we are waiting for an impact, delay the visual death
+      if (monster.impactDelay && monster.impactDelay > 0) {
+        monster.isDeadPending = true
+      } else {
+        // Otherwise die immediately
+        monster.state = 'dead'
+        monster.stateTimer = 0
+      }
+      this.monsters.set(id, { ...monster })
+    }
+  }
+
   handleMonsterAttacked(monsterId: string, playerId: string, hit: boolean) {
     const monster = this.monsters.get(monsterId)
-    if (!monster) return
+    if (!monster || monster.state === 'dead') return
 
     // Set impact delay (e.g., 400ms for player's slash to land)
     monster.impactDelay = 540
@@ -95,7 +114,13 @@ class MonsterManager {
         if (monster.impactDelay <= 0) {
           monster.impactDelay = 0
 
-          if (monster.isLastHitSuccess) {
+          if (monster.isDeadPending) {
+            // Death impact!
+            monster.state = 'dead'
+            monster.stateTimer = 0
+            monster.isDeadPending = false
+          } else if (monster.isLastHitSuccess) {
+            // Normal hit impact
             monster.state = 'hit'
             monster.stateTimer = 0
             // Force immediate update to network if owner
@@ -114,12 +139,21 @@ class MonsterManager {
 
       // Only control monsters that YOU own
       if (monster.ownerId === myPlayerId) {
+        // Guard: If dead or about to die, stop AI immediately
+        if (monster.state === 'dead' || monster.isDeadPending) {
+          // Keep reactivity
+          this.monsters.set(monster.id, { ...monster })
+          continue
+        }
+
         this.updateMonsterAI(monster, deltaTime)
         // Trigger reactivity with new reference
         this.monsters.set(monster.id, { ...monster })
       } else {
         // Interpolate remote monsters
         if (
+          monster.state !== 'dead' &&
+          !monster.isDeadPending &&
           (monster.state === 'walk' ||
             monster.state === 'run' ||
             monster.state === 'attack') &&
@@ -137,6 +171,10 @@ class MonsterManager {
     monster.stateTimer += deltaTime
 
     switch (monster.state) {
+      case 'dead':
+        // No AI for dead monsters, just wait for removal
+        break
+
       case 'hit':
         // Wait for stagger animation to finish (approx 800ms)
         if (monster.stateTimer >= 800) {
@@ -359,6 +397,11 @@ class MonsterManager {
   ) {
     const monster = this.monsters.get(id)
     if (monster) {
+      // Guard: If monster is dead, don't allow state changes back to alive states
+      if (monster.state === 'dead' && state !== 'dead') {
+        return
+      }
+
       monster.position = position
       monster.rotation = rotation
       monster.state = state as MonsterData['state']

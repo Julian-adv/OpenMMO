@@ -1,3 +1,4 @@
+use crate::game::combat;
 use crate::types::{Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -137,23 +138,83 @@ impl GameState {
     }
 
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
+        // 1. Check if monster exists and is alive first
+        {
+            let monsters = self.monsters.read().await;
+            let monster = monsters.get(&monster_id);
+            if monster.is_none() || monster.unwrap().state == "dead" {
+                return;
+            }
+        }
+
         let players = self.players.read().await;
 
         if let Some(player) = players.get(player_id) {
             info!("Player {} attacking monster {}", player.name, monster_id);
 
-            // Roll d20: 1-20
-            let roll = rand::random::<u8>() % 20 + 1;
-            let hit = roll > 10;
+            let result = combat::roll_attack();
 
-            info!("Dice roll: {}, Hit: {}", roll, hit);
+            info!(
+                "Dice roll: {}, Hit: {}, Damage: {}",
+                result.roll, result.hit, result.damage
+            );
 
+            // Send attack result
             let _ = self.broadcast_tx.send(ServerMessage::PlayerAttacked {
                 player_id: player_id.clone(),
-                monster_id,
-                hit,
-                roll,
+                monster_id: monster_id.clone(),
+                hit: result.hit,
+                roll: result.roll,
+                damage: result.damage,
             });
+
+            // If hit, update monster HP
+            if result.hit {
+                let mut monsters = self.monsters.write().await;
+                let mut is_dead = false;
+
+                if let Some(monster) = monsters.get_mut(&monster_id) {
+                    if monster.state == "dead" {
+                        return; // Already dead
+                    }
+
+                    monster.health = monster.health.saturating_sub(result.damage);
+                    info!(
+                        "Monster {} HP: {}/{}",
+                        monster_id, monster.health, monster.max_health
+                    );
+
+                    if monster.health == 0 {
+                        monster.state = "dead".to_string();
+                        is_dead = true;
+                    }
+                }
+
+                if is_dead {
+                    info!("Monster {} died, broadcasting dead state", monster_id);
+                    let _ = self.broadcast_tx.send(ServerMessage::MonsterDead {
+                        monster_id: monster_id.clone(),
+                    });
+
+                    // Schedule removal after 30 seconds
+                    let game_state = self.clone();
+                    let id_to_remove = monster_id.clone();
+                    tokio::spawn(async move {
+                        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+                        let mut monsters = game_state.monsters.write().await;
+                        if let Some(monster) = monsters.get(&id_to_remove) {
+                            if monster.state == "dead" {
+                                monsters.remove(&id_to_remove);
+                                info!("Monster {} removed after 30s corpse time", id_to_remove);
+                                let _ =
+                                    game_state.broadcast_tx.send(ServerMessage::MonsterRemoved {
+                                        monster_id: id_to_remove,
+                                    });
+                            }
+                        }
+                    });
+                }
+            }
         } else {
             warn!("Attack from non-existent player: {}", player_id);
         }
@@ -181,6 +242,8 @@ impl GameState {
             rotation,
             state: "idle".to_string(),
             owner_id,
+            health: 10,
+            max_health: 10,
         };
 
         monsters.insert(id.clone(), monster.clone());
@@ -202,6 +265,9 @@ impl GameState {
         let mut monsters = self.monsters.write().await;
 
         if let Some(monster) = monsters.get_mut(&monster_id) {
+            if monster.state == "dead" {
+                return;
+            }
             monster.position = new_position.clone();
             monster.rotation = rotation;
             monster.state = state.clone();

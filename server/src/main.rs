@@ -1,4 +1,5 @@
 mod connection;
+mod game;
 mod game_state;
 mod types;
 
