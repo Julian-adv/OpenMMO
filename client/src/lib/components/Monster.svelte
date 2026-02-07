@@ -26,9 +26,83 @@
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
   let animDebugInfo = $state('')
   let isDeadAnimationFinished = $state(false)
+  let lastMonsterState = $state<MonsterData['state'] | undefined>(undefined)
+  let lastDeadAnimFinished = $state(false)
+
+  function playAnimation() {
+    if (!mixer || !$gltf) return
+
+    let clipName = '939_Idle'
+    if (monsterState === 'walk') clipName = '939_Walking'
+    if (monsterState === 'run') clipName = '939_Running'
+    if (monsterState === 'attack') clipName = '939_Attack1'
+    if (monsterState === 'hit') clipName = '939_AddStagger1'
+    if (monsterState === 'dead') {
+      clipName = isDeadAnimationFinished ? '939_Dead' : '939_Die'
+    }
+
+    const clip = $gltf.animations.find((c) => c.name === clipName)
+
+    if (clip) {
+      const newAction = mixer.clipAction(clip)
+      if (newAction !== currentAction) {
+        if (currentAction) {
+          if (monsterState === 'dead') {
+            mixer.stopAllAction()
+          } else {
+            currentAction.fadeOut(0.2)
+          }
+        }
+
+        newAction.reset()
+        if (monsterState !== 'dead') {
+          newAction.fadeIn(0.2)
+        }
+        newAction.play()
+
+        if (monsterState === 'dead') {
+          if (clipName === '939_Die') {
+            newAction.setLoop(THREE.LoopOnce, 1)
+            newAction.clampWhenFinished = true
+          } else {
+            // 939_Dead should loop or stay idle
+            newAction.setLoop(THREE.LoopRepeat, Infinity)
+            newAction.clampWhenFinished = false
+          }
+        } else {
+          newAction.setLoop(THREE.LoopRepeat, Infinity)
+          newAction.clampWhenFinished = false
+          isDeadAnimationFinished = false
+        }
+
+        currentAction = newAction
+      }
+    } else {
+      console.warn(
+        `Animation ${clipName} not found used for state ${monsterState}`
+      )
+      if (!currentAction && $gltf.animations.length > 0) {
+        const firstClip = $gltf.animations[0]
+        const newAction = mixer.clipAction(firstClip)
+        newAction.play()
+        currentAction = newAction
+      }
+    }
+  }
 
   // Export update function to be called from parent
   export function update(deltaTime: number, camera?: THREE.Camera) {
+    // 1. Sync animation with state
+    if (
+      lastMonsterState !== monsterState ||
+      lastDeadAnimFinished !== isDeadAnimationFinished
+    ) {
+      lastMonsterState = monsterState
+      lastDeadAnimFinished = isDeadAnimationFinished
+      playAnimation()
+    }
+
+    // 2. Update mixer
     if (mixer) {
       mixer.update(deltaTime)
 
@@ -80,68 +154,6 @@
 
         const animationNames = $gltf.animations.map((c) => c.name)
         console.log(`Monster ${id} animations:`, animationNames)
-      }
-    }
-  })
-
-  $effect(() => {
-    if (mixer && $gltf) {
-      let clipName = '939_Idle'
-      if (monsterState === 'walk') clipName = '939_Walking'
-      if (monsterState === 'run') clipName = '939_Running'
-      if (monsterState === 'attack') clipName = '939_Attack1'
-      if (monsterState === 'hit') clipName = '939_AddStagger1'
-      if (monsterState === 'dead') {
-        clipName = isDeadAnimationFinished ? '939_Dead' : '939_Die'
-      }
-
-      const clip = $gltf.animations.find((c) => c.name === clipName)
-
-      if (clip) {
-        const newAction = mixer.clipAction(clip)
-        if (newAction !== currentAction) {
-          if (currentAction) {
-            // If going to dead state, stop all previous actions immediately to be sure
-            if (monsterState === 'dead') {
-              mixer.stopAllAction()
-            } else {
-              currentAction.fadeOut(0.2)
-            }
-          }
-
-          newAction.reset()
-          if (monsterState !== 'dead') {
-            newAction.fadeIn(0.2)
-          }
-          newAction.play()
-
-          if (monsterState === 'dead') {
-            if (clipName === '939_Die') {
-              newAction.setLoop(THREE.LoopOnce, 1)
-              newAction.clampWhenFinished = true
-            } else {
-              newAction.setLoop(THREE.LoopRepeat, Infinity)
-              newAction.clampWhenFinished = false
-            }
-          } else {
-            newAction.setLoop(THREE.LoopRepeat, Infinity)
-            newAction.clampWhenFinished = false
-            isDeadAnimationFinished = false
-          }
-
-          currentAction = newAction
-        }
-      } else {
-        console.warn(
-          `Animation ${clipName} not found used for state ${monsterState}`
-        )
-        // Fallback: play first animation if available and nothing is playing
-        if (!currentAction && $gltf.animations.length > 0) {
-          const firstClip = $gltf.animations[0]
-          const newAction = mixer.clipAction(firstClip)
-          newAction.play()
-          currentAction = newAction
-        }
       }
     }
   })
