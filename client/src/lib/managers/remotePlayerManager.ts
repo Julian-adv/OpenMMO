@@ -3,6 +3,7 @@ import type { Player } from '../stores/gameStore'
 import {
   calculateMovementStep,
   initMovementState,
+  getMovementMode,
   hasTargetChanged,
   DEFAULT_MOVEMENT_CONFIG,
   type Position,
@@ -86,15 +87,18 @@ class PlayerStateManager {
           state: currentState,
           speed: 0,
           rotation: currentPlayer?.rotation ?? result.rotation,
-          totalDistance: undefined,
+          movementMode: undefined,
         })
       } else {
+        // Determine movement mode based on distance
+        const movementMode = getMovementMode(movement.totalDistance)
+
         this.players.set(playerId, {
           position: result.newPos,
           state: currentState,
           speed: result.newSpeed,
           rotation: result.rotation,
-          totalDistance: movement.totalDistance,
+          movementMode,
         })
       }
     })

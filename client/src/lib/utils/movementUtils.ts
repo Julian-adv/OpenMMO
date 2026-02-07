@@ -1,5 +1,7 @@
 // Common movement calculation utilities shared between local and remote players
 
+export type MovementMode = 'walk' | 'jog' | 'run'
+
 export interface Position {
   x: number
   y: number
@@ -32,7 +34,20 @@ export interface PlayerState {
   state: 'idle' | 'moving' | 'attack'
   speed: number
   rotation: number
-  totalDistance?: number // Total distance for current movement (used for animation selection)
+  movementMode?: MovementMode
+}
+
+/**
+ * Determine movement mode based on distance
+ */
+export function getMovementMode(distance: number): MovementMode {
+  if (distance <= 3) {
+    return 'walk'
+  } else if (distance <= 8) {
+    return 'jog'
+  } else {
+    return 'run'
+  }
 }
 
 // Default movement configuration

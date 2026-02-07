@@ -8,6 +8,7 @@
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { ANIMATION_ORDER, AnimationIndex } from '../types/animations'
+  import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
 
   interface Props {
@@ -17,7 +18,7 @@
     playerState: 'idle' | 'moving' | 'attack'
     speed: number
     rotation: number
-    totalDistance?: number
+    movementMode?: MovementMode
     camera: THREE.PerspectiveCamera | undefined
     chatBubble?: string
   }
@@ -29,7 +30,7 @@
     playerState,
     speed: _speed,
     rotation,
-    totalDistance,
+    movementMode,
     camera,
     chatBubble,
   }: Props = $props()
@@ -58,29 +59,19 @@
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
 
-  // Distance thresholds for animation selection
-  const WALK_DISTANCE_THRESHOLD = 3 // Distance <= 3 units: walk
-  const JOG_DISTANCE_THRESHOLD = 8 // Distance <= 8 units: jog, > 8: run
-
-  // Select movement animation based on total distance
-  function selectMovementAnimation(distance: number | undefined): number {
-    if (distance === undefined) {
-      return AnimationIndex.JOG // Default to jog if no distance
-    }
-    if (distance <= WALK_DISTANCE_THRESHOLD) {
-      return AnimationIndex.WALK
-    } else if (distance <= JOG_DISTANCE_THRESHOLD) {
-      return AnimationIndex.JOG
-    } else {
-      return AnimationIndex.RUN
-    }
+  // Select movement animation based on movement mode
+  function selectMovementAnimation(mode: MovementMode | undefined): number {
+    if (mode === 'walk') return AnimationIndex.WALK
+    if (mode === 'jog') return AnimationIndex.JOG
+    if (mode === 'run') return AnimationIndex.RUN
+    return AnimationIndex.JOG // Default fallback
   }
 
   function playAnimationForState() {
     // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
 
-    // Select animation based on player state and distance
+    // Select animation based on player state and mode
     let clip: THREE.AnimationClip | undefined
     if (playerState === 'idle') {
       // Reset movement animation lock when idle
@@ -96,9 +87,9 @@
         idleIndices[Math.floor(Math.random() * idleIndices.length)]
       clip = validAnimations[idleIndex]
     } else if (playerState === 'moving') {
-      // Lock animation at the start of movement based on total distance
+      // Lock animation at the start of movement based on movement mode
       if (currentMovementAnimationIndex === undefined) {
-        currentMovementAnimationIndex = selectMovementAnimation(totalDistance)
+        currentMovementAnimationIndex = selectMovementAnimation(movementMode)
       }
       clip = validAnimations[currentMovementAnimationIndex]
     } else if (playerState === 'attack') {

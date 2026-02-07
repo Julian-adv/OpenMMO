@@ -7,11 +7,13 @@
   import {
     calculateMovementStep,
     initMovementState,
+    getMovementMode,
     DEFAULT_MOVEMENT_CONFIG,
     type Position,
     type MovementState,
     type MovementConfig,
     type PlayerState,
+    type MovementMode,
   } from '../utils/movementUtils'
 
   interface Props {
@@ -71,12 +73,24 @@
         }
       : playerState.position
 
+    // Determine movement mode based on distance or if chasing a monster
+    let movementMode: MovementMode | undefined
+    if (isMoving) {
+      if (attackTargetId) {
+        movementMode = 'run'
+      } else if (totalDistance !== undefined) {
+        movementMode = getMovementMode(totalDistance)
+      } else {
+        movementMode = 'jog'
+      }
+    }
+
     const newState: PlayerState = {
       state: isMoving ? 'moving' : 'idle',
       speed: currentSpeed,
       rotation: playerRotation,
       position: currentPosition,
-      totalDistance: isMoving ? totalDistance : undefined,
+      movementMode,
     }
 
     // Only update if state actually changed
@@ -85,7 +99,8 @@
       Math.abs(newState.speed - playerState.speed) > 0.01 ||
       newState.rotation !== playerState.rotation ||
       Math.abs(newState.position.x - playerState.position.x) > 0.01 ||
-      Math.abs(newState.position.z - playerState.position.z) > 0.01
+      Math.abs(newState.position.z - playerState.position.z) > 0.01 ||
+      newState.movementMode !== playerState.movementMode
     ) {
       playerState = newState
       onStateChange(newState)
