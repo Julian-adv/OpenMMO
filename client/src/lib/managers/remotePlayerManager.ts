@@ -72,10 +72,13 @@ class PlayerStateManager {
       this.movementData.set(playerId, movement)
 
       // Update player
+      // Preserve attack state if active
+      const currentState = currentPlayer?.state === 'attack' ? 'attack' : (result.arrived ? 'idle' : 'moving')
+
       if (result.arrived) {
         this.players.set(playerId, {
           position: result.newPos,
-          state: 'idle',
+          state: currentState,
           speed: 0,
           rotation: currentPlayer?.rotation ?? result.rotation,
           totalDistance: undefined,
@@ -83,7 +86,7 @@ class PlayerStateManager {
       } else {
         this.players.set(playerId, {
           position: result.newPos,
-          state: 'moving',
+          state: currentState,
           speed: result.newSpeed,
           rotation: result.rotation,
           totalDistance: movement.totalDistance,
