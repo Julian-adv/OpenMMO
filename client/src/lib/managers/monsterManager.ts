@@ -12,7 +12,7 @@ const MAX_MOVE_DIST = 10.0
 class MonsterManager {
   monsters = new SvelteMap<string, MonsterData>()
   private timeSinceLastSpawn = 0
-  private readonly SPAWN_INTERVAL = 30000 // 30 seconds
+  private readonly SPAWN_INTERVAL = 10000 // 10 seconds
 
   spawnWithId(
     id: string,

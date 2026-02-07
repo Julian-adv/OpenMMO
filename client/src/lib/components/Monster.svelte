@@ -47,18 +47,10 @@
       const newAction = mixer.clipAction(clip)
       if (newAction !== currentAction) {
         if (currentAction) {
-          if (monsterState === 'dead') {
-            mixer.stopAllAction()
-          } else {
-            currentAction.fadeOut(0.2)
-          }
+          currentAction.fadeOut(0.2)
         }
 
-        newAction.reset()
-        if (monsterState !== 'dead') {
-          newAction.fadeIn(0.2)
-        }
-        newAction.play()
+        newAction.reset().fadeIn(0.2).play()
 
         if (monsterState === 'dead') {
           if (clipName === '939_Die') {

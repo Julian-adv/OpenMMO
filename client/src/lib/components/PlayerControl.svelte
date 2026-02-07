@@ -124,11 +124,17 @@
   export function updatePlayerMovement(deltaTime: number) {
     // If we have a target monster
     if (targetMonsterId && currentPlayer) {
-      // Check if monster is dead
+      // Check if monster exists and its state
       const monsterData = monsterManager.monsters.get(targetMonsterId)
-      if (monsterData?.state === 'dead') {
+      const cooldownMs = attackCooldown ? attackCooldown * 1000 : 1500
+      const isFinishingAttack =
+        playerState.state === 'attack' && attackTimer < cooldownMs
+
+      // Only clear target if monster is gone/dead AND we aren't in the middle of a final swing
+      if (!monsterData || (monsterData.state === 'dead' && !isFinishingAttack)) {
         targetMonsterId = null
         attackCounter = 0
+        attackTimer = 0
         if (isMoving) {
           isMoving = false
           movementTarget = null
@@ -219,7 +225,7 @@
           }
         } else {
           // PHASE 2: COMBAT (In Range)
-          if (dist > 2.5) {
+          if (dist > 2.5 && !isFinishingAttack) {
             // Range too far, stop attacking
             targetMonsterId = null
             attackCounter = 0
@@ -239,12 +245,39 @@
             playerRotation = Math.atan2(dx, dz)
 
             attackTimer += deltaTime
-            const cooldownMs = attackCooldown ? attackCooldown * 1000 : 1500
+
+            // Only start new attack cycles if monster is not already dying
+            if (monsterData && !monsterData.state && !monsterData.isDeadPending) {
+              // This block is for monsterData that might still be alive
+            }
+
+            // Corrected logic: Always increment timer, but only restart if alive
+            const isMonsterAlive =
+              monsterData &&
+              monsterData.state !== 'dead' &&
+              !monsterData.isDeadPending
+
             if (attackTimer >= cooldownMs) {
-              attackTimer = 0
-              attackCounter++
-              networkManager.sendPlayerAttack(targetMonsterId)
-              updatePlayerState()
+              if (isMonsterAlive) {
+                // Restart cycle
+                attackTimer = 0
+                attackCounter++
+                networkManager.sendPlayerAttack(targetMonsterId)
+                updatePlayerState()
+              } else {
+                // Monster is dead/dying and animation finished -> Idle
+                targetMonsterId = null
+                attackCounter = 0
+                attackTimer = 0
+                const idleState = {
+                  ...playerState,
+                  state: 'idle',
+                  attackCounter: 0,
+                } as PlayerState
+                playerState = idleState
+                onStateChange(idleState)
+                return
+              }
             }
 
             if (playerState.state !== 'attack') {
@@ -465,7 +498,7 @@
   // Handle attack logic
   function handleAttack(monsterId: string) {
     const monsterData = monsterManager.monsters.get(monsterId)
-    if (monsterData?.state === 'dead') return
+    if (monsterData?.state === 'dead' || monsterData?.isDeadPending) return
 
     console.log('Attacking monster:', monsterId)
 
