@@ -73,7 +73,10 @@ class MonsterManager {
         this.monsters.set(monster.id, { ...monster })
       } else {
         // Interpolate remote monsters (Basic lerp for now)
-        if ((monster.state === 'walk' || monster.state === 'run') && monster.targetPosition) {
+        if (
+          (monster.state === 'walk' || monster.state === 'run') &&
+          monster.targetPosition
+        ) {
           this.moveTowards(monster, monster.targetPosition, deltaTime)
           // Trigger reactivity with new reference
           this.monsters.set(monster.id, { ...monster })
@@ -132,7 +135,8 @@ class MonsterManager {
   private transitionToMove(monster: MonsterData) {
     // 1. Determine distance first
     const angle = Math.random() * Math.PI * 2
-    const distance = MIN_MOVE_DIST + Math.random() * (MAX_MOVE_DIST - MIN_MOVE_DIST)
+    const distance =
+      MIN_MOVE_DIST + Math.random() * (MAX_MOVE_DIST - MIN_MOVE_DIST)
 
     // 2. Probability Logic
     // d=2(MIN) -> walk chance 80% (P=0.8)
@@ -178,8 +182,6 @@ class MonsterManager {
     const distance = Math.sqrt(dx * dx + dz * dz)
 
     const moveStep = (monster.moveSpeed * deltaTime) / 1000
-
-
 
     if (distance <= moveStep) {
       monster.position = { ...target }
