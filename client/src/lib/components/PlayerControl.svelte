@@ -290,6 +290,10 @@
     if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
       return
     }
+
+    // Ignore movement keys when Ctrl is pressed (e.g. for Ctrl+D toggle)
+    if (event.ctrlKey) return
+
     keysPressed.add(event.code)
     event.preventDefault()
   }

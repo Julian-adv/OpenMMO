@@ -4,6 +4,7 @@
   let fps = $state(0)
   let frameCount = $state(0)
   let lastFpsTime = $state(0)
+  let visible = $state(true)
 
   function updateFPS() {
     frameCount++
@@ -19,14 +20,25 @@
     requestAnimationFrame(updateFPS)
   }
 
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.ctrlKey && event.key === 'd') {
+      event.preventDefault()
+      visible = !visible
+    }
+  }
+
   // Start FPS monitoring
   lastFpsTime = performance.now()
   requestAnimationFrame(updateFPS)
 </script>
 
-<div class="fps-counter">
-  FPS: {fps} | ZOOM: {$cameraDistance.toFixed(1)}
-</div>
+<svelte:window onkeydown={handleKeydown} />
+
+{#if visible}
+  <div class="fps-counter">
+    FPS: {fps} | ZOOM: {$cameraDistance.toFixed(1)}
+  </div>
+{/if}
 
 <style>
   .fps-counter {
