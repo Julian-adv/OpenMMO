@@ -3,7 +3,12 @@
   import { OrbitControls, Grid } from '@threlte/extras'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { gameStore, type Player, type ChatBubble } from '../stores/gameStore'
+  import {
+    gameStore,
+    resetGameStore,
+    type Player,
+    type ChatBubble,
+  } from '../stores/gameStore'
   import {
     startChatBubbleChecker,
     stopChatBubbleChecker,
@@ -278,6 +283,9 @@
       stopGameLoop()
       stopChatBubbleChecker()
       networkManager.disconnect()
+      monsterManager.reset()
+      remotePlayerManager.reset()
+      resetGameStore()
     }
   })
 </script>

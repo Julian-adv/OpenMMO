@@ -294,22 +294,18 @@ class NetworkManager {
           return state
         })
 
-        // Sync monsters if provided
+        // Sync monsters from server - clear and rebuild to avoid ghost entities
+        monsterManager.reset()
         if (message.monsters) {
-          // Ideally we should sync full state, but for now let's just spawn them if they don't exist
-          // Or we can clear and respawn?
-          // For simplicity, let's just make sure they are spawned
           Object.values(message.monsters).forEach((monster: ServerMonster) => {
-            if (!monsterManager.monsters.has(monster.id)) {
-              monsterManager.spawnWithId(
-                monster.id,
-                monster.monster_type as MonsterData['type'],
-                monster.position,
-                monster.owner_id,
-                monster.health,
-                monster.max_health
-              )
-            }
+            monsterManager.spawnWithId(
+              monster.id,
+              monster.monster_type as MonsterData['type'],
+              monster.position,
+              monster.owner_id,
+              monster.health,
+              monster.max_health
+            )
           })
         }
         break
