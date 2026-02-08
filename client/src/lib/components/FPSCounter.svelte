@@ -5,7 +5,7 @@
   let fps = $state(0)
   let frameCount = $state(0)
   let lastFpsTime = $state(0)
-  let visible = $state(true)
+  let visible = $state(false)
 
   function updateFPS() {
     frameCount++
