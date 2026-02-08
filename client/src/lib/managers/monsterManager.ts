@@ -134,7 +134,7 @@ class MonsterManager {
             monster.stateTimer = 0
             monster.isDeadPending = false
           } else if (monster.isLastHitSuccess) {
-            // Normal hit impact
+            // Normal hit impact - stagger then retaliate
             monster.state = 'hit'
             monster.stateTimer = 0
             // Force immediate update to network if owner
@@ -144,6 +144,19 @@ class MonsterManager {
                 monster.position,
                 monster.rotation,
                 'hit',
+                monster.position
+              )
+            }
+          } else if (monster.targetPlayerId && monster.state !== 'attack') {
+            // Miss - skip stagger but still retaliate
+            monster.state = 'attack'
+            monster.stateTimer = 0
+            if (monster.ownerId === myPlayerId) {
+              networkManager.sendMonsterMove(
+                monster.id,
+                monster.position,
+                monster.rotation,
+                'attack',
                 monster.position
               )
             }

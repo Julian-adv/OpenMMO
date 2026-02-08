@@ -23,8 +23,7 @@
     lastDamageInfo?: MonsterData['lastDamageInfo']
   }
 
-  let { position, rotation, monsterState, id, lastDamageInfo }: Props =
-    $props()
+  let { position, rotation, monsterState, id, lastDamageInfo }: Props = $props()
 
   const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
 
@@ -76,7 +75,7 @@
           mat.transparent = true
           mat.opacity = opacity
         }
-        mesh.castShadow = opacity >= 0.3
+        mesh.castShadow = opacity >= 0.25
       }
     })
   }
