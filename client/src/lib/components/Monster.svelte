@@ -41,6 +41,45 @@
   let nextTextId = 0
   let lastDamageTrigger = $state(0)
   let damageTextRefs: DamageText[] = []
+  let lastAppliedOpacity = 1
+  let materialsCloned = false
+  let corpseTimer = 0
+  const CORPSE_FADE_START = 25
+  const CORPSE_FADE_DURATION = 5
+
+  function cloneMaterials() {
+    if (materialsCloned || !model) return
+    materialsCloned = true
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh
+        if (Array.isArray(mesh.material)) {
+          mesh.material = mesh.material.map((m) => m.clone())
+        } else {
+          mesh.material = mesh.material.clone()
+        }
+      }
+    })
+  }
+
+  function applyOpacity(opacity: number) {
+    if (!model || opacity === lastAppliedOpacity) return
+    cloneMaterials()
+    lastAppliedOpacity = opacity
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh
+        const materials = Array.isArray(mesh.material)
+          ? mesh.material
+          : [mesh.material]
+        for (const mat of materials) {
+          mat.transparent = true
+          mat.opacity = opacity
+        }
+        mesh.castShadow = opacity >= 0.3
+      }
+    })
+  }
 
   function playAnimation() {
     if (!mixer || !$gltf) return
@@ -126,7 +165,19 @@
       )
     }
 
-    // 4. Update mixer
+    // 4. Corpse fade
+    if (monsterState === 'dead') {
+      corpseTimer += deltaTime
+      if (corpseTimer >= CORPSE_FADE_START) {
+        const fadeProgress =
+          (corpseTimer - CORPSE_FADE_START) / CORPSE_FADE_DURATION
+        applyOpacity(Math.max(0, 1 - fadeProgress))
+      }
+    } else {
+      corpseTimer = 0
+    }
+
+    // 5. Update mixer
     if (mixer) {
       mixer.update(deltaTime)
 
