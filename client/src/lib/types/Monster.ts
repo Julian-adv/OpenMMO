@@ -1,6 +1,6 @@
 export interface MonsterData {
   id: string
-  type: 'scp939'
+  type: string
   position: { x: number; y: number; z: number }
   rotation: number
   state: 'idle' | 'walk' | 'run' | 'attack' | 'hit' | 'dead'

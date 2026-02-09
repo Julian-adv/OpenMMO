@@ -3,9 +3,8 @@ import { networkManager } from '../network/socket'
 import { get } from 'svelte/store'
 import { gameStore } from '../stores/gameStore'
 import type { MonsterData } from '../types/Monster'
+import { getMonsterDef } from '../data/monsterDefs'
 
-const WALK_SPEED = 1.0
-const RUN_SPEED = 8.0
 const MIN_MOVE_DIST = 2.0
 const MAX_MOVE_DIST = 10.0
 
@@ -19,10 +18,14 @@ class MonsterManager {
     type: MonsterData['type'],
     position: { x: number; y: number; z: number },
     ownerId?: string,
-    health: number = 10,
-    maxHealth: number = 10
+    health?: number,
+    maxHealth?: number
   ) {
     if (this.monsters.has(id)) return
+
+    const def = getMonsterDef(type)
+    const hp = health ?? def?.health ?? 10
+    const maxHp = maxHealth ?? def?.health ?? 10
 
     this.monsters.set(id, {
       id,
@@ -31,10 +34,10 @@ class MonsterManager {
       rotation: 0,
       state: 'idle',
       ownerId,
-      moveSpeed: 3.5, // default
+      moveSpeed: def?.walkSpeed ?? 1,
       stateTimer: 0,
-      health,
-      maxHealth,
+      health: hp,
+      maxHealth: maxHp,
     })
     console.log(
       `Spawned monster ${id} (synced) at`,
@@ -85,7 +88,8 @@ class MonsterManager {
     if (monster.ownerId === myPlayerId) {
       // We will transition to 'hit' in the update loop after impactDelay
       // but we can set the targetPlayerId now to ensure retaliation
-      monster.moveSpeed = RUN_SPEED
+      const def = getMonsterDef(monster.type)
+      monster.moveSpeed = def?.runSpeed ?? 8
     }
 
     // Trigger reactivity
@@ -273,13 +277,14 @@ class MonsterManager {
           }
 
           if (targetPlayer) {
+            const def = getMonsterDef(monster.type)
             const dx = targetPlayer.position.x - monster.position.x
             const dz = targetPlayer.position.z - monster.position.z
             const distSq = dx * dx + dz * dz
-            const ATTACK_RANGE = 2.0
-            const ATTACK_RANGE_SQ = ATTACK_RANGE * ATTACK_RANGE
-            const CHASE_RANGE = 25.0
-            const CHASE_RANGE_SQ = CHASE_RANGE * CHASE_RANGE
+            const attackRange = def?.attackRange ?? 2
+            const ATTACK_RANGE_SQ = attackRange * attackRange
+            const chaseRange = def?.chaseRange ?? 25
+            const CHASE_RANGE_SQ = chaseRange * chaseRange
 
             if (distSq > CHASE_RANGE_SQ) {
               // Target too far, stop chasing
@@ -301,8 +306,7 @@ class MonsterManager {
 
             if (distSq <= ATTACK_RANGE_SQ) {
               // Within range - wait for attack animation/cooldown
-              if (monster.stateTimer >= 1500) {
-                // Attack every 1.5s
+              if (monster.stateTimer >= (def?.attackCooldown ?? 1500)) {
                 monster.stateTimer = 0
                 console.log(
                   `Monster ${monster.id} attacks player ${monster.targetPlayerId}`
@@ -318,7 +322,7 @@ class MonsterManager {
               }
             } else {
               // Out of range - move towards player
-              monster.moveSpeed = RUN_SPEED
+              monster.moveSpeed = def?.runSpeed ?? 8
               const dist = Math.sqrt(distSq)
               const moveStep = (monster.moveSpeed * deltaTime) / 1000
 
@@ -366,9 +370,9 @@ class MonsterManager {
     const walkProbability = -0.075 * distance + 0.95
     const isWalking = Math.random() < walkProbability
 
+    const def = getMonsterDef(monster.type)
     monster.state = isWalking ? 'walk' : 'run'
-    // Speed constant usage
-    monster.moveSpeed = isWalking ? WALK_SPEED : RUN_SPEED
+    monster.moveSpeed = isWalking ? (def?.walkSpeed ?? 1) : (def?.runSpeed ?? 8)
 
     monster.targetPosition = {
       x: monster.position.x + Math.cos(angle) * distance,
@@ -434,10 +438,11 @@ class MonsterManager {
       monster.state = state as MonsterData['state']
 
       // Update moveSpeed based on state for remote monsters
+      const def = getMonsterDef(monster.type)
       if (monster.state === 'run') {
-        monster.moveSpeed = RUN_SPEED
+        monster.moveSpeed = def?.runSpeed ?? 8
       } else if (monster.state === 'walk') {
-        monster.moveSpeed = WALK_SPEED
+        monster.moveSpeed = def?.walkSpeed ?? 1
       }
 
       monster.targetPosition = targetPosition
