@@ -1,0 +1,2 @@
+id,name,model,health,walkSpeed,runSpeed,attackRange,chaseRange,attackCooldown,damageRoll,hitThreshold
+scp939,SCP-939,scp939.glb,10,1.0,8.0,2.0,25.0,1500,1d6,10

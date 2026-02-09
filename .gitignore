@@ -40,6 +40,9 @@ logs/
 *.tmp
 *.temp
 
+# Generated data files
+data/monsters.json
+
 # Claude Code (keep agents for sharing)
 .claude/*
 !.claude/agents/
