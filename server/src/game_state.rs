@@ -1,4 +1,5 @@
 use crate::game::combat;
+use crate::monster_defs::MonsterDefs;
 use crate::types::{Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -14,16 +15,18 @@ pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
     broadcast_tx: GameStateSender,
+    monster_defs: MonsterDefs,
 }
 
 impl GameState {
-    pub fn new() -> Self {
+    pub fn new(monster_defs: MonsterDefs) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
 
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
             monsters: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
+            monster_defs,
         }
     }
 
@@ -138,21 +141,25 @@ impl GameState {
     }
 
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
-        // 1. Check if monster exists and is alive first
-        {
+        // 1. Check if monster exists and is alive first, get its type
+        let monster_type = {
             let monsters = self.monsters.read().await;
             let monster = monsters.get(&monster_id);
             if monster.is_none() || monster.unwrap().state == "dead" {
                 return;
             }
-        }
+            monster.unwrap().monster_type.clone()
+        };
 
         let players = self.players.read().await;
 
         if let Some(player) = players.get(player_id) {
             info!("Player {} attacking monster {}", player.name, monster_id);
 
-            let result = combat::roll_attack();
+            let def = self.monster_defs.get(&monster_type);
+            let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
+            let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
+            let result = combat::roll_attack(hit_threshold, damage_roll);
 
             info!(
                 "Dice roll: {}, Hit: {}, Damage: {}",
@@ -234,6 +241,9 @@ impl GameState {
             return;
         }
 
+        let def = self.monster_defs.get(&monster_type);
+        let health = def.map(|d| d.health).unwrap_or(10);
+
         let id = format!("monster_{}", Uuid::new_v4());
         let monster = crate::types::Monster {
             id: id.clone(),
@@ -242,8 +252,8 @@ impl GameState {
             rotation,
             state: "idle".to_string(),
             owner_id,
-            health: 10,
-            max_health: 10,
+            health,
+            max_health: health,
         };
 
         monsters.insert(id.clone(), monster.clone());

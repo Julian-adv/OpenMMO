@@ -1,6 +1,7 @@
 mod connection;
 mod game;
 mod game_state;
+mod monster_defs;
 mod types;
 
 use clap::Parser;
@@ -25,7 +26,8 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
-    let game_state = Arc::new(GameState::new());
+    let monster_defs = monster_defs::MonsterDefs::load();
+    let game_state = Arc::new(GameState::new(monster_defs));
 
     let addr = format!("0.0.0.0:{}", args.port);
     let listener = match TcpListener::bind(addr.as_str()).await {
