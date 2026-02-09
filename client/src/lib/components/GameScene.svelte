@@ -23,6 +23,7 @@
   import { type PlayerState } from '../utils/movementUtils'
   import { cameraDistance } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
+  import { debugVisible } from '../stores/debugStore'
 
   interface Props {
     serverUrl: string
@@ -52,6 +53,34 @@
     x: 0,
     y: INITIAL_DISTANCE * Math.sin(INITIAL_PITCH),
     z: INITIAL_DISTANCE * Math.cos(INITIAL_PITCH),
+  }
+
+  // Reset camera rotation to default angle when debug mode is turned off
+  let prevDebugVisible = $state(false)
+  $effect(() => {
+    const current = $debugVisible
+    if (prevDebugVisible && !current) {
+      resetCameraRotation()
+    }
+    prevDebugVisible = current
+  })
+
+  function resetCameraRotation() {
+    if (!currentPlayer || !camera) return
+
+    const playerPos = currentPlayer.position
+    const dx = camera.position.x - playerPos.x
+    const dy = camera.position.y - playerPos.y
+    const dz = camera.position.z - playerPos.z
+    const currentDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    camera.position.set(
+      playerPos.x,
+      playerPos.y + currentDistance * Math.sin(INITIAL_PITCH),
+      playerPos.z + currentDistance * Math.cos(INITIAL_PITCH)
+    )
+    camera.lookAt(playerPos.x, playerPos.y, playerPos.z)
+    cameraTarget = [playerPos.x, playerPos.y, playerPos.z]
   }
 
   // Light follow system - offset relative to player
@@ -292,7 +321,7 @@
 
 <T.PerspectiveCamera bind:ref={camera} makeDefault fov={75}>
   <OrbitControls
-    enableRotate={true}
+    enableRotate={$debugVisible}
     enablePan={false}
     enableZoom={true}
     target={cameraTarget}

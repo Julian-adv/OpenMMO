@@ -1,11 +1,11 @@
 <script lang="ts">
   import { cameraDistance } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
+  import { debugVisible } from '../stores/debugStore'
 
   let fps = $state(0)
   let frameCount = $state(0)
   let lastFpsTime = $state(0)
-  let visible = $state(false)
 
   function updateFPS() {
     frameCount++
@@ -24,7 +24,7 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.ctrlKey && event.key === 'd') {
       event.preventDefault()
-      visible = !visible
+      debugVisible.update((v) => !v)
     }
   }
 
@@ -39,7 +39,7 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if visible}
+{#if $debugVisible}
   <div class="fps-counter">
     <span>FPS: {fps} | ZOOM: {$cameraDistance.toFixed(1)}</span>
     <button
