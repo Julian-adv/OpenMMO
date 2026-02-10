@@ -10,12 +10,6 @@
   import type { MonsterData } from '../types/Monster'
   import { getMonsterDef } from '../data/monsterDefs'
 
-  interface FloatingText {
-    id: number
-    text: string
-    color: string
-  }
-
   interface Props {
     position: { x: number; y: number; z: number }
     rotation: number
@@ -41,10 +35,7 @@
   let isDeadAnimationFinished = $state(false)
   let lastMonsterState = $state<MonsterData['state'] | undefined>(undefined)
   let lastDeadAnimFinished = $state(false)
-  let floatingTexts = $state<FloatingText[]>([])
-  let nextTextId = 0
-  let lastDamageTrigger = $state(0)
-  let damageTextRefs: DamageText[] = []
+  let damageTextRef = $state<ReturnType<typeof DamageText>>()
   let lastAppliedOpacity = 1
   let materialsCloned = false
   let corpseTimer = 0
@@ -151,27 +142,18 @@
       playAnimation()
     }
 
-    // 2. Check for new damage
-    if (lastDamageInfo && lastDamageInfo.trigger !== lastDamageTrigger) {
-      lastDamageTrigger = lastDamageInfo.trigger
-
-      const text = lastDamageInfo.hit ? `${lastDamageInfo.damage}` : 'Miss'
-      const color = lastDamageInfo.hit ? '#ff4d4d' : '#a0aec0'
-
-      floatingTexts = [...floatingTexts, { id: nextTextId++, text, color }]
-    }
-
-    // 3. Update floating damage texts
-    if (floatingTexts.length > 0 && camera) {
-      for (const ref of damageTextRefs) {
-        ref?.update(deltaTime, position.x, position.y, position.z, camera)
-      }
-      floatingTexts = floatingTexts.filter(
-        (_, index) => damageTextRefs[index]?.isAlive() !== false
+    // 2. Update damage texts
+    if (camera) {
+      damageTextRef?.update(
+        deltaTime,
+        position.x,
+        position.y,
+        position.z,
+        camera
       )
     }
 
-    // 4. Corpse fade
+    // 3. Corpse fade
     if (monsterState === 'dead') {
       corpseTimer += deltaTime
       if (corpseTimer >= CORPSE_FADE_START) {
@@ -183,7 +165,7 @@
       corpseTimer = 0
     }
 
-    // 5. Update mixer
+    // 4. Update mixer
     if (mixer) {
       mixer.update(deltaTime)
 
@@ -279,10 +261,4 @@
 </T.Group>
 
 <!-- Floating Damage Text -->
-{#each floatingTexts as text, index (text.id)}
-  <DamageText
-    bind:this={damageTextRefs[index]}
-    text={text.text}
-    color={text.color}
-  />
-{/each}
+<DamageText bind:this={damageTextRef} {lastDamageInfo} />

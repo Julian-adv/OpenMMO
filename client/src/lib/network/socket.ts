@@ -395,8 +395,20 @@ class NetworkManager {
         const isCurrentPlayer =
           gameState2.currentPlayer?.id === message.player_id
 
+        // Only build damage info for current player (floating text)
+        let damageInfo = undefined
+        if (isCurrentPlayer) {
+          const prevTrigger =
+            gameState2.currentPlayer?.lastDamageInfo?.trigger ?? 0
+          damageInfo = {
+            damage: message.damage,
+            hit: message.hit,
+            trigger: prevTrigger + 1,
+          }
+        }
+
         if (message.hit) {
-          // Update player HP
+          // Update player HP and optionally damage info
           updatePlayer(message.player_id, {
             health: isCurrentPlayer
               ? Math.max(
@@ -408,6 +420,7 @@ class NetworkManager {
                   (gameState2.otherPlayers.get(message.player_id)?.health ??
                     0) - message.damage
                 ),
+            ...(isCurrentPlayer ? { lastDamageInfo: damageInfo } : {}),
           })
 
           const targetName = isCurrentPlayer
@@ -418,6 +431,12 @@ class NetworkManager {
             `Monster rolled ${message.roll}: HIT ${targetName} for ${message.damage} damage!`
           )
         } else {
+          // Only update damage info for current player to show "Miss"
+          if (isCurrentPlayer) {
+            updatePlayer(message.player_id, {
+              lastDamageInfo: damageInfo,
+            })
+          }
           addChatMessage(`Monster rolled ${message.roll}: MISSED!`)
         }
         break

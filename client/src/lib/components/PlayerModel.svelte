@@ -12,6 +12,8 @@
   import { ANIMATION_ORDER, AnimationIndex, AnimationName } from '../types/animations'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
+  import DamageText from './DamageText.svelte'
+  import type { PlayerDamageInfo } from '../stores/gameStore'
 
   interface Props {
     position: Vector3
@@ -25,6 +27,7 @@
     camera: THREE.PerspectiveCamera | undefined
     chatBubble?: string
     onAttackDuration?: (duration: number) => void
+    lastDamageInfo?: PlayerDamageInfo
   }
 
   let {
@@ -39,6 +42,7 @@
     camera,
     chatBubble,
     onAttackDuration,
+    lastDamageInfo,
   }: Props = $props()
 
   let nametagScale = $state(1)
@@ -46,6 +50,9 @@
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
   let chatBubbleInstance = $state<ChatBubble | null>(null)
   let animDebugInfo = $state('')
+
+  // Floating damage text
+  let damageTextRef = $state<ReturnType<typeof DamageText>>()
 
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
@@ -371,6 +378,17 @@
       nametagGroup.quaternion.copy(camera.quaternion)
     }
 
+    // Update floating damage texts
+    if (camera) {
+      damageTextRef?.update(
+        deltaTime,
+        position.x,
+        position.y,
+        position.z,
+        camera
+      )
+    }
+
     if (chatBubbleInstance) {
       chatBubbleInstance.update()
     }
@@ -461,4 +479,9 @@
     {camera}
     message={chatBubble}
   />
+{/if}
+
+<!-- Floating Damage Text -->
+{#if isCurrentPlayer}
+  <DamageText bind:this={damageTextRef} {lastDamageInfo} />
 {/if}

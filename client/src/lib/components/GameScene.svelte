@@ -390,6 +390,7 @@
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
     onAttackDuration={(duration) => (playerAttackDuration = duration)}
+    lastDamageInfo={currentPlayer.lastDamageInfo}
   />
 {/if}
 
