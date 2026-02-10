@@ -1,7 +1,7 @@
 <script lang="ts">
   import { cameraDistance } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
-  import { debugVisible } from '../stores/debugStore'
+  import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
 
   let fps = $state(0)
   let frameCount = $state(0)
@@ -32,6 +32,10 @@
     timeScale.update((scale) => (scale === 1.0 ? 0.1 : 1.0))
   }
 
+  function toggleCameraRotation() {
+    cameraRotationEnabled.update((v) => !v)
+  }
+
   // Start FPS monitoring
   lastFpsTime = performance.now()
   requestAnimationFrame(updateFPS)
@@ -39,24 +43,44 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if $debugVisible}
-  <div class="fps-counter">
-    <span>FPS: {fps} | ZOOM: {$cameraDistance.toFixed(1)}</span>
-    <button
-      class="slow-btn"
-      class:active={$timeScale < 1.0}
-      onclick={toggleSlowMode}
-    >
-      SLOW
-    </button>
+<div class="hud-container">
+  <div class="hud-box">
+    {#if $debugVisible}
+      <span class="fps-text">FPS: {fps} | ZOOM: {$cameraDistance.toFixed(1)}</span>
+    {/if}
+    
+    <div class="button-group">
+      <button
+        class="action-btn slow-btn"
+        class:active={$timeScale < 1.0}
+        onclick={toggleSlowMode}
+        title="Toggle Slow Motion"
+      >
+        SLOW
+      </button>
+      
+      <button
+        class="action-btn"
+        class:active={$cameraRotationEnabled}
+        onclick={toggleCameraRotation}
+        title="Toggle Camera Rotation"
+      >
+        CAM ROT: {$cameraRotationEnabled ? 'ON' : 'OFF'}
+      </button>
+    </div>
   </div>
-{/if}
+</div>
 
 <style>
-  .fps-counter {
+  .hud-container {
     position: fixed;
     top: 10px;
     left: 10px;
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  .hud-box {
     background: rgba(0, 0, 0, 0.8);
     color: #00ff00;
     padding: 8px 12px;
@@ -64,35 +88,48 @@
     font-family: 'Courier New', monospace;
     font-size: 14px;
     font-weight: bold;
-    z-index: 1000;
-    pointer-events: auto; /* Changed to auto to allow button click */
+    pointer-events: auto;
     border: 1px solid rgba(0, 255, 0, 0.3);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 15px;
+    width: fit-content;
   }
 
-  .slow-btn {
+  .fps-text {
+    white-space: nowrap;
+  }
+
+  .button-group {
+    display: flex;
+    gap: 6px;
+  }
+
+  .action-btn {
     background: #333;
     color: #fff;
     border: 1px solid #666;
     border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 10px;
+    padding: 4px 8px;
+    font-size: 11px;
     cursor: pointer;
     font-family: inherit;
     transition: all 0.2s;
+    white-space: nowrap;
   }
 
-  .slow-btn:hover {
+  .action-btn:hover {
     background: #555;
   }
 
-  .slow-btn.active {
-    background: #ff0000;
-    border-color: #ffcccc;
-    color: white;
-    box-shadow: 0 0 5px rgba(255, 0, 0, 0.5);
+  .action-btn.active {
+    background: #2f855a; /* Green for CAM ROT ON */
+    border-color: #68d391;
+  }
+
+  .action-btn.slow-btn.active {
+    background: #c53030; /* Red for Slow Mode */
+    border-color: #feb2b2;
   }
 </style>

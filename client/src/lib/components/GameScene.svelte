@@ -23,7 +23,7 @@
   import { type PlayerState } from '../utils/movementUtils'
   import { cameraDistance } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
-  import { debugVisible } from '../stores/debugStore'
+  import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
 
   interface Props {
     serverUrl: string
@@ -55,14 +55,20 @@
     z: INITIAL_DISTANCE * Math.cos(INITIAL_PITCH),
   }
 
-  // Reset camera rotation to default angle when debug mode is turned off
+  // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
   let prevDebugVisible = $state(false)
+  let prevRotationEnabled = $state(false)
   $effect(() => {
-    const current = $debugVisible
-    if (prevDebugVisible && !current) {
+    const currentDebug = $debugVisible
+    const currentRotation = $cameraRotationEnabled
+
+    // Reset if debug mode was turned off OR rotation was just disabled
+    if ((prevDebugVisible && !currentDebug) || (prevRotationEnabled && !currentRotation)) {
       resetCameraRotation()
     }
-    prevDebugVisible = current
+
+    prevDebugVisible = currentDebug
+    prevRotationEnabled = currentRotation
   })
 
   function resetCameraRotation() {
@@ -321,7 +327,7 @@
 
 <T.PerspectiveCamera bind:ref={camera} makeDefault fov={75}>
   <OrbitControls
-    enableRotate={$debugVisible}
+    enableRotate={$cameraRotationEnabled}
     enablePan={false}
     enableZoom={true}
     target={cameraTarget}
