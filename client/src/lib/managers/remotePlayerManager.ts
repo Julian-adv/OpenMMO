@@ -35,8 +35,11 @@ class PlayerStateManager {
       // Get current interpolated position or initialize from player position
       const currentPlayer = this.players.get(playerId)
 
-      // Skip movement update if player is attacking
-      if (currentPlayer?.state === 'attack') {
+      // Skip movement update if player is attacking or dead
+      if (
+        currentPlayer?.state === 'attack' ||
+        currentPlayer?.state === 'dead'
+      ) {
         return
       }
 
@@ -147,6 +150,17 @@ class PlayerStateManager {
     this.players.clear()
     this.movementData.clear()
     this.attackQueue.clear()
+  }
+
+  handleDead(playerId: string) {
+    const player = this.players.get(playerId)
+    if (!player) return
+
+    this.players.set(playerId, {
+      ...player,
+      state: 'dead',
+      speed: 0,
+    })
   }
 
   handleAttack(playerId: string) {

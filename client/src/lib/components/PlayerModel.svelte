@@ -17,7 +17,7 @@
     position: Vector3
     name: string
     isCurrentPlayer: boolean
-    playerState: 'idle' | 'moving' | 'attack'
+    playerState: 'idle' | 'moving' | 'attack' | 'dead'
     attackCounter?: number
     speed: number
     rotation: number
@@ -60,9 +60,9 @@
   // Clock removed, using passed deltaTime
 
   let validAnimations = $state<THREE.AnimationClip[]>([])
-  let lastPlayerState = $state<'idle' | 'moving' | 'attack' | undefined>(
-    undefined
-  )
+  let lastPlayerState = $state<
+    'idle' | 'moving' | 'attack' | 'dead' | undefined
+  >(undefined)
   let lastAttackCounter = $state(0)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
@@ -106,6 +106,14 @@
       // Find index for slash1 or fallback
       // Assuming AnimationIndex.SLASH1 exists and maps correctly
       clip = validAnimations[AnimationIndex.SLASH1]
+    } else if (playerState === 'dead') {
+      // Stop all animations - the model will be tilted via the group rotation
+      currentMovementAnimationIndex = undefined
+      if (currentAction) {
+        currentAction.fadeOut(0.5)
+        currentAction = null
+      }
+      return
     } else {
       return // Unknown state
     }
@@ -417,7 +425,7 @@
 {#if modelRoot}
   <T.Group
     position={[position.x, position.y, position.z]}
-    rotation={[0, rotation, 0]}
+    rotation={[playerState === 'dead' ? -Math.PI / 2 : 0, rotation, 0]}
   >
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />

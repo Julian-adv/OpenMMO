@@ -227,6 +227,76 @@ impl GameState {
         }
     }
 
+    pub async fn broadcast_monster_attack(
+        &self,
+        monster_id: &str,
+        target_player_id: &str,
+    ) {
+        // 1. Check if monster exists and is alive, get its type
+        let monster_type = {
+            let monsters = self.monsters.read().await;
+            let monster = monsters.get(monster_id);
+            if monster.is_none() || monster.unwrap().state == "dead" {
+                return;
+            }
+            monster.unwrap().monster_type.clone()
+        };
+
+        // 2. Check if target player exists and is alive
+        {
+            let players = self.players.read().await;
+            match players.get(target_player_id) {
+                Some(player) if player.health > 0 => {}
+                _ => return,
+            }
+        }
+
+        let def = self.monster_defs.get(&monster_type);
+        let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
+        let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
+        let result = combat::roll_attack(hit_threshold, damage_roll);
+
+        info!(
+            "Monster {} attacks player {}: Roll {}, Hit: {}, Damage: {}",
+            monster_id, target_player_id, result.roll, result.hit, result.damage
+        );
+
+        // Send attack result
+        let _ = self
+            .broadcast_tx
+            .send(ServerMessage::MonsterAttackedPlayer {
+                monster_id: monster_id.to_string(),
+                player_id: target_player_id.to_string(),
+                hit: result.hit,
+                roll: result.roll,
+                damage: result.damage,
+            });
+
+        // If hit, update player HP
+        if result.hit {
+            let mut players = self.players.write().await;
+
+            if let Some(player) = players.get_mut(target_player_id) {
+                if player.health == 0 {
+                    return; // Already dead
+                }
+
+                player.health = player.health.saturating_sub(result.damage);
+                info!(
+                    "Player {} HP: {}/{}",
+                    target_player_id, player.health, player.max_health
+                );
+
+                if player.health == 0 {
+                    info!("Player {} died", target_player_id);
+                    let _ = self.broadcast_tx.send(ServerMessage::PlayerDead {
+                        player_id: target_player_id.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
     pub async fn spawn_monster(
         &self,
         monster_type: String,

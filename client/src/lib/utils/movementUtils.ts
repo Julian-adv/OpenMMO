@@ -31,7 +31,7 @@ export interface MovementResult {
 
 export interface PlayerState {
   position: Position
-  state: 'idle' | 'moving' | 'attack'
+  state: 'idle' | 'moving' | 'attack' | 'dead'
   speed: number
   rotation: number
   movementMode?: MovementMode

@@ -267,13 +267,32 @@ class MonsterManager {
         if (monster.targetPlayerId) {
           const gameState = get(gameStore)
           let targetPlayer:
-            | { position: { x: number; y: number; z: number } }
+            | { position: { x: number; y: number; z: number }; health?: number }
             | undefined
 
           if (gameState.currentPlayer?.id === monster.targetPlayerId) {
             targetPlayer = gameState.currentPlayer
           } else {
             targetPlayer = gameState.otherPlayers.get(monster.targetPlayerId)
+          }
+
+          // Stop attacking if target is dead
+          if (
+            targetPlayer &&
+            targetPlayer.health !== undefined &&
+            targetPlayer.health <= 0
+          ) {
+            monster.state = 'idle'
+            monster.targetPlayerId = undefined
+            monster.stateTimer = 0
+            networkManager.sendMonsterMove(
+              monster.id,
+              monster.position,
+              monster.rotation,
+              'idle',
+              monster.position
+            )
+            return
           }
 
           if (targetPlayer) {
@@ -318,6 +337,12 @@ class MonsterManager {
                   monster.rotation,
                   'attack',
                   monster.position
+                )
+
+                // Request server-side damage resolution
+                networkManager.sendMonsterAttack(
+                  monster.id,
+                  monster.targetPlayerId
                 )
               }
             } else {

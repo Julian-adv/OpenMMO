@@ -59,6 +59,7 @@ type ClientMessage =
       target_position: Position
     }
   | { type: 'player_attack'; monster_id: string }
+  | { type: 'monster_attack'; monster_id: string; target_player_id: string }
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
@@ -96,6 +97,15 @@ type ServerMessage =
     }
   | { type: 'monster_removed'; monster_id: string }
   | { type: 'monster_dead'; monster_id: string }
+  | {
+      type: 'monster_attacked_player'
+      monster_id: string
+      player_id: string
+      hit: boolean
+      roll: number
+      damage: number
+    }
+  | { type: 'player_dead'; player_id: string }
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -370,6 +380,66 @@ class NetworkManager {
         )
         break
       }
+
+      case 'monster_attacked_player': {
+        console.log(
+          'Monster',
+          message.monster_id,
+          'attacked player',
+          message.player_id,
+          'Hit:',
+          message.hit
+        )
+
+        const gameState2 = get(gameStore)
+        const isCurrentPlayer =
+          gameState2.currentPlayer?.id === message.player_id
+
+        if (message.hit) {
+          // Update player HP
+          updatePlayer(message.player_id, {
+            health: isCurrentPlayer
+              ? Math.max(
+                  0,
+                  (gameState2.currentPlayer?.health ?? 0) - message.damage
+                )
+              : Math.max(
+                  0,
+                  (gameState2.otherPlayers.get(message.player_id)?.health ??
+                    0) - message.damage
+                ),
+          })
+
+          const targetName = isCurrentPlayer
+            ? 'You'
+            : (gameState2.otherPlayers.get(message.player_id)?.name ??
+              'Unknown')
+          addChatMessage(
+            `Monster rolled ${message.roll}: HIT ${targetName} for ${message.damage} damage!`
+          )
+        } else {
+          addChatMessage(`Monster rolled ${message.roll}: MISSED!`)
+        }
+        break
+      }
+
+      case 'player_dead': {
+        console.log('Player dead:', message.player_id)
+        const gameState3 = get(gameStore)
+        const isDeadCurrentPlayer =
+          gameState3.currentPlayer?.id === message.player_id
+        const deadPlayerName = isDeadCurrentPlayer
+          ? 'You'
+          : (gameState3.otherPlayers.get(message.player_id)?.name ?? 'Unknown')
+        addChatMessage(
+          `${deadPlayerName === 'You' ? 'You have' : deadPlayerName + ' has'} been slain!`
+        )
+
+        if (!isDeadCurrentPlayer) {
+          remotePlayerManager.handleDead(message.player_id)
+        }
+        break
+      }
     }
   }
 
@@ -378,6 +448,17 @@ class NetworkManager {
       const message: ClientMessage = {
         type: 'player_attack',
         monster_id: monsterId,
+      }
+      this.socket.send(JSON.stringify(message))
+    }
+  }
+
+  sendMonsterAttack(monsterId: string, targetPlayerId: string) {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      const message: ClientMessage = {
+        type: 'monster_attack',
+        monster_id: monsterId,
+        target_player_id: targetPlayerId,
       }
       this.socket.send(JSON.stringify(message))
     }

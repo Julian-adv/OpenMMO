@@ -32,8 +32,8 @@ impl Player {
             },
             rotation: 0.0,
             level: 1,
-            health: 100,
-            max_health: 100,
+            health: 10,
+            max_health: 10,
         }
     }
 }
@@ -75,6 +75,11 @@ pub enum ClientMessage {
     },
     #[serde(rename = "player_attack")]
     PlayerAttack { monster_id: String },
+    #[serde(rename = "monster_attack")]
+    MonsterAttack {
+        monster_id: String,
+        target_player_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -122,6 +127,16 @@ pub enum ServerMessage {
         roll: u8,
         damage: u32,
     },
+    #[serde(rename = "monster_attacked_player")]
+    MonsterAttackedPlayer {
+        monster_id: String,
+        player_id: String,
+        hit: bool,
+        roll: u8,
+        damage: u32,
+    },
+    #[serde(rename = "player_dead")]
+    PlayerDead { player_id: String },
 }
 
 pub type PlayerId = String;

@@ -122,6 +122,24 @@
 
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
+    // Dead players cannot move
+    if (currentPlayer && currentPlayer.health <= 0) {
+      if (playerState.state !== 'dead') {
+        isMoving = false
+        movementTarget = null
+        movementState = null
+        targetMonsterId = null
+        const deadState: PlayerState = {
+          ...playerState,
+          state: 'dead',
+          speed: 0,
+        }
+        playerState = deadState
+        onStateChange(deadState)
+      }
+      return
+    }
+
     // If we have a target monster
     if (targetMonsterId && currentPlayer) {
       // Check if monster exists and its state
@@ -462,6 +480,7 @@
 
   // Handle click-to-move
   export function handleClickToMove(clickPosition: Position) {
+    if (currentPlayer && currentPlayer.health <= 0) return
     if (!currentPlayer || isMoving || keysPressed.size > 0) {
       // Allow overriding current movement with new click
       if (currentPlayer && isMoving && !keysPressed.size) {
@@ -541,7 +560,7 @@
 
   // Handle canvas click events
   function handleCanvasClick(event: MouseEvent) {
-    if (!currentPlayer) return
+    if (!currentPlayer || currentPlayer.health <= 0) return
 
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect()
     
