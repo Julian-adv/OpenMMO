@@ -422,6 +422,7 @@
   <Monster
     bind:this={monsterModels[index]}
     id={monster.id}
+    type={monster.type}
     position={monster.position}
     rotation={monster.rotation}
     monsterState={monster.state}

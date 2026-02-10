@@ -8,6 +8,7 @@
   import DamageText from './DamageText.svelte'
 
   import type { MonsterData } from '../types/Monster'
+  import { getMonsterDef } from '../data/monsterDefs'
 
   interface FloatingText {
     id: number
@@ -20,10 +21,14 @@
     rotation: number
     monsterState: MonsterData['state']
     id: string
+    type: string
     lastDamageInfo?: MonsterData['lastDamageInfo']
   }
 
-  let { position, rotation, monsterState, id, lastDamageInfo }: Props = $props()
+  let { position, rotation, monsterState, id, type, lastDamageInfo }: Props =
+    $props()
+
+  const def = $derived(getMonsterDef(type))
 
   const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
 
@@ -83,13 +88,15 @@
   function playAnimation() {
     if (!mixer || !$gltf) return
 
-    let clipName = '939_Idle'
-    if (monsterState === 'walk') clipName = '939_Walking'
-    if (monsterState === 'run') clipName = '939_Running'
-    if (monsterState === 'attack') clipName = '939_Attack1'
-    if (monsterState === 'hit') clipName = '939_AddStagger1'
+    let clipName = def?.animIdle ?? 'Idle'
+    if (monsterState === 'walk') clipName = def?.animWalk ?? 'Walk'
+    if (monsterState === 'run') clipName = def?.animRun ?? 'Run'
+    if (monsterState === 'attack') clipName = def?.animAttack ?? 'Attack'
+    if (monsterState === 'hit') clipName = def?.animHit ?? 'Hit'
     if (monsterState === 'dead') {
-      clipName = isDeadAnimationFinished ? '939_Dead' : '939_Die'
+      clipName = isDeadAnimationFinished
+        ? (def?.animDead ?? 'Dead')
+        : (def?.animDie ?? 'Die')
     }
 
     const clip = $gltf.animations.find((c) => c.name === clipName)
@@ -221,7 +228,7 @@
 
         mixer.addEventListener('finished', (e) => {
           console.log(`Animation finished: ${e.action.getClip().name}`)
-          if (e.action.getClip().name === '939_Die') {
+          if (e.action.getClip().name === (def?.animDie ?? 'Die')) {
             isDeadAnimationFinished = true
           }
         })

@@ -24,6 +24,20 @@ pub struct MonsterDefinition {
     pub damage_roll: String,
     #[serde(rename = "hitThreshold")]
     pub hit_threshold: u8,
+    #[serde(rename = "animIdle")]
+    pub anim_idle: String,
+    #[serde(rename = "animWalk")]
+    pub anim_walk: String,
+    #[serde(rename = "animRun")]
+    pub anim_run: String,
+    #[serde(rename = "animAttack")]
+    pub anim_attack: String,
+    #[serde(rename = "animHit")]
+    pub anim_hit: String,
+    #[serde(rename = "animDie")]
+    pub anim_die: String,
+    #[serde(rename = "animDead")]
+    pub anim_dead: String,
 }
 
 #[derive(Debug, Clone)]
