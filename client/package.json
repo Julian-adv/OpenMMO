@@ -18,6 +18,7 @@
     "@eslint/js": "^9.33.0",
     "@sveltejs/vite-plugin-svelte": "^6.1.0",
     "@tsconfig/svelte": "^5.0.4",
+    "@types/node": "^25.2.2",
     "eslint": "^9.33.0",
     "eslint-plugin-svelte": "^3.11.0",
     "globals": "^16.3.0",
