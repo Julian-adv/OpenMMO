@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { Vector2, Raycaster } from 'three'
   import * as THREE from 'three'
   import { gameStore, type Player } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { monsterManager } from '../managers/monsterManager'
+  import { combatController } from '../managers/combatController'
+  import { inputHandler } from '../managers/inputHandler'
   import {
     calculateMovementStep,
     initMovementState,
@@ -28,17 +29,12 @@
   let { onStateChange, camera, groundMesh, monsterMeshes, attackCooldown }: Props = $props()
 
   let currentPlayer = $state<Player | null>(null)
-  let keysPressed = $state(new Set<string>())
 
   // Movement system
   let movementTarget = $state<Position | null>(null)
   let isMoving = $state(false)
   let movementState = $state<MovementState | null>(null)
-  let targetMonsterId = $state<string | null>(null)
-  let lastChaseUpdate = 0
   let lastSentPosition = $state<Position | null>(null)
-  let attackTimer = 0
-  let attackCounter = $state(0)
 
   // Use the same movement config as remote players
   const MOVEMENT_CONFIG: MovementConfig = {
@@ -74,6 +70,24 @@
     }
   })
 
+  // Find monster mesh position by traversing the scene graph
+  function findMonsterMeshPosition(monsterId: string): Position | undefined {
+    for (const group of monsterMeshes) {
+      if (group) {
+        let found = false
+        group.traverse((child) => {
+          if (child.userData.monsterId === monsterId) {
+            found = true
+          }
+        })
+        if (found) {
+          return { x: group.position.x, y: 0, z: group.position.z }
+        }
+      }
+    }
+    return undefined
+  }
+
   // Update player state and notify parent
   function updatePlayerState(totalDistance?: number) {
     const currentPosition = currentPlayer
@@ -87,7 +101,7 @@
     // Determine movement mode based on distance or if chasing a monster
     let movementMode: MovementMode | undefined
     if (isMoving) {
-      if (targetMonsterId) {
+      if (combatController.isInCombat) {
         movementMode = 'run'
       } else if (totalDistance !== undefined) {
         movementMode = getMovementMode(totalDistance)
@@ -102,7 +116,9 @@
       rotation: playerRotation,
       position: currentPosition,
       movementMode,
-      attackCounter: targetMonsterId ? attackCounter : undefined,
+      attackCounter: combatController.isInCombat
+        ? combatController.attackCounter
+        : undefined,
     }
 
     // Only update if state actually changed
@@ -120,6 +136,57 @@
     }
   }
 
+  // Initiate attack on a monster
+  function initiateAttack(monsterId: string) {
+    const monsterData = monsterManager.monsters.get(monsterId)
+    if (monsterData?.state === 'dead' || monsterData?.isDeadPending) return
+
+    console.log('Attacking monster:', monsterId)
+
+    combatController.beginCombat(monsterId, true)
+
+    // Ensure position sync
+    if (currentPlayer) {
+      const currentPos: Position = {
+        x: currentPlayer.position.x,
+        y: currentPlayer.position.y,
+        z: currentPlayer.position.z,
+      }
+
+      const shouldSendMove =
+        !lastSentPosition ||
+        Math.abs(currentPos.x - lastSentPosition.x) > 0.01 ||
+        Math.abs(currentPos.z - lastSentPosition.z) > 0.01
+
+      if (shouldSendMove) {
+        sendPlayerMove(currentPos, playerRotation)
+      }
+    }
+
+    const newPlayerState = {
+      ...playerState,
+      state: 'attack',
+    } as PlayerState
+
+    playerState = newPlayerState
+    onStateChange(newPlayerState)
+
+    networkManager.sendPlayerAttack(monsterId)
+  }
+
+  // Transition from attack to idle state
+  function transitionToIdle() {
+    if (playerState.state === 'attack') {
+      const idleState = {
+        ...playerState,
+        state: 'idle',
+        attackCounter: 0,
+      } as PlayerState
+      playerState = idleState
+      onStateChange(idleState)
+    }
+  }
+
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
     // Dead players cannot move
@@ -128,7 +195,7 @@
         isMoving = false
         movementTarget = null
         movementState = null
-        targetMonsterId = null
+        combatController.cancelCombat()
         const deadState: PlayerState = {
           ...playerState,
           state: 'dead',
@@ -140,200 +207,116 @@
       return
     }
 
-    // If we have a target monster
-    if (targetMonsterId && currentPlayer) {
-      // Check if monster exists and its state
-      const monsterData = monsterManager.monsters.get(targetMonsterId)
+    // Combat update
+    if (combatController.isInCombat && currentPlayer) {
+      const targetId = combatController.targetMonsterId!
+      const monsterData = monsterManager.monsters.get(targetId)
+      const monsterObjPos = findMonsterMeshPosition(targetId)
       const cooldownMs = attackCooldown ? attackCooldown * 1000 : 1500
-      const isFinishingAttack =
-        playerState.state === 'attack' && attackTimer < cooldownMs
 
-      // Only clear target if monster is gone/dead AND we aren't in the middle of a final swing
-      if (!monsterData || (monsterData.state === 'dead' && !isFinishingAttack)) {
-        targetMonsterId = null
-        attackCounter = 0
-        attackTimer = 0
-        if (isMoving) {
-          isMoving = false
-          movementTarget = null
-          movementState = null
-          updatePlayerState()
-        } else if (playerState.state === 'attack') {
-          const idleState = {
-            ...playerState,
-            state: 'idle',
-            attackCounter: 0,
-          } as PlayerState
-          playerState = idleState
-          onStateChange(idleState)
-        }
-        return
-      }
-
-      // Find the monster object
-      let monsterObj: THREE.Object3D | undefined
-      // TODO: Optimize lookup
-      for (const group of monsterMeshes) {
-        if (group) {
-          let found = false
-          group.traverse((child) => {
-            if (child.userData.monsterId === targetMonsterId) {
-              found = true
+      const result = combatController.update(
+        deltaTime,
+        { x: currentPlayer.position.x, y: 0, z: currentPlayer.position.z },
+        monsterData
+          ? {
+              state: monsterData.state,
+              isDeadPending: monsterData.isDeadPending,
             }
-          })
-          if (found) {
-            monsterObj = group
-            break
-          }
-        }
-      }
+          : undefined,
+        monsterObjPos,
+        isMoving,
+        cooldownMs,
+        playerState.state
+      )
 
-      if (monsterObj) {
-        const monsterPos = monsterObj.position
-        const currentPos = new THREE.Vector3(
-          currentPlayer.position.x,
-          0,
-          currentPlayer.position.z
-        )
-        const targetVector = new THREE.Vector3(monsterPos.x, 0, monsterPos.z)
-        const dist = currentPos.distanceTo(targetVector)
-
-        if (isMoving) {
-          // PHASE 1: CHASING
-          if (dist < 2.0) {
-            // Reached attack range - Transition to Combat
+      switch (result.action) {
+        case 'idle': {
+          if (isMoving) {
             isMoving = false
             movementTarget = null
             movementState = null
-            currentSpeed = 0
             updatePlayerState()
-            handleAttack(targetMonsterId)
-            return
-          } else {
-            // Update target position to tracking point (throttled)
-            const now = Date.now()
-            if (now - lastChaseUpdate >= 1000) {
-              lastChaseUpdate = now
-              const newTarget = { x: monsterPos.x, y: 0, z: monsterPos.z }
-              if (
-                !movementTarget ||
-                Math.abs(movementTarget.x - newTarget.x) > 0.1 ||
-                Math.abs(movementTarget.z - newTarget.z) > 0.1
-              ) {
-                movementTarget = newTarget
-                if (movementState) {
-                  movementState.targetPos = { ...movementTarget }
-                  const dx = movementTarget.x - currentPlayer.position.x
-                  const dy = movementTarget.y - currentPlayer.position.y
-                  const dz = movementTarget.z - currentPlayer.position.z
-                  movementState.totalDistance = Math.sqrt(
-                    dx * dx + dy * dy + dz * dz
-                  )
-                  movementState.startPos = { ...currentPos }
-                } else {
-                  movementState = initMovementState(
-                    currentPos,
-                    movementTarget,
-                    currentSpeed
-                  )
-                }
-                sendPlayerMove(movementTarget, playerRotation)
-              }
-            }
           }
-        } else {
-          // PHASE 2: COMBAT (In Range)
-          if (dist > 2.5 && !isFinishingAttack) {
-            // Range too far, stop attacking
-            targetMonsterId = null
-            attackCounter = 0
-            if (playerState.state === 'attack') {
-              const idleState = {
-                ...playerState,
-                state: 'idle',
-                attackCounter: 0,
-              } as PlayerState
-              playerState = idleState
-              onStateChange(idleState)
-            }
-          } else {
-            // Still in range, rotate to face monster
-            const dx = monsterPos.x - currentPlayer.position.x
-            const dz = monsterPos.z - currentPlayer.position.z
-            playerRotation = Math.atan2(dx, dz)
-
-            attackTimer += deltaTime
-
-            // Only start new attack cycles if monster is not already dying
-            if (monsterData && !monsterData.state && !monsterData.isDeadPending) {
-              // This block is for monsterData that might still be alive
-            }
-
-            // Corrected logic: Always increment timer, but only restart if alive
-            const isMonsterAlive =
-              monsterData &&
-              monsterData.state !== 'dead' &&
-              !monsterData.isDeadPending
-
-            if (attackTimer >= cooldownMs) {
-              if (isMonsterAlive) {
-                // Restart cycle
-                attackTimer = 0
-                attackCounter++
-                networkManager.sendPlayerAttack(targetMonsterId)
-                updatePlayerState()
-              } else {
-                // Monster is dead/dying and animation finished -> Idle
-                targetMonsterId = null
-                attackCounter = 0
-                attackTimer = 0
-                const idleState = {
-                  ...playerState,
-                  state: 'idle',
-                  attackCounter: 0,
-                } as PlayerState
-                playerState = idleState
-                onStateChange(idleState)
-                return
-              }
-            }
-
-            if (playerState.state !== 'attack') {
-              const attackState = {
-                ...playerState,
-                state: 'attack',
-                rotation: playerRotation,
-              } as PlayerState
-              playerState = attackState
-              onStateChange(attackState)
-            }
-            return // No movement processing while in combat
-          }
+          transitionToIdle()
+          return
         }
-      } else {
-        // Target lost
-        targetMonsterId = null
-        attackCounter = 0
-        if (isMoving) {
+
+        case 'reached_attack_range': {
           isMoving = false
           movementTarget = null
           movementState = null
+          currentSpeed = 0
           updatePlayerState()
-        } else if (playerState.state === 'attack') {
-          const idleState = {
-            ...playerState,
-            state: 'idle',
-            attackCounter: 0,
-          } as PlayerState
-          playerState = idleState
-          onStateChange(idleState)
+          initiateAttack(targetId)
+          return
         }
-        return
+
+        case 'chasing': {
+          if (result.newTarget) {
+            if (
+              !movementTarget ||
+              Math.abs(movementTarget.x - result.newTarget.x) > 0.1 ||
+              Math.abs(movementTarget.z - result.newTarget.z) > 0.1
+            ) {
+              movementTarget = result.newTarget
+              if (movementState) {
+                movementState.targetPos = { ...result.newTarget }
+                const dx = result.newTarget.x - currentPlayer.position.x
+                const dy = result.newTarget.y - currentPlayer.position.y
+                const dz = result.newTarget.z - currentPlayer.position.z
+                movementState.totalDistance = Math.sqrt(
+                  dx * dx + dy * dy + dz * dz
+                )
+                movementState.startPos = {
+                  x: currentPlayer.position.x,
+                  y: 0,
+                  z: currentPlayer.position.z,
+                }
+              } else {
+                movementState = initMovementState(
+                  {
+                    x: currentPlayer.position.x,
+                    y: 0,
+                    z: currentPlayer.position.z,
+                  },
+                  result.newTarget,
+                  currentSpeed
+                )
+              }
+              sendPlayerMove(result.newTarget, playerRotation)
+            }
+          }
+          break // Fall through to movement processing
+        }
+
+        case 'attacking': {
+          playerRotation = result.rotation
+          if (playerState.state !== 'attack') {
+            const attackState = {
+              ...playerState,
+              state: 'attack',
+              rotation: result.rotation,
+            } as PlayerState
+            playerState = attackState
+            onStateChange(attackState)
+          }
+          return
+        }
+
+        case 'attack_cycle': {
+          playerRotation = result.rotation
+          networkManager.sendPlayerAttack(result.monsterId)
+          updatePlayerState()
+          return
+        }
+
+        case 'none':
+          break
       }
     }
 
+    // Movement processing
     if (!isMoving || !movementTarget || !currentPlayer || !movementState) {
-      // Reset speed when not moving
       if (currentSpeed > 0) {
         currentSpeed = 0
         updatePlayerState()
@@ -384,9 +367,9 @@
       currentSpeed = 0
       updatePlayerState()
 
-      // If we were chasing a target (and for some reason arrived without triggering distance check above), attack it now
-      if (targetMonsterId) {
-        handleAttack(targetMonsterId)
+      // If we were chasing a target, attack it now
+      if (combatController.isInCombat) {
+        initiateAttack(combatController.targetMonsterId!)
       }
     } else {
       // Continue movement
@@ -406,47 +389,33 @@
 
   // Keyboard movement system
   export function updateKeyboardMovement() {
-    if (!currentPlayer || keysPressed.size === 0) {
+    if (!currentPlayer || !inputHandler.hasKeysPressed) {
       return
     }
 
     // Cancel click-to-move if keyboard input detected
-    if (keysPressed.size > 0 && movementTarget) {
+    if (inputHandler.hasKeysPressed && movementTarget) {
       movementTarget = null
       movementState = null
-      targetMonsterId = null // Cancel chase/combat
+      combatController.cancelCombat()
     }
 
-    if (keysPressed.size > 0 && targetMonsterId) {
-      targetMonsterId = null
-      attackCounter = 0
+    if (inputHandler.hasKeysPressed && combatController.isInCombat) {
+      combatController.cancelCombat()
     }
 
-    // Calculate movement direction based on pressed keys
-    let moveX = 0
-    let moveZ = 0
-
-    if (keysPressed.has('KeyW') || keysPressed.has('ArrowUp')) moveZ -= 1
-    if (keysPressed.has('KeyS') || keysPressed.has('ArrowDown')) moveZ += 1
-    if (keysPressed.has('KeyA') || keysPressed.has('ArrowLeft')) moveX -= 1
-    if (keysPressed.has('KeyD') || keysPressed.has('ArrowRight')) moveX += 1
-
-    // Normalize diagonal movement
-    if (moveX !== 0 && moveZ !== 0) {
-      moveX *= 0.707 // 1/sqrt(2)
-      moveZ *= 0.707
-    }
+    const dir = inputHandler.getMovementDirection()
 
     // Apply keyboard movement if any keys are pressed
-    if (moveX !== 0 || moveZ !== 0) {
+    if (dir) {
       // Use fixed speed for keyboard movement (instant response)
       currentSpeed = MOVEMENT_CONFIG.maxSpeed
       const speed = MOVEMENT_CONFIG.maxSpeed * (1000 / 120 / 1000) // Adjust for frame rate (120 FPS target)
-      const newX = currentPlayer.position.x + moveX * speed
-      const newZ = currentPlayer.position.z + moveZ * speed
+      const newX = currentPlayer.position.x + dir.x * speed
+      const newZ = currentPlayer.position.z + dir.z * speed
 
       // Calculate rotation based on movement direction
-      playerRotation = Math.atan2(moveX, moveZ)
+      playerRotation = Math.atan2(dir.x, dir.z)
 
       gameStore.update((state) => {
         if (state.currentPlayer) {
@@ -481,9 +450,9 @@
   // Handle click-to-move
   export function handleClickToMove(clickPosition: Position) {
     if (currentPlayer && currentPlayer.health <= 0) return
-    if (!currentPlayer || isMoving || keysPressed.size > 0) {
+    if (!currentPlayer || isMoving || inputHandler.hasKeysPressed) {
       // Allow overriding current movement with new click
-      if (currentPlayer && isMoving && !keysPressed.size) {
+      if (currentPlayer && isMoving && !inputHandler.hasKeysPressed) {
         // Proceed
       } else {
         return
@@ -514,201 +483,46 @@
     updatePlayerState(movementState.totalDistance)
   }
 
-  // Handle attack logic
-  function handleAttack(monsterId: string) {
-    const monsterData = monsterManager.monsters.get(monsterId)
-    if (monsterData?.state === 'dead' || monsterData?.isDeadPending) return
-
-    console.log('Attacking monster:', monsterId)
-
-    // Ensure position sync: send final move packet if current position differs from last sent
-    if (currentPlayer) {
-      const currentPos: Position = {
-        x: currentPlayer.position.x,
-        y: currentPlayer.position.y,
-        z: currentPlayer.position.z,
-      }
-
-      const shouldSendMove =
-        !lastSentPosition ||
-        Math.abs(currentPos.x - lastSentPosition.x) > 0.01 ||
-        Math.abs(currentPos.z - lastSentPosition.z) > 0.01
-
-      if (shouldSendMove) {
-        sendPlayerMove(currentPos, playerRotation)
-      }
-    }
-
-    // 1. Set local player state to attack
-    const newPlayerState = {
-      ...playerState,
-      state: 'attack',
-    } as PlayerState
-
-    // Force immediate update
-    playerState = newPlayerState
-    onStateChange(newPlayerState)
-
-    // 2. Send attack packet
-    networkManager.sendPlayerAttack(monsterId)
-
-    // 3. Set attacking target for persistent attack
-    targetMonsterId = monsterId
-    attackCounter = 1 // Start at 1
-    attackTimer = 0
-  }
-
-  // Handle canvas click events
-  function handleCanvasClick(event: MouseEvent) {
+  // Handle canvas click intent from input handler
+  function handleCanvasClickIntent(event: MouseEvent) {
     if (!currentPlayer || currentPlayer.health <= 0) return
 
-    const rect = (event.target as HTMLCanvasElement).getBoundingClientRect()
-    
-    // Define 5 points to raycast: center, up, right, down, left (10px offsets)
-    const offsets = [
-      { dx: 0, dy: 0 },    // Center
-      { dx: 0, dy: -10 },  // Up (Screen coordinates: -y is up)
-      { dx: 10, dy: 0 },   // Right
-      { dx: 0, dy: 10 },   // Down
-      { dx: -10, dy: 0 },  // Left
-    ]
+    const intent = inputHandler.processCanvasClick(event, {
+      camera,
+      monsterMeshes,
+      groundMesh,
+      playerPosition: {
+        x: currentPlayer.position.x,
+        y: 0,
+        z: currentPlayer.position.z,
+      },
+      isMonsterDead: (id) => {
+        const m = monsterManager.monsters.get(id)
+        return m?.state === 'dead' || false
+      },
+    })
 
-    const raycaster = new Raycaster()
-
-    // 1. Check intersection with monsters using 5 rays
-    if (monsterMeshes.length > 0) {
-      for (const offset of offsets) {
-        const mouseNDC = new Vector2(
-          ((event.clientX - rect.left + offset.dx) / rect.width) * 2 - 1,
-          -((event.clientY - rect.top + offset.dy) / rect.height) * 2 + 1
-        )
-
-        raycaster.setFromCamera(mouseNDC, camera)
-        const monsterIntersects = raycaster.intersectObjects(monsterMeshes, true)
-
-        if (monsterIntersects.length > 0) {
-          // Find the root object that has the monsterId
-          let object: THREE.Object3D | null = monsterIntersects[0].object
-          let monsterId: string | undefined
-
-          while (object) {
-            if (object.userData && object.userData.monsterId) {
-              monsterId = object.userData.monsterId
-              break
-            }
-            object = object.parent
-          }
-
-          if (monsterId) {
-            // Check if monster is dead
-            const monsterData = monsterManager.monsters.get(monsterId)
-            if (monsterData?.state === 'dead') {
-              continue // Try other rays if this hit a dead one, or just ignore
-            }
-
-            const hitPoint = monsterIntersects[0].point
-            const dist = new THREE.Vector3(
-              currentPlayer.position.x,
-              0,
-              currentPlayer.position.z
-            ).distanceTo(new THREE.Vector3(hitPoint.x, 0, hitPoint.z))
-
-            if (dist < 2.0) {
-              handleAttack(monsterId)
-              isMoving = false
-              movementTarget = null
-              targetMonsterId = monsterId
-            } else {
-              targetMonsterId = monsterId
-              lastChaseUpdate = Date.now()
-              handleClickToMove({
-                x: hitPoint.x,
-                y: 0,
-                z: hitPoint.z,
-              })
-            }
-            return // Successfully targeted a monster, exit function
-          }
+    switch (intent.type) {
+      case 'attack_monster': {
+        if (intent.distance < 2.0) {
+          initiateAttack(intent.monsterId)
+          isMoving = false
+          movementTarget = null
+        } else {
+          combatController.beginCombat(intent.monsterId, false)
+          handleClickToMove(intent.hitPoint)
         }
+        break
+      }
+      case 'move_to_ground': {
+        combatController.cancelCombat()
+        handleClickToMove(intent.position)
+        break
       }
     }
-
-    // 2. Check intersection with ground (only use the center ray)
-    const centerNDC = new Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    )
-    raycaster.setFromCamera(centerNDC, camera)
-    const intersects = raycaster.intersectObject(groundMesh)
-
-    if (intersects.length > 0) {
-      const point = intersects[0].point
-      const clickPosition: Position = {
-        x: point.x,
-        y: 0, // Position player on ground level
-        z: point.z,
-      }
-
-      // Normal click-to-move, clear attack target
-      targetMonsterId = null // Clear persistent attack/chase
-      attackCounter = 0
-      handleClickToMove(clickPosition)
-    }
-  }
-
-  // Keyboard event handlers
-  function handleKeyDown(event: KeyboardEvent) {
-    // Ignore keyboard input when typing in input fields
-    const target = event.target as HTMLElement
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-      return
-    }
-
-    // Ignore movement keys when Ctrl is pressed (e.g. for Ctrl+D toggle)
-    if (event.ctrlKey) return
-
-    keysPressed.add(event.code)
-    event.preventDefault()
-  }
-
-  function handleKeyUp(event: KeyboardEvent) {
-    // Always remove from tracked keys on keyup, to prevent stuck keys
-    // especially when focus changes (e.g. Enter to open chat)
-    if (keysPressed.has(event.code)) {
-      keysPressed.delete(event.code)
-    }
-
-    // Ignore keyboard input when typing in input fields
-    const target = event.target as HTMLElement
-    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-      return
-    }
-    event.preventDefault()
   }
 
   onMount(() => {
-    // Add keyboard event listeners
-    document.addEventListener('keydown', handleKeyDown)
-    document.addEventListener('keyup', handleKeyUp)
-
-    // Add click event listener to canvas - wait until canvas exists
-    let canvas: HTMLCanvasElement | null = null
-    const findCanvas = () => {
-      canvas = document.querySelector('canvas')
-      if (canvas) {
-        canvas.addEventListener('mousedown', handleCanvasClick)
-      } else {
-        setTimeout(findCanvas, 100)
-      }
-    }
-    findCanvas()
-
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown)
-      document.removeEventListener('keyup', handleKeyUp)
-      if (canvas) {
-        canvas.removeEventListener('mousedown', handleCanvasClick)
-      }
-    }
+    return inputHandler.setupEventListeners(handleCanvasClickIntent)
   })
 </script>
