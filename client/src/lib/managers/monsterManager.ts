@@ -1,15 +1,37 @@
 import { SvelteMap } from 'svelte/reactivity'
+import * as THREE from 'three'
 import { networkManager } from '../network/socket'
 import { get } from 'svelte/store'
 import { gameStore } from '../stores/gameStore'
 import type { MonsterData } from '../types/Monster'
 import { getMonsterDef } from '../data/monsterDefs'
+import type { Position } from '../utils/movementUtils'
 
 const MIN_MOVE_DIST = 2.0
 const MAX_MOVE_DIST = 10.0
 
 class MonsterManager {
   monsters = new SvelteMap<string, MonsterData>()
+  findMeshPosition(
+    monsterId: string,
+    meshes: THREE.Group[]
+  ): Position | undefined {
+    for (const group of meshes) {
+      if (group) {
+        let found = false
+        group.traverse((child) => {
+          if (child.userData.monsterId === monsterId) {
+            found = true
+          }
+        })
+        if (found) {
+          return { x: group.position.x, y: 0, z: group.position.z }
+        }
+      }
+    }
+    return undefined
+  }
+
   private timeSinceLastSpawn = 0
   private readonly SPAWN_INTERVAL = 10000 // 10 seconds
 

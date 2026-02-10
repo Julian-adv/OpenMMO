@@ -70,24 +70,6 @@
     }
   })
 
-  // Find monster mesh position by traversing the scene graph
-  function findMonsterMeshPosition(monsterId: string): Position | undefined {
-    for (const group of monsterMeshes) {
-      if (group) {
-        let found = false
-        group.traverse((child) => {
-          if (child.userData.monsterId === monsterId) {
-            found = true
-          }
-        })
-        if (found) {
-          return { x: group.position.x, y: 0, z: group.position.z }
-        }
-      }
-    }
-    return undefined
-  }
-
   // Update player state and notify parent
   function updatePlayerState(totalDistance?: number) {
     const currentPosition = currentPlayer
@@ -211,7 +193,7 @@
     if (combatController.isInCombat && currentPlayer) {
       const targetId = combatController.targetMonsterId!
       const monsterData = monsterManager.monsters.get(targetId)
-      const monsterObjPos = findMonsterMeshPosition(targetId)
+      const monsterObjPos = monsterManager.findMeshPosition(targetId, monsterMeshes)
       const cooldownMs = attackCooldown ? attackCooldown * 1000 : 1500
 
       const result = combatController.update(
