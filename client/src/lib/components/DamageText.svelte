@@ -1,25 +1,33 @@
 <script lang="ts">
-  import { T } from '@threlte/core'
-  import { Text } from '@threlte/extras'
+  import DamageTextItem from './DamageTextItem.svelte'
   import * as THREE from 'three'
+  import type { PlayerDamageInfo } from '../stores/gameStore'
 
   interface Props {
+    lastDamageInfo?: PlayerDamageInfo
+  }
+
+  let { lastDamageInfo }: Props = $props()
+
+  interface FloatingText {
+    id: number
     text: string
     color: string
   }
 
-  let { text, color }: Props = $props()
-  let group = $state<THREE.Group | undefined>(undefined)
-
-  let yOffset = $state(1.8)
-  let life = 1.0
-  let opacity = $state(1)
-
-  let _alive = true
-
-  export function isAlive() {
-    return _alive
-  }
+  let floatingTexts = $state<FloatingText[]>([])
+  let nextTextId = 0
+  let lastDamageTrigger = $state(0)
+  let itemRefs: (ReturnType<typeof DamageTextItem> & {
+    update: (
+      deltaTime: number,
+      baseX: number,
+      baseY: number,
+      baseZ: number,
+      camera: THREE.Camera
+    ) => void
+    isAlive: () => boolean
+  })[] = []
 
   export function update(
     deltaTime: number,
@@ -28,30 +36,40 @@
     baseZ: number,
     camera: THREE.Camera
   ) {
-    life -= deltaTime
-    yOffset += deltaTime * 1.5
-    opacity = Math.max(0, Math.min(1, life * 2))
-    _alive = life > 0
+    // 1. Check for new damage
+    if (lastDamageInfo && lastDamageInfo.trigger !== lastDamageTrigger) {
+      lastDamageTrigger = lastDamageInfo.trigger
 
-    if (!group) return
-    // Position at monster base, face camera
-    group.position.set(baseX, baseY, baseZ)
-    group.quaternion.copy(camera.quaternion)
-    // yOffset is applied in local space via the Text's position.y prop,
-    // so it moves in screen-up direction (billboard local Y)
+      const text = lastDamageInfo.hit ? `${lastDamageInfo.damage}` : 'Miss'
+      const color = lastDamageInfo.hit ? '#ff4d4d' : '#a0aec0'
+
+      floatingTexts = [...floatingTexts, { id: nextTextId++, text, color }]
+    }
+
+    // 2. Update existing items
+    if (floatingTexts.length > 0) {
+      for (const ref of itemRefs) {
+        ref?.update(deltaTime, baseX, baseY, baseZ, camera)
+      }
+
+      // Filter out dead items
+      if (itemRefs.some((ref) => ref && !ref.isAlive())) {
+        const remainingTexts: FloatingText[] = []
+        floatingTexts.forEach((text, index) => {
+          if (itemRefs[index]?.isAlive() !== false) {
+            remainingTexts.push(text)
+          }
+        })
+        floatingTexts = remainingTexts
+      }
+    }
   }
 </script>
 
-<!-- Outer group: billboard at monster position -->
-<T.Group bind:ref={group}>
-  <!-- Inner offset: local Y = screen up -->
-  <Text
-    {text}
-    fontSize={0.25}
-    {color}
-    fillOpacity={opacity}
-    position.y={yOffset}
-    anchorX="center"
-    anchorY="middle"
+{#each floatingTexts as text, index (text.id)}
+  <DamageTextItem
+    bind:this={itemRefs[index]}
+    text={text.text}
+    color={text.color}
   />
-</T.Group>
+{/each}

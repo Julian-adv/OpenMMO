@@ -2,6 +2,12 @@ import { writable } from 'svelte/store'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
 
+export interface PlayerDamageInfo {
+  damage: number
+  hit: boolean
+  trigger: number
+}
+
 export interface Player {
   id: string
   name: string
@@ -10,6 +16,7 @@ export interface Player {
   level: number
   health: number
   maxHealth: number
+  lastDamageInfo?: PlayerDamageInfo
 }
 
 export interface ChatBubble {
