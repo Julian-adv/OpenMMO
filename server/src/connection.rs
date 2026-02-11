@@ -29,7 +29,9 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
             msg = ws_receiver.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        info!("Received message: {}", text);
+                        if !text.contains("\"type\":\"monster_move\"") {
+                            info!("Received message: {}", text);
+                        }
                         match handle_client_message(&text, &game_state, &mut player_id).await
                         {
                             Ok(responses) => {

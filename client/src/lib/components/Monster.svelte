@@ -209,14 +209,10 @@
         mixer = new THREE.AnimationMixer(clonedScene)
 
         mixer.addEventListener('finished', (e) => {
-          console.log(`Animation finished: ${e.action.getClip().name}`)
           if (e.action.getClip().name === (def?.animDie ?? 'Die')) {
             isDeadAnimationFinished = true
           }
         })
-
-        const animationNames = $gltf.animations.map((c) => c.name)
-        console.log(`Monster ${id} animations:`, animationNames)
       }
     }
   })

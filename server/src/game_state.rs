@@ -5,10 +5,16 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
 use tracing::{info, warn};
-use uuid::Uuid;
 
 pub type GameStateSender = broadcast::Sender<ServerMessage>;
 pub type GameStateReceiver = broadcast::Receiver<ServerMessage>;
+
+#[derive(Default)]
+struct IdState {
+    next_player_number: u32,
+    player_numbers: HashMap<PlayerId, u32>,
+    owner_spawn_counts: HashMap<u32, u32>,
+}
 
 #[derive(Clone)]
 pub struct GameState {
@@ -16,6 +22,7 @@ pub struct GameState {
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
     broadcast_tx: GameStateSender,
     monster_defs: MonsterDefs,
+    id_state: Arc<RwLock<IdState>>,
 }
 
 impl GameState {
@@ -27,6 +34,21 @@ impl GameState {
             monsters: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
             monster_defs,
+            id_state: Arc::new(RwLock::new(IdState::default())),
+        }
+    }
+
+    async fn get_or_assign_player_number(&self, player_id: &str) -> u32 {
+        let mut id_state = self.id_state.write().await;
+        if let Some(player_number) = id_state.player_numbers.get(player_id).copied() {
+            player_number
+        } else {
+            id_state.next_player_number = id_state.next_player_number.saturating_add(1);
+            let player_number = id_state.next_player_number;
+            id_state
+                .player_numbers
+                .insert(player_id.to_string(), player_number);
+            player_number
         }
     }
 
@@ -37,13 +59,17 @@ impl GameState {
     pub async fn add_player(&self, player: Player) -> Option<ServerMessage> {
         let player_id = player.id.clone();
         let player_name = player.name.clone();
+        let player_number = self.get_or_assign_player_number(&player_id).await;
 
         {
             let mut players = self.players.write().await;
             players.insert(player_id.clone(), player.clone());
         }
 
-        info!("Player {} ({}) joined the game", player_name, player_id);
+        info!(
+            "Player {} ({}) joined the game [#{}]",
+            player_name, player_id, player_number
+        );
 
         let _ = self
             .broadcast_tx
@@ -72,10 +98,26 @@ impl GameState {
     pub async fn remove_player(&self, player_id: &PlayerId) {
         self.remove_monsters_by_owner(player_id).await;
 
+        let removed_player_number = {
+            let mut id_state = self.id_state.write().await;
+            let removed = id_state.player_numbers.remove(player_id);
+            if let Some(player_number) = removed {
+                id_state.owner_spawn_counts.remove(&player_number);
+            }
+            removed
+        };
+
         let mut players = self.players.write().await;
 
         if let Some(player) = players.remove(player_id) {
-            info!("Player {} ({}) left the game", player.name, player_id);
+            info!(
+                "Player {} ({}) left the game{}",
+                player.name,
+                player_id,
+                removed_player_number
+                    .map(|n| format!(" [#{}]", n))
+                    .unwrap_or_default()
+            );
             let _ = self.broadcast_tx.send(ServerMessage::PlayerLeft {
                 player_id: player_id.clone(),
             });
@@ -261,11 +303,7 @@ impl GameState {
         }
     }
 
-    pub async fn broadcast_monster_attack(
-        &self,
-        monster_id: &str,
-        target_player_id: &str,
-    ) {
+    pub async fn broadcast_monster_attack(&self, monster_id: &str, target_player_id: &str) {
         // 1. Check if monster exists and is alive, get its type
         let monster_type = {
             let monsters = self.monsters.read().await;
@@ -343,8 +381,19 @@ impl GameState {
         rotation: f32,
         owner_id: Option<String>,
     ) {
-        let mut monsters = self.monsters.write().await;
+        let owner_number = match owner_id.as_deref() {
+            Some(owner_id) => self.get_or_assign_player_number(owner_id).await,
+            None => 0,
+        };
+        let spawn_count = {
+            let mut id_state = self.id_state.write().await;
+            let counter = id_state.owner_spawn_counts.entry(owner_number).or_insert(0);
+            *counter = counter.saturating_add(1);
+            *counter
+        };
+        let id = format!("m{}_{}", owner_number, spawn_count);
 
+        let mut monsters = self.monsters.write().await;
         if monsters.len() >= 10 {
             warn!("Monster spawn rejected: limit reached ({})", monsters.len());
             return;
@@ -352,8 +401,6 @@ impl GameState {
 
         let def = self.monster_defs.get(&monster_type);
         let health = def.map(|d| d.health).unwrap_or(10);
-
-        let id = format!("monster_{}", Uuid::new_v4());
         let monster = crate::types::Monster {
             id: id.clone(),
             monster_type: monster_type.clone(),
@@ -366,7 +413,13 @@ impl GameState {
         };
 
         monsters.insert(id.clone(), monster.clone());
-        info!("Spawned monster {} (Total: {})", id, monsters.len());
+        info!(
+            "Spawned monster {} [owner #{}, spawn #{}] (Total: {})",
+            id,
+            owner_number,
+            spawn_count,
+            monsters.len()
+        );
 
         let _ = self
             .broadcast_tx

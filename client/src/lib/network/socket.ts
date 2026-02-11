@@ -347,7 +347,6 @@ class NetworkManager {
         break
 
       case 'monster_spawned':
-        console.log('Monster spawned from server:', message.monster)
         monsterManager.spawnWithId(
           message.monster.id,
           message.monster.monster_type as MonsterData['type'],
@@ -369,17 +368,14 @@ class NetworkManager {
         break
 
       case 'monster_removed':
-        console.log('Monster removed from server:', message.monster_id)
         monsterManager.remove(message.monster_id)
         break
 
       case 'monster_dead':
-        console.log('Monster dead from server:', message.monster_id)
         monsterManager.handleMonsterDead(message.monster_id)
         break
 
       case 'player_attacked': {
-        console.log('Player attacked:', message.player_id, 'Hit:', message.hit)
         remotePlayerManager.handleAttack(message.player_id)
 
         // Show hit/miss in chat for debugging
@@ -408,15 +404,6 @@ class NetworkManager {
       }
 
       case 'monster_attacked_player': {
-        console.log(
-          'Monster',
-          message.monster_id,
-          'attacked player',
-          message.player_id,
-          'Hit:',
-          message.hit
-        )
-
         const gameState2 = get(gameStore)
         const isCurrentPlayer =
           gameState2.currentPlayer?.id === message.player_id
