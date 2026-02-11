@@ -13,6 +13,7 @@
   let isPlayerDead = $state(false)
   let showRespawnDialog = $state(false)
   let wasPlayerDead = false
+  let kickedMessage = $state('')
 
   async function handleLogin(
     url: string,
@@ -20,6 +21,7 @@
     pass: string,
     createAccount: boolean
   ): Promise<{ ok: boolean; message?: string }> {
+    kickedMessage = ''
     const result = await networkManager.requestAuthentication(
       url,
       name,
@@ -44,6 +46,11 @@
   function closeRespawnDialog() {
     showRespawnDialog = false
   }
+
+  networkManager.onKicked((reason) => {
+    kickedMessage = reason
+    isLoggedIn = false
+  })
 
   gameStore.subscribe((state) => {
     const deadNow =
@@ -77,7 +84,7 @@
       </button>
     {/if}
   {:else}
-    <LoginScreen onLogin={handleLogin} />
+    <LoginScreen onLogin={handleLogin} {kickedMessage} />
   {/if}
 </main>
 
