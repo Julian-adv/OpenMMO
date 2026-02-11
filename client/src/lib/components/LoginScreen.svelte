@@ -6,7 +6,12 @@
   const STORAGE_KEY_PLAYER = 'onlinerpg_lastPlayerName'
 
   interface Props {
-    onLogin: (serverUrl: string, playerName: string, password: string) => void
+    onLogin: (
+      serverUrl: string,
+      playerName: string,
+      password: string,
+      createAccount: boolean
+    ) => Promise<{ ok: boolean; message?: string }>
   }
 
   let { onLogin }: Props = $props()
@@ -15,50 +20,68 @@
   let playerName = $state('')
   let password = $state('')
   let isConnecting = $state(false)
+  let pendingAction = $state<'login' | 'create'>('login')
   let errorMessage = $state('')
 
   onMount(() => {
+    const savedServerUrl = localStorage.getItem(STORAGE_KEY_SERVER)
     const savedPlayerName = localStorage.getItem(STORAGE_KEY_PLAYER)
 
-    serverUrl = getDefaultServerUrl()
+    serverUrl = savedServerUrl || getDefaultServerUrl()
 
     if (savedPlayerName) {
       playerName = savedPlayerName
     }
   })
 
-  function handleSubmit(event: Event) {
-    event.preventDefault()
-
+  function validateForm(): string | null {
     if (!serverUrl.trim()) {
-      errorMessage = 'Please enter server address'
-      return
+      return 'Please enter server address'
     }
 
     if (!playerName.trim()) {
-      errorMessage = 'Please enter player name'
-      return
+      return 'Please enter player name'
     }
 
     if (!password.trim()) {
-      errorMessage = 'Please enter password'
+      return 'Please enter password'
+    }
+
+    return null
+  }
+
+  async function submit(createAccount: boolean) {
+    const validationError = validateForm()
+    if (validationError) {
+      errorMessage = validationError
       return
     }
 
     errorMessage = ''
     isConnecting = true
+    pendingAction = createAccount ? 'create' : 'login'
+
+    const result = await onLogin(
+      serverUrl.trim(),
+      playerName.trim(),
+      password.trim(),
+      createAccount
+    )
+
+    if (!result.ok) {
+      errorMessage = result.message ?? 'Authentication failed'
+      isConnecting = false
+      return
+    }
 
     // Save to localStorage for next time
     localStorage.setItem(STORAGE_KEY_SERVER, serverUrl.trim())
     localStorage.setItem(STORAGE_KEY_PLAYER, playerName.trim())
-
-    onLogin(serverUrl.trim(), playerName.trim(), password.trim())
   }
 
-  function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      handleSubmit(event)
-    }
+  function handleSubmit(event: Event) {
+    event.preventDefault()
+    void submit(false)
   }
 </script>
 
@@ -86,7 +109,6 @@
           bind:value={playerName}
           placeholder="Enter your name"
           disabled={isConnecting}
-          onkeydown={handleKeyDown}
         />
       </div>
 
@@ -98,7 +120,6 @@
           bind:value={password}
           placeholder="Enter password"
           disabled={isConnecting}
-          onkeydown={handleKeyDown}
         />
       </div>
 
@@ -106,9 +127,21 @@
         <div class="error-message">{errorMessage}</div>
       {/if}
 
-      <button type="submit" class="login-button" disabled={isConnecting}>
-        {isConnecting ? 'Connecting...' : 'Connect'}
-      </button>
+      <div class="button-row">
+        <button type="submit" class="login-button" disabled={isConnecting}>
+          {isConnecting && pendingAction === 'login' ? 'Connecting...' : 'Login'}
+        </button>
+        <button
+          type="button"
+          class="create-button"
+          disabled={isConnecting}
+          onclick={() => void submit(true)}
+        >
+          {isConnecting && pendingAction === 'create'
+            ? 'Creating...'
+            : 'Create Account'}
+        </button>
+      </div>
     </form>
   </div>
 </div>
@@ -230,6 +263,42 @@
   }
 
   .login-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .button-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .create-button {
+    padding: 14px 20px;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    background: #2d3748;
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      transform 0.2s,
+      box-shadow 0.2s;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .create-button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
+  }
+
+  .create-button:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  .create-button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }

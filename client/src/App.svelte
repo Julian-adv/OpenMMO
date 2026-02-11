@@ -10,17 +10,30 @@
 
   let isLoggedIn = $state(false)
   let serverUrl = $state('')
-  let playerName = $state('')
-  let password = $state('')
   let isPlayerDead = $state(false)
   let showRespawnDialog = $state(false)
   let wasPlayerDead = false
 
-  function handleLogin(url: string, name: string, pass: string) {
-    serverUrl = url
-    playerName = name
-    password = pass
-    isLoggedIn = true
+  async function handleLogin(
+    url: string,
+    name: string,
+    pass: string,
+    createAccount: boolean
+  ): Promise<{ ok: boolean; message?: string }> {
+    const result = await networkManager.requestAuthentication(
+      url,
+      name,
+      pass,
+      createAccount
+    )
+
+    if (result.ok) {
+      serverUrl = url
+      isLoggedIn = true
+      return { ok: true }
+    }
+
+    return result
   }
 
   function requestRespawn() {
@@ -50,7 +63,7 @@
   {#if isLoggedIn}
     <div class="game-shell" class:dead={isPlayerDead}>
       <Canvas renderMode="always">
-        <GameScene {serverUrl} {playerName} {password} />
+        <GameScene {serverUrl} />
       </Canvas>
       <ChatPanel />
       <FPSCounter />

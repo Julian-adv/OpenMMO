@@ -42,6 +42,7 @@ logs/
 
 # Generated data files
 data/monsters.json
+server/data/accounts.db
 
 # Claude Code (keep agents for sharing)
 .claude/*

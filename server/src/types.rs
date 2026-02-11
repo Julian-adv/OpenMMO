@@ -54,7 +54,11 @@ pub struct Monster {
 #[serde(tag = "type")]
 pub enum ClientMessage {
     #[serde(rename = "join")]
-    Join { player_name: String },
+    Join {
+        player_name: String,
+        password_hash: String,
+        create_account: bool,
+    },
     #[serde(rename = "player_move")]
     PlayerMove { position: Position, rotation: f32 },
     #[serde(rename = "chat_message")]
@@ -89,6 +93,8 @@ pub enum ClientMessage {
 pub enum ServerMessage {
     #[serde(rename = "join_success")]
     JoinSuccess { player: Player },
+    #[serde(rename = "auth_error")]
+    AuthError { message: String },
     #[serde(rename = "player_joined")]
     PlayerJoined { player: Player },
     #[serde(rename = "player_left")]

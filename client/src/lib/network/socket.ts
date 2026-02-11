@@ -13,6 +13,7 @@ import { monsterManager } from '../managers/monsterManager'
 import type { MonsterData } from '../types/Monster'
 import { getDefaultServerUrl } from '../utils/networkUtils'
 import { requestCameraReset } from '../stores/cameraStore'
+import { simplePasswordHash } from '../utils/authUtils'
 
 type Position = {
   x: number
@@ -42,7 +43,12 @@ type ServerMonster = {
 }
 
 type ClientMessage =
-  | { type: 'join'; player_name: string }
+  | {
+      type: 'join'
+      player_name: string
+      password_hash: string
+      create_account: boolean
+    }
   | { type: 'player_move'; position: Position; rotation: number }
   | { type: 'chat_message'; message: string }
   | {
@@ -65,6 +71,7 @@ type ClientMessage =
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
+  | { type: 'auth_error'; message: string }
   | { type: 'player_left'; player_id: string }
   | {
       type: 'player_moved'
@@ -112,6 +119,8 @@ type ServerMessage =
 
 type RespawnRequestedHandler = () => void
 type PlayerRespawnedHandler = (playerId: string) => void
+type AuthSuccessHandler = () => void
+type AuthErrorHandler = (message: string) => void
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -120,8 +129,12 @@ class NetworkManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private lastServerUrl: string = ''
   private lastPlayerName: string = ''
+  private lastPasswordHash: string = ''
+  private lastCreateAccount = false
   private respawnRequestedHandlers = new Set<RespawnRequestedHandler>()
   private playerRespawnedHandlers = new Set<PlayerRespawnedHandler>()
+  private authSuccessHandlers = new Set<AuthSuccessHandler>()
+  private authErrorHandlers = new Set<AuthErrorHandler>()
 
   onRespawnRequested(handler: RespawnRequestedHandler) {
     this.respawnRequestedHandlers.add(handler)
@@ -133,12 +146,30 @@ class NetworkManager {
     return () => this.playerRespawnedHandlers.delete(handler)
   }
 
+  onAuthSuccess(handler: AuthSuccessHandler) {
+    this.authSuccessHandlers.add(handler)
+    return () => this.authSuccessHandlers.delete(handler)
+  }
+
+  onAuthError(handler: AuthErrorHandler) {
+    this.authErrorHandlers.add(handler)
+    return () => this.authErrorHandlers.delete(handler)
+  }
+
   private emitRespawnRequested() {
     this.respawnRequestedHandlers.forEach((handler) => handler())
   }
 
   private emitPlayerRespawned(playerId: string) {
     this.playerRespawnedHandlers.forEach((handler) => handler(playerId))
+  }
+
+  private emitAuthSuccess() {
+    this.authSuccessHandlers.forEach((handler) => handler())
+  }
+
+  private emitAuthError(message: string) {
+    this.authErrorHandlers.forEach((handler) => handler(message))
   }
 
   connect(serverUrl?: string) {
@@ -216,8 +247,15 @@ class NetworkManager {
 
   private handleServerMessage(message: ServerMessage) {
     switch (message.type) {
+      case 'auth_error': {
+        console.warn('Authentication error:', message.message)
+        this.emitAuthError(message.message)
+        break
+      }
+
       case 'join_success': {
         console.log('Join successful, received player data:', message.player)
+        this.lastCreateAccount = false
         const playerPosition = new Vector3(
           message.player.position.x,
           message.player.position.y,
@@ -232,6 +270,7 @@ class NetworkManager {
           ...state,
           currentPlayer: player,
         }))
+        this.emitAuthSuccess()
         break
       }
 
@@ -583,17 +622,118 @@ class NetworkManager {
     }
   }
 
-  joinGame(playerName: string) {
+  joinGame(playerName: string, password: string, createAccount: boolean) {
+    const passwordHash = simplePasswordHash(password)
+    return this.joinGameWithHash(playerName, passwordHash, createAccount)
+  }
+
+  private joinGameWithHash(
+    playerName: string,
+    passwordHash: string,
+    createAccount: boolean
+  ) {
     this.lastPlayerName = playerName
+    this.lastPasswordHash = passwordHash
+    this.lastCreateAccount = createAccount
+
     if (this.socket?.readyState === WebSocket.OPEN) {
       console.log('Sending join request for player:', playerName)
       const message: ClientMessage = {
         type: 'join',
         player_name: playerName,
+        password_hash: passwordHash,
+        create_account: createAccount,
       }
       this.socket.send(JSON.stringify(message))
       // Don't create currentPlayer here, wait for server response
+      return true
     }
+
+    return false
+  }
+
+  private waitForSocketOpen(timeoutMs: number): Promise<boolean> {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      return Promise.resolve(true)
+    }
+
+    return new Promise((resolve) => {
+      const start = Date.now()
+      const interval = setInterval(() => {
+        const socket = this.socket
+        if (socket?.readyState === WebSocket.OPEN) {
+          clearInterval(interval)
+          resolve(true)
+          return
+        }
+
+        const isClosed =
+          !socket ||
+          socket.readyState === WebSocket.CLOSING ||
+          socket.readyState === WebSocket.CLOSED
+        if (isClosed || Date.now() - start >= timeoutMs) {
+          clearInterval(interval)
+          resolve(false)
+        }
+      }, 50)
+    })
+  }
+
+  async requestAuthentication(
+    serverUrl: string,
+    playerName: string,
+    password: string,
+    createAccount: boolean
+  ): Promise<{ ok: boolean; message?: string }> {
+    this.connect(serverUrl)
+    const opened = await this.waitForSocketOpen(5000)
+    if (!opened) {
+      return { ok: false, message: 'Failed to connect to server' }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let offSuccess: () => void = () => {}
+      let offError: () => void = () => {}
+
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        offSuccess()
+        offError()
+      }
+
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Authentication timed out' })
+      }, 8000)
+
+      offSuccess = this.onAuthSuccess(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: true })
+      })
+
+      offError = this.onAuthError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      const sent = this.joinGame(playerName, password, createAccount)
+      if (!sent && !settled) {
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Socket is not connected' })
+      }
+    })
   }
 
   requestSpawnMonster(
@@ -633,6 +773,8 @@ class NetworkManager {
     // Save references to rejoin after connection
     const serverUrl = this.lastServerUrl
     const playerName = this.lastPlayerName
+    const passwordHash = this.lastPasswordHash
+    const createAccount = this.lastCreateAccount
 
     this.connect(serverUrl)
 
@@ -640,7 +782,7 @@ class NetworkManager {
     const checkInterval = setInterval(() => {
       if (this.socket?.readyState === WebSocket.OPEN) {
         clearInterval(checkInterval)
-        this.joinGame(playerName)
+        this.joinGameWithHash(playerName, passwordHash, createAccount)
       }
     }, 100)
 

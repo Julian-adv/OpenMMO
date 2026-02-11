@@ -27,11 +27,9 @@
 
   interface Props {
     serverUrl: string
-    playerName: string
-    password: string
   }
 
-  let { serverUrl, playerName, password: _password }: Props = $props()
+  let { serverUrl }: Props = $props()
 
   let currentPlayer = $state<Player | null>(null)
   let otherPlayers = $state(new Map())
@@ -488,11 +486,6 @@
     startChatBubbleChecker()
 
     networkManager.connect(serverUrl)
-
-    // Join the game with the player name from login
-    setTimeout(() => {
-      networkManager.joinGame(playerName)
-    }, 1000)
 
     // Initialize camera position after a short delay to ensure camera ref is available
     setTimeout(() => {

@@ -1,3 +1,4 @@
+use crate::auth::AuthService;
 use crate::game_state::GameState;
 use crate::types::{ClientMessage, Player, PlayerId, ServerMessage};
 use futures_util::{SinkExt, StreamExt};
@@ -8,7 +9,11 @@ use tokio::sync::broadcast;
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
-pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
+pub async fn handle_connection(
+    stream: TcpStream,
+    game_state: Arc<GameState>,
+    auth_service: Arc<AuthService>,
+) {
     let ws_stream = match accept_async(stream).await {
         Ok(ws) => ws,
         Err(e) => {
@@ -32,7 +37,13 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
                         if !text.contains("\"type\":\"monster_move\"") {
                             info!("Received message: {}", text);
                         }
-                        match handle_client_message(&text, &game_state, &mut player_id).await
+                        match handle_client_message(
+                            &text,
+                            &game_state,
+                            &auth_service,
+                            &mut player_id,
+                        )
+                        .await
                         {
                             Ok(responses) => {
                                 // Send all direct responses to this client
@@ -114,15 +125,32 @@ pub async fn handle_connection(stream: TcpStream, game_state: Arc<GameState>) {
 async fn handle_client_message(
     message: &str,
     game_state: &Arc<GameState>,
+    auth_service: &Arc<AuthService>,
     player_id: &mut Option<PlayerId>,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = serde_json::from_str(message)?;
 
     match client_msg {
-        ClientMessage::Join { player_name } => {
+        ClientMessage::Join {
+            player_name,
+            password_hash,
+            create_account,
+        } => {
             if player_id.is_some() {
                 warn!("Player already joined, ignoring join request");
                 return Ok(vec![]);
+            }
+
+            if let Err(auth_err) =
+                auth_service.authenticate(&player_name, &password_hash, create_account)
+            {
+                warn!(
+                    "Auth failed for player '{}', create_account={}: {}",
+                    player_name, create_account, auth_err
+                );
+                return Ok(vec![ServerMessage::AuthError {
+                    message: auth_err.client_message().to_string(),
+                }]);
             }
 
             let player = Player::new(player_name);

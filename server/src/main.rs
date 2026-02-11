@@ -1,9 +1,11 @@
+mod auth;
 mod connection;
 mod game;
 mod game_state;
 mod monster_defs;
 mod types;
 
+use auth::AuthService;
 use clap::Parser;
 use connection::handle_connection;
 use game_state::GameState;
@@ -28,6 +30,13 @@ async fn main() {
     let args = Args::parse();
     let monster_defs = monster_defs::MonsterDefs::load();
     let game_state = Arc::new(GameState::new(monster_defs));
+    let auth_service = match AuthService::new(AuthService::default_db_path()) {
+        Ok(service) => Arc::new(service),
+        Err(e) => {
+            error!("Failed to initialize auth service: {}", e);
+            return;
+        }
+    };
 
     let addr = format!("0.0.0.0:{}", args.port);
     let listener = match TcpListener::bind(addr.as_str()).await {
@@ -50,9 +59,10 @@ async fn main() {
             Ok((stream, addr)) => {
                 info!("New connection from: {}", addr);
                 let game_state_clone = Arc::clone(&game_state);
+                let auth_service_clone = Arc::clone(&auth_service);
 
                 tokio::spawn(async move {
-                    handle_connection(stream, game_state_clone).await;
+                    handle_connection(stream, game_state_clone, auth_service_clone).await;
                 });
             }
             Err(e) => {
