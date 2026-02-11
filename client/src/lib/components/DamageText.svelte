@@ -18,16 +18,18 @@
   let floatingTexts = $state<FloatingText[]>([])
   let nextTextId = 0
   let lastDamageTrigger = $state(0)
-  let itemRefs: (ReturnType<typeof DamageTextItem> & {
-    update: (
-      deltaTime: number,
-      baseX: number,
-      baseY: number,
-      baseZ: number,
-      camera: THREE.Camera
-    ) => void
-    isAlive: () => boolean
-  })[] = []
+  let itemRefs = $state<
+    (ReturnType<typeof DamageTextItem> & {
+      update: (
+        deltaTime: number,
+        baseX: number,
+        baseY: number,
+        baseZ: number,
+        camera: THREE.Camera
+      ) => void
+      isAlive: () => boolean
+    })[]
+  >([])
 
   export function update(
     deltaTime: number,
