@@ -209,6 +209,14 @@ async fn handle_client_message(
                 warn!("Received monster attack from unauthenticated client");
             }
         }
+
+        ClientMessage::RequestRespawn => {
+            if let Some(id) = player_id {
+                game_state.respawn_player(id).await;
+            } else {
+                warn!("Received respawn request from unauthenticated client");
+            }
+        }
     }
 
     Ok(vec![])

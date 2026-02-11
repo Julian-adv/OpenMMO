@@ -12,6 +12,7 @@ import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
 import type { MonsterData } from '../types/Monster'
 import { getDefaultServerUrl } from '../utils/networkUtils'
+import { requestCameraReset } from '../stores/cameraStore'
 
 type Position = {
   x: number
@@ -60,6 +61,7 @@ type ClientMessage =
     }
   | { type: 'player_attack'; monster_id: string }
   | { type: 'monster_attack'; monster_id: string; target_player_id: string }
+  | { type: 'request_respawn' }
 
 type ServerMessage =
   | { type: 'player_joined'; player: ServerPlayer }
@@ -106,6 +108,10 @@ type ServerMessage =
       damage: number
     }
   | { type: 'player_dead'; player_id: string }
+  | { type: 'player_respawned'; player: ServerPlayer }
+
+type RespawnRequestedHandler = () => void
+type PlayerRespawnedHandler = (playerId: string) => void
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -114,6 +120,26 @@ class NetworkManager {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private lastServerUrl: string = ''
   private lastPlayerName: string = ''
+  private respawnRequestedHandlers = new Set<RespawnRequestedHandler>()
+  private playerRespawnedHandlers = new Set<PlayerRespawnedHandler>()
+
+  onRespawnRequested(handler: RespawnRequestedHandler) {
+    this.respawnRequestedHandlers.add(handler)
+    return () => this.respawnRequestedHandlers.delete(handler)
+  }
+
+  onPlayerRespawned(handler: PlayerRespawnedHandler) {
+    this.playerRespawnedHandlers.add(handler)
+    return () => this.playerRespawnedHandlers.delete(handler)
+  }
+
+  private emitRespawnRequested() {
+    this.respawnRequestedHandlers.forEach((handler) => handler())
+  }
+
+  private emitPlayerRespawned(playerId: string) {
+    this.playerRespawnedHandlers.forEach((handler) => handler(playerId))
+  }
 
   connect(serverUrl?: string) {
     if (serverUrl) {
@@ -459,6 +485,39 @@ class NetworkManager {
         }
         break
       }
+
+      case 'player_respawned': {
+        console.log('Player respawned:', message.player.id)
+        const respawnPosition = new Vector3(
+          message.player.position.x,
+          message.player.position.y,
+          message.player.position.z
+        )
+        const gameState4 = get(gameStore)
+        const isCurrentPlayerRespawned =
+          gameState4.currentPlayer?.id === message.player.id
+
+        updatePlayer(message.player.id, {
+          position: respawnPosition,
+          targetPosition: respawnPosition.clone(),
+          health: message.player.health,
+          maxHealth: message.player.max_health,
+        })
+
+        if (isCurrentPlayerRespawned) {
+          requestCameraReset()
+          addChatMessage('You have respawned.')
+        } else {
+          addChatMessage(`${message.player.name} has respawned.`)
+          remotePlayerManager.handleRespawn(
+            message.player.id,
+            message.player.position,
+            message.player.rotation
+          )
+        }
+        this.emitPlayerRespawned(message.player.id)
+        break
+      }
     }
   }
 
@@ -480,6 +539,16 @@ class NetworkManager {
         target_player_id: targetPlayerId,
       }
       this.socket.send(JSON.stringify(message))
+    }
+  }
+
+  requestRespawn() {
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      const message: ClientMessage = {
+        type: 'request_respawn',
+      }
+      this.socket.send(JSON.stringify(message))
+      this.emitRespawnRequested()
     }
   }
 

@@ -126,6 +126,40 @@ impl GameState {
         }
     }
 
+    pub async fn respawn_player(&self, player_id: &PlayerId) {
+        let respawned_player = {
+            let mut players = self.players.write().await;
+            if let Some(player) = players.get_mut(player_id) {
+                if player.health > 0 {
+                    info!(
+                        "Ignored respawn request for alive player {} ({})",
+                        player.name, player.id
+                    );
+                    return;
+                }
+                player.health = player.max_health;
+                player.position = Position {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                };
+                player.rotation = 0.0;
+                Some(player.clone())
+            } else {
+                None
+            }
+        };
+
+        if let Some(player) = respawned_player {
+            info!("Player {} ({}) respawned", player.name, player.id);
+            let _ = self
+                .broadcast_tx
+                .send(ServerMessage::PlayerRespawned { player });
+        } else {
+            warn!("Attempted to respawn non-existent player: {}", player_id);
+        }
+    }
+
     pub async fn send_chat_message(&self, player_id: &PlayerId, message: String) {
         let players = self.players.read().await;
 

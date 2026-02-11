@@ -169,23 +169,57 @@
     }
   }
 
+  function transitionToDead() {
+    if (playerState.state === 'dead') return
+
+    isMoving = false
+    movementTarget = null
+    movementState = null
+    combatController.cancelCombat()
+    currentSpeed = 0
+
+    const deadState: PlayerState = {
+      ...playerState,
+      state: 'dead',
+      speed: 0,
+      movementMode: undefined,
+    }
+    playerState = deadState
+    onStateChange(deadState)
+  }
+
+  function transitionToRespawned() {
+    if (!currentPlayer) return
+
+    isMoving = false
+    movementTarget = null
+    movementState = null
+    combatController.cancelCombat()
+    currentSpeed = 0
+    playerRotation = 0
+
+    const revivedState: PlayerState = {
+      ...playerState,
+      state: 'idle',
+      speed: 0,
+      rotation: playerRotation,
+      movementMode: undefined,
+      attackCounter: 0,
+      position: {
+        x: currentPlayer.position.x,
+        y: currentPlayer.position.y,
+        z: currentPlayer.position.z,
+      },
+    }
+    playerState = revivedState
+    onStateChange(revivedState)
+  }
+
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
     // Dead players cannot move
     if (currentPlayer && currentPlayer.health <= 0) {
-      if (playerState.state !== 'dead') {
-        isMoving = false
-        movementTarget = null
-        movementState = null
-        combatController.cancelCombat()
-        const deadState: PlayerState = {
-          ...playerState,
-          state: 'dead',
-          speed: 0,
-        }
-        playerState = deadState
-        onStateChange(deadState)
-      }
+      transitionToDead()
       return
     }
 
@@ -504,7 +538,30 @@
     }
   }
 
+  let respawnRequested = $state(false)
+
   onMount(() => {
-    return inputHandler.setupEventListeners(handleCanvasClickIntent)
+    const removeInputListeners = inputHandler.setupEventListeners(
+      handleCanvasClickIntent
+    )
+
+    const unsubscribeRespawnRequested = networkManager.onRespawnRequested(() => {
+      if (!currentPlayer || currentPlayer.health > 0 || respawnRequested) return
+      respawnRequested = true
+    })
+
+    const unsubscribePlayerRespawned = networkManager.onPlayerRespawned(
+      (playerId) => {
+        if (!currentPlayer || currentPlayer.id !== playerId) return
+        respawnRequested = false
+        transitionToRespawned()
+      }
+    )
+
+    return () => {
+      removeInputListeners()
+      unsubscribeRespawnRequested()
+      unsubscribePlayerRespawned()
+    }
   })
 </script>

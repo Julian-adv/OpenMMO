@@ -80,6 +80,8 @@ pub enum ClientMessage {
         monster_id: String,
         target_player_id: String,
     },
+    #[serde(rename = "request_respawn")]
+    RequestRespawn,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +139,8 @@ pub enum ServerMessage {
     },
     #[serde(rename = "player_dead")]
     PlayerDead { player_id: String },
+    #[serde(rename = "player_respawned")]
+    PlayerRespawned { player: Player },
 }
 
 pub type PlayerId = String;

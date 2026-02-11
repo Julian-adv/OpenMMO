@@ -163,6 +163,17 @@ class PlayerStateManager {
     })
   }
 
+  handleRespawn(playerId: string, position: Position, rotation: number) {
+    this.movementData.delete(playerId)
+    this.attackQueue.delete(playerId)
+    this.players.set(playerId, {
+      position: { ...position },
+      state: 'idle',
+      speed: 0,
+      rotation,
+    })
+  }
+
   handleAttack(playerId: string) {
     const player = this.players.get(playerId)
     if (!player) return

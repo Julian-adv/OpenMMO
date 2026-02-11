@@ -21,7 +21,7 @@
   import SplatTerrain from './SplatTerrain.svelte'
   import Monster from './Monster.svelte'
   import { type PlayerState } from '../utils/movementUtils'
-  import { cameraDistance } from '../stores/cameraStore'
+  import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
   import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
 
@@ -237,6 +237,33 @@
     cameraTarget = [playerPos.x, playerPos.y, playerPos.z]
   }
 
+  function resetCameraToInitialState() {
+    if (!currentPlayer || !camera) return
+
+    camera.position.set(
+      currentPlayer.position.x + CAMERA_OFFSET.x,
+      currentPlayer.position.y + CAMERA_OFFSET.y,
+      currentPlayer.position.z + CAMERA_OFFSET.z
+    )
+    camera.lookAt(
+      currentPlayer.position.x,
+      currentPlayer.position.y,
+      currentPlayer.position.z
+    )
+    cameraTarget = [
+      currentPlayer.position.x,
+      currentPlayer.position.y,
+      currentPlayer.position.z,
+    ]
+
+    const initialDistance = Math.sqrt(
+      CAMERA_OFFSET.x * CAMERA_OFFSET.x +
+        CAMERA_OFFSET.y * CAMERA_OFFSET.y +
+        CAMERA_OFFSET.z * CAMERA_OFFSET.z
+    )
+    cameraDistance.set(initialDistance)
+  }
+
   function updateLightPosition() {
     if (!currentPlayer || !directionalLight) return
 
@@ -269,6 +296,13 @@
   }
 
   onMount(() => {
+    const unsubscribeCameraReset = cameraResetNonce.subscribe((nonce) => {
+      // Ignore initial store emission; only react to explicit reset requests.
+      if (nonce > 0) {
+        resetCameraToInitialState()
+      }
+    })
+
     // Build a terrain geometry (XZ plane)
     const plane = new THREE.PlaneGeometry(100, 100, 128, 128)
     plane.rotateX(-Math.PI / 2) // Lay flat on XZ
@@ -290,31 +324,13 @@
     // Initialize camera position after a short delay to ensure camera ref is available
     setTimeout(() => {
       if (camera && currentPlayer) {
-        // Set initial camera position
-        camera.position.set(
-          currentPlayer.position.x + CAMERA_OFFSET.x,
-          currentPlayer.position.y + CAMERA_OFFSET.y,
-          currentPlayer.position.z + CAMERA_OFFSET.z
-        )
+        resetCameraToInitialState()
         cameraInitialized = true
-
-        // Make camera look at player directly
-        camera.lookAt(
-          currentPlayer.position.x,
-          currentPlayer.position.y,
-          currentPlayer.position.z
-        )
-
-        // Set initial camera target to look at player
-        cameraTarget = [
-          currentPlayer.position.x,
-          currentPlayer.position.y,
-          currentPlayer.position.z,
-        ]
       }
     }, 1100)
 
     return () => {
+      unsubscribeCameraReset()
       stopGameLoop()
       stopChatBubbleChecker()
       networkManager.disconnect()
