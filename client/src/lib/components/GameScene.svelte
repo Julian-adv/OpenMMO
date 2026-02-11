@@ -95,8 +95,101 @@
   // Game loop
   let gameLoopId = $state<number | null>(null)
   let lastFrameTime = $state(0)
-  const TARGET_FPS = 120
+  const TARGET_FPS = 60
   const FRAME_TIME = 1000 / TARGET_FPS // 16.67ms
+  const FRAME_TIME_TOLERANCE = 0.5 // absorb timer jitter (e.g. 16.6ms vs 16.67ms)
+  const MAX_CATCH_UP_STEPS = 5
+
+  type LoopProfileSection =
+    | 'frameWork'
+    | 'cameraOffset'
+    | 'playerControl'
+    | 'remoteInterpolation'
+    | 'currentPlayerAnimation'
+    | 'otherPlayerAnimation'
+    | 'monsterAnimation'
+    | 'monsterLogic'
+    | 'cameraUpdate'
+    | 'lightUpdate'
+
+  const LOOP_PROFILE_SECTIONS: readonly LoopProfileSection[] = [
+    'frameWork',
+    'cameraOffset',
+    'playerControl',
+    'remoteInterpolation',
+    'currentPlayerAnimation',
+    'otherPlayerAnimation',
+    'monsterAnimation',
+    'monsterLogic',
+    'cameraUpdate',
+    'lightUpdate',
+  ] as const
+
+  interface LoopProfileStats {
+    totalMs: number
+    maxMs: number
+    count: number
+  }
+
+  const loopProfileStats = new Map<LoopProfileSection, LoopProfileStats>(
+    LOOP_PROFILE_SECTIONS.map((section) => [
+      section,
+      { totalMs: 0, maxMs: 0, count: 0 },
+    ])
+  )
+  let loopProfileEnabled = false
+  let loopProfileWindowStart = 0
+  let loopProfileFrameCount = 0
+  let loopProfileFrameDropCount = 0
+  let loopProfileRawDeltaTotal = 0
+  let loopProfileRawDeltaMax = 0
+
+  function resetLoopProfileWindow(windowStart: number) {
+    loopProfileWindowStart = windowStart
+    loopProfileFrameCount = 0
+    loopProfileFrameDropCount = 0
+    loopProfileRawDeltaTotal = 0
+    loopProfileRawDeltaMax = 0
+    for (const section of LOOP_PROFILE_SECTIONS) {
+      const stats = loopProfileStats.get(section)!
+      stats.totalMs = 0
+      stats.maxMs = 0
+      stats.count = 0
+    }
+  }
+
+  function recordLoopProfile(section: LoopProfileSection, durationMs: number) {
+    const stats = loopProfileStats.get(section)
+    if (!stats) return
+    stats.totalMs += durationMs
+    stats.maxMs = Math.max(stats.maxMs, durationMs)
+    stats.count += 1
+  }
+
+  function flushLoopProfile(now: number) {
+    const elapsed = now - loopProfileWindowStart
+    if (!loopProfileEnabled || elapsed < 1000 || loopProfileFrameCount === 0) return
+
+    const rows = LOOP_PROFILE_SECTIONS.map((section) => {
+      const stats = loopProfileStats.get(section)!
+      const avgMs = stats.count > 0 ? stats.totalMs / stats.count : 0
+      return {
+        section,
+        avg_ms: Number(avgMs.toFixed(3)),
+        max_ms: Number(stats.maxMs.toFixed(3)),
+        samples: stats.count,
+      }
+    })
+
+    const avgRawDelta = loopProfileRawDeltaTotal / loopProfileFrameCount
+    console.groupCollapsed(
+      `[LoopProfile] frames=${loopProfileFrameCount} dropped=${loopProfileFrameDropCount} avgDelta=${avgRawDelta.toFixed(2)}ms maxDelta=${loopProfileRawDeltaMax.toFixed(2)}ms`
+    )
+    console.table(rows)
+    console.groupEnd()
+
+    resetLoopProfileWindow(now)
+  }
 
   // Player state from PlayerControl
   let currentPlayerState = $state<PlayerState>({
@@ -130,55 +223,132 @@
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
     const rawDeltaTime = currentTime - lastFrameTime
+    const shouldRunFrame = rawDeltaTime >= FRAME_TIME - FRAME_TIME_TOLERANCE
 
     // Throttle to 60fps
-    if (rawDeltaTime >= FRAME_TIME) {
+    if (shouldRunFrame) {
+      const unclampedSteps = Math.max(
+        1,
+        Math.floor((rawDeltaTime + FRAME_TIME_TOLERANCE) / FRAME_TIME)
+      )
+      const stepCount = Math.min(unclampedSteps, MAX_CATCH_UP_STEPS)
+      const fixedDeltaTime = FRAME_TIME * stepCount
+
+      if (loopProfileEnabled) {
+        loopProfileFrameCount += 1
+        loopProfileRawDeltaTotal += fixedDeltaTime
+        loopProfileRawDeltaMax = Math.max(loopProfileRawDeltaMax, fixedDeltaTime)
+        if (fixedDeltaTime > FRAME_TIME * 1.5) {
+          loopProfileFrameDropCount += 1
+        }
+      }
+
+      const frameWorkStart = performance.now()
+
       // Apply time scale for slow motion debugging
-      const deltaTime = rawDeltaTime * $timeScale
+      const deltaTime = fixedDeltaTime * $timeScale
 
       // Calculate camera offset before player movement
+      const cameraOffsetStart = performance.now()
       const cameraOffset = calculateCameraOffset()
+      if (loopProfileEnabled) {
+        recordLoopProfile('cameraOffset', performance.now() - cameraOffsetStart)
+      }
 
       // Update player controls
+      const playerControlStart = performance.now()
       if (playerControl) {
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }
+      if (loopProfileEnabled) {
+        recordLoopProfile('playerControl', performance.now() - playerControlStart)
+      }
 
       // Update remote player interpolation
+      const remoteInterpolationStart = performance.now()
       remotePlayerManager.update(deltaTime, otherPlayers)
+      if (loopProfileEnabled) {
+        recordLoopProfile(
+          'remoteInterpolation',
+          performance.now() - remoteInterpolationStart
+        )
+      }
 
       // Update player model animations
+      const currentPlayerAnimationStart = performance.now()
       if (currentPlayerModel) {
         currentPlayerModel.update(deltaTime / 1000)
       }
+      if (loopProfileEnabled) {
+        recordLoopProfile(
+          'currentPlayerAnimation',
+          performance.now() - currentPlayerAnimationStart
+        )
+      }
 
       // Update other player model animations
+      const otherPlayerAnimationStart = performance.now()
       for (const playerModel of otherPlayerModels) {
         if (playerModel) {
           playerModel.update(deltaTime / 1000)
         }
       }
+      if (loopProfileEnabled) {
+        recordLoopProfile(
+          'otherPlayerAnimation',
+          performance.now() - otherPlayerAnimationStart
+        )
+      }
 
       // Update monster animations
+      const monsterAnimationStart = performance.now()
       for (const monsterModel of monsterModels) {
         if (monsterModel) {
           monsterModel.update(deltaTime / 1000, camera) // Convert ms to seconds for THREE.AnimationMixer
         }
       }
+      if (loopProfileEnabled) {
+        recordLoopProfile('monsterAnimation', performance.now() - monsterAnimationStart)
+      }
 
       // Update monster spawning logic
+      const monsterLogicStart = performance.now()
       if (currentPlayer) {
         monsterManager.update(deltaTime, currentPlayer.position)
       }
+      if (loopProfileEnabled) {
+        recordLoopProfile('monsterLogic', performance.now() - monsterLogicStart)
+      }
 
       // Update camera with preserved offset
+      const cameraUpdateStart = performance.now()
       updateCameraWithOffset(cameraOffset)
+      if (loopProfileEnabled) {
+        recordLoopProfile('cameraUpdate', performance.now() - cameraUpdateStart)
+      }
 
       // Update directional light to follow player
+      const lightUpdateStart = performance.now()
       updateLightPosition()
+      if (loopProfileEnabled) {
+        recordLoopProfile('lightUpdate', performance.now() - lightUpdateStart)
+      }
 
-      lastFrameTime = currentTime
+      if (loopProfileEnabled) {
+        recordLoopProfile('frameWork', performance.now() - frameWorkStart)
+      }
+
+      if (unclampedSteps > MAX_CATCH_UP_STEPS) {
+        // Drop excessive backlog after long stalls (tab switch, debugger pause, etc.).
+        lastFrameTime = currentTime - FRAME_TIME
+      } else {
+        lastFrameTime += fixedDeltaTime
+      }
+    }
+
+    if (loopProfileEnabled) {
+      flushLoopProfile(currentTime)
     }
 
     // Always continue the loop
@@ -296,6 +466,9 @@
   }
 
   onMount(() => {
+    loopProfileEnabled = false
+    resetLoopProfileWindow(performance.now())
+
     const unsubscribeCameraReset = cameraResetNonce.subscribe((nonce) => {
       // Ignore initial store emission; only react to explicit reset requests.
       if (nonce > 0) {
