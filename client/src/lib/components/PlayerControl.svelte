@@ -123,8 +123,6 @@
     const monsterData = monsterManager.monsters.get(monsterId)
     if (monsterData?.state === 'dead' || monsterData?.isDeadPending) return
 
-    console.log('Attacking monster:', monsterId)
-
     combatController.beginCombat(monsterId, true)
 
     // Ensure position sync

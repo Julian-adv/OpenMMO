@@ -61,11 +61,6 @@ class MonsterManager {
       health: hp,
       maxHealth: maxHp,
     })
-    console.log(
-      `Spawned monster ${id} (synced) at`,
-      position,
-      `Owner: ${ownerId}`
-    )
   }
 
   remove(id: string) {
@@ -349,9 +344,6 @@ class MonsterManager {
               // Within range - wait for attack animation/cooldown
               if (monster.stateTimer >= (def?.attackCooldown ?? 1500)) {
                 monster.stateTimer = 0
-                console.log(
-                  `Monster ${monster.id} attacks player ${monster.targetPlayerId}`
-                )
 
                 networkManager.sendMonsterMove(
                   monster.id,
