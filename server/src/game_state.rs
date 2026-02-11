@@ -3,7 +3,7 @@ use crate::monster_defs::MonsterDefs;
 use crate::types::{Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{info, warn};
 
 pub type GameStateSender = broadcast::Sender<ServerMessage>;
@@ -23,6 +23,7 @@ pub struct GameState {
     broadcast_tx: GameStateSender,
     monster_defs: MonsterDefs,
     id_state: Arc<RwLock<IdState>>,
+    direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
 }
 
 impl GameState {
@@ -35,6 +36,7 @@ impl GameState {
             broadcast_tx,
             monster_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
+            direct_channels: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -54,6 +56,56 @@ impl GameState {
 
     pub fn subscribe(&self) -> GameStateReceiver {
         self.broadcast_tx.subscribe()
+    }
+
+    pub async fn register_direct_channel(
+        &self,
+        player_id: &PlayerId,
+    ) -> mpsc::UnboundedReceiver<ServerMessage> {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let mut channels = self.direct_channels.write().await;
+        channels.insert(player_id.clone(), tx);
+        rx
+    }
+
+    pub async fn unregister_direct_channel(&self, player_id: &PlayerId) {
+        let mut channels = self.direct_channels.write().await;
+        channels.remove(player_id);
+    }
+
+    pub async fn send_direct_message(&self, player_id: &PlayerId, msg: ServerMessage) {
+        let channels = self.direct_channels.read().await;
+        if let Some(tx) = channels.get(player_id) {
+            let _ = tx.send(msg);
+        }
+    }
+
+    pub async fn kick_player_by_name(&self, name: &str) -> Option<PlayerId> {
+        let old_player_id = {
+            let players = self.players.read().await;
+            players
+                .iter()
+                .find(|(_, p)| p.name == name)
+                .map(|(id, _)| id.clone())
+        };
+
+        if let Some(ref player_id) = old_player_id {
+            info!("Kicking existing player '{}' ({})", name, player_id);
+
+            self.send_direct_message(
+                player_id,
+                ServerMessage::Kicked {
+                    player_id: player_id.clone(),
+                    reason: "Another session logged in with the same account"
+                        .to_string(),
+                },
+            )
+            .await;
+
+            self.remove_player(player_id).await;
+        }
+
+        old_player_id
     }
 
     pub async fn add_player(&self, player: Player) -> Option<ServerMessage> {

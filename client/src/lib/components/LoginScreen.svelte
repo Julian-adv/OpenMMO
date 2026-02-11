@@ -12,9 +12,10 @@
       password: string,
       createAccount: boolean
     ) => Promise<{ ok: boolean; message?: string }>
+    kickedMessage?: string
   }
 
-  let { onLogin }: Props = $props()
+  let { onLogin, kickedMessage }: Props = $props()
 
   let serverUrl = $state('ws://127.0.0.1:8080')
   let playerName = $state('')
@@ -88,6 +89,10 @@
 <div class="login-container">
   <div class="login-panel">
     <h1 class="title">Online RPG</h1>
+
+    {#if kickedMessage}
+      <div class="kicked-message">{kickedMessage}</div>
+    {/if}
 
     <form onsubmit={handleSubmit}>
       <div class="form-group">
@@ -224,6 +229,19 @@
 
   .form-group input::placeholder {
     color: #718096;
+  }
+
+  .kicked-message {
+    margin-bottom: 20px;
+    padding: 12px 14px;
+    background: rgba(236, 201, 75, 0.15);
+    border: 1px solid #ecc94b;
+    border-radius: 6px;
+    color: #ecc94b;
+    font-size: 13px;
+    text-align: center;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .error-message {

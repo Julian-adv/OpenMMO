@@ -5,7 +5,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json;
 use std::sync::Arc;
 use tokio::net::TcpStream;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
@@ -27,6 +27,7 @@ pub async fn handle_connection(
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let mut game_receiver = game_state.subscribe();
     let mut player_id: Option<PlayerId> = None;
+    let mut direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>> = None;
 
     loop {
         tokio::select! {
@@ -42,6 +43,7 @@ pub async fn handle_connection(
                             &game_state,
                             &auth_service,
                             &mut player_id,
+                            &mut direct_rx,
                         )
                         .await
                         {
@@ -111,12 +113,33 @@ pub async fn handle_connection(
                     }
                 }
             }
+
+            // Handle direct messages to this player
+            direct_msg = async {
+                match direct_rx.as_mut() {
+                    Some(rx) => rx.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                if let Some(msg) = direct_msg {
+                    let is_kicked = matches!(msg, ServerMessage::Kicked { .. });
+                    if let Ok(json) = serde_json::to_string(&msg) {
+                        let _ = ws_sender.send(Message::Text(json)).await;
+                    }
+                    if is_kicked {
+                        info!("Player {:?} kicked", player_id);
+                        player_id = None;
+                        break;
+                    }
+                }
+            }
         }
     }
 
     // Clean up on disconnect
-    if let Some(id) = player_id {
-        game_state.remove_player(&id).await;
+    if let Some(ref id) = player_id {
+        game_state.unregister_direct_channel(id).await;
+        game_state.remove_player(id).await;
     }
 
     info!("Connection handler finished");
@@ -127,6 +150,7 @@ async fn handle_client_message(
     game_state: &Arc<GameState>,
     auth_service: &Arc<AuthService>,
     player_id: &mut Option<PlayerId>,
+    direct_rx: &mut Option<mpsc::UnboundedReceiver<ServerMessage>>,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = serde_json::from_str(message)?;
 
@@ -153,8 +177,14 @@ async fn handle_client_message(
                 }]);
             }
 
+            // Kick any existing player with the same name
+            game_state.kick_player_by_name(&player_name).await;
+
             let player = Player::new(player_name);
             let id = player.id.clone();
+
+            // Register direct channel for this player
+            *direct_rx = Some(game_state.register_direct_channel(&id).await);
 
             // Send join_success directly to this client
             let mut responses = vec![ServerMessage::JoinSuccess {

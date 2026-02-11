@@ -147,6 +147,8 @@ pub enum ServerMessage {
     PlayerDead { player_id: String },
     #[serde(rename = "player_respawned")]
     PlayerRespawned { player: Player },
+    #[serde(rename = "kicked")]
+    Kicked { player_id: String, reason: String },
 }
 
 pub type PlayerId = String;

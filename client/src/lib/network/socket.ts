@@ -116,11 +116,13 @@ type ServerMessage =
     }
   | { type: 'player_dead'; player_id: string }
   | { type: 'player_respawned'; player: ServerPlayer }
+  | { type: 'kicked'; player_id: string; reason: string }
 
 type RespawnRequestedHandler = () => void
 type PlayerRespawnedHandler = (playerId: string) => void
 type AuthSuccessHandler = () => void
 type AuthErrorHandler = (message: string) => void
+type KickedHandler = (reason: string) => void
 
 class NetworkManager {
   private socket: WebSocket | null = null
@@ -135,6 +137,7 @@ class NetworkManager {
   private playerRespawnedHandlers = new Set<PlayerRespawnedHandler>()
   private authSuccessHandlers = new Set<AuthSuccessHandler>()
   private authErrorHandlers = new Set<AuthErrorHandler>()
+  private kickedHandlers = new Set<KickedHandler>()
 
   onRespawnRequested(handler: RespawnRequestedHandler) {
     this.respawnRequestedHandlers.add(handler)
@@ -156,6 +159,11 @@ class NetworkManager {
     return () => this.authErrorHandlers.delete(handler)
   }
 
+  onKicked(handler: KickedHandler) {
+    this.kickedHandlers.add(handler)
+    return () => this.kickedHandlers.delete(handler)
+  }
+
   private emitRespawnRequested() {
     this.respawnRequestedHandlers.forEach((handler) => handler())
   }
@@ -170,6 +178,10 @@ class NetworkManager {
 
   private emitAuthError(message: string) {
     this.authErrorHandlers.forEach((handler) => handler(message))
+  }
+
+  private emitKicked(reason: string) {
+    this.kickedHandlers.forEach((handler) => handler(reason))
   }
 
   connect(serverUrl?: string) {
@@ -509,6 +521,16 @@ class NetworkManager {
         if (!isDeadCurrentPlayer) {
           remotePlayerManager.handleDead(message.player_id)
         }
+        break
+      }
+
+      case 'kicked': {
+        console.warn('Kicked from server:', message.reason)
+        this.emitKicked(message.reason)
+        resetGameStore()
+        monsterManager.reset()
+        remotePlayerManager.reset()
+        this.disconnect()
         break
       }
 
