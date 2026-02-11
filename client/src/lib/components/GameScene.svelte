@@ -24,6 +24,7 @@
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
   import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
+  import { initFpsCounting, tickFps } from './FPSCounter.svelte'
 
   interface Props {
     serverUrl: string
@@ -220,6 +221,8 @@
 
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
+    tickFps(currentTime)
+
     const rawDeltaTime = currentTime - lastFrameTime
     const shouldRunFrame = rawDeltaTime >= FRAME_TIME - FRAME_TIME_TOLERANCE
 
@@ -480,6 +483,7 @@
     terrainGeometry = plane
     // Start game loop
     lastFrameTime = performance.now()
+    initFpsCounting()
     gameLoopId = requestAnimationFrame(gameLoop)
 
     // Start chat bubble expiration checker

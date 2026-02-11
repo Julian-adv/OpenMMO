@@ -1,25 +1,26 @@
+<script lang="ts" module>
+  let frameCount = 0
+  let lastFpsTime = 0
+  let currentFps = $state(0)
+
+  export function initFpsCounting() {
+    lastFpsTime = performance.now()
+  }
+
+  export function tickFps(currentTime: number) {
+    frameCount++
+    if (currentTime - lastFpsTime >= 1000) {
+      currentFps = Math.round((frameCount * 1000) / (currentTime - lastFpsTime))
+      frameCount = 0
+      lastFpsTime = currentTime
+    }
+  }
+</script>
+
 <script lang="ts">
   import { cameraDistance } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
   import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
-
-  let fps = $state(0)
-  let frameCount = $state(0)
-  let lastFpsTime = $state(0)
-
-  function updateFPS() {
-    frameCount++
-    const currentTime = performance.now()
-
-    if (currentTime - lastFpsTime >= 1000) {
-      // Update FPS every second
-      fps = Math.round((frameCount * 1000) / (currentTime - lastFpsTime))
-      frameCount = 0
-      lastFpsTime = currentTime
-    }
-
-    requestAnimationFrame(updateFPS)
-  }
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.ctrlKey && event.key === 'd') {
@@ -35,10 +36,6 @@
   function toggleCameraRotation() {
     cameraRotationEnabled.update((v) => !v)
   }
-
-  // Start FPS monitoring
-  lastFpsTime = performance.now()
-  requestAnimationFrame(updateFPS)
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -46,7 +43,7 @@
 <div class="hud-container">
   <div class="hud-box">
     {#if $debugVisible}
-      <span class="fps-text">FPS: {fps} | ZOOM: {$cameraDistance.toFixed(1)}</span>
+      <span class="fps-text">FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}</span>
     {/if}
     
     <div class="button-group">
