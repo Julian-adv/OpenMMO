@@ -132,8 +132,8 @@ impl GameState {
             if let Some(player) = players.get_mut(player_id) {
                 if player.health > 0 {
                     info!(
-                        "Ignored respawn request for alive player {} ({})",
-                        player.name, player.id
+                        "Ignored respawn request for alive player {} ({}) HP: {}/{}",
+                        player.name, player.id, player.health, player.max_health
                     );
                     return;
                 }
@@ -295,18 +295,8 @@ impl GameState {
             monster_id, target_player_id, result.roll, result.hit, result.damage
         );
 
-        // Send attack result
-        let _ = self
-            .broadcast_tx
-            .send(ServerMessage::MonsterAttackedPlayer {
-                monster_id: monster_id.to_string(),
-                player_id: target_player_id.to_string(),
-                hit: result.hit,
-                roll: result.roll,
-                damage: result.damage,
-            });
-
-        // If hit, update player HP
+        // If hit, update player HP first so subsequent respawn checks observe the new state.
+        let mut did_die = false;
         if result.hit {
             let mut players = self.players.write().await;
 
@@ -322,12 +312,27 @@ impl GameState {
                 );
 
                 if player.health == 0 {
+                    did_die = true;
                     info!("Player {} died", target_player_id);
-                    let _ = self.broadcast_tx.send(ServerMessage::PlayerDead {
-                        player_id: target_player_id.to_string(),
-                    });
                 }
             }
+        }
+
+        // Send attack result after server-side HP update.
+        let _ = self
+            .broadcast_tx
+            .send(ServerMessage::MonsterAttackedPlayer {
+                monster_id: monster_id.to_string(),
+                player_id: target_player_id.to_string(),
+                hit: result.hit,
+                roll: result.roll,
+                damage: result.damage,
+            });
+
+        if did_die {
+            let _ = self.broadcast_tx.send(ServerMessage::PlayerDead {
+                player_id: target_player_id.to_string(),
+            });
         }
     }
 
