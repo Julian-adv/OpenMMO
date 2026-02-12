@@ -1,6 +1,9 @@
 use crate::auth::AuthService;
+use crate::game::character_attributes::roll_character_attributes;
 use crate::game_state::GameState;
-use crate::types::{new_player, Character, ClientMessage, PlayerId, ServerMessage};
+use crate::types::{
+    new_player, Character, CharacterAttributes, ClientMessage, PlayerId, ServerMessage,
+};
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
 use std::sync::Arc;
@@ -29,6 +32,7 @@ pub async fn handle_connection(
     let mut account_name: Option<String> = None;
     let mut player_id: Option<PlayerId> = None;
     let mut direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>> = None;
+    let mut pending_character_attributes: Option<CharacterAttributes> = None;
 
     loop {
         tokio::select! {
@@ -43,6 +47,7 @@ pub async fn handle_connection(
                             &mut account_name,
                             &mut player_id,
                             &mut direct_rx,
+                            &mut pending_character_attributes,
                         )
                         .await
                         {
@@ -157,6 +162,7 @@ async fn handle_client_message(
     account_name: &mut Option<String>,
     player_id: &mut Option<PlayerId>,
     direct_rx: &mut Option<mpsc::UnboundedReceiver<ServerMessage>>,
+    pending_character_attributes: &mut Option<CharacterAttributes>,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = deserialize_client_msg(message)?;
 
@@ -204,6 +210,7 @@ async fn handle_client_message(
                 .collect::<Vec<Character>>();
 
             *account_name = Some(requested_account_name.clone());
+            *pending_character_attributes = None;
 
             info!(
                 "Account '{}' authenticated successfully with {} character(s)",
@@ -231,8 +238,23 @@ async fn handle_client_message(
                 }]);
             };
 
-            match auth_service.create_character(&authed_account_name, &character_name) {
+            let Some(rolled_attributes) = pending_character_attributes.clone() else {
+                warn!(
+                    "Character creation requested without rolled stats for account '{}'",
+                    authed_account_name
+                );
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Roll attributes first".to_string(),
+                }]);
+            };
+
+            match auth_service.create_character(
+                &authed_account_name,
+                &character_name,
+                &rolled_attributes,
+            ) {
                 Ok(character) => {
+                    *pending_character_attributes = None;
                     info!(
                         "Character '{}' created for account '{}'",
                         character.name, authed_account_name
@@ -251,6 +273,26 @@ async fn handle_client_message(
                     }]);
                 }
             }
+        }
+
+        ClientMessage::RollCharacterStats => {
+            if player_id.is_some() {
+                warn!("RollCharacterStats ignored because client is already in game");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Cannot roll attributes while in game".to_string(),
+                }]);
+            }
+
+            if account_name.is_none() {
+                warn!("RollCharacterStats requested by unauthenticated client");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Authenticate first".to_string(),
+                }]);
+            }
+
+            let attributes = roll_character_attributes();
+            *pending_character_attributes = Some(attributes.clone());
+            return Ok(vec![ServerMessage::CharacterStatsRolled { attributes }]);
         }
 
         ClientMessage::EnterGame { character_id } => {
@@ -393,5 +435,6 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         id: record.id,
         name: record.name,
         created_at: record.created_at,
+        attributes: record.attributes,
     }
 }

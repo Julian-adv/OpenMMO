@@ -1,11 +1,16 @@
 <script lang="ts">
-  import type { AccountCharacter } from '../network/socket'
+  import type { AccountCharacter, CharacterAttributes } from '../network/socket'
 
   const MAX_CHARACTER_SLOTS = 3
 
   interface Props {
     accountName: string
     characters: AccountCharacter[]
+    onRollCharacterStats: () => Promise<{
+      ok: boolean
+      message?: string
+      attributes?: CharacterAttributes
+    }>
     onCreateCharacter: (
       characterName: string
     ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
@@ -13,14 +18,27 @@
     onLogout: () => void
   }
 
-  let { accountName, characters, onCreateCharacter, onStartGame, onLogout }: Props =
-    $props()
+  let {
+    accountName,
+    characters,
+    onRollCharacterStats,
+    onCreateCharacter,
+    onStartGame,
+    onLogout,
+  }: Props = $props()
 
   let selectedCharacterId = $state<number | null>(null)
   let createCharacterName = $state('')
+  let rolledAttributes = $state<CharacterAttributes | null>(null)
   let viewMode = $state<'select' | 'create'>('select')
-  let isSubmitting = $state(false)
+  let isCreating = $state(false)
+  let isRolling = $state(false)
+  let isStarting = $state(false)
   let errorMessage = $state('')
+
+  function isBusy() {
+    return isCreating || isRolling || isStarting
+  }
 
   $effect(() => {
     const selectedStillExists = selectedCharacterId
@@ -35,7 +53,7 @@
   })
 
   function handleSlotClick(slotIndex: number) {
-    if (isSubmitting) return
+    if (isBusy()) return
 
     const character = characters[slotIndex]
     errorMessage = ''
@@ -51,23 +69,44 @@
     }
 
     createCharacterName = ''
+    rolledAttributes = null
     viewMode = 'create'
+  }
+
+  async function handleRoll() {
+    if (isBusy()) return
+
+    isRolling = true
+    errorMessage = ''
+    const result = await onRollCharacterStats()
+    isRolling = false
+
+    if (!result.ok) {
+      errorMessage = result.message ?? 'Failed to roll character attributes'
+      return
+    }
+
+    rolledAttributes = result.attributes ?? null
   }
 
   async function submitCreateCharacter(event: Event) {
     event.preventDefault()
-    if (isSubmitting) return
+    if (isBusy()) return
 
     const characterName = createCharacterName.trim()
     if (!characterName) {
       errorMessage = 'Please enter character name'
       return
     }
+    if (!rolledAttributes) {
+      errorMessage = 'Roll attributes first'
+      return
+    }
 
-    isSubmitting = true
+    isCreating = true
     errorMessage = ''
     const result = await onCreateCharacter(characterName)
-    isSubmitting = false
+    isCreating = false
 
     if (!result.ok) {
       errorMessage = result.message ?? 'Failed to create character'
@@ -78,16 +117,17 @@
       selectedCharacterId = result.character.id
     }
     createCharacterName = ''
+    rolledAttributes = null
     viewMode = 'select'
   }
 
   async function handleStart() {
-    if (!selectedCharacterId || isSubmitting) return
+    if (!selectedCharacterId || isBusy()) return
 
-    isSubmitting = true
+    isStarting = true
     errorMessage = ''
     const result = await onStartGame(selectedCharacterId)
-    isSubmitting = false
+    isStarting = false
 
     if (!result.ok) {
       errorMessage = result.message ?? 'Failed to enter game'
@@ -110,10 +150,13 @@
             class:selected={character?.id === selectedCharacterId}
             class:empty={!character}
             onclick={() => handleSlotClick(slotIndex)}
-            disabled={isSubmitting}
+            disabled={isBusy()}
           >
             {#if character}
               <div class="slot-name">{character.name}</div>
+              <div class="slot-stats">
+                STR {character.attributes.str} DEX {character.attributes.dex} CON {character.attributes.con} INT {character.attributes.int} WIS {character.attributes.wis} CHA {character.attributes.cha}
+              </div>
             {:else}
               <div class="slot-empty">+ Create Character</div>
             {/if}
@@ -129,18 +172,40 @@
           bind:value={createCharacterName}
           maxlength={24}
           placeholder="Enter character name"
-          disabled={isSubmitting}
+          disabled={isBusy()}
         />
+
+        <div class="rolled-attributes">
+          {#if rolledAttributes}
+            <div class="attr">STR {rolledAttributes.str}</div>
+            <div class="attr">DEX {rolledAttributes.dex}</div>
+            <div class="attr">CON {rolledAttributes.con}</div>
+            <div class="attr">INT {rolledAttributes.int}</div>
+            <div class="attr">WIS {rolledAttributes.wis}</div>
+            <div class="attr">CHA {rolledAttributes.cha}</div>
+          {:else}
+            <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
+          {/if}
+        </div>
+
         <div class="create-actions">
-          <button type="submit" class="primary" disabled={isSubmitting}>
-            {isSubmitting ? 'Creating...' : 'Create'}
+          <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
+            {isRolling ? 'Rolling...' : 'Roll'}
+          </button>
+          <button
+            type="submit"
+            class="primary"
+            disabled={isBusy() || !rolledAttributes}
+          >
+            {isCreating ? 'Creating...' : 'Create'}
           </button>
           <button
             type="button"
             class="secondary"
-            disabled={isSubmitting}
+            disabled={isBusy()}
             onclick={() => {
               viewMode = 'select'
+              rolledAttributes = null
               errorMessage = ''
             }}
           >
@@ -160,15 +225,15 @@
           type="button"
           class="primary"
           onclick={handleStart}
-          disabled={!selectedCharacterId || isSubmitting}
+          disabled={!selectedCharacterId || isBusy()}
         >
-          {isSubmitting ? 'Starting...' : 'Start'}
+          {isStarting ? 'Starting...' : 'Start'}
         </button>
         <button
           type="button"
           class="secondary"
           onclick={onLogout}
-          disabled={isSubmitting}
+          disabled={isBusy()}
         >
           Back
         </button>
@@ -251,6 +316,13 @@
     font-weight: 600;
   }
 
+  .slot-stats {
+    margin-top: 6px;
+    font-size: 12px;
+    color: #a7b7ca;
+    line-height: 1.4;
+  }
+
   .slot-empty {
     font-size: 14px;
     font-weight: 500;
@@ -275,11 +347,49 @@
     font-size: 14px;
   }
 
-  .create-actions,
+  .rolled-attributes {
+    border: 1px solid #45556b;
+    border-radius: 8px;
+    background: rgba(16, 24, 35, 0.9);
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    min-height: 54px;
+    align-items: center;
+  }
+
+  .attr {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e4ecf5;
+    text-align: center;
+  }
+
+  .roll-hint {
+    grid-column: 1 / -1;
+    font-size: 12px;
+    color: #9fb0c6;
+    text-align: center;
+  }
+
+  .create-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+  }
+
   .actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+  }
+
+  .create-actions button,
+  .actions button {
+    border-radius: 7px;
+    padding: 10px 12px;
+    font-size: 14px;
   }
 
   .primary {
