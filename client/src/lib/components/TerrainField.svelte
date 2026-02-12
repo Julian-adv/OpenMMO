@@ -19,7 +19,12 @@
   }: Props = $props()
 
   // Load GLB model
-  const gltf = useLoader(GLTFLoader).load(modelPath)
+  const gltfLoader = useLoader(GLTFLoader)
+  let gltf = gltfLoader.load('/models/3d_field_inspection.glb')
+
+  $effect(() => {
+    gltf = gltfLoader.load(modelPath)
+  })
 
   let terrainGroup = $state<THREE.Group | null>(null)
   let xSpacing = 53.4 // Will be calculated from bounding box
