@@ -142,11 +142,13 @@ class MonsterManager {
         if (monster.impactDelay <= 0) {
           monster.impactDelay = 0
 
-          // Trigger damage display
-          monster.lastDamageInfo = {
-            damage: monster.pendingDamage || 0,
-            hit: !!monster.isLastHitSuccess,
-            trigger: (monster.lastDamageInfo?.trigger || 0) + 1,
+          // Trigger damage display only for local player's attacks
+          if (monster.targetPlayerId === myPlayerId) {
+            monster.lastDamageInfo = {
+              damage: monster.pendingDamage || 0,
+              hit: !!monster.isLastHitSuccess,
+              trigger: (monster.lastDamageInfo?.trigger || 0) + 1,
+            }
           }
 
           if (monster.isDeadPending) {

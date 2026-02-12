@@ -602,6 +602,7 @@
       name={player.name}
       isCurrentPlayer={false}
       playerState={remotePlayer?.state ?? 'idle'}
+      attackCounter={remotePlayer?.attackCounter}
       speed={remotePlayer?.speed ?? 0}
       rotation={remotePlayer?.rotation ?? 0}
       movementMode={remotePlayer?.movementMode}

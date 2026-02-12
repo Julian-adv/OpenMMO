@@ -201,6 +201,7 @@ class PlayerStateManager {
     this.players.set(playerId, {
       ...player,
       state: 'attack',
+      attackCounter: (player.attackCounter ?? 0) + 1,
     })
 
     // Auto-reset to idle after a short delay
