@@ -36,6 +36,17 @@ pub struct Character {
     pub id: i64,
     pub name: String,
     pub created_at: i64,
+    pub attributes: CharacterAttributes,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterAttributes {
+    pub r#str: u8,
+    pub dex: u8,
+    pub con: u8,
+    pub int: u8,
+    pub wis: u8,
+    pub cha: u8,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -48,6 +59,7 @@ pub enum ClientMessage {
     CreateCharacter {
         character_name: String,
     },
+    RollCharacterStats,
     EnterGame {
         character_id: i64,
     },
@@ -94,6 +106,9 @@ pub enum ServerMessage {
     },
     CharacterCreated {
         character: Character,
+    },
+    CharacterStatsRolled {
+        attributes: CharacterAttributes,
     },
     CharacterError {
         message: String,

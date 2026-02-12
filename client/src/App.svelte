@@ -55,6 +55,10 @@
     return result
   }
 
+  async function handleRollCharacterStats() {
+    return networkManager.requestRollCharacterStats()
+  }
+
   async function handleStartGame(
     characterId: number
   ): Promise<{ ok: boolean; message?: string }> {
@@ -125,6 +129,7 @@
     <CharacterSelectScreen
       {accountName}
       characters={accountCharacters}
+      onRollCharacterStats={handleRollCharacterStats}
       onCreateCharacter={handleCreateCharacter}
       onStartGame={handleStartGame}
       onLogout={handleLogoutToLogin}

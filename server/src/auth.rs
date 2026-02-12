@@ -1,4 +1,6 @@
+use crate::types::CharacterAttributes;
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -13,6 +15,7 @@ pub struct CharacterRecord {
     pub id: i64,
     pub name: String,
     pub created_at: i64,
+    pub attributes: CharacterAttributes,
 }
 
 #[derive(Debug)]
@@ -108,14 +111,49 @@ impl AuthService {
                 account_name TEXT NOT NULL,
                 character_name TEXT NOT NULL UNIQUE,
                 created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                attr_str INTEGER NOT NULL DEFAULT 12,
+                attr_dex INTEGER NOT NULL DEFAULT 12,
+                attr_con INTEGER NOT NULL DEFAULT 12,
+                attr_int INTEGER NOT NULL DEFAULT 12,
+                attr_wis INTEGER NOT NULL DEFAULT 12,
+                attr_cha INTEGER NOT NULL DEFAULT 12,
                 FOREIGN KEY (account_name) REFERENCES accounts(player_name) ON DELETE CASCADE
             )",
             [],
         )?;
+        Self::ensure_character_attribute_columns(conn)?;
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
             [],
         )?;
+
+        Ok(())
+    }
+
+    fn ensure_character_attribute_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let mut stmt = conn.prepare("PRAGMA table_info(characters)")?;
+        let existing_columns: HashSet<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<HashSet<_>, _>>()?;
+
+        let expected_columns = [
+            ("attr_str", "INTEGER NOT NULL DEFAULT 12"),
+            ("attr_dex", "INTEGER NOT NULL DEFAULT 12"),
+            ("attr_con", "INTEGER NOT NULL DEFAULT 12"),
+            ("attr_int", "INTEGER NOT NULL DEFAULT 12"),
+            ("attr_wis", "INTEGER NOT NULL DEFAULT 12"),
+            ("attr_cha", "INTEGER NOT NULL DEFAULT 12"),
+        ];
+
+        for (column_name, column_def) in expected_columns {
+            if !existing_columns.contains(column_name) {
+                let sql = format!(
+                    "ALTER TABLE characters ADD COLUMN {} {}",
+                    column_name, column_def
+                );
+                conn.execute(sql.as_str(), [])?;
+            }
+        }
 
         Ok(())
     }
@@ -211,7 +249,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, character_name, created_at
+                "SELECT id, character_name, created_at, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE account_name = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -224,6 +262,14 @@ impl AuthService {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     created_at: row.get(2)?,
+                    attributes: CharacterAttributes {
+                        r#str: row.get(3)?,
+                        dex: row.get(4)?,
+                        con: row.get(5)?,
+                        int: row.get(6)?,
+                        wis: row.get(7)?,
+                        cha: row.get(8)?,
+                    },
                 })
             })
             .map_err(|e| AuthError::Database(e.to_string()))?
@@ -237,6 +283,7 @@ impl AuthService {
         &self,
         account_name: &str,
         character_name: &str,
+        attributes: &CharacterAttributes,
     ) -> Result<CharacterRecord, AuthError> {
         let account_name = account_name.trim();
         let character_name = character_name.trim();
@@ -287,17 +334,49 @@ impl AuthService {
         }
 
         conn.execute(
-            "INSERT INTO characters (account_name, character_name) VALUES (?1, ?2)",
-            params![account_name, character_name],
+            "INSERT INTO characters (
+                account_name,
+                character_name,
+                attr_str,
+                attr_dex,
+                attr_con,
+                attr_int,
+                attr_wis,
+                attr_cha
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                account_name,
+                character_name,
+                i64::from(attributes.r#str),
+                i64::from(attributes.dex),
+                i64::from(attributes.con),
+                i64::from(attributes.int),
+                i64::from(attributes.wis),
+                i64::from(attributes.cha),
+            ],
         )
         .map_err(|e| AuthError::Database(e.to_string()))?;
 
         let id = conn.last_insert_rowid();
-        let created_at: i64 = conn
+        let (created_at, loaded_attributes): (i64, CharacterAttributes) = conn
             .query_row(
-                "SELECT created_at FROM characters WHERE id = ?1",
+                "SELECT created_at, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                 FROM characters
+                 WHERE id = ?1",
                 params![id],
-                |row| row.get(0),
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        CharacterAttributes {
+                            r#str: row.get(1)?,
+                            dex: row.get(2)?,
+                            con: row.get(3)?,
+                            int: row.get(4)?,
+                            wis: row.get(5)?,
+                            cha: row.get(6)?,
+                        },
+                    ))
+                },
             )
             .map_err(|e| AuthError::Database(e.to_string()))?;
 
@@ -305,6 +384,7 @@ impl AuthService {
             id,
             name: character_name.to_string(),
             created_at,
+            attributes: loaded_attributes,
         };
 
         Ok(character)
@@ -326,7 +406,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at
+                "SELECT id, character_name, created_at, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE id = ?1 AND account_name = ?2",
                 params![character_id, account_name],
@@ -335,6 +415,14 @@ impl AuthService {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         created_at: row.get(2)?,
+                        attributes: CharacterAttributes {
+                            r#str: row.get(3)?,
+                            dex: row.get(4)?,
+                            con: row.get(5)?,
+                            int: row.get(6)?,
+                            wis: row.get(7)?,
+                            cha: row.get(8)?,
+                        },
                     })
                 },
             )

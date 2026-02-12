@@ -50,6 +50,16 @@ export type AccountCharacter = {
   id: number
   name: string
   created_at: number
+  attributes: CharacterAttributes
+}
+
+export type CharacterAttributes = {
+  str: number
+  dex: number
+  con: number
+  int: number
+  wis: number
+  cha: number
 }
 
 // Serde externally tagged enum shapes
@@ -62,6 +72,7 @@ type ClientMessage =
       }
     }
   | { CreateCharacter: { character_name: string } }
+  | 'RollCharacterStats'
   | { EnterGame: { character_id: number } }
   | { PlayerMove: { position: Position; rotation: number } }
   | { ChatMessage: { message: string } }
@@ -95,6 +106,7 @@ type AuthSuccessHandler = (payload: AuthSuccessPayload) => void
 type AuthErrorHandler = (message: string) => void
 type JoinSuccessHandler = () => void
 type CharacterCreatedHandler = (character: AccountCharacter) => void
+type CharacterStatsRolledHandler = (attributes: CharacterAttributes) => void
 type CharacterErrorHandler = (message: string) => void
 type KickedHandler = (reason: string) => void
 
@@ -115,6 +127,7 @@ class NetworkManager {
   private authErrorHandlers = new Set<AuthErrorHandler>()
   private joinSuccessHandlers = new Set<JoinSuccessHandler>()
   private characterCreatedHandlers = new Set<CharacterCreatedHandler>()
+  private characterStatsRolledHandlers = new Set<CharacterStatsRolledHandler>()
   private characterErrorHandlers = new Set<CharacterErrorHandler>()
   private kickedHandlers = new Set<KickedHandler>()
 
@@ -155,6 +168,11 @@ class NetworkManager {
     return () => this.characterCreatedHandlers.delete(handler)
   }
 
+  onCharacterStatsRolled(handler: CharacterStatsRolledHandler) {
+    this.characterStatsRolledHandlers.add(handler)
+    return () => this.characterStatsRolledHandlers.delete(handler)
+  }
+
   onCharacterError(handler: CharacterErrorHandler) {
     this.characterErrorHandlers.add(handler)
     return () => this.characterErrorHandlers.delete(handler)
@@ -187,6 +205,10 @@ class NetworkManager {
 
   private emitCharacterCreated(character: AccountCharacter) {
     this.characterCreatedHandlers.forEach((handler) => handler(character))
+  }
+
+  private emitCharacterStatsRolled(attributes: CharacterAttributes) {
+    this.characterStatsRolledHandlers.forEach((handler) => handler(attributes))
   }
 
   private emitCharacterError(message: string) {
@@ -331,6 +353,12 @@ class NetworkManager {
       case 'CharacterCreated': {
         const character: AccountCharacter = data.character
         this.emitCharacterCreated(character)
+        break
+      }
+
+      case 'CharacterStatsRolled': {
+        const attributes: CharacterAttributes = data.attributes
+        this.emitCharacterStatsRolled(attributes)
         break
       }
 
@@ -721,6 +749,16 @@ class NetworkManager {
     return false
   }
 
+  private sendRollCharacterStats() {
+    if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
+      const bytes = serialize_client_message('RollCharacterStats')
+      this.socket.send(bytes)
+      return true
+    }
+
+    return false
+  }
+
   private sendEnterGame(characterId: number) {
     if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
       this.lastCharacterId = characterId
@@ -885,6 +923,70 @@ class NetworkManager {
       })
 
       const sent = this.sendCreateCharacter(characterName)
+      if (!sent && !settled) {
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Socket is not connected' })
+      }
+    })
+  }
+
+  async requestRollCharacterStats(): Promise<{
+    ok: boolean
+    message?: string
+    attributes?: CharacterAttributes
+  }> {
+    await this.ensureWasm()
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      return { ok: false, message: 'Socket is not connected' }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let offRolled: () => void = () => {}
+      let offCharacterError: () => void = () => {}
+      let offAuthError: () => void = () => {}
+
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        offRolled()
+        offCharacterError()
+        offAuthError()
+      }
+
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Stat roll timed out' })
+      }, 8000)
+
+      offRolled = this.onCharacterStatsRolled((attributes) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: true, attributes })
+      })
+
+      offCharacterError = this.onCharacterError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      offAuthError = this.onAuthError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      const sent = this.sendRollCharacterStats()
       if (!sent && !settled) {
         settled = true
         cleanup()
