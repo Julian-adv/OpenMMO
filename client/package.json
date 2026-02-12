@@ -4,8 +4,9 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "build:wasm": "cd ../shared && wasm-pack build --target web --out-dir ../client/src/lib/wasm",
+    "dev": "npm run build:wasm && vite",
+    "build": "npm run build:wasm && vite build",
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.app.json && tsc -p tsconfig.node.json",
     "format": "prettier --write .",
@@ -28,7 +29,8 @@
     "svelte-check": "^4.3.1",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.39.0",
-    "vite": "^7.1.0"
+    "vite": "^7.1.0",
+    "vite-plugin-wasm": "^3.5.0"
   },
   "dependencies": {
     "@threlte/core": "^8.1.4",

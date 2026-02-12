@@ -10,9 +10,12 @@ client/package-lock.json
 client/*.tsbuildinfo
 client/vite.config.d.ts
 
-# Server (Rust)
-server/target/
-server/Cargo.lock
+# Rust (workspace)
+target/
+Cargo.lock
+
+# Wasm build output
+client/src/lib/wasm/
 
 # IDE
 .vscode/

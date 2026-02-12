@@ -1,8 +1,8 @@
 use crate::auth::AuthService;
 use crate::game_state::GameState;
-use crate::types::{ClientMessage, Player, PlayerId, ServerMessage};
+use crate::types::{new_player, ClientMessage, PlayerId, ServerMessage};
 use futures_util::{SinkExt, StreamExt};
-use serde_json;
+use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc};
@@ -34,12 +34,9 @@ pub async fn handle_connection(
             // Handle incoming messages from client
             msg = ws_receiver.next() => {
                 match msg {
-                    Some(Ok(Message::Text(text))) => {
-                        if !text.contains("\"type\":\"monster_move\"") {
-                            info!("Received message: {}", text);
-                        }
+                    Some(Ok(Message::Binary(bytes))) => {
                         match handle_client_message(
-                            &text,
+                            &bytes,
                             &game_state,
                             &auth_service,
                             &mut player_id,
@@ -50,21 +47,21 @@ pub async fn handle_connection(
                             Ok(responses) => {
                                 // Send all direct responses to this client
                                 for response in responses {
-                                    if let Ok(json) = serde_json::to_string(&response) {
-                                        if let Err(e) = ws_sender.send(Message::Text(json)).await {
-                                            error!(
-                                                "Failed to send direct response to client: {}",
-                                                e
-                                            );
+                                    match serialize_server_msg(&response) {
+                                        Ok(bytes) => {
+                                            if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
+                                                error!(
+                                                    "Failed to send direct response to client: {}",
+                                                    e
+                                                );
+                                            }
                                         }
+                                        Err(e) => error!("Serialization failed: {}", e),
                                     }
                                 }
                             }
                             Err(e) => {
-                                error!(
-                                    "Error handling client message: {} - message was: {}",
-                                    e, text
-                                );
+                                error!("Error handling client message: {}", e);
                             }
                         }
                     }
@@ -97,11 +94,14 @@ pub async fn handle_connection(
                             }
                         }
 
-                        if let Ok(json) = serde_json::to_string(&server_msg) {
-                            if let Err(e) = ws_sender.send(Message::Text(json)).await {
-                                error!("Failed to send message to client: {}", e);
-                                break;
+                        match serialize_server_msg(&server_msg) {
+                            Ok(bytes) => {
+                                if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
+                                    error!("Failed to send message to client: {}", e);
+                                    break;
+                                }
                             }
+                            Err(e) => error!("Serialization failed: {}", e),
                         }
                     }
                     Err(broadcast::error::RecvError::Closed) => {
@@ -123,8 +123,11 @@ pub async fn handle_connection(
             } => {
                 if let Some(msg) = direct_msg {
                     let is_kicked = matches!(msg, ServerMessage::Kicked { .. });
-                    if let Ok(json) = serde_json::to_string(&msg) {
-                        let _ = ws_sender.send(Message::Text(json)).await;
+                    match serialize_server_msg(&msg) {
+                        Ok(bytes) => {
+                            let _ = ws_sender.send(Message::Binary(bytes)).await;
+                        }
+                        Err(e) => error!("Serialization failed: {}", e),
                     }
                     if is_kicked {
                         info!("Player {:?} kicked", player_id);
@@ -146,13 +149,13 @@ pub async fn handle_connection(
 }
 
 async fn handle_client_message(
-    message: &str,
+    message: &[u8],
     game_state: &Arc<GameState>,
     auth_service: &Arc<AuthService>,
     player_id: &mut Option<PlayerId>,
     direct_rx: &mut Option<mpsc::UnboundedReceiver<ServerMessage>>,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
-    let client_msg: ClientMessage = serde_json::from_str(message)?;
+    let client_msg: ClientMessage = deserialize_client_msg(message)?;
 
     match client_msg {
         ClientMessage::Join {
@@ -180,7 +183,7 @@ async fn handle_client_message(
             // Kick any existing player with the same name
             game_state.kick_player_by_name(&player_name).await;
 
-            let player = Player::new(player_name);
+            let player = new_player(player_name);
             let id = player.id.clone();
 
             // Register direct channel for this player
