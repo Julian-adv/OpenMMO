@@ -27,6 +27,8 @@
   - `npm run format`
   - `npm run lint`
   - `npm run check`
+- Pre-commit (server): Before committing server-side changes, run the following command in the `server` directory:
+  - `cargo fmt`
 - Safety: ALWAYS ask the user for confirmation before executing a commit command, even if "Yolo Mode" or any autonomous mode is enabled.
 
 ## Security & Configuration Tips
