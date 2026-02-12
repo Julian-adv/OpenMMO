@@ -42,10 +42,20 @@
   let chatBubbles = $state<Map<string, ChatBubble>>(new Map())
   let camera = $state<THREE.PerspectiveCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
-  let groundMesh = $state<THREE.Mesh | undefined>(undefined)
+  let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
+  interface TerrainTile {
+    id: string
+    position: [number, number, number]
+  }
+  let terrainTiles = $state<TerrainTile[]>([])
+  let terrainCenterChunk = $state({ x: 0, z: 0 })
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
+
+  const TERRAIN_TILE_SIZE = 100
+  const TERRAIN_TILE_SEGMENTS = 128
+  const TERRAIN_GRID_RADIUS = 1 // 1 => 3x3 tiles around player
 
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
@@ -215,6 +225,38 @@
     currentPlayerState = newState
   }
 
+  function rebuildTerrainTiles(centerChunkX: number, centerChunkZ: number) {
+    const nextTiles: TerrainTile[] = []
+    for (let dz = -TERRAIN_GRID_RADIUS; dz <= TERRAIN_GRID_RADIUS; dz++) {
+      for (let dx = -TERRAIN_GRID_RADIUS; dx <= TERRAIN_GRID_RADIUS; dx++) {
+        nextTiles.push({
+          id: `${dx}_${dz}`,
+          position: [
+            (centerChunkX + dx) * TERRAIN_TILE_SIZE,
+            0,
+            (centerChunkZ + dz) * TERRAIN_TILE_SIZE,
+          ],
+        })
+      }
+    }
+    terrainTiles = nextTiles
+    terrainMeshes = new Array(nextTiles.length)
+  }
+
+  function updateTerrainTilesFromPlayer() {
+    if (!currentPlayer) return
+    const nextChunkX = Math.round(currentPlayer.position.x / TERRAIN_TILE_SIZE)
+    const nextChunkZ = Math.round(currentPlayer.position.z / TERRAIN_TILE_SIZE)
+    if (
+      nextChunkX === terrainCenterChunk.x &&
+      nextChunkZ === terrainCenterChunk.z
+    ) {
+      return
+    }
+    terrainCenterChunk = { x: nextChunkX, z: nextChunkZ }
+    rebuildTerrainTiles(nextChunkX, nextChunkZ)
+  }
+
   gameStore.subscribe((state) => {
     currentPlayer = state.currentPlayer
     otherPlayers = state.otherPlayers
@@ -267,6 +309,7 @@
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }
+      updateTerrainTilesFromPlayer()
       if (loopProfileEnabled) {
         recordLoopProfile('playerControl', performance.now() - playerControlStart)
       }
@@ -493,9 +536,15 @@
     })
 
     // Build a terrain geometry (XZ plane)
-    const plane = new THREE.PlaneGeometry(100, 100, 128, 128)
+    const plane = new THREE.PlaneGeometry(
+      TERRAIN_TILE_SIZE,
+      TERRAIN_TILE_SIZE,
+      TERRAIN_TILE_SEGMENTS,
+      TERRAIN_TILE_SEGMENTS
+    )
     plane.rotateX(-Math.PI / 2) // Lay flat on XZ
     terrainGeometry = plane
+    rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
     lastFrameTime = performance.now()
     initFpsCounting()
@@ -522,6 +571,8 @@
       monsterManager.reset()
       remotePlayerManager.reset()
       playerDebugInfo.set(null)
+      terrainTiles = []
+      terrainMeshes = []
       resetGameStore()
     }
   })
@@ -564,19 +615,25 @@
 />
 
 {#if terrainGeometry}
-  <SplatTerrain geometry={terrainGeometry} bind:mesh={groundMesh} />
+  {#each terrainTiles as tile, index (tile.id)}
+    <SplatTerrain
+      geometry={terrainGeometry}
+      position={tile.position}
+      bind:mesh={terrainMeshes[index]}
+    />
+  {/each}
 {/if}
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
 <!-- <TerrainField /> -->
 
-{#if camera && groundMesh}
+{#if camera && terrainMeshes.some((m) => m !== undefined)}
   <!-- PlayerControl component handles input and updates player state -->
   <PlayerControl
     bind:this={playerControl}
     onStateChange={handlePlayerStateChange}
     {camera}
-    {groundMesh}
+    groundMeshes={terrainMeshes.filter((m) => m !== undefined) as THREE.Mesh[]}
     monsterMeshes={monsterModels
       .map((m) => m?.getMeshGroup())
       .filter((g) => g !== undefined) as THREE.Group[]}

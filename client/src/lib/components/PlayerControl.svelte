@@ -21,12 +21,12 @@
   interface Props {
     onStateChange: (state: PlayerState) => void
     camera: THREE.PerspectiveCamera
-    groundMesh: THREE.Mesh
+    groundMeshes: THREE.Mesh[]
     monsterMeshes: THREE.Group[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, groundMesh, monsterMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, groundMeshes, monsterMeshes, attackCooldown }: Props = $props()
 
   let currentPlayer = $state<LocalPlayer | null>(null)
 
@@ -504,7 +504,7 @@
     const intent = inputHandler.processCanvasClick(event, {
       camera,
       monsterMeshes,
-      groundMesh,
+      groundMeshes,
       playerPosition: {
         x: currentPlayer.position.x,
         y: 0,

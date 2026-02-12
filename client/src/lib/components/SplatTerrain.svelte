@@ -12,6 +12,7 @@
 
   export let geometry: THREE.BufferGeometry
   export let mesh: THREE.Mesh | undefined = undefined
+  export let position: [number, number, number] = [0, 0, 0]
 
   let material: THREE.MeshStandardMaterial | null = null
 
@@ -174,5 +175,12 @@
 </script>
 
 {#if material}
-  <T.Mesh bind:ref={mesh} {geometry} {material} castShadow receiveShadow />
+  <T.Mesh
+    bind:ref={mesh}
+    {geometry}
+    {material}
+    {position}
+    castShadow
+    receiveShadow
+  />
 {/if}
