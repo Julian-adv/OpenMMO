@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import * as THREE from 'three'
-  import { gameStore, type Player } from '../stores/gameStore'
+  import { gameStore, type LocalPlayer } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { monsterManager } from '../managers/monsterManager'
   import { combatController } from '../managers/combatController'
@@ -28,7 +28,7 @@
 
   let { onStateChange, camera, groundMesh, monsterMeshes, attackCooldown }: Props = $props()
 
-  let currentPlayer = $state<Player | null>(null)
+  let currentPlayer = $state<LocalPlayer | null>(null)
 
   // Movement system
   let movementTarget = $state<Position | null>(null)

@@ -6,7 +6,7 @@ import {
   addChatBubble,
   resetGameStore,
 } from '../stores/gameStore'
-import type { Player } from '../stores/gameStore'
+import type { LocalPlayer, RemotePlayer } from '../stores/gameStore'
 import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
@@ -260,7 +260,7 @@ class NetworkManager {
           serverPlayer.position.y,
           serverPlayer.position.z
         )
-        const player: Player = {
+        const player: LocalPlayer = {
           ...serverPlayer,
           position: playerPosition,
           maxHealth: serverPlayer.max_health,
@@ -280,10 +280,16 @@ class NetworkManager {
           serverPlayer.position.y,
           serverPlayer.position.z
         )
-        const player: Player = {
+        const player: LocalPlayer = {
           ...serverPlayer,
           position: playerPosition,
-          targetPosition: playerPosition.clone(),
+          maxHealth: serverPlayer.max_health,
+        }
+        const remotePlayer: RemotePlayer = {
+          id: serverPlayer.id,
+          name: serverPlayer.name,
+          level: serverPlayer.level,
+          health: serverPlayer.health,
           maxHealth: serverPlayer.max_health,
         }
         gameStore.update((state) => {
@@ -296,7 +302,7 @@ class NetworkManager {
               serverPlayer.position,
               serverPlayer.rotation
             )
-            state.otherPlayers.set(serverPlayer.id, player)
+            state.otherPlayers.set(serverPlayer.id, remotePlayer)
             addChatMessage(`${serverPlayer.name} joined the game`)
           }
           return state
@@ -307,9 +313,9 @@ class NetworkManager {
       case 'PlayerLeft':
         gameStore.update((state) => {
           const player = state.otherPlayers.get(data.player_id)
+          remotePlayerManager.removePlayer(data.player_id)
           if (player) {
             state.otherPlayers.delete(data.player_id)
-            remotePlayerManager.removePlayer(data.player_id)
             addChatMessage(`${player.name} left the game`)
           }
           return state
@@ -317,12 +323,15 @@ class NetworkManager {
         break
 
       case 'PlayerMoved': {
-        const targetPosition = new Vector3(
-          data.position.x,
-          data.position.y,
-          data.position.z
-        )
-        updatePlayer(data.player_id, { targetPosition })
+        const state = get(gameStore)
+        if (state.currentPlayer?.id === data.player_id) {
+          break
+        }
+        remotePlayerManager.setTargetPosition(data.player_id, {
+          x: data.position.x,
+          y: data.position.y,
+          z: data.position.z,
+        })
         break
       }
 
@@ -344,15 +353,11 @@ class NetworkManager {
           Object.values(data.players as Record<string, ServerPlayer>).forEach(
             (serverPlayer) => {
               if (serverPlayer.id !== state.currentPlayer?.id) {
-                const playerPos = new Vector3(
-                  serverPlayer.position.x,
-                  serverPlayer.position.y,
-                  serverPlayer.position.z
-                )
-                const player: Player = {
-                  ...serverPlayer,
-                  position: playerPos,
-                  targetPosition: playerPos.clone(),
+                const player: RemotePlayer = {
+                  id: serverPlayer.id,
+                  name: serverPlayer.name,
+                  level: serverPlayer.level,
+                  health: serverPlayer.health,
                   maxHealth: serverPlayer.max_health,
                 }
                 remotePlayerManager.initPlayer(
@@ -519,26 +524,28 @@ class NetworkManager {
       case 'PlayerRespawned': {
         const serverPlayer: ServerPlayer = data.player
         console.log('Player respawned:', serverPlayer.id)
-        const respawnPosition = new Vector3(
-          serverPlayer.position.x,
-          serverPlayer.position.y,
-          serverPlayer.position.z
-        )
         const gameState4 = get(gameStore)
         const isCurrentPlayerRespawned =
           gameState4.currentPlayer?.id === serverPlayer.id
 
-        updatePlayer(serverPlayer.id, {
-          position: respawnPosition,
-          targetPosition: respawnPosition.clone(),
-          health: serverPlayer.health,
-          maxHealth: serverPlayer.max_health,
-        })
-
         if (isCurrentPlayerRespawned) {
+          const respawnPosition = new Vector3(
+            serverPlayer.position.x,
+            serverPlayer.position.y,
+            serverPlayer.position.z
+          )
+          updatePlayer(serverPlayer.id, {
+            position: respawnPosition,
+            health: serverPlayer.health,
+            maxHealth: serverPlayer.max_health,
+          })
           requestCameraReset()
           addChatMessage('You have respawned.')
         } else {
+          updatePlayer(serverPlayer.id, {
+            health: serverPlayer.health,
+            maxHealth: serverPlayer.max_health,
+          })
           addChatMessage(`${serverPlayer.name} has respawned.`)
           remotePlayerManager.handleRespawn(
             serverPlayer.id,

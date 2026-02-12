@@ -1,5 +1,4 @@
 import { SvelteMap } from 'svelte/reactivity'
-import type { Player } from '../stores/gameStore'
 import {
   calculateMovementStep,
   initMovementState,
@@ -23,17 +22,21 @@ class PlayerStateManager {
   // Remote player movement data (for acceleration/deceleration)
   private movementData = new SvelteMap<string, MovementState>()
 
+  // Server-authoritative movement targets for each remote player.
+  private targetPositions = new SvelteMap<string, Position>()
+
   // Queue for pending attacks when player is still moving
   private attackQueue = new SvelteMap<string, string[]>()
 
   // Move remote players toward their target positions with acceleration/deceleration
-  update(deltaTime: number, otherPlayers: Map<string, Player>) {
+  update(deltaTime: number) {
     const dt = deltaTime / 1000 // Convert to seconds
 
     // Update players
-    otherPlayers.forEach((player, playerId) => {
+    this.targetPositions.forEach((targetPos, playerId) => {
       // Get current interpolated position or initialize from player position
       const currentPlayer = this.players.get(playerId)
+      if (!currentPlayer) return
 
       // Skip movement update if player is attacking or dead
       if (
@@ -43,18 +46,7 @@ class PlayerStateManager {
         return
       }
 
-      if (!player.targetPosition) return
-
-      let currentPos = currentPlayer?.position
-      if (!currentPos) {
-        currentPos = {
-          x: player.position.x,
-          y: player.position.y,
-          z: player.position.z,
-        }
-      }
-
-      const targetPos = player.targetPosition
+      const currentPos = currentPlayer.position
 
       // Get or initialize movement data
       let movement = this.movementData.get(playerId)
@@ -130,6 +122,7 @@ class PlayerStateManager {
 
   // Initialize remote player state with position and rotation
   initPlayer(playerId: string, position: Position, rotation: number) {
+    this.targetPositions.set(playerId, { ...position })
     this.players.set(playerId, {
       position: { ...position },
       state: 'idle',
@@ -142,6 +135,7 @@ class PlayerStateManager {
   removePlayer(playerId: string) {
     this.players.delete(playerId)
     this.movementData.delete(playerId)
+    this.targetPositions.delete(playerId)
     this.attackQueue.delete(playerId)
   }
 
@@ -149,6 +143,7 @@ class PlayerStateManager {
   reset() {
     this.players.clear()
     this.movementData.clear()
+    this.targetPositions.clear()
     this.attackQueue.clear()
   }
 
@@ -166,6 +161,7 @@ class PlayerStateManager {
   handleRespawn(playerId: string, position: Position, rotation: number) {
     this.movementData.delete(playerId)
     this.attackQueue.delete(playerId)
+    this.targetPositions.set(playerId, { ...position })
     this.players.set(playerId, {
       position: { ...position },
       state: 'idle',
@@ -191,6 +187,10 @@ class PlayerStateManager {
       // Not moving - execute immediately
       this.executeAttack(playerId)
     }
+  }
+
+  setTargetPosition(playerId: string, targetPosition: Position) {
+    this.targetPositions.set(playerId, { ...targetPosition })
   }
 
   private executeAttack(playerId: string) {

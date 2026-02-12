@@ -8,16 +8,20 @@ export interface PlayerDamageInfo {
   trigger: number
 }
 
-export interface Player {
+interface PlayerBase {
   id: string
   name: string
-  position: Vector3
-  targetPosition?: Vector3 // For remote player interpolation
   level: number
   health: number
   maxHealth: number
   lastDamageInfo?: PlayerDamageInfo
 }
+
+export interface LocalPlayer extends PlayerBase {
+  position: Vector3
+}
+
+export type RemotePlayer = PlayerBase
 
 export interface ChatBubble {
   playerId: string
@@ -28,8 +32,8 @@ export interface ChatBubble {
 
 export interface GameState {
   isConnected: boolean
-  currentPlayer: Player | null
-  otherPlayers: Map<string, Player>
+  currentPlayer: LocalPlayer | null
+  otherPlayers: Map<string, RemotePlayer>
   chatMessages: string[]
   chatBubbles: Map<string, ChatBubble> // playerId -> ChatBubble
 }
@@ -52,7 +56,10 @@ export const resetGameStore = () => {
   })
 }
 
-export const updatePlayer = (playerId: string, playerData: Partial<Player>) => {
+export const updatePlayer = (
+  playerId: string,
+  playerData: Partial<LocalPlayer> | Partial<RemotePlayer>
+) => {
   gameStore.update((state) => {
     if (state.currentPlayer && state.currentPlayer.id === playerId) {
       return {

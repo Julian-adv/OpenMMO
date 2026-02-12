@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { networkManager } from '../network/socket'
 import { get } from 'svelte/store'
 import { gameStore } from '../stores/gameStore'
+import { remotePlayerManager } from './remotePlayerManager'
 import type { MonsterData } from '../types/Monster'
 import { getMonsterDef } from '../data/monsterDefs'
 import type { Position } from '../utils/movementUtils'
@@ -290,9 +291,28 @@ class MonsterManager {
             | undefined
 
           if (gameState.currentPlayer?.id === monster.targetPlayerId) {
-            targetPlayer = gameState.currentPlayer
+            targetPlayer = {
+              position: {
+                x: gameState.currentPlayer.position.x,
+                y: gameState.currentPlayer.position.y,
+                z: gameState.currentPlayer.position.z,
+              },
+              health: gameState.currentPlayer.health,
+            }
           } else {
-            targetPlayer = gameState.otherPlayers.get(monster.targetPlayerId)
+            const remotePlayerState = remotePlayerManager.players.get(
+              monster.targetPlayerId
+            )
+            const remotePlayer = gameState.otherPlayers.get(
+              monster.targetPlayerId
+            )
+
+            if (remotePlayerState) {
+              targetPlayer = {
+                position: remotePlayerState.position,
+                health: remotePlayer?.health,
+              }
+            }
           }
 
           // Stop attacking if target is dead

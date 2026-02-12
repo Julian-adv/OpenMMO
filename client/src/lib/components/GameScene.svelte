@@ -6,7 +6,8 @@
   import {
     gameStore,
     resetGameStore,
-    type Player,
+    type LocalPlayer,
+    type RemotePlayer,
     type ChatBubble,
   } from '../stores/gameStore'
   import {
@@ -32,8 +33,8 @@
 
   let { serverUrl }: Props = $props()
 
-  let currentPlayer = $state<Player | null>(null)
-  let otherPlayers = $state(new Map())
+  let currentPlayer = $state<LocalPlayer | null>(null)
+  let otherPlayers = $state<Map<string, RemotePlayer>>(new Map())
   let chatBubbles = $state<Map<string, ChatBubble>>(new Map())
   let camera = $state<THREE.PerspectiveCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
@@ -268,7 +269,7 @@
 
       // Update remote player interpolation
       const remoteInterpolationStart = performance.now()
-      remotePlayerManager.update(deltaTime, otherPlayers)
+      remotePlayerManager.update(deltaTime)
       if (loopProfileEnabled) {
         recordLoopProfile(
           'remoteInterpolation',
@@ -589,26 +590,25 @@
 {#if cameraInitialized && camera}
   {#each [...otherPlayers.values()] as player, index (player.id)}
     {@const remotePlayer = remotePlayerManager.players.get(player.id)}
-    {@const displayPosition = remotePlayer
-      ? new THREE.Vector3(
+    {#if remotePlayer}
+      <PlayerModel
+        bind:this={otherPlayerModels[index]}
+        position={new THREE.Vector3(
           remotePlayer.position.x,
           remotePlayer.position.y,
           remotePlayer.position.z
-        )
-      : player.position}
-    <PlayerModel
-      bind:this={otherPlayerModels[index]}
-      position={displayPosition}
-      name={player.name}
-      isCurrentPlayer={false}
-      playerState={remotePlayer?.state ?? 'idle'}
-      attackCounter={remotePlayer?.attackCounter}
-      speed={remotePlayer?.speed ?? 0}
-      rotation={remotePlayer?.rotation ?? 0}
-      movementMode={remotePlayer?.movementMode}
-      {camera}
-      chatBubble={chatBubbles.get(player.id)?.message}
-    />
+        )}
+        name={player.name}
+        isCurrentPlayer={false}
+        playerState={remotePlayer.state}
+        attackCounter={remotePlayer.attackCounter}
+        speed={remotePlayer.speed}
+        rotation={remotePlayer.rotation}
+        movementMode={remotePlayer.movementMode}
+        {camera}
+        chatBubble={chatBubbles.get(player.id)?.message}
+      />
+    {/if}
   {/each}
 {/if}
 
