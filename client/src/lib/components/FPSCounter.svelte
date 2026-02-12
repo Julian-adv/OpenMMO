@@ -20,7 +20,16 @@
 <script lang="ts">
   import { cameraDistance } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
-  import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
+  import {
+    debugVisible,
+    cameraRotationEnabled,
+    playerDebugInfo,
+  } from '../stores/debugStore'
+
+  function toDegrees(radians: number) {
+    const degrees = (radians * 180) / Math.PI
+    return ((degrees % 360) + 360) % 360
+  }
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.ctrlKey && event.key === 'd') {
@@ -43,9 +52,23 @@
 <div class="hud-container">
   <div class="hud-box">
     {#if $debugVisible}
-      <span class="fps-text">FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}</span>
+      <div class="stats-text">
+        <span class="fps-text">
+          FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}
+        </span>
+        {#if $playerDebugInfo}
+          <span class="player-text">
+            POS: ({$playerDebugInfo.position.x.toFixed(2)},
+            {$playerDebugInfo.position.y.toFixed(2)},
+            {$playerDebugInfo.position.z.toFixed(2)}) | ROT:
+            {toDegrees($playerDebugInfo.rotation).toFixed(1)}°
+          </span>
+        {:else}
+          <span class="player-text">POS: (-, -, -) | ROT: -</span>
+        {/if}
+      </div>
     {/if}
-    
+
     <div class="button-group">
       <button
         class="action-btn slow-btn"
@@ -95,6 +118,18 @@
   }
 
   .fps-text {
+    white-space: nowrap;
+  }
+
+  .stats-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .player-text {
     white-space: nowrap;
   }
 

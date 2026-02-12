@@ -24,7 +24,11 @@
   import { type PlayerState } from '../utils/movementUtils'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import { timeScale } from '../stores/timeStore'
-  import { debugVisible, cameraRotationEnabled } from '../stores/debugStore'
+  import {
+    debugVisible,
+    cameraRotationEnabled,
+    playerDebugInfo,
+  } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
 
   interface Props {
@@ -318,6 +322,16 @@
       const monsterLogicStart = performance.now()
       if (currentPlayer) {
         monsterManager.update(deltaTime, currentPlayer.position)
+        playerDebugInfo.set({
+          position: {
+            x: currentPlayer.position.x,
+            y: currentPlayer.position.y,
+            z: currentPlayer.position.z,
+          },
+          rotation: currentPlayerState.rotation,
+        })
+      } else {
+        playerDebugInfo.set(null)
       }
       if (loopProfileEnabled) {
         recordLoopProfile('monsterLogic', performance.now() - monsterLogicStart)
@@ -507,6 +521,7 @@
       networkManager.disconnect()
       monsterManager.reset()
       remotePlayerManager.reset()
+      playerDebugInfo.set(null)
       resetGameStore()
     }
   })
