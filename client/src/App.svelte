@@ -4,12 +4,19 @@
   import ChatPanel from './lib/components/ChatPanel.svelte'
   import FPSCounter from './lib/components/FPSCounter.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
+  import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { networkManager } from './lib/network/socket'
+  import {
+    networkManager,
+    type AccountCharacter,
+  } from './lib/network/socket'
 
-  let isLoggedIn = $state(false)
+  type AppScreen = 'login' | 'character-select' | 'game'
+  let screen = $state<AppScreen>('login')
   let serverUrl = $state('')
+  let accountName = $state('')
+  let accountCharacters = $state<AccountCharacter[]>([])
   let isPlayerDead = $state(false)
   let showRespawnDialog = $state(false)
   let wasPlayerDead = false
@@ -17,25 +24,52 @@
 
   async function handleLogin(
     url: string,
-    name: string,
+    account: string,
     pass: string,
     createAccount: boolean
   ): Promise<{ ok: boolean; message?: string }> {
     kickedMessage = ''
     const result = await networkManager.requestAuthentication(
       url,
-      name,
+      account,
       pass,
       createAccount
     )
 
     if (result.ok) {
       serverUrl = url
-      isLoggedIn = true
+      accountName = result.accountName ?? account
+      accountCharacters = result.characters ?? []
+      screen = 'character-select'
       return { ok: true }
     }
 
     return result
+  }
+
+  async function handleCreateCharacter(characterName: string) {
+    const result = await networkManager.requestCreateCharacter(characterName)
+    if (result.ok && result.character) {
+      accountCharacters = [...accountCharacters, result.character]
+    }
+    return result
+  }
+
+  async function handleStartGame(
+    characterId: number
+  ): Promise<{ ok: boolean; message?: string }> {
+    const result = await networkManager.requestEnterGame(characterId)
+    if (result.ok) {
+      screen = 'game'
+    }
+    return result
+  }
+
+  function handleLogoutToLogin() {
+    networkManager.disconnect()
+    accountName = ''
+    accountCharacters = []
+    screen = 'login'
   }
 
   function requestRespawn() {
@@ -49,12 +83,16 @@
 
   networkManager.onKicked((reason) => {
     kickedMessage = reason
-    isLoggedIn = false
+    accountName = ''
+    accountCharacters = []
+    screen = 'login'
   })
 
   gameStore.subscribe((state) => {
     const deadNow =
-      isLoggedIn && !!state.currentPlayer && state.currentPlayer.health <= 0
+      screen === 'game' &&
+      !!state.currentPlayer &&
+      state.currentPlayer.health <= 0
     if (deadNow && !wasPlayerDead) {
       showRespawnDialog = true
     }
@@ -67,7 +105,7 @@
 </script>
 
 <main>
-  {#if isLoggedIn}
+  {#if screen === 'game'}
     <div class="game-shell" class:dead={isPlayerDead}>
       <Canvas renderMode="always">
         <GameScene {serverUrl} />
@@ -83,6 +121,14 @@
         Respawn
       </button>
     {/if}
+  {:else if screen === 'character-select'}
+    <CharacterSelectScreen
+      {accountName}
+      characters={accountCharacters}
+      onCreateCharacter={handleCreateCharacter}
+      onStartGame={handleStartGame}
+      onLogout={handleLogoutToLogin}
+    />
   {:else}
     <LoginScreen onLogin={handleLogin} {kickedMessage} />
   {/if}

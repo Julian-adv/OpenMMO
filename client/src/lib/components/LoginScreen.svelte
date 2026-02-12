@@ -8,7 +8,7 @@
   interface Props {
     onLogin: (
       serverUrl: string,
-      playerName: string,
+      accountName: string,
       password: string,
       createAccount: boolean
     ) => Promise<{ ok: boolean; message?: string }>
@@ -18,7 +18,7 @@
   let { onLogin, kickedMessage }: Props = $props()
 
   let serverUrl = $state('ws://127.0.0.1:8080')
-  let playerName = $state('')
+  let accountName = $state('')
   let password = $state('')
   let isConnecting = $state(false)
   let pendingAction = $state<'login' | 'create'>('login')
@@ -31,7 +31,7 @@
     serverUrl = savedServerUrl || getDefaultServerUrl()
 
     if (savedPlayerName) {
-      playerName = savedPlayerName
+      accountName = savedPlayerName
     }
   })
 
@@ -40,8 +40,8 @@
       return 'Please enter server address'
     }
 
-    if (!playerName.trim()) {
-      return 'Please enter player name'
+    if (!accountName.trim()) {
+      return 'Please enter account name'
     }
 
     if (!password.trim()) {
@@ -64,7 +64,7 @@
 
     const result = await onLogin(
       serverUrl.trim(),
-      playerName.trim(),
+      accountName.trim(),
       password.trim(),
       createAccount
     )
@@ -77,7 +77,7 @@
 
     // Save to localStorage for next time
     localStorage.setItem(STORAGE_KEY_SERVER, serverUrl.trim())
-    localStorage.setItem(STORAGE_KEY_PLAYER, playerName.trim())
+    localStorage.setItem(STORAGE_KEY_PLAYER, accountName.trim())
   }
 
   function handleSubmit(event: Event) {
@@ -107,12 +107,12 @@
       </div>
 
       <div class="form-group">
-        <label for="playerName">Player Name</label>
+        <label for="playerName">Account Name</label>
         <input
           type="text"
           id="playerName"
-          bind:value={playerName}
-          placeholder="Enter your name"
+          bind:value={accountName}
+          placeholder="Enter your account"
           disabled={isConnecting}
         />
       </div>

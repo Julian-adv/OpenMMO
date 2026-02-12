@@ -8,22 +8,39 @@ pub struct AuthService {
     db_path: Arc<PathBuf>,
 }
 
+#[derive(Debug, Clone)]
+pub struct CharacterRecord {
+    pub id: i64,
+    pub name: String,
+    pub created_at: i64,
+}
+
 #[derive(Debug)]
 pub enum AuthError {
     InvalidInput(&'static str),
     AccountAlreadyExists,
     AccountNotFound,
     InvalidPassword,
+    InvalidCharacterName,
+    CharacterLimitReached,
+    CharacterNameAlreadyExists,
+    CharacterNotFound,
     Database(String),
 }
 
 impl AuthError {
     pub fn client_message(&self) -> &'static str {
         match self {
-            AuthError::InvalidInput(_) => "Player name and password are required",
+            AuthError::InvalidInput(_) => "Account name and password are required",
             AuthError::AccountAlreadyExists => "Account already exists",
             AuthError::AccountNotFound => "Account not found",
             AuthError::InvalidPassword => "Invalid password",
+            AuthError::InvalidCharacterName => "Character name is required",
+            AuthError::CharacterLimitReached => {
+                "A maximum of 3 characters can be created per account"
+            }
+            AuthError::CharacterNameAlreadyExists => "Character name already exists",
+            AuthError::CharacterNotFound => "Character not found",
             AuthError::Database(_) => "Server auth database error",
         }
     }
@@ -36,6 +53,12 @@ impl Display for AuthError {
             AuthError::AccountAlreadyExists => write!(f, "Account already exists"),
             AuthError::AccountNotFound => write!(f, "Account not found"),
             AuthError::InvalidPassword => write!(f, "Invalid password"),
+            AuthError::InvalidCharacterName => write!(f, "Character name is required"),
+            AuthError::CharacterLimitReached => {
+                write!(f, "A maximum of 3 characters can be created per account")
+            }
+            AuthError::CharacterNameAlreadyExists => write!(f, "Character name already exists"),
+            AuthError::CharacterNotFound => write!(f, "Character not found"),
             AuthError::Database(message) => write!(f, "Database error: {message}"),
         }
     }
@@ -44,12 +67,16 @@ impl Display for AuthError {
 impl std::error::Error for AuthError {}
 
 impl AuthService {
-    pub fn default_db_path() -> PathBuf {
+    fn data_dir() -> PathBuf {
         if Path::new("data").is_dir() {
-            Path::new("data").join("accounts.db")
+            PathBuf::from("data")
         } else {
-            Path::new("../data").join("accounts.db")
+            PathBuf::from("../data")
         }
+    }
+
+    pub fn default_db_path() -> PathBuf {
+        Self::data_dir().join("game_data.db")
     }
 
     pub fn new(db_path: PathBuf) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -58,6 +85,7 @@ impl AuthService {
         }
 
         let conn = Connection::open(&db_path)?;
+        conn.execute("PRAGMA foreign_keys = ON", [])?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS accounts (
                 player_name TEXT PRIMARY KEY,
@@ -66,10 +94,38 @@ impl AuthService {
             )",
             [],
         )?;
+        Self::ensure_characters_schema(&conn)?;
 
         Ok(Self {
             db_path: Arc::new(db_path),
         })
+    }
+
+    fn ensure_characters_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS characters (
+                id INTEGER PRIMARY KEY,
+                account_name TEXT NOT NULL,
+                character_name TEXT NOT NULL UNIQUE,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                FOREIGN KEY (account_name) REFERENCES accounts(player_name) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
+            [],
+        )?;
+
+        Ok(())
+    }
+
+    fn open_connection(&self) -> Result<Connection, AuthError> {
+        let conn = Connection::open(self.db_path.as_ref())
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        conn.execute("PRAGMA foreign_keys = ON", [])
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(conn)
     }
 
     pub fn authenticate(
@@ -87,8 +143,7 @@ impl AuthService {
             ));
         }
 
-        let conn = Connection::open(self.db_path.as_ref())
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let conn = self.open_connection()?;
 
         if create_account {
             self.create_account(&conn, player_name, password_hash)
@@ -145,5 +200,147 @@ impl AuthService {
             Some(hash) if hash == password_hash => Ok(()),
             Some(_) => Err(AuthError::InvalidPassword),
         }
+    }
+
+    pub fn list_characters(&self, account_name: &str) -> Result<Vec<CharacterRecord>, AuthError> {
+        let account_name = account_name.trim();
+        if account_name.is_empty() {
+            return Err(AuthError::InvalidInput("Account name is required"));
+        }
+
+        let conn = self.open_connection()?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT id, character_name, created_at
+                 FROM characters
+                 WHERE account_name = ?1
+                 ORDER BY created_at ASC, id ASC",
+            )
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+
+        let characters = stmt
+            .query_map(params![account_name], |row| {
+                Ok(CharacterRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    created_at: row.get(2)?,
+                })
+            })
+            .map_err(|e| AuthError::Database(e.to_string()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+
+        Ok(characters)
+    }
+
+    pub fn create_character(
+        &self,
+        account_name: &str,
+        character_name: &str,
+    ) -> Result<CharacterRecord, AuthError> {
+        let account_name = account_name.trim();
+        let character_name = character_name.trim();
+
+        if account_name.is_empty() {
+            return Err(AuthError::InvalidInput("Account name is required"));
+        }
+
+        if character_name.is_empty() {
+            return Err(AuthError::InvalidCharacterName);
+        }
+
+        let conn = self.open_connection()?;
+
+        let account_exists: Option<String> = conn
+            .query_row(
+                "SELECT player_name FROM accounts WHERE player_name = ?1",
+                params![account_name],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        if account_exists.is_none() {
+            return Err(AuthError::AccountNotFound);
+        }
+
+        let character_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM characters WHERE account_name = ?1",
+                params![account_name],
+                |row| row.get(0),
+            )
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        if character_count >= 3 {
+            return Err(AuthError::CharacterLimitReached);
+        }
+
+        let existing_character_name: Option<String> = conn
+            .query_row(
+                "SELECT character_name FROM characters WHERE character_name = ?1",
+                params![character_name],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+        if existing_character_name.is_some() {
+            return Err(AuthError::CharacterNameAlreadyExists);
+        }
+
+        conn.execute(
+            "INSERT INTO characters (account_name, character_name) VALUES (?1, ?2)",
+            params![account_name, character_name],
+        )
+        .map_err(|e| AuthError::Database(e.to_string()))?;
+
+        let id = conn.last_insert_rowid();
+        let created_at: i64 = conn
+            .query_row(
+                "SELECT created_at FROM characters WHERE id = ?1",
+                params![id],
+                |row| row.get(0),
+            )
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+
+        let character = CharacterRecord {
+            id,
+            name: character_name.to_string(),
+            created_at,
+        };
+
+        Ok(character)
+    }
+
+    pub fn get_character_for_account(
+        &self,
+        account_name: &str,
+        character_id: i64,
+    ) -> Result<CharacterRecord, AuthError> {
+        let account_name = account_name.trim();
+        if account_name.is_empty() {
+            return Err(AuthError::InvalidInput("Account name is required"));
+        }
+        if character_id <= 0 {
+            return Err(AuthError::CharacterNotFound);
+        }
+
+        let conn = self.open_connection()?;
+        let character = conn
+            .query_row(
+                "SELECT id, character_name, created_at
+                 FROM characters
+                 WHERE id = ?1 AND account_name = ?2",
+                params![character_id, account_name],
+                |row| {
+                    Ok(CharacterRecord {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                        created_at: row.get(2)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+
+        character.ok_or(AuthError::CharacterNotFound)
     }
 }

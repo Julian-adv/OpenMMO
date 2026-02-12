@@ -31,12 +31,25 @@ pub struct Monster {
     pub max_health: u32,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Character {
+    pub id: i64,
+    pub name: String,
+    pub created_at: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
-    Join {
-        player_name: String,
+    Authenticate {
+        account_name: String,
         password_hash: String,
         create_account: bool,
+    },
+    CreateCharacter {
+        character_name: String,
+    },
+    EnterGame {
+        character_id: i64,
     },
     PlayerMove {
         position: Position,
@@ -69,10 +82,20 @@ pub enum ClientMessage {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
+    AuthSuccess {
+        account_name: String,
+        characters: Vec<Character>,
+    },
     JoinSuccess {
         player: Player,
     },
     AuthError {
+        message: String,
+    },
+    CharacterCreated {
+        character: Character,
+    },
+    CharacterError {
         message: String,
     },
     PlayerJoined {
@@ -173,8 +196,7 @@ mod wasm_api {
     pub fn serialize_client_message(val: JsValue) -> Result<Vec<u8>, JsError> {
         let msg: ClientMessage = serde_wasm_bindgen::from_value(val)
             .map_err(|e| JsError::new(&format!("Invalid client message: {e}")))?;
-        rmp_serde::to_vec(&msg)
-            .map_err(|e| JsError::new(&format!("Serialization failed: {e}")))
+        rmp_serde::to_vec(&msg).map_err(|e| JsError::new(&format!("Serialization failed: {e}")))
     }
 
     #[wasm_bindgen]

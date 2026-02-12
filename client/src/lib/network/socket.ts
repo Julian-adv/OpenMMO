@@ -46,15 +46,23 @@ type ServerMonster = {
   max_health: number
 }
 
+export type AccountCharacter = {
+  id: number
+  name: string
+  created_at: number
+}
+
 // Serde externally tagged enum shapes
 type ClientMessage =
   | {
-      Join: {
-        player_name: string
+      Authenticate: {
+        account_name: string
         password_hash: string
         create_account: boolean
       }
     }
+  | { CreateCharacter: { character_name: string } }
+  | { EnterGame: { character_id: number } }
   | { PlayerMove: { position: Position; rotation: number } }
   | { ChatMessage: { message: string } }
   | {
@@ -79,8 +87,15 @@ type ClientMessage =
 
 type RespawnRequestedHandler = () => void
 type PlayerRespawnedHandler = (playerId: string) => void
-type AuthSuccessHandler = () => void
+type AuthSuccessPayload = {
+  accountName: string
+  characters: AccountCharacter[]
+}
+type AuthSuccessHandler = (payload: AuthSuccessPayload) => void
 type AuthErrorHandler = (message: string) => void
+type JoinSuccessHandler = () => void
+type CharacterCreatedHandler = (character: AccountCharacter) => void
+type CharacterErrorHandler = (message: string) => void
 type KickedHandler = (reason: string) => void
 
 class NetworkManager {
@@ -89,14 +104,18 @@ class NetworkManager {
   private maxReconnectAttempts = 5
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private lastServerUrl: string = ''
-  private lastPlayerName: string = ''
+  private lastAccountName: string = ''
   private lastPasswordHash: string = ''
   private lastCreateAccount = false
+  private lastCharacterId: number | null = null
   private wasmReady = false
   private respawnRequestedHandlers = new Set<RespawnRequestedHandler>()
   private playerRespawnedHandlers = new Set<PlayerRespawnedHandler>()
   private authSuccessHandlers = new Set<AuthSuccessHandler>()
   private authErrorHandlers = new Set<AuthErrorHandler>()
+  private joinSuccessHandlers = new Set<JoinSuccessHandler>()
+  private characterCreatedHandlers = new Set<CharacterCreatedHandler>()
+  private characterErrorHandlers = new Set<CharacterErrorHandler>()
   private kickedHandlers = new Set<KickedHandler>()
 
   async ensureWasm() {
@@ -126,6 +145,21 @@ class NetworkManager {
     return () => this.authErrorHandlers.delete(handler)
   }
 
+  onJoinSuccess(handler: JoinSuccessHandler) {
+    this.joinSuccessHandlers.add(handler)
+    return () => this.joinSuccessHandlers.delete(handler)
+  }
+
+  onCharacterCreated(handler: CharacterCreatedHandler) {
+    this.characterCreatedHandlers.add(handler)
+    return () => this.characterCreatedHandlers.delete(handler)
+  }
+
+  onCharacterError(handler: CharacterErrorHandler) {
+    this.characterErrorHandlers.add(handler)
+    return () => this.characterErrorHandlers.delete(handler)
+  }
+
   onKicked(handler: KickedHandler) {
     this.kickedHandlers.add(handler)
     return () => this.kickedHandlers.delete(handler)
@@ -139,12 +173,24 @@ class NetworkManager {
     this.playerRespawnedHandlers.forEach((handler) => handler(playerId))
   }
 
-  private emitAuthSuccess() {
-    this.authSuccessHandlers.forEach((handler) => handler())
+  private emitAuthSuccess(payload: AuthSuccessPayload) {
+    this.authSuccessHandlers.forEach((handler) => handler(payload))
   }
 
   private emitAuthError(message: string) {
     this.authErrorHandlers.forEach((handler) => handler(message))
+  }
+
+  private emitJoinSuccess() {
+    this.joinSuccessHandlers.forEach((handler) => handler())
+  }
+
+  private emitCharacterCreated(character: AccountCharacter) {
+    this.characterCreatedHandlers.forEach((handler) => handler(character))
+  }
+
+  private emitCharacterError(message: string) {
+    this.characterErrorHandlers.forEach((handler) => handler(message))
   }
 
   private emitKicked(reason: string) {
@@ -245,6 +291,15 @@ class NetworkManager {
     const data = raw[type]
 
     switch (type) {
+      case 'AuthSuccess': {
+        const characters = (data.characters as AccountCharacter[]) ?? []
+        this.emitAuthSuccess({
+          accountName: data.account_name,
+          characters,
+        })
+        break
+      }
+
       case 'AuthError': {
         console.warn('Authentication error:', data.message)
         this.emitAuthError(data.message)
@@ -269,7 +324,18 @@ class NetworkManager {
           ...state,
           currentPlayer: player,
         }))
-        this.emitAuthSuccess()
+        this.emitJoinSuccess()
+        break
+      }
+
+      case 'CharacterCreated': {
+        const character: AccountCharacter = data.character
+        this.emitCharacterCreated(character)
+        break
+      }
+
+      case 'CharacterError': {
+        this.emitCharacterError(data.message)
         break
       }
 
@@ -609,27 +675,58 @@ class NetworkManager {
     this.sendMessage({ ChatMessage: { message } })
   }
 
-  joinGame(playerName: string, password: string, createAccount: boolean) {
+  authenticate(accountName: string, password: string, createAccount: boolean) {
     const passwordHash = simplePasswordHash(password)
-    return this.joinGameWithHash(playerName, passwordHash, createAccount)
+    return this.authenticateWithHash(accountName, passwordHash, createAccount)
   }
 
-  private joinGameWithHash(
-    playerName: string,
+  private authenticateWithHash(
+    accountName: string,
     passwordHash: string,
     createAccount: boolean
   ) {
-    this.lastPlayerName = playerName
+    this.lastAccountName = accountName
     this.lastPasswordHash = passwordHash
     this.lastCreateAccount = createAccount
 
     if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
-      console.log('Sending join request for player:', playerName)
+      console.log('Sending authentication request for account:', accountName)
       const msg: ClientMessage = {
-        Join: {
-          player_name: playerName,
+        Authenticate: {
+          account_name: accountName,
           password_hash: passwordHash,
           create_account: createAccount,
+        },
+      }
+      const bytes = serialize_client_message(msg)
+      this.socket.send(bytes)
+      return true
+    }
+
+    return false
+  }
+
+  private sendCreateCharacter(characterName: string) {
+    if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
+      const msg: ClientMessage = {
+        CreateCharacter: {
+          character_name: characterName,
+        },
+      }
+      const bytes = serialize_client_message(msg)
+      this.socket.send(bytes)
+      return true
+    }
+
+    return false
+  }
+
+  private sendEnterGame(characterId: number) {
+    if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
+      this.lastCharacterId = characterId
+      const msg: ClientMessage = {
+        EnterGame: {
+          character_id: characterId,
         },
       }
       const bytes = serialize_client_message(msg)
@@ -669,10 +766,15 @@ class NetworkManager {
 
   async requestAuthentication(
     serverUrl: string,
-    playerName: string,
+    accountName: string,
     password: string,
     createAccount: boolean
-  ): Promise<{ ok: boolean; message?: string }> {
+  ): Promise<{
+    ok: boolean
+    message?: string
+    accountName?: string
+    characters?: AccountCharacter[]
+  }> {
     await this.ensureWasm()
     this.connect(serverUrl)
     const opened = await this.waitForSocketOpen(5000)
@@ -702,11 +804,15 @@ class NetworkManager {
         resolve({ ok: false, message: 'Authentication timed out' })
       }, 8000)
 
-      offSuccess = this.onAuthSuccess(() => {
+      offSuccess = this.onAuthSuccess((payload) => {
         if (settled) return
         settled = true
         cleanup()
-        resolve({ ok: true })
+        resolve({
+          ok: true,
+          accountName: payload.accountName,
+          characters: payload.characters,
+        })
       })
 
       offError = this.onAuthError((message) => {
@@ -716,7 +822,131 @@ class NetworkManager {
         resolve({ ok: false, message })
       })
 
-      const sent = this.joinGame(playerName, password, createAccount)
+      const sent = this.authenticate(accountName, password, createAccount)
+      if (!sent && !settled) {
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Socket is not connected' })
+      }
+    })
+  }
+
+  async requestCreateCharacter(
+    characterName: string
+  ): Promise<{ ok: boolean; message?: string; character?: AccountCharacter }> {
+    await this.ensureWasm()
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      return { ok: false, message: 'Socket is not connected' }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let offCreated: () => void = () => {}
+      let offCharacterError: () => void = () => {}
+      let offAuthError: () => void = () => {}
+
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        offCreated()
+        offCharacterError()
+        offAuthError()
+      }
+
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Character creation timed out' })
+      }, 8000)
+
+      offCreated = this.onCharacterCreated((character) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: true, character })
+      })
+
+      offCharacterError = this.onCharacterError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      offAuthError = this.onAuthError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      const sent = this.sendCreateCharacter(characterName)
+      if (!sent && !settled) {
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Socket is not connected' })
+      }
+    })
+  }
+
+  async requestEnterGame(
+    characterId: number
+  ): Promise<{ ok: boolean; message?: string }> {
+    await this.ensureWasm()
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      return { ok: false, message: 'Socket is not connected' }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let offJoin: () => void = () => {}
+      let offCharacterError: () => void = () => {}
+      let offAuthError: () => void = () => {}
+
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        offJoin()
+        offCharacterError()
+        offAuthError()
+      }
+
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Game entry timed out' })
+      }, 8000)
+
+      offJoin = this.onJoinSuccess(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: true })
+      })
+
+      offCharacterError = this.onCharacterError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      offAuthError = this.onAuthError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      const sent = this.sendEnterGame(characterId)
       if (!sent && !settled) {
         settled = true
         cleanup()
@@ -746,7 +976,7 @@ class NetworkManager {
     }
   }
 
-  reconnect() {
+  async reconnect() {
     console.log('Manual reconnection requested. Resetting state...')
     this.disconnect()
     resetGameStore()
@@ -754,20 +984,68 @@ class NetworkManager {
     remotePlayerManager.reset()
 
     const serverUrl = this.lastServerUrl
-    const playerName = this.lastPlayerName
+    const accountName = this.lastAccountName
     const passwordHash = this.lastPasswordHash
     const createAccount = this.lastCreateAccount
+    const characterId = this.lastCharacterId
+    if (!serverUrl || !accountName || !passwordHash || !characterId) {
+      console.warn('Reconnect skipped: missing account or character context')
+      return
+    }
 
+    await this.ensureWasm()
     this.connect(serverUrl)
+    const opened = await this.waitForSocketOpen(5000)
+    if (!opened) {
+      console.warn('Reconnect failed: socket open timeout')
+      return
+    }
 
-    const checkInterval = setInterval(() => {
-      if (this.socket?.readyState === WebSocket.OPEN) {
-        clearInterval(checkInterval)
-        this.joinGameWithHash(playerName, passwordHash, createAccount)
+    let settled = false
+    let timeout: ReturnType<typeof setTimeout> | null = null
+    let offSuccess: () => void = () => {}
+    let offError: () => void = () => {}
+
+    const cleanup = () => {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = null
       }
-    }, 100)
+      offSuccess()
+      offError()
+    }
 
-    setTimeout(() => clearInterval(checkInterval), 5000)
+    timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      console.warn('Reconnect auth timed out')
+    }, 8000)
+
+    offSuccess = this.onAuthSuccess(() => {
+      if (settled) return
+      settled = true
+      cleanup()
+      this.sendEnterGame(characterId)
+    })
+
+    offError = this.onAuthError((message) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      console.warn('Reconnect auth failed:', message)
+    })
+
+    const sent = this.authenticateWithHash(
+      accountName,
+      passwordHash,
+      createAccount
+    )
+    if (!sent && !settled) {
+      settled = true
+      cleanup()
+      console.warn('Reconnect failed: socket is not connected')
+    }
   }
 }
 

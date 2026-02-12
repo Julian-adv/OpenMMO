@@ -1,6 +1,6 @@
 use crate::auth::AuthService;
 use crate::game_state::GameState;
-use crate::types::{new_player, ClientMessage, PlayerId, ServerMessage};
+use crate::types::{new_player, Character, ClientMessage, PlayerId, ServerMessage};
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
 use std::sync::Arc;
@@ -26,6 +26,7 @@ pub async fn handle_connection(
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let mut game_receiver = game_state.subscribe();
+    let mut account_name: Option<String> = None;
     let mut player_id: Option<PlayerId> = None;
     let mut direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>> = None;
 
@@ -39,6 +40,7 @@ pub async fn handle_connection(
                             &bytes,
                             &game_state,
                             &auth_service,
+                            &mut account_name,
                             &mut player_id,
                             &mut direct_rx,
                         )
@@ -152,55 +154,156 @@ async fn handle_client_message(
     message: &[u8],
     game_state: &Arc<GameState>,
     auth_service: &Arc<AuthService>,
+    account_name: &mut Option<String>,
     player_id: &mut Option<PlayerId>,
     direct_rx: &mut Option<mpsc::UnboundedReceiver<ServerMessage>>,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = deserialize_client_msg(message)?;
 
     match client_msg {
-        ClientMessage::Join {
-            player_name,
+        ClientMessage::Authenticate {
+            account_name: requested_account_name,
             password_hash,
             create_account,
         } => {
-            if player_id.is_some() {
-                warn!("Player already joined, ignoring join request");
-                return Ok(vec![]);
+            if account_name.is_some() {
+                warn!("Client is already authenticated");
+                return Ok(vec![ServerMessage::AuthError {
+                    message: "Already authenticated".to_string(),
+                }]);
             }
 
             if let Err(auth_err) =
-                auth_service.authenticate(&player_name, &password_hash, create_account)
+                auth_service.authenticate(&requested_account_name, &password_hash, create_account)
             {
                 warn!(
-                    "Auth failed for player '{}', create_account={}: {}",
-                    player_name, create_account, auth_err
+                    "Auth failed for account '{}', create_account={}: {}",
+                    requested_account_name, create_account, auth_err
                 );
                 return Ok(vec![ServerMessage::AuthError {
                     message: auth_err.client_message().to_string(),
                 }]);
             }
 
-            // Kick any existing player with the same name
-            game_state.kick_player_by_name(&player_name).await;
+            let character_records = match auth_service.list_characters(&requested_account_name) {
+                Ok(characters) => characters,
+                Err(err) => {
+                    warn!(
+                        "Failed to load character list for account '{}': {}",
+                        requested_account_name, err
+                    );
+                    return Ok(vec![ServerMessage::AuthError {
+                        message: err.client_message().to_string(),
+                    }]);
+                }
+            };
 
-            let player = new_player(player_name);
+            let characters = character_records
+                .into_iter()
+                .map(character_record_to_shared)
+                .collect::<Vec<Character>>();
+
+            *account_name = Some(requested_account_name.clone());
+
+            info!(
+                "Account '{}' authenticated successfully with {} character(s)",
+                requested_account_name,
+                characters.len()
+            );
+            return Ok(vec![ServerMessage::AuthSuccess {
+                account_name: requested_account_name,
+                characters,
+            }]);
+        }
+
+        ClientMessage::CreateCharacter { character_name } => {
+            if player_id.is_some() {
+                warn!("CreateCharacter ignored because client is already in game");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Cannot create character while in game".to_string(),
+                }]);
+            }
+
+            let Some(authed_account_name) = account_name.clone() else {
+                warn!("Character creation requested by unauthenticated client");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Authenticate first".to_string(),
+                }]);
+            };
+
+            match auth_service.create_character(&authed_account_name, &character_name) {
+                Ok(character) => {
+                    info!(
+                        "Character '{}' created for account '{}'",
+                        character.name, authed_account_name
+                    );
+                    return Ok(vec![ServerMessage::CharacterCreated {
+                        character: character_record_to_shared(character),
+                    }]);
+                }
+                Err(err) => {
+                    warn!(
+                        "Character create failed for account '{}': {}",
+                        authed_account_name, err
+                    );
+                    return Ok(vec![ServerMessage::CharacterError {
+                        message: err.client_message().to_string(),
+                    }]);
+                }
+            }
+        }
+
+        ClientMessage::EnterGame { character_id } => {
+            if player_id.is_some() {
+                warn!("Client already entered game, ignoring EnterGame request");
+                return Ok(vec![]);
+            }
+
+            let Some(authed_account_name) = account_name.clone() else {
+                warn!("EnterGame requested by unauthenticated client");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Authenticate first".to_string(),
+                }]);
+            };
+
+            let selected_character =
+                match auth_service.get_character_for_account(&authed_account_name, character_id) {
+                    Ok(character) => character,
+                    Err(err) => {
+                        warn!(
+                            "EnterGame failed for account '{}': {}",
+                            authed_account_name, err
+                        );
+                        return Ok(vec![ServerMessage::CharacterError {
+                            message: err.client_message().to_string(),
+                        }]);
+                    }
+                };
+
+            // Enforced unique character names allow name-based session replacement.
+            game_state
+                .kick_player_by_name(&selected_character.name)
+                .await;
+
+            let player = new_player(selected_character.name.clone());
             let id = player.id.clone();
 
-            // Register direct channel for this player
             *direct_rx = Some(game_state.register_direct_channel(&id).await);
 
-            // Send join_success directly to this client
             let mut responses = vec![ServerMessage::JoinSuccess {
                 player: player.clone(),
             }];
 
-            // add_player returns game_state if there are other players
             if let Some(game_state_msg) = game_state.add_player(player).await {
                 responses.push(game_state_msg);
             }
+
             *player_id = Some(id);
 
-            info!("Player joined with ID: {:?}", player_id);
+            info!(
+                "Account '{}' entered game as character '{}' with player ID {:?}",
+                authed_account_name, selected_character.name, player_id
+            );
             return Ok(responses);
         }
 
@@ -210,7 +313,7 @@ async fn handle_client_message(
                     .update_player_position(id, position, rotation)
                     .await;
             } else {
-                warn!("Received move from unauthenticated client");
+                warn!("Received move from client that is not in game");
             }
         }
 
@@ -218,7 +321,7 @@ async fn handle_client_message(
             if let Some(id) = player_id {
                 game_state.send_chat_message(id, message).await;
             } else {
-                warn!("Received chat message from unauthenticated client");
+                warn!("Received chat message from client that is not in game");
             }
         }
 
@@ -232,7 +335,7 @@ async fn handle_client_message(
                     .spawn_monster(monster_type, position, rotation, Some(id.clone()))
                     .await;
             } else {
-                warn!("Received spawn request from unauthenticated client");
+                warn!("Received spawn request from client that is not in game");
             }
         }
 
@@ -248,7 +351,7 @@ async fn handle_client_message(
                     .update_monster_position(monster_id, position, rotation, state, target_position)
                     .await;
             } else {
-                warn!("Received monster move from unauthenticated client");
+                warn!("Received monster move from client that is not in game");
             }
         }
 
@@ -256,7 +359,7 @@ async fn handle_client_message(
             if let Some(id) = player_id {
                 game_state.broadcast_player_attack(id, monster_id).await;
             } else {
-                warn!("Received attack from unauthenticated client");
+                warn!("Received attack from client that is not in game");
             }
         }
 
@@ -269,7 +372,7 @@ async fn handle_client_message(
                     .broadcast_monster_attack(&monster_id, &target_player_id)
                     .await;
             } else {
-                warn!("Received monster attack from unauthenticated client");
+                warn!("Received monster attack from client that is not in game");
             }
         }
 
@@ -277,10 +380,18 @@ async fn handle_client_message(
             if let Some(id) = player_id {
                 game_state.respawn_player(id).await;
             } else {
-                warn!("Received respawn request from unauthenticated client");
+                warn!("Received respawn request from client that is not in game");
             }
         }
     }
 
     Ok(vec![])
+}
+
+fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character {
+    Character {
+        id: record.id,
+        name: record.name,
+        created_at: record.created_at,
+    }
 }

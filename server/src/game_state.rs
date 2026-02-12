@@ -96,8 +96,7 @@ impl GameState {
                 player_id,
                 ServerMessage::Kicked {
                     player_id: player_id.clone(),
-                    reason: "Another session logged in with the same account"
-                        .to_string(),
+                    reason: "Another session logged in with the same account".to_string(),
                 },
             )
             .await;
