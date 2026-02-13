@@ -275,6 +275,41 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::DeleteCharacter { character_id } => {
+            if player_id.is_some() {
+                warn!("DeleteCharacter ignored because client is already in game");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Cannot delete character while in game".to_string(),
+                }]);
+            }
+
+            let Some(authed_account_name) = account_name.clone() else {
+                warn!("Character deletion requested by unauthenticated client");
+                return Ok(vec![ServerMessage::CharacterError {
+                    message: "Authenticate first".to_string(),
+                }]);
+            };
+
+            match auth_service.delete_character(&authed_account_name, character_id) {
+                Ok(()) => {
+                    info!(
+                        "Character id={} deleted for account '{}'",
+                        character_id, authed_account_name
+                    );
+                    return Ok(vec![ServerMessage::CharacterDeleted { character_id }]);
+                }
+                Err(err) => {
+                    warn!(
+                        "Character delete failed for account '{}': {}",
+                        authed_account_name, err
+                    );
+                    return Ok(vec![ServerMessage::CharacterError {
+                        message: err.client_message().to_string(),
+                    }]);
+                }
+            }
+        }
+
         ClientMessage::RollCharacterStats => {
             if player_id.is_some() {
                 warn!("RollCharacterStats ignored because client is already in game");

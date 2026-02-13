@@ -72,6 +72,7 @@ type ClientMessage =
       }
     }
   | { CreateCharacter: { character_name: string } }
+  | { DeleteCharacter: { character_id: number } }
   | 'RollCharacterStats'
   | { EnterGame: { character_id: number } }
   | { PlayerMove: { position: Position; rotation: number } }
@@ -107,6 +108,7 @@ type AuthErrorHandler = (message: string) => void
 type JoinSuccessHandler = () => void
 type CharacterCreatedHandler = (character: AccountCharacter) => void
 type CharacterStatsRolledHandler = (attributes: CharacterAttributes) => void
+type CharacterDeletedHandler = (characterId: number) => void
 type CharacterErrorHandler = (message: string) => void
 type KickedHandler = (reason: string) => void
 
@@ -128,6 +130,7 @@ class NetworkManager {
   private joinSuccessHandlers = new Set<JoinSuccessHandler>()
   private characterCreatedHandlers = new Set<CharacterCreatedHandler>()
   private characterStatsRolledHandlers = new Set<CharacterStatsRolledHandler>()
+  private characterDeletedHandlers = new Set<CharacterDeletedHandler>()
   private characterErrorHandlers = new Set<CharacterErrorHandler>()
   private kickedHandlers = new Set<KickedHandler>()
 
@@ -173,6 +176,11 @@ class NetworkManager {
     return () => this.characterStatsRolledHandlers.delete(handler)
   }
 
+  onCharacterDeleted(handler: CharacterDeletedHandler) {
+    this.characterDeletedHandlers.add(handler)
+    return () => this.characterDeletedHandlers.delete(handler)
+  }
+
   onCharacterError(handler: CharacterErrorHandler) {
     this.characterErrorHandlers.add(handler)
     return () => this.characterErrorHandlers.delete(handler)
@@ -209,6 +217,10 @@ class NetworkManager {
 
   private emitCharacterStatsRolled(attributes: CharacterAttributes) {
     this.characterStatsRolledHandlers.forEach((handler) => handler(attributes))
+  }
+
+  private emitCharacterDeleted(characterId: number) {
+    this.characterDeletedHandlers.forEach((handler) => handler(characterId))
   }
 
   private emitCharacterError(message: string) {
@@ -359,6 +371,11 @@ class NetworkManager {
       case 'CharacterStatsRolled': {
         const attributes: CharacterAttributes = data.attributes
         this.emitCharacterStatsRolled(attributes)
+        break
+      }
+
+      case 'CharacterDeleted': {
+        this.emitCharacterDeleted(data.character_id)
         break
       }
 
@@ -749,6 +766,21 @@ class NetworkManager {
     return false
   }
 
+  private sendDeleteCharacter(characterId: number) {
+    if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
+      const msg: ClientMessage = {
+        DeleteCharacter: {
+          character_id: characterId,
+        },
+      }
+      const bytes = serialize_client_message(msg)
+      this.socket.send(bytes)
+      return true
+    }
+
+    return false
+  }
+
   private sendRollCharacterStats() {
     if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
       const bytes = serialize_client_message('RollCharacterStats')
@@ -923,6 +955,68 @@ class NetworkManager {
       })
 
       const sent = this.sendCreateCharacter(characterName)
+      if (!sent && !settled) {
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Socket is not connected' })
+      }
+    })
+  }
+
+  async requestDeleteCharacter(
+    characterId: number
+  ): Promise<{ ok: boolean; message?: string }> {
+    await this.ensureWasm()
+    if (this.socket?.readyState !== WebSocket.OPEN) {
+      return { ok: false, message: 'Socket is not connected' }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let offDeleted: () => void = () => {}
+      let offCharacterError: () => void = () => {}
+      let offAuthError: () => void = () => {}
+
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        offDeleted()
+        offCharacterError()
+        offAuthError()
+      }
+
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Character deletion timed out' })
+      }, 8000)
+
+      offDeleted = this.onCharacterDeleted(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: true })
+      })
+
+      offCharacterError = this.onCharacterError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      offAuthError = this.onAuthError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      const sent = this.sendDeleteCharacter(characterId)
       if (!sent && !settled) {
         settled = true
         cleanup()

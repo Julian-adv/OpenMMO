@@ -60,6 +60,9 @@ pub enum ClientMessage {
         character_name: String,
     },
     RollCharacterStats,
+    DeleteCharacter {
+        character_id: i64,
+    },
     EnterGame {
         character_id: i64,
     },
@@ -109,6 +112,9 @@ pub enum ServerMessage {
     },
     CharacterStatsRolled {
         attributes: CharacterAttributes,
+    },
+    CharacterDeleted {
+        character_id: i64,
     },
     CharacterError {
         message: String,

@@ -390,6 +390,30 @@ impl AuthService {
         Ok(character)
     }
 
+    pub fn delete_character(&self, account_name: &str, character_id: i64) -> Result<(), AuthError> {
+        let account_name = account_name.trim();
+        if account_name.is_empty() {
+            return Err(AuthError::InvalidInput("Account name is required"));
+        }
+        if character_id <= 0 {
+            return Err(AuthError::CharacterNotFound);
+        }
+
+        let conn = self.open_connection()?;
+        let rows_affected = conn
+            .execute(
+                "DELETE FROM characters WHERE id = ?1 AND account_name = ?2",
+                params![character_id, account_name],
+            )
+            .map_err(|e| AuthError::Database(e.to_string()))?;
+
+        if rows_affected == 0 {
+            return Err(AuthError::CharacterNotFound);
+        }
+
+        Ok(())
+    }
+
     pub fn get_character_for_account(
         &self,
         account_name: &str,
