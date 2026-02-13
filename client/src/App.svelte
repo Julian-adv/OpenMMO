@@ -55,6 +55,14 @@
     return result
   }
 
+  async function handleDeleteCharacter(characterId: number) {
+    const result = await networkManager.requestDeleteCharacter(characterId)
+    if (result.ok) {
+      accountCharacters = accountCharacters.filter((c) => c.id !== characterId)
+    }
+    return result
+  }
+
   async function handleRollCharacterStats() {
     return networkManager.requestRollCharacterStats()
   }
@@ -132,6 +140,7 @@
       onRollCharacterStats={handleRollCharacterStats}
       onCreateCharacter={handleCreateCharacter}
       onStartGame={handleStartGame}
+      onDeleteCharacter={handleDeleteCharacter}
       onLogout={handleLogoutToLogin}
     />
   {:else}

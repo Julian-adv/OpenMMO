@@ -15,6 +15,9 @@
       characterName: string
     ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
     onStartGame: (characterId: number) => Promise<{ ok: boolean; message?: string }>
+    onDeleteCharacter: (
+      characterId: number
+    ) => Promise<{ ok: boolean; message?: string }>
     onLogout: () => void
   }
 
@@ -24,6 +27,7 @@
     onRollCharacterStats,
     onCreateCharacter,
     onStartGame,
+    onDeleteCharacter,
     onLogout,
   }: Props = $props()
 
@@ -34,10 +38,11 @@
   let isCreating = $state(false)
   let isRolling = $state(false)
   let isStarting = $state(false)
+  let isDeleting = $state(false)
   let errorMessage = $state('')
 
   function isBusy() {
-    return isCreating || isRolling || isStarting
+    return isCreating || isRolling || isStarting || isDeleting
   }
 
   $effect(() => {
@@ -131,6 +136,27 @@
 
     if (!result.ok) {
       errorMessage = result.message ?? 'Failed to enter game'
+    }
+  }
+
+  async function handleDelete() {
+    if (!selectedCharacterId || isBusy()) return
+
+    const character = characters.find((c) => c.id === selectedCharacterId)
+    if (!character) return
+
+    const confirmed = confirm(
+      `Are you sure you want to delete "${character.name}"? This cannot be undone.`
+    )
+    if (!confirmed) return
+
+    isDeleting = true
+    errorMessage = ''
+    const result = await onDeleteCharacter(selectedCharacterId)
+    isDeleting = false
+
+    if (!result.ok) {
+      errorMessage = result.message ?? 'Failed to delete character'
     }
   }
 </script>
@@ -228,6 +254,14 @@
           disabled={!selectedCharacterId || isBusy()}
         >
           {isStarting ? 'Starting...' : 'Start'}
+        </button>
+        <button
+          type="button"
+          class="danger"
+          onclick={handleDelete}
+          disabled={!selectedCharacterId || isBusy()}
+        >
+          {isDeleting ? 'Deleting...' : 'Delete'}
         </button>
         <button
           type="button"
@@ -381,7 +415,7 @@
 
   .actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 10px;
   }
 
@@ -403,6 +437,12 @@
     border: 1px solid #61738a;
     background: #1c2736;
     color: #dbe6f2;
+  }
+
+  .danger {
+    border: 1px solid #b04040;
+    background: #3a1a1a;
+    color: #ffa0a0;
   }
 
   .error-message {
