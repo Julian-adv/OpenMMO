@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { Canvas } from '@threlte/core'
   import type { AccountCharacter, CharacterAttributes } from '../network/socket'
+  import CharacterSelectScene from './CharacterSelectScene.svelte'
 
   const MAX_CHARACTER_SLOTS = 3
 
@@ -161,205 +163,313 @@
   }
 </script>
 
-<div class="character-select-container">
-  <div class="character-select-panel">
-    <h1 class="title">Character Select</h1>
-    <p class="account-name">Account: {accountName}</p>
+<div class="character-select-screen">
+  <!-- 3D Canvas Layer -->
+  <div class="canvas-layer">
+    <Canvas>
+      <CharacterSelectScene {characters} {selectedCharacterId} />
+    </Canvas>
+  </div>
+
+  <!-- HTML Overlay Layer -->
+  <div class="overlay-layer">
+    <div class="top-bar">
+      <h1 class="title">Character Select</h1>
+      <p class="account-name">Account: {accountName}</p>
+    </div>
 
     {#if viewMode === 'select'}
-      <div class="slots">
+      <div class="character-columns">
         {#each [0, 1, 2] as slotIndex (slotIndex)}
           {@const character = characters[slotIndex]}
           <button
             type="button"
-            class="slot"
+            class="character-column"
             class:selected={character?.id === selectedCharacterId}
             class:empty={!character}
             onclick={() => handleSlotClick(slotIndex)}
             disabled={isBusy()}
           >
             {#if character}
-              <div class="slot-name">{character.name}</div>
-              <div class="slot-stats">
-                STR {character.attributes.str} DEX {character.attributes.dex} CON {character.attributes.con} INT {character.attributes.int} WIS {character.attributes.wis} CHA {character.attributes.cha}
+              <div class="char-name">{character.name}</div>
+              <div class="char-stats">
+                <span class="stat">STR {character.attributes.str}</span>
+                <span class="stat">DEX {character.attributes.dex}</span>
+                <span class="stat">CON {character.attributes.con}</span>
+                <span class="stat">INT {character.attributes.int}</span>
+                <span class="stat">WIS {character.attributes.wis}</span>
+                <span class="stat">CHA {character.attributes.cha}</span>
               </div>
             {:else}
-              <div class="slot-empty">+ Create Character</div>
+              <div class="empty-slot">+ Create</div>
             {/if}
           </button>
         {/each}
       </div>
-    {:else}
-      <form class="create-form" onsubmit={submitCreateCharacter}>
-        <label for="characterName">Character Name</label>
-        <input
-          id="characterName"
-          type="text"
-          bind:value={createCharacterName}
-          maxlength={24}
-          placeholder="Enter character name"
-          disabled={isBusy()}
-        />
 
-        <div class="rolled-attributes">
-          {#if rolledAttributes}
-            <div class="attr">STR {rolledAttributes.str}</div>
-            <div class="attr">DEX {rolledAttributes.dex}</div>
-            <div class="attr">CON {rolledAttributes.con}</div>
-            <div class="attr">INT {rolledAttributes.int}</div>
-            <div class="attr">WIS {rolledAttributes.wis}</div>
-            <div class="attr">CHA {rolledAttributes.cha}</div>
-          {:else}
-            <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
-          {/if}
-        </div>
-
-        <div class="create-actions">
-          <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
-            {isRolling ? 'Rolling...' : 'Roll'}
+      <div class="bottom-bar">
+        {#if errorMessage}
+          <div class="error-message">{errorMessage}</div>
+        {/if}
+        <div class="actions">
+          <button
+            type="button"
+            class="primary"
+            onclick={handleStart}
+            disabled={!selectedCharacterId || isBusy()}
+          >
+            {isStarting ? 'Starting...' : 'Start'}
           </button>
           <button
-            type="submit"
-            class="primary"
-            disabled={isBusy() || !rolledAttributes}
+            type="button"
+            class="danger"
+            onclick={handleDelete}
+            disabled={!selectedCharacterId || isBusy()}
           >
-            {isCreating ? 'Creating...' : 'Create'}
+            {isDeleting ? 'Deleting...' : 'Delete'}
           </button>
           <button
             type="button"
             class="secondary"
+            onclick={onLogout}
             disabled={isBusy()}
-            onclick={() => {
-              viewMode = 'select'
-              rolledAttributes = null
-              errorMessage = ''
-            }}
           >
-            Cancel
+            Back
           </button>
         </div>
-      </form>
-    {/if}
-
-    {#if errorMessage}
-      <div class="error-message">{errorMessage}</div>
-    {/if}
-
-    {#if viewMode === 'select'}
-      <div class="actions">
-        <button
-          type="button"
-          class="primary"
-          onclick={handleStart}
-          disabled={!selectedCharacterId || isBusy()}
-        >
-          {isStarting ? 'Starting...' : 'Start'}
-        </button>
-        <button
-          type="button"
-          class="danger"
-          onclick={handleDelete}
-          disabled={!selectedCharacterId || isBusy()}
-        >
-          {isDeleting ? 'Deleting...' : 'Delete'}
-        </button>
-        <button
-          type="button"
-          class="secondary"
-          onclick={onLogout}
-          disabled={isBusy()}
-        >
-          Back
-        </button>
       </div>
     {/if}
   </div>
+
+  <!-- Create Mode Modal Overlay -->
+  {#if viewMode === 'create'}
+    <div class="create-overlay">
+      <div class="create-panel">
+        <h2 class="create-title">Create Character</h2>
+        <form class="create-form" onsubmit={submitCreateCharacter}>
+          <label for="characterName">Character Name</label>
+          <input
+            id="characterName"
+            type="text"
+            bind:value={createCharacterName}
+            maxlength={24}
+            placeholder="Enter character name"
+            disabled={isBusy()}
+          />
+
+          <div class="rolled-attributes">
+            {#if rolledAttributes}
+              <div class="attr">STR {rolledAttributes.str}</div>
+              <div class="attr">DEX {rolledAttributes.dex}</div>
+              <div class="attr">CON {rolledAttributes.con}</div>
+              <div class="attr">INT {rolledAttributes.int}</div>
+              <div class="attr">WIS {rolledAttributes.wis}</div>
+              <div class="attr">CHA {rolledAttributes.cha}</div>
+            {:else}
+              <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
+            {/if}
+          </div>
+
+          {#if errorMessage}
+            <div class="error-message">{errorMessage}</div>
+          {/if}
+
+          <div class="create-actions">
+            <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
+              {isRolling ? 'Rolling...' : 'Roll'}
+            </button>
+            <button
+              type="submit"
+              class="primary"
+              disabled={isBusy() || !rolledAttributes}
+            >
+              {isCreating ? 'Creating...' : 'Create'}
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              disabled={isBusy()}
+              onclick={() => {
+                viewMode = 'select'
+                rolledAttributes = null
+                errorMessage = ''
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
-  .character-select-container {
+  .character-select-screen {
     position: fixed;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background: linear-gradient(140deg, #0f1621 0%, #1e2d43 55%, #263a58 100%);
   }
 
-  .character-select-panel {
-    width: min(460px, calc(100vw - 32px));
-    border-radius: 12px;
-    background: rgba(6, 10, 16, 0.88);
-    border: 1px solid #45556b;
-    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45);
-    padding: 28px;
+  .canvas-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  .overlay-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    justify-content: space-between;
+    pointer-events: none;
     color: #edf2f7;
+  }
+
+  .top-bar {
+    text-align: center;
+    padding: 32px 16px 0;
   }
 
   .title {
     margin: 0;
-    font-size: 26px;
-    text-align: center;
+    font-size: 28px;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
   }
 
   .account-name {
-    margin: 0;
-    text-align: center;
+    margin: 6px 0 0;
     color: #9fb0c6;
     font-size: 13px;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   }
 
-  .slots {
-    display: grid;
-    gap: 10px;
+  .character-columns {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 0 10%;
+    margin-top: auto;
+    padding-bottom: 16px;
   }
 
-  .slot {
-    width: 100%;
-    min-height: 66px;
-    border-radius: 8px;
-    border: 1px solid #53657b;
-    background: #141e2c;
+  .character-column {
+    flex: 1;
+    max-width: 200px;
+    min-height: 100px;
+    border-radius: 10px;
+    border: 1px solid rgba(83, 101, 123, 0.5);
+    background: rgba(20, 30, 44, 0.6);
     color: #f7fafc;
-    text-align: left;
-    padding: 12px 14px;
+    text-align: center;
+    padding: 14px 12px;
+    pointer-events: auto;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
     transition:
       border-color 0.18s,
       background-color 0.18s;
   }
 
-  .slot:hover:not(:disabled) {
+  .character-column:hover:not(:disabled) {
     border-color: #6fa3ff;
-    background: #1a2940;
+    background: rgba(26, 41, 64, 0.7);
   }
 
-  .slot.selected {
+  .character-column.selected {
     border-color: #7cc9ff;
-    background: #223552;
+    background: rgba(34, 53, 82, 0.7);
   }
 
-  .slot.empty {
+  .character-column.empty {
     color: #9fb0c6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
-  .slot-name {
-    font-size: 16px;
+  .character-column:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .char-name {
+    font-size: 15px;
     font-weight: 600;
+    margin-bottom: 8px;
   }
 
-  .slot-stats {
-    margin-top: 6px;
-    font-size: 12px;
+  .char-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 8px;
+  }
+
+  .stat {
+    font-size: 11px;
     color: #a7b7ca;
-    line-height: 1.4;
   }
 
-  .slot-empty {
+  .empty-slot {
     font-size: 14px;
     font-weight: 500;
+  }
+
+  .bottom-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 0 16px 32px;
+    pointer-events: auto;
+  }
+
+  .actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .actions button {
+    min-width: 100px;
+    border-radius: 7px;
+    padding: 10px 20px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  .actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* Create overlay */
+  .create-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
+
+  .create-panel {
+    width: min(420px, calc(100vw - 32px));
+    border-radius: 12px;
+    background: rgba(6, 10, 16, 0.92);
+    border: 1px solid #45556b;
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45);
+    padding: 24px;
+    color: #edf2f7;
+  }
+
+  .create-title {
+    margin: 0 0 16px;
+    font-size: 20px;
+    text-align: center;
   }
 
   .create-form {
@@ -413,19 +523,19 @@
     gap: 10px;
   }
 
-  .actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-  }
-
-  .create-actions button,
-  .actions button {
+  .create-actions button {
     border-radius: 7px;
     padding: 10px 12px;
     font-size: 14px;
+    cursor: pointer;
   }
 
+  .create-actions button:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  /* Shared button styles */
   .primary {
     border: none;
     background: #2c7be5;
@@ -452,5 +562,7 @@
     background: rgba(175, 45, 45, 0.2);
     color: #ffd2d2;
     font-size: 13px;
+    max-width: 400px;
+    text-align: center;
   }
 </style>
