@@ -166,7 +166,7 @@
 <div class="character-select-screen">
   <!-- 3D Canvas Layer -->
   <div class="canvas-layer">
-    <Canvas>
+    <Canvas shadows>
       <CharacterSelectScene {characters} {selectedCharacterId} />
     </Canvas>
   </div>

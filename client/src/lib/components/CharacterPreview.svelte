@@ -4,22 +4,25 @@
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import { onMount } from 'svelte'
-  import { SvelteSet } from 'svelte/reactivity'
   import { ANIMATION_ORDER, AnimationIndex } from '../types/animations'
 
   interface Props {
     positionX: number
+    positionY: number
+    positionZ: number
     selected: boolean
   }
 
-  let { positionX, selected }: Props = $props()
-
+  let { positionX, positionY, positionZ, selected }: Props = $props()
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
   let validAnimations = $state<THREE.AnimationClip[]>([])
+  let spotlightRef = $state<THREE.SpotLight | undefined>(undefined)
+  let fillSpotlightRef = $state<THREE.SpotLight | undefined>(undefined)
+  let spotlightTarget = $state<THREE.Object3D | undefined>(undefined)
   const OVERLAP_BEFORE_END = 0.3
 
   function playIdleAnimation() {
@@ -39,7 +42,7 @@
     newAction.reset()
     newAction.loop = THREE.LoopOnce
     newAction.clampWhenFinished = true
-    newAction.paused = false
+    newAction.paused = !selected
 
     if (currentAction && newAction !== currentAction) {
       newAction.crossFadeFrom(currentAction, 0.3, true)
@@ -49,51 +52,59 @@
     currentAction = newAction
   }
 
-  function setupModel() {
-    if ($gltf && !mixer && !modelRoot) {
-      const cloned = SkeletonUtils.clone($gltf.scene)
-      const newModelRoot = new THREE.Group()
-      newModelRoot.add(cloned)
+  function setupModel(sourceScene: THREE.Object3D, animations: THREE.AnimationClip[]) {
+    if (mixer || modelRoot) return
 
-      newModelRoot.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true
-          child.receiveShadow = true
-        }
-      })
+    const scene = SkeletonUtils.clone(sourceScene)
+    const newModelRoot = new THREE.Group()
+    newModelRoot.add(scene)
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const animations: THREE.AnimationClip[] = ($gltf as any).animations || []
-
-      const modelNodeNames = new SvelteSet()
-      cloned.traverse((obj) => {
-        if (obj.name) modelNodeNames.add(obj.name)
-      })
-
-      validAnimations = ANIMATION_ORDER.map((targetName) => {
-        const foundClip = animations.find((clip) => clip.name === targetName)
-        return foundClip ?? animations[0]
-      })
-
-      if (validAnimations.length > 0) {
-        mixer = new THREE.AnimationMixer(newModelRoot)
-        playIdleAnimation()
+    newModelRoot.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true
+        child.receiveShadow = true
       }
+    })
 
-      modelRoot = newModelRoot
+    validAnimations = ANIMATION_ORDER.map((targetName) => {
+      const foundClip = animations.find((clip) => clip.name === targetName)
+      return foundClip ?? animations[0]
+    })
+
+    if (validAnimations.length > 0) {
+      mixer = new THREE.AnimationMixer(newModelRoot)
+      playIdleAnimation()
     }
+
+    modelRoot = newModelRoot
   }
 
-  onMount(() => {
-    const checkGltf = () => {
-      if ($gltf) {
-        setupModel()
-      } else {
-        setTimeout(checkGltf, 100)
-      }
-    }
-    checkGltf()
+  $effect(() => {
+    if (!$gltf) return
+    const animations = $gltf.animations ?? []
+    setupModel($gltf.scene, animations)
+  })
 
+  $effect(() => {
+    if (!mixer || !currentAction) return
+
+    if (selected) {
+      currentAction.paused = false
+      return
+    }
+
+    currentAction.paused = true
+    currentAction.time = 0
+    mixer.setTime(0)
+  })
+
+  $effect(() => {
+    if (!spotlightTarget) return
+    if (spotlightRef) spotlightRef.target = spotlightTarget
+    if (fillSpotlightRef) fillSpotlightRef.target = spotlightTarget
+  })
+
+  onMount(() => {
     return () => {
       if (mixer) {
         mixer.stopAllAction()
@@ -104,7 +115,7 @@
   })
 
   useTask((delta) => {
-    if (!mixer || !currentAction) return
+    if (!selected || !mixer || !currentAction) return
 
     mixer.update(delta)
 
@@ -119,15 +130,40 @@
 </script>
 
 {#if modelRoot}
-  <T.Group position={[positionX, 0, 0]}>
+  <T.Group position={[positionX, positionY, positionZ]}>
     <T is={modelRoot} />
   </T.Group>
+  <T.Object3D
+    position={[positionX, positionY + 0.9, positionZ]}
+    bind:ref={spotlightTarget}
+  />
   {#if selected}
-    <T.PointLight
-      position={[positionX, 2.5, 1]}
-      intensity={1.5}
-      color="#7cc9ff"
-      distance={5}
+    <T.SpotLight
+      bind:ref={spotlightRef}
+      position={[positionX, positionY + 4.0, positionZ + 1.2]}
+      intensity={9.0}
+      angle={0.34}
+      penumbra={0.22}
+      distance={14}
+      decay={1.2}
+      color="#ffffff"
+      castShadow
+      shadow.mapSize.width={2048}
+      shadow.mapSize.height={2048}
+      shadow.camera.near={0.5}
+      shadow.camera.far={18}
+      shadow.bias={-0.0002}
+      shadow.normalBias={0.02}
+    />
+    <T.SpotLight
+      bind:ref={fillSpotlightRef}
+      position={[positionX, positionY + 2.5, positionZ + 3.1]}
+      intensity={3.4}
+      angle={0.52}
+      penumbra={0.8}
+      distance={12}
+      decay={1.2}
+      color="#fff2d8"
     />
   {/if}
 {/if}

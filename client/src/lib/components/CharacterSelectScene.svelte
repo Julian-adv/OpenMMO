@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { T } from '@threlte/core'
+  import { T, useThrelte } from '@threlte/core'
   import * as THREE from 'three'
+  import { onMount } from 'svelte'
   import type { AccountCharacter } from '../network/socket'
   import CharacterPreview from './CharacterPreview.svelte'
 
@@ -11,38 +12,130 @@
 
   let { characters, selectedCharacterId }: Props = $props()
 
-  const SLOT_POSITIONS = [-3, 0, 3]
+  const SLOT_SPACING = 1.8
+  const SLOT_POSITIONS = [-SLOT_SPACING, 0, SLOT_SPACING]
+  const SLOT_DEPTH = 2.5
+  const SLOT_DISC_RADIUS = 0.76
+  const SLOT_DISC_THICKNESS = 0.1
+  const SLOT_DISC_Y = SLOT_DISC_THICKNESS / 2 + 0.002
+  const CHARACTER_Y_OFFSET = SLOT_DISC_THICKNESS
+  const PLATFORM_MARGIN_X = 2.8
+  const PLATFORM_MARGIN_Z_FRONT = 3.2
+  const PLATFORM_MARGIN_Z_BACK = 4.2
+  const PLATFORM_SCALE = 2
+  const BASE_PLATFORM_WIDTH = SLOT_SPACING * 2 + PLATFORM_MARGIN_X * 2
+  const BASE_PLATFORM_DEPTH =
+    PLATFORM_MARGIN_Z_FRONT + PLATFORM_MARGIN_Z_BACK + SLOT_DEPTH
+  const PLATFORM_WIDTH = BASE_PLATFORM_WIDTH * PLATFORM_SCALE
+  const PLATFORM_DEPTH = BASE_PLATFORM_DEPTH * PLATFORM_SCALE
+  const PLATFORM_CENTER_Z = (SLOT_DEPTH + PLATFORM_MARGIN_Z_FRONT - PLATFORM_MARGIN_Z_BACK) / 2
+  const CAMERA_FOV = 45
+  const CAMERA_POSITION_Y = 1.5
+  const CAMERA_LOOK_AT_Y = 0.8
+  const CHARACTER_HALF_WIDTH = 1.0
+  const CHARACTER_HALF_HEIGHT = 1.8
+  const CAMERA_FIT_PADDING = 1.1
+  const AMBIENT_INTENSITY = 0.12
+  const KEY_LIGHT_INTENSITY = 0.05
+  const FILL_LIGHT_INTENSITY = 0.48
+
+  const { size } = useThrelte()
+  let viewportSize = $state({ width: 1, height: 1 })
+  let cameraPositionZ = $state(8)
 
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
 
+  onMount(() => {
+    const unsubscribe = size.subscribe((nextSize) => {
+      viewportSize = nextSize
+    })
+    return unsubscribe
+  })
+
+  function calculateCameraPositionZ(width: number, height: number) {
+    const safeWidth = Math.max(1, width)
+    const safeHeight = Math.max(1, height)
+    const aspect = safeWidth / safeHeight
+
+    const halfVerticalFov = THREE.MathUtils.degToRad(CAMERA_FOV / 2)
+    const halfHorizontalFov = Math.atan(Math.tan(halfVerticalFov) * aspect)
+
+    const halfSpanX = SLOT_SPACING + CHARACTER_HALF_WIDTH
+    const fitDistanceByWidth = halfSpanX / Math.tan(halfHorizontalFov)
+    const fitDistanceByHeight = CHARACTER_HALF_HEIGHT / Math.tan(halfVerticalFov)
+    const offsetZ = Math.max(fitDistanceByWidth, fitDistanceByHeight) * CAMERA_FIT_PADDING
+
+    return SLOT_DEPTH + offsetZ
+  }
+
   $effect(() => {
+    cameraPositionZ = calculateCameraPositionZ(viewportSize.width, viewportSize.height)
+
     if (cameraRef) {
-      cameraRef.lookAt(0, 0.8, 0)
+      cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, SLOT_DEPTH)
     }
   })
 </script>
 
 <T.PerspectiveCamera
   makeDefault
-  position={[0, 1.5, 6]}
-  fov={45}
+  position={[0, CAMERA_POSITION_Y, cameraPositionZ]}
+  fov={CAMERA_FOV}
   bind:ref={cameraRef}
 />
 
-<T.AmbientLight intensity={0.5} />
-<T.DirectionalLight position={[5, 8, 5]} intensity={1.2} />
-<T.DirectionalLight position={[-3, 6, -2]} intensity={0.4} color="#8899cc" />
+<T.AmbientLight intensity={AMBIENT_INTENSITY} />
+<T.DirectionalLight
+  position={[5, 8, 5]}
+  intensity={KEY_LIGHT_INTENSITY}
+  castShadow
+  shadow.camera.left={-8}
+  shadow.camera.right={8}
+  shadow.camera.top={8}
+  shadow.camera.bottom={-8}
+  shadow.camera.near={0.5}
+  shadow.camera.far={24}
+  shadow.mapSize.width={1024}
+  shadow.mapSize.height={1024}
+  shadow.bias={-0.00025}
+  shadow.normalBias={0.02}
+/>
+<T.DirectionalLight
+  position={[-3, 6, -2]}
+  intensity={FILL_LIGHT_INTENSITY}
+  color="#8899cc"
+/>
 
-<T.Mesh rotation.x={-Math.PI / 2} position.y={-0.01} receiveShadow>
-  <T.PlaneGeometry args={[12, 6]} />
+<T.Mesh
+  rotation.x={-Math.PI / 2}
+  position={[0, -0.01, PLATFORM_CENTER_Z]}
+  receiveShadow
+>
+  <T.PlaneGeometry args={[PLATFORM_WIDTH, PLATFORM_DEPTH]} />
   <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent />
 </T.Mesh>
 
 {#each [0, 1, 2] as slotIndex (slotIndex)}
   {@const character = characters[slotIndex]}
+  <T.Mesh
+    position={[SLOT_POSITIONS[slotIndex], SLOT_DISC_Y, SLOT_DEPTH]}
+    receiveShadow
+  >
+    <T.CylinderGeometry
+      args={[SLOT_DISC_RADIUS, SLOT_DISC_RADIUS, SLOT_DISC_THICKNESS, 40]}
+    />
+    <T.MeshStandardMaterial
+      color="#2f3f52"
+      opacity={1.0}
+      transparent
+    />
+  </T.Mesh>
+
   {#if character}
     <CharacterPreview
       positionX={SLOT_POSITIONS[slotIndex]}
+      positionY={CHARACTER_Y_OFFSET}
+      positionZ={SLOT_DEPTH}
       selected={character.id === selectedCharacterId}
     />
   {/if}
