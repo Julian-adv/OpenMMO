@@ -7,6 +7,7 @@
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
+  import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
   import { networkManager, type AccountCharacter } from './lib/network/socket'
 
@@ -16,6 +17,9 @@
   let accountName = $state('')
   let accountCharacters = $state<AccountCharacter[]>([])
   let selectedCharacterId = $state<number | null>(null)
+  let selectedCharacter = $derived<AccountCharacter | null>(
+    accountCharacters.find((character) => character.id === selectedCharacterId) ?? null
+  )
   let isPlayerDead = $state(false)
   let showRespawnDialog = $state(false)
   let wasPlayerDead = false
@@ -161,6 +165,9 @@
       </Canvas>
       <ChatPanel />
       <FPSCounter />
+      {#if selectedCharacter}
+        <CharacterAttributesHud attributes={selectedCharacter.attributes} />
+      {/if}
     </div>
 
     {#if showRespawnDialog}
@@ -239,4 +246,5 @@
     bottom: 16px;
     z-index: 31;
   }
+
 </style>
