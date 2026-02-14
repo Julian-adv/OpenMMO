@@ -13,7 +13,7 @@ export type ClickIntent =
   | { type: 'none' }
 
 export interface RaycastContext {
-  camera: THREE.PerspectiveCamera
+  camera: THREE.Camera
   monsterMeshes: THREE.Group[]
   groundMeshes: THREE.Mesh[]
   playerPosition: Position

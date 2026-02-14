@@ -6,7 +6,7 @@
 
   interface Props {
     position: Vector3
-    camera: THREE.PerspectiveCamera | undefined
+    camera: THREE.Camera | undefined
     message: string
   }
 

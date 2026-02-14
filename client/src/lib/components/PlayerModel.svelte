@@ -24,7 +24,7 @@
     speed: number
     rotation: number
     movementMode?: MovementMode
-    camera: THREE.PerspectiveCamera | undefined
+    camera: THREE.Camera | undefined
     chatBubble?: string
     onAttackDuration?: (duration: number) => void
     lastDamageInfo?: PlayerDamageInfo

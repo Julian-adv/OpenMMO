@@ -20,7 +20,7 @@
 
   interface Props {
     onStateChange: (state: PlayerState) => void
-    camera: THREE.PerspectiveCamera
+    camera: THREE.Camera
     groundMeshes: THREE.Mesh[]
     monsterMeshes: THREE.Group[]
     attackCooldown?: number

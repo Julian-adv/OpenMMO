@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { T } from '@threlte/core'
+  import { T, useThrelte } from '@threlte/core'
   import { OrbitControls, Grid } from '@threlte/extras'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
@@ -40,7 +40,7 @@
   let currentPlayer = $state<LocalPlayer | null>(null)
   let otherPlayers = $state<Map<string, RemotePlayer>>(new Map())
   let chatBubbles = $state<Map<string, ChatBubble>>(new Map())
-  let camera = $state<THREE.PerspectiveCamera | undefined>(undefined)
+  let camera = $state<THREE.OrthographicCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
@@ -60,13 +60,22 @@
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
 
-  // Initial camera position relative to player (Distance 10, 45 degree pitch)
-  const INITIAL_DISTANCE = 10
-  const INITIAL_PITCH = Math.PI / 4
+  // Isometric camera defaults
+  const INITIAL_DISTANCE = 16
+  const INITIAL_PITCH = Math.atan(1 / Math.sqrt(2))
+  const INITIAL_YAW = -Math.PI / 4
+  const ORTHOGRAPHIC_FRUSTUM_HEIGHT = 20
+  const ORTHOGRAPHIC_FRUSTUM_VERTICAL_OFFSET = 0
+  const ORTHOGRAPHIC_DEFAULT_ZOOM = 1
+
+  const { size } = useThrelte()
+  let viewportSize = $state({ width: 1, height: 1 })
+
+  const horizontalDistance = INITIAL_DISTANCE * Math.cos(INITIAL_PITCH)
   const CAMERA_OFFSET = {
-    x: 0,
+    x: horizontalDistance * Math.sin(INITIAL_YAW),
     y: INITIAL_DISTANCE * Math.sin(INITIAL_PITCH),
-    z: INITIAL_DISTANCE * Math.cos(INITIAL_PITCH),
+    z: horizontalDistance * Math.cos(INITIAL_YAW),
   }
 
   // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
@@ -94,14 +103,34 @@
     const dz = camera.position.z - playerPos.z
     const currentDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
 
+    const currentHorizontalDistance = currentDistance * Math.cos(INITIAL_PITCH)
     camera.position.set(
-      playerPos.x,
+      playerPos.x + currentHorizontalDistance * Math.sin(INITIAL_YAW),
       playerPos.y + currentDistance * Math.sin(INITIAL_PITCH),
-      playerPos.z + currentDistance * Math.cos(INITIAL_PITCH)
+      playerPos.z + currentHorizontalDistance * Math.cos(INITIAL_YAW)
     )
     camera.lookAt(playerPos.x, playerPos.y, playerPos.z)
     cameraTarget = [playerPos.x, playerPos.y, playerPos.z]
   }
+
+  function updateOrthographicFrustum() {
+    if (!camera) return
+
+    const aspect = Math.max(1, viewportSize.width) / Math.max(1, viewportSize.height)
+    const halfHeight = ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2
+    const halfWidth = halfHeight * aspect
+    camera.left = -halfWidth
+    camera.right = halfWidth
+    camera.top = halfHeight - ORTHOGRAPHIC_FRUSTUM_VERTICAL_OFFSET
+    camera.bottom = -halfHeight - ORTHOGRAPHIC_FRUSTUM_VERTICAL_OFFSET
+    camera.near = 0.1
+    camera.far = 500
+    camera.updateProjectionMatrix()
+  }
+
+  $effect(() => {
+    updateOrthographicFrustum()
+  })
 
   // Light follow system - offset relative to player
   const LIGHT_OFFSET = { x: 10, y: 10, z: 10 }
@@ -430,13 +459,8 @@
       z: currentCameraPos.z - playerPos.z,
     }
 
-    // Calculate and update camera distance
-    const distance = Math.sqrt(
-      distanceVector.x * distanceVector.x +
-        distanceVector.y * distanceVector.y +
-        distanceVector.z * distanceVector.z
-    )
-    cameraDistance.set(distance)
+    // Update camera "zoom metric" for debug UI.
+    cameraDistance.set(camera.zoom)
 
     return distanceVector
   }
@@ -485,12 +509,9 @@
       currentPlayer.position.z,
     ]
 
-    const initialDistance = Math.sqrt(
-      CAMERA_OFFSET.x * CAMERA_OFFSET.x +
-        CAMERA_OFFSET.y * CAMERA_OFFSET.y +
-        CAMERA_OFFSET.z * CAMERA_OFFSET.z
-    )
-    cameraDistance.set(initialDistance)
+    camera.zoom = ORTHOGRAPHIC_DEFAULT_ZOOM
+    camera.updateProjectionMatrix()
+    cameraDistance.set(camera.zoom)
   }
 
   function updateLightPosition() {
@@ -528,6 +549,10 @@
     loopProfileEnabled = false
     resetLoopProfileWindow(performance.now())
 
+    const unsubscribeViewportSize = size.subscribe((nextSize) => {
+      viewportSize = nextSize
+    })
+
     const unsubscribeCameraReset = cameraResetNonce.subscribe((nonce) => {
       // Ignore initial store emission; only react to explicit reset requests.
       if (nonce > 0) {
@@ -564,6 +589,7 @@
     }, 1100)
 
     return () => {
+      unsubscribeViewportSize()
       unsubscribeCameraReset()
       stopGameLoop()
       stopChatBubbleChecker()
@@ -578,16 +604,20 @@
   })
 </script>
 
-<T.PerspectiveCamera bind:ref={camera} makeDefault fov={75}>
+<T.OrthographicCamera
+  bind:ref={camera}
+  makeDefault
+  zoom={ORTHOGRAPHIC_DEFAULT_ZOOM}
+>
   <OrbitControls
     enableRotate={$cameraRotationEnabled}
     enablePan={false}
     enableZoom={true}
     target={cameraTarget}
-    minDistance={5}
-    maxDistance={20}
+    minZoom={1}
+    maxZoom={2}
   />
-</T.PerspectiveCamera>
+</T.OrthographicCamera>
 
 <T.DirectionalLight
   bind:ref={directionalLight}
