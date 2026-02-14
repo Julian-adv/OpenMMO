@@ -5,22 +5,37 @@
   import FPSCounter from './lib/components/FPSCounter.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
+  import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import {
-    networkManager,
-    type AccountCharacter,
-  } from './lib/network/socket'
+  import { networkManager, type AccountCharacter } from './lib/network/socket'
 
-  type AppScreen = 'login' | 'character-select' | 'game'
+  type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
   let screen = $state<AppScreen>('login')
   let serverUrl = $state('')
   let accountName = $state('')
   let accountCharacters = $state<AccountCharacter[]>([])
+  let selectedCharacterId = $state<number | null>(null)
   let isPlayerDead = $state(false)
   let showRespawnDialog = $state(false)
   let wasPlayerDead = false
   let kickedMessage = $state('')
+
+  $effect(() => {
+    if (selectedCharacterId === null) {
+      if (accountCharacters.length > 0) {
+        selectedCharacterId = accountCharacters[0].id
+      }
+      return
+    }
+
+    const selectedStillExists = accountCharacters.some(
+      (character) => character.id === selectedCharacterId
+    )
+    if (!selectedStillExists) {
+      selectedCharacterId = accountCharacters.length > 0 ? accountCharacters[0].id : null
+    }
+  })
 
   async function handleLogin(
     url: string,
@@ -37,9 +52,11 @@
     )
 
     if (result.ok) {
+      const characters = result.characters ?? []
       serverUrl = url
       accountName = result.accountName ?? account
-      accountCharacters = result.characters ?? []
+      accountCharacters = characters
+      selectedCharacterId = characters.length > 0 ? characters[0].id : null
       screen = 'character-select'
       return { ok: true }
     }
@@ -77,10 +94,29 @@
     return result
   }
 
+  function handleOpenCreateCharacterScreen() {
+    if (accountCharacters.length >= 3) return
+    screen = 'character-create'
+  }
+
+  function handleCancelCreateCharacter() {
+    screen = 'character-select'
+  }
+
+  function handleCharacterCreated(characterId: number) {
+    selectedCharacterId = characterId
+    screen = 'character-select'
+  }
+
+  function handleSelectCharacter(characterId: number) {
+    selectedCharacterId = characterId
+  }
+
   function handleLogoutToLogin() {
     networkManager.disconnect()
     accountName = ''
     accountCharacters = []
+    selectedCharacterId = null
     screen = 'login'
   }
 
@@ -97,6 +133,7 @@
     kickedMessage = reason
     accountName = ''
     accountCharacters = []
+    selectedCharacterId = null
     screen = 'login'
   })
 
@@ -137,11 +174,21 @@
     <CharacterSelectScreen
       {accountName}
       characters={accountCharacters}
-      onRollCharacterStats={handleRollCharacterStats}
-      onCreateCharacter={handleCreateCharacter}
+      {selectedCharacterId}
+      onSelectCharacter={handleSelectCharacter}
+      onRequestCreateCharacter={handleOpenCreateCharacterScreen}
       onStartGame={handleStartGame}
       onDeleteCharacter={handleDeleteCharacter}
       onLogout={handleLogoutToLogin}
+    />
+  {:else if screen === 'character-create'}
+    <CharacterCreateScreen
+      {accountName}
+      characters={accountCharacters}
+      onRollCharacterStats={handleRollCharacterStats}
+      onCreateCharacter={handleCreateCharacter}
+      onCharacterCreated={handleCharacterCreated}
+      onCancel={handleCancelCreateCharacter}
     />
   {:else}
     <LoginScreen onLogin={handleLogin} {kickedMessage} />

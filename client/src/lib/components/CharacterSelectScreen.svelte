@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core'
-  import type { AccountCharacter, CharacterAttributes } from '../network/socket'
+  import type { AccountCharacter } from '../network/socket'
   import CharacterSelectScene from './CharacterSelectScene.svelte'
 
   const MAX_CHARACTER_SLOTS = 3
@@ -8,14 +8,9 @@
   interface Props {
     accountName: string
     characters: AccountCharacter[]
-    onRollCharacterStats: () => Promise<{
-      ok: boolean
-      message?: string
-      attributes?: CharacterAttributes
-    }>
-    onCreateCharacter: (
-      characterName: string
-    ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
+    selectedCharacterId: number | null
+    onSelectCharacter: (characterId: number) => void
+    onRequestCreateCharacter: () => void
     onStartGame: (characterId: number) => Promise<{ ok: boolean; message?: string }>
     onDeleteCharacter: (
       characterId: number
@@ -26,38 +21,21 @@
   let {
     accountName,
     characters,
-    onRollCharacterStats,
-    onCreateCharacter,
+    selectedCharacterId,
+    onSelectCharacter,
+    onRequestCreateCharacter,
     onStartGame,
     onDeleteCharacter,
     onLogout,
   }: Props = $props()
 
-  let selectedCharacterId = $state<number | null>(null)
-  let createCharacterName = $state('')
-  let rolledAttributes = $state<CharacterAttributes | null>(null)
-  let viewMode = $state<'select' | 'create'>('select')
-  let isCreating = $state(false)
-  let isRolling = $state(false)
   let isStarting = $state(false)
   let isDeleting = $state(false)
   let errorMessage = $state('')
 
   function isBusy() {
-    return isCreating || isRolling || isStarting || isDeleting
+    return isStarting || isDeleting
   }
-
-  $effect(() => {
-    const selectedStillExists = selectedCharacterId
-      ? characters.some((character) => character.id === selectedCharacterId)
-      : false
-    if (!selectedStillExists) {
-      selectedCharacterId = characters.length > 0 ? characters[0].id : null
-    }
-    if (characters.length >= MAX_CHARACTER_SLOTS && viewMode === 'create') {
-      viewMode = 'select'
-    }
-  })
 
   function handleSlotClick(slotIndex: number) {
     if (isBusy()) return
@@ -65,8 +43,7 @@
     const character = characters[slotIndex]
     errorMessage = ''
     if (character) {
-      selectedCharacterId = character.id
-      viewMode = 'select'
+      onSelectCharacter(character.id)
       return
     }
 
@@ -75,57 +52,7 @@
       return
     }
 
-    createCharacterName = ''
-    rolledAttributes = null
-    viewMode = 'create'
-  }
-
-  async function handleRoll() {
-    if (isBusy()) return
-
-    isRolling = true
-    errorMessage = ''
-    const result = await onRollCharacterStats()
-    isRolling = false
-
-    if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to roll character attributes'
-      return
-    }
-
-    rolledAttributes = result.attributes ?? null
-  }
-
-  async function submitCreateCharacter(event: Event) {
-    event.preventDefault()
-    if (isBusy()) return
-
-    const characterName = createCharacterName.trim()
-    if (!characterName) {
-      errorMessage = 'Please enter character name'
-      return
-    }
-    if (!rolledAttributes) {
-      errorMessage = 'Roll attributes first'
-      return
-    }
-
-    isCreating = true
-    errorMessage = ''
-    const result = await onCreateCharacter(characterName)
-    isCreating = false
-
-    if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to create character'
-      return
-    }
-
-    if (result.character) {
-      selectedCharacterId = result.character.id
-    }
-    createCharacterName = ''
-    rolledAttributes = null
-    viewMode = 'select'
+    onRequestCreateCharacter()
   }
 
   async function handleStart() {
@@ -164,144 +91,78 @@
 </script>
 
 <div class="character-select-screen">
-  <!-- 3D Canvas Layer -->
   <div class="canvas-layer">
     <Canvas shadows>
       <CharacterSelectScene {characters} {selectedCharacterId} />
     </Canvas>
   </div>
 
-  <!-- HTML Overlay Layer -->
   <div class="overlay-layer">
     <div class="top-bar">
       <h1 class="title">Character Select</h1>
       <p class="account-name">Account: {accountName}</p>
     </div>
 
-    {#if viewMode === 'select'}
-      <div class="character-columns">
-        {#each [0, 1, 2] as slotIndex (slotIndex)}
-          {@const character = characters[slotIndex]}
-          <button
-            type="button"
-            class="character-column"
-            class:selected={character?.id === selectedCharacterId}
-            class:empty={!character}
-            onclick={() => handleSlotClick(slotIndex)}
-            disabled={isBusy()}
-          >
-            {#if character}
-              <div class="char-name">{character.name}</div>
-              <div class="char-stats">
-                <span class="stat">STR {character.attributes.str}</span>
-                <span class="stat">DEX {character.attributes.dex}</span>
-                <span class="stat">CON {character.attributes.con}</span>
-                <span class="stat">INT {character.attributes.int}</span>
-                <span class="stat">WIS {character.attributes.wis}</span>
-                <span class="stat">CHA {character.attributes.cha}</span>
-              </div>
-            {:else}
-              <div class="empty-slot">+ Create</div>
-            {/if}
-          </button>
-        {/each}
-      </div>
-
-      <div class="bottom-bar">
-        {#if errorMessage}
-          <div class="error-message">{errorMessage}</div>
-        {/if}
-        <div class="actions">
-          <button
-            type="button"
-            class="primary"
-            onclick={handleStart}
-            disabled={!selectedCharacterId || isBusy()}
-          >
-            {isStarting ? 'Starting...' : 'Start'}
-          </button>
-          <button
-            type="button"
-            class="danger"
-            onclick={handleDelete}
-            disabled={!selectedCharacterId || isBusy()}
-          >
-            {isDeleting ? 'Deleting...' : 'Delete'}
-          </button>
-          <button
-            type="button"
-            class="secondary"
-            onclick={onLogout}
-            disabled={isBusy()}
-          >
-            Back
-          </button>
-        </div>
-      </div>
-    {/if}
-  </div>
-
-  <!-- Create Mode Modal Overlay -->
-  {#if viewMode === 'create'}
-    <div class="create-overlay">
-      <div class="create-panel">
-        <h2 class="create-title">Create Character</h2>
-        <form class="create-form" onsubmit={submitCreateCharacter}>
-          <label for="characterName">Character Name</label>
-          <input
-            id="characterName"
-            type="text"
-            bind:value={createCharacterName}
-            maxlength={24}
-            placeholder="Enter character name"
-            disabled={isBusy()}
-          />
-
-          <div class="rolled-attributes">
-            {#if rolledAttributes}
-              <div class="attr">STR {rolledAttributes.str}</div>
-              <div class="attr">DEX {rolledAttributes.dex}</div>
-              <div class="attr">CON {rolledAttributes.con}</div>
-              <div class="attr">INT {rolledAttributes.int}</div>
-              <div class="attr">WIS {rolledAttributes.wis}</div>
-              <div class="attr">CHA {rolledAttributes.cha}</div>
-            {:else}
-              <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
-            {/if}
-          </div>
-
-          {#if errorMessage}
-            <div class="error-message">{errorMessage}</div>
+    <div class="character-columns">
+      {#each [0, 1, 2] as slotIndex (slotIndex)}
+        {@const character = characters[slotIndex]}
+        <button
+          type="button"
+          class="character-column"
+          class:selected={character?.id === selectedCharacterId}
+          class:empty={!character}
+          onclick={() => handleSlotClick(slotIndex)}
+          disabled={isBusy()}
+        >
+          {#if character}
+            <div class="char-name">{character.name}</div>
+            <div class="char-stats">
+              <span class="stat">STR {character.attributes.str}</span>
+              <span class="stat">DEX {character.attributes.dex}</span>
+              <span class="stat">CON {character.attributes.con}</span>
+              <span class="stat">INT {character.attributes.int}</span>
+              <span class="stat">WIS {character.attributes.wis}</span>
+              <span class="stat">CHA {character.attributes.cha}</span>
+            </div>
+          {:else}
+            <div class="empty-slot">+ Create</div>
           {/if}
+        </button>
+      {/each}
+    </div>
 
-          <div class="create-actions">
-            <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
-              {isRolling ? 'Rolling...' : 'Roll'}
-            </button>
-            <button
-              type="submit"
-              class="primary"
-              disabled={isBusy() || !rolledAttributes}
-            >
-              {isCreating ? 'Creating...' : 'Create'}
-            </button>
-            <button
-              type="button"
-              class="secondary"
-              disabled={isBusy()}
-              onclick={() => {
-                viewMode = 'select'
-                rolledAttributes = null
-                errorMessage = ''
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
+    <div class="bottom-bar">
+      {#if errorMessage}
+        <div class="error-message">{errorMessage}</div>
+      {/if}
+      <div class="actions">
+        <button
+          type="button"
+          class="primary"
+          onclick={handleStart}
+          disabled={!selectedCharacterId || isBusy()}
+        >
+          {isStarting ? 'Starting...' : 'Start'}
+        </button>
+        <button
+          type="button"
+          class="danger"
+          onclick={handleDelete}
+          disabled={!selectedCharacterId || isBusy()}
+        >
+          {isDeleting ? 'Deleting...' : 'Delete'}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          onclick={onLogout}
+          disabled={isBusy()}
+        >
+          Back
+        </button>
       </div>
     </div>
-  {/if}
+  </div>
 </div>
 
 <style>
@@ -444,98 +305,6 @@
     cursor: default;
   }
 
-  /* Create overlay */
-  .create-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(2px);
-  }
-
-  .create-panel {
-    width: min(420px, calc(100vw - 32px));
-    border-radius: 12px;
-    background: rgba(6, 10, 16, 0.92);
-    border: 1px solid #45556b;
-    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45);
-    padding: 24px;
-    color: #edf2f7;
-  }
-
-  .create-title {
-    margin: 0 0 16px;
-    font-size: 20px;
-    text-align: center;
-  }
-
-  .create-form {
-    display: grid;
-    gap: 10px;
-  }
-
-  .create-form label {
-    font-size: 13px;
-    color: #b8c6d9;
-  }
-
-  .create-form input {
-    border: 1px solid #526276;
-    border-radius: 7px;
-    padding: 10px 12px;
-    background: #111923;
-    color: #f7fafc;
-    font-size: 14px;
-  }
-
-  .rolled-attributes {
-    border: 1px solid #45556b;
-    border-radius: 8px;
-    background: rgba(16, 24, 35, 0.9);
-    padding: 10px;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    min-height: 54px;
-    align-items: center;
-  }
-
-  .attr {
-    font-size: 13px;
-    font-weight: 600;
-    color: #e4ecf5;
-    text-align: center;
-  }
-
-  .roll-hint {
-    grid-column: 1 / -1;
-    font-size: 12px;
-    color: #9fb0c6;
-    text-align: center;
-  }
-
-  .create-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 10px;
-  }
-
-  .create-actions button {
-    border-radius: 7px;
-    padding: 10px 12px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-
-  .create-actions button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
-  /* Shared button styles */
   .primary {
     border: none;
     background: #2c7be5;
