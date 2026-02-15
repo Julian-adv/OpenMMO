@@ -31,6 +31,19 @@ export interface SunLightSimulation {
   getLightState: () => SunLightState
 }
 
+export interface SolarDaylightWindowConfig {
+  latitudeDeg: number
+  month: number
+  day: number
+  axialTiltDeg?: number
+}
+
+export interface SolarDaylightWindow {
+  sunriseHour: number
+  sunsetHour: number
+  dayLengthHours: number
+}
+
 const HOURS_PER_DAY = 24
 const MONTHS_PER_YEAR = 12
 const DAYS_PER_MONTH = 30
@@ -53,6 +66,53 @@ function dayOfYearFromCalendar(month: number, day: number) {
   const clampedMonth = clampMonth(month)
   const clampedDay = clampDay(day)
   return (clampedMonth - 1) * DAYS_PER_MONTH + clampedDay
+}
+
+function getSolarDeclinationRadFromDayOfYear(
+  dayOfYear: number,
+  axialTiltRad: number
+) {
+  const phase =
+    (2 * Math.PI * (dayOfYear - SPRING_EQUINOX_DAY_OF_YEAR)) / DAYS_PER_YEAR
+  return axialTiltRad * Math.sin(phase)
+}
+
+export function getSolarDaylightWindow(
+  config: SolarDaylightWindowConfig
+): SolarDaylightWindow {
+  const dayOfYear = dayOfYearFromCalendar(config.month, config.day)
+  const latitudeRad = (config.latitudeDeg * Math.PI) / 180
+  const axialTiltRad = ((config.axialTiltDeg ?? 24) * Math.PI) / 180
+  const declination = getSolarDeclinationRadFromDayOfYear(
+    dayOfYear,
+    axialTiltRad
+  )
+  const cosHourAngle = -Math.tan(latitudeRad) * Math.tan(declination)
+
+  if (cosHourAngle <= -1) {
+    return {
+      sunriseHour: 0,
+      sunsetHour: HOURS_PER_DAY,
+      dayLengthHours: HOURS_PER_DAY,
+    }
+  }
+
+  if (cosHourAngle >= 1) {
+    return {
+      sunriseHour: 12,
+      sunsetHour: 12,
+      dayLengthHours: 0,
+    }
+  }
+
+  const hourAngle = Math.acos(cosHourAngle)
+  const dayLengthHours = (HOURS_PER_DAY * hourAngle) / Math.PI
+
+  return {
+    sunriseHour: 12 - dayLengthHours / 2,
+    sunsetHour: 12 + dayLengthHours / 2,
+    dayLengthHours,
+  }
 }
 
 export function createSunLightSimulation(
@@ -84,9 +144,7 @@ export function createSunLightSimulation(
   }
 
   function getSolarDeclinationRad() {
-    const phase =
-      (2 * Math.PI * (dayOfYear - SPRING_EQUINOX_DAY_OF_YEAR)) / DAYS_PER_YEAR
-    return axialTiltRad * Math.sin(phase)
+    return getSolarDeclinationRadFromDayOfYear(dayOfYear, axialTiltRad)
   }
 
   function getSunDirectionFromHour(hour: number): SunVector {

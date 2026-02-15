@@ -17,9 +17,10 @@
 </script>
 
 <script lang="ts">
-  const SUNRISE_HOUR = 6
-  const SUNSET_HOUR = 18
-  const DAYLIGHT_HOURS = SUNSET_HOUR - SUNRISE_HOUR
+  import { getSolarDaylightWindow } from '../utils/sunLightSimulation'
+
+  const SUN_LATITUDE_DEG = 40
+  const SUN_AXIAL_TILT_DEG = 24
   const HOURS_PER_DAY = 24
   const DAYS_PER_MONTH = 30
   const MONTHS_PER_YEAR = 12
@@ -315,13 +316,23 @@
     return `${currentGameDate.year} ${monthName} ${day}`
   }
 
-  function getSunVisualState(hour: number) {
+  function getCurrentDaylightWindow() {
+    return getSolarDaylightWindow({
+      latitudeDeg: SUN_LATITUDE_DEG,
+      month: currentGameDate.month,
+      day: currentGameDate.day,
+      axialTiltDeg: SUN_AXIAL_TILT_DEG,
+    })
+  }
+
+  function getSunVisualState(hour: number, sunriseHour: number, sunsetHour: number) {
     const normalizedHour = normalizeHour(hour)
-    const clampedHour = Math.min(
-      SUNSET_HOUR,
-      Math.max(SUNRISE_HOUR, normalizedHour)
-    )
-    const progress = (clampedHour - SUNRISE_HOUR) / DAYLIGHT_HOURS
+    const hasDaylight = sunsetHour > sunriseHour
+    const daylightHours = Math.max(1e-6, sunsetHour - sunriseHour)
+    const clampedHour = hasDaylight
+      ? Math.min(sunsetHour, Math.max(sunriseHour, normalizedHour))
+      : sunriseHour
+    const progress = hasDaylight ? (clampedHour - sunriseHour) / daylightHours : 0.5
     const arc = 1 - Math.pow(progress * 2 - 1, 2)
 
     return {
@@ -329,14 +340,23 @@
         SUN_LEFT_MARGIN_PERCENT +
         progress * (SUN_RIGHT_MARGIN_PERCENT - SUN_LEFT_MARGIN_PERCENT),
       yPercent: HORIZON_Y_PERCENT - arc * SUN_ARC_HEIGHT_PERCENT,
-      isDaylight: normalizedHour >= SUNRISE_HOUR && normalizedHour <= SUNSET_HOUR,
+      isDaylight:
+        hasDaylight && normalizedHour >= sunriseHour && normalizedHour <= sunsetHour,
       isSunsetWindow:
-        Math.abs(normalizedHour - SUNRISE_HOUR) <= SUNSET_WINDOW_HOURS ||
-        Math.abs(normalizedHour - SUNSET_HOUR) <= SUNSET_WINDOW_HOURS,
+        hasDaylight &&
+        (Math.abs(normalizedHour - sunriseHour) <= SUNSET_WINDOW_HOURS ||
+          Math.abs(normalizedHour - sunsetHour) <= SUNSET_WINDOW_HOURS),
     }
   }
 
-  const sunVisual = $derived(getSunVisualState(currentGameHour))
+  const daylightWindow = $derived(getCurrentDaylightWindow())
+  const sunVisual = $derived(
+    getSunVisualState(
+      currentGameHour,
+      daylightWindow.sunriseHour,
+      daylightWindow.sunsetHour
+    )
+  )
   const absoluteDayIndex = $derived(getAbsoluteDayIndex())
   const moonVisuals = $derived(
     MOONS.map((moon) =>
