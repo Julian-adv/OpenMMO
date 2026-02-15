@@ -362,7 +362,7 @@ async fn handle_client_message(
                 .kick_player_by_name(&selected_character.name)
                 .await;
 
-            let player = new_player(selected_character.name.clone());
+            let player = new_player(selected_character.name.clone(), selected_character.level);
             let id = player.id.clone();
 
             *direct_rx = Some(game_state.register_direct_channel(&id).await);
@@ -470,6 +470,7 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         id: record.id,
         name: record.name,
         created_at: record.created_at,
+        level: record.level,
         attributes: record.attributes,
     }
 }

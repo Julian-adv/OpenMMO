@@ -50,6 +50,7 @@ export type AccountCharacter = {
   id: number
   name: string
   created_at: number
+  level: number
   attributes: CharacterAttributes
 }
 

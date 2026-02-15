@@ -2,13 +2,19 @@
   import type { CharacterAttributes } from '../network/socket'
 
   interface Props {
+    level: number
     attributes: CharacterAttributes
   }
 
-  let { attributes }: Props = $props()
+  let { level, attributes }: Props = $props()
 </script>
 
 <div class="attribute-hud" aria-label="Character attributes">
+  <span class="attr-item level-item">
+    <span class="attr-label">lv</span>
+    <span class="attr-value level-value">{level}</span>
+  </span>
+  <span class="attr-separator"></span>
   <span class="attr-item">
     <span class="attr-label">str</span>
     <span class="attr-value">{attributes.str}</span>
@@ -78,5 +84,15 @@
     font-weight: 700;
     color: #f5f9fc;
     line-height: 1;
+  }
+
+  .level-value {
+    color: #f0c040;
+  }
+
+  .attr-separator {
+    width: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    align-self: stretch;
   }
 </style>

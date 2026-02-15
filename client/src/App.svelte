@@ -166,7 +166,7 @@
       <ChatPanel />
       <FPSCounter />
       {#if selectedCharacter}
-        <CharacterAttributesHud attributes={selectedCharacter.attributes} />
+        <CharacterAttributesHud level={selectedCharacter.level} attributes={selectedCharacter.attributes} />
       {/if}
     </div>
 

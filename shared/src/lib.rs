@@ -36,6 +36,7 @@ pub struct Character {
     pub id: i64,
     pub name: String,
     pub created_at: i64,
+    pub level: u32,
     pub attributes: CharacterAttributes,
 }
 

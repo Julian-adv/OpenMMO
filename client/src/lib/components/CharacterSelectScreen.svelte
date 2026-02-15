@@ -116,6 +116,7 @@
         >
           {#if character}
             <div class="char-name">{character.name}</div>
+            <div class="char-level">Lv. {character.level}</div>
             <div class="char-stats">
               <span class="stat">STR {character.attributes.str}</span>
               <span class="stat">DEX {character.attributes.dex}</span>
@@ -259,6 +260,12 @@
   .char-name {
     font-size: 15px;
     font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .char-level {
+    font-size: 12px;
+    color: #f0c040;
     margin-bottom: 8px;
   }
 

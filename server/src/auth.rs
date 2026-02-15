@@ -15,6 +15,7 @@ pub struct CharacterRecord {
     pub id: i64,
     pub name: String,
     pub created_at: i64,
+    pub level: u32,
     pub attributes: CharacterAttributes,
 }
 
@@ -137,6 +138,7 @@ impl AuthService {
             .collect::<Result<HashSet<_>, _>>()?;
 
         let expected_columns = [
+            ("level", "INTEGER NOT NULL DEFAULT 1"),
             ("attr_str", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_dex", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_con", "INTEGER NOT NULL DEFAULT 12"),
@@ -249,7 +251,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, character_name, created_at, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT id, character_name, created_at, level, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE account_name = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -262,13 +264,14 @@ impl AuthService {
                     id: row.get(0)?,
                     name: row.get(1)?,
                     created_at: row.get(2)?,
+                    level: row.get(3)?,
                     attributes: CharacterAttributes {
-                        r#str: row.get(3)?,
-                        dex: row.get(4)?,
-                        con: row.get(5)?,
-                        int: row.get(6)?,
-                        wis: row.get(7)?,
-                        cha: row.get(8)?,
+                        r#str: row.get(4)?,
+                        dex: row.get(5)?,
+                        con: row.get(6)?,
+                        int: row.get(7)?,
+                        wis: row.get(8)?,
+                        cha: row.get(9)?,
                     },
                 })
             })
@@ -337,16 +340,18 @@ impl AuthService {
             "INSERT INTO characters (
                 account_name,
                 character_name,
+                level,
                 attr_str,
                 attr_dex,
                 attr_con,
                 attr_int,
                 attr_wis,
                 attr_cha
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 account_name,
                 character_name,
+                1_i64,
                 i64::from(attributes.r#str),
                 i64::from(attributes.dex),
                 i64::from(attributes.con),
@@ -358,22 +363,23 @@ impl AuthService {
         .map_err(|e| AuthError::Database(e.to_string()))?;
 
         let id = conn.last_insert_rowid();
-        let (created_at, loaded_attributes): (i64, CharacterAttributes) = conn
+        let (created_at, level, loaded_attributes): (i64, u32, CharacterAttributes) = conn
             .query_row(
-                "SELECT created_at, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT created_at, level, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE id = ?1",
                 params![id],
                 |row| {
                     Ok((
                         row.get(0)?,
+                        row.get(1)?,
                         CharacterAttributes {
-                            r#str: row.get(1)?,
-                            dex: row.get(2)?,
-                            con: row.get(3)?,
-                            int: row.get(4)?,
-                            wis: row.get(5)?,
-                            cha: row.get(6)?,
+                            r#str: row.get(2)?,
+                            dex: row.get(3)?,
+                            con: row.get(4)?,
+                            int: row.get(5)?,
+                            wis: row.get(6)?,
+                            cha: row.get(7)?,
                         },
                     ))
                 },
@@ -384,6 +390,7 @@ impl AuthService {
             id,
             name: character_name.to_string(),
             created_at,
+            level,
             attributes: loaded_attributes,
         };
 
@@ -430,7 +437,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT id, character_name, created_at, level, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE id = ?1 AND account_name = ?2",
                 params![character_id, account_name],
@@ -439,13 +446,14 @@ impl AuthService {
                         id: row.get(0)?,
                         name: row.get(1)?,
                         created_at: row.get(2)?,
+                        level: row.get(3)?,
                         attributes: CharacterAttributes {
-                            r#str: row.get(3)?,
-                            dex: row.get(4)?,
-                            con: row.get(5)?,
-                            int: row.get(6)?,
-                            wis: row.get(7)?,
-                            cha: row.get(8)?,
+                            r#str: row.get(4)?,
+                            dex: row.get(5)?,
+                            con: row.get(6)?,
+                            int: row.get(7)?,
+                            wis: row.get(8)?,
+                            cha: row.get(9)?,
                         },
                     })
                 },
