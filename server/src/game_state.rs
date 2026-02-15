@@ -3,11 +3,15 @@ use crate::monster_defs::MonsterDefs;
 use crate::types::{Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{info, warn};
 
 pub type GameStateSender = broadcast::Sender<ServerMessage>;
 pub type GameStateReceiver = broadcast::Receiver<ServerMessage>;
+const GAME_DAY_DURATION_SECONDS: f32 = 3.0 * 60.0 * 60.0;
+const GAME_HOURS_PER_DAY: f32 = 24.0;
+const GAME_START_HOUR: f32 = 12.0;
 
 #[derive(Default)]
 struct IdState {
@@ -21,6 +25,7 @@ pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
     broadcast_tx: GameStateSender,
+    game_clock_start: Instant,
     monster_defs: MonsterDefs,
     id_state: Arc<RwLock<IdState>>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
@@ -34,10 +39,24 @@ impl GameState {
             players: Arc::new(RwLock::new(HashMap::new())),
             monsters: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
+            game_clock_start: Instant::now(),
             monster_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    pub fn current_game_hour(&self) -> f32 {
+        let elapsed_seconds = self.game_clock_start.elapsed().as_secs_f32();
+        let day_progress =
+            (elapsed_seconds % GAME_DAY_DURATION_SECONDS) / GAME_DAY_DURATION_SECONDS;
+        (GAME_START_HOUR + day_progress * GAME_HOURS_PER_DAY) % GAME_HOURS_PER_DAY
+    }
+
+    pub fn broadcast_game_time(&self) {
+        let _ = self.broadcast_tx.send(ServerMessage::GameTimeSync {
+            game_hour: self.current_game_hour(),
+        });
     }
 
     async fn get_or_assign_player_number(&self, player_id: &str) -> u32 {

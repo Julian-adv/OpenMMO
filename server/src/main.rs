@@ -11,6 +11,7 @@ use connection::handle_connection;
 use game_state::GameState;
 use std::sync::Arc;
 use tokio::net::TcpListener;
+use tokio::time::Duration;
 use tracing::{error, info};
 use tracing_subscriber;
 
@@ -30,6 +31,15 @@ async fn main() {
     let args = Args::parse();
     let monster_defs = monster_defs::MonsterDefs::load();
     let game_state = Arc::new(GameState::new(monster_defs));
+    let game_state_for_time_sync = Arc::clone(&game_state);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(8));
+        loop {
+            interval.tick().await;
+            game_state_for_time_sync.broadcast_game_time();
+        }
+    });
+
     let auth_service = match AuthService::new(AuthService::default_db_path()) {
         Ok(service) => Arc::new(service),
         Err(e) => {
