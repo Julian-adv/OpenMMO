@@ -24,7 +24,7 @@
   import { type PlayerState } from '../utils/movementUtils'
   import { createSunLightSimulation } from '../utils/sunLightSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
-  import { timeScale, sunTimeScale } from '../stores/timeStore'
+  import { timeScale, sunTimeScale, serverGameHour } from '../stores/timeStore'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -147,6 +147,16 @@
     lightDistance: SUN_LIGHT_DISTANCE,
     maxIntensity: 1.5,
   })
+
+  let latestServerGameHour = $state<number | null>(null)
+  let latestSunTimeScale = $state(1)
+
+  function applyServerGameHourIfAllowed() {
+    if (latestSunTimeScale > 1) return
+    if (latestServerGameHour === null) return
+    sunLightSimulation.setGameHour(latestServerGameHour)
+    setGameHour(latestServerGameHour)
+  }
 
   // Game loop
   let gameLoopId = $state<number | null>(null)
@@ -568,6 +578,19 @@
     resetLoopProfileWindow(performance.now())
     setGameHour(sunLightSimulation.getGameHour())
 
+    const unsubscribeServerGameHour = serverGameHour.subscribe((hour) => {
+      latestServerGameHour = hour
+      applyServerGameHourIfAllowed()
+    })
+
+    const unsubscribeSunTimeScale = sunTimeScale.subscribe((scale) => {
+      const wasFastSun = latestSunTimeScale > 1
+      latestSunTimeScale = scale
+      if (wasFastSun && scale <= 1) {
+        applyServerGameHourIfAllowed()
+      }
+    })
+
     const unsubscribeViewportSize = size.subscribe((nextSize) => {
       viewportSize = nextSize
     })
@@ -610,6 +633,8 @@
     return () => {
       unsubscribeViewportSize()
       unsubscribeCameraReset()
+      unsubscribeServerGameHour()
+      unsubscribeSunTimeScale()
       stopGameLoop()
       stopChatBubbleChecker()
       networkManager.disconnect()

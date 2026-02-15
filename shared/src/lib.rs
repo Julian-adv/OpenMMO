@@ -141,6 +141,9 @@ pub enum ServerMessage {
         players: HashMap<String, Player>,
         monsters: HashMap<String, Monster>,
     },
+    GameTimeSync {
+        game_hour: f32,
+    },
     MonsterSpawned {
         monster: Monster,
     },
