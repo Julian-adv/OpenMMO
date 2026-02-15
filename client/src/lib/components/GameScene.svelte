@@ -22,14 +22,16 @@
   import SplatTerrain from './SplatTerrain.svelte'
   import Monster from './Monster.svelte'
   import { type PlayerState } from '../utils/movementUtils'
+  import { createSunLightSimulation } from '../utils/sunLightSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
-  import { timeScale } from '../stores/timeStore'
+  import { timeScale, sunTimeScale } from '../stores/timeStore'
   import {
     debugVisible,
     cameraRotationEnabled,
     playerDebugInfo,
   } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
+  import { setGameHour } from './GameTimeWidget.svelte'
 
   interface Props {
     serverUrl: string
@@ -132,8 +134,19 @@
     updateOrthographicFrustum()
   })
 
-  // Light follow system - offset relative to player
-  const LIGHT_OFFSET = { x: 10, y: 10, z: 10 }
+  // Sun simulation (equinox) with world axes: +x east, -x west, +z south, -z north.
+  const SUN_LIGHT_DISTANCE = 120
+  const SHADOW_CAMERA_EXTENT = 80
+  const SHADOW_CAMERA_FAR = SUN_LIGHT_DISTANCE * 3
+
+  const sunLightSimulation = createSunLightSimulation({
+    latitudeDeg: 40,
+    sunriseHour: 6,
+    dayDurationSeconds: 3 * 60 * 60,
+    startHour: 12,
+    lightDistance: SUN_LIGHT_DISTANCE,
+    maxIntensity: 1.5,
+  })
 
   // Game loop
   let gameLoopId = $state<number | null>(null)
@@ -322,8 +335,12 @@
 
       const frameWorkStart = performance.now()
 
+      const realDeltaSeconds = fixedDeltaTime / 1000
+
       // Apply time scale for slow motion debugging
       const deltaTime = fixedDeltaTime * $timeScale
+      sunLightSimulation.advance(realDeltaSeconds * $sunTimeScale)
+      setGameHour(sunLightSimulation.getGameHour())
 
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
@@ -518,15 +535,16 @@
     if (!currentPlayer || !directionalLight) return
 
     const playerPos = currentPlayer.position
+    const sunLightState = sunLightSimulation.getLightState()
 
-    // Update light position to follow player with fixed offset
+    // Place the light in the sun direction; the target stays on the player.
     directionalLight.position.set(
-      playerPos.x + LIGHT_OFFSET.x,
-      playerPos.y + LIGHT_OFFSET.y,
-      playerPos.z + LIGHT_OFFSET.z
+      playerPos.x + sunLightState.positionOffset.x,
+      playerPos.y + sunLightState.positionOffset.y,
+      playerPos.z + sunLightState.positionOffset.z
     )
+    directionalLight.intensity = sunLightState.intensity
 
-    // Update shadow camera target to look at player
     if (directionalLight.target) {
       directionalLight.target.position.set(
         playerPos.x,
@@ -548,6 +566,7 @@
   onMount(() => {
     loopProfileEnabled = false
     resetLoopProfileWindow(performance.now())
+    setGameHour(sunLightSimulation.getGameHour())
 
     const unsubscribeViewportSize = size.subscribe((nextSize) => {
       viewportSize = nextSize
@@ -624,12 +643,14 @@
   position={[10, 10, 10]}
   intensity={1.5}
   castShadow
-  shadow.camera.left={-50}
-  shadow.camera.right={50}
-  shadow.camera.top={50}
-  shadow.camera.bottom={-50}
-  shadow.camera.near={0.5}
-  shadow.camera.far={100}
+  shadow.camera.left={-SHADOW_CAMERA_EXTENT}
+  shadow.camera.right={SHADOW_CAMERA_EXTENT}
+  shadow.camera.top={SHADOW_CAMERA_EXTENT}
+  shadow.camera.bottom={-SHADOW_CAMERA_EXTENT}
+  shadow.camera.near={1}
+  shadow.camera.far={SHADOW_CAMERA_FAR}
+  shadow.bias={-0.0002}
+  shadow.normalBias={0.01}
   shadow.mapSize.width={2048}
   shadow.mapSize.height={2048}
 />
