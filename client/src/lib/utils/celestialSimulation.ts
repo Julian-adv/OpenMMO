@@ -1,3 +1,8 @@
+import {
+  getCelestialDirectionFromHourAndDeclination,
+  getDeclinationRadFromDayIndex,
+} from './celestialDirection'
+
 export const HOURS_PER_DAY = 24
 export const DAYS_PER_MONTH = 30
 export const MONTHS_PER_YEAR = 12
@@ -13,6 +18,7 @@ export const SUN_START_HOUR = 12
 export const SUN_MAX_INTENSITY = 2.25
 export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.22
 export const SUN_TWILIGHT_COLOR_BLEND = 0.65
+export const MOON_AXIAL_TILT_DEG = 19
 
 export const GAME_START_YEAR = 217
 export const GAME_MONTHS_PER_YEAR = 12
@@ -22,8 +28,8 @@ export const SUN_DAY_COLOR_HEX = '#ffffff'
 export const SUN_TWILIGHT_COLOR_HEX = '#ff9b86'
 export const MOON_LIGHT_COLOR_HEX = '#d6e2ff'
 export const MOON_VISIBILITY_THRESHOLD = 0.02
-export const ELDER_MOON_MAX_INTENSITY = 0.6
-export const SWIFT_MOON_MAX_INTENSITY = 0.45
+export const ELDER_MOON_MAX_INTENSITY = 1.2
+export const SWIFT_MOON_MAX_INTENSITY = 0.9
 export const MOON_ILLUMINATION_SOFTENING_EXPONENT = 0.7
 export const MOON_LIGHT_FLOOR = 0.3
 
@@ -216,8 +222,14 @@ export function getMoonPhaseState(
   absoluteDayIndex: number,
   gameHour: number
 ): MoonPhaseState {
+  // Use fractional day progress so moon phase/intensity stays continuous at midnight.
+  const normalizedHour = normalizeHour(gameHour)
+  const dayProgress = normalizedHour / HOURS_PER_DAY
   const cycleDay =
-    positiveModulo(absoluteDayIndex + moon.phaseOffsetDays, moon.periodDays) + 1
+    positiveModulo(
+      absoluteDayIndex + dayProgress + moon.phaseOffsetDays,
+      moon.periodDays
+    ) + 1
   const fullMoonDay = moon.periodDays / 2
   const illumination = Math.max(
     0,
@@ -233,7 +245,6 @@ export function getMoonPhaseState(
   // New moon aligns with the sun (transit around noon), full moon transits at midnight.
   const transitHour = normalizeHour(12 + orbitalProgress * HOURS_PER_DAY)
   const riseHour = normalizeHour(transitHour - 6)
-  const normalizedHour = normalizeHour(gameHour)
   const hoursSinceRise = normalizeHour(normalizedHour - riseHour)
   const isAboveHorizon = hoursSinceRise <= 12
 
@@ -309,65 +320,83 @@ export function getSunTrackState(config: SunTrackConfig): SunTrackState {
 
 export function getMoonDirection(
   phaseState: MoonPhaseState,
-  latitudeDeg: number
+  latitudeDeg: number,
+  dayIndex: number,
+  axialTiltDeg = MOON_AXIAL_TILT_DEG
 ): { x: number; y: number; z: number } {
-  const latitudeRad = (latitudeDeg * Math.PI) / 180
-  const latitudeCos = Math.cos(latitudeRad)
-  const latitudeSin = Math.sin(latitudeRad)
-  const hourAngle =
-    (2 * Math.PI * (phaseState.normalizedHour - phaseState.transitHour)) /
-    HOURS_PER_DAY
-  const east = -Math.sin(hourAngle)
-  const north = -latitudeSin * Math.cos(hourAngle)
-  const up = latitudeCos * Math.cos(hourAngle)
-
-  return {
-    x: east,
-    y: up,
-    z: -north,
-  }
+  const declination = getDeclinationRadFromDayIndex(dayIndex, axialTiltDeg)
+  return getCelestialDirectionFromHourAndDeclination(
+    phaseState.normalizedHour,
+    phaseState.transitHour,
+    latitudeDeg,
+    declination
+  )
 }
 
-interface SelectedMoonLight {
+interface MoonLightSample {
+  direction: { x: number; y: number; z: number }
+  intensity: number
+}
+
+interface MoonLightCandidate {
   phaseState: MoonPhaseState
   maxIntensity: number
 }
 
-function getSelectedMoonLight(
+function getMoonDirectionalIntensity(
+  phaseState: MoonPhaseState,
+  maxIntensity: number
+) {
+  if (
+    !phaseState.isAboveHorizon ||
+    phaseState.illumination <= MOON_VISIBILITY_THRESHOLD
+  ) {
+    return 0
+  }
+
+  const softenedMoonFactor =
+    MOON_LIGHT_FLOOR +
+    (1 - MOON_LIGHT_FLOOR) *
+      Math.pow(phaseState.illumination, MOON_ILLUMINATION_SOFTENING_EXPONENT)
+
+  return softenedMoonFactor * maxIntensity
+}
+
+function getMoonLightSamples(
   dayIndex: number,
   gameHour: number
-): SelectedMoonLight | null {
-  const elderMoonPhaseState = getMoonPhaseState(
-    ELDER_MOON_DEFINITION,
-    dayIndex,
-    gameHour
-  )
-  const swiftMoonPhaseState = getMoonPhaseState(
-    SWIFT_MOON_DEFINITION,
-    dayIndex,
-    gameHour
-  )
-  const elderMoonVisible =
-    elderMoonPhaseState.isAboveHorizon &&
-    elderMoonPhaseState.illumination > MOON_VISIBILITY_THRESHOLD
-  if (elderMoonVisible) {
-    return {
-      phaseState: elderMoonPhaseState,
+): MoonLightSample[] {
+  const seasonalDayIndex = dayIndex + normalizeHour(gameHour) / HOURS_PER_DAY
+  const candidates: MoonLightCandidate[] = [
+    {
+      phaseState: getMoonPhaseState(ELDER_MOON_DEFINITION, dayIndex, gameHour),
       maxIntensity: ELDER_MOON_MAX_INTENSITY,
-    }
-  }
-
-  const swiftMoonVisible =
-    swiftMoonPhaseState.isAboveHorizon &&
-    swiftMoonPhaseState.illumination > MOON_VISIBILITY_THRESHOLD
-  if (swiftMoonVisible) {
-    return {
-      phaseState: swiftMoonPhaseState,
+    },
+    {
+      phaseState: getMoonPhaseState(SWIFT_MOON_DEFINITION, dayIndex, gameHour),
       maxIntensity: SWIFT_MOON_MAX_INTENSITY,
-    }
+    },
+  ]
+
+  const samples: MoonLightSample[] = []
+  for (const candidate of candidates) {
+    const intensity = getMoonDirectionalIntensity(
+      candidate.phaseState,
+      candidate.maxIntensity
+    )
+    if (intensity <= 0) continue
+
+    samples.push({
+      direction: getMoonDirection(
+        candidate.phaseState,
+        SUN_LATITUDE_DEG,
+        seasonalDayIndex
+      ),
+      intensity,
+    })
   }
 
-  return null
+  return samples
 }
 
 export function computeCelestialDirectionalLightState(
@@ -379,30 +408,27 @@ export function computeCelestialDirectionalLightState(
   const ambientNightFactor = sunLightState.direction.y <= 0 ? 1 : 0
 
   if (!sunAboveHorizon) {
-    const selectedMoonLight = getSelectedMoonLight(
+    const moonLightSamples = getMoonLightSamples(
       dayIndex,
       sunLightState.gameHour
     )
-    if (selectedMoonLight) {
-      const moonDirection = getMoonDirection(
-        selectedMoonLight.phaseState,
-        SUN_LATITUDE_DEG
-      )
-      const softenedMoonFactor =
-        MOON_LIGHT_FLOOR +
-        (1 - MOON_LIGHT_FLOOR) *
-          Math.pow(
-            selectedMoonLight.phaseState.illumination,
-            MOON_ILLUMINATION_SOFTENING_EXPONENT
-          )
+    if (moonLightSamples.length > 0) {
+      let brightestSample = moonLightSamples[0]
+
+      for (const sample of moonLightSamples) {
+        if (sample.intensity > brightestSample.intensity) {
+          brightestSample = sample
+        }
+      }
+
       return {
         useMoonLight: true,
         positionOffset: {
-          x: moonDirection.x * SUN_LIGHT_DISTANCE,
-          y: moonDirection.y * SUN_LIGHT_DISTANCE,
-          z: moonDirection.z * SUN_LIGHT_DISTANCE,
+          x: brightestSample.direction.x * SUN_LIGHT_DISTANCE,
+          y: brightestSample.direction.y * SUN_LIGHT_DISTANCE,
+          z: brightestSample.direction.z * SUN_LIGHT_DISTANCE,
         },
-        intensity: softenedMoonFactor * selectedMoonLight.maxIntensity,
+        intensity: brightestSample.intensity,
         ambientNightFactor,
         sunColorBlendFactor: 0,
       }
