@@ -49,6 +49,8 @@ const MONTHS_PER_YEAR = 12
 const DAYS_PER_MONTH = 30
 const DAYS_PER_YEAR = MONTHS_PER_YEAR * DAYS_PER_MONTH
 const SPRING_EQUINOX_DAY_OF_YEAR = 90 // 3/30 in a 30-day month calendar
+const DAYLIGHT_SOFTENING_EXPONENT = 0.7
+const DAYLIGHT_FLOOR = 0.4
 
 function normalizeHour(hour: number) {
   return ((hour % HOURS_PER_DAY) + HOURS_PER_DAY) % HOURS_PER_DAY
@@ -178,10 +180,18 @@ export function createSunLightSimulation(
   function getLightState(): SunLightState {
     const gameHour = getGameHour()
     const direction = getSunDirectionFromHour(gameHour)
-    const daylightFactor = Math.min(
+    const baseDaylightFactor = Math.min(
       1,
       Math.max(0, direction.y / Math.max(latitudeCos, 1e-6))
     )
+    const softenedDaylightFactor = Math.pow(
+      baseDaylightFactor,
+      DAYLIGHT_SOFTENING_EXPONENT
+    )
+    const daylightFactor =
+      direction.y > 0
+        ? DAYLIGHT_FLOOR + (1 - DAYLIGHT_FLOOR) * softenedDaylightFactor
+        : 0
 
     return {
       gameHour,

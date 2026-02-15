@@ -23,6 +23,24 @@
   import Monster from './Monster.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import { createSunLightSimulation } from '../utils/sunLightSimulation'
+  import {
+    GAME_START_YEAR,
+    MOON_LIGHT_COLOR_HEX,
+    SHADOW_CAMERA_EXTENT,
+    SHADOW_CAMERA_FAR,
+    SUN_AXIAL_TILT_DEG,
+    SUN_DAY_COLOR_HEX,
+    SUN_DAY_DURATION_SECONDS,
+    SUN_LATITUDE_DEG,
+    SUN_LIGHT_DISTANCE,
+    SUN_MAX_INTENSITY,
+    SUN_START_HOUR,
+    SUN_TWILIGHT_COLOR_HEX,
+    type CalendarDate,
+    computeCelestialLightState,
+    getCalendarDateFromGameDayIndex,
+    getGameCalendarDayIndex,
+  } from '../utils/celestialSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import {
     timeScale,
@@ -49,6 +67,7 @@
   let chatBubbles = $state<Map<string, ChatBubble>>(new Map())
   let camera = $state<THREE.OrthographicCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
+  let ambientLight = $state<THREE.AmbientLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   interface TerrainTile {
@@ -140,32 +159,27 @@
   })
 
   // Sun simulation (equinox) with world axes: +x east, -x west, +z south, -z north.
-  const SUN_LIGHT_DISTANCE = 120
-  const SHADOW_CAMERA_EXTENT = 80
-  const SHADOW_CAMERA_FAR = SUN_LIGHT_DISTANCE * 3
-  const SUN_DAY_DURATION_SECONDS = 3 * 60 * 60
-  const SUN_START_HOUR = 12
-  const GAME_START_YEAR = 217
-  const GAME_MONTHS_PER_YEAR = 12
-  const GAME_DAYS_PER_MONTH = 30
+  const SUN_DAY_COLOR = new THREE.Color(SUN_DAY_COLOR_HEX)
+  const SUN_TWILIGHT_COLOR = new THREE.Color(SUN_TWILIGHT_COLOR_HEX)
+  const sunDirectionalColor = new THREE.Color()
+  const MOON_LIGHT_COLOR = new THREE.Color(MOON_LIGHT_COLOR_HEX)
+  const AMBIENT_DAY_COLOR = new THREE.Color('#ffffff')
+  const AMBIENT_NIGHT_COLOR = new THREE.Color('#8ea8ff')
+  const AMBIENT_DAY_INTENSITY = 0.95
+  const AMBIENT_NIGHT_INTENSITY = 2.24
+  const ambientColor = new THREE.Color()
 
   const sunLightSimulation = createSunLightSimulation({
-    latitudeDeg: 40,
+    latitudeDeg: SUN_LATITUDE_DEG,
     sunriseHour: 6,
     dayDurationSeconds: SUN_DAY_DURATION_SECONDS,
     startHour: SUN_START_HOUR,
     startMonth: 1,
     startDay: 1,
-    axialTiltDeg: 24,
+    axialTiltDeg: SUN_AXIAL_TILT_DEG,
     lightDistance: SUN_LIGHT_DISTANCE,
-    maxIntensity: 1.5,
+    maxIntensity: SUN_MAX_INTENSITY,
   })
-
-  interface CalendarDate {
-    year: number
-    month: number
-    day: number
-  }
 
   let localCalendarDate = $state<CalendarDate>({
     year: GAME_START_YEAR,
@@ -178,35 +192,6 @@
 
   let latestServerGameTime = $state<ServerGameTime | null>(null)
   let latestSunTimeScale = $state(1)
-
-  function calendarToDayIndex(date: CalendarDate) {
-    const normalizedYear = Math.max(GAME_START_YEAR, Math.floor(date.year))
-    const normalizedMonth = Math.min(
-      GAME_MONTHS_PER_YEAR,
-      Math.max(1, Math.floor(date.month))
-    )
-    const normalizedDay = Math.min(
-      GAME_DAYS_PER_MONTH,
-      Math.max(1, Math.floor(date.day))
-    )
-    const yearsSinceStart = normalizedYear - GAME_START_YEAR
-    return (
-      yearsSinceStart * GAME_MONTHS_PER_YEAR * GAME_DAYS_PER_MONTH +
-      (normalizedMonth - 1) * GAME_DAYS_PER_MONTH +
-      (normalizedDay - 1)
-    )
-  }
-
-  function dayIndexToCalendar(dayIndex: number): CalendarDate {
-    const normalizedDayIndex = Math.max(0, Math.floor(dayIndex))
-    const daysPerYear = GAME_MONTHS_PER_YEAR * GAME_DAYS_PER_MONTH
-    const year = GAME_START_YEAR + Math.floor(normalizedDayIndex / daysPerYear)
-    const dayOfYear = normalizedDayIndex % daysPerYear
-    const month = Math.floor(dayOfYear / GAME_DAYS_PER_MONTH) + 1
-    const day = (dayOfYear % GAME_DAYS_PER_MONTH) + 1
-
-    return { year, month, day }
-  }
 
   function syncCalendarToWidgetAndSun() {
     setGameDate(
@@ -230,8 +215,10 @@
 
   function addLocalCalendarDays(daysToAdd: number) {
     if (daysToAdd === 0) return
-    const currentDayIndex = calendarToDayIndex(localCalendarDate)
-    localCalendarDate = dayIndexToCalendar(currentDayIndex + daysToAdd)
+    const currentDayIndex = getGameCalendarDayIndex(localCalendarDate)
+    localCalendarDate = getCalendarDateFromGameDayIndex(
+      currentDayIndex + daysToAdd
+    )
   }
 
   function advanceLocalCalendar(deltaSeconds: number) {
@@ -640,18 +627,44 @@
   }
 
   function updateLightPosition() {
-    if (!currentPlayer || !directionalLight) return
+    if (!currentPlayer) return
+
+    const sunLightState = sunLightSimulation.getLightState()
+    const celestialLightState = computeCelestialLightState(
+      sunLightState,
+      localCalendarDate,
+      AMBIENT_DAY_INTENSITY,
+      AMBIENT_NIGHT_INTENSITY
+    )
+
+    if (ambientLight) {
+      ambientColor
+        .copy(AMBIENT_DAY_COLOR)
+        .lerp(AMBIENT_NIGHT_COLOR, celestialLightState.ambientNightFactor)
+      ambientLight.color.copy(ambientColor)
+      ambientLight.intensity = celestialLightState.ambientIntensity
+    }
+
+    if (!directionalLight) return
 
     const playerPos = currentPlayer.position
-    const sunLightState = sunLightSimulation.getLightState()
+    const directionalLightState = celestialLightState.directional
 
-    // Place the light in the sun direction; the target stays on the player.
     directionalLight.position.set(
-      playerPos.x + sunLightState.positionOffset.x,
-      playerPos.y + sunLightState.positionOffset.y,
-      playerPos.z + sunLightState.positionOffset.z
+      playerPos.x + directionalLightState.positionOffset.x,
+      playerPos.y + directionalLightState.positionOffset.y,
+      playerPos.z + directionalLightState.positionOffset.z
     )
-    directionalLight.intensity = sunLightState.intensity
+    directionalLight.intensity = directionalLightState.intensity
+
+    if (directionalLightState.useMoonLight) {
+      directionalLight.color.copy(MOON_LIGHT_COLOR)
+    } else {
+      sunDirectionalColor
+        .copy(SUN_DAY_COLOR)
+        .lerp(SUN_TWILIGHT_COLOR, directionalLightState.sunColorBlendFactor)
+      directionalLight.color.copy(sunDirectionalColor)
+    }
 
     if (directionalLight.target) {
       directionalLight.target.position.set(
@@ -765,7 +778,7 @@
 <T.DirectionalLight
   bind:ref={directionalLight}
   position={[10, 10, 10]}
-  intensity={1.5}
+  intensity={SUN_MAX_INTENSITY}
   castShadow
   shadow.camera.left={-SHADOW_CAMERA_EXTENT}
   shadow.camera.right={SHADOW_CAMERA_EXTENT}
@@ -778,7 +791,11 @@
   shadow.mapSize.width={2048}
   shadow.mapSize.height={2048}
 />
-<T.AmbientLight intensity={0.4} />
+<T.AmbientLight
+  bind:ref={ambientLight}
+  intensity={AMBIENT_DAY_INTENSITY}
+  color="#ffffff"
+/>
 
 <Grid
   infiniteGrid
