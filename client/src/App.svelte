@@ -3,6 +3,7 @@
   import GameScene from './lib/components/GameScene.svelte'
   import ChatPanel from './lib/components/ChatPanel.svelte'
   import FPSCounter from './lib/components/FPSCounter.svelte'
+  import GameTimeWidget from './lib/components/GameTimeWidget.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
@@ -164,11 +165,12 @@
 <main>
   {#if screen === 'game'}
     <div class="game-shell" class:dead={isPlayerDead}>
-      <Canvas renderMode="always">
+      <Canvas renderMode="always" shadows>
         <GameScene {serverUrl} />
       </Canvas>
       <ChatPanel />
       <FPSCounter />
+      <GameTimeWidget />
       {#if selectedCharacter}
         <CharacterAttributesHud
           level={selectedCharacter.level}

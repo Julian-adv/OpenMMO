@@ -19,7 +19,7 @@
 
 <script lang="ts">
   import { cameraDistance } from '../stores/cameraStore'
-  import { timeScale } from '../stores/timeStore'
+  import { timeScale, sunTimeScale } from '../stores/timeStore'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -40,6 +40,10 @@
 
   function toggleSlowMode() {
     timeScale.update((scale) => (scale === 1.0 ? 0.1 : 1.0))
+  }
+
+  function toggleFastSun() {
+    sunTimeScale.update((scale) => (scale === 1.0 ? 60.0 : 1.0))
   }
 
   function toggleCameraRotation() {
@@ -77,6 +81,15 @@
         title="Toggle Slow Motion"
       >
         SLOW
+      </button>
+
+      <button
+        class="action-btn sun-btn"
+        class:active={$sunTimeScale > 1.0}
+        onclick={toggleFastSun}
+        title="Toggle Fast Sun Time (3h day -> 3m day)"
+      >
+        FAST SUN: {$sunTimeScale > 1.0 ? 'ON' : 'OFF'}
       </button>
       
       <button
@@ -163,5 +176,10 @@
   .action-btn.slow-btn.active {
     background: #c53030; /* Red for Slow Mode */
     border-color: #feb2b2;
+  }
+
+  .action-btn.sun-btn.active {
+    background: #b7791f; /* Amber for fast sun */
+    border-color: #f6ad55;
   }
 </style>
