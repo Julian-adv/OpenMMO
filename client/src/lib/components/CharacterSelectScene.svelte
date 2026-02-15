@@ -2,15 +2,20 @@
   import { T, useThrelte } from '@threlte/core'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
+  import { interactivity } from '@threlte/extras'
   import type { AccountCharacter } from '../network/socket'
   import CharacterPreview from './CharacterPreview.svelte'
+  import CharacterSlotLabel from './CharacterSlotLabel.svelte'
+
+  interactivity()
 
   interface Props {
     characters: AccountCharacter[]
     selectedCharacterId: number | null
+    onSlotClick: (slotIndex: number) => void
   }
 
-  let { characters, selectedCharacterId }: Props = $props()
+  let { characters, selectedCharacterId, onSlotClick }: Props = $props()
 
   const SLOT_SPACING = 1.8
   const SLOT_POSITIONS = [-SLOT_SPACING, 0, SLOT_SPACING]
@@ -112,7 +117,7 @@
   receiveShadow
 >
   <T.PlaneGeometry args={[PLATFORM_WIDTH, PLATFORM_DEPTH]} />
-  <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent />
+  <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent depthWrite={false} />
 </T.Mesh>
 
 {#each [0, 1, 2] as slotIndex (slotIndex)}
@@ -139,4 +144,13 @@
       selected={character.id === selectedCharacterId}
     />
   {/if}
+
+  <CharacterSlotLabel
+    {character}
+    selected={character?.id === selectedCharacterId}
+    positionX={SLOT_POSITIONS[slotIndex]}
+    positionZ={SLOT_DEPTH}
+    camera={cameraRef}
+    onclick={() => onSlotClick(slotIndex)}
+  />
 {/each}
