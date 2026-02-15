@@ -17,27 +17,25 @@
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { networkManager } from '../network/socket'
   import { monsterManager } from '../managers/monsterManager'
-  import PlayerModel from './PlayerModel.svelte'
-  import PlayerControl from './PlayerControl.svelte'
-  import SplatTerrain from './SplatTerrain.svelte'
-  import Monster from './Monster.svelte'
+  import type PlayerModel from './PlayerModel.svelte'
+  import type PlayerControl from './PlayerControl.svelte'
+  import type Monster from './Monster.svelte'
+  import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
+  import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
+  import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import { createSunLightSimulation } from '../utils/sunLightSimulation'
   import {
     GAME_START_YEAR,
-    MOON_LIGHT_COLOR_HEX,
     SHADOW_CAMERA_EXTENT,
     SHADOW_CAMERA_FAR,
     SUN_AXIAL_TILT_DEG,
-    SUN_DAY_COLOR_HEX,
     SUN_DAY_DURATION_SECONDS,
     SUN_LATITUDE_DEG,
     SUN_LIGHT_DISTANCE,
     SUN_MAX_INTENSITY,
     SUN_START_HOUR,
-    SUN_TWILIGHT_COLOR_HEX,
     type CalendarDate,
-    computeCelestialLightState,
     getCalendarDateFromGameDayIndex,
     getGameCalendarDayIndex,
   } from '../utils/celestialSimulation'
@@ -55,6 +53,26 @@
   } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { setGameDate, setGameHour } from './GameTimeWidget.svelte'
+  import {
+    DEFAULT_CAMERA_OFFSET,
+    ORTHOGRAPHIC_DEFAULT_ZOOM,
+    calculateCameraOffset as getCameraOffsetFromScene,
+    resetCameraRotation as resetCameraRotationToDefault,
+    resetCameraToInitialState as resetCameraToDefaultState,
+    updateCameraWithOffset as applyCameraOffset,
+    updateOrthographicFrustum,
+  } from './game-scene/camera-utils'
+  import {
+    TERRAIN_GRID_RADIUS,
+    TERRAIN_TILE_SEGMENTS,
+    TERRAIN_TILE_SIZE,
+    type TerrainTile,
+    createTerrainGeometry,
+    createTerrainTiles,
+    getTerrainChunkFromPosition,
+  } from './game-scene/terrain-utils'
+  import { createLoopProfiler } from './game-scene/loop-profiler'
+  import { createSceneLightingController } from './game-scene/scene-lighting'
 
   interface Props {
     serverUrl: string
@@ -70,39 +88,18 @@
   let ambientLight = $state<THREE.AmbientLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
-  interface TerrainTile {
-    id: string
-    position: [number, number, number]
-  }
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
-  const TERRAIN_TILE_SIZE = 100
-  const TERRAIN_TILE_SEGMENTS = 128
-  const TERRAIN_GRID_RADIUS = 1 // 1 => 3x3 tiles around player
-
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
-
-  // Isometric camera defaults
-  const INITIAL_DISTANCE = 16
-  const INITIAL_PITCH = Math.atan(1 / Math.sqrt(2))
-  const INITIAL_YAW = -Math.PI / 4
-  const ORTHOGRAPHIC_FRUSTUM_HEIGHT = 20
-  const ORTHOGRAPHIC_FRUSTUM_VERTICAL_OFFSET = 0
-  const ORTHOGRAPHIC_DEFAULT_ZOOM = 1
 
   const { size } = useThrelte()
   let viewportSize = $state({ width: 1, height: 1 })
 
-  const horizontalDistance = INITIAL_DISTANCE * Math.cos(INITIAL_PITCH)
-  const CAMERA_OFFSET = {
-    x: horizontalDistance * Math.sin(INITIAL_YAW),
-    y: INITIAL_DISTANCE * Math.sin(INITIAL_PITCH),
-    z: horizontalDistance * Math.cos(INITIAL_YAW),
-  }
+  const CAMERA_OFFSET = { ...DEFAULT_CAMERA_OFFSET }
 
   // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
   let prevDebugVisible = $state(false)
@@ -122,52 +119,14 @@
 
   function resetCameraRotation() {
     if (!currentPlayer || !camera) return
-
-    const playerPos = currentPlayer.position
-    const dx = camera.position.x - playerPos.x
-    const dy = camera.position.y - playerPos.y
-    const dz = camera.position.z - playerPos.z
-    const currentDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
-
-    const currentHorizontalDistance = currentDistance * Math.cos(INITIAL_PITCH)
-    camera.position.set(
-      playerPos.x + currentHorizontalDistance * Math.sin(INITIAL_YAW),
-      playerPos.y + currentDistance * Math.sin(INITIAL_PITCH),
-      playerPos.z + currentHorizontalDistance * Math.cos(INITIAL_YAW)
-    )
-    camera.lookAt(playerPos.x, playerPos.y, playerPos.z)
-    cameraTarget = [playerPos.x, playerPos.y, playerPos.z]
-  }
-
-  function updateOrthographicFrustum() {
-    if (!camera) return
-
-    const aspect = Math.max(1, viewportSize.width) / Math.max(1, viewportSize.height)
-    const halfHeight = ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2
-    const halfWidth = halfHeight * aspect
-    camera.left = -halfWidth
-    camera.right = halfWidth
-    camera.top = halfHeight - ORTHOGRAPHIC_FRUSTUM_VERTICAL_OFFSET
-    camera.bottom = -halfHeight - ORTHOGRAPHIC_FRUSTUM_VERTICAL_OFFSET
-    camera.near = 0.1
-    camera.far = 500
-    camera.updateProjectionMatrix()
+    cameraTarget = resetCameraRotationToDefault(camera, currentPlayer.position)
   }
 
   $effect(() => {
-    updateOrthographicFrustum()
+    updateOrthographicFrustum(camera, viewportSize)
   })
 
-  // Sun simulation (equinox) with world axes: +x east, -x west, +z south, -z north.
-  const SUN_DAY_COLOR = new THREE.Color(SUN_DAY_COLOR_HEX)
-  const SUN_TWILIGHT_COLOR = new THREE.Color(SUN_TWILIGHT_COLOR_HEX)
-  const sunDirectionalColor = new THREE.Color()
-  const MOON_LIGHT_COLOR = new THREE.Color(MOON_LIGHT_COLOR_HEX)
-  const AMBIENT_DAY_COLOR = new THREE.Color('#ffffff')
-  const AMBIENT_NIGHT_COLOR = new THREE.Color('#8ea8ff')
-  const AMBIENT_DAY_INTENSITY = 0.95
-  const AMBIENT_NIGHT_INTENSITY = 2.24
-  const ambientColor = new THREE.Color()
+  const sceneLighting = createSceneLightingController()
 
   const sunLightSimulation = createSunLightSimulation({
     latitudeDeg: SUN_LATITUDE_DEG,
@@ -249,96 +208,8 @@
   const FRAME_TIME_TOLERANCE = 0.5 // absorb timer jitter (e.g. 16.6ms vs 16.67ms)
   const MAX_CATCH_UP_STEPS = 5
 
-  type LoopProfileSection =
-    | 'frameWork'
-    | 'cameraOffset'
-    | 'playerControl'
-    | 'remoteInterpolation'
-    | 'currentPlayerAnimation'
-    | 'otherPlayerAnimation'
-    | 'monsterAnimation'
-    | 'monsterLogic'
-    | 'cameraUpdate'
-    | 'lightUpdate'
-
-  const LOOP_PROFILE_SECTIONS: readonly LoopProfileSection[] = [
-    'frameWork',
-    'cameraOffset',
-    'playerControl',
-    'remoteInterpolation',
-    'currentPlayerAnimation',
-    'otherPlayerAnimation',
-    'monsterAnimation',
-    'monsterLogic',
-    'cameraUpdate',
-    'lightUpdate',
-  ] as const
-
-  interface LoopProfileStats {
-    totalMs: number
-    maxMs: number
-    count: number
-  }
-
-  const loopProfileStats = new Map<LoopProfileSection, LoopProfileStats>(
-    LOOP_PROFILE_SECTIONS.map((section) => [
-      section,
-      { totalMs: 0, maxMs: 0, count: 0 },
-    ])
-  )
   let loopProfileEnabled = false
-  let loopProfileWindowStart = 0
-  let loopProfileFrameCount = 0
-  let loopProfileFrameDropCount = 0
-  let loopProfileRawDeltaTotal = 0
-  let loopProfileRawDeltaMax = 0
-
-  function resetLoopProfileWindow(windowStart: number) {
-    loopProfileWindowStart = windowStart
-    loopProfileFrameCount = 0
-    loopProfileFrameDropCount = 0
-    loopProfileRawDeltaTotal = 0
-    loopProfileRawDeltaMax = 0
-    for (const section of LOOP_PROFILE_SECTIONS) {
-      const stats = loopProfileStats.get(section)!
-      stats.totalMs = 0
-      stats.maxMs = 0
-      stats.count = 0
-    }
-  }
-
-  function recordLoopProfile(section: LoopProfileSection, durationMs: number) {
-    const stats = loopProfileStats.get(section)
-    if (!stats) return
-    stats.totalMs += durationMs
-    stats.maxMs = Math.max(stats.maxMs, durationMs)
-    stats.count += 1
-  }
-
-  function flushLoopProfile(now: number) {
-    const elapsed = now - loopProfileWindowStart
-    if (!loopProfileEnabled || elapsed < 1000 || loopProfileFrameCount === 0) return
-
-    const rows = LOOP_PROFILE_SECTIONS.map((section) => {
-      const stats = loopProfileStats.get(section)!
-      const avgMs = stats.count > 0 ? stats.totalMs / stats.count : 0
-      return {
-        section,
-        avg_ms: Number(avgMs.toFixed(3)),
-        max_ms: Number(stats.maxMs.toFixed(3)),
-        samples: stats.count,
-      }
-    })
-
-    const avgRawDelta = loopProfileRawDeltaTotal / loopProfileFrameCount
-    console.groupCollapsed(
-      `[LoopProfile] frames=${loopProfileFrameCount} dropped=${loopProfileFrameDropCount} avgDelta=${avgRawDelta.toFixed(2)}ms maxDelta=${loopProfileRawDeltaMax.toFixed(2)}ms`
-    )
-    console.table(rows)
-    console.groupEnd()
-
-    resetLoopProfileWindow(now)
-  }
+  const loopProfiler = createLoopProfiler(() => loopProfileEnabled)
 
   // Player state from PlayerControl
   let currentPlayerState = $state<PlayerState>({
@@ -350,7 +221,7 @@
 
   // References to PlayerModel components
   let currentPlayerModel = $state<PlayerModel | null>(null)
-  let otherPlayerModels = $state<PlayerModel[]>([])
+  let otherPlayerModels = $state<(PlayerModel | undefined)[]>([])
 
   // Reference to PlayerControl component
   let playerControl = $state<PlayerControl>()
@@ -361,35 +232,29 @@
   }
 
   function rebuildTerrainTiles(centerChunkX: number, centerChunkZ: number) {
-    const nextTiles: TerrainTile[] = []
-    for (let dz = -TERRAIN_GRID_RADIUS; dz <= TERRAIN_GRID_RADIUS; dz++) {
-      for (let dx = -TERRAIN_GRID_RADIUS; dx <= TERRAIN_GRID_RADIUS; dx++) {
-        nextTiles.push({
-          id: `${dx}_${dz}`,
-          position: [
-            (centerChunkX + dx) * TERRAIN_TILE_SIZE,
-            0,
-            (centerChunkZ + dz) * TERRAIN_TILE_SIZE,
-          ],
-        })
-      }
-    }
-    terrainTiles = nextTiles
-    terrainMeshes = new Array(nextTiles.length)
+    terrainTiles = createTerrainTiles(
+      centerChunkX,
+      centerChunkZ,
+      TERRAIN_TILE_SIZE,
+      TERRAIN_GRID_RADIUS
+    )
+    terrainMeshes = new Array(terrainTiles.length)
   }
 
   function updateTerrainTilesFromPlayer() {
     if (!currentPlayer) return
-    const nextChunkX = Math.round(currentPlayer.position.x / TERRAIN_TILE_SIZE)
-    const nextChunkZ = Math.round(currentPlayer.position.z / TERRAIN_TILE_SIZE)
+    const nextChunk = getTerrainChunkFromPosition(
+      currentPlayer.position,
+      TERRAIN_TILE_SIZE
+    )
     if (
-      nextChunkX === terrainCenterChunk.x &&
-      nextChunkZ === terrainCenterChunk.z
+      nextChunk.x === terrainCenterChunk.x &&
+      nextChunk.z === terrainCenterChunk.z
     ) {
       return
     }
-    terrainCenterChunk = { x: nextChunkX, z: nextChunkZ }
-    rebuildTerrainTiles(nextChunkX, nextChunkZ)
+    terrainCenterChunk = nextChunk
+    rebuildTerrainTiles(nextChunk.x, nextChunk.z)
   }
 
   gameStore.subscribe((state) => {
@@ -399,7 +264,7 @@
   })
 
   // Monster models reference
-  let monsterModels = $state<Monster[]>([])
+  let monsterModels = $state<(Monster | undefined)[]>([])
 
   // Main game loop with 60fps throttling
   function gameLoop(currentTime: number) {
@@ -417,14 +282,7 @@
       const stepCount = Math.min(unclampedSteps, MAX_CATCH_UP_STEPS)
       const fixedDeltaTime = FRAME_TIME * stepCount
 
-      if (loopProfileEnabled) {
-        loopProfileFrameCount += 1
-        loopProfileRawDeltaTotal += fixedDeltaTime
-        loopProfileRawDeltaMax = Math.max(loopProfileRawDeltaMax, fixedDeltaTime)
-        if (fixedDeltaTime > FRAME_TIME * 1.5) {
-          loopProfileFrameDropCount += 1
-        }
-      }
+      loopProfiler.onFrame(fixedDeltaTime, FRAME_TIME)
 
       const frameWorkStart = performance.now()
 
@@ -440,9 +298,7 @@
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
       const cameraOffset = calculateCameraOffset()
-      if (loopProfileEnabled) {
-        recordLoopProfile('cameraOffset', performance.now() - cameraOffsetStart)
-      }
+      loopProfiler.record('cameraOffset', performance.now() - cameraOffsetStart)
 
       // Update player controls
       const playerControlStart = performance.now()
@@ -451,31 +307,25 @@
         playerControl.updatePlayerMovement(deltaTime)
       }
       updateTerrainTilesFromPlayer()
-      if (loopProfileEnabled) {
-        recordLoopProfile('playerControl', performance.now() - playerControlStart)
-      }
+      loopProfiler.record('playerControl', performance.now() - playerControlStart)
 
       // Update remote player interpolation
       const remoteInterpolationStart = performance.now()
       remotePlayerManager.update(deltaTime)
-      if (loopProfileEnabled) {
-        recordLoopProfile(
-          'remoteInterpolation',
-          performance.now() - remoteInterpolationStart
-        )
-      }
+      loopProfiler.record(
+        'remoteInterpolation',
+        performance.now() - remoteInterpolationStart
+      )
 
       // Update player model animations
       const currentPlayerAnimationStart = performance.now()
       if (currentPlayerModel) {
         currentPlayerModel.update(deltaTime / 1000)
       }
-      if (loopProfileEnabled) {
-        recordLoopProfile(
-          'currentPlayerAnimation',
-          performance.now() - currentPlayerAnimationStart
-        )
-      }
+      loopProfiler.record(
+        'currentPlayerAnimation',
+        performance.now() - currentPlayerAnimationStart
+      )
 
       // Update other player model animations
       const otherPlayerAnimationStart = performance.now()
@@ -484,12 +334,10 @@
           playerModel.update(deltaTime / 1000)
         }
       }
-      if (loopProfileEnabled) {
-        recordLoopProfile(
-          'otherPlayerAnimation',
-          performance.now() - otherPlayerAnimationStart
-        )
-      }
+      loopProfiler.record(
+        'otherPlayerAnimation',
+        performance.now() - otherPlayerAnimationStart
+      )
 
       // Update monster animations
       const monsterAnimationStart = performance.now()
@@ -498,9 +346,7 @@
           monsterModel.update(deltaTime / 1000, camera) // Convert ms to seconds for THREE.AnimationMixer
         }
       }
-      if (loopProfileEnabled) {
-        recordLoopProfile('monsterAnimation', performance.now() - monsterAnimationStart)
-      }
+      loopProfiler.record('monsterAnimation', performance.now() - monsterAnimationStart)
 
       // Update monster spawning logic
       const monsterLogicStart = performance.now()
@@ -517,27 +363,19 @@
       } else {
         playerDebugInfo.set(null)
       }
-      if (loopProfileEnabled) {
-        recordLoopProfile('monsterLogic', performance.now() - monsterLogicStart)
-      }
+      loopProfiler.record('monsterLogic', performance.now() - monsterLogicStart)
 
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()
       updateCameraWithOffset(cameraOffset)
-      if (loopProfileEnabled) {
-        recordLoopProfile('cameraUpdate', performance.now() - cameraUpdateStart)
-      }
+      loopProfiler.record('cameraUpdate', performance.now() - cameraUpdateStart)
 
       // Update directional light to follow player
       const lightUpdateStart = performance.now()
       updateLightPosition()
-      if (loopProfileEnabled) {
-        recordLoopProfile('lightUpdate', performance.now() - lightUpdateStart)
-      }
+      loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
-      if (loopProfileEnabled) {
-        recordLoopProfile('frameWork', performance.now() - frameWorkStart)
-      }
+      loopProfiler.record('frameWork', performance.now() - frameWorkStart)
 
       if (unclampedSteps > MAX_CATCH_UP_STEPS) {
         // Drop excessive backlog after long stalls (tab switch, debugger pause, etc.).
@@ -547,133 +385,48 @@
       }
     }
 
-    if (loopProfileEnabled) {
-      flushLoopProfile(currentTime)
-    }
+    loopProfiler.flush(currentTime)
 
     // Always continue the loop
     gameLoopId = requestAnimationFrame(gameLoop)
   }
 
   function calculateCameraOffset() {
-    if (!currentPlayer || !camera) {
-      return { x: CAMERA_OFFSET.x, y: CAMERA_OFFSET.y, z: CAMERA_OFFSET.z }
+    const offset = getCameraOffsetFromScene(
+      camera,
+      currentPlayer?.position ?? null,
+      CAMERA_OFFSET
+    )
+    if (camera) {
+      // Update camera "zoom metric" for debug UI.
+      cameraDistance.set(camera.zoom)
     }
-
-    // Calculate current distance vector from player to camera
-    const currentCameraPos = camera.position
-    const playerPos = currentPlayer.position
-
-    // Get the current distance vector (preserving zoom)
-    const distanceVector = {
-      x: currentCameraPos.x - playerPos.x,
-      y: currentCameraPos.y - playerPos.y,
-      z: currentCameraPos.z - playerPos.z,
-    }
-
-    // Update camera "zoom metric" for debug UI.
-    cameraDistance.set(camera.zoom)
-
-    return distanceVector
+    return offset
   }
 
   function updateCameraWithOffset(offset: { x: number; y: number; z: number }) {
     if (!currentPlayer || !camera) return
-
-    const playerPos = currentPlayer.position
-
-    // Update camera position by adding the preserved offset to new player position
-    const newCameraPosition = {
-      x: playerPos.x + offset.x,
-      y: playerPos.y + offset.y,
-      z: playerPos.z + offset.z,
-    }
-
-    camera.position.set(
-      newCameraPosition.x,
-      newCameraPosition.y,
-      newCameraPosition.z
-    )
-
-    // Make camera look at player directly
-    camera.lookAt(playerPos.x, playerPos.y, playerPos.z)
-
-    // Update camera target to look at player
-    cameraTarget = [playerPos.x, playerPos.y, playerPos.z]
+    cameraTarget = applyCameraOffset(camera, currentPlayer.position, offset)
   }
 
   function resetCameraToInitialState() {
     if (!currentPlayer || !camera) return
-
-    camera.position.set(
-      currentPlayer.position.x + CAMERA_OFFSET.x,
-      currentPlayer.position.y + CAMERA_OFFSET.y,
-      currentPlayer.position.z + CAMERA_OFFSET.z
+    cameraTarget = resetCameraToDefaultState(
+      camera,
+      currentPlayer.position,
+      CAMERA_OFFSET
     )
-    camera.lookAt(
-      currentPlayer.position.x,
-      currentPlayer.position.y,
-      currentPlayer.position.z
-    )
-    cameraTarget = [
-      currentPlayer.position.x,
-      currentPlayer.position.y,
-      currentPlayer.position.z,
-    ]
-
-    camera.zoom = ORTHOGRAPHIC_DEFAULT_ZOOM
-    camera.updateProjectionMatrix()
     cameraDistance.set(camera.zoom)
   }
 
   function updateLightPosition() {
-    if (!currentPlayer) return
-
-    const sunLightState = sunLightSimulation.getLightState()
-    const celestialLightState = computeCelestialLightState(
-      sunLightState,
+    sceneLighting.update({
+      currentPlayerPosition: currentPlayer?.position ?? null,
       localCalendarDate,
-      AMBIENT_DAY_INTENSITY,
-      AMBIENT_NIGHT_INTENSITY
-    )
-
-    if (ambientLight) {
-      ambientColor
-        .copy(AMBIENT_DAY_COLOR)
-        .lerp(AMBIENT_NIGHT_COLOR, celestialLightState.ambientNightFactor)
-      ambientLight.color.copy(ambientColor)
-      ambientLight.intensity = celestialLightState.ambientIntensity
-    }
-
-    if (!directionalLight) return
-
-    const playerPos = currentPlayer.position
-    const directionalLightState = celestialLightState.directional
-
-    directionalLight.position.set(
-      playerPos.x + directionalLightState.positionOffset.x,
-      playerPos.y + directionalLightState.positionOffset.y,
-      playerPos.z + directionalLightState.positionOffset.z
-    )
-    directionalLight.intensity = directionalLightState.intensity
-
-    if (directionalLightState.useMoonLight) {
-      directionalLight.color.copy(MOON_LIGHT_COLOR)
-    } else {
-      sunDirectionalColor
-        .copy(SUN_DAY_COLOR)
-        .lerp(SUN_TWILIGHT_COLOR, directionalLightState.sunColorBlendFactor)
-      directionalLight.color.copy(sunDirectionalColor)
-    }
-
-    if (directionalLight.target) {
-      directionalLight.target.position.set(
-        playerPos.x,
-        playerPos.y,
-        playerPos.z
-      )
-      directionalLight.target.updateMatrixWorld()
-    }
+      ambientLight,
+      directionalLight,
+      sunLightSimulation,
+    })
   }
 
   // Stop game loop
@@ -686,7 +439,7 @@
 
   onMount(() => {
     loopProfileEnabled = false
-    resetLoopProfileWindow(performance.now())
+    loopProfiler.resetWindow(performance.now())
     setGameHour(sunLightSimulation.getGameHour())
     syncCalendarToWidgetAndSun()
 
@@ -714,15 +467,7 @@
       }
     })
 
-    // Build a terrain geometry (XZ plane)
-    const plane = new THREE.PlaneGeometry(
-      TERRAIN_TILE_SIZE,
-      TERRAIN_TILE_SIZE,
-      TERRAIN_TILE_SEGMENTS,
-      TERRAIN_TILE_SEGMENTS
-    )
-    plane.rotateX(-Math.PI / 2) // Lay flat on XZ
-    terrainGeometry = plane
+    terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
     lastFrameTime = performance.now()
@@ -793,7 +538,7 @@
 />
 <T.AmbientLight
   bind:ref={ambientLight}
-  intensity={AMBIENT_DAY_INTENSITY}
+  intensity={sceneLighting.ambientDayIntensity}
   color="#ffffff"
 />
 
@@ -806,84 +551,34 @@
   position={[0, -1.1, 0]}
 />
 
-{#if terrainGeometry}
-  {#each terrainTiles as tile, index (tile.id)}
-    <SplatTerrain
-      geometry={terrainGeometry}
-      position={tile.position}
-      bind:mesh={terrainMeshes[index]}
-    />
-  {/each}
-{/if}
+<GameSceneTerrainLayer
+  {terrainGeometry}
+  {terrainTiles}
+  bind:terrainMeshes={terrainMeshes}
+/>
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
 <!-- <TerrainField /> -->
 
-{#if camera && terrainMeshes.some((m) => m !== undefined)}
-  <!-- PlayerControl component handles input and updates player state -->
-  <PlayerControl
-    bind:this={playerControl}
-    onStateChange={handlePlayerStateChange}
-    {camera}
-    groundMeshes={terrainMeshes.filter((m) => m !== undefined) as THREE.Mesh[]}
-    monsterMeshes={monsterModels
-      .map((m) => m?.getMeshGroup())
-      .filter((g) => g !== undefined) as THREE.Group[]}
-    attackCooldown={playerAttackDuration}
-  />
-{/if}
+<GameScenePlayersLayer
+  {camera}
+  {cameraInitialized}
+  {currentPlayer}
+  {otherPlayers}
+  remotePlayers={remotePlayerManager.players}
+  {chatBubbles}
+  {currentPlayerState}
+  {terrainMeshes}
+  {monsterModels}
+  {playerAttackDuration}
+  onStateChange={handlePlayerStateChange}
+  onAttackDuration={(duration) => (playerAttackDuration = duration)}
+  bind:playerControl={playerControl}
+  bind:currentPlayerModel={currentPlayerModel}
+  bind:otherPlayerModels={otherPlayerModels}
+/>
 
-{#if currentPlayer && cameraInitialized && camera}
-  <PlayerModel
-    bind:this={currentPlayerModel}
-    position={currentPlayer.position}
-    name={currentPlayer.name}
-    isCurrentPlayer={true}
-    playerState={currentPlayerState.state}
-    attackCounter={currentPlayerState.attackCounter}
-    speed={currentPlayerState.speed}
-    rotation={currentPlayerState.rotation}
-    movementMode={currentPlayerState.movementMode}
-    {camera}
-    chatBubble={chatBubbles.get(currentPlayer.id)?.message}
-    onAttackDuration={(duration) => (playerAttackDuration = duration)}
-    lastDamageInfo={currentPlayer.lastDamageInfo}
-  />
-{/if}
-
-{#if cameraInitialized && camera}
-  {#each [...otherPlayers.values()] as player, index (player.id)}
-    {@const remotePlayer = remotePlayerManager.players.get(player.id)}
-    {#if remotePlayer}
-      <PlayerModel
-        bind:this={otherPlayerModels[index]}
-        position={new THREE.Vector3(
-          remotePlayer.position.x,
-          remotePlayer.position.y,
-          remotePlayer.position.z
-        )}
-        name={player.name}
-        isCurrentPlayer={false}
-        playerState={remotePlayer.state}
-        attackCounter={remotePlayer.attackCounter}
-        speed={remotePlayer.speed}
-        rotation={remotePlayer.rotation}
-        movementMode={remotePlayer.movementMode}
-        {camera}
-        chatBubble={chatBubbles.get(player.id)?.message}
-      />
-    {/if}
-  {/each}
-{/if}
-
-{#each [...monsterManager.monsters.values()] as monster, index (monster.id)}
-  <Monster
-    bind:this={monsterModels[index]}
-    id={monster.id}
-    type={monster.type}
-    position={monster.position}
-    rotation={monster.rotation}
-    monsterState={monster.state}
-    lastDamageInfo={monster.lastDamageInfo}
-  />
-{/each}
+<GameSceneMonstersLayer
+  monsters={monsterManager.monsters}
+  bind:monsterModels={monsterModels}
+/>
