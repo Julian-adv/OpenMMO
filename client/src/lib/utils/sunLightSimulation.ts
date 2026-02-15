@@ -1,3 +1,8 @@
+import {
+  getCelestialDirectionFromHourAndDeclination,
+  getDeclinationRadFromDayIndex,
+} from './celestialDirection'
+
 export interface SunSimulationConfig {
   latitudeDeg: number
   sunriseHour: number
@@ -47,8 +52,6 @@ export interface SolarDaylightWindow {
 const HOURS_PER_DAY = 24
 const MONTHS_PER_YEAR = 12
 const DAYS_PER_MONTH = 30
-const DAYS_PER_YEAR = MONTHS_PER_YEAR * DAYS_PER_MONTH
-const SPRING_EQUINOX_DAY_OF_YEAR = 90 // 3/30 in a 30-day month calendar
 const DAYLIGHT_SOFTENING_EXPONENT = 0.7
 const DAYLIGHT_FLOOR = 0.4
 
@@ -70,25 +73,13 @@ function dayOfYearFromCalendar(month: number, day: number) {
   return (clampedMonth - 1) * DAYS_PER_MONTH + clampedDay
 }
 
-function getSolarDeclinationRadFromDayOfYear(
-  dayOfYear: number,
-  axialTiltRad: number
-) {
-  const phase =
-    (2 * Math.PI * (dayOfYear - SPRING_EQUINOX_DAY_OF_YEAR)) / DAYS_PER_YEAR
-  return axialTiltRad * Math.sin(phase)
-}
-
 export function getSolarDaylightWindow(
   config: SolarDaylightWindowConfig
 ): SolarDaylightWindow {
   const dayOfYear = dayOfYearFromCalendar(config.month, config.day)
   const latitudeRad = (config.latitudeDeg * Math.PI) / 180
-  const axialTiltRad = ((config.axialTiltDeg ?? 24) * Math.PI) / 180
-  const declination = getSolarDeclinationRadFromDayOfYear(
-    dayOfYear,
-    axialTiltRad
-  )
+  const axialTiltDeg = config.axialTiltDeg ?? 24
+  const declination = getDeclinationRadFromDayIndex(dayOfYear, axialTiltDeg)
   const cosHourAngle = -Math.tan(latitudeRad) * Math.tan(declination)
 
   if (cosHourAngle <= -1) {
@@ -122,8 +113,7 @@ export function createSunLightSimulation(
 ): SunLightSimulation {
   const latitudeRad = (config.latitudeDeg * Math.PI) / 180
   const latitudeCos = Math.cos(latitudeRad)
-  const latitudeSin = Math.sin(latitudeRad)
-  const axialTiltRad = ((config.axialTiltDeg ?? 24) * Math.PI) / 180
+  const axialTiltDeg = config.axialTiltDeg ?? 24
   let elapsedSeconds =
     (normalizeHour(config.startHour) / HOURS_PER_DAY) *
     config.dayDurationSeconds
@@ -146,28 +136,17 @@ export function createSunLightSimulation(
   }
 
   function getSolarDeclinationRad() {
-    return getSolarDeclinationRadFromDayOfYear(dayOfYear, axialTiltRad)
+    return getDeclinationRadFromDayIndex(dayOfYear, axialTiltDeg)
   }
 
   function getSunDirectionFromHour(hour: number): SunVector {
-    const hourAngle = (2 * Math.PI * (hour - 12)) / HOURS_PER_DAY
     const declination = getSolarDeclinationRad()
-    const cosDeclination = Math.cos(declination)
-    const sinDeclination = Math.sin(declination)
-
-    const east = -cosDeclination * Math.sin(hourAngle)
-    const north =
-      latitudeCos * sinDeclination -
-      latitudeSin * cosDeclination * Math.cos(hourAngle)
-    const up =
-      latitudeSin * sinDeclination +
-      latitudeCos * cosDeclination * Math.cos(hourAngle)
-
-    return {
-      x: east,
-      y: up,
-      z: -north, // Convert north-positive to south-positive world z.
-    }
+    return getCelestialDirectionFromHourAndDeclination(
+      hour,
+      12,
+      config.latitudeDeg,
+      declination
+    )
   }
 
   function advance(deltaSeconds: number) {
