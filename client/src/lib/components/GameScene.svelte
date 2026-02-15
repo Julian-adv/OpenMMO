@@ -143,12 +143,17 @@
   const SUN_LIGHT_DISTANCE = 120
   const SHADOW_CAMERA_EXTENT = 80
   const SHADOW_CAMERA_FAR = SUN_LIGHT_DISTANCE * 3
+  const SUN_DAY_DURATION_SECONDS = 3 * 60 * 60
+  const SUN_START_HOUR = 12
+  const GAME_START_YEAR = 217
+  const GAME_MONTHS_PER_YEAR = 12
+  const GAME_DAYS_PER_MONTH = 30
 
   const sunLightSimulation = createSunLightSimulation({
     latitudeDeg: 40,
     sunriseHour: 6,
-    dayDurationSeconds: 3 * 60 * 60,
-    startHour: 12,
+    dayDurationSeconds: SUN_DAY_DURATION_SECONDS,
+    startHour: SUN_START_HOUR,
     startMonth: 1,
     startDay: 1,
     axialTiltDeg: 24,
@@ -156,21 +161,94 @@
     maxIntensity: 1.5,
   })
 
+  interface CalendarDate {
+    year: number
+    month: number
+    day: number
+  }
+
+  let localCalendarDate = $state<CalendarDate>({
+    year: GAME_START_YEAR,
+    month: 1,
+    day: 1,
+  })
+  let localDayElapsedSeconds = $state(
+    (SUN_START_HOUR / 24) * SUN_DAY_DURATION_SECONDS
+  )
+
   let latestServerGameTime = $state<ServerGameTime | null>(null)
   let latestSunTimeScale = $state(1)
+
+  function calendarToDayIndex(date: CalendarDate) {
+    const normalizedYear = Math.max(GAME_START_YEAR, Math.floor(date.year))
+    const normalizedMonth = Math.min(
+      GAME_MONTHS_PER_YEAR,
+      Math.max(1, Math.floor(date.month))
+    )
+    const normalizedDay = Math.min(
+      GAME_DAYS_PER_MONTH,
+      Math.max(1, Math.floor(date.day))
+    )
+    const yearsSinceStart = normalizedYear - GAME_START_YEAR
+    return (
+      yearsSinceStart * GAME_MONTHS_PER_YEAR * GAME_DAYS_PER_MONTH +
+      (normalizedMonth - 1) * GAME_DAYS_PER_MONTH +
+      (normalizedDay - 1)
+    )
+  }
+
+  function dayIndexToCalendar(dayIndex: number): CalendarDate {
+    const normalizedDayIndex = Math.max(0, Math.floor(dayIndex))
+    const daysPerYear = GAME_MONTHS_PER_YEAR * GAME_DAYS_PER_MONTH
+    const year = GAME_START_YEAR + Math.floor(normalizedDayIndex / daysPerYear)
+    const dayOfYear = normalizedDayIndex % daysPerYear
+    const month = Math.floor(dayOfYear / GAME_DAYS_PER_MONTH) + 1
+    const day = (dayOfYear % GAME_DAYS_PER_MONTH) + 1
+
+    return { year, month, day }
+  }
+
+  function syncCalendarToWidgetAndSun() {
+    setGameDate(
+      localCalendarDate.year,
+      localCalendarDate.month,
+      localCalendarDate.day
+    )
+    sunLightSimulation.setCalendarDate(localCalendarDate.month, localCalendarDate.day)
+  }
+
+  function syncLocalCalendarToServer(gameTime: ServerGameTime) {
+    localCalendarDate = {
+      year: gameTime.year,
+      month: gameTime.month,
+      day: gameTime.day,
+    }
+    localDayElapsedSeconds =
+      ((gameTime.hour + gameTime.minute / 60) / 24) * SUN_DAY_DURATION_SECONDS
+    syncCalendarToWidgetAndSun()
+  }
+
+  function addLocalCalendarDays(daysToAdd: number) {
+    if (daysToAdd === 0) return
+    const currentDayIndex = calendarToDayIndex(localCalendarDate)
+    localCalendarDate = dayIndexToCalendar(currentDayIndex + daysToAdd)
+  }
+
+  function advanceLocalCalendar(deltaSeconds: number) {
+    if (deltaSeconds <= 0) return
+    localDayElapsedSeconds += deltaSeconds
+    if (localDayElapsedSeconds < SUN_DAY_DURATION_SECONDS) return
+
+    const elapsedDays = Math.floor(localDayElapsedSeconds / SUN_DAY_DURATION_SECONDS)
+    addLocalCalendarDays(elapsedDays)
+    localDayElapsedSeconds -= elapsedDays * SUN_DAY_DURATION_SECONDS
+    syncCalendarToWidgetAndSun()
+  }
 
   function applyServerGameHourIfAllowed() {
     if (latestSunTimeScale > 1) return
     if (latestServerGameTime === null) return
-    setGameDate(
-      latestServerGameTime.year,
-      latestServerGameTime.month,
-      latestServerGameTime.day
-    )
-    sunLightSimulation.setCalendarDate(
-      latestServerGameTime.month,
-      latestServerGameTime.day
-    )
+    syncLocalCalendarToServer(latestServerGameTime)
     const hour = latestServerGameTime.hour + latestServerGameTime.minute / 60
     sunLightSimulation.setGameHour(hour)
     setGameHour(hour)
@@ -367,7 +445,9 @@
 
       // Apply time scale for slow motion debugging
       const deltaTime = fixedDeltaTime * $timeScale
-      sunLightSimulation.advance(realDeltaSeconds * $sunTimeScale)
+      const sunDeltaSeconds = realDeltaSeconds * $sunTimeScale
+      sunLightSimulation.advance(sunDeltaSeconds)
+      advanceLocalCalendar(sunDeltaSeconds)
       setGameHour(sunLightSimulation.getGameHour())
 
       // Calculate camera offset before player movement
@@ -595,12 +675,10 @@
     loopProfileEnabled = false
     resetLoopProfileWindow(performance.now())
     setGameHour(sunLightSimulation.getGameHour())
+    syncCalendarToWidgetAndSun()
 
     const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
       latestServerGameTime = gameTime
-      if (gameTime) {
-        setGameDate(gameTime.year, gameTime.month, gameTime.day)
-      }
       applyServerGameHourIfAllowed()
     })
 
