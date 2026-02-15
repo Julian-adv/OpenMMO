@@ -1,5 +1,8 @@
 use crate::auth::AuthService;
 use crate::game::character_attributes::roll_character_attributes;
+use crate::game::character_hp::{
+    level_one_max_hp, DEFAULT_CHARACTER_CLASS, DEFAULT_CHARACTER_RACE,
+};
 use crate::game_state::GameState;
 use crate::types::{
     new_player, Character, CharacterAttributes, ClientMessage, PlayerId, ServerMessage,
@@ -11,6 +14,8 @@ use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tracing::{error, info, warn};
+
+const FALLBACK_DEFAULT_MAX_HP: u32 = 16;
 
 pub async fn handle_connection(
     stream: TcpStream,
@@ -248,10 +253,12 @@ async fn handle_client_message(
                 }]);
             };
 
+            let max_hp = default_character_max_hp();
             match auth_service.create_character(
                 &authed_account_name,
                 &character_name,
                 &rolled_attributes,
+                max_hp,
             ) {
                 Ok(character) => {
                     *pending_character_attributes = None;
@@ -326,8 +333,12 @@ async fn handle_client_message(
             }
 
             let attributes = roll_character_attributes();
+            let max_hp = default_character_max_hp();
             *pending_character_attributes = Some(attributes.clone());
-            return Ok(vec![ServerMessage::CharacterStatsRolled { attributes }]);
+            return Ok(vec![ServerMessage::CharacterStatsRolled {
+                attributes,
+                max_hp,
+            }]);
         }
 
         ClientMessage::EnterGame { character_id } => {
@@ -362,7 +373,13 @@ async fn handle_client_message(
                 .kick_player_by_name(&selected_character.name)
                 .await;
 
-            let player = new_player(selected_character.name.clone(), selected_character.level);
+            let max_hp = selected_character.max_hp;
+
+            let player = new_player(
+                selected_character.name.clone(),
+                selected_character.level,
+                max_hp,
+            );
             let id = player.id.clone();
 
             *direct_rx = Some(game_state.register_direct_channel(&id).await);
@@ -471,6 +488,20 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         name: record.name,
         created_at: record.created_at,
         level: record.level,
+        max_hp: record.max_hp,
         attributes: record.attributes,
+    }
+}
+
+fn default_character_max_hp() -> u32 {
+    match level_one_max_hp(DEFAULT_CHARACTER_RACE, DEFAULT_CHARACTER_CLASS) {
+        Ok(value) => value,
+        Err(err) => {
+            warn!(
+                "Failed to resolve level 1 max HP for race='{}', class='{}': {}",
+                DEFAULT_CHARACTER_RACE, DEFAULT_CHARACTER_CLASS, err
+            );
+            FALLBACK_DEFAULT_MAX_HP
+        }
     }
 }

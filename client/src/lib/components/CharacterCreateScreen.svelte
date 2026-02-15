@@ -1,6 +1,10 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core'
-  import type { AccountCharacter, CharacterAttributes } from '../network/socket'
+  import type {
+    AccountCharacter,
+    CharacterRollResult,
+    RollCharacterStatsResult,
+  } from '../network/socket'
   import CharacterCreateScene from './CharacterCreateScene.svelte'
 
   const MAX_CHARACTER_SLOTS = 3
@@ -8,11 +12,7 @@
   interface Props {
     accountName: string
     characters: AccountCharacter[]
-    onRollCharacterStats: () => Promise<{
-      ok: boolean
-      message?: string
-      attributes?: CharacterAttributes
-    }>
+    onRollCharacterStats: () => Promise<RollCharacterStatsResult>
     onCreateCharacter: (
       characterName: string
     ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
@@ -30,7 +30,7 @@
   }: Props = $props()
 
   let createCharacterName = $state('')
-  let rolledAttributes = $state<CharacterAttributes | null>(null)
+  let rolledStats = $state<CharacterRollResult | null>(null)
   let isCreating = $state(false)
   let isRolling = $state(false)
   let errorMessage = $state('')
@@ -56,11 +56,11 @@
     isRolling = false
 
     if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to roll character attributes'
+      errorMessage = result.message
       return
     }
 
-    rolledAttributes = result.attributes ?? null
+    rolledStats = { attributes: result.attributes, maxHp: result.maxHp }
   }
 
   async function submitCreateCharacter(event: Event) {
@@ -77,7 +77,7 @@
       errorMessage = 'Please enter character name'
       return
     }
-    if (!rolledAttributes) {
+    if (!rolledStats) {
       errorMessage = 'Roll attributes first'
       return
     }
@@ -98,7 +98,7 @@
     }
 
     createCharacterName = ''
-    rolledAttributes = null
+    rolledStats = null
     onCharacterCreated(result.character.id)
   }
 </script>
@@ -135,13 +135,14 @@
         </label>
 
         <div class="rolled-attributes">
-          {#if rolledAttributes}
-            <div class="attr">STR {rolledAttributes.str}</div>
-            <div class="attr">DEX {rolledAttributes.dex}</div>
-            <div class="attr">CON {rolledAttributes.con}</div>
-            <div class="attr">INT {rolledAttributes.int}</div>
-            <div class="attr">WIS {rolledAttributes.wis}</div>
-            <div class="attr">CHA {rolledAttributes.cha}</div>
+          {#if rolledStats}
+            <div class="attr">STR {rolledStats.attributes.str}</div>
+            <div class="attr">DEX {rolledStats.attributes.dex}</div>
+            <div class="attr">CON {rolledStats.attributes.con}</div>
+            <div class="attr">INT {rolledStats.attributes.int}</div>
+            <div class="attr">WIS {rolledStats.attributes.wis}</div>
+            <div class="attr">CHA {rolledStats.attributes.cha}</div>
+            <div class="attr">HP {rolledStats.maxHp}</div>
           {:else}
             <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
           {/if}
@@ -154,7 +155,7 @@
           <button
             type="submit"
             class="primary"
-            disabled={isBusy() || !rolledAttributes || atSlotLimit()}
+            disabled={isBusy() || !rolledStats || atSlotLimit()}
           >
             {isCreating ? 'Creating...' : 'Create'}
           </button>

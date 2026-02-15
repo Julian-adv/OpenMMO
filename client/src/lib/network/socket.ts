@@ -51,6 +51,7 @@ export type AccountCharacter = {
   name: string
   created_at: number
   level: number
+  max_hp: number
   attributes: CharacterAttributes
 }
 
@@ -62,6 +63,22 @@ export type CharacterAttributes = {
   wis: number
   cha: number
 }
+
+export type CharacterRollResult = {
+  attributes: CharacterAttributes
+  maxHp: number
+}
+
+export type RollCharacterStatsResult =
+  | {
+      ok: true
+      attributes: CharacterAttributes
+      maxHp: number
+    }
+  | {
+      ok: false
+      message: string
+    }
 
 // Serde externally tagged enum shapes
 type ClientMessage =
@@ -108,7 +125,7 @@ type AuthSuccessHandler = (payload: AuthSuccessPayload) => void
 type AuthErrorHandler = (message: string) => void
 type JoinSuccessHandler = () => void
 type CharacterCreatedHandler = (character: AccountCharacter) => void
-type CharacterStatsRolledHandler = (attributes: CharacterAttributes) => void
+type CharacterStatsRolledHandler = (result: CharacterRollResult) => void
 type CharacterDeletedHandler = (characterId: number) => void
 type CharacterErrorHandler = (message: string) => void
 type KickedHandler = (reason: string) => void
@@ -216,8 +233,8 @@ class NetworkManager {
     this.characterCreatedHandlers.forEach((handler) => handler(character))
   }
 
-  private emitCharacterStatsRolled(attributes: CharacterAttributes) {
-    this.characterStatsRolledHandlers.forEach((handler) => handler(attributes))
+  private emitCharacterStatsRolled(result: CharacterRollResult) {
+    this.characterStatsRolledHandlers.forEach((handler) => handler(result))
   }
 
   private emitCharacterDeleted(characterId: number) {
@@ -371,7 +388,10 @@ class NetworkManager {
 
       case 'CharacterStatsRolled': {
         const attributes: CharacterAttributes = data.attributes
-        this.emitCharacterStatsRolled(attributes)
+        this.emitCharacterStatsRolled({
+          attributes,
+          maxHp: data.max_hp,
+        })
         break
       }
 
@@ -1026,11 +1046,7 @@ class NetworkManager {
     })
   }
 
-  async requestRollCharacterStats(): Promise<{
-    ok: boolean
-    message?: string
-    attributes?: CharacterAttributes
-  }> {
+  async requestRollCharacterStats(): Promise<RollCharacterStatsResult> {
     await this.ensureWasm()
     if (this.socket?.readyState !== WebSocket.OPEN) {
       return { ok: false, message: 'Socket is not connected' }
@@ -1060,11 +1076,15 @@ class NetworkManager {
         resolve({ ok: false, message: 'Stat roll timed out' })
       }, 8000)
 
-      offRolled = this.onCharacterStatsRolled((attributes) => {
+      offRolled = this.onCharacterStatsRolled((result) => {
         if (settled) return
         settled = true
         cleanup()
-        resolve({ ok: true, attributes })
+        resolve({
+          ok: true,
+          attributes: result.attributes,
+          maxHp: result.maxHp,
+        })
       })
 
       offCharacterError = this.onCharacterError((message) => {

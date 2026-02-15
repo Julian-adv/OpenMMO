@@ -3,16 +3,22 @@
 
   interface Props {
     level: number
+    currentHp: number
+    maxHp: number
     attributes: CharacterAttributes
   }
 
-  let { level, attributes }: Props = $props()
+  let { level, currentHp, maxHp, attributes }: Props = $props()
 </script>
 
 <div class="attribute-hud" aria-label="Character attributes">
   <span class="attr-item level-item">
     <span class="attr-label">lv</span>
     <span class="attr-value level-value">{level}</span>
+  </span>
+  <span class="attr-item hp-item">
+    <span class="attr-label">hp</span>
+    <span class="attr-value hp-value">{currentHp}/{maxHp}</span>
   </span>
   <span class="attr-separator"></span>
   <span class="attr-item">
@@ -88,6 +94,11 @@
 
   .level-value {
     color: #f0c040;
+  }
+
+  .hp-value {
+    color: #6ee7b7;
+    font-size: 16px;
   }
 
   .attr-separator {

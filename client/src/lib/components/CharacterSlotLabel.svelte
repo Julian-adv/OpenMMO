@@ -120,7 +120,7 @@
 
     <!-- Level -->
     <Text
-      text="Lv. {character.level}"
+      text={`Lv. ${character.level}  HP ${character.max_hp}`}
       position={[0, panelHeight / 2 - 0.27, 0.02]}
       fontSize={0.1}
       color="#f0c040"

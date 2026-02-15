@@ -37,6 +37,7 @@ pub struct Character {
     pub name: String,
     pub created_at: i64,
     pub level: u32,
+    pub max_hp: u32,
     pub attributes: CharacterAttributes,
 }
 
@@ -113,6 +114,7 @@ pub enum ServerMessage {
     },
     CharacterStatsRolled {
         attributes: CharacterAttributes,
+        max_hp: u32,
     },
     CharacterDeleted {
         character_id: i64,

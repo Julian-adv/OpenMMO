@@ -21,6 +21,8 @@
     accountCharacters.find((character) => character.id === selectedCharacterId) ?? null
   )
   let isPlayerDead = $state(false)
+  let currentPlayerHp = $state<number | null>(null)
+  let currentPlayerMaxHp = $state<number | null>(null)
   let showRespawnDialog = $state(false)
   let wasPlayerDead = false
   let kickedMessage = $state('')
@@ -142,6 +144,8 @@
   })
 
   gameStore.subscribe((state) => {
+    currentPlayerHp = state.currentPlayer?.health ?? null
+    currentPlayerMaxHp = state.currentPlayer?.maxHealth ?? null
     const deadNow =
       screen === 'game' &&
       !!state.currentPlayer &&
@@ -166,7 +170,12 @@
       <ChatPanel />
       <FPSCounter />
       {#if selectedCharacter}
-        <CharacterAttributesHud level={selectedCharacter.level} attributes={selectedCharacter.attributes} />
+        <CharacterAttributesHud
+          level={selectedCharacter.level}
+          currentHp={currentPlayerHp ?? selectedCharacter.max_hp}
+          maxHp={currentPlayerMaxHp ?? selectedCharacter.max_hp}
+          attributes={selectedCharacter.attributes}
+        />
       {/if}
     </div>
 

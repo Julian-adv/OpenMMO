@@ -4,7 +4,7 @@ pub use onlinerpg_shared::{
 };
 use uuid::Uuid;
 
-pub fn new_player(name: String, level: u32) -> Player {
+pub fn new_player(name: String, level: u32, max_health: u32) -> Player {
     Player {
         id: Uuid::new_v4().to_string(),
         name,
@@ -15,7 +15,7 @@ pub fn new_player(name: String, level: u32) -> Player {
         },
         rotation: 0.0,
         level,
-        health: 10,
-        max_health: 10,
+        health: max_health,
+        max_health,
     }
 }
