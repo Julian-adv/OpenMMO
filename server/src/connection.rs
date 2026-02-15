@@ -387,8 +387,10 @@ async fn handle_client_message(
             let mut responses = vec![ServerMessage::JoinSuccess {
                 player: player.clone(),
             }];
+            let datetime = game_state.current_game_datetime();
             responses.push(ServerMessage::GameTimeSync {
-                game_hour: game_state.current_game_hour(),
+                is_night: GameState::is_night(&datetime),
+                datetime,
             });
 
             if let Some(game_state_msg) = game_state.add_player(player).await {

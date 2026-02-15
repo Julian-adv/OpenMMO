@@ -1,6 +1,6 @@
 use crate::game::combat;
 use crate::monster_defs::MonsterDefs;
-use crate::types::{Player, PlayerId, Position, ServerMessage};
+use crate::types::{GameDateTime, Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -9,9 +9,17 @@ use tracing::{info, warn};
 
 pub type GameStateSender = broadcast::Sender<ServerMessage>;
 pub type GameStateReceiver = broadcast::Receiver<ServerMessage>;
-const GAME_DAY_DURATION_SECONDS: f32 = 3.0 * 60.0 * 60.0;
-const GAME_HOURS_PER_DAY: f32 = 24.0;
-const GAME_START_HOUR: f32 = 12.0;
+const REAL_DAY_DURATION_SECONDS: f64 = 3.0 * 60.0 * 60.0;
+const GAME_HOURS_PER_DAY: i64 = 24;
+const GAME_MINUTES_PER_HOUR: i64 = 60;
+const GAME_DAYS_PER_MONTH: i64 = 30;
+const GAME_MONTHS_PER_YEAR: i64 = 12;
+const GAME_DAYS_PER_YEAR: i64 = GAME_DAYS_PER_MONTH * GAME_MONTHS_PER_YEAR;
+const GAME_START_YEAR: i64 = 217;
+const DAY_START_HOUR: u8 = 6;
+const NIGHT_START_HOUR: u8 = 18;
+const GAME_SECONDS_PER_REAL_SECOND: f64 =
+    (GAME_HOURS_PER_DAY as f64 * GAME_MINUTES_PER_HOUR as f64 * 60.0) / REAL_DAY_DURATION_SECONDS;
 
 #[derive(Default)]
 struct IdState {
@@ -25,38 +33,100 @@ pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
     broadcast_tx: GameStateSender,
-    game_clock_start: Instant,
+    game_clock_start_real: Instant,
+    game_clock_start_game_seconds: i64,
     monster_defs: MonsterDefs,
     id_state: Arc<RwLock<IdState>>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
 }
 
 impl GameState {
-    pub fn new(monster_defs: MonsterDefs) -> Self {
+    pub fn default_start_datetime() -> GameDateTime {
+        GameDateTime {
+            year: GAME_START_YEAR as u32,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+        }
+    }
+
+    pub fn new(monster_defs: MonsterDefs, initial_datetime: GameDateTime) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
 
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
             monsters: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
-            game_clock_start: Instant::now(),
+            game_clock_start_real: Instant::now(),
+            game_clock_start_game_seconds: Self::datetime_to_total_game_seconds(&initial_datetime),
             monster_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub fn current_game_hour(&self) -> f32 {
-        let elapsed_seconds = self.game_clock_start.elapsed().as_secs_f32();
-        let day_progress =
-            (elapsed_seconds % GAME_DAY_DURATION_SECONDS) / GAME_DAY_DURATION_SECONDS;
-        (GAME_START_HOUR + day_progress * GAME_HOURS_PER_DAY) % GAME_HOURS_PER_DAY
+    fn datetime_to_total_game_seconds(datetime: &GameDateTime) -> i64 {
+        let year = i64::from(datetime.year).max(GAME_START_YEAR);
+        let month = i64::from(datetime.month).clamp(1, GAME_MONTHS_PER_YEAR);
+        let day = i64::from(datetime.day).clamp(1, GAME_DAYS_PER_MONTH);
+        let hour = i64::from(datetime.hour).clamp(0, GAME_HOURS_PER_DAY - 1);
+        let minute = i64::from(datetime.minute).clamp(0, GAME_MINUTES_PER_HOUR - 1);
+
+        let years_since_start = year - GAME_START_YEAR;
+        let total_days =
+            years_since_start * GAME_DAYS_PER_YEAR + (month - 1) * GAME_DAYS_PER_MONTH + (day - 1);
+        let total_minutes = total_days * GAME_HOURS_PER_DAY * GAME_MINUTES_PER_HOUR
+            + hour * GAME_MINUTES_PER_HOUR
+            + minute;
+        total_minutes * 60
     }
 
-    pub fn broadcast_game_time(&self) {
+    fn total_game_seconds_to_datetime(total_game_seconds: i64) -> GameDateTime {
+        let total_seconds = total_game_seconds.max(0);
+        let total_minutes = total_seconds / 60;
+        let total_days = total_minutes / (GAME_HOURS_PER_DAY * GAME_MINUTES_PER_HOUR);
+
+        let minutes_in_day = total_minutes % (GAME_HOURS_PER_DAY * GAME_MINUTES_PER_HOUR);
+        let hour = (minutes_in_day / GAME_MINUTES_PER_HOUR) as u8;
+        let minute = (minutes_in_day % GAME_MINUTES_PER_HOUR) as u8;
+
+        let year = GAME_START_YEAR + (total_days / GAME_DAYS_PER_YEAR);
+        let day_of_year = total_days % GAME_DAYS_PER_YEAR;
+        let month = (day_of_year / GAME_DAYS_PER_MONTH) + 1;
+        let day = (day_of_year % GAME_DAYS_PER_MONTH) + 1;
+
+        GameDateTime {
+            year: year as u32,
+            month: month as u8,
+            day: day as u8,
+            hour,
+            minute,
+        }
+    }
+
+    fn current_total_game_seconds(&self) -> i64 {
+        let elapsed_real_seconds = self.game_clock_start_real.elapsed().as_secs_f64();
+        let elapsed_game_seconds =
+            (elapsed_real_seconds * GAME_SECONDS_PER_REAL_SECOND).floor() as i64;
+        self.game_clock_start_game_seconds + elapsed_game_seconds
+    }
+
+    pub fn current_game_datetime(&self) -> GameDateTime {
+        Self::total_game_seconds_to_datetime(self.current_total_game_seconds())
+    }
+
+    pub fn is_night(datetime: &GameDateTime) -> bool {
+        datetime.hour < DAY_START_HOUR || datetime.hour >= NIGHT_START_HOUR
+    }
+
+    pub fn broadcast_game_time(&self) -> GameDateTime {
+        let datetime = self.current_game_datetime();
         let _ = self.broadcast_tx.send(ServerMessage::GameTimeSync {
-            game_hour: self.current_game_hour(),
+            is_night: Self::is_night(&datetime),
+            datetime: datetime.clone(),
         });
+        datetime
     }
 
     async fn get_or_assign_player_number(&self, player_id: &str) -> u32 {

@@ -24,14 +24,19 @@
   import { type PlayerState } from '../utils/movementUtils'
   import { createSunLightSimulation } from '../utils/sunLightSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
-  import { timeScale, sunTimeScale, serverGameHour } from '../stores/timeStore'
+  import {
+    timeScale,
+    sunTimeScale,
+    serverGameTime,
+    type ServerGameTime,
+  } from '../stores/timeStore'
   import {
     debugVisible,
     cameraRotationEnabled,
     playerDebugInfo,
   } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
-  import { setGameHour } from './GameTimeWidget.svelte'
+  import { setGameDate, setGameHour } from './GameTimeWidget.svelte'
 
   interface Props {
     serverUrl: string
@@ -144,18 +149,31 @@
     sunriseHour: 6,
     dayDurationSeconds: 3 * 60 * 60,
     startHour: 12,
+    startMonth: 1,
+    startDay: 1,
+    axialTiltDeg: 24,
     lightDistance: SUN_LIGHT_DISTANCE,
     maxIntensity: 1.5,
   })
 
-  let latestServerGameHour = $state<number | null>(null)
+  let latestServerGameTime = $state<ServerGameTime | null>(null)
   let latestSunTimeScale = $state(1)
 
   function applyServerGameHourIfAllowed() {
     if (latestSunTimeScale > 1) return
-    if (latestServerGameHour === null) return
-    sunLightSimulation.setGameHour(latestServerGameHour)
-    setGameHour(latestServerGameHour)
+    if (latestServerGameTime === null) return
+    setGameDate(
+      latestServerGameTime.year,
+      latestServerGameTime.month,
+      latestServerGameTime.day
+    )
+    sunLightSimulation.setCalendarDate(
+      latestServerGameTime.month,
+      latestServerGameTime.day
+    )
+    const hour = latestServerGameTime.hour + latestServerGameTime.minute / 60
+    sunLightSimulation.setGameHour(hour)
+    setGameHour(hour)
   }
 
   // Game loop
@@ -578,8 +596,11 @@
     resetLoopProfileWindow(performance.now())
     setGameHour(sunLightSimulation.getGameHour())
 
-    const unsubscribeServerGameHour = serverGameHour.subscribe((hour) => {
-      latestServerGameHour = hour
+    const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
+      latestServerGameTime = gameTime
+      if (gameTime) {
+        setGameDate(gameTime.year, gameTime.month, gameTime.day)
+      }
       applyServerGameHourIfAllowed()
     })
 
@@ -633,7 +654,7 @@
     return () => {
       unsubscribeViewportSize()
       unsubscribeCameraReset()
-      unsubscribeServerGameHour()
+      unsubscribeServerGameTime()
       unsubscribeSunTimeScale()
       stopGameLoop()
       stopChatBubbleChecker()

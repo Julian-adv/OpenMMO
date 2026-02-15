@@ -51,6 +51,15 @@ pub struct CharacterAttributes {
     pub cha: u8,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GameDateTime {
+    pub year: u32,
+    pub month: u8,
+    pub day: u8,
+    pub hour: u8,
+    pub minute: u8,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
     Authenticate {
@@ -142,7 +151,8 @@ pub enum ServerMessage {
         monsters: HashMap<String, Monster>,
     },
     GameTimeSync {
-        game_hour: f32,
+        datetime: GameDateTime,
+        is_night: bool,
     },
     MonsterSpawned {
         monster: Monster,

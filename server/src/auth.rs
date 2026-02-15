@@ -1,4 +1,4 @@
-use crate::types::CharacterAttributes;
+use crate::types::{CharacterAttributes, GameDateTime};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
@@ -100,6 +100,7 @@ impl AuthService {
             [],
         )?;
         Self::ensure_characters_schema(&conn)?;
+        Self::ensure_world_time_schema(&conn)?;
 
         Ok(Self {
             db_path: Arc::new(db_path),
@@ -131,6 +132,22 @@ impl AuthService {
             [],
         )?;
 
+        Ok(())
+    }
+
+    fn ensure_world_time_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS world_time (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                day INTEGER NOT NULL,
+                hour INTEGER NOT NULL,
+                minute INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+            )",
+            [],
+        )?;
         Ok(())
     }
 
@@ -473,5 +490,48 @@ impl AuthService {
             .map_err(|e| AuthError::Database(e.to_string()))?;
 
         character.ok_or(AuthError::CharacterNotFound)
+    }
+
+    pub fn load_world_time(&self) -> Result<Option<GameDateTime>, AuthError> {
+        let conn = self.open_connection()?;
+        conn.query_row(
+            "SELECT year, month, day, hour, minute FROM world_time WHERE id = 1",
+            [],
+            |row| {
+                Ok(GameDateTime {
+                    year: row.get(0)?,
+                    month: row.get(1)?,
+                    day: row.get(2)?,
+                    hour: row.get(3)?,
+                    minute: row.get(4)?,
+                })
+            },
+        )
+        .optional()
+        .map_err(|e| AuthError::Database(e.to_string()))
+    }
+
+    pub fn save_world_time(&self, datetime: &GameDateTime) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO world_time (id, year, month, day, hour, minute, updated_at)
+             VALUES (1, ?1, ?2, ?3, ?4, ?5, strftime('%s', 'now'))
+             ON CONFLICT(id) DO UPDATE SET
+                year = excluded.year,
+                month = excluded.month,
+                day = excluded.day,
+                hour = excluded.hour,
+                minute = excluded.minute,
+                updated_at = excluded.updated_at",
+            params![
+                i64::from(datetime.year),
+                i64::from(datetime.month),
+                i64::from(datetime.day),
+                i64::from(datetime.hour),
+                i64::from(datetime.minute),
+            ],
+        )
+        .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(())
     }
 }

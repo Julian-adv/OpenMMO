@@ -44,6 +44,10 @@ npm run dev
 - **Chat System**: Real-time chat functionality
 - **Player Movement**: Character control via mouse/keyboard
 
+## Documentation
+
+- Worldbuilding: [WORLD_BUILDING.md](WORLD_BUILDING.md)
+
 ## Architecture
 
 - **Client**: Svelte component-based UI + Three.js integration through Threlte

@@ -14,7 +14,7 @@ import type { MonsterData } from '../types/Monster'
 import { getDefaultServerUrl } from '../utils/networkUtils'
 import { requestCameraReset } from '../stores/cameraStore'
 import { simplePasswordHash } from '../utils/authUtils'
-import { clearServerGameHour, setServerGameHour } from '../stores/timeStore'
+import { clearServerGameTime, setServerGameTime } from '../stores/timeStore'
 import initWasm, {
   serialize_client_message,
   deserialize_server_message,
@@ -276,7 +276,7 @@ class NetworkManager {
     this.socket.onopen = () => {
       console.log('Connected to server')
       gameStore.update((state) => ({ ...state, isConnected: true }))
-      clearServerGameHour()
+      clearServerGameTime()
       this.reconnectAttempts = 0
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer)
@@ -524,7 +524,14 @@ class NetworkManager {
         break
 
       case 'GameTimeSync': {
-        setServerGameHour(data.game_hour)
+        setServerGameTime({
+          year: data.datetime.year,
+          month: data.datetime.month,
+          day: data.datetime.day,
+          hour: data.datetime.hour,
+          minute: data.datetime.minute,
+          isNight: data.is_night,
+        })
         break
       }
 
@@ -1194,7 +1201,7 @@ class NetworkManager {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    clearServerGameHour()
+    clearServerGameTime()
     if (this.socket) {
       this.socket.close()
       this.socket = null
