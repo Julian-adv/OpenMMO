@@ -16,8 +16,6 @@ const GAME_DAYS_PER_MONTH: i64 = 30;
 const GAME_MONTHS_PER_YEAR: i64 = 12;
 const GAME_DAYS_PER_YEAR: i64 = GAME_DAYS_PER_MONTH * GAME_MONTHS_PER_YEAR;
 const GAME_START_YEAR: i64 = 217;
-const DAY_START_HOUR: u8 = 6;
-const NIGHT_START_HOUR: u8 = 18;
 const GAME_SECONDS_PER_REAL_SECOND: f64 =
     (GAME_HOURS_PER_DAY as f64 * GAME_MINUTES_PER_HOUR as f64 * 60.0) / REAL_DAY_DURATION_SECONDS;
 
@@ -117,7 +115,7 @@ impl GameState {
     }
 
     pub fn is_night(datetime: &GameDateTime) -> bool {
-        datetime.hour < DAY_START_HOUR || datetime.hour >= NIGHT_START_HOUR
+        crate::celestial::is_night(datetime)
     }
 
     pub fn broadcast_game_time(&self) -> GameDateTime {
