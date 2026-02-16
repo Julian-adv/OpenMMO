@@ -17,6 +17,7 @@
 </script>
 
 <script lang="ts">
+  import { calendarVisible } from '../stores/debugStore'
   import { getSolarDaylightWindow } from '../utils/sunLightSimulation'
   import {
     type MoonDefinition,
@@ -141,6 +142,12 @@
     return `${currentGameDate.year} ${monthName} ${day}`
   }
 
+  function formatGameTime() {
+    const h = Math.floor(currentGameHour)
+    const m = Math.floor((currentGameHour - h) * 60)
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+  }
+
   function getCurrentDaylightWindow() {
     return getSolarDaylightWindow({
       latitudeDeg: SUN_LATITUDE_DEG,
@@ -179,10 +186,13 @@
   )
 </script>
 
-<div class="time-widget">
-  <div class="meta">
-    <span class="date">{formatGameDate()}</span>
-  </div>
+<div class="time-widget" class:compact={!$calendarVisible}>
+  {#if $calendarVisible}
+    <div class="meta">
+      <span class="date">{formatGameDate()}</span>
+      <span class="time">{formatGameTime()}</span>
+    </div>
+  {/if}
   <div class="sky-track">
     <img
       class="horizon"
@@ -242,12 +252,24 @@
     color: #f7f1d0;
     border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
-    padding: 10px;
+    padding: 5px;
     font-family: 'Courier New', monospace;
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 10px;
-    width: min(360px, calc(100vw - 20px));
+  }
+
+  .time-widget.compact {
+    background: transparent;
+    box-shadow: none;
+    padding: 5px;
+    border-radius: 0;
+    width: auto;
+  }
+
+  .compact .sky-track {
+    flex: none;
+    width: 256px;
   }
 
   .meta {
@@ -260,6 +282,7 @@
   .sky-track {
     position: relative;
     flex: 1;
+    width: 256px;
     height: 36px;
     border-radius: 8px;
     overflow: hidden;
@@ -336,5 +359,14 @@
     white-space: nowrap;
     min-width: 108px;
     text-align: left;
+  }
+
+  .time {
+    font-size: 14px;
+    font-weight: bold;
+    opacity: 0.95;
+    line-height: 1;
+    white-space: nowrap;
+    letter-spacing: 1px;
   }
 </style>
