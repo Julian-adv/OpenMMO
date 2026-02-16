@@ -1279,6 +1279,85 @@ class NetworkManager {
       console.warn('Reconnect failed: socket is not connected')
     }
   }
+
+  async requestReauthenticate(): Promise<{
+    ok: boolean
+    message?: string
+    accountName?: string
+    characters?: AccountCharacter[]
+  }> {
+    this.disconnect()
+    resetGameStore()
+    monsterManager.reset()
+    remotePlayerManager.reset()
+
+    const serverUrl = this.lastServerUrl
+    const accountName = this.lastAccountName
+    const passwordHash = this.lastPasswordHash
+    const createAccount = this.lastCreateAccount
+    if (!serverUrl || !accountName || !passwordHash) {
+      return { ok: false, message: 'Missing account context' }
+    }
+
+    await this.ensureWasm()
+    this.connect(serverUrl)
+    const opened = await this.waitForSocketOpen(5000)
+    if (!opened) {
+      return { ok: false, message: 'Failed to connect to server' }
+    }
+
+    return new Promise((resolve) => {
+      let settled = false
+      let timeout: ReturnType<typeof setTimeout> | null = null
+      let offSuccess: () => void = () => {}
+      let offError: () => void = () => {}
+
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout)
+          timeout = null
+        }
+        offSuccess()
+        offError()
+      }
+
+      timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Re-authentication timed out' })
+      }, 8000)
+
+      offSuccess = this.onAuthSuccess((payload) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({
+          ok: true,
+          accountName: payload.accountName,
+          characters: payload.characters,
+        })
+      })
+
+      offError = this.onAuthError((message) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve({ ok: false, message })
+      })
+
+      const sent = this.authenticateWithHash(
+        accountName,
+        passwordHash,
+        createAccount
+      )
+      if (!sent && !settled) {
+        settled = true
+        cleanup()
+        resolve({ ok: false, message: 'Socket is not connected' })
+      }
+    })
+  }
 }
 
 export const networkManager = new NetworkManager()

@@ -119,6 +119,27 @@
     selectedCharacterId = characterId
   }
 
+  async function handleBackToCharacterSelect() {
+    screen = 'character-select'
+    const result = await networkManager.requestReauthenticate()
+    if (result.ok) {
+      accountCharacters = result.characters ?? []
+      if (result.accountName) accountName = result.accountName
+      if (accountCharacters.length > 0) {
+        const stillExists = accountCharacters.some(
+          (c) => c.id === selectedCharacterId
+        )
+        if (!stillExists) {
+          selectedCharacterId = accountCharacters[0].id
+        }
+      } else {
+        selectedCharacterId = null
+      }
+    } else {
+      handleLogoutToLogin()
+    }
+  }
+
   function handleLogoutToLogin() {
     networkManager.disconnect()
     accountName = ''
@@ -179,6 +200,9 @@
           attributes={selectedCharacter.attributes}
         />
       {/if}
+      <button class="back-to-select" onclick={handleBackToCharacterSelect}>
+        Character Select
+      </button>
     </div>
 
     {#if showRespawnDialog}
@@ -256,6 +280,27 @@
     right: 16px;
     bottom: 16px;
     z-index: 31;
+  }
+
+  .back-to-select {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 30;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    background: rgba(60, 60, 60, 0.85);
+    color: #ccc;
+    font-weight: 600;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .back-to-select:hover {
+    background: rgba(80, 80, 80, 0.95);
+    color: #fff;
   }
 
 </style>
