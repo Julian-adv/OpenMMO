@@ -126,6 +126,19 @@ export interface SunLightSnapshot {
   intensity: number
 }
 
+export interface SolarDaylightWindowConfig {
+  latitudeDeg: number
+  month: number
+  day: number
+  axialTiltDeg?: number
+}
+
+export interface SolarDaylightWindow {
+  sunriseHour: number
+  sunsetHour: number
+  dayLengthHours: number
+}
+
 export interface CelestialDirectionalLightState {
   useMoonLight: boolean
   positionOffset: { x: number; y: number; z: number }
@@ -326,6 +339,94 @@ export function getSunTrackState(config: SunTrackConfig): SunTrackState {
       hasDaylight &&
       normalizedHour >= config.sunriseHour &&
       normalizedHour <= config.sunsetHour,
+  }
+}
+
+const SUN_DAYLIGHT_SOFTENING_EXPONENT = 0.7
+const SUN_DAYLIGHT_FLOOR = 0.4
+
+function dayOfYearFromCalendar(month: number, day: number) {
+  const clampedMonth = Math.min(MONTHS_PER_YEAR, Math.max(1, Math.floor(month)))
+  const clampedDay = Math.min(DAYS_PER_MONTH, Math.max(1, Math.floor(day)))
+  return (clampedMonth - 1) * DAYS_PER_MONTH + clampedDay
+}
+
+export function getSolarDaylightWindow(
+  config: SolarDaylightWindowConfig
+): SolarDaylightWindow {
+  const dayOfYear = dayOfYearFromCalendar(config.month, config.day)
+  const latitudeRad = (config.latitudeDeg * Math.PI) / 180
+  const axialTiltDeg = config.axialTiltDeg ?? SUN_AXIAL_TILT_DEG
+  const declination = getDeclinationRadFromDayIndex(dayOfYear, axialTiltDeg)
+  const cosHourAngle = -Math.tan(latitudeRad) * Math.tan(declination)
+
+  if (cosHourAngle <= -1) {
+    return {
+      sunriseHour: 0,
+      sunsetHour: HOURS_PER_DAY,
+      dayLengthHours: HOURS_PER_DAY,
+    }
+  }
+
+  if (cosHourAngle >= 1) {
+    return {
+      sunriseHour: 12,
+      sunsetHour: 12,
+      dayLengthHours: 0,
+    }
+  }
+
+  const hourAngle = Math.acos(cosHourAngle)
+  const dayLengthHours = (HOURS_PER_DAY * hourAngle) / Math.PI
+
+  return {
+    sunriseHour: 12 - dayLengthHours / 2,
+    sunsetHour: 12 + dayLengthHours / 2,
+    dayLengthHours,
+  }
+}
+
+export function computeSunLightSnapshot(
+  gameHour: number,
+  calendarDate: CalendarDate
+): SunLightSnapshot {
+  const normalizedGameHour = normalizeHour(gameHour)
+  const dayOfYear = dayOfYearFromCalendar(calendarDate.month, calendarDate.day)
+  const latitudeRad = (SUN_LATITUDE_DEG * Math.PI) / 180
+  const latitudeCos = Math.cos(latitudeRad)
+  const declination = getDeclinationRadFromDayIndex(
+    dayOfYear,
+    SUN_AXIAL_TILT_DEG
+  )
+  const direction = getCelestialDirectionFromHourAndDeclination(
+    normalizedGameHour,
+    12,
+    SUN_LATITUDE_DEG,
+    declination
+  )
+
+  const baseDaylightFactor = Math.min(
+    1,
+    Math.max(0, direction.y / Math.max(latitudeCos, 1e-6))
+  )
+  const softenedDaylightFactor = Math.pow(
+    baseDaylightFactor,
+    SUN_DAYLIGHT_SOFTENING_EXPONENT
+  )
+  const daylightFactor =
+    direction.y > 0
+      ? SUN_DAYLIGHT_FLOOR + (1 - SUN_DAYLIGHT_FLOOR) * softenedDaylightFactor
+      : 0
+
+  return {
+    gameHour: normalizedGameHour,
+    direction,
+    positionOffset: {
+      x: direction.x * SUN_LIGHT_DISTANCE,
+      y: direction.y * SUN_LIGHT_DISTANCE,
+      z: direction.z * SUN_LIGHT_DISTANCE,
+    },
+    intensity: SUN_MAX_INTENSITY * daylightFactor,
   }
 }
 

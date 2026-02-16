@@ -24,18 +24,15 @@
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import { type PlayerState } from '../utils/movementUtils'
-  import { createSunLightSimulation } from '../utils/sunLightSimulation'
   import {
     GAME_START_YEAR,
     SHADOW_CAMERA_EXTENT,
     SHADOW_CAMERA_FAR,
-    SUN_AXIAL_TILT_DEG,
     SUN_DAY_DURATION_SECONDS,
-    SUN_LATITUDE_DEG,
-    SUN_LIGHT_DISTANCE,
     SUN_MAX_INTENSITY,
     SUN_START_HOUR,
     type CalendarDate,
+    computeSunLightSnapshot,
     getCalendarDateFromGameDayIndex,
     getGameCalendarDayIndex,
   } from '../utils/celestialSimulation'
@@ -128,18 +125,6 @@
 
   const sceneLighting = createSceneLightingController()
 
-  const sunLightSimulation = createSunLightSimulation({
-    latitudeDeg: SUN_LATITUDE_DEG,
-    sunriseHour: 6,
-    dayDurationSeconds: SUN_DAY_DURATION_SECONDS,
-    startHour: SUN_START_HOUR,
-    startMonth: 1,
-    startDay: 1,
-    axialTiltDeg: SUN_AXIAL_TILT_DEG,
-    lightDistance: SUN_LIGHT_DISTANCE,
-    maxIntensity: SUN_MAX_INTENSITY,
-  })
-
   let localCalendarDate = $state<CalendarDate>({
     year: GAME_START_YEAR,
     month: 1,
@@ -152,13 +137,12 @@
   let latestServerGameTime = $state<ServerGameTime | null>(null)
   let latestSunTimeScale = $state(1)
 
-  function syncCalendarToWidgetAndSun() {
+  function syncCalendarToWidget() {
     setGameDate(
       localCalendarDate.year,
       localCalendarDate.month,
       localCalendarDate.day
     )
-    sunLightSimulation.setCalendarDate(localCalendarDate.month, localCalendarDate.day)
   }
 
   function syncLocalCalendarToServer(gameTime: ServerGameTime) {
@@ -169,7 +153,12 @@
     }
     localDayElapsedSeconds =
       ((gameTime.hour + gameTime.minute / 60) / 24) * SUN_DAY_DURATION_SECONDS
-    syncCalendarToWidgetAndSun()
+    syncCalendarToWidget()
+    setGameHour(getLocalGameHour())
+  }
+
+  function getLocalGameHour() {
+    return (localDayElapsedSeconds / SUN_DAY_DURATION_SECONDS) * 24
   }
 
   function addLocalCalendarDays(daysToAdd: number) {
@@ -188,16 +177,13 @@
     const elapsedDays = Math.floor(localDayElapsedSeconds / SUN_DAY_DURATION_SECONDS)
     addLocalCalendarDays(elapsedDays)
     localDayElapsedSeconds -= elapsedDays * SUN_DAY_DURATION_SECONDS
-    syncCalendarToWidgetAndSun()
+    syncCalendarToWidget()
   }
 
   function applyServerGameHourIfAllowed() {
     if (latestSunTimeScale > 1) return
     if (latestServerGameTime === null) return
     syncLocalCalendarToServer(latestServerGameTime)
-    const hour = latestServerGameTime.hour + latestServerGameTime.minute / 60
-    sunLightSimulation.setGameHour(hour)
-    setGameHour(hour)
   }
 
   // Game loop
@@ -291,9 +277,8 @@
       // Apply time scale for slow motion debugging
       const deltaTime = fixedDeltaTime * $timeScale
       const sunDeltaSeconds = realDeltaSeconds * $sunTimeScale
-      sunLightSimulation.advance(sunDeltaSeconds)
       advanceLocalCalendar(sunDeltaSeconds)
-      setGameHour(sunLightSimulation.getGameHour())
+      setGameHour(getLocalGameHour())
 
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
@@ -425,7 +410,10 @@
       localCalendarDate,
       ambientLight,
       directionalLight,
-      sunLightSimulation,
+      sunLightSnapshot: computeSunLightSnapshot(
+        getLocalGameHour(),
+        localCalendarDate
+      ),
     })
   }
 
@@ -440,8 +428,8 @@
   onMount(() => {
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
-    setGameHour(sunLightSimulation.getGameHour())
-    syncCalendarToWidgetAndSun()
+    setGameHour(getLocalGameHour())
+    syncCalendarToWidget()
 
     const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
       latestServerGameTime = gameTime

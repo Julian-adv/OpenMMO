@@ -22,7 +22,7 @@
     getCelestialDirectionFromHourAndDeclination,
     getDeclinationRadFromDayIndex,
   } from '../utils/celestialDirection'
-  import { getSolarDaylightWindow } from '../utils/sunLightSimulation'
+  import { getSolarDaylightWindow } from '../utils/celestialSimulation'
   import {
     type MoonDefinition,
     ELDER_MOON_DEFINITION,

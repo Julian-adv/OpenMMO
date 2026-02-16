@@ -4,9 +4,9 @@ import {
   SUN_DAY_COLOR_HEX,
   SUN_TWILIGHT_COLOR_HEX,
   type CalendarDate,
+  type SunLightSnapshot,
   computeCelestialLightState,
 } from '../../utils/celestialSimulation'
-import type { SunLightSimulation } from '../../utils/sunLightSimulation'
 
 export const AMBIENT_DAY_INTENSITY = 0.95
 export const AMBIENT_NIGHT_INTENSITY = 2.24
@@ -22,7 +22,7 @@ export interface SceneLightingUpdateParams {
   localCalendarDate: CalendarDate
   ambientLight: THREE.AmbientLight | undefined
   directionalLight: THREE.DirectionalLight | undefined
-  sunLightSimulation: SunLightSimulation
+  sunLightSnapshot: SunLightSnapshot
 }
 
 export interface SceneLightingController {
@@ -42,7 +42,7 @@ export function createSceneLightingController(): SceneLightingController {
   function update(params: SceneLightingUpdateParams) {
     if (!params.currentPlayerPosition) return
 
-    const sunLightState = params.sunLightSimulation.getLightState()
+    const sunLightState = params.sunLightSnapshot
     const celestialLightState = computeCelestialLightState(
       sunLightState,
       params.localCalendarDate,
