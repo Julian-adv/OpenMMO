@@ -16,7 +16,7 @@ export const SHADOW_CAMERA_FAR = SUN_LIGHT_DISTANCE * 3
 export const SUN_DAY_DURATION_SECONDS = 3 * 60 * 60
 export const SUN_START_HOUR = 12
 export const SUN_MAX_INTENSITY = 2.25
-export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.22
+export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.11
 export const SUN_TWILIGHT_COLOR_BLEND = 0.65
 export const MOON_AXIAL_TILT_DEG = 19
 
@@ -87,14 +87,12 @@ export interface SunTrackConfig {
   rightPercent: number
   horizonYPercent: number
   arcHeightPercent: number
-  sunsetWindowHours: number
 }
 
 export interface SunTrackState {
   xPercent: number
   yPercent: number
   isDaylight: boolean
-  isSunsetWindow: boolean
 }
 
 export interface MoonTrackConfig {
@@ -328,12 +326,6 @@ export function getSunTrackState(config: SunTrackConfig): SunTrackState {
       hasDaylight &&
       normalizedHour >= config.sunriseHour &&
       normalizedHour <= config.sunsetHour,
-    isSunsetWindow:
-      hasDaylight &&
-      (Math.abs(normalizedHour - config.sunriseHour) <=
-        config.sunsetWindowHours ||
-        Math.abs(normalizedHour - config.sunsetHour) <=
-          config.sunsetWindowHours),
   }
 }
 

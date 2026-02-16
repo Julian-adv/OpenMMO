@@ -18,6 +18,10 @@
 
 <script lang="ts">
   import { calendarVisible } from '../stores/debugStore'
+  import {
+    getCelestialDirectionFromHourAndDeclination,
+    getDeclinationRadFromDayIndex,
+  } from '../utils/celestialDirection'
   import { getSolarDaylightWindow } from '../utils/sunLightSimulation'
   import {
     type MoonDefinition,
@@ -26,6 +30,7 @@
     SWIFT_MOON_DEFINITION,
     SUN_AXIAL_TILT_DEG,
     SUN_LATITUDE_DEG,
+    SUN_TWILIGHT_ELEVATION_THRESHOLD,
     getGameCalendarDayIndex,
     getMoonPhaseLabel,
     getMoonPhaseState,
@@ -40,7 +45,6 @@
   const SUN_ARC_HEIGHT_PERCENT = 68
   const MOON_ARC_HEIGHT_PERCENT = 54
   const MOON_DAYLIGHT_VISIBILITY_SCALE = 0.45
-  const SUNSET_WINDOW_HOURS = 0.5
 
   const MONTH_NAMES = [
     'Dawnmere',
@@ -166,7 +170,6 @@
       rightPercent: SUN_RIGHT_MARGIN_PERCENT,
       horizonYPercent: HORIZON_Y_PERCENT,
       arcHeightPercent: SUN_ARC_HEIGHT_PERCENT,
-      sunsetWindowHours: SUNSET_WINDOW_HOURS,
     })
   }
 
@@ -177,6 +180,22 @@
       daylightWindow.sunriseHour,
       daylightWindow.sunsetHour
     )
+  )
+  const dayOfYear = $derived(
+    (currentGameDate.month - 1) * 30 + currentGameDate.day
+  )
+  const sunElevation = $derived.by(() => {
+    const declination = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
+    const dir = getCelestialDirectionFromHourAndDeclination(
+      currentGameHour,
+      12,
+      SUN_LATITUDE_DEG,
+      declination
+    )
+    return dir.y
+  })
+  const isTwilight = $derived(
+    sunElevation > 0 && sunElevation < SUN_TWILIGHT_ELEVATION_THRESHOLD
   )
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(currentGameDate))
   const moonVisuals = $derived(
@@ -197,7 +216,7 @@
     <img
       class="horizon"
       src={
-        sunVisual.isSunsetWindow
+        isTwilight
           ? '/icons/horizon-sunset.png'
           : sunVisual.isDaylight
             ? '/icons/horizon.png'
@@ -230,7 +249,7 @@
     <img
       class="horizon-front"
       src={
-        sunVisual.isSunsetWindow
+        isTwilight
           ? '/icons/horizon-sunset-front.png'
           : sunVisual.isDaylight
           ? '/icons/horizon-front.png'
