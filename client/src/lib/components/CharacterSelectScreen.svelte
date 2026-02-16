@@ -114,6 +114,14 @@
       <div class="actions">
         <button
           type="button"
+          class="secondary"
+          onclick={onLogout}
+          disabled={isBusy()}
+        >
+          Back
+        </button>
+        <button
+          type="button"
           class="primary"
           onclick={handleStart}
           disabled={!selectedCharacterId || isBusy()}
@@ -127,14 +135,6 @@
           disabled={!selectedCharacterId || isBusy()}
         >
           {isDeleting ? 'Deleting...' : 'Delete'}
-        </button>
-        <button
-          type="button"
-          class="secondary"
-          onclick={onLogout}
-          disabled={isBusy()}
-        >
-          Back
         </button>
       </div>
     </div>
@@ -194,7 +194,8 @@
 
   .actions {
     display: flex;
-    gap: 10px;
+    justify-content: space-between;
+    width: 100%;
   }
 
   .actions button {
