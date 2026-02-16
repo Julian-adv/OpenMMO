@@ -543,12 +543,12 @@
       handleCanvasClickIntent
     )
 
-    const unsubscribeRespawnRequested = networkManager.onRespawnRequested(() => {
+    const unsubscribeRespawnRequested = networkManager.respawnRequested.on(() => {
       if (!currentPlayer || currentPlayer.health > 0 || respawnRequested) return
       respawnRequested = true
     })
 
-    const unsubscribePlayerRespawned = networkManager.onPlayerRespawned(
+    const unsubscribePlayerRespawned = networkManager.playerRespawned.on(
       (playerId) => {
         if (!currentPlayer || currentPlayer.id !== playerId) return
         respawnRequested = false

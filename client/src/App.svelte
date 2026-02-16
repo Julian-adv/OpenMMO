@@ -157,7 +157,7 @@
     showRespawnDialog = false
   }
 
-  networkManager.onKicked((reason) => {
+  networkManager.kicked.on((reason) => {
     kickedMessage = reason
     accountName = ''
     accountCharacters = []
