@@ -35,6 +35,7 @@
   const borderColor = $derived(selected ? '#7cc9ff' : '#53657b')
   const bgColor = $derived(selected ? '#223552' : '#141e2c')
   const bgOpacity = $derived(selected ? 0.75 : 0.5)
+  const borderThickness = $derived(selected ? 0.02 : 0.01)
 
   function createRoundedRectShape(
     width: number,
@@ -63,13 +64,15 @@
     return shape
   }
 
-  function createBorderGeometry(shape: THREE.Shape): THREE.BufferGeometry {
-    const points = shape.getPoints(32)
-    return new THREE.BufferGeometry().setFromPoints(points)
-  }
-
   const panelShape = $derived(
     createRoundedRectShape(panelWidth, panelHeight, CORNER_RADIUS)
+  )
+  const borderShape = $derived(
+    createRoundedRectShape(
+      panelWidth + borderThickness * 2,
+      panelHeight + borderThickness * 2,
+      CORNER_RADIUS + borderThickness
+    )
   )
 
   // Stat layout: 2 columns, 3 rows
@@ -100,11 +103,16 @@
     />
   </T.Mesh>
 
-  <!-- Border -->
-  <T.LineLoop position={[0, 0, 0.001]} renderOrder={1}>
-    <T is={createBorderGeometry(panelShape)} />
-    <T.LineBasicMaterial color={borderColor} />
-  </T.LineLoop>
+  <!-- Border (rendered behind background) -->
+  <T.Mesh position={[0, 0, -0.001]} renderOrder={0}>
+    <T.ShapeGeometry args={[borderShape]} />
+    <T.MeshBasicMaterial
+      color={borderColor}
+      opacity={bgOpacity}
+      transparent={true}
+      depthWrite={false}
+    />
+  </T.Mesh>
 
   {#if character}
     <!-- Character name -->
