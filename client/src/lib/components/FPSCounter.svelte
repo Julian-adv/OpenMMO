@@ -23,6 +23,7 @@
   import {
     debugVisible,
     cameraRotationEnabled,
+    calendarVisible,
     playerDebugInfo,
   } from '../stores/debugStore'
 
@@ -48,6 +49,10 @@
 
   function toggleCameraRotation() {
     cameraRotationEnabled.update((v) => !v)
+  }
+
+  function toggleCalendar() {
+    calendarVisible.update((v) => !v)
   }
 </script>
 
@@ -99,6 +104,15 @@
         title="Toggle Camera Rotation"
       >
         CAM ROT: {$cameraRotationEnabled ? 'ON' : 'OFF'}
+      </button>
+
+      <button
+        class="action-btn cal-btn"
+        class:active={$calendarVisible}
+        onclick={toggleCalendar}
+        title="Toggle Calendar Display"
+      >
+        CAL: {$calendarVisible ? 'ON' : 'OFF'}
       </button>
     </div>
   </div>
@@ -181,5 +195,10 @@
   .action-btn.sun-btn.active {
     background: #b7791f; /* Amber for fast sun */
     border-color: #f6ad55;
+  }
+
+  .action-btn.cal-btn.active {
+    background: #2b6cb0;
+    border-color: #63b3ed;
   }
 </style>
