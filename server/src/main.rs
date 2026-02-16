@@ -1,4 +1,5 @@
 mod auth;
+mod celestial;
 mod connection;
 mod game;
 mod game_state;
