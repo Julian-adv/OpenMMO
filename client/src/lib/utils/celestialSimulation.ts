@@ -33,6 +33,25 @@ export const SWIFT_MOON_MAX_INTENSITY = 0.9
 export const MOON_ILLUMINATION_SOFTENING_EXPONENT = 0.7
 export const MOON_LIGHT_FLOOR = 0.3
 
+// Moon surface colors for canvas rendering
+// Lit side: base RGB at minimum shade, plus per-channel offset scaled by shade
+export const MOON_LIT_BASE = 210
+export const MOON_LIT_RANGE = 45
+export const MOON_LIT_SHADE_MIN = 0.75
+export const MOON_LIT_R_OFFSET = -4
+export const MOON_LIT_G_OFFSET = 0
+export const MOON_LIT_B_OFFSET = 8
+export const MOON_LIT_ALPHA = 255
+
+// Dark side: base RGB at minimum shade, plus per-channel offset
+export const MOON_DARK_BASE = 58
+export const MOON_DARK_RANGE = 42
+export const MOON_DARK_SHADE_MIN = 0.16
+export const MOON_DARK_R_OFFSET = 0
+export const MOON_DARK_G_OFFSET = 2
+export const MOON_DARK_B_OFFSET = 8
+export const MOON_DARK_ALPHA = 228
+
 export interface CalendarDate {
   year: number
   month: number
@@ -529,19 +548,19 @@ export function drawMoonToCanvas(
       let alpha = 0
 
       if (lightDot > 0) {
-        const shade = 0.75 + 0.25 * lightDot
-        const base = Math.round(188 + shade * 62)
-        red = base - 8
-        green = base - 3
-        blue = base + 6
-        alpha = Math.round(255 * edgeAlpha)
+        const shade = MOON_LIT_SHADE_MIN + (1 - MOON_LIT_SHADE_MIN) * lightDot
+        const base = Math.round(MOON_LIT_BASE + shade * MOON_LIT_RANGE)
+        red = base + MOON_LIT_R_OFFSET
+        green = base + MOON_LIT_G_OFFSET
+        blue = base + MOON_LIT_B_OFFSET
+        alpha = Math.round(MOON_LIT_ALPHA * edgeAlpha)
       } else {
-        const shade = 0.16 + 0.12 * nz
-        const base = Math.round(12 + shade * 42)
-        red = base
-        green = base + 2
-        blue = base + 8
-        alpha = Math.round(228 * edgeAlpha)
+        const shade = MOON_DARK_SHADE_MIN + (1 - MOON_DARK_SHADE_MIN) * nz
+        const base = Math.round(MOON_DARK_BASE + shade * MOON_DARK_RANGE)
+        red = base + MOON_DARK_R_OFFSET
+        green = base + MOON_DARK_G_OFFSET
+        blue = base + MOON_DARK_B_OFFSET
+        alpha = Math.round(MOON_DARK_ALPHA * edgeAlpha)
       }
 
       pixels[pixelIndex] = red
