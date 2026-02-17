@@ -5,6 +5,7 @@
   import { loadGLTFFromFile } from './lib/gltf-io'
   import {
     mergeAnimationClips,
+    type MergeMethod,
     type MergeOptions,
     type RotationFixAxis,
     type RotationFixOrder,
@@ -31,7 +32,7 @@
   let clipInfo = $state('애니메이션 없음')
 
   let autoRotate = $state(false)
-  let loop = $state(true)
+  let loop = $state(false)
   let dropActive = $state(false)
   let bDropActive = $state(false)
   let isLoadingMain = $state(false)
@@ -46,6 +47,10 @@
   let animsBeforeMerge = $state<AnimationClip[] | null>(null)
 
   let mergeAnimName = $state('')
+  let mergeMethod = $state<MergeMethod>('retarget')
+  let retargetKeepRootMotion = $state(true)
+  let retargetNormalizeRootStart = $state(true)
+  let retargetKeepVerticalRootMotion = $state(false)
   let rotFixEnabled = $state(false)
   let rotFixAxis = $state<RotationFixAxis>('x')
   let rotFixDeg = $state(-90)
@@ -237,12 +242,18 @@
 
     const options: MergeOptions = {
       animName: trimmedMergeName,
+      mergeMethod,
       rotationFix: {
         enabled: rotFixEnabled,
         axis: rotFixAxis,
         deg: Number(rotFixDeg),
         scope: rotFixScope,
         order: rotFixOrder,
+      },
+      retarget: {
+        keepRootMotion: retargetKeepRootMotion,
+        normalizeRootStart: retargetNormalizeRootStart,
+        keepVerticalRootMotion: retargetKeepVerticalRootMotion,
       },
       selectedBClipIndex: bSelectedClipIndex,
     }
@@ -406,6 +417,25 @@
         </label>
         {#if mergeNameConflict}
           <span class="small conflict-msg">이미 존재하는 이름입니다</span>
+        {/if}
+        <label class="small">
+          <span class="lbl-prefix">병합 방식</span>
+          <select bind:value={mergeMethod}>
+            <option value="retarget">리타겟 (권장)</option>
+            <option value="track-map">트랙 매핑</option>
+          </select>
+        </label>
+        {#if mergeMethod === 'retarget'}
+          <label class="small"
+            ><input type="checkbox" bind:checked={retargetKeepRootMotion} /> 루트 모션 유지</label
+          >
+          <label class="small indent"
+            ><input type="checkbox" bind:checked={retargetNormalizeRootStart} /> 시작점 정렬</label
+          >
+          <label class="small indent"
+            ><input type="checkbox" bind:checked={retargetKeepVerticalRootMotion} /> 수직 루트 모션(Y)
+            유지</label
+          >
         {/if}
         <label class="small"><input type="checkbox" bind:checked={rotFixEnabled} /> 회전 보정</label>
         <div class="grid-2 indent">

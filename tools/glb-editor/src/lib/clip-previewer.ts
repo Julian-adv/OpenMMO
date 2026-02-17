@@ -20,6 +20,24 @@ export class ClipPreviewer {
   private clips: THREE.AnimationClip[] = []
   private selectedClipIndex = 0
   private loop = true
+  private readonly onMixerFinished = (event: THREE.Event): void => {
+    if (this.loop) return
+    if (!this.mixer) return
+
+    const finished = event as THREE.Event & {
+      action?: THREE.AnimationAction
+    }
+    const action = finished.action
+    if (!action) return
+
+    const clip = action.getClip()
+    action.enabled = true
+    action.paused = true
+    action.time = clip.duration
+    action.clampWhenFinished = true
+    action.setEffectiveWeight(1)
+    this.mixer.update(0)
+  }
 
   constructor(container: HTMLElement) {
     this.container = container
@@ -74,6 +92,7 @@ export class ClipPreviewer {
 
     if (this.clips.length > 0) {
       this.mixer = new THREE.AnimationMixer(cloned)
+      this.mixer.addEventListener('finished', this.onMixerFinished)
       this.playClip(0)
     }
   }
@@ -173,6 +192,7 @@ export class ClipPreviewer {
 
   private disposeModel(): void {
     if (this.mixer && this.modelRoot) {
+      this.mixer.removeEventListener('finished', this.onMixerFinished)
       this.mixer.stopAllAction()
       this.mixer.uncacheRoot(this.modelRoot)
     }

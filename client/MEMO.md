@@ -23,7 +23,7 @@
 - "MIXAMO" (https://skfb.ly/ottKO) by sdhkim is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 - "Bandit Armor and Clothes - Game Model" (https://skfb.ly/6UVot) by wolkoed is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 - Maria https://sketchfab.com/3d-models/maria-a04cac95ab8046e4bbdc9dec30c7d92d
-- dying https://sketchfab.com/3d-models/dying-de870177c90a4632963db81794bd73e5
+- dying https://sketchfab.com/3d-models/dying-98a1d5b2288d49d993039cb161913cd3
 
 ## Monster
 

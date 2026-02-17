@@ -49,6 +49,24 @@ export class GlbViewer {
   private autoRotate = false
   private loop = true
   private selectedClipIndex = 0
+  private readonly onMixerFinished = (event: THREE.Event): void => {
+    if (this.loop) return
+    if (!this.mixer) return
+
+    const finished = event as THREE.Event & {
+      action?: THREE.AnimationAction
+    }
+    const action = finished.action
+    if (!action) return
+
+    const clip = action.getClip()
+    action.enabled = true
+    action.paused = true
+    action.time = clip.duration
+    action.clampWhenFinished = true
+    action.setEffectiveWeight(1)
+    this.mixer.update(0)
+  }
 
   constructor(container: HTMLElement, callbacks: ViewerCallbacks) {
     this.container = container
@@ -320,6 +338,7 @@ export class GlbViewer {
 
     if (this.relatedClips.length > 0) {
       this.mixer = new THREE.AnimationMixer(this.modelRoot)
+      this.mixer.addEventListener('finished', this.onMixerFinished)
       this.selectedClipIndex = 0
       this.playClip(0)
     } else {
@@ -348,6 +367,7 @@ export class GlbViewer {
 
   private disposePreview(): void {
     if (this.mixer && this.modelRoot) {
+      this.mixer.removeEventListener('finished', this.onMixerFinished)
       this.mixer.stopAllAction()
       this.mixer.uncacheRoot(this.modelRoot)
     }
