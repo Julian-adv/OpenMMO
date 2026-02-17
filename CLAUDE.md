@@ -6,10 +6,12 @@ Before committing code changes, always use the `commit-agent` to ensure code qua
 
 ## Common Commands
 
-### Client Directory Commands
+### Client & Tools Directory Commands
+
+The same commands apply to both `client/` and `tools/*` directories (e.g. `tools/glb-editor/`).
 
 ```bash
-cd client
+cd client  # or cd tools/glb-editor
 npm run lint          # Check for linting errors
 npm run lint:fix       # Automatically fix linting errors
 npm run format         # Format code with Prettier
