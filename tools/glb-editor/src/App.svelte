@@ -319,9 +319,6 @@
       clips={clipNames}
       {selectedClipIndex}
       clipInfo={clipInfo}
-      emptyLabel="애니메이션 없음"
-      dropzoneText="여기에 GLB 파일을 드래그 앤 드롭"
-      ariaLabel="GLB viewer drop target"
       {dropActive}
       onClipChange={(index) => {
         selectedClipIndex = index
@@ -398,9 +395,6 @@
           clips={bClipNames}
           selectedClipIndex={bSelectedClipIndex}
           clipInfo={bClipInfo}
-          emptyLabel="b 애니메이션 없음"
-          dropzoneText="여기에 b.glb 파일을 드래그 앤 드롭"
-          ariaLabel="b glb drop target"
           dropActive={bDropActive}
           onClipChange={(index) => {
             bSelectedClipIndex = index

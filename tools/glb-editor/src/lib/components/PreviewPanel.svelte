@@ -1,13 +1,13 @@
 <script lang="ts">
   import AnimationClipControls from './AnimationClipControls.svelte'
 
+  const DROPZONE_TEXT = '여기에 GLB 파일을 드래그 앤 드롭'
+  const ARIA_LABEL = 'GLB preview'
+
   interface Props {
     clips: string[]
     selectedClipIndex: number
     clipInfo: string
-    emptyLabel?: string
-    dropzoneText?: string
-    ariaLabel?: string
     dropActive?: boolean
     onClipChange?: (index: number) => void
     onPlay?: () => void
@@ -23,9 +23,6 @@
     clips,
     selectedClipIndex,
     clipInfo,
-    emptyLabel = '애니메이션 없음',
-    dropzoneText = '여기에 GLB 파일을 드래그 앤 드롭',
-    ariaLabel = 'GLB preview',
     dropActive = false,
     onClipChange,
     onPlay,
@@ -47,7 +44,7 @@
 <div
   class="preview-wrap"
   role="region"
-  aria-label={ariaLabel}
+  aria-label={ARIA_LABEL}
   ondragenter={onDragEnter ?? onDragOver}
   ondragover={onDragOver}
   ondragleave={onDragLeave}
@@ -61,11 +58,10 @@
       onChange={onClipChange}
       {onPlay}
       {onPause}
-      {emptyLabel}
     />
   </div>
-  <div class="dropzone" class:active={dropActive}>{dropzoneText}</div>
-  <div class="preview-host" bind:this={hostEl} role="region" aria-label="{ariaLabel} canvas"></div>
+  <div class="dropzone" class:active={dropActive}>{DROPZONE_TEXT}</div>
+  <div class="preview-host" bind:this={hostEl} role="region" aria-label="{ARIA_LABEL} canvas"></div>
 </div>
 
 <style>

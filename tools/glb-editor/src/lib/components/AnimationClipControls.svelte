@@ -1,6 +1,8 @@
 <script lang="ts">
   type Variant = 'inline' | 'panel'
 
+  const EMPTY_LABEL = '애니메이션 없음'
+
   interface Props {
     clips: string[]
     selectedIndex: number
@@ -8,7 +10,6 @@
     onChange?: (index: number) => void
     onPlay?: () => void
     onPause?: () => void
-    emptyLabel?: string
     className?: string
     variant?: Variant
   }
@@ -20,7 +21,6 @@
     onChange,
     onPlay,
     onPause,
-    emptyLabel = '애니메이션 없음',
     className = '',
     variant = 'inline',
   }: Props = $props()
@@ -37,7 +37,7 @@
 <div class={`clip-controls ${variant} ${className}`.trim()}>
   <select value={String(selectedIndex)} onchange={handleChange} disabled={!hasClip}>
     {#if !hasClip}
-      <option value="0">{emptyLabel}</option>
+      <option value="0">{EMPTY_LABEL}</option>
     {:else}
       {#each clips as clip, index (index)}
         <option value={String(index)}>{clip}</option>
