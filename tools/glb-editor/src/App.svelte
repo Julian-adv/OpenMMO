@@ -32,6 +32,7 @@
   let autoRotate = $state(false)
   let loop = $state(true)
   let dropActive = $state(false)
+  let bDropActive = $state(false)
   let isLoadingMain = $state(false)
 
   let gltfB = $state<GLTF | null>(null)
@@ -174,11 +175,7 @@
     bClipInfo = '애니메이션 없음'
   }
 
-  async function onLoadBFile(event: Event): Promise<void> {
-    const input = event.currentTarget as HTMLInputElement
-    const file = input.files?.[0]
-    if (!file) return
-
+  async function handleBFile(file: File): Promise<void> {
     try {
       gltfB = await loadGLTFFromFile(file)
       gltfBFileName = file.name
@@ -190,9 +187,33 @@
       appendLog(`b.glb 로드 완료: ${file.name} (animations: ${gltfB.animations?.length ?? 0})`)
     } catch (error) {
       appendLog(`b.glb 로드 실패: ${String(error)}`)
-    } finally {
-      input.value = ''
     }
+  }
+
+  async function onLoadBFile(event: Event): Promise<void> {
+    const input = event.currentTarget as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    await handleBFile(file)
+    input.value = ''
+  }
+
+  function onBDragOver(event: DragEvent): void {
+    event.preventDefault()
+    bDropActive = true
+  }
+
+  function onBDragLeave(event: DragEvent): void {
+    event.preventDefault()
+    bDropActive = false
+  }
+
+  async function onBDrop(event: DragEvent): Promise<void> {
+    event.preventDefault()
+    bDropActive = false
+    const file = event.dataTransfer?.files?.[0]
+    if (!file) return
+    await handleBFile(file)
   }
 
   async function onMerge(): Promise<void> {
@@ -341,16 +362,18 @@
             GLB 열기
             <input type="file" accept=".glb,.gltf" onchange={onLoadBFile} />
           </label>
+          <button class="btn primary" onclick={onMerge} disabled={!canMerge || isMerging}>
+            {isMerging ? '병합 중...' : '병합 실행'}
+          </button>
         </div>
 
-        <div class="small file-name">{gltfBFileName || '선택된 b.glb 없음'}</div>
+        <div class="small file-name">{gltfBFileName || ''}</div>
 
         <label class="small"><input type="checkbox" bind:checked={prefixB} /> b_ 접두사 자동 부여</label>
-
-        <div class="grid-2">
-          <label class="small"><input type="checkbox" bind:checked={rotFixEnabled} /> 회전 보정</label>
+        <label class="small"><input type="checkbox" bind:checked={rotFixEnabled} /> 회전 보정</label>
+        <div class="grid-2 indent">
           <label class="small"
-            >축
+            ><span class="lbl">축</span>
             <select bind:value={rotFixAxis}>
               <option value="x">X</option>
               <option value="y">Y</option>
@@ -358,31 +381,35 @@
             </select></label
           >
           <label class="small"
-            >각도
+            ><span class="lbl">각도</span>
             <input type="number" bind:value={rotFixDeg} step="1" />
           </label>
           <label class="small"
-            >대상
+            ><span class="lbl">대상</span>
             <select bind:value={rotFixScope}>
               <option value="root">루트만</option>
               <option value="all">모든 본</option>
             </select></label
           >
           <label class="small"
-            >순서
+            ><span class="lbl">순서</span>
             <select bind:value={rotFixOrder}>
               <option value="pre">pre</option>
               <option value="post">post</option>
             </select></label
           >
         </div>
-
-        <button class="btn primary block" onclick={onMerge} disabled={!canMerge || isMerging}>
-          {isMerging ? '병합 중...' : '병합 실행 (merged.glb)'}
-        </button>
       </div>
 
-      <div class="b-preview-wrap">
+      <div
+        class="b-preview-wrap"
+        role="region"
+        aria-label="b glb drop target"
+        ondragenter={onBDragOver}
+        ondragover={onBDragOver}
+        ondragleave={onBDragLeave}
+        ondrop={onBDrop}
+      >
         <div class="b-preview-overlay">
           <AnimationClipControls
             clips={bClipNames}
@@ -397,6 +424,7 @@
             emptyLabel="b 애니메이션 없음"
           />
         </div>
+        <div class="dropzone b-dropzone" class:active={bDropActive}>여기에 b.glb 파일을 드래그 앤 드롭</div>
 
         <div
           class="b-preview"
@@ -486,10 +514,7 @@
     border-color: #2c3650;
   }
 
-  .btn.block {
-    width: 100%;
-    margin-top: 10px;
-  }
+
 
   .file {
     position: relative;
@@ -506,6 +531,10 @@
   .small {
     color: #9ca3af;
     font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
   }
 
   .title {
@@ -678,13 +707,23 @@
     display: grid;
     gap: 8px;
     grid-template-columns: 1fr 1fr;
-    align-items: end;
+    align-items: center;
+  }
+
+  .indent {
+    margin-left: 20px;
+  }
+
+  .grid-2 .lbl {
+    display: inline-block;
+    width: 28px;
+    flex-shrink: 0;
   }
 
   .grid-2 input,
   .grid-2 select {
-    width: 100%;
-    margin-top: 4px;
+    width: 60px;
+    margin-top: 0;
   }
 
   .log {
