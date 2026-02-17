@@ -13,6 +13,7 @@
   import { networkManager, type AccountCharacter } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
+  type DeathUiState = 'alive' | 'waiting_dying' | 'dialog_open' | 'dialog_closed'
   let screen = $state<AppScreen>('login')
   let serverUrl = $state('')
   let accountName = $state('')
@@ -24,7 +25,11 @@
   let isPlayerDead = $state(false)
   let currentPlayerHp = $state<number | null>(null)
   let currentPlayerMaxHp = $state<number | null>(null)
-  let showRespawnDialog = $state(false)
+  let deathUiState = $state<DeathUiState>('alive')
+  let showRespawnDialog = $derived(deathUiState === 'dialog_open')
+  let canReopenRespawnDialog = $derived(
+    isPlayerDead && deathUiState === 'dialog_closed'
+  )
   let wasPlayerDead = false
   let kickedMessage = $state('')
 
@@ -149,12 +154,22 @@
   }
 
   function requestRespawn() {
-    showRespawnDialog = false
+    deathUiState = 'dialog_closed'
     networkManager.requestRespawn()
   }
 
   function closeRespawnDialog() {
-    showRespawnDialog = false
+    deathUiState = isPlayerDead ? 'dialog_closed' : 'alive'
+  }
+
+  function reopenRespawnDialog() {
+    if (!isPlayerDead || deathUiState !== 'dialog_closed') return
+    deathUiState = 'dialog_open'
+  }
+
+  function handleCurrentPlayerDyingFinished() {
+    if (screen !== 'game' || !isPlayerDead || deathUiState !== 'waiting_dying') return
+    deathUiState = 'dialog_open'
   }
 
   networkManager.kicked.on((reason) => {
@@ -162,6 +177,8 @@
     accountName = ''
     accountCharacters = []
     selectedCharacterId = null
+    deathUiState = 'alive'
+    isPlayerDead = false
     screen = 'login'
   })
 
@@ -173,10 +190,10 @@
       !!state.currentPlayer &&
       state.currentPlayer.health <= 0
     if (deadNow && !wasPlayerDead) {
-      showRespawnDialog = true
+      deathUiState = 'waiting_dying'
     }
     if (!deadNow) {
-      showRespawnDialog = false
+      deathUiState = 'alive'
     }
     isPlayerDead = deadNow
     wasPlayerDead = deadNow
@@ -187,7 +204,10 @@
   {#if screen === 'game'}
     <div class="game-shell" class:dead={isPlayerDead}>
       <Canvas renderMode="always" shadows>
-        <GameScene {serverUrl} />
+        <GameScene
+          {serverUrl}
+          onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
+        />
       </Canvas>
       <ChatPanel />
       <FPSCounter />
@@ -200,17 +220,21 @@
           attributes={selectedCharacter.attributes}
         />
       {/if}
-      <button class="back-to-select" onclick={handleBackToCharacterSelect}>
-        Character Select
-      </button>
+
+      <div class="corner-actions">
+        {#if canReopenRespawnDialog}
+          <button class="respawn-reopen" onclick={reopenRespawnDialog}>
+            Respawn
+          </button>
+        {/if}
+        <button class="back-to-select" onclick={handleBackToCharacterSelect}>
+          Character Select
+        </button>
+      </div>
     </div>
 
     {#if showRespawnDialog}
       <RespawnDialog onRespawn={requestRespawn} onLater={closeRespawnDialog} />
-    {:else if isPlayerDead}
-      <button class="respawn-reopen" onclick={() => (showRespawnDialog = true)}>
-        Respawn
-      </button>
     {/if}
   {:else if screen === 'character-select'}
     <CharacterSelectScreen
@@ -261,11 +285,23 @@
     filter: grayscale(100%);
   }
 
-  .respawn-reopen {
+  .corner-actions {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .respawn-reopen,
+  .back-to-select {
     border: none;
     border-radius: 8px;
     padding: 10px 14px;
-    font-size: 14px;
+    font-size: 13px;
     cursor: pointer;
   }
 
@@ -275,23 +311,7 @@
     font-weight: 700;
   }
 
-  .respawn-reopen {
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-    z-index: 31;
-  }
-
   .back-to-select {
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-    z-index: 30;
-    border: none;
-    border-radius: 8px;
-    padding: 10px 14px;
-    font-size: 13px;
-    cursor: pointer;
     background: rgba(60, 60, 60, 0.85);
     color: #ccc;
     font-weight: 600;

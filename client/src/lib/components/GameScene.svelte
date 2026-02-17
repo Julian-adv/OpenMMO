@@ -73,9 +73,10 @@
 
   interface Props {
     serverUrl: string
+    onCurrentPlayerDyingFinished?: () => void
   }
 
-  let { serverUrl }: Props = $props()
+  let { serverUrl, onCurrentPlayerDyingFinished }: Props = $props()
 
   let currentPlayer = $state<LocalPlayer | null>(null)
   let otherPlayers = $state<Map<string, RemotePlayer>>(new Map())
@@ -561,6 +562,7 @@
   {playerAttackDuration}
   onStateChange={handlePlayerStateChange}
   onAttackDuration={(duration) => (playerAttackDuration = duration)}
+  {onCurrentPlayerDyingFinished}
   bind:playerControl={playerControl}
   bind:currentPlayerModel={currentPlayerModel}
   bind:otherPlayerModels={otherPlayerModels}

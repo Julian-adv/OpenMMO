@@ -27,6 +27,7 @@
     camera: THREE.Camera | undefined
     chatBubble?: string
     onAttackDuration?: (duration: number) => void
+    onDyingFinished?: () => void
     lastDamageInfo?: PlayerDamageInfo
   }
 
@@ -42,6 +43,7 @@
     camera,
     chatBubble,
     onAttackDuration,
+    onDyingFinished,
     lastDamageInfo,
   }: Props = $props()
 
@@ -71,6 +73,7 @@
     'idle' | 'moving' | 'attack' | 'dead' | undefined
   >(undefined)
   let lastAttackCounter = $state(0)
+  let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
 
@@ -114,13 +117,9 @@
       // Assuming AnimationIndex.SLASH1 exists and maps correctly
       clip = validAnimations[AnimationIndex.SLASH1]
     } else if (playerState === 'dead') {
-      // Stop all animations - the model will be tilted via the group rotation
       currentMovementAnimationIndex = undefined
-      if (currentAction) {
-        currentAction.fadeOut(0.5)
-        currentAction = null
-      }
-      return
+      dyingFinishedNotified = false
+      clip = validAnimations[AnimationIndex.DYING]
     } else {
       return // Unknown state
     }
@@ -132,11 +131,15 @@
     // Setup new action
     newAction.reset()
     newAction.loop =
-      playerState === 'idle' || playerState === 'attack'
+      playerState === 'idle' ||
+      playerState === 'attack' ||
+      playerState === 'dead'
         ? THREE.LoopOnce
         : THREE.LoopRepeat
     newAction.clampWhenFinished =
-      playerState === 'idle' || playerState === 'attack'
+      playerState === 'idle' ||
+      playerState === 'attack' ||
+      playerState === 'dead'
     newAction.paused = false
 
     // If there's a current action and it's different, crossfade to the new one
@@ -423,6 +426,24 @@
       }
     }
 
+    if (playerState !== 'dead') {
+      dyingFinishedNotified = false
+    } else if (
+      isCurrentPlayer &&
+      onDyingFinished &&
+      !dyingFinishedNotified &&
+      currentAction
+    ) {
+      const clip = currentAction.getClip()
+      if (
+        clip.name === AnimationName.DYING &&
+        currentAction.time >= clip.duration - 0.001
+      ) {
+        dyingFinishedNotified = true
+        onDyingFinished()
+      }
+    }
+
     // Update animation state
     if (validAnimations.length > 0) {
       // Only update animation if the player state has changed or attack counter increased
@@ -441,9 +462,9 @@
 
 <!-- Character Model -->
 {#if modelRoot}
-  <T.Group
+<T.Group
     position={[position.x, position.y, position.z]}
-    rotation={[playerState === 'dead' ? -Math.PI / 2 : 0, rotation, 0]}
+    rotation={[0, rotation, 0]}
   >
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />

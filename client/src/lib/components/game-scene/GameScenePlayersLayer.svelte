@@ -23,6 +23,7 @@
     playerAttackDuration: number
     onStateChange: (newState: PlayerState) => void
     onAttackDuration: (duration: number) => void
+    onCurrentPlayerDyingFinished?: () => void
     playerControl?: PlayerControl
     currentPlayerModel?: PlayerModel | null
     otherPlayerModels?: (PlayerModel | undefined)[]
@@ -41,6 +42,7 @@
     playerAttackDuration,
     onStateChange,
     onAttackDuration,
+    onCurrentPlayerDyingFinished,
     playerControl = $bindable<PlayerControl>(),
     currentPlayerModel = $bindable<PlayerModel | null>(null),
     otherPlayerModels = $bindable<(PlayerModel | undefined)[]>([]),
@@ -74,6 +76,7 @@
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
     onAttackDuration={onAttackDuration}
+    onDyingFinished={onCurrentPlayerDyingFinished}
     lastDamageInfo={currentPlayer.lastDamageInfo}
   />
 {/if}
