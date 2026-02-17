@@ -53,10 +53,6 @@
   let resizeStartY = 0
   let resizeStartMergeHeight = 0
 
-  const HEADER_HEIGHT = 56
-  const LOG_HEIGHT = 190
-  const ROW_RESIZER_HEIGHT = 10
-  const MIN_MAIN_HEIGHT = 260
   const MIN_MERGE_HEIGHT = 240
 
   const hasCandidate = $derived(selectedCandidateIndex >= 0)
@@ -98,10 +94,10 @@
       bPreviewer = new ClipPreviewer(bPreviewHost)
       bPreviewer.setLoop(loop)
     }
+
   })
 
   onDestroy(() => {
-    stopMergeHeightResize()
     viewer?.destroy()
     bPreviewer?.destroy()
   })
@@ -228,35 +224,32 @@
   }
 
   function clampMergeHeight(next: number): number {
-    const appHeight = appHost?.clientHeight ?? window.innerHeight
-    const usableHeight = appHeight - HEADER_HEIGHT - LOG_HEIGHT - ROW_RESIZER_HEIGHT
-    const maxMergeHeight = Math.max(MIN_MERGE_HEIGHT, usableHeight - MIN_MAIN_HEIGHT)
-    return Math.max(MIN_MERGE_HEIGHT, Math.min(next, maxMergeHeight))
+    return Math.max(MIN_MERGE_HEIGHT, next)
   }
 
   function onMergeHeightResizerPointerDown(event: PointerEvent): void {
+    if (event.button !== 0) return
     event.preventDefault()
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
     resizeStartY = event.clientY
     resizeStartMergeHeight = mergePanelHeight
     isResizingMergePanelHeight = true
-
-    window.addEventListener('pointermove', onMergeHeightResizerPointerMove)
-    window.addEventListener('pointerup', stopMergeHeightResize)
+    console.log('pointer down')
   }
 
   function onMergeHeightResizerPointerMove(event: PointerEvent): void {
     if (!isResizingMergePanelHeight) return
-
+    if (event.buttons === 0) {
+      stopMergeHeightResize()
+      return
+    }
     const delta = event.clientY - resizeStartY
     mergePanelHeight = clampMergeHeight(resizeStartMergeHeight - delta)
+    console.log('merge panel height:', mergePanelHeight)
   }
 
   function stopMergeHeightResize(): void {
-    if (!isResizingMergePanelHeight) return
-
     isResizingMergePanelHeight = false
-    window.removeEventListener('pointermove', onMergeHeightResizerPointerMove)
-    window.removeEventListener('pointerup', stopMergeHeightResize)
   }
 </script>
 
@@ -264,7 +257,7 @@
   class="app"
   class:resizing={isResizingMergePanelHeight}
   bind:this={appHost}
-  style={`--merge-panel-height: ${mergePanelHeight}px;`}
+  style:grid-template-rows="56px minmax(0,1fr) 10px {mergePanelHeight}px 190px"
 >
   <header>
     <h1>GLB Editor</h1>
@@ -336,6 +329,8 @@
     type="button"
     aria-label="Merge panel height resize handle"
     onpointerdown={onMergeHeightResizerPointerDown}
+    onpointermove={onMergeHeightResizerPointerMove}
+    onlostpointercapture={stopMergeHeightResize}
   ></button>
 
   <section class="merge-panel">
@@ -344,7 +339,7 @@
         <div class="merge-header">
           <h2>애니메이션 병합</h2>
           <label class="btn file">
-            b.glb 열기
+            GLB 열기
             <input type="file" accept=".glb,.gltf" onchange={onLoadBFile} />
           </label>
         </div>
@@ -412,11 +407,6 @@
         ></div>
       </div>
     </div>
-
-    <p class="small tip">
-      매칭 규칙: 대소문자 무시, 공백/하이픈 제거, Blender 숫자 접미사 제거, 좌/우 표준화,
-      Levenshtein 퍼지 매칭.
-    </p>
   </section>
 
   <section class="log">
@@ -428,13 +418,9 @@
   .app {
     display: grid;
     grid-template-columns: 300px minmax(0, 1fr);
-    grid-template-rows:
-      56px
-      minmax(0, 1fr)
-      10px
-      var(--merge-panel-height, 360px)
-      190px;
+    /* grid-template-rows is set via inline style for reactive resize */
     height: 100%;
+    overflow: hidden;
   }
 
   .app.resizing {
@@ -610,6 +596,7 @@
     border-bottom: 1px solid #000;
     background: #0f1320;
     cursor: row-resize;
+    touch-action: none;
     padding: 0;
     margin: 0;
     opacity: 0.9;
@@ -630,18 +617,24 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
   }
 
   .merge-top {
     display: grid;
     grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.2fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 10px;
+    flex: 1;
+    min-height: 0;
   }
 
   .merge-top-left {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    min-height: 0;
+    overflow: auto;
   }
 
   .merge-header {
@@ -661,6 +654,7 @@
     border-radius: 10px;
     overflow: hidden;
     background: #090b12;
+    min-height: 0;
   }
 
   .b-preview-overlay {
@@ -677,7 +671,8 @@
 
   .b-preview {
     width: 100%;
-    height: 230px;
+    height: 100%;
+    min-height: 230px;
   }
 
   .grid-2 {
@@ -691,10 +686,6 @@
   .grid-2 select {
     width: 100%;
     margin-top: 4px;
-  }
-
-  .tip {
-    line-height: 1.45;
   }
 
   .log {
