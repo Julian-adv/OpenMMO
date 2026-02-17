@@ -42,7 +42,7 @@
   let bClipInfo = $state('애니메이션 없음')
   let isMerging = $state(false)
 
-  let prefixB = $state(true)
+  let mergeAnimName = $state('')
   let rotFixEnabled = $state(false)
   let rotFixAxis = $state<RotationFixAxis>('x')
   let rotFixDeg = $state(-90)
@@ -58,8 +58,18 @@
 
   const hasCandidate = $derived(selectedCandidateIndex >= 0)
   const hasCandidates = $derived(candidates.length > 0)
-  const canMerge = $derived(Boolean(viewer?.getSourceGLTF() && gltfB))
   const hasBClip = $derived(bClipNames.length > 0)
+  const trimmedMergeName = $derived(mergeAnimName.trim())
+  const mergeNameConflict = $derived(
+    trimmedMergeName !== '' && clipNames.includes(trimmedMergeName),
+  )
+  const canMerge = $derived(
+    hasCandidates &&
+      gltfB !== null &&
+      hasBClip &&
+      trimmedMergeName !== '' &&
+      !mergeNameConflict,
+  )
 
   function appendLog(message: string): void {
     logText += `${message}\n`
@@ -221,7 +231,7 @@
     if (!gltfA || !gltfB) return
 
     const options: MergeOptions = {
-      prefixB,
+      animName: trimmedMergeName,
       rotationFix: {
         enabled: rotFixEnabled,
         axis: rotFixAxis,
@@ -229,7 +239,7 @@
         scope: rotFixScope,
         order: rotFixOrder,
       },
-      selectedBClipIndex: hasBClip ? bSelectedClipIndex : null,
+      selectedBClipIndex: bSelectedClipIndex,
     }
 
     isMerging = true
@@ -358,7 +368,13 @@
 
         <div class="small file-name">{gltfBFileName || ''}</div>
 
-        <label class="small"><input type="checkbox" bind:checked={prefixB} /> b_ 접두사 자동 부여</label>
+        <label class="small">
+          <span class="lbl-prefix">애님 이름</span>
+          <input class="anim-name-input" class:conflict={mergeNameConflict} type="text" bind:value={mergeAnimName} placeholder="병합할 애님 이름" />
+        </label>
+        {#if mergeNameConflict}
+          <span class="small conflict-msg">이미 존재하는 이름입니다</span>
+        {/if}
         <label class="small"><input type="checkbox" bind:checked={rotFixEnabled} /> 회전 보정</label>
         <div class="grid-2 indent">
           <label class="small"
@@ -629,6 +645,28 @@
     min-height: 0;
   }
 
+
+  .lbl-prefix {
+    flex-shrink: 0;
+  }
+
+  .anim-name-input {
+    width: 140px;
+    background: #1f2635;
+    border: 1px solid #2c3650;
+    border-radius: 4px;
+    color: #e5e7eb;
+    padding: 2px 6px;
+    font-size: 12px;
+  }
+
+  .anim-name-input.conflict {
+    border-color: #ef4444;
+  }
+
+  .conflict-msg {
+    color: #ef4444 !important;
+  }
 
   .grid-2 {
     display: grid;

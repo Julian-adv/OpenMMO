@@ -15,9 +15,9 @@ export interface RotationFixOptions {
 }
 
 export interface MergeOptions {
-  prefixB: boolean
+  animName: string
   rotationFix: RotationFixOptions
-  selectedBClipIndex: number | null
+  selectedBClipIndex: number
 }
 
 export interface MergeStats {
@@ -81,20 +81,15 @@ export async function mergeAnimationsIntoA(
   let correctedTracks = 0
 
   const bAnimations = gltfB.animations ?? []
-  const clipsToMerge =
-    options.selectedBClipIndex === null
-      ? bAnimations
-      : [bAnimations[options.selectedBClipIndex]].filter(
-          (clip): clip is THREE.AnimationClip => Boolean(clip)
-        )
-
-  if (clipsToMerge.length === 0) {
+  const srcClip = bAnimations[options.selectedBClipIndex]
+  if (!srcClip) {
     log('b.glb에서 병합할 애니메이션이 없습니다.')
-  } else if (options.selectedBClipIndex !== null) {
-    log(`b.glb 선택 클립만 병합: index=${options.selectedBClipIndex}`)
-  } else {
-    log(`b.glb 전체 클립 병합: ${clipsToMerge.length}개`)
+    throw new Error('선택된 B 클립이 없습니다.')
   }
+  log(
+    `b.glb 선택 클립 병합: index=${options.selectedBClipIndex} ("${srcClip.name}")`
+  )
+  const clipsToMerge = [srcClip]
 
   for (const clip of clipsToMerge) {
     const newTracks: THREE.KeyframeTrack[] = []
@@ -138,10 +133,7 @@ export async function mergeAnimationsIntoA(
     const newClip = clip.clone()
     newClip.tracks = newTracks
 
-    let baseName =
-      clip.name && clip.name.trim() ? clip.name.trim() : 'Animation'
-    if (options.prefixB) baseName = `b_${baseName}`
-    newClip.name = uniqueName(baseName, takenNames)
+    newClip.name = uniqueName(options.animName, takenNames)
 
     mappedBAnims.push(newClip)
     log(
