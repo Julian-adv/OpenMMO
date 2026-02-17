@@ -23,7 +23,11 @@
 ## Commit & Pull Request Guidelines
 - Commits: Use imperative, present-tense summaries (e.g., "Add HeightmapTerrain component"). Group related changes; keep scope focused.
 - PRs: Include purpose, linked issues, and usage notes. For UI changes, add screenshots or short clips from the Vite preview. Ensure `npm run lint` (client) and `cargo build` (server) pass.
-- Pre-commit: Before committing changes, run the following commands in the `client` directory:
+- Pre-commit: If the `client` directory changed, run the following commands in the `client` directory before committing:
+  - `npm run format`
+  - `npm run lint`
+  - `npm run check`
+- Pre-commit (tools): Before committing tool-side changes, run the following commands in each changed `tools/*` package directory:
   - `npm run format`
   - `npm run lint`
   - `npm run check`
