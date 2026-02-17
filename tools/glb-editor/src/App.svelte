@@ -234,7 +234,6 @@
     resizeStartY = event.clientY
     resizeStartMergeHeight = mergePanelHeight
     isResizingMergePanelHeight = true
-    console.log('pointer down')
   }
 
   function onMergeHeightResizerPointerMove(event: PointerEvent): void {
