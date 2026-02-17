@@ -1,4 +1,5 @@
 # Client (Node.js/Svelte)
+node_modules/
 client/node_modules/
 client/dist/
 client/build/
@@ -9,6 +10,7 @@ client/.env.production
 client/package-lock.json
 client/*.tsbuildinfo
 client/vite.config.d.ts
+tools/glb-editor/vite.config.d.ts
 
 # Rust (workspace)
 target/
