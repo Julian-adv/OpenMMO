@@ -100,6 +100,43 @@
         <code>b_</code> 접두사 자동 부여</label
       >
     </div>
+    <div class="row">
+      <label class="small"
+        ><input type="checkbox" id="rotFixEnabled" /> b 회전 보정</label
+      >
+      <label class="small"
+        >축:
+        <select id="rotFixAxis">
+          <option value="x" selected>X</option>
+          <option value="y">Y</option>
+          <option value="z">Z</option>
+        </select>
+      </label>
+      <label class="small"
+        >각도:
+        <input
+          id="rotFixDeg"
+          type="number"
+          value="-90"
+          step="1"
+          style="width:72px"
+        />
+      </label>
+      <label class="small"
+        >대상:
+        <select id="rotFixScope">
+          <option value="root" selected>루트만</option>
+          <option value="all">모든 본</option>
+        </select>
+      </label>
+      <label class="small"
+        >순서:
+        <select id="rotFixOrder">
+          <option value="pre" selected>pre</option>
+          <option value="post">post</option>
+        </select>
+      </label>
+    </div>
     <div class="row"><button id="mergeBtn" disabled>병합 실행</button></div>
     <div class="row tip">
       매칭 규칙: 대소문자 무시 · 공백/하이픈 제거 · Blender 접미사(.001 / _001
@@ -260,6 +297,60 @@
         return null
       }
 
+      function isQuaternionTrack(track) {
+        return (
+          track &&
+          typeof track.name === 'string' &&
+          track.name.endsWith('.quaternion') &&
+          track.values &&
+          track.values.length % 4 === 0
+        )
+      }
+      function isLikelyRootNode(name) {
+        const key = canonicalKey(name).replace(/_/g, '')
+        return (
+          key === 'root' ||
+          key === 'armature' ||
+          key === 'hips' ||
+          key === 'pelvis' ||
+          key === 'mixamorighips' ||
+          key === 'skeletonroot' ||
+          key.endsWith('root')
+        )
+      }
+      function buildRotationFixConfig() {
+        const enabled = document.getElementById('rotFixEnabled').checked
+        if (!enabled) return null
+        const axis = document.getElementById('rotFixAxis').value
+        const deg = Number(document.getElementById('rotFixDeg').value || 0)
+        const scope = document.getElementById('rotFixScope').value
+        const order = document.getElementById('rotFixOrder').value
+        if (!Number.isFinite(deg) || Math.abs(deg) < 1e-8) return null
+
+        const q = new THREE.Quaternion()
+        const rad = THREE.MathUtils.degToRad(deg)
+        if (axis === 'x') q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), rad)
+        else if (axis === 'y')
+          q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rad)
+        else q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), rad)
+
+        return { axis, deg, scope, order, q }
+      }
+      function applyQuaternionRotationFix(track, fixCfg) {
+        const q = new THREE.Quaternion()
+        const vals = track.values
+        for (let i = 0; i < vals.length; i += 4) {
+          q.set(vals[i], vals[i + 1], vals[i + 2], vals[i + 3])
+          if (fixCfg.order === 'post') q.multiply(fixCfg.q)
+          else q.premultiply(fixCfg.q)
+          q.normalize()
+          vals[i] = q.x
+          vals[i + 1] = q.y
+          vals[i + 2] = q.z
+          vals[i + 3] = q.w
+        }
+      }
+
       // ---------- 클립 이름 고유화 ----------
       function uniqueName(base, taken) {
         let name = base && base.trim() ? base.trim() : 'Clip'
@@ -298,10 +389,18 @@
         let totalTracks = 0,
           mappedTracks = 0
         const addPrefix = document.getElementById('prefixB').checked
+        const rotFix = buildRotationFixConfig()
+        let correctedTracks = 0
+        if (rotFix) {
+          log(
+            `🔧 회전 보정 활성화: axis=${rotFix.axis}, deg=${rotFix.deg}, scope=${rotFix.scope}, order=${rotFix.order}`
+          )
+        }
 
         let seq = 1
         for (const clip of gltfB.animations) {
           const newTracks = []
+          let clipCorrected = 0
 
           for (const track of clip.tracks) {
             totalTracks++
@@ -311,6 +410,17 @@
             if (match) {
               const cloned = track.clone()
               cloned.name = cloned.name.replace(bNode, match.name)
+
+              const shouldApplyRotFix =
+                rotFix &&
+                isQuaternionTrack(cloned) &&
+                (rotFix.scope === 'all' || isLikelyRootNode(match.name))
+              if (shouldApplyRotFix) {
+                applyQuaternionRotationFix(cloned, rotFix)
+                clipCorrected++
+                correctedTracks++
+              }
+
               newTracks.push(cloned)
               mappedTracks++
               log(
@@ -341,6 +451,9 @@
             log(
               `클립 "${clip.name}" → "${newClip.name}" (${newTracks.length} 트랙 매핑 성공)`
             )
+            if (clipCorrected > 0) {
+              log(`  ↳ 회전 보정 적용 트랙: ${clipCorrected}`)
+            }
             seq++
           } else {
             log(`클립 "${clip.name}" 매핑된 트랙 없음 → 스킵`)
@@ -348,6 +461,9 @@
         }
 
         log(`요약: 총 트랙 ${totalTracks}개 중 ${mappedTracks}개 매핑 성공`)
+        if (rotFix) {
+          log(`요약: 회전 보정 적용 트랙 ${correctedTracks}개`)
+        }
 
         // 3) 병합 (a 원본 + b 매핑본)
         const mergedAnims = [...gltfA.animations, ...mappedBAnims]
