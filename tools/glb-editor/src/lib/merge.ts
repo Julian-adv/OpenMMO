@@ -17,6 +17,7 @@ export interface RotationFixOptions {
 export interface MergeOptions {
   prefixB: boolean
   rotationFix: RotationFixOptions
+  selectedBClipIndex: number | null
 }
 
 export interface MergeStats {
@@ -79,7 +80,23 @@ export async function mergeAnimationsIntoA(
   let mappedTracks = 0
   let correctedTracks = 0
 
-  for (const clip of gltfB.animations ?? []) {
+  const bAnimations = gltfB.animations ?? []
+  const clipsToMerge =
+    options.selectedBClipIndex === null
+      ? bAnimations
+      : [bAnimations[options.selectedBClipIndex]].filter(
+          (clip): clip is THREE.AnimationClip => Boolean(clip)
+        )
+
+  if (clipsToMerge.length === 0) {
+    log('b.glb에서 병합할 애니메이션이 없습니다.')
+  } else if (options.selectedBClipIndex !== null) {
+    log(`b.glb 선택 클립만 병합: index=${options.selectedBClipIndex}`)
+  } else {
+    log(`b.glb 전체 클립 병합: ${clipsToMerge.length}개`)
+  }
+
+  for (const clip of clipsToMerge) {
     const newTracks: THREE.KeyframeTrack[] = []
     let clipCorrected = 0
 

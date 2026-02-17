@@ -9,10 +9,14 @@
     type RotationFixOrder,
     type RotationFixScope,
   } from './lib/merge'
+  import { ClipPreviewer } from './lib/clip-previewer'
+  import AnimationClipControls from './lib/components/AnimationClipControls.svelte'
   import { GlbViewer, type CandidateSummary } from './lib/viewer'
 
   let viewerHost = $state<HTMLDivElement | null>(null)
   let viewer = $state<GlbViewer | null>(null)
+  let bPreviewHost = $state<HTMLDivElement | null>(null)
+  let bPreviewer = $state<ClipPreviewer | null>(null)
   let logEl = $state<HTMLPreElement | null>(null)
 
   let logText = $state('')
@@ -31,6 +35,9 @@
 
   let gltfB = $state<GLTF | null>(null)
   let gltfBFileName = $state('')
+  let bClipNames = $state<string[]>([])
+  let bSelectedClipIndex = $state(0)
+  let bClipInfo = $state('애니메이션 없음')
   let isMerging = $state(false)
 
   let prefixB = $state(true)
@@ -43,6 +50,7 @@
   const hasCandidate = $derived(selectedCandidateIndex >= 0)
   const hasCandidates = $derived(candidates.length > 0)
   const canMerge = $derived(Boolean(viewer?.getSourceGLTF() && gltfB))
+  const hasBClip = $derived(bClipNames.length > 0)
 
   function appendLog(message: string): void {
     logText += `${message}\n`
@@ -54,30 +62,35 @@
   }
 
   onMount(() => {
-    if (!viewerHost) return
+    if (viewerHost) {
+      viewer = new GlbViewer(viewerHost, {
+        log: appendLog,
+        onMetaChange: (message) => {
+          metaText = message
+        },
+        onCandidatesChange: (items, selected) => {
+          candidates = items
+          selectedCandidateIndex = selected
+        },
+        onClipsChange: (clips, selected, info) => {
+          clipNames = clips
+          selectedClipIndex = selected
+          clipInfo = info
+        },
+      })
+      viewer.setAutoRotate(autoRotate)
+      viewer.setLoop(loop)
+    }
 
-    viewer = new GlbViewer(viewerHost, {
-      log: appendLog,
-      onMetaChange: (message) => {
-        metaText = message
-      },
-      onCandidatesChange: (items, selected) => {
-        candidates = items
-        selectedCandidateIndex = selected
-      },
-      onClipsChange: (clips, selected, info) => {
-        clipNames = clips
-        selectedClipIndex = selected
-        clipInfo = info
-      },
-    })
-
-    viewer.setAutoRotate(autoRotate)
-    viewer.setLoop(loop)
+    if (bPreviewHost) {
+      bPreviewer = new ClipPreviewer(bPreviewHost)
+      bPreviewer.setLoop(loop)
+    }
   })
 
   onDestroy(() => {
     viewer?.destroy()
+    bPreviewer?.destroy()
   })
 
   $effect(() => {
@@ -86,6 +99,7 @@
 
   $effect(() => {
     viewer?.setLoop(loop)
+    bPreviewer?.setLoop(loop)
   })
 
   async function handleMainFile(file: File): Promise<void> {
@@ -129,13 +143,6 @@
     await handleMainFile(file)
   }
 
-  function onClipChange(event: Event): void {
-    const select = event.currentTarget as HTMLSelectElement
-    const next = Number.parseInt(select.value, 10)
-    selectedClipIndex = Number.isNaN(next) ? 0 : next
-    viewer?.playClip(selectedClipIndex)
-  }
-
   function onSelectCandidate(index: number): void {
     viewer?.selectCandidate(index)
   }
@@ -150,8 +157,12 @@
 
   function onReset(): void {
     viewer?.reset()
+    bPreviewer?.clear()
     gltfB = null
     gltfBFileName = ''
+    bClipNames = []
+    bSelectedClipIndex = 0
+    bClipInfo = '애니메이션 없음'
   }
 
   async function onLoadBFile(event: Event): Promise<void> {
@@ -162,6 +173,11 @@
     try {
       gltfB = await loadGLTFFromFile(file)
       gltfBFileName = file.name
+      const clips = gltfB.animations ?? []
+      bClipNames = clips.map((clip, index) => clip.name?.trim() || `Clip ${index + 1}`)
+      bSelectedClipIndex = 0
+      bClipInfo = clips.length > 0 ? `${clips.length} clip(s)` : '애니메이션 없음'
+      bPreviewer?.loadGLTF(gltfB)
       appendLog(`b.glb 로드 완료: ${file.name} (animations: ${gltfB.animations?.length ?? 0})`)
     } catch (error) {
       appendLog(`b.glb 로드 실패: ${String(error)}`)
@@ -183,6 +199,7 @@
         scope: rotFixScope,
         order: rotFixOrder,
       },
+      selectedBClipIndex: hasBClip ? bSelectedClipIndex : null,
     }
 
     isMerging = true
@@ -236,20 +253,18 @@
 
   <main class="viewer-panel">
     <div class="overlay">
-      <select value={String(selectedClipIndex)} onchange={onClipChange} disabled={clipNames.length === 0}>
-        {#if clipNames.length === 0}
-          <option value="0">애니메이션 없음</option>
-        {:else}
-          {#each clipNames as clip, index}
-            <option value={String(index)}>{clip}</option>
-          {/each}
-        {/if}
-      </select>
-      <button class="btn" onclick={() => viewer?.playClip(selectedClipIndex)} disabled={clipNames.length === 0}
-        >재생</button
-      >
-      <button class="btn" onclick={() => viewer?.pause()} disabled={clipNames.length === 0}>일시정지</button>
-      <span class="small">{clipInfo}</span>
+      <AnimationClipControls
+        clips={clipNames}
+        selectedIndex={selectedClipIndex}
+        info={clipInfo}
+        onChange={(index) => {
+          selectedClipIndex = index
+          viewer?.playClip(selectedClipIndex)
+        }}
+        onPlay={() => viewer?.playClip(selectedClipIndex)}
+        onPause={() => viewer?.pause()}
+        emptyLabel="애니메이션 없음"
+      />
     </div>
 
     <div
@@ -276,6 +291,27 @@
     </label>
 
     <div class="small file-name">{gltfBFileName || '선택된 b.glb 없음'}</div>
+
+    <AnimationClipControls
+      clips={bClipNames}
+      selectedIndex={bSelectedClipIndex}
+      info={bClipInfo}
+      onChange={(index) => {
+        bSelectedClipIndex = index
+        bPreviewer?.playClip(bSelectedClipIndex)
+      }}
+      onPlay={() => bPreviewer?.playClip(bSelectedClipIndex)}
+      onPause={() => bPreviewer?.pause()}
+      emptyLabel="b 애니메이션 없음"
+      variant="panel"
+    />
+
+    <div
+      class="b-preview"
+      bind:this={bPreviewHost}
+      role="region"
+      aria-label="b glb animation preview"
+    ></div>
 
     <label class="small"><input type="checkbox" bind:checked={prefixB} /> b_ 접두사 자동 부여</label>
 
@@ -460,23 +496,11 @@
     position: absolute;
     left: 10px;
     top: 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
     z-index: 2;
     background: rgb(0 0 0 / 38%);
     padding: 8px;
     border-radius: 10px;
     backdrop-filter: blur(6px);
-  }
-
-  .overlay select {
-    min-width: 180px;
-  }
-
-  .overlay button {
-    padding-top: 5px;
-    padding-bottom: 5px;
   }
 
   .dropzone {
@@ -507,6 +531,15 @@
 
   .file-name {
     margin-bottom: 4px;
+  }
+
+  .b-preview {
+    width: 100%;
+    height: 210px;
+    border: 1px solid #1f283d;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #090b12;
   }
 
   .grid-2 {
@@ -568,7 +601,6 @@
 
     .overlay {
       max-width: calc(100% - 20px);
-      flex-wrap: wrap;
     }
   }
 </style>
