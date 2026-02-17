@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
+  import type { AnimationClip } from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { loadGLTFFromFile } from './lib/gltf-io'
   import {
@@ -42,6 +43,7 @@
   let bClipInfo = $state('애니메이션 없음')
   let isMerging = $state(false)
   let hasMergedUnsaved = $state(false)
+  let animsBeforeMerge = $state<AnimationClip[] | null>(null)
 
   let mergeAnimName = $state('')
   let rotFixEnabled = $state(false)
@@ -185,6 +187,7 @@
     bSelectedClipIndex = 0
     bClipInfo = '애니메이션 없음'
     hasMergedUnsaved = false
+    animsBeforeMerge = null
   }
 
   async function handleBFile(file: File): Promise<void> {
@@ -248,6 +251,7 @@
     try {
       const output = mergeAnimationClips(gltfA, gltfB, options, appendLog)
       if (!gltfA.animations) gltfA.animations = []
+      animsBeforeMerge = [...gltfA.animations]
       gltfA.animations.push(...output.clips)
       viewer?.refreshPreview()
       hasMergedUnsaved = true
@@ -262,6 +266,18 @@
   async function onSave(): Promise<void> {
     await viewer?.saveCurrentGLB()
     hasMergedUnsaved = false
+    animsBeforeMerge = null
+  }
+
+  function onUndoMerge(): void {
+    const gltfA = viewer?.getSourceGLTF() ?? null
+    if (!gltfA || !animsBeforeMerge) return
+
+    gltfA.animations = animsBeforeMerge
+    animsBeforeMerge = null
+    hasMergedUnsaved = false
+    viewer?.refreshPreview()
+    appendLog('병합 되돌리기 완료')
   }
 
   function clampMergeHeight(next: number): number {
@@ -373,6 +389,9 @@
           </label>
           <button class="btn primary" onclick={onMerge} disabled={!canMerge || isMerging}>
             {isMerging ? '병합 중...' : '병합 실행'}
+          </button>
+          <button class="btn ghost" onclick={onUndoMerge} disabled={!animsBeforeMerge}>
+            되돌리기
           </button>
           <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>
             저장 (다운로드)
