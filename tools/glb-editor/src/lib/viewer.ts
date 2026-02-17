@@ -153,6 +153,33 @@ export class GlbViewer {
     })
   }
 
+  refreshPreview(): void {
+    if (
+      this.selectedIndex >= 0 &&
+      this.selectedIndex < this.candidates.length
+    ) {
+      this.loadPreview(this.candidates[this.selectedIndex])
+    }
+  }
+
+  async saveCurrentGLB(): Promise<void> {
+    if (!this.srcGLTF) return
+
+    const allAnims = this.srcGLTF.animations ?? []
+    this.callbacks.log(`GLB 저장 시작 (animations: ${allAnims.length})`)
+
+    try {
+      const arrayBuffer = await this.exportScene(
+        this.srcGLTF.scene as unknown as THREE.Scene,
+        allAnims
+      )
+      downloadArrayBuffer('merged.glb', arrayBuffer)
+      this.callbacks.log('GLB 저장 완료: merged.glb 다운로드')
+    } catch (error) {
+      this.callbacks.log(`GLB 저장 실패: ${String(error)}`)
+    }
+  }
+
   async exportSelected(): Promise<void> {
     if (this.selectedIndex < 0 || this.selectedIndex >= this.candidates.length)
       return

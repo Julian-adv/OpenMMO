@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 
 export type RotationFixAxis = 'x' | 'y' | 'z'
 export type RotationFixScope = 'root' | 'all'
@@ -27,8 +26,8 @@ export interface MergeStats {
   mergedClipCount: number
 }
 
-export interface MergeOutput {
-  merged: Blob
+export interface MergeClipsOutput {
+  clips: THREE.AnimationClip[]
   stats: MergeStats
 }
 
@@ -51,14 +50,12 @@ interface RotationFixConfig {
   q: THREE.Quaternion
 }
 
-const exporter = new GLTFExporter()
-
-export async function mergeAnimationsIntoA(
+export function mergeAnimationClips(
   gltfA: GLTF,
   gltfB: GLTF,
   options: MergeOptions,
   log: (message: string) => void
-): Promise<MergeOutput> {
+): MergeClipsOutput {
   const aIndex = buildANodeIndex(gltfA.scene)
   log(`a.glb 노드 수(이름 보유): ${aIndex.originals.size}`)
 
@@ -145,52 +142,21 @@ export async function mergeAnimationsIntoA(
     }
   }
 
-  const mergedAnims = [...(gltfA.animations ?? []), ...mappedBAnims]
   log(`요약: 총 트랙 ${totalTracks}개 중 ${mappedTracks}개 매핑 성공`)
   if (rotFix) {
     log(`요약: 회전 보정 적용 트랙 ${correctedTracks}개`)
   }
-  log(`최종 병합 애니메이션 개수: ${mergedAnims.length}`)
-
-  const result = await exportBinaryGLB(gltfA.scene, mergedAnims)
-  const merged = new Blob([result], { type: 'model/gltf-binary' })
+  log(`병합된 클립 수: ${mappedBAnims.length}`)
 
   return {
-    merged,
+    clips: mappedBAnims,
     stats: {
       totalTracks,
       mappedTracks,
       correctedTracks,
-      mergedClipCount: mergedAnims.length,
+      mergedClipCount: (gltfA.animations?.length ?? 0) + mappedBAnims.length,
     },
   }
-}
-
-function exportBinaryGLB(
-  scene: THREE.Object3D,
-  animations: THREE.AnimationClip[]
-): Promise<ArrayBuffer> {
-  return new Promise((resolve, reject) => {
-    exporter.parse(
-      scene,
-      (result) => {
-        if (result instanceof ArrayBuffer) {
-          resolve(result)
-          return
-        }
-        reject(
-          new Error('GLB binary export failed: non-binary result returned')
-        )
-      },
-      (err) => {
-        reject(err instanceof Error ? err : new Error(String(err)))
-      },
-      {
-        binary: true,
-        animations,
-      }
-    )
-  })
 }
 
 function normalizeSide(name: string): string {

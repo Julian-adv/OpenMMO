@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-  import { downloadBlob, loadGLTFFromFile } from './lib/gltf-io'
+  import { loadGLTFFromFile } from './lib/gltf-io'
   import {
-    mergeAnimationsIntoA,
+    mergeAnimationClips,
     type MergeOptions,
     type RotationFixAxis,
     type RotationFixOrder,
@@ -41,6 +41,7 @@
   let bSelectedClipIndex = $state(0)
   let bClipInfo = $state('애니메이션 없음')
   let isMerging = $state(false)
+  let hasMergedUnsaved = $state(false)
 
   let mergeAnimName = $state('')
   let rotFixEnabled = $state(false)
@@ -183,6 +184,7 @@
     bClipNames = []
     bSelectedClipIndex = 0
     bClipInfo = '애니메이션 없음'
+    hasMergedUnsaved = false
   }
 
   async function handleBFile(file: File): Promise<void> {
@@ -226,7 +228,7 @@
     await handleBFile(file)
   }
 
-  async function onMerge(): Promise<void> {
+  function onMerge(): void {
     const gltfA = viewer?.getSourceGLTF() ?? null
     if (!gltfA || !gltfB) return
 
@@ -244,14 +246,22 @@
 
     isMerging = true
     try {
-      const output = await mergeAnimationsIntoA(gltfA, gltfB, options, appendLog)
-      downloadBlob('merged.glb', output.merged)
-      appendLog('병합 완료: merged.glb 다운로드')
+      const output = mergeAnimationClips(gltfA, gltfB, options, appendLog)
+      if (!gltfA.animations) gltfA.animations = []
+      gltfA.animations.push(...output.clips)
+      viewer?.refreshPreview()
+      hasMergedUnsaved = true
+      appendLog('병합 완료 (메모리). 미리보기에서 확인 후 저장하세요.')
     } catch (error) {
       appendLog(`병합 실패: ${String(error)}`)
     } finally {
       isMerging = false
     }
+  }
+
+  async function onSave(): Promise<void> {
+    await viewer?.saveCurrentGLB()
+    hasMergedUnsaved = false
   }
 
   function clampMergeHeight(next: number): number {
@@ -363,6 +373,9 @@
           </label>
           <button class="btn primary" onclick={onMerge} disabled={!canMerge || isMerging}>
             {isMerging ? '병합 중...' : '병합 실행'}
+          </button>
+          <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>
+            저장 (다운로드)
           </button>
         </div>
 
@@ -503,6 +516,11 @@
   .btn.ghost {
     background: transparent;
     border-color: #2c3650;
+  }
+
+  .btn.save {
+    background: #0a7a3e;
+    border-color: #065226;
   }
 
 
