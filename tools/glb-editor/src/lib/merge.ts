@@ -138,12 +138,15 @@ export async function mergeAnimationsIntoA(
     const newClip = clip.clone()
     newClip.tracks = newTracks
 
-    let baseName = clip.name && clip.name.trim() ? clip.name.trim() : 'Animation'
+    let baseName =
+      clip.name && clip.name.trim() ? clip.name.trim() : 'Animation'
     if (options.prefixB) baseName = `b_${baseName}`
     newClip.name = uniqueName(baseName, takenNames)
 
     mappedBAnims.push(newClip)
-    log(`클립 "${clip.name}" -> "${newClip.name}" (${newTracks.length} 트랙 매핑 성공)`)
+    log(
+      `클립 "${clip.name}" -> "${newClip.name}" (${newTracks.length} 트랙 매핑 성공)`
+    )
 
     if (clipCorrected > 0) {
       log(`회전 보정 적용 트랙: ${clipCorrected}`)
@@ -183,7 +186,9 @@ function exportBinaryGLB(
           resolve(result)
           return
         }
-        reject(new Error('GLB binary export failed: non-binary result returned'))
+        reject(
+          new Error('GLB binary export failed: non-binary result returned')
+        )
       },
       (err) => {
         reject(err instanceof Error ? err : new Error(String(err)))
@@ -198,14 +203,14 @@ function exportBinaryGLB(
 
 function normalizeSide(name: string): string {
   let n = name.replace(/\.l\b/gi, '_l').replace(/\.r\b/gi, '_r')
-  n = n.replace(/[\s\-]+l\b/gi, '_l').replace(/[\s\-]+r\b/gi, '_r')
+  n = n.replace(/[\s-]+l\b/gi, '_l').replace(/[\s-]+r\b/gi, '_r')
   return n
 }
 
 function stripNumericSuffix(name: string): string {
   let n = name
   for (let i = 0; i < 3; i += 1) {
-    n = n.replace(/([_\-\.\s]?\(?\d{1,4}\)?)$/, '')
+    n = n.replace(/([_.\s-]?\(?\d{1,4}\)?)$/, '')
   }
   return n
 }
@@ -273,7 +278,10 @@ function buildANodeIndex(scene: THREE.Object3D): ANodeIndex {
   return { idx, originals }
 }
 
-function pickBestMatch(bNodeRaw: string, aIndex: ANodeIndex): MatchResult | null {
+function pickBestMatch(
+  bNodeRaw: string,
+  aIndex: ANodeIndex
+): MatchResult | null {
   const bKey = canonicalKey(bNodeRaw)
 
   if (aIndex.idx.has(bKey)) {
@@ -323,7 +331,9 @@ function pickBestMatch(bNodeRaw: string, aIndex: ANodeIndex): MatchResult | null
   return null
 }
 
-function isQuaternionTrack(track: THREE.KeyframeTrack): track is THREE.QuaternionKeyframeTrack {
+function isQuaternionTrack(
+  track: THREE.KeyframeTrack
+): track is THREE.QuaternionKeyframeTrack {
   return (
     track.name.endsWith('.quaternion') &&
     track.values.length % 4 === 0 &&
@@ -344,7 +354,9 @@ function isLikelyRootNode(name: string): boolean {
   )
 }
 
-function buildRotationFixConfig(options: RotationFixOptions): RotationFixConfig | null {
+function buildRotationFixConfig(
+  options: RotationFixOptions
+): RotationFixConfig | null {
   if (!options.enabled) return null
   if (!Number.isFinite(options.deg) || Math.abs(options.deg) < 1e-8) return null
 
@@ -352,7 +364,8 @@ function buildRotationFixConfig(options: RotationFixOptions): RotationFixConfig 
   const rad = THREE.MathUtils.degToRad(options.deg)
 
   if (options.axis === 'x') q.setFromAxisAngle(new THREE.Vector3(1, 0, 0), rad)
-  else if (options.axis === 'y') q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rad)
+  else if (options.axis === 'y')
+    q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rad)
   else q.setFromAxisAngle(new THREE.Vector3(0, 0, 1), rad)
 
   return {

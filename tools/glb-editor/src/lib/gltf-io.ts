@@ -32,6 +32,9 @@ export function downloadBlob(fileName: string, blob: Blob): void {
   URL.revokeObjectURL(url)
 }
 
-export function downloadArrayBuffer(fileName: string, arrayBuffer: ArrayBuffer): void {
+export function downloadArrayBuffer(
+  fileName: string,
+  arrayBuffer: ArrayBuffer
+): void {
   downloadBlob(fileName, new Blob([arrayBuffer], { type: 'model/gltf-binary' }))
 }

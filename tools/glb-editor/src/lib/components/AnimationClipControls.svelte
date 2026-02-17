@@ -39,7 +39,7 @@
     {#if !hasClip}
       <option value="0">{emptyLabel}</option>
     {:else}
-      {#each clips as clip, index}
+      {#each clips as clip, index (index)}
         <option value={String(index)}>{clip}</option>
       {/each}
     {/if}

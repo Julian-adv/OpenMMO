@@ -15,7 +15,11 @@ interface ViewerCallbacks {
   log: (message: string) => void
   onMetaChange: (message: string) => void
   onCandidatesChange: (items: CandidateSummary[], selectedIndex: number) => void
-  onClipsChange: (clips: string[], selectedClipIndex: number, info: string) => void
+  onClipsChange: (
+    clips: string[],
+    selectedClipIndex: number,
+    info: string
+  ) => void
 }
 
 const exporter = new GLTFExporter()
@@ -150,9 +154,14 @@ export class GlbViewer {
   }
 
   async exportSelected(): Promise<void> {
-    if (this.selectedIndex < 0 || this.selectedIndex >= this.candidates.length) return
+    if (this.selectedIndex < 0 || this.selectedIndex >= this.candidates.length)
+      return
 
-    await this.doExportOne(this.candidates[this.selectedIndex], this.relatedClips, this.selectedIndex)
+    await this.doExportOne(
+      this.candidates[this.selectedIndex],
+      this.relatedClips,
+      this.selectedIndex
+    )
   }
 
   async exportAll(): Promise<void> {
@@ -163,7 +172,10 @@ export class GlbViewer {
     for (let i = 0; i < this.candidates.length; i += 1) {
       const node = this.candidates[i]
       const cloneForNames = SkeletonUtils.clone(node) as THREE.Object3D
-      const clips = this.filterAnimations(this.srcGLTF.animations ?? [], this.collectNodeNames(cloneForNames))
+      const clips = this.filterAnimations(
+        this.srcGLTF.animations ?? [],
+        this.collectNodeNames(cloneForNames)
+      )
       await this.doExportOne(node, clips, i, true)
     }
 
@@ -270,7 +282,10 @@ export class GlbViewer {
     this.frameObject(this.modelRoot)
 
     const allowedNames = this.collectNodeNames(cloned)
-    this.relatedClips = this.filterAnimations(this.srcGLTF.animations ?? [], allowedNames)
+    this.relatedClips = this.filterAnimations(
+      this.srcGLTF.animations ?? [],
+      allowedNames
+    )
 
     if (this.relatedClips.length > 0) {
       this.mixer = new THREE.AnimationMixer(this.modelRoot)
@@ -338,7 +353,10 @@ export class GlbViewer {
     return set
   }
 
-  private filterAnimations(anims: THREE.AnimationClip[], allowed: Set<string>): THREE.AnimationClip[] {
+  private filterAnimations(
+    anims: THREE.AnimationClip[],
+    allowed: Set<string>
+  ): THREE.AnimationClip[] {
     const out: THREE.AnimationClip[] = []
 
     for (const clip of anims) {
@@ -372,7 +390,10 @@ export class GlbViewer {
     const exportScene = new THREE.Scene()
     exportScene.add(cloned)
 
-    const safeName = (sourceNode.name || `object_${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, '_')
+    const safeName = (sourceNode.name || `object_${index + 1}`).replace(
+      /[^a-zA-Z0-9_-]/g,
+      '_'
+    )
     const fileName = `animated_${String(index + 1).padStart(2, '0')}_${safeName}.glb`
 
     try {
@@ -384,7 +405,10 @@ export class GlbViewer {
     }
   }
 
-  private exportScene(scene: THREE.Scene, animations: THREE.AnimationClip[]): Promise<ArrayBuffer> {
+  private exportScene(
+    scene: THREE.Scene,
+    animations: THREE.AnimationClip[]
+  ): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
       exporter.parse(
         scene,
@@ -393,7 +417,9 @@ export class GlbViewer {
             resolve(result)
             return
           }
-          reject(new Error('GLB binary export failed: non-binary result returned'))
+          reject(
+            new Error('GLB binary export failed: non-binary result returned')
+          )
         },
         (err) => {
           reject(err instanceof Error ? err : new Error(String(err)))
@@ -445,7 +471,13 @@ export class GlbViewer {
       return
     }
 
-    const clips = this.relatedClips.map((clip, index) => clip.name || `Clip ${index + 1}`)
-    this.callbacks.onClipsChange(clips, this.selectedClipIndex, `${clips.length} clip(s)`)
+    const clips = this.relatedClips.map(
+      (clip, index) => clip.name || `Clip ${index + 1}`
+    )
+    this.callbacks.onClipsChange(
+      clips,
+      this.selectedClipIndex,
+      `${clips.length} clip(s)`
+    )
   }
 }

@@ -10,7 +10,7 @@
     type RotationFixScope,
   } from './lib/merge'
   import { ClipPreviewer } from './lib/clip-previewer'
-  import AnimationClipControls from './lib/components/AnimationClipControls.svelte'
+  import PreviewPanel from './lib/components/PreviewPanel.svelte'
   import { GlbViewer, type CandidateSummary } from './lib/viewer'
 
   let viewerHost = $state<HTMLDivElement | null>(null)
@@ -301,7 +301,7 @@
   <aside class="sidebar">
     <div class="small title">오브젝트 목록 (메시 포함 노드)</div>
     <div class="list">
-      {#each candidates as item}
+      {#each candidates as item (item.index)}
         <button
           class="item"
           class:active={item.index === selectedCandidateIndex}
@@ -315,33 +315,25 @@
   </aside>
 
   <main class="viewer-panel">
-    <div class="overlay">
-      <AnimationClipControls
-        clips={clipNames}
-        selectedIndex={selectedClipIndex}
-        info={clipInfo}
-        onChange={(index) => {
-          selectedClipIndex = index
-          viewer?.playClip(selectedClipIndex)
-        }}
-        onPlay={() => viewer?.playClip(selectedClipIndex)}
-        onPause={() => viewer?.pause()}
-        emptyLabel="애니메이션 없음"
-      />
-    </div>
-
-    <div
-      class="viewer"
-      bind:this={viewerHost}
-      role="region"
-      aria-label="GLB viewer drop target"
-      ondragenter={onDragOver}
-      ondragover={onDragOver}
-      ondragleave={onDragLeave}
-      ondrop={onDrop}
-    >
-      <div class="dropzone" class:active={dropActive}>여기에 GLB 파일을 드래그 앤 드롭</div>
-    </div>
+    <PreviewPanel
+      clips={clipNames}
+      {selectedClipIndex}
+      clipInfo={clipInfo}
+      emptyLabel="애니메이션 없음"
+      dropzoneText="여기에 GLB 파일을 드래그 앤 드롭"
+      ariaLabel="GLB viewer drop target"
+      {dropActive}
+      onClipChange={(index) => {
+        selectedClipIndex = index
+        viewer?.playClip(selectedClipIndex)
+      }}
+      onPlay={() => viewer?.playClip(selectedClipIndex)}
+      onPause={() => viewer?.pause()}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      bindHost={(el) => (viewerHost = el)}
+    />
   </main>
 
   <button
@@ -401,37 +393,26 @@
         </div>
       </div>
 
-      <div
-        class="b-preview-wrap"
-        role="region"
-        aria-label="b glb drop target"
-        ondragenter={onBDragOver}
-        ondragover={onBDragOver}
-        ondragleave={onBDragLeave}
-        ondrop={onBDrop}
-      >
-        <div class="b-preview-overlay">
-          <AnimationClipControls
-            clips={bClipNames}
-            selectedIndex={bSelectedClipIndex}
-            info={bClipInfo}
-            onChange={(index) => {
-              bSelectedClipIndex = index
-              bPreviewer?.playClip(bSelectedClipIndex)
-            }}
-            onPlay={() => bPreviewer?.playClip(bSelectedClipIndex)}
-            onPause={() => bPreviewer?.pause()}
-            emptyLabel="b 애니메이션 없음"
-          />
-        </div>
-        <div class="dropzone b-dropzone" class:active={bDropActive}>여기에 b.glb 파일을 드래그 앤 드롭</div>
-
-        <div
-          class="b-preview"
-          bind:this={bPreviewHost}
-          role="region"
-          aria-label="b glb animation preview"
-        ></div>
+      <div class="b-preview-wrap">
+        <PreviewPanel
+          clips={bClipNames}
+          selectedClipIndex={bSelectedClipIndex}
+          clipInfo={bClipInfo}
+          emptyLabel="b 애니메이션 없음"
+          dropzoneText="여기에 b.glb 파일을 드래그 앤 드롭"
+          ariaLabel="b glb drop target"
+          dropActive={bDropActive}
+          onClipChange={(index) => {
+            bSelectedClipIndex = index
+            bPreviewer?.playClip(bSelectedClipIndex)
+          }}
+          onPlay={() => bPreviewer?.playClip(bSelectedClipIndex)}
+          onPause={() => bPreviewer?.pause()}
+          onDragOver={onBDragOver}
+          onDragLeave={onBDragLeave}
+          onDrop={onBDrop}
+          bindHost={(el) => (bPreviewHost = el)}
+        />
       </div>
     </div>
   </section>
@@ -582,37 +563,6 @@
     background: #090b12;
   }
 
-  .viewer {
-    width: 100%;
-    height: 100%;
-  }
-
-  .overlay {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    z-index: 2;
-    background: rgb(0 0 0 / 38%);
-    padding: 8px;
-    border-radius: 10px;
-    backdrop-filter: blur(6px);
-  }
-
-  .dropzone {
-    position: absolute;
-    inset: 12px;
-    border: 2px dashed #364052;
-    border-radius: 10px;
-    display: none;
-    place-items: center;
-    color: #9ca3af;
-    background: rgb(0 0 0 / 28%);
-    pointer-events: none;
-  }
-
-  .dropzone.active {
-    display: grid;
-  }
 
   .panel-resizer {
     grid-column: 1 / -1;
@@ -685,23 +635,6 @@
     min-height: 0;
   }
 
-  .b-preview-overlay {
-    position: absolute;
-    left: 10px;
-    top: 10px;
-    z-index: 2;
-    background: rgb(0 0 0 / 38%);
-    padding: 8px;
-    border-radius: 10px;
-    backdrop-filter: blur(6px);
-    max-width: calc(100% - 20px);
-  }
-
-  .b-preview {
-    width: 100%;
-    height: 100%;
-    min-height: 230px;
-  }
 
   .grid-2 {
     display: grid;
