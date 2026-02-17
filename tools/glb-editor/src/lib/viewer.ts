@@ -37,6 +37,7 @@ export class GlbViewer {
   private rafId = 0
 
   private srcGLTF: GLTF | null = null
+  private sourceFileName = ''
   private candidates: THREE.Object3D[] = []
   private selectedIndex = -1
 
@@ -94,6 +95,7 @@ export class GlbViewer {
 
   async loadFile(file: File): Promise<void> {
     this.reset()
+    this.sourceFileName = file.name
     this.callbacks.log(`파일 로드 시작: ${file.name} (${file.size} bytes)`)
 
     const gltf = await loadGLTFFromFile(file)
@@ -166,6 +168,7 @@ export class GlbViewer {
     if (!this.srcGLTF) return
 
     const allAnims = this.srcGLTF.animations ?? []
+    const outputFileName = this.getMergedFileName()
     this.callbacks.log(`GLB 저장 시작 (animations: ${allAnims.length})`)
 
     try {
@@ -173,8 +176,8 @@ export class GlbViewer {
         this.srcGLTF.scene as unknown as THREE.Scene,
         allAnims
       )
-      downloadArrayBuffer('merged.glb', arrayBuffer)
-      this.callbacks.log('GLB 저장 완료: merged.glb 다운로드')
+      downloadArrayBuffer(outputFileName, arrayBuffer)
+      this.callbacks.log(`GLB 저장 완료: ${outputFileName} 다운로드`)
     } catch (error) {
       this.callbacks.log(`GLB 저장 실패: ${String(error)}`)
     }
@@ -213,6 +216,7 @@ export class GlbViewer {
     this.candidates = []
     this.selectedIndex = -1
     this.srcGLTF = null
+    this.sourceFileName = ''
     this.callbacks.onMetaChange('')
     this.disposePreview()
     this.pushCandidates()
@@ -457,6 +461,18 @@ export class GlbViewer {
         }
       )
     })
+  }
+
+  private getMergedFileName(): string {
+    if (!this.sourceFileName) return 'merged.glb'
+
+    const trimmed = this.sourceFileName.trim()
+    if (!trimmed) return 'merged.glb'
+
+    const dotIndex = trimmed.lastIndexOf('.')
+    if (dotIndex <= 0) return `${trimmed}.glb`
+
+    return `${trimmed.slice(0, dotIndex)}.glb`
   }
 
   private getMeshStats(node: THREE.Object3D): string {
