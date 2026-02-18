@@ -320,8 +320,7 @@
     bottom: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    object-position: center bottom;
+    object-fit: fill;
     opacity: 0.95;
     z-index: 1;
   }
@@ -366,8 +365,7 @@
     bottom: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    object-position: center bottom;
+    object-fit: fill;
     z-index: 3;
   }
 
