@@ -50,7 +50,7 @@ export const MOON_DARK_SHADE_MIN = 0.16
 export const MOON_DARK_R_OFFSET = 0
 export const MOON_DARK_G_OFFSET = 2
 export const MOON_DARK_B_OFFSET = 8
-export const MOON_DARK_ALPHA = 228
+export const MOON_DARK_ALPHA = 255
 
 export interface CalendarDate {
   year: number
@@ -303,17 +303,15 @@ export function getMoonTrackState(config: MoonTrackConfig): MoonTrackState {
     nightArcProgress * (config.rightPercent - config.leftPercent)
   const yPercent = config.horizonYPercent - arc * config.arcHeightPercent
   const visibilityScale = config.isDaylight ? config.daylightVisibilityScale : 1
-  const opacity = Math.min(
-    1,
-    Math.max(0, config.phaseState.illumination * visibilityScale)
-  )
+  const illuminationFactor = config.phaseState.illumination * visibilityScale
   const isVisible =
-    config.phaseState.isAboveHorizon && opacity > config.visibilityThreshold
+    config.phaseState.isAboveHorizon &&
+    illuminationFactor > config.visibilityThreshold
 
   return {
     xPercent,
     yPercent,
-    opacity,
+    opacity: isVisible ? visibilityScale : 0,
     isVisible,
   }
 }
@@ -653,7 +651,7 @@ export function drawMoonToCanvas(
         red = base + MOON_DARK_R_OFFSET
         green = base + MOON_DARK_G_OFFSET
         blue = base + MOON_DARK_B_OFFSET
-        alpha = Math.round(MOON_DARK_ALPHA * edgeAlpha)
+        alpha = MOON_DARK_ALPHA
       }
 
       pixels[pixelIndex] = red

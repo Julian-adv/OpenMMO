@@ -4,6 +4,7 @@
   import ChatPanel from './lib/components/ChatPanel.svelte'
   import FPSCounter from './lib/components/FPSCounter.svelte'
   import GameTimeWidget from './lib/components/GameTimeWidget.svelte'
+  import CelestialDebugDialog from './lib/components/CelestialDebugDialog.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
@@ -212,6 +213,7 @@
       <ChatPanel />
       <FPSCounter />
       <GameTimeWidget />
+      <CelestialDebugDialog />
       {#if selectedCharacter}
         <CharacterAttributesHud
           level={selectedCharacter.level}

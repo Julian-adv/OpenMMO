@@ -1,14 +1,15 @@
 <script lang="ts" module>
-  let currentGameHour = $state(12)
-  let currentGameDate = $state({ year: 217, month: 1, day: 1 })
+  export const gameTimeState = $state({
+    hour: 12,
+    date: { year: 217, month: 1, day: 1 },
+  })
 
   export function setGameHour(hour: number) {
-    const normalizedHour = ((hour % 24) + 24) % 24
-    currentGameHour = normalizedHour
+    gameTimeState.hour = ((hour % 24) + 24) % 24
   }
 
   export function setGameDate(year: number, month: number, day: number) {
-    currentGameDate = {
+    gameTimeState.date = {
       year: Math.max(1, Math.floor(year)),
       month: Math.min(12, Math.max(1, Math.floor(month))),
       day: Math.min(30, Math.max(1, Math.floor(day))),
@@ -141,22 +142,22 @@
 
   function formatGameDate() {
     const monthName =
-      MONTH_NAMES[currentGameDate.month - 1] ?? `Month ${currentGameDate.month}`
-    const day = currentGameDate.day.toString().padStart(2, '0')
-    return `${currentGameDate.year} ${monthName} ${day}`
+      MONTH_NAMES[gameTimeState.date.month - 1] ?? `Month ${gameTimeState.date.month}`
+    const day = gameTimeState.date.day.toString().padStart(2, '0')
+    return `${gameTimeState.date.year} ${monthName} ${day}`
   }
 
   function formatGameTime() {
-    const h = Math.floor(currentGameHour)
-    const m = Math.floor((currentGameHour - h) * 60)
+    const h = Math.floor(gameTimeState.hour)
+    const m = Math.floor((gameTimeState.hour - h) * 60)
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
   }
 
   function getCurrentDaylightWindow() {
     return getSolarDaylightWindow({
       latitudeDeg: SUN_LATITUDE_DEG,
-      month: currentGameDate.month,
-      day: currentGameDate.day,
+      month: gameTimeState.date.month,
+      day: gameTimeState.date.day,
       axialTiltDeg: SUN_AXIAL_TILT_DEG,
     })
   }
@@ -176,18 +177,18 @@
   const daylightWindow = $derived(getCurrentDaylightWindow())
   const sunVisual = $derived(
     getSunVisualState(
-      currentGameHour,
+      gameTimeState.hour,
       daylightWindow.sunriseHour,
       daylightWindow.sunsetHour
     )
   )
   const dayOfYear = $derived(
-    (currentGameDate.month - 1) * 30 + currentGameDate.day
+    (gameTimeState.date.month - 1) * 30 + gameTimeState.date.day
   )
   const sunElevation = $derived.by(() => {
     const declination = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
     const dir = getCelestialDirectionFromHourAndDeclination(
-      currentGameHour,
+      gameTimeState.hour,
       12,
       SUN_LATITUDE_DEG,
       declination
@@ -197,10 +198,10 @@
   const isTwilight = $derived(
     sunElevation > 0 && sunElevation < SUN_TWILIGHT_ELEVATION_THRESHOLD
   )
-  const absoluteDayIndex = $derived(getGameCalendarDayIndex(currentGameDate))
+  const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
   const moonVisuals = $derived(
     MOONS.map((moon) =>
-      getMoonVisualState(moon, currentGameHour, absoluteDayIndex, sunVisual.isDaylight)
+      getMoonVisualState(moon, gameTimeState.hour, absoluteDayIndex, sunVisual.isDaylight)
     )
   )
 </script>
