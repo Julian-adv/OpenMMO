@@ -11,9 +11,10 @@
     positionZ: number
     camera: THREE.Camera | undefined
     onclick: () => void
+    ondblclick: () => void
   }
 
-  let { character, selected, positionX, positionZ, camera, onclick }: Props =
+  let { character, selected, positionX, positionZ, camera, onclick, ondblclick }: Props =
     $props()
 
   const PANEL_Y = -0.9
@@ -93,7 +94,7 @@
   bind:ref={labelGroup}
 >
   <!-- Background (click target) -->
-  <T.Mesh renderOrder={0} {onclick}>
+  <T.Mesh renderOrder={0} {onclick} {ondblclick}>
     <T.ShapeGeometry args={[panelShape]} />
     <T.MeshBasicMaterial
       color={bgColor}

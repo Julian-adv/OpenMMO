@@ -13,9 +13,10 @@
     characters: AccountCharacter[]
     selectedCharacterId: number | null
     onSlotClick: (slotIndex: number) => void
+  onSlotDoubleClick: (slotIndex: number) => void
   }
 
-  let { characters, selectedCharacterId, onSlotClick }: Props = $props()
+  let { characters, selectedCharacterId, onSlotClick, onSlotDoubleClick }: Props = $props()
 
   const SLOT_SPACING = 1.8
   const SLOT_POSITIONS = [-SLOT_SPACING, 0, SLOT_SPACING]
@@ -152,5 +153,6 @@
     positionZ={SLOT_DEPTH}
     camera={cameraRef}
     onclick={() => onSlotClick(slotIndex)}
+    ondblclick={() => onSlotDoubleClick(slotIndex)}
   />
 {/each}

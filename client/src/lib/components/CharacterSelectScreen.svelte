@@ -55,12 +55,21 @@
     onRequestCreateCharacter()
   }
 
-  async function handleStart() {
-    if (!selectedCharacterId || isBusy()) return
+  async function handleSlotDoubleClick(slotIndex: number) {
+    if (isBusy()) return
+    const character = characters[slotIndex]
+    if (!character) return
+    onSelectCharacter(character.id)
+    await handleStart(character.id)
+  }
+
+  async function handleStart(characterId?: number) {
+    const id = characterId ?? selectedCharacterId
+    if (!id || isBusy()) return
 
     isStarting = true
     errorMessage = ''
-    const result = await onStartGame(selectedCharacterId)
+    const result = await onStartGame(id)
     isStarting = false
 
     if (!result.ok) {
@@ -97,6 +106,7 @@
         {characters}
         {selectedCharacterId}
         onSlotClick={handleSlotClick}
+        onSlotDoubleClick={handleSlotDoubleClick}
       />
     </Canvas>
   </div>
@@ -123,7 +133,7 @@
         <button
           type="button"
           class="primary"
-          onclick={handleStart}
+          onclick={() => handleStart()}
           disabled={!selectedCharacterId || isBusy()}
         >
           {isStarting ? 'Starting...' : 'Start'}
