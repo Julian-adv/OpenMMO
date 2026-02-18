@@ -117,6 +117,7 @@ export interface MoonCanvasParams {
   illumination: number
   isWaxing: boolean
   sizePx: number
+  isDaylight?: boolean
 }
 
 export interface SunLightSnapshot {
@@ -639,15 +640,19 @@ export function drawMoonToCanvas(
       let alpha = 0
 
       if (lightDot > 0) {
+        const litBase = params.isDaylight ? 220 : MOON_LIT_BASE
+        const litRange = params.isDaylight ? 35 : MOON_LIT_RANGE
         const shade = MOON_LIT_SHADE_MIN + (1 - MOON_LIT_SHADE_MIN) * lightDot
-        const base = Math.round(MOON_LIT_BASE + shade * MOON_LIT_RANGE)
-        red = base + MOON_LIT_R_OFFSET
-        green = base + MOON_LIT_G_OFFSET
-        blue = base + MOON_LIT_B_OFFSET
+        const base = Math.round(litBase + shade * litRange)
+        red = Math.min(255, base + MOON_LIT_R_OFFSET)
+        green = Math.min(255, base + MOON_LIT_G_OFFSET)
+        blue = Math.min(255, base + MOON_LIT_B_OFFSET)
         alpha = Math.round(MOON_LIT_ALPHA * edgeAlpha)
       } else {
+        const darkBase = params.isDaylight ? 150 : MOON_DARK_BASE
+        const darkRange = params.isDaylight ? 40 : MOON_DARK_RANGE
         const shade = MOON_DARK_SHADE_MIN + (1 - MOON_DARK_SHADE_MIN) * nz
-        const base = Math.round(MOON_DARK_BASE + shade * MOON_DARK_RANGE)
+        const base = Math.round(darkBase + shade * darkRange)
         red = base + MOON_DARK_R_OFFSET
         green = base + MOON_DARK_G_OFFSET
         blue = base + MOON_DARK_B_OFFSET
@@ -678,7 +683,7 @@ export function moonPhaseCanvasAction(
   let lastSignature = ''
 
   const render = (next: MoonCanvasParams) => {
-    const signature = `${next.sizePx}:${next.isWaxing ? 1 : 0}:${next.illumination.toFixed(4)}`
+    const signature = `${next.sizePx}:${next.isWaxing ? 1 : 0}:${next.illumination.toFixed(4)}:${next.isDaylight ? 1 : 0}`
     if (signature === lastSignature) return
     lastSignature = signature
     drawMoonToCanvas(node, next)

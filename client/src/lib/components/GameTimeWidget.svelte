@@ -40,9 +40,9 @@
     moonPhaseCanvasAction,
   } from '../utils/celestialSimulation'
 
-  const SUN_LEFT_MARGIN_PERCENT = 0
-  const SUN_RIGHT_MARGIN_PERCENT = 100
-  const HORIZON_Y_PERCENT = 70
+  const SUN_LEFT_MARGIN_PERCENT = -10
+  const SUN_RIGHT_MARGIN_PERCENT = 110
+  const HORIZON_Y_PERCENT = 85
   const SUN_ARC_HEIGHT_PERCENT = 68
   const MOON_ARC_HEIGHT_PERCENT = 54
   const MOON_DAYLIGHT_VISIBILITY_SCALE = 0.45
@@ -234,18 +234,17 @@
       />
     {/if}
     {#each moonVisuals as moon (moon.id)}
-      {#if moon.isVisible}
-        <canvas
-          class="moon"
-          aria-label={`${moon.displayName} Moon`}
-          use:moonPhaseCanvasAction={{
-            illumination: moon.illumination,
-            isWaxing: moon.isWaxing,
-            sizePx: moon.sizePx,
-          }}
-          style={`--moon-x:${moon.xPercent}%; --moon-y:${moon.yPercent}%; --moon-size:${moon.sizePx}px; --moon-opacity:${moon.opacity}; --moon-hue:${moon.hueRotateDeg}deg; --moon-saturation:${moon.saturation};`}
-        ></canvas>
-      {/if}
+      <canvas
+        class="moon"
+        aria-label={`${moon.displayName} Moon`}
+        use:moonPhaseCanvasAction={{
+          illumination: moon.illumination,
+          isWaxing: moon.isWaxing,
+          sizePx: moon.sizePx,
+          isDaylight: sunVisual.isDaylight,
+        }}
+        style={`--moon-x:${moon.xPercent}%; --moon-y:${moon.yPercent}%; --moon-size:${moon.sizePx}px; --moon-opacity:${moon.opacity}; --moon-hue:${moon.hueRotateDeg}deg; --moon-saturation:${moon.saturation}; --moon-glow:${sunVisual.isDaylight ? 'drop-shadow(0 0 3px rgba(255,255,255,0.95)) drop-shadow(0 0 1px rgba(60,80,130,0.6))' : 'drop-shadow(0 0 4px rgba(215,228,255,0.65))'};`}
+      ></canvas>
     {/each}
     <img
       class="horizon-front"
@@ -335,9 +334,6 @@
     transform: translate(-50%, -50%);
     filter: drop-shadow(0 0 6px rgba(255, 225, 100, 0.85));
     opacity: 1;
-    transition:
-      left 220ms linear,
-      top 220ms linear;
     z-index: 2;
   }
 
@@ -352,11 +348,7 @@
     filter:
       saturate(var(--moon-saturation))
       hue-rotate(var(--moon-hue))
-      drop-shadow(0 0 4px rgba(215, 228, 255, 0.65));
-    transition:
-      left 220ms linear,
-      top 220ms linear,
-      opacity 220ms linear;
+      var(--moon-glow);
     z-index: 2;
   }
 
