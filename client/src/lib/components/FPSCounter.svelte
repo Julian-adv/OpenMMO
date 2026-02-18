@@ -24,6 +24,7 @@
     debugVisible,
     cameraRotationEnabled,
     calendarVisible,
+    celestialDebugVisible,
     playerDebugInfo,
   } from '../stores/debugStore'
 
@@ -43,8 +44,8 @@
     timeScale.update((scale) => (scale === 1.0 ? 0.1 : 1.0))
   }
 
-  function toggleFastSun() {
-    sunTimeScale.update((scale) => (scale === 1.0 ? 60.0 : 1.0))
+  function setSunSpeed(scale: number) {
+    sunTimeScale.set(scale)
   }
 
   function toggleCameraRotation() {
@@ -53,6 +54,10 @@
 
   function toggleCalendar() {
     calendarVisible.update((v) => !v)
+  }
+
+  function toggleCelestialDebug() {
+    celestialDebugVisible.update((v: boolean) => !v)
   }
 </script>
 
@@ -88,14 +93,24 @@
         SLOW
       </button>
 
-      <button
-        class="action-btn sun-btn"
-        class:active={$sunTimeScale > 1.0}
-        onclick={toggleFastSun}
-        title="Toggle Fast Sun Time (3h day -> 3m day)"
-      >
-        FAST SUN: {$sunTimeScale > 1.0 ? 'ON' : 'OFF'}
-      </button>
+      <div class="seg-group" title="Sun Speed">
+        <span class="seg-label">SUN</span>
+        <button
+          class="seg-btn"
+          class:seg-active={$sunTimeScale === 1.0}
+          onclick={() => setSunSpeed(1.0)}
+        >OFF</button>
+        <button
+          class="seg-btn"
+          class:seg-active={$sunTimeScale === 60.0}
+          onclick={() => setSunSpeed(60.0)}
+        >3m</button>
+        <button
+          class="seg-btn"
+          class:seg-active={$sunTimeScale === 600.0}
+          onclick={() => setSunSpeed(600.0)}
+        >18s</button>
+      </div>
       
       <button
         class="action-btn"
@@ -113,6 +128,15 @@
         title="Toggle Calendar Display"
       >
         CAL: {$calendarVisible ? 'ON' : 'OFF'}
+      </button>
+
+      <button
+        class="action-btn orbits-btn"
+        class:active={$celestialDebugVisible}
+        onclick={toggleCelestialDebug}
+        title="Toggle Celestial Orbits Debug"
+      >
+        ORBITS: {$celestialDebugVisible ? 'ON' : 'OFF'}
       </button>
     </div>
   </div>
@@ -192,13 +216,58 @@
     border-color: #feb2b2;
   }
 
-  .action-btn.sun-btn.active {
-    background: #b7791f; /* Amber for fast sun */
-    border-color: #f6ad55;
+  .seg-group {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    border: 1px solid #666;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .seg-label {
+    padding: 4px 6px;
+    font-size: 11px;
+    color: #aaa;
+    background: #222;
+    border-right: 1px solid #666;
+    white-space: nowrap;
+  }
+
+  .seg-btn {
+    background: #333;
+    color: #fff;
+    border: none;
+    border-right: 1px solid #555;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: bold;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+
+  .seg-btn:last-child {
+    border-right: none;
+  }
+
+  .seg-btn:hover {
+    background: #555;
+  }
+
+  .seg-btn.seg-active {
+    background: #b7791f;
+    color: #fff;
   }
 
   .action-btn.cal-btn.active {
     background: #2b6cb0;
     border-color: #63b3ed;
+  }
+
+  .action-btn.orbits-btn.active {
+    background: #553b8a;
+    border-color: #b794f4;
   }
 </style>
