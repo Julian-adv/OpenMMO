@@ -249,22 +249,18 @@ function mergeByRetarget(
     `리타겟 매핑: target ${mapResult.targetCount}개 / source ${mapResult.sourceCount}개 중 ${mapResult.mappedCount}개 연결 (avg score=${mapResult.avgScore.toFixed(3)})`
   )
 
-  // 두 스켈레톤의 Armature 스케일 차이를 감지해 sourceRoot에 보정을 적용한다.
-  // 예) maria(target)는 Armature scale=0.01(cm→m), dying(source)는 scale=1 이므로
+  // 두 스켈레톤의 좌표계 단위 차이를 감지해 sourceRoot에 보정을 적용한다.
+  // 예) maria(target)는 Armature scale=0.01(cm→m 변환), dying(source)는 단위 변환 없음 →
   // retargetClip 내부의 worldToLocal 이 100배 과장된 값을 만드는 문제를 방지한다.
-  const targetHipParentScale = getHipParentWorldScale(
-    targetSkinned,
-    mapResult.targetHipName
-  )
-  const sourceHipParentScale = getHipParentWorldScale(
-    sourceSkinned,
-    mapResult.sourceHipName
-  )
+  // 골반 본의 실제 월드 Y 좌표를 비교해 스케일 비율을 계산한다.
+  // (Armature parent scale 비교 방식은 dying.glb 같은 비표준 계층 구조에서 부정확함)
+  const targetHipWorldY = getHipWorldY(targetSkinned, mapResult.targetHipName)
+  const sourceHipWorldY = getHipWorldY(sourceSkinned, mapResult.sourceHipName)
   const csScaleRatio =
-    sourceHipParentScale > 1e-8 ? targetHipParentScale / sourceHipParentScale : 1
+    Math.abs(sourceHipWorldY) > 1e-4 ? targetHipWorldY / sourceHipWorldY : 1
   if (Math.abs(csScaleRatio - 1) > 1e-4) {
     log(
-      `좌표계 스케일 보정: target=${targetHipParentScale.toFixed(6)}, source=${sourceHipParentScale.toFixed(6)}, ratio=${csScaleRatio.toFixed(6)}`
+      `좌표계 스케일 보정: targetHipY=${targetHipWorldY.toFixed(6)}, sourceHipY=${sourceHipWorldY.toFixed(6)}, ratio=${csScaleRatio.toFixed(6)}`
     )
     sourceRoot.scale.multiplyScalar(csScaleRatio)
     sourceRoot.updateMatrixWorld(true)
@@ -891,16 +887,16 @@ function buildRetargetNameMap(
   }
 }
 
-function getHipParentWorldScale(
+function getHipWorldY(
   skinned: THREE.SkinnedMesh,
   hipBoneName: string | null
 ): number {
-  if (!hipBoneName) return 1
+  if (!hipBoneName) return 0
   const hip = skinned.skeleton.bones.find((b) => b.name === hipBoneName)
-  if (!hip?.parent) return 1
-  const s = new THREE.Vector3()
-  hip.parent.getWorldScale(s)
-  return Math.abs(s.x) > 1e-8 ? s.x : 1
+  if (!hip) return 0
+  const pos = new THREE.Vector3()
+  hip.getWorldPosition(pos)
+  return pos.y
 }
 
 function findFirstSkinnedMesh(root: THREE.Object3D): THREE.SkinnedMesh | null {
