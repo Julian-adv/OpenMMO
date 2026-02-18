@@ -12,6 +12,7 @@
     onClipChange?: (index: number) => void
     onPlay?: () => void
     onPause?: () => void
+    onDelete?: () => void
     onDragEnter?: (event: DragEvent) => void
     onDragOver?: (event: DragEvent) => void
     onDragLeave?: (event: DragEvent) => void
@@ -27,6 +28,7 @@
     onClipChange,
     onPlay,
     onPause,
+    onDelete,
     onDragEnter,
     onDragOver,
     onDragLeave,
@@ -58,6 +60,7 @@
       onChange={onClipChange}
       {onPlay}
       {onPause}
+      {onDelete}
     />
   </div>
   <div class="dropzone" class:active={dropActive}>{DROPZONE_TEXT}</div>

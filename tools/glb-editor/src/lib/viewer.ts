@@ -45,6 +45,7 @@ export class GlbViewer {
   private mixer: THREE.AnimationMixer | null = null
   private currentActions: THREE.AnimationAction[] = []
   private relatedClips: THREE.AnimationClip[] = []
+  private relatedClipSourceIndices: number[] = []
 
   private autoRotate = false
   private loop = true
@@ -182,6 +183,16 @@ export class GlbViewer {
     }
   }
 
+  deleteCurrentClip(): boolean {
+    if (!this.srcGLTF) return false
+    const sourceIndex = this.relatedClipSourceIndices[this.selectedClipIndex]
+    if (sourceIndex === undefined) return false
+
+    this.srcGLTF.animations.splice(sourceIndex, 1)
+    this.refreshPreview()
+    return true
+  }
+
   async saveCurrentGLB(): Promise<void> {
     if (!this.srcGLTF) return
 
@@ -223,7 +234,7 @@ export class GlbViewer {
       const clips = this.filterAnimations(
         this.srcGLTF.animations ?? [],
         this.collectNodeNames(cloneForNames)
-      )
+      ).map((f) => f.clip)
       await this.doExportOne(node, clips, i, true)
     }
 
@@ -331,10 +342,12 @@ export class GlbViewer {
     this.frameObject(this.modelRoot)
 
     const allowedNames = this.collectNodeNames(cloned)
-    this.relatedClips = this.filterAnimations(
+    const filtered = this.filterAnimations(
       this.srcGLTF.animations ?? [],
       allowedNames
     )
+    this.relatedClips = filtered.map((f) => f.clip)
+    this.relatedClipSourceIndices = filtered.map((f) => f.sourceIndex)
 
     if (this.relatedClips.length > 0) {
       this.mixer = new THREE.AnimationMixer(this.modelRoot)
@@ -375,6 +388,7 @@ export class GlbViewer {
     this.mixer = null
     this.currentActions = []
     this.relatedClips = []
+    this.relatedClipSourceIndices = []
     this.selectedClipIndex = 0
 
     if (this.modelRoot) {
@@ -407,10 +421,11 @@ export class GlbViewer {
   private filterAnimations(
     anims: THREE.AnimationClip[],
     allowed: Set<string>
-  ): THREE.AnimationClip[] {
-    const out: THREE.AnimationClip[] = []
+  ): { clip: THREE.AnimationClip; sourceIndex: number }[] {
+    const out: { clip: THREE.AnimationClip; sourceIndex: number }[] = []
 
-    for (const clip of anims) {
+    for (let i = 0; i < anims.length; i++) {
+      const clip = anims[i]
       const kept = clip.tracks.filter((track) => {
         const target = track.name.split('.')[0]
         return allowed.has(target)
@@ -420,7 +435,7 @@ export class GlbViewer {
 
       const newClip = clip.clone()
       newClip.tracks = kept
-      out.push(newClip)
+      out.push({ clip: newClip, sourceIndex: i })
     }
 
     return out

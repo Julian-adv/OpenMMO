@@ -280,6 +280,18 @@
     animsBeforeMerge = null
   }
 
+  function onDeleteClip(): void {
+    const gltfA = viewer?.getSourceGLTF() ?? null
+    if (!gltfA) return
+
+    animsBeforeMerge = [...(gltfA.animations ?? [])]
+    const deleted = viewer?.deleteCurrentClip()
+    if (deleted) {
+      hasMergedUnsaved = true
+      appendLog('애니메이션 삭제 완료. 저장 또는 되돌리기 가능.')
+    }
+  }
+
   function onUndoMerge(): void {
     const gltfA = viewer?.getSourceGLTF() ?? null
     if (!gltfA || !animsBeforeMerge) return
@@ -335,6 +347,7 @@
       </label>
       <button class="btn primary" onclick={onExportSelected} disabled={!hasCandidate}>선택 내보내기</button>
       <button class="btn" onclick={onExportAll} disabled={!hasCandidates}>전체 내보내기</button>
+      <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>저장 (다운로드)</button>
       <button class="btn ghost" onclick={onReset}>초기화</button>
       <span class="small">{isLoadingMain ? '로딩 중...' : metaText}</span>
     </div>
@@ -373,6 +386,7 @@
       }}
       onPlay={() => viewer?.playClip(selectedClipIndex)}
       onPause={() => viewer?.pause()}
+      onDelete={onDeleteClip}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -403,9 +417,6 @@
           </button>
           <button class="btn ghost" onclick={onUndoMerge} disabled={!animsBeforeMerge}>
             되돌리기
-          </button>
-          <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>
-            저장 (다운로드)
           </button>
         </div>
 

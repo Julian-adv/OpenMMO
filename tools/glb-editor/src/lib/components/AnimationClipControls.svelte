@@ -10,6 +10,7 @@
     onChange?: (index: number) => void
     onPlay?: () => void
     onPause?: () => void
+    onDelete?: () => void
     className?: string
     variant?: Variant
   }
@@ -21,6 +22,7 @@
     onChange,
     onPlay,
     onPause,
+    onDelete,
     className = '',
     variant = 'inline',
   }: Props = $props()
@@ -47,6 +49,9 @@
 
   <button class="btn" onclick={() => onPlay?.()} disabled={!hasClip}>재생</button>
   <button class="btn" onclick={() => onPause?.()} disabled={!hasClip}>일시정지</button>
+  {#if onDelete}
+    <button class="btn danger" onclick={() => onDelete?.()} disabled={!hasClip}>삭제</button>
+  {/if}
   <span class="info">{info}</span>
 </div>
 
@@ -63,7 +68,7 @@
 
   .clip-controls.panel {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto auto auto;
   }
 
   select {
@@ -84,6 +89,15 @@
   .btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  .btn.danger {
+    background: #7a1e1e;
+    border-color: #4a0f0f;
+  }
+
+  .btn.danger:hover:not(:disabled) {
+    background: #9a2525;
   }
 
   .info {
