@@ -8,7 +8,14 @@
     getMoonPhaseLabel,
     getGameCalendarDayIndex,
     moonPhaseCanvasAction,
+    SUN_AXIAL_TILT_DEG,
+    SUN_LATITUDE_DEG,
+    SUN_TWILIGHT_ELEVATION_THRESHOLD,
   } from '../utils/celestialSimulation'
+  import {
+    getCelestialDirectionFromHourAndDeclination,
+    getDeclinationRadFromDayIndex,
+  } from '../utils/celestialDirection'
 
   // Diagram layout constants (2x original size)
   const D = 520
@@ -51,12 +58,37 @@
 
   const earthToSunAngle = $derived(Math.atan2(C - earthY, C - earthX))
 
-  // SVG path: lit semicircle on the sun-facing half of Earth
-  // Arc from A to B (on the terminator diameter) sweeping clockwise (sweep=1) through the lit side
+  // Terminator chord offset: shifts the day/night boundary based on observer latitude + declination.
+  // Summer (decl > 0): chord moves anti-sun → lit arc > 180° (longer day at this latitude)
+  // Winter (decl < 0): chord moves toward sun → lit arc < 180° (shorter day)
+  // Formula: d = -R * sin(lat) * tan(decl)
+  const LAT_RAD = (SUN_LATITUDE_DEG * Math.PI) / 180
+  const chordOffset = $derived.by(() => {
+    const decl = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
+    return -EARTH_DISPLAY_R * Math.sin(LAT_RAD) * Math.tan(decl)
+  })
+
+  // Builds an SVG arc path for the lit portion of a circle of radius r, with chord offset d along sunDir.
+  function litChordPath(
+    cx: number, cy: number, r: number, d: number,
+    sdx: number, sdy: number, px: number, py: number
+  ) {
+    const clampedD = Math.max(-(r - 0.5), Math.min(r - 0.5, d))
+    const half = Math.sqrt(Math.max(0, r * r - clampedD * clampedD))
+    const largeArc = clampedD < 0 ? 1 : 0
+    return (
+      `M ${cx + clampedD * sdx + half * px},${cy + clampedD * sdy + half * py}` +
+      ` A ${r},${r} 0 ${largeArc},0` +
+      ` ${cx + clampedD * sdx - half * px},${cy + clampedD * sdy - half * py} Z`
+    )
+  }
+
+  // SVG path: lit arc on the sun-facing portion of Earth (chord offset shifts with season)
   const litHalfPath = $derived(
-    `M ${earthX + EARTH_DISPLAY_R * perpX},${earthY + EARTH_DISPLAY_R * perpY}` +
-      ` A ${EARTH_DISPLAY_R},${EARTH_DISPLAY_R} 0 0,0` +
-      ` ${earthX - EARTH_DISPLAY_R * perpX},${earthY - EARTH_DISPLAY_R * perpY} Z`
+    litChordPath(earthX, earthY, EARTH_DISPLAY_R, chordOffset, sunDirX, sunDirY, perpX, perpY)
+  )
+  const cloudHighlightPath = $derived(
+    litChordPath(earthX, earthY, EARTH_DISPLAY_R - 4, chordOffset, sunDirX, sunDirY, perpX, perpY)
   )
 
   // Observer (player) on Earth's surface
@@ -72,13 +104,30 @@
     earthY + (EARTH_DISPLAY_R + INDICATOR_LENGTH) * Math.sin(observerAngle)
   )
 
-  // dot product: +1 = facing sun (noon), -1 = facing away (midnight)
-  const obsSunDot = $derived(Math.cos((gameTimeState.hour - 12) * TAU / 24))
+  // Actual sun elevation using declination (axial tilt + latitude), matching GameTimeWidget
+  const sunElevation = $derived.by(() => {
+    const declination = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
+    const dir = getCelestialDirectionFromHourAndDeclination(
+      gameTimeState.hour,
+      12,
+      SUN_LATITUDE_DEG,
+      declination
+    )
+    return dir.y
+  })
   const indicatorColor = $derived(
-    obsSunDot > 0.15 ? '#ffdd44' : obsSunDot > -0.15 ? '#ff9944' : '#8899dd'
+    sunElevation >= SUN_TWILIGHT_ELEVATION_THRESHOLD
+      ? '#ffdd44'
+      : sunElevation > 0
+        ? '#ff9944'
+        : '#8899dd'
   )
   const timeOfDayLabel = $derived(
-    obsSunDot > 0.15 ? 'Day' : obsSunDot > -0.15 ? 'Twilight' : 'Night'
+    sunElevation >= SUN_TWILIGHT_ELEVATION_THRESHOLD
+      ? 'Day'
+      : sunElevation > 0
+        ? 'Twilight'
+        : 'Night'
   )
 
   // Moon orbital positions
@@ -199,12 +248,7 @@
         <path d={litHalfPath} fill="#4a90d9" opacity="0.90" />
 
         <!-- Earth: cloud highlight on lit side (subtle lighter arc, smaller radius) -->
-        <path
-          d={`M ${earthX + (EARTH_DISPLAY_R - 4) * perpX},${earthY + (EARTH_DISPLAY_R - 4) * perpY}` +
-            ` A ${EARTH_DISPLAY_R - 4},${EARTH_DISPLAY_R - 4} 0 0,0` +
-            ` ${earthX - (EARTH_DISPLAY_R - 4) * perpX},${earthY - (EARTH_DISPLAY_R - 4) * perpY} Z`}
-          fill="rgba(160,210,255,0.18)"
-        />
+        <path d={cloudHighlightPath} fill="rgba(160,210,255,0.18)" />
 
         <!-- Earth: atmosphere ring -->
         <circle
