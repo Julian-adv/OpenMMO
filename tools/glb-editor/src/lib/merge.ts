@@ -332,6 +332,9 @@ function mergeByRetarget(
     )
   }
 
+  // normalizeRootStart=true 일 때도 이 블록이 실행된다.
+  // alignRootStartToReference 가 수직 위치를 고정한 뒤, lockClipToGround 가
+  // 실제 발 본 위치를 기준으로 정밀 지면 스냅을 추가 적용하는 것이 의도된 동작이다.
   if (
     options.retarget.keepRootMotion &&
     targetHipName &&
@@ -341,7 +344,7 @@ function mergeByRetarget(
       gltfA,
       adjustedTracks,
       targetHipName,
-      srcClip.duration,
+      retargetedClip.duration,
       upAxisIndex,
       verticalAxisInfo.worldYPerLocalUnit,
       log
@@ -505,8 +508,6 @@ function lockClipToGround(
 
   const probeSensitivityAt = (time: number, axisIndex: number): number => {
     const epsilon = 0.01
-    probeMixer.setTime(time)
-    probeGroup.updateMatrixWorld(true)
     const baseMinY = sampleGroundY(time)
 
     const original = probeHip.position.getComponent(axisIndex)
