@@ -19,10 +19,6 @@
 
 <script lang="ts">
   import { calendarVisible } from '../stores/debugStore'
-  import {
-    getCelestialDirectionFromHourAndDeclination,
-    getDeclinationRadFromDayIndex,
-  } from '../utils/celestialDirection'
   import { getSolarDaylightWindow } from '../utils/celestialSimulation'
   import {
     type MoonDefinition,
@@ -31,12 +27,13 @@
     SWIFT_MOON_DEFINITION,
     SUN_AXIAL_TILT_DEG,
     SUN_LATITUDE_DEG,
-    SUN_TWILIGHT_ELEVATION_THRESHOLD,
     getGameCalendarDayIndex,
     getMoonPhaseLabel,
     getMoonPhaseState,
     getMoonTrackState,
+    getSunElevation,
     getSunTrackState,
+    isTwilightElevation,
     moonPhaseCanvasAction,
   } from '../utils/celestialSimulation'
 
@@ -182,22 +179,14 @@
       daylightWindow.sunsetHour
     )
   )
-  const dayOfYear = $derived(
-    (gameTimeState.date.month - 1) * 30 + gameTimeState.date.day
+  const sunElevation = $derived(
+    getSunElevation({
+      hour: gameTimeState.hour,
+      month: gameTimeState.date.month,
+      day: gameTimeState.date.day,
+    })
   )
-  const sunElevation = $derived.by(() => {
-    const declination = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
-    const dir = getCelestialDirectionFromHourAndDeclination(
-      gameTimeState.hour,
-      12,
-      SUN_LATITUDE_DEG,
-      declination
-    )
-    return dir.y
-  })
-  const isTwilight = $derived(
-    sunElevation > 0 && sunElevation < SUN_TWILIGHT_ELEVATION_THRESHOLD
-  )
+  const isTwilight = $derived(isTwilightElevation(sunElevation))
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
   const moonVisuals = $derived(
     MOONS.map((moon) =>

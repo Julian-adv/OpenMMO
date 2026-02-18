@@ -7,15 +7,13 @@
     getMoonPhaseState,
     getMoonPhaseLabel,
     getGameCalendarDayIndex,
+    getSunElevation,
     moonPhaseCanvasAction,
+    getSunPeriodFromElevation,
     SUN_AXIAL_TILT_DEG,
     SUN_LATITUDE_DEG,
-    SUN_TWILIGHT_ELEVATION_THRESHOLD,
   } from '../utils/celestialSimulation'
-  import {
-    getCelestialDirectionFromHourAndDeclination,
-    getDeclinationRadFromDayIndex,
-  } from '../utils/celestialDirection'
+  import { getDeclinationRadFromDayIndex } from '../utils/celestialDirection'
 
   // Diagram layout constants (2x original size)
   const D = 520
@@ -65,7 +63,7 @@
   const LAT_RAD = (SUN_LATITUDE_DEG * Math.PI) / 180
   const chordOffset = $derived.by(() => {
     const decl = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
-    return -EARTH_DISPLAY_R * Math.sin(LAT_RAD) * Math.tan(decl)
+    return -(EARTH_DISPLAY_R + 2.5) * Math.sin(LAT_RAD) * Math.tan(decl)
   })
 
   // Builds an SVG arc path for the lit portion of a circle of radius r, with chord offset d along sunDir.
@@ -105,29 +103,19 @@
   )
 
   // Actual sun elevation using declination (axial tilt + latitude), matching GameTimeWidget
-  const sunElevation = $derived.by(() => {
-    const declination = getDeclinationRadFromDayIndex(dayOfYear, SUN_AXIAL_TILT_DEG)
-    const dir = getCelestialDirectionFromHourAndDeclination(
-      gameTimeState.hour,
-      12,
-      SUN_LATITUDE_DEG,
-      declination
-    )
-    return dir.y
-  })
+  const sunElevation = $derived(
+    getSunElevation({
+      hour: gameTimeState.hour,
+      month: gameTimeState.date.month,
+      day: gameTimeState.date.day,
+    })
+  )
+  const sunPeriod = $derived(getSunPeriodFromElevation(sunElevation))
   const indicatorColor = $derived(
-    sunElevation >= SUN_TWILIGHT_ELEVATION_THRESHOLD
-      ? '#ffdd44'
-      : sunElevation > 0
-        ? '#ff9944'
-        : '#8899dd'
+    sunPeriod === 'day' ? '#ffdd44' : sunPeriod === 'twilight' ? '#ff9944' : '#8899dd'
   )
   const timeOfDayLabel = $derived(
-    sunElevation >= SUN_TWILIGHT_ELEVATION_THRESHOLD
-      ? 'Day'
-      : sunElevation > 0
-        ? 'Twilight'
-        : 'Night'
+    sunPeriod === 'day' ? 'Day' : sunPeriod === 'twilight' ? 'Twilight' : 'Night'
   )
 
   // Moon orbital positions

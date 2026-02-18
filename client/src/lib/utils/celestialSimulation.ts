@@ -16,7 +16,8 @@ export const SHADOW_CAMERA_FAR = SUN_LIGHT_DISTANCE * 3
 export const SUN_DAY_DURATION_SECONDS = 3 * 60 * 60
 export const SUN_START_HOUR = 12
 export const SUN_MAX_INTENSITY = 2.25
-export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.11
+export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.07 // upper bound (~4° above horizon)
+export const SUN_TWILIGHT_LOWER_THRESHOLD = -0.04 // lower bound (~-2.3° below horizon)
 export const SUN_TWILIGHT_COLOR_BLEND = 0.65
 export const MOON_AXIAL_TILT_DEG = 19
 
@@ -127,6 +128,15 @@ export interface SunLightSnapshot {
   intensity: number
 }
 
+export interface SunDirectionConfig {
+  hour: number
+  month: number
+  day: number
+  latitudeDeg?: number
+  axialTiltDeg?: number
+  transitHour?: number
+}
+
 export interface SolarDaylightWindowConfig {
   latitudeDeg: number
   month: number
@@ -154,6 +164,8 @@ export interface CelestialLightState {
   ambientIntensity: number
 }
 
+export type SunPeriod = 'day' | 'twilight' | 'night'
+
 export const ELDER_MOON_DEFINITION: MoonDefinition = {
   id: 'elder',
   displayName: 'Eldor',
@@ -176,6 +188,16 @@ export function normalizeHour(hour: number) {
 
 export function positiveModulo(value: number, mod: number) {
   return ((value % mod) + mod) % mod
+}
+
+export function getSunPeriodFromElevation(elevation: number): SunPeriod {
+  if (elevation >= SUN_TWILIGHT_ELEVATION_THRESHOLD) return 'day'
+  if (elevation > SUN_TWILIGHT_LOWER_THRESHOLD) return 'twilight'
+  return 'night'
+}
+
+export function isTwilightElevation(elevation: number) {
+  return getSunPeriodFromElevation(elevation) === 'twilight'
 }
 
 export function getAbsoluteDayIndex(date: CalendarDate) {
@@ -342,12 +364,32 @@ export function getSunTrackState(config: SunTrackConfig): SunTrackState {
 }
 
 const SUN_DAYLIGHT_SOFTENING_EXPONENT = 0.7
-const SUN_DAYLIGHT_FLOOR = 0.4
+export const SUN_DAYLIGHT_FLOOR = 0.4
 
 function dayOfYearFromCalendar(month: number, day: number) {
   const clampedMonth = Math.min(MONTHS_PER_YEAR, Math.max(1, Math.floor(month)))
   const clampedDay = Math.min(DAYS_PER_MONTH, Math.max(1, Math.floor(day)))
   return (clampedMonth - 1) * DAYS_PER_MONTH + clampedDay
+}
+
+export function getSunDirection(config: SunDirectionConfig) {
+  const normalizedHour = normalizeHour(config.hour)
+  const latitudeDeg = config.latitudeDeg ?? SUN_LATITUDE_DEG
+  const axialTiltDeg = config.axialTiltDeg ?? SUN_AXIAL_TILT_DEG
+  const transitHour = config.transitHour ?? 12
+  const dayOfYear = dayOfYearFromCalendar(config.month, config.day)
+  const declination = getDeclinationRadFromDayIndex(dayOfYear, axialTiltDeg)
+
+  return getCelestialDirectionFromHourAndDeclination(
+    normalizedHour,
+    transitHour,
+    latitudeDeg,
+    declination
+  )
+}
+
+export function getSunElevation(config: SunDirectionConfig) {
+  return getSunDirection(config).y
 }
 
 export function getSolarDaylightWindow(
@@ -390,19 +432,13 @@ export function computeSunLightSnapshot(
   calendarDate: CalendarDate
 ): SunLightSnapshot {
   const normalizedGameHour = normalizeHour(gameHour)
-  const dayOfYear = dayOfYearFromCalendar(calendarDate.month, calendarDate.day)
   const latitudeRad = (SUN_LATITUDE_DEG * Math.PI) / 180
   const latitudeCos = Math.cos(latitudeRad)
-  const declination = getDeclinationRadFromDayIndex(
-    dayOfYear,
-    SUN_AXIAL_TILT_DEG
-  )
-  const direction = getCelestialDirectionFromHourAndDeclination(
-    normalizedGameHour,
-    12,
-    SUN_LATITUDE_DEG,
-    declination
-  )
+  const direction = getSunDirection({
+    hour: normalizedGameHour,
+    month: calendarDate.month,
+    day: calendarDate.day,
+  })
 
   const baseDaylightFactor = Math.min(
     1,
@@ -514,6 +550,7 @@ export function computeCelestialDirectionalLightState(
   sunLightState: SunLightSnapshot,
   dayIndex: number
 ): CelestialDirectionalLightState {
+  const sunPeriod = getSunPeriodFromElevation(sunLightState.direction.y)
   const sunAboveHorizon =
     sunLightState.direction.y > 0 && sunLightState.intensity > 0
   const ambientNightFactor = sunLightState.direction.y <= 0 ? 1 : 0
@@ -546,16 +583,17 @@ export function computeCelestialDirectionalLightState(
     }
   }
 
-  const twilightFactor = sunAboveHorizon
-    ? Math.min(
-        1,
-        Math.max(
-          0,
-          (SUN_TWILIGHT_ELEVATION_THRESHOLD - sunLightState.direction.y) /
-            SUN_TWILIGHT_ELEVATION_THRESHOLD
+  const twilightFactor =
+    sunPeriod === 'twilight'
+      ? Math.min(
+          1,
+          Math.max(
+            0,
+            (SUN_TWILIGHT_ELEVATION_THRESHOLD - sunLightState.direction.y) /
+              SUN_TWILIGHT_ELEVATION_THRESHOLD
+          )
         )
-      )
-    : 0
+      : 0
 
   return {
     useMoonLight: false,
