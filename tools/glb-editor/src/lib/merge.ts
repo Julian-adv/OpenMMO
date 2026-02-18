@@ -227,6 +227,8 @@ function mergeByRetarget(
 } {
   const targetRoot = SkeletonUtils.clone(gltfA.scene)
   const sourceRoot = SkeletonUtils.clone(gltfB.scene)
+  targetRoot.updateMatrixWorld(true)
+  sourceRoot.updateMatrixWorld(true)
 
   const targetSkinned = findFirstSkinnedMesh(targetRoot)
   const sourceSkinned = findFirstSkinnedMesh(sourceRoot)
@@ -246,6 +248,27 @@ function mergeByRetarget(
   log(
     `리타겟 매핑: target ${mapResult.targetCount}개 / source ${mapResult.sourceCount}개 중 ${mapResult.mappedCount}개 연결 (avg score=${mapResult.avgScore.toFixed(3)})`
   )
+
+  // 두 스켈레톤의 Armature 스케일 차이를 감지해 sourceRoot에 보정을 적용한다.
+  // 예) maria(target)는 Armature scale=0.01(cm→m), dying(source)는 scale=1 이므로
+  // retargetClip 내부의 worldToLocal 이 100배 과장된 값을 만드는 문제를 방지한다.
+  const targetHipParentScale = getHipParentWorldScale(
+    targetSkinned,
+    mapResult.targetHipName
+  )
+  const sourceHipParentScale = getHipParentWorldScale(
+    sourceSkinned,
+    mapResult.sourceHipName
+  )
+  const csScaleRatio =
+    sourceHipParentScale > 1e-8 ? targetHipParentScale / sourceHipParentScale : 1
+  if (Math.abs(csScaleRatio - 1) > 1e-4) {
+    log(
+      `좌표계 스케일 보정: target=${targetHipParentScale.toFixed(6)}, source=${sourceHipParentScale.toFixed(6)}, ratio=${csScaleRatio.toFixed(6)}`
+    )
+    sourceRoot.scale.multiplyScalar(csScaleRatio)
+    sourceRoot.updateMatrixWorld(true)
+  }
 
   const sourceHipName = mapResult.sourceHipName
   if (sourceHipName) {
@@ -332,24 +355,22 @@ function mergeByRetarget(
     )
   }
 
-  // normalizeRootStart=true 일 때도 이 블록이 실행된다.
-  // alignRootStartToReference 가 수직 위치를 고정한 뒤, lockClipToGround 가
-  // 실제 발 본 위치를 기준으로 정밀 지면 스냅을 추가 적용하는 것이 의도된 동작이다.
-  if (
-    options.retarget.keepRootMotion &&
-    targetHipName &&
-    !options.retarget.keepVerticalRootMotion
-  ) {
-    lockClipToGround(
-      gltfA,
-      adjustedTracks,
-      targetHipName,
-      retargetedClip.duration,
-      upAxisIndex,
-      verticalAxisInfo.worldYPerLocalUnit,
-      log
-    )
-  }
+  // TODO: 좌표계 스케일 보정 후 _lockClipToGround 가 여전히 필요한지 검증 필요.
+  // if (
+  //   options.retarget.keepRootMotion &&
+  //   targetHipName &&
+  //   !options.retarget.keepVerticalRootMotion
+  // ) {
+  //   _lockClipToGround(
+  //     gltfA,
+  //     adjustedTracks,
+  //     targetHipName,
+  //     retargetedClip.duration,
+  //     upAxisIndex,
+  //     verticalAxisInfo.worldYPerLocalUnit,
+  //     log
+  //   )
+  // }
 
   if (adjustedTracks.length === 0) {
     throw new Error('리타겟 결과 트랙이 비어 있습니다.')
@@ -457,7 +478,7 @@ function flattenRootVerticalMotion(
   )
 }
 
-function lockClipToGround(
+function _lockClipToGround(
   gltfA: GLTF,
   tracks: THREE.KeyframeTrack[],
   targetHipName: string,
@@ -868,6 +889,18 @@ function buildRetargetNameMap(
     sourceHipName,
     targetHipName,
   }
+}
+
+function getHipParentWorldScale(
+  skinned: THREE.SkinnedMesh,
+  hipBoneName: string | null
+): number {
+  if (!hipBoneName) return 1
+  const hip = skinned.skeleton.bones.find((b) => b.name === hipBoneName)
+  if (!hip?.parent) return 1
+  const s = new THREE.Vector3()
+  hip.parent.getWorldScale(s)
+  return Math.abs(s.x) > 1e-8 ? s.x : 1
 }
 
 function findFirstSkinnedMesh(root: THREE.Object3D): THREE.SkinnedMesh | null {
