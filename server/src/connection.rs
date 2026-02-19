@@ -154,6 +154,7 @@ pub async fn handle_connection(
     // Clean up on disconnect
     if let Some(ref id) = player_id {
         game_state.unregister_direct_channel(id).await;
+        game_state.unregister_player_character(id).await;
         game_state.remove_player(id).await;
     }
 
@@ -374,6 +375,7 @@ async fn handle_client_message(
                 .await;
 
             let max_hp = selected_character.max_hp;
+            let character_xp = selected_character.xp;
 
             let player = new_player(
                 selected_character.name.clone(),
@@ -383,6 +385,9 @@ async fn handle_client_message(
             let id = player.id.clone();
 
             *direct_rx = Some(game_state.register_direct_channel(&id).await);
+            game_state
+                .register_player_character(&id, character_id, character_xp)
+                .await;
 
             let mut responses = vec![ServerMessage::JoinSuccess {
                 player: player.clone(),
@@ -493,6 +498,7 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         name: record.name,
         created_at: record.created_at,
         level: record.level,
+        xp: record.xp,
         max_hp: record.max_hp,
         attributes: record.attributes,
     }

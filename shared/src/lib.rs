@@ -37,6 +37,7 @@ pub struct Character {
     pub name: String,
     pub created_at: i64,
     pub level: u32,
+    pub xp: u64,
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
 }
@@ -190,6 +191,13 @@ pub enum ServerMessage {
     },
     PlayerRespawned {
         player: Player,
+    },
+    XpGained {
+        player_id: String,
+        xp_amount: u32,
+        total_xp: u64,
+        new_level: u32,
+        leveled_up: bool,
     },
     Kicked {
         player_id: String,

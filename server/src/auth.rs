@@ -16,6 +16,7 @@ pub struct CharacterRecord {
     pub name: String,
     pub created_at: i64,
     pub level: u32,
+    pub xp: u64,
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
 }
@@ -159,6 +160,7 @@ impl AuthService {
 
         let expected_columns = [
             ("level", "INTEGER NOT NULL DEFAULT 1"),
+            ("xp", "INTEGER NOT NULL DEFAULT 0"),
             ("max_hp", "INTEGER NOT NULL DEFAULT 16"),
             ("attr_str", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_dex", "INTEGER NOT NULL DEFAULT 12"),
@@ -272,7 +274,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, character_name, created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE account_name = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -286,14 +288,15 @@ impl AuthService {
                     name: row.get(1)?,
                     created_at: row.get(2)?,
                     level: row.get(3)?,
-                    max_hp: row.get(4)?,
+                    xp: row.get::<_, i64>(4)? as u64,
+                    max_hp: row.get(5)?,
                     attributes: CharacterAttributes {
-                        r#str: row.get(5)?,
-                        dex: row.get(6)?,
-                        con: row.get(7)?,
-                        int: row.get(8)?,
-                        wis: row.get(9)?,
-                        cha: row.get(10)?,
+                        r#str: row.get(6)?,
+                        dex: row.get(7)?,
+                        con: row.get(8)?,
+                        int: row.get(9)?,
+                        wis: row.get(10)?,
+                        cha: row.get(11)?,
                     },
                 })
             })
@@ -417,6 +420,7 @@ impl AuthService {
             name: character_name.to_string(),
             created_at,
             level,
+            xp: 0,
             max_hp: loaded_max_hp,
             attributes: loaded_attributes,
         };
@@ -464,7 +468,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
                  FROM characters
                  WHERE id = ?1 AND account_name = ?2",
                 params![character_id, account_name],
@@ -474,14 +478,15 @@ impl AuthService {
                         name: row.get(1)?,
                         created_at: row.get(2)?,
                         level: row.get(3)?,
-                        max_hp: row.get(4)?,
+                        xp: row.get::<_, i64>(4)? as u64,
+                        max_hp: row.get(5)?,
                         attributes: CharacterAttributes {
-                            r#str: row.get(5)?,
-                            dex: row.get(6)?,
-                            con: row.get(7)?,
-                            int: row.get(8)?,
-                            wis: row.get(9)?,
-                            cha: row.get(10)?,
+                            r#str: row.get(6)?,
+                            dex: row.get(7)?,
+                            con: row.get(8)?,
+                            int: row.get(9)?,
+                            wis: row.get(10)?,
+                            cha: row.get(11)?,
                         },
                     })
                 },
@@ -490,6 +495,21 @@ impl AuthService {
             .map_err(|e| AuthError::Database(e.to_string()))?;
 
         character.ok_or(AuthError::CharacterNotFound)
+    }
+
+    pub fn update_character_xp_and_level(
+        &self,
+        character_id: i64,
+        xp: u64,
+        level: u32,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE characters SET xp = ?1, level = ?2 WHERE id = ?3",
+            params![xp as i64, i64::from(level), character_id],
+        )
+        .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(())
     }
 
     pub fn load_world_time(&self) -> Result<Option<GameDateTime>, AuthError> {

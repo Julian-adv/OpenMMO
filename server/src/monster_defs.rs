@@ -22,6 +22,8 @@ pub struct MonsterDefinition {
     pub attack_cooldown: u32,
     #[serde(rename = "damageRoll")]
     pub damage_roll: String,
+    pub level: u8,
+    pub guard: u8,
     #[serde(rename = "hitThreshold")]
     pub hit_threshold: u8,
     #[serde(rename = "animIdle")]

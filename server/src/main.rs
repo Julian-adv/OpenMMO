@@ -63,7 +63,7 @@ async fn main() {
         }
     };
 
-    let game_state = Arc::new(GameState::new(monster_defs, initial_game_time));
+    let game_state = Arc::new(GameState::new(monster_defs, initial_game_time, Arc::clone(&auth_service)));
     let game_state_for_time_sync = Arc::clone(&game_state);
     let auth_service_for_time_sync = Arc::clone(&auth_service);
     tokio::spawn(async move {

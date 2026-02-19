@@ -1,4 +1,5 @@
-use crate::game::combat;
+use crate::auth::AuthService;
+use crate::game::{combat, xp};
 use crate::monster_defs::MonsterDefs;
 use crate::types::{GameDateTime, Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
@@ -36,6 +37,9 @@ pub struct GameState {
     monster_defs: MonsterDefs,
     id_state: Arc<RwLock<IdState>>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
+    auth_service: Arc<AuthService>,
+    // player_id → (character_id, current_xp)
+    player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64)>>>,
 }
 
 impl GameState {
@@ -49,7 +53,11 @@ impl GameState {
         }
     }
 
-    pub fn new(monster_defs: MonsterDefs, initial_datetime: GameDateTime) -> Self {
+    pub fn new(
+        monster_defs: MonsterDefs,
+        initial_datetime: GameDateTime,
+        auth_service: Arc<AuthService>,
+    ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
 
         Self {
@@ -61,6 +69,8 @@ impl GameState {
             monster_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
+            auth_service,
+            player_characters: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -165,6 +175,21 @@ impl GameState {
         if let Some(tx) = channels.get(player_id) {
             let _ = tx.send(msg);
         }
+    }
+
+    pub async fn register_player_character(
+        &self,
+        player_id: &PlayerId,
+        character_id: i64,
+        xp: u64,
+    ) {
+        let mut map = self.player_characters.write().await;
+        map.insert(player_id.clone(), (character_id, xp));
+    }
+
+    pub async fn unregister_player_character(&self, player_id: &PlayerId) {
+        let mut map = self.player_characters.write().await;
+        map.remove(player_id);
     }
 
     pub async fn kick_player_by_name(&self, name: &str) -> Option<PlayerId> {
@@ -416,6 +441,72 @@ impl GameState {
                     let _ = self.broadcast_tx.send(ServerMessage::MonsterDead {
                         monster_id: monster_id.clone(),
                     });
+
+                    // Award XP to the player who killed the monster
+                    let xp_def = self.monster_defs.get(&monster_type);
+                    if let Some(def) = xp_def {
+                        let xp_amount = xp::monster_xp(def.level, def.guard);
+                        let player_char = {
+                            let map = self.player_characters.read().await;
+                            map.get(player_id).copied()
+                        };
+                        if let Some((character_id, old_xp)) = player_char {
+                            let new_xp = old_xp + xp_amount as u64;
+                            let old_level = xp::level_from_xp(old_xp);
+                            let new_level = xp::level_from_xp(new_xp);
+                            let leveled_up = new_level > old_level;
+
+                            // Update in-memory XP
+                            {
+                                let mut map = self.player_characters.write().await;
+                                if let Some(entry) = map.get_mut(player_id) {
+                                    entry.1 = new_xp;
+                                }
+                            }
+
+                            // Update level in player map if leveled up
+                            if leveled_up {
+                                let mut players_write = self.players.write().await;
+                                if let Some(p) = players_write.get_mut(player_id) {
+                                    p.level = new_level;
+                                }
+                            }
+
+                            // Persist to DB
+                            let auth = self.auth_service.clone();
+                            tokio::task::spawn_blocking(move || {
+                                if let Err(e) = auth.update_character_xp_and_level(
+                                    character_id,
+                                    new_xp,
+                                    new_level,
+                                ) {
+                                    tracing::warn!("Failed to persist XP: {}", e);
+                                }
+                            });
+
+                            // Notify the player directly
+                            self.send_direct_message(
+                                player_id,
+                                ServerMessage::XpGained {
+                                    player_id: player_id.clone(),
+                                    xp_amount,
+                                    total_xp: new_xp,
+                                    new_level,
+                                    leveled_up,
+                                },
+                            )
+                            .await;
+
+                            info!(
+                                "Player {} gained {} XP (total: {}, level: {}{})",
+                                player_id,
+                                xp_amount,
+                                new_xp,
+                                new_level,
+                                if leveled_up { " LEVEL UP!" } else { "" }
+                            );
+                        }
+                    }
 
                     // Schedule removal after 30 seconds
                     let game_state = self.clone();

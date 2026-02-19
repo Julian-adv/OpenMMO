@@ -1,2 +1,2 @@
-id,name,model,health,walkSpeed,runSpeed,attackRange,chaseRange,attackCooldown,damageRoll,hitThreshold,animIdle,animWalk,animRun,animAttack,animHit,animDie,animDead
-scp939,SCP-939,scp939.glb,10,1.0,8.0,2.0,25.0,1500,1d6,10,939_Idle,939_Walking,939_Running,939_Attack1,939_AddStagger1,939_Die,939_Dead
+id,name,model,health,level,guard,walkSpeed,runSpeed,attackRange,chaseRange,attackCooldown,damageRoll,hitThreshold,animIdle,animWalk,animRun,animAttack,animHit,animDie,animDead
+scp939,SCP-939,scp939.glb,10,3,5,1.0,8.0,2.0,25.0,1500,1d6,10,939_Idle,939_Walking,939_Running,939_Attack1,939_AddStagger1,939_Die,939_Dead
