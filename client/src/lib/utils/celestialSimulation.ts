@@ -35,23 +35,6 @@ export const MOON_ILLUMINATION_SOFTENING_EXPONENT = 0.7
 export const MOON_LIGHT_FLOOR = 0.3
 
 // Moon surface colors for canvas rendering
-// Lit side: base RGB at minimum shade, plus per-channel offset scaled by shade
-export const MOON_LIT_BASE = 210
-export const MOON_LIT_RANGE = 45
-export const MOON_LIT_SHADE_MIN = 0.75
-export const MOON_LIT_R_OFFSET = -4
-export const MOON_LIT_G_OFFSET = 0
-export const MOON_LIT_B_OFFSET = 8
-export const MOON_LIT_ALPHA = 255
-
-// Dark side: base RGB at minimum shade, plus per-channel offset
-export const MOON_DARK_BASE = 58
-export const MOON_DARK_RANGE = 42
-export const MOON_DARK_SHADE_MIN = 0.16
-export const MOON_DARK_R_OFFSET = 0
-export const MOON_DARK_G_OFFSET = 2
-export const MOON_DARK_B_OFFSET = 8
-export const MOON_DARK_ALPHA = 255
 
 export interface CalendarDate {
   year: number
@@ -104,7 +87,6 @@ export interface MoonTrackConfig {
   horizonYPercent: number
   arcHeightPercent: number
   daylightVisibilityScale: number
-  visibilityThreshold: number
 }
 
 export interface MoonTrackState {
@@ -115,6 +97,7 @@ export interface MoonTrackState {
 }
 
 export interface MoonCanvasParams {
+  moonId?: MoonDefinition['id']
   illumination: number
   isWaxing: boolean
   sizePx: number
@@ -315,21 +298,24 @@ export function getMoonPhaseState(
   }
 }
 
+const CELESTIAL_ARC_SHAPE_EXPONENT = 4
+
+function getTrackArc(progress: number) {
+  return 1 - Math.pow(Math.abs(progress * 2 - 1), CELESTIAL_ARC_SHAPE_EXPONENT)
+}
+
 export function getMoonTrackState(config: MoonTrackConfig): MoonTrackState {
   const nightArcProgress = Math.min(
     1,
     Math.max(0, config.phaseState.hoursSinceRise / 12)
   )
-  const arc = 1 - Math.pow(nightArcProgress * 2 - 1, 2)
+  const arc = getTrackArc(nightArcProgress)
   const xPercent =
     config.leftPercent +
     nightArcProgress * (config.rightPercent - config.leftPercent)
   const yPercent = config.horizonYPercent - arc * config.arcHeightPercent
   const visibilityScale = config.isDaylight ? config.daylightVisibilityScale : 1
-  const illuminationFactor = config.phaseState.illumination * visibilityScale
-  const isVisible =
-    config.phaseState.isAboveHorizon &&
-    illuminationFactor > config.visibilityThreshold
+  const isVisible = config.phaseState.isAboveHorizon
 
   return {
     xPercent,
@@ -349,7 +335,7 @@ export function getSunTrackState(config: SunTrackConfig): SunTrackState {
   const progress = hasDaylight
     ? (clampedHour - config.sunriseHour) / daylightHours
     : 0.5
-  const arc = 1 - Math.pow(progress * 2 - 1, 2)
+  const arc = getTrackArc(progress)
 
   return {
     xPercent:
@@ -633,6 +619,58 @@ function toMoonPhaseAngleRad(illumination: number, isWaxing: boolean) {
   return isWaxing ? baseAngle : 2 * Math.PI - baseAngle
 }
 
+const MOON_TEXTURE_SRCS: Partial<Record<MoonDefinition['id'], string>> = {
+  elder: '/icons/moon_large_32.png',
+  swift: '/icons/moon_small_32.png',
+}
+
+const moonTextureCache = new Map<string, HTMLImageElement>()
+const moonTexturePromises = new Map<string, Promise<HTMLImageElement>>()
+
+function clampColorByte(value: number) {
+  return Math.min(255, Math.max(0, Math.round(value)))
+}
+
+function hasMoonTexture(moonId: MoonDefinition['id']) {
+  const src = MOON_TEXTURE_SRCS[moonId]
+  return src !== undefined && moonTextureCache.has(src)
+}
+
+function loadMoonTexture(moonId: MoonDefinition['id']) {
+  const src = MOON_TEXTURE_SRCS[moonId]
+  if (!src) return Promise.reject(new Error(`No texture for moon: ${moonId}`))
+
+  const cached = moonTextureCache.get(src)
+  if (cached) return Promise.resolve(cached)
+  const existing = moonTexturePromises.get(src)
+  if (existing) return existing
+
+  const promise = new Promise<HTMLImageElement>((resolve, reject) => {
+    const texture = new Image()
+    texture.decoding = 'async'
+    texture.onload = () => {
+      moonTextureCache.set(src, texture)
+      moonTexturePromises.delete(src)
+      resolve(texture)
+    }
+    texture.onerror = (event) => {
+      moonTexturePromises.delete(src)
+      reject(event)
+    }
+    texture.src = src
+  })
+
+  moonTexturePromises.set(src, promise)
+  return promise
+}
+
+function getElderShadowDarkening(lightDot: number, isDaylight: boolean) {
+  const shadowAmount = Math.pow(Math.min(1, Math.max(0, -lightDot)), 0.82)
+  const maxDarkening = isDaylight ? 0.62 : 0.88
+  const minDarkening = isDaylight ? 0.18 : 0.28
+  return minDarkening + (maxDarkening - minDarkening) * shadowAmount
+}
+
 export function drawMoonToCanvas(
   node: HTMLCanvasElement,
   params: MoonCanvasParams
@@ -647,13 +685,28 @@ export function drawMoonToCanvas(
   const context = node.getContext('2d')
   if (!context) return
 
-  const imageData = context.createImageData(renderSize, renderSize)
-  const pixels = imageData.data
   const radius = renderSize * 0.5 - 0.5
   const center = renderSize * 0.5
   const phaseAngle = toMoonPhaseAngleRad(params.illumination, params.isWaxing)
   const sunX = Math.sin(phaseAngle)
   const sunZ = -Math.cos(phaseAngle)
+  const moonId = params.moonId ?? 'elder'
+  const textureImage = moonTextureCache.get(MOON_TEXTURE_SRCS[moonId] ?? '')
+  const imageData = (() => {
+    if (!textureImage) {
+      return context.createImageData(renderSize, renderSize)
+    }
+
+    context.clearRect(0, 0, renderSize, renderSize)
+    context.save()
+    context.beginPath()
+    context.arc(center, center, radius, 0, 2 * Math.PI)
+    context.clip()
+    context.drawImage(textureImage, 0, 0, renderSize, renderSize)
+    context.restore()
+    return context.getImageData(0, 0, renderSize, renderSize)
+  })()
+  const pixels = imageData.data
 
   for (let py = 0; py < renderSize; py += 1) {
     for (let px = 0; px < renderSize; px += 1) {
@@ -672,46 +725,28 @@ export function drawMoonToCanvas(
       const distanceFromEdge = Math.sqrt(radiusSquared)
       const edgeAlpha = Math.min(1, Math.max(0, (1 - distanceFromEdge) / 0.05))
 
-      let red = 0
-      let green = 0
-      let blue = 0
-      let alpha = 0
+      let red = textureImage ? pixels[pixelIndex] : 255
+      let green = textureImage ? pixels[pixelIndex + 1] : 255
+      let blue = textureImage ? pixels[pixelIndex + 2] : 255
+      const alpha = textureImage ? pixels[pixelIndex + 3] : 255
 
-      if (lightDot > 0) {
-        const litBase = params.isDaylight ? 220 : MOON_LIT_BASE
-        const litRange = params.isDaylight ? 35 : MOON_LIT_RANGE
-        const shade = MOON_LIT_SHADE_MIN + (1 - MOON_LIT_SHADE_MIN) * lightDot
-        const base = Math.round(litBase + shade * litRange)
-        red = Math.min(255, base + MOON_LIT_R_OFFSET)
-        green = Math.min(255, base + MOON_LIT_G_OFFSET)
-        blue = Math.min(255, base + MOON_LIT_B_OFFSET)
-        alpha = Math.round(MOON_LIT_ALPHA * edgeAlpha)
-      } else {
-        const darkBase = params.isDaylight ? 150 : MOON_DARK_BASE
-        const darkRange = params.isDaylight ? 40 : MOON_DARK_RANGE
-        const shade = MOON_DARK_SHADE_MIN + (1 - MOON_DARK_SHADE_MIN) * nz
-        const base = Math.round(darkBase + shade * darkRange)
-        red = base + MOON_DARK_R_OFFSET
-        green = base + MOON_DARK_G_OFFSET
-        blue = base + MOON_DARK_B_OFFSET
-        alpha = MOON_DARK_ALPHA
+      if (lightDot <= 0) {
+        const darkening = getElderShadowDarkening(lightDot, !!params.isDaylight)
+        const darkenFactor = 1 - darkening
+        red *= darkenFactor
+        green *= darkenFactor
+        blue *= darkenFactor
       }
 
-      pixels[pixelIndex] = red
-      pixels[pixelIndex + 1] = green
-      pixels[pixelIndex + 2] = blue
-      pixels[pixelIndex + 3] = alpha
+      pixels[pixelIndex] = clampColorByte(red)
+      pixels[pixelIndex + 1] = clampColorByte(green)
+      pixels[pixelIndex + 2] = clampColorByte(blue)
+      pixels[pixelIndex + 3] = clampColorByte(alpha * edgeAlpha)
     }
   }
 
   context.clearRect(0, 0, renderSize, renderSize)
   context.putImageData(imageData, 0, 0)
-
-  context.beginPath()
-  context.arc(center, center, radius - 0.5, 0, 2 * Math.PI)
-  context.strokeStyle = 'rgba(220, 230, 255, 0.24)'
-  context.lineWidth = Math.max(1, renderSize * 0.04)
-  context.stroke()
 }
 
 export function moonPhaseCanvasAction(
@@ -719,12 +754,30 @@ export function moonPhaseCanvasAction(
   params: MoonCanvasParams
 ) {
   let lastSignature = ''
+  let lastParams = params
+  let waitingForTexture = false
 
   const render = (next: MoonCanvasParams) => {
-    const signature = `${next.sizePx}:${next.isWaxing ? 1 : 0}:${next.illumination.toFixed(4)}:${next.isDaylight ? 1 : 0}`
+    lastParams = next
+    const moonId = next.moonId ?? 'elder'
+    const textureReady = hasMoonTexture(moonId) ? 1 : 0
+    const signature = `${moonId}:${next.sizePx}:${next.isWaxing ? 1 : 0}:${next.illumination.toFixed(4)}:${next.isDaylight ? 1 : 0}:${textureReady}`
     if (signature === lastSignature) return
     lastSignature = signature
     drawMoonToCanvas(node, next)
+
+    if (!hasMoonTexture(moonId) && !waitingForTexture) {
+      waitingForTexture = true
+      void loadMoonTexture(moonId)
+        .then(() => {
+          waitingForTexture = false
+          lastSignature = ''
+          render(lastParams)
+        })
+        .catch(() => {
+          waitingForTexture = false
+        })
+    }
   }
 
   render(params)

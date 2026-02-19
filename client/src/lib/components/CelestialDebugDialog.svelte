@@ -287,9 +287,11 @@
         class="moon elder-moon"
         aria-label="Eldor (Elder Moon)"
         use:moonPhaseCanvasAction={{
+          moonId: 'elder',
           illumination: elderPhase.illumination,
           isWaxing: elderPhase.isWaxing,
           sizePx: ELDER_MOON_SIZE,
+          isDaylight: sunPeriod === 'day',
         }}
         style="left:{elderX}px; top:{elderY}px; width:{ELDER_MOON_SIZE}px; height:{ELDER_MOON_SIZE}px;"
       ></canvas>
@@ -297,11 +299,13 @@
         class="moon swift-moon"
         aria-label="Serin (Swift Moon)"
         use:moonPhaseCanvasAction={{
+          moonId: 'swift',
           illumination: swiftPhase.illumination,
           isWaxing: swiftPhase.isWaxing,
           sizePx: SWIFT_MOON_SIZE,
+          isDaylight: sunPeriod === 'day',
         }}
-        style="left:{swiftX}px; top:{swiftY}px; width:{SWIFT_MOON_SIZE}px; height:{SWIFT_MOON_SIZE}px; filter: saturate(0.85) hue-rotate(12deg) drop-shadow(0 0 5px rgba(215,228,255,0.6));"
+        style="left:{swiftX}px; top:{swiftY}px; width:{SWIFT_MOON_SIZE}px; height:{SWIFT_MOON_SIZE}px; filter: hue-rotate(12deg) drop-shadow(0 0 6px rgba(215,228,255,0.7));"
       ></canvas>
     </div>
 

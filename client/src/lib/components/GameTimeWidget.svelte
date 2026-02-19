@@ -23,7 +23,6 @@
   import {
     type MoonDefinition,
     ELDER_MOON_DEFINITION,
-    MOON_VISIBILITY_THRESHOLD,
     SWIFT_MOON_DEFINITION,
     SUN_AXIAL_TILT_DEG,
     SUN_LATITUDE_DEG,
@@ -37,12 +36,16 @@
     moonPhaseCanvasAction,
   } from '../utils/celestialSimulation'
 
-  const SUN_LEFT_MARGIN_PERCENT = -10
-  const SUN_RIGHT_MARGIN_PERCENT = 110
-  const HORIZON_Y_PERCENT = 85
-  const SUN_ARC_HEIGHT_PERCENT = 68
-  const MOON_ARC_HEIGHT_PERCENT = 54
+  const SUN_LEFT_MARGIN_PERCENT = 2
+  const SUN_RIGHT_MARGIN_PERCENT = 98
+  const HORIZON_Y_PERCENT = 104
+  const SUN_ARC_HEIGHT_PERCENT = 98
+  const SUN_ARC_CLAMP_HEIGHT_PERCENT = 98
+  const MOON_ARC_HEIGHT_PERCENT = 82
+  const MOON_ARC_CLAMP_HEIGHT_PERCENT = 90
   const MOON_DAYLIGHT_VISIBILITY_SCALE = 0.45
+  const SUN_MIN_Y_PERCENT = HORIZON_Y_PERCENT - SUN_ARC_CLAMP_HEIGHT_PERCENT
+  const MOON_MIN_Y_PERCENT = HORIZON_Y_PERCENT - MOON_ARC_CLAMP_HEIGHT_PERCENT
 
   const MONTH_NAMES = [
     'Dawnmere',
@@ -85,7 +88,7 @@
   const MOONS: readonly MoonVisualDefinition[] = [
     {
       ...ELDER_MOON_DEFINITION,
-      sizePx: 20,
+      sizePx: 18,
       hueRotateDeg: 0,
       saturation: 1,
     },
@@ -93,7 +96,7 @@
       ...SWIFT_MOON_DEFINITION,
       sizePx: 14,
       hueRotateDeg: 12,
-      saturation: 0.85,
+      saturation: 1,
     },
   ] as const
 
@@ -116,7 +119,6 @@
       horizonYPercent: HORIZON_Y_PERCENT,
       arcHeightPercent: MOON_ARC_HEIGHT_PERCENT,
       daylightVisibilityScale: MOON_DAYLIGHT_VISIBILITY_SCALE,
-      visibilityThreshold: MOON_VISIBILITY_THRESHOLD,
     })
 
     return {
@@ -128,7 +130,7 @@
       illumination: phaseState.illumination,
       isWaxing: phaseState.isWaxing,
       xPercent: trackState.xPercent,
-      yPercent: trackState.yPercent,
+      yPercent: Math.max(trackState.yPercent, MOON_MIN_Y_PERCENT),
       sizePx: moon.sizePx,
       hueRotateDeg: moon.hueRotateDeg,
       saturation: moon.saturation,
@@ -160,7 +162,7 @@
   }
 
   function getSunVisualState(hour: number, sunriseHour: number, sunsetHour: number) {
-    return getSunTrackState({
+    const trackState = getSunTrackState({
       hour,
       sunriseHour,
       sunsetHour,
@@ -169,6 +171,11 @@
       horizonYPercent: HORIZON_Y_PERCENT,
       arcHeightPercent: SUN_ARC_HEIGHT_PERCENT,
     })
+
+    return {
+      ...trackState,
+      yPercent: Math.max(trackState.yPercent, SUN_MIN_Y_PERCENT),
+    }
   }
 
   const daylightWindow = $derived(getCurrentDaylightWindow())
@@ -227,6 +234,7 @@
         class="moon"
         aria-label={`${moon.displayName} Moon`}
         use:moonPhaseCanvasAction={{
+          moonId: moon.id,
           illumination: moon.illumination,
           isWaxing: moon.isWaxing,
           sizePx: moon.sizePx,
