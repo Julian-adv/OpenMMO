@@ -2,7 +2,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
-const dataDir = path.dirname(fileURLToPath(import.meta.url))
+const toolsDir = path.dirname(fileURLToPath(import.meta.url))
+const dataDir = path.join(toolsDir, '..', 'data')
 export const csvPath = path.join(dataDir, 'monsters.csv')
 export const jsonPath = path.join(dataDir, 'monsters.json')
 
