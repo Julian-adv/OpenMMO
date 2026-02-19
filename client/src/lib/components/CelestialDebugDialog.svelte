@@ -16,8 +16,8 @@
   import { getDeclinationRadFromDayIndex } from '../utils/celestialDirection'
 
   // Diagram layout constants (2x original size)
-  const D = 520
-  const C = D / 2 // 260
+  const D = 640
+  const C = D / 2 // 320
   const EARTH_ORBIT_R = 170
   const ELDER_MOON_ORBIT_R = 82
   const SWIFT_MOON_ORBIT_R = 54
@@ -27,6 +27,11 @@
   const ELDER_MOON_SIZE = 28
   const SWIFT_MOON_SIZE = 20
   const TAU = 2 * Math.PI
+
+  // Night sky ring — outside Elder moon's maximum reach from center (170+82=252)
+  const NIGHT_SKY_RING_INNER_R = 262 // 10px outside Elder moon max orbit
+  const NIGHT_SKY_RING_OUTER_R = 315 // close to SVG edge (320)
+  const NIGHT_SKY_RING_HEIGHT = NIGHT_SKY_RING_OUTER_R - NIGHT_SKY_RING_INNER_R // 53px
 
   // Seasonal markers on Earth's orbit ring
   // SPRING_EQUINOX_DAY_INDEX=90 (from celestialDirection.ts), so each event is 90 days apart
@@ -41,6 +46,49 @@
   // Counterclockwise in screen (y↓): decreasing angle as dayOfYear increases — matches real astronomy
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
   const dayOfYear = $derived((gameTimeState.date.month - 1) * 30 + (gameTimeState.date.day - 1))
+
+  // Canvas action: polar UV mapping of panorama onto the ring
+  // For each of 512 angular segments, column i of the panorama maps to angle i/512 * TAU.
+  // ctx.rotate(midAngle - TAU/4) makes +y point radially outward at midAngle,
+  // so drawImage maps panorama rows → radial direction (innerR..outerR).
+  function nightSkyRingAction(node: HTMLCanvasElement) {
+    const ctx = node.getContext('2d')!
+    const img = new Image()
+    img.src = '/icons/night-sky-panorama-512.png'
+    img.onload = () => {
+      const N = 512
+      ctx.globalAlpha = 0.8
+      for (let i = 0; i < N; i++) {
+        const angle1 = (i / N) * TAU - TAU / 4
+        const angle2 = ((i + 1) / N) * TAU - TAU / 4
+        const midAngle = (angle1 + angle2) / 2
+        // arcWidth: tangential pixel width at outer radius, +2 to avoid seam gaps
+        const arcWidth = Math.ceil((TAU * NIGHT_SKY_RING_OUTER_R) / N) + 2
+        ctx.save()
+        // Clip to this donut segment
+        ctx.beginPath()
+        ctx.arc(C, C, NIGHT_SKY_RING_OUTER_R, angle1, angle2)
+        ctx.arc(C, C, NIGHT_SKY_RING_INNER_R, angle2, angle1, true)
+        ctx.closePath()
+        ctx.clip()
+        // Rotate so that +y points radially outward at midAngle, then flip y
+        ctx.translate(C, C)
+        ctx.rotate(midAngle - TAU / 4)
+        ctx.scale(1, -1)
+        // After scale(1,-1): +y is now toward center, so outer edge is at -OUTER_R
+        // Panorama top (y=0) → outer edge, bottom → inner edge
+        ctx.drawImage(
+          img,
+          (i + N - 128) % N, 0, 1, img.naturalHeight || 512,
+          -arcWidth / 2, -NIGHT_SKY_RING_OUTER_R,
+          arcWidth, NIGHT_SKY_RING_HEIGHT,
+        )
+        ctx.restore()
+      }
+    }
+    return { destroy() {} }
+  }
+
   const earthAngle = $derived(TAU / 4 - (dayOfYear / 360) * TAU)
   const earthX = $derived(C + EARTH_ORBIT_R * Math.cos(earthAngle))
   const earthY = $derived(C + EARTH_ORBIT_R * Math.sin(earthAngle))
@@ -153,18 +201,11 @@
     <div class="dialog-title">Celestial Orbits</div>
 
     <div class="diagram" style="width:{D}px; height:{D}px">
+      <!-- Night sky ring: polar UV mapped panorama on canvas (static, behind SVG) -->
+      <canvas class="night-sky-ring" width={D} height={D} use:nightSkyRingAction></canvas>
+
       <!-- All static geometry + Earth + Sun in SVG -->
       <svg width={D} height={D} class="diagram-svg">
-        <defs>
-          <radialGradient id="spaceGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stop-color="#0d1e38" />
-            <stop offset="100%" stop-color="#030810" />
-          </radialGradient>
-        </defs>
-
-        <!-- Space background -->
-        <rect width={D} height={D} fill="url(#spaceGrad)" />
-
         <!-- Earth orbit ring -->
         <circle
           cx={C}
@@ -369,10 +410,19 @@
   .diagram {
     position: relative;
     line-height: 0;
+    background: radial-gradient(circle, #0d1e38 0%, #030810 100%);
+  }
+
+  .night-sky-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
   }
 
   .diagram-svg {
-    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
   }
 
   /* Moon canvases are absolutely positioned over the SVG */
