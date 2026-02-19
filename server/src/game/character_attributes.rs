@@ -4,6 +4,8 @@ use rand::Rng;
 const TARGET_ATTRIBUTE_TOTAL: i16 = 72;
 const MIN_ATTRIBUTE: u8 = 3;
 const MAX_ATTRIBUTE: u8 = 18;
+const MIN_GUARD: i16 = 1;
+const MAX_GUARD: i16 = 20;
 
 pub fn roll_character_attributes() -> CharacterAttributes {
     let mut rng = rand::thread_rng();
@@ -13,6 +15,7 @@ pub fn roll_character_attributes() -> CharacterAttributes {
     }
 
     rebalance_attributes_to_target(&mut values, TARGET_ATTRIBUTE_TOTAL);
+    let guard = calculate_guard(values[1]);
 
     CharacterAttributes {
         r#str: values[0],
@@ -21,7 +24,14 @@ pub fn roll_character_attributes() -> CharacterAttributes {
         int: values[3],
         wis: values[4],
         cha: values[5],
+        guard,
     }
+}
+
+fn calculate_guard(dex: u8) -> u8 {
+    // D20-style baseline where dexterity shifts defense around 10.
+    let dex_mod = (i16::from(dex) - 10) / 2;
+    (10 + dex_mod).clamp(MIN_GUARD, MAX_GUARD) as u8
 }
 
 fn roll_4d6_drop_lowest(rng: &mut impl Rng) -> u8 {
