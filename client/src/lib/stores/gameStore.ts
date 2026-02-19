@@ -12,6 +12,7 @@ interface PlayerBase {
   id: string
   name: string
   level: number
+  totalXp?: number
   health: number
   maxHealth: number
   lastDamageInfo?: PlayerDamageInfo
