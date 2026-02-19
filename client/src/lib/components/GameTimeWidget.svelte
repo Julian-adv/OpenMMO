@@ -4,6 +4,8 @@
     date: { year: 217, month: 1, day: 1 },
   })
 
+  export const eclipseState = $state({ factor: 0 })
+
   export function setGameHour(hour: number) {
     gameTimeState.hour = ((hour % 24) + 24) % 24
   }
@@ -27,9 +29,11 @@
     SUN_AXIAL_TILT_DEG,
     SUN_LATITUDE_DEG,
     getGameCalendarDayIndex,
+    getMoonDirection,
     getMoonPhaseLabel,
     getMoonPhaseState,
     getMoonTrackState,
+    getSunDirection,
     getSunElevation,
     getSunTrackState,
     isTwilightElevation,
@@ -46,6 +50,9 @@
   const MOON_DAYLIGHT_VISIBILITY_SCALE = 0.45
   const SUN_MIN_Y_PERCENT = HORIZON_Y_PERCENT - SUN_ARC_CLAMP_HEIGHT_PERCENT
   const MOON_MIN_Y_PERCENT = HORIZON_Y_PERCENT - MOON_ARC_CLAMP_HEIGHT_PERCENT
+  const ECLIPSE_NEW_MOON_THRESHOLD = 0.15
+  const ECLIPSE_ANGLE_THRESHOLD_RAD = 0.2 // ~11.5°
+  const ECLIPSE_X_OVERLAP_THRESHOLD_PERCENT = 15
 
   const MONTH_NAMES = [
     'Dawnmere',
@@ -83,6 +90,7 @@
     saturation: number
     isVisible: boolean
     opacity: number
+    eclipseFactor: number
   }
 
   const MOONS: readonly MoonVisualDefinition[] = [
@@ -104,7 +112,10 @@
     moon: MoonVisualDefinition,
     hour: number,
     absoluteDayIndex: number,
-    isDaylight: boolean
+    isDaylight: boolean,
+    sunXPercent: number,
+    month: number,
+    day: number
   ): MoonVisualState {
     const phaseState = getMoonPhaseState(moon, absoluteDayIndex, hour)
     const phaseLabel = getMoonPhaseLabel(
@@ -121,6 +132,42 @@
       daylightVisibilityScale: MOON_DAYLIGHT_VISIBILITY_SCALE,
     })
 
+    const xPercent = trackState.xPercent
+    const yPercent = Math.max(trackState.yPercent, MOON_MIN_Y_PERCENT)
+    const isVisible = trackState.isVisible
+    const visibilityScale = isDaylight ? MOON_DAYLIGHT_VISIBILITY_SCALE : 1
+
+    // Eclipse: use 3D angular separation to account for moon's orbital inclination.
+    // Eclipses only occur when new moon is near an orbital node (sun/moon declinations align).
+    const phaseFactor = Math.max(
+      0,
+      1 - phaseState.illumination / ECLIPSE_NEW_MOON_THRESHOLD
+    )
+    let eclipseFactor = 0
+    if (isDaylight && isVisible && phaseFactor > 0) {
+      const moonDir = getMoonDirection(phaseState, SUN_LATITUDE_DEG, absoluteDayIndex)
+      const sunDir = getSunDirection({ hour, month, day })
+      const dot =
+        moonDir.x * sunDir.x + moonDir.y * sunDir.y + moonDir.z * sunDir.z
+      const angularSep = Math.acos(Math.max(-1, Math.min(1, dot)))
+      const directionFactor = Math.max(0, 1 - angularSep / ECLIPSE_ANGLE_THRESHOLD_RAD)
+      eclipseFactor = directionFactor * phaseFactor
+    }
+
+    // Hide moon when visually overlapping the sun but not eclipsing.
+    const xOverlapFactor =
+      isDaylight && isVisible
+        ? Math.max(
+            0,
+            1 - Math.abs(xPercent - sunXPercent) / ECLIPSE_X_OVERLAP_THRESHOLD_PERCENT
+          )
+        : 0
+    const visibilityModifier = Math.min(1, Math.max(0, 1 - xOverlapFactor + eclipseFactor))
+    const eclipseBoost = eclipseFactor * (1 - visibilityScale)
+    const opacity = isVisible
+      ? visibilityScale * visibilityModifier + eclipseBoost
+      : 0
+
     return {
       id: moon.id,
       displayName: moon.displayName,
@@ -129,14 +176,29 @@
       phaseLabel,
       illumination: phaseState.illumination,
       isWaxing: phaseState.isWaxing,
-      xPercent: trackState.xPercent,
-      yPercent: Math.max(trackState.yPercent, MOON_MIN_Y_PERCENT),
+      xPercent,
+      yPercent,
       sizePx: moon.sizePx,
       hueRotateDeg: moon.hueRotateDeg,
       saturation: moon.saturation,
-      isVisible: trackState.isVisible,
-      opacity: trackState.opacity,
+      isVisible,
+      opacity,
+      eclipseFactor,
     }
+  }
+
+  function getMoonGlowFilter(moon: MoonVisualState, isDaylight: boolean): string {
+    if (moon.eclipseFactor > 0.05) {
+      const e = moon.eclipseFactor
+      const innerR = Math.round(2 + e * 5)
+      const outerR = Math.round(6 + e * 12)
+      const innerA = (e * 0.95).toFixed(2)
+      const outerA = (e * 0.55).toFixed(2)
+      return `drop-shadow(0 0 ${innerR}px rgba(255,220,100,${innerA})) drop-shadow(0 0 ${outerR}px rgba(255,150,30,${outerA}))`
+    }
+    return isDaylight
+      ? 'drop-shadow(0 0 3px rgba(255,255,255,0.95)) drop-shadow(0 0 1px rgba(60,80,130,0.6))'
+      : 'drop-shadow(0 0 4px rgba(215,228,255,0.65))'
   }
 
   function formatGameDate() {
@@ -202,9 +264,21 @@
   })
   const moonVisuals = $derived(
     MOONS.map((moon) =>
-      getMoonVisualState(moon, gameTimeState.hour, absoluteDayIndex, sunVisual.isDaylight)
+      getMoonVisualState(
+        moon,
+        gameTimeState.hour,
+        absoluteDayIndex,
+        sunVisual.isDaylight,
+        sunVisual.xPercent,
+        gameTimeState.date.month,
+        gameTimeState.date.day
+      )
     )
   )
+
+  $effect(() => {
+    eclipseState.factor = Math.max(0, ...moonVisuals.map((m) => m.eclipseFactor))
+  })
 </script>
 
 <div class="time-widget" class:compact={!$calendarVisible}>
@@ -247,7 +321,7 @@
           sizePx: moon.sizePx,
           isDaylight: sunVisual.isDaylight,
         }}
-        style={`--moon-x:${moon.xPercent}%; --moon-y:${moon.yPercent}%; --moon-size:${moon.sizePx}px; --moon-opacity:${moon.opacity}; --moon-hue:${moon.hueRotateDeg}deg; --moon-saturation:${moon.saturation}; --moon-glow:${sunVisual.isDaylight ? 'drop-shadow(0 0 3px rgba(255,255,255,0.95)) drop-shadow(0 0 1px rgba(60,80,130,0.6))' : 'drop-shadow(0 0 4px rgba(215,228,255,0.65))'};`}
+        style={`--moon-x:${moon.xPercent}%; --moon-y:${moon.yPercent}%; --moon-size:${moon.sizePx}px; --moon-opacity:${moon.opacity}; --moon-hue:${moon.hueRotateDeg}deg; --moon-saturation:${moon.saturation}; --moon-glow:${getMoonGlowFilter(moon, sunVisual.isDaylight)};`}
       ></canvas>
     {/each}
     <img

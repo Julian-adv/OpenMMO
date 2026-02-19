@@ -23,6 +23,7 @@ export interface SceneLightingUpdateParams {
   ambientLight: THREE.AmbientLight | undefined
   directionalLight: THREE.DirectionalLight | undefined
   sunLightSnapshot: SunLightSnapshot
+  eclipseFactor: number
 }
 
 export interface SceneLightingController {
@@ -50,13 +51,16 @@ export function createSceneLightingController(): SceneLightingController {
       AMBIENT_NIGHT_INTENSITY
     )
 
+    const eclipse = params.eclipseFactor
+
     if (params.ambientLight) {
       ambientColor
         .copy(ambientDayColor)
         .lerp(ambientNightColor, celestialLightState.ambientNightFactor)
 
       params.ambientLight.color.copy(ambientColor)
-      params.ambientLight.intensity = celestialLightState.ambientIntensity
+      params.ambientLight.intensity =
+        celestialLightState.ambientIntensity * (1 - eclipse * 0.5)
     }
 
     if (!params.directionalLight) return
@@ -69,7 +73,8 @@ export function createSceneLightingController(): SceneLightingController {
       playerPos.y + directionalLightState.positionOffset.y,
       playerPos.z + directionalLightState.positionOffset.z
     )
-    params.directionalLight.intensity = directionalLightState.intensity
+    params.directionalLight.intensity =
+      directionalLightState.intensity * (1 - eclipse * 0.95)
 
     if (directionalLightState.useMoonLight) {
       params.directionalLight.color.copy(moonLightColor)

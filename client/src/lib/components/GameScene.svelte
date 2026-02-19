@@ -49,7 +49,7 @@
     playerDebugInfo,
   } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
-  import { setGameDate, setGameHour } from './GameTimeWidget.svelte'
+  import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
   import {
     DEFAULT_CAMERA_OFFSET,
     ORTHOGRAPHIC_DEFAULT_ZOOM,
@@ -415,6 +415,7 @@
         getLocalGameHour(),
         localCalendarDate
       ),
+      eclipseFactor: eclipseState.factor,
     })
   }
 
