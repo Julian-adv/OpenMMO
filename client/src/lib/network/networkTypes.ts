@@ -42,6 +42,7 @@ export type CharacterAttributes = {
   int: number
   wis: number
   cha: number
+  guard: number
 }
 
 export type CharacterRollResult = {

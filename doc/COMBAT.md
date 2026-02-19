@@ -27,6 +27,27 @@ NetHack/D&D 스타일의 스탯 기반 전투 시스템. 모든 전투 계산은
 
 - 구현: [server/src/game/character_attributes.rs](../server/src/game/character_attributes.rs)
 
+### 캐릭터 Guard 계산 (생성 시)
+
+캐릭터를 생성할 때, 굴린 `DEX`로 `GUARD`를 계산해 저장한다.
+
+```
+dex_mod = (DEX - 10) / 2
+GUARD = clamp(10 + dex_mod, 1, 20)
+```
+
+- 현재 구현은 Rust 정수 나눗셈을 사용하므로 0 쪽으로 버림된다.
+- 현재 스탯 범위(DEX 3~18) 기준, 실제 캐릭터 GUARD 범위는 대략 7~14다.
+
+예시:
+
+| DEX | dex_mod | GUARD |
+|-----|---------|-------|
+| 8   | -1      | 9     |
+| 10  | 0       | 10    |
+| 14  | +2      | 12    |
+| 18  | +4      | 14    |
+
 ---
 
 ## HP 계산
@@ -90,8 +111,8 @@ d20 굴림 ≤ hitThreshold  →  빗나감
 
 NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.**
 
-- 범위: 0 이상 (상한 없음)
-- 기본값(무방비): 0
+- 캐릭터: 생성 시 DEX 기반 공식으로 계산 (위 섹션 참고)
+- 몬스터: `data/monsters.json`에 직접 정의
 - 10이 기준점 (이 이상부터 XP 보너스가 가속)
 
 | GUARD | 의미 |

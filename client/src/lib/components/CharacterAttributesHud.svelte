@@ -41,6 +41,7 @@
   const gainedXp = $derived(clamp(currentXp - levelStartXp, 0, neededXp))
   const expProgress = $derived(gainedXp / neededXp)
   const expPercent = $derived(Math.round(expProgress * 100))
+  const guard = $derived(attributes.guard)
 </script>
 
 <div class="attribute-hud" aria-label="Character attributes">
@@ -79,6 +80,10 @@
     <span class="attr-item">
       <span class="attr-label">Cha</span>
       <span class="attr-value">{attributes.cha}</span>
+    </span>
+    <span class="attr-item">
+      <span class="attr-label">Guard</span>
+      <span class="attr-value">{guard}</span>
     </span>
   </div>
   <div class="exp-block" aria-label="Experience progress">

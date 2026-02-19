@@ -123,6 +123,7 @@ impl AuthService {
                 attr_int INTEGER NOT NULL DEFAULT 12,
                 attr_wis INTEGER NOT NULL DEFAULT 12,
                 attr_cha INTEGER NOT NULL DEFAULT 12,
+                attr_guard INTEGER NOT NULL DEFAULT 10,
                 FOREIGN KEY (account_name) REFERENCES accounts(player_name) ON DELETE CASCADE
             )",
             [],
@@ -168,6 +169,7 @@ impl AuthService {
             ("attr_int", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_wis", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_cha", "INTEGER NOT NULL DEFAULT 12"),
+            ("attr_guard", "INTEGER NOT NULL DEFAULT 10"),
         ];
 
         for (column_name, column_def) in expected_columns {
@@ -274,7 +276,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard
                  FROM characters
                  WHERE account_name = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -297,6 +299,7 @@ impl AuthService {
                         int: row.get(9)?,
                         wis: row.get(10)?,
                         cha: row.get(11)?,
+                        guard: row.get(12)?,
                     },
                 })
             })
@@ -373,8 +376,9 @@ impl AuthService {
                 attr_con,
                 attr_int,
                 attr_wis,
-                attr_cha
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                attr_cha,
+                attr_guard
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 account_name,
                 character_name,
@@ -386,14 +390,16 @@ impl AuthService {
                 i64::from(attributes.int),
                 i64::from(attributes.wis),
                 i64::from(attributes.cha),
+                i64::from(attributes.guard),
             ],
         )
         .map_err(|e| AuthError::Database(e.to_string()))?;
 
         let id = conn.last_insert_rowid();
-        let (created_at, level, loaded_max_hp, loaded_attributes): (i64, u32, u32, CharacterAttributes) = conn
+        let (created_at, level, loaded_max_hp, loaded_attributes): (i64, u32, u32, CharacterAttributes) =
+            conn
             .query_row(
-                "SELECT created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard
                  FROM characters
                  WHERE id = ?1",
                 params![id],
@@ -409,6 +415,7 @@ impl AuthService {
                             int: row.get(6)?,
                             wis: row.get(7)?,
                             cha: row.get(8)?,
+                            guard: row.get(9)?,
                         },
                     ))
                 },
@@ -468,7 +475,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard
                  FROM characters
                  WHERE id = ?1 AND account_name = ?2",
                 params![character_id, account_name],
@@ -487,6 +494,7 @@ impl AuthService {
                             int: row.get(9)?,
                             wis: row.get(10)?,
                             cha: row.get(11)?,
+                            guard: row.get(12)?,
                         },
                     })
                 },

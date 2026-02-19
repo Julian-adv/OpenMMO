@@ -50,6 +50,7 @@ pub struct CharacterAttributes {
     pub int: u8,
     pub wis: u8,
     pub cha: u8,
+    pub guard: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
