@@ -260,7 +260,9 @@
   const nightSkyOffsetPx = $derived(() => {
     const { month, day } = gameTimeState.date
     const dayOfYear = (month - 1) * 30 + day // 1 to 360
-    return ((dayOfYear - 1) / 360) * 512
+    const seasonalOffset = ((dayOfYear - 1) / 360) * 512
+    const rotationOffset = (gameTimeState.hour / 24) * 512
+    return seasonalOffset + rotationOffset
   })
   const moonVisuals = $derived(
     MOONS.map((moon) =>
@@ -292,7 +294,7 @@
     {#if !sunVisual.isDaylight && !isTwilight}
       <div
         class="night-sky"
-        style="background-position-x: -{nightSkyOffsetPx()}px;"
+        style="background-position-x: {nightSkyOffsetPx()}px;"
       ></div>
     {/if}
     {#if sunVisual.isDaylight || isTwilight}
