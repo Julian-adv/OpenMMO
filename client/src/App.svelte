@@ -26,6 +26,8 @@
   let isPlayerDead = $state(false)
   let currentPlayerHp = $state<number | null>(null)
   let currentPlayerMaxHp = $state<number | null>(null)
+  let currentPlayerLevel = $state<number | null>(null)
+  let currentPlayerTotalXp = $state<number | null>(null)
   let deathUiState = $state<DeathUiState>('alive')
   let showRespawnDialog = $derived(deathUiState === 'dialog_open')
   let canReopenRespawnDialog = $derived(
@@ -186,6 +188,8 @@
   gameStore.subscribe((state) => {
     currentPlayerHp = state.currentPlayer?.health ?? null
     currentPlayerMaxHp = state.currentPlayer?.maxHealth ?? null
+    currentPlayerLevel = state.currentPlayer?.level ?? null
+    currentPlayerTotalXp = state.currentPlayer?.totalXp ?? null
     const deadNow =
       screen === 'game' &&
       !!state.currentPlayer &&
@@ -216,7 +220,8 @@
       <CelestialDebugDialog />
       {#if selectedCharacter}
         <CharacterAttributesHud
-          level={selectedCharacter.level}
+          level={currentPlayerLevel ?? selectedCharacter.level}
+          currentXp={currentPlayerTotalXp ?? selectedCharacter.xp}
           currentHp={currentPlayerHp ?? selectedCharacter.max_hp}
           maxHp={currentPlayerMaxHp ?? selectedCharacter.max_hp}
           attributes={selectedCharacter.attributes}

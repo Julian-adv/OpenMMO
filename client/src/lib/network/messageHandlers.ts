@@ -401,5 +401,13 @@ export function handleServerMessage(
       events.playerRespawned.emit(serverPlayer.id)
       break
     }
+
+    case 'XpGained': {
+      updatePlayer(data.player_id, {
+        level: data.new_level,
+        totalXp: Number(data.total_xp),
+      })
+      break
+    }
   }
 }

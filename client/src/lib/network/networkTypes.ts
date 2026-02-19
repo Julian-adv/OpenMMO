@@ -30,6 +30,7 @@ export type AccountCharacter = {
   name: string
   created_at: number
   level: number
+  xp: number
   max_hp: number
   attributes: CharacterAttributes
 }
