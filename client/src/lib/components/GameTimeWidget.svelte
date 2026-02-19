@@ -195,6 +195,11 @@
   )
   const isTwilight = $derived(isTwilightElevation(sunElevation))
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
+  const nightSkyOffsetPx = $derived(() => {
+    const { month, day } = gameTimeState.date
+    const dayOfYear = (month - 1) * 30 + day // 1 to 360
+    return ((dayOfYear - 1) / 360) * 512
+  })
   const moonVisuals = $derived(
     MOONS.map((moon) =>
       getMoonVisualState(moon, gameTimeState.hour, absoluteDayIndex, sunVisual.isDaylight)
@@ -210,17 +215,19 @@
     </div>
   {/if}
   <div class="sky-track">
-    <img
-      class="horizon"
-      src={
-        isTwilight
-          ? '/icons/horizon-sunset.png'
-          : sunVisual.isDaylight
-            ? '/icons/horizon.png'
-            : '/icons/horizon-night.png'
-      }
-      alt=""
-    />
+    {#if !sunVisual.isDaylight && !isTwilight}
+      <div
+        class="night-sky"
+        style="background-position-x: -{nightSkyOffsetPx()}px;"
+      ></div>
+    {/if}
+    {#if sunVisual.isDaylight || isTwilight}
+      <img
+        class="horizon"
+        src={isTwilight ? '/icons/horizon-sunset.png' : '/icons/horizon.png'}
+        alt=""
+      />
+    {/if}
     {#if sunVisual.isDaylight}
       <img
         class="sun"
@@ -309,6 +316,15 @@
         rgba(85, 170, 230, 0.72) 55%,
         rgba(22, 43, 74, 0.5) 100%
       );
+  }
+
+  .night-sky {
+    position: absolute;
+    inset: 0;
+    background-image: url('/icons/night-sky-panorama-512.png');
+    background-size: 512px 100%;
+    background-repeat: repeat-x;
+    z-index: 0;
   }
 
   .horizon {
