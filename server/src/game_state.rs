@@ -390,10 +390,13 @@ impl GameState {
             monster.unwrap().monster_type.clone()
         };
 
-        let players = self.players.read().await;
+        let player_name = {
+            let players = self.players.read().await;
+            players.get(player_id).map(|p| p.name.clone())
+        };
 
-        if let Some(player) = players.get(player_id) {
-            info!("Player {} attacking monster {}", player.name, monster_id);
+        if let Some(player_name) = player_name {
+            info!("Player {} attacking monster {}", player_name, monster_id);
 
             let def = self.monster_defs.get(&monster_type);
             let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);

@@ -137,11 +137,14 @@ class MonsterManager {
     const myPlayerId = gameState.currentPlayer?.id
 
     for (const monster of this.monsters.values()) {
+      let impactJustExpired = false
+
       // Impact Delay Handling (Global for all clients to keep visuals synced)
       if (monster.impactDelay !== undefined && monster.impactDelay > 0) {
         monster.impactDelay -= deltaTime
         if (monster.impactDelay <= 0) {
           monster.impactDelay = 0
+          impactJustExpired = true
 
           // Trigger damage display only for local player's attacks
           if (monster.targetPlayerId === myPlayerId) {
@@ -212,6 +215,11 @@ class MonsterManager {
         ) {
           this.moveTowards(monster, monster.targetPosition, deltaTime)
           // Trigger reactivity with new reference
+          this.monsters.set(monster.id, { ...monster })
+        } else if (impactJustExpired) {
+          // Impact delay expired and caused a state change (e.g., dead, hit).
+          // Non-moving states don't call set() above, so trigger reactivity here
+          // so the animation updates (e.g., attack → dead/hit).
           this.monsters.set(monster.id, { ...monster })
         }
       }
