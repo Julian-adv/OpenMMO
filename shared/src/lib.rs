@@ -186,6 +186,7 @@ pub enum ServerMessage {
         hit: bool,
         roll: u8,
         damage: u32,
+        current_health: u32,
     },
     PlayerDead {
         player_id: String,

@@ -310,18 +310,12 @@ export function handleServerMessage(
         }
       }
 
-      if (data.hit) {
-        updatePlayer(data.player_id, {
-          health: isCurrentPlayer
-            ? Math.max(0, (gameState.currentPlayer?.health ?? 0) - data.damage)
-            : Math.max(
-                0,
-                (gameState.otherPlayers.get(data.player_id)?.health ?? 0) -
-                  data.damage
-              ),
-          ...(isCurrentPlayer ? { lastDamageInfo: damageInfo } : {}),
-        })
+      updatePlayer(data.player_id, {
+        health: data.current_health,
+        ...(isCurrentPlayer ? { lastDamageInfo: damageInfo } : {}),
+      })
 
+      if (data.hit) {
         const targetName = isCurrentPlayer
           ? 'You'
           : (gameState.otherPlayers.get(data.player_id)?.name ?? 'Unknown')
@@ -329,11 +323,6 @@ export function handleServerMessage(
           `Monster rolled ${data.roll}: HIT ${targetName} for ${data.damage} damage!`
         )
       } else {
-        if (isCurrentPlayer) {
-          updatePlayer(data.player_id, {
-            lastDamageInfo: damageInfo,
-          })
-        }
         addChatMessage(`Monster rolled ${data.roll}: MISSED!`)
       }
       break

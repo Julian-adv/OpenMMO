@@ -42,6 +42,9 @@ pub struct GameState {
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64)>>>,
 }
 
+#[cfg(test)]
+mod tests;
+
 impl GameState {
     pub fn default_start_datetime() -> GameDateTime {
         GameDateTime {
@@ -567,6 +570,7 @@ impl GameState {
 
         // If hit, update player HP first so subsequent respawn checks observe the new state.
         let mut did_die = false;
+        let mut current_health = 0;
         if result.hit {
             let mut players = self.players.write().await;
 
@@ -576,6 +580,7 @@ impl GameState {
                 }
 
                 player.health = player.health.saturating_sub(result.damage);
+                current_health = player.health;
                 info!(
                     "Player {} HP: {}/{}",
                     target_player_id, player.health, player.max_health
@@ -585,6 +590,12 @@ impl GameState {
                     did_die = true;
                     info!("Player {} died", target_player_id);
                 }
+            }
+        } else {
+            // If missed, we still need current health for the message.
+            let players = self.players.read().await;
+            if let Some(player) = players.get(target_player_id) {
+                current_health = player.health;
             }
         }
 
@@ -597,6 +608,7 @@ impl GameState {
                 hit: result.hit,
                 roll: result.roll,
                 damage: result.damage,
+                current_health,
             });
 
         if did_die {
