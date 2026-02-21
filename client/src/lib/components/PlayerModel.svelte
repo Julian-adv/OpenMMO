@@ -58,6 +58,7 @@
 
   // Load animated model
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
+  const locomotionGltf = useLoader(GLTFLoader).load('/models/animations/locomotion.glb')
 
   // Load sword model
   const swordGltf = useLoader(GLTFLoader).load('/models/sword.glb')
@@ -76,6 +77,16 @@
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
+  const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
+  const LOCOMOTION_ANIMATION_NAMES = new Set<string>([
+    AnimationName.IDLE1,
+    AnimationName.IDLE2,
+    AnimationName.IDLE3,
+    AnimationName.IDLE4,
+    AnimationName.WALK,
+    AnimationName.JOG,
+    AnimationName.RUN,
+  ])
 
   // Select movement animation based on movement mode
   function selectMovementAnimation(mode: MovementMode | undefined): number {
@@ -251,10 +262,16 @@
         }
       }
 
-      // Filter animations to only include tracks that match model nodes
+      // Prefer locomotion clips for idle/walk/jog/run, keep combat/death on maria clips.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const animations: THREE.AnimationClip[] = ($gltf as any).animations || []
-      console.log(`Found ${animations.length} animation clips`)
+      const baseAnimations: THREE.AnimationClip[] = ($gltf as any).animations || []
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const locomotionAnimations: THREE.AnimationClip[] = ($locomotionGltf as any)?.animations || []
+      const baseClipByName = new Map(baseAnimations.map((clip) => [clip.name, clip]))
+      const locomotionClipByName = new Map(locomotionAnimations.map((clip) => [clip.name, clip]))
+
+      console.log(`Found ${baseAnimations.length} base animation clips`)
+      console.log(`Found ${locomotionAnimations.length} locomotion animation clips`)
 
       // Collect all node names in the cloned model
       const modelNodeNames = new SvelteSet()
@@ -266,9 +283,15 @@
 
       // Find animations by specific track names in order
       validAnimations = ANIMATION_ORDER.map((targetName) => {
-        const foundClip = animations.find((clip) => clip.name === targetName)
+        const baseClip = baseClipByName.get(targetName)
+        const locomotionClip = locomotionClipByName.get(targetName)
+        const foundClip = LOCOMOTION_ANIMATION_NAMES.has(targetName)
+          ? (locomotionClip ?? baseClip)
+          : (baseClip ?? locomotionClip)
+
         if (foundClip) {
-          console.log(`✅ Found animation: ${targetName}`)
+          const source = locomotionClip === foundClip ? 'locomotion.glb' : 'maria.glb'
+          console.log(`✅ Found animation: ${targetName} (${source})`)
           
           // Report attack animation duration if it's the one we use for attacking
           if (targetName === AnimationName.SLASH1 && onAttackDuration) {
@@ -278,7 +301,7 @@
           return foundClip
         } else {
           console.log(`❌ Missing animation: ${targetName}`)
-          return animations[0] // Use first animation as dummy to keep index alignment
+          return baseAnimations[0] ?? locomotionAnimations[0] // Keep index alignment even on partial data
         }
       })
 
@@ -294,12 +317,14 @@
         console.warn('No suitable animations found with strict filtering')
 
         // Fallback: try to play any animation without filtering
-        if (animations.length > 0) {
+        const fallbackAnimations =
+          baseAnimations.length > 0 ? baseAnimations : locomotionAnimations
+        if (fallbackAnimations.length > 0) {
           console.log(
             'Trying fallback: playing first animation without filtering'
           )
           mixer = new THREE.AnimationMixer(newModelRoot)
-          const clip = animations[0]
+          const clip = fallbackAnimations[0]
           console.log(
             `Playing fallback animation: ${clip.name}, duration: ${clip.duration}s`
           )
@@ -320,8 +345,14 @@
 
   onMount(() => {
     // Wait for GLTF to load and setup real animation
+    const waitStartTime = Date.now()
     const checkGltf = () => {
-      if ($gltf) {
+      const locomotionTimedOut =
+        Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
+      if ($gltf && ($locomotionGltf || locomotionTimedOut)) {
+        if (!$locomotionGltf && locomotionTimedOut) {
+          console.warn('Locomotion GLB load timeout, using maria animations only')
+        }
         setupRealAnimation()
       } else {
         setTimeout(checkGltf, 100)

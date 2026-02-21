@@ -4,7 +4,11 @@
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import { onMount } from 'svelte'
-  import { ANIMATION_ORDER, AnimationIndex } from '../types/animations'
+  import {
+    ANIMATION_ORDER,
+    AnimationIndex,
+    AnimationName,
+  } from '../types/animations'
 
   interface Props {
     positionX: number
@@ -15,6 +19,7 @@
 
   let { positionX, positionY, positionZ, selected }: Props = $props()
   const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
+  const locomotionGltf = useLoader(GLTFLoader).load('/models/animations/locomotion.glb')
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
@@ -24,6 +29,16 @@
   let fillSpotlightRef = $state<THREE.SpotLight | undefined>(undefined)
   let spotlightTarget = $state<THREE.Object3D | undefined>(undefined)
   const OVERLAP_BEFORE_END = 0.3
+  const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
+  const LOCOMOTION_ANIMATION_NAMES = new Set<string>([
+    AnimationName.IDLE1,
+    AnimationName.IDLE2,
+    AnimationName.IDLE3,
+    AnimationName.IDLE4,
+    AnimationName.WALK,
+    AnimationName.JOG,
+    AnimationName.RUN,
+  ])
 
   function playIdleAnimation() {
     if (!mixer || validAnimations.length === 0) return
@@ -52,7 +67,11 @@
     currentAction = newAction
   }
 
-  function setupModel(sourceScene: THREE.Object3D, animations: THREE.AnimationClip[]) {
+  function setupModel(
+    sourceScene: THREE.Object3D,
+    baseAnimations: THREE.AnimationClip[],
+    locomotionAnimations: THREE.AnimationClip[]
+  ) {
     if (mixer || modelRoot) return
 
     const scene = SkeletonUtils.clone(sourceScene)
@@ -66,9 +85,17 @@
       }
     })
 
+    const baseClipByName = new Map(baseAnimations.map((clip) => [clip.name, clip]))
+    const locomotionClipByName = new Map(
+      locomotionAnimations.map((clip) => [clip.name, clip])
+    )
+
     validAnimations = ANIMATION_ORDER.map((targetName) => {
-      const foundClip = animations.find((clip) => clip.name === targetName)
-      return foundClip ?? animations[0]
+      const baseClip = baseClipByName.get(targetName)
+      const locomotionClip = locomotionClipByName.get(targetName)
+      return LOCOMOTION_ANIMATION_NAMES.has(targetName)
+        ? (locomotionClip ?? baseClip ?? baseAnimations[0] ?? locomotionAnimations[0])
+        : (baseClip ?? locomotionClip ?? baseAnimations[0] ?? locomotionAnimations[0])
     })
 
     if (validAnimations.length > 0) {
@@ -78,12 +105,6 @@
 
     modelRoot = newModelRoot
   }
-
-  $effect(() => {
-    if (!$gltf) return
-    const animations = $gltf.animations ?? []
-    setupModel($gltf.scene, animations)
-  })
 
   $effect(() => {
     if (!mixer || !currentAction) return
@@ -105,6 +126,24 @@
   })
 
   onMount(() => {
+    const waitStartTime = Date.now()
+    const checkGltf = () => {
+      const locomotionTimedOut =
+        Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
+
+      if ($gltf && ($locomotionGltf || locomotionTimedOut)) {
+        setupModel(
+          $gltf.scene,
+          $gltf.animations ?? [],
+          $locomotionGltf?.animations ?? []
+        )
+        return
+      }
+
+      setTimeout(checkGltf, 100)
+    }
+    checkGltf()
+
     return () => {
       if (mixer) {
         mixer.stopAllAction()
