@@ -16,6 +16,22 @@ export interface CandidateSummary {
   stats: string
 }
 
+export interface ExtractAnimationPackOptions {
+  packName: string
+  clipName: string
+  basePackFile?: File | null
+  outputMode?: 'download' | 'return-buffer'
+}
+
+export interface ExtractAnimationPackResult {
+  fileName: string
+  clipName: string
+  totalTracks: number
+  keptTracks: number
+  mode: 'new-pack' | 'append-pack'
+  arrayBuffer: ArrayBuffer
+}
+
 interface ViewerCallbacks {
   log: (message: string) => void
   onMetaChange: (message: string) => void
@@ -307,6 +323,117 @@ export class GlbViewer {
     this.callbacks.log('=== 전체 일괄 내보내기 완료 ===')
   }
 
+  async extractSelectedClipToPack(
+    options: ExtractAnimationPackOptions
+  ): Promise<ExtractAnimationPackResult> {
+    if (
+      this.selectedIndex < 0 ||
+      this.selectedIndex >= this.candidates.length
+    ) {
+      throw new Error('먼저 추출할 오브젝트를 선택하세요.')
+    }
+
+    if (this.relatedClips.length === 0) {
+      throw new Error('추출할 애니메이션이 없습니다.')
+    }
+
+    const sourceClip = this.relatedClips[this.selectedClipIndex]
+    if (!sourceClip) {
+      throw new Error('선택된 애니메이션이 없습니다.')
+    }
+
+    const packName = this.sanitizePackName(options.packName)
+    const requestedClipName =
+      options.clipName.trim() || sourceClip.name || 'Animation'
+    const outputMode = options.outputMode ?? 'download'
+
+    if (options.basePackFile) {
+      const basePack = await loadGLTFFromFile(options.basePackFile)
+      const clonedRoot = SkeletonUtils.clone(basePack.scene) as THREE.Object3D
+      const exportScene = new THREE.Scene()
+      exportScene.add(clonedRoot)
+
+      const filtered = this.filterClipTracksByNodeNames(
+        sourceClip,
+        this.collectNodeNames(clonedRoot)
+      )
+      if (filtered.keptTracks === 0) {
+        throw new Error(
+          '선택한 팩 GLB와 본 이름이 맞지 않아 트랙이 모두 제외되었습니다.'
+        )
+      }
+
+      const totalTracks = filtered.totalTracks
+      const keptTracks = filtered.keptTracks
+
+      const takenNames = new Set(
+        (basePack.animations ?? [])
+          .map((clip) => clip.name || '')
+          .filter(Boolean)
+      )
+      const clipName = this.ensureUniqueClipName(requestedClipName, takenNames)
+      filtered.clip.name = clipName
+
+      const outAnimations = [...(basePack.animations ?? []), filtered.clip]
+      const arrayBuffer = await this.exportScene(exportScene, outAnimations)
+      const fileName = `${packName}.glb`
+      if (outputMode === 'download') {
+        downloadArrayBuffer(fileName, arrayBuffer)
+      }
+      this.callbacks.log(
+        outputMode === 'download'
+          ? `애니메이션 팩 저장 완료: ${fileName} (기존 팩 +1, ${keptTracks}/${totalTracks} 트랙 유지)`
+          : `애니메이션 팩 생성 완료: ${fileName} (기존 팩 +1, ${keptTracks}/${totalTracks} 트랙 유지)`
+      )
+
+      return {
+        fileName,
+        clipName,
+        totalTracks,
+        keptTracks,
+        mode: 'append-pack',
+        arrayBuffer,
+      }
+    }
+
+    const sourceNode = this.candidates[this.selectedIndex]
+    const exportRoot = this.buildAnimationPackRoot(sourceNode, sourceClip)
+    const exportScene = new THREE.Scene()
+    exportScene.add(exportRoot)
+
+    const filtered = this.filterClipTracksByNodeNames(
+      sourceClip,
+      this.collectNodeNames(exportRoot)
+    )
+    if (filtered.keptTracks === 0) {
+      throw new Error('현재 오브젝트에서 추출 가능한 트랙이 없습니다.')
+    }
+
+    const totalTracks = filtered.totalTracks
+    const keptTracks = filtered.keptTracks
+    filtered.clip.name = requestedClipName
+
+    const arrayBuffer = await this.exportScene(exportScene, [filtered.clip])
+    const fileName = `${packName}.glb`
+    if (outputMode === 'download') {
+      downloadArrayBuffer(fileName, arrayBuffer)
+    }
+    this.callbacks.log(
+      outputMode === 'download'
+        ? `애니메이션 팩 저장 완료: ${fileName} (신규 팩, ${keptTracks}/${totalTracks} 트랙 유지)`
+        : `애니메이션 팩 생성 완료: ${fileName} (신규 팩, ${keptTracks}/${totalTracks} 트랙 유지)`
+    )
+
+    return {
+      fileName,
+      clipName: filtered.clip.name,
+      totalTracks,
+      keptTracks,
+      mode: 'new-pack',
+      arrayBuffer,
+    }
+  }
+
   reset(): void {
     this.candidates = []
     this.selectedIndex = -1
@@ -535,6 +662,91 @@ export class GlbViewer {
     } catch (error) {
       this.callbacks.log(`내보내기 실패: ${fileName} (${String(error)})`)
     }
+  }
+
+  private buildAnimationPackRoot(
+    sourceNode: THREE.Object3D,
+    sourceClip: THREE.AnimationClip
+  ): THREE.Object3D {
+    const stripped = SkeletonUtils.clone(sourceNode) as THREE.Object3D
+    this.stripMeshes(stripped)
+
+    const strippedTrackCount = this.filterClipTracksByNodeNames(
+      sourceClip,
+      this.collectNodeNames(stripped)
+    ).keptTracks
+    if (strippedTrackCount > 0) {
+      stripped.position.set(0, 0, 0)
+      stripped.rotation.set(0, 0, 0)
+      stripped.scale.set(1, 1, 1)
+      return stripped
+    }
+
+    const fallback = SkeletonUtils.clone(sourceNode) as THREE.Object3D
+    fallback.position.set(0, 0, 0)
+    fallback.rotation.set(0, 0, 0)
+    fallback.scale.set(1, 1, 1)
+    return fallback
+  }
+
+  private stripMeshes(root: THREE.Object3D): void {
+    const toRemove: THREE.Object3D[] = []
+    root.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        toRemove.push(obj)
+      }
+    })
+
+    for (const mesh of toRemove) {
+      mesh.parent?.remove(mesh)
+    }
+  }
+
+  private filterClipTracksByNodeNames(
+    clip: THREE.AnimationClip,
+    allowedNames: Set<string>
+  ): { clip: THREE.AnimationClip; totalTracks: number; keptTracks: number } {
+    const keptTracks = clip.tracks
+      .filter((track) => {
+        const targetName = track.name.split('.')[0]
+        return allowedNames.has(targetName)
+      })
+      .map((track) => track.clone())
+
+    const nextClip = clip.clone()
+    nextClip.tracks = keptTracks
+
+    return {
+      clip: nextClip,
+      totalTracks: clip.tracks.length,
+      keptTracks: keptTracks.length,
+    }
+  }
+
+  private ensureUniqueClipName(name: string, taken: Set<string>): string {
+    const base = name.trim() || 'Animation'
+    if (!taken.has(base)) {
+      taken.add(base)
+      return base
+    }
+
+    let index = 2
+    while (true) {
+      const candidate = `${base}_${String(index).padStart(2, '0')}`
+      if (!taken.has(candidate)) {
+        taken.add(candidate)
+        return candidate
+      }
+      index += 1
+    }
+  }
+
+  private sanitizePackName(name: string): string {
+    const trimmed = name.trim()
+    if (!trimmed) return 'animations_pack'
+
+    const safe = trimmed.replace(/[^a-zA-Z0-9_-]/g, '_')
+    return safe || 'animations_pack'
   }
 
   private exportScene(
