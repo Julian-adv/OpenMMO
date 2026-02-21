@@ -5,7 +5,7 @@ import sveltePlugin from 'eslint-plugin-svelte'
 
 export default [
   {
-    ignores: ['dist/', 'public/'],
+    ignores: ['.svelte-kit/', 'dist/', 'build/', 'public/'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
