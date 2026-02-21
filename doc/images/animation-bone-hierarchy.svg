@@ -1,0 +1,187 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="1522" viewBox="0 0 980 1522">
+  <rect width="100%" height="100%" fill="#0f172a"/>
+  <rect x="12" y="12" width="956" height="1498" rx="10" fill="#111827" stroke="#374151"/>
+  <text x="24" y="30" fill="#f9fafb" font-family="Consolas, Menlo, Monaco, monospace" font-size="18" font-weight="700">OnlineRPG Bone Hierarchy (locomotion.glb)</text>
+  <line x1="24" y1="42" x2="956" y2="42" stroke="#374151"/>
+  <line x1="31" y1="66" x2="31" y2="1386" stroke="#475569" stroke-width="1.2"/>
+  <line x1="31" y1="88" x2="53" y2="88" stroke="#475569" stroke-width="1.2"/>
+  <line x1="31" y1="1276" x2="53" y2="1276" stroke="#475569" stroke-width="1.2"/>
+  <line x1="31" y1="1386" x2="53" y2="1386" stroke="#475569" stroke-width="1.2"/>
+  <line x1="53" y1="88" x2="53" y2="110" stroke="#475569" stroke-width="1.2"/>
+  <line x1="53" y1="110" x2="75" y2="110" stroke="#475569" stroke-width="1.2"/>
+  <line x1="75" y1="110" x2="75" y2="132" stroke="#475569" stroke-width="1.2"/>
+  <line x1="75" y1="132" x2="97" y2="132" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="132" x2="97" y2="748" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="154" x2="119" y2="154" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="220" x2="119" y2="220" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="748" x2="119" y2="748" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="154" x2="119" y2="176" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="176" x2="141" y2="176" stroke="#475569" stroke-width="1.2"/>
+  <line x1="141" y1="176" x2="141" y2="198" stroke="#475569" stroke-width="1.2"/>
+  <line x1="141" y1="198" x2="163" y2="198" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="220" x2="119" y2="242" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="242" x2="141" y2="242" stroke="#475569" stroke-width="1.2"/>
+  <line x1="141" y1="242" x2="141" y2="264" stroke="#475569" stroke-width="1.2"/>
+  <line x1="141" y1="264" x2="163" y2="264" stroke="#475569" stroke-width="1.2"/>
+  <line x1="163" y1="264" x2="163" y2="286" stroke="#475569" stroke-width="1.2"/>
+  <line x1="163" y1="286" x2="185" y2="286" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="286" x2="185" y2="660" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="308" x2="207" y2="308" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="396" x2="207" y2="396" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="484" x2="207" y2="484" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="572" x2="207" y2="572" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="660" x2="207" y2="660" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="308" x2="207" y2="330" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="330" x2="229" y2="330" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="330" x2="229" y2="352" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="352" x2="251" y2="352" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="352" x2="251" y2="374" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="374" x2="273" y2="374" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="396" x2="207" y2="418" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="418" x2="229" y2="418" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="418" x2="229" y2="440" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="440" x2="251" y2="440" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="440" x2="251" y2="462" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="462" x2="273" y2="462" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="484" x2="207" y2="506" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="506" x2="229" y2="506" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="506" x2="229" y2="528" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="528" x2="251" y2="528" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="528" x2="251" y2="550" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="550" x2="273" y2="550" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="572" x2="207" y2="594" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="594" x2="229" y2="594" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="594" x2="229" y2="616" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="616" x2="251" y2="616" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="616" x2="251" y2="638" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="638" x2="273" y2="638" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="660" x2="207" y2="682" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="682" x2="229" y2="682" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="682" x2="229" y2="704" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="704" x2="251" y2="704" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="704" x2="251" y2="726" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="726" x2="273" y2="726" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="748" x2="119" y2="770" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="770" x2="141" y2="770" stroke="#475569" stroke-width="1.2"/>
+  <line x1="141" y1="770" x2="141" y2="792" stroke="#475569" stroke-width="1.2"/>
+  <line x1="141" y1="792" x2="163" y2="792" stroke="#475569" stroke-width="1.2"/>
+  <line x1="163" y1="792" x2="163" y2="814" stroke="#475569" stroke-width="1.2"/>
+  <line x1="163" y1="814" x2="185" y2="814" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="814" x2="185" y2="1188" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="836" x2="207" y2="836" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="924" x2="207" y2="924" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="1012" x2="207" y2="1012" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="1100" x2="207" y2="1100" stroke="#475569" stroke-width="1.2"/>
+  <line x1="185" y1="1188" x2="207" y2="1188" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="836" x2="207" y2="858" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="858" x2="229" y2="858" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="858" x2="229" y2="880" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="880" x2="251" y2="880" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="880" x2="251" y2="902" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="902" x2="273" y2="902" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="924" x2="207" y2="946" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="946" x2="229" y2="946" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="946" x2="229" y2="968" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="968" x2="251" y2="968" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="968" x2="251" y2="990" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="990" x2="273" y2="990" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="1012" x2="207" y2="1034" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="1034" x2="229" y2="1034" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="1034" x2="229" y2="1056" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="1056" x2="251" y2="1056" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="1056" x2="251" y2="1078" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="1078" x2="273" y2="1078" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="1100" x2="207" y2="1122" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="1122" x2="229" y2="1122" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="1122" x2="229" y2="1144" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="1144" x2="251" y2="1144" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="1144" x2="251" y2="1166" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="1166" x2="273" y2="1166" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="1188" x2="207" y2="1210" stroke="#475569" stroke-width="1.2"/>
+  <line x1="207" y1="1210" x2="229" y2="1210" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="1210" x2="229" y2="1232" stroke="#475569" stroke-width="1.2"/>
+  <line x1="229" y1="1232" x2="251" y2="1232" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="1232" x2="251" y2="1254" stroke="#475569" stroke-width="1.2"/>
+  <line x1="251" y1="1254" x2="273" y2="1254" stroke="#475569" stroke-width="1.2"/>
+  <line x1="53" y1="1276" x2="53" y2="1298" stroke="#475569" stroke-width="1.2"/>
+  <line x1="53" y1="1298" x2="75" y2="1298" stroke="#475569" stroke-width="1.2"/>
+  <line x1="75" y1="1298" x2="75" y2="1320" stroke="#475569" stroke-width="1.2"/>
+  <line x1="75" y1="1320" x2="97" y2="1320" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="1320" x2="97" y2="1342" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="1342" x2="119" y2="1342" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="1342" x2="119" y2="1364" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="1364" x2="141" y2="1364" stroke="#475569" stroke-width="1.2"/>
+  <line x1="53" y1="1386" x2="53" y2="1408" stroke="#475569" stroke-width="1.2"/>
+  <line x1="53" y1="1408" x2="75" y2="1408" stroke="#475569" stroke-width="1.2"/>
+  <line x1="75" y1="1408" x2="75" y2="1430" stroke="#475569" stroke-width="1.2"/>
+  <line x1="75" y1="1430" x2="97" y2="1430" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="1430" x2="97" y2="1452" stroke="#475569" stroke-width="1.2"/>
+  <line x1="97" y1="1452" x2="119" y2="1452" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="1452" x2="119" y2="1474" stroke="#475569" stroke-width="1.2"/>
+  <line x1="119" y1="1474" x2="141" y2="1474" stroke="#475569" stroke-width="1.2"/>
+  <text x="40" y="68" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">Hips</text>
+  <text x="62" y="90" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">Spine</text>
+  <text x="84" y="112" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">Spine1</text>
+  <text x="106" y="134" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">Spine2</text>
+  <text x="128" y="156" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">Neck</text>
+  <text x="150" y="178" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">Head</text>
+  <text x="172" y="200" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">HeadTop_End</text>
+  <text x="128" y="222" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftShoulder</text>
+  <text x="150" y="244" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftArm</text>
+  <text x="172" y="266" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftForeArm</text>
+  <text x="194" y="288" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHand</text>
+  <text x="216" y="310" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandThumb1</text>
+  <text x="238" y="332" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandThumb2</text>
+  <text x="260" y="354" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandThumb3</text>
+  <text x="282" y="376" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandThumb4</text>
+  <text x="216" y="398" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandIndex1</text>
+  <text x="238" y="420" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandIndex2</text>
+  <text x="260" y="442" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandIndex3</text>
+  <text x="282" y="464" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandIndex4</text>
+  <text x="216" y="486" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandMiddle1</text>
+  <text x="238" y="508" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandMiddle2</text>
+  <text x="260" y="530" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandMiddle3</text>
+  <text x="282" y="552" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandMiddle4</text>
+  <text x="216" y="574" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandRing1</text>
+  <text x="238" y="596" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandRing2</text>
+  <text x="260" y="618" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandRing3</text>
+  <text x="282" y="640" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandRing4</text>
+  <text x="216" y="662" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandPinky1</text>
+  <text x="238" y="684" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandPinky2</text>
+  <text x="260" y="706" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandPinky3</text>
+  <text x="282" y="728" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftHandPinky4</text>
+  <text x="128" y="750" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightShoulder</text>
+  <text x="150" y="772" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightArm</text>
+  <text x="172" y="794" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightForeArm</text>
+  <text x="194" y="816" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHand</text>
+  <text x="216" y="838" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandThumb1</text>
+  <text x="238" y="860" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandThumb2</text>
+  <text x="260" y="882" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandThumb3</text>
+  <text x="282" y="904" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandThumb4</text>
+  <text x="216" y="926" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandIndex1</text>
+  <text x="238" y="948" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandIndex2</text>
+  <text x="260" y="970" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandIndex3</text>
+  <text x="282" y="992" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandIndex4</text>
+  <text x="216" y="1014" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandMiddle1</text>
+  <text x="238" y="1036" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandMiddle2</text>
+  <text x="260" y="1058" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandMiddle3</text>
+  <text x="282" y="1080" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandMiddle4</text>
+  <text x="216" y="1102" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandRing1</text>
+  <text x="238" y="1124" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandRing2</text>
+  <text x="260" y="1146" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandRing3</text>
+  <text x="282" y="1168" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandRing4</text>
+  <text x="216" y="1190" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandPinky1</text>
+  <text x="238" y="1212" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandPinky2</text>
+  <text x="260" y="1234" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandPinky3</text>
+  <text x="282" y="1256" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightHandPinky4</text>
+  <text x="62" y="1278" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftUpLeg</text>
+  <text x="84" y="1300" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftLeg</text>
+  <text x="106" y="1322" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftFoot</text>
+  <text x="128" y="1344" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftToeBase</text>
+  <text x="150" y="1366" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">LeftToe_End</text>
+  <text x="62" y="1388" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightUpLeg</text>
+  <text x="84" y="1410" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightLeg</text>
+  <text x="106" y="1432" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightFoot</text>
+  <text x="128" y="1454" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightToeBase</text>
+  <text x="150" y="1476" fill="#d1d5db" font-family="Consolas, Menlo, Monaco, monospace" font-size="15">RightToe_End</text>
+</svg>
