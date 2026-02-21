@@ -32,6 +32,11 @@ export interface ExtractAnimationPackResult {
   arrayBuffer: ArrayBuffer
 }
 
+export interface SaveCurrentGLBResult {
+  fileName: string
+  arrayBuffer: ArrayBuffer
+}
+
 interface ViewerCallbacks {
   log: (message: string) => void
   onMetaChange: (message: string) => void
@@ -275,8 +280,8 @@ export class GlbViewer {
     return true
   }
 
-  async saveCurrentGLB(): Promise<void> {
-    if (!this.srcGLTF) return
+  async saveCurrentGLB(): Promise<SaveCurrentGLBResult | null> {
+    if (!this.srcGLTF) return null
 
     const allAnims = this.srcGLTF.animations ?? []
     const outputFileName = this.getMergedFileName()
@@ -287,10 +292,13 @@ export class GlbViewer {
         this.srcGLTF.scene as unknown as THREE.Scene,
         allAnims
       )
-      downloadArrayBuffer(outputFileName, arrayBuffer)
-      this.callbacks.log(`GLB 저장 완료: ${outputFileName} 다운로드`)
+      return {
+        fileName: outputFileName,
+        arrayBuffer,
+      }
     } catch (error) {
       this.callbacks.log(`GLB 저장 실패: ${String(error)}`)
+      return null
     }
   }
 
