@@ -1,0 +1,104 @@
+# Animation Pipeline
+
+OnlineRPG 클라이언트의 캐릭터 애니메이션 로딩/매핑 규칙 문서.
+
+## 1. 관련 파일
+
+- 캐릭터 베이스 모델: `client/public/models/maria.glb`
+- 이동 전용 클립: `client/public/models/animations/locomotion.glb`
+- 애니메이션 이름/순서 정의: `client/src/lib/types/animations.ts`
+- 공통 유틸: `client/src/lib/utils/characterAnimationUtils.ts`
+- 런타임 캐릭터: `client/src/lib/components/PlayerModel.svelte`
+- 캐릭터 선택 프리뷰: `client/src/lib/components/CharacterPreview.svelte`
+
+## 2. 표준 클립 이름
+
+아래 이름은 코드에서 직접 참조하므로 대소문자까지 정확히 일치해야 한다.
+
+| Category | Clips | Animation Pack |
+|---|---|---|
+| Idle | `idle1`, `idle2`, `idle3`, `idle4` | `locomotion` |
+| Move | `walk`, `jog`, `run` | `locomotion` |
+| Attack | `slash1`, `slash2`, `slash3`, `slash4`, `slash5` | `combat_melee` |
+| Attack alt | `attack1`, `attack2`, `attack3`, `attack4` | `combat_ranged` (클립 성격에 따라 `combat_melee`) |
+| Death | `dying` | `combat_melee` |
+
+순서 기준은 `ANIMATION_ORDER`(`client/src/lib/types/animations.ts`)를 따른다.
+
+## 2-1. 본 구조 (Mixamo)
+
+현재 휴먼 본 구조는 Mixamo(`mixamorig`) 계열을 따른다.
+
+- `glb-editor` 기준 본 이름: `mixamorig:Hips`, `mixamorig:Spine` 형태
+- 현재 export된 node 이름: 접두어/콜론이 제거된 `Hips`, `Spine` 형태
+
+## 2-2. 본 계층 구조 (부모-자식)
+
+![locomotion bone hierarchy](./images/animation-bone-hierarchy.svg)
+
+- 파일: `doc/images/animation-bone-hierarchy.svg`
+- `locomotion.glb`에서 추출한 65개 본의 부모-자식 구조를 시각화한 이미지
+
+## 3. 현재 매핑 정책
+
+`selectOrderedCharacterAnimations(...)`에서 아래 우선순위를 사용한다.
+
+1. `idle1~idle4`, `walk`, `jog`, `run`은 `locomotion.glb` 우선
+2. 나머지(`slash*`, `attack*`, `dying`)는 `maria.glb` 우선
+3. 둘 다 없으면 첫 번째 클립으로 fallback
+
+초기 로딩 시 `LOCOMOTION_WAIT_TIMEOUT_MS`(현재 2000ms)까지 locomotion 로드를 기다린다.
+
+## 4. 컴포넌트별 사용 방식
+
+### PlayerModel
+
+- 플레이 상태(`idle`, `moving`, `attack`, `dead`) 기반으로 클립 선택
+- `moving` 상태에서는 시작 시점에 `walk/jog/run` 중 하나를 lock
+- `idle`은 4개 idle 클립 중 랜덤 반복
+- `attack`은 `slash1`, `dead`는 `dying` 사용
+
+### CharacterPreview
+
+- 선택 화면에서 idle 계열만 재생
+- 선택되지 않은 슬롯은 action pause + time reset
+
+## 5. 자주 발생하는 문제
+
+### `THREE.PropertyBinding: No target node found for track: mixamorigHips.position`
+
+원인:
+
+- 애니메이션 트랙 본 이름과 타깃 모델 본 이름이 다를 때 발생
+- 예: `locomotion.glb`는 `mixamorigHips`, `maria.glb`는 `Hips`
+
+대응:
+
+1. `glb-editor`에서 `본 이름 표준화`를 실행한다.
+
+참고: 경고가 발생하면 클립이 부분/전체 미적용될 수 있으므로 반드시 확인한다.
+
+## 6. 신규 애니메이션 추가 체크리스트
+
+1. `glb-editor`에서 `본 이름 표준화` 버튼을 눌러 본 이름을 정리한다.
+2. `애니메이션 추출` 버튼을 눌러 애니메이션을 추출한다.
+3. 추출한 클립을 4개 묶음 파일 중 하나(`locomotion`, `combat_melee`, `combat_ranged`, `emote`)에 넣는다.
+4. 클립 이름을 `AnimationName`에 추가
+5. `AnimationIndex`, `ANIMATION_ORDER` 동기화
+6. 필요한 경우 `selectOrderedCharacterAnimations` 우선순위 반영
+7. `PlayerModel` 상태 전이에서 새 클립 사용 지점 연결
+8. `CharacterPreview`에서 필요한 경우 재생 정책 반영
+9. 실행 검증
+   - `cd client && npm run lint`
+   - `cd client && npm run check`
+
+## 7. 버전 로그
+
+- `v0.8` (2026-02-21): 표준 클립 표에 `Animation Pack` 컬럼 추가
+- `v0.7` (2026-02-21): 본 계층 구조 표를 SVG 이미지 첨부 방식으로 변경 (`doc/images/animation-bone-hierarchy.svg`)
+- `v0.6` (2026-02-21): VSCode 프리뷰 가독성을 위해 본 계층 구조를 Mermaid에서 테이블+인덴트 형식으로 변경
+- `v0.5` (2026-02-21): 본 계층 구조를 텍스트 트리에서 Mermaid 다이어그램으로 변경
+- `v0.4` (2026-02-21): `locomotion.glb` 본 계층 구조(`부모 ㄴ 자식`) 섹션 추가
+- `v0.3` (2026-02-21): 신규 애니메이션 추가 절차에 `glb-editor` 본 정리/Extract/4개 묶음 분류 규칙 추가
+- `v0.2` (2026-02-21): Mixamo 본 구조 설명 및 `locomotion.glb` 본 이름 목록 추가
+- `v0.1` (2026-02-21): 문서 생성, locomotion 우선 매핑 규칙 및 트러블슈팅 정리

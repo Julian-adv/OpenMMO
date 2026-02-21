@@ -1,5 +1,7 @@
 # Asset URLs
 
+- 애니메이션 파이프라인/매핑 규칙 문서: [ANIMATION.md](./ANIMATION.md)
+
 ## grass
 
 - https://sketchfab.com/3d-models/realistic-grass-pack-for-games-free-9b958d613e9a44dbba580748e7a1789c
