@@ -2,13 +2,14 @@
   import { T, useLoader, useTask } from '@threlte/core'
   import * as THREE from 'three'
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
-  import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import { onMount } from 'svelte'
+  import { AnimationIndex } from '../types/animations'
   import {
-    ANIMATION_ORDER,
-    AnimationIndex,
-    AnimationName,
-  } from '../types/animations'
+    LOCOMOTION_WAIT_TIMEOUT_MS,
+    createCharacterModelRoot,
+    getGltfAnimations,
+    selectOrderedCharacterAnimations,
+  } from '../utils/characterAnimationUtils'
 
   interface Props {
     positionX: number
@@ -29,16 +30,6 @@
   let fillSpotlightRef = $state<THREE.SpotLight | undefined>(undefined)
   let spotlightTarget = $state<THREE.Object3D | undefined>(undefined)
   const OVERLAP_BEFORE_END = 0.3
-  const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
-  const LOCOMOTION_ANIMATION_NAMES = new Set<string>([
-    AnimationName.IDLE1,
-    AnimationName.IDLE2,
-    AnimationName.IDLE3,
-    AnimationName.IDLE4,
-    AnimationName.WALK,
-    AnimationName.JOG,
-    AnimationName.RUN,
-  ])
 
   function playIdleAnimation() {
     if (!mixer || validAnimations.length === 0) return
@@ -74,29 +65,11 @@
   ) {
     if (mixer || modelRoot) return
 
-    const scene = SkeletonUtils.clone(sourceScene)
-    const newModelRoot = new THREE.Group()
-    newModelRoot.add(scene)
-
-    newModelRoot.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true
-        child.receiveShadow = true
-      }
-    })
-
-    const baseClipByName = new Map(baseAnimations.map((clip) => [clip.name, clip]))
-    const locomotionClipByName = new Map(
-      locomotionAnimations.map((clip) => [clip.name, clip])
-    )
-
-    validAnimations = ANIMATION_ORDER.map((targetName) => {
-      const baseClip = baseClipByName.get(targetName)
-      const locomotionClip = locomotionClipByName.get(targetName)
-      return LOCOMOTION_ANIMATION_NAMES.has(targetName)
-        ? (locomotionClip ?? baseClip ?? baseAnimations[0] ?? locomotionAnimations[0])
-        : (baseClip ?? locomotionClip ?? baseAnimations[0] ?? locomotionAnimations[0])
-    })
+    const { modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
+    validAnimations = selectOrderedCharacterAnimations(
+      baseAnimations,
+      locomotionAnimations
+    ).map(({ clip }) => clip)
 
     if (validAnimations.length > 0) {
       mixer = new THREE.AnimationMixer(newModelRoot)
@@ -134,8 +107,8 @@
       if ($gltf && ($locomotionGltf || locomotionTimedOut)) {
         setupModel(
           $gltf.scene,
-          $gltf.animations ?? [],
-          $locomotionGltf?.animations ?? []
+          getGltfAnimations($gltf),
+          getGltfAnimations($locomotionGltf)
         )
         return
       }

@@ -4,12 +4,17 @@
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
-  import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import { timeScale } from '../stores/timeStore'
-  import { ANIMATION_ORDER, AnimationIndex, AnimationName } from '../types/animations'
+  import { AnimationIndex, AnimationName } from '../types/animations'
+  import {
+    LOCOMOTION_WAIT_TIMEOUT_MS,
+    createCharacterModelRoot,
+    getGltfAnimations,
+    selectOrderedCharacterAnimations,
+  } from '../utils/characterAnimationUtils'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
@@ -77,16 +82,6 @@
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
-  const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
-  const LOCOMOTION_ANIMATION_NAMES = new Set<string>([
-    AnimationName.IDLE1,
-    AnimationName.IDLE2,
-    AnimationName.IDLE3,
-    AnimationName.IDLE4,
-    AnimationName.WALK,
-    AnimationName.JOG,
-    AnimationName.RUN,
-  ])
 
   // Select movement animation based on movement mode
   function selectMovementAnimation(mode: MovementMode | undefined): number {
@@ -170,18 +165,8 @@
     if ($gltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
 
-      // Create a safely cloned model using SkeletonUtils - gpt-all-in-one.html 패턴 따름
-      const cloned = SkeletonUtils.clone($gltf.scene)
-      const newModelRoot = new THREE.Group()
-      newModelRoot.add(cloned)
-
-      // Enable shadows on all meshes
-      newModelRoot.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true
-          child.receiveShadow = true
-        }
-      })
+      const { clonedScene: cloned, modelRoot: newModelRoot } =
+        createCharacterModelRoot($gltf.scene)
 
       // Attach sword to right hand if sword model is loaded
       if ($swordGltf) {
@@ -262,13 +247,8 @@
         }
       }
 
-      // Prefer locomotion clips for idle/walk/jog/run, keep combat/death on maria clips.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const baseAnimations: THREE.AnimationClip[] = ($gltf as any).animations || []
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const locomotionAnimations: THREE.AnimationClip[] = ($locomotionGltf as any)?.animations || []
-      const baseClipByName = new Map(baseAnimations.map((clip) => [clip.name, clip]))
-      const locomotionClipByName = new Map(locomotionAnimations.map((clip) => [clip.name, clip]))
+      const baseAnimations = getGltfAnimations($gltf)
+      const locomotionAnimations = getGltfAnimations($locomotionGltf)
 
       console.log(`Found ${baseAnimations.length} base animation clips`)
       console.log(`Found ${locomotionAnimations.length} locomotion animation clips`)
@@ -281,29 +261,25 @@
       console.log(`Model has ${modelNodeNames.size} named nodes`)
       console.log('Model node names:', Array.from(modelNodeNames).slice(0, 10))
 
-      // Find animations by specific track names in order
-      validAnimations = ANIMATION_ORDER.map((targetName) => {
-        const baseClip = baseClipByName.get(targetName)
-        const locomotionClip = locomotionClipByName.get(targetName)
-        const foundClip = LOCOMOTION_ANIMATION_NAMES.has(targetName)
-          ? (locomotionClip ?? baseClip)
-          : (baseClip ?? locomotionClip)
+      const orderedSelections = selectOrderedCharacterAnimations(
+        baseAnimations,
+        locomotionAnimations
+      )
+      validAnimations = orderedSelections.map(({ clip }) => clip)
 
-        if (foundClip) {
-          const source = locomotionClip === foundClip ? 'locomotion.glb' : 'maria.glb'
-          console.log(`✅ Found animation: ${targetName} (${source})`)
-          
-          // Report attack animation duration if it's the one we use for attacking
-          if (targetName === AnimationName.SLASH1 && onAttackDuration) {
-            onAttackDuration(foundClip.duration)
-          }
-          
-          return foundClip
+      for (const selection of orderedSelections) {
+        if (selection.fromFallback) {
+          console.log(`❌ Missing animation: ${selection.name} (using fallback)`)
         } else {
-          console.log(`❌ Missing animation: ${targetName}`)
-          return baseAnimations[0] ?? locomotionAnimations[0] // Keep index alignment even on partial data
+          const source =
+            selection.source === 'locomotion' ? 'locomotion.glb' : 'maria.glb'
+          console.log(`✅ Found animation: ${selection.name} (${source})`)
         }
-      })
+
+        if (selection.name === AnimationName.SLASH1 && onAttackDuration) {
+          onAttackDuration(selection.clip.duration)
+        }
+      }
 
       console.log(`Found ${validAnimations.length} valid animations`)
 
