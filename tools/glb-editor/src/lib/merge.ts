@@ -975,13 +975,13 @@ function buildNameIndexFromScene(scene: THREE.Object3D): NameIndex {
   return { idx, originals }
 }
 
-function normalizeSide(name: string): string {
+export function normalizeSide(name: string): string {
   let n = name.replace(/\.l\b/gi, '_l').replace(/\.r\b/gi, '_r')
   n = n.replace(/[\s-]+l\b/gi, '_l').replace(/[\s-]+r\b/gi, '_r')
   return n
 }
 
-function stripNumericSuffix(name: string): string {
+export function stripNumericSuffix(name: string): string {
   let n = name
   for (let i = 0; i < 3; i += 1) {
     n = n.replace(/([_.\s-]?\(?\d{1,4}\)?)$/, '')
@@ -989,12 +989,14 @@ function stripNumericSuffix(name: string): string {
   return n
 }
 
-function canonicalKey(name: string): string {
+export function canonicalKey(name: string): string {
   if (!name) return ''
   let n = normalizeSide(name)
   n = stripNumericSuffix(n)
   n = n.toLowerCase()
   n = n.replace(/[^a-z0-9_]/g, '')
+  // Strip Mixamo prefix so "mixamorigHips" and "Hips" both canonicalize to "hips"
+  n = n.replace(/^mixamorig[0-9_]*/, '')
   n = n.replace(/_+/g, '_').replace(/^_+|_+$/g, '')
   return n
 }

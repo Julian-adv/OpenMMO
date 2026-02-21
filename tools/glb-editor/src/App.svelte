@@ -14,6 +14,7 @@
   import { ClipPreviewer } from './lib/clip-previewer'
   import PreviewPanel from './lib/components/PreviewPanel.svelte'
   import { GlbViewer, type CandidateSummary } from './lib/viewer'
+  import { MIXAMO_BONE_NAMES, type MixamoDetectionResult } from './lib/mixamo-bones'
 
   let viewerHost = $state<HTMLDivElement | null>(null)
   let appHost = $state<HTMLDivElement | null>(null)
@@ -59,6 +60,10 @@
   let mergePanelHeight = $state(360)
   let isResizingMergePanelHeight = $state(false)
 
+  let boneDetection = $state<MixamoDetectionResult | null>(null)
+  let manualMapping = $state<Record<string, string>>({})
+  let showBonePanel = $state(false)
+
   let resizeStartY = 0
   let resizeStartMergeHeight = 0
 
@@ -78,6 +83,16 @@
       trimmedMergeName !== '' &&
       !mergeNameConflict,
   )
+
+  const allBoneNames = $derived(
+    boneDetection
+      ? [
+          ...Object.keys(boneDetection.nameMap),
+          ...boneDetection.unmatchedBones,
+        ]
+      : [],
+  )
+  const assignedMixamoNames = $derived(new Set(Object.values(manualMapping)))
 
   function appendLog(message: string): void {
     logText += `${message}\n`
@@ -193,6 +208,9 @@
     bClipInfo = '애니메이션 없음'
     hasMergedUnsaved = false
     animsBeforeMerge = null
+    showBonePanel = false
+    boneDetection = null
+    manualMapping = {}
   }
 
   async function handleBFile(file: File): Promise<void> {
@@ -292,6 +310,45 @@
     }
   }
 
+  function onStandardizeBones(): void {
+    if (!viewer) return
+    const result = viewer.detectBones()
+    if (!result) return
+
+    boneDetection = result
+    manualMapping = { ...result.nameMap }
+    showBonePanel = true
+  }
+
+  function onManualMappingChange(boneName: string, mixamoName: string): void {
+    if (mixamoName === '') {
+      const next = { ...manualMapping }
+      delete next[boneName]
+      manualMapping = next
+    } else {
+      manualMapping = { ...manualMapping, [boneName]: mixamoName }
+    }
+  }
+
+  function onApplyBoneRename(): void {
+    if (!viewer || !boneDetection) return
+
+    const changed = viewer.applyBoneRename(manualMapping)
+    if (changed) {
+      hasMergedUnsaved = true
+    }
+
+    showBonePanel = false
+    boneDetection = null
+    manualMapping = {}
+  }
+
+  function onCancelBonePanel(): void {
+    showBonePanel = false
+    boneDetection = null
+    manualMapping = {}
+  }
+
   function onUndoMerge(): void {
     const gltfA = viewer?.getSourceGLTF() ?? null
     if (!gltfA || !animsBeforeMerge) return
@@ -347,6 +404,7 @@
       </label>
       <button class="btn primary" onclick={onExportSelected} disabled={!hasCandidate}>선택 내보내기</button>
       <button class="btn" onclick={onExportAll} disabled={!hasCandidates}>전체 내보내기</button>
+      <button class="btn" onclick={onStandardizeBones} disabled={!hasCandidates}>본 이름 표준화</button>
       <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>저장 (다운로드)</button>
       <button class="btn ghost" onclick={onReset}>초기화</button>
       <span class="small">{isLoadingMain ? '로딩 중...' : metaText}</span>
@@ -503,6 +561,53 @@
   <section class="log">
     <pre bind:this={logEl}>{logText}</pre>
   </section>
+
+  {#if showBonePanel && boneDetection}
+    <div class="bone-overlay">
+      <div class="bone-panel">
+        <div class="bone-panel-header">
+          <h2>본 이름 매핑</h2>
+          <span class="small">
+            자동 매칭: {Object.keys(boneDetection.nameMap).length}개 /
+            매칭 안 됨: {boneDetection.unmatchedBones.length}개
+          </span>
+          <div class="spacer"></div>
+          <button class="btn primary" onclick={onApplyBoneRename}>적용</button>
+          <button class="btn ghost" onclick={onCancelBonePanel}>취소</button>
+        </div>
+
+        <div class="bone-lists">
+          <div class="bone-rows">
+            {#each allBoneNames as bone (bone)}
+              {@const currentValue = manualMapping[bone] ?? ''}
+              {@const isAutoMatched = bone in boneDetection.nameMap}
+              <div class="bone-row" class:unmatched={!isAutoMatched}>
+                <span class="bone-name">{bone}</span>
+                <span class="bone-arrow">→</span>
+                <select
+                  class="bone-select"
+                  value={currentValue}
+                  onchange={(e) => onManualMappingChange(bone, (e.currentTarget as HTMLSelectElement).value)}
+                >
+                  <option value="">(매핑 안 함)</option>
+                  {#if currentValue}
+                    <option value={currentValue}>{currentValue}</option>
+                  {/if}
+                  {#each MIXAMO_BONE_NAMES as mx (mx)}
+                    {#if !assignedMixamoNames.has(mx) || mx === currentValue}
+                      {#if mx !== currentValue}
+                        <option value={mx}>{mx}</option>
+                      {/if}
+                    {/if}
+                  {/each}
+                </select>
+              </div>
+            {/each}
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -784,6 +889,84 @@
     font-size: 12px;
     white-space: pre-wrap;
     color: #dbeafe;
+  }
+
+  .bone-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+
+  .bone-panel {
+    background: #151b2a;
+    border: 1px solid #2c3650;
+    border-radius: 12px;
+    width: min(700px, 90vw);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .bone-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #2c3650;
+    flex-wrap: wrap;
+  }
+
+  .bone-lists {
+    overflow: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .bone-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .bone-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+
+  .bone-row.unmatched {
+    background: #1a2236;
+  }
+
+  .bone-name {
+    flex: 1;
+    overflow-wrap: anywhere;
+    color: #e5e7eb;
+  }
+
+  .bone-arrow {
+    color: #4b5563;
+    flex-shrink: 0;
+  }
+
+  .bone-select {
+    flex: 1;
+    background: #1f2635;
+    border: 1px solid #2c3650;
+    border-radius: 4px;
+    color: #e5e7eb;
+    padding: 3px 6px;
+    font-size: 12px;
   }
 
 </style>

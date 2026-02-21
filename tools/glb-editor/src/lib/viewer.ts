@@ -4,6 +4,11 @@ import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { downloadArrayBuffer, loadGLTFFromFile } from './gltf-io'
+import {
+  detectMixamoSkeleton,
+  renameBonesToMixamo,
+  type MixamoDetectionResult,
+} from './mixamo-bones'
 
 export interface CandidateSummary {
   index: number
@@ -189,6 +194,67 @@ export class GlbViewer {
     if (sourceIndex === undefined) return false
 
     this.srcGLTF.animations.splice(sourceIndex, 1)
+    this.refreshPreview()
+    return true
+  }
+
+  detectBones(): MixamoDetectionResult | null {
+    if (!this.srcGLTF) {
+      this.callbacks.log('본 감지 실패: GLB가 로드되지 않았습니다')
+      return null
+    }
+
+    const scene = this.srcGLTF.scene
+    const bones: THREE.Bone[] = []
+    scene.traverse((node) => {
+      if ((node as THREE.Bone).isBone) {
+        bones.push(node as THREE.Bone)
+      }
+    })
+
+    if (bones.length === 0) {
+      this.callbacks.log('본 감지 실패: 스켈레톤이 없습니다')
+      return null
+    }
+
+    const detection = detectMixamoSkeleton(bones)
+    this.callbacks.log(
+      `Mixamo 감지: core=${(detection.coreMatchRatio * 100).toFixed(0)}% ` +
+        `전체=${(detection.matchRatio * 100).toFixed(0)}% ` +
+        `(${Object.keys(detection.nameMap).length}/${bones.length} 본 매칭)`
+    )
+
+    if (!detection.isMixamo) {
+      this.callbacks.log(
+        '본 감지 실패: Mixamo 스켈레톤 구조가 아닙니다 (core 매칭률 70% 미만)'
+      )
+      return null
+    }
+
+    return detection
+  }
+
+  applyBoneRename(nameMap: Record<string, string>): boolean {
+    if (!this.srcGLTF) return false
+
+    const needsRename = Object.entries(nameMap).filter(
+      ([from, to]) => from !== to
+    )
+
+    if (needsRename.length === 0) {
+      this.callbacks.log('본 이름이 이미 표준 Mixamo 이름입니다')
+      return false
+    }
+
+    const animations = this.srcGLTF.animations ?? []
+    const renamed = renameBonesToMixamo(this.srcGLTF.scene, animations, nameMap)
+
+    this.callbacks.log(`본 이름 표준화 완료: ${renamed}개 본 이름 변경`)
+
+    for (const [from, to] of needsRename) {
+      this.callbacks.log(`  ${from} → ${to}`)
+    }
+
     this.refreshPreview()
     return true
   }
