@@ -37,6 +37,10 @@
 
 - Use version 4.2.12 LTS
 
+## Import tips
+
+- .glb를 import 할 때 bone shape scale을 0.01로 하면 거대한 구체가 나타나는 것을 방지할 수 있다.
+
 ## Export tips
 
 - Backface Culling: Material Properties → Settings → Backface Culling 켜기(뒷면 제거).
