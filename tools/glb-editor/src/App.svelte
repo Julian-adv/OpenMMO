@@ -16,6 +16,20 @@
   import { GlbViewer, type CandidateSummary } from './lib/viewer'
   import { MIXAMO_BONE_NAMES, type MixamoDetectionResult } from './lib/mixamo-bones'
 
+  const DEFAULT_ANIMATION_PACKS = ['locomotion', 'combat_melee', 'combat_ranged', 'emote']
+  const ANIMATION_PACK_PATH_HINT = 'client/public/models/animations'
+  const PACK_LIST_API = '/__animation_packs'
+  const PACK_FILE_API = '/__animation_pack'
+
+  interface AnimationPackEntry {
+    packName: string
+    fileName: string
+  }
+
+  interface AnimationPackListResponse {
+    packs: AnimationPackEntry[]
+  }
+
   let viewerHost = $state<HTMLDivElement | null>(null)
   let appHost = $state<HTMLDivElement | null>(null)
   let viewer = $state<GlbViewer | null>(null)
@@ -63,6 +77,13 @@
   let boneDetection = $state<MixamoDetectionResult | null>(null)
   let manualMapping = $state<Record<string, string>>({})
   let showBonePanel = $state(false)
+  let showExtractPanel = $state(false)
+  let animationPacks = $state<string[]>([...DEFAULT_ANIMATION_PACKS])
+  let packFilesByName = $state<Record<string, string>>({})
+  let selectedPackName = $state(DEFAULT_ANIMATION_PACKS[0] ?? '')
+  let extractClipName = $state('')
+  let isLoadingPackCatalog = $state(false)
+  let isExtracting = $state(false)
 
   let resizeStartY = 0
   let resizeStartMergeHeight = 0
@@ -71,8 +92,13 @@
 
   const hasCandidate = $derived(selectedCandidateIndex >= 0)
   const hasCandidates = $derived(candidates.length > 0)
+  const hasMainClip = $derived(clipNames.length > 0)
   const hasBClip = $derived(bClipNames.length > 0)
   const trimmedMergeName = $derived(mergeAnimName.trim())
+  const trimmedSelectedPackName = $derived(selectedPackName.trim())
+  const trimmedExtractClipName = $derived(extractClipName.trim())
+  const selectedPackFileName = $derived(packFilesByName[trimmedSelectedPackName] ?? '')
+  const selectedPackExists = $derived(selectedPackFileName !== '')
   const mergeNameConflict = $derived(
     trimmedMergeName !== '' && clipNames.includes(trimmedMergeName),
   )
@@ -82,6 +108,9 @@
       hasBClip &&
       trimmedMergeName !== '' &&
       !mergeNameConflict,
+  )
+  const canExtract = $derived(
+    hasMainClip && trimmedSelectedPackName !== '' && trimmedExtractClipName !== '',
   )
 
   const allBoneNames = $derived(
@@ -93,6 +122,101 @@
       : [],
   )
   const assignedMixamoNames = $derived(new Set(Object.values(manualMapping)))
+
+  function uniqueNames(items: string[]): string[] {
+    const out: string[] = []
+    for (const item of items) {
+      const normalized = item.trim()
+      if (!normalized || out.includes(normalized)) continue
+      out.push(normalized)
+    }
+    return out
+  }
+
+  async function loadAnimationPackCatalog(): Promise<void> {
+    isLoadingPackCatalog = true
+    try {
+      const response = await fetch(PACK_LIST_API, { cache: 'no-store' })
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = (await response.json()) as AnimationPackListResponse
+      const nextMap: Record<string, string> = {}
+      for (const pack of data.packs ?? []) {
+        if (!pack?.packName || !pack?.fileName) continue
+        nextMap[pack.packName.trim()] = pack.fileName.trim()
+      }
+
+      packFilesByName = nextMap
+      animationPacks = uniqueNames([...Object.keys(nextMap), ...DEFAULT_ANIMATION_PACKS])
+      if (!animationPacks.includes(selectedPackName)) {
+        selectedPackName = animationPacks[0] ?? DEFAULT_ANIMATION_PACKS[0] ?? ''
+      }
+      appendLog(`애니메이션 팩 스캔 완료: ${Object.keys(nextMap).length}개 파일`)
+    } catch (error) {
+      packFilesByName = {}
+      animationPacks = [...DEFAULT_ANIMATION_PACKS]
+      if (!animationPacks.includes(selectedPackName)) {
+        selectedPackName = animationPacks[0] ?? ''
+      }
+      appendLog(`애니메이션 팩 스캔 실패: ${String(error)}`)
+    } finally {
+      isLoadingPackCatalog = false
+    }
+  }
+
+  async function loadBasePackFile(packName: string): Promise<File | null> {
+    const fileName = packFilesByName[packName]
+    if (!fileName) return null
+
+    const response = await fetch(`${PACK_FILE_API}?file=${encodeURIComponent(fileName)}`, {
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      throw new Error(`기존 팩 파일 로드 실패: ${fileName} (HTTP ${response.status})`)
+    }
+
+    const blob = await response.blob()
+    return new File([blob], fileName, { type: blob.type || 'model/gltf-binary' })
+  }
+
+  async function savePackFileToAnimationsDir(
+    fileName: string,
+    arrayBuffer: ArrayBuffer,
+  ): Promise<void> {
+    const response = await fetch(`${PACK_FILE_API}?file=${encodeURIComponent(fileName)}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+      },
+      body: arrayBuffer,
+    })
+
+    if (!response.ok) {
+      throw new Error(`팩 파일 저장 실패: ${fileName} (HTTP ${response.status})`)
+    }
+  }
+
+  function openExtractPanel(): void {
+    if (!hasMainClip) {
+      appendLog('추출할 애니메이션이 없습니다.')
+      return
+    }
+
+    showExtractPanel = true
+    selectedPackName = animationPacks[0] ?? DEFAULT_ANIMATION_PACKS[0] ?? ''
+    extractClipName = clipNames[selectedClipIndex] ?? 'Animation'
+    void loadAnimationPackCatalog()
+  }
+
+  function closeExtractPanel(): void {
+    showExtractPanel = false
+  }
+
+  function onRefreshPackCatalog(): void {
+    void loadAnimationPackCatalog()
+  }
 
   function appendLog(message: string): void {
     logText += `${message}\n`
@@ -129,6 +253,7 @@
       bPreviewer.setLoop(loop)
     }
 
+    void loadAnimationPackCatalog()
   })
 
   onDestroy(() => {
@@ -209,8 +334,10 @@
     hasMergedUnsaved = false
     animsBeforeMerge = null
     showBonePanel = false
+    showExtractPanel = false
     boneDetection = null
     manualMapping = {}
+    extractClipName = ''
   }
 
   async function handleBFile(file: File): Promise<void> {
@@ -360,6 +487,31 @@
     appendLog('병합 되돌리기 완료')
   }
 
+  async function onExtractAnimation(): Promise<void> {
+    if (!viewer || !canExtract) return
+
+    isExtracting = true
+    try {
+      const basePackFile = await loadBasePackFile(trimmedSelectedPackName)
+      const result = await viewer.extractSelectedClipToPack({
+        packName: trimmedSelectedPackName,
+        clipName: trimmedExtractClipName,
+        basePackFile,
+        outputMode: 'return-buffer',
+      })
+      await savePackFileToAnimationsDir(result.fileName, result.arrayBuffer)
+      appendLog(
+        `애니메이션 추출 완료: ${result.fileName} (${result.mode === 'append-pack' ? '기존 팩 갱신' : '신규 팩'})`
+      )
+      await loadAnimationPackCatalog()
+      closeExtractPanel()
+    } catch (error) {
+      appendLog(`애니메이션 추출 실패: ${String(error)}`)
+    } finally {
+      isExtracting = false
+    }
+  }
+
   function clampMergeHeight(next: number): number {
     return Math.max(MIN_MERGE_HEIGHT, next)
   }
@@ -404,6 +556,7 @@
       </label>
       <button class="btn primary" onclick={onExportSelected} disabled={!hasCandidate}>선택 내보내기</button>
       <button class="btn" onclick={onExportAll} disabled={!hasCandidates}>전체 내보내기</button>
+      <button class="btn" onclick={openExtractPanel} disabled={!hasMainClip}>애니메이션 추출</button>
       <button class="btn" onclick={onStandardizeBones} disabled={!hasCandidates}>본 이름 표준화</button>
       <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>저장 (다운로드)</button>
       <button class="btn ghost" onclick={onReset}>초기화</button>
@@ -561,6 +714,56 @@
   <section class="log">
     <pre bind:this={logEl}>{logText}</pre>
   </section>
+
+  {#if showExtractPanel}
+    <div class="dialog-overlay">
+      <div class="extract-panel">
+        <div class="extract-panel-header">
+          <h2>애니메이션 추출</h2>
+          <div class="spacer"></div>
+          <button class="btn ghost" onclick={closeExtractPanel}>닫기</button>
+        </div>
+
+        <div class="extract-panel-body">
+          <p class="small path-hint">권장 저장 위치: {ANIMATION_PACK_PATH_HINT}</p>
+          <label class="small full-width">
+            <span class="lbl-prefix">클립 이름</span>
+            <input class="clip-name-input" type="text" bind:value={extractClipName} placeholder="추출할 클립 이름" />
+          </label>
+
+          <div class="small">애니메이션 팩 선택</div>
+          <div class="pack-list">
+            {#each animationPacks as pack (pack)}
+              <label class="pack-item">
+                <input type="radio" name="animation-pack" value={pack} bind:group={selectedPackName} />
+                <span>{pack}</span>
+              </label>
+            {/each}
+          </div>
+
+          <div class="pack-meta-row">
+            <span class="small">
+              {#if selectedPackExists}
+                기존 팩 파일: {selectedPackFileName}
+              {:else}
+                선택한 팩 파일이 없어 신규 팩으로 저장됩니다.
+              {/if}
+            </span>
+            <button class="btn ghost" onclick={onRefreshPackCatalog} disabled={isLoadingPackCatalog || isExtracting}>
+              {isLoadingPackCatalog ? '스캔 중...' : '폴더 다시 스캔'}
+            </button>
+          </div>
+        </div>
+
+        <div class="extract-panel-footer">
+          <button class="btn ghost" onclick={closeExtractPanel} disabled={isExtracting}>취소</button>
+          <button class="btn primary" onclick={onExtractAnimation} disabled={!canExtract || isExtracting}>
+            {isExtracting ? '추출 중...' : '추출 실행'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
 
   {#if showBonePanel && boneDetection}
     <div class="bone-overlay">
@@ -889,6 +1092,97 @@
     font-size: 12px;
     white-space: pre-wrap;
     color: #dbeafe;
+  }
+
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+  }
+
+  .extract-panel {
+    background: #151b2a;
+    border: 1px solid #2c3650;
+    border-radius: 12px;
+    width: min(560px, 92vw);
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .extract-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #2c3650;
+  }
+
+  .extract-panel-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 16px;
+    overflow: auto;
+  }
+
+  .extract-panel-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid #2c3650;
+  }
+
+  .path-hint {
+    white-space: normal;
+  }
+
+  .full-width {
+    width: 100%;
+  }
+
+  .clip-name-input {
+    background: #1f2635;
+    border: 1px solid #2c3650;
+    border-radius: 6px;
+    color: #e5e7eb;
+    padding: 6px 8px;
+    font-size: 12px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .pack-list {
+    display: grid;
+    gap: 6px;
+    border: 1px solid #1f283d;
+    border-radius: 8px;
+    padding: 8px;
+    max-height: 180px;
+    overflow: auto;
+    background: #0f1320;
+  }
+
+  .pack-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #e5e7eb;
+    font-size: 13px;
+  }
+
+  .pack-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px;
   }
 
   .bone-overlay {
