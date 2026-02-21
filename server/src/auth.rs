@@ -520,6 +520,22 @@ impl AuthService {
         Ok(())
     }
 
+    pub fn update_character_xp_level_and_max_hp(
+        &self,
+        character_id: i64,
+        xp: u64,
+        level: u32,
+        max_hp: u32,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE characters SET xp = ?1, level = ?2, max_hp = ?3 WHERE id = ?4",
+            params![xp as i64, i64::from(level), i64::from(max_hp), character_id],
+        )
+        .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(())
+    }
+
     pub fn load_world_time(&self) -> Result<Option<GameDateTime>, AuthError> {
         let conn = self.open_connection()?;
         conn.query_row(
