@@ -201,6 +201,7 @@ pub enum ServerMessage {
         new_level: u32,
         leveled_up: bool,
         max_hp: u32,
+        current_hp: u32,
     },
     Kicked {
         player_id: String,

@@ -1,9 +1,7 @@
 use crate::auth::AuthService;
 use crate::game::{character_hp, combat, xp};
 use crate::monster_defs::MonsterDefs;
-use crate::types::{
-    CharacterAttributes, GameDateTime, Player, PlayerId, Position, ServerMessage,
-};
+use crate::types::{CharacterAttributes, GameDateTime, Player, PlayerId, Position, ServerMessage};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -33,6 +31,7 @@ struct IdState {
 pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
+    monster_last_attack_at: Arc<RwLock<HashMap<String, Instant>>>,
     broadcast_tx: GameStateSender,
     game_clock_start_real: Instant,
     game_clock_start_game_seconds: i64,
@@ -68,6 +67,7 @@ impl GameState {
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
             monsters: Arc::new(RwLock::new(HashMap::new())),
+            monster_last_attack_at: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
             game_clock_start_real: Instant::now(),
             game_clock_start_game_seconds: Self::datetime_to_total_game_seconds(&initial_datetime),
@@ -304,15 +304,20 @@ impl GameState {
             .map(|(id, _)| id.clone())
             .collect();
 
-        for monster_id in owned_ids {
-            monsters.remove(&monster_id);
+        for monster_id in &owned_ids {
+            monsters.remove(monster_id);
             info!(
                 "Removed monster {} (owner {} disconnected)",
                 monster_id, owner_id
             );
-            let _ = self
-                .broadcast_tx
-                .send(ServerMessage::MonsterRemoved { monster_id });
+            let _ = self.broadcast_tx.send(ServerMessage::MonsterRemoved {
+                monster_id: monster_id.clone(),
+            });
+        }
+
+        let mut last_attack_at = self.monster_last_attack_at.write().await;
+        for monster_id in &owned_ids {
+            last_attack_at.remove(monster_id);
         }
     }
 
@@ -476,6 +481,7 @@ impl GameState {
 
                             // Update level/max HP in player map if leveled up
                             let mut new_max_hp = None;
+                            let mut new_current_hp = None;
                             if leveled_up {
                                 let mut players_write = self.players.write().await;
                                 if let Some(p) = players_write.get_mut(player_id) {
@@ -504,6 +510,10 @@ impl GameState {
                                         p.max_health = updated_max_hp;
                                         new_max_hp = Some(updated_max_hp);
                                     }
+
+                                    // Level-up always fully restores current HP to max HP.
+                                    p.health = p.max_health;
+                                    new_current_hp = Some(p.health);
                                 }
                             }
 
@@ -541,6 +551,16 @@ impl GameState {
                                     .map(|p| p.max_health)
                                     .unwrap_or(0)
                             };
+                            let current_hp_for_msg = if let Some(current_hp) = new_current_hp {
+                                current_hp
+                            } else {
+                                self.players
+                                    .read()
+                                    .await
+                                    .get(player_id)
+                                    .map(|p| p.health)
+                                    .unwrap_or(0)
+                            };
                             self.send_direct_message(
                                 player_id,
                                 ServerMessage::XpGained {
@@ -550,6 +570,7 @@ impl GameState {
                                     new_level,
                                     leveled_up,
                                     max_hp: max_hp_for_msg,
+                                    current_hp: current_hp_for_msg,
                                 },
                             )
                             .await;
@@ -574,6 +595,11 @@ impl GameState {
                         if let Some(monster) = monsters.get(&id_to_remove) {
                             if monster.state == "dead" {
                                 monsters.remove(&id_to_remove);
+                                game_state
+                                    .monster_last_attack_at
+                                    .write()
+                                    .await
+                                    .remove(&id_to_remove);
                                 info!("Monster {} removed after 30s corpse time", id_to_remove);
                                 let _ =
                                     game_state.broadcast_tx.send(ServerMessage::MonsterRemoved {
@@ -612,6 +638,21 @@ impl GameState {
         let def = self.monster_defs.get(&monster_type);
         let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
         let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
+        let attack_cooldown_ms = def.map(|d| u64::from(d.attack_cooldown)).unwrap_or(1500);
+
+        // Server-side cooldown guard to prevent duplicate attack resolution
+        // if multiple identical MonsterAttack requests arrive close together.
+        {
+            let now = Instant::now();
+            let mut last_attack_at = self.monster_last_attack_at.write().await;
+            if let Some(last) = last_attack_at.get(monster_id) {
+                if now.duration_since(*last).as_millis() < u128::from(attack_cooldown_ms) {
+                    return;
+                }
+            }
+            last_attack_at.insert(monster_id.to_string(), now);
+        }
+
         let result = combat::roll_attack(hit_threshold, damage_roll);
 
         info!(

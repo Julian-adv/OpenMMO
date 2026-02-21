@@ -395,8 +395,13 @@ export function handleServerMessage(
       updatePlayer(data.player_id, {
         level: data.new_level,
         totalXp: Number(data.total_xp),
+        health: data.current_hp,
         maxHealth: data.max_hp,
       })
+      addChatMessage(`You gained ${data.xp_amount} XP.`)
+      if (data.leveled_up) {
+        addChatMessage(`Level up! You are now level ${data.new_level}.`)
+      }
       break
     }
   }
