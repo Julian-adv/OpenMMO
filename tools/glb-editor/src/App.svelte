@@ -420,9 +420,22 @@
   }
 
   async function onSave(): Promise<void> {
-    await viewer?.saveCurrentGLB()
-    hasMergedUnsaved = false
-    animsBeforeMerge = null
+    if (!viewer) return
+
+    const result = await viewer.saveCurrentGLB()
+    if (!result) return
+
+    try {
+      await savePackFileToAnimationsDir(result.fileName, result.arrayBuffer)
+      appendLog(
+        `GLB 저장 완료: ${ANIMATION_PACK_PATH_HINT}/${result.fileName} (파일시스템 기록)`
+      )
+      hasMergedUnsaved = false
+      animsBeforeMerge = null
+      await loadAnimationPackCatalog()
+    } catch (error) {
+      appendLog(`GLB 파일 저장 실패: ${String(error)}`)
+    }
   }
 
   function onDeleteClip(): void {
@@ -558,7 +571,7 @@
       <button class="btn" onclick={onExportAll} disabled={!hasCandidates}>전체 내보내기</button>
       <button class="btn" onclick={openExtractPanel} disabled={!hasMainClip}>애니메이션 추출</button>
       <button class="btn" onclick={onStandardizeBones} disabled={!hasCandidates}>본 이름 표준화</button>
-      <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>저장 (다운로드)</button>
+      <button class="btn save" onclick={onSave} disabled={!hasMergedUnsaved}>저장 (파일시스템)</button>
       <button class="btn ghost" onclick={onReset}>초기화</button>
       <span class="small">{isLoadingMain ? '로딩 중...' : metaText}</span>
     </div>
