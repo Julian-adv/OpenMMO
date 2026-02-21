@@ -1,7 +1,9 @@
 use crate::auth::AuthService;
-use crate::game::{combat, xp};
+use crate::game::{character_hp, combat, xp};
 use crate::monster_defs::MonsterDefs;
-use crate::types::{GameDateTime, Player, PlayerId, Position, ServerMessage};
+use crate::types::{
+    CharacterAttributes, GameDateTime, Player, PlayerId, Position, ServerMessage,
+};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -38,8 +40,8 @@ pub struct GameState {
     id_state: Arc<RwLock<IdState>>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
     auth_service: Arc<AuthService>,
-    // player_id → (character_id, current_xp)
-    player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64)>>>,
+    // player_id → (character_id, current_xp, attributes)
+    player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
 }
 
 #[cfg(test)]
@@ -185,9 +187,10 @@ impl GameState {
         player_id: &PlayerId,
         character_id: i64,
         xp: u64,
+        attributes: CharacterAttributes,
     ) {
         let mut map = self.player_characters.write().await;
-        map.insert(player_id.clone(), (character_id, xp));
+        map.insert(player_id.clone(), (character_id, xp, attributes));
     }
 
     pub async fn unregister_player_character(&self, player_id: &PlayerId) {
@@ -454,13 +457,14 @@ impl GameState {
                         let xp_amount = xp::monster_xp(def.level, def.guard);
                         let player_char = {
                             let map = self.player_characters.read().await;
-                            map.get(player_id).copied()
+                            map.get(player_id).cloned()
                         };
-                        if let Some((character_id, old_xp)) = player_char {
+                        if let Some((character_id, old_xp, attributes)) = player_char {
                             let new_xp = old_xp + xp_amount as u64;
                             let old_level = xp::level_from_xp(old_xp);
                             let new_level = xp::level_from_xp(new_xp);
                             let leveled_up = new_level > old_level;
+                            let levels_gained = new_level.saturating_sub(old_level);
 
                             // Update in-memory XP
                             {
@@ -470,27 +474,73 @@ impl GameState {
                                 }
                             }
 
-                            // Update level in player map if leveled up
+                            // Update level/max HP in player map if leveled up
+                            let mut new_max_hp = None;
                             if leveled_up {
                                 let mut players_write = self.players.write().await;
                                 if let Some(p) = players_write.get_mut(player_id) {
                                     p.level = new_level;
+                                    let mut updated_max_hp = p.max_health;
+                                    for _ in 0..levels_gained {
+                                        match character_hp::level_up_max_hp(
+                                            updated_max_hp,
+                                            character_hp::DEFAULT_CHARACTER_CLASS,
+                                            attributes.con,
+                                        ) {
+                                            Ok(next_max_hp) => {
+                                                updated_max_hp = next_max_hp;
+                                            }
+                                            Err(err) => {
+                                                warn!(
+                                                    "Failed to roll level-up HP for player {}: {}",
+                                                    player_id, err
+                                                );
+                                                break;
+                                            }
+                                        }
+                                    }
+
+                                    if updated_max_hp != p.max_health {
+                                        p.max_health = updated_max_hp;
+                                        new_max_hp = Some(updated_max_hp);
+                                    }
                                 }
                             }
 
                             // Persist to DB
                             let auth = self.auth_service.clone();
+                            let new_max_hp_for_db = new_max_hp;
                             tokio::task::spawn_blocking(move || {
-                                if let Err(e) = auth.update_character_xp_and_level(
-                                    character_id,
-                                    new_xp,
-                                    new_level,
-                                ) {
+                                let result = if let Some(max_hp) = new_max_hp_for_db {
+                                    auth.update_character_xp_level_and_max_hp(
+                                        character_id,
+                                        new_xp,
+                                        new_level,
+                                        max_hp,
+                                    )
+                                } else {
+                                    auth.update_character_xp_and_level(
+                                        character_id,
+                                        new_xp,
+                                        new_level,
+                                    )
+                                };
+                                if let Err(e) = result {
                                     tracing::warn!("Failed to persist XP: {}", e);
                                 }
                             });
 
                             // Notify the player directly
+                            let max_hp_for_msg = if let Some(max_hp) = new_max_hp {
+                                max_hp
+                            } else {
+                                self.players
+                                    .read()
+                                    .await
+                                    .get(player_id)
+                                    .map(|p| p.max_health)
+                                    .unwrap_or(0)
+                            };
                             self.send_direct_message(
                                 player_id,
                                 ServerMessage::XpGained {
@@ -499,6 +549,7 @@ impl GameState {
                                     total_xp: new_xp,
                                     new_level,
                                     leveled_up,
+                                    max_hp: max_hp_for_msg,
                                 },
                             )
                             .await;

@@ -15,7 +15,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_tungstenite::{accept_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
-const FALLBACK_DEFAULT_MAX_HP: u32 = 16;
+const FALLBACK_DEFAULT_MAX_HP: u32 = 13;
 
 pub async fn handle_connection(
     stream: TcpStream,
@@ -254,7 +254,7 @@ async fn handle_client_message(
                 }]);
             };
 
-            let max_hp = default_character_max_hp();
+            let max_hp = default_character_max_hp(&rolled_attributes);
             match auth_service.create_character(
                 &authed_account_name,
                 &character_name,
@@ -334,7 +334,7 @@ async fn handle_client_message(
             }
 
             let attributes = roll_character_attributes();
-            let max_hp = default_character_max_hp();
+            let max_hp = default_character_max_hp(&attributes);
             *pending_character_attributes = Some(attributes.clone());
             return Ok(vec![ServerMessage::CharacterStatsRolled {
                 attributes,
@@ -386,7 +386,12 @@ async fn handle_client_message(
 
             *direct_rx = Some(game_state.register_direct_channel(&id).await);
             game_state
-                .register_player_character(&id, character_id, character_xp)
+                .register_player_character(
+                    &id,
+                    character_id,
+                    character_xp,
+                    selected_character.attributes.clone(),
+                )
                 .await;
 
             let mut responses = vec![ServerMessage::JoinSuccess {
@@ -504,13 +509,20 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
     }
 }
 
-fn default_character_max_hp() -> u32 {
-    match level_one_max_hp(DEFAULT_CHARACTER_RACE, DEFAULT_CHARACTER_CLASS) {
+fn default_character_max_hp(attributes: &CharacterAttributes) -> u32 {
+    match level_one_max_hp(
+        DEFAULT_CHARACTER_RACE,
+        DEFAULT_CHARACTER_CLASS,
+        attributes.con,
+    ) {
         Ok(value) => value,
         Err(err) => {
             warn!(
-                "Failed to resolve level 1 max HP for race='{}', class='{}': {}",
-                DEFAULT_CHARACTER_RACE, DEFAULT_CHARACTER_CLASS, err
+                "Failed to resolve level 1 max HP for race='{}', class='{}', con='{}': {}",
+                DEFAULT_CHARACTER_RACE,
+                DEFAULT_CHARACTER_CLASS,
+                attributes.con,
+                err
             );
             FALLBACK_DEFAULT_MAX_HP
         }

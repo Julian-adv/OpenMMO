@@ -395,6 +395,7 @@ export function handleServerMessage(
       updatePlayer(data.player_id, {
         level: data.new_level,
         totalXp: Number(data.total_xp),
+        maxHealth: data.max_hp,
       })
       break
     }

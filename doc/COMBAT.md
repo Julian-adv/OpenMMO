@@ -52,18 +52,22 @@ GUARD = clamp(10 + dex_mod, 1, 20)
 
 ## HP 계산
 
-레벨 1 기준: `max_hp = 클래스 기본 HP + 종족 보너스`
+레벨 1 기준: `max_hp = HD_max + con_mod + 종족 보너스`
 
-### 클래스 기본 HP
+```
+con_mod = (CON - 10) / 2
+```
 
-| 클래스 | HP |
+- `con_mod`는 정수 나눗셈을 사용해 0 쪽으로 버림된다.
+
+### 클래스 Hit Die (HD)
+
+| 클래스 | HD |
 |--------|----|
-| Knight, Barbarian, Caveman, Valkyrie | 14 |
-| Ranger, Samurai | 13 |
-| Monk, Priest | 12 |
-| Archaeologist, Healer | 11 |
-| Rogue, Wizard | 10 |
-| Tourist | 8 |
+| Knight, Barbarian, Caveman, Valkyrie | d10 |
+| Ranger, Samurai, Monk, Priest | d8 |
+| Archaeologist, Healer, Rogue, Wizard | d6 |
+| Tourist | d4 |
 
 ### 종족 보너스
 
@@ -73,7 +77,23 @@ GUARD = clamp(10 + dex_mod, 1, 20)
 | Human | +2 |
 | Elf, Gnome, Orc | +1 |
 
-**예시:** Human Knight = 14 + 2 = **16 HP**
+**레벨 1 예시:** Human Knight, CON 14  
+`HD_max(10) + con_mod(+2) + 종족 보너스(+2) = 14 HP`
+
+### 레벨업 시 Max HP 증가 (하이브리드 룰)
+
+- 레벨 2부터 적용
+- HD를 굴린 뒤 최소 50% 보장, 그 다음 `con_mod`를 더한다
+
+```
+roll = dX
+min_roll = X / 2
+hp_gain = max(roll, min_roll) + con_mod
+max_hp += hp_gain
+```
+
+**예시 (전사 계열 d10):**  
+`roll = 3` → `min_roll = 5` → `hp_gain = 5 + con_mod`
 
 - 구현: [server/src/game/character_hp.rs](../server/src/game/character_hp.rs)
 
