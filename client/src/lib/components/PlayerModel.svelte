@@ -15,6 +15,10 @@
     getGltfAnimations,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
+  import {
+    CHARACTER_ANIMATION_PACK_PATHS,
+    CHARACTER_MODEL_PATH,
+  } from '../utils/modelPaths'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
@@ -62,8 +66,13 @@
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
 
   // Load animated model
-  const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
-  const locomotionGltf = useLoader(GLTFLoader).load('/models/animations/locomotion.glb')
+  const gltf = useLoader(GLTFLoader).load(CHARACTER_MODEL_PATH)
+  const locomotionGltf = useLoader(GLTFLoader).load(
+    CHARACTER_ANIMATION_PACK_PATHS.locomotion
+  )
+  const combatMeleeGltf = useLoader(GLTFLoader).load(
+    CHARACTER_ANIMATION_PACK_PATHS.combatMelee
+  )
 
   // Load sword model
   const swordGltf = useLoader(GLTFLoader).load('/models/sword.glb')
@@ -249,9 +258,13 @@
 
       const baseAnimations = getGltfAnimations($gltf)
       const locomotionAnimations = getGltfAnimations($locomotionGltf)
+      const combatMeleeAnimations = getGltfAnimations($combatMeleeGltf)
 
       console.log(`Found ${baseAnimations.length} base animation clips`)
       console.log(`Found ${locomotionAnimations.length} locomotion animation clips`)
+      console.log(
+        `Found ${combatMeleeAnimations.length} combat melee animation clips`
+      )
 
       // Collect all node names in the cloned model
       const modelNodeNames = new SvelteSet()
@@ -263,7 +276,8 @@
 
       const orderedSelections = selectOrderedCharacterAnimations(
         baseAnimations,
-        locomotionAnimations
+        locomotionAnimations,
+        combatMeleeAnimations
       )
       validAnimations = orderedSelections.map(({ clip }) => clip)
 
@@ -272,7 +286,11 @@
           console.log(`❌ Missing animation: ${selection.name} (using fallback)`)
         } else {
           const source =
-            selection.source === 'locomotion' ? 'locomotion.glb' : 'maria.glb'
+            selection.source === 'locomotion'
+              ? 'locomotion.glb'
+              : selection.source === 'combat_melee'
+                ? 'combat_melee.glb'
+                : 'maria.glb'
           console.log(`✅ Found animation: ${selection.name} (${source})`)
         }
 
@@ -294,7 +312,11 @@
 
         // Fallback: try to play any animation without filtering
         const fallbackAnimations =
-          baseAnimations.length > 0 ? baseAnimations : locomotionAnimations
+          baseAnimations.length > 0
+            ? baseAnimations
+            : combatMeleeAnimations.length > 0
+              ? combatMeleeAnimations
+              : locomotionAnimations
         if (fallbackAnimations.length > 0) {
           console.log(
             'Trying fallback: playing first animation without filtering'
@@ -323,11 +345,16 @@
     // Wait for GLTF to load and setup real animation
     const waitStartTime = Date.now()
     const checkGltf = () => {
-      const locomotionTimedOut =
+      const animationPackTimedOut =
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
-      if ($gltf && ($locomotionGltf || locomotionTimedOut)) {
-        if (!$locomotionGltf && locomotionTimedOut) {
+      if ($gltf && (($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut)) {
+        if (!$locomotionGltf && animationPackTimedOut) {
           console.warn('Locomotion GLB load timeout, using maria animations only')
+        }
+        if (!$combatMeleeGltf && animationPackTimedOut) {
+          console.warn(
+            'Combat melee GLB load timeout, using maria/locomotion animations only'
+          )
         }
         setupRealAnimation()
       } else {

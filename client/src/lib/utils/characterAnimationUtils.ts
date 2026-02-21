@@ -4,7 +4,7 @@ import { ANIMATION_ORDER, AnimationName } from '../types/animations'
 
 export const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
 
-type AnimationSource = 'base' | 'locomotion'
+type AnimationSource = 'base' | 'locomotion' | 'combat_melee'
 
 export interface OrderedAnimationSelection {
   name: AnimationName
@@ -21,6 +21,15 @@ const LOCOMOTION_ANIMATION_NAMES = new Set<AnimationName>([
   AnimationName.WALK,
   AnimationName.JOG,
   AnimationName.RUN,
+])
+
+const COMBAT_MELEE_ANIMATION_NAMES = new Set<AnimationName>([
+  AnimationName.SLASH1,
+  AnimationName.SLASH2,
+  AnimationName.SLASH3,
+  AnimationName.SLASH4,
+  AnimationName.SLASH5,
+  AnimationName.DYING,
 ])
 
 export function getGltfAnimations(gltf: unknown): THREE.AnimationClip[] {
@@ -50,14 +59,21 @@ export function createCharacterModelRoot(sourceScene: THREE.Object3D): {
 
 export function selectOrderedCharacterAnimations(
   baseAnimations: THREE.AnimationClip[],
-  locomotionAnimations: THREE.AnimationClip[]
+  locomotionAnimations: THREE.AnimationClip[],
+  combatMeleeAnimations: THREE.AnimationClip[]
 ): OrderedAnimationSelection[] {
   const defaultBaseClip = baseAnimations[0]
   const defaultLocomotionClip = locomotionAnimations[0]
-  const defaultClip = defaultBaseClip ?? defaultLocomotionClip
+  const defaultCombatMeleeClip = combatMeleeAnimations[0]
+  const defaultClip =
+    defaultBaseClip ?? defaultLocomotionClip ?? defaultCombatMeleeClip
   if (!defaultClip) return []
 
-  const defaultSource: AnimationSource = defaultBaseClip ? 'base' : 'locomotion'
+  const defaultSource: AnimationSource = defaultBaseClip
+    ? 'base'
+    : defaultLocomotionClip
+      ? 'locomotion'
+      : 'combat_melee'
 
   const baseClipByName = new Map(
     baseAnimations.map((clip) => [clip.name, clip])
@@ -65,19 +81,30 @@ export function selectOrderedCharacterAnimations(
   const locomotionClipByName = new Map(
     locomotionAnimations.map((clip) => [clip.name, clip])
   )
+  const combatMeleeClipByName = new Map(
+    combatMeleeAnimations.map((clip) => [clip.name, clip])
+  )
 
   return ANIMATION_ORDER.map((name) => {
     const baseClip = baseClipByName.get(name)
     const locomotionClip = locomotionClipByName.get(name)
+    const combatMeleeClip = combatMeleeClipByName.get(name)
     const preferredClip = LOCOMOTION_ANIMATION_NAMES.has(name)
-      ? (locomotionClip ?? baseClip)
-      : (baseClip ?? locomotionClip)
+      ? (locomotionClip ?? baseClip ?? combatMeleeClip)
+      : COMBAT_MELEE_ANIMATION_NAMES.has(name)
+        ? (combatMeleeClip ?? baseClip ?? locomotionClip)
+        : (baseClip ?? combatMeleeClip ?? locomotionClip)
 
     if (preferredClip) {
       return {
         name,
         clip: preferredClip,
-        source: preferredClip === locomotionClip ? 'locomotion' : 'base',
+        source:
+          preferredClip === locomotionClip
+            ? 'locomotion'
+            : preferredClip === combatMeleeClip
+              ? 'combat_melee'
+              : 'base',
         fromFallback: false,
       }
     }

@@ -10,6 +10,10 @@
     getGltfAnimations,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
+  import {
+    CHARACTER_ANIMATION_PACK_PATHS,
+    CHARACTER_MODEL_PATH,
+  } from '../utils/modelPaths'
 
   interface Props {
     positionX: number
@@ -19,8 +23,13 @@
   }
 
   let { positionX, positionY, positionZ, selected }: Props = $props()
-  const gltf = useLoader(GLTFLoader).load('/models/maria.glb')
-  const locomotionGltf = useLoader(GLTFLoader).load('/models/animations/locomotion.glb')
+  const gltf = useLoader(GLTFLoader).load(CHARACTER_MODEL_PATH)
+  const locomotionGltf = useLoader(GLTFLoader).load(
+    CHARACTER_ANIMATION_PACK_PATHS.locomotion
+  )
+  const combatMeleeGltf = useLoader(GLTFLoader).load(
+    CHARACTER_ANIMATION_PACK_PATHS.combatMelee
+  )
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
@@ -61,14 +70,16 @@
   function setupModel(
     sourceScene: THREE.Object3D,
     baseAnimations: THREE.AnimationClip[],
-    locomotionAnimations: THREE.AnimationClip[]
+    locomotionAnimations: THREE.AnimationClip[],
+    combatMeleeAnimations: THREE.AnimationClip[]
   ) {
     if (mixer || modelRoot) return
 
     const { modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
     validAnimations = selectOrderedCharacterAnimations(
       baseAnimations,
-      locomotionAnimations
+      locomotionAnimations,
+      combatMeleeAnimations
     ).map(({ clip }) => clip)
 
     if (validAnimations.length > 0) {
@@ -101,14 +112,15 @@
   onMount(() => {
     const waitStartTime = Date.now()
     const checkGltf = () => {
-      const locomotionTimedOut =
+      const animationPackTimedOut =
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
 
-      if ($gltf && ($locomotionGltf || locomotionTimedOut)) {
+      if ($gltf && (($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut)) {
         setupModel(
           $gltf.scene,
           getGltfAnimations($gltf),
-          getGltfAnimations($locomotionGltf)
+          getGltfAnimations($locomotionGltf),
+          getGltfAnimations($combatMeleeGltf)
         )
         return
       }
