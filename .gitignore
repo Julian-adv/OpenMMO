@@ -52,3 +52,7 @@ server/data/game_data.db
 # Claude Code (keep agents for sharing)
 .claude/*
 !.claude/agents/
+
+# Codex
+.codex/
+!.codex/config.toml
