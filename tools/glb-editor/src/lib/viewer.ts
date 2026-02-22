@@ -249,7 +249,9 @@ export class GlbViewer {
       this.callbacks.log(
         '본 감지 실패: Mixamo 스켈레톤 구조가 아닙니다 (core 매칭률 70% 미만)'
       )
-      return null
+      this.callbacks.log(
+        '자동 감지는 실패했지만 수동 매핑 다이얼로그를 열어 계속 진행합니다.'
+      )
     }
 
     return detection

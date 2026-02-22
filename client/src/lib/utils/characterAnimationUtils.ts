@@ -32,6 +32,21 @@ const COMBAT_MELEE_ANIMATION_NAMES = new Set<AnimationName>([
   AnimationName.DYING,
 ])
 
+const RETARGET_TRACK_NAME_PATTERN = /^\.bones\[(.+?)\]\.(position|quaternion)$/
+const HIP_BONE_CANDIDATES = [
+  'Hips',
+  'hips',
+  'Hip',
+  'hip',
+  'Pelvis',
+  'pelvis',
+  'mixamorigHips',
+] as const
+const retargetedClipCache = new Map<string, THREE.AnimationClip>()
+const CHARACTER_DISPLAY_TARGET_HEIGHT = 1.8
+const CHARACTER_HEIGHT_NORMALIZATION_MIN = 0.5
+const CHARACTER_HEIGHT_NORMALIZATION_MAX = 5
+
 export function getGltfAnimations(gltf: unknown): THREE.AnimationClip[] {
   if (!gltf || typeof gltf !== 'object' || !('animations' in gltf)) return []
 
@@ -55,6 +70,257 @@ export function createCharacterModelRoot(sourceScene: THREE.Object3D): {
   })
 
   return { clonedScene, modelRoot }
+}
+
+export function normalizeCharacterModelScale(
+  modelRoot: THREE.Object3D
+): number {
+  modelRoot.updateMatrixWorld(true)
+
+  const bounds = new THREE.Box3().setFromObject(modelRoot)
+  if (bounds.isEmpty()) return 1
+
+  const size = new THREE.Vector3()
+  bounds.getSize(size)
+  const height = size.y
+  if (!Number.isFinite(height) || height <= 0) return 1
+
+  if (
+    height >= CHARACTER_HEIGHT_NORMALIZATION_MIN &&
+    height <= CHARACTER_HEIGHT_NORMALIZATION_MAX
+  ) {
+    return 1
+  }
+
+  const scaleFactor = CHARACTER_DISPLAY_TARGET_HEIGHT / height
+  if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) return 1
+
+  modelRoot.scale.multiplyScalar(scaleFactor)
+  modelRoot.updateMatrixWorld(true)
+  return scaleFactor
+}
+
+function findPrimarySkinnedMesh(
+  root: THREE.Object3D
+): THREE.SkinnedMesh | null {
+  let bestMatch: THREE.SkinnedMesh | null = null
+
+  root.traverse((child) => {
+    if (!(child instanceof THREE.SkinnedMesh) || !child.skeleton) return
+    if (
+      !bestMatch ||
+      child.skeleton.bones.length > bestMatch.skeleton.bones.length
+    ) {
+      bestMatch = child
+    }
+  })
+
+  return bestMatch
+}
+
+function quaternionDistance(a: THREE.Quaternion, b: THREE.Quaternion): number {
+  const direct = Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z, a.w - b.w)
+  const negated = Math.hypot(a.x + b.x, a.y + b.y, a.z + b.z, a.w + b.w)
+  return Math.min(direct, negated)
+}
+
+function roundForProfile(value: number): number {
+  return Math.round(value * 1000) / 1000
+}
+
+function buildSkeletonProfileKey(skinnedMesh: THREE.SkinnedMesh): string {
+  const sortedBones = [...skinnedMesh.skeleton.bones].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  )
+  return sortedBones
+    .map((bone) =>
+      [
+        bone.name,
+        roundForProfile(bone.position.x),
+        roundForProfile(bone.position.y),
+        roundForProfile(bone.position.z),
+        roundForProfile(bone.quaternion.x),
+        roundForProfile(bone.quaternion.y),
+        roundForProfile(bone.quaternion.z),
+        roundForProfile(bone.quaternion.w),
+        roundForProfile(bone.scale.x),
+        roundForProfile(bone.scale.y),
+        roundForProfile(bone.scale.z),
+      ].join(':')
+    )
+    .join('|')
+}
+
+function hasEquivalentSkeletonRestPose(
+  targetSkinnedMesh: THREE.SkinnedMesh,
+  sourceSkinnedMesh: THREE.SkinnedMesh
+): boolean {
+  const targetBones = targetSkinnedMesh.skeleton.bones.filter(
+    (bone) => bone.name.length > 0
+  )
+  const sourceBoneByName = new Map(
+    sourceSkinnedMesh.skeleton.bones
+      .filter((bone) => bone.name.length > 0)
+      .map((bone) => [bone.name, bone])
+  )
+
+  const commonBones = targetBones.filter((bone) =>
+    sourceBoneByName.has(bone.name)
+  )
+  const coverage =
+    commonBones.length / Math.max(targetBones.length, sourceBoneByName.size)
+  if (coverage < 0.95) return false
+
+  for (const targetBone of commonBones) {
+    const sourceBone = sourceBoneByName.get(targetBone.name)
+    if (!sourceBone) return false
+
+    if (targetBone.position.distanceTo(sourceBone.position) > 0.001)
+      return false
+    if (targetBone.scale.distanceTo(sourceBone.scale) > 0.001) return false
+    if (
+      quaternionDistance(targetBone.quaternion, sourceBone.quaternion) > 0.001
+    ) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function normalizeRetargetedClipTrackNames(
+  retargetedClip: THREE.AnimationClip,
+  originalClipName: string
+): THREE.AnimationClip {
+  let renamedTrackFound = false
+  const convertedTracks: THREE.KeyframeTrack[] = []
+
+  for (const track of retargetedClip.tracks) {
+    const match = RETARGET_TRACK_NAME_PATTERN.exec(track.name)
+    if (!match) {
+      convertedTracks.push(track)
+      continue
+    }
+
+    const [, boneName, property] = match
+    if (property === 'position') {
+      // Character locomotion is handled by gameplay state. Position tracks from
+      // retargeting can push the rig off-screen on mismatched assets.
+      continue
+    }
+
+    const renamedTrack = track.clone()
+    renamedTrack.name = `${boneName}.${property}`
+    renamedTrackFound = true
+    convertedTracks.push(renamedTrack)
+  }
+
+  if (!renamedTrackFound) return retargetedClip
+
+  return new THREE.AnimationClip(
+    originalClipName,
+    retargetedClip.duration,
+    convertedTracks
+  )
+}
+
+function buildBoneNameMap(
+  targetSkinnedMesh: THREE.SkinnedMesh,
+  sourceSkinnedMesh: THREE.SkinnedMesh
+): Record<string, string> {
+  const sourceBoneNames = new Set(
+    sourceSkinnedMesh.skeleton.bones
+      .map((bone) => bone.name)
+      .filter((name) => name.length > 0)
+  )
+  const nameMap: Record<string, string> = {}
+
+  for (const targetBone of targetSkinnedMesh.skeleton.bones) {
+    if (!targetBone.name || !sourceBoneNames.has(targetBone.name)) continue
+    nameMap[targetBone.name] = targetBone.name
+  }
+
+  return nameMap
+}
+
+function resolveHipBoneName(sourceSkinnedMesh: THREE.SkinnedMesh): string {
+  const sourceBoneNames = new Set(
+    sourceSkinnedMesh.skeleton.bones.map((bone) => bone.name)
+  )
+  return (
+    HIP_BONE_CANDIDATES.find((boneName) => sourceBoneNames.has(boneName)) ??
+    sourceSkinnedMesh.skeleton.bones[0]?.name ??
+    'Hips'
+  )
+}
+
+export function retargetAnimationsForCharacterModel(
+  targetScene: THREE.Object3D,
+  retargetSourceScene: THREE.Object3D | null | undefined,
+  clips: THREE.AnimationClip[]
+): THREE.AnimationClip[] {
+  if (clips.length === 0 || !retargetSourceScene) return clips
+
+  const targetSkinnedMesh = findPrimarySkinnedMesh(targetScene)
+  const sourceSkinnedMesh = findPrimarySkinnedMesh(retargetSourceScene)
+  if (!targetSkinnedMesh || !sourceSkinnedMesh) return clips
+
+  targetSkinnedMesh.skeleton.pose()
+  sourceSkinnedMesh.skeleton.pose()
+  targetSkinnedMesh.updateMatrixWorld(true)
+  sourceSkinnedMesh.updateMatrixWorld(true)
+
+  if (hasEquivalentSkeletonRestPose(targetSkinnedMesh, sourceSkinnedMesh)) {
+    return clips
+  }
+
+  const boneNameMap = buildBoneNameMap(targetSkinnedMesh, sourceSkinnedMesh)
+  if (Object.keys(boneNameMap).length === 0) return clips
+
+  const targetProfileKey = buildSkeletonProfileKey(targetSkinnedMesh)
+  const sourceProfileKey = buildSkeletonProfileKey(sourceSkinnedMesh)
+  const hipBoneName = resolveHipBoneName(sourceSkinnedMesh)
+
+  const retargetedClips = clips.map((clip) => {
+    const cacheKey = `${targetProfileKey}::${sourceProfileKey}::${clip.uuid}`
+    const cachedClip = retargetedClipCache.get(cacheKey)
+    if (cachedClip) return cachedClip
+
+    try {
+      targetSkinnedMesh.skeleton.pose()
+      targetSkinnedMesh.updateMatrixWorld(true)
+
+      const retargetedClip = SkeletonUtils.retargetClip(
+        targetSkinnedMesh,
+        sourceSkinnedMesh,
+        clip,
+        {
+          names: boneNameMap,
+          hip: hipBoneName,
+          preserveBoneMatrix: true,
+          useTargetMatrix: false,
+          useFirstFramePosition: false,
+        }
+      )
+      const normalizedClip = normalizeRetargetedClipTrackNames(
+        retargetedClip,
+        clip.name
+      )
+      if (normalizedClip.tracks.length === 0) {
+        return clip
+      }
+      retargetedClipCache.set(cacheKey, normalizedClip)
+      return normalizedClip
+    } catch (error) {
+      console.warn(`Failed to retarget animation clip "${clip.name}"`, error)
+      return clip
+    }
+  })
+
+  targetSkinnedMesh.skeleton.pose()
+  targetSkinnedMesh.updateMatrixWorld(true)
+
+  return retargetedClips
 }
 
 export function selectOrderedCharacterAnimations(

@@ -13,9 +13,12 @@
     LOCOMOTION_WAIT_TIMEOUT_MS,
     createCharacterModelRoot,
     getGltfAnimations,
+    normalizeCharacterModelScale,
+    retargetAnimationsForCharacterModel,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
   import {
+    CHARACTER_ANIMATION_SOURCE_MODEL_PATH,
     CHARACTER_ANIMATION_PACK_PATHS,
     CHARACTER_MODEL_PATH,
   } from '../utils/modelPaths'
@@ -72,6 +75,9 @@
   )
   const combatMeleeGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.combatMelee
+  )
+  const retargetSourceGltf = useLoader(GLTFLoader).load(
+    CHARACTER_ANIMATION_SOURCE_MODEL_PATH
   )
 
   // Load sword model
@@ -279,7 +285,11 @@
         locomotionAnimations,
         combatMeleeAnimations
       )
-      validAnimations = orderedSelections.map(({ clip }) => clip)
+      validAnimations = retargetAnimationsForCharacterModel(
+        newModelRoot,
+        $retargetSourceGltf?.scene,
+        orderedSelections.map(({ clip }) => clip)
+      )
 
       for (const selection of orderedSelections) {
         if (selection.fromFallback) {
@@ -302,11 +312,21 @@
       console.log(`Found ${validAnimations.length} valid animations`)
 
       if (validAnimations.length > 0) {
-        // Setup mixer
-        mixer = new THREE.AnimationMixer(newModelRoot)
+        try {
+          // Setup mixer
+          mixer = new THREE.AnimationMixer(newModelRoot)
 
-        // Play appropriate animation based on isMoving state
-        playAnimationForState()
+          // Play appropriate animation based on isMoving state
+          playAnimationForState()
+        } catch (error) {
+          console.warn('Failed to start player animation clips', error)
+          if (mixer) {
+            mixer.stopAllAction()
+            mixer = null
+          }
+          currentAction = null
+          validAnimations = []
+        }
       } else {
         console.warn('No suitable animations found with strict filtering')
 
@@ -337,6 +357,7 @@
         }
       }
 
+      normalizeCharacterModelScale(newModelRoot)
       modelRoot = newModelRoot
     }
   }
@@ -347,13 +368,21 @@
     const checkGltf = () => {
       const animationPackTimedOut =
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
-      if ($gltf && (($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut)) {
+      const animationPacksReady =
+        ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
+      const retargetSourceReady = !!$retargetSourceGltf || animationPackTimedOut
+      if ($gltf && animationPacksReady && retargetSourceReady) {
         if (!$locomotionGltf && animationPackTimedOut) {
           console.warn('Locomotion GLB load timeout, using maria animations only')
         }
         if (!$combatMeleeGltf && animationPackTimedOut) {
           console.warn(
             'Combat melee GLB load timeout, using maria/locomotion animations only'
+          )
+        }
+        if (!$retargetSourceGltf && animationPackTimedOut) {
+          console.warn(
+            'Retarget source GLB load timeout, using non-retargeted animation clips'
           )
         }
         setupRealAnimation()
