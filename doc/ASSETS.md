@@ -28,6 +28,22 @@
 - dying https://sketchfab.com/3d-models/dying-98a1d5b2288d49d993039cb161913cd3
 - medieval_knight https://sketchfab.com/3d-models/medieval-knight-sculpture-game-ready-6cdd055b4afa41eb9360dbbfe75c7f10
 
+- Medea By M. Arrebola https://www.mixamo.com/#/?page=1&query=&type=Character
+- Walking https://www.mixamo.com/#/?page=1&query=walk&type=Motion%2CMotionPack
+- Catwalk Walk Forward https://www.mixamo.com/#/?page=2&query=walk&type=Motion%2CMotionPack
+- Standing Torch Walk Forward
+- Catwalk Walking
+
+- Run (허리구부리고) https://www.mixamo.com/#/?page=1&query=run&type=Motion%2CMotionPack
+- Slow Run https://www.mixamo.com/#/?page=1&query=run&type=Motion%2CMotionPack
+- Jogging https://www.mixamo.com/#/?page=1&query=jog&type=Motion%2CMotionPack
+
+- Standing Idle https://www.mixamo.com/#/?page=1&query=idle&type=Motion%2CMotionPack
+- Happy Idle
+- Dwarf Idle
+- Offensive Idle https://www.mixamo.com/#/?page=2&query=idle&type=Motion%2CMotionPack
+- Sword And Shield Idle
+
 ## Monster
 
 - SCP939 https://sketchfab.com/3d-models/scp939-79a749a5073b453d9d85875797bf45d7

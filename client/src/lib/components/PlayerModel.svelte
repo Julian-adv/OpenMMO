@@ -105,6 +105,7 @@
   const MIN_SAFE_SCALE_COMPONENT = 0.0001
   const MIN_SWORD_SCALE_COMPENSATION = 0.25
   const MAX_SWORD_SCALE_COMPENSATION = 4
+  const ENABLE_SWORD_SCALE_COMPENSATION = true
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
     const boneName = bone.name.toLowerCase()
@@ -288,16 +289,21 @@
           rightHandBone.add(swordClone)
 
           // Keep sword size consistent across rigs by compensating cumulative
-          // scale differences along the hand-bone chain against maria.
+          // scale differences against the maria reference rig.
           const targetHandChainScale = getObjectChainScale(rightHandBone)
           const targetModelHeight = getObjectHeight(cloned)
 
+          const swordScaleReferenceScene = $warriorGltf?.scene
           const sourceHandBone =
-            $retargetSourceGltf?.scene &&
-            findMainRightHandBone($retargetSourceGltf.scene)
-          if (sourceHandBone) {
+            swordScaleReferenceScene &&
+            findMainRightHandBone(swordScaleReferenceScene)
+          if (
+            ENABLE_SWORD_SCALE_COMPENSATION &&
+            sourceHandBone &&
+            swordScaleReferenceScene
+          ) {
             const sourceHandChainScale = getObjectChainScale(sourceHandBone)
-            const sourceModelHeight = getObjectHeight($retargetSourceGltf.scene)
+            const sourceModelHeight = getObjectHeight(swordScaleReferenceScene)
             const modelHeightCompensation =
               sourceModelHeight > MIN_SAFE_SCALE_COMPONENT
                 ? targetModelHeight / sourceModelHeight
