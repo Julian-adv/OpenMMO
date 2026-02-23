@@ -44,8 +44,6 @@ const HIP_BONE_CANDIDATES = [
 ] as const
 const retargetedClipCache = new Map<string, THREE.AnimationClip>()
 const CHARACTER_DISPLAY_TARGET_HEIGHT = 1.8
-const CHARACTER_HEIGHT_NORMALIZATION_MIN = 0.5
-const CHARACTER_HEIGHT_NORMALIZATION_MAX = 5
 
 export function getGltfAnimations(gltf: unknown): THREE.AnimationClip[] {
   if (!gltf || typeof gltf !== 'object' || !('animations' in gltf)) return []
@@ -84,13 +82,6 @@ export function normalizeCharacterModelScale(
   bounds.getSize(size)
   const height = size.y
   if (!Number.isFinite(height) || height <= 0) return 1
-
-  if (
-    height >= CHARACTER_HEIGHT_NORMALIZATION_MIN &&
-    height <= CHARACTER_HEIGHT_NORMALIZATION_MAX
-  ) {
-    return 1
-  }
 
   const scaleFactor = CHARACTER_DISPLAY_TARGET_HEIGHT / height
   if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) return 1
@@ -261,8 +252,19 @@ export function retargetAnimationsForCharacterModel(
 ): THREE.AnimationClip[] {
   if (clips.length === 0 || !retargetSourceScene) return clips
 
-  const targetSkinnedMesh = findPrimarySkinnedMesh(targetScene)
-  const sourceSkinnedMesh = findPrimarySkinnedMesh(retargetSourceScene)
+  // Operate on clones only. Both target and source scenes can come from shared
+  // loader instances, and retarget internals mutate skeleton transforms.
+  const targetSceneClone = SkeletonUtils.clone(targetScene) as THREE.Object3D
+
+  // `retargetSourceScene` comes from a shared loader cache. Retargeting mutates
+  // skeleton state (`pose`, matrix updates), so work on a clone to avoid
+  // leaking transforms back into maria.glb previews.
+  const retargetSourceClone = SkeletonUtils.clone(
+    retargetSourceScene
+  ) as THREE.Object3D
+
+  const targetSkinnedMesh = findPrimarySkinnedMesh(targetSceneClone)
+  const sourceSkinnedMesh = findPrimarySkinnedMesh(retargetSourceClone)
   if (!targetSkinnedMesh || !sourceSkinnedMesh) return clips
 
   targetSkinnedMesh.skeleton.pose()
@@ -316,9 +318,6 @@ export function retargetAnimationsForCharacterModel(
       return clip
     }
   })
-
-  targetSkinnedMesh.skeleton.pose()
-  targetSkinnedMesh.updateMatrixWorld(true)
 
   return retargetedClips
 }
