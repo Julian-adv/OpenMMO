@@ -102,6 +102,57 @@
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
+  const MIN_SAFE_SCALE_COMPONENT = 0.0001
+  const MIN_SWORD_SCALE_COMPENSATION = 0.25
+  const MAX_SWORD_SCALE_COMPENSATION = 4
+
+  function isMainRightHandBone(bone: THREE.Bone): boolean {
+    const boneName = bone.name.toLowerCase()
+    return (
+      (boneName.includes('righthand') ||
+        boneName.includes('right_hand') ||
+        boneName.includes('hand_r') ||
+        boneName.includes('hand.r')) &&
+      !boneName.includes('thumb') &&
+      !boneName.includes('index') &&
+      !boneName.includes('middle') &&
+      !boneName.includes('ring') &&
+      !boneName.includes('pinky')
+    )
+  }
+
+  function findMainRightHandBone(root: THREE.Object3D): THREE.Bone | undefined {
+    let rightHandBone: THREE.Bone | undefined
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.Bone)) return
+      if (!isMainRightHandBone(obj)) return
+      rightHandBone = obj
+    })
+    return rightHandBone
+  }
+
+  function getObjectChainScale(object: THREE.Object3D): THREE.Vector3 {
+    const chainScale = new THREE.Vector3(1, 1, 1)
+    let current: THREE.Object3D | null = object
+
+    while (current) {
+      chainScale.x *= Math.abs(current.scale.x)
+      chainScale.y *= Math.abs(current.scale.y)
+      chainScale.z *= Math.abs(current.scale.z)
+      current = current.parent
+    }
+
+    return chainScale
+  }
+
+  function getObjectHeight(object: THREE.Object3D): number {
+    object.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(object)
+    if (bounds.isEmpty()) return 0
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    return Number.isFinite(size.y) ? size.y : 0
+  }
 
   // Select movement animation based on movement mode
   function selectMovementAnimation(mode: MovementMode | undefined): number {
@@ -193,28 +244,10 @@
       if ($swordGltf) {
         console.log('Attaching sword to hand')
 
-        // Find the right hand bone (main hand bone, not finger bones)
-        let rightHandBone: THREE.Bone | undefined
-        cloned.traverse((obj) => {
-          if (obj instanceof THREE.Bone) {
-            const boneName = obj.name.toLowerCase()
-            // Match only the main hand bone, exclude finger bones (thumb, index, middle, ring, pinky)
-            if (
-              (boneName.includes('righthand') ||
-                boneName.includes('right_hand') ||
-                boneName.includes('hand_r') ||
-                boneName.includes('hand.r')) &&
-              !boneName.includes('thumb') &&
-              !boneName.includes('index') &&
-              !boneName.includes('middle') &&
-              !boneName.includes('ring') &&
-              !boneName.includes('pinky')
-            ) {
-              console.log(`Found main right hand bone: ${obj.name}`)
-              rightHandBone = obj
-            }
-          }
-        })
+        const rightHandBone = findMainRightHandBone(cloned)
+        if (rightHandBone) {
+          console.log(`Found main right hand bone: ${rightHandBone.name}`)
+        }
 
         if (rightHandBone) {
           // Clone the sword model
@@ -253,6 +286,61 @@
 
           // Attach sword to hand bone
           rightHandBone.add(swordClone)
+
+          // Keep sword size consistent across rigs by compensating cumulative
+          // scale differences along the hand-bone chain against maria.
+          const targetHandChainScale = getObjectChainScale(rightHandBone)
+          const targetModelHeight = getObjectHeight(cloned)
+
+          const sourceHandBone =
+            $retargetSourceGltf?.scene &&
+            findMainRightHandBone($retargetSourceGltf.scene)
+          if (sourceHandBone) {
+            const sourceHandChainScale = getObjectChainScale(sourceHandBone)
+            const sourceModelHeight = getObjectHeight($retargetSourceGltf.scene)
+            const modelHeightCompensation =
+              sourceModelHeight > MIN_SAFE_SCALE_COMPONENT
+                ? targetModelHeight / sourceModelHeight
+                : 1
+
+            const compensationX = THREE.MathUtils.clamp(
+              (sourceHandChainScale.x /
+                Math.max(
+                  targetHandChainScale.x,
+                  MIN_SAFE_SCALE_COMPONENT
+                )) *
+                modelHeightCompensation,
+              MIN_SWORD_SCALE_COMPENSATION,
+              MAX_SWORD_SCALE_COMPENSATION
+            )
+            const compensationY = THREE.MathUtils.clamp(
+              (sourceHandChainScale.y /
+                Math.max(
+                  targetHandChainScale.y,
+                  MIN_SAFE_SCALE_COMPONENT
+                )) *
+                modelHeightCompensation,
+              MIN_SWORD_SCALE_COMPENSATION,
+              MAX_SWORD_SCALE_COMPENSATION
+            )
+            const compensationZ = THREE.MathUtils.clamp(
+              (sourceHandChainScale.z /
+                Math.max(
+                  targetHandChainScale.z,
+                  MIN_SAFE_SCALE_COMPONENT
+                )) *
+                modelHeightCompensation,
+              MIN_SWORD_SCALE_COMPENSATION,
+              MAX_SWORD_SCALE_COMPENSATION
+            )
+
+            swordClone.scale.set(
+              swordClone.scale.x * compensationX,
+              swordClone.scale.y * compensationY,
+              swordClone.scale.z * compensationZ
+            )
+          }
+
           console.log('Sword attached successfully to', rightHandBone.name)
           console.log('Hand bone position:', rightHandBone.position)
         } else {
