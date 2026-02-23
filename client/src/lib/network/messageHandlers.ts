@@ -76,6 +76,7 @@ export function handleServerMessage(
         ...serverPlayer,
         position: playerPosition,
         maxHealth: serverPlayer.max_health,
+        characterClass: serverPlayer.class,
       }
       gameStore.update((state) => ({
         ...state,
@@ -121,6 +122,7 @@ export function handleServerMessage(
         ...serverPlayer,
         position: playerPosition,
         maxHealth: serverPlayer.max_health,
+        characterClass: serverPlayer.class,
       }
       const remotePlayer: RemotePlayer = {
         id: serverPlayer.id,
@@ -128,6 +130,7 @@ export function handleServerMessage(
         level: serverPlayer.level,
         health: serverPlayer.health,
         maxHealth: serverPlayer.max_health,
+        characterClass: serverPlayer.class,
       }
       gameStore.update((state) => {
         if (!state.currentPlayer) {
@@ -196,6 +199,7 @@ export function handleServerMessage(
                 level: serverPlayer.level,
                 health: serverPlayer.health,
                 maxHealth: serverPlayer.max_health,
+                characterClass: serverPlayer.class,
               }
               remotePlayerManager.initPlayer(
                 serverPlayer.id,

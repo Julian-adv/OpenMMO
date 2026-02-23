@@ -144,6 +144,7 @@
       positionY={CHARACTER_Y_OFFSET}
       positionZ={SLOT_DEPTH}
       selected={character.id === selectedCharacterId}
+      characterClass={character.class}
     />
   {/if}
 

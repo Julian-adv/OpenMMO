@@ -2,6 +2,7 @@
   import { Canvas } from '@threlte/core'
   import type {
     AccountCharacter,
+    CharacterClass,
     CharacterRollResult,
     RollCharacterStatsResult,
   } from '../network/socket'
@@ -14,7 +15,8 @@
     characters: AccountCharacter[]
     onRollCharacterStats: () => Promise<RollCharacterStatsResult>
     onCreateCharacter: (
-      characterName: string
+      characterName: string,
+      characterClass: CharacterClass
     ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
     onCharacterCreated: (characterId: number) => void
     onCancel: () => void
@@ -30,6 +32,7 @@
   }: Props = $props()
 
   let createCharacterName = $state('')
+  let selectedClass = $state<CharacterClass>('warrior')
   let rolledStats = $state<CharacterRollResult | null>(null)
   let isCreating = $state(false)
   let isRolling = $state(false)
@@ -84,7 +87,7 @@
 
     isCreating = true
     errorMessage = ''
-    const result = await onCreateCharacter(characterName)
+    const result = await onCreateCharacter(characterName, selectedClass)
     isCreating = false
 
     if (!result.ok) {
@@ -106,7 +109,7 @@
 <div class="character-create-screen">
   <div class="canvas-layer">
     <Canvas shadows>
-      <CharacterCreateScene />
+      <CharacterCreateScene characterClass={selectedClass} />
     </Canvas>
   </div>
 
@@ -122,6 +125,30 @@
       {/if}
 
       <form class="create-form" onsubmit={submitCreateCharacter}>
+        <div class="class-field">
+          <span>Class</span>
+          <div class="class-buttons">
+            <button
+              type="button"
+              class="class-btn"
+              class:class-selected={selectedClass === 'warrior'}
+              disabled={isBusy()}
+              onclick={() => { selectedClass = 'warrior'; rolledStats = null }}
+            >
+              Warrior
+            </button>
+            <button
+              type="button"
+              class="class-btn"
+              class:class-selected={selectedClass === 'knight'}
+              disabled={isBusy()}
+              onclick={() => { selectedClass = 'knight'; rolledStats = null }}
+            >
+              Knight
+            </button>
+          </div>
+        </div>
+
         <label class="name-field" for="characterName">
           <span>Name</span>
           <input
@@ -234,6 +261,46 @@
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
   }
 
+  .class-field {
+    display: grid;
+    gap: 6px;
+    min-width: 160px;
+  }
+
+  .class-field span {
+    font-size: 13px;
+    color: #b8c6d9;
+  }
+
+  .class-buttons {
+    display: flex;
+    gap: 6px;
+  }
+
+  .class-btn {
+    flex: 1;
+    border: 1px solid #526276;
+    border-radius: 7px;
+    padding: 10px 12px;
+    background: #111923;
+    color: #9fb0c6;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  }
+
+  .class-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .class-btn.class-selected {
+    border-color: #2c7be5;
+    background: #162a44;
+    color: #edf2f7;
+    font-weight: 600;
+  }
+
   .name-field {
     min-width: 220px;
     max-width: 320px;
@@ -336,6 +403,7 @@
       flex-direction: column;
     }
 
+    .class-field,
     .name-field,
     .rolled-attributes,
     .create-actions {

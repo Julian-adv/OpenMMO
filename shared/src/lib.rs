@@ -1,6 +1,30 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum CharacterClass {
+    #[serde(rename = "warrior")]
+    Warrior,
+    #[serde(rename = "knight")]
+    Knight,
+}
+
+impl CharacterClass {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CharacterClass::Warrior => "warrior",
+            CharacterClass::Knight => "knight",
+        }
+    }
+
+    pub fn from_str_or_default(s: &str) -> Self {
+        match s {
+            "warrior" => CharacterClass::Warrior,
+            _ => CharacterClass::Knight,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
@@ -17,6 +41,7 @@ pub struct Player {
     pub level: u32,
     pub health: u32,
     pub max_health: u32,
+    pub class: CharacterClass,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +65,7 @@ pub struct Character {
     pub xp: u64,
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
+    pub class: CharacterClass,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,6 +97,7 @@ pub enum ClientMessage {
     },
     CreateCharacter {
         character_name: String,
+        character_class: CharacterClass,
     },
     RollCharacterStats,
     DeleteCharacter {
@@ -308,6 +335,7 @@ mod tests {
                 level: 1,
                 health: 10,
                 max_health: 10,
+                class: CharacterClass::Knight,
             },
         );
         let msg = ServerMessage::GameState {

@@ -1,7 +1,14 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import type { CharacterClass } from '../network/networkTypes'
   import CharacterPreview from './CharacterPreview.svelte'
+
+  interface Props {
+    characterClass: CharacterClass
+  }
+
+  let { characterClass }: Props = $props()
 
   const CAMERA_FOV = 42
   const CAMERA_POSITION_Y = 1.4
@@ -77,4 +84,5 @@
   positionY={CHARACTER_Y_OFFSET}
   positionZ={CHARACTER_Z}
   selected={true}
+  {characterClass}
 />

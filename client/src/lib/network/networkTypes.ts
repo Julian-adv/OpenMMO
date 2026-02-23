@@ -4,6 +4,8 @@ export type Position = {
   z: number
 }
 
+export type CharacterClass = 'warrior' | 'knight'
+
 export type ServerPlayer = {
   id: string
   name: string
@@ -12,6 +14,7 @@ export type ServerPlayer = {
   level: number
   health: number
   max_health: number
+  class: CharacterClass
 }
 
 export type ServerMonster = {
@@ -33,6 +36,7 @@ export type AccountCharacter = {
   xp: number
   max_hp: number
   attributes: CharacterAttributes
+  class: CharacterClass
 }
 
 export type CharacterAttributes = {
@@ -70,7 +74,12 @@ export type ClientMessage =
         create_account: boolean
       }
     }
-  | { CreateCharacter: { character_name: string } }
+  | {
+      CreateCharacter: {
+        character_name: string
+        character_class: CharacterClass
+      }
+    }
   | { DeleteCharacter: { character_id: number } }
   | 'RollCharacterStats'
   | { EnterGame: { character_id: number } }

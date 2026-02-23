@@ -15,18 +15,22 @@
   import {
     CHARACTER_ANIMATION_SOURCE_MODEL_PATH,
     CHARACTER_ANIMATION_PACK_PATHS,
-    CHARACTER_MODEL_PATH,
+    WARRIOR_CHARACTER_MODEL_PATH,
+    KNIGHT_CHARACTER_MODEL_PATH,
   } from '../utils/modelPaths'
+  import type { CharacterClass } from '../network/networkTypes'
 
   interface Props {
     positionX: number
     positionY: number
     positionZ: number
     selected: boolean
+    characterClass: CharacterClass
   }
 
-  let { positionX, positionY, positionZ, selected }: Props = $props()
-  const gltf = useLoader(GLTFLoader).load(CHARACTER_MODEL_PATH)
+  let { positionX, positionY, positionZ, selected, characterClass }: Props = $props()
+  const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
+  const knightGltf = useLoader(GLTFLoader).load(KNIGHT_CHARACTER_MODEL_PATH)
   const locomotionGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   )
@@ -140,17 +144,18 @@
       const animationPacksReady =
         ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
       const retargetSourceReady = !!$retargetSourceGltf || animationPackTimedOut
+      const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
 
-      if ($gltf && animationPacksReady && retargetSourceReady) {
+      if (activeGltf && animationPacksReady && retargetSourceReady) {
         if (!$retargetSourceGltf && animationPackTimedOut) {
           console.warn(
             'Retarget source GLB load timeout in preview, using non-retargeted clips'
           )
         }
         setupModel(
-          $gltf.scene,
+          activeGltf.scene,
           $retargetSourceGltf?.scene,
-          getGltfAnimations($gltf),
+          getGltfAnimations(activeGltf),
           getGltfAnimations($locomotionGltf),
           getGltfAnimations($combatMeleeGltf)
         )

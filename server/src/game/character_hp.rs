@@ -13,6 +13,7 @@ const RACE_HP_BONUSES: &[(&str, i32)] = &[
 ];
 
 const CLASS_HIT_DICE: &[(&str, u8)] = &[
+    ("warrior", 10),
     ("knight", 10),
     ("barbarian", 10),
     ("caveman", 10),

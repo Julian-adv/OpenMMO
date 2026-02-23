@@ -20,8 +20,10 @@
   import {
     CHARACTER_ANIMATION_SOURCE_MODEL_PATH,
     CHARACTER_ANIMATION_PACK_PATHS,
-    CHARACTER_MODEL_PATH,
+    WARRIOR_CHARACTER_MODEL_PATH,
+    KNIGHT_CHARACTER_MODEL_PATH,
   } from '../utils/modelPaths'
+  import type { CharacterClass } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
@@ -38,6 +40,7 @@
     movementMode?: MovementMode
     camera: THREE.Camera | undefined
     chatBubble?: string
+    characterClass: CharacterClass
     onAttackDuration?: (duration: number) => void
     onDyingFinished?: () => void
     lastDamageInfo?: PlayerDamageInfo
@@ -54,6 +57,7 @@
     movementMode,
     camera,
     chatBubble,
+    characterClass,
     onAttackDuration,
     onDyingFinished,
     lastDamageInfo,
@@ -68,8 +72,9 @@
   // Floating damage text
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
 
-  // Load animated model
-  const gltf = useLoader(GLTFLoader).load(CHARACTER_MODEL_PATH)
+  // Load animated model (both models are loaded; Threlte caches by URL)
+  const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
+  const knightGltf = useLoader(GLTFLoader).load(KNIGHT_CHARACTER_MODEL_PATH)
   const locomotionGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   )
@@ -177,11 +182,12 @@
   }
 
   function setupRealAnimation() {
-    if ($gltf && !mixer && !modelRoot) {
+    const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
+    if (activeGltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
 
       const { clonedScene: cloned, modelRoot: newModelRoot } =
-        createCharacterModelRoot($gltf.scene)
+        createCharacterModelRoot(activeGltf.scene)
 
       // Attach sword to right hand if sword model is loaded
       if ($swordGltf) {
@@ -262,7 +268,7 @@
         }
       }
 
-      const baseAnimations = getGltfAnimations($gltf)
+      const baseAnimations = getGltfAnimations(activeGltf)
       const locomotionAnimations = getGltfAnimations($locomotionGltf)
       const combatMeleeAnimations = getGltfAnimations($combatMeleeGltf)
 
@@ -371,7 +377,8 @@
       const animationPacksReady =
         ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
       const retargetSourceReady = !!$retargetSourceGltf || animationPackTimedOut
-      if ($gltf && animationPacksReady && retargetSourceReady) {
+      const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
+      if (activeGltf && animationPacksReady && retargetSourceReady) {
         if (!$locomotionGltf && animationPackTimedOut) {
           console.warn('Locomotion GLB load timeout, using maria animations only')
         }

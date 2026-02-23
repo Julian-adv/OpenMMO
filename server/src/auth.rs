@@ -19,6 +19,7 @@ pub struct CharacterRecord {
     pub xp: u64,
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
+    pub class: String,
 }
 
 #[derive(Debug)]
@@ -170,6 +171,7 @@ impl AuthService {
             ("attr_wis", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_cha", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_guard", "INTEGER NOT NULL DEFAULT 10"),
+            ("class", "TEXT NOT NULL DEFAULT 'knight'"),
         ];
 
         for (column_name, column_def) in expected_columns {
@@ -276,7 +278,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class
                  FROM characters
                  WHERE account_name = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -301,6 +303,7 @@ impl AuthService {
                         cha: row.get(11)?,
                         guard: row.get(12)?,
                     },
+                    class: row.get::<_, String>(13).unwrap_or_else(|_| "knight".to_string()),
                 })
             })
             .map_err(|e| AuthError::Database(e.to_string()))?
@@ -316,6 +319,7 @@ impl AuthService {
         character_name: &str,
         attributes: &CharacterAttributes,
         max_hp: u32,
+        class: &str,
     ) -> Result<CharacterRecord, AuthError> {
         let account_name = account_name.trim();
         let character_name = character_name.trim();
@@ -377,8 +381,9 @@ impl AuthService {
                 attr_int,
                 attr_wis,
                 attr_cha,
-                attr_guard
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                attr_guard,
+                class
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
                 account_name,
                 character_name,
@@ -391,15 +396,16 @@ impl AuthService {
                 i64::from(attributes.wis),
                 i64::from(attributes.cha),
                 i64::from(attributes.guard),
+                class,
             ],
         )
         .map_err(|e| AuthError::Database(e.to_string()))?;
 
         let id = conn.last_insert_rowid();
-        let (created_at, level, loaded_max_hp, loaded_attributes): (i64, u32, u32, CharacterAttributes) =
+        let (created_at, level, loaded_max_hp, loaded_attributes, loaded_class): (i64, u32, u32, CharacterAttributes, String) =
             conn
             .query_row(
-                "SELECT created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard
+                "SELECT created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class
                  FROM characters
                  WHERE id = ?1",
                 params![id],
@@ -417,6 +423,7 @@ impl AuthService {
                             cha: row.get(8)?,
                             guard: row.get(9)?,
                         },
+                        row.get::<_, String>(10).unwrap_or_else(|_| "knight".to_string()),
                     ))
                 },
             )
@@ -430,6 +437,7 @@ impl AuthService {
             xp: 0,
             max_hp: loaded_max_hp,
             attributes: loaded_attributes,
+            class: loaded_class,
         };
 
         Ok(character)
@@ -475,7 +483,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class
                  FROM characters
                  WHERE id = ?1 AND account_name = ?2",
                 params![character_id, account_name],
@@ -496,6 +504,7 @@ impl AuthService {
                             cha: row.get(11)?,
                             guard: row.get(12)?,
                         },
+                        class: row.get::<_, String>(13).unwrap_or_else(|_| "knight".to_string()),
                     })
                 },
             )

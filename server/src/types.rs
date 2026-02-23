@@ -1,10 +1,10 @@
 pub use onlinerpg_shared::{
-    Character, CharacterAttributes, ClientMessage, GameDateTime, Monster, Player, PlayerId,
-    Position, ServerMessage,
+    Character, CharacterAttributes, CharacterClass, ClientMessage, GameDateTime, Monster, Player,
+    PlayerId, Position, ServerMessage,
 };
 use uuid::Uuid;
 
-pub fn new_player(name: String, level: u32, max_health: u32) -> Player {
+pub fn new_player(name: String, level: u32, max_health: u32, class: CharacterClass) -> Player {
     Player {
         id: Uuid::new_v4().to_string(),
         name,
@@ -17,5 +17,6 @@ pub fn new_player(name: String, level: u32, max_health: u32) -> Player {
         level,
         health: max_health,
         max_health,
+        class,
     }
 }

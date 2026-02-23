@@ -75,6 +75,7 @@
     movementMode={currentPlayerState.movementMode}
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
+    characterClass={currentPlayer.characterClass}
     onAttackDuration={onAttackDuration}
     onDyingFinished={onCurrentPlayerDyingFinished}
     lastDamageInfo={currentPlayer.lastDamageInfo}
@@ -101,6 +102,7 @@
         movementMode={remotePlayer.movementMode}
         {camera}
         chatBubble={chatBubbles.get(player.id)?.message}
+        characterClass={player.characterClass}
       />
     {/if}
   {/each}

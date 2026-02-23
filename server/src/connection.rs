@@ -1,11 +1,10 @@
 use crate::auth::AuthService;
 use crate::game::character_attributes::roll_character_attributes;
-use crate::game::character_hp::{
-    level_one_max_hp, DEFAULT_CHARACTER_CLASS, DEFAULT_CHARACTER_RACE,
-};
+use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
 use crate::game_state::GameState;
 use crate::types::{
-    new_player, Character, CharacterAttributes, ClientMessage, PlayerId, ServerMessage,
+    new_player, Character, CharacterAttributes, CharacterClass, ClientMessage, PlayerId,
+    ServerMessage,
 };
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
@@ -229,7 +228,7 @@ async fn handle_client_message(
             }]);
         }
 
-        ClientMessage::CreateCharacter { character_name } => {
+        ClientMessage::CreateCharacter { character_name, character_class } => {
             if player_id.is_some() {
                 warn!("CreateCharacter ignored because client is already in game");
                 return Ok(vec![ServerMessage::CharacterError {
@@ -254,12 +253,13 @@ async fn handle_client_message(
                 }]);
             };
 
-            let max_hp = default_character_max_hp(&rolled_attributes);
+            let max_hp = default_character_max_hp(&rolled_attributes, &character_class);
             match auth_service.create_character(
                 &authed_account_name,
                 &character_name,
                 &rolled_attributes,
                 max_hp,
+                character_class.as_str(),
             ) {
                 Ok(character) => {
                     *pending_character_attributes = None;
@@ -334,7 +334,8 @@ async fn handle_client_message(
             }
 
             let attributes = roll_character_attributes();
-            let max_hp = default_character_max_hp(&attributes);
+            // Class is not yet chosen at roll time; use knight as preview (warrior and knight share the same hit die)
+            let max_hp = default_character_max_hp(&attributes, &CharacterClass::Knight);
             *pending_character_attributes = Some(attributes.clone());
             return Ok(vec![ServerMessage::CharacterStatsRolled {
                 attributes,
@@ -381,6 +382,7 @@ async fn handle_client_message(
                 selected_character.name.clone(),
                 selected_character.level,
                 max_hp,
+                CharacterClass::from_str_or_default(&selected_character.class),
             );
             let id = player.id.clone();
 
@@ -506,20 +508,18 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         xp: record.xp,
         max_hp: record.max_hp,
         attributes: record.attributes,
+        class: CharacterClass::from_str_or_default(&record.class),
     }
 }
 
-fn default_character_max_hp(attributes: &CharacterAttributes) -> u32 {
-    match level_one_max_hp(
-        DEFAULT_CHARACTER_RACE,
-        DEFAULT_CHARACTER_CLASS,
-        attributes.con,
-    ) {
+fn default_character_max_hp(attributes: &CharacterAttributes, character_class: &CharacterClass) -> u32 {
+    let class_str = character_class.as_str();
+    match level_one_max_hp(DEFAULT_CHARACTER_RACE, class_str, attributes.con) {
         Ok(value) => value,
         Err(err) => {
             warn!(
                 "Failed to resolve level 1 max HP for race='{}', class='{}', con='{}': {}",
-                DEFAULT_CHARACTER_RACE, DEFAULT_CHARACTER_CLASS, attributes.con, err
+                DEFAULT_CHARACTER_RACE, class_str, attributes.con, err
             );
             FALLBACK_DEFAULT_MAX_HP
         }

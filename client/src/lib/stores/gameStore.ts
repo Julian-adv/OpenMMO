@@ -1,6 +1,7 @@
 import { writable } from 'svelte/store'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
+import type { CharacterClass } from '../network/networkTypes'
 
 export interface PlayerDamageInfo {
   damage: number
@@ -15,6 +16,7 @@ interface PlayerBase {
   totalXp?: number
   health: number
   maxHealth: number
+  characterClass: CharacterClass
   lastDamageInfo?: PlayerDamageInfo
 }
 

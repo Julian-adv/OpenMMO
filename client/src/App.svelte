@@ -11,7 +11,7 @@
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { networkManager, type AccountCharacter } from './lib/network/socket'
+  import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
   type DeathUiState = 'alive' | 'waiting_dying' | 'dialog_open' | 'dialog_closed'
@@ -79,8 +79,8 @@
     return result
   }
 
-  async function handleCreateCharacter(characterName: string) {
-    const result = await networkManager.requestCreateCharacter(characterName)
+  async function handleCreateCharacter(characterName: string, characterClass: CharacterClass) {
+    const result = await networkManager.requestCreateCharacter(characterName, characterClass)
     if (result.ok && result.character) {
       accountCharacters = [...accountCharacters, result.character]
     }

@@ -12,6 +12,7 @@ import { createEvent } from './networkEvents'
 import { handleServerMessage } from './messageHandlers'
 import type {
   AccountCharacter,
+  CharacterClass,
   CharacterRollResult,
   ClientMessage,
   RollCharacterStatsResult,
@@ -20,6 +21,7 @@ import type {
 export type {
   AccountCharacter,
   CharacterAttributes,
+  CharacterClass,
   CharacterRollResult,
   RollCharacterStatsResult,
 } from './networkTypes'
@@ -373,7 +375,8 @@ class NetworkManager {
   }
 
   async requestCreateCharacter(
-    characterName: string
+    characterName: string,
+    characterClass: CharacterClass
   ): Promise<{ ok: boolean; message?: string; character?: AccountCharacter }> {
     await this.ensureWasm()
     if (!this.isConnected()) {
@@ -402,7 +405,10 @@ class NetworkManager {
         return {
           send: () =>
             this.sendAndSerialize({
-              CreateCharacter: { character_name: characterName },
+              CreateCharacter: {
+                character_name: characterName,
+                character_class: characterClass,
+              },
             }),
           notSentResult: { ok: false, message: 'Socket is not connected' },
         }
