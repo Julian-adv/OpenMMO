@@ -79,10 +79,12 @@
   <T.MeshStandardMaterial color="#2f3f52" opacity={1.0} transparent />
 </T.Mesh>
 
-<CharacterPreview
-  positionX={0}
-  positionY={CHARACTER_Y_OFFSET}
-  positionZ={CHARACTER_Z}
-  selected={true}
-  {characterClass}
-/>
+{#key characterClass}
+  <CharacterPreview
+    positionX={0}
+    positionY={CHARACTER_Y_OFFSET}
+    positionZ={CHARACTER_Z}
+    selected={true}
+    {characterClass}
+  />
+{/key}
