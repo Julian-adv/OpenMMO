@@ -41,6 +41,7 @@
   const CHARACTER_HALF_WIDTH = 1.0
   const CHARACTER_HALF_HEIGHT = 1.8
   const CAMERA_FIT_PADDING = 1.1
+  const MAX_CAMERA_WIDTH = 1280
   const AMBIENT_INTENSITY = 0.12
   const KEY_LIGHT_INTENSITY = 0.05
   const FILL_LIGHT_INTENSITY = 0.48
@@ -59,7 +60,7 @@
   })
 
   function calculateCameraPositionZ(width: number, height: number) {
-    const safeWidth = Math.max(1, width)
+    const safeWidth = Math.min(Math.max(1, width), MAX_CAMERA_WIDTH)
     const safeHeight = Math.max(1, height)
     const aspect = safeWidth / safeHeight
 
