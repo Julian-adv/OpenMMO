@@ -100,8 +100,6 @@
   let swordAttached = $state(false)
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const ENABLE_SWORD_ATTACHMENT = true
-  const MIN_SWORD_TO_CHARACTER_HEIGHT_RATIO = 0.08
-  const MAX_SWORD_TO_CHARACTER_HEIGHT_RATIO = 0.6
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
     const boneName = bone.name.toLowerCase()
@@ -192,15 +190,6 @@
     })
   }
 
-  function getObjectWorldSize(object: THREE.Object3D): THREE.Vector3 {
-    object.updateMatrixWorld(true)
-    const bounds = new THREE.Box3().setFromObject(object)
-    if (bounds.isEmpty()) return new THREE.Vector3(0, 0, 0)
-    const size = new THREE.Vector3()
-    bounds.getSize(size)
-    return size
-  }
-
   function getAverageAbsWorldScale(object: THREE.Object3D): number {
     const worldScale = new THREE.Vector3()
     object.getWorldScale(worldScale)
@@ -227,32 +216,13 @@
     swordClone.scale.set(1, 1, 1)
     prepareSwordMeshes(swordClone)
 
-    const characterHeight = getObjectWorldSize(characterRoot).y
     rightHandBone.add(swordClone)
 
-    // Some rigs (e.g. maria) carry tiny armature/world scale in the hand chain.
-    // Neutralize parent scale so attached props preserve expected world size.
+    // Keep prop world size stable when armature/hand chain uses non-unit scale.
     const handAvgScale = getAverageAbsWorldScale(rightHandBone)
     if (handAvgScale > 0) {
       swordClone.scale.multiplyScalar(1 / handAvgScale)
     }
-
-    // Keep sword size in a visible, sane range relative to character height.
-    if (characterHeight > 0) {
-      const swordSize = getObjectWorldSize(swordClone)
-      const swordMaxDim = Math.max(swordSize.x, swordSize.y, swordSize.z)
-      if (swordMaxDim > 0) {
-        const currentRatio = swordMaxDim / characterHeight
-        if (currentRatio < MIN_SWORD_TO_CHARACTER_HEIGHT_RATIO) {
-          const scaleUp = MIN_SWORD_TO_CHARACTER_HEIGHT_RATIO / currentRatio
-          swordClone.scale.multiplyScalar(scaleUp)
-        } else if (currentRatio > MAX_SWORD_TO_CHARACTER_HEIGHT_RATIO) {
-          const scaleDown = MAX_SWORD_TO_CHARACTER_HEIGHT_RATIO / currentRatio
-          swordClone.scale.multiplyScalar(scaleDown)
-        }
-      }
-    }
-
     swordAttached = true
     console.log('Sword attached successfully to', rightHandBone.name)
     return true
