@@ -30,12 +30,11 @@ export enum AnimationIndex {
   SLASH2 = 8,
   SLASH3 = 9,
   SLASH4 = 10,
-  SLASH5 = 11,
-  ATTACK1 = 12,
-  ATTACK2 = 13,
-  ATTACK3 = 14,
-  ATTACK4 = 15,
-  DYING = 16,
+  ATTACK1 = 11,
+  ATTACK2 = 12,
+  ATTACK3 = 13,
+  ATTACK4 = 14,
+  DYING = 15,
 }
 
 export const ANIMATION_ORDER = [
@@ -50,7 +49,6 @@ export const ANIMATION_ORDER = [
   AnimationName.SLASH2,
   AnimationName.SLASH3,
   AnimationName.SLASH4,
-  AnimationName.SLASH5,
   AnimationName.ATTACK1,
   AnimationName.ATTACK2,
   AnimationName.ATTACK3,

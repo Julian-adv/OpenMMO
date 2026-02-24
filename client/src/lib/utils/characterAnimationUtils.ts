@@ -19,24 +19,25 @@ export interface RetargetSourceScenes {
   combatMelee?: THREE.Object3D | null
 }
 
-const LOCOMOTION_ANIMATION_NAMES = new Set<AnimationName>([
-  AnimationName.IDLE1,
-  AnimationName.IDLE2,
-  AnimationName.IDLE3,
-  AnimationName.IDLE4,
-  AnimationName.WALK,
-  AnimationName.JOG,
-  AnimationName.RUN,
-])
-
-const COMBAT_MELEE_ANIMATION_NAMES = new Set<AnimationName>([
-  AnimationName.SLASH1,
-  AnimationName.SLASH2,
-  AnimationName.SLASH3,
-  AnimationName.SLASH4,
-  AnimationName.SLASH5,
-  AnimationName.DYING,
-])
+const ANIMATION_SOURCE_BY_NAME: Record<AnimationName, AnimationSource> = {
+  [AnimationName.IDLE1]: 'locomotion',
+  [AnimationName.IDLE2]: 'locomotion',
+  [AnimationName.IDLE3]: 'locomotion',
+  [AnimationName.IDLE4]: 'locomotion',
+  [AnimationName.WALK]: 'locomotion',
+  [AnimationName.JOG]: 'locomotion',
+  [AnimationName.RUN]: 'locomotion',
+  [AnimationName.SLASH1]: 'combat_melee',
+  [AnimationName.SLASH2]: 'combat_melee',
+  [AnimationName.SLASH3]: 'combat_melee',
+  [AnimationName.SLASH4]: 'combat_melee',
+  [AnimationName.SLASH5]: 'combat_melee',
+  [AnimationName.ATTACK1]: 'combat_melee',
+  [AnimationName.ATTACK2]: 'combat_melee',
+  [AnimationName.ATTACK3]: 'combat_melee',
+  [AnimationName.ATTACK4]: 'combat_melee',
+  [AnimationName.DYING]: 'combat_melee',
+}
 
 const RETARGET_TRACK_NAME_PATTERN = /^\.bones\[(.+?)\]\.(position|quaternion)$/
 const HIP_BONE_CANDIDATES = [
@@ -395,19 +396,6 @@ export function selectOrderedCharacterAnimations(
   locomotionAnimations: THREE.AnimationClip[],
   combatMeleeAnimations: THREE.AnimationClip[]
 ): OrderedAnimationSelection[] {
-  const defaultBaseClip = baseAnimations[0]
-  const defaultLocomotionClip = locomotionAnimations[0]
-  const defaultCombatMeleeClip = combatMeleeAnimations[0]
-  const defaultClip =
-    defaultBaseClip ?? defaultLocomotionClip ?? defaultCombatMeleeClip
-  if (!defaultClip) return []
-
-  const defaultSource: AnimationSource = defaultBaseClip
-    ? 'base'
-    : defaultLocomotionClip
-      ? 'locomotion'
-      : 'combat_melee'
-
   const baseClipByName = new Map(
     baseAnimations.map((clip) => [clip.name, clip])
   )
@@ -417,36 +405,61 @@ export function selectOrderedCharacterAnimations(
   const combatMeleeClipByName = new Map(
     combatMeleeAnimations.map((clip) => [clip.name, clip])
   )
+  const firstBaseClip = baseAnimations[0]
+  const firstLocomotionClip = locomotionAnimations[0]
+  const firstCombatMeleeClip = combatMeleeAnimations[0]
+  const orderedSelections: OrderedAnimationSelection[] = []
 
-  return ANIMATION_ORDER.map((name) => {
-    const baseClip = baseClipByName.get(name)
-    const locomotionClip = locomotionClipByName.get(name)
-    const combatMeleeClip = combatMeleeClipByName.get(name)
-    const preferredClip = LOCOMOTION_ANIMATION_NAMES.has(name)
-      ? (locomotionClip ?? baseClip ?? combatMeleeClip)
-      : COMBAT_MELEE_ANIMATION_NAMES.has(name)
-        ? (combatMeleeClip ?? baseClip ?? locomotionClip)
-        : (baseClip ?? combatMeleeClip ?? locomotionClip)
+  for (const name of ANIMATION_ORDER) {
+    const source = ANIMATION_SOURCE_BY_NAME[name]
+    if (!source) {
+      console.error(
+        `No animation source mapping defined for "${name}"; update animation source map.`
+      )
+      return []
+    }
 
-    if (preferredClip) {
-      return {
-        name,
-        clip: preferredClip,
-        source:
-          preferredClip === locomotionClip
-            ? 'locomotion'
-            : preferredClip === combatMeleeClip
-              ? 'combat_melee'
-              : 'base',
-        fromFallback: false,
+    const selectedClip =
+      source === 'locomotion'
+        ? locomotionClipByName.get(name)
+        : source === 'combat_melee'
+          ? combatMeleeClipByName.get(name)
+          : baseClipByName.get(name)
+
+    let clip = selectedClip
+    let fromFallback = false
+
+    if (!clip) {
+      const fallbackClip =
+        source === 'locomotion'
+          ? firstLocomotionClip
+          : source === 'combat_melee'
+            ? firstCombatMeleeClip
+            : firstBaseClip
+
+      if (fallbackClip) {
+        clip = fallbackClip
+        fromFallback = true
+        console.warn(
+          `Missing animation "${name}" in ${source}.glb; using first ${source} clip "${fallbackClip.name}" as fallback.`
+        )
       }
     }
 
-    return {
-      name,
-      clip: defaultClip,
-      source: defaultSource,
-      fromFallback: true,
+    if (!clip) {
+      console.error(
+        `Missing animation "${name}" in ${source}.glb and no fallback clip is available.`
+      )
+      return []
     }
-  })
+
+    orderedSelections.push({
+      name,
+      clip,
+      source,
+      fromFallback,
+    })
+  }
+
+  return orderedSelections
 }
