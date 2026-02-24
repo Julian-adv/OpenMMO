@@ -76,6 +76,8 @@
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
     characterClass={currentPlayer.characterClass}
+    health={currentPlayer.health}
+    maxHealth={currentPlayer.maxHealth}
     onAttackDuration={onAttackDuration}
     onDyingFinished={onCurrentPlayerDyingFinished}
     lastDamageInfo={currentPlayer.lastDamageInfo}
@@ -103,6 +105,8 @@
         {camera}
         chatBubble={chatBubbles.get(player.id)?.message}
         characterClass={player.characterClass}
+        health={player.health}
+        maxHealth={player.maxHealth}
       />
     {/if}
   {/each}

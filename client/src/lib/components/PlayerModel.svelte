@@ -40,6 +40,8 @@
     camera: THREE.Camera | undefined
     chatBubble?: string
     characterClass: CharacterClass
+    health: number
+    maxHealth: number
     onAttackDuration?: (duration: number) => void
     onDyingFinished?: () => void
     lastDamageInfo?: PlayerDamageInfo
@@ -57,13 +59,15 @@
     camera,
     chatBubble,
     characterClass,
+    health,
+    maxHealth,
     onAttackDuration,
     onDyingFinished,
     lastDamageInfo,
   }: Props = $props()
 
   let nametagScale = $state(1)
-  let nametagHeight = $state(2.2)
+  let nametagHeight = $state(2.7)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
   let chatBubbleInstance = $state<ChatBubble | null>(null)
   let animDebugInfo = $state('')
@@ -488,9 +492,9 @@
       const minScale = 0.5
       const maxScale = 1.0
 
-      // Height: 1.8 to 2.2
-      const minHeight = 1.8
-      const maxHeight = 2.2
+      // Height: 2.3 to 2.7
+      const minHeight = 2.0
+      const maxHeight = 2.5
 
       let t = (dist - minDist) / (maxDist - minDist)
       t = Math.max(0, Math.min(1, t)) // Clamp between 0 and 1
@@ -607,6 +611,26 @@
     anchorX="center"
     anchorY="middle"
   />
+
+  <!-- Health Bar -->
+  {#if isCurrentPlayer}
+    <T.Group position.y={-0.3}>
+      <!-- Background (black) -->
+      <T.Mesh>
+        <T.PlaneGeometry args={[1.0, 0.08]} />
+        <T.MeshBasicMaterial color="#000000" transparent opacity={0.5} />
+      </T.Mesh>
+      <!-- Foreground (red) -->
+      <T.Mesh
+        position.x={-0.5 + (1.0 * Math.max(0, Math.min(1, health / (maxHealth || 1)))) / 2}
+        scale.x={Math.max(0.001, Math.min(1, health / (maxHealth || 1)))}
+      >
+        <T.PlaneGeometry args={[1.0, 0.08]} />
+        <T.MeshBasicMaterial color="#ff0000" />
+      </T.Mesh>
+    </T.Group>
+  {/if}
+
   {#if animDebugInfo}
     <Text
       text={animDebugInfo}
