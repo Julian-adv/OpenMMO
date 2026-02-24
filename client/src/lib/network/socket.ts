@@ -652,3 +652,9 @@ class NetworkManager {
 }
 
 export const networkManager = new NetworkManager()
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    networkManager.disconnect()
+  })
+}

@@ -376,6 +376,134 @@ impl GameState {
         }
     }
 
+    async fn apply_player_death_penalty(&self, player_id: &PlayerId) {
+        let (character_id, old_xp, attributes) = {
+            let map = self.player_characters.read().await;
+            match map.get(player_id).cloned() {
+                Some(entry) => entry,
+                None => return,
+            }
+        };
+
+        let penalty = xp::apply_death_penalty(old_xp);
+        let progression_changed =
+            penalty.new_xp != penalty.old_xp || penalty.new_level != penalty.old_level;
+        if !progression_changed {
+            return;
+        }
+
+        {
+            let mut map = self.player_characters.write().await;
+            if let Some(entry) = map.get_mut(player_id) {
+                entry.1 = penalty.new_xp;
+            }
+        }
+
+        let mut max_hp_for_db = None;
+        let mut current_hp_for_msg = 0;
+        let mut max_hp_for_msg = 0;
+        let mut level_for_msg = penalty.new_level;
+
+        {
+            let mut players = self.players.write().await;
+            if let Some(player) = players.get_mut(player_id) {
+                player.level = penalty.new_level;
+
+                if penalty.leveled_down {
+                    let class_name = player.class.as_str();
+
+                    let level_one_floor = match character_hp::level_one_max_hp(
+                        character_hp::DEFAULT_CHARACTER_RACE,
+                        class_name,
+                        attributes.con,
+                    ) {
+                        Ok(value) => value,
+                        Err(err) => {
+                            warn!(
+                                "Failed to compute level 1 HP floor for player {}: {}",
+                                player_id, err
+                            );
+                            1
+                        }
+                    };
+
+                    match character_hp::roll_level_hp_delta(class_name, attributes.con) {
+                        Ok(hp_loss) => {
+                            let candidate = i64::from(player.max_health) - i64::from(hp_loss);
+                            let bounded = candidate
+                                .max(i64::from(level_one_floor))
+                                .clamp(1, i64::from(u32::MAX))
+                                as u32;
+
+                            if bounded != player.max_health {
+                                player.max_health = bounded;
+                                max_hp_for_db = Some(bounded);
+                            }
+                        }
+                        Err(err) => {
+                            warn!(
+                                "Failed to roll level-down HP delta for player {}: {}",
+                                player_id, err
+                            );
+                        }
+                    }
+                }
+
+                if player.health > player.max_health {
+                    player.health = player.max_health;
+                }
+
+                current_hp_for_msg = player.health;
+                max_hp_for_msg = player.max_health;
+                level_for_msg = player.level;
+            }
+        }
+
+        let auth = self.auth_service.clone();
+        let new_xp = penalty.new_xp;
+        let new_level = level_for_msg;
+        tokio::task::spawn_blocking(move || {
+            let result = if let Some(max_hp) = max_hp_for_db {
+                auth.update_character_xp_level_and_max_hp(character_id, new_xp, new_level, max_hp)
+            } else {
+                auth.update_character_xp_and_level(character_id, new_xp, new_level)
+            };
+            if let Err(e) = result {
+                tracing::warn!("Failed to persist death penalty: {}", e);
+            }
+        });
+
+        self.send_direct_message(
+            player_id,
+            ServerMessage::XpGained {
+                player_id: player_id.clone(),
+                xp_amount: 0,
+                xp_lost: penalty.old_xp.saturating_sub(penalty.new_xp),
+                total_xp: penalty.new_xp,
+                new_level: level_for_msg,
+                leveled_up: false,
+                max_hp: max_hp_for_msg,
+                current_hp: current_hp_for_msg,
+            },
+        )
+        .await;
+
+        info!(
+            "Player {} death penalty: XP {} -> {} (penalty {}), level {} -> {}{}",
+            player_id,
+            penalty.old_xp,
+            penalty.new_xp,
+            penalty.xp_penalty,
+            penalty.old_level,
+            level_for_msg,
+            if penalty.leveled_down {
+                ", level down"
+            } else {
+                ""
+            }
+        );
+    }
+
     pub async fn send_chat_message(&self, player_id: &PlayerId, message: String) {
         let players = self.players.read().await;
 
@@ -487,10 +615,11 @@ impl GameState {
                                 if let Some(p) = players_write.get_mut(player_id) {
                                     p.level = new_level;
                                     let mut updated_max_hp = p.max_health;
+                                    let class_name = p.class.as_str().to_string();
                                     for _ in 0..levels_gained {
                                         match character_hp::level_up_max_hp(
                                             updated_max_hp,
-                                            character_hp::DEFAULT_CHARACTER_CLASS,
+                                            &class_name,
                                             attributes.con,
                                         ) {
                                             Ok(next_max_hp) => {
@@ -566,6 +695,7 @@ impl GameState {
                                 ServerMessage::XpGained {
                                     player_id: player_id.clone(),
                                     xp_amount,
+                                    xp_lost: 0,
                                     total_xp: new_xp,
                                     new_level,
                                     leveled_up,
@@ -615,12 +745,20 @@ impl GameState {
         }
     }
 
-    pub async fn broadcast_monster_attack(&self, monster_id: &str, target_player_id: &str) {
-        // 1. Check if monster exists and is alive, get its type
+    pub async fn broadcast_monster_attack(
+        &self,
+        attacker_player_id: &PlayerId,
+        monster_id: &str,
+        target_player_id: &str,
+    ) {
+        // 1. Check if monster exists, is alive, and is owned by the requester.
         let monster_type = {
             let monsters = self.monsters.read().await;
             let monster = monsters.get(monster_id);
             if monster.is_none() || monster.unwrap().state == "dead" {
+                return;
+            }
+            if monster.unwrap().owner_id.as_deref() != Some(attacker_player_id) {
                 return;
             }
             monster.unwrap().monster_type.clone()
@@ -704,8 +842,10 @@ impl GameState {
             });
 
         if did_die {
+            let dead_player_id = target_player_id.to_string();
+            self.apply_player_death_penalty(&dead_player_id).await;
             let _ = self.broadcast_tx.send(ServerMessage::PlayerDead {
-                player_id: target_player_id.to_string(),
+                player_id: dead_player_id,
             });
         }
     }

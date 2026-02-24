@@ -273,6 +273,64 @@ xp = 1 + level²  +  guard_bonus
 | 29 | 2,684,354,560 |
 | 30 | 5,368,709,120 |
 
+### 죽음 페널티 (Death Penalty)
+
+사망 시, 현재 레벨 구간 XP의 15%를 차감한다.
+
+```
+level_start_xp = XP(L)
+next_level_xp = XP(L + 1)
+level_band = next_level_xp - level_start_xp
+penalty = max(1, floor(level_band * 0.15))
+new_xp = max(0, current_xp - penalty)
+```
+
+#### 레벨 하락 조건
+
+사망 후 XP가 현재 레벨 시작 XP보다 작아지면 레벨을 1 내린다.
+
+```
+if new_xp < XP(L):
+  L = max(1, L - 1)   // 1회 사망당 최대 1레벨 하락
+```
+
+#### 레벨 하락 시 XP 보정
+
+레벨 하락이 발생하면, 하위 레벨 구간의 최소 30% 진행도는 보장한다.
+
+```
+lower_start_xp = XP(L)
+lower_next_xp = XP(L + 1)
+lower_band = lower_next_xp - lower_start_xp
+recovery_floor = lower_start_xp + floor(lower_band * 0.30)
+new_xp = max(new_xp, recovery_floor)
+```
+
+#### 레벨 하락 시 Max HP 보정
+
+레벨 업/다운 반복에서 통계적 이득이 없도록, **레벨 다운 시 HP 감소량 분포를 레벨 업 증가량 분포와 동일하게** 한다.
+
+```
+con_mod = (CON - 10) / 2
+hp_delta(HD, CON):
+  roll = dHD
+  min_roll = HD / 2
+  return max(roll, min_roll) + con_mod
+
+hp_loss = hp_delta(HD(class), CON)   // 레벨업과 동일 분포
+new_max_hp = max(level1_max_hp, current_max_hp - hp_loss)
+current_hp = min(current_hp, new_max_hp)
+```
+
+- 레벨이 내려가지 않은 경우에는 `max_hp`를 깎지 않는다.
+- 통계적으로 `E(hp_gain) = E(hp_loss)`이므로, 레벨 업/다운 반복의 기대 순이득은 0이다.
+- 클래스별 `E(max(roll, HD/2))`는 다음과 같다: d10=6.5, d8=5.25, d6=4.0, d4=2.75.
+
+#### 예외 규칙
+
+- 레벨 1에서는 레벨 하락이 발생하지 않는다.
+- 1회 사망으로 연속 레벨 하락(2레벨 이상)은 발생하지 않는다.
+
 ---
 
 ## 네트워크 메시지

@@ -1,5 +1,6 @@
 use super::*;
 use crate::monster_defs::MonsterDefs;
+use crate::types::CharacterClass;
 use std::path::PathBuf;
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -42,6 +43,7 @@ async fn respawn_player_revives_dead_player_only() {
         level: 3,
         health: 0,
         max_health: 30,
+        class: CharacterClass::Knight,
     };
     let player_id = player.id.clone();
     game_state.add_player(player).await;
@@ -87,6 +89,7 @@ async fn respawn_player_ignores_alive_player() {
         level: 2,
         health: 18,
         max_health: 20,
+        class: CharacterClass::Knight,
     };
     let player_id = player.id.clone();
     game_state.add_player(player).await;

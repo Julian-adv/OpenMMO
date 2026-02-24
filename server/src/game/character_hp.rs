@@ -2,7 +2,6 @@ use rand::Rng;
 use std::fmt::{Display, Formatter};
 
 pub const DEFAULT_CHARACTER_RACE: &str = "human";
-pub const DEFAULT_CHARACTER_CLASS: &str = "knight";
 
 const RACE_HP_BONUSES: &[(&str, i32)] = &[
     ("human", 2),
@@ -97,6 +96,19 @@ pub fn level_up_max_hp(
     class_name: &str,
     con: u8,
 ) -> Result<u32, CharacterHpTableError> {
+    let hp_gain = i64::from(roll_level_hp_delta(class_name, con)?);
+    let new_max_hp = i64::from(current_max_hp) + hp_gain;
+
+    if !(1..=i64::from(u32::MAX)).contains(&new_max_hp) {
+        return Err(CharacterHpTableError::OutOfRange);
+    }
+
+    Ok(new_max_hp as u32)
+}
+
+/// Roll per-level HP delta with the same distribution used by level-up:
+/// max(dHD roll, HD/2) + CON modifier.
+pub fn roll_level_hp_delta(class_name: &str, con: u8) -> Result<i32, CharacterHpTableError> {
     let normalized_class_name = class_name.trim().to_lowercase();
     if normalized_class_name.is_empty() {
         return Err(CharacterHpTableError::InvalidInput);
@@ -115,14 +127,7 @@ pub fn level_up_max_hp(
     let roll = rng.gen_range(1..=class_hit_die);
     let min_roll = class_hit_die / 2;
     let adjusted_roll = roll.max(min_roll);
-    let hp_gain = i64::from(adjusted_roll) + i64::from(con_mod);
-    let new_max_hp = i64::from(current_max_hp) + hp_gain;
-
-    if !(1..=i64::from(u32::MAX)).contains(&new_max_hp) {
-        return Err(CharacterHpTableError::OutOfRange);
-    }
-
-    Ok(new_max_hp as u32)
+    Ok(i32::from(adjusted_roll) + i32::from(con_mod))
 }
 
 fn con_modifier(con: u8) -> i16 {

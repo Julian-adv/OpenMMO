@@ -224,6 +224,7 @@ pub enum ServerMessage {
     XpGained {
         player_id: String,
         xp_amount: u32,
+        xp_lost: u64,
         total_xp: u64,
         new_level: u32,
         leveled_up: bool,

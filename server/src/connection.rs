@@ -228,7 +228,10 @@ async fn handle_client_message(
             }]);
         }
 
-        ClientMessage::CreateCharacter { character_name, character_class } => {
+        ClientMessage::CreateCharacter {
+            character_name,
+            character_class,
+        } => {
             if player_id.is_some() {
                 warn!("CreateCharacter ignored because client is already in game");
                 return Ok(vec![ServerMessage::CharacterError {
@@ -478,9 +481,9 @@ async fn handle_client_message(
             monster_id,
             target_player_id,
         } => {
-            if player_id.is_some() {
+            if let Some(id) = player_id {
                 game_state
-                    .broadcast_monster_attack(&monster_id, &target_player_id)
+                    .broadcast_monster_attack(id, &monster_id, &target_player_id)
                     .await;
             } else {
                 warn!("Received monster attack from client that is not in game");
@@ -512,7 +515,10 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
     }
 }
 
-fn default_character_max_hp(attributes: &CharacterAttributes, character_class: &CharacterClass) -> u32 {
+fn default_character_max_hp(
+    attributes: &CharacterAttributes,
+    character_class: &CharacterClass,
+) -> u32 {
     let class_str = character_class.as_str();
     match level_one_max_hp(DEFAULT_CHARACTER_RACE, class_str, attributes.con) {
         Ok(value) => value,

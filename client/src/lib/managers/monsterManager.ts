@@ -375,6 +375,11 @@ class MonsterManager {
               if (monster.stateTimer >= (def?.attackCooldown ?? 1500)) {
                 monster.stateTimer = 0
 
+                const myPlayerId = gameState.currentPlayer?.id
+                if (!myPlayerId || monster.ownerId !== myPlayerId) {
+                  return
+                }
+
                 networkManager.sendMonsterMove(
                   monster.id,
                   monster.position,

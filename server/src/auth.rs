@@ -303,7 +303,9 @@ impl AuthService {
                         cha: row.get(11)?,
                         guard: row.get(12)?,
                     },
-                    class: row.get::<_, String>(13).unwrap_or_else(|_| "knight".to_string()),
+                    class: row
+                        .get::<_, String>(13)
+                        .unwrap_or_else(|_| "knight".to_string()),
                 })
             })
             .map_err(|e| AuthError::Database(e.to_string()))?

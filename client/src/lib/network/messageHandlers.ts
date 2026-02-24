@@ -396,15 +396,34 @@ export function handleServerMessage(
     }
 
     case 'XpGained': {
+      const previousState = get(gameStore)
+      const previousPlayer = previousState.currentPlayer
+      const previousLevel =
+        previousPlayer && previousPlayer.id === data.player_id
+          ? previousPlayer.level
+          : null
+      const newTotalXp = Number(data.total_xp)
+      const xpLost = Number(data.xp_lost ?? 0)
+
       updatePlayer(data.player_id, {
         level: data.new_level,
-        totalXp: Number(data.total_xp),
+        totalXp: newTotalXp,
         health: data.current_hp,
         maxHealth: data.max_hp,
       })
-      addChatMessage(`You gained ${data.xp_amount} XP.`)
+      if (data.xp_amount > 0) {
+        addChatMessage(`You gained ${data.xp_amount} XP.`)
+      } else if (previousLevel !== null) {
+        if (xpLost > 0) {
+          addChatMessage(`Death penalty: You lost ${xpLost} XP.`)
+        } else {
+          addChatMessage('Death penalty applied.')
+        }
+      }
       if (data.leveled_up) {
         addChatMessage(`Level up! You are now level ${data.new_level}.`)
+      } else if (previousLevel !== null && data.new_level < previousLevel) {
+        addChatMessage(`Level down. You are now level ${data.new_level}.`)
       }
       break
     }
