@@ -88,7 +88,6 @@
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
-  let modelGroundOffsetY = $state(0)
   // Clock removed, using passed deltaTime
 
   let validAnimations = $state<THREE.AnimationClip[]>([])
@@ -151,16 +150,6 @@
     const size = new THREE.Vector3()
     bounds.getSize(size)
     return Number.isFinite(size.y) ? size.y : 0
-  }
-
-  function getGroundAlignmentOffsetY(object: THREE.Object3D): number {
-    object.updateMatrixWorld(true)
-    const bounds = new THREE.Box3().setFromObject(object)
-    if (bounds.isEmpty() || !Number.isFinite(bounds.min.y)) return 0
-
-    // Player world Y is treated as ground level. Raise only when the model's
-    // local base is below zero to avoid additional sinking.
-    return Math.max(0, -bounds.min.y)
   }
 
   // Select movement animation based on movement mode
@@ -460,7 +449,6 @@
         }
       }
 
-      modelGroundOffsetY = getGroundAlignmentOffsetY(newModelRoot)
       modelRoot = newModelRoot
     }
   }
@@ -499,7 +487,6 @@
       if (modelRoot) {
         modelRoot = null
       }
-      modelGroundOffsetY = 0
     }
   })
 
@@ -629,7 +616,7 @@
     rotation={[0, rotation, 0]}
   >
     <!-- 3D Character Model with real animations -->
-    <T is={modelRoot} position={[0, modelGroundOffsetY, 0]} />
+    <T is={modelRoot} />
   </T.Group>
 {/if}
 
