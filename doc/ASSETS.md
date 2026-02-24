@@ -28,6 +28,10 @@
 - dying https://sketchfab.com/3d-models/dying-98a1d5b2288d49d993039cb161913cd3
 - medieval_knight https://sketchfab.com/3d-models/medieval-knight-sculpture-game-ready-6cdd055b4afa41eb9360dbbfe75c7f10
 
+### animations
+
+- mixamo.com에서 받은 fbx를 blender에서 scale 10으로 임포트한다
+
 - Medea By M. Arrebola https://www.mixamo.com/#/?page=1&query=&type=Character
 - Walking https://www.mixamo.com/#/?page=1&query=walk&type=Motion%2CMotionPack
 - Catwalk Walk Forward https://www.mixamo.com/#/?page=2&query=walk&type=Motion%2CMotionPack
@@ -43,6 +47,8 @@
 - Dwarf Idle
 - Offensive Idle https://www.mixamo.com/#/?page=2&query=idle&type=Motion%2CMotionPack
 - Sword And Shield Idle
+
+- Sword and Shield Slash https://www.mixamo.com/#/?page=1&query=slash&type=Motion%2CMotionPack
 
 ## Monster
 

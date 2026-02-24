@@ -13,6 +13,12 @@ export interface OrderedAnimationSelection {
   fromFallback: boolean
 }
 
+export interface RetargetSourceScenes {
+  base?: THREE.Object3D | null
+  locomotion?: THREE.Object3D | null
+  combatMelee?: THREE.Object3D | null
+}
+
 const LOCOMOTION_ANIMATION_NAMES = new Set<AnimationName>([
   AnimationName.IDLE1,
   AnimationName.IDLE2,
@@ -44,6 +50,7 @@ const HIP_BONE_CANDIDATES = [
 ] as const
 const retargetedClipCache = new Map<string, THREE.AnimationClip>()
 const CHARACTER_DISPLAY_TARGET_HEIGHT = 1.8
+const ENABLE_RUNTIME_BONE_RETARGETING = true
 
 export function getGltfAnimations(gltf: unknown): THREE.AnimationClip[] {
   if (!gltf || typeof gltf !== 'object' || !('animations' in gltf)) return []
@@ -250,6 +257,7 @@ export function retargetAnimationsForCharacterModel(
   retargetSourceScene: THREE.Object3D | null | undefined,
   clips: THREE.AnimationClip[]
 ): THREE.AnimationClip[] {
+  if (!ENABLE_RUNTIME_BONE_RETARGETING) return clips
   if (clips.length === 0 || !retargetSourceScene) return clips
 
   // Operate on clones only. Both target and source scenes can come from shared
@@ -320,6 +328,66 @@ export function retargetAnimationsForCharacterModel(
   })
 
   return retargetedClips
+}
+
+export function retargetOrderedCharacterAnimationsForModel(
+  targetScene: THREE.Object3D,
+  orderedSelections: OrderedAnimationSelection[],
+  sourceScenes: RetargetSourceScenes
+): THREE.AnimationClip[] {
+  if (!ENABLE_RUNTIME_BONE_RETARGETING) {
+    return orderedSelections.map((selection) => selection.clip)
+  }
+
+  const bySource = {
+    base: orderedSelections.filter((selection) => selection.source === 'base'),
+    locomotion: orderedSelections.filter(
+      (selection) => selection.source === 'locomotion'
+    ),
+    combat_melee: orderedSelections.filter(
+      (selection) => selection.source === 'combat_melee'
+    ),
+  }
+
+  const retargetedBySource = {
+    base: retargetAnimationsForCharacterModel(
+      targetScene,
+      sourceScenes.base,
+      bySource.base.map((selection) => selection.clip)
+    ),
+    locomotion: retargetAnimationsForCharacterModel(
+      targetScene,
+      sourceScenes.locomotion,
+      bySource.locomotion.map((selection) => selection.clip)
+    ),
+    combat_melee: retargetAnimationsForCharacterModel(
+      targetScene,
+      sourceScenes.combatMelee ?? sourceScenes.locomotion,
+      bySource.combat_melee.map((selection) => selection.clip)
+    ),
+  }
+
+  let baseIndex = 0
+  let locomotionIndex = 0
+  let combatMeleeIndex = 0
+
+  return orderedSelections.map((selection) => {
+    if (selection.source === 'base') {
+      const clip = retargetedBySource.base[baseIndex]
+      baseIndex += 1
+      return clip ?? selection.clip
+    }
+
+    if (selection.source === 'locomotion') {
+      const clip = retargetedBySource.locomotion[locomotionIndex]
+      locomotionIndex += 1
+      return clip ?? selection.clip
+    }
+
+    const clip = retargetedBySource.combat_melee[combatMeleeIndex]
+    combatMeleeIndex += 1
+    return clip ?? selection.clip
+  })
 }
 
 export function selectOrderedCharacterAnimations(

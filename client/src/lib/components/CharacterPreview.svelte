@@ -9,11 +9,10 @@
     createCharacterModelRoot,
     getGltfAnimations,
     normalizeCharacterModelScale,
-    retargetAnimationsForCharacterModel,
+    retargetOrderedCharacterAnimationsForModel,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
   import {
-    CHARACTER_ANIMATION_SOURCE_MODEL_PATH,
     CHARACTER_ANIMATION_PACK_PATHS,
     WARRIOR_CHARACTER_MODEL_PATH,
     KNIGHT_CHARACTER_MODEL_PATH,
@@ -36,9 +35,6 @@
   )
   const combatMeleeGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.combatMelee
-  )
-  const retargetSourceGltf = useLoader(GLTFLoader).load(
-    CHARACTER_ANIMATION_SOURCE_MODEL_PATH
   )
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
@@ -79,7 +75,6 @@
 
   function setupModel(
     sourceScene: THREE.Object3D,
-    retargetSourceScene: THREE.Object3D | null | undefined,
     baseAnimations: THREE.AnimationClip[],
     locomotionAnimations: THREE.AnimationClip[],
     combatMeleeAnimations: THREE.AnimationClip[]
@@ -89,14 +84,18 @@
     const { modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
     modelRoot = newModelRoot
 
-    validAnimations = retargetAnimationsForCharacterModel(
+    validAnimations = retargetOrderedCharacterAnimationsForModel(
       newModelRoot,
-      retargetSourceScene,
       selectOrderedCharacterAnimations(
         baseAnimations,
         locomotionAnimations,
         combatMeleeAnimations
-      ).map(({ clip }) => clip)
+      ),
+      {
+        base: sourceScene,
+        locomotion: $locomotionGltf?.scene,
+        combatMelee: $locomotionGltf?.scene,
+      }
     )
 
     if (validAnimations.length > 0) {
@@ -143,18 +142,11 @@
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
       const animationPacksReady =
         ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
-      const retargetSourceReady = !!$retargetSourceGltf || animationPackTimedOut
       const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
 
-      if (activeGltf && animationPacksReady && retargetSourceReady) {
-        if (!$retargetSourceGltf && animationPackTimedOut) {
-          console.warn(
-            'Retarget source GLB load timeout in preview, using non-retargeted clips'
-          )
-        }
+      if (activeGltf && animationPacksReady) {
         setupModel(
           activeGltf.scene,
-          $retargetSourceGltf?.scene,
           getGltfAnimations(activeGltf),
           getGltfAnimations($locomotionGltf),
           getGltfAnimations($combatMeleeGltf)

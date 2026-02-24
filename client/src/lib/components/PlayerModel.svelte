@@ -14,11 +14,10 @@
     createCharacterModelRoot,
     getGltfAnimations,
     normalizeCharacterModelScale,
-    retargetAnimationsForCharacterModel,
+    retargetOrderedCharacterAnimationsForModel,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
   import {
-    CHARACTER_ANIMATION_SOURCE_MODEL_PATH,
     CHARACTER_ANIMATION_PACK_PATHS,
     WARRIOR_CHARACTER_MODEL_PATH,
     KNIGHT_CHARACTER_MODEL_PATH,
@@ -81,9 +80,6 @@
   const combatMeleeGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.combatMelee
   )
-  const retargetSourceGltf = useLoader(GLTFLoader).load(
-    CHARACTER_ANIMATION_SOURCE_MODEL_PATH
-  )
 
   // Load sword model
   const swordGltf = useLoader(GLTFLoader).load('/models/sword.glb')
@@ -92,6 +88,7 @@
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
+  let modelGroundOffsetY = $state(0)
   // Clock removed, using passed deltaTime
 
   let validAnimations = $state<THREE.AnimationClip[]>([])
@@ -103,8 +100,9 @@
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const MIN_SAFE_SCALE_COMPONENT = 0.0001
-  const MIN_SWORD_SCALE_COMPENSATION = 0.25
-  const MAX_SWORD_SCALE_COMPENSATION = 4
+  const MIN_SWORD_SCALE_COMPENSATION = 0.6
+  const MAX_SWORD_SCALE_COMPENSATION = 1.8
+  const ENABLE_SWORD_ATTACHMENT = false
   const ENABLE_SWORD_SCALE_COMPENSATION = true
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
@@ -153,6 +151,16 @@
     const size = new THREE.Vector3()
     bounds.getSize(size)
     return Number.isFinite(size.y) ? size.y : 0
+  }
+
+  function getGroundAlignmentOffsetY(object: THREE.Object3D): number {
+    object.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(object)
+    if (bounds.isEmpty() || !Number.isFinite(bounds.min.y)) return 0
+
+    // Player world Y is treated as ground level. Raise only when the model's
+    // local base is below zero to avoid additional sinking.
+    return Math.max(0, -bounds.min.y)
   }
 
   // Select movement animation based on movement mode
@@ -240,9 +248,11 @@
 
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
+      normalizeCharacterModelScale(newModelRoot)
+      const targetModelHeight = getObjectHeight(cloned)
 
       // Attach sword to right hand if sword model is loaded
-      if ($swordGltf) {
+      if (ENABLE_SWORD_ATTACHMENT && $swordGltf) {
         console.log('Attaching sword to hand')
 
         const rightHandBone = findMainRightHandBone(cloned)
@@ -291,7 +301,6 @@
           // Keep sword size consistent across rigs by compensating cumulative
           // scale differences against the maria reference rig.
           const targetHandChainScale = getObjectChainScale(rightHandBone)
-          const targetModelHeight = getObjectHeight(cloned)
 
           const swordScaleReferenceScene = $warriorGltf?.scene
           const sourceHandBone =
@@ -309,42 +318,32 @@
                 ? targetModelHeight / sourceModelHeight
                 : 1
 
-            const compensationX = THREE.MathUtils.clamp(
-              (sourceHandChainScale.x /
-                Math.max(
-                  targetHandChainScale.x,
-                  MIN_SAFE_SCALE_COMPONENT
-                )) *
-                modelHeightCompensation,
-              MIN_SWORD_SCALE_COMPENSATION,
-              MAX_SWORD_SCALE_COMPENSATION
+            const ratioX =
+              sourceHandChainScale.x /
+              Math.max(targetHandChainScale.x, MIN_SAFE_SCALE_COMPONENT)
+            const ratioY =
+              sourceHandChainScale.y /
+              Math.max(targetHandChainScale.y, MIN_SAFE_SCALE_COMPONENT)
+            const ratioZ =
+              sourceHandChainScale.z /
+              Math.max(targetHandChainScale.z, MIN_SAFE_SCALE_COMPONENT)
+
+            const axisRatios = [ratioX, ratioY, ratioZ].filter(
+              (value) => Number.isFinite(value) && value > 0
             )
-            const compensationY = THREE.MathUtils.clamp(
-              (sourceHandChainScale.y /
-                Math.max(
-                  targetHandChainScale.y,
-                  MIN_SAFE_SCALE_COMPONENT
-                )) *
-                modelHeightCompensation,
-              MIN_SWORD_SCALE_COMPENSATION,
-              MAX_SWORD_SCALE_COMPENSATION
-            )
-            const compensationZ = THREE.MathUtils.clamp(
-              (sourceHandChainScale.z /
-                Math.max(
-                  targetHandChainScale.z,
-                  MIN_SAFE_SCALE_COMPONENT
-                )) *
-                modelHeightCompensation,
+            const averageRatio =
+              axisRatios.length > 0
+                ? axisRatios.reduce((sum, value) => sum + value, 0) /
+                  axisRatios.length
+                : 1
+
+            const compensation = THREE.MathUtils.clamp(
+              averageRatio * modelHeightCompensation,
               MIN_SWORD_SCALE_COMPENSATION,
               MAX_SWORD_SCALE_COMPENSATION
             )
 
-            swordClone.scale.set(
-              swordClone.scale.x * compensationX,
-              swordClone.scale.y * compensationY,
-              swordClone.scale.z * compensationZ
-            )
+            swordClone.scale.multiplyScalar(compensation)
           }
 
           console.log('Sword attached successfully to', rightHandBone.name)
@@ -385,10 +384,14 @@
         locomotionAnimations,
         combatMeleeAnimations
       )
-      validAnimations = retargetAnimationsForCharacterModel(
+      validAnimations = retargetOrderedCharacterAnimationsForModel(
         newModelRoot,
-        $retargetSourceGltf?.scene,
-        orderedSelections.map(({ clip }) => clip)
+        orderedSelections,
+        {
+          base: activeGltf.scene,
+          locomotion: $locomotionGltf?.scene,
+          combatMelee: $locomotionGltf?.scene,
+        }
       )
 
       for (const selection of orderedSelections) {
@@ -457,7 +460,7 @@
         }
       }
 
-      normalizeCharacterModelScale(newModelRoot)
+      modelGroundOffsetY = getGroundAlignmentOffsetY(newModelRoot)
       modelRoot = newModelRoot
     }
   }
@@ -470,20 +473,14 @@
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
       const animationPacksReady =
         ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
-      const retargetSourceReady = !!$retargetSourceGltf || animationPackTimedOut
       const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
-      if (activeGltf && animationPacksReady && retargetSourceReady) {
+      if (activeGltf && animationPacksReady) {
         if (!$locomotionGltf && animationPackTimedOut) {
           console.warn('Locomotion GLB load timeout, using maria animations only')
         }
         if (!$combatMeleeGltf && animationPackTimedOut) {
           console.warn(
             'Combat melee GLB load timeout, using maria/locomotion animations only'
-          )
-        }
-        if (!$retargetSourceGltf && animationPackTimedOut) {
-          console.warn(
-            'Retarget source GLB load timeout, using non-retargeted animation clips'
           )
         }
         setupRealAnimation()
@@ -502,6 +499,7 @@
       if (modelRoot) {
         modelRoot = null
       }
+      modelGroundOffsetY = 0
     }
   })
 
@@ -631,7 +629,7 @@
     rotation={[0, rotation, 0]}
   >
     <!-- 3D Character Model with real animations -->
-    <T is={modelRoot} />
+    <T is={modelRoot} position={[0, modelGroundOffsetY, 0]} />
   </T.Group>
 {/if}
 
