@@ -97,8 +97,11 @@
   let lastAttackCounter = $state(0)
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
+  let swordAttached = $state(false)
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const ENABLE_SWORD_ATTACHMENT = true
+  const MIN_SWORD_TO_CHARACTER_HEIGHT_RATIO = 0.08
+  const MAX_SWORD_TO_CHARACTER_HEIGHT_RATIO = 0.6
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
     const boneName = bone.name.toLowerCase()
@@ -115,14 +118,144 @@
     )
   }
 
+  function findPrimarySkinnedMesh(
+    root: THREE.Object3D
+  ): THREE.SkinnedMesh | undefined {
+    let primarySkinnedMesh: THREE.SkinnedMesh | undefined
+    root.traverse((obj) => {
+      if (!(obj instanceof THREE.SkinnedMesh) || !obj.skeleton) return
+      if (
+        !primarySkinnedMesh ||
+        obj.skeleton.bones.length > primarySkinnedMesh.skeleton.bones.length
+      ) {
+        primarySkinnedMesh = obj
+      }
+    })
+    return primarySkinnedMesh
+  }
+
   function findMainRightHandBone(root: THREE.Object3D): THREE.Bone | undefined {
-    let rightHandBone: THREE.Bone | undefined
+    const primarySkinnedMesh = findPrimarySkinnedMesh(root)
+    if (primarySkinnedMesh) {
+      const skeletonBones = primarySkinnedMesh.skeleton.bones
+      const byName = new Map(
+        skeletonBones.map((bone) => [bone.name.toLowerCase(), bone])
+      )
+      const preferredBoneNames = [
+        'righthand',
+        'right_hand',
+        'hand_r',
+        'hand.r',
+        'mixamorig:righthand',
+        'mixamorigrighthand',
+      ]
+
+      for (const preferredName of preferredBoneNames) {
+        const preferredBone = byName.get(preferredName)
+        if (preferredBone) return preferredBone
+      }
+
+      const matchedSkeletonBone = skeletonBones.find((bone) =>
+        isMainRightHandBone(bone)
+      )
+      if (matchedSkeletonBone) return matchedSkeletonBone
+    }
+
+    // Fallback: search entire hierarchy if skeleton lookup was unavailable.
+    let fallbackBone: THREE.Bone | undefined
     root.traverse((obj) => {
       if (!(obj instanceof THREE.Bone)) return
       if (!isMainRightHandBone(obj)) return
-      rightHandBone = obj
+      fallbackBone = obj
     })
-    return rightHandBone
+    return fallbackBone
+  }
+
+  function prepareSwordMeshes(root: THREE.Object3D): void {
+    root.traverse((child) => {
+      if (!(child instanceof THREE.Mesh)) return
+      child.castShadow = true
+      child.receiveShadow = true
+      child.visible = true
+      child.frustumCulled = false
+
+      const materials = Array.isArray(child.material)
+        ? child.material
+        : [child.material]
+      for (const material of materials) {
+        if (!material) continue
+        // Right-hand bone chains can include mirrored (negative) scale, which
+        // may invert face winding and hide single-sided meshes.
+        material.side = THREE.DoubleSide
+        material.needsUpdate = true
+      }
+    })
+  }
+
+  function getObjectWorldSize(object: THREE.Object3D): THREE.Vector3 {
+    object.updateMatrixWorld(true)
+    const bounds = new THREE.Box3().setFromObject(object)
+    if (bounds.isEmpty()) return new THREE.Vector3(0, 0, 0)
+    const size = new THREE.Vector3()
+    bounds.getSize(size)
+    return size
+  }
+
+  function getAverageAbsWorldScale(object: THREE.Object3D): number {
+    const worldScale = new THREE.Vector3()
+    object.getWorldScale(worldScale)
+    const sx = Math.abs(worldScale.x)
+    const sy = Math.abs(worldScale.y)
+    const sz = Math.abs(worldScale.z)
+    const avg = (sx + sy + sz) / 3
+    return Number.isFinite(avg) && avg > 0 ? avg : 1
+  }
+
+  function tryAttachSword(characterRoot: THREE.Object3D): boolean {
+    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !$swordGltf) return false
+
+    const rightHandBone = findMainRightHandBone(characterRoot)
+    if (!rightHandBone) {
+      console.warn('Could not find right hand bone for sword attachment')
+      return false
+    }
+
+    const swordClone = $swordGltf.scene.clone()
+    // Use model-authored pivot/orientation, but clear accidental scene offsets.
+    swordClone.position.set(0, 0, 0)
+    swordClone.rotation.set(0, 0, 0)
+    swordClone.scale.set(1, 1, 1)
+    prepareSwordMeshes(swordClone)
+
+    const characterHeight = getObjectWorldSize(characterRoot).y
+    rightHandBone.add(swordClone)
+
+    // Some rigs (e.g. maria) carry tiny armature/world scale in the hand chain.
+    // Neutralize parent scale so attached props preserve expected world size.
+    const handAvgScale = getAverageAbsWorldScale(rightHandBone)
+    if (handAvgScale > 0) {
+      swordClone.scale.multiplyScalar(1 / handAvgScale)
+    }
+
+    // Keep sword size in a visible, sane range relative to character height.
+    if (characterHeight > 0) {
+      const swordSize = getObjectWorldSize(swordClone)
+      const swordMaxDim = Math.max(swordSize.x, swordSize.y, swordSize.z)
+      if (swordMaxDim > 0) {
+        const currentRatio = swordMaxDim / characterHeight
+        if (currentRatio < MIN_SWORD_TO_CHARACTER_HEIGHT_RATIO) {
+          const scaleUp = MIN_SWORD_TO_CHARACTER_HEIGHT_RATIO / currentRatio
+          swordClone.scale.multiplyScalar(scaleUp)
+        } else if (currentRatio > MAX_SWORD_TO_CHARACTER_HEIGHT_RATIO) {
+          const scaleDown = MAX_SWORD_TO_CHARACTER_HEIGHT_RATIO / currentRatio
+          swordClone.scale.multiplyScalar(scaleDown)
+        }
+      }
+    }
+
+    swordAttached = true
+    console.log('Sword attached successfully to', rightHandBone.name)
+    return true
   }
 
   // Select movement animation based on movement mode
@@ -212,50 +345,10 @@
         createCharacterModelRoot(activeGltf.scene)
       normalizeCharacterModelScale(newModelRoot)
 
-      // Attach sword to right hand if sword model is loaded
-      if (ENABLE_SWORD_ATTACHMENT && $swordGltf) {
-        console.log('Attaching sword to hand')
-
-        const rightHandBone = findMainRightHandBone(cloned)
-        if (rightHandBone) {
-          console.log(`Found main right hand bone: ${rightHandBone.name}`)
-        }
-
-        if (rightHandBone) {
-          // Clone the sword model
-          const swordClone = $swordGltf.scene.clone()
-
-          // Debug: Log sword model info
-          console.log('Sword model info:', {
-            position: swordClone.position,
-            rotation: swordClone.rotation,
-            scale: swordClone.scale,
-            children: swordClone.children.length,
-          })
-
-          // Adjust sword position and rotation to fit in hand
-          // Try much larger scale to make it visible (sword might be very small)
-          // swordClone.position.set(0, 0.1, 0)
-          // swordClone.rotation.set(-Math.PI / 2, 0, 0)
-          // swordClone.scale.set(100, 100, 100)
-
-          // Attach sword to hand bone
-          rightHandBone.add(swordClone)
-
-          console.log('Sword attached successfully to', rightHandBone.name)
-          console.log('Hand bone position:', rightHandBone.position)
-        } else {
-          console.warn('Could not find right hand bone')
-          // Log all bone names to help with debugging
-          const boneNames: string[] = []
-          cloned.traverse((obj) => {
-            if (obj instanceof THREE.Bone) {
-              boneNames.push(obj.name)
-            }
-          })
-          console.log('Available bones:', boneNames)
-        }
+      if (ENABLE_SWORD_ATTACHMENT && !$swordGltf) {
+        console.log('Sword GLB not ready yet; will attach when loaded')
       }
+      tryAttachSword(cloned)
 
       const baseAnimations = getGltfAnimations(activeGltf)
       const locomotionAnimations = getGltfAnimations($locomotionGltf)
@@ -394,7 +487,15 @@
       if (modelRoot) {
         modelRoot = null
       }
+      swordAttached = false
     }
+  })
+
+  $effect(() => {
+    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !modelRoot || !$swordGltf) {
+      return
+    }
+    tryAttachSword(modelRoot)
   })
 
   // Function to update mixer and animation state and nametag - called from GameScene gameLoop
