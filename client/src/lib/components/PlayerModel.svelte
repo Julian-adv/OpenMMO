@@ -98,11 +98,7 @@
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
-  const MIN_SAFE_SCALE_COMPONENT = 0.0001
-  const MIN_SWORD_SCALE_COMPENSATION = 0.6
-  const MAX_SWORD_SCALE_COMPENSATION = 1.8
-  const ENABLE_SWORD_ATTACHMENT = false
-  const ENABLE_SWORD_SCALE_COMPENSATION = true
+  const ENABLE_SWORD_ATTACHMENT = true
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
     const boneName = bone.name.toLowerCase()
@@ -127,29 +123,6 @@
       rightHandBone = obj
     })
     return rightHandBone
-  }
-
-  function getObjectChainScale(object: THREE.Object3D): THREE.Vector3 {
-    const chainScale = new THREE.Vector3(1, 1, 1)
-    let current: THREE.Object3D | null = object
-
-    while (current) {
-      chainScale.x *= Math.abs(current.scale.x)
-      chainScale.y *= Math.abs(current.scale.y)
-      chainScale.z *= Math.abs(current.scale.z)
-      current = current.parent
-    }
-
-    return chainScale
-  }
-
-  function getObjectHeight(object: THREE.Object3D): number {
-    object.updateMatrixWorld(true)
-    const bounds = new THREE.Box3().setFromObject(object)
-    if (bounds.isEmpty()) return 0
-    const size = new THREE.Vector3()
-    bounds.getSize(size)
-    return Number.isFinite(size.y) ? size.y : 0
   }
 
   // Select movement animation based on movement mode
@@ -238,7 +211,6 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
       normalizeCharacterModelScale(newModelRoot)
-      const targetModelHeight = getObjectHeight(cloned)
 
       // Attach sword to right hand if sword model is loaded
       if (ENABLE_SWORD_ATTACHMENT && $swordGltf) {
@@ -261,23 +233,6 @@
             children: swordClone.children.length,
           })
 
-          // Debug: Log all meshes in sword
-          let meshCount = 0
-          swordClone.traverse((child) => {
-            if (child instanceof THREE.Mesh) {
-              meshCount++
-              console.log('Sword mesh:', {
-                name: child.name,
-                geometry: child.geometry,
-                material: child.material,
-                visible: child.visible,
-              })
-              child.castShadow = true
-              child.receiveShadow = true
-            }
-          })
-          console.log(`Total sword meshes: ${meshCount}`)
-
           // Adjust sword position and rotation to fit in hand
           // Try much larger scale to make it visible (sword might be very small)
           // swordClone.position.set(0, 0.1, 0)
@@ -286,54 +241,6 @@
 
           // Attach sword to hand bone
           rightHandBone.add(swordClone)
-
-          // Keep sword size consistent across rigs by compensating cumulative
-          // scale differences against the maria reference rig.
-          const targetHandChainScale = getObjectChainScale(rightHandBone)
-
-          const swordScaleReferenceScene = $warriorGltf?.scene
-          const sourceHandBone =
-            swordScaleReferenceScene &&
-            findMainRightHandBone(swordScaleReferenceScene)
-          if (
-            ENABLE_SWORD_SCALE_COMPENSATION &&
-            sourceHandBone &&
-            swordScaleReferenceScene
-          ) {
-            const sourceHandChainScale = getObjectChainScale(sourceHandBone)
-            const sourceModelHeight = getObjectHeight(swordScaleReferenceScene)
-            const modelHeightCompensation =
-              sourceModelHeight > MIN_SAFE_SCALE_COMPONENT
-                ? targetModelHeight / sourceModelHeight
-                : 1
-
-            const ratioX =
-              sourceHandChainScale.x /
-              Math.max(targetHandChainScale.x, MIN_SAFE_SCALE_COMPONENT)
-            const ratioY =
-              sourceHandChainScale.y /
-              Math.max(targetHandChainScale.y, MIN_SAFE_SCALE_COMPONENT)
-            const ratioZ =
-              sourceHandChainScale.z /
-              Math.max(targetHandChainScale.z, MIN_SAFE_SCALE_COMPONENT)
-
-            const axisRatios = [ratioX, ratioY, ratioZ].filter(
-              (value) => Number.isFinite(value) && value > 0
-            )
-            const averageRatio =
-              axisRatios.length > 0
-                ? axisRatios.reduce((sum, value) => sum + value, 0) /
-                  axisRatios.length
-                : 1
-
-            const compensation = THREE.MathUtils.clamp(
-              averageRatio * modelHeightCompensation,
-              MIN_SWORD_SCALE_COMPENSATION,
-              MAX_SWORD_SCALE_COMPENSATION
-            )
-
-            swordClone.scale.multiplyScalar(compensation)
-          }
 
           console.log('Sword attached successfully to', rightHandBone.name)
           console.log('Hand bone position:', rightHandBone.position)
