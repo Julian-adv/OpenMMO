@@ -539,6 +539,10 @@ class NetworkManager {
     }
     clearServerGameTime()
     if (this.socket) {
+      this.socket.onopen = null
+      this.socket.onclose = null
+      this.socket.onerror = null
+      this.socket.onmessage = null
       this.socket.close()
       this.socket = null
     }
