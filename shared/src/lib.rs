@@ -42,6 +42,8 @@ pub struct Player {
     pub health: u32,
     pub max_health: u32,
     pub class: CharacterClass,
+    #[serde(skip)]
+    pub last_combat_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,8 @@ pub struct Monster {
     pub owner_id: Option<String>,
     pub health: u32,
     pub max_health: u32,
+    #[serde(skip)]
+    pub last_attack_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,6 +224,11 @@ pub enum ServerMessage {
     },
     PlayerRespawned {
         player: Player,
+    },
+    PlayerHealthUpdate {
+        player_id: String,
+        health: u32,
+        max_health: u32,
     },
     XpGained {
         player_id: String,

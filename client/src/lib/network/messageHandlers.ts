@@ -395,6 +395,14 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerHealthUpdate': {
+      updatePlayer(data.player_id, {
+        health: data.health,
+        maxHealth: data.max_health,
+      })
+      break
+    }
+
     case 'XpGained': {
       const previousState = get(gameStore)
       const previousPlayer = previousState.currentPlayer

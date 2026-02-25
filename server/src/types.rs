@@ -18,5 +18,6 @@ pub fn new_player(name: String, level: u32, max_health: u32, class: CharacterCla
         health: max_health,
         max_health,
         class,
+        last_combat_at: 0,
     }
 }

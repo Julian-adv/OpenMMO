@@ -72,8 +72,16 @@ async fn main() {
     let auth_service_for_time_sync = Arc::clone(&auth_service);
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_secs(8));
+        let mut tick_count = 0u64;
         loop {
             interval.tick().await;
+            tick_count = tick_count.wrapping_add(1);
+
+            // Regenerate player health every 2 ticks (16 seconds)
+            if tick_count % 2 == 0 {
+                game_state_for_time_sync.tick_regeneration().await;
+            }
+
             let datetime = game_state_for_time_sync.broadcast_game_time();
             if let Err(err) = auth_service_for_time_sync.save_world_time(&datetime) {
                 warn!("Failed to persist game time: {}", err);

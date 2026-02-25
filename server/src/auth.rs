@@ -75,10 +75,15 @@ impl std::error::Error for AuthError {}
 
 impl AuthService {
     fn data_dir() -> PathBuf {
-        if Path::new("data").is_dir() {
+        // In a workspace structure, prioritize the parent's data directory
+        // if we are running from a crate sub-directory like server/.
+        if Path::new("../data").is_dir() {
+            PathBuf::from("../data")
+        } else if Path::new("data").is_dir() {
             PathBuf::from("data")
         } else {
-            PathBuf::from("../data")
+            // Fallback: create a local 'data' folder if none found
+            PathBuf::from("data")
         }
     }
 

@@ -31,7 +31,6 @@ struct IdState {
 pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
-    monster_last_attack_at: Arc<RwLock<HashMap<String, Instant>>>,
     broadcast_tx: GameStateSender,
     game_clock_start_real: Instant,
     game_clock_start_game_seconds: i64,
@@ -67,7 +66,6 @@ impl GameState {
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
             monsters: Arc::new(RwLock::new(HashMap::new())),
-            monster_last_attack_at: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
             game_clock_start_real: Instant::now(),
             game_clock_start_game_seconds: Self::datetime_to_total_game_seconds(&initial_datetime),
@@ -116,6 +114,13 @@ impl GameState {
             hour,
             minute,
         }
+    }
+
+    pub fn now_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
     }
 
     fn current_total_game_seconds(&self) -> i64 {
@@ -313,11 +318,6 @@ impl GameState {
             let _ = self.broadcast_tx.send(ServerMessage::MonsterRemoved {
                 monster_id: monster_id.clone(),
             });
-        }
-
-        let mut last_attack_at = self.monster_last_attack_at.write().await;
-        for monster_id in &owned_ids {
-            last_attack_at.remove(monster_id);
         }
     }
 
@@ -537,27 +537,38 @@ impl GameState {
         if let Some(player_name) = player_name {
             info!("Player {} attacking monster {}", player_name, monster_id);
 
-            let def = self.monster_defs.get(&monster_type);
-            let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
-            let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
-            let result = combat::roll_attack(hit_threshold, damage_roll);
+            // Calculate attack result
+            let (result_hit, result_roll, result_damage) = {
+                let def = self.monster_defs.get(&monster_type);
+                let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
+                let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
+                let result = combat::roll_attack(hit_threshold, damage_roll);
+                (result.hit, result.roll, result.damage)
+            };
 
             info!(
                 "Dice roll: {}, Hit: {}, Damage: {}",
-                result.roll, result.hit, result.damage
+                result_roll, result_hit, result_damage
             );
+
+            // Update player combat timestamp and damage logic
+            {
+                let mut players = self.players.write().await;
+                if let Some(player) = players.get_mut(player_id) {
+                    player.last_combat_at = Self::now_ms();
+                }
+            }
 
             // Send attack result
             let _ = self.broadcast_tx.send(ServerMessage::PlayerAttacked {
                 player_id: player_id.clone(),
                 monster_id: monster_id.clone(),
-                hit: result.hit,
-                roll: result.roll,
-                damage: result.damage,
+                hit: result_hit,
+                roll: result_roll,
+                damage: result_damage,
             });
 
-            // If hit, update monster HP
-            if result.hit {
+            if result_hit {
                 let mut monsters = self.monsters.write().await;
                 let mut is_dead = false;
 
@@ -566,7 +577,7 @@ impl GameState {
                         return; // Already dead
                     }
 
-                    monster.health = monster.health.saturating_sub(result.damage);
+                    monster.health = monster.health.saturating_sub(result_damage);
                     info!(
                         "Monster {} HP: {}/{}",
                         monster_id, monster.health, monster.max_health
@@ -725,11 +736,6 @@ impl GameState {
                         if let Some(monster) = monsters.get(&id_to_remove) {
                             if monster.state == "dead" {
                                 monsters.remove(&id_to_remove);
-                                game_state
-                                    .monster_last_attack_at
-                                    .write()
-                                    .await
-                                    .remove(&id_to_remove);
                                 info!("Monster {} removed after 30s corpse time", id_to_remove);
                                 let _ =
                                     game_state.broadcast_tx.send(ServerMessage::MonsterRemoved {
@@ -752,16 +758,32 @@ impl GameState {
         target_player_id: &str,
     ) {
         // 1. Check if monster exists, is alive, and is owned by the requester.
-        let monster_type = {
-            let monsters = self.monsters.read().await;
-            let monster = monsters.get(monster_id);
-            if monster.is_none() || monster.unwrap().state == "dead" {
-                return;
+        // Also check server-side cooldown guard.
+        let now = Self::now_ms();
+        let mut monster_data = None;
+
+        {
+            let mut monsters = self.monsters.write().await;
+            if let Some(monster) = monsters.get_mut(monster_id) {
+                if monster.state != "dead" && monster.owner_id.as_deref() == Some(attacker_player_id) {
+                    let def = self.monster_defs.get(&monster.monster_type);
+                    let attack_cooldown_ms = def.map(|d| u64::from(d.attack_cooldown)).unwrap_or(1500);
+
+                    if now.saturating_sub(monster.last_attack_at) >= attack_cooldown_ms {
+                        monster.last_attack_at = now;
+                        monster_data = Some((
+                            monster.monster_type.clone(),
+                            def.map(|d| d.hit_threshold).unwrap_or(10),
+                            def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6"),
+                        ));
+                    }
+                }
             }
-            if monster.unwrap().owner_id.as_deref() != Some(attacker_player_id) {
-                return;
-            }
-            monster.unwrap().monster_type.clone()
+        }
+
+        let (_monster_type, hit_threshold, damage_roll) = match monster_data {
+            Some(data) => data,
+            None => return,
         };
 
         // 2. Check if target player exists and is alive
@@ -773,24 +795,6 @@ impl GameState {
             }
         }
 
-        let def = self.monster_defs.get(&monster_type);
-        let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
-        let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
-        let attack_cooldown_ms = def.map(|d| u64::from(d.attack_cooldown)).unwrap_or(1500);
-
-        // Server-side cooldown guard to prevent duplicate attack resolution
-        // if multiple identical MonsterAttack requests arrive close together.
-        {
-            let now = Instant::now();
-            let mut last_attack_at = self.monster_last_attack_at.write().await;
-            if let Some(last) = last_attack_at.get(monster_id) {
-                if now.duration_since(*last).as_millis() < u128::from(attack_cooldown_ms) {
-                    return;
-                }
-            }
-            last_attack_at.insert(monster_id.to_string(), now);
-        }
-
         let result = combat::roll_attack(hit_threshold, damage_roll);
 
         info!(
@@ -798,33 +802,25 @@ impl GameState {
             monster_id, target_player_id, result.roll, result.hit, result.damage
         );
 
-        // If hit, update player HP first so subsequent respawn checks observe the new state.
+        // Update player HP and combat timestamp
         let mut did_die = false;
         let mut current_health = 0;
-        if result.hit {
-            let mut players = self.players.write().await;
 
+        {
+            let mut players = self.players.write().await;
             if let Some(player) = players.get_mut(target_player_id) {
                 if player.health == 0 {
                     return; // Already dead
                 }
 
-                player.health = player.health.saturating_sub(result.damage);
-                current_health = player.health;
-                info!(
-                    "Player {} HP: {}/{}",
-                    target_player_id, player.health, player.max_health
-                );
+                player.last_combat_at = now;
 
-                if player.health == 0 {
-                    did_die = true;
-                    info!("Player {} died", target_player_id);
+                if result.hit {
+                    player.health = player.health.saturating_sub(result.damage);
+                    if player.health == 0 {
+                        did_die = true;
+                    }
                 }
-            }
-        } else {
-            // If missed, we still need current health for the message.
-            let players = self.players.read().await;
-            if let Some(player) = players.get(target_player_id) {
                 current_health = player.health;
             }
         }
@@ -886,6 +882,7 @@ impl GameState {
             owner_id,
             health,
             max_health: health,
+            last_attack_at: 0,
         };
 
         monsters.insert(id.clone(), monster.clone());
@@ -939,5 +936,57 @@ impl GameState {
     #[allow(dead_code)]
     pub async fn get_all_players(&self) -> HashMap<PlayerId, Player> {
         self.players.read().await.clone()
+    }
+
+    pub async fn tick_regeneration(&self) {
+        let mut updates = Vec::new();
+
+        {
+            let players = self.players.read().await;
+            let player_chars = self.player_characters.read().await;
+            let now = Self::now_ms();
+
+            for (player_id, player) in players.iter() {
+                // Only regenerate if alive and wounded
+                if player.health > 0 && player.health < player.max_health {
+                    // Check if player is "out of combat" (10s threshold = 10000ms)
+                    if now.saturating_sub(player.last_combat_at) < 10000 {
+                        continue;
+                    }
+
+                    let con = player_chars
+                        .get(player_id)
+                        .map(|(_, _, attrs)| attrs.con)
+                        .unwrap_or(10); // Default to 10 if not found
+
+                    let con_mod = (i16::from(con) - 10) / 2;
+                    let amount = (1 + (player.level as i32 / 5) + con_mod as i32).max(1) as u32;
+
+                    updates.push((player_id.clone(), amount));
+                }
+            }
+        }
+
+        if updates.is_empty() {
+            return;
+        }
+
+        let mut players = self.players.write().await;
+        for (player_id, amount) in updates {
+            if let Some(player) = players.get_mut(&player_id) {
+                if player.health > 0 && player.health < player.max_health {
+                    let old_health = player.health;
+                    player.health = (player.health + amount).min(player.max_health);
+
+                    if player.health != old_health {
+                        let _ = self.broadcast_tx.send(ServerMessage::PlayerHealthUpdate {
+                            player_id: player_id.clone(),
+                            health: player.health,
+                            max_health: player.max_health,
+                        });
+                    }
+                }
+            }
+        }
     }
 }
