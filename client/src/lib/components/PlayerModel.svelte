@@ -368,7 +368,7 @@
               ? 'locomotion.glb'
               : selection.source === 'combat_melee'
                 ? 'combat_melee.glb'
-                : 'maria.glb'
+                : 'female_knight.glb'
           console.log(`✅ Found animation: ${selection.name} (${source})`)
         }
 

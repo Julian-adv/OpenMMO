@@ -1,4 +1,4 @@
-export const WARRIOR_CHARACTER_MODEL_PATH = '/models/maria.glb'
+export const WARRIOR_CHARACTER_MODEL_PATH = '/models/female_knight.glb'
 export const KNIGHT_CHARACTER_MODEL_PATH = '/models/medieval_knight.glb'
 
 export const CHARACTER_ANIMATION_PACK_PATHS = {

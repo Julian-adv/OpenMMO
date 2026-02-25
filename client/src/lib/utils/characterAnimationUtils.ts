@@ -267,7 +267,7 @@ export function retargetAnimationsForCharacterModel(
 
   // `retargetSourceScene` comes from a shared loader cache. Retargeting mutates
   // skeleton state (`pose`, matrix updates), so work on a clone to avoid
-  // leaking transforms back into maria.glb previews.
+  // leaking transforms back into female_knight.glb previews.
   const retargetSourceClone = SkeletonUtils.clone(
     retargetSourceScene
   ) as THREE.Object3D
