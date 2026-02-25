@@ -27,6 +27,14 @@
 - Maria https://sketchfab.com/3d-models/maria-a04cac95ab8046e4bbdc9dec30c7d92d
 - dying https://sketchfab.com/3d-models/dying-98a1d5b2288d49d993039cb161913cd3
 - medieval_knight https://sketchfab.com/3d-models/medieval-knight-sculpture-game-ready-6cdd055b4afa41eb9360dbbfe75c7f10
+- female_knight 
+  - ComfyUI에서 jibMixZIT_v10.safetensors로 원화 생성 ![원화](images/18-15-52.png)
+  - Nano banana에서 T 포즈로 변형 ![T-pose](images/T-pose.png)
+  - meshy.ai에서 3d 모델로 변환 -> 10k 모델로 리매쉬
+  - mixamo.com에서 리깅 및 애니메이션 부착
+  - blender에서 위치 조정(rest pose 원점 발 밑에 오게) -> 매터리얼 조정 (Shader Editor에서 Alpha 끊기) -> .glb 내보내기
+  - tools/glb-editor에서 `본 이름 표준화`
+
 
 ### animations
 
