@@ -47,6 +47,7 @@ logs/
 *.skill
 
 # Generated data files
+data/*.db
 data/monsters.json
 server/data/game_data.db
 
