@@ -396,28 +396,61 @@ export function handleServerMessage(
     }
 
     case 'PlayerHealthUpdate': {
+      const gameState = get(gameStore)
+      const isCurrentPlayer = gameState.currentPlayer?.id === data.player_id
+
+      let regenInfo = undefined
+      if (isCurrentPlayer && gameState.currentPlayer) {
+        const diff = data.health - gameState.currentPlayer.health
+        if (diff > 0) {
+          const prevTrigger =
+            gameState.currentPlayer.lastRegenInfo?.trigger ?? 0
+          regenInfo = {
+            damage: diff,
+            hit: true,
+            trigger: prevTrigger + 1,
+          }
+        }
+      }
+
       updatePlayer(data.player_id, {
         health: data.health,
         maxHealth: data.max_health,
+        ...(isCurrentPlayer ? { lastRegenInfo: regenInfo } : {}),
       })
       break
     }
 
     case 'XpGained': {
-      const previousState = get(gameStore)
-      const previousPlayer = previousState.currentPlayer
+      const gameState = get(gameStore)
+      const previousPlayer = gameState.currentPlayer
       const previousLevel =
         previousPlayer && previousPlayer.id === data.player_id
           ? previousPlayer.level
           : null
+      const isCurrentPlayer = previousPlayer?.id === data.player_id
       const newTotalXp = Number(data.total_xp)
       const xpLost = Number(data.xp_lost ?? 0)
+
+      let regenInfo = undefined
+      if (isCurrentPlayer && previousPlayer) {
+        const diff = data.current_hp - previousPlayer.health
+        if (diff > 0) {
+          const prevTrigger = previousPlayer.lastRegenInfo?.trigger ?? 0
+          regenInfo = {
+            damage: diff,
+            hit: true,
+            trigger: prevTrigger + 1,
+          }
+        }
+      }
 
       updatePlayer(data.player_id, {
         level: data.new_level,
         totalXp: newTotalXp,
         health: data.current_hp,
         maxHealth: data.max_hp,
+        ...(isCurrentPlayer ? { lastRegenInfo: regenInfo } : {}),
       })
       if (data.xp_amount > 0) {
         addChatMessage(`You gained ${data.xp_amount} XP.`)

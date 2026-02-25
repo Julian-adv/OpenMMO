@@ -5,9 +5,10 @@
 
   interface Props {
     lastDamageInfo?: PlayerDamageInfo
+    lastRegenInfo?: PlayerDamageInfo
   }
 
-  let { lastDamageInfo }: Props = $props()
+  let { lastDamageInfo, lastRegenInfo }: Props = $props()
 
   interface FloatingText {
     id: number
@@ -18,6 +19,7 @@
   let floatingTexts = $state<FloatingText[]>([])
   let nextTextId = 0
   let lastDamageTrigger = $state(0)
+  let lastRegenTrigger = $state(0)
   let itemRefs = $state<
     (ReturnType<typeof DamageTextItem> & {
       update: (
@@ -48,7 +50,17 @@
       floatingTexts = [...floatingTexts, { id: nextTextId++, text, color }]
     }
 
-    // 2. Update existing items
+    // 2. Check for new regen
+    if (lastRegenInfo && lastRegenInfo.trigger !== lastRegenTrigger) {
+      lastRegenTrigger = lastRegenInfo.trigger
+
+      const text = `+${lastRegenInfo.damage}`
+      const color = '#48bb78' // Green
+
+      floatingTexts = [...floatingTexts, { id: nextTextId++, text, color }]
+    }
+
+    // 3. Update existing items
     if (floatingTexts.length > 0) {
       for (const ref of itemRefs) {
         ref?.update(deltaTime, baseX, baseY, baseZ, camera)

@@ -45,6 +45,7 @@
     onAttackDuration?: (duration: number) => void
     onDyingFinished?: () => void
     lastDamageInfo?: PlayerDamageInfo
+    lastRegenInfo?: PlayerDamageInfo
   }
 
   let {
@@ -64,6 +65,7 @@
     onAttackDuration,
     onDyingFinished,
     lastDamageInfo,
+    lastRegenInfo,
   }: Props = $props()
 
   let nametagScale = $state(1)
@@ -655,5 +657,5 @@
 
 <!-- Floating Damage Text -->
 {#if isCurrentPlayer}
-  <DamageText bind:this={damageTextRef} {lastDamageInfo} />
+  <DamageText bind:this={damageTextRef} {lastDamageInfo} {lastRegenInfo} />
 {/if}

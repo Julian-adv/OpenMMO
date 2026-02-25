@@ -81,6 +81,7 @@
     onAttackDuration={onAttackDuration}
     onDyingFinished={onCurrentPlayerDyingFinished}
     lastDamageInfo={currentPlayer.lastDamageInfo}
+    lastRegenInfo={currentPlayer.lastRegenInfo}
   />
 {/if}
 

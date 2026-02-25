@@ -18,6 +18,7 @@ interface PlayerBase {
   maxHealth: number
   characterClass: CharacterClass
   lastDamageInfo?: PlayerDamageInfo
+  lastRegenInfo?: PlayerDamageInfo
 }
 
 export interface LocalPlayer extends PlayerBase {
