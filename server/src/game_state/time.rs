@@ -1,0 +1,93 @@
+use crate::types::{GameDateTime, ServerMessage};
+
+pub const REAL_DAY_DURATION_SECONDS: f64 = 3.0 * 60.0 * 60.0;
+pub const GAME_HOURS_PER_DAY: i64 = 24;
+pub const GAME_MINUTES_PER_HOUR: i64 = 60;
+pub const GAME_DAYS_PER_MONTH: i64 = 30;
+pub const GAME_MONTHS_PER_YEAR: i64 = 12;
+pub const GAME_DAYS_PER_YEAR: i64 = GAME_DAYS_PER_MONTH * GAME_MONTHS_PER_YEAR;
+pub const GAME_START_YEAR: i64 = 217;
+pub const GAME_SECONDS_PER_REAL_SECOND: f64 =
+    (GAME_HOURS_PER_DAY as f64 * GAME_MINUTES_PER_HOUR as f64 * 60.0) / REAL_DAY_DURATION_SECONDS;
+
+impl super::GameState {
+    pub fn default_start_datetime() -> GameDateTime {
+        GameDateTime {
+            year: GAME_START_YEAR as u32,
+            month: 1,
+            day: 1,
+            hour: 0,
+            minute: 0,
+        }
+    }
+
+    pub fn datetime_to_total_game_seconds(datetime: &GameDateTime) -> i64 {
+        let year = i64::from(datetime.year).max(GAME_START_YEAR);
+        let month = i64::from(datetime.month).clamp(1, GAME_MONTHS_PER_YEAR);
+        let day = i64::from(datetime.day).clamp(1, GAME_DAYS_PER_MONTH);
+        let hour = i64::from(datetime.hour).clamp(0, GAME_HOURS_PER_DAY - 1);
+        let minute = i64::from(datetime.minute).clamp(0, GAME_MINUTES_PER_HOUR - 1);
+
+        let years_since_start = year - GAME_START_YEAR;
+        let total_days =
+            years_since_start * GAME_DAYS_PER_YEAR + (month - 1) * GAME_DAYS_PER_MONTH + (day - 1);
+        let total_minutes = total_days * GAME_HOURS_PER_DAY * GAME_MINUTES_PER_HOUR
+            + hour * GAME_MINUTES_PER_HOUR
+            + minute;
+        total_minutes * 60
+    }
+
+    pub fn total_game_seconds_to_datetime(total_game_seconds: i64) -> GameDateTime {
+        let total_seconds = total_game_seconds.max(0);
+        let total_minutes = total_seconds / 60;
+        let total_days = total_minutes / (GAME_HOURS_PER_DAY * GAME_MINUTES_PER_HOUR);
+
+        let minutes_in_day = total_minutes % (GAME_HOURS_PER_DAY * GAME_MINUTES_PER_HOUR);
+        let hour = (minutes_in_day / GAME_MINUTES_PER_HOUR) as u8;
+        let minute = (minutes_in_day % GAME_MINUTES_PER_HOUR) as u8;
+
+        let year = GAME_START_YEAR + (total_days / GAME_DAYS_PER_YEAR);
+        let day_of_year = total_days % GAME_DAYS_PER_YEAR;
+        let month = (day_of_year / GAME_DAYS_PER_MONTH) + 1;
+        let day = (day_of_year % GAME_DAYS_PER_MONTH) + 1;
+
+        GameDateTime {
+            year: year as u32,
+            month: month as u8,
+            day: day as u8,
+            hour,
+            minute,
+        }
+    }
+
+    pub fn now_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis() as u64
+    }
+
+    pub fn current_total_game_seconds(&self) -> i64 {
+        let elapsed_real_seconds = self.game_clock_start_real.elapsed().as_secs_f64();
+        let elapsed_game_seconds =
+            (elapsed_real_seconds * GAME_SECONDS_PER_REAL_SECOND).floor() as i64;
+        self.game_clock_start_game_seconds + elapsed_game_seconds
+    }
+
+    pub fn current_game_datetime(&self) -> GameDateTime {
+        Self::total_game_seconds_to_datetime(self.current_total_game_seconds())
+    }
+
+    pub fn is_night(datetime: &GameDateTime) -> bool {
+        crate::celestial::is_night(datetime)
+    }
+
+    pub fn broadcast_game_time(&self) -> GameDateTime {
+        let datetime = self.current_game_datetime();
+        let _ = self.broadcast_tx.send(ServerMessage::GameTimeSync {
+            is_night: Self::is_night(&datetime),
+            datetime: datetime.clone(),
+        });
+        datetime
+    }
+}
