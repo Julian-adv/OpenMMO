@@ -1,44 +1,5 @@
 # Claude Development Guidelines
 
-## Code Quality Workflow
+Refer to [AGENTS.md](./AGENTS.md) for the comprehensive set of engineering principles, coding styles, and project architecture rules.
 
-Before committing code changes, always use the `commit-agent` to ensure code quality checks are performed automatically.
-
-## Common Commands
-
-### Client & Tools Directory Commands
-
-The same commands apply to both `client/` and `tools/*` directories (e.g. `tools/glb-editor/`).
-
-```bash
-cd client  # or cd tools/glb-editor
-npm run lint          # Check for linting errors
-npm run lint:fix       # Automatically fix linting errors
-npm run format         # Format code with Prettier
-npm run format:check   # Check if code is formatted correctly
-npm run check          # Run Svelte and TypeScript type checking
-npm run dev            # Start development server
-npm run build          # Build for production
-```
-
-## Code Style Guidelines
-
-- No semicolons (configured in Prettier)
-- Use single quotes for strings
-- Use proper TypeScript types (avoid `any`)
-- Add keys to Svelte `{#each}` blocks
-- Use block scopes in switch cases to avoid lexical declaration errors
-
-## Refactoring Policy
-
-This project is in early development. Do NOT worry about backwards compatibility:
-- When renaming or removing exports, find and update ALL usages across the codebase
-- Do not leave deprecated aliases, re-exports, or compatibility shims
-- Do not add `@deprecated` comments - just remove unused code directly
-- If something is no longer needed, delete it completely
-
-## Notes
-
-- ESLint is configured to work with JavaScript, TypeScript, and Svelte files
-- Prettier is set up to format code without semicolons
-- Always run lint checks after making code changes to maintain code quality
+- **Commit Workflow**: Always use the `commit-agent` skill when committing changes to ensure code quality checks.

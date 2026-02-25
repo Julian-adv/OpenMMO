@@ -44,6 +44,7 @@ logs/
 # Temporary files
 *.tmp
 *.temp
+*.skill
 
 # Generated data files
 data/monsters.json
@@ -54,5 +55,7 @@ server/data/game_data.db
 !.claude/agents/
 
 # Codex
-.codex/
+.codex/*
 !.codex/config.toml
+!.codex/skills/
+!.codex/skills/**
