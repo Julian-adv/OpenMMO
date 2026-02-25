@@ -45,6 +45,8 @@
   let fillSpotlightRef = $state<THREE.SpotLight | undefined>(undefined)
   let spotlightTarget = $state<THREE.Object3D | undefined>(undefined)
   const OVERLAP_BEFORE_END = 0.3
+  const IDLE2_Y_OFFSET = -0.16
+  let currentAnimationYOffset = $state(0)
 
   function playIdleAnimation() {
     if (!mixer || validAnimations.length === 0) return
@@ -56,6 +58,7 @@
       AnimationIndex.IDLE4,
     ]
     const idleIndex = idleIndices[Math.floor(Math.random() * idleIndices.length)]
+    currentAnimationYOffset = idleIndex === AnimationIndex.IDLE2 ? IDLE2_Y_OFFSET : 0
     const clip = validAnimations[idleIndex]
     if (!clip) return
 
@@ -183,7 +186,7 @@
 </script>
 
 {#if modelRoot}
-  <T.Group position={[positionX, positionY, positionZ]}>
+  <T.Group position={[positionX, positionY + currentAnimationYOffset, positionZ]}>
     <T is={modelRoot} />
   </T.Group>
   <T.Object3D
