@@ -38,23 +38,3 @@ export enum AnimationIndex {
   ATTACK4 = 15,
   DYING = 16,
 }
-
-export const ANIMATION_ORDER = [
-  AnimationName.IDLE1,
-  AnimationName.IDLE2,
-  AnimationName.IDLE3,
-  AnimationName.IDLE4,
-  AnimationName.IDLE5,
-  AnimationName.WALK,
-  AnimationName.JOG,
-  AnimationName.RUN,
-  AnimationName.SLASH1,
-  AnimationName.SLASH2,
-  AnimationName.SLASH3,
-  AnimationName.SLASH4,
-  AnimationName.ATTACK1,
-  AnimationName.ATTACK2,
-  AnimationName.ATTACK3,
-  AnimationName.ATTACK4,
-  AnimationName.DYING,
-]

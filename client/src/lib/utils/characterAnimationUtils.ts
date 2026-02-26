@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
-import { ANIMATION_ORDER, AnimationName } from '../types/animations'
+import { AnimationName } from '../types/animations'
 
 export const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
 
@@ -406,7 +406,7 @@ export function selectOrderedCharacterAnimations(
   const firstCombatMeleeClip = combatMeleeAnimations[0]
   const orderedSelections: OrderedAnimationSelection[] = []
 
-  for (const name of ANIMATION_ORDER) {
+  for (const name of Object.values(AnimationName)) {
     const source = ANIMATION_SOURCE_BY_NAME[name]
     if (!source) {
       console.error(
