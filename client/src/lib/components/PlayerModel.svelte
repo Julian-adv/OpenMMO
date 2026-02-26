@@ -108,8 +108,6 @@
   let swordAttached = $state(false)
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const ENABLE_SWORD_ATTACHMENT = true
-  const IDLE2_Y_OFFSET = -0.16
-  let currentAnimationYOffset = $state(0)
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
     const boneName = bone.name.toLowerCase()
@@ -261,27 +259,24 @@
         AnimationIndex.IDLE2,
         AnimationIndex.IDLE3,
         AnimationIndex.IDLE4,
+        AnimationIndex.IDLE5,
       ]
       const idleIndex =
         idleIndices[Math.floor(Math.random() * idleIndices.length)]
       clip = validAnimations[idleIndex]
-      currentAnimationYOffset = idleIndex === AnimationIndex.IDLE2 ? IDLE2_Y_OFFSET : 0
     } else if (playerState === 'moving') {
-      currentAnimationYOffset = 0
       // Lock animation at the start of movement based on movement mode
       if (currentMovementAnimationIndex === undefined) {
         currentMovementAnimationIndex = selectMovementAnimation(movementMode)
       }
       clip = validAnimations[currentMovementAnimationIndex]
     } else if (playerState === 'attack') {
-      currentAnimationYOffset = 0
       // Use slash1 animation
       currentMovementAnimationIndex = undefined
       // Find index for slash1 or fallback
       // Assuming AnimationIndex.SLASH1 exists and maps correctly
       clip = validAnimations[AnimationIndex.SLASH1]
     } else if (playerState === 'dead') {
-      currentAnimationYOffset = 0
       currentMovementAnimationIndex = undefined
       dyingFinishedNotified = false
       clip = validAnimations[AnimationIndex.DYING]
@@ -604,7 +599,7 @@
 <!-- Character Model -->
 {#if modelRoot}
 <T.Group
-    position={[position.x, position.y + currentAnimationYOffset, position.z]}
+    position={[position.x, position.y, position.z]}
     rotation={[0, rotation, 0]}
   >
     <!-- 3D Character Model with real animations -->

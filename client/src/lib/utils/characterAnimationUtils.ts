@@ -24,6 +24,7 @@ const ANIMATION_SOURCE_BY_NAME: Record<AnimationName, AnimationSource> = {
   [AnimationName.IDLE2]: 'locomotion',
   [AnimationName.IDLE3]: 'locomotion',
   [AnimationName.IDLE4]: 'locomotion',
+  [AnimationName.IDLE5]: 'locomotion',
   [AnimationName.WALK]: 'locomotion',
   [AnimationName.JOG]: 'locomotion',
   [AnimationName.RUN]: 'locomotion',
@@ -202,11 +203,6 @@ function normalizeRetargetedClipTrackNames(
     }
 
     const [, boneName, property] = match
-    if (property === 'position') {
-      // Character locomotion is handled by gameplay state. Position tracks from
-      // retargeting can push the rig off-screen on mismatched assets.
-      continue
-    }
 
     const renamedTrack = track.clone()
     renamedTrack.name = `${boneName}.${property}`
