@@ -177,37 +177,6 @@
     return fallbackBone
   }
 
-  function prepareSwordMeshes(root: THREE.Object3D): void {
-    root.traverse((child) => {
-      if (!(child instanceof THREE.Mesh)) return
-      child.castShadow = true
-      child.receiveShadow = true
-      child.visible = true
-      child.frustumCulled = false
-
-      const materials = Array.isArray(child.material)
-        ? child.material
-        : [child.material]
-      for (const material of materials) {
-        if (!material) continue
-        // Right-hand bone chains can include mirrored (negative) scale, which
-        // may invert face winding and hide single-sided meshes.
-        material.side = THREE.DoubleSide
-        material.needsUpdate = true
-      }
-    })
-  }
-
-  function getAverageAbsWorldScale(object: THREE.Object3D): number {
-    const worldScale = new THREE.Vector3()
-    object.getWorldScale(worldScale)
-    const sx = Math.abs(worldScale.x)
-    const sy = Math.abs(worldScale.y)
-    const sz = Math.abs(worldScale.z)
-    const avg = (sx + sy + sz) / 3
-    return Number.isFinite(avg) && avg > 0 ? avg : 1
-  }
-
   function tryAttachSword(characterRoot: THREE.Object3D): boolean {
     if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !$swordGltf) return false
 
@@ -218,19 +187,7 @@
     }
 
     const swordClone = $swordGltf.scene.clone()
-    // Use model-authored pivot/orientation, but clear accidental scene offsets.
-    swordClone.position.set(0, 0, 0)
-    swordClone.rotation.set(0, 0, 0)
-    swordClone.scale.set(1, 1, 1)
-    prepareSwordMeshes(swordClone)
-
     rightHandBone.add(swordClone)
-
-    // Keep prop world size stable when armature/hand chain uses non-unit scale.
-    const handAvgScale = getAverageAbsWorldScale(rightHandBone)
-    if (handAvgScale > 0) {
-      swordClone.scale.multiplyScalar(1 / handAvgScale)
-    }
     swordAttached = true
     console.log('Sword attached successfully to', rightHandBone.name)
     return true
