@@ -27,14 +27,24 @@
 - Maria https://sketchfab.com/3d-models/maria-a04cac95ab8046e4bbdc9dec30c7d92d
 - dying https://sketchfab.com/3d-models/dying-98a1d5b2288d49d993039cb161913cd3
 - medieval_knight https://sketchfab.com/3d-models/medieval-knight-sculpture-game-ready-6cdd055b4afa41eb9360dbbfe75c7f10
-- female_knight 
-  - ComfyUI에서 jibMixZIT_v10.safetensors로 원화 생성 ![원화](images/18-15-52.png)
-  - Nano banana에서 T 포즈로 변형 ![T-pose](images/T-pose.png)
+
+### female_knight 
+  - ComfyUI에서 jibMixZIT_v10.safetensors로 원화 생성 ![원화](images/female-knight-concept.png)
+  - Nano banana에서 T 포즈로 변형 ![T-pose](images/female-knight-T-pose.png)
   - meshy.ai에서 3d 모델로 변환 -> 10k 모델로 리매쉬
   - mixamo.com에서 리깅 및 애니메이션 부착
-  - blender에서 위치 조정(rest pose 원점 발 밑에 오게) -> 매터리얼 조정 (Shader Editor에서 Alpha 끊기) -> .glb 내보내기
+  - blender에서 스케일/위치 조정(rest pose 원점 발 밑에 오게) -> 매터리얼 조정 (Shader Editor에서 Alpha 끊기) -> .glb 내보내기
   - tools/glb-editor에서 `본 이름 표준화`
 
+### thief
+  - female_knight와 같은 workflow
+  - 원화 ![원화](images/thief-concept.png)
+  - grok으로 T-pose(나노 바나나가 말을 안들어서) ![T-pose](images/thief-T-pose.jpg)
+
+### knight
+  - female_knight와 같은 workflow
+  - 원화 ![원화](images/knight-concept.png)
+  - nano banana2로 A 포즈 ![T-pose](images/knight-A-pose.png)
 
 ### animations
 
@@ -68,16 +78,24 @@
 
 # Blender
 
-- Use version 4.2.12 LTS
+- Use version 5.0.1
+- blender-scripts
+  - fix_mixamo_transforms.py
+  
+    mixamo에서 import한 armature와 mesh가 각각 scale이 0.01, 100.0으로 되어 있는 것을 1.0, 1.0으로 맞춰준다.
+  
+  - add_action_to_nla.py
+    
+    mixamo에서 import한 메쉬없는 애니메이션을 최초의 armature에 붙여준다
 
 ## Import tips
 
-- .glb를 import 할 때 bone shape scale을 0.01로 하면 거대한 구체가 나타나는 것을 방지할 수 있다.
+- .glb를 import 할 때 거대한 구가 나타나는 경우 bone shape scale을 0.01로 하면 거대한 구체가 나타나는 것을 방지할 수 있다.
 
 ## Export tips
 
 - Backface Culling: Material Properties → Settings → Backface Culling 켜기(뒷면 제거).
-- 노드 에디터(Shader/Geometry Nodes) 활성화
+- Shader Editor 활성화
   - Alpha가 의도치 않게 들어가 있는지: Base Color 텍스처에 알파가 섞여 Alpha에 연결돼 있지 않은지 확인.
 - .glb 내보내기 시 권장 옵션(Blender glTF 2.0 Exporter)
   - Apply Modifiers: 켜기
