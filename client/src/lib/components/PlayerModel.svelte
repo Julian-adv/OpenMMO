@@ -21,6 +21,7 @@
     CHARACTER_ANIMATION_PACK_PATHS,
     WARRIOR_CHARACTER_MODEL_PATH,
     KNIGHT_CHARACTER_MODEL_PATH,
+    THIEF_CHARACTER_MODEL_PATH,
   } from '../utils/modelPaths'
   import type { CharacterClass } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
@@ -80,6 +81,7 @@
   // Load animated model (both models are loaded; Threlte caches by URL)
   const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
   const knightGltf = useLoader(GLTFLoader).load(KNIGHT_CHARACTER_MODEL_PATH)
+  const thiefGltf = useLoader(GLTFLoader).load(THIEF_CHARACTER_MODEL_PATH)
   const locomotionGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   )
@@ -319,7 +321,7 @@
   }
 
   function setupRealAnimation() {
-    const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
+    const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
     if (activeGltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
 
@@ -443,7 +445,7 @@
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
       const animationPacksReady =
         ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
-      const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
+      const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
       if (activeGltf && animationPacksReady) {
         if (!$locomotionGltf && animationPackTimedOut) {
           console.warn('Locomotion GLB load timeout, using maria animations only')

@@ -7,6 +7,8 @@ pub enum CharacterClass {
     Warrior,
     #[serde(rename = "knight")]
     Knight,
+    #[serde(rename = "thief")]
+    Thief,
 }
 
 impl CharacterClass {
@@ -14,12 +16,14 @@ impl CharacterClass {
         match self {
             CharacterClass::Warrior => "warrior",
             CharacterClass::Knight => "knight",
+            CharacterClass::Thief => "thief",
         }
     }
 
     pub fn from_str_or_default(s: &str) -> Self {
         match s {
             "warrior" => CharacterClass::Warrior,
+            "thief" => CharacterClass::Thief,
             _ => CharacterClass::Knight,
         }
     }

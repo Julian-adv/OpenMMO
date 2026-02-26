@@ -146,6 +146,15 @@
             >
               Knight
             </button>
+            <button
+              type="button"
+              class="class-btn"
+              class:class-selected={selectedClass === 'thief'}
+              disabled={isBusy()}
+              onclick={() => { selectedClass = 'thief'; rolledStats = null }}
+            >
+              Thief
+            </button>
           </div>
         </div>
 

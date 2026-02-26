@@ -23,6 +23,7 @@ const CLASS_HIT_DICE: &[(&str, u8)] = &[
     ("priest", 8),
     ("archaeologist", 6),
     ("healer", 6),
+    ("thief", 8),
     ("rogue", 6),
     ("wizard", 6),
     ("tourist", 4),

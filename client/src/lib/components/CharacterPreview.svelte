@@ -16,6 +16,7 @@
     CHARACTER_ANIMATION_PACK_PATHS,
     WARRIOR_CHARACTER_MODEL_PATH,
     KNIGHT_CHARACTER_MODEL_PATH,
+    THIEF_CHARACTER_MODEL_PATH,
   } from '../utils/modelPaths'
   import type { CharacterClass } from '../network/networkTypes'
 
@@ -30,6 +31,7 @@
   let { positionX, positionY, positionZ, selected, characterClass }: Props = $props()
   const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
   const knightGltf = useLoader(GLTFLoader).load(KNIGHT_CHARACTER_MODEL_PATH)
+  const thiefGltf = useLoader(GLTFLoader).load(THIEF_CHARACTER_MODEL_PATH)
   const locomotionGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   )
@@ -145,7 +147,7 @@
         Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
       const animationPacksReady =
         ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
-      const activeGltf = characterClass === 'warrior' ? $warriorGltf : $knightGltf
+      const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
 
       if (activeGltf && animationPacksReady) {
         setupModel(
