@@ -682,7 +682,7 @@ export function drawMoonToCanvas(
     node.height = renderSize
   }
 
-  const context = node.getContext('2d')
+  const context = node.getContext('2d', { willReadFrequently: true })
   if (!context) return
 
   const radius = renderSize * 0.5 - 0.5
