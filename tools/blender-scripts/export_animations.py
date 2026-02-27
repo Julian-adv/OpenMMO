@@ -120,6 +120,13 @@ def strip_bone_name_prefixes(armature):
         print("  No bone prefixes to strip")
         return
 
+    # Update vertex group names on child meshes so glTF can match them to bones
+    for obj in bpy.data.objects:
+        if obj.type == "MESH" and obj.parent == armature:
+            for vg in obj.vertex_groups:
+                if vg.name in original_to_new:
+                    vg.name = original_to_new[vg.name]
+
     # Update F-curve data_paths to match renamed bones
     for action in bpy.data.actions:
         for fc in iter_fcurves(action):
