@@ -227,6 +227,31 @@ function resolveHipBoneName(sourceSkinnedMesh: THREE.SkinnedMesh): string {
   )
 }
 
+function getHipBoneRestY(
+  skinnedMesh: THREE.SkinnedMesh,
+  hipBoneName: string
+): number | null {
+  const hipBone = skinnedMesh.skeleton.bones.find(
+    (b) => b.name === hipBoneName
+  )
+  return hipBone ? hipBone.position.y : null
+}
+
+function correctHipHeightInClip(
+  clip: THREE.AnimationClip,
+  hipBoneName: string,
+  yDelta: number
+): void {
+  const track = clip.tracks.find((t) => t.name === `${hipBoneName}.position`)
+  if (!track) return
+
+  // Position values are stored as [x, y, z, x, y, z, ...]
+  const values = track.values
+  for (let i = 1; i < values.length; i += 3) {
+    values[i] += yDelta
+  }
+}
+
 export function retargetAnimationsForCharacterModel(
   targetScene: THREE.Object3D,
   retargetSourceScene: THREE.Object3D | null | undefined,
@@ -266,6 +291,15 @@ export function retargetAnimationsForCharacterModel(
   const sourceProfileKey = buildSkeletonProfileKey(sourceSkinnedMesh)
   const hipBoneName = resolveHipBoneName(sourceSkinnedMesh)
 
+  const targetHipY = getHipBoneRestY(targetSkinnedMesh, hipBoneName)
+  const sourceHipY = getHipBoneRestY(sourceSkinnedMesh, hipBoneName)
+  const hipYDelta =
+    targetHipY !== null && sourceHipY !== null ? targetHipY - sourceHipY : 0
+
+  console.log(
+    `[retarget] hip="${hipBoneName}" targetY=${targetHipY} sourceY=${sourceHipY} delta=${hipYDelta}`
+  )
+
   const retargetedClips = clips.map((clip) => {
     const cacheKey = `${targetProfileKey}::${sourceProfileKey}::${clip.uuid}`
     const cachedClip = retargetedClipCache.get(cacheKey)
@@ -293,6 +327,9 @@ export function retargetAnimationsForCharacterModel(
       )
       if (normalizedClip.tracks.length === 0) {
         return clip
+      }
+      if (Math.abs(hipYDelta) > 0.001) {
+        correctHipHeightInClip(normalizedClip, hipBoneName, hipYDelta)
       }
       retargetedClipCache.set(cacheKey, normalizedClip)
       return normalizedClip
