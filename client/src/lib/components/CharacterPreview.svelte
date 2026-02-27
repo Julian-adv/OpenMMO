@@ -8,7 +8,6 @@
     LOCOMOTION_WAIT_TIMEOUT_MS,
     createCharacterModelRoot,
     getGltfAnimations,
-    normalizeCharacterModelScale,
     retargetOrderedCharacterAnimationsForModel,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
@@ -115,7 +114,6 @@
       }
     }
 
-    normalizeCharacterModelScale(newModelRoot)
   }
 
   $effect(() => {

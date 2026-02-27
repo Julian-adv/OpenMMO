@@ -51,7 +51,6 @@ const HIP_BONE_CANDIDATES = [
   'mixamorigHips',
 ] as const
 const retargetedClipCache = new Map<string, THREE.AnimationClip>()
-const CHARACTER_DISPLAY_TARGET_HEIGHT = 1.8
 const ENABLE_RUNTIME_BONE_RETARGETING = true
 
 export function getGltfAnimations(gltf: unknown): THREE.AnimationClip[] {
@@ -77,27 +76,6 @@ export function createCharacterModelRoot(sourceScene: THREE.Object3D): {
   })
 
   return { clonedScene, modelRoot }
-}
-
-export function normalizeCharacterModelScale(
-  modelRoot: THREE.Object3D
-): number {
-  modelRoot.updateMatrixWorld(true)
-
-  const bounds = new THREE.Box3().setFromObject(modelRoot)
-  if (bounds.isEmpty()) return 1
-
-  const size = new THREE.Vector3()
-  bounds.getSize(size)
-  const height = size.y
-  if (!Number.isFinite(height) || height <= 0) return 1
-
-  const scaleFactor = CHARACTER_DISPLAY_TARGET_HEIGHT / height
-  if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) return 1
-
-  modelRoot.scale.multiplyScalar(scaleFactor)
-  modelRoot.updateMatrixWorld(true)
-  return scaleFactor
 }
 
 function findPrimarySkinnedMesh(

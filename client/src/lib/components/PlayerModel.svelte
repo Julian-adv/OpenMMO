@@ -13,7 +13,6 @@
     LOCOMOTION_WAIT_TIMEOUT_MS,
     createCharacterModelRoot,
     getGltfAnimations,
-    normalizeCharacterModelScale,
     retargetOrderedCharacterAnimationsForModel,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
@@ -279,7 +278,6 @@
 
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
-      normalizeCharacterModelScale(newModelRoot)
 
       if (ENABLE_SWORD_ATTACHMENT && !$swordGltf) {
         console.log('Sword GLB not ready yet; will attach when loaded')
