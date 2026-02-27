@@ -24,6 +24,7 @@
     onStateChange: (newState: PlayerState) => void
     onAttackDuration: (duration: number) => void
     onCurrentPlayerDyingFinished?: () => void
+    isCurrentPlayerLoading?: boolean
     playerControl?: PlayerControl
     currentPlayerModel?: PlayerModel | null
     otherPlayerModels?: (PlayerModel | undefined)[]
@@ -43,6 +44,7 @@
     onStateChange,
     onAttackDuration,
     onCurrentPlayerDyingFinished,
+    isCurrentPlayerLoading = $bindable(false),
     playerControl = $bindable<PlayerControl>(),
     currentPlayerModel = $bindable<PlayerModel | null>(null),
     otherPlayerModels = $bindable<(PlayerModel | undefined)[]>([]),
@@ -80,6 +82,7 @@
     maxHealth={currentPlayer.maxHealth}
     onAttackDuration={onAttackDuration}
     onDyingFinished={onCurrentPlayerDyingFinished}
+    bind:isLoading={isCurrentPlayerLoading}
     lastDamageInfo={currentPlayer.lastDamageInfo}
     lastRegenInfo={currentPlayer.lastRegenInfo}
   />

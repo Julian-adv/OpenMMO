@@ -2,8 +2,6 @@ import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { AnimationName } from '../types/animations'
 
-export const LOCOMOTION_WAIT_TIMEOUT_MS = 2000
-
 type AnimationSource = 'base' | 'locomotion' | 'combat_melee'
 
 export interface OrderedAnimationSelection {

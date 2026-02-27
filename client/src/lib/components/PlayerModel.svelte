@@ -10,7 +10,6 @@
   import { timeScale } from '../stores/timeStore'
   import { AnimationIndex, AnimationName } from '../types/animations'
   import {
-    LOCOMOTION_WAIT_TIMEOUT_MS,
     createCharacterModelRoot,
     getGltfAnimations,
     retargetOrderedCharacterAnimationsForModel,
@@ -44,6 +43,7 @@
     maxHealth: number
     onAttackDuration?: (duration: number) => void
     onDyingFinished?: () => void
+    isLoading?: boolean
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
   }
@@ -64,6 +64,7 @@
     maxHealth,
     onAttackDuration,
     onDyingFinished,
+    isLoading = $bindable(false),
     lastDamageInfo,
     lastRegenInfo,
   }: Props = $props()
@@ -388,23 +389,12 @@
   }
 
   onMount(() => {
-    // Wait for GLTF to load and setup real animation
-    const waitStartTime = Date.now()
+    // Wait for all GLTFs (character model + animation packs) to load
+    isLoading = true
     const checkGltf = () => {
-      const animationPackTimedOut =
-        Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
-      const animationPacksReady =
-        ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
       const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
-      if (activeGltf && animationPacksReady) {
-        if (!$locomotionGltf && animationPackTimedOut) {
-          console.warn('Locomotion GLB load timeout, using maria animations only')
-        }
-        if (!$combatMeleeGltf && animationPackTimedOut) {
-          console.warn(
-            'Combat melee GLB load timeout, using maria/locomotion animations only'
-          )
-        }
+      if (activeGltf && $locomotionGltf && $combatMeleeGltf) {
+        isLoading = false
         setupRealAnimation()
       } else {
         setTimeout(checkGltf, 100)
