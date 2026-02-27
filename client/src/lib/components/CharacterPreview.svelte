@@ -95,7 +95,7 @@
       {
         base: sourceScene,
         locomotion: $locomotionGltf?.scene,
-        combatMelee: $locomotionGltf?.scene,
+        combatMelee: $combatMeleeGltf?.scene,
       }
     )
 

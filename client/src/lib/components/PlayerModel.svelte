@@ -313,7 +313,7 @@
         {
           base: activeGltf.scene,
           locomotion: $locomotionGltf?.scene,
-          combatMelee: $locomotionGltf?.scene,
+          combatMelee: $combatMeleeGltf?.scene,
         }
       )
 

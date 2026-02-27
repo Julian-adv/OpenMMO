@@ -231,9 +231,7 @@ function getHipBoneRestY(
   skinnedMesh: THREE.SkinnedMesh,
   hipBoneName: string
 ): number | null {
-  const hipBone = skinnedMesh.skeleton.bones.find(
-    (b) => b.name === hipBoneName
-  )
+  const hipBone = skinnedMesh.skeleton.bones.find((b) => b.name === hipBoneName)
   return hipBone ? hipBone.position.y : null
 }
 
