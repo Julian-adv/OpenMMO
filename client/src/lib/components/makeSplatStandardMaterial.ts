@@ -24,6 +24,7 @@ export function makeSplatStandardMaterial({
     color: 0xffffff,
     roughness: 1.0, // Sensible default; adjust externally as needed
     metalness: 0.0,
+    envMapIntensity: 0,
   })
 
   // Recommended common texture settings
@@ -42,6 +43,9 @@ export function makeSplatStandardMaterial({
 
   mat.onBeforeCompile = (shader) => {
     shader.defines = { ...(shader.defines ?? {}), USE_UV: 1 }
+
+    // Disable environment map at shader level so scene.environment doesn't brighten terrain
+    shader.fragmentShader = '#undef USE_ENVMAP\n' + shader.fragmentShader
 
     // Common uniforms
     shader.uniforms.splatMap = { value: splatMap }
@@ -115,6 +119,22 @@ export function makeSplatStandardMaterial({
          vec3 c2 = texture2D(diffuse2, vUv * tile2).rgb;
          vec3 c3 = texture2D(diffuse3, vUv * tile3).rgb;
          vec3 blended = c0*weights.r + c1*weights.g + c2*weights.b + c3*weights.a;
+         
+         // --- Grid visualization ---
+         vec2 gridCoords = vUv * 64.0; // 1m grid (since vUv is 0-1 across the 64m tile)
+         
+         // 1m grid logic
+         vec2 grid1 = abs(fract(gridCoords - 0.5) - 0.5) / fwidth(gridCoords);
+         float line1 = 1.0 - min(min(grid1.x, grid1.y), 1.0);
+         
+         // 64m grid logic (tile boundary)
+         vec2 grid64 = abs(fract(vUv - 0.5) - 0.5) / fwidth(vUv);
+         float line64 = 1.0 - min(min(grid64.x, grid64.y), 1.0);
+         
+         // Overlay grids
+         blended = mix(blended, vec3(0.0), line1 * 0.3);   // Dark 1m grid (30% opacity)
+         blended = mix(blended, vec3(1.0, 0.0, 0.0), line64); // Red 64m grid (Full opacity)
+         
          diffuseColor = vec4(blended, 1.0);`
       )
       // Inject custom normal perturbation function

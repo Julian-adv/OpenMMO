@@ -5,7 +5,6 @@
   import { onMount } from 'svelte'
   import { AnimationIndex } from '../types/animations'
   import {
-    LOCOMOTION_WAIT_TIMEOUT_MS,
     createCharacterModelRoot,
     getGltfAnimations,
     retargetOrderedCharacterAnimationsForModel,
@@ -136,15 +135,10 @@
   })
 
   onMount(() => {
-    const waitStartTime = Date.now()
     const checkGltf = () => {
-      const animationPackTimedOut =
-        Date.now() - waitStartTime >= LOCOMOTION_WAIT_TIMEOUT_MS
-      const animationPacksReady =
-        ($locomotionGltf && $combatMeleeGltf) || animationPackTimedOut
       const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
 
-      if (activeGltf && animationPacksReady) {
+      if (activeGltf && $locomotionGltf && $combatMeleeGltf) {
         setupModel(
           activeGltf.scene,
           getGltfAnimations(activeGltf),

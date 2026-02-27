@@ -9,6 +9,7 @@
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
+  import LoadingDialog from './lib/components/LoadingDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
@@ -34,6 +35,7 @@
     isPlayerDead && deathUiState === 'dialog_closed'
   )
   let wasPlayerDead = false
+  let isCurrentPlayerLoading = $state(false)
   let kickedMessage = $state('')
 
   $effect(() => {
@@ -212,6 +214,7 @@
         <GameScene
           {serverUrl}
           onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
+          bind:isCurrentPlayerLoading
         />
       </Canvas>
       <ChatPanel />
@@ -239,6 +242,10 @@
         </button>
       </div>
     </div>
+
+    {#if isCurrentPlayerLoading}
+      <LoadingDialog />
+    {/if}
 
     {#if showRespawnDialog}
       <RespawnDialog onRespawn={requestRespawn} onLater={closeRespawnDialog} />

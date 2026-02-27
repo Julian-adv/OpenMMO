@@ -75,9 +75,10 @@
   interface Props {
     serverUrl: string
     onCurrentPlayerDyingFinished?: () => void
+    isCurrentPlayerLoading?: boolean
   }
 
-  let { serverUrl, onCurrentPlayerDyingFinished }: Props = $props()
+  let { serverUrl, onCurrentPlayerDyingFinished, isCurrentPlayerLoading = $bindable(false) }: Props = $props()
 
   let currentPlayer = $state<LocalPlayer | null>(null)
   let otherPlayers = $state<Map<string, RemotePlayer>>(new Map())
@@ -460,6 +461,7 @@
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer)
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
+    scene.environmentIntensity = 0.5
     pmremGenerator.dispose()
 
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
@@ -571,6 +573,7 @@
   onStateChange={handlePlayerStateChange}
   onAttackDuration={(duration) => (playerAttackDuration = duration)}
   {onCurrentPlayerDyingFinished}
+  bind:isCurrentPlayerLoading={isCurrentPlayerLoading}
   bind:playerControl={playerControl}
   bind:currentPlayerModel={currentPlayerModel}
   bind:otherPlayerModels={otherPlayerModels}

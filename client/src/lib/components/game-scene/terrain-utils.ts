@@ -16,9 +16,9 @@ export interface Vector3Like {
   z: number
 }
 
-export const TERRAIN_TILE_SIZE = 100
-export const TERRAIN_TILE_SEGMENTS = 128
-export const TERRAIN_GRID_RADIUS = 1 // 1 => 3x3 tiles around player
+export const TERRAIN_TILE_SIZE = 64
+export const TERRAIN_TILE_SEGMENTS = 64
+export const TERRAIN_GRID_RADIUS = 2 // 2 => 5x5 tiles around player
 
 export function createTerrainTiles(
   centerChunkX: number,
