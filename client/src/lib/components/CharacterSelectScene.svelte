@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T, useThrelte } from '@threlte/core'
   import * as THREE from 'three'
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
   import { interactivity } from '@threlte/extras'
   import type { AccountCharacter } from '../network/socket'
@@ -46,7 +47,7 @@
   const KEY_LIGHT_INTENSITY = 0.05
   const FILL_LIGHT_INTENSITY = 0.48
 
-  const { size } = useThrelte()
+  const { size, renderer, scene } = useThrelte()
   let viewportSize = $state({ width: 1, height: 1 })
   let cameraPositionZ = $state(8)
 
@@ -56,7 +57,17 @@
     const unsubscribe = size.subscribe((nextSize) => {
       viewportSize = nextSize
     })
-    return unsubscribe
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer)
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
+    scene.environmentIntensity = 0.1
+    pmremGenerator.dispose()
+
+    return () => {
+      scene.environment?.dispose()
+      scene.environment = null
+      unsubscribe()
+    }
   })
 
   function calculateCameraPositionZ(width: number, height: number) {
@@ -119,7 +130,7 @@
   receiveShadow
 >
   <T.PlaneGeometry args={[PLATFORM_WIDTH, PLATFORM_DEPTH]} />
-  <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent depthWrite={false} />
+  <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent depthWrite={false} envMapIntensity={0} />
 </T.Mesh>
 
 {#each [0, 1, 2] as slotIndex (slotIndex)}
@@ -135,6 +146,7 @@
       color="#2f3f52"
       opacity={1.0}
       transparent
+      envMapIntensity={0}
     />
   </T.Mesh>
 
