@@ -2,6 +2,7 @@
   import { T, useThrelte } from '@threlte/core'
   import { OrbitControls, Grid } from '@threlte/extras'
   import * as THREE from 'three'
+  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
   import {
     gameStore,
@@ -94,7 +95,7 @@
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
 
-  const { size } = useThrelte()
+  const { size, renderer, scene } = useThrelte()
   let viewportSize = $state({ width: 1, height: 1 })
 
   const CAMERA_OFFSET = { ...DEFAULT_CAMERA_OFFSET }
@@ -457,6 +458,10 @@
       }
     })
 
+    const pmremGenerator = new THREE.PMREMGenerator(renderer)
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
+    pmremGenerator.dispose()
+
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
@@ -478,6 +483,8 @@
     }, 1100)
 
     return () => {
+      scene.environment?.dispose()
+      scene.environment = null
       unsubscribeViewportSize()
       unsubscribeCameraReset()
       unsubscribeServerGameTime()
