@@ -10,6 +10,7 @@ Or run from Blender's Text Editor for interactive use.
 
 import bpy
 import os
+import re
 
 # ---------------------------------------------------------------------------
 # Configuration: define which actions go into which GLB file.
@@ -87,6 +88,37 @@ def push_actions_to_nla(armature, actions):
         strip.name = action.name
 
 
+def strip_bone_name_prefixes(armature):
+    """Remove Mixamo prefixes (e.g. 'mixamorig:') from bone names.
+
+    Also updates animation F-curve data_paths that reference bone names.
+    Changes persist in the .blend file if saved afterwards.
+    """
+    prefix_pattern = re.compile(r'^mixamorig\d*:')
+    original_to_new = {}
+
+    for bone in armature.data.bones:
+        new_name = prefix_pattern.sub("", bone.name)
+        if new_name != bone.name:
+            original_to_new[bone.name] = new_name
+            bone.name = new_name
+
+    if not original_to_new:
+        print("  No bone prefixes to strip")
+        return
+
+    # Update F-curve data_paths to match renamed bones
+    for action in bpy.data.actions:
+        for fc in action.fcurves:
+            for orig, new in original_to_new.items():
+                if orig in fc.data_path:
+                    fc.data_path = fc.data_path.replace(
+                        f'["{orig}"]', f'["{new}"]'
+                    )
+
+    print(f"  Stripped prefixes from {len(original_to_new)} bones")
+
+
 def select_export_objects(armature):
     """Select only the target armature and its child meshes for export."""
     bpy.ops.object.select_all(action="DESELECT")
@@ -123,6 +155,9 @@ def main():
         return
 
     print(f"Using armature: '{armature.name}'")
+
+    # Standardize bone names before export
+    strip_bone_name_prefixes(armature)
 
     all_actions = collect_all_actions()
     print(f"Found {len(all_actions)} actions: {list(all_actions.keys())}")
