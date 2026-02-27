@@ -88,6 +88,19 @@ def push_actions_to_nla(armature, actions):
         strip.name = action.name
 
 
+def iter_fcurves(action):
+    """Blender 5.x Layered Action / 4.x Legacy 모두 지원"""
+    if action.is_action_layered:
+        for layer in action.layers:
+            for strip in layer.strips:
+                for slot in action.slots:
+                    cb = strip.channelbag(slot)
+                    if cb:
+                        yield from cb.fcurves
+    else:
+        yield from action.fcurves
+
+
 def strip_bone_name_prefixes(armature):
     """Remove Mixamo prefixes (e.g. 'mixamorig:') from bone names.
 
@@ -109,7 +122,7 @@ def strip_bone_name_prefixes(armature):
 
     # Update F-curve data_paths to match renamed bones
     for action in bpy.data.actions:
-        for fc in action.fcurves:
+        for fc in iter_fcurves(action):
             for orig, new in original_to_new.items():
                 if orig in fc.data_path:
                     fc.data_path = fc.data_path.replace(
