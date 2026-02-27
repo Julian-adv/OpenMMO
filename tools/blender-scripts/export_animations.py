@@ -79,13 +79,61 @@ def push_actions_to_nla(armature, actions):
         strip.name = action.name
 
 
+def ensure_armature_has_mesh(armature):
+    """Ensure the armature has at least one child mesh for skeleton export.
+
+    The glTF exporter only writes skin/skeleton data when a SkinnedMesh is
+    present. Without it, the exported GLB has no skeleton and runtime
+    retargeting (which needs a source SkinnedMesh) silently fails.
+    If no mesh exists, create a minimal single-vertex mesh weighted to the
+    armature so the skeleton is included in the export.
+
+    Returns the created mesh object, or None if a mesh already existed.
+    """
+    for obj in bpy.data.objects:
+        if obj.type == "MESH" and obj.parent == armature:
+            return None
+
+    # Create minimal mesh
+    mesh_data = bpy.data.meshes.new("_export_helper_mesh")
+    mesh_data.from_pydata([(0, 0, 0)], [], [])
+    mesh_data.update()
+
+    mesh_obj = bpy.data.objects.new("_export_helper", mesh_data)
+    bpy.context.scene.collection.objects.link(mesh_obj)
+    mesh_obj.parent = armature
+
+    # Add Armature modifier so the mesh is bound to the skeleton
+    mod = mesh_obj.modifiers.new(name="Armature", type="ARMATURE")
+    mod.object = armature
+
+    # Add a vertex group for the root bone so glTF sees it as a skinned mesh
+    if armature.data.bones:
+        root_bone = next((b for b in armature.data.bones if b.parent is None), armature.data.bones[0])
+        vg = mesh_obj.vertex_groups.new(name=root_bone.name)
+        vg.add([0], 1.0, "REPLACE")
+
+    print(f"  Created helper mesh bound to '{armature.name}' for skeleton export")
+    return mesh_obj
+
+
+def cleanup_helper_mesh(mesh_obj):
+    """Remove the temporary helper mesh created by ensure_armature_has_mesh."""
+    if mesh_obj is None:
+        return
+    mesh_data = mesh_obj.data
+    bpy.data.objects.remove(mesh_obj, do_unlink=True)
+    bpy.data.meshes.remove(mesh_data)
+
+
 def export_glb(filepath):
-    """Export the current scene as GLB."""
+    """Export the current scene as GLB with skeleton data."""
     os.makedirs(os.path.dirname(filepath), exist_ok=True)
     bpy.ops.export_scene.gltf(
         filepath=filepath,
         export_format="GLB",
         export_animations=True,
+        export_skins=True,
         export_nla_strips=True,
         export_nla_strips_merged_animation_name="",
         export_animation_mode="NLA_TRACKS",
@@ -104,6 +152,10 @@ def main():
 
     all_actions = collect_all_actions()
     print(f"Found {len(all_actions)} actions: {list(all_actions.keys())}")
+
+    # Ensure a SkinnedMesh exists so the glTF exporter includes skeleton data.
+    # This is required for runtime retargeting to work across different character models.
+    helper_mesh = ensure_armature_has_mesh(armature)
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -135,7 +187,8 @@ def main():
         export_glb(output_path)
         print(f"Done: {output_path}")
 
-    # Clean up: restore NLA tracks
+    # Clean up
+    cleanup_helper_mesh(helper_mesh)
     clear_nla_tracks(armature)
     print("\nAll packs exported successfully.")
 
