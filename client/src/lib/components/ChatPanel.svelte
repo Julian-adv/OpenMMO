@@ -2,15 +2,10 @@
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
 
-  let chatMessages: string[] = $state([])
-  let isConnected = $state(false)
+  let chatMessages = $derived($gameStore.chatMessages)
+  let isConnected = $derived($gameStore.isConnected)
   let messageInput = $state('')
   let chatContainer: HTMLDivElement
-
-  gameStore.subscribe((state) => {
-    chatMessages = state.chatMessages
-    isConnected = state.isConnected
-  })
 
   $effect(() => {
     // Auto-scroll to bottom when new messages arrive
@@ -46,23 +41,6 @@
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="chat-panel">
-  <div class="chat-header">
-    <h3>Chat</h3>
-    <div
-      class="connection-status"
-      class:connected={isConnected}
-      onclick={() => !isConnected && networkManager.reconnect()}
-      role="button"
-      tabindex="0"
-      onkeydown={(e) =>
-        e.key === 'Enter' && !isConnected && networkManager.reconnect()}
-      aria-label={isConnected ? 'Connected' : 'Click to reconnect'}
-    >
-      {isConnected ? '🟢' : '🔴'}
-      {isConnected ? 'Connected' : 'Disconnected'}
-    </div>
-  </div>
-
   <div class="chat-messages" bind:this={chatContainer}>
     {#each chatMessages as message, index (index)}
       <div class="message">
@@ -71,7 +49,7 @@
     {/each}
   </div>
 
-  <div class="chat-input">
+  <div class="chat-input" class:disconnected={!isConnected}>
     <input
       type="text"
       bind:this={chatInput}
@@ -105,49 +83,6 @@
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 10px 15px;
-    border-bottom: 1px solid #4a5568;
-    background: rgba(0, 0, 0, 0.9);
-    border-radius: 8px 8px 0 0;
-  }
-
-  .chat-header h3 {
-    margin: 0;
-    color: #ffffff;
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  .connection-status {
-    font-size: 12px;
-    color: #a0aec0;
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    cursor: pointer;
-    user-select: none;
-    padding: 2px 5px;
-    border-radius: 4px;
-    transition: background-color 0.2s;
-  }
-
-  .connection-status:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .connection-status.connected {
-    color: #68d391;
-    cursor: default;
-  }
-
-  .connection-status.connected:hover {
-    background: transparent;
-  }
-
   .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -173,19 +108,22 @@
 
   .chat-input {
     display: flex;
-    padding: 10px;
     gap: 8px;
     border-top: 1px solid #4a5568;
-    background: rgba(0, 0, 0, 0.9);
+    background: #1a202c;
     border-radius: 0 0 8px 8px;
+  }
+
+  .chat-input.disconnected {
+    background: #742a2a;
   }
 
   .chat-input input {
     flex: 1;
     padding: 8px 10px;
-    border: 1px solid #4a5568;
-    border-radius: 4px;
-    background: #1a202c;
+    border: none;
+    border-radius: 0 0 0 8px;
+    background: transparent;
     color: #ffffff;
     font-size: 12px;
   }
@@ -200,6 +138,7 @@
   }
 
   .chat-input button {
+    margin: 2px;
     padding: 8px 15px;
     border: none;
     border-radius: 4px;

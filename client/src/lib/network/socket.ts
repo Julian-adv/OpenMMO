@@ -152,9 +152,31 @@ class NetworkManager {
       console.log(
         `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
       )
-      this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = setTimeout(async () => {
         this.reconnectTimer = null
         this.connect()
+        if (
+          this.lastAccountName &&
+          this.lastPasswordHash &&
+          this.lastCharacterId
+        ) {
+          const opened = await this.waitForSocketOpen(5000)
+          if (opened) {
+            this.authenticateWithHash(
+              this.lastAccountName,
+              this.lastPasswordHash,
+              this.lastCreateAccount
+            )
+            const unsub = this.authSuccess.on(() => {
+              unsub()
+              if (this.lastCharacterId) {
+                this.sendAndSerialize({
+                  EnterGame: { character_id: this.lastCharacterId },
+                })
+              }
+            })
+          }
+        }
       }, 2000 * this.reconnectAttempts)
     }
   }
@@ -655,10 +677,11 @@ class NetworkManager {
   }
 }
 
-export const networkManager = new NetworkManager()
+export const networkManager: NetworkManager =
+  import.meta.hot?.data?.networkManager ?? new NetworkManager()
 
 if (import.meta.hot) {
-  import.meta.hot.dispose(() => {
-    networkManager.disconnect()
+  import.meta.hot.dispose((data) => {
+    data.networkManager = networkManager
   })
 }
