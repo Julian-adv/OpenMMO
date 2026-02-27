@@ -460,6 +460,7 @@
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer)
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
+    scene.environmentIntensity = 0.5
     pmremGenerator.dispose()
 
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)

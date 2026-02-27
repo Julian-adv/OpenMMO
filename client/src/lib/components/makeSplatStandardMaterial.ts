@@ -24,6 +24,7 @@ export function makeSplatStandardMaterial({
     color: 0xffffff,
     roughness: 1.0, // Sensible default; adjust externally as needed
     metalness: 0.0,
+    envMapIntensity: 0,
   })
 
   // Recommended common texture settings
@@ -42,6 +43,9 @@ export function makeSplatStandardMaterial({
 
   mat.onBeforeCompile = (shader) => {
     shader.defines = { ...(shader.defines ?? {}), USE_UV: 1 }
+
+    // Disable environment map at shader level so scene.environment doesn't brighten terrain
+    shader.fragmentShader = '#undef USE_ENVMAP\n' + shader.fragmentShader
 
     // Common uniforms
     shader.uniforms.splatMap = { value: splatMap }
