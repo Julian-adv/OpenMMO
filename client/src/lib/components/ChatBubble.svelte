@@ -128,13 +128,13 @@
 
 <!-- Chat bubble background -->
 <T.Group bind:ref={bubbleGroup}>
-  <T.Mesh position={[0, 0, 0]}>
+  <T.Mesh position={[0, cornerRadius, 0]}>
     <T.ShapeGeometry args={[bubbleShape]} />
     <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} />
   </T.Mesh>
 
   <!-- Chat bubble border (white line) -->
-  <T.LineLoop position={[0, 0, 0.001]}>
+  <T.LineLoop position={[0, cornerRadius, 0.001]}>
     <T is={createBorderGeometry(bubbleShape)} />
     <T.LineBasicMaterial color="#ffffff" />
   </T.LineLoop>
@@ -143,7 +143,7 @@
   <Text
     bind:ref={textRef}
     text={displayText}
-    position={[0, bubbleCenterY, 0.01]}
+    position={[0, bubbleCenterY + cornerRadius, 0.01]}
     fontSize={0.25}
     color="#ffffff"
     anchorX="center"
