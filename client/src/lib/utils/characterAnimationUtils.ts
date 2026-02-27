@@ -296,10 +296,6 @@ export function retargetAnimationsForCharacterModel(
   const hipYDelta =
     targetHipY !== null && sourceHipY !== null ? targetHipY - sourceHipY : 0
 
-  console.log(
-    `[retarget] hip="${hipBoneName}" targetY=${targetHipY} sourceY=${sourceHipY} delta=${hipYDelta}`
-  )
-
   const retargetedClips = clips.map((clip) => {
     const cacheKey = `${targetProfileKey}::${sourceProfileKey}::${clip.uuid}`
     const cachedClip = retargetedClipCache.get(cacheKey)
