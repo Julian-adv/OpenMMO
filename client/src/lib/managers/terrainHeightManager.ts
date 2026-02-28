@@ -197,8 +197,7 @@ export class TerrainHeightManager {
             const heightDelta = delta * weight
 
             const idx = cz * TILE_DIM + cx
-            const currentValue = data[idx]
-            const currentHeight = decodeHeight(currentValue)
+            const currentHeight = decodeHeight(data[idx])
             const newHeight = currentHeight + heightDelta
             const newValue = Math.max(
               0,

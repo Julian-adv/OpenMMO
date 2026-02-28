@@ -80,11 +80,20 @@
     }
   }
 
+  function getPaintIntervalMs(): number {
+    return (11 - currentBrushStrength) * 100
+  }
+
   function applyBrushAtCursor() {
     if (!heightManager) return
 
     const now = performance.now()
-    const deltaTimeSec = lastPaintTime > 0 ? Math.min((now - lastPaintTime) / 1000, 0.1) : 1 / 60
+    if (lastPaintTime === 0) {
+      lastPaintTime = now
+      return
+    }
+    const elapsed = now - lastPaintTime
+    if (elapsed < getPaintIntervalMs()) return
     lastPaintTime = now
 
     const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
@@ -92,9 +101,9 @@
       lastWorldPos.x,
       lastWorldPos.z,
       currentBrushSize,
-      currentBrushStrength,
+      0.1,
       raise,
-      deltaTimeSec
+      1
     )
   }
 
@@ -116,13 +125,13 @@
 
   function handleMouseDown(event: MouseEvent) {
     if (event.button !== 0) return
+    event.preventDefault()
     const hit = raycastTerrain(event)
     if (!hit) return
 
     isPainting = true
     lastPaintTime = 0
     updateCursorFromHit(hit)
-    applyBrushAtCursor()
   }
 
   function handleMouseUp(event: MouseEvent) {
@@ -157,17 +166,17 @@
     const canvas = document.querySelector('canvas')
     if (!canvas) return
 
-    canvas.addEventListener('mousemove', handleMouseMove)
-    canvas.addEventListener('mousedown', handleMouseDown)
-    canvas.addEventListener('mouseup', handleMouseUp)
+    canvas.addEventListener('mousemove', handleMouseMove, true)
+    canvas.addEventListener('mousedown', handleMouseDown, true)
+    canvas.addEventListener('mouseup', handleMouseUp, true)
     canvas.addEventListener('mouseleave', handleMouseOut)
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
 
     return () => {
-      canvas.removeEventListener('mousemove', handleMouseMove)
-      canvas.removeEventListener('mousedown', handleMouseDown)
-      canvas.removeEventListener('mouseup', handleMouseUp)
+      canvas.removeEventListener('mousemove', handleMouseMove, true)
+      canvas.removeEventListener('mousedown', handleMouseDown, true)
+      canvas.removeEventListener('mouseup', handleMouseUp, true)
       canvas.removeEventListener('mouseleave', handleMouseOut)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
