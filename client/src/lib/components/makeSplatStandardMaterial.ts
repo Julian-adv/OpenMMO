@@ -158,7 +158,7 @@ export function makeSplatStandardMaterial({
            if (bDist <= brushRadius) {
              float sigma = brushRadius / 2.5;
              float bWeight = exp(-(bDist * bDist) / (2.0 * sigma * sigma));
-             vec3 brushColor = brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
+             vec3 brushColor = brushRaise > 1.5 ? vec3(0.3, 0.6, 1.0) : brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
              blended = mix(blended, brushColor, bWeight * 0.2);
            }
          }

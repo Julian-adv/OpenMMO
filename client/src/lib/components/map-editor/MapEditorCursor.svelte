@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushEffectiveRaise, brushWorldPos, cursorHeight } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushEffectiveRaise, brushFlatten, brushWorldPos, cursorHeight } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -17,6 +17,7 @@
 
   let isPainting = $state(false)
   let shiftHeld = $state(false)
+  let ctrlHeld = $state(false)
   let lastPaintTime = $state(0)
 
   let currentBrushSize = $state(3)
@@ -96,15 +97,23 @@
     if (elapsed < getPaintIntervalMs()) return
     lastPaintTime = now
 
-    const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
-    heightManager.applyBrush(
-      lastWorldPos.x,
-      lastWorldPos.z,
-      currentBrushSize,
-      0.1,
-      raise,
-      1
-    )
+    if (ctrlHeld) {
+      heightManager.applyFlatten(
+        lastWorldPos.x,
+        lastWorldPos.z,
+        currentBrushSize
+      )
+    } else {
+      const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
+      heightManager.applyBrush(
+        lastWorldPos.x,
+        lastWorldPos.z,
+        currentBrushSize,
+        0.1,
+        raise,
+        1
+      )
+    }
   }
 
   function handleMouseMove(event: MouseEvent) {
@@ -145,6 +154,10 @@
       shiftHeld = true
       syncEffectiveRaise()
     }
+    if (event.key === 'Control') {
+      ctrlHeld = true
+      brushFlatten.set(true)
+    }
   }
 
   function handleKeyUp(event: KeyboardEvent) {
@@ -152,6 +165,18 @@
       shiftHeld = false
       syncEffectiveRaise()
     }
+    if (event.key === 'Control') {
+      ctrlHeld = false
+      brushFlatten.set(false)
+    }
+  }
+
+  function handleWheel(event: WheelEvent) {
+    if (!event.ctrlKey) return
+    event.preventDefault()
+    const delta = event.deltaY > 0 ? -1 : 1
+    const newSize = Math.max(1, Math.min(10, currentBrushSize + delta))
+    brushSize.set(newSize)
   }
 
   function handleMouseOut() {
@@ -170,6 +195,7 @@
     canvas.addEventListener('mousedown', handleMouseDown, true)
     canvas.addEventListener('mouseup', handleMouseUp, true)
     canvas.addEventListener('mouseleave', handleMouseOut)
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('keyup', handleKeyUp)
 
@@ -178,6 +204,7 @@
       canvas.removeEventListener('mousedown', handleMouseDown, true)
       canvas.removeEventListener('mouseup', handleMouseUp, true)
       canvas.removeEventListener('mouseleave', handleMouseOut)
+      canvas.removeEventListener('wheel', handleWheel)
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       hoveredCell.set(null)

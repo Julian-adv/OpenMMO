@@ -10,7 +10,7 @@
     type SplatLayer,
   } from './makeSplatStandardMaterial'
   import { mapEditorMode } from '../stores/debugStore'
-  import { brushWorldPos, brushSize, brushEffectiveRaise } from '../stores/editorStore'
+  import { brushWorldPos, brushSize, brushEffectiveRaise, brushFlatten } from '../stores/editorStore'
 
   export let geometry: THREE.BufferGeometry
   export let mesh: THREE.Mesh | undefined = undefined
@@ -28,6 +28,7 @@
     let pos: { x: number; z: number } | null = null
     let size = 3
     let raise = true
+    let flatten = false
 
     function sync() {
       const s = mat.userData?.shader
@@ -37,7 +38,7 @@
         u.brushActive.value = 1.0
         u.brushCenter.value.set(pos.x, pos.z)
         u.brushRadius.value = size
-        u.brushRaise.value = raise ? 1.0 : 0.0
+        u.brushRaise.value = flatten ? 2.0 : raise ? 1.0 : 0.0
       } else {
         u.brushActive.value = 0.0
       }
@@ -48,6 +49,7 @@
       brushWorldPos.subscribe((v) => { pos = v; sync() }),
       brushSize.subscribe((v) => { size = v; sync() }),
       brushEffectiveRaise.subscribe((v) => { raise = v; sync() }),
+      brushFlatten.subscribe((v) => { flatten = v; sync() }),
     )
   }
 

@@ -231,6 +231,104 @@ export class TerrainHeightManager {
     return affected
   }
 
+  applyFlatten(worldX: number, worldZ: number, radius: number): AffectedTile[] {
+    const affected: AffectedTile[] = []
+    const sigma = radius / 2.5
+
+    const minWorldX = worldX - radius
+    const maxWorldX = worldX + radius
+    const minWorldZ = worldZ - radius
+    const maxWorldZ = worldZ + radius
+
+    const minTileX = Math.floor(
+      (minWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const maxTileX = Math.floor(
+      (maxWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const minTileZ = Math.floor(
+      (minWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const maxTileZ = Math.floor(
+      (maxWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+
+    // Box filter smooth: each cell blends toward the average of its 3x3 neighbors
+    const affectedKeys = new Set<string>()
+
+    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+      for (let tx = minTileX; tx <= maxTileX; tx++) {
+        const key = tileKey(tx, tz)
+        const data = this.heightmaps.get(key)
+        if (!data) continue
+
+        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
+        const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
+        const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
+        const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
+
+        for (let cz = startCZ; cz <= endCZ; cz++) {
+          for (let cx = startCX; cx <= endCX; cx++) {
+            const dx = tileMinX + cx + 0.5 - worldX
+            const dz = tileMinZ + cz + 0.5 - worldZ
+            const dist = Math.sqrt(dx * dx + dz * dz)
+            if (dist > radius) continue
+
+            // Average of 8 surrounding neighbors (excluding self)
+            let nSum = 0
+            let nCount = 0
+            for (let nz = -1; nz <= 1; nz++) {
+              for (let nx = -1; nx <= 1; nx++) {
+                if (nx === 0 && nz === 0) continue
+                const ncx = cx + nx
+                const ncz = cz + nz
+                if (ncx >= 0 && ncx < TILE_DIM && ncz >= 0 && ncz < TILE_DIM) {
+                  nSum += decodeHeight(data[ncz * TILE_DIM + ncx])
+                  nCount++
+                }
+              }
+            }
+            if (nCount === 0) continue
+            const neighborAvg = nSum / nCount
+
+            const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
+            const idx = cz * TILE_DIM + cx
+            const currentHeight = decodeHeight(data[idx])
+            const heightDelta = (neighborAvg - currentHeight) * weight
+
+            const steps = Math.trunc(heightDelta / 0.05)
+            if (steps === 0) continue
+            const newHeight = currentHeight + steps * 0.05
+            const newValue = Math.max(
+              0,
+              Math.min(65535, encodeHeight(newHeight))
+            )
+            data[idx] = newValue
+
+            if (!affectedKeys.has(key)) {
+              affectedKeys.add(key)
+              affected.push({ tileX: tx, tileZ: tz })
+              this.dirtyTiles.add(key)
+            }
+          }
+        }
+
+        const geometry = this.geometries.get(key)
+        if (geometry) {
+          this.applyHeightToGeometry(tx, tz, geometry)
+        }
+      }
+    }
+
+    if (affected.length > 0) {
+      this.scheduleSave()
+    }
+
+    return affected
+  }
+
   private scheduleSave() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)
