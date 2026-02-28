@@ -59,6 +59,15 @@ export function makeSplatStandardMaterial({
     shader.uniforms.tile3 = { value: layers[3].tile }
     shader.uniforms.splatScale = { value: splatScale }
 
+    // Brush overlay uniforms
+    shader.uniforms.brushCenter = { value: new THREE.Vector2(0, 0) }
+    shader.uniforms.brushRadius = { value: 3.0 }
+    shader.uniforms.brushActive = { value: 0.0 }
+    shader.uniforms.brushRaise = { value: 1.0 }
+
+    // Save shader ref for external uniform updates
+    mat.userData.shader = shader
+
     // Optional uniforms
     const hasN = layers.some((l) => !!l.normalMap)
     const hasORM = layers.some((l) => !!l.orm)
@@ -81,18 +90,21 @@ export function makeSplatStandardMaterial({
       if (layers[3].orm) shader.uniforms.orm3 = { value: layers[3].orm }
     }
 
-    // Vertex shader: splat UV
+    // Vertex shader: splat UV + world position for brush overlay
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <uv_pars_vertex>',
         `#include <uv_pars_vertex>
          uniform float splatScale;
-         varying vec2 vUvSplat;`
+         varying vec2 vUvSplat;
+         varying vec2 vWorldXZ;`
       )
       .replace(
         '#include <uv_vertex>',
         `#include <uv_vertex>
-         vUvSplat = uv * splatScale;`
+         vUvSplat = uv * splatScale;
+         vec4 worldPos4 = modelMatrix * vec4(position, 1.0);
+         vWorldXZ = worldPos4.xz;`
       )
 
     // Fragment shader: declarations
@@ -104,6 +116,11 @@ export function makeSplatStandardMaterial({
          uniform sampler2D diffuse0, diffuse1, diffuse2, diffuse3;
          uniform float tile0, tile1, tile2, tile3;
          varying vec2 vUvSplat;
+         varying vec2 vWorldXZ;
+         uniform vec2 brushCenter;
+         uniform float brushRadius;
+         uniform float brushActive;
+         uniform float brushRaise;
          ${hasN ? 'uniform sampler2D normal0, normal1, normal2, normal3; uniform float normalScale;' : ''}
          ${hasORM ? 'uniform sampler2D orm0, orm1, orm2, orm3;' : ''}`
       )
@@ -134,7 +151,18 @@ export function makeSplatStandardMaterial({
          // Overlay grids
          blended = mix(blended, vec3(0.0), line1 * 0.3);   // Dark 1m grid (30% opacity)
          blended = mix(blended, vec3(1.0, 0.0, 0.0), line64); // Red 64m grid (Full opacity)
-         
+
+         // Brush overlay (shader-based, follows terrain surface)
+         if (brushActive > 0.5) {
+           float bDist = distance(vWorldXZ, brushCenter);
+           if (bDist <= brushRadius) {
+             float sigma = brushRadius / 2.5;
+             float bWeight = exp(-(bDist * bDist) / (2.0 * sigma * sigma));
+             vec3 brushColor = brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
+             blended = mix(blended, brushColor, bWeight * 0.2);
+           }
+         }
+
          diffuseColor = vec4(blended, 1.0);`
       )
       // Inject custom normal perturbation function

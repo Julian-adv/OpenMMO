@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, cursorHeight } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushEffectiveRaise, brushWorldPos, cursorHeight } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -16,7 +15,6 @@
 
   let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager }: Props = $props()
 
-  let cursorPosition = $state<[number, number, number] | null>(null)
   let isPainting = $state(false)
   let shiftHeld = $state(false)
   let lastPaintTime = $state(0)
@@ -27,20 +25,17 @@
 
   brushSize.subscribe((v) => (currentBrushSize = v))
   brushStrength.subscribe((v) => (currentBrushStrength = v))
-  brushRaiseMode.subscribe((v) => (currentBrushRaise = v))
+  brushRaiseMode.subscribe((v) => {
+    currentBrushRaise = v
+    syncEffectiveRaise()
+  })
+
+  function syncEffectiveRaise() {
+    brushEffectiveRaise.set(shiftHeld ? !currentBrushRaise : currentBrushRaise)
+  }
 
   const raycaster = new THREE.Raycaster()
   const mouseNDC = new THREE.Vector2()
-
-  // Ring geometry for brush cursor
-  let ringGeometry = $state<THREE.RingGeometry>(new THREE.RingGeometry(2.5, 3, 48))
-
-  $effect(() => {
-    const inner = Math.max(0.1, currentBrushSize - 0.25)
-    const outer = currentBrushSize + 0.25
-    ringGeometry.dispose()
-    ringGeometry = new THREE.RingGeometry(inner, outer, 48)
-  })
 
   let lastWorldPos = { x: 0, z: 0 }
 
@@ -78,7 +73,7 @@
 
     hoveredCell.set({ tileX, tileZ, cellX, cellZ, worldX, worldZ })
     lastWorldPos = { x: hit.point.x, z: hit.point.z }
-    cursorPosition = [hit.point.x, hit.point.y + 0.1, hit.point.z]
+    brushWorldPos.set({ x: hit.point.x, z: hit.point.z })
 
     if (heightManager) {
       cursorHeight.set(heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ))
@@ -108,7 +103,7 @@
 
     if (!hit) {
       hoveredCell.set(null)
-      cursorPosition = null
+      brushWorldPos.set(null)
       return
     }
 
@@ -137,17 +132,23 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Shift') shiftHeld = true
+    if (event.key === 'Shift') {
+      shiftHeld = true
+      syncEffectiveRaise()
+    }
   }
 
   function handleKeyUp(event: KeyboardEvent) {
-    if (event.key === 'Shift') shiftHeld = false
+    if (event.key === 'Shift') {
+      shiftHeld = false
+      syncEffectiveRaise()
+    }
   }
 
   function handleMouseOut() {
     hoveredCell.set(null)
     cursorHeight.set(null)
-    cursorPosition = null
+    brushWorldPos.set(null)
     isPainting = false
     lastPaintTime = 0
   }
@@ -171,19 +172,7 @@
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('keyup', handleKeyUp)
       hoveredCell.set(null)
+      brushWorldPos.set(null)
     }
   })
 </script>
-
-{#if cursorPosition}
-  <T.Mesh position={cursorPosition} rotation.x={-Math.PI / 2}>
-    <T is={ringGeometry} />
-    <T.MeshBasicMaterial
-      color={shiftHeld !== !currentBrushRaise ? '#ff6666' : '#66ff66'}
-      transparent
-      opacity={0.6}
-      side={THREE.DoubleSide}
-      depthWrite={false}
-    />
-  </T.Mesh>
-{/if}

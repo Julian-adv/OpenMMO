@@ -9,12 +9,47 @@
     makeSplatStandardMaterial,
     type SplatLayer,
   } from './makeSplatStandardMaterial'
+  import { mapEditorMode } from '../stores/debugStore'
+  import { brushWorldPos, brushSize, brushEffectiveRaise } from '../stores/editorStore'
 
   export let geometry: THREE.BufferGeometry
   export let mesh: THREE.Mesh | undefined = undefined
   export let position: [number, number, number] = [0, 0, 0]
 
   let material: THREE.MeshStandardMaterial | null = null
+  let brushUnsubs: (() => void)[] = []
+
+  function setupBrushSync(mat: THREE.MeshStandardMaterial) {
+    // Clean up previous subscriptions
+    brushUnsubs.forEach((u) => u())
+    brushUnsubs = []
+
+    let editorActive = false
+    let pos: { x: number; z: number } | null = null
+    let size = 3
+    let raise = true
+
+    function sync() {
+      const s = mat.userData?.shader
+      if (!s) return
+      const u = s.uniforms
+      if (editorActive && pos) {
+        u.brushActive.value = 1.0
+        u.brushCenter.value.set(pos.x, pos.z)
+        u.brushRadius.value = size
+        u.brushRaise.value = raise ? 1.0 : 0.0
+      } else {
+        u.brushActive.value = 0.0
+      }
+    }
+
+    brushUnsubs.push(
+      mapEditorMode.subscribe((v) => { editorActive = v; sync() }),
+      brushWorldPos.subscribe((v) => { pos = v; sync() }),
+      brushSize.subscribe((v) => { size = v; sync() }),
+      brushEffectiveRaise.subscribe((v) => { raise = v; sync() }),
+    )
+  }
 
   // === Your assets ===
   const paths = {
@@ -123,7 +158,16 @@
     return tex
   }
 
-  onMount(async () => {
+  onMount(() => {
+    loadMaterial()
+
+    return () => {
+      brushUnsubs.forEach((u) => u())
+      brushUnsubs = []
+    }
+  })
+
+  async function loadMaterial() {
     const loader = new THREE.TextureLoader()
     const glbLoader = new GLTFLoader()
 
@@ -171,7 +215,9 @@
       splatMap: splat,
       splatScale: 1.0,
     })
-  })
+
+    setupBrushSync(material)
+  }
 </script>
 
 {#if material}
