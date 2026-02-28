@@ -14,6 +14,7 @@
   import { gameStore } from './lib/stores/gameStore'
   import { mapEditorMode } from './lib/stores/debugStore'
   import { hoveredCell } from './lib/stores/editorStore'
+  import HeightBrushPanel from './lib/components/map-editor/HeightBrushPanel.svelte'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
@@ -232,6 +233,7 @@
             </span>
           {/if}
         </div>
+        <HeightBrushPanel />
       {/if}
       {#if selectedCharacter}
         <CharacterAttributesHud
