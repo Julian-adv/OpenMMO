@@ -6,10 +6,10 @@ pub const HEIGHTMAP_SIZE: usize = TILE_DIM * TILE_DIM * 2;
 /// Splatmap: 64x64 RGBA uint8 = 16,384 bytes
 pub const SPLATMAP_SIZE: usize = TILE_DIM * TILE_DIM * 4;
 
-/// uint16 value for sea level (0.0m): 5000 * 0.1 - 500.0 = 0.0
-pub const DEFAULT_HEIGHT_VALUE: u16 = 5000;
+/// uint16 value for sea level (0.0m): 10000 * 0.05 - 500.0 = 0.0
+pub const DEFAULT_HEIGHT_VALUE: u16 = 10000;
 
-/// Generate a flat heightmap at sea level (all cells = 5000).
+/// Generate a flat heightmap at sea level (all cells = 10000).
 pub fn default_heightmap() -> Vec<u8> {
     let mut buf = Vec::with_capacity(HEIGHTMAP_SIZE);
     let bytes = DEFAULT_HEIGHT_VALUE.to_le_bytes();

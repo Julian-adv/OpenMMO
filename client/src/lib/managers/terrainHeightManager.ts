@@ -10,11 +10,11 @@ function tileKey(tileX: number, tileZ: number): string {
 }
 
 function encodeHeight(meters: number): number {
-  return Math.round((meters + 500.0) / 0.1)
+  return Math.round((meters + 500.0) / 0.05)
 }
 
 function decodeHeight(value: number): number {
-  return value * 0.1 - 500.0
+  return value * 0.05 - 500.0
 }
 
 export interface AffectedTile {
@@ -198,7 +198,10 @@ export class TerrainHeightManager {
 
             const idx = cz * TILE_DIM + cx
             const currentHeight = decodeHeight(data[idx])
-            const newHeight = currentHeight + heightDelta
+            // Quantize delta to 0.05m steps (1 uint16 unit)
+            const steps = Math.trunc(heightDelta / 0.05)
+            if (steps === 0) continue
+            const newHeight = currentHeight + steps * 0.05
             const newValue = Math.max(
               0,
               Math.min(65535, encodeHeight(newHeight))

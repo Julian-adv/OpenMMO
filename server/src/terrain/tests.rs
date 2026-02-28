@@ -111,7 +111,7 @@ async fn heightmap_write_read_roundtrip() {
 
     let io = super::io::TerrainIO::new(dir.clone());
     let mut data = defaults::default_heightmap();
-    // Set first cell to 6000 (= 100.0m)
+    // Set first cell to 6000 (= -200.0m)
     let custom: u16 = 6000;
     data[0] = custom.to_le_bytes()[0];
     data[1] = custom.to_le_bytes()[1];

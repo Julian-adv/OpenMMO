@@ -66,7 +66,7 @@
 
   {#if height !== null}
     <div class="info-row">
-      Height: {height.toFixed(1)}m
+      Height: {height.toFixed(2)}m
     </div>
   {/if}
 </div>
