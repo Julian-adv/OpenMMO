@@ -1,0 +1,101 @@
+use axum::{
+    body::Bytes,
+    extract::{Path, State},
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Json, Router,
+};
+use std::sync::Arc;
+use tracing::error;
+
+use super::io::TerrainIO;
+
+pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
+    Router::new()
+        .route(
+            "/api/terrain/height/{x}/{z}",
+            get(get_heightmap).put(put_heightmap),
+        )
+        .route(
+            "/api/terrain/splat/{x}/{z}",
+            get(get_splatmap).put(put_splatmap),
+        )
+        .route("/api/terrain/meta/{rx}/{rz}", get(get_meta))
+        .with_state(terrain_io)
+}
+
+async fn get_heightmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    let data = terrain.read_heightmap(x, z).await.map_err(|e| {
+        error!("Failed to read heightmap ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data).into_response())
+}
+
+async fn put_heightmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+    body: Bytes,
+) -> Result<StatusCode, (StatusCode, String)> {
+    terrain
+        .write_heightmap(x, z, &body)
+        .await
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::InvalidData => (StatusCode::BAD_REQUEST, e.to_string()),
+            _ => {
+                error!("Failed to write heightmap ({}, {}): {}", x, z, e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_splatmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    let data = terrain.read_splatmap(x, z).await.map_err(|e| {
+        error!("Failed to read splatmap ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data).into_response())
+}
+
+async fn put_splatmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+    body: Bytes,
+) -> Result<StatusCode, (StatusCode, String)> {
+    terrain
+        .write_splatmap(x, z, &body)
+        .await
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::InvalidData => (StatusCode::BAD_REQUEST, e.to_string()),
+            _ => {
+                error!("Failed to write splatmap ({}, {}): {}", x, z, e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_meta(
+    Path((rx, rz)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let meta = terrain.read_meta(rx, rz).await.map_err(|e| {
+        error!("Failed to read meta ({}, {}): {}", rx, rz, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(Json(meta))
+}

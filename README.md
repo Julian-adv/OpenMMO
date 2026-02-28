@@ -14,6 +14,7 @@ An simple online RPG prototype.
 - Rust
 - Tokio (async runtime)
 - tokio-tungstenite (WebSocket)
+- Axum (Terrain REST API)
 - serde (JSON serialization)
 
 ## Development Setup
@@ -27,27 +28,36 @@ An simple online RPG prototype.
   cargo install cargo-watch
   ```
 
-### 2. Running the Server
+### 2. Port Assignments (Example)
+
+| Port | Service              |
+|------|----------------------|
+| 5001 | Client (Vite dev)    |
+| 5002 | Server (WebSocket)   |
+| 5003 | Server (Terrain API) |
+| 5004 | GLB Editor           |
+
+> **Port Rule:** The client automatically derives server addresses from its own port: WebSocket = `client_port + 1`, Terrain API = `client_port + 2`.
+
+### 3. Running the Server
 
 This project is organized as a **Cargo Workspace**. To detect changes in both the server (`server/`) and shared logic (`shared/`), it is recommended to run commands from the **root directory**.
 
-> **Port Rule:** The client automatically calculates the server address by subtracting 1 from the current browser port. Therefore, if the **server port is N, the client port must be N+1** to connect automatically.
-
 ```bash
-# Run server (e.g., port 1234)
-cargo watch -x "run -p onlinerpg-server -- --port 5172"
+cargo watch -x "run -p onlinerpg-server -- --port 5002"
 ```
 
-### 3. Running the Client
+The terrain REST API starts automatically on port 5003 (game port + 1).
 
-#### Default Run (Run on 5173 if server is on 5172)
+### 4. Running the Client
+
 ```bash
 cd client
 npm install
-npm run dev -- --port 5173
+npm run dev -- --port 5001
 ```
 
-#### Automatic WASM Rebuild on Shared Code Changes (Recommended)
+### 5. Automatic WASM Rebuild on Shared Code Changes (Recommended)
 To have Rust code changes in the `shared` library reflected in the browser immediately during client development, run the following command in a separate terminal:
 
 ```bash
@@ -55,13 +65,13 @@ To have Rust code changes in the `shared` library reflected in the browser immed
 cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```
 
-By default, the client runs on `localhost:5173` and can be accessed via your browser.
+### 6. Running the GLB Editor
 
-## How to Connect
-
-1. Ensure the server is running on `localhost:8080`
-2. Run the client on `localhost:5173`
-3. Access the game through your browser
+```bash
+cd tools/glb-editor
+npm install
+npm run dev -- --port 5004
+```
 
 ## Features
 
@@ -73,6 +83,7 @@ By default, the client runs on `localhost:5173` and can be accessed via your bro
 ## Documentation
 
 - Worldbuilding: [WORLD_BUILDING.md](WORLD_BUILDING.md)
+- Map & Terrain Design: [MAP_DESIGN.md](doc/MAP_DESIGN.md)
 
 ## Architecture
 

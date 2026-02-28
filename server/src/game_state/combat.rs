@@ -250,9 +250,12 @@ impl super::GameState {
         {
             let mut monsters = self.monsters.write().await;
             if let Some(monster) = monsters.get_mut(monster_id) {
-                if monster.state != "dead" && monster.owner_id.as_deref() == Some(attacker_player_id) {
+                if monster.state != "dead"
+                    && monster.owner_id.as_deref() == Some(attacker_player_id)
+                {
                     let def = self.monster_defs.get(&monster.monster_type);
-                    let attack_cooldown_ms = def.map(|d| u64::from(d.attack_cooldown)).unwrap_or(1500);
+                    let attack_cooldown_ms =
+                        def.map(|d| u64::from(d.attack_cooldown)).unwrap_or(1500);
 
                     if now.saturating_sub(monster.last_attack_at) >= attack_cooldown_ms {
                         monster.last_attack_at = now;

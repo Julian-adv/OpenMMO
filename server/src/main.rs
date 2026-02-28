@@ -4,6 +4,7 @@ mod connection;
 mod game;
 mod game_state;
 mod monster_defs;
+mod terrain;
 mod types;
 
 use auth::AuthService;
@@ -11,8 +12,12 @@ use clap::Parser;
 use connection::handle_connection;
 use game_state::GameState;
 use std::sync::Arc;
+use terrain::io::TerrainIO;
+use terrain::routes::terrain_router;
 use tokio::net::TcpListener;
 use tokio::time::Duration;
+use tower_http::compression::CompressionLayer;
+use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info, warn};
 use tracing_subscriber;
 
@@ -23,6 +28,14 @@ struct Args {
     /// Port number to listen on
     #[arg(short, long, default_value_t = 8080)]
     port: u16,
+
+    /// Port for terrain REST API (default: game port + 1)
+    #[arg(long)]
+    terrain_port: Option<u16>,
+
+    /// Directory for terrain data files
+    #[arg(long, default_value = "./data/terrain")]
+    terrain_dir: String,
 }
 
 #[tokio::main]
@@ -100,6 +113,32 @@ async fn main() {
             return;
         }
     };
+
+    // Start terrain REST API server
+    let terrain_port = args.terrain_port.unwrap_or(args.port + 1);
+    let terrain_io = Arc::new(TerrainIO::new(std::path::PathBuf::from(&args.terrain_dir)));
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
+    let terrain_app = terrain_router(terrain_io)
+        .layer(cors)
+        .layer(CompressionLayer::new());
+    let terrain_addr = format!("0.0.0.0:{}", terrain_port);
+    match TcpListener::bind(&terrain_addr).await {
+        Ok(terrain_listener) => {
+            info!("Terrain REST API listening on: {}", terrain_addr);
+            tokio::spawn(async move {
+                if let Err(e) = axum::serve(terrain_listener, terrain_app).await {
+                    error!("Terrain API server error: {}", e);
+                }
+            });
+        }
+        Err(e) => {
+            error!("Failed to bind terrain API to {}: {}", terrain_addr, e);
+            return;
+        }
+    }
 
     info!("🎮 MMORPG Server started successfully!");
     info!("📡 WebSocket server ready for connections");
