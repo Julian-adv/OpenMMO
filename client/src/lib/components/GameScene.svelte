@@ -73,6 +73,7 @@
   } from './game-scene/terrain-utils'
   import { createLoopProfiler } from './game-scene/loop-profiler'
   import { createSceneLightingController } from './game-scene/scene-lighting'
+  import { TerrainHeightManager } from '../managers/terrainHeightManager'
 
   interface Props {
     serverUrl: string
@@ -92,6 +93,7 @@
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
+  const terrainHeightManager = new TerrainHeightManager()
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -499,6 +501,7 @@
       monsterManager.reset()
       remotePlayerManager.reset()
       playerDebugInfo.set(null)
+      terrainHeightManager.destroy()
       terrainTiles = []
       terrainMeshes = []
       resetGameStore()
@@ -556,6 +559,7 @@
   {terrainGeometry}
   {terrainTiles}
   bind:terrainMeshes={terrainMeshes}
+  heightManager={terrainHeightManager}
 />
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
@@ -587,5 +591,5 @@
 />
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} />
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} />
 {/if}
