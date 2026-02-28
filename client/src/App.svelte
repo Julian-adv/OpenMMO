@@ -12,6 +12,7 @@
   import LoadingDialog from './lib/components/LoadingDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
+  import { mapEditorMode } from './lib/stores/debugStore'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
@@ -221,6 +222,9 @@
       <FPSCounter />
       <GameTimeWidget />
       <CelestialDebugDialog />
+      {#if $mapEditorMode}
+        <div class="editor-mode-badge">MAP EDITOR</div>
+      {/if}
       {#if selectedCharacter}
         <CharacterAttributesHud
           level={currentPlayerLevel ?? selectedCharacter.level}
@@ -335,6 +339,24 @@
   .back-to-select:hover {
     background: rgba(80, 80, 80, 0.95);
     color: #fff;
+  }
+
+  .editor-mode-badge {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.8);
+    color: #e2b93b;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-family: 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: bold;
+    border: 1px solid rgba(226, 185, 59, 0.4);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    letter-spacing: 1px;
   }
 
 </style>

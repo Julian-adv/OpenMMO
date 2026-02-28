@@ -6,6 +6,7 @@
   import { monsterManager } from '../managers/monsterManager'
   import { combatController } from '../managers/combatController'
   import { inputHandler } from '../managers/inputHandler'
+  import { mapEditorMode } from '../stores/debugStore'
   import {
     calculateMovementStep,
     initMovementState,
@@ -499,6 +500,7 @@
 
   // Handle canvas click intent from input handler
   function handleCanvasClickIntent(event: MouseEvent) {
+    if ($mapEditorMode) return
     if (!currentPlayer || currentPlayer.health <= 0) return
 
     const intent = inputHandler.processCanvasClick(event, {

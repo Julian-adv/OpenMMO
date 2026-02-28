@@ -26,6 +26,7 @@
     calendarVisible,
     celestialDebugVisible,
     playerDebugInfo,
+    mapEditorMode,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -37,6 +38,10 @@
     if (event.ctrlKey && event.key === 'd') {
       event.preventDefault()
       debugVisible.update((v) => !v)
+    }
+    if (event.ctrlKey && event.key === 'm') {
+      event.preventDefault()
+      mapEditorMode.update((v) => !v)
     }
   }
 

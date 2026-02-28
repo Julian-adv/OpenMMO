@@ -48,6 +48,7 @@
     debugVisible,
     cameraRotationEnabled,
     playerDebugInfo,
+    mapEditorMode,
   } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
@@ -288,9 +289,9 @@
       const cameraOffset = calculateCameraOffset()
       loopProfiler.record('cameraOffset', performance.now() - cameraOffsetStart)
 
-      // Update player controls
+      // Update player controls (skip in map editor mode)
       const playerControlStart = performance.now()
-      if (playerControl) {
+      if (playerControl && !$mapEditorMode) {
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }
