@@ -93,7 +93,11 @@ class CombatController {
         this._lastChaseUpdate = now
         return {
           action: 'chasing',
-          newTarget: { x: monsterObjPos.x, y: 0, z: monsterObjPos.z },
+          newTarget: {
+            x: monsterObjPos.x,
+            y: monsterObjPos.y,
+            z: monsterObjPos.z,
+          },
         }
       }
       return { action: 'chasing' }

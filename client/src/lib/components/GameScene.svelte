@@ -94,6 +94,7 @@
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
+  monsterManager.heightManager = terrainHeightManager
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -576,6 +577,7 @@
   {terrainMeshes}
   {monsterModels}
   {playerAttackDuration}
+  heightManager={terrainHeightManager}
   onStateChange={handlePlayerStateChange}
   onAttackDuration={(duration) => (playerAttackDuration = duration)}
   {onCurrentPlayerDyingFinished}

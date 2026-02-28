@@ -107,7 +107,7 @@ class InputHandler {
             return {
               type: 'attack_monster',
               monsterId,
-              hitPoint: { x: hitPoint.x, y: 0, z: hitPoint.z },
+              hitPoint: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
               distance: dist,
             }
           }
@@ -131,7 +131,7 @@ class InputHandler {
       const point = intersects[0].point
       return {
         type: 'move_to_ground',
-        position: { x: point.x, y: 0, z: point.z },
+        position: { x: point.x, y: point.y, z: point.z },
       }
     }
 

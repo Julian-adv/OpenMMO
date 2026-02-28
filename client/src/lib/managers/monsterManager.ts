@@ -7,12 +7,19 @@ import { remotePlayerManager } from './remotePlayerManager'
 import type { MonsterData } from '../types/Monster'
 import { getMonsterDef } from '../data/monsterDefs'
 import type { Position } from '../utils/movementUtils'
+import type { TerrainHeightManager } from './terrainHeightManager'
 
 const MIN_MOVE_DIST = 2.0
 const MAX_MOVE_DIST = 10.0
 
 class MonsterManager {
   monsters = new SvelteMap<string, MonsterData>()
+  heightManager: TerrainHeightManager | null = null
+
+  private sampleHeight(x: number, z: number): number {
+    return this.heightManager?.getHeightAtWorldPosition(x, z) ?? 0
+  }
+
   findMeshPosition(
     monsterId: string,
     meshes: THREE.Group[]
@@ -26,7 +33,11 @@ class MonsterManager {
           }
         })
         if (found) {
-          return { x: group.position.x, y: 0, z: group.position.z }
+          return {
+            x: group.position.x,
+            y: group.position.y,
+            z: group.position.z,
+          }
         }
       }
     }
@@ -137,6 +148,12 @@ class MonsterManager {
     const myPlayerId = gameState.currentPlayer?.id
 
     for (const monster of this.monsters.values()) {
+      // Keep monster Y aligned with terrain height
+      const terrainY = this.sampleHeight(monster.position.x, monster.position.z)
+      if (Math.abs(monster.position.y - terrainY) > 0.001) {
+        monster.position = { ...monster.position, y: terrainY }
+      }
+
       let impactJustExpired = false
 
       // Impact Delay Handling (Global for all clients to keep visuals synced)
@@ -400,10 +417,12 @@ class MonsterManager {
               const dist = Math.sqrt(distSq)
               const moveStep = (monster.moveSpeed * deltaTime) / 1000
 
+              const newX = monster.position.x + (dx / dist) * moveStep
+              const newZ = monster.position.z + (dz / dist) * moveStep
               monster.position = {
-                x: monster.position.x + (dx / dist) * moveStep,
-                y: monster.position.y,
-                z: monster.position.z + (dz / dist) * moveStep,
+                x: newX,
+                y: this.sampleHeight(newX, newZ),
+                z: newZ,
               }
 
               // Update network to sync movement
@@ -448,10 +467,12 @@ class MonsterManager {
     monster.state = isWalking ? 'walk' : 'run'
     monster.moveSpeed = isWalking ? (def?.walkSpeed ?? 1) : (def?.runSpeed ?? 8)
 
+    const targetX = monster.position.x + Math.cos(angle) * distance
+    const targetZ = monster.position.z + Math.sin(angle) * distance
     monster.targetPosition = {
-      x: monster.position.x + Math.cos(angle) * distance,
-      y: monster.position.y,
-      z: monster.position.z + Math.sin(angle) * distance,
+      x: targetX,
+      y: this.sampleHeight(targetX, targetZ),
+      z: targetZ,
     }
 
     // Look at target
@@ -481,13 +502,15 @@ class MonsterManager {
     const moveStep = (monster.moveSpeed * deltaTime) / 1000
 
     if (distance <= moveStep) {
-      monster.position = { ...target }
+      monster.position = { ...target, y: this.sampleHeight(target.x, target.z) }
       return true
     } else {
+      const newX = monster.position.x + (dx / distance) * moveStep
+      const newZ = monster.position.z + (dz / distance) * moveStep
       monster.position = {
-        x: monster.position.x + (dx / distance) * moveStep,
-        y: monster.position.y,
-        z: monster.position.z + (dz / distance) * moveStep,
+        x: newX,
+        y: this.sampleHeight(newX, newZ),
+        z: newZ,
       }
       return false
     }
@@ -534,7 +557,7 @@ class MonsterManager {
     // Request spawn from server
     networkManager.requestSpawnMonster(
       'scp939',
-      { x, y: 0, z }, // Assuming flat ground for now
+      { x, y: this.sampleHeight(x, z), z },
       Math.random() * Math.PI * 2
     )
   }

@@ -63,6 +63,32 @@ export class TerrainHeightManager {
     return decodeHeight(data[cz * TILE_DIM + cx])
   }
 
+  getHeightAtWorldPosition(worldX: number, worldZ: number): number {
+    const tileX = Math.floor(
+      (worldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const tileZ = Math.floor(
+      (worldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    const localX = worldX - tileMinX
+    const localZ = worldZ - tileMinZ
+    const cellX = Math.floor(localX)
+    const cellZ = Math.floor(localZ)
+    const fracX = localX - cellX
+    const fracZ = localZ - cellZ
+
+    const h00 = this.getHeightAtCell(tileX, tileZ, cellX, cellZ)
+    const h10 = this.getHeightAtCell(tileX, tileZ, cellX + 1, cellZ)
+    const h01 = this.getHeightAtCell(tileX, tileZ, cellX, cellZ + 1)
+    const h11 = this.getHeightAtCell(tileX, tileZ, cellX + 1, cellZ + 1)
+
+    const h0 = h00 + (h10 - h00) * fracX
+    const h1 = h01 + (h11 - h01) * fracX
+    return h0 + (h1 - h0) * fracZ
+  }
+
   registerGeometry(
     tileX: number,
     tileZ: number,

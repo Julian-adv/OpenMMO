@@ -87,16 +87,15 @@ export function calculateMovementStep(
   const accelDistance = getAccelDistance(config)
   const decelDistance = getDecelDistance(config)
 
-  // Calculate remaining distance
+  // Calculate remaining distance on XZ plane (Y is handled by terrain)
   const dx = targetPos.x - currentPos.x
-  const dy = targetPos.y - currentPos.y
   const dz = targetPos.z - currentPos.z
-  const remainingDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  const remainingDistance = Math.sqrt(dx * dx + dz * dz)
 
   // Check if arrived
   if (remainingDistance <= config.arrivalThreshold) {
     return {
-      newPos: { x: targetPos.x, y: targetPos.y, z: targetPos.z },
+      newPos: { x: targetPos.x, y: currentPos.y, z: targetPos.z },
       newSpeed: 0,
       rotation: Math.atan2(dx, dz),
       arrived: true,
@@ -131,7 +130,7 @@ export function calculateMovementStep(
   let newPos: Position
   if (moveDistance >= remainingDistance || newSpeed <= 0.001) {
     // Arrived at destination
-    newPos = { x: targetPos.x, y: targetPos.y, z: targetPos.z }
+    newPos = { x: targetPos.x, y: currentPos.y, z: targetPos.z }
     return {
       newPos,
       newSpeed: 0,
@@ -139,13 +138,12 @@ export function calculateMovementStep(
       arrived: true,
     }
   } else {
-    // Continue moving
+    // Continue moving on XZ plane
     const dirX = dx / remainingDistance
-    const dirY = dy / remainingDistance
     const dirZ = dz / remainingDistance
     newPos = {
       x: currentPos.x + dirX * moveDistance,
-      y: currentPos.y + dirY * moveDistance,
+      y: currentPos.y,
       z: currentPos.z + dirZ * moveDistance,
     }
   }
@@ -172,9 +170,8 @@ export function initMovementState(
   currentSpeed: number = 0
 ): MovementState {
   const dx = targetPos.x - currentPos.x
-  const dy = targetPos.y - currentPos.y
   const dz = targetPos.z - currentPos.z
-  const totalDistance = Math.sqrt(dx * dx + dy * dy + dz * dz)
+  const totalDistance = Math.sqrt(dx * dx + dz * dz)
 
   return {
     currentSpeed,

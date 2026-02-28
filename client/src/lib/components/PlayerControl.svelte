@@ -18,16 +18,22 @@
     type PlayerState,
     type MovementMode,
   } from '../utils/movementUtils'
+  import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 
   interface Props {
     onStateChange: (state: PlayerState) => void
     camera: THREE.Camera
+    heightManager: TerrainHeightManager
     groundMeshes: THREE.Mesh[]
     monsterMeshes: THREE.Group[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, groundMeshes, monsterMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, attackCooldown }: Props = $props()
+
+  function sampleHeight(x: number, z: number): number {
+    return heightManager.getHeightAtWorldPosition(x, z)
+  }
 
   let currentPlayer = $state<LocalPlayer | null>(null)
 
@@ -222,6 +228,14 @@
       return
     }
 
+    // Keep player Y aligned with terrain height (handles spawn and terrain edits)
+    if (currentPlayer) {
+      const terrainY = sampleHeight(currentPlayer.position.x, currentPlayer.position.z)
+      if (Math.abs(currentPlayer.position.y - terrainY) > 0.001) {
+        currentPlayer.position.y = terrainY
+      }
+    }
+
     // Combat update
     if (combatController.isInCombat && currentPlayer) {
       const targetId = combatController.targetMonsterId!
@@ -231,7 +245,7 @@
 
       const result = combatController.update(
         deltaTime,
-        { x: currentPlayer.position.x, y: 0, z: currentPlayer.position.z },
+        { x: currentPlayer.position.x, y: currentPlayer.position.y, z: currentPlayer.position.z },
         monsterData
           ? {
               state: monsterData.state,
@@ -277,21 +291,18 @@
               if (movementState) {
                 movementState.targetPos = { ...result.newTarget }
                 const dx = result.newTarget.x - currentPlayer.position.x
-                const dy = result.newTarget.y - currentPlayer.position.y
                 const dz = result.newTarget.z - currentPlayer.position.z
-                movementState.totalDistance = Math.sqrt(
-                  dx * dx + dy * dy + dz * dz
-                )
+                movementState.totalDistance = Math.sqrt(dx * dx + dz * dz)
                 movementState.startPos = {
                   x: currentPlayer.position.x,
-                  y: 0,
+                  y: currentPlayer.position.y,
                   z: currentPlayer.position.z,
                 }
               } else {
                 movementState = initMovementState(
                   {
                     x: currentPlayer.position.x,
-                    y: 0,
+                    y: currentPlayer.position.y,
                     z: currentPlayer.position.z,
                   },
                   result.newTarget,
@@ -364,11 +375,8 @@
       // Movement complete
       gameStore.update((state) => {
         if (state.currentPlayer && movementTarget) {
-          state.currentPlayer.position.set(
-            movementTarget.x,
-            movementTarget.y,
-            movementTarget.z
-          )
+          const y = sampleHeight(movementTarget.x, movementTarget.z)
+          state.currentPlayer.position.set(movementTarget.x, y, movementTarget.z)
         }
         return state
       })
@@ -390,11 +398,8 @@
       // Continue movement
       gameStore.update((state) => {
         if (state.currentPlayer) {
-          state.currentPlayer.position.set(
-            result.newPos.x,
-            result.newPos.y,
-            result.newPos.z
-          )
+          const y = sampleHeight(result.newPos.x, result.newPos.z)
+          state.currentPlayer.position.set(result.newPos.x, y, result.newPos.z)
         }
         return state
       })
@@ -432,13 +437,11 @@
       // Calculate rotation based on movement direction
       playerRotation = Math.atan2(dir.x, dir.z)
 
+      const groundY = sampleHeight(newX, newZ)
+
       gameStore.update((state) => {
         if (state.currentPlayer) {
-          state.currentPlayer.position.set(
-            newX,
-            0, // Keep player on ground level
-            newZ
-          )
+          state.currentPlayer.position.set(newX, groundY, newZ)
           isMoving = true
         }
         return state
@@ -448,7 +451,7 @@
       sendPlayerMove(
         {
           x: newX,
-          y: 0, // Keep player on ground level
+          y: groundY,
           z: newZ,
         },
         playerRotation
@@ -509,7 +512,7 @@
       groundMeshes,
       playerPosition: {
         x: currentPlayer.position.x,
-        y: 0,
+        y: currentPlayer.position.y,
         z: currentPlayer.position.z,
       },
       isMonsterDead: (id) => {

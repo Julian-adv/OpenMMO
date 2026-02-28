@@ -9,6 +9,7 @@
   } from '../../stores/gameStore'
   import type { PlayerState } from '../../utils/movementUtils'
   import type Monster from '../Monster.svelte'
+  import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
@@ -21,6 +22,7 @@
     terrainMeshes: (THREE.Mesh | undefined)[]
     monsterModels: (Monster | undefined)[]
     playerAttackDuration: number
+    heightManager: TerrainHeightManager
     onStateChange: (newState: PlayerState) => void
     onAttackDuration: (duration: number) => void
     onCurrentPlayerDyingFinished?: () => void
@@ -41,6 +43,7 @@
     terrainMeshes,
     monsterModels,
     playerAttackDuration,
+    heightManager,
     onStateChange,
     onAttackDuration,
     onCurrentPlayerDyingFinished,
@@ -56,6 +59,7 @@
     bind:this={playerControl}
     onStateChange={onStateChange}
     {camera}
+    {heightManager}
     groundMeshes={terrainMeshes.filter((mesh) => mesh !== undefined) as THREE.Mesh[]}
     monsterMeshes={monsterModels
       .map((model) => model?.getMeshGroup())
