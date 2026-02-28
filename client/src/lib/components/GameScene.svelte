@@ -24,6 +24,7 @@
   import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
+  import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
     GAME_START_YEAR,
@@ -584,3 +585,7 @@
   monsters={monsterManager.monsters}
   bind:monsterModels={monsterModels}
 />
+
+{#if $mapEditorMode}
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} />
+{/if}

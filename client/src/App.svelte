@@ -13,6 +13,7 @@
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
   import { mapEditorMode } from './lib/stores/debugStore'
+  import { hoveredCell } from './lib/stores/editorStore'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
@@ -223,7 +224,14 @@
       <GameTimeWidget />
       <CelestialDebugDialog />
       {#if $mapEditorMode}
-        <div class="editor-mode-badge">MAP EDITOR</div>
+        <div class="editor-mode-badge">
+          MAP EDITOR{#if $hoveredCell}
+            <span class="cell-info">
+              T({$hoveredCell.tileX}, {$hoveredCell.tileZ})
+              C({$hoveredCell.cellX}, {$hoveredCell.cellZ})
+            </span>
+          {/if}
+        </div>
       {/if}
       {#if selectedCharacter}
         <CharacterAttributesHud
@@ -357,6 +365,13 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     pointer-events: none;
     letter-spacing: 1px;
+  }
+
+  .cell-info {
+    margin-left: 8px;
+    color: #ccc;
+    font-weight: normal;
+    letter-spacing: 0;
   }
 
 </style>
