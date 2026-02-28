@@ -48,9 +48,9 @@
     <input
       id="brush-strength"
       type="range"
-      min="0.5"
+      min="1"
       max="10"
-      step="0.5"
+      step="1"
       value={strength}
       oninput={onStrengthChange}
     />

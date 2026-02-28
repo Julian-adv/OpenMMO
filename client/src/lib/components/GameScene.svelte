@@ -516,9 +516,10 @@
   zoom={ORTHOGRAPHIC_DEFAULT_ZOOM}
 >
   <OrbitControls
-    enableRotate={$cameraRotationEnabled}
+    enableRotate={$mapEditorMode ? false : $cameraRotationEnabled}
     enablePan={false}
-    enableZoom={true}
+    enableZoom={!$mapEditorMode}
+    enabled={!$mapEditorMode}
     target={cameraTarget}
     minZoom={1}
     maxZoom={2}
