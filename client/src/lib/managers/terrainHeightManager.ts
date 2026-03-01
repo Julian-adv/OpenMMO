@@ -56,11 +56,23 @@ export class TerrainHeightManager {
     cellX: number,
     cellZ: number
   ): number {
+    // Handle cross-tile lookups for cells beyond tile boundaries
+    if (cellX >= TILE_DIM) {
+      return this.getHeightAtCell(tileX + 1, tileZ, cellX - TILE_DIM, cellZ)
+    }
+    if (cellZ >= TILE_DIM) {
+      return this.getHeightAtCell(tileX, tileZ + 1, cellX, cellZ - TILE_DIM)
+    }
+    if (cellX < 0) {
+      return this.getHeightAtCell(tileX - 1, tileZ, cellX + TILE_DIM, cellZ)
+    }
+    if (cellZ < 0) {
+      return this.getHeightAtCell(tileX, tileZ - 1, cellX, cellZ + TILE_DIM)
+    }
+
     const data = this.heightmaps.get(tileKey(tileX, tileZ))
     if (!data) return 0
-    const cx = Math.max(0, Math.min(TILE_DIM - 1, cellX))
-    const cz = Math.max(0, Math.min(TILE_DIM - 1, cellZ))
-    return decodeHeight(data[cz * TILE_DIM + cx])
+    return decodeHeight(data[cellZ * TILE_DIM + cellX])
   }
 
   getHeightAtWorldPosition(worldX: number, worldZ: number): number {
@@ -114,10 +126,9 @@ export class TerrainHeightManager {
 
     for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
       for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
-        // Clamp to 0-63 for the heightmap data (65th vertex duplicates 64th)
-        const cx = Math.min(vx, TILE_DIM - 1)
-        const cz = Math.min(vz, TILE_DIM - 1)
-        const heightMeters = decodeHeight(data[cz * TILE_DIM + cx])
+        // For edge vertices (vx=64 or vz=64), getHeightAtCell crosses into
+        // the adjacent tile to fetch cell 0, ensuring seamless tile borders.
+        const heightMeters = this.getHeightAtCell(tileX, tileZ, vx, vz)
 
         const vertexIndex = vz * VERTS_PER_SIDE + vx
         // After rotateX(-PI/2), Y is the height axis (index 1 in stride-3 buffer)
@@ -128,6 +139,27 @@ export class TerrainHeightManager {
     posAttr.needsUpdate = true
     geometry.computeVertexNormals()
     geometry.computeBoundingSphere()
+  }
+
+  /** Re-apply height to adjacent tiles whose edge vertices reference this tile's data. */
+  refreshAdjacentTileEdges(tileX: number, tileZ: number) {
+    // Tile (tileX-1)'s right edge (vx=64) reads cell column 0 of this tile
+    // Tile (tileZ-1)'s bottom edge (vz=64) reads cell row 0 of this tile
+    // Tile (tileX-1, tileZ-1)'s corner (vx=64, vz=64) reads cell (0,0) of this tile
+    const neighbors = [
+      { dx: -1, dz: 0 },
+      { dx: 0, dz: -1 },
+      { dx: -1, dz: -1 },
+    ]
+    for (const { dx, dz } of neighbors) {
+      const nx = tileX + dx
+      const nz = tileZ + dz
+      const key = tileKey(nx, nz)
+      const geo = this.geometries.get(key)
+      if (geo && this.heightmaps.has(key)) {
+        this.applyHeightToGeometry(nx, nz, geo)
+      }
+    }
   }
 
   applyBrush(
@@ -222,6 +254,11 @@ export class TerrainHeightManager {
           this.applyHeightToGeometry(tx, tz, geometry)
         }
       }
+    }
+
+    // Refresh edge vertices of adjacent tiles that reference modified tiles' data
+    for (const { tileX: tx, tileZ: tz } of affected) {
+      this.refreshAdjacentTileEdges(tx, tz)
     }
 
     if (affected.length > 0) {
@@ -320,6 +357,11 @@ export class TerrainHeightManager {
           this.applyHeightToGeometry(tx, tz, geometry)
         }
       }
+    }
+
+    // Refresh edge vertices of adjacent tiles that reference modified tiles' data
+    for (const { tileX: tx, tileZ: tz } of affected) {
+      this.refreshAdjacentTileEdges(tx, tz)
     }
 
     if (affected.length > 0) {

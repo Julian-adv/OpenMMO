@@ -68,6 +68,8 @@
 
       mgr.loadHeightmap(tileX, tileZ).then(() => {
         mgr.applyHeightToGeometry(tileX, tileZ, geo)
+        // Refresh adjacent tiles whose edge vertices reference this tile's data
+        mgr.refreshAdjacentTileEdges(tileX, tileZ)
         // Trigger reactivity update after async height load
         tileGeometries = terrainTiles.map((t) => geoMap.get(t.id) ?? null)
       })
