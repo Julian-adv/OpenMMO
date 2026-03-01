@@ -6,6 +6,7 @@ export const calendarVisible = writable(false)
 export const celestialDebugVisible = writable(false)
 export const mapEditorMode = writable(false)
 export const gridVisible = writable(false)
+export const worldMapVisible = writable(false)
 
 export interface PlayerDebugInfo {
   position: { x: number; y: number; z: number }

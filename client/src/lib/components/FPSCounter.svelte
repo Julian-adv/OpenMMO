@@ -28,6 +28,7 @@
     playerDebugInfo,
     mapEditorMode,
     gridVisible,
+    worldMapVisible,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -43,6 +44,15 @@
     if (event.ctrlKey && event.key === 'm') {
       event.preventDefault()
       mapEditorMode.update((v) => !v)
+    }
+    if (event.key === 'm' || event.key === 'M') {
+      if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+        const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+        if (tag !== 'input' && tag !== 'textarea') {
+          event.preventDefault()
+          worldMapVisible.update((v) => !v)
+        }
+      }
     }
   }
 

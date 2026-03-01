@@ -10,9 +10,10 @@
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
   import LoadingDialog from './lib/components/LoadingDialog.svelte'
+  import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { mapEditorMode } from './lib/stores/debugStore'
+  import { mapEditorMode, worldMapVisible } from './lib/stores/debugStore'
   import { hoveredCell, editorTool } from './lib/stores/editorStore'
   import HeightBrushPanel from './lib/components/map-editor/HeightBrushPanel.svelte'
   import SplatBrushPanel from './lib/components/map-editor/SplatBrushPanel.svelte'
@@ -280,6 +281,10 @@
 
     {#if showRespawnDialog}
       <RespawnDialog onRespawn={requestRespawn} onLater={closeRespawnDialog} />
+    {/if}
+
+    {#if $worldMapVisible}
+      <WorldMapDialog />
     {/if}
   {:else if screen === 'character-select'}
     <CharacterSelectScreen
