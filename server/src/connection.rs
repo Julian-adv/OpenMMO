@@ -16,6 +16,47 @@ use tracing::{error, info, warn};
 
 const FALLBACK_DEFAULT_MAX_HP: u32 = 13;
 
+struct ConnectionState {
+    account_name: Option<String>,
+    player_id: Option<PlayerId>,
+    direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>>,
+    pending_character_attributes: Option<CharacterAttributes>,
+}
+
+impl ConnectionState {
+    fn new() -> Self {
+        Self {
+            account_name: None,
+            player_id: None,
+            direct_rx: None,
+            pending_character_attributes: None,
+        }
+    }
+
+    fn require_auth(&self, action: &str) -> Result<String, Vec<ServerMessage>> {
+        match &self.account_name {
+            Some(name) => Ok(name.clone()),
+            None => {
+                warn!("{} requested by unauthenticated client", action);
+                Err(vec![ServerMessage::CharacterError {
+                    message: "Authenticate first".to_string(),
+                }])
+            }
+        }
+    }
+
+    fn require_not_in_game(&self, action: &str) -> Result<(), Vec<ServerMessage>> {
+        if self.player_id.is_some() {
+            warn!("{} ignored because client is already in game", action);
+            Err(vec![ServerMessage::CharacterError {
+                message: format!("Cannot {} while in game", action),
+            }])
+        } else {
+            Ok(())
+        }
+    }
+}
+
 pub async fn handle_connection(
     stream: TcpStream,
     game_state: Arc<GameState>,
@@ -33,10 +74,7 @@ pub async fn handle_connection(
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
     let mut game_receiver = game_state.subscribe();
-    let mut account_name: Option<String> = None;
-    let mut player_id: Option<PlayerId> = None;
-    let mut direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>> = None;
-    let mut pending_character_attributes: Option<CharacterAttributes> = None;
+    let mut state = ConnectionState::new();
 
     loop {
         tokio::select! {
@@ -48,10 +86,7 @@ pub async fn handle_connection(
                             &bytes,
                             &game_state,
                             &auth_service,
-                            &mut account_name,
-                            &mut player_id,
-                            &mut direct_rx,
-                            &mut pending_character_attributes,
+                            &mut state,
                         )
                         .await
                         {
@@ -98,7 +133,7 @@ pub async fn handle_connection(
                     Ok(server_msg) => {
                         // Filter out monster move updates for the owner
                         if let ServerMessage::MonsterMoved { owner_id: Some(ref owner), .. } = server_msg {
-                            if let Some(ref current_player) = player_id {
+                            if let Some(ref current_player) = state.player_id {
                                 if owner == current_player {
                                     continue;
                                 }
@@ -127,7 +162,7 @@ pub async fn handle_connection(
 
             // Handle direct messages to this player
             direct_msg = async {
-                match direct_rx.as_mut() {
+                match state.direct_rx.as_mut() {
                     Some(rx) => rx.recv().await,
                     None => std::future::pending().await,
                 }
@@ -141,8 +176,8 @@ pub async fn handle_connection(
                         Err(e) => error!("Serialization failed: {}", e),
                     }
                     if is_kicked {
-                        info!("Player {:?} kicked", player_id);
-                        player_id = None;
+                        info!("Player {:?} kicked", state.player_id);
+                        state.player_id = None;
                         break;
                     }
                 }
@@ -151,14 +186,20 @@ pub async fn handle_connection(
     }
 
     // Save player position to DB before cleanup
-    if let Some(ref id) = player_id {
+    if let Some(ref id) = state.player_id {
         if let (Some(character_id), Some((pos, rot))) = (
             game_state.get_player_character_id(id).await,
             game_state.get_player_position(id).await,
         ) {
-            if let Err(e) =
-                auth_service.save_character_position(character_id, pos.x, pos.y, pos.z, rot)
-            {
+            let auth = auth_service.clone();
+            if let Err(e) = tokio::task::spawn_blocking(move || {
+                auth.save_character_position(character_id, pos.x, pos.y, pos.z, rot)
+            })
+            .await
+            .unwrap_or_else(|e| {
+                error!("spawn_blocking panicked: {}", e);
+                Ok(())
+            }) {
                 error!("Failed to save player position on disconnect: {}", e);
             }
         }
@@ -175,10 +216,7 @@ async fn handle_client_message(
     message: &[u8],
     game_state: &Arc<GameState>,
     auth_service: &Arc<AuthService>,
-    account_name: &mut Option<String>,
-    player_id: &mut Option<PlayerId>,
-    direct_rx: &mut Option<mpsc::UnboundedReceiver<ServerMessage>>,
-    pending_character_attributes: &mut Option<CharacterAttributes>,
+    state: &mut ConnectionState,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = deserialize_client_msg(message)?;
 
@@ -188,7 +226,7 @@ async fn handle_client_message(
             password_hash,
             create_account,
         } => {
-            if account_name.is_some() {
+            if state.account_name.is_some() {
                 warn!("Client is already authenticated");
                 return Ok(vec![ServerMessage::AuthError {
                     message: "Already authenticated".to_string(),
@@ -225,8 +263,8 @@ async fn handle_client_message(
                 .map(character_record_to_shared)
                 .collect::<Vec<Character>>();
 
-            *account_name = Some(requested_account_name.clone());
-            *pending_character_attributes = None;
+            state.account_name = Some(requested_account_name.clone());
+            state.pending_character_attributes = None;
 
             info!(
                 "Account '{}' authenticated successfully with {} character(s)",
@@ -243,21 +281,15 @@ async fn handle_client_message(
             character_name,
             character_class,
         } => {
-            if player_id.is_some() {
-                warn!("CreateCharacter ignored because client is already in game");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Cannot create character while in game".to_string(),
-                }]);
+            if let Err(responses) = state.require_not_in_game("CreateCharacter") {
+                return Ok(responses);
             }
-
-            let Some(authed_account_name) = account_name.clone() else {
-                warn!("Character creation requested by unauthenticated client");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Authenticate first".to_string(),
-                }]);
+            let authed_account_name = match state.require_auth("CreateCharacter") {
+                Ok(name) => name,
+                Err(responses) => return Ok(responses),
             };
 
-            let Some(rolled_attributes) = pending_character_attributes.clone() else {
+            let Some(rolled_attributes) = state.pending_character_attributes.clone() else {
                 warn!(
                     "Character creation requested without rolled stats for account '{}'",
                     authed_account_name
@@ -276,7 +308,7 @@ async fn handle_client_message(
                 character_class.as_str(),
             ) {
                 Ok(character) => {
-                    *pending_character_attributes = None;
+                    state.pending_character_attributes = None;
                     info!(
                         "Character '{}' created for account '{}'",
                         character.name, authed_account_name
@@ -298,18 +330,12 @@ async fn handle_client_message(
         }
 
         ClientMessage::DeleteCharacter { character_id } => {
-            if player_id.is_some() {
-                warn!("DeleteCharacter ignored because client is already in game");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Cannot delete character while in game".to_string(),
-                }]);
+            if let Err(responses) = state.require_not_in_game("DeleteCharacter") {
+                return Ok(responses);
             }
-
-            let Some(authed_account_name) = account_name.clone() else {
-                warn!("Character deletion requested by unauthenticated client");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Authenticate first".to_string(),
-                }]);
+            let authed_account_name = match state.require_auth("DeleteCharacter") {
+                Ok(name) => name,
+                Err(responses) => return Ok(responses),
             };
 
             match auth_service.delete_character(&authed_account_name, character_id) {
@@ -333,24 +359,17 @@ async fn handle_client_message(
         }
 
         ClientMessage::RollCharacterStats => {
-            if player_id.is_some() {
-                warn!("RollCharacterStats ignored because client is already in game");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Cannot roll attributes while in game".to_string(),
-                }]);
+            if let Err(responses) = state.require_not_in_game("RollCharacterStats") {
+                return Ok(responses);
             }
-
-            if account_name.is_none() {
-                warn!("RollCharacterStats requested by unauthenticated client");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Authenticate first".to_string(),
-                }]);
+            if let Err(responses) = state.require_auth("RollCharacterStats") {
+                return Ok(responses);
             }
 
             let attributes = roll_character_attributes();
             // Class is not yet chosen at roll time; use knight as preview (warrior and knight share the same hit die)
             let max_hp = default_character_max_hp(&attributes, &CharacterClass::Knight);
-            *pending_character_attributes = Some(attributes.clone());
+            state.pending_character_attributes = Some(attributes.clone());
             return Ok(vec![ServerMessage::CharacterStatsRolled {
                 attributes,
                 max_hp,
@@ -358,16 +377,14 @@ async fn handle_client_message(
         }
 
         ClientMessage::EnterGame { character_id } => {
-            if player_id.is_some() {
+            if state.player_id.is_some() {
                 warn!("Client already entered game, ignoring EnterGame request");
                 return Ok(vec![]);
             }
 
-            let Some(authed_account_name) = account_name.clone() else {
-                warn!("EnterGame requested by unauthenticated client");
-                return Ok(vec![ServerMessage::CharacterError {
-                    message: "Authenticate first".to_string(),
-                }]);
+            let authed_account_name = match state.require_auth("EnterGame") {
+                Ok(name) => name,
+                Err(responses) => return Ok(responses),
             };
 
             let selected_character =
@@ -406,7 +423,7 @@ async fn handle_client_message(
             );
             let id = player.id.clone();
 
-            *direct_rx = Some(game_state.register_direct_channel(&id).await);
+            state.direct_rx = Some(game_state.register_direct_channel(&id).await);
             game_state
                 .register_player_character(
                     &id,
@@ -429,17 +446,17 @@ async fn handle_client_message(
                 responses.push(game_state_msg);
             }
 
-            *player_id = Some(id);
+            state.player_id = Some(id);
 
             info!(
                 "Account '{}' entered game as character '{}' with player ID {:?}",
-                authed_account_name, selected_character.name, player_id
+                authed_account_name, selected_character.name, state.player_id
             );
             return Ok(responses);
         }
 
         ClientMessage::PlayerMove { position, rotation } => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
                 game_state
                     .update_player_position(id, position, rotation)
                     .await;
@@ -449,7 +466,7 @@ async fn handle_client_message(
         }
 
         ClientMessage::ChatMessage { message } => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
                 game_state.send_chat_message(id, message).await;
             } else {
                 warn!("Received chat message from client that is not in game");
@@ -461,7 +478,7 @@ async fn handle_client_message(
             position,
             rotation,
         } => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
                 game_state
                     .spawn_monster(monster_type, position, rotation, Some(id.clone()))
                     .await;
@@ -474,12 +491,18 @@ async fn handle_client_message(
             monster_id,
             position,
             rotation,
-            state,
+            state: monster_state,
             target_position,
         } => {
-            if player_id.is_some() {
+            if state.player_id.is_some() {
                 game_state
-                    .update_monster_position(monster_id, position, rotation, state, target_position)
+                    .update_monster_position(
+                        monster_id,
+                        position,
+                        rotation,
+                        monster_state,
+                        target_position,
+                    )
                     .await;
             } else {
                 warn!("Received monster move from client that is not in game");
@@ -487,7 +510,7 @@ async fn handle_client_message(
         }
 
         ClientMessage::PlayerAttack { monster_id } => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
                 game_state.broadcast_player_attack(id, monster_id).await;
             } else {
                 warn!("Received attack from client that is not in game");
@@ -498,7 +521,7 @@ async fn handle_client_message(
             monster_id,
             target_player_id,
         } => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
                 game_state
                     .broadcast_monster_attack(id, &monster_id, &target_player_id)
                     .await;
@@ -508,7 +531,7 @@ async fn handle_client_message(
         }
 
         ClientMessage::RequestRespawn => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
                 game_state.respawn_player(id).await;
             } else {
                 warn!("Received respawn request from client that is not in game");
@@ -516,9 +539,14 @@ async fn handle_client_message(
         }
 
         ClientMessage::DebugTeleport { position } => {
-            if let Some(id) = player_id {
+            if let Some(id) = &state.player_id {
+                let rotation = game_state
+                    .get_player_position(id)
+                    .await
+                    .map(|(_, rot)| rot)
+                    .unwrap_or(0.0);
                 game_state
-                    .update_player_position(id, position, 0.0)
+                    .update_player_position(id, position, rotation)
                     .await;
             } else {
                 warn!("Received debug teleport from client that is not in game");

@@ -115,7 +115,7 @@ impl From<rusqlite::Error> for AuthError {
 
 impl AuthService {
     pub fn default_db_path() -> PathBuf {
-        PathBuf::from("../data/game_data.db")
+        PathBuf::from("data/game_data.db")
     }
 
     pub fn new(db_path: PathBuf) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
