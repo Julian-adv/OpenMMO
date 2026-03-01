@@ -17,7 +17,7 @@ export interface ViewportSize {
   height: number
 }
 
-export const INITIAL_DISTANCE = 16
+export const INITIAL_DISTANCE = 50
 export const INITIAL_PITCH = Math.atan(1 / Math.sqrt(2))
 export const INITIAL_YAW = -Math.PI / 4
 export const ORTHOGRAPHIC_FRUSTUM_HEIGHT = 20
