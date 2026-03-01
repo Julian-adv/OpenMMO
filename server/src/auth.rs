@@ -20,6 +20,10 @@ pub struct CharacterRecord {
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
     pub class: String,
+    pub last_x: f32,
+    pub last_y: f32,
+    pub last_z: f32,
+    pub last_rotation: f32,
 }
 
 #[derive(Debug)]
@@ -177,6 +181,10 @@ impl AuthService {
             ("attr_cha", "INTEGER NOT NULL DEFAULT 12"),
             ("attr_guard", "INTEGER NOT NULL DEFAULT 10"),
             ("class", "TEXT NOT NULL DEFAULT 'knight'"),
+            ("last_x", "REAL NOT NULL DEFAULT 0.0"),
+            ("last_y", "REAL NOT NULL DEFAULT 0.0"),
+            ("last_z", "REAL NOT NULL DEFAULT 0.0"),
+            ("last_rotation", "REAL NOT NULL DEFAULT 0.0"),
         ];
 
         for (column_name, column_def) in expected_columns {
@@ -283,7 +291,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn
             .prepare(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation
                  FROM characters
                  WHERE account_name = ?1
                  ORDER BY created_at ASC, id ASC",
@@ -311,6 +319,10 @@ impl AuthService {
                     class: row
                         .get::<_, String>(13)
                         .unwrap_or_else(|_| "knight".to_string()),
+                    last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
+                    last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
+                    last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
+                    last_rotation: row.get::<_, f64>(17).unwrap_or(0.0) as f32,
                 })
             })
             .map_err(|e| AuthError::Database(e.to_string()))?
@@ -445,6 +457,10 @@ impl AuthService {
             max_hp: loaded_max_hp,
             attributes: loaded_attributes,
             class: loaded_class,
+            last_x: 0.0,
+            last_y: 0.0,
+            last_z: 0.0,
+            last_rotation: 0.0,
         };
 
         Ok(character)
@@ -490,7 +506,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class
+                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation
                  FROM characters
                  WHERE id = ?1 AND account_name = ?2",
                 params![character_id, account_name],
@@ -512,6 +528,10 @@ impl AuthService {
                             guard: row.get(12)?,
                         },
                         class: row.get::<_, String>(13).unwrap_or_else(|_| "knight".to_string()),
+                        last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
+                        last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
+                        last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
+                        last_rotation: row.get::<_, f64>(17).unwrap_or(0.0) as f32,
                     })
                 },
             )
@@ -547,6 +567,29 @@ impl AuthService {
         conn.execute(
             "UPDATE characters SET xp = ?1, level = ?2, max_hp = ?3 WHERE id = ?4",
             params![xp as i64, i64::from(level), i64::from(max_hp), character_id],
+        )
+        .map_err(|e| AuthError::Database(e.to_string()))?;
+        Ok(())
+    }
+
+    pub fn save_character_position(
+        &self,
+        character_id: i64,
+        x: f32,
+        y: f32,
+        z: f32,
+        rotation: f32,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4 WHERE id = ?5",
+            params![
+                f64::from(x),
+                f64::from(y),
+                f64::from(z),
+                f64::from(rotation),
+                character_id,
+            ],
         )
         .map_err(|e| AuthError::Database(e.to_string()))?;
         Ok(())

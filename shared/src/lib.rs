@@ -350,6 +350,7 @@ mod tests {
                 health: 10,
                 max_health: 10,
                 class: CharacterClass::Knight,
+                last_combat_at: 0,
             },
         );
         let msg = ServerMessage::GameState {

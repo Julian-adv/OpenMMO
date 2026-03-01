@@ -3,7 +3,7 @@ use crate::game::character_attributes::roll_character_attributes;
 use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
 use crate::game_state::GameState;
 use crate::types::{
-    new_player, Character, CharacterAttributes, CharacterClass, ClientMessage, PlayerId,
+    new_player, Character, CharacterAttributes, CharacterClass, ClientMessage, PlayerId, Position,
     ServerMessage,
 };
 use futures_util::{SinkExt, StreamExt};
@@ -150,8 +150,19 @@ pub async fn handle_connection(
         }
     }
 
-    // Clean up on disconnect
+    // Save player position to DB before cleanup
     if let Some(ref id) = player_id {
+        if let (Some(character_id), Some((pos, rot))) = (
+            game_state.get_player_character_id(id).await,
+            game_state.get_player_position(id).await,
+        ) {
+            if let Err(e) =
+                auth_service.save_character_position(character_id, pos.x, pos.y, pos.z, rot)
+            {
+                error!("Failed to save player position on disconnect: {}", e);
+            }
+        }
+
         game_state.unregister_direct_channel(id).await;
         game_state.unregister_player_character(id).await;
         game_state.remove_player(id).await;
@@ -386,6 +397,12 @@ async fn handle_client_message(
                 selected_character.level,
                 max_hp,
                 CharacterClass::from_str_or_default(&selected_character.class),
+                Position {
+                    x: selected_character.last_x,
+                    y: selected_character.last_y,
+                    z: selected_character.last_z,
+                },
+                selected_character.last_rotation,
             );
             let id = player.id.clone();
 

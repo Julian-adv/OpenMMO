@@ -208,6 +208,18 @@ impl super::GameState {
         }
     }
 
+    pub async fn get_player_position(&self, player_id: &PlayerId) -> Option<(Position, f32)> {
+        let players = self.players.read().await;
+        players
+            .get(player_id)
+            .map(|p| (p.position.clone(), p.rotation))
+    }
+
+    pub async fn get_player_character_id(&self, player_id: &PlayerId) -> Option<i64> {
+        let map = self.player_characters.read().await;
+        map.get(player_id).map(|(char_id, _, _)| *char_id)
+    }
+
     #[allow(dead_code)]
     pub async fn get_player_count(&self) -> usize {
         self.players.read().await.len()
