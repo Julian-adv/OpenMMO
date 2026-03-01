@@ -31,7 +31,7 @@ export function createTerrainTiles(
   for (let dz = -gridRadius; dz <= gridRadius; dz++) {
     for (let dx = -gridRadius; dx <= gridRadius; dx++) {
       nextTiles.push({
-        id: `${dx}_${dz}`,
+        id: `${centerChunkX + dx}_${centerChunkZ + dz}`,
         position: [
           (centerChunkX + dx) * tileSize,
           0,
