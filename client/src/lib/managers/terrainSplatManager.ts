@@ -123,11 +123,11 @@ export class TerrainSplatManager {
 
         for (let cz = startCZ; cz <= endCZ; cz++) {
           for (let cx = startCX; cx <= endCX; cx++) {
-            const cellWorldX = tileMinX + cx + 0.5
-            const cellWorldZ = tileMinZ + cz + 0.5
+            const vertexWorldX = tileMinX + cx
+            const vertexWorldZ = tileMinZ + cz
 
-            const dx = cellWorldX - worldX
-            const dz = cellWorldZ - worldZ
+            const dx = vertexWorldX - worldX
+            const dz = vertexWorldZ - worldZ
             const dist = Math.sqrt(dx * dx + dz * dz)
 
             if (dist > radius) continue
