@@ -96,6 +96,7 @@
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
+  let modelGroup = $state<THREE.Group | undefined>(undefined)
   // Clock removed, using passed deltaTime
 
   let validAnimations = $state<THREE.AnimationClip[]>([])
@@ -424,6 +425,12 @@
 
   // Function to update mixer and animation state and nametag - called from GameScene gameLoop
   export function update(deltaTime: number) {
+    // Sync Three.js group position directly from the Vector3 prop
+    // (Svelte cannot track mutations on THREE.Vector3 objects)
+    if (modelGroup) {
+      modelGroup.position.set(position.x, position.y, position.z)
+    }
+
     // Update nametag logic (formerly in useTask)
     if (camera && nametagGroup) {
       const nametagPos = new THREE.Vector3(
@@ -544,6 +551,7 @@
 <!-- Character Model -->
 {#if modelRoot}
 <T.Group
+    bind:ref={modelGroup}
     position={[position.x, position.y, position.z]}
     rotation={[0, rotation, 0]}
   >

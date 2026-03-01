@@ -313,6 +313,10 @@ class NetworkManager {
     })
   }
 
+  sendDebugTeleport(position: { x: number; y: number; z: number }) {
+    this.sendMessage({ DebugTeleport: { position } })
+  }
+
   sendChatMessage(message: string) {
     this.sendMessage({ ChatMessage: { message } })
   }

@@ -141,6 +141,9 @@ pub enum ClientMessage {
         target_player_id: String,
     },
     RequestRespawn,
+    DebugTeleport {
+        position: Position,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

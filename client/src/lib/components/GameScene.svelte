@@ -50,6 +50,7 @@
     cameraRotationEnabled,
     playerDebugInfo,
     mapEditorMode,
+    teleportLoading,
   } from '../stores/debugStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
@@ -294,7 +295,7 @@
 
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
-      const cameraOffset = calculateCameraOffset()
+      let cameraOffset = calculateCameraOffset()
       loopProfiler.record('cameraOffset', performance.now() - cameraOffsetStart)
 
       // Update player controls (skip in map editor mode)
@@ -304,6 +305,15 @@
         playerControl.updatePlayerMovement(deltaTime)
       }
       updateTerrainTilesFromPlayer()
+      // Finalize teleport once full 3x3 heightmap grid is loaded
+      if ($teleportLoading && currentPlayer &&
+          terrainHeightManager.hasHeightDataForGrid(currentPlayer.position.x, currentPlayer.position.z)) {
+        currentPlayer.position.y = terrainHeightManager.getHeightAtWorldPosition(
+          currentPlayer.position.x, currentPlayer.position.z)
+        teleportLoading.set(false)
+        resetCameraToInitialState()
+        cameraOffset = { ...CAMERA_OFFSET }
+      }
       loopProfiler.record('playerControl', performance.now() - playerControlStart)
 
       // Update remote player interpolation

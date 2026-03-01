@@ -13,7 +13,7 @@
   import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { mapEditorMode, worldMapVisible } from './lib/stores/debugStore'
+  import { mapEditorMode, worldMapVisible, teleportLoading } from './lib/stores/debugStore'
   import { hoveredCell, editorTool } from './lib/stores/editorStore'
   import HeightBrushPanel from './lib/components/map-editor/HeightBrushPanel.svelte'
   import SplatBrushPanel from './lib/components/map-editor/SplatBrushPanel.svelte'
@@ -275,7 +275,7 @@
       </div>
     </div>
 
-    {#if isCurrentPlayerLoading}
+    {#if isCurrentPlayerLoading || $teleportLoading}
       <LoadingDialog />
     {/if}
 

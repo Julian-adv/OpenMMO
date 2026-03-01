@@ -514,6 +514,16 @@ async fn handle_client_message(
                 warn!("Received respawn request from client that is not in game");
             }
         }
+
+        ClientMessage::DebugTeleport { position } => {
+            if let Some(id) = player_id {
+                game_state
+                    .update_player_position(id, position, 0.0)
+                    .await;
+            } else {
+                warn!("Received debug teleport from client that is not in game");
+            }
+        }
     }
 
     Ok(vec![])

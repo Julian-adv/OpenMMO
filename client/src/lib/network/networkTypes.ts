@@ -104,6 +104,7 @@ export type ClientMessage =
   | { PlayerAttack: { monster_id: string } }
   | { MonsterAttack: { monster_id: string; target_player_id: string } }
   | 'RequestRespawn'
+  | { DebugTeleport: { position: Position } }
 
 export type AuthSuccessPayload = {
   accountName: string

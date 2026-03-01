@@ -229,7 +229,7 @@
     }
 
     // Keep player Y aligned with terrain height (handles spawn and terrain edits)
-    if (currentPlayer) {
+    if (currentPlayer && heightManager.hasHeightData(currentPlayer.position.x, currentPlayer.position.z)) {
       const terrainY = sampleHeight(currentPlayer.position.x, currentPlayer.position.z)
       if (Math.abs(currentPlayer.position.y - terrainY) > 0.001) {
         currentPlayer.position.y = terrainY

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
-  import { worldMapVisible } from '../stores/debugStore'
+  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
+  import { networkManager } from '../network/socket'
 
   const MAP_WIDTH = 3696
   const MAP_HEIGHT = 3924
@@ -39,6 +40,33 @@
     }
   }
 
+  function handleMapClick(event: MouseEvent) {
+    if (!event.ctrlKey || !containerEl || scale <= 0) return
+    event.preventDefault()
+    event.stopPropagation()
+
+    const rect = containerEl.getBoundingClientRect()
+    const pixelX = event.clientX - rect.left
+    const pixelY = event.clientY - rect.top
+
+    // Reverse the marker calculation: markerLeft = offsetX + (MAP_WIDTH/2 + playerX) * scale
+    const worldX = (pixelX - offsetX) / scale - MAP_WIDTH / 2
+    const worldZ = (pixelY - offsetY) / scale - MAP_HEIGHT / 2
+
+    const position = { x: worldX, y: 0, z: worldZ }
+
+    // Optimistic local update
+    gameStore.update((state) => {
+      if (!state.currentPlayer) return state
+      state.currentPlayer.position.set(worldX, 0, worldZ)
+      return state
+    })
+
+    networkManager.sendDebugTeleport(position)
+    teleportLoading.set(true)
+    close()
+  }
+
   $effect(() => {
     if (!containerEl) return
     const ro = new ResizeObserver((entries) => {
@@ -63,7 +91,9 @@
       <h2>World Map</h2>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
-    <div class="map-container" bind:this={containerEl}>
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="map-container" bind:this={containerEl} onclick={handleMapClick}>
       {#if scale > 0}
         <img
           src="/textures/height_map.png"

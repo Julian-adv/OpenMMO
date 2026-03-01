@@ -75,6 +75,33 @@ export class TerrainHeightManager {
     return decodeHeight(data[cellZ * TILE_DIM + cellX])
   }
 
+  hasHeightData(worldX: number, worldZ: number): boolean {
+    const tileX = Math.floor(
+      (worldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const tileZ = Math.floor(
+      (worldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    return this.heightmaps.has(tileKey(tileX, tileZ))
+  }
+
+  hasHeightDataForGrid(worldX: number, worldZ: number, radius = 1): boolean {
+    const centerTileX = Math.floor(
+      (worldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    const centerTileZ = Math.floor(
+      (worldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+    )
+    for (let dz = -radius; dz <= radius; dz++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (!this.heightmaps.has(tileKey(centerTileX + dx, centerTileZ + dz))) {
+          return false
+        }
+      }
+    }
+    return true
+  }
+
   getHeightAtWorldPosition(worldX: number, worldZ: number): number {
     const tileX = Math.floor(
       (worldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
