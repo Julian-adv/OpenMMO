@@ -1,19 +1,22 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer } from '../../stores/editorStore'
+  import type { EditorTool } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
     terrainMeshes: (THREE.Mesh | undefined)[]
     terrainTiles: TerrainTile[]
     heightManager: TerrainHeightManager | null
+    splatManager: TerrainSplatManager | null
   }
 
-  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager }: Props = $props()
+  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager }: Props = $props()
 
   let isPainting = $state(false)
   let shiftHeld = $state(false)
@@ -23,6 +26,8 @@
   let currentBrushSize = $state(3)
   let currentBrushStrength = $state(5)
   let currentBrushRaise = $state(true)
+  let currentTool = $state<EditorTool>('height')
+  let currentSplatLayer = $state(0)
 
   brushSize.subscribe((v) => (currentBrushSize = v))
   brushStrength.subscribe((v) => (currentBrushStrength = v))
@@ -30,6 +35,8 @@
     currentBrushRaise = v
     syncBrushMode()
   })
+  editorTool.subscribe((v) => (currentTool = v))
+  splatLayer.subscribe((v) => (currentSplatLayer = v))
 
   function syncBrushMode() {
     if (ctrlHeld) {
@@ -91,8 +98,6 @@
   }
 
   function applyBrushAtCursor() {
-    if (!heightManager) return
-
     const now = performance.now()
     if (lastPaintTime === 0) {
       lastPaintTime = now
@@ -102,22 +107,34 @@
     if (elapsed < getPaintIntervalMs()) return
     lastPaintTime = now
 
-    if (ctrlHeld) {
-      heightManager.applyFlatten(
-        lastWorldPos.x,
-        lastWorldPos.z,
-        currentBrushSize
-      )
-    } else {
-      const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
-      heightManager.applyBrush(
+    if (currentTool === 'splat') {
+      if (!splatManager) return
+      splatManager.applySplatBrush(
         lastWorldPos.x,
         lastWorldPos.z,
         currentBrushSize,
-        0.1,
-        raise,
-        1
+        currentSplatLayer,
+        currentBrushStrength / 50
       )
+    } else {
+      if (!heightManager) return
+      if (ctrlHeld) {
+        heightManager.applyFlatten(
+          lastWorldPos.x,
+          lastWorldPos.z,
+          currentBrushSize
+        )
+      } else {
+        const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
+        heightManager.applyBrush(
+          lastWorldPos.x,
+          lastWorldPos.z,
+          currentBrushSize,
+          0.1,
+          raise,
+          1
+        )
+      }
     }
   }
 

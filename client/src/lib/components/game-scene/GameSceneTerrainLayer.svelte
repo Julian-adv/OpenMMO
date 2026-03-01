@@ -5,12 +5,14 @@
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
 
   interface Props {
     terrainGeometry: THREE.BufferGeometry | null
     terrainTiles: TerrainTile[]
     terrainMeshes?: (THREE.Mesh | undefined)[]
     heightManager?: TerrainHeightManager | null
+    splatManager?: TerrainSplatManager | null
   }
 
   let {
@@ -18,6 +20,7 @@
     terrainTiles,
     terrainMeshes = $bindable<(THREE.Mesh | undefined)[]>([]),
     heightManager = null,
+    splatManager = null,
   }: Props = $props()
 
   // Internal map for geometry tracking
@@ -25,6 +28,10 @@
 
   // Reactive array of geometries parallel to terrainTiles
   let tileGeometries = $state<(THREE.BufferGeometry | null)[]>([])
+
+  // Per-tile splat textures parallel to terrainTiles
+  const splatTexMap = new SvelteMap<string, THREE.Texture>()
+  let tileSplatTextures = $state<(THREE.Texture | null)[]>([])
 
   function getTileCoords(tile: TerrainTile): { tileX: number; tileZ: number } {
     return {
@@ -43,11 +50,13 @@
       if (!currentTileIds.has(id)) {
         geo.dispose()
         geoMap.delete(id)
+        splatTexMap.delete(id)
       }
     }
 
     // Create geometries for new tiles
     const mgr = heightManager
+    const sMgr = splatManager
     for (const tile of terrainTiles) {
       if (geoMap.has(tile.id)) continue
 
@@ -62,10 +71,19 @@
         // Trigger reactivity update after async height load
         tileGeometries = terrainTiles.map((t) => geoMap.get(t.id) ?? null)
       })
+
+      // Load splatmap alongside heightmap
+      if (sMgr) {
+        sMgr.loadSplatmap(tileX, tileZ).then((tex) => {
+          splatTexMap.set(tile.id, tex)
+          tileSplatTextures = terrainTiles.map((t) => splatTexMap.get(t.id) ?? null)
+        })
+      }
     }
 
-    // Sync reactive array
+    // Sync reactive arrays
     tileGeometries = terrainTiles.map((t) => geoMap.get(t.id) ?? null)
+    tileSplatTextures = terrainTiles.map((t) => splatTexMap.get(t.id) ?? null)
   })
 </script>
 
@@ -76,6 +94,7 @@
       <SplatTerrain
         geometry={geo}
         position={tile.position}
+        splatTexture={tileSplatTextures[index] ?? null}
         bind:mesh={terrainMeshes[index]}
       />
     {/if}

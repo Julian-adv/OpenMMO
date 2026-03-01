@@ -10,14 +10,24 @@
     type SplatLayer,
   } from './makeSplatStandardMaterial'
   import { mapEditorMode } from '../stores/debugStore'
-  import { brushWorldPos, brushSize, brushMode } from '../stores/editorStore'
-  import type { BrushMode } from '../stores/editorStore'
+  import { brushWorldPos, brushSize, brushMode, editorTool } from '../stores/editorStore'
+  import type { BrushMode, EditorTool } from '../stores/editorStore'
 
-  export let geometry: THREE.BufferGeometry
-  export let mesh: THREE.Mesh | undefined = undefined
-  export let position: [number, number, number] = [0, 0, 0]
+  interface Props {
+    geometry: THREE.BufferGeometry
+    mesh?: THREE.Mesh | undefined
+    position?: [number, number, number]
+    splatTexture?: THREE.Texture | null
+  }
 
-  let material: THREE.MeshStandardMaterial | null = null
+  let {
+    geometry,
+    mesh = $bindable(undefined),
+    position = [0, 0, 0],
+    splatTexture = null,
+  }: Props = $props()
+
+  let material = $state<THREE.MeshStandardMaterial | null>(null)
   let brushUnsubs: (() => void)[] = []
 
   function setupBrushSync(mat: THREE.MeshStandardMaterial) {
@@ -29,6 +39,7 @@
     let pos: { x: number; z: number } | null = null
     let size = 3
     let mode: BrushMode = 'raise'
+    let tool: EditorTool = 'height'
 
     const modeToShaderValue: Record<BrushMode, number> = { lower: 0.0, raise: 1.0, flatten: 2.0 }
 
@@ -41,6 +52,7 @@
         u.brushCenter.value.set(pos.x, pos.z)
         u.brushRadius.value = size
         u.brushRaise.value = modeToShaderValue[mode]
+        u.brushToolMode.value = tool === 'splat' ? 1.0 : 0.0
       } else {
         u.brushActive.value = 0.0
       }
@@ -51,6 +63,7 @@
       brushWorldPos.subscribe((v) => { pos = v; sync() }),
       brushSize.subscribe((v) => { size = v; sync() }),
       brushMode.subscribe((v) => { mode = v; sync() }),
+      editorTool.subscribe((v) => { tool = v; sync() }),
     )
   }
 
@@ -170,16 +183,44 @@
     }
   })
 
+  // Reactively update splatMap uniform when splatTexture prop changes (late-loading).
+  // material.userData.shader is set by Three.js onBeforeCompile (async, after first render),
+  // so we must poll with rAF until the shader is available.
+  $effect(() => {
+    if (!material || !splatTexture) return
+    const mat = material
+    const tex = splatTexture
+    let cancelled = false
+
+    function tryUpdate() {
+      if (cancelled) return
+      const s = mat.userData?.shader
+      if (s) {
+        s.uniforms.splatMap.value = tex
+      } else {
+        requestAnimationFrame(tryUpdate)
+      }
+    }
+    requestAnimationFrame(tryUpdate)
+
+    return () => { cancelled = true }
+  })
+
   async function loadMaterial() {
     const loader = new THREE.TextureLoader()
     const glbLoader = new GLTFLoader()
 
-    // Load splat first
-    const splat = await loader.loadAsync(paths.splat)
-    splat.wrapS = splat.wrapT = THREE.RepeatWrapping
-    splat.minFilter = THREE.LinearMipMapLinearFilter
-    splat.magFilter = THREE.LinearFilter
-    splat.needsUpdate = true
+    // Use per-tile splatTexture if provided, otherwise load static PNG
+    let splat: THREE.Texture
+    if (splatTexture) {
+      splat = splatTexture
+    } else {
+      splat = await loader.loadAsync(paths.splat)
+      splat.wrapS = splat.wrapT = THREE.RepeatWrapping
+      splat.minFilter = THREE.LinearMipMapLinearFilter
+      splat.magFilter = THREE.LinearFilter
+      splat.needsUpdate = true
+    }
 
     // Load GLBs (each contains one material we care about)
     const [grassGltf, rockGltf, dirtGltf, snowGltf] = await Promise.all([

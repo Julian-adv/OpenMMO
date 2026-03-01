@@ -23,3 +23,10 @@ export const brushWorldPos = writable<{ x: number; z: number } | null>(null)
 // Effective brush mode (accounts for Shift/Ctrl modifiers)
 export type BrushMode = 'raise' | 'lower' | 'flatten'
 export const brushMode = writable<BrushMode>('raise')
+
+// Editor tool selection
+export type EditorTool = 'height' | 'splat'
+export const editorTool = writable<EditorTool>('height')
+
+// Splat layer: 0=R(grass), 1=G(rock), 2=B(dirt), 3=A(snow)
+export const splatLayer = writable<number>(0)

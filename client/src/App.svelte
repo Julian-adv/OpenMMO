@@ -13,8 +13,9 @@
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
   import { mapEditorMode } from './lib/stores/debugStore'
-  import { hoveredCell } from './lib/stores/editorStore'
+  import { hoveredCell, editorTool } from './lib/stores/editorStore'
   import HeightBrushPanel from './lib/components/map-editor/HeightBrushPanel.svelte'
+  import SplatBrushPanel from './lib/components/map-editor/SplatBrushPanel.svelte'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
@@ -233,7 +234,23 @@
             </span>
           {/if}
         </div>
-        <HeightBrushPanel />
+        <div class="editor-tool-tabs">
+          <button
+            class="tool-tab"
+            class:active={$editorTool === 'height'}
+            onclick={() => editorTool.set('height')}
+          >Height</button>
+          <button
+            class="tool-tab"
+            class:active={$editorTool === 'splat'}
+            onclick={() => editorTool.set('splat')}
+          >Splat</button>
+        </div>
+        {#if $editorTool === 'height'}
+          <HeightBrushPanel />
+        {:else}
+          <SplatBrushPanel />
+        {/if}
       {/if}
       {#if selectedCharacter}
         <CharacterAttributesHud
@@ -374,6 +391,42 @@
     color: #ccc;
     font-weight: normal;
     letter-spacing: 0;
+  }
+
+  .editor-tool-tabs {
+    position: fixed;
+    left: 16px;
+    bottom: 180px;
+    z-index: 1000;
+    display: flex;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 6px;
+    padding: 3px;
+    border: 1px solid rgba(226, 185, 59, 0.3);
+  }
+
+  .tool-tab {
+    padding: 5px 14px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #888;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .tool-tab:hover {
+    color: #ccc;
+  }
+
+  .tool-tab.active {
+    background: rgba(226, 185, 59, 0.25);
+    color: #e2b93b;
   }
 
 </style>

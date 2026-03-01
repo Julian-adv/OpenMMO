@@ -64,6 +64,7 @@ export function makeSplatStandardMaterial({
     shader.uniforms.brushRadius = { value: 3.0 }
     shader.uniforms.brushActive = { value: 0.0 }
     shader.uniforms.brushRaise = { value: 1.0 }
+    shader.uniforms.brushToolMode = { value: 0.0 } // 0=height, 1=splat
 
     // Save shader ref for external uniform updates
     mat.userData.shader = shader
@@ -121,6 +122,7 @@ export function makeSplatStandardMaterial({
          uniform float brushRadius;
          uniform float brushActive;
          uniform float brushRaise;
+         uniform float brushToolMode;
          ${hasN ? 'uniform sampler2D normal0, normal1, normal2, normal3; uniform float normalScale;' : ''}
          ${hasORM ? 'uniform sampler2D orm0, orm1, orm2, orm3;' : ''}`
       )
@@ -158,7 +160,7 @@ export function makeSplatStandardMaterial({
            if (bDist <= brushRadius) {
              float sigma = brushRadius / 2.5;
              float bWeight = exp(-(bDist * bDist) / (2.0 * sigma * sigma));
-             vec3 brushColor = brushRaise > 1.5 ? vec3(0.3, 0.6, 1.0) : brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
+             vec3 brushColor = brushToolMode > 0.5 ? vec3(1.0, 0.7, 0.2) : brushRaise > 1.5 ? vec3(0.3, 0.6, 1.0) : brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
              blended = mix(blended, brushColor, bWeight * 0.2);
            }
          }
