@@ -1,13 +1,13 @@
 use crate::types::{CharacterAttributes, GameDateTime};
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub struct AuthService {
-    db_path: Arc<PathBuf>,
+    pool: r2d2::Pool<SqliteConnectionManager>,
 }
 
 #[derive(Debug, Clone)]
@@ -123,8 +123,12 @@ impl AuthService {
             std::fs::create_dir_all(parent)?;
         }
 
-        let conn = Connection::open(&db_path)?;
-        conn.execute("PRAGMA foreign_keys = ON", [])?;
+        let manager = SqliteConnectionManager::file(&db_path)
+            .with_init(|conn| conn.execute_batch("PRAGMA foreign_keys = ON"));
+
+        let pool = r2d2::Pool::builder().build(manager)?;
+
+        let conn = pool.get()?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS accounts (
                 player_name TEXT PRIMARY KEY,
@@ -136,9 +140,7 @@ impl AuthService {
         Self::ensure_characters_schema(&conn)?;
         Self::ensure_world_time_schema(&conn)?;
 
-        Ok(Self {
-            db_path: Arc::new(db_path),
-        })
+        Ok(Self { pool })
     }
 
     fn ensure_characters_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
@@ -223,10 +225,12 @@ impl AuthService {
         Ok(())
     }
 
-    fn open_connection(&self) -> Result<Connection, AuthError> {
-        let conn = Connection::open(self.db_path.as_ref())?;
-        conn.execute("PRAGMA foreign_keys = ON", [])?;
-        Ok(conn)
+    fn open_connection(
+        &self,
+    ) -> Result<r2d2::PooledConnection<SqliteConnectionManager>, AuthError> {
+        self.pool
+            .get()
+            .map_err(|e| AuthError::Database(e.to_string()))
     }
 
     pub fn authenticate(
