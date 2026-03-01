@@ -178,6 +178,27 @@ impl super::GameState {
         }
     }
 
+    pub async fn teleport_player(
+        &self,
+        player_id: &PlayerId,
+        new_position: Position,
+        new_rotation: f32,
+    ) {
+        let mut players = self.players.write().await;
+        if let Some(player) = players.get_mut(player_id) {
+            player.position = new_position.clone();
+            player.rotation = new_rotation;
+            self.broadcast(
+                ServerMessage::PlayerTeleported {
+                    player_id: player_id.clone(),
+                    position: new_position,
+                    rotation: new_rotation,
+                },
+                None,
+            );
+        }
+    }
+
     pub async fn respawn_player(&self, player_id: &PlayerId) {
         let respawned_player = {
             let mut players = self.players.write().await;

@@ -170,6 +170,17 @@ class PlayerStateManager {
     })
   }
 
+  teleportPlayer(playerId: string, position: Position, rotation: number) {
+    this.targetPositions.set(playerId, { ...position })
+    this.movementData.delete(playerId)
+    this.players.set(playerId, {
+      position: { ...position },
+      state: 'idle',
+      speed: 0,
+      rotation,
+    })
+  }
+
   handleAttack(playerId: string) {
     const player = this.players.get(playerId)
     if (!player) return

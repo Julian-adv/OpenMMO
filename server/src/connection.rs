@@ -542,7 +542,7 @@ async fn handle_client_message(
                     .map(|(_, rot)| rot)
                     .unwrap_or(0.0);
                 game_state
-                    .update_player_position(id, position, rotation)
+                    .teleport_player(id, position, rotation)
                     .await;
             } else {
                 warn!("Received debug teleport from client that is not in game");
