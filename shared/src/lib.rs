@@ -182,6 +182,11 @@ pub enum ServerMessage {
         position: Position,
         rotation: f32,
     },
+    PlayerTeleported {
+        player_id: String,
+        position: Position,
+        rotation: f32,
+    },
     ChatMessage {
         player_id: String,
         message: String,

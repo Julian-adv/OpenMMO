@@ -175,6 +175,25 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerTeleported': {
+      const state = get(gameStore)
+      if (state.currentPlayer && state.currentPlayer.id === data.player_id) {
+        state.currentPlayer.position.set(
+          data.position.x,
+          data.position.y,
+          data.position.z
+        )
+        requestCameraReset()
+        break
+      }
+      remotePlayerManager.teleportPlayer(
+        data.player_id,
+        data.position,
+        data.rotation
+      )
+      break
+    }
+
     case 'ChatMessage': {
       const state = get(gameStore)
       const playerName =

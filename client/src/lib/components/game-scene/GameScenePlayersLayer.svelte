@@ -100,7 +100,7 @@
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
           remotePlayer.position.x,
-          remotePlayer.position.y,
+          heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) || remotePlayer.position.y,
           remotePlayer.position.z
         )}
         name={player.name}
