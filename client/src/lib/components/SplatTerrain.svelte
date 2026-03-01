@@ -9,7 +9,7 @@
     makeSplatStandardMaterial,
     type SplatLayer,
   } from './makeSplatStandardMaterial'
-  import { mapEditorMode } from '../stores/debugStore'
+  import { mapEditorMode, gridVisible } from '../stores/debugStore'
   import { brushWorldPos, brushSize, brushMode, editorTool } from '../stores/editorStore'
   import type { BrushMode, EditorTool } from '../stores/editorStore'
 
@@ -36,6 +36,7 @@
     brushUnsubs = []
 
     let editorActive = false
+    let gridOn = false
     let pos: { x: number; z: number } | null = null
     let size = 3
     let mode: BrushMode = 'raise'
@@ -47,6 +48,7 @@
       const s = mat.userData?.shader
       if (!s) return
       const u = s.uniforms
+      u.gridVisible.value = (editorActive || gridOn) ? 1.0 : 0.0
       if (editorActive && pos) {
         u.brushActive.value = 1.0
         u.brushCenter.value.set(pos.x, pos.z)
@@ -60,6 +62,7 @@
 
     brushUnsubs.push(
       mapEditorMode.subscribe((v) => { editorActive = v; sync() }),
+      gridVisible.subscribe((v) => { gridOn = v; sync() }),
       brushWorldPos.subscribe((v) => { pos = v; sync() }),
       brushSize.subscribe((v) => { size = v; sync() }),
       brushMode.subscribe((v) => { mode = v; sync() }),

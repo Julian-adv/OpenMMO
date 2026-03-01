@@ -27,6 +27,7 @@
     celestialDebugVisible,
     playerDebugInfo,
     mapEditorMode,
+    gridVisible,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -63,6 +64,10 @@
 
   function toggleCelestialDebug() {
     celestialDebugVisible.update((v: boolean) => !v)
+  }
+
+  function toggleGrid() {
+    gridVisible.update((v) => !v)
   }
 </script>
 
@@ -143,6 +148,17 @@
       >
         ORBITS: {$celestialDebugVisible ? 'ON' : 'OFF'}
       </button>
+
+      {#if !$mapEditorMode}
+        <button
+          class="action-btn grid-btn"
+          class:active={$gridVisible}
+          onclick={toggleGrid}
+          title="Toggle Terrain Grid"
+        >
+          GRID: {$gridVisible ? 'ON' : 'OFF'}
+        </button>
+      {/if}
     </div>
   </div>
 </div>
@@ -274,5 +290,10 @@
   .action-btn.orbits-btn.active {
     background: #553b8a;
     border-color: #b794f4;
+  }
+
+  .action-btn.grid-btn.active {
+    background: #b7791f;
+    border-color: #ecc94b;
   }
 </style>

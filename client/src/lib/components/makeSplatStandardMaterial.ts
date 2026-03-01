@@ -65,6 +65,7 @@ export function makeSplatStandardMaterial({
     shader.uniforms.brushActive = { value: 0.0 }
     shader.uniforms.brushRaise = { value: 1.0 }
     shader.uniforms.brushToolMode = { value: 0.0 } // 0=height, 1=splat
+    shader.uniforms.gridVisible = { value: 0.0 } // 0=hidden, 1=visible
 
     // Save shader ref for external uniform updates
     mat.userData.shader = shader
@@ -123,6 +124,7 @@ export function makeSplatStandardMaterial({
          uniform float brushActive;
          uniform float brushRaise;
          uniform float brushToolMode;
+         uniform float gridVisible;
          ${hasN ? 'uniform sampler2D normal0, normal1, normal2, normal3; uniform float normalScale;' : ''}
          ${hasORM ? 'uniform sampler2D orm0, orm1, orm2, orm3;' : ''}`
       )
@@ -139,20 +141,22 @@ export function makeSplatStandardMaterial({
          vec3 c3 = texture2D(diffuse3, vUv * tile3).rgb;
          vec3 blended = c0*weights.r + c1*weights.g + c2*weights.b + c3*weights.a;
          
-         // --- Grid visualization ---
-         vec2 gridCoords = vUv * 64.0; // 1m grid (since vUv is 0-1 across the 64m tile)
-         
-         // 1m grid logic
-         vec2 grid1 = abs(fract(gridCoords - 0.5) - 0.5) / fwidth(gridCoords);
-         float line1 = 1.0 - min(min(grid1.x, grid1.y), 1.0);
-         
-         // 64m grid logic (tile boundary)
-         vec2 grid64 = abs(fract(vUv - 0.5) - 0.5) / fwidth(vUv);
-         float line64 = 1.0 - min(min(grid64.x, grid64.y), 1.0);
-         
-         // Overlay grids
-         blended = mix(blended, vec3(0.0), line1 * 0.3);   // Dark 1m grid (30% opacity)
-         blended = mix(blended, vec3(1.0, 0.0, 0.0), line64); // Red 64m grid (Full opacity)
+         // --- Grid visualization (conditional) ---
+         if (gridVisible > 0.5) {
+           vec2 gridCoords = vUv * 64.0; // 1m grid (since vUv is 0-1 across the 64m tile)
+
+           // 1m grid logic
+           vec2 grid1 = abs(fract(gridCoords - 0.5) - 0.5) / fwidth(gridCoords);
+           float line1 = 1.0 - min(min(grid1.x, grid1.y), 1.0);
+
+           // 64m grid logic (tile boundary)
+           vec2 grid64 = abs(fract(vUv - 0.5) - 0.5) / fwidth(vUv);
+           float line64 = 1.0 - min(min(grid64.x, grid64.y), 1.0);
+
+           // Overlay grids
+           blended = mix(blended, vec3(0.0), line1 * 0.3);   // Dark 1m grid (30% opacity)
+           blended = mix(blended, vec3(1.0, 0.0, 0.0), line64); // Red 64m grid (Full opacity)
+         }
 
          // Brush overlay (shader-based, follows terrain surface)
          if (brushActive > 0.5) {
