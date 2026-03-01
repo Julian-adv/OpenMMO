@@ -1,3 +1,4 @@
+import type { Position } from './networkTypes'
 import { gameStore, resetGameStore } from '../stores/gameStore'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
@@ -313,7 +314,7 @@ class NetworkManager {
     })
   }
 
-  sendDebugTeleport(position: { x: number; y: number; z: number }) {
+  sendDebugTeleport(position: Position) {
     this.sendMessage({ DebugTeleport: { position } })
   }
 
