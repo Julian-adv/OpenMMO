@@ -177,11 +177,18 @@
   }
 
   function handleWheel(event: WheelEvent) {
-    if (!event.ctrlKey) return
-    event.preventDefault()
-    const delta = event.deltaY > 0 ? -1 : 1
-    const newSize = Math.max(1, Math.min(10, currentBrushSize + delta))
-    brushSize.set(newSize)
+    if (event.ctrlKey) {
+      event.preventDefault()
+      const delta = event.deltaY > 0 ? -1 : 1
+      const newSize = Math.max(1, Math.min(10, currentBrushSize + delta))
+      brushSize.set(newSize)
+    } else {
+      if (!camera) return
+      event.preventDefault()
+      const factor = event.deltaY > 0 ? 0.95 : 1 / 0.95
+      camera.zoom = Math.max(0.15, Math.min(2, camera.zoom * factor))
+      camera.updateProjectionMatrix()
+    }
   }
 
   function handleMouseOut() {

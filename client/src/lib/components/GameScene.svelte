@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T, useThrelte } from '@threlte/core'
-  import { OrbitControls, Grid } from '@threlte/extras'
+  import { OrbitControls } from '@threlte/extras'
   import * as THREE from 'three'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
@@ -55,7 +55,9 @@
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
   import {
     DEFAULT_CAMERA_OFFSET,
+    INITIAL_DISTANCE,
     ORTHOGRAPHIC_DEFAULT_ZOOM,
+    ORTHOGRAPHIC_FRUSTUM_HEIGHT,
     calculateCameraOffset as getCameraOffsetFromScene,
     resetCameraRotation as resetCameraRotationToDefault,
     resetCameraToInitialState as resetCameraToDefaultState,
@@ -399,7 +401,19 @@
 
   function updateCameraWithOffset(offset: { x: number; y: number; z: number }) {
     if (!currentPlayer || !camera) return
-    cameraTarget = applyCameraOffset(camera, currentPlayer.position, offset)
+    // In map editor mode, scale the base offset to raise the camera when zoomed out
+    // so bottom view rays still intersect the ground plane.
+    if ($mapEditorMode && camera.zoom < 1) {
+      const maxBelow = INITIAL_DISTANCE / Math.SQRT2
+      const scale = Math.max(1, (ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2) / (camera.zoom * maxBelow))
+      cameraTarget = applyCameraOffset(camera, currentPlayer.position, {
+        x: CAMERA_OFFSET.x * scale,
+        y: CAMERA_OFFSET.y * scale,
+        z: CAMERA_OFFSET.z * scale,
+      })
+    } else {
+      cameraTarget = applyCameraOffset(camera, currentPlayer.position, offset)
+    }
   }
 
   function resetCameraToInitialState() {
@@ -546,15 +560,6 @@
   bind:ref={ambientLight}
   intensity={sceneLighting.ambientDayIntensity}
   color="#ffffff"
-/>
-
-<Grid
-  infiniteGrid
-  gridSize={100}
-  sectionColor="#4a5568"
-  sectionThickness={1.2}
-  fadeDistance={100}
-  position={[0, -1.1, 0]}
 />
 
 <GameSceneTerrainLayer
