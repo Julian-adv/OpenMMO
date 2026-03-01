@@ -158,14 +158,14 @@ export function makeSplatStandardMaterial({
            blended = mix(blended, vec3(1.0, 0.0, 0.0), line64); // Red 64m grid (Full opacity)
          }
 
-         // Brush overlay (shader-based, follows terrain surface)
+         // Brush overlay (ring shape, follows terrain surface)
          if (brushActive > 0.5) {
            float bDist = distance(vWorldXZ, brushCenter);
-           if (bDist <= brushRadius) {
-             float sigma = brushRadius / 2.5;
-             float bWeight = exp(-(bDist * bDist) / (2.0 * sigma * sigma));
+           float ringWidth = max(0.5, brushRadius * 0.1);
+           float innerRadius = brushRadius - ringWidth;
+           if (bDist >= innerRadius && bDist <= brushRadius) {
              vec3 brushColor = brushToolMode > 0.5 ? vec3(1.0, 0.7, 0.2) : brushRaise > 1.5 ? vec3(0.3, 0.6, 1.0) : brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
-             blended = mix(blended, brushColor, bWeight * 0.2);
+             blended = mix(blended, brushColor, 0.35);
            }
          }
 
