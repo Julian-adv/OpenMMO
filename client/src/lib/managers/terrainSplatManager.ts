@@ -200,10 +200,7 @@ export class TerrainSplatManager {
       const tz = parseInt(tzStr)
 
       const url = `${this.terrainApiUrl}/api/terrain/splat/${tx}/${tz}`
-      const body = data.buffer.slice(
-        data.byteOffset,
-        data.byteOffset + data.byteLength
-      )
+      const body = new Uint8Array(data).buffer as ArrayBuffer
 
       try {
         await fetch(url, {
