@@ -2,7 +2,7 @@ use crate::types::{CharacterAttributes, GameDateTime};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
@@ -24,6 +24,36 @@ pub struct CharacterRecord {
     pub last_y: f32,
     pub last_z: f32,
     pub last_rotation: f32,
+}
+
+/// Column list shared between queries that return full CharacterRecord rows.
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation";
+
+fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
+    Ok(CharacterRecord {
+        id: row.get(0)?,
+        name: row.get(1)?,
+        created_at: row.get(2)?,
+        level: row.get(3)?,
+        xp: row.get::<_, i64>(4)? as u64,
+        max_hp: row.get(5)?,
+        attributes: CharacterAttributes {
+            r#str: row.get(6)?,
+            dex: row.get(7)?,
+            con: row.get(8)?,
+            int: row.get(9)?,
+            wis: row.get(10)?,
+            cha: row.get(11)?,
+            guard: row.get(12)?,
+        },
+        class: row
+            .get::<_, String>(13)
+            .unwrap_or_else(|_| "knight".to_string()),
+        last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
+        last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
+        last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
+        last_rotation: row.get::<_, f64>(17).unwrap_or(0.0) as f32,
+    })
 }
 
 #[derive(Debug)]
@@ -77,22 +107,15 @@ impl Display for AuthError {
 
 impl std::error::Error for AuthError {}
 
-impl AuthService {
-    fn data_dir() -> PathBuf {
-        // In a workspace structure, prioritize the parent's data directory
-        // if we are running from a crate sub-directory like server/.
-        if Path::new("../data").is_dir() {
-            PathBuf::from("../data")
-        } else if Path::new("data").is_dir() {
-            PathBuf::from("data")
-        } else {
-            // Fallback: create a local 'data' folder if none found
-            PathBuf::from("data")
-        }
+impl From<rusqlite::Error> for AuthError {
+    fn from(e: rusqlite::Error) -> Self {
+        AuthError::Database(e.to_string())
     }
+}
 
+impl AuthService {
     pub fn default_db_path() -> PathBuf {
-        Self::data_dir().join("game_data.db")
+        PathBuf::from("../data/game_data.db")
     }
 
     pub fn new(db_path: PathBuf) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
@@ -201,10 +224,8 @@ impl AuthService {
     }
 
     fn open_connection(&self) -> Result<Connection, AuthError> {
-        let conn = Connection::open(self.db_path.as_ref())
-            .map_err(|e| AuthError::Database(e.to_string()))?;
-        conn.execute("PRAGMA foreign_keys = ON", [])
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let conn = Connection::open(self.db_path.as_ref())?;
+        conn.execute("PRAGMA foreign_keys = ON", [])?;
         Ok(conn)
     }
 
@@ -244,8 +265,7 @@ impl AuthService {
                 params![player_name],
                 |row| row.get(0),
             )
-            .optional()
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+            .optional()?;
 
         if existing.is_some() {
             return Err(AuthError::AccountAlreadyExists);
@@ -254,8 +274,7 @@ impl AuthService {
         conn.execute(
             "INSERT INTO accounts (player_name, password_hash) VALUES (?1, ?2)",
             params![player_name, password_hash],
-        )
-        .map_err(|e| AuthError::Database(e.to_string()))?;
+        )?;
 
         Ok(())
     }
@@ -272,8 +291,7 @@ impl AuthService {
                 params![player_name],
                 |row| row.get(0),
             )
-            .optional()
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+            .optional()?;
 
         match stored_hash {
             None => Err(AuthError::AccountNotFound),
@@ -289,45 +307,17 @@ impl AuthService {
         }
 
         let conn = self.open_connection()?;
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation
-                 FROM characters
-                 WHERE account_name = ?1
-                 ORDER BY created_at ASC, id ASC",
-            )
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let mut stmt = conn.prepare(&format!(
+            "SELECT {}
+             FROM characters
+             WHERE account_name = ?1
+             ORDER BY created_at ASC, id ASC",
+            CHARACTER_COLUMNS
+        ))?;
 
         let characters = stmt
-            .query_map(params![account_name], |row| {
-                Ok(CharacterRecord {
-                    id: row.get(0)?,
-                    name: row.get(1)?,
-                    created_at: row.get(2)?,
-                    level: row.get(3)?,
-                    xp: row.get::<_, i64>(4)? as u64,
-                    max_hp: row.get(5)?,
-                    attributes: CharacterAttributes {
-                        r#str: row.get(6)?,
-                        dex: row.get(7)?,
-                        con: row.get(8)?,
-                        int: row.get(9)?,
-                        wis: row.get(10)?,
-                        cha: row.get(11)?,
-                        guard: row.get(12)?,
-                    },
-                    class: row
-                        .get::<_, String>(13)
-                        .unwrap_or_else(|_| "knight".to_string()),
-                    last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
-                    last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
-                    last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
-                    last_rotation: row.get::<_, f64>(17).unwrap_or(0.0) as f32,
-                })
-            })
-            .map_err(|e| AuthError::Database(e.to_string()))?
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+            .query_map(params![account_name], |row| character_record_from_row(row))?
+            .collect::<Result<Vec<_>, _>>()?;
 
         Ok(characters)
     }
@@ -359,19 +349,16 @@ impl AuthService {
                 params![account_name],
                 |row| row.get(0),
             )
-            .optional()
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+            .optional()?;
         if account_exists.is_none() {
             return Err(AuthError::AccountNotFound);
         }
 
-        let character_count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM characters WHERE account_name = ?1",
-                params![account_name],
-                |row| row.get(0),
-            )
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let character_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM characters WHERE account_name = ?1",
+            params![account_name],
+            |row| row.get(0),
+        )?;
         if character_count >= 3 {
             return Err(AuthError::CharacterLimitReached);
         }
@@ -382,8 +369,7 @@ impl AuthService {
                 params![character_name],
                 |row| row.get(0),
             )
-            .optional()
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+            .optional()?;
         if existing_character_name.is_some() {
             return Err(AuthError::CharacterNameAlreadyExists);
         }
@@ -417,53 +403,29 @@ impl AuthService {
                 i64::from(attributes.guard),
                 class,
             ],
-        )
-        .map_err(|e| AuthError::Database(e.to_string()))?;
+        )?;
 
         let id = conn.last_insert_rowid();
-        let (created_at, level, loaded_max_hp, loaded_attributes, loaded_class): (i64, u32, u32, CharacterAttributes, String) =
-            conn
-            .query_row(
-                "SELECT created_at, level, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class
-                 FROM characters
-                 WHERE id = ?1",
-                params![id],
-                |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        CharacterAttributes {
-                            r#str: row.get(3)?,
-                            dex: row.get(4)?,
-                            con: row.get(5)?,
-                            int: row.get(6)?,
-                            wis: row.get(7)?,
-                            cha: row.get(8)?,
-                            guard: row.get(9)?,
-                        },
-                        row.get::<_, String>(10).unwrap_or_else(|_| "knight".to_string()),
-                    ))
-                },
-            )
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let created_at: i64 = conn.query_row(
+            "SELECT created_at FROM characters WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
 
-        let character = CharacterRecord {
+        Ok(CharacterRecord {
             id,
             name: character_name.to_string(),
             created_at,
-            level,
+            level: 1,
             xp: 0,
-            max_hp: loaded_max_hp,
-            attributes: loaded_attributes,
-            class: loaded_class,
+            max_hp,
+            attributes: attributes.clone(),
+            class: class.to_string(),
             last_x: 0.0,
             last_y: 0.0,
             last_z: 0.0,
             last_rotation: 0.0,
-        };
-
-        Ok(character)
+        })
     }
 
     pub fn delete_character(&self, account_name: &str, character_id: i64) -> Result<(), AuthError> {
@@ -476,12 +438,10 @@ impl AuthService {
         }
 
         let conn = self.open_connection()?;
-        let rows_affected = conn
-            .execute(
-                "DELETE FROM characters WHERE id = ?1 AND account_name = ?2",
-                params![character_id, account_name],
-            )
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+        let rows_affected = conn.execute(
+            "DELETE FROM characters WHERE id = ?1 AND account_name = ?2",
+            params![character_id, account_name],
+        )?;
 
         if rows_affected == 0 {
             return Err(AuthError::CharacterNotFound);
@@ -506,37 +466,16 @@ impl AuthService {
         let conn = self.open_connection()?;
         let character = conn
             .query_row(
-                "SELECT id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation
-                 FROM characters
-                 WHERE id = ?1 AND account_name = ?2",
+                &format!(
+                    "SELECT {}
+                     FROM characters
+                     WHERE id = ?1 AND account_name = ?2",
+                    CHARACTER_COLUMNS
+                ),
                 params![character_id, account_name],
-                |row| {
-                    Ok(CharacterRecord {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                        created_at: row.get(2)?,
-                        level: row.get(3)?,
-                        xp: row.get::<_, i64>(4)? as u64,
-                        max_hp: row.get(5)?,
-                        attributes: CharacterAttributes {
-                            r#str: row.get(6)?,
-                            dex: row.get(7)?,
-                            con: row.get(8)?,
-                            int: row.get(9)?,
-                            wis: row.get(10)?,
-                            cha: row.get(11)?,
-                            guard: row.get(12)?,
-                        },
-                        class: row.get::<_, String>(13).unwrap_or_else(|_| "knight".to_string()),
-                        last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
-                        last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
-                        last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
-                        last_rotation: row.get::<_, f64>(17).unwrap_or(0.0) as f32,
-                    })
-                },
+                |row| character_record_from_row(row),
             )
-            .optional()
-            .map_err(|e| AuthError::Database(e.to_string()))?;
+            .optional()?;
 
         character.ok_or(AuthError::CharacterNotFound)
     }
@@ -546,29 +485,20 @@ impl AuthService {
         character_id: i64,
         xp: u64,
         level: u32,
+        max_hp: Option<u32>,
     ) -> Result<(), AuthError> {
         let conn = self.open_connection()?;
-        conn.execute(
-            "UPDATE characters SET xp = ?1, level = ?2 WHERE id = ?3",
-            params![xp as i64, i64::from(level), character_id],
-        )
-        .map_err(|e| AuthError::Database(e.to_string()))?;
-        Ok(())
-    }
-
-    pub fn update_character_xp_level_and_max_hp(
-        &self,
-        character_id: i64,
-        xp: u64,
-        level: u32,
-        max_hp: u32,
-    ) -> Result<(), AuthError> {
-        let conn = self.open_connection()?;
-        conn.execute(
-            "UPDATE characters SET xp = ?1, level = ?2, max_hp = ?3 WHERE id = ?4",
-            params![xp as i64, i64::from(level), i64::from(max_hp), character_id],
-        )
-        .map_err(|e| AuthError::Database(e.to_string()))?;
+        if let Some(hp) = max_hp {
+            conn.execute(
+                "UPDATE characters SET xp = ?1, level = ?2, max_hp = ?3 WHERE id = ?4",
+                params![xp as i64, i64::from(level), i64::from(hp), character_id],
+            )?;
+        } else {
+            conn.execute(
+                "UPDATE characters SET xp = ?1, level = ?2 WHERE id = ?3",
+                params![xp as i64, i64::from(level), character_id],
+            )?;
+        }
         Ok(())
     }
 
@@ -590,28 +520,27 @@ impl AuthService {
                 f64::from(rotation),
                 character_id,
             ],
-        )
-        .map_err(|e| AuthError::Database(e.to_string()))?;
+        )?;
         Ok(())
     }
 
     pub fn load_world_time(&self) -> Result<Option<GameDateTime>, AuthError> {
         let conn = self.open_connection()?;
-        conn.query_row(
-            "SELECT year, month, day, hour, minute FROM world_time WHERE id = 1",
-            [],
-            |row| {
-                Ok(GameDateTime {
-                    year: row.get(0)?,
-                    month: row.get(1)?,
-                    day: row.get(2)?,
-                    hour: row.get(3)?,
-                    minute: row.get(4)?,
-                })
-            },
-        )
-        .optional()
-        .map_err(|e| AuthError::Database(e.to_string()))
+        Ok(conn
+            .query_row(
+                "SELECT year, month, day, hour, minute FROM world_time WHERE id = 1",
+                [],
+                |row| {
+                    Ok(GameDateTime {
+                        year: row.get(0)?,
+                        month: row.get(1)?,
+                        day: row.get(2)?,
+                        hour: row.get(3)?,
+                        minute: row.get(4)?,
+                    })
+                },
+            )
+            .optional()?)
     }
 
     pub fn save_world_time(&self, datetime: &GameDateTime) -> Result<(), AuthError> {
@@ -633,8 +562,7 @@ impl AuthService {
                 i64::from(datetime.hour),
                 i64::from(datetime.minute),
             ],
-        )
-        .map_err(|e| AuthError::Database(e.to_string()))?;
+        )?;
         Ok(())
     }
 }

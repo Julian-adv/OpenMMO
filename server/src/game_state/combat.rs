@@ -146,20 +146,12 @@ impl super::GameState {
                             let auth = self.auth_service.clone();
                             let new_max_hp_for_db = new_max_hp;
                             tokio::task::spawn_blocking(move || {
-                                let result = if let Some(max_hp) = new_max_hp_for_db {
-                                    auth.update_character_xp_level_and_max_hp(
-                                        character_id,
-                                        new_xp,
-                                        new_level,
-                                        max_hp,
-                                    )
-                                } else {
-                                    auth.update_character_xp_and_level(
-                                        character_id,
-                                        new_xp,
-                                        new_level,
-                                    )
-                                };
+                                let result = auth.update_character_xp_and_level(
+                                    character_id,
+                                    new_xp,
+                                    new_level,
+                                    new_max_hp_for_db,
+                                );
                                 if let Err(e) = result {
                                     tracing::warn!("Failed to persist XP: {}", e);
                                 }
@@ -473,11 +465,8 @@ impl super::GameState {
         let new_xp = penalty.new_xp;
         let new_level = level_for_msg;
         tokio::task::spawn_blocking(move || {
-            let result = if let Some(max_hp) = max_hp_for_db {
-                auth.update_character_xp_level_and_max_hp(character_id, new_xp, new_level, max_hp)
-            } else {
-                auth.update_character_xp_and_level(character_id, new_xp, new_level)
-            };
+            let result =
+                auth.update_character_xp_and_level(character_id, new_xp, new_level, max_hp_for_db);
             if let Err(e) = result {
                 tracing::warn!("Failed to persist death penalty: {}", e);
             }
