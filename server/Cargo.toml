@@ -6,7 +6,8 @@ edition = "2021"
 [dependencies]
 onlinerpg-shared = { path = "../shared" }
 tokio = { version = "1.0", features = ["full"] }
-tokio-tungstenite = "0.24"
+tokio-tungstenite = "0.26"
+bytes = "1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rmp-serde = "1.3"
