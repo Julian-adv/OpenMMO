@@ -7,6 +7,7 @@ use crate::types::{
     ServerMessage,
 };
 use futures_util::{SinkExt, StreamExt};
+use bytes::Bytes;
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -95,7 +96,7 @@ pub async fn handle_connection(
                                 for response in responses {
                                     match serialize_server_msg(&response) {
                                         Ok(bytes) => {
-                                            if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
+                                            if let Err(e) = ws_sender.send(Message::Binary(Bytes::from(bytes))).await {
                                                 error!(
                                                     "Failed to send direct response to client: {}",
                                                     e
@@ -140,7 +141,7 @@ pub async fn handle_connection(
                             }
                         }
 
-                        if let Err(e) = ws_sender.send(Message::Binary(msg.bytes.to_vec())).await {
+                        if let Err(e) = ws_sender.send(Message::Binary(msg.bytes.clone())).await {
                             error!("Failed to send message to client: {}", e);
                             break;
                         }
@@ -166,7 +167,7 @@ pub async fn handle_connection(
                     let is_kicked = matches!(msg, ServerMessage::Kicked { .. });
                     match serialize_server_msg(&msg) {
                         Ok(bytes) => {
-                            let _ = ws_sender.send(Message::Binary(bytes)).await;
+                            let _ = ws_sender.send(Message::Binary(Bytes::from(bytes))).await;
                         }
                         Err(e) => error!("Serialization failed: {}", e),
                     }

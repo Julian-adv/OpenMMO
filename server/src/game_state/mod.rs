@@ -1,6 +1,7 @@
 use crate::auth::AuthService;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
+use bytes::Bytes;
 use onlinerpg_shared::serialize_server_msg;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,7 +11,7 @@ use tracing::error;
 
 #[derive(Debug, Clone)]
 pub struct BroadcastMessage {
-    pub bytes: Arc<Vec<u8>>,
+    pub bytes: Bytes,
     /// If set, skip sending to this player (used for MonsterMoved owner filtering).
     pub skip_player_id: Option<PlayerId>,
 }
@@ -79,7 +80,7 @@ impl GameState {
         match serialize_server_msg(&msg) {
             Ok(bytes) => {
                 let _ = self.broadcast_tx.send(BroadcastMessage {
-                    bytes: Arc::new(bytes),
+                    bytes: Bytes::from(bytes),
                     skip_player_id,
                 });
             }
