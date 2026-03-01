@@ -7,8 +7,32 @@ pub enum CharacterClass {
     Warrior,
     #[serde(rename = "knight")]
     Knight,
+    #[serde(rename = "barbarian")]
+    Barbarian,
+    #[serde(rename = "caveman")]
+    Caveman,
+    #[serde(rename = "valkyrie")]
+    Valkyrie,
+    #[serde(rename = "ranger")]
+    Ranger,
+    #[serde(rename = "samurai")]
+    Samurai,
+    #[serde(rename = "monk")]
+    Monk,
+    #[serde(rename = "priest")]
+    Priest,
     #[serde(rename = "thief")]
     Thief,
+    #[serde(rename = "archaeologist")]
+    Archaeologist,
+    #[serde(rename = "healer")]
+    Healer,
+    #[serde(rename = "rogue")]
+    Rogue,
+    #[serde(rename = "wizard")]
+    Wizard,
+    #[serde(rename = "tourist")]
+    Tourist,
 }
 
 impl CharacterClass {
@@ -16,14 +40,58 @@ impl CharacterClass {
         match self {
             CharacterClass::Warrior => "warrior",
             CharacterClass::Knight => "knight",
+            CharacterClass::Barbarian => "barbarian",
+            CharacterClass::Caveman => "caveman",
+            CharacterClass::Valkyrie => "valkyrie",
+            CharacterClass::Ranger => "ranger",
+            CharacterClass::Samurai => "samurai",
+            CharacterClass::Monk => "monk",
+            CharacterClass::Priest => "priest",
             CharacterClass::Thief => "thief",
+            CharacterClass::Archaeologist => "archaeologist",
+            CharacterClass::Healer => "healer",
+            CharacterClass::Rogue => "rogue",
+            CharacterClass::Wizard => "wizard",
+            CharacterClass::Tourist => "tourist",
+        }
+    }
+
+    pub fn hit_die(&self) -> u8 {
+        match self {
+            CharacterClass::Warrior
+            | CharacterClass::Knight
+            | CharacterClass::Barbarian
+            | CharacterClass::Caveman
+            | CharacterClass::Valkyrie => 10,
+            CharacterClass::Ranger
+            | CharacterClass::Samurai
+            | CharacterClass::Monk
+            | CharacterClass::Priest
+            | CharacterClass::Thief => 8,
+            CharacterClass::Archaeologist
+            | CharacterClass::Healer
+            | CharacterClass::Rogue
+            | CharacterClass::Wizard => 6,
+            CharacterClass::Tourist => 4,
         }
     }
 
     pub fn from_str_or_default(s: &str) -> Self {
         match s {
             "warrior" => CharacterClass::Warrior,
+            "barbarian" => CharacterClass::Barbarian,
+            "caveman" => CharacterClass::Caveman,
+            "valkyrie" => CharacterClass::Valkyrie,
+            "ranger" => CharacterClass::Ranger,
+            "samurai" => CharacterClass::Samurai,
+            "monk" => CharacterClass::Monk,
+            "priest" => CharacterClass::Priest,
             "thief" => CharacterClass::Thief,
+            "archaeologist" => CharacterClass::Archaeologist,
+            "healer" => CharacterClass::Healer,
+            "rogue" => CharacterClass::Rogue,
+            "wizard" => CharacterClass::Wizard,
+            "tourist" => CharacterClass::Tourist,
             _ => CharacterClass::Knight,
         }
     }

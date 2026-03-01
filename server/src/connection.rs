@@ -570,13 +570,12 @@ fn default_character_max_hp(
     attributes: &CharacterAttributes,
     character_class: &CharacterClass,
 ) -> u32 {
-    let class_str = character_class.as_str();
-    match level_one_max_hp(DEFAULT_CHARACTER_RACE, class_str, attributes.con) {
+    match level_one_max_hp(DEFAULT_CHARACTER_RACE, character_class, attributes.con) {
         Ok(value) => value,
         Err(err) => {
             warn!(
                 "Failed to resolve level 1 max HP for race='{}', class='{}', con='{}': {}",
-                DEFAULT_CHARACTER_RACE, class_str, attributes.con, err
+                DEFAULT_CHARACTER_RACE, character_class.as_str(), attributes.con, err
             );
             FALLBACK_DEFAULT_MAX_HP
         }

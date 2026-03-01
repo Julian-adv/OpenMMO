@@ -117,11 +117,10 @@ impl super::GameState {
                                 if let Some(p) = players_write.get_mut(player_id) {
                                     p.level = new_level;
                                     let mut updated_max_hp = p.max_health;
-                                    let class_name = p.class.as_str().to_string();
                                     for _ in 0..levels_gained {
                                         match character_hp::level_up_max_hp(
                                             updated_max_hp,
-                                            &class_name,
+                                            &p.class,
                                             attributes.con,
                                         ) {
                                             Ok(next_max_hp) => {
@@ -427,11 +426,9 @@ impl super::GameState {
                 player.level = penalty.new_level;
 
                 if penalty.leveled_down {
-                    let class_name = player.class.as_str();
-
                     let level_one_floor = match character_hp::level_one_max_hp(
                         character_hp::DEFAULT_CHARACTER_RACE,
-                        class_name,
+                        &player.class,
                         attributes.con,
                     ) {
                         Ok(value) => value,
@@ -444,7 +441,7 @@ impl super::GameState {
                         }
                     };
 
-                    match character_hp::roll_level_hp_delta(class_name, attributes.con) {
+                    match character_hp::roll_level_hp_delta(&player.class, attributes.con) {
                         Ok(hp_loss) => {
                             let candidate = i64::from(player.max_health) - i64::from(hp_loss);
                             let bounded = candidate
