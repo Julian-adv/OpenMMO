@@ -98,9 +98,7 @@ impl super::GameState {
             player_name, player_id, player_number
         );
 
-        let _ = self
-            .broadcast_tx
-            .send(ServerMessage::PlayerJoined { player });
+        self.broadcast(ServerMessage::PlayerJoined { player }, None);
 
         // Return game_state to be sent directly to the new player only
         let current_players = self.players.read().await;
@@ -145,9 +143,12 @@ impl super::GameState {
                     .map(|n| format!(" [#{}]", n))
                     .unwrap_or_default()
             );
-            let _ = self.broadcast_tx.send(ServerMessage::PlayerLeft {
-                player_id: player_id.clone(),
-            });
+            self.broadcast(
+                ServerMessage::PlayerLeft {
+                    player_id: player_id.clone(),
+                },
+                None,
+            );
         } else {
             warn!("Attempted to remove non-existent player: {}", player_id);
         }
@@ -164,11 +165,14 @@ impl super::GameState {
         if let Some(player) = players.get_mut(player_id) {
             player.position = new_position.clone();
             player.rotation = new_rotation;
-            let _ = self.broadcast_tx.send(ServerMessage::PlayerMoved {
-                player_id: player_id.clone(),
-                position: new_position,
-                rotation: new_rotation,
-            });
+            self.broadcast(
+                ServerMessage::PlayerMoved {
+                    player_id: player_id.clone(),
+                    position: new_position,
+                    rotation: new_rotation,
+                },
+                None,
+            );
         } else {
             warn!("Attempted to move non-existent player: {}", player_id);
         }
@@ -200,9 +204,7 @@ impl super::GameState {
 
         if let Some(player) = respawned_player {
             info!("Player {} ({}) respawned", player.name, player.id);
-            let _ = self
-                .broadcast_tx
-                .send(ServerMessage::PlayerRespawned { player });
+            self.broadcast(ServerMessage::PlayerRespawned { player }, None);
         } else {
             warn!("Attempted to respawn non-existent player: {}", player_id);
         }

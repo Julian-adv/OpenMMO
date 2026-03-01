@@ -130,24 +130,19 @@ pub async fn handle_connection(
             // Handle game state broadcasts
             broadcast_msg = game_receiver.recv() => {
                 match broadcast_msg {
-                    Ok(server_msg) => {
-                        // Filter out monster move updates for the owner
-                        if let ServerMessage::MonsterMoved { owner_id: Some(ref owner), .. } = server_msg {
+                    Ok(msg) => {
+                        // Skip messages intended to be filtered for this player
+                        if let Some(ref skip_id) = msg.skip_player_id {
                             if let Some(ref current_player) = state.player_id {
-                                if owner == current_player {
+                                if skip_id == current_player {
                                     continue;
                                 }
                             }
                         }
 
-                        match serialize_server_msg(&server_msg) {
-                            Ok(bytes) => {
-                                if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
-                                    error!("Failed to send message to client: {}", e);
-                                    break;
-                                }
-                            }
-                            Err(e) => error!("Serialization failed: {}", e),
+                        if let Err(e) = ws_sender.send(Message::Binary(msg.bytes.to_vec())).await {
+                            error!("Failed to send message to client: {}", e);
+                            break;
                         }
                     }
                     Err(broadcast::error::RecvError::Closed) => {

@@ -7,10 +7,13 @@ impl super::GameState {
 
         if let Some(player) = players.get(player_id) {
             info!("Chat message from {}: {}", player.name, message);
-            let _ = self.broadcast_tx.send(ServerMessage::ChatMessage {
-                player_id: player_id.clone(),
-                message,
-            });
+            self.broadcast(
+                ServerMessage::ChatMessage {
+                    player_id: player_id.clone(),
+                    message,
+                },
+                None,
+            );
         } else {
             warn!("Chat message from non-existent player: {}", player_id);
         }

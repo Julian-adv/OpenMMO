@@ -1,6 +1,6 @@
 use super::*;
 use crate::monster_defs::MonsterDefs;
-use crate::types::{CharacterClass, Position};
+use crate::types::{CharacterClass, Position, ServerMessage};
 use std::path::PathBuf;
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -63,11 +63,17 @@ async fn respawn_player_revives_dead_player_only() {
     assert_eq!(revived.rotation, 0.0);
 
     match rx.try_recv() {
-        Ok(ServerMessage::PlayerRespawned { player }) => {
-            assert_eq!(player.id, player_id);
-            assert_eq!(player.health, player.max_health);
+        Ok(msg) => {
+            let server_msg: ServerMessage =
+                rmp_serde::from_slice(&msg.bytes).expect("Failed to deserialize broadcast");
+            match server_msg {
+                ServerMessage::PlayerRespawned { player } => {
+                    assert_eq!(player.id, player_id);
+                    assert_eq!(player.health, player.max_health);
+                }
+                other => panic!("Expected PlayerRespawned, got {:?}", other),
+            }
         }
-        Ok(other) => panic!("Expected PlayerRespawned, got {:?}", other),
         Err(err) => panic!("Expected PlayerRespawned broadcast, got {:?}", err),
     }
 
@@ -111,7 +117,14 @@ async fn respawn_player_ignores_alive_player() {
 
     match rx.try_recv() {
         Err(TryRecvError::Empty) => {}
-        Ok(other) => panic!("Expected no broadcast for alive respawn, got {:?}", other),
+        Ok(msg) => {
+            let server_msg: ServerMessage =
+                rmp_serde::from_slice(&msg.bytes).expect("Failed to deserialize broadcast");
+            panic!(
+                "Expected no broadcast for alive respawn, got {:?}",
+                server_msg
+            );
+        }
         Err(err) => panic!("Expected empty channel, got {:?}", err),
     }
 

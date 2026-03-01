@@ -45,13 +45,16 @@ impl super::GameState {
             }
 
             // Send attack result
-            let _ = self.broadcast_tx.send(ServerMessage::PlayerAttacked {
-                player_id: player_id.clone(),
-                monster_id: monster_id.clone(),
-                hit: result_hit,
-                roll: result_roll,
-                damage: result_damage,
-            });
+            self.broadcast(
+                ServerMessage::PlayerAttacked {
+                    player_id: player_id.clone(),
+                    monster_id: monster_id.clone(),
+                    hit: result_hit,
+                    roll: result_roll,
+                    damage: result_damage,
+                },
+                None,
+            );
 
             if result_hit {
                 let mut monsters = self.monsters.write().await;
@@ -76,9 +79,12 @@ impl super::GameState {
 
                 if is_dead {
                     info!("Monster {} died, broadcasting dead state", monster_id);
-                    let _ = self.broadcast_tx.send(ServerMessage::MonsterDead {
-                        monster_id: monster_id.clone(),
-                    });
+                    self.broadcast(
+                        ServerMessage::MonsterDead {
+                            monster_id: monster_id.clone(),
+                        },
+                        None,
+                    );
 
                     // Award XP to the player who killed the monster
                     let xp_def = self.monster_defs.get(&monster_type);
@@ -214,10 +220,12 @@ impl super::GameState {
                             if monster.state == "dead" {
                                 monsters.remove(&id_to_remove);
                                 info!("Monster {} removed after 30s corpse time", id_to_remove);
-                                let _ =
-                                    game_state.broadcast_tx.send(ServerMessage::MonsterRemoved {
+                                game_state.broadcast(
+                                    ServerMessage::MonsterRemoved {
                                         monster_id: id_to_remove,
-                                    });
+                                    },
+                                    None,
+                                );
                             }
                         }
                     });
@@ -306,23 +314,27 @@ impl super::GameState {
         }
 
         // Send attack result after server-side HP update.
-        let _ = self
-            .broadcast_tx
-            .send(ServerMessage::MonsterAttackedPlayer {
+        self.broadcast(
+            ServerMessage::MonsterAttackedPlayer {
                 monster_id: monster_id.to_string(),
                 player_id: target_player_id.to_string(),
                 hit: result.hit,
                 roll: result.roll,
                 damage: result.damage,
                 current_health,
-            });
+            },
+            None,
+        );
 
         if did_die {
             let dead_player_id = target_player_id.to_string();
             self.apply_player_death_penalty(&dead_player_id).await;
-            let _ = self.broadcast_tx.send(ServerMessage::PlayerDead {
-                player_id: dead_player_id,
-            });
+            self.broadcast(
+                ServerMessage::PlayerDead {
+                    player_id: dead_player_id,
+                },
+                None,
+            );
         }
     }
 
@@ -367,11 +379,14 @@ impl super::GameState {
                     player.health = (player.health + amount).min(player.max_health);
 
                     if player.health != old_health {
-                        let _ = self.broadcast_tx.send(ServerMessage::PlayerHealthUpdate {
-                            player_id: player_id.clone(),
-                            health: player.health,
-                            max_health: player.max_health,
-                        });
+                        self.broadcast(
+                            ServerMessage::PlayerHealthUpdate {
+                                player_id: player_id.clone(),
+                                health: player.health,
+                                max_health: player.max_health,
+                            },
+                            None,
+                        );
                     }
                 }
             }

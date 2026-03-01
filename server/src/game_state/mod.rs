@@ -1,13 +1,22 @@
 use crate::auth::AuthService;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
+use onlinerpg_shared::serialize_server_msg;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, RwLock};
+use tracing::error;
 
-pub type GameStateSender = broadcast::Sender<ServerMessage>;
-pub type GameStateReceiver = broadcast::Receiver<ServerMessage>;
+#[derive(Debug, Clone)]
+pub struct BroadcastMessage {
+    pub bytes: Arc<Vec<u8>>,
+    /// If set, skip sending to this player (used for MonsterMoved owner filtering).
+    pub skip_player_id: Option<PlayerId>,
+}
+
+pub type GameStateSender = broadcast::Sender<BroadcastMessage>;
+pub type GameStateReceiver = broadcast::Receiver<BroadcastMessage>;
 
 mod chat;
 mod combat;
@@ -64,5 +73,17 @@ impl GameState {
 
     pub fn subscribe(&self) -> GameStateReceiver {
         self.broadcast_tx.subscribe()
+    }
+
+    fn broadcast(&self, msg: ServerMessage, skip_player_id: Option<PlayerId>) {
+        match serialize_server_msg(&msg) {
+            Ok(bytes) => {
+                let _ = self.broadcast_tx.send(BroadcastMessage {
+                    bytes: Arc::new(bytes),
+                    skip_player_id,
+                });
+            }
+            Err(e) => error!("Failed to serialize broadcast message: {}", e),
+        }
     }
 }

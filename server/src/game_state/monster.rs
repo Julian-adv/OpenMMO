@@ -50,9 +50,7 @@ impl super::GameState {
             monsters.len()
         );
 
-        let _ = self
-            .broadcast_tx
-            .send(ServerMessage::MonsterSpawned { monster });
+        self.broadcast(ServerMessage::MonsterSpawned { monster }, None);
     }
 
     pub async fn update_monster_position(
@@ -73,14 +71,17 @@ impl super::GameState {
             monster.rotation = rotation;
             monster.state = state.clone();
 
-            let _ = self.broadcast_tx.send(ServerMessage::MonsterMoved {
-                monster_id,
-                position: new_position,
-                rotation,
-                state,
-                target_position,
-                owner_id: monster.owner_id.clone(),
-            });
+            self.broadcast(
+                ServerMessage::MonsterMoved {
+                    monster_id,
+                    position: new_position,
+                    rotation,
+                    state,
+                    target_position,
+                    owner_id: monster.owner_id.clone(),
+                },
+                monster.owner_id.clone(),
+            );
         }
     }
 
@@ -99,9 +100,12 @@ impl super::GameState {
                 "Removed monster {} (owner {} disconnected)",
                 monster_id, owner_id
             );
-            let _ = self.broadcast_tx.send(ServerMessage::MonsterRemoved {
-                monster_id: monster_id.clone(),
-            });
+            self.broadcast(
+                ServerMessage::MonsterRemoved {
+                    monster_id: monster_id.clone(),
+                },
+                None,
+            );
         }
     }
 }
