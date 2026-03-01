@@ -20,8 +20,6 @@ export const cursorHeight = writable<number | null>(null)
 // Brush world position for shader overlay (null = no overlay)
 export const brushWorldPos = writable<{ x: number; z: number } | null>(null)
 
-// Effective raise mode (accounts for Shift inversion)
-export const brushEffectiveRaise = writable<boolean>(true)
-
-// Flatten mode (Ctrl held)
-export const brushFlatten = writable<boolean>(false)
+// Effective brush mode (accounts for Shift/Ctrl modifiers)
+export type BrushMode = 'raise' | 'lower' | 'flatten'
+export const brushMode = writable<BrushMode>('raise')

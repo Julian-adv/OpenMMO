@@ -10,7 +10,8 @@
     type SplatLayer,
   } from './makeSplatStandardMaterial'
   import { mapEditorMode } from '../stores/debugStore'
-  import { brushWorldPos, brushSize, brushEffectiveRaise, brushFlatten } from '../stores/editorStore'
+  import { brushWorldPos, brushSize, brushMode } from '../stores/editorStore'
+  import type { BrushMode } from '../stores/editorStore'
 
   export let geometry: THREE.BufferGeometry
   export let mesh: THREE.Mesh | undefined = undefined
@@ -27,8 +28,9 @@
     let editorActive = false
     let pos: { x: number; z: number } | null = null
     let size = 3
-    let raise = true
-    let flatten = false
+    let mode: BrushMode = 'raise'
+
+    const modeToShaderValue: Record<BrushMode, number> = { lower: 0.0, raise: 1.0, flatten: 2.0 }
 
     function sync() {
       const s = mat.userData?.shader
@@ -38,7 +40,7 @@
         u.brushActive.value = 1.0
         u.brushCenter.value.set(pos.x, pos.z)
         u.brushRadius.value = size
-        u.brushRaise.value = flatten ? 2.0 : raise ? 1.0 : 0.0
+        u.brushRaise.value = modeToShaderValue[mode]
       } else {
         u.brushActive.value = 0.0
       }
@@ -48,8 +50,7 @@
       mapEditorMode.subscribe((v) => { editorActive = v; sync() }),
       brushWorldPos.subscribe((v) => { pos = v; sync() }),
       brushSize.subscribe((v) => { size = v; sync() }),
-      brushEffectiveRaise.subscribe((v) => { raise = v; sync() }),
-      brushFlatten.subscribe((v) => { flatten = v; sync() }),
+      brushMode.subscribe((v) => { mode = v; sync() }),
     )
   }
 

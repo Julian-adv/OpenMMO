@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushEffectiveRaise, brushFlatten, brushWorldPos, cursorHeight } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -28,11 +28,16 @@
   brushStrength.subscribe((v) => (currentBrushStrength = v))
   brushRaiseMode.subscribe((v) => {
     currentBrushRaise = v
-    syncEffectiveRaise()
+    syncBrushMode()
   })
 
-  function syncEffectiveRaise() {
-    brushEffectiveRaise.set(shiftHeld ? !currentBrushRaise : currentBrushRaise)
+  function syncBrushMode() {
+    if (ctrlHeld) {
+      brushMode.set('flatten')
+    } else {
+      const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
+      brushMode.set(raise ? 'raise' : 'lower')
+    }
   }
 
   const raycaster = new THREE.Raycaster()
@@ -152,22 +157,22 @@
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === 'Shift') {
       shiftHeld = true
-      syncEffectiveRaise()
+      syncBrushMode()
     }
     if (event.key === 'Control') {
       ctrlHeld = true
-      brushFlatten.set(true)
+      syncBrushMode()
     }
   }
 
   function handleKeyUp(event: KeyboardEvent) {
     if (event.key === 'Shift') {
       shiftHeld = false
-      syncEffectiveRaise()
+      syncBrushMode()
     }
     if (event.key === 'Control') {
       ctrlHeld = false
-      brushFlatten.set(false)
+      syncBrushMode()
     }
   }
 

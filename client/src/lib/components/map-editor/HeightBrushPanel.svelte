@@ -1,14 +1,17 @@
 <script lang="ts">
-  import { brushSize, brushStrength, brushRaiseMode, cursorHeight } from '../../stores/editorStore'
+  import { brushSize, brushStrength, brushRaiseMode, brushMode, cursorHeight } from '../../stores/editorStore'
+  import type { BrushMode } from '../../stores/editorStore'
 
   let size = $state(3)
   let strength = $state(5)
   let raise = $state(true)
+  let mode = $state<BrushMode>('raise')
   let height = $state<number | null>(null)
 
   brushSize.subscribe((v) => (size = v))
   brushStrength.subscribe((v) => (strength = v))
   brushRaiseMode.subscribe((v) => (raise = v))
+  brushMode.subscribe((v) => (mode = v))
   cursorHeight.subscribe((v) => (height = v))
 
   function onSizeChange(event: Event) {
@@ -58,10 +61,10 @@
   </div>
 
   <div class="control-row">
-    <button class="mode-btn" class:raise class:lower={!raise} onclick={toggleMode}>
-      {raise ? 'Raise' : 'Lower'}
+    <button class="mode-btn" class:raise={mode === 'raise'} class:lower={mode === 'lower'} class:flatten={mode === 'flatten'} onclick={toggleMode}>
+      {mode === 'flatten' ? 'Flatten' : mode === 'raise' ? 'Raise' : 'Lower'}
     </button>
-    <span class="hint">Shift to invert</span>
+    <span class="hint">{mode === 'flatten' ? 'Ctrl held' : (mode === 'raise') !== raise ? 'Shift held' : 'Shift to invert'}</span>
   </div>
 
   {#if height !== null}
@@ -144,6 +147,12 @@
     background: rgba(255, 102, 102, 0.2);
     color: #ff6666;
     border-color: rgba(255, 102, 102, 0.4);
+  }
+
+  .mode-btn.flatten {
+    background: rgba(77, 153, 255, 0.2);
+    color: #4d99ff;
+    border-color: rgba(77, 153, 255, 0.4);
   }
 
   .hint {
