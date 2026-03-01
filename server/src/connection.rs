@@ -305,7 +305,7 @@ async fn handle_client_message(
                 &character_name,
                 &rolled_attributes,
                 max_hp,
-                character_class.as_str(),
+                character_class.clone(),
             ) {
                 Ok(character) => {
                     state.pending_character_attributes = None;
@@ -413,7 +413,7 @@ async fn handle_client_message(
                 selected_character.name.clone(),
                 selected_character.level,
                 max_hp,
-                CharacterClass::from_str_or_default(&selected_character.class),
+                selected_character.class.clone(),
                 Position {
                     x: selected_character.last_x,
                     y: selected_character.last_y,
@@ -566,7 +566,7 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         xp: record.xp,
         max_hp: record.max_hp,
         attributes: record.attributes,
-        class: CharacterClass::from_str_or_default(&record.class),
+        class: record.class,
     }
 }
 

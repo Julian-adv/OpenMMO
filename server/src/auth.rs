@@ -1,4 +1,5 @@
 use crate::types::{CharacterAttributes, GameDateTime};
+use onlinerpg_shared::CharacterClass;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
@@ -19,7 +20,7 @@ pub struct CharacterRecord {
     pub xp: u64,
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
-    pub class: String,
+    pub class: CharacterClass,
     pub last_x: f32,
     pub last_y: f32,
     pub last_z: f32,
@@ -46,9 +47,10 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             cha: row.get(11)?,
             guard: row.get(12)?,
         },
-        class: row
-            .get::<_, String>(13)
-            .unwrap_or_else(|_| "knight".to_string()),
+        class: CharacterClass::from_str_or_default(
+            &row.get::<_, String>(13)
+                .unwrap_or_else(|_| "knight".to_string()),
+        ),
         last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
         last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
         last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
@@ -332,7 +334,7 @@ impl AuthService {
         character_name: &str,
         attributes: &CharacterAttributes,
         max_hp: u32,
-        class: &str,
+        class: CharacterClass,
     ) -> Result<CharacterRecord, AuthError> {
         let account_name = account_name.trim();
         let character_name = character_name.trim();
@@ -405,7 +407,7 @@ impl AuthService {
                 i64::from(attributes.wis),
                 i64::from(attributes.cha),
                 i64::from(attributes.guard),
-                class,
+                class.as_str(),
             ],
         )?;
 
@@ -424,7 +426,7 @@ impl AuthService {
             xp: 0,
             max_hp,
             attributes: attributes.clone(),
-            class: class.to_string(),
+            class,
             last_x: 0.0,
             last_y: 0.0,
             last_z: 0.0,
