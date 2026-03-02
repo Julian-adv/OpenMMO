@@ -11,6 +11,7 @@
     time?: number
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
+    cameraDirection?: THREE.Vector3 | null
   }
 
   let {
@@ -21,6 +22,7 @@
     time = 0,
     sunDirection = null,
     sunColor = null,
+    cameraDirection = null,
   }: Props = $props()
 
   let material = $state<THREE.ShaderMaterial | null>(null)
@@ -49,6 +51,7 @@
     if (!material) return
     if (sunDirection) material.uniforms.uSunDirection.value.copy(sunDirection)
     if (sunColor) material.uniforms.uSunColor.value.copy(sunColor)
+    if (cameraDirection) material.uniforms.uCameraDirection.value.copy(cameraDirection)
   })
 
   // Position Y slightly above terrain to avoid z-fighting
