@@ -32,6 +32,7 @@ uniform float uMaxDepth;
 uniform vec3 uSunDirection;
 uniform vec3 uSunColor;
 uniform sampler2D uNormalMap;
+uniform vec3 uCameraDirection;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
@@ -65,17 +66,36 @@ void main() {
   vec4 noise = getNoise(vWorldPos.xz);
   vec3 surfaceNormal = normalize(noise.xzy * vec3(1.5, 1.0, 1.5));
 
-  // 4. Specular: broad sun reflection + cell-based point sparkles
-  vec3 viewDir = vec3(0.0, 1.0, 0.0);
+  // View direction (from surface toward camera) — constant for orthographic
+  vec3 viewDir = normalize(-uCameraDirection);
+
+  // Specular: broad sun reflection
   vec3 halfDir = normalize(uSunDirection + viewDir);
   float NdotH = max(dot(surfaceNormal, halfDir), 0.0);
-
   float specBroad = pow(NdotH, 64.0) * 0.35;
-
   vec3 specular = uSunColor * specBroad;
 
   // Diffuse lighting
   float diffuse = max(dot(surfaceNormal, uSunDirection), 0.0) * 0.1;
+
+  // Smoothed normal for reflection (avoids normal-map grid showing through)
+  vec3 reflNormal = normalize(mix(vec3(0.0, 1.0, 0.0), surfaceNormal, 0.3));
+
+  // Fresnel reflection
+  float cosTheta = max(dot(viewDir, reflNormal), 0.0);
+  float fresnel = 0.1 + 0.9 * pow(1.0 - cosTheta, 2.0);
+
+  // Procedural sky reflection
+  vec3 reflectDir = reflect(-viewDir, reflNormal);
+  float skyY = clamp(reflectDir.y * 0.5 + 0.5, 0.0, 1.0);
+  float skyBrightness = smoothstep(-0.1, 0.3, uSunDirection.y);
+  vec3 zenithColor = vec3(0.12, 0.25, 0.50) * skyBrightness;
+  vec3 horizonColor = vec3(0.55, 0.65, 0.75) * skyBrightness;
+  float sunsetFactor = 1.0 - smoothstep(0.0, 0.5, uSunDirection.y);
+  horizonColor = mix(horizonColor, uSunColor * 0.5, sunsetFactor * 0.3);
+  vec3 skyReflection = mix(horizonColor, zenithColor, skyY);
+  float sunDot = max(dot(reflectDir, uSunDirection), 0.0);
+  skyReflection += uSunColor * pow(sunDot, 8.0) * 0.25;
 
   // 5. Shore foam — stylized white bands at the waterline
   // Animate foam position with wave motion
@@ -100,8 +120,13 @@ void main() {
 
   float foam = clamp(max(band, foamGlow), 0.0, 1.0);
 
+  // Blend water with sky reflection via Fresnel, then add specular
+  vec3 litWater = waterColor + diffuse;
+  vec3 surfaceColor = mix(litWater, skyReflection, fresnel);
+  surfaceColor += specular;
+
   // Combine: mix toward white based on foam intensity
-  vec3 finalColor = mix(waterColor + diffuse + specular, vec3(1.0), foam * 0.7);
+  vec3 finalColor = mix(surfaceColor, vec3(1.0), foam * 0.7);
 
   // 6. Alpha: deeper water is more opaque, foam adds opacity
   float alpha = mix(0.65, 0.95, smoothDepth);
@@ -136,6 +161,7 @@ export function createWaterMaterial(
       },
       uSunColor: { value: new THREE.Color(1.0, 0.95, 0.8) },
       uNormalMap: { value: options.normalMap },
+      uCameraDirection: { value: new THREE.Vector3(0, -1, 0) },
     },
     vertexShader,
     fragmentShader,

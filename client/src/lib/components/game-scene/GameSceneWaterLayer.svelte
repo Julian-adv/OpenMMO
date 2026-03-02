@@ -16,6 +16,7 @@
     time?: number
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
+    cameraDirection?: THREE.Vector3 | null
   }
 
   let {
@@ -26,6 +27,7 @@
     time = 0,
     sunDirection = null,
     sunColor = null,
+    cameraDirection = null,
   }: Props = $props()
 
   // Cache heightmap textures per tile
@@ -137,6 +139,7 @@
         {time}
         {sunDirection}
         {sunColor}
+        {cameraDirection}
       />
     {/if}
   {/each}

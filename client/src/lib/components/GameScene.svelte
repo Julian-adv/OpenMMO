@@ -106,7 +106,9 @@
   let waterTime = $state(0)
   let waterSunDir = $state<THREE.Vector3 | null>(null)
   let waterSunColor = $state<THREE.Color | null>(null)
+  let waterCamDir = $state<THREE.Vector3 | null>(null)
   const _waterSunDirTmp = new THREE.Vector3()
+  const _waterCamDirTmp = new THREE.Vector3()
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -396,6 +398,10 @@
         waterSunDir = _waterSunDirTmp.clone()
         waterSunColor = directionalLight.color.clone()
       }
+      if (camera) {
+        camera.getWorldDirection(_waterCamDirTmp)
+        waterCamDir = _waterCamDirTmp.clone()
+      }
 
       loopProfiler.record('frameWork', performance.now() - frameWorkStart)
 
@@ -609,6 +615,7 @@
   time={waterTime}
   sunDirection={waterSunDir}
   sunColor={waterSunColor}
+  cameraDirection={waterCamDir}
 />
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
