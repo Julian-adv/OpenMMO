@@ -22,6 +22,7 @@
   import type PlayerControl from './PlayerControl.svelte'
   import type Monster from './Monster.svelte'
   import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
+  import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
@@ -78,6 +79,7 @@
   import { createSceneLightingController } from './game-scene/scene-lighting'
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
+  import { loadWaterNormalMap } from '../shaders/water-normal-gen'
 
   interface Props {
     serverUrl: string
@@ -100,6 +102,11 @@
   const terrainHeightManager = new TerrainHeightManager()
   const terrainSplatManager = new TerrainSplatManager()
   monsterManager.heightManager = terrainHeightManager
+  let waterNormalMap = $state<THREE.Texture | null>(null)
+  let waterTime = $state(0)
+  let waterSunDir = $state<THREE.Vector3 | null>(null)
+  let waterSunColor = $state<THREE.Color | null>(null)
+  const _waterSunDirTmp = new THREE.Vector3()
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -382,6 +389,14 @@
       updateLightPosition()
       loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
+      // Update water uniforms
+      waterTime += realDeltaSeconds
+      if (directionalLight) {
+        _waterSunDirTmp.copy(directionalLight.position).sub(directionalLight.target.position).normalize()
+        waterSunDir = _waterSunDirTmp.clone()
+        waterSunColor = directionalLight.color.clone()
+      }
+
       loopProfiler.record('frameWork', performance.now() - frameWorkStart)
 
       if (unclampedSteps > MAX_CATCH_UP_STEPS) {
@@ -496,6 +511,7 @@
     pmremGenerator.dispose()
 
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
+    loadWaterNormalMap().then((tex) => { waterNormalMap = tex })
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
     lastFrameTime = performance.now()
@@ -530,6 +546,8 @@
       playerDebugInfo.set(null)
       terrainHeightManager.destroy()
       terrainSplatManager.destroy()
+      waterNormalMap?.dispose()
+      waterNormalMap = null
       terrainTiles = []
       terrainMeshes = []
       resetGameStore()
@@ -581,6 +599,16 @@
   bind:terrainMeshes={terrainMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
+/>
+
+<GameSceneWaterLayer
+  {terrainGeometry}
+  {terrainTiles}
+  heightManager={terrainHeightManager}
+  normalMap={waterNormalMap}
+  time={waterTime}
+  sunDirection={waterSunDir}
+  sunColor={waterSunColor}
 />
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->

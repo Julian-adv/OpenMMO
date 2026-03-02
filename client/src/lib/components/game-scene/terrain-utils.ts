@@ -16,6 +16,9 @@ export interface Vector3Like {
   z: number
 }
 
+export const SEA_LEVEL = 0.0
+export const SEA_LEVEL_ENCODED = 10000
+
 export const TERRAIN_TILE_SIZE = 64
 export const TERRAIN_TILE_SEGMENTS = 64
 export const TERRAIN_GRID_RADIUS = 1 // 1 => 3x3 tiles around player

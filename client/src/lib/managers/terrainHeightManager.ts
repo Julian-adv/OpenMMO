@@ -1,6 +1,9 @@
 import * as THREE from 'three'
 import { getTerrainApiUrl } from '../utils/networkUtils'
-import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
+import {
+  TERRAIN_TILE_SIZE,
+  SEA_LEVEL_ENCODED,
+} from '../components/game-scene/terrain-utils'
 
 const TILE_DIM = 64
 const VERTS_PER_SIDE = TILE_DIM + 1 // 65 vertices per axis
@@ -26,15 +29,31 @@ export interface AffectedTile {
   tileZ: number
 }
 
+export type HeightChangedCallback = (tiles: AffectedTile[]) => void
+
 export class TerrainHeightManager {
   private heightmaps = new Map<string, Uint16Array>()
   private geometries = new Map<string, THREE.BufferGeometry>()
   private dirtyTiles = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private terrainApiUrl: string
+  private heightChangedListeners: HeightChangedCallback[] = []
 
   constructor() {
     this.terrainApiUrl = getTerrainApiUrl()
+  }
+
+  onHeightChanged(cb: HeightChangedCallback): () => void {
+    this.heightChangedListeners.push(cb)
+    return () => {
+      this.heightChangedListeners = this.heightChangedListeners.filter(
+        (l) => l !== cb
+      )
+    }
+  }
+
+  private notifyHeightChanged(tiles: AffectedTile[]) {
+    for (const cb of this.heightChangedListeners) cb(tiles)
   }
 
   async loadHeightmap(tileX: number, tileZ: number): Promise<Uint16Array> {
@@ -282,6 +301,7 @@ export class TerrainHeightManager {
 
     if (affected.length > 0) {
       this.scheduleSave()
+      this.notifyHeightChanged(affected)
     }
 
     return affected
@@ -385,6 +405,7 @@ export class TerrainHeightManager {
 
     if (affected.length > 0) {
       this.scheduleSave()
+      this.notifyHeightChanged(affected)
     }
 
     return affected
@@ -430,6 +451,36 @@ export class TerrainHeightManager {
         this.dirtyTiles.add(key)
       }
     }
+  }
+
+  hasWater(tileX: number, tileZ: number): boolean {
+    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    if (!data) return false
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] < SEA_LEVEL_ENCODED) return true
+    }
+    return false
+  }
+
+  getHeightmapTexture(tileX: number, tileZ: number): THREE.DataTexture | null {
+    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    if (!data) return null
+    const decoded = new Float32Array(TILE_DIM * TILE_DIM)
+    for (let i = 0; i < data.length; i++) {
+      decoded[i] = decodeHeight(data[i])
+    }
+    const tex = new THREE.DataTexture(
+      decoded,
+      TILE_DIM,
+      TILE_DIM,
+      THREE.RedFormat,
+      THREE.FloatType
+    )
+    tex.flipY = true
+    tex.minFilter = THREE.LinearFilter
+    tex.magFilter = THREE.LinearFilter
+    tex.needsUpdate = true
+    return tex
   }
 
   unloadTile(tileX: number, tileZ: number) {
