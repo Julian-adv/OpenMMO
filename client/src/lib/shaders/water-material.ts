@@ -2,25 +2,42 @@ import * as THREE from 'three'
 
 const vertexShader = /* glsl */ `
 uniform float uTime;
+uniform vec4 waveA;
+uniform vec4 waveB;
+uniform vec4 waveC;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
+varying vec4 vClipPos;
+
+#define PI 3.14159265359
+
+vec3 GerstnerWave(vec4 wave, vec3 p) {
+  float steepness = wave.z;
+  float wavelength = wave.w;
+  float k = 2.0 * PI / wavelength;
+  float c = sqrt(9.8 / k);
+  vec2 d = normalize(wave.xy);
+  float f = k * (dot(d, p.xz) - c * uTime);
+  float a = steepness / k;
+  return vec3(d.x * a * cos(f), a * sin(f), d.y * a * cos(f));
+}
 
 void main() {
   vUv = uv;
 
-  // Compute world position first, then use it for waves
-  // so displacement is continuous across tile boundaries
   vec4 worldPos = modelMatrix * vec4(position, 1.0);
 
-  // Two sine waves for gentle surface displacement (Y axis)
-  float wave1 = sin(worldPos.x * 0.8 + uTime * 0.6) * cos(worldPos.z * 0.6 + uTime * 0.4) * 0.08;
-  float wave2 = sin(worldPos.x * 1.5 + worldPos.z * 1.2 + uTime * 1.0) * 0.04;
-  worldPos.y += wave1 + wave2;
+  vec3 p = worldPos.xyz;
+  vec3 offset = GerstnerWave(waveA, p);
+  offset += GerstnerWave(waveB, p);
+  offset += GerstnerWave(waveC, p);
+  worldPos.xyz += offset;
 
   vWorldPos = worldPos.xyz;
 
-  gl_Position = projectionMatrix * viewMatrix * worldPos;
+  vClipPos = projectionMatrix * viewMatrix * worldPos;
+  gl_Position = vClipPos;
 }
 `
 
@@ -36,9 +53,12 @@ uniform sampler2D uNormalMap;
 uniform sampler2D uFoamMap;
 uniform sampler2D uSurfaceMap;
 uniform vec3 uCameraDirection;
+uniform sampler2D uRefractionMap;
+uniform float uRefractionStrength;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
+varying vec4 vClipPos;
 
 // 4-sample normal map blending (technique from Three.js Water.js)
 // Uses prime-ratio divisors to break up repetition
@@ -72,6 +92,17 @@ void main() {
   // View direction (from surface toward camera) — constant for orthographic
   vec3 viewDir = normalize(-uCameraDirection);
 
+  // 4. Refraction: sample the scene rendered without water
+  // Orthographic: w=1, so clip.xy / 1 maps directly to NDC
+  vec2 screenUV = vClipPos.xy * 0.5 + 0.5;
+  vec2 refractionUV = screenUV + surfaceNormal.xz * uRefractionStrength;
+  refractionUV = clamp(refractionUV, 0.0, 1.0);
+  vec3 refractionColor = texture2D(uRefractionMap, refractionUV).rgb;
+
+  // Blend refraction with depth tint: shallow shows terrain, deep fades to deep color
+  float refractionMix = 1.0 - smoothstep(0.0, 0.7, smoothDepth);
+  waterColor = mix(waterColor, refractionColor, refractionMix * 0.7);
+
   // Specular: broad sun reflection
   vec3 halfDir = normalize(uSunDirection + viewDir);
   float NdotH = max(dot(surfaceNormal, halfDir), 0.0);
@@ -88,15 +119,22 @@ void main() {
   float cosTheta = max(dot(viewDir, reflNormal), 0.0);
   float fresnel = 0.1 + 0.9 * pow(1.0 - cosTheta, 2.0);
 
-  // Procedural sky reflection
+  // Procedural sky reflection — 3-band gradient (ground / horizon haze / zenith)
   vec3 reflectDir = reflect(-viewDir, reflNormal);
   float skyY = clamp(reflectDir.y * 0.5 + 0.5, 0.0, 1.0);
   float skyBrightness = smoothstep(-0.1, 0.3, uSunDirection.y);
+
+  vec3 groundColor = vec3(0.08, 0.12, 0.15) * skyBrightness;
+  vec3 hazeColor = vec3(0.55, 0.65, 0.75) * skyBrightness;
   vec3 zenithColor = vec3(0.12, 0.25, 0.50) * skyBrightness;
-  vec3 horizonColor = vec3(0.55, 0.65, 0.75) * skyBrightness;
+
   float sunsetFactor = 1.0 - smoothstep(0.0, 0.5, uSunDirection.y);
-  horizonColor = mix(horizonColor, uSunColor * 0.5, sunsetFactor * 0.3);
-  vec3 skyReflection = mix(horizonColor, zenithColor, skyY);
+  hazeColor = mix(hazeColor, uSunColor * 0.5, sunsetFactor * 0.3);
+
+  // Blend ground->haze->zenith
+  vec3 skyReflection = mix(groundColor, hazeColor, smoothstep(0.0, 0.35, skyY));
+  skyReflection = mix(skyReflection, zenithColor, smoothstep(0.35, 0.7, skyY));
+
   float sunDot = max(dot(reflectDir, uSunDirection), 0.0);
   skyReflection += uSunColor * pow(sunDot, 8.0) * 0.25;
 
@@ -199,11 +237,30 @@ export interface WaterMaterialOptions {
   normalMap: THREE.Texture
   foamMap: THREE.Texture
   surfaceMap: THREE.Texture
+  refractionMap?: THREE.Texture | null
 }
 
 export function createWaterMaterial(
   options: WaterMaterialOptions
 ): THREE.ShaderMaterial {
+  // Use a 1x1 white pixel as fallback when no refraction map is provided yet
+  const fallbackTex = new THREE.DataTexture(
+    new Uint8Array([128, 128, 128, 255]),
+    1,
+    1,
+    THREE.RGBAFormat
+  )
+  fallbackTex.needsUpdate = true
+
+  // Default Gerstner wave parameters: direction.xy, steepness, wavelength
+  const degToDir = (deg: number) => {
+    const rad = (deg * Math.PI) / 180
+    return [Math.sin(rad), Math.cos(rad)]
+  }
+  const [ax, az] = degToDir(0)
+  const [bx, bz] = degToDir(30)
+  const [cx, cz] = degToDir(60)
+
   return new THREE.ShaderMaterial({
     uniforms: {
       uTime: { value: 0.0 },
@@ -219,6 +276,11 @@ export function createWaterMaterial(
       uFoamMap: { value: options.foamMap },
       uSurfaceMap: { value: options.surfaceMap },
       uCameraDirection: { value: new THREE.Vector3(0, -1, 0) },
+      uRefractionMap: { value: options.refractionMap ?? fallbackTex },
+      uRefractionStrength: { value: 0.02 },
+      waveA: { value: new THREE.Vector4(ax, az, 0.15, 20) },
+      waveB: { value: new THREE.Vector4(bx, bz, 0.10, 15) },
+      waveC: { value: new THREE.Vector4(cx, cz, 0.08, 10) },
     },
     vertexShader,
     fragmentShader,

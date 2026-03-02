@@ -13,6 +13,8 @@
     terrainMeshes?: (THREE.Mesh | undefined)[]
     heightManager?: TerrainHeightManager | null
     splatManager?: TerrainSplatManager | null
+    causticsMap?: THREE.Texture | null
+    causticsTime?: number
   }
 
   let {
@@ -21,6 +23,8 @@
     terrainMeshes = $bindable<(THREE.Mesh | undefined)[]>([]),
     heightManager = null,
     splatManager = null,
+    causticsMap = null,
+    causticsTime = 0,
   }: Props = $props()
 
   // Internal map for geometry tracking
@@ -97,6 +101,8 @@
         geometry={geo}
         position={tile.position}
         splatTexture={tileSplatTextures[index] ?? null}
+        {causticsMap}
+        {causticsTime}
         bind:mesh={terrainMeshes[index]}
       />
     {/if}

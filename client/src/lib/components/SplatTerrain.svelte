@@ -18,6 +18,8 @@
     mesh?: THREE.Mesh | undefined
     position?: [number, number, number]
     splatTexture?: THREE.Texture | null
+    causticsMap?: THREE.Texture | null
+    causticsTime?: number
   }
 
   let {
@@ -25,6 +27,8 @@
     mesh = $bindable(undefined),
     position = [0, 0, 0],
     splatTexture = null,
+    causticsMap = null,
+    causticsTime = 0,
   }: Props = $props()
 
   let material = $state<THREE.MeshStandardMaterial | null>(null)
@@ -207,6 +211,34 @@
     requestAnimationFrame(tryUpdate)
 
     return () => { cancelled = true }
+  })
+
+  // Update caustics texture uniform (poll for shader like splatTexture does)
+  $effect(() => {
+    if (!material || !causticsMap) return
+    const mat = material
+    const tex = causticsMap
+    let cancelled = false
+
+    function tryUpdate() {
+      if (cancelled) return
+      const s = mat.userData?.shader
+      if (s) {
+        s.uniforms.causticsMap.value = tex
+      } else {
+        requestAnimationFrame(tryUpdate)
+      }
+    }
+    requestAnimationFrame(tryUpdate)
+
+    return () => { cancelled = true }
+  })
+
+  // Update caustics time uniform every frame
+  $effect(() => {
+    if (!material) return
+    const s = material.userData?.shader
+    if (s) s.uniforms.causticsTime.value = causticsTime
   })
 
   async function loadMaterial() {

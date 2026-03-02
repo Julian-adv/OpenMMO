@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { SvelteMap } from 'svelte/reactivity'
   import { onMount } from 'svelte'
@@ -19,6 +20,8 @@
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
+    refractionMap?: THREE.Texture | null
+    waterGroup?: THREE.Group | undefined
   }
 
   let {
@@ -32,6 +35,8 @@
     sunDirection = null,
     sunColor = null,
     cameraDirection = null,
+    refractionMap = null,
+    waterGroup = $bindable(undefined),
   }: Props = $props()
 
   // Cache heightmap textures per tile
@@ -133,20 +138,23 @@
 </script>
 
 {#if terrainGeometry && normalMap && foamMap && surfaceMap}
-  {#each terrainTiles as tile, index (tile.id)}
-    {#if tileHasWater[index] && tileHeightTextures[index]}
-      <WaterTile
-        geometry={terrainGeometry}
-        position={tile.position}
-        heightmapTexture={tileHeightTextures[index]!}
-        {normalMap}
-        foamMap={foamMap!}
-        surfaceMap={surfaceMap!}
-        {time}
-        {sunDirection}
-        {sunColor}
-        {cameraDirection}
-      />
-    {/if}
-  {/each}
+  <T.Group bind:ref={waterGroup}>
+    {#each terrainTiles as tile, index (tile.id)}
+      {#if tileHasWater[index] && tileHeightTextures[index]}
+        <WaterTile
+          geometry={terrainGeometry}
+          position={tile.position}
+          heightmapTexture={tileHeightTextures[index]!}
+          {normalMap}
+          foamMap={foamMap!}
+          surfaceMap={surfaceMap!}
+          {time}
+          {sunDirection}
+          {sunColor}
+          {cameraDirection}
+          {refractionMap}
+        />
+      {/if}
+    {/each}
+  </T.Group>
 {/if}
