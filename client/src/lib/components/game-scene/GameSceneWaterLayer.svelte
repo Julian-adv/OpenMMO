@@ -13,6 +13,8 @@
     terrainTiles: TerrainTile[]
     heightManager?: TerrainHeightManager | null
     normalMap?: THREE.Texture | null
+    foamMap?: THREE.Texture | null
+    surfaceMap?: THREE.Texture | null
     time?: number
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
@@ -24,6 +26,8 @@
     terrainTiles,
     heightManager = null,
     normalMap = null,
+    foamMap = null,
+    surfaceMap = null,
     time = 0,
     sunDirection = null,
     sunColor = null,
@@ -128,7 +132,7 @@
   }
 </script>
 
-{#if terrainGeometry && normalMap}
+{#if terrainGeometry && normalMap && foamMap && surfaceMap}
   {#each terrainTiles as tile, index (tile.id)}
     {#if tileHasWater[index] && tileHeightTextures[index]}
       <WaterTile
@@ -136,6 +140,8 @@
         position={tile.position}
         heightmapTexture={tileHeightTextures[index]!}
         {normalMap}
+        foamMap={foamMap!}
+        surfaceMap={surfaceMap!}
         {time}
         {sunDirection}
         {sunColor}

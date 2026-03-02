@@ -80,6 +80,7 @@
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { loadWaterNormalMap } from '../shaders/water-normal-gen'
+  import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
 
   interface Props {
     serverUrl: string
@@ -103,6 +104,8 @@
   const terrainSplatManager = new TerrainSplatManager()
   monsterManager.heightManager = terrainHeightManager
   let waterNormalMap = $state<THREE.Texture | null>(null)
+  let waterFoamMap = $state<THREE.Texture | null>(null)
+  let waterSurfaceMap = $state<THREE.Texture | null>(null)
   let waterTime = $state(0)
   let waterSunDir = $state<THREE.Vector3 | null>(null)
   let waterSunColor = $state<THREE.Color | null>(null)
@@ -518,6 +521,8 @@
 
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
     loadWaterNormalMap().then((tex) => { waterNormalMap = tex })
+    loadFoamTexture().then((tex) => { waterFoamMap = tex })
+    loadSurfaceTexture().then((tex) => { waterSurfaceMap = tex })
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
     lastFrameTime = performance.now()
@@ -554,6 +559,10 @@
       terrainSplatManager.destroy()
       waterNormalMap?.dispose()
       waterNormalMap = null
+      waterFoamMap?.dispose()
+      waterFoamMap = null
+      waterSurfaceMap?.dispose()
+      waterSurfaceMap = null
       terrainTiles = []
       terrainMeshes = []
       resetGameStore()
@@ -612,6 +621,8 @@
   {terrainTiles}
   heightManager={terrainHeightManager}
   normalMap={waterNormalMap}
+  foamMap={waterFoamMap}
+  surfaceMap={waterSurfaceMap}
   time={waterTime}
   sunDirection={waterSunDir}
   sunColor={waterSunColor}

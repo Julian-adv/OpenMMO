@@ -15,6 +15,11 @@
 - "3D field inspection" (https://skfb.ly/oJx7N) by matousekfoto is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
 - https://polyhaven.com/a/gravel_floor
 
+## sea
+
+- sea https://www.filterforge.com/filters/4141.html
+- sea foam https://www.filterforge.com/filters/13843.html
+
 ## human
 
 - https://sketchfab.com/3d-models/blake-slim-walk-c4d-c076264ca7394357bf3f17837edd72c9
