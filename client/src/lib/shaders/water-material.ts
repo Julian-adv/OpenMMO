@@ -113,9 +113,18 @@ void main() {
   float cycle1 = fract(uTime * waveSpeed);
   float cycle2 = fract(uTime * waveSpeed + 0.5);
 
-  // Foam band center moves from spawnDepth toward shore (depth 0)
-  float center1 = spawnDepth * (1.0 - cycle1);
-  float center2 = spawnDepth * (1.0 - cycle2);
+  // Movement stops at 70% of cycle, band lingers at shore for remaining 30%
+  float movePhase1 = min(cycle1 / 0.7, 1.0);
+  float movePhase2 = min(cycle2 / 0.7, 1.0);
+  float minDepth = 0.25;
+  float center1 = mix(spawnDepth, minDepth, movePhase1);
+  float center2 = mix(spawnDepth, minDepth, movePhase2);
+
+  // Fade in at start, fade out at end of cycle before next band spawns
+  float fadeIn1 = smoothstep(0.0, 0.15, cycle1);
+  float fadeIn2 = smoothstep(0.0, 0.15, cycle2);
+  float fadeOut1 = 1.0 - smoothstep(0.85, 1.0, cycle1);
+  float fadeOut2 = 1.0 - smoothstep(0.85, 1.0, cycle2);
 
   // Band widens and brightens as it approaches shore (like real waves breaking)
   float proximity1 = clamp(center1 / spawnDepth, 0.0, 1.0);
@@ -125,24 +134,14 @@ void main() {
   float thickVar2 = 0.7 + 0.6 * sin(vWorldPos.x * 1.8 + vWorldPos.z * 2.3 + center2 * 4.0);
   float bh1 = bandHalfMax * (0.15 + 0.85 * (1.0 - proximity1)) * thickVar1;
   float bh2 = bandHalfMax * (0.15 + 0.85 * (1.0 - proximity2)) * thickVar2;
-  float bright1 = 1.0 + 0.6 * (1.0 - proximity1);
-  float bright2 = 1.0 + 0.6 * (1.0 - proximity2);
-
-  // Fade in from transparent when band first spawns
-  float fadeIn1 = smoothstep(0.0, 0.15, cycle1);
-  float fadeIn2 = smoothstep(0.0, 0.15, cycle2);
-  bright1 *= fadeIn1;
-  bright2 *= fadeIn2;
+  float bright1 = (1.0 + 0.6 * (1.0 - proximity1)) * fadeIn1 * fadeOut1;
+  float bright2 = (1.0 + 0.6 * (1.0 - proximity2)) * fadeIn2 * fadeOut2;
 
   // Soft bands around each center
   float band1 = smoothstep(center1 - bh1 - 0.06, center1 - bh1, noisyD)
               * (1.0 - smoothstep(center1 + bh1, center1 + bh1 + 0.06, noisyD));
   float band2 = smoothstep(center2 - bh2 - 0.06, center2 - bh2, noisyD)
               * (1.0 - smoothstep(center2 + bh2, center2 + bh2 + 0.06, noisyD));
-
-  // Fade out as wave reaches shore edge
-  band1 *= smoothstep(0.0, 0.2, center1);
-  band2 *= smoothstep(0.0, 0.2, center2);
 
   // Break bands into segments using large-scale noise along shoreline
   float breakNoise1 = sin(vWorldPos.x * 1.2 + vWorldPos.z * 0.9 + center1 * 3.0) *
@@ -176,9 +175,9 @@ void main() {
   float foamTex1 = texture2D(uFoamMap, foamUV1).r;
   float foamTex2 = texture2D(uFoamMap, foamUV2).r;
 
-  // Blend each band with its own texture sample
+  // Blend foam bands with texture
   float foamWithTex = clamp(max(max(band1 * foamTex1, band2 * foamTex2), foamGlow), 0.0, 1.0);
-  vec3 foamColor = mix(vec3(0.85, 0.92, 0.95), vec3(1.0), max(foamTex1 * band1, foamTex2 * band2));
+  vec3 foamColor = mix(vec3(0.85, 0.92, 0.95), vec3(1.0), foamWithTex);
   vec3 finalColor = mix(surfaceColor, foamColor, foamWithTex * 0.9);
 
   // 6. Alpha: deeper water is more opaque, foam adds opacity
