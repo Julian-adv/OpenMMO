@@ -63,6 +63,21 @@ varying vec3 vWorldPos;
 varying vec3 vOrigWorldPos;
 varying vec4 vClipPos;
 
+// Hash-based smooth value noise for foam band breaks
+float hash(vec2 p) {
+  return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+}
+float valueNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f); // smoothstep interpolation
+  float a = hash(i);
+  float b = hash(i + vec2(1.0, 0.0));
+  float c = hash(i + vec2(0.0, 1.0));
+  float d = hash(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+}
+
 // 4-sample normal map blending (technique from Three.js Water.js)
 // Uses prime-ratio divisors to break up repetition
 vec4 getNoise(vec2 uv) {
@@ -184,6 +199,12 @@ void main() {
               * (1.0 - smoothstep(center1 + bh1, center1 + bh1 + 0.06, noisyD));
   float band2 = smoothstep(center2 - bh2 - 0.06, center2 - bh2, noisyD)
               * (1.0 - smoothstep(center2 + bh2, center2 + bh2 + 0.06, noisyD));
+
+  // Break bands into irregular segments using value noise
+  float bn1 = valueNoise(vOrigWorldPos.xz * 0.3 + center1 * 2.0);
+  float bn2 = valueNoise(vOrigWorldPos.xz * 0.3 + center2 * 2.0);
+  band1 *= smoothstep(0.35, 0.55, bn1);
+  band2 *= smoothstep(0.35, 0.55, bn2);
 
   // Density variation from noise, modulated by brightness
   band1 *= smoothstep(0.2, 0.55, foamNoise) * 0.25 * bright1;
