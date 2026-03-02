@@ -1,9 +1,11 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset } from '../../stores/editorStore'
   import type { EditorTool } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
+  import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
+  import { get } from 'svelte/store'
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
@@ -19,6 +21,9 @@
   let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager }: Props = $props()
 
   let isPainting = $state(false)
+  let isPanning = $state(false)
+  let lastPanX = $state(0)
+  let lastPanY = $state(0)
   let shiftHeld = $state(false)
   let ctrlHeld = $state(false)
   let lastPaintTime = $state(0)
@@ -49,6 +54,9 @@
 
   const raycaster = new THREE.Raycaster()
   const mouseNDC = new THREE.Vector2()
+  const _panRight = new THREE.Vector3()
+  const _panUp = new THREE.Vector3()
+  const _panFwd = new THREE.Vector3()
 
   let lastWorldPos = { x: 0, z: 0 }
 
@@ -139,6 +147,32 @@
   }
 
   function handleMouseMove(event: MouseEvent) {
+    if (isPanning) {
+      if (!camera) return
+      const dx = event.clientX - lastPanX
+      const dy = event.clientY - lastPanY
+      lastPanX = event.clientX
+      lastPanY = event.clientY
+
+      // Get camera basis vectors projected onto XZ plane
+      camera.matrixWorld.extractBasis(_panRight, _panUp, _panFwd)
+      _panRight.y = 0
+      _panRight.normalize()
+      _panFwd.y = 0
+      _panFwd.normalize()
+
+      // Convert screen pixels to world units for orthographic camera
+      const rect = (event.target as HTMLElement).getBoundingClientRect()
+      const scale = ORTHOGRAPHIC_FRUSTUM_HEIGHT / (camera.zoom * rect.height)
+
+      const current = get(editorPanOffset)
+      editorPanOffset.set({
+        x: current.x - (_panRight.x * dx + _panFwd.x * dy) * scale,
+        z: current.z - (_panRight.z * dx + _panFwd.z * dy) * scale,
+      })
+      return
+    }
+
     const hit = raycastTerrain(event)
 
     if (!hit) {
@@ -155,6 +189,13 @@
   }
 
   function handleMouseDown(event: MouseEvent) {
+    if (event.button === 1) {
+      event.preventDefault()
+      isPanning = true
+      lastPanX = event.clientX
+      lastPanY = event.clientY
+      return
+    }
     if (event.button !== 0) return
     event.preventDefault()
     const hit = raycastTerrain(event)
@@ -166,6 +207,10 @@
   }
 
   function handleMouseUp(event: MouseEvent) {
+    if (event.button === 1) {
+      isPanning = false
+      return
+    }
     if (event.button !== 0) return
     isPainting = false
     lastPaintTime = 0
@@ -213,6 +258,7 @@
     cursorHeight.set(null)
     brushWorldPos.set(null)
     isPainting = false
+    isPanning = false
     lastPaintTime = 0
   }
 
