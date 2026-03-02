@@ -9,14 +9,15 @@ varying vec3 vWorldPos;
 void main() {
   vUv = uv;
 
-  vec3 pos = position;
+  // Compute world position first, then use it for waves
+  // so displacement is continuous across tile boundaries
+  vec4 worldPos = modelMatrix * vec4(position, 1.0);
 
   // Two sine waves for gentle surface displacement (Y axis)
-  float wave1 = sin(pos.x * 0.8 + uTime * 0.6) * cos(pos.z * 0.6 + uTime * 0.4) * 0.08;
-  float wave2 = sin(pos.x * 1.5 + pos.z * 1.2 + uTime * 1.0) * 0.04;
-  pos.y += wave1 + wave2;
+  float wave1 = sin(worldPos.x * 0.8 + uTime * 0.6) * cos(worldPos.z * 0.6 + uTime * 0.4) * 0.08;
+  float wave2 = sin(worldPos.x * 1.5 + worldPos.z * 1.2 + uTime * 1.0) * 0.04;
+  worldPos.y += wave1 + wave2;
 
-  vec4 worldPos = modelMatrix * vec4(pos, 1.0);
   vWorldPos = worldPos.xyz;
 
   gl_Position = projectionMatrix * viewMatrix * worldPos;
