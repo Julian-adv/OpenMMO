@@ -57,8 +57,9 @@ void main() {
   float depth = max(0.0, vWorldPos.y - terrainHeight);
   float depthFactor = clamp(depth / uMaxDepth, 0.0, 1.0);
 
-  // 2. Depth-based color
-  vec3 waterColor = mix(uShallowColor, uDeepColor, depthFactor);
+  // 2. Depth-based color (smoothstep for gradual shallow-to-deep)
+  float smoothDepth = smoothstep(0.0, 1.0, depthFactor);
+  vec3 waterColor = mix(uShallowColor, uDeepColor, smoothDepth);
 
   // 3. Surface normal from 4-sample noise (Water.js technique)
   vec4 noise = getNoise(vWorldPos.xz);
@@ -77,16 +78,20 @@ void main() {
   float diffuse = max(dot(surfaceNormal, uSunDirection), 0.0) * 0.1;
 
   // 5. Shore foam
-  float foamEdge = 1.0 - smoothstep(0.0, 0.5, depth);
+  float foamEdge = 1.0 - smoothstep(0.0, 0.7, depth);
   float foamScroll = sin(vWorldPos.x * 0.7 + uTime * 0.8) * sin(vWorldPos.z * 0.9 + uTime * 0.6);
-  float foam = foamEdge * max(noise.x + foamScroll * 0.3, 0.0) * 0.45;
+  float foam = foamEdge * max(noise.x + foamScroll * 0.2, 0.0) * 0.6;
 
   // Combine
   vec3 finalColor = waterColor + diffuse + specular + vec3(foam);
 
   // 6. Alpha
-  float alpha = mix(0.65, 0.95, depthFactor);
+  float alpha = mix(0.65, 0.95, smoothDepth);
   alpha = min(1.0, alpha + foam * 0.4);
+
+  // 7. Shore edge softening: fade alpha near depth=0 with noise perturbation
+  float shoreFade = smoothstep(0.0, 0.3, depth + noise.y * 0.08);
+  alpha *= shoreFade;
 
   gl_FragColor = vec4(finalColor, alpha);
 }
@@ -104,9 +109,9 @@ export function createWaterMaterial(
     uniforms: {
       uTime: { value: 0.0 },
       uHeightmap: { value: options.heightmapTexture },
-      uShallowColor: { value: new THREE.Color(0.18, 0.42, 0.55) },
-      uDeepColor: { value: new THREE.Color(0.03, 0.08, 0.25) },
-      uMaxDepth: { value: 8.0 },
+      uShallowColor: { value: new THREE.Color(0.15, 0.45, 0.52) },
+      uDeepColor: { value: new THREE.Color(0.02, 0.05, 0.18) },
+      uMaxDepth: { value: 1.8 },
       uSunDirection: {
         value: new THREE.Vector3(0.5, 0.8, 0.3).normalize(),
       },
