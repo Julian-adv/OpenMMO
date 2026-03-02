@@ -5,11 +5,13 @@ uniform float uTime;
 uniform vec4 waveA;
 uniform vec4 waveB;
 uniform vec4 waveC;
+uniform sampler2D uHeightmap;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vOrigWorldPos;
 varying vec4 vClipPos;
+varying float vWaveHeight;
 
 #define PI 3.14159265359
 
@@ -35,6 +37,12 @@ void main() {
   offset += GerstnerWave(waveB, p);
   offset += GerstnerWave(waveC, p);
   worldPos.xyz += offset;
+
+  vWaveHeight = offset.y;
+
+  // Clamp wave so it never dips below the terrain
+  float terrainHeight = texture2D(uHeightmap, uv).r;
+  worldPos.y = max(terrainHeight + 0.01, worldPos.y);
 
   vWorldPos = worldPos.xyz;
 
@@ -62,6 +70,7 @@ varying vec2 vUv;
 varying vec3 vWorldPos;
 varying vec3 vOrigWorldPos;
 varying vec4 vClipPos;
+varying float vWaveHeight;
 
 // Hash-based smooth value noise for foam band breaks
 float hash(vec2 p) {
@@ -163,7 +172,7 @@ void main() {
 
   // Wave approach parameters
   float waveSpeed = 0.0175;
-  float spawnDepth = 1.0;
+  float spawnDepth = 1.5;
   float bandHalfMax = 0.03;
 
   // Two wave cycles offset by half-period
@@ -221,7 +230,7 @@ void main() {
 
   // Blend water with sky reflection via Fresnel, then add specular
   vec3 litWater = mix(waterColor, surfTex, 0.3) + diffuse;
-  vec3 surfaceColor = mix(litWater, skyReflection, fresnel);
+  vec3 surfaceColor = mix(litWater, skyReflection, fresnel * 0.6);
   surfaceColor += specular;
 
   // Sample foam texture moving with each band (UV offset tied to cycle)
@@ -230,8 +239,13 @@ void main() {
   float foamTex1 = texture2D(uFoamMap, foamUV1).r;
   float foamTex2 = texture2D(uFoamMap, foamUV2).r;
 
+  // Wave crest foam: foam appears on Gerstner wave peaks
+  float crestFoam = smoothstep(0.08, 0.18, vWaveHeight) * 0.3;
+  crestFoam *= smoothstep(0.2, 0.55, foamNoise);
+
   // Blend foam bands with texture
-  float foamWithTex = clamp(max(max(band1 * foamTex1, band2 * foamTex2), foamGlow), 0.0, 1.0);
+  float shoreFoam = clamp(max(max(band1 * foamTex1, band2 * foamTex2), foamGlow), 0.0, 1.0);
+  float foamWithTex = clamp(max(shoreFoam, crestFoam), 0.0, 1.0);
   vec3 foamColor = mix(vec3(0.85, 0.92, 0.95), vec3(1.0), foamWithTex);
   vec3 finalColor = mix(surfaceColor, foamColor, foamWithTex * 0.9);
 
