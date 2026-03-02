@@ -8,6 +8,8 @@
     position?: [number, number, number]
     heightmapTexture: THREE.DataTexture
     normalMap: THREE.Texture
+    foamMap: THREE.Texture
+    surfaceMap: THREE.Texture
     time?: number
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
@@ -19,6 +21,8 @@
     position = [0, 0, 0],
     heightmapTexture,
     normalMap,
+    foamMap,
+    surfaceMap,
     time = 0,
     sunDirection = null,
     sunColor = null,
@@ -33,7 +37,10 @@
     const nm = normalMap
     if (!hm || !nm) return
 
-    const mat = createWaterMaterial({ heightmapTexture: hm, normalMap: nm })
+    const fm = foamMap
+    const sm = surfaceMap
+    if (!fm || !sm) return
+    const mat = createWaterMaterial({ heightmapTexture: hm, normalMap: nm, foamMap: fm, surfaceMap: sm })
     material = mat
 
     return () => {
