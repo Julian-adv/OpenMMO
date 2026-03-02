@@ -136,6 +136,16 @@ void main() {
   float specBroad = pow(NdotH, 64.0) * 0.35;
   vec3 specular = uSunColor * specBroad;
 
+  // Sun sparkles: two scrolling normal-map layers, bright only where both peak
+  float spT = uTime * 0.04;
+  vec2 spUV1 = vOrigWorldPos.xz * 0.5 + vec2(spT, spT * 0.7);
+  vec2 spUV2 = vOrigWorldPos.xz * 0.8 - vec2(spT * 0.6, spT);
+  float sp1 = texture2D(uNormalMap, spUV1).r;
+  float sp2 = texture2D(uNormalMap, spUV2).g;
+  float sparkle = smoothstep(1.2, 1.38, sp1 + sp2) * 0.8;
+  sparkle *= smoothstep(0.0, 0.15, uSunDirection.y) * (0.3 + 0.7 * uSunDirection.y);
+  specular += uSunColor * sparkle;
+
   // Diffuse lighting
   float diffuse = max(dot(surfaceNormal, uSunDirection), 0.0) * 0.1;
 
@@ -250,7 +260,7 @@ void main() {
   vec3 finalColor = mix(surfaceColor, foamColor, foamWithTex * 0.9);
 
   // 6. Alpha: deeper water is more opaque, foam adds opacity
-  float alpha = mix(0.65, 0.95, smoothDepth);
+  float alpha = mix(0.45, 0.95, smoothDepth);
   alpha = min(1.0, alpha + foamWithTex * 0.5);
 
   // 7. Shore edge softening: fade alpha near depth=0 with noise perturbation
@@ -295,7 +305,7 @@ export function createWaterMaterial(
     uniforms: {
       uTime: { value: 0.0 },
       uHeightmap: { value: options.heightmapTexture },
-      uShallowColor: { value: new THREE.Color(0.15, 0.45, 0.52) },
+      uShallowColor: { value: new THREE.Color(0.08, 0.55, 0.58) },
       uDeepColor: { value: new THREE.Color(0.02, 0.05, 0.18) },
       uMaxDepth: { value: 1.8 },
       uSunDirection: {

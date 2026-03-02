@@ -9,7 +9,7 @@ import {
 } from '../../utils/celestialSimulation'
 
 export const AMBIENT_DAY_INTENSITY = 0.95
-export const AMBIENT_NIGHT_INTENSITY = 2.24
+export const AMBIENT_NIGHT_INTENSITY = 1.4
 
 export interface Vector3Like {
   x: number
