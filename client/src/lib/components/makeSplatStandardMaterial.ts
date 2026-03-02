@@ -70,9 +70,9 @@ export function makeSplatStandardMaterial({
     // Caustics uniforms
     shader.uniforms.causticsMap = { value: null }
     shader.uniforms.causticsTime = { value: 0.0 }
-    shader.uniforms.causticsStrength = { value: 0.0 }
+    shader.uniforms.causticsStrength = { value: 0.275 }
     shader.uniforms.causticsScale = { value: 0.15 }
-    shader.uniforms.waterLevel = { value: 0.0 }
+    shader.uniforms.waterLevel = { value: 0.01 }
 
     // Save shader ref for external uniform updates
     mat.userData.shader = shader
@@ -284,11 +284,13 @@ export function makeSplatStandardMaterial({
         '#include <lights_fragment_end>',
         `#include <lights_fragment_end>
         if (vWorldY < waterLevel) {
-          vec2 cUV1 = vWorldXZ * causticsScale + vec2(causticsTime * 0.03, causticsTime * 0.02);
-          vec2 cUV2 = vWorldXZ * causticsScale * 1.3 - vec2(causticsTime * 0.02, causticsTime * 0.04);
+          float t = causticsTime;
+          vec2 sway = vec2(sin(t * 0.07 + vWorldXZ.y * 2.0), cos(t * 0.09 + vWorldXZ.x * 2.0)) * 0.02;
+          vec2 cUV1 = vWorldXZ * causticsScale + vec2(t * 0.03, t * 0.02) + sway;
+          vec2 cUV2 = vWorldXZ * causticsScale * 1.3 - vec2(t * 0.02, t * 0.04) - sway * 1.3;
           float caustic = min(texture2D(causticsMap, cUV1).r, texture2D(causticsMap, cUV2).r);
           float underwaterDepth = clamp((waterLevel - vWorldY) / 3.0, 0.0, 1.0);
-          float caustFade = smoothstep(0.0, 0.15, underwaterDepth) * (1.0 - smoothstep(0.5, 1.0, underwaterDepth));
+          float caustFade = smoothstep(0.04, 0.25, underwaterDepth) * (1.0 - smoothstep(0.5, 1.0, underwaterDepth));
           reflectedLight.directDiffuse += vec3(caustic * causticsStrength * caustFade);
         }`
       )

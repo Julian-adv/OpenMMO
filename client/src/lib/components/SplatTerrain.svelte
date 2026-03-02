@@ -234,11 +234,15 @@
     return () => { cancelled = true }
   })
 
-  // Update caustics time uniform every frame
+  // Update caustics uniforms every frame
   $effect(() => {
     if (!material) return
     const s = material.userData?.shader
-    if (s) s.uniforms.causticsTime.value = causticsTime
+    if (s) {
+      s.uniforms.causticsTime.value = causticsTime
+      s.uniforms.causticsStrength.value = 0.275
+      s.uniforms.waterLevel.value = 0.01
+    }
   })
 
   async function loadMaterial() {
