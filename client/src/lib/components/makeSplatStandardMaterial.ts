@@ -70,7 +70,7 @@ export function makeSplatStandardMaterial({
     // Caustics uniforms
     shader.uniforms.causticsMap = { value: null }
     shader.uniforms.causticsTime = { value: 0.0 }
-    shader.uniforms.causticsStrength = { value: 0.4 }
+    shader.uniforms.causticsStrength = { value: 0.0 }
     shader.uniforms.causticsScale = { value: 0.15 }
     shader.uniforms.waterLevel = { value: 0.0 }
 

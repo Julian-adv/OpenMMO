@@ -8,6 +8,7 @@ uniform vec4 waveC;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
+varying vec3 vOrigWorldPos;
 varying vec4 vClipPos;
 
 #define PI 3.14159265359
@@ -18,7 +19,7 @@ vec3 GerstnerWave(vec4 wave, vec3 p) {
   float k = 2.0 * PI / wavelength;
   float c = sqrt(9.8 / k);
   vec2 d = normalize(wave.xy);
-  float f = k * (dot(d, p.xz) - c * uTime);
+  float f = k * (dot(d, p.xz) - c * uTime * 0.1);
   float a = steepness / k;
   return vec3(d.x * a * cos(f), a * sin(f), d.y * a * cos(f));
 }
@@ -27,6 +28,7 @@ void main() {
   vUv = uv;
 
   vec4 worldPos = modelMatrix * vec4(position, 1.0);
+  vOrigWorldPos = worldPos.xyz;
 
   vec3 p = worldPos.xyz;
   vec3 offset = GerstnerWave(waveA, p);
@@ -58,6 +60,7 @@ uniform float uRefractionStrength;
 
 varying vec2 vUv;
 varying vec3 vWorldPos;
+varying vec3 vOrigWorldPos;
 varying vec4 vClipPos;
 
 // 4-sample normal map blending (technique from Three.js Water.js)
@@ -76,9 +79,9 @@ vec4 getNoise(vec2 uv) {
 }
 
 void main() {
-  // 1. Depth calculation
+  // 1. Depth calculation (use undisplaced Y to avoid Gerstner artifacts in foam)
   float terrainHeight = texture2D(uHeightmap, vUv).r;
-  float depth = max(0.0, vWorldPos.y - terrainHeight);
+  float depth = max(0.0, vOrigWorldPos.y - terrainHeight);
   float depthFactor = clamp(depth / uMaxDepth, 0.0, 1.0);
 
   // 2. Depth-based color (smoothstep for gradual shallow-to-deep)
@@ -86,7 +89,7 @@ void main() {
   vec3 waterColor = mix(uShallowColor, uDeepColor, smoothDepth);
 
   // 3. Surface normal from 4-sample noise (Water.js technique)
-  vec4 noise = getNoise(vWorldPos.xz);
+  vec4 noise = getNoise(vOrigWorldPos.xz);
   vec3 surfaceNormal = normalize(noise.xzy * vec3(1.5, 1.0, 1.5));
 
   // View direction (from surface toward camera) — constant for orthographic
@@ -144,7 +147,7 @@ void main() {
   float noisyD = depth + noisePerturb;
 
   // Wave approach parameters
-  float waveSpeed = 0.035;
+  float waveSpeed = 0.0175;
   float spawnDepth = 1.0;
   float bandHalfMax = 0.03;
 
@@ -169,8 +172,8 @@ void main() {
   float proximity1 = clamp(center1 / spawnDepth, 0.0, 1.0);
   float proximity2 = clamp(center2 / spawnDepth, 0.0, 1.0);
   // Per-position thickness variation using noise
-  float thickVar1 = 0.7 + 0.6 * sin(vWorldPos.x * 2.1 + vWorldPos.z * 1.7 + center1 * 4.0);
-  float thickVar2 = 0.7 + 0.6 * sin(vWorldPos.x * 1.8 + vWorldPos.z * 2.3 + center2 * 4.0);
+  float thickVar1 = 0.7 + 0.6 * sin(vOrigWorldPos.x * 2.1 + vOrigWorldPos.z * 1.7 + center1 * 4.0);
+  float thickVar2 = 0.7 + 0.6 * sin(vOrigWorldPos.x * 1.8 + vOrigWorldPos.z * 2.3 + center2 * 4.0);
   float bh1 = bandHalfMax * (0.15 + 0.85 * (1.0 - proximity1)) * thickVar1;
   float bh2 = bandHalfMax * (0.15 + 0.85 * (1.0 - proximity2)) * thickVar2;
   float bright1 = (1.0 + 0.6 * (1.0 - proximity1)) * fadeIn1 * fadeOut1;
@@ -181,14 +184,6 @@ void main() {
               * (1.0 - smoothstep(center1 + bh1, center1 + bh1 + 0.06, noisyD));
   float band2 = smoothstep(center2 - bh2 - 0.06, center2 - bh2, noisyD)
               * (1.0 - smoothstep(center2 + bh2, center2 + bh2 + 0.06, noisyD));
-
-  // Break bands into segments using large-scale noise along shoreline
-  float breakNoise1 = sin(vWorldPos.x * 1.2 + vWorldPos.z * 0.9 + center1 * 3.0) *
-                      cos(vWorldPos.z * 1.5 - vWorldPos.x * 0.7 + center1 * 2.0);
-  float breakNoise2 = sin(vWorldPos.x * 1.0 + vWorldPos.z * 1.3 + center2 * 3.0) *
-                      cos(vWorldPos.z * 1.1 - vWorldPos.x * 0.8 + center2 * 2.0);
-  band1 *= smoothstep(-0.6, -0.3, breakNoise1);
-  band2 *= smoothstep(-0.6, -0.3, breakNoise2);
 
   // Density variation from noise, modulated by brightness
   band1 *= smoothstep(0.2, 0.55, foamNoise) * 0.25 * bright1;
@@ -209,8 +204,8 @@ void main() {
   surfaceColor += specular;
 
   // Sample foam texture moving with each band (UV offset tied to cycle)
-  vec2 foamUV1 = vWorldPos.xz * 0.4 + cycle1 * 0.3;
-  vec2 foamUV2 = vWorldPos.xz * 0.4 + cycle2 * 0.3;
+  vec2 foamUV1 = vOrigWorldPos.xz * 0.4 + cycle1 * 0.3;
+  vec2 foamUV2 = vOrigWorldPos.xz * 0.4 + cycle2 * 0.3;
   float foamTex1 = texture2D(uFoamMap, foamUV1).r;
   float foamTex2 = texture2D(uFoamMap, foamUV2).r;
 
@@ -278,9 +273,9 @@ export function createWaterMaterial(
       uCameraDirection: { value: new THREE.Vector3(0, -1, 0) },
       uRefractionMap: { value: options.refractionMap ?? fallbackTex },
       uRefractionStrength: { value: 0.02 },
-      waveA: { value: new THREE.Vector4(ax, az, 0.15, 20) },
-      waveB: { value: new THREE.Vector4(bx, bz, 0.10, 15) },
-      waveC: { value: new THREE.Vector4(cx, cz, 0.08, 10) },
+      waveA: { value: new THREE.Vector4(ax, az, 0.03, 20) },
+      waveB: { value: new THREE.Vector4(bx, bz, 0.02, 15) },
+      waveC: { value: new THREE.Vector4(cx, cz, 0.015, 10) },
     },
     vertexShader,
     fragmentShader,
