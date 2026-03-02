@@ -26,7 +26,6 @@
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
-  import { editorPanOffset } from '../stores/editorStore'
   import { type PlayerState } from '../utils/movementUtils'
   import {
     GAME_START_YEAR,
@@ -82,6 +81,8 @@
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { loadWaterNormalMap } from '../shaders/water-normal-gen'
   import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
+  import { RefractionRenderManager } from '../managers/refractionRenderManager'
+  import { generateCausticsTexture } from '../shaders/caustics-gen'
 
   interface Props {
     serverUrl: string
@@ -111,8 +112,13 @@
   let waterSunDir = $state<THREE.Vector3 | null>(null)
   let waterSunColor = $state<THREE.Color | null>(null)
   let waterCamDir = $state<THREE.Vector3 | null>(null)
+  let waterGroup = $state<THREE.Group | undefined>(undefined)
   const _waterSunDirTmp = new THREE.Vector3()
   const _waterCamDirTmp = new THREE.Vector3()
+  let refractionManager = $state<RefractionRenderManager | null>(null)
+  let refractionTexture = $state<THREE.Texture | null>(null)
+  let causticsMap = $state<THREE.Texture | null>(null)
+  let causticsTime = $state(0)
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -138,16 +144,6 @@
 
     prevDebugVisible = currentDebug
     prevRotationEnabled = currentRotation
-  })
-
-  // Reset pan offset when leaving map editor mode
-  let prevMapEditorMode = $state(false)
-  $effect(() => {
-    const current = $mapEditorMode
-    if (prevMapEditorMode && !current) {
-      editorPanOffset.set({ x: 0, z: 0 })
-    }
-    prevMapEditorMode = current
   })
 
   function resetCameraRotation() {
@@ -407,6 +403,7 @@
 
       // Update water uniforms
       waterTime += realDeltaSeconds
+      causticsTime += realDeltaSeconds
       if (directionalLight) {
         _waterSunDirTmp.copy(directionalLight.position).sub(directionalLight.target.position).normalize()
         waterSunDir = _waterSunDirTmp.clone()
@@ -415,6 +412,13 @@
       if (camera) {
         camera.getWorldDirection(_waterCamDirTmp)
         waterCamDir = _waterCamDirTmp.clone()
+      }
+
+      // Render refraction pass (scene without water)
+      if (refractionManager) {
+        if (camera) refractionManager.setCamera(camera)
+        if (waterGroup) refractionManager.setWaterGroup(waterGroup)
+        refractionManager.render()
       }
 
       loopProfiler.record('frameWork', performance.now() - frameWorkStart)
@@ -448,24 +452,18 @@
 
   function updateCameraWithOffset(offset: { x: number; y: number; z: number }) {
     if (!currentPlayer || !camera) return
-
-    // In map editor mode, apply pan offset to the effective look-at position
-    const pos = $mapEditorMode
-      ? { x: currentPlayer.position.x + $editorPanOffset.x, y: currentPlayer.position.y, z: currentPlayer.position.z + $editorPanOffset.z }
-      : currentPlayer.position
-
     // In map editor mode, scale the base offset to raise the camera when zoomed out
     // so bottom view rays still intersect the ground plane.
     if ($mapEditorMode && camera.zoom < 1) {
       const maxBelow = INITIAL_DISTANCE / Math.SQRT2
       const scale = Math.max(1, (ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2) / (camera.zoom * maxBelow))
-      cameraTarget = applyCameraOffset(camera, pos, {
+      cameraTarget = applyCameraOffset(camera, currentPlayer.position, {
         x: CAMERA_OFFSET.x * scale,
         y: CAMERA_OFFSET.y * scale,
         z: CAMERA_OFFSET.z * scale,
       })
     } else {
-      cameraTarget = applyCameraOffset(camera, pos, offset)
+      cameraTarget = applyCameraOffset(camera, currentPlayer.position, offset)
     }
   }
 
@@ -522,6 +520,7 @@
 
     const unsubscribeViewportSize = size.subscribe((nextSize) => {
       viewportSize = nextSize
+      if (refractionManager) refractionManager.resize(nextSize.width, nextSize.height)
     })
 
     const unsubscribeCameraReset = cameraResetNonce.subscribe((nonce) => {
@@ -540,6 +539,14 @@
     loadWaterNormalMap().then((tex) => { waterNormalMap = tex })
     loadFoamTexture().then((tex) => { waterFoamMap = tex })
     loadSurfaceTexture().then((tex) => { waterSurfaceMap = tex })
+
+    // Initialize refraction render manager
+    const refMgr = new RefractionRenderManager(renderer, scene, viewportSize.width, viewportSize.height)
+    refractionManager = refMgr
+    refractionTexture = refMgr.texture
+
+    // Generate caustics texture
+    causticsMap = generateCausticsTexture()
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
     lastFrameTime = performance.now()
@@ -580,6 +587,11 @@
       waterFoamMap = null
       waterSurfaceMap?.dispose()
       waterSurfaceMap = null
+      refractionManager?.dispose()
+      refractionManager = null
+      refractionTexture = null
+      causticsMap?.dispose()
+      causticsMap = null
       terrainTiles = []
       terrainMeshes = []
       resetGameStore()
@@ -631,6 +643,8 @@
   bind:terrainMeshes={terrainMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
+  {causticsMap}
+  {causticsTime}
 />
 
 <GameSceneWaterLayer
@@ -644,6 +658,8 @@
   sunDirection={waterSunDir}
   sunColor={waterSunColor}
   cameraDirection={waterCamDir}
+  refractionMap={refractionTexture}
+  bind:waterGroup={waterGroup}
 />
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->

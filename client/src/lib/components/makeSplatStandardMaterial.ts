@@ -67,6 +67,13 @@ export function makeSplatStandardMaterial({
     shader.uniforms.brushToolMode = { value: 0.0 } // 0=height, 1=splat
     shader.uniforms.gridVisible = { value: 0.0 } // 0=hidden, 1=visible
 
+    // Caustics uniforms
+    shader.uniforms.causticsMap = { value: null }
+    shader.uniforms.causticsTime = { value: 0.0 }
+    shader.uniforms.causticsStrength = { value: 0.4 }
+    shader.uniforms.causticsScale = { value: 0.15 }
+    shader.uniforms.waterLevel = { value: 0.0 }
+
     // Save shader ref for external uniform updates
     mat.userData.shader = shader
 
@@ -99,14 +106,16 @@ export function makeSplatStandardMaterial({
         `#include <uv_pars_vertex>
          uniform float splatScale;
          varying vec2 vUvSplat;
-         varying vec2 vWorldXZ;`
+         varying vec2 vWorldXZ;
+         varying float vWorldY;`
       )
       .replace(
         '#include <uv_vertex>',
         `#include <uv_vertex>
          vUvSplat = uv * splatScale;
          vec4 worldPos4 = modelMatrix * vec4(position, 1.0);
-         vWorldXZ = worldPos4.xz;`
+         vWorldXZ = worldPos4.xz;
+         vWorldY = worldPos4.y;`
       )
 
     // Fragment shader: declarations
@@ -125,6 +134,12 @@ export function makeSplatStandardMaterial({
          uniform float brushRaise;
          uniform float brushToolMode;
          uniform float gridVisible;
+         uniform sampler2D causticsMap;
+         uniform float causticsTime;
+         uniform float causticsStrength;
+         uniform float causticsScale;
+         uniform float waterLevel;
+         varying float vWorldY;
          ${hasN ? 'uniform sampler2D normal0, normal1, normal2, normal3; uniform float normalScale;' : ''}
          ${hasORM ? 'uniform sampler2D orm0, orm1, orm2, orm3;' : ''}`
       )
@@ -263,6 +278,19 @@ export function makeSplatStandardMaterial({
   
         reflectedLight.indirectDiffuse *= aoBlend;`
           : `#include <aomap_fragment>`
+      )
+      // Caustics: animated light patterns on terrain below water level
+      .replace(
+        '#include <lights_fragment_end>',
+        `#include <lights_fragment_end>
+        if (vWorldY < waterLevel) {
+          vec2 cUV1 = vWorldXZ * causticsScale + vec2(causticsTime * 0.03, causticsTime * 0.02);
+          vec2 cUV2 = vWorldXZ * causticsScale * 1.3 - vec2(causticsTime * 0.02, causticsTime * 0.04);
+          float caustic = min(texture2D(causticsMap, cUV1).r, texture2D(causticsMap, cUV2).r);
+          float underwaterDepth = clamp((waterLevel - vWorldY) / 3.0, 0.0, 1.0);
+          float caustFade = smoothstep(0.0, 0.15, underwaterDepth) * (1.0 - smoothstep(0.5, 1.0, underwaterDepth));
+          reflectedLight.directDiffuse += vec3(caustic * causticsStrength * caustFade);
+        }`
       )
   }
 

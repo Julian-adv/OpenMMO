@@ -14,6 +14,7 @@
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
+    refractionMap?: THREE.Texture | null
   }
 
   let {
@@ -27,6 +28,7 @@
     sunDirection = null,
     sunColor = null,
     cameraDirection = null,
+    refractionMap = null,
   }: Props = $props()
 
   let material = $state<THREE.ShaderMaterial | null>(null)
@@ -40,7 +42,13 @@
     const fm = foamMap
     const sm = surfaceMap
     if (!fm || !sm) return
-    const mat = createWaterMaterial({ heightmapTexture: hm, normalMap: nm, foamMap: fm, surfaceMap: sm })
+    const mat = createWaterMaterial({
+      heightmapTexture: hm,
+      normalMap: nm,
+      foamMap: fm,
+      surfaceMap: sm,
+      refractionMap,
+    })
     material = mat
 
     return () => {
@@ -59,6 +67,13 @@
     if (sunDirection) material.uniforms.uSunDirection.value.copy(sunDirection)
     if (sunColor) material.uniforms.uSunColor.value.copy(sunColor)
     if (cameraDirection) material.uniforms.uCameraDirection.value.copy(cameraDirection)
+  })
+
+  // Update refraction map when it changes
+  $effect(() => {
+    if (material && refractionMap) {
+      material.uniforms.uRefractionMap.value = refractionMap
+    }
   })
 
   // Position Y slightly above terrain to avoid z-fighting
