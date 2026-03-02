@@ -77,21 +77,40 @@ void main() {
   // Diffuse lighting
   float diffuse = max(dot(surfaceNormal, uSunDirection), 0.0) * 0.1;
 
-  // 5. Shore foam
-  float foamEdge = 1.0 - smoothstep(0.0, 0.7, depth);
-  float foamScroll = sin(vWorldPos.x * 0.7 + uTime * 0.8) * sin(vWorldPos.z * 0.9 + uTime * 0.6);
-  float foam = foamEdge * max(noise.x + foamScroll * 0.2, 0.0) * 0.6;
+  // 5. Shore foam — stylized white bands at the waterline
+  // Animate foam position with wave motion
+  float foamWave1 = sin(vWorldPos.x * 0.5 + uTime * 0.7) * cos(vWorldPos.z * 0.4 + uTime * 0.5) * 0.08;
+  float foamWave2 = sin(vWorldPos.x * 0.3 - uTime * 0.4) * cos(vWorldPos.z * 0.6 + uTime * 0.3) * 0.05;
+  float foamDepth = depth + foamWave1;
 
-  // Combine
-  vec3 finalColor = waterColor + diffuse + specular + vec3(foam);
+  // Noise perturbation on depth to make band edges organic, not clean lines
+  float noisePerturb = noise.x * 0.07 + noise.z * 0.04;
+  float noisyDepth = foamDepth + noisePerturb;
+  float noisyDepth2 = foamDepth + foamWave2 + noisePerturb;
 
-  // 6. Alpha
+  // Noise for density variation (remap to 0..1)
+  float foamNoise = noise.x * 0.5 + 0.5;
+
+  // Foam band: soft white line slightly away from the shore edge
+  float band = smoothstep(0.16, 0.22, noisyDepth) * (1.0 - smoothstep(0.24, 0.34, noisyDepth));
+  band *= smoothstep(0.25, 0.6, foamNoise) * 0.4;
+
+  // Subtle brightening glow near shore
+  float foamGlow = (1.0 - smoothstep(0.0, 0.35, depth)) * 0.06;
+
+  float foam = clamp(max(band, foamGlow), 0.0, 1.0);
+
+  // Combine: mix toward white based on foam intensity
+  vec3 finalColor = mix(waterColor + diffuse + specular, vec3(1.0), foam * 0.7);
+
+  // 6. Alpha: deeper water is more opaque, foam adds opacity
   float alpha = mix(0.65, 0.95, smoothDepth);
-  alpha = min(1.0, alpha + foam * 0.4);
+  alpha = min(1.0, alpha + foam * 0.5);
 
   // 7. Shore edge softening: fade alpha near depth=0 with noise perturbation
-  float shoreFade = smoothstep(0.0, 0.3, depth + noise.y * 0.08);
-  alpha *= shoreFade;
+  //    but preserve opacity where foam is visible
+  float shoreFade = smoothstep(0.0, 0.25, depth + noise.y * 0.12 + noise.x * 0.06);
+  alpha *= max(shoreFade, foam * 0.85);
 
   gl_FragColor = vec4(finalColor, alpha);
 }
