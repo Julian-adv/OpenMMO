@@ -81,6 +81,11 @@
 
 - sword.glb https://www.fab.com/listings/5fe82d66-eaac-48e0-899d-1fedacdf409a
 
+## Terrain
+
+- https://tangrams.github.io/heightmapper/#11.16667/34.4293/126.4164
+- export PATH="$HOME/.local/bin:$PATH" && rm -rf data/terrain/height/r*/h_*.bin && find data/terrain/height/ -type d -empty -delete 2>/dev/null; uv run --with Pillow --with numpy tools/import_heightmap.py     client/public/textures/height_map.png     --min-height -7 --max-height 60     --origin-tile -29 -31     --terrain-dir data/terrain
+
 # Blender
 
 - Use version 5.0.1
