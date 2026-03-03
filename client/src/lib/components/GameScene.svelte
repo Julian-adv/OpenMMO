@@ -83,6 +83,7 @@
   import { loadWaterNormalMap } from '../shaders/water-normal-gen'
   import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
+  import { loadSplatLayers } from '../utils/splatLayerLoader'
 
   interface Props {
     serverUrl: string
@@ -547,6 +548,17 @@
     refractionTexture = refMgr.texture
 
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
+
+    // Pre-compile all WebGPU shaders once materials are ready
+    loadSplatLayers().then(() => {
+      // Allow Svelte to render the terrain meshes, then compile
+      requestAnimationFrame(() => {
+        if (camera) {
+          renderer.compileAsync(scene, camera).catch(() => {})
+        }
+      })
+    })
+
     // Start game loop
     lastFrameTime = performance.now()
     initFpsCounting()

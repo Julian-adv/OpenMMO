@@ -11,6 +11,7 @@ function tileKey(tileX: number, tileZ: number): string {
 
 export class TerrainSplatManager {
   private splatmaps = new Map<string, Uint8Array>()
+  private inflightSplatmaps = new Map<string, Promise<THREE.DataTexture>>()
   private textures = new Map<string, THREE.DataTexture>()
   private dirtyTiles = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -20,42 +21,7 @@ export class TerrainSplatManager {
     this.terrainApiUrl = getTerrainApiUrl()
   }
 
-  async loadSplatmap(tileX: number, tileZ: number): Promise<THREE.DataTexture> {
-    const key = tileKey(tileX, tileZ)
-    const cached = this.textures.get(key)
-    if (cached) return cached
-
-    const url = `${this.terrainApiUrl}/api/terrain/splat/${tileX}/${tileZ}`
-    const response = await fetch(url)
-    if (!response.ok) {
-      console.error(
-        `Failed to load splatmap (${tileX}, ${tileZ}): ${response.status}`
-      )
-      // Return a default splatmap (all grass = channel 0)
-      const data = new Uint8Array(TILE_DIM * TILE_DIM * CHANNELS)
-      for (let i = 0; i < TILE_DIM * TILE_DIM; i++) {
-        data[i * CHANNELS] = 255 // R = grass
-      }
-      this.splatmaps.set(key, data)
-      const texture = new THREE.DataTexture(
-        data,
-        TILE_DIM,
-        TILE_DIM,
-        THREE.RGBAFormat,
-        THREE.UnsignedByteType
-      )
-      texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
-      texture.minFilter = THREE.LinearFilter
-      texture.magFilter = THREE.LinearFilter
-      texture.flipY = true
-      texture.needsUpdate = true
-      this.textures.set(key, texture)
-      return texture
-    }
-    const buffer = await response.arrayBuffer()
-    const data = new Uint8Array(buffer)
-    this.splatmaps.set(key, data)
-
+  private createTexture(data: Uint8Array): THREE.DataTexture {
     const texture = new THREE.DataTexture(
       data,
       TILE_DIM,
@@ -70,8 +36,46 @@ export class TerrainSplatManager {
     // flipY=true so data row 0 maps to v=1 (minZ), matching cz=0 = minZ.
     texture.flipY = true
     texture.needsUpdate = true
-    this.textures.set(key, texture)
     return texture
+  }
+
+  async loadSplatmap(tileX: number, tileZ: number): Promise<THREE.DataTexture> {
+    const key = tileKey(tileX, tileZ)
+    const cached = this.textures.get(key)
+    if (cached) return cached
+
+    // Deduplicate in-flight requests
+    const inflight = this.inflightSplatmaps.get(key)
+    if (inflight) return inflight
+
+    const promise = (async () => {
+      const url = `${this.terrainApiUrl}/api/terrain/splat/${tileX}/${tileZ}`
+      const response = await fetch(url)
+      if (!response.ok) {
+        console.error(
+          `Failed to load splatmap (${tileX}, ${tileZ}): ${response.status}`
+        )
+        // Return a default splatmap (all grass = channel 0)
+        const data = new Uint8Array(TILE_DIM * TILE_DIM * CHANNELS)
+        for (let i = 0; i < TILE_DIM * TILE_DIM; i++) {
+          data[i * CHANNELS] = 255 // R = grass
+        }
+        this.splatmaps.set(key, data)
+        const texture = this.createTexture(data)
+        this.textures.set(key, texture)
+        this.inflightSplatmaps.delete(key)
+        return texture
+      }
+      const buffer = await response.arrayBuffer()
+      const data = new Uint8Array(buffer)
+      this.splatmaps.set(key, data)
+      const texture = this.createTexture(data)
+      this.textures.set(key, texture)
+      this.inflightSplatmaps.delete(key)
+      return texture
+    })()
+    this.inflightSplatmaps.set(key, promise)
+    return promise
   }
 
   getSplatTexture(tileX: number, tileZ: number): THREE.DataTexture | null {

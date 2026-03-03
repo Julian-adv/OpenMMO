@@ -122,6 +122,7 @@ export interface WaterMaterialUniforms {
   uSunColor: { value: THREE.Color }
   uCameraDirection: { value: THREE.Vector3 }
   uRefractionMap: { value: THREE.Texture }
+  uHeightmapTexture: { value: THREE.Texture }
 }
 
 export interface WaterMaterialResult {
@@ -474,6 +475,7 @@ export function createWaterMaterial(
       uSunColor,
       uCameraDirection,
       uRefractionMap: refractionTex,
+      uHeightmapTexture: heightmapTex,
     },
   }
 }

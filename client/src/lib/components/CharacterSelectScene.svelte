@@ -66,6 +66,13 @@
       scene.environment = rt.texture
       scene.environmentIntensity = 0.1
       pmremGenerator.dispose()
+
+      // Pre-compile all WebGPU shaders (characters, platform, lights)
+      requestAnimationFrame(() => {
+        if (cameraRef) {
+          renderer.compileAsync(scene, cameraRef).catch(() => {})
+        }
+      })
     })
 
     return () => {

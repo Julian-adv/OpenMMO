@@ -1,9 +1,11 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import type { NodeMaterial } from 'three/webgpu'
   import { SvelteMap } from 'svelte/reactivity'
-  import { onMount } from 'svelte'
+  import { onMount, onDestroy } from 'svelte'
   import WaterTile from '../WaterTile.svelte'
+  import { createWaterMaterial, type WaterMaterialResult } from '../../shaders/water-material'
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -39,13 +41,65 @@
     waterGroup = $bindable(undefined),
   }: Props = $props()
 
-  // Cache heightmap textures per tile
-  const heightTexMap = new SvelteMap<string, THREE.DataTexture>()
+  // ── Shared water material (created once) ──────────────────────
+  let sharedMaterial = $state<NodeMaterial | null>(null)
+  let waterResult = $state<WaterMaterialResult | null>(null)
 
-  // Track which tiles have water (true/false/undefined=not checked yet)
+  // Default 1x1 heightmap for initial material creation
+  const defaultHeightmap = new THREE.DataTexture(
+    new Float32Array([0]),
+    1,
+    1,
+    THREE.RedFormat,
+    THREE.FloatType
+  )
+  defaultHeightmap.minFilter = THREE.LinearFilter
+  defaultHeightmap.magFilter = THREE.LinearFilter
+  defaultHeightmap.needsUpdate = true
+
+  $effect(() => {
+    if (!normalMap || !foamMap || !surfaceMap) return
+    if (sharedMaterial) return // already created
+
+    const result = createWaterMaterial({
+      heightmapTexture: defaultHeightmap,
+      normalMap,
+      foamMap,
+      surfaceMap,
+      refractionMap,
+    })
+    waterResult = result
+    sharedMaterial = result.material
+  })
+
+  onDestroy(() => {
+    sharedMaterial?.dispose()
+  })
+
+  // Update time uniform
+  $effect(() => {
+    if (waterResult) waterResult.uniforms.uTime.value = time
+  })
+
+  // Update sun uniforms
+  $effect(() => {
+    if (!waterResult) return
+    if (sunDirection) waterResult.uniforms.uSunDirection.value.copy(sunDirection)
+    if (sunColor) waterResult.uniforms.uSunColor.value.copy(sunColor)
+    if (cameraDirection) waterResult.uniforms.uCameraDirection.value.copy(cameraDirection)
+  })
+
+  // Update refraction map
+  $effect(() => {
+    if (waterResult && refractionMap) {
+      waterResult.uniforms.uRefractionMap.value = refractionMap
+    }
+  })
+
+  // ── Heightmap texture management per tile ──────────────────────
+  const heightTexMap = new SvelteMap<string, THREE.DataTexture>()
   const waterTileSet = new SvelteMap<string, boolean>()
 
-  // Reactive arrays parallel to terrainTiles
   let tileHeightTextures = $state<(THREE.DataTexture | null)[]>([])
   let tileHasWater = $state<boolean[]>([])
 
@@ -84,7 +138,6 @@
     syncArrays()
   }
 
-  // Subscribe to height changes from brush edits
   onMount(() => {
     if (!heightManager) return
     const unsub = heightManager.onHeightChanged((tiles: AffectedTile[]) => {
@@ -96,13 +149,11 @@
     return unsub
   })
 
-  // Initial tile loading + tile list changes
   $effect(() => {
     if (!terrainGeometry || !heightManager) return
 
     const currentTileIds = new Set(terrainTiles.map((t) => t.id))
 
-    // Remove data for tiles no longer in the list
     for (const [id, tex] of heightTexMap) {
       if (!currentTileIds.has(id)) {
         tex.dispose()
@@ -110,7 +161,6 @@
         waterTileSet.delete(id)
       }
     }
-    // Also clean waterTileSet entries without textures
     for (const [id] of waterTileSet) {
       if (!currentTileIds.has(id)) {
         waterTileSet.delete(id)
@@ -137,7 +187,7 @@
   }
 </script>
 
-{#if terrainGeometry && normalMap && foamMap && surfaceMap}
+{#if terrainGeometry && sharedMaterial && waterResult}
   <T.Group bind:ref={waterGroup}>
     {#each terrainTiles as tile, index (tile.id)}
       {#if tileHasWater[index] && tileHeightTextures[index]}
@@ -145,14 +195,8 @@
           geometry={terrainGeometry}
           position={tile.position}
           heightmapTexture={tileHeightTextures[index]!}
-          {normalMap}
-          foamMap={foamMap!}
-          surfaceMap={surfaceMap!}
-          {time}
-          {sunDirection}
-          {sunColor}
-          {cameraDirection}
-          {refractionMap}
+          material={sharedMaterial}
+          {waterResult}
         />
       {/if}
     {/each}

@@ -2,20 +2,10 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import type { MeshStandardNodeMaterial } from 'three/webgpu'
-  import { onMount } from 'svelte'
-  // You can use either Addons.js (aggregate) or direct GLTFLoader import. Keep Addons for compatibility.
-  import { GLTFLoader } from 'three/examples/jsm/Addons.js'
-  import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
-  import {
-    makeSplatStandardMaterial,
-    type SplatLayer,
-  } from './makeSplatStandardMaterial'
-  import { mapEditorMode, gridVisible } from '../stores/debugStore'
-  import { brushWorldPos, brushSize, brushMode, editorTool } from '../stores/editorStore'
-  import type { BrushMode, EditorTool } from '../stores/editorStore'
 
   interface Props {
     geometry: THREE.BufferGeometry
+    material: MeshStandardNodeMaterial
     mesh?: THREE.Mesh | undefined
     position?: [number, number, number]
     splatTexture?: THREE.Texture | null
@@ -23,242 +13,41 @@
 
   let {
     geometry,
+    material,
     mesh = $bindable(undefined),
     position = [0, 0, 0],
     splatTexture = null,
   }: Props = $props()
 
-  let material = $state<MeshStandardNodeMaterial | null>(null)
-  let brushUnsubs: (() => void)[] = []
+  // Default 1x1 all-grass splatmap used until the real one loads
+  const defaultSplat = new THREE.DataTexture(
+    new Uint8Array([255, 0, 0, 0]),
+    1,
+    1,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType
+  )
+  defaultSplat.wrapS = defaultSplat.wrapT = THREE.ClampToEdgeWrapping
+  defaultSplat.minFilter = THREE.LinearFilter
+  defaultSplat.magFilter = THREE.LinearFilter
+  defaultSplat.needsUpdate = true
 
-  function setupBrushSync(mat: MeshStandardNodeMaterial) {
-    // Clean up previous subscriptions
-    brushUnsubs.forEach((u) => u())
-    brushUnsubs = []
-
-    let editorActive = false
-    let gridOn = false
-    let pos: { x: number; z: number } | null = null
-    let size = 3
-    let mode: BrushMode = 'raise'
-    let tool: EditorTool = 'height'
-
-    const modeToShaderValue: Record<BrushMode, number> = { lower: 0.0, raise: 1.0, flatten: 2.0 }
-
-    function sync() {
-      const u = mat.userData?.uniforms
-      if (!u) return
-      u.gridVisible.value = (editorActive || gridOn) ? 1.0 : 0.0
-      if (editorActive && pos) {
-        u.brushActive.value = 1.0
-        u.brushCenter.value.set(pos.x, pos.z)
-        u.brushRadius.value = size
-        u.brushRaise.value = modeToShaderValue[mode]
-        u.brushToolMode.value = tool === 'splat' ? 1.0 : 0.0
-      } else {
-        u.brushActive.value = 0.0
-      }
-    }
-
-    brushUnsubs.push(
-      mapEditorMode.subscribe((v) => { editorActive = v; sync() }),
-      gridVisible.subscribe((v) => { gridOn = v; sync() }),
-      brushWorldPos.subscribe((v) => { pos = v; sync() }),
-      brushSize.subscribe((v) => { size = v; sync() }),
-      brushMode.subscribe((v) => { mode = v; sync() }),
-      editorTool.subscribe((v) => { tool = v; sync() }),
-    )
-  }
-
-  // === Your assets ===
-  const paths = {
-    splat: '/textures/splat_rgba_v2.png',
-    grassGlb: '/textures/rocky_terrain_02_1k.glb',
-    rockGlb: '/textures/gravel_floor_1k.glb',
-    dirtGlb: '/textures/red_laterite_soil_stones_1k.glb',
-    snowGlb: '/textures/snow_02_1k.glb',
-  }
-
-  // --- helpers ---
-  function prepColorTex(t: THREE.Texture | null) {
-    if (!t) return null
-    t.wrapS = t.wrapT = THREE.RepeatWrapping
-    t.anisotropy = 8
-    t.colorSpace = THREE.SRGBColorSpace
-    t.needsUpdate = true
-    return t
-  }
-
-  function prepDataTex(t: THREE.Texture | null) {
-    if (!t) return null
-    t.wrapS = t.wrapT = THREE.RepeatWrapping
-    t.anisotropy = 8
-    // keep Linear for non-color data
-    t.needsUpdate = true
-    return t
-  }
-
-  function firstMaterial(gltf: GLTF): THREE.MeshStandardMaterial | null {
-    let found: THREE.MeshStandardMaterial | null = null
-    gltf.scene.traverse((o: THREE.Object3D) => {
-      if (found) return
-      if (
-        o instanceof THREE.Mesh &&
-        o.material instanceof THREE.MeshStandardMaterial
-      ) {
-        found = o.material
-      }
-    })
-    return found
-  }
-
-  // Pack AO(R) + MetallicRoughness(G,B) into one CanvasTexture (R=AO, G=Roughness, B=Metal)
-  function packORM(
-    ao: THREE.Texture | null,
-    mr: THREE.Texture | null
-  ): THREE.Texture | null {
-    const aoImg = ao?.image as HTMLImageElement | undefined
-    const mrImg = mr?.image as HTMLImageElement | undefined
-    if (!aoImg && !mrImg) return null
-
-    const w = mrImg?.width || aoImg?.width
-    const h = mrImg?.height || aoImg?.height
-    if (!w || !h) return null
-
-    const canvas = document.createElement('canvas')
-    canvas.width = w
-    canvas.height = h
-    const ctx = canvas.getContext('2d')!
-    // clear to defaults: AO=1, R=1; Rough=1, G=1; Metal=0, B=0
-    ctx.fillStyle = 'rgb(255,255,0)'
-    ctx.fillRect(0, 0, w, h)
-
-    // Draw MR then AO to separate buffers to read pixels
-    // MR: we need G,B channels
-    if (mrImg) {
-      const mrc = document.createElement('canvas')
-      mrc.width = w
-      mrc.height = h
-      const mctx = mrc.getContext('2d')!
-      mctx.drawImage(mrImg, 0, 0, w, h)
-      const mrData = mctx.getImageData(0, 0, w, h).data
-
-      const imgData = ctx.getImageData(0, 0, w, h)
-      const data = imgData.data
-      for (let i = 0; i < data.length; i += 4) {
-        data[i + 1] = mrData[i + 1] // G = roughness
-        data[i + 2] = mrData[i + 2] // B = metallic
-      }
-      ctx.putImageData(imgData, 0, 0)
-    }
-
-    if (aoImg) {
-      const aoc = document.createElement('canvas')
-      aoc.width = w
-      aoc.height = h
-      const actx = aoc.getContext('2d')!
-      actx.drawImage(aoImg, 0, 0, w, h)
-      const aoData = actx.getImageData(0, 0, w, h).data
-
-      const imgData = ctx.getImageData(0, 0, w, h)
-      const data = imgData.data
-      for (let i = 0; i < data.length; i += 4) {
-        data[i + 0] = aoData[i + 0] // R = AO
-      }
-      ctx.putImageData(imgData, 0, 0)
-    }
-
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.anisotropy = 8
-    tex.flipY = false // match glTF loader behavior
-    // Leave colorSpace as Linear for data
-    tex.needsUpdate = true
-    return tex
-  }
-
-  onMount(() => {
-    loadMaterial()
-
-    return () => {
-      brushUnsubs.forEach((u) => u())
-      brushUnsubs = []
-    }
-  })
-
-  // Reactively update splatMap uniform when splatTexture prop changes.
-  // TSL uniforms are immediately available — no rAF polling needed.
+  // Swap per-tile splatTexture on the shared material before each draw
   $effect(() => {
-    if (!material || !splatTexture) return
-    const u = material.userData?.uniforms
-    if (u) u.splatMap.value = splatTexture
+    if (!mesh) return
+    const tex = splatTexture ?? defaultSplat
+    mesh.onBeforeRender = () => {
+      const u = material.userData?.uniforms
+      if (u) u.splatMap.value = tex
+    }
   })
-
-  async function loadMaterial() {
-    const loader = new THREE.TextureLoader()
-    const glbLoader = new GLTFLoader()
-
-    // Use per-tile splatTexture if provided, otherwise load static PNG
-    let splat: THREE.Texture
-    if (splatTexture) {
-      splat = splatTexture
-    } else {
-      splat = await loader.loadAsync(paths.splat)
-      splat.wrapS = splat.wrapT = THREE.RepeatWrapping
-      splat.minFilter = THREE.LinearMipMapLinearFilter
-      splat.magFilter = THREE.LinearFilter
-      splat.needsUpdate = true
-    }
-
-    // Load GLBs (each contains one material we care about)
-    const [grassGltf, rockGltf, dirtGltf, snowGltf] = await Promise.all([
-      glbLoader.loadAsync(paths.grassGlb),
-      glbLoader.loadAsync(paths.rockGlb),
-      glbLoader.loadAsync(paths.dirtGlb),
-      glbLoader.loadAsync(paths.snowGlb),
-    ])
-
-    function toLayer(gltf: GLTF, tile: number): SplatLayer {
-      const mat = firstMaterial(gltf)
-      if (!mat) throw new Error('No MeshStandardMaterial found in GLB')
-      // Albedo
-      const albedo = prepColorTex(mat.map || null)!
-      // Normal
-      const normal = prepDataTex(mat.normalMap || null) || undefined
-      // MetallicRoughness (glTF packs both in one texture)
-      // In three, either roughnessMap or metalnessMap will both point to the same texture when using glTF
-      const mr = prepDataTex(mat.roughnessMap || mat.metalnessMap || null)
-      // AO is separate in glTF
-      const ao = prepDataTex(mat.aoMap || null)
-      // Pack into a single ORM texture
-      const orm = packORM(ao, mr) || undefined
-      return { map: albedo, normalMap: normal, orm, tile }
-    }
-
-    const layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] = [
-      toLayer(grassGltf, 8.0), // R
-      toLayer(rockGltf, 6.0), // G
-      toLayer(dirtGltf, 10.0), // B
-      toLayer(snowGltf, 4.0), // A
-    ]
-
-    material = makeSplatStandardMaterial({
-      layers,
-      splatMap: splat,
-      splatScale: 1.0,
-    })
-
-    setupBrushSync(material)
-  }
 </script>
 
-{#if material}
-  <T.Mesh
-    bind:ref={mesh}
-    {geometry}
-    {material}
-    {position}
-    castShadow
-    receiveShadow
-  />
-{/if}
+<T.Mesh
+  bind:ref={mesh}
+  {geometry}
+  {material}
+  {position}
+  castShadow
+  receiveShadow
+/>

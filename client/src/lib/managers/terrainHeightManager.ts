@@ -33,6 +33,7 @@ export type HeightChangedCallback = (tiles: AffectedTile[]) => void
 
 export class TerrainHeightManager {
   private heightmaps = new Map<string, Uint16Array>()
+  private inflightHeightmaps = new Map<string, Promise<Uint16Array>>()
   private geometries = new Map<string, THREE.BufferGeometry>()
   private dirtyTiles = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -61,12 +62,21 @@ export class TerrainHeightManager {
     const cached = this.heightmaps.get(key)
     if (cached) return cached
 
-    const url = `${this.terrainApiUrl}/api/terrain/height/${tileX}/${tileZ}`
-    const response = await fetch(url)
-    const buffer = await response.arrayBuffer()
-    const data = new Uint16Array(buffer)
-    this.heightmaps.set(key, data)
-    return data
+    // Deduplicate in-flight requests
+    const inflight = this.inflightHeightmaps.get(key)
+    if (inflight) return inflight
+
+    const promise = (async () => {
+      const url = `${this.terrainApiUrl}/api/terrain/height/${tileX}/${tileZ}`
+      const response = await fetch(url)
+      const buffer = await response.arrayBuffer()
+      const data = new Uint16Array(buffer)
+      this.heightmaps.set(key, data)
+      this.inflightHeightmaps.delete(key)
+      return data
+    })()
+    this.inflightHeightmaps.set(key, promise)
+    return promise
   }
 
   getHeightmap(tileX: number, tileZ: number): Uint16Array | undefined {
@@ -161,21 +171,99 @@ export class TerrainHeightManager {
 
     const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
     const positions = posAttr.array as Float32Array
+    const normalAttr = geometry.getAttribute('normal') as THREE.BufferAttribute
+    const normals = normalAttr.array as Float32Array
 
+    // Build padded height grid (67×67) to avoid per-vertex cross-tile lookups.
+    // Rows/cols 0 and 66 come from neighbor tiles; 1-65 are this tile's data.
+    const P = VERTS_PER_SIDE + 2 // 67
+    const heights = new Float32Array(P * P)
+
+    // Fill 64×64 interior directly from heightmap data (no function call overhead)
+    for (let cz = 0; cz < TILE_DIM; cz++) {
+      const srcRow = cz * TILE_DIM
+      const dstRow = (cz + 1) * P + 1
+      for (let cx = 0; cx < TILE_DIM; cx++) {
+        heights[dstRow + cx] = decodeHeight(data[srcRow + cx])
+      }
+    }
+    // Edge vertices (vx=64 and vz=64) share data with neighbor tiles
+    for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
+      heights[(vz + 1) * P + (TILE_DIM + 1)] = this.getHeightAtCell(
+        tileX,
+        tileZ,
+        TILE_DIM,
+        vz
+      )
+    }
+    for (let vx = 0; vx < TILE_DIM; vx++) {
+      heights[(TILE_DIM + 1) * P + (vx + 1)] = this.getHeightAtCell(
+        tileX,
+        tileZ,
+        vx,
+        TILE_DIM
+      )
+    }
+
+    // Padding edges for normal computation at boundaries
+    for (let i = 0; i < VERTS_PER_SIDE; i++) {
+      heights[(i + 1) * P] = this.getHeightAtCell(tileX, tileZ, -1, i) // left padding
+      heights[(i + 1) * P + (P - 1)] = this.getHeightAtCell(
+        tileX,
+        tileZ,
+        VERTS_PER_SIDE,
+        i
+      ) // right padding
+      heights[i + 1] = this.getHeightAtCell(tileX, tileZ, i, -1) // top padding
+      heights[(P - 1) * P + (i + 1)] = this.getHeightAtCell(
+        tileX,
+        tileZ,
+        i,
+        VERTS_PER_SIDE
+      ) // bottom padding
+    }
+    // Four padding corners
+    heights[0] = this.getHeightAtCell(tileX, tileZ, -1, -1)
+    heights[P - 1] = this.getHeightAtCell(tileX, tileZ, VERTS_PER_SIDE, -1)
+    heights[(P - 1) * P] = this.getHeightAtCell(
+      tileX,
+      tileZ,
+      -1,
+      VERTS_PER_SIDE
+    )
+    heights[(P - 1) * P + (P - 1)] = this.getHeightAtCell(
+      tileX,
+      tileZ,
+      VERTS_PER_SIDE,
+      VERTS_PER_SIDE
+    )
+
+    // Set positions and compute analytical normals via central differences
     for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
       for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
-        // For edge vertices (vx=64 or vz=64), getHeightAtCell crosses into
-        // the adjacent tile to fetch cell 0, ensuring seamless tile borders.
-        const heightMeters = this.getHeightAtCell(tileX, tileZ, vx, vz)
-
         const vertexIndex = vz * VERTS_PER_SIDE + vx
-        // After rotateX(-PI/2), Y is the height axis (index 1 in stride-3 buffer)
-        positions[vertexIndex * 3 + 1] = heightMeters
+        const pi = (vz + 1) * P + (vx + 1) // index into padded grid
+
+        const h = heights[pi]
+        positions[vertexIndex * 3 + 1] = h
+
+        // Central differences (cell spacing = 1.0)
+        const dhdx = heights[pi + 1] - heights[pi - 1] // right - left
+        const dhdz = heights[pi + P] - heights[pi - P] // forward - back
+
+        // normal = normalize(-dhdx, 2, -dhdz)
+        const nx = -dhdx
+        const ny = 2.0
+        const nz = -dhdz
+        const invLen = 1.0 / Math.sqrt(nx * nx + ny * ny + nz * nz)
+        normals[vertexIndex * 3] = nx * invLen
+        normals[vertexIndex * 3 + 1] = ny * invLen
+        normals[vertexIndex * 3 + 2] = nz * invLen
       }
     }
 
     posAttr.needsUpdate = true
-    geometry.computeVertexNormals()
+    normalAttr.needsUpdate = true
     geometry.computeBoundingSphere()
   }
 

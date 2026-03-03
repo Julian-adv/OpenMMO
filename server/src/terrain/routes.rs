@@ -33,7 +33,14 @@ async fn get_heightmap(
         error!("Failed to read heightmap ({}, {}): {}", x, z, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data).into_response())
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/octet-stream"),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        data,
+    )
+        .into_response())
 }
 
 async fn put_heightmap(
@@ -65,7 +72,14 @@ async fn get_splatmap(
         error!("Failed to read splatmap ({}, {}): {}", x, z, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data).into_response())
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/octet-stream"),
+            (header::CACHE_CONTROL, "public, max-age=3600"),
+        ],
+        data,
+    )
+        .into_response())
 }
 
 async fn put_splatmap(
@@ -92,10 +106,14 @@ async fn put_splatmap(
 async fn get_meta(
     Path((rx, rz)): Path<(i32, i32)>,
     State(terrain): State<Arc<TerrainIO>>,
-) -> Result<Json<serde_json::Value>, StatusCode> {
+) -> Result<Response, StatusCode> {
     let meta = terrain.read_meta(rx, rz).await.map_err(|e| {
         error!("Failed to read meta ({}, {}): {}", rx, rz, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    Ok(Json(meta))
+    Ok((
+        [(header::CACHE_CONTROL, "public, max-age=3600")],
+        Json(meta),
+    )
+        .into_response())
 }
