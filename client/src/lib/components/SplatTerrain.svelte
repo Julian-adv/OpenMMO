@@ -198,14 +198,20 @@
     if (u) u.splatMap.value = splatTexture
   })
 
-  // Update caustics texture uniform
+  // Update tile origin uniform when position changes
+  $effect(() => {
+    if (!material) return
+    const u = material.userData?.uniforms
+    if (u?.tileOrigin) u.tileOrigin.value.set(position[0], position[2])
+  })
+
+  // Update caustics uniforms (stored in userData but not connected to shader nodes)
   $effect(() => {
     if (!material || !causticsMap) return
     const u = material.userData?.uniforms
     if (u) u.causticsMap.value = causticsMap
   })
 
-  // Update caustics uniforms every frame
   $effect(() => {
     if (!material) return
     const u = material.userData?.uniforms
