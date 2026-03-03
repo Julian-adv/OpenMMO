@@ -153,12 +153,14 @@
     cameraTarget = resetCameraRotationToDefault(camera, currentPlayer.position)
   }
 
-  // Reset editor pan offset when leaving map editor mode
+  // Reset camera and pan offset when entering/leaving map editor mode
   let prevMapEditorMode = $state(false)
   $effect(() => {
     const current = $mapEditorMode
-    if (prevMapEditorMode && !current) {
+    if (prevMapEditorMode !== current) {
+      // Clear pan offset first so resetCameraRotation computes the correct distance
       editorPanOffset.set({ x: 0, z: 0 })
+      resetCameraRotation()
     }
     prevMapEditorMode = current
   })
@@ -450,7 +452,24 @@
       if (refractionManager) {
         if (camera) refractionManager.setCamera(camera)
         if (waterGroup) refractionManager.setWaterGroup(waterGroup)
+
+        // Hide brush/grid overlay during refraction so it doesn't show through water
+        const brushUniforms = (terrainMeshes[0]?.material as any)?.userData?.uniforms
+        let savedBrushActive: number | undefined
+        let savedGridVisible: number | undefined
+        if (brushUniforms) {
+          savedBrushActive = brushUniforms.brushActive.value
+          savedGridVisible = brushUniforms.gridVisible.value
+          brushUniforms.brushActive.value = 0.0
+          brushUniforms.gridVisible.value = 0.0
+        }
+
         refractionManager.render()
+
+        if (brushUniforms) {
+          brushUniforms.brushActive.value = savedBrushActive
+          brushUniforms.gridVisible.value = savedGridVisible
+        }
       }
 
       loopProfiler.record('frameWork', performance.now() - frameWorkStart)
@@ -493,8 +512,8 @@
         y: currentPlayer.position.y,
         z: currentPlayer.position.z + pan.z,
       }
-      // Scale the base offset to raise the camera when zoomed out
-      // so bottom view rays still intersect the ground plane.
+      // Always use fixed CAMERA_OFFSET in editor mode (OrbitControls is disabled,
+      // so we must not feed back the computed offset which includes the pan).
       if (camera.zoom < 1) {
         const maxBelow = INITIAL_DISTANCE / Math.SQRT2
         const scale = Math.max(1, (ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2) / (camera.zoom * maxBelow))
@@ -504,7 +523,7 @@
           z: CAMERA_OFFSET.z * scale,
         })
       } else {
-        cameraTarget = applyCameraOffset(camera, panPos, offset)
+        cameraTarget = applyCameraOffset(camera, panPos, CAMERA_OFFSET)
       }
     } else {
       cameraTarget = applyCameraOffset(camera, currentPlayer.position, offset)
