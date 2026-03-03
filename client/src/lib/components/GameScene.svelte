@@ -54,6 +54,7 @@
     mapEditorMode,
     teleportLoading,
   } from '../stores/debugStore'
+  import { editorPanOffset } from '../stores/editorStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
   import {
@@ -151,6 +152,16 @@
     if (!currentPlayer || !camera) return
     cameraTarget = resetCameraRotationToDefault(camera, currentPlayer.position)
   }
+
+  // Reset editor pan offset when leaving map editor mode
+  let prevMapEditorMode = $state(false)
+  $effect(() => {
+    const current = $mapEditorMode
+    if (prevMapEditorMode && !current) {
+      editorPanOffset.set({ x: 0, z: 0 })
+    }
+    prevMapEditorMode = current
+  })
 
   $effect(() => {
     updateOrthographicFrustum(camera, viewportSize)
@@ -473,16 +484,28 @@
 
   function updateCameraWithOffset(offset: { x: number; y: number; z: number }) {
     if (!currentPlayer || !camera) return
-    // In map editor mode, scale the base offset to raise the camera when zoomed out
-    // so bottom view rays still intersect the ground plane.
-    if ($mapEditorMode && camera.zoom < 1) {
-      const maxBelow = INITIAL_DISTANCE / Math.SQRT2
-      const scale = Math.max(1, (ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2) / (camera.zoom * maxBelow))
-      cameraTarget = applyCameraOffset(camera, currentPlayer.position, {
-        x: CAMERA_OFFSET.x * scale,
-        y: CAMERA_OFFSET.y * scale,
-        z: CAMERA_OFFSET.z * scale,
-      })
+
+    if ($mapEditorMode) {
+      // Apply editor pan offset so middle-mouse drag moves the viewport
+      const pan = $editorPanOffset
+      const panPos = {
+        x: currentPlayer.position.x + pan.x,
+        y: currentPlayer.position.y,
+        z: currentPlayer.position.z + pan.z,
+      }
+      // Scale the base offset to raise the camera when zoomed out
+      // so bottom view rays still intersect the ground plane.
+      if (camera.zoom < 1) {
+        const maxBelow = INITIAL_DISTANCE / Math.SQRT2
+        const scale = Math.max(1, (ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2) / (camera.zoom * maxBelow))
+        cameraTarget = applyCameraOffset(camera, panPos, {
+          x: CAMERA_OFFSET.x * scale,
+          y: CAMERA_OFFSET.y * scale,
+          z: CAMERA_OFFSET.z * scale,
+        })
+      } else {
+        cameraTarget = applyCameraOffset(camera, panPos, offset)
+      }
     } else {
       cameraTarget = applyCameraOffset(camera, currentPlayer.position, offset)
     }
