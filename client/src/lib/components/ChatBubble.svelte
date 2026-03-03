@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T } from '@threlte/core'
-  import { Text } from '@threlte/extras'
+  import CanvasText from './CanvasText.svelte'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
 
@@ -17,8 +17,7 @@
 
   let textBounds = $state({ width: 1, height: 0.3 })
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let textRef = $state<any>(null)
+  let textRef = $state<CanvasText | null>(null)
   let bubbleGroup = $state<THREE.Group | undefined>(undefined)
 
   function handleTextSync() {
@@ -140,8 +139,8 @@
   </T.LineLoop>
 
   <!-- Chat bubble text -->
-  <Text
-    bind:ref={textRef}
+  <CanvasText
+    bind:this={textRef}
     text={displayText}
     position={[0, bubbleCenterY + cornerRadius, 0.01]}
     fontSize={0.25}
