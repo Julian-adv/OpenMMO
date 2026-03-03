@@ -1,5 +1,30 @@
-// makeSplatStandardMaterial.ts
+// makeSplatStandardMaterial.ts — TSL/WebGPU version
 import * as THREE from 'three'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
+import {
+  Fn,
+  uniform,
+  texture,
+  uv,
+  vec2,
+  vec3,
+  vec4,
+  float,
+  sin,
+  cos,
+  smoothstep,
+  mix,
+  clamp,
+  min,
+  max,
+  varying,
+  positionLocal,
+  modelWorldMatrix,
+  fwidth,
+  fract,
+  abs,
+  distance,
+} from 'three/tsl'
 
 export type SplatLayer = {
   map: THREE.Texture // Albedo (sRGB)
@@ -19,285 +44,316 @@ export function makeSplatStandardMaterial({
   splatMap,
   splatScale = 1,
 }: SplatParams) {
-  // Standard material: keep lighting/shadows/physical properties intact
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 1.0, // Sensible default; adjust externally as needed
-    metalness: 0.0,
-    envMapIntensity: 0,
-  })
-
   // Recommended common texture settings
   const prepare = (t: THREE.Texture, isColor = false) => {
     t.wrapS = t.wrapT = THREE.RepeatWrapping
     t.anisotropy = 8
-    if (isColor) t.colorSpace = THREE.SRGBColorSpace // Albedo uses sRGB
+    if (isColor) t.colorSpace = THREE.SRGBColorSpace
     t.needsUpdate = true
   }
 
   layers.forEach((l) => prepare(l.map, true))
   prepare(splatMap, false)
-  // Splat map filtering: Linear for smooth blends, Nearest for hard edges
   splatMap.minFilter = THREE.LinearMipMapLinearFilter
   splatMap.magFilter = THREE.LinearFilter
 
-  mat.onBeforeCompile = (shader) => {
-    shader.defines = { ...(shader.defines ?? {}), USE_UV: 1 }
+  // ─── Scalar uniforms ─────────────────────────────────
+  const uTile0 = uniform(layers[0].tile)
+  const uTile1 = uniform(layers[1].tile)
+  const uTile2 = uniform(layers[2].tile)
+  const uTile3 = uniform(layers[3].tile)
+  const uSplatScale = uniform(splatScale)
 
-    // Disable environment map at shader level so scene.environment doesn't brighten terrain
-    shader.fragmentShader = '#undef USE_ENVMAP\n' + shader.fragmentShader
+  // Brush overlay
+  const uBrushCenter = uniform(new THREE.Vector2(0, 0))
+  const uBrushRadius = uniform(3.0)
+  const uBrushActive = uniform(0.0)
+  const uBrushRaise = uniform(1.0)
+  const uBrushToolMode = uniform(0.0)
+  const uGridVisible = uniform(0.0)
 
-    // Common uniforms
-    shader.uniforms.splatMap = { value: splatMap }
-    shader.uniforms.diffuse0 = { value: layers[0].map }
-    shader.uniforms.diffuse1 = { value: layers[1].map }
-    shader.uniforms.diffuse2 = { value: layers[2].map }
-    shader.uniforms.diffuse3 = { value: layers[3].map }
-    shader.uniforms.tile0 = { value: layers[0].tile }
-    shader.uniforms.tile1 = { value: layers[1].tile }
-    shader.uniforms.tile2 = { value: layers[2].tile }
-    shader.uniforms.tile3 = { value: layers[3].tile }
-    shader.uniforms.splatScale = { value: splatScale }
+  // Caustics
+  const uCausticsTime = uniform(0.0)
+  const uCausticsStrength = uniform(0.275)
+  const uCausticsScale = uniform(0.15)
+  const uWaterLevel = uniform(0.01)
 
-    // Brush overlay uniforms
-    shader.uniforms.brushCenter = { value: new THREE.Vector2(0, 0) }
-    shader.uniforms.brushRadius = { value: 3.0 }
-    shader.uniforms.brushActive = { value: 0.0 }
-    shader.uniforms.brushRaise = { value: 1.0 }
-    shader.uniforms.brushToolMode = { value: 0.0 } // 0=height, 1=splat
-    shader.uniforms.gridVisible = { value: 0.0 } // 0=hidden, 1=visible
+  // ─── Texture nodes (direct THREE.Texture → TextureNode) ──
+  const splatTex = texture(splatMap)
+  const diffTex0 = texture(layers[0].map)
+  const diffTex1 = texture(layers[1].map)
+  const diffTex2 = texture(layers[2].map)
+  const diffTex3 = texture(layers[3].map)
 
-    // Caustics uniforms
-    shader.uniforms.causticsMap = { value: null }
-    shader.uniforms.causticsTime = { value: 0.0 }
-    shader.uniforms.causticsStrength = { value: 0.275 }
-    shader.uniforms.causticsScale = { value: 0.15 }
-    shader.uniforms.waterLevel = { value: 0.01 }
+  const hasN = layers.some((l) => !!l.normalMap)
+  const hasORM = layers.some((l) => !!l.orm)
 
-    // Save shader ref for external uniform updates
-    mat.userData.shader = shader
+  // Placeholder texture for missing layers
+  const placeholderTex = new THREE.DataTexture(
+    new Uint8Array([128, 128, 255, 255]),
+    1,
+    1,
+    THREE.RGBAFormat
+  )
+  placeholderTex.needsUpdate = true
+  const placeholderORM = new THREE.DataTexture(
+    new Uint8Array([255, 255, 0, 255]),
+    1,
+    1,
+    THREE.RGBAFormat
+  )
+  placeholderORM.needsUpdate = true
 
-    // Optional uniforms
-    const hasN = layers.some((l) => !!l.normalMap)
-    const hasORM = layers.some((l) => !!l.orm)
+  const normTex0 = hasN ? texture(layers[0].normalMap ?? placeholderTex) : null
+  const normTex1 = hasN ? texture(layers[1].normalMap ?? placeholderTex) : null
+  const normTex2 = hasN ? texture(layers[2].normalMap ?? placeholderTex) : null
+  const normTex3 = hasN ? texture(layers[3].normalMap ?? placeholderTex) : null
 
-    if (hasN) {
-      if (layers[0].normalMap)
-        shader.uniforms.normal0 = { value: layers[0].normalMap }
-      if (layers[1].normalMap)
-        shader.uniforms.normal1 = { value: layers[1].normalMap }
-      if (layers[2].normalMap)
-        shader.uniforms.normal2 = { value: layers[2].normalMap }
-      if (layers[3].normalMap)
-        shader.uniforms.normal3 = { value: layers[3].normalMap }
-      shader.uniforms.normalScale = { value: 1.0 }
-    }
-    if (hasORM) {
-      if (layers[0].orm) shader.uniforms.orm0 = { value: layers[0].orm }
-      if (layers[1].orm) shader.uniforms.orm1 = { value: layers[1].orm }
-      if (layers[2].orm) shader.uniforms.orm2 = { value: layers[2].orm }
-      if (layers[3].orm) shader.uniforms.orm3 = { value: layers[3].orm }
-    }
+  const ormTex0 = hasORM ? texture(layers[0].orm ?? placeholderORM) : null
+  const ormTex1 = hasORM ? texture(layers[1].orm ?? placeholderORM) : null
+  const ormTex2 = hasORM ? texture(layers[2].orm ?? placeholderORM) : null
+  const ormTex3 = hasORM ? texture(layers[3].orm ?? placeholderORM) : null
 
-    // Vertex shader: splat UV + world position for brush overlay
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <uv_pars_vertex>',
-        `#include <uv_pars_vertex>
-         uniform float splatScale;
-         varying vec2 vUvSplat;
-         varying vec2 vWorldXZ;
-         varying float vWorldY;`
+  const caustTex = texture(placeholderTex) // will be updated via .value
+
+  // ─── Varyings: world position from vertex ─────────
+  const vUvSplat = varying(vec2(0), 'v_uvSplat')
+  const vWorldXZ = varying(vec2(0), 'v_worldXZ')
+  const vWorldY = varying(float(0), 'v_worldY')
+
+  // ─── Helper: normalized splat weights ─────────────
+  const getWeights = Fn(([uvCoord]: [ReturnType<typeof vec2>]) => {
+    const w = splatTex.uv(uvCoord).toVar()
+    const wSum = w.r.add(w.g).add(w.b).add(w.a)
+    w.assign(mix(w, w.div(wSum), smoothstep(float(0), float(1e-5), wSum)))
+    return w
+  })
+
+  // ─── Vertex position node (adds varyings) ─────────
+  const vertexNode = Fn(() => {
+    const localUv = uv()
+    vUvSplat.assign(localUv.mul(uSplatScale))
+    const worldPos4 = modelWorldMatrix.mul(vec4(positionLocal, 1.0))
+    vWorldXZ.assign(worldPos4.xz)
+    vWorldY.assign(worldPos4.y)
+    return positionLocal
+  })()
+
+  // ─── Color node (albedo blending + overlays) ──────
+  const colorNode = Fn(() => {
+    const localUv = uv()
+    const weights = getWeights(vUvSplat)
+
+    const c0 = diffTex0.uv(localUv.mul(uTile0)).rgb
+    const c1 = diffTex1.uv(localUv.mul(uTile1)).rgb
+    const c2 = diffTex2.uv(localUv.mul(uTile2)).rgb
+    const c3 = diffTex3.uv(localUv.mul(uTile3)).rgb
+    const blended = c0
+      .mul(weights.r)
+      .add(c1.mul(weights.g))
+      .add(c2.mul(weights.b))
+      .add(c3.mul(weights.a))
+      .toVar()
+
+    // Grid visualization
+    const gridCoords = localUv.mul(64.0)
+    const grid1 = abs(fract(gridCoords.sub(0.5)).sub(0.5)).div(
+      fwidth(gridCoords)
+    )
+    const line1 = float(1).sub(min(min(grid1.x, grid1.y), float(1)))
+    const grid64 = abs(fract(localUv.sub(0.5)).sub(0.5)).div(fwidth(localUv))
+    const line64 = float(1).sub(min(min(grid64.x, grid64.y), float(1)))
+
+    const gridActive = smoothstep(float(0.49), float(0.51), uGridVisible)
+    blended.assign(
+      mix(blended, mix(blended, vec3(0, 0, 0), line1.mul(0.3)), gridActive)
+    )
+    blended.assign(
+      mix(blended, mix(blended, vec3(1, 0, 0), line64), gridActive)
+    )
+
+    // Brush overlay
+    const bDist = distance(vWorldXZ, vec2(uBrushCenter))
+    const ringWidth = max(float(0.5), float(uBrushRadius).mul(0.1))
+    const innerRadius = float(uBrushRadius).sub(ringWidth)
+    const inRing = smoothstep(innerRadius.sub(0.1), innerRadius, bDist).mul(
+      float(1).sub(
+        smoothstep(float(uBrushRadius), float(uBrushRadius).add(0.1), bDist)
       )
-      .replace(
-        '#include <uv_vertex>',
-        `#include <uv_vertex>
-         vUvSplat = uv * splatScale;
-         vec4 worldPos4 = modelMatrix * vec4(position, 1.0);
-         vWorldXZ = worldPos4.xz;
-         vWorldY = worldPos4.y;`
-      )
+    )
 
-    // Fragment shader: declarations
-    shader.fragmentShader = shader.fragmentShader
-      .replace(
-        '#include <map_pars_fragment>',
-        `#include <map_pars_fragment>
-         uniform sampler2D splatMap;
-         uniform sampler2D diffuse0, diffuse1, diffuse2, diffuse3;
-         uniform float tile0, tile1, tile2, tile3;
-         varying vec2 vUvSplat;
-         varying vec2 vWorldXZ;
-         uniform vec2 brushCenter;
-         uniform float brushRadius;
-         uniform float brushActive;
-         uniform float brushRaise;
-         uniform float brushToolMode;
-         uniform float gridVisible;
-         uniform sampler2D causticsMap;
-         uniform float causticsTime;
-         uniform float causticsStrength;
-         uniform float causticsScale;
-         uniform float waterLevel;
-         varying float vWorldY;
-         ${hasN ? 'uniform sampler2D normal0, normal1, normal2, normal3; uniform float normalScale;' : ''}
-         ${hasORM ? 'uniform sampler2D orm0, orm1, orm2, orm3;' : ''}`
-      )
-      // Albedo blending
-      .replace(
-        '#include <map_fragment>',
-        `vec4 weights = texture2D(splatMap, vUvSplat);
-         float wSum = weights.r + weights.g + weights.b + weights.a;
-         if (wSum > 1e-5) weights /= wSum;
+    const splatColor = vec3(1.0, 0.7, 0.2)
+    const flattenColor = vec3(0.3, 0.6, 1.0)
+    const raiseColor = vec3(0.3, 1.0, 0.3)
+    const lowerColor = vec3(1.0, 0.3, 0.3)
 
-         vec3 c0 = texture2D(diffuse0, vUv * tile0).rgb;
-         vec3 c1 = texture2D(diffuse1, vUv * tile1).rgb;
-         vec3 c2 = texture2D(diffuse2, vUv * tile2).rgb;
-         vec3 c3 = texture2D(diffuse3, vUv * tile3).rgb;
-         vec3 blended = c0*weights.r + c1*weights.g + c2*weights.b + c3*weights.a;
-         
-         // --- Grid visualization (conditional) ---
-         if (gridVisible > 0.5) {
-           vec2 gridCoords = vUv * 64.0; // 1m grid (since vUv is 0-1 across the 64m tile)
+    const heightColor = mix(
+      lowerColor,
+      mix(
+        raiseColor,
+        flattenColor,
+        smoothstep(float(1.49), float(1.51), uBrushRaise)
+      ),
+      smoothstep(float(0.49), float(0.51), uBrushRaise)
+    )
+    const brushColor = mix(
+      heightColor,
+      splatColor,
+      smoothstep(float(0.49), float(0.51), uBrushToolMode)
+    )
 
-           // 1m grid logic
-           vec2 grid1 = abs(fract(gridCoords - 0.5) - 0.5) / fwidth(gridCoords);
-           float line1 = 1.0 - min(min(grid1.x, grid1.y), 1.0);
+    const brushAlpha = inRing
+      .mul(0.35)
+      .mul(smoothstep(float(0.49), float(0.51), uBrushActive))
+    blended.assign(mix(blended, brushColor, brushAlpha))
 
-           // 64m grid logic (tile boundary)
-           vec2 grid64 = abs(fract(vUv - 0.5) - 0.5) / fwidth(vUv);
-           float line64 = 1.0 - min(min(grid64.x, grid64.y), 1.0);
+    return vec4(blended, 1.0)
+  })()
 
-           // Overlay grids
-           blended = mix(blended, vec3(0.0), line1 * 0.3);   // Dark 1m grid (30% opacity)
-           blended = mix(blended, vec3(1.0, 0.0, 0.0), line64); // Red 64m grid (Full opacity)
-         }
+  // ─── Normal node (splat-blended normals) ──────────
+  const normalNode = hasN
+    ? Fn(() => {
+        const localUv = uv()
+        const w = getWeights(vUvSplat)
 
-         // Brush overlay (ring shape, follows terrain surface)
-         if (brushActive > 0.5) {
-           float bDist = distance(vWorldXZ, brushCenter);
-           float ringWidth = max(0.5, brushRadius * 0.1);
-           float innerRadius = brushRadius - ringWidth;
-           if (bDist >= innerRadius && bDist <= brushRadius) {
-             vec3 brushColor = brushToolMode > 0.5 ? vec3(1.0, 0.7, 0.2) : brushRaise > 1.5 ? vec3(0.3, 0.6, 1.0) : brushRaise > 0.5 ? vec3(0.3, 1.0, 0.3) : vec3(1.0, 0.3, 0.3);
-             blended = mix(blended, brushColor, 0.35);
-           }
-         }
+        const n0 = normTex0!
+          .uv(localUv.mul(uTile0))
+          .xyz.mul(2.0)
+          .sub(1.0)
+          .mul(w.r)
+        const n1 = normTex1!
+          .uv(localUv.mul(uTile1))
+          .xyz.mul(2.0)
+          .sub(1.0)
+          .mul(w.g)
+        const n2 = normTex2!
+          .uv(localUv.mul(uTile2))
+          .xyz.mul(2.0)
+          .sub(1.0)
+          .mul(w.b)
+        const n3 = normTex3!
+          .uv(localUv.mul(uTile3))
+          .xyz.mul(2.0)
+          .sub(1.0)
+          .mul(w.a)
 
-         diffuseColor = vec4(blended, 1.0);`
-      )
-      // Inject custom normal perturbation function
-      .replace(
-        '#include <normal_pars_fragment>',
-        `#include <normal_pars_fragment>
-      ${
-        hasN
-          ? `
-        vec3 perturbNormal2Arb_custom( vec3 eye_pos, vec3 surf_norm, vec3 mapN, float faceDir ) {
-        vec3 q0 = dFdx( eye_pos.xyz );
-        vec3 q1 = dFdy( eye_pos.xyz );
-        vec2 st0 = dFdx( vUv );
-        vec2 st1 = dFdy( vUv );
-        vec3 S = normalize( q0 * st1.t - q1 * st0.t );
-        vec3 T = normalize( -q0 * st1.s + q1 * st0.s );
-        vec3 N = normalize( surf_norm );
-        N *= faceDir;
-        mapN.xy *= ( faceDir * normalScale );
-        mat3 tsn = mat3( S, T, N );
-        return normalize( tsn * mapN );
-      }`
-          : ``
-      }`
-      )
-      // Normal blending
-      .replace(
-        '#include <normal_fragment_maps>',
-        hasN
-          ? `
-        vec4 wNrm = texture2D(splatMap, vUvSplat);
-        float sN = wNrm.r + wNrm.g + wNrm.b + wNrm.a; if (sN > 1e-5) wNrm /= sN;
-  
-        vec3 n0 = texture2D(normal0, vUv * tile0).xyz * 2.0 - 1.0;
-        vec3 n1 = texture2D(normal1, vUv * tile1).xyz * 2.0 - 1.0;
-        vec3 n2 = texture2D(normal2, vUv * tile2).xyz * 2.0 - 1.0;
-        vec3 n3 = texture2D(normal3, vUv * tile3).xyz * 2.0 - 1.0;
-        vec3 mapN = normalize(n0*wNrm.r + n1*wNrm.g + n2*wNrm.b + n3*wNrm.a);
-  
-        normal = perturbNormal2Arb_custom(-vViewPosition, normal, mapN, (gl_FrontFacing) ? 1.0 : -1.0);`
-          : `#include <normal_fragment_maps>`
-      )
-      // Roughness (G channel)
-      .replace(
-        '#include <roughnessmap_fragment>',
-        hasORM
-          ? `
-        float roughnessFactor = roughness;
-        vec4 wR = texture2D(splatMap, vUvSplat);
-        float sR = wR.r + wR.g + wR.b + wR.a; if (sR > 1e-5) wR /= sR;
-  
-        float r0 = texture2D(orm0, vUv * tile0).g;
-        float r1 = texture2D(orm1, vUv * tile1).g;
-        float r2 = texture2D(orm2, vUv * tile2).g;
-        float r3 = texture2D(orm3, vUv * tile3).g;
-        float rBlend = r0*wR.r + r1*wR.g + r2*wR.b + r3*wR.a;
-  
-        roughnessFactor = roughnessFactor * rBlend;`
-          : `#include <roughnessmap_fragment>`
-      )
-      // Metalness (B channel)
-      .replace(
-        '#include <metalnessmap_fragment>',
-        hasORM
-          ? `
-        float metalnessFactor = metalness;
-        vec4 wM = texture2D(splatMap, vUvSplat);
-        float sM = wM.r + wM.g + wM.b + wM.a; if (sM > 1e-5) wM /= sM;
-  
-        float m0 = texture2D(orm0, vUv * tile0).b;
-        float m1 = texture2D(orm1, vUv * tile1).b;
-        float m2 = texture2D(orm2, vUv * tile2).b;
-        float m3 = texture2D(orm3, vUv * tile3).b;
-        float mBlend = m0*wM.r + m1*wM.g + m2*wM.b + m3*wM.a;
-  
-        metalnessFactor = metalnessFactor * mBlend;`
-          : `#include <metalnessmap_fragment>`
-      )
-      // AO (R channel)
-      .replace(
-        '#include <aomap_fragment>',
-        hasORM
-          ? `
-        vec4 wAO = texture2D(splatMap, vUvSplat);
-        float sAO = wAO.r + wAO.g + wAO.b + wAO.a; if (sAO > 1e-5) wAO /= sAO;
-  
-        float ao0v = texture2D(orm0, vUv * tile0).r;
-        float ao1v = texture2D(orm1, vUv * tile1).r;
-        float ao2v = texture2D(orm2, vUv * tile2).r;
-        float ao3v = texture2D(orm3, vUv * tile3).r;
-        float aoBlend = ao0v*wAO.r + ao1v*wAO.g + ao2v*wAO.b + ao3v*wAO.a;
-  
-        reflectedLight.indirectDiffuse *= aoBlend;`
-          : `#include <aomap_fragment>`
-      )
-      // Caustics: animated light patterns on terrain below water level
-      .replace(
-        '#include <lights_fragment_end>',
-        `#include <lights_fragment_end>
-        if (vWorldY < waterLevel) {
-          float t = causticsTime;
-          vec2 sway = vec2(sin(t * 0.07 + vWorldXZ.y * 2.0), cos(t * 0.09 + vWorldXZ.x * 2.0)) * 0.02;
-          vec2 cUV1 = vWorldXZ * causticsScale + vec2(t * 0.03, t * 0.02) + sway;
-          vec2 cUV2 = vWorldXZ * causticsScale * 1.3 - vec2(t * 0.02, t * 0.04) - sway * 1.3;
-          float caustic = min(texture2D(causticsMap, cUV1).r, texture2D(causticsMap, cUV2).r);
-          float underwaterDepth = clamp((waterLevel - vWorldY) / 3.0, 0.0, 1.0);
-          float caustFade = smoothstep(0.04, 0.25, underwaterDepth) * (1.0 - smoothstep(0.5, 1.0, underwaterDepth));
-          reflectedLight.directDiffuse += vec3(caustic * causticsStrength * caustFade);
-        }`
-      )
+        return n0.add(n1).add(n2).add(n3).normalize()
+      })()
+    : undefined
+
+  // ─── Roughness node (ORM G channel) ───────────────
+  const roughnessNode = hasORM
+    ? Fn(() => {
+        const localUv = uv()
+        const w = getWeights(vUvSplat)
+
+        const r0 = ormTex0!.uv(localUv.mul(uTile0)).g
+        const r1 = ormTex1!.uv(localUv.mul(uTile1)).g
+        const r2 = ormTex2!.uv(localUv.mul(uTile2)).g
+        const r3 = ormTex3!.uv(localUv.mul(uTile3)).g
+
+        return r0.mul(w.r).add(r1.mul(w.g)).add(r2.mul(w.b)).add(r3.mul(w.a))
+      })()
+    : undefined
+
+  // ─── Metalness node (ORM B channel) ───────────────
+  const metalnessNode = hasORM
+    ? Fn(() => {
+        const localUv = uv()
+        const w = getWeights(vUvSplat)
+
+        const m0 = ormTex0!.uv(localUv.mul(uTile0)).b
+        const m1 = ormTex1!.uv(localUv.mul(uTile1)).b
+        const m2 = ormTex2!.uv(localUv.mul(uTile2)).b
+        const m3 = ormTex3!.uv(localUv.mul(uTile3)).b
+
+        return m0.mul(w.r).add(m1.mul(w.g)).add(m2.mul(w.b)).add(m3.mul(w.a))
+      })()
+    : undefined
+
+  // ─── AO node (ORM R channel) ──────────────────────
+  const aoNode = hasORM
+    ? Fn(() => {
+        const localUv = uv()
+        const w = getWeights(vUvSplat)
+
+        const ao0 = ormTex0!.uv(localUv.mul(uTile0)).r
+        const ao1 = ormTex1!.uv(localUv.mul(uTile1)).r
+        const ao2 = ormTex2!.uv(localUv.mul(uTile2)).r
+        const ao3 = ormTex3!.uv(localUv.mul(uTile3)).r
+
+        return ao0
+          .mul(w.r)
+          .add(ao1.mul(w.g))
+          .add(ao2.mul(w.b))
+          .add(ao3.mul(w.a))
+      })()
+    : undefined
+
+  // ─── Emissive node (caustics animation) ───────────
+  const emissiveNode = Fn(() => {
+    const t = uCausticsTime
+    const sway = vec2(
+      sin(t.mul(0.07).add(vWorldXZ.y.mul(2))),
+      cos(t.mul(0.09).add(vWorldXZ.x.mul(2)))
+    ).mul(0.02)
+
+    const cUV1 = vWorldXZ
+      .mul(uCausticsScale)
+      .add(vec2(t.mul(0.03), t.mul(0.02)))
+      .add(sway)
+    const cUV2 = vWorldXZ
+      .mul(float(uCausticsScale).mul(1.3))
+      .sub(vec2(t.mul(0.02), t.mul(0.04)))
+      .sub(sway.mul(1.3))
+
+    const caustic = min(caustTex.uv(cUV1).r, caustTex.uv(cUV2).r)
+    const underwaterDepth = clamp(
+      float(uWaterLevel).sub(vWorldY).div(3),
+      0.0,
+      1.0
+    )
+    const caustFade = smoothstep(float(0.04), float(0.25), underwaterDepth).mul(
+      float(1).sub(smoothstep(float(0.5), float(1), underwaterDepth))
+    )
+
+    const belowWater = smoothstep(
+      float(uWaterLevel),
+      float(uWaterLevel).sub(0.01),
+      vWorldY
+    )
+    return vec3(caustic.mul(uCausticsStrength).mul(caustFade).mul(belowWater))
+  })()
+
+  // ─── Build material ────────────────────────────────
+  const mat = new MeshStandardNodeMaterial()
+  mat.roughness = 1.0
+  mat.metalness = 0.0
+  mat.envMapIntensity = 0
+
+  mat.positionNode = vertexNode
+  mat.colorNode = colorNode
+  if (normalNode) mat.normalNode = normalNode
+  if (roughnessNode) mat.roughnessNode = roughnessNode
+  if (metalnessNode) mat.metalnessNode = metalnessNode
+  if (aoNode) mat.aoNode = aoNode
+  mat.emissiveNode = emissiveNode
+
+  // Store uniforms for external access (replaces mat.userData.shader pattern)
+  mat.userData.uniforms = {
+    splatMap: splatTex,
+    brushCenter: uBrushCenter,
+    brushRadius: uBrushRadius,
+    brushActive: uBrushActive,
+    brushRaise: uBrushRaise,
+    brushToolMode: uBrushToolMode,
+    gridVisible: uGridVisible,
+    causticsMap: caustTex,
+    causticsTime: uCausticsTime,
+    causticsStrength: uCausticsStrength,
+    causticsScale: uCausticsScale,
+    waterLevel: uWaterLevel,
   }
-
-  // To change tiles/textures without recreating the material,
-  // store values like mat.userData.tiles = [ ... ] and update uniforms as needed.
 
   return mat
 }

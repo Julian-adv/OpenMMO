@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import type { MeshStandardNodeMaterial } from 'three/webgpu'
   import { onMount } from 'svelte'
   // You can use either Addons.js (aggregate) or direct GLTFLoader import. Keep Addons for compatibility.
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
@@ -31,10 +32,10 @@
     causticsTime = 0,
   }: Props = $props()
 
-  let material = $state<THREE.MeshStandardMaterial | null>(null)
+  let material = $state<MeshStandardNodeMaterial | null>(null)
   let brushUnsubs: (() => void)[] = []
 
-  function setupBrushSync(mat: THREE.MeshStandardMaterial) {
+  function setupBrushSync(mat: MeshStandardNodeMaterial) {
     // Clean up previous subscriptions
     brushUnsubs.forEach((u) => u())
     brushUnsubs = []
@@ -49,9 +50,8 @@
     const modeToShaderValue: Record<BrushMode, number> = { lower: 0.0, raise: 1.0, flatten: 2.0 }
 
     function sync() {
-      const s = mat.userData?.shader
-      if (!s) return
-      const u = s.uniforms
+      const u = mat.userData?.uniforms
+      if (!u) return
       u.gridVisible.value = (editorActive || gridOn) ? 1.0 : 0.0
       if (editorActive && pos) {
         u.brushActive.value = 1.0
@@ -190,58 +190,29 @@
     }
   })
 
-  // Reactively update splatMap uniform when splatTexture prop changes (late-loading).
-  // material.userData.shader is set by Three.js onBeforeCompile (async, after first render),
-  // so we must poll with rAF until the shader is available.
+  // Reactively update splatMap uniform when splatTexture prop changes.
+  // TSL uniforms are immediately available — no rAF polling needed.
   $effect(() => {
     if (!material || !splatTexture) return
-    const mat = material
-    const tex = splatTexture
-    let cancelled = false
-
-    function tryUpdate() {
-      if (cancelled) return
-      const s = mat.userData?.shader
-      if (s) {
-        s.uniforms.splatMap.value = tex
-      } else {
-        requestAnimationFrame(tryUpdate)
-      }
-    }
-    requestAnimationFrame(tryUpdate)
-
-    return () => { cancelled = true }
+    const u = material.userData?.uniforms
+    if (u) u.splatMap.value = splatTexture
   })
 
-  // Update caustics texture uniform (poll for shader like splatTexture does)
+  // Update caustics texture uniform
   $effect(() => {
     if (!material || !causticsMap) return
-    const mat = material
-    const tex = causticsMap
-    let cancelled = false
-
-    function tryUpdate() {
-      if (cancelled) return
-      const s = mat.userData?.shader
-      if (s) {
-        s.uniforms.causticsMap.value = tex
-      } else {
-        requestAnimationFrame(tryUpdate)
-      }
-    }
-    requestAnimationFrame(tryUpdate)
-
-    return () => { cancelled = true }
+    const u = material.userData?.uniforms
+    if (u) u.causticsMap.value = causticsMap
   })
 
   // Update caustics uniforms every frame
   $effect(() => {
     if (!material) return
-    const s = material.userData?.shader
-    if (s) {
-      s.uniforms.causticsTime.value = causticsTime
-      s.uniforms.causticsStrength.value = 0.275
-      s.uniforms.waterLevel.value = 0.01
+    const u = material.userData?.uniforms
+    if (u) {
+      u.causticsTime.value = causticsTime
+      u.causticsStrength.value = 0.275
+      u.waterLevel.value = 0.01
     }
   })
 

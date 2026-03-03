@@ -7,6 +7,7 @@
     RollCharacterStatsResult,
   } from '../network/socket'
   import CharacterCreateScene from './CharacterCreateScene.svelte'
+  import { createWebGPURenderer } from '../utils/renderer'
 
   const MAX_CHARACTER_SLOTS = 3
 
@@ -108,7 +109,7 @@
 
 <div class="character-create-screen">
   <div class="canvas-layer">
-    <Canvas shadows>
+    <Canvas shadows createRenderer={createWebGPURenderer}>
       <CharacterCreateScene characterClass={selectedClass} />
     </Canvas>
   </div>

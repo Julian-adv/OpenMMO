@@ -1,7 +1,8 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
-  import { createWaterMaterial } from '../shaders/water-material'
+  import type { NodeMaterial } from 'three/webgpu'
+  import { createWaterMaterial, type WaterMaterialResult } from '../shaders/water-material'
 
   interface Props {
     geometry: THREE.BufferGeometry
@@ -31,7 +32,8 @@
     refractionMap = null,
   }: Props = $props()
 
-  let material = $state<THREE.ShaderMaterial | null>(null)
+  let material = $state<NodeMaterial | null>(null)
+  let waterResult = $state<WaterMaterialResult | null>(null)
 
   // Create/recreate material when heightmapTexture or normalMap change
   $effect(() => {
@@ -42,37 +44,38 @@
     const fm = foamMap
     const sm = surfaceMap
     if (!fm || !sm) return
-    const mat = createWaterMaterial({
+    const result = createWaterMaterial({
       heightmapTexture: hm,
       normalMap: nm,
       foamMap: fm,
       surfaceMap: sm,
       refractionMap,
     })
-    material = mat
+    waterResult = result
+    material = result.material
 
     return () => {
-      mat.dispose()
+      result.material.dispose()
     }
   })
 
   // Update time uniform every frame
   $effect(() => {
-    if (material) material.uniforms.uTime.value = time
+    if (waterResult) waterResult.uniforms.uTime.value = time
   })
 
   // Update sun uniforms
   $effect(() => {
-    if (!material) return
-    if (sunDirection) material.uniforms.uSunDirection.value.copy(sunDirection)
-    if (sunColor) material.uniforms.uSunColor.value.copy(sunColor)
-    if (cameraDirection) material.uniforms.uCameraDirection.value.copy(cameraDirection)
+    if (!waterResult) return
+    if (sunDirection) waterResult.uniforms.uSunDirection.value.copy(sunDirection)
+    if (sunColor) waterResult.uniforms.uSunColor.value.copy(sunColor)
+    if (cameraDirection) waterResult.uniforms.uCameraDirection.value.copy(cameraDirection)
   })
 
   // Update refraction map when it changes
   $effect(() => {
-    if (material && refractionMap) {
-      material.uniforms.uRefractionMap.value = refractionMap
+    if (waterResult && refractionMap) {
+      waterResult.uniforms.uRefractionMap.value = refractionMap
     }
   })
 

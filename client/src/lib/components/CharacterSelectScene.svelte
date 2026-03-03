@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T, useThrelte } from '@threlte/core'
   import * as THREE from 'three'
+  import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
   import { interactivity } from '@threlte/extras'
@@ -47,7 +48,9 @@
   const KEY_LIGHT_INTENSITY = 0.05
   const FILL_LIGHT_INTENSITY = 0.48
 
-  const { size, renderer, scene } = useThrelte()
+  const { size, renderer: _renderer, scene } = useThrelte()
+  // Cast renderer — Threlte types it as WebGLRenderer but we use WebGPURenderer via createRenderer
+  const renderer = _renderer as unknown as WebGPURenderer
   let viewportSize = $state({ width: 1, height: 1 })
   let cameraPositionZ = $state(8)
 
@@ -58,7 +61,7 @@
       viewportSize = nextSize
     })
 
-    const pmremGenerator = new THREE.PMREMGenerator(renderer)
+    const pmremGenerator = new PMREMGenerator(renderer)
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
     scene.environmentIntensity = 0.1
     pmremGenerator.dispose()

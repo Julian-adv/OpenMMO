@@ -2,6 +2,7 @@
   import { Canvas } from '@threlte/core'
   import type { AccountCharacter } from '../network/socket'
   import CharacterSelectScene from './CharacterSelectScene.svelte'
+  import { createWebGPURenderer } from '../utils/renderer'
 
   const MAX_CHARACTER_SLOTS = 3
 
@@ -101,7 +102,7 @@
 
 <div class="character-select-screen">
   <div class="canvas-layer">
-    <Canvas shadows>
+    <Canvas shadows createRenderer={createWebGPURenderer}>
       <CharacterSelectScene
         {characters}
         {selectedCharacterId}
