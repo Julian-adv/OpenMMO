@@ -250,14 +250,34 @@
     currentPlayerState = newState
   }
 
+  // Queue for staggered tile loading: add one new tile per frame
+  // to spread geometry cloning + heightmap application across frames.
+  let pendingTileQueue: TerrainTile[] = []
+
   function rebuildTerrainTiles(centerChunkX: number, centerChunkZ: number) {
-    terrainTiles = createTerrainTiles(
+    const allTiles = createTerrainTiles(
       centerChunkX,
       centerChunkZ,
       TERRAIN_TILE_SIZE,
       TERRAIN_GRID_RADIUS
     )
-    terrainMeshes = new Array(terrainTiles.length)
+
+    const newTileIds = new Set(allTiles.map((t) => t.id))
+    const keptTiles = terrainTiles.filter((t) => newTileIds.has(t.id))
+    const keptIds = new Set(keptTiles.map((t) => t.id))
+
+    // Immediately keep existing tiles and remove stale ones
+    terrainTiles = keptTiles
+    terrainMeshes = new Array(allTiles.length)
+
+    // Queue truly new tiles for one-per-frame loading
+    pendingTileQueue = allTiles.filter((t) => !keptIds.has(t.id))
+  }
+
+  function drainTileQueue() {
+    if (pendingTileQueue.length === 0) return
+    const tile = pendingTileQueue.shift()!
+    terrainTiles = [...terrainTiles, tile]
   }
 
   function updateTerrainTilesFromPlayer() {
@@ -325,6 +345,7 @@
         playerControl.updatePlayerMovement(deltaTime)
       }
       updateTerrainTilesFromPlayer()
+      drainTileQueue()
       // Finalize teleport once full 3x3 heightmap grid is loaded
       if ($teleportLoading && currentPlayer &&
           terrainHeightManager.hasHeightDataForGrid(currentPlayer.position.x, currentPlayer.position.z)) {
