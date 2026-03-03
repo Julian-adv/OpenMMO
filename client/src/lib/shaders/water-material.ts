@@ -21,7 +21,6 @@ import {
   fract,
   floor,
   max,
-  min,
   reflect,
   varying,
   positionLocal,
@@ -154,8 +153,10 @@ export function createWaterMaterial(
   const uWaveA = uniform(new THREE.Vector4(ax, az, 0.03, 20))
   const uWaveB = uniform(new THREE.Vector4(bx, bz, 0.02, 15))
   const uWaveC = uniform(new THREE.Vector4(cx, cz, 0.015, 10))
-  const uShallowColor = uniform(new THREE.Color(0.08, 0.55, 0.58))
-  const uDeepColor = uniform(new THREE.Color(0.02, 0.05, 0.18))
+  const uFoamBandColor = uniform(new THREE.Color(0.7, 0.9, 0.92))
+  const uShallowColor = uniform(new THREE.Color(0.1, 0.7, 0.7))
+  const uMidColor = uniform(new THREE.Color(0.0, 0.4, 0.6))
+  const uDeepColor = uniform(new THREE.Color(0.0, 0.05, 0.14))
   const uMaxDepth = uniform(1.8)
   const uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.3).normalize())
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
@@ -166,7 +167,6 @@ export function createWaterMaterial(
   const heightmapTex = texture(options.heightmapTexture)
   const normalMapTex = texture(options.normalMap)
   const foamMapTex = texture(options.foamMap)
-  const surfaceMapTex = texture(options.surfaceMap)
   const refractionTex = texture(options.refractionMap ?? fallbackTex)
 
   // ─── Vertex: Gerstner wave displacement ────────────
@@ -192,10 +192,6 @@ export function createWaterMaterial(
     worldPos.xyz.addAssign(offset)
     vWaveHeight.assign(offset.y)
 
-    // Clamp wave so it never dips below the terrain
-    const terrainHeight = heightmapTex.sample(uv()).r
-    worldPos.y.assign(max(terrainHeight.add(0.01), worldPos.y))
-
     vWorldPos.assign(worldPos.xyz)
 
     const clipPos = cameraProjectionMatrix.mul(cameraViewMatrix).mul(worldPos)
@@ -211,9 +207,23 @@ export function createWaterMaterial(
     const depth = max(float(0), vOrigWorldPos.y.sub(terrainHeight))
     const depthFactor = clamp(depth.div(uMaxDepth), 0.0, 1.0)
 
-    // 2. Depth-based color
+    // 2. Depth-based color (4-stop gradient)
     const smoothDepth = smoothstep(float(0), float(1), depthFactor)
-    const waterColor = mix(uShallowColor, uDeepColor, smoothDepth).toVar()
+    const c1 = mix(
+      uFoamBandColor,
+      uShallowColor,
+      smoothstep(float(0), float(0.15), depthFactor)
+    )
+    const c2 = mix(
+      c1,
+      uMidColor,
+      smoothstep(float(0.15), float(0.4), depthFactor)
+    )
+    const waterColor = mix(
+      c2,
+      uDeepColor,
+      smoothstep(float(0.4), float(1.0), depthFactor)
+    ).toVar()
 
     // 3. Surface normal from 4-sample noise
     const noise = getNoise(vOrigWorldPos.xz, normalMapTex, uTime).toVar()
@@ -258,9 +268,6 @@ export function createWaterMaterial(
       )
     specular.addAssign(vec3(uSunColor).mul(sparkle))
 
-    // Diffuse lighting
-    const diffuse = max(dot(surfaceNormal, vec3(uSunDirection)), 0.0).mul(0.1)
-
     // Smoothed normal for reflection
     const reflNormal = normalize(mix(vec3(0, 1, 0), surfaceNormal, 0.3))
 
@@ -299,123 +306,68 @@ export function createWaterMaterial(
       vec3(uSunColor).mul(pow(sunDot, float(8)).mul(0.25))
     )
 
-    // 5. Shore foam — animated waves
-    const noisePerturb = noise.x.mul(0.07).add(noise.z.mul(0.04))
+    // 5. Shore foam — wide breaking waves
     const foamNoise = noise.x.mul(0.5).add(0.5)
-    const noisyD = depth.add(noisePerturb)
 
-    const waveSpeed = float(0.0175)
-    const spawnDepth = float(1.5)
-    const bandHalfMax = float(0.03)
+    // Noise-perturbed depth for irregular edges
+    const noisyD = depth
+      .add(noise.x.mul(0.15))
+      .add(noise.z.mul(0.1))
+      .add(valueNoise(vOrigWorldPos.xz.mul(0.2)).mul(0.3))
 
+    // Two wave cycles offset by half phase
+    const waveSpeed = float(0.02)
     const cycle1 = fract(uTime.mul(waveSpeed))
     const cycle2 = fract(uTime.mul(waveSpeed).add(0.5))
 
-    const movePhase1 = min(cycle1.div(0.7), float(1))
-    const movePhase2 = min(cycle2.div(0.7), float(1))
-    const minDepth = float(0.25)
-    const center1 = mix(spawnDepth, minDepth, movePhase1)
-    const center2 = mix(spawnDepth, minDepth, movePhase2)
+    // Waves move from deeper water toward shore
+    const spawnDepth = float(1.0)
+    const shoreDepth = float(0.05)
+    const move1 = smoothstep(float(0), float(0.75), cycle1)
+    const move2 = smoothstep(float(0), float(0.75), cycle2)
+    const center1 = mix(spawnDepth, shoreDepth, move1)
+    const center2 = mix(spawnDepth, shoreDepth, move2)
 
-    const fadeIn1 = smoothstep(float(0), float(0.15), cycle1)
-    const fadeIn2 = smoothstep(float(0), float(0.15), cycle2)
-    const fadeOut1 = float(1).sub(smoothstep(float(0.85), float(1), cycle1))
-    const fadeOut2 = float(1).sub(smoothstep(float(0.85), float(1), cycle2))
-
-    const proximity1 = clamp(center1.div(spawnDepth), 0.0, 1.0)
-    const proximity2 = clamp(center2.div(spawnDepth), 0.0, 1.0)
-
-    const thickVar1 = float(0.7).add(
-      float(0.6).mul(
-        sin(
-          vOrigWorldPos.x
-            .mul(2.1)
-            .add(vOrigWorldPos.z.mul(1.7))
-            .add(center1.mul(4))
-        )
-      )
+    // Fade in/out
+    const fade1 = smoothstep(float(0), float(0.1), cycle1).mul(
+      float(1).sub(smoothstep(float(0.8), float(1), cycle1))
     )
-    const thickVar2 = float(0.7).add(
-      float(0.6).mul(
-        sin(
-          vOrigWorldPos.x
-            .mul(1.8)
-            .add(vOrigWorldPos.z.mul(2.3))
-            .add(center2.mul(4))
-        )
-      )
+    const fade2 = smoothstep(float(0), float(0.1), cycle2).mul(
+      float(1).sub(smoothstep(float(0.8), float(1), cycle2))
     )
 
-    const bh1 = bandHalfMax
-      .mul(float(0.15).add(float(0.85).mul(float(1).sub(proximity1))))
-      .mul(thickVar1)
-    const bh2 = bandHalfMax
-      .mul(float(0.15).add(float(0.85).mul(float(1).sub(proximity2))))
-      .mul(thickVar2)
-    const bright1 = float(1)
-      .add(float(0.6).mul(float(1).sub(proximity1)))
-      .mul(fadeIn1)
-      .mul(fadeOut1)
-    const bright2 = float(1)
-      .add(float(0.6).mul(float(1).sub(proximity2)))
-      .mul(fadeIn2)
-      .mul(fadeOut2)
+    // Wide bands — thick near spawn, thinner near shore
+    const bandWidth1 = float(0.12).add(float(0.18).mul(float(1).sub(move1)))
+    const bandWidth2 = float(0.12).add(float(0.18).mul(float(1).sub(move2)))
 
-    // Soft bands around each center
-    const band1 = smoothstep(
-      center1.sub(bh1).sub(0.06),
-      center1.sub(bh1),
-      noisyD
-    )
-      .mul(
-        float(1).sub(
-          smoothstep(center1.add(bh1), center1.add(bh1).add(0.06), noisyD)
-        )
-      )
+    // Soft band shape
+    const band1 = smoothstep(center1.sub(bandWidth1), center1, noisyD)
+      .mul(float(1).sub(smoothstep(center1, center1.add(bandWidth1), noisyD)))
+      .mul(fade1)
       .toVar()
-    const band2 = smoothstep(
-      center2.sub(bh2).sub(0.06),
-      center2.sub(bh2),
-      noisyD
-    )
-      .mul(
-        float(1).sub(
-          smoothstep(center2.add(bh2), center2.add(bh2).add(0.06), noisyD)
-        )
-      )
+    const band2 = smoothstep(center2.sub(bandWidth2), center2, noisyD)
+      .mul(float(1).sub(smoothstep(center2, center2.add(bandWidth2), noisyD)))
+      .mul(fade2)
       .toVar()
 
-    // Break bands with value noise
-    const bn1 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(center1.mul(2)))
-    const bn2 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(center2.mul(2)))
-    band1.mulAssign(smoothstep(float(0.35), float(0.55), bn1))
-    band2.mulAssign(smoothstep(float(0.35), float(0.55), bn2))
+    // Break up with large-scale noise for organic edges
+    const bn1 = valueNoise(vOrigWorldPos.xz.mul(0.15).add(center1.mul(1.5)))
+    const bn2 = valueNoise(vOrigWorldPos.xz.mul(0.15).add(center2.mul(1.5)))
+    band1.mulAssign(smoothstep(float(0.2), float(0.5), bn1))
+    band2.mulAssign(smoothstep(float(0.2), float(0.5), bn2))
 
-    // Density variation from noise
-    band1.mulAssign(
-      smoothstep(float(0.2), float(0.55), foamNoise).mul(0.25).mul(bright1)
-    )
-    band2.mulAssign(
-      smoothstep(float(0.25), float(0.6), foamNoise).mul(0.2).mul(bright2)
-    )
+    // Persistent shore foam — always present near the edge
+    const shoreBase = float(1)
+      .sub(smoothstep(float(0), float(0.5), noisyD))
+      .mul(0.6)
 
     // Subtle brightening near shore
     const foamGlow = float(1)
-      .sub(smoothstep(float(0), float(0.35), depth))
-      .mul(0.06)
-
-    // Surface texture
-    const st = uTime.mul(0.008)
-    const surfUV0 = vWorldPos.xz.mul(0.12).add(vec2(st, st.mul(0.7)))
-    const surfUV1 = vWorldPos.xz.mul(0.08).sub(vec2(st.mul(0.6), st.mul(0.9)))
-    const surfTex = surfaceMapTex
-      .sample(surfUV0)
-      .rgb.add(surfaceMapTex.sample(surfUV1).rgb)
-      .mul(0.5)
+      .sub(smoothstep(float(0), float(0.5), depth))
+      .mul(0.1)
 
     // Blend water with sky reflection via Fresnel, then add specular
-    const litWater = mix(waterColor, surfTex, 0.3).add(diffuse)
-    const surfaceColor = mix(litWater, skyReflection, fresnel.mul(0.6))
+    const surfaceColor = mix(waterColor, skyReflection, fresnel.mul(0.6))
       .add(specular)
       .toVar()
 
@@ -425,35 +377,37 @@ export function createWaterMaterial(
     const foamTex1 = foamMapTex.sample(foamUV1).r
     const foamTex2 = foamMapTex.sample(foamUV2).r
 
-    // Wave crest foam
-    const crestFoam = smoothstep(float(0.08), float(0.18), vWaveHeight)
-      .mul(0.3)
-      .mul(smoothstep(float(0.2), float(0.55), foamNoise))
-      .toVar()
-
-    // Blend foam
-    const shoreFoam = clamp(
-      max(max(band1.mul(foamTex1), band2.mul(foamTex2)), foamGlow),
+    // Blend foam — combine wave bands, persistent shore foam, and glow
+    const waveFoam = max(band1.mul(foamTex1), band2.mul(foamTex2))
+    const foamWithTex = clamp(
+      max(max(waveFoam, shoreBase.mul(foamNoise)), foamGlow),
       0.0,
       1.0
     )
-    const foamWithTex = clamp(max(shoreFoam, crestFoam), 0.0, 1.0)
     const foamColor = mix(vec3(0.85, 0.92, 0.95), vec3(1, 1, 1), foamWithTex)
     const finalColor = mix(surfaceColor, foamColor, foamWithTex.mul(0.9))
 
     // 6. Alpha
-    const alpha = mix(float(0.45), float(0.95), smoothDepth)
+    const alpha = mix(float(0.15), float(0.85), smoothDepth)
       .add(foamWithTex.mul(0.5))
+      .add(sparkle)
       .min(1.0)
       .toVar()
 
-    // 7. Shore edge softening
-    const shoreFade = smoothstep(
-      float(0),
-      float(0.25),
-      depth.add(noise.y.mul(0.12)).add(noise.x.mul(0.06))
+    // 7. Shore edge — noisy holes near coastline to reveal terrain underneath
+    const shoreZone = float(1).sub(smoothstep(float(0), float(0.6), depth))
+    const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.8).add(uTime.mul(0.07)))
+    const sn2 = valueNoise(vOrigWorldPos.xz.mul(1.5).add(uTime.mul(0.04)))
+    const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(uTime.mul(0.1)))
+    const holeMask = sn1.mul(0.5).add(sn2.mul(0.3)).add(sn3.mul(0.2))
+    // Near shore: if noise < threshold, punch alpha to 0
+    const holeThreshold = shoreZone.mul(0.6)
+    const holeAlpha = smoothstep(
+      holeThreshold.sub(0.05),
+      holeThreshold.add(0.05),
+      holeMask
     )
-    alpha.mulAssign(max(shoreFade, foamWithTex.mul(0.85)))
+    alpha.mulAssign(holeAlpha)
 
     return vec4(finalColor, alpha)
   })()

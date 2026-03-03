@@ -110,6 +110,7 @@ export function makeSplatStandardMaterial({
   // ─── Varyings: world position from vertex ─────────
   const vUvSplat = varying(vec2(0), 'v_uvSplat')
   const vWorldXZ = varying(vec2(0), 'v_worldXZ')
+  const vWorldY = varying(float(0), 'v_worldY')
 
   // ─── Helper: normalized splat weights ─────────────
   const getWeights = Fn(([uvCoord]: [ReturnType<typeof vec2>]) => {
@@ -125,6 +126,7 @@ export function makeSplatStandardMaterial({
     vUvSplat.assign(localUv.mul(uSplatScale))
     const worldPos4 = modelWorldMatrix.mul(vec4(positionLocal, 1.0))
     vWorldXZ.assign(worldPos4.xz)
+    vWorldY.assign(worldPos4.y)
     return positionLocal
   })()
 
