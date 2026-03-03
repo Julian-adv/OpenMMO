@@ -102,11 +102,10 @@
   })
 
   // ── Geometry & splatmap management ──────────────────────
+  // Use SvelteMaps directly in the template (keyed by tile id) to avoid
+  // index mismatch when terrainTiles reorders during tile transitions.
   const geoMap = new SvelteMap<string, THREE.BufferGeometry>()
-  let tileGeometries = $state<(THREE.BufferGeometry | null)[]>([])
-
   const splatTexMap = new SvelteMap<string, THREE.Texture>()
-  let tileSplatTextures = $state<(THREE.Texture | null)[]>([])
 
   function getTileCoords(tile: TerrainTile): { tileX: number; tileZ: number } {
     return {
@@ -167,8 +166,6 @@
         mgr.applyHeightToGeometry(tx, tz, geo)
       }
     }
-
-    tileGeometries = terrainTiles.map((t) => geoMap.get(t.id) ?? null)
   }
 
   $effect(() => {
@@ -205,25 +202,21 @@
       if (sMgr) {
         sMgr.loadSplatmap(tileX, tileZ).then((tex) => {
           splatTexMap.set(tile.id, tex)
-          tileSplatTextures = terrainTiles.map((t) => splatTexMap.get(t.id) ?? null)
         })
       }
     }
-
-    tileGeometries = terrainTiles.map((t) => geoMap.get(t.id) ?? null)
-    tileSplatTextures = terrainTiles.map((t) => splatTexMap.get(t.id) ?? null)
   })
 </script>
 
 {#if terrainGeometry && sharedMaterial}
   {#each terrainTiles as tile, index (tile.id)}
-    {@const geo = tileGeometries[index]}
+    {@const geo = geoMap.get(tile.id) ?? null}
     {#if geo}
       <SplatTerrain
         geometry={geo}
         material={sharedMaterial}
         position={tile.position}
-        splatTexture={tileSplatTextures[index] ?? null}
+        splatTexture={splatTexMap.get(tile.id) ?? null}
         bind:mesh={terrainMeshes[index]}
       />
     {/if}

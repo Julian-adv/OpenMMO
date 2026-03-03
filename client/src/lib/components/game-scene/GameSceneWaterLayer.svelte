@@ -39,15 +39,11 @@
     waterGroup = $bindable(undefined),
   }: Props = $props()
 
-  // Cache heightmap textures per tile
+  // Cache heightmap textures per tile (keyed by tile id)
   const heightTexMap = new SvelteMap<string, THREE.DataTexture>()
 
-  // Track which tiles have water (true/false/undefined=not checked yet)
+  // Track which tiles have water (keyed by tile id)
   const waterTileSet = new SvelteMap<string, boolean>()
-
-  // Reactive arrays parallel to terrainTiles
-  let tileHeightTextures = $state<(THREE.DataTexture | null)[]>([])
-  let tileHasWater = $state<boolean[]>([])
 
   function tileIdFromCoords(tileX: number, tileZ: number): string {
     return `${tileX}_${tileZ}`
@@ -81,7 +77,6 @@
       }
       waterTileSet.set(id, false)
     }
-    syncArrays()
   }
 
   // Subscribe to height changes from brush edits
@@ -127,24 +122,19 @@
         refreshTile(tile.id, tileX, tileZ)
       })
     }
-
-    syncArrays()
   })
-
-  function syncArrays() {
-    tileHeightTextures = terrainTiles.map((t) => heightTexMap.get(t.id) ?? null)
-    tileHasWater = terrainTiles.map((t) => waterTileSet.get(t.id) ?? false)
-  }
 </script>
 
 {#if terrainGeometry && normalMap && foamMap && surfaceMap}
   <T.Group bind:ref={waterGroup}>
-    {#each terrainTiles as tile, index (tile.id)}
-      {#if tileHasWater[index] && tileHeightTextures[index]}
+    {#each terrainTiles as tile (tile.id)}
+      {@const hasWater = waterTileSet.get(tile.id) ?? false}
+      {@const heightTex = heightTexMap.get(tile.id) ?? null}
+      {#if hasWater && heightTex}
         <WaterTile
           geometry={terrainGeometry}
           position={tile.position}
-          heightmapTexture={tileHeightTextures[index]!}
+          heightmapTexture={heightTex}
           {normalMap}
           foamMap={foamMap!}
           surfaceMap={surfaceMap!}

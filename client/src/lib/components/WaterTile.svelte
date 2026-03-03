@@ -35,7 +35,14 @@
   let material = $state<NodeMaterial | null>(null)
   let waterResult = $state<WaterMaterialResult | null>(null)
 
-  // Create/recreate material when heightmapTexture or normalMap change
+  // Track previous texture references to skip redundant material recreation.
+  // Svelte reactivity can re-trigger this $effect many times per tile transition
+  // (SvelteMap changes → parent $effect → syncArrays → prop re-evaluation).
+  // Without this guard, ~60 NodeMaterials get created per transition, stalling the GPU.
+  let prevHm: THREE.DataTexture | null = null
+  let prevNm: THREE.Texture | null = null
+
+  // Create/recreate material only when texture inputs actually change
   $effect(() => {
     const hm = heightmapTexture
     const nm = normalMap
@@ -44,6 +51,18 @@
     const fm = foamMap
     const sm = surfaceMap
     if (!fm || !sm) return
+
+    // Skip if the key textures haven't changed (same object reference)
+    if (hm === prevHm && nm === prevNm && waterResult) return
+
+    prevHm = hm
+    prevNm = nm
+
+    // Dispose previous material
+    if (waterResult) {
+      waterResult.material.dispose()
+    }
+
     const result = createWaterMaterial({
       heightmapTexture: hm,
       normalMap: nm,
@@ -53,10 +72,6 @@
     })
     waterResult = result
     material = result.material
-
-    return () => {
-      result.material.dispose()
-    }
   })
 
   // Update time uniform every frame
