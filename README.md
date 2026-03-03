@@ -44,10 +44,17 @@ An simple online RPG prototype.
 This project is organized as a **Cargo Workspace**. To detect changes in both the server (`server/`) and shared logic (`shared/`), it is recommended to run commands from the **root directory**.
 
 ```bash
-cargo watch -x "run -p onlinerpg-server -- --port 5002"
+cargo watch -x "run -p onlinerpg-server -- --port 5012"
 ```
 
 The terrain REST API starts automatically on port 5003 (game port + 1).
+
+https proxy
+
+```bash
+socat OPENSSL-LISTEN:10005,fork,reuseaddr,cert=client/node_modules/.vite-ssl/cert.pem,key=client/node_modules/.vite-ssl/key.pem,verify=0 TCP:127.0.0.1:5012
+```
+
 
 ### 4. Running the Client
 
