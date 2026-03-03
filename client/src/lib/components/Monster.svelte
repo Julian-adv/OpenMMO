@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T, useLoader } from '@threlte/core'
-  import { Text } from '@threlte/extras'
+  import CanvasText from './CanvasText.svelte'
   import { SkeletonUtils, GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as THREE from 'three'
   import { get } from 'svelte/store'
@@ -237,19 +237,19 @@
 <!-- Name tag / Debug info -->
 <T.Group bind:ref={nametagGroup}>
   {#if animDebugInfo}
-    <Text
+    <CanvasText
       text={id}
       fontSize={0.2}
       color="#ffffff"
-      position.y={0.3}
+      position={[0, 0.3, 0]}
       anchorX="center"
       anchorY="middle"
     />
-    <Text
+    <CanvasText
       text={animDebugInfo}
       fontSize={0.2}
       color="#ffff00"
-      position.y={0.6}
+      position={[0, 0.6, 0]}
       anchorX="center"
       anchorY="middle"
     />
