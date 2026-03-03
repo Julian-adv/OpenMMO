@@ -2,6 +2,7 @@
   import { T, useThrelte } from '@threlte/core'
   import { OrbitControls } from '@threlte/extras'
   import * as THREE from 'three'
+  import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
   import {
@@ -125,7 +126,9 @@
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
 
-  const { size, renderer, scene } = useThrelte()
+  const { size, renderer: _renderer, scene } = useThrelte()
+  // Cast renderer — Threlte types it as WebGLRenderer but we use WebGPURenderer via createRenderer
+  const renderer = _renderer as unknown as WebGPURenderer
   let viewportSize = $state({ width: 1, height: 1 })
 
   const CAMERA_OFFSET = { ...DEFAULT_CAMERA_OFFSET }
@@ -530,7 +533,7 @@
       }
     })
 
-    const pmremGenerator = new THREE.PMREMGenerator(renderer)
+    const pmremGenerator = new PMREMGenerator(renderer)
     scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
     scene.environmentIntensity = 0.5
     pmremGenerator.dispose()

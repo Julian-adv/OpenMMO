@@ -14,6 +14,7 @@
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
   import { mapEditorMode, worldMapVisible, teleportLoading } from './lib/stores/debugStore'
+  import { createWebGPURenderer } from './lib/utils/renderer'
   import MapEditorPanel from './lib/components/map-editor/MapEditorPanel.svelte'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
@@ -213,7 +214,7 @@
 <main>
   {#if screen === 'game'}
     <div class="game-shell" class:dead={isPlayerDead}>
-      <Canvas renderMode="always" shadows>
+      <Canvas renderMode="always" shadows createRenderer={createWebGPURenderer}>
         <GameScene
           {serverUrl}
           onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}

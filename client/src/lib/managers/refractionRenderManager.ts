@@ -1,18 +1,27 @@
 import * as THREE from 'three'
+import { RenderTarget } from 'three/webgpu'
 
 /**
  * Renders the scene (without water) to a half-resolution render target
  * so the water shader can sample it as a refraction texture.
  */
 export class RefractionRenderManager {
-  readonly target: THREE.WebGLRenderTarget
-  private renderer: THREE.WebGLRenderer
+  readonly target: RenderTarget
+  private renderer: {
+    getRenderTarget(): THREE.RenderTarget | null
+    setRenderTarget(target: THREE.RenderTarget | null): void
+    render(scene: THREE.Scene, camera: THREE.Camera): void
+  }
   private scene: THREE.Scene
   private camera: THREE.Camera | null = null
   private waterGroup: THREE.Group | null = null
 
   constructor(
-    renderer: THREE.WebGLRenderer,
+    renderer: {
+      getRenderTarget(): THREE.RenderTarget | null
+      setRenderTarget(target: THREE.RenderTarget | null): void
+      render(scene: THREE.Scene, camera: THREE.Camera): void
+    },
     scene: THREE.Scene,
     width: number,
     height: number
@@ -20,7 +29,7 @@ export class RefractionRenderManager {
     this.renderer = renderer
     this.scene = scene
     // Half-resolution for performance
-    this.target = new THREE.WebGLRenderTarget(
+    this.target = new RenderTarget(
       Math.max(1, Math.floor(width / 2)),
       Math.max(1, Math.floor(height / 2)),
       {

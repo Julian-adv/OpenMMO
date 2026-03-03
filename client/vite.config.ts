@@ -7,4 +7,6 @@ import { monsterCsvPlugin } from '../tools/vitePlugin.mjs'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [monsterCsvPlugin(), wasm(), svelte()],
+  build: { target: 'esnext' },
+  optimizeDeps: { esbuildOptions: { target: 'esnext' } },
 })
