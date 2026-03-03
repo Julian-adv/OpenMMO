@@ -62,9 +62,11 @@
     })
 
     const pmremGenerator = new PMREMGenerator(renderer)
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
-    scene.environmentIntensity = 0.1
-    pmremGenerator.dispose()
+    pmremGenerator.fromSceneAsync(new RoomEnvironment()).then((rt) => {
+      scene.environment = rt.texture
+      scene.environmentIntensity = 0.1
+      pmremGenerator.dispose()
+    })
 
     return () => {
       scene.environment?.dispose()

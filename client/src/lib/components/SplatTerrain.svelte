@@ -19,8 +19,6 @@
     mesh?: THREE.Mesh | undefined
     position?: [number, number, number]
     splatTexture?: THREE.Texture | null
-    causticsMap?: THREE.Texture | null
-    causticsTime?: number
   }
 
   let {
@@ -28,8 +26,6 @@
     mesh = $bindable(undefined),
     position = [0, 0, 0],
     splatTexture = null,
-    causticsMap = null,
-    causticsTime = 0,
   }: Props = $props()
 
   let material = $state<MeshStandardNodeMaterial | null>(null)
@@ -196,30 +192,6 @@
     if (!material || !splatTexture) return
     const u = material.userData?.uniforms
     if (u) u.splatMap.value = splatTexture
-  })
-
-  // Update tile origin uniform when position changes
-  $effect(() => {
-    if (!material) return
-    const u = material.userData?.uniforms
-    if (u?.tileOrigin) u.tileOrigin.value.set(position[0], position[2])
-  })
-
-  // Update caustics uniforms (stored in userData but not connected to shader nodes)
-  $effect(() => {
-    if (!material || !causticsMap) return
-    const u = material.userData?.uniforms
-    if (u) u.causticsMap.value = causticsMap
-  })
-
-  $effect(() => {
-    if (!material) return
-    const u = material.userData?.uniforms
-    if (u) {
-      u.causticsTime.value = causticsTime
-      u.causticsStrength.value = 0.275
-      u.waterLevel.value = 0.01
-    }
   })
 
   async function loadMaterial() {

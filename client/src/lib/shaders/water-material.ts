@@ -98,10 +98,10 @@ const getNoise = /* #__PURE__ */ Fn(
       .sub(vec2(t.div(109.0), t.div(-113.0)))
 
     const noise = normalMapTex
-      .uv(uv0)
-      .add(normalMapTex.uv(uv1))
-      .add(normalMapTex.uv(uv2))
-      .add(normalMapTex.uv(uv3))
+      .sample(uv0)
+      .add(normalMapTex.sample(uv1))
+      .add(normalMapTex.sample(uv2))
+      .add(normalMapTex.sample(uv3))
 
     return noise.mul(0.5).sub(1.0)
   }
@@ -193,7 +193,7 @@ export function createWaterMaterial(
     vWaveHeight.assign(offset.y)
 
     // Clamp wave so it never dips below the terrain
-    const terrainHeight = heightmapTex.uv(uv()).r
+    const terrainHeight = heightmapTex.sample(uv()).r
     worldPos.y.assign(max(terrainHeight.add(0.01), worldPos.y))
 
     vWorldPos.assign(worldPos.xyz)
@@ -207,7 +207,7 @@ export function createWaterMaterial(
   // ─── Fragment: full water shading ──────────────────
   const fragmentNode = Fn(() => {
     // 1. Depth calculation
-    const terrainHeight = heightmapTex.uv(vUv).r
+    const terrainHeight = heightmapTex.sample(vUv).r
     const depth = max(float(0), vOrigWorldPos.y.sub(terrainHeight))
     const depthFactor = clamp(depth.div(uMaxDepth), 0.0, 1.0)
 
@@ -229,7 +229,7 @@ export function createWaterMaterial(
       0.0,
       1.0
     )
-    const refractionColor = refractionTex.uv(refractionUV).rgb
+    const refractionColor = refractionTex.sample(refractionUV).rgb
 
     // Blend refraction with depth tint
     const refractionMix = float(1).sub(
@@ -247,8 +247,8 @@ export function createWaterMaterial(
     const spT = uTime.mul(0.04)
     const spUV1 = vOrigWorldPos.xz.mul(0.5).add(vec2(spT, spT.mul(0.7)))
     const spUV2 = vOrigWorldPos.xz.mul(0.8).sub(vec2(spT.mul(0.6), spT))
-    const sp1 = normalMapTex.uv(spUV1).r
-    const sp2 = normalMapTex.uv(spUV2).g
+    const sp1 = normalMapTex.sample(spUV1).r
+    const sp2 = normalMapTex.sample(spUV2).g
     const sparkle = smoothstep(float(1.2), float(1.38), sp1.add(sp2))
       .mul(0.8)
       .mul(
@@ -409,8 +409,8 @@ export function createWaterMaterial(
     const surfUV0 = vWorldPos.xz.mul(0.12).add(vec2(st, st.mul(0.7)))
     const surfUV1 = vWorldPos.xz.mul(0.08).sub(vec2(st.mul(0.6), st.mul(0.9)))
     const surfTex = surfaceMapTex
-      .uv(surfUV0)
-      .rgb.add(surfaceMapTex.uv(surfUV1).rgb)
+      .sample(surfUV0)
+      .rgb.add(surfaceMapTex.sample(surfUV1).rgb)
       .mul(0.5)
 
     // Blend water with sky reflection via Fresnel, then add specular
@@ -422,8 +422,8 @@ export function createWaterMaterial(
     // Foam texture with band movement
     const foamUV1 = vOrigWorldPos.xz.mul(0.4).add(cycle1.mul(0.3))
     const foamUV2 = vOrigWorldPos.xz.mul(0.4).add(cycle2.mul(0.3))
-    const foamTex1 = foamMapTex.uv(foamUV1).r
-    const foamTex2 = foamMapTex.uv(foamUV2).r
+    const foamTex1 = foamMapTex.sample(foamUV1).r
+    const foamTex2 = foamMapTex.sample(foamUV2).r
 
     // Wave crest foam
     const crestFoam = smoothstep(float(0.08), float(0.18), vWaveHeight)

@@ -83,7 +83,6 @@
   import { loadWaterNormalMap } from '../shaders/water-normal-gen'
   import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
-  import { generateCausticsTexture } from '../shaders/caustics-gen'
 
   interface Props {
     serverUrl: string
@@ -118,8 +117,6 @@
   const _waterCamDirTmp = new THREE.Vector3()
   let refractionManager = $state<RefractionRenderManager | null>(null)
   let refractionTexture = $state<THREE.Texture | null>(null)
-  let causticsMap = $state<THREE.Texture | null>(null)
-  let causticsTime = $state(0)
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -406,7 +403,6 @@
 
       // Update water uniforms
       waterTime += realDeltaSeconds
-      causticsTime += realDeltaSeconds
       if (directionalLight) {
         _waterSunDirTmp.copy(directionalLight.position).sub(directionalLight.target.position).normalize()
         waterSunDir = _waterSunDirTmp.clone()
@@ -534,9 +530,11 @@
     })
 
     const pmremGenerator = new PMREMGenerator(renderer)
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment()).texture
-    scene.environmentIntensity = 0.5
-    pmremGenerator.dispose()
+    pmremGenerator.fromSceneAsync(new RoomEnvironment()).then((rt) => {
+      scene.environment = rt.texture
+      scene.environmentIntensity = 0.5
+      pmremGenerator.dispose()
+    })
 
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
     loadWaterNormalMap().then((tex) => { waterNormalMap = tex })
@@ -548,8 +546,6 @@
     refractionManager = refMgr
     refractionTexture = refMgr.texture
 
-    // Generate caustics texture
-    causticsMap = generateCausticsTexture()
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
     // Start game loop
     lastFrameTime = performance.now()
@@ -593,8 +589,6 @@
       refractionManager?.dispose()
       refractionManager = null
       refractionTexture = null
-      causticsMap?.dispose()
-      causticsMap = null
       terrainTiles = []
       terrainMeshes = []
       resetGameStore()
@@ -646,8 +640,6 @@
   bind:terrainMeshes={terrainMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
-  {causticsMap}
-  {causticsTime}
 />
 
 <GameSceneWaterLayer
