@@ -50,4 +50,5 @@
   {position}
   castShadow
   receiveShadow
+  frustumCulled={false}
 />

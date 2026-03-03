@@ -2,32 +2,80 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import type { NodeMaterial } from 'three/webgpu'
-  import type { WaterMaterialResult } from '../shaders/water-material'
+  import { createWaterMaterial, type WaterMaterialResult } from '../shaders/water-material'
 
   interface Props {
     geometry: THREE.BufferGeometry
     position?: [number, number, number]
     heightmapTexture: THREE.DataTexture
-    material: NodeMaterial
-    waterResult: WaterMaterialResult
+    normalMap: THREE.Texture
+    foamMap: THREE.Texture
+    surfaceMap: THREE.Texture
+    time?: number
+    sunDirection?: THREE.Vector3 | null
+    sunColor?: THREE.Color | null
+    cameraDirection?: THREE.Vector3 | null
+    refractionMap?: THREE.Texture | null
   }
 
   let {
     geometry,
     position = [0, 0, 0],
     heightmapTexture,
-    material,
-    waterResult,
+    normalMap,
+    foamMap,
+    surfaceMap,
+    time = 0,
+    sunDirection = null,
+    sunColor = null,
+    cameraDirection = null,
+    refractionMap = null,
   }: Props = $props()
 
-  let mesh = $state<THREE.Mesh | undefined>(undefined)
+  let material = $state<NodeMaterial | null>(null)
+  let waterResult = $state<WaterMaterialResult | null>(null)
 
-  // Swap per-tile heightmap texture on the shared material before each draw
+  // Create/recreate material when heightmapTexture or normalMap change
   $effect(() => {
-    if (!mesh) return
-    const tex = heightmapTexture
-    mesh.onBeforeRender = () => {
-      waterResult.uniforms.uHeightmapTexture.value = tex
+    const hm = heightmapTexture
+    const nm = normalMap
+    if (!hm || !nm) return
+
+    const fm = foamMap
+    const sm = surfaceMap
+    if (!fm || !sm) return
+    const result = createWaterMaterial({
+      heightmapTexture: hm,
+      normalMap: nm,
+      foamMap: fm,
+      surfaceMap: sm,
+      refractionMap,
+    })
+    waterResult = result
+    material = result.material
+
+    return () => {
+      result.material.dispose()
+    }
+  })
+
+  // Update time uniform every frame
+  $effect(() => {
+    if (waterResult) waterResult.uniforms.uTime.value = time
+  })
+
+  // Update sun uniforms
+  $effect(() => {
+    if (!waterResult) return
+    if (sunDirection) waterResult.uniforms.uSunDirection.value.copy(sunDirection)
+    if (sunColor) waterResult.uniforms.uSunColor.value.copy(sunColor)
+    if (cameraDirection) waterResult.uniforms.uCameraDirection.value.copy(cameraDirection)
+  })
+
+  // Update refraction map when it changes
+  $effect(() => {
+    if (waterResult && refractionMap) {
+      waterResult.uniforms.uRefractionMap.value = refractionMap
     }
   })
 
@@ -35,11 +83,12 @@
   const waterPosition: [number, number, number] = $derived([position[0], 0.01, position[2]])
 </script>
 
-<T.Mesh
-  bind:ref={mesh}
-  {geometry}
-  {material}
-  position={waterPosition}
-  receiveShadow={false}
-  castShadow={false}
-/>
+{#if material}
+  <T.Mesh
+    {geometry}
+    {material}
+    position={waterPosition}
+    receiveShadow={false}
+    castShadow={false}
+  />
+{/if}

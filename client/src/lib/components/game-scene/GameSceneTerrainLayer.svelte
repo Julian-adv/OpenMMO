@@ -125,7 +125,7 @@
     pendingEdgeTiles.push({ tileX, tileZ })
     if (!edgeBatchScheduled) {
       edgeBatchScheduled = true
-      queueMicrotask(flushEdgeRefreshes)
+      requestAnimationFrame(flushEdgeRefreshes)
     }
   }
 

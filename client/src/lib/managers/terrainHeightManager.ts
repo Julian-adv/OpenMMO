@@ -7,6 +7,8 @@ import {
 
 const TILE_DIM = 64
 const VERTS_PER_SIDE = TILE_DIM + 1 // 65 vertices per axis
+const PADDED_SIDE = VERTS_PER_SIDE + 2 // 67 — padded grid for analytical normals
+const _paddedHeights = new Float32Array(PADDED_SIDE * PADDED_SIDE) // reusable buffer
 
 function tileKey(tileX: number, tileZ: number): string {
   return `${tileX},${tileZ}`
@@ -174,10 +176,10 @@ export class TerrainHeightManager {
     const normalAttr = geometry.getAttribute('normal') as THREE.BufferAttribute
     const normals = normalAttr.array as Float32Array
 
-    // Build padded height grid (67×67) to avoid per-vertex cross-tile lookups.
+    // Reuse padded height grid (67×67) to avoid per-call allocation.
     // Rows/cols 0 and 66 come from neighbor tiles; 1-65 are this tile's data.
-    const P = VERTS_PER_SIDE + 2 // 67
-    const heights = new Float32Array(P * P)
+    const P = PADDED_SIDE
+    const heights = _paddedHeights
 
     // Fill 64×64 interior directly from heightmap data (no function call overhead)
     for (let cz = 0; cz < TILE_DIM; cz++) {
@@ -264,7 +266,6 @@ export class TerrainHeightManager {
 
     posAttr.needsUpdate = true
     normalAttr.needsUpdate = true
-    geometry.computeBoundingSphere()
   }
 
   /** Re-apply height to adjacent tiles whose edge vertices reference this tile's data. */
