@@ -255,7 +255,6 @@ export function retargetAnimationsForCharacterModel(
 ): THREE.AnimationClip[] {
   if (!ENABLE_RUNTIME_BONE_RETARGETING) return clips
   if (clips.length === 0 || !retargetSourceScene) return clips
-
   // Operate on clones only. Both target and source scenes can come from shared
   // loader instances, and retarget internals mutate skeleton transforms.
   const targetSceneClone = SkeletonUtils.clone(targetScene) as THREE.Object3D
@@ -293,9 +292,11 @@ export function retargetAnimationsForCharacterModel(
     targetHipY !== null && sourceHipY !== null ? targetHipY - sourceHipY : 0
 
   const retargetedClips = clips.map((clip) => {
-    const cacheKey = `${targetProfileKey}::${sourceProfileKey}::${clip.uuid}`
+    const cacheKey = `${targetProfileKey}::${sourceProfileKey}::${clip.name}`
     const cachedClip = retargetedClipCache.get(cacheKey)
-    if (cachedClip) return cachedClip
+    if (cachedClip) {
+      return cachedClip
+    }
 
     try {
       targetSkinnedMesh.skeleton.pose()

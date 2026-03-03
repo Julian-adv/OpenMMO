@@ -102,7 +102,7 @@
 
 <div class="character-select-screen">
   <div class="canvas-layer">
-    <Canvas shadows createRenderer={createWebGPURenderer}>
+    <Canvas renderMode="always" shadows createRenderer={createWebGPURenderer}>
       <CharacterSelectScene
         {characters}
         {selectedCharacterId}

@@ -109,7 +109,7 @@
 
 <div class="character-create-screen">
   <div class="canvas-layer">
-    <Canvas shadows createRenderer={createWebGPURenderer}>
+    <Canvas renderMode="always" shadows createRenderer={createWebGPURenderer}>
       <CharacterCreateScene characterClass={selectedClass} />
     </Canvas>
   </div>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { T, useThrelte } from '@threlte/core'
+  import { T, useThrelte, useTask } from '@threlte/core'
   import * as THREE from 'three'
   import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -56,6 +56,45 @@
 
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
 
+  interface CharacterPreviewInstance {
+    isGltfReady(): boolean
+    isSetUp(): boolean
+    setup(): void
+    update(delta: number): void
+    dispose(): void
+  }
+
+  // CharacterPreview refs managed by bind:this
+  let characterPreviews: (CharacterPreviewInstance | undefined)[] = $state([
+    undefined,
+    undefined,
+    undefined,
+  ])
+  let nextSetupIndex = 0
+
+  // Single pair of spotlights — created once via Three.js, moved in useTask.
+  // Avoids WebGPU pipeline recompilation on selection changes.
+  const spotlightTarget = new THREE.Object3D()
+  const keyLight = new THREE.SpotLight('#ffffff', 9.0, 14, 0.34, 0.22, 1.2)
+  keyLight.castShadow = true
+  keyLight.shadow.mapSize.set(2048, 2048)
+  keyLight.shadow.camera.near = 0.5
+  keyLight.shadow.camera.far = 18
+  keyLight.shadow.bias = -0.0002
+  keyLight.shadow.normalBias = 0.02
+  keyLight.target = spotlightTarget
+
+  const fillLight = new THREE.SpotLight('#fff2d8', 3.4, 12, 0.52, 0.8, 1.2)
+  fillLight.target = spotlightTarget
+
+  let spotlightsAdded = false
+
+  function getSelectedSlotX(): number | null {
+    if (selectedCharacterId === null) return null
+    const idx = characters.findIndex((c) => c.id === selectedCharacterId)
+    return idx >= 0 ? SLOT_POSITIONS[idx] : null
+  }
+
   onMount(() => {
     const unsubscribe = size.subscribe((nextSize) => {
       viewportSize = nextSize
@@ -79,6 +118,12 @@
       scene.environment?.dispose()
       scene.environment = null
       unsubscribe()
+      nextSetupIndex = 0
+      // Clean up spotlights
+      if (spotlightsAdded) {
+        scene.remove(keyLight, fillLight, spotlightTarget)
+        spotlightsAdded = false
+      }
     }
   })
 
@@ -103,6 +148,43 @@
 
     if (cameraRef) {
       cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, SLOT_DEPTH)
+    }
+  })
+
+  // Central game loop — staggered setup + per-frame update + spotlight positioning
+  useTask((delta) => {
+    // Phase 1: Staggered setup — one character per frame, in order (0→1→2)
+    if (nextSetupIndex < characterPreviews.length) {
+      const preview = characterPreviews[nextSetupIndex]
+      if (preview) {
+        if (preview.isGltfReady()) {
+          preview.setup()
+          nextSetupIndex++
+
+          // Add spotlights to scene on first setup (pipeline compiles once)
+          if (!spotlightsAdded) {
+            scene.add(spotlightTarget, keyLight, fillLight)
+            spotlightsAdded = true
+          }
+        }
+      }
+    }
+
+    // Phase 2: Move spotlights to selected character (pure Three.js mutation — no pipeline change)
+    const slotX = getSelectedSlotX()
+    if (slotX !== null && spotlightsAdded) {
+      const y = CHARACTER_Y_OFFSET
+      const z = SLOT_DEPTH
+      spotlightTarget.position.set(slotX, y + 0.9, z)
+      keyLight.position.set(slotX, y + 4.0, z + 1.2)
+      fillLight.position.set(slotX, y + 2.5, z + 3.1)
+    }
+
+    // Phase 3: Update all set-up characters
+    for (const preview of characterPreviews) {
+      if (preview?.isSetUp()) {
+        preview.update(delta)
+      }
     }
   })
 </script>
@@ -164,6 +246,7 @@
 
   {#if character}
     <CharacterPreview
+      bind:this={characterPreviews[slotIndex]}
       positionX={SLOT_POSITIONS[slotIndex]}
       positionY={CHARACTER_Y_OFFSET}
       positionZ={SLOT_DEPTH}

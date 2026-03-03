@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { T } from '@threlte/core'
+  import { T, useThrelte, useTask } from '@threlte/core'
   import * as THREE from 'three'
+  import { onMount } from 'svelte'
   import type { CharacterClass } from '../network/networkTypes'
   import CharacterPreview from './CharacterPreview.svelte'
 
@@ -25,11 +26,69 @@
   const KEY_LIGHT_INTENSITY = 0.05
   const FILL_LIGHT_INTENSITY = 0.48
 
+  const { scene } = useThrelte()
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
+
+  interface CharacterPreviewInstance {
+    isGltfReady(): boolean
+    isSetUp(): boolean
+    setup(): void
+    update(delta: number): void
+    dispose(): void
+  }
+
+  // CharacterPreview ref managed by bind:this
+  let characterPreview: CharacterPreviewInstance | undefined = $state(undefined)
+
+  // Single pair of spotlights — created once via Three.js
+  const spotlightTarget = new THREE.Object3D()
+  spotlightTarget.position.set(0, CHARACTER_Y_OFFSET + 0.9, CHARACTER_Z)
+
+  const keyLight = new THREE.SpotLight('#ffffff', 9.0, 14, 0.34, 0.22, 1.2)
+  keyLight.position.set(0, CHARACTER_Y_OFFSET + 4.0, CHARACTER_Z + 1.2)
+  keyLight.castShadow = true
+  keyLight.shadow.mapSize.set(2048, 2048)
+  keyLight.shadow.camera.near = 0.5
+  keyLight.shadow.camera.far = 18
+  keyLight.shadow.bias = -0.0002
+  keyLight.shadow.normalBias = 0.02
+  keyLight.target = spotlightTarget
+
+  const fillLight = new THREE.SpotLight('#fff2d8', 3.4, 12, 0.52, 0.8, 1.2)
+  fillLight.position.set(0, CHARACTER_Y_OFFSET + 2.5, CHARACTER_Z + 3.1)
+  fillLight.target = spotlightTarget
+
+  let spotlightsAdded = false
 
   $effect(() => {
     if (!cameraRef) return
     cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, CHARACTER_Z)
+  })
+
+  onMount(() => {
+    return () => {
+      if (spotlightsAdded) {
+        scene.remove(keyLight, fillLight, spotlightTarget)
+        spotlightsAdded = false
+      }
+    }
+  })
+
+  // Game loop for single character preview
+  useTask((delta) => {
+    if (!characterPreview) return
+
+    if (characterPreview.isGltfReady() && !characterPreview.isSetUp()) {
+      characterPreview.setup()
+      if (!spotlightsAdded) {
+        scene.add(spotlightTarget, keyLight, fillLight)
+        spotlightsAdded = true
+      }
+    }
+
+    if (characterPreview.isSetUp()) {
+      characterPreview.update(delta)
+    }
   })
 </script>
 
@@ -81,6 +140,7 @@
 
 {#key characterClass}
   <CharacterPreview
+    bind:this={characterPreview}
     positionX={0}
     positionY={CHARACTER_Y_OFFSET}
     positionZ={CHARACTER_Z}

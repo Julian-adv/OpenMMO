@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { T, useLoader, useTask } from '@threlte/core'
+  import { T, useLoader } from '@threlte/core'
   import * as THREE from 'three'
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
-  import { onMount } from 'svelte'
+  import { onDestroy } from 'svelte'
   import { AnimationIndex } from '../types/animations'
   import {
     createCharacterModelRoot,
@@ -12,9 +12,7 @@
   } from '../utils/characterAnimationUtils'
   import {
     CHARACTER_ANIMATION_PACK_PATHS,
-    WARRIOR_CHARACTER_MODEL_PATH,
-    KNIGHT_CHARACTER_MODEL_PATH,
-    THIEF_CHARACTER_MODEL_PATH,
+    getCharacterModelPath,
   } from '../utils/modelPaths'
   import type { CharacterClass } from '../network/networkTypes'
 
@@ -27,9 +25,9 @@
   }
 
   let { positionX, positionY, positionZ, selected, characterClass }: Props = $props()
-  const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
-  const knightGltf = useLoader(GLTFLoader).load(KNIGHT_CHARACTER_MODEL_PATH)
-  const thiefGltf = useLoader(GLTFLoader).load(THIEF_CHARACTER_MODEL_PATH)
+
+  // Load only this character's own model + shared animation packs
+  const characterGltf = useLoader(GLTFLoader).load(getCharacterModelPath(characterClass))
   const locomotionGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   )
@@ -41,10 +39,12 @@
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
   let validAnimations = $state<THREE.AnimationClip[]>([])
-  let spotlightRef = $state<THREE.SpotLight | undefined>(undefined)
-  let fillSpotlightRef = $state<THREE.SpotLight | undefined>(undefined)
-  let spotlightTarget = $state<THREE.Object3D | undefined>(undefined)
+  let setupDone = $state(false)
+
   const OVERLAP_BEFORE_END = 0.3
+
+  let gltfReady = $derived(!!$characterGltf && !!$locomotionGltf && !!$combatMeleeGltf)
+
   function playIdleAnimation() {
     if (!mixer || validAnimations.length === 0) return
 
@@ -73,28 +73,36 @@
     currentAction = newAction
   }
 
-  function setupModel(
-    sourceScene: THREE.Object3D,
-    baseAnimations: THREE.AnimationClip[],
-    locomotionAnimations: THREE.AnimationClip[],
-    combatMeleeAnimations: THREE.AnimationClip[]
-  ) {
-    if (mixer || modelRoot) return
+  // --- Exported interface for parent game loop ---
 
+  export function isGltfReady(): boolean {
+    return gltfReady
+  }
+
+  export function isSetUp(): boolean {
+    return setupDone
+  }
+
+  export function setup(): void {
+    if (setupDone || !$characterGltf || !$locomotionGltf || !$combatMeleeGltf) return
+
+    const sourceScene = $characterGltf.scene
     const { modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
     modelRoot = newModelRoot
 
+    const orderedAnims = selectOrderedCharacterAnimations(
+      getGltfAnimations($characterGltf),
+      getGltfAnimations($locomotionGltf),
+      getGltfAnimations($combatMeleeGltf)
+    )
+
     validAnimations = retargetOrderedCharacterAnimationsForModel(
       newModelRoot,
-      selectOrderedCharacterAnimations(
-        baseAnimations,
-        locomotionAnimations,
-        combatMeleeAnimations
-      ),
+      orderedAnims,
       {
         base: sourceScene,
-        locomotion: $locomotionGltf?.scene,
-        combatMelee: $combatMeleeGltf?.scene,
+        locomotion: $locomotionGltf.scene,
+        combatMelee: $combatMeleeGltf.scene,
       }
     )
 
@@ -113,8 +121,35 @@
       }
     }
 
+    setupDone = true
   }
 
+  export function update(delta: number): void {
+    if (!selected || !mixer || !currentAction) return
+
+    mixer.update(delta)
+
+    const clip = currentAction.getClip()
+    if (clip && clip.duration > 0) {
+      const remainingTime = clip.duration - currentAction.time
+      if (remainingTime <= OVERLAP_BEFORE_END) {
+        playIdleAnimation()
+      }
+    }
+  }
+
+  export function dispose(): void {
+    if (mixer) {
+      mixer.stopAllAction()
+      mixer = null
+    }
+    currentAction = null
+    modelRoot = null
+    validAnimations = []
+    setupDone = false
+  }
+
+  // Pause/resume on selection change
   $effect(() => {
     if (!mixer || !currentAction) return
 
@@ -128,51 +163,8 @@
     mixer.setTime(0)
   })
 
-  $effect(() => {
-    if (!spotlightTarget) return
-    if (spotlightRef) spotlightRef.target = spotlightTarget
-    if (fillSpotlightRef) fillSpotlightRef.target = spotlightTarget
-  })
-
-  onMount(() => {
-    const checkGltf = () => {
-      const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
-
-      if (activeGltf && $locomotionGltf && $combatMeleeGltf) {
-        setupModel(
-          activeGltf.scene,
-          getGltfAnimations(activeGltf),
-          getGltfAnimations($locomotionGltf),
-          getGltfAnimations($combatMeleeGltf)
-        )
-        return
-      }
-
-      setTimeout(checkGltf, 100)
-    }
-    checkGltf()
-
-    return () => {
-      if (mixer) {
-        mixer.stopAllAction()
-        mixer = null
-      }
-      modelRoot = null
-    }
-  })
-
-  useTask((delta) => {
-    if (!selected || !mixer || !currentAction) return
-
-    mixer.update(delta)
-
-    const clip = currentAction.getClip()
-    if (clip && clip.duration > 0) {
-      const remainingTime = clip.duration - currentAction.time
-      if (remainingTime <= OVERLAP_BEFORE_END) {
-        playIdleAnimation()
-      }
-    }
+  onDestroy(() => {
+    dispose()
   })
 </script>
 
@@ -180,37 +172,4 @@
   <T.Group position={[positionX, positionY, positionZ]}>
     <T is={modelRoot} />
   </T.Group>
-  <T.Object3D
-    position={[positionX, positionY + 0.9, positionZ]}
-    bind:ref={spotlightTarget}
-  />
-  {#if selected}
-    <T.SpotLight
-      bind:ref={spotlightRef}
-      position={[positionX, positionY + 4.0, positionZ + 1.2]}
-      intensity={9.0}
-      angle={0.34}
-      penumbra={0.22}
-      distance={14}
-      decay={1.2}
-      color="#ffffff"
-      castShadow
-      shadow.mapSize.width={2048}
-      shadow.mapSize.height={2048}
-      shadow.camera.near={0.5}
-      shadow.camera.far={18}
-      shadow.bias={-0.0002}
-      shadow.normalBias={0.02}
-    />
-    <T.SpotLight
-      bind:ref={fillSpotlightRef}
-      position={[positionX, positionY + 2.5, positionZ + 3.1]}
-      intensity={3.4}
-      angle={0.52}
-      penumbra={0.8}
-      distance={12}
-      decay={1.2}
-      color="#fff2d8"
-    />
-  {/if}
 {/if}
