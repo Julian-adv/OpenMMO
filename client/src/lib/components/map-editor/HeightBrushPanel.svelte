@@ -76,10 +76,6 @@
 
 <style>
   .height-brush-panel {
-    position: fixed;
-    left: 16px;
-    bottom: 16px;
-    z-index: 1000;
     background: rgba(0, 0, 0, 0.85);
     color: #e0e0e0;
     padding: 12px 16px;

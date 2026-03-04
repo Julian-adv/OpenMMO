@@ -12,9 +12,10 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainMetaManager, ResolvedRegionLayers } from '../../managers/terrainMetaManager'
+  import { tileToRegion } from '../../managers/terrainMetaManager'
   import { loadSplatLayers } from '../../utils/splatLayerLoader'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
-  import { brushWorldPos, brushSize, brushMode, editorTool } from '../../stores/editorStore'
+  import { brushWorldPos, brushSize, brushMode, editorTool, regionMetaVersion, currentEditorRegion } from '../../stores/editorStore'
   import type { BrushMode, EditorTool } from '../../stores/editorStore'
 
   interface Props {
@@ -212,6 +213,28 @@
       }
 
       if (mMgr) {
+        mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
+          regionLayerMap.set(tile.id, resolved)
+        })
+      }
+    }
+  })
+
+  // Re-resolve region layers when meta changes (texture swap in SplatBrushPanel)
+  let metaVer = $state(0)
+  regionMetaVersion.subscribe((v) => (metaVer = v))
+
+  let changedRegion = $state<{ rx: number; rz: number } | null>(null)
+  currentEditorRegion.subscribe((v) => (changedRegion = v))
+
+  $effect(() => {
+    if (metaVer === 0 || !changedRegion || !metaManager) return
+    const mMgr = metaManager
+    const { rx, rz } = changedRegion
+
+    for (const tile of terrainTiles) {
+      const { tileX, tileZ } = getTileCoords(tile)
+      if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
         mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
           regionLayerMap.set(tile.id, resolved)
         })

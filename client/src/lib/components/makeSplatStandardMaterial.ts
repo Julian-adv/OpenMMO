@@ -155,12 +155,24 @@ export function makeSplatStandardMaterial({
     const grid64 = abs(fract(localUv.sub(0.5)).sub(0.5)).div(fwidth(localUv))
     const line64 = float(1).sub(min(min(grid64.x, grid64.y), float(1)))
 
+    // Region boundary grid (16 tiles = 1024 world units, offset by half tile)
+    const regionCoords = vWorldXZ.add(32.0).div(1024.0)
+    const gridRegion = abs(fract(regionCoords.sub(0.5)).sub(0.5)).div(
+      fwidth(regionCoords)
+    )
+    const lineRegion = float(1).sub(
+      min(min(gridRegion.x, gridRegion.y), float(1))
+    )
+
     const gridActive = smoothstep(float(0.49), float(0.51), uGridVisible)
     blended.assign(
       mix(blended, mix(blended, vec3(0, 0, 0), line1.mul(0.3)), gridActive)
     )
     blended.assign(
       mix(blended, mix(blended, vec3(1, 0, 0), line64), gridActive)
+    )
+    blended.assign(
+      mix(blended, vec3(0.886, 0.725, 0.231), lineRegion.mul(gridActive))
     )
 
     // Brush overlay

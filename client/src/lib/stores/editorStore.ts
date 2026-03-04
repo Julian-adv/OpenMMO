@@ -1,4 +1,6 @@
 import { writable } from 'svelte/store'
+import type { LayerConfig } from '../utils/splatLayerLoader'
+import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 
 export interface HoveredCell {
   tileX: number
@@ -62,3 +64,18 @@ export const editorPanOffset = writable<{ x: number; z: number }>({
   x: 0,
   z: 0,
 })
+
+// Current region the editor cursor is in
+export const currentEditorRegion = writable<{
+  rx: number
+  rz: number
+} | null>(null)
+
+// Actual LayerConfig data for the current region (texture + tileScale)
+export const currentRegionConfigs = writable<LayerConfig[]>([])
+
+// MetaManager reference for SplatBrushPanel to save region texture changes
+export const editorMetaManager = writable<TerrainMetaManager | null>(null)
+
+// Incremented after saving region meta to trigger terrain re-render
+export const regionMetaVersion = writable<number>(0)

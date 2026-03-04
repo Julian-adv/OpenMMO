@@ -12,23 +12,25 @@
     </span>
   {/if}
 </div>
-<div class="editor-tool-tabs">
-  <button
-    class="tool-tab"
-    class:active={$editorTool === 'height'}
-    onclick={() => editorTool.set('height')}
-  >Height</button>
-  <button
-    class="tool-tab"
-    class:active={$editorTool === 'splat'}
-    onclick={() => editorTool.set('splat')}
-  >Splat</button>
+<div class="editor-panel-container">
+  <div class="editor-tool-tabs">
+    <button
+      class="tool-tab"
+      class:active={$editorTool === 'height'}
+      onclick={() => editorTool.set('height')}
+    >Height</button>
+    <button
+      class="tool-tab"
+      class:active={$editorTool === 'splat'}
+      onclick={() => editorTool.set('splat')}
+    >Splat</button>
+  </div>
+  {#if $editorTool === 'height'}
+    <HeightBrushPanel />
+  {:else}
+    <SplatBrushPanel />
+  {/if}
 </div>
-{#if $editorTool === 'height'}
-  <HeightBrushPanel />
-{:else}
-  <SplatBrushPanel />
-{/if}
 
 <style>
   .editor-mode-badge {
@@ -56,17 +58,24 @@
     letter-spacing: 0;
   }
 
-  .editor-tool-tabs {
+  .editor-panel-container {
     position: fixed;
     left: 16px;
-    bottom: 180px;
+    bottom: 16px;
     z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .editor-tool-tabs {
     display: flex;
     gap: 2px;
     background: rgba(0, 0, 0, 0.7);
     border-radius: 6px;
     padding: 3px;
     border: 1px solid rgba(226, 185, 59, 0.3);
+    width: fit-content;
   }
 
   .tool-tab {

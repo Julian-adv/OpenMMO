@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager } from '../../stores/editorStore'
   import type { EditorTool } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
@@ -114,8 +114,10 @@
       if (rx !== lastRegionX || rz !== lastRegionZ) {
         lastRegionX = rx
         lastRegionZ = rz
+        currentEditorRegion.set({ rx, rz })
         const meta = metaManager.getMetaForTile(tileX, tileZ)
         if (meta) {
+          currentRegionConfigs.set([...meta.layers])
           currentRegionLayers.set(
             meta.layers.map((l, i) => ({
               label: textureNameToLabel(l.texture),
@@ -289,6 +291,8 @@
   }
 
   onMount(() => {
+    if (metaManager) editorMetaManager.set(metaManager)
+
     const canvas = document.querySelector('canvas')
     if (!canvas) return
 

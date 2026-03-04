@@ -20,6 +20,17 @@ export const DEFAULT_LAYER_CONFIGS: [
   { texture: 'snow_02_1k', tileScale: 4.0 }, // A = snow
 ]
 
+/** All available splat textures that can be assigned to region layers. */
+export const ALL_SPLAT_TEXTURES: { name: string; defaultTileScale: number }[] =
+  [
+    { name: 'rocky_terrain_02_1k', defaultTileScale: 8.0 },
+    { name: 'gravel_floor_1k', defaultTileScale: 6.0 },
+    { name: 'red_laterite_soil_stones_1k', defaultTileScale: 10.0 },
+    { name: 'snow_02_1k', defaultTileScale: 4.0 },
+    { name: 'gravel_road_1k', defaultTileScale: 8.0 },
+    { name: 'sandy_gravel_02_1k', defaultTileScale: 8.0 },
+  ]
+
 /** Cache: texture name → extracted textures (without tile scale) */
 interface CachedTextures {
   map: THREE.Texture
