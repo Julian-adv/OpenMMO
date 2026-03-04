@@ -81,6 +81,7 @@
   import { createSceneLightingController } from './game-scene/scene-lighting'
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
+  import { TerrainMetaManager } from '../managers/terrainMetaManager'
   import { loadWaterNormalMap } from '../shaders/water-normal-gen'
   import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
@@ -106,6 +107,7 @@
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
   const terrainSplatManager = new TerrainSplatManager()
+  const terrainMetaManager = new TerrainMetaManager()
   monsterManager.heightManager = terrainHeightManager
   let waterNormalMap = $state<THREE.Texture | null>(null)
   let waterFoamMap = $state<THREE.Texture | null>(null)
@@ -716,6 +718,7 @@
   bind:terrainMeshes={terrainMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
+  metaManager={terrainMetaManager}
 />
 
 <GameSceneWaterLayer
@@ -763,5 +766,5 @@
 />
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} />
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />
 {/if}

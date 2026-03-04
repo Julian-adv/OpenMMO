@@ -112,3 +112,10 @@
 - .glb 내보내기 시 권장 옵션(Blender glTF 2.0 Exporter)
   - Apply Modifiers: 켜기
   - (노멀맵 쓴다면) Tangents: 켜기
+
+## Splat Map용 텍스처 GLB 내보내기
+
+- Plane의 크기는 상관없다. 코드에서 geometry는 무시하고 material의 텍스처만 추출한다.
+  - `splatLayerLoader.ts`가 GLB를 로드한 뒤 첫 번째 `MeshStandardMaterial`에서 `map`, `normalMap`, `roughnessMap`, `metalnessMap`, `aoMap`만 꺼내 쓴다.
+  - 터레인 geometry는 별도로 `PlaneGeometry(64, 64)`를 생성한다.
+- 중요한 것은 Blender에서 material에 올바른 텍스처(albedo, normal, roughness 등)가 할당되어 있는지이다.

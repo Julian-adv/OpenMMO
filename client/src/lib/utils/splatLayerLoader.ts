@@ -3,16 +3,32 @@ import { GLTFLoader } from 'three/examples/jsm/Addons.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { SplatLayer } from '../components/makeSplatStandardMaterial'
 
-const GLB_PATHS = [
-  { path: '/textures/rocky_terrain_02_1k.glb', tile: 8.0 }, // R = grass
-  { path: '/textures/gravel_floor_1k.glb', tile: 6.0 }, // G = rock
-  { path: '/textures/red_laterite_soil_stones_1k.glb', tile: 10.0 }, // B = dirt
-  { path: '/textures/snow_02_1k.glb', tile: 4.0 }, // A = snow
-] as const
+export interface LayerConfig {
+  texture: string
+  tileScale: number
+}
 
-let cached: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null = null
-let inflight: Promise<[SplatLayer, SplatLayer, SplatLayer, SplatLayer]> | null =
-  null
+export const DEFAULT_LAYER_CONFIGS: [
+  LayerConfig,
+  LayerConfig,
+  LayerConfig,
+  LayerConfig,
+] = [
+  { texture: 'rocky_terrain_02_1k', tileScale: 8.0 }, // R = grass
+  { texture: 'gravel_floor_1k', tileScale: 6.0 }, // G = rock
+  { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 }, // B = dirt
+  { texture: 'snow_02_1k', tileScale: 4.0 }, // A = snow
+]
+
+/** Cache: texture name → extracted textures (without tile scale) */
+interface CachedTextures {
+  map: THREE.Texture
+  normalMap?: THREE.Texture
+  orm?: THREE.Texture
+}
+
+const textureCache = new Map<string, CachedTextures>()
+const inflightTextures = new Map<string, Promise<CachedTextures>>()
 
 function prepColorTex(t: THREE.Texture | null) {
   if (!t) return null
@@ -105,7 +121,7 @@ function packORM(
   return tex
 }
 
-function toLayer(gltf: GLTF, tile: number): SplatLayer {
+function extractTextures(gltf: GLTF): CachedTextures {
   const mat = firstMaterial(gltf)
   if (!mat) throw new Error('No MeshStandardMaterial found in GLB')
   const albedo = prepColorTex(mat.map || null)!
@@ -113,28 +129,42 @@ function toLayer(gltf: GLTF, tile: number): SplatLayer {
   const mr = prepDataTex(mat.roughnessMap || mat.metalnessMap || null)
   const ao = prepDataTex(mat.aoMap || null)
   const orm = packORM(ao, mr) || undefined
-  return { map: albedo, normalMap: normal, orm, tile }
+  return { map: albedo, normalMap: normal, orm }
 }
 
-/** Load terrain splat layers once. Subsequent calls return the cached result. */
-export function loadSplatLayers(): Promise<
-  [SplatLayer, SplatLayer, SplatLayer, SplatLayer]
-> {
-  if (cached) return Promise.resolve(cached)
-  if (inflight) return inflight
+/** Load a single texture by name, with caching. */
+export function loadSplatLayer(
+  textureName: string,
+  tileScale: number
+): Promise<SplatLayer> {
+  const cached = textureCache.get(textureName)
+  if (cached) return Promise.resolve({ ...cached, tile: tileScale })
 
-  inflight = (async () => {
+  const existing = inflightTextures.get(textureName)
+  if (existing) return existing.then((t) => ({ ...t, tile: tileScale }))
+
+  const promise = (async () => {
     const glbLoader = new GLTFLoader()
-    const gltfs = await Promise.all(
-      GLB_PATHS.map((l) => glbLoader.loadAsync(l.path))
-    )
-    cached = gltfs.map((gltf, i) => toLayer(gltf, GLB_PATHS[i].tile)) as [
-      SplatLayer,
-      SplatLayer,
-      SplatLayer,
-      SplatLayer,
-    ]
-    return cached
+    const gltf = await glbLoader.loadAsync(`/textures/${textureName}.glb`)
+    const textures = extractTextures(gltf)
+    textureCache.set(textureName, textures)
+    inflightTextures.delete(textureName)
+    return textures
   })()
-  return inflight
+  inflightTextures.set(textureName, promise)
+  return promise.then((t) => ({ ...t, tile: tileScale }))
+}
+
+/** Load 4 splat layers from config. Shared textures are loaded only once. */
+export function loadSplatLayers(
+  configs: [
+    LayerConfig,
+    LayerConfig,
+    LayerConfig,
+    LayerConfig,
+  ] = DEFAULT_LAYER_CONFIGS
+): Promise<[SplatLayer, SplatLayer, SplatLayer, SplatLayer]> {
+  return Promise.all(
+    configs.map((c) => loadSplatLayer(c.texture, c.tileScale))
+  ) as Promise<[SplatLayer, SplatLayer, SplatLayer, SplatLayer]>
 }

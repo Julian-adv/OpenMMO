@@ -294,9 +294,19 @@ export function makeSplatStandardMaterial({
   if (metalnessNode) mat.metalnessNode = metalnessNode
   if (aoNode) mat.aoNode = aoNode
 
-  // Store uniforms for external access
+  // Store uniforms for external access (layer textures swappable per-tile)
   mat.userData.uniforms = {
     splatMap: splatTex,
+    diffTex0,
+    diffTex1,
+    diffTex2,
+    diffTex3,
+    ...(normTex0 ? { normTex0, normTex1, normTex2, normTex3 } : {}),
+    ...(ormTex0 ? { ormTex0, ormTex1, ormTex2, ormTex3 } : {}),
+    uTile0,
+    uTile1,
+    uTile2,
+    uTile3,
     brushCenter: uBrushCenter,
     brushRadius: uBrushRadius,
     brushActive: uBrushActive,

@@ -1,20 +1,15 @@
 <script lang="ts">
-  import { brushSize, brushStrength, splatLayer } from '../../stores/editorStore'
+  import { brushSize, brushStrength, splatLayer, currentRegionLayers, type SplatLayerInfo } from '../../stores/editorStore'
 
   let size = $state(3)
   let strength = $state(5)
   let layer = $state(0)
+  let layers = $state<SplatLayerInfo[]>([])
 
   brushSize.subscribe((v) => (size = v))
   brushStrength.subscribe((v) => (strength = v))
   splatLayer.subscribe((v) => (layer = v))
-
-  const layers = [
-    { label: 'Grass', color: '#66cc66' },
-    { label: 'Rock', color: '#999999' },
-    { label: 'Dirt', color: '#bb7744' },
-    { label: 'Snow', color: '#ddeeff' },
-  ]
+  currentRegionLayers.subscribe((v) => (layers = v))
 
   function onSizeChange(event: Event) {
     const value = parseInt((event.target as HTMLInputElement).value)

@@ -95,4 +95,26 @@ impl TerrainIO {
             Err(e) => Err(e),
         }
     }
+
+    pub async fn write_meta(&self, rx: i32, rz: i32, json: &serde_json::Value) -> std::io::Result<()> {
+        let layers = json.get("layers")
+            .and_then(|l| l.as_array())
+            .ok_or_else(|| std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "meta must contain \"layers\" array",
+            ))?;
+        if layers.len() != 4 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("layers must have exactly 4 entries, got {}", layers.len()),
+            ));
+        }
+        let path = coords::meta_path(&self.base_dir, rx, rz);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        let json_str = serde_json::to_string_pretty(json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        fs::write(&path, json_str).await
+    }
 }

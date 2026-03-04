@@ -21,7 +21,7 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
             "/api/terrain/splat/{x}/{z}",
             get(get_splatmap).put(put_splatmap),
         )
-        .route("/api/terrain/meta/{rx}/{rz}", get(get_meta))
+        .route("/api/terrain/meta/{rx}/{rz}", get(get_meta).put(put_meta))
         .with_state(terrain_io)
 }
 
@@ -116,4 +116,25 @@ async fn get_meta(
         Json(meta),
     )
         .into_response())
+}
+
+async fn put_meta(
+    Path((rx, rz)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+    Json(body): Json<serde_json::Value>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    terrain
+        .write_meta(rx, rz, &body)
+        .await
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::InvalidData => (StatusCode::BAD_REQUEST, e.to_string()),
+            _ => {
+                error!("Failed to write meta ({}, {}): {}", rx, rz, e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+        })?;
+    Ok(StatusCode::NO_CONTENT)
 }

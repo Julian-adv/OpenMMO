@@ -11,6 +11,7 @@
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
+  import type { TerrainMetaManager, ResolvedRegionLayers } from '../../managers/terrainMetaManager'
   import { loadSplatLayers } from '../../utils/splatLayerLoader'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
   import { brushWorldPos, brushSize, brushMode, editorTool } from '../../stores/editorStore'
@@ -22,6 +23,7 @@
     terrainMeshes?: (THREE.Mesh | undefined)[]
     heightManager?: TerrainHeightManager | null
     splatManager?: TerrainSplatManager | null
+    metaManager?: TerrainMetaManager | null
   }
 
   let {
@@ -30,6 +32,7 @@
     terrainMeshes = $bindable<(THREE.Mesh | undefined)[]>([]),
     heightManager = null,
     splatManager = null,
+    metaManager = null,
   }: Props = $props()
 
   // ── Shared material (created once) ──────────────────────
@@ -101,11 +104,12 @@
     brushUnsubs = []
   })
 
-  // ── Geometry & splatmap management ──────────────────────
+  // ── Geometry, splatmap & region layer management ──────────
   // Use SvelteMaps directly in the template (keyed by tile id) to avoid
   // index mismatch when terrainTiles reorders during tile transitions.
   const geoMap = new SvelteMap<string, THREE.BufferGeometry>()
   const splatTexMap = new SvelteMap<string, THREE.Texture>()
+  const regionLayerMap = new SvelteMap<string, ResolvedRegionLayers>()
 
   function getTileCoords(tile: TerrainTile): { tileX: number; tileZ: number } {
     return {
@@ -179,12 +183,14 @@
         geo.dispose()
         geoMap.delete(id)
         splatTexMap.delete(id)
+        regionLayerMap.delete(id)
       }
     }
 
     // Create geometries for new tiles
     const mgr = heightManager
     const sMgr = splatManager
+    const mMgr = metaManager
     for (const tile of terrainTiles) {
       if (geoMap.has(tile.id)) continue
 
@@ -204,6 +210,12 @@
           splatTexMap.set(tile.id, tex)
         })
       }
+
+      if (mMgr) {
+        mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
+          regionLayerMap.set(tile.id, resolved)
+        })
+      }
     }
   })
 </script>
@@ -217,6 +229,7 @@
         material={sharedMaterial}
         position={tile.position}
         splatTexture={splatTexMap.get(tile.id) ?? null}
+        regionLayers={regionLayerMap.get(tile.id) ?? null}
         bind:mesh={terrainMeshes[index]}
       />
     {/if}

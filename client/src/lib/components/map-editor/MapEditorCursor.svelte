@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel } from '../../stores/editorStore'
   import type { EditorTool } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
@@ -9,6 +9,10 @@
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
+  import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
+  import { tileToRegion } from '../../managers/terrainMetaManager'
+
+  const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
@@ -16,9 +20,10 @@
     terrainTiles: TerrainTile[]
     heightManager: TerrainHeightManager | null
     splatManager: TerrainSplatManager | null
+    metaManager: TerrainMetaManager | null
   }
 
-  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager }: Props = $props()
+  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, metaManager = null }: Props = $props()
 
   let isPainting = $state(false)
   let isPanning = $state(false)
@@ -59,6 +64,8 @@
   const _panFwd = new THREE.Vector3()
 
   let lastWorldPos = { x: 0, z: 0 }
+  let lastRegionX = NaN
+  let lastRegionZ = NaN
 
   function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
     if (!camera) return null
@@ -98,6 +105,25 @@
 
     if (heightManager) {
       cursorHeight.set(heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ))
+    }
+
+    // Update splat layer labels when region changes
+    if (metaManager) {
+      const rx = tileToRegion(tileX)
+      const rz = tileToRegion(tileZ)
+      if (rx !== lastRegionX || rz !== lastRegionZ) {
+        lastRegionX = rx
+        lastRegionZ = rz
+        const meta = metaManager.getMetaForTile(tileX, tileZ)
+        if (meta) {
+          currentRegionLayers.set(
+            meta.layers.map((l, i) => ({
+              label: textureNameToLabel(l.texture),
+              color: LAYER_COLORS[i] ?? '#ffffff',
+            }))
+          )
+        }
+      }
     }
   }
 
