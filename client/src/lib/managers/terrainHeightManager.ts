@@ -572,6 +572,34 @@ export class TerrainHeightManager {
     return tex
   }
 
+  /** Re-apply height to geometry if the tile has a registered geometry. */
+  refreshTileGeometry(tileX: number, tileZ: number): void {
+    const key = tileKey(tileX, tileZ)
+    const geo = this.geometries.get(key)
+    if (geo && this.heightmaps.has(key)) {
+      this.applyHeightToGeometry(tileX, tileZ, geo)
+    }
+  }
+
+  /** Directly set heightmap data for a tile (used by terrain generator). */
+  setHeightmap(tileX: number, tileZ: number, data: Uint16Array): void {
+    this.heightmaps.set(tileKey(tileX, tileZ), data)
+  }
+
+  /** Mark a tile as dirty so it will be saved on next save cycle. */
+  markDirty(tileX: number, tileZ: number): void {
+    this.dirtyTiles.add(tileKey(tileX, tileZ))
+  }
+
+  /** Force-save all dirty tiles immediately (cancels pending debounce). */
+  async saveAllDirty(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+    }
+    await this.saveDirtyTiles()
+  }
+
   unloadTile(tileX: number, tileZ: number) {
     const key = tileKey(tileX, tileZ)
     this.heightmaps.delete(key)
