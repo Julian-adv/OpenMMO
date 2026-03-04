@@ -1,19 +1,20 @@
 pub const TILE_DIM: usize = 64;
+pub const VERTS_PER_SIDE: usize = TILE_DIM + 1; // 65
 
-/// Heightmap: 64x64 uint16 = 8,192 bytes
-pub const HEIGHTMAP_SIZE: usize = TILE_DIM * TILE_DIM * 2;
+/// Heightmap: 65x65 uint16 = 8,450 bytes (vertex-based, adjacent tiles overlap by 1)
+pub const HEIGHTMAP_SIZE: usize = VERTS_PER_SIDE * VERTS_PER_SIDE * 2;
 
-/// Splatmap: 64x64 RGBA uint8 = 16,384 bytes
+/// Splatmap: 64x64 RGBA uint8 = 16,384 bytes (cell-based)
 pub const SPLATMAP_SIZE: usize = TILE_DIM * TILE_DIM * 4;
 
 /// uint16 value for sea level (0.0m): 10000 * 0.05 - 500.0 = 0.0
 pub const DEFAULT_HEIGHT_VALUE: u16 = 10000;
 
-/// Generate a flat heightmap at sea level (all cells = 10000).
+/// Generate a flat heightmap at sea level (all vertices = 10000).
 pub fn default_heightmap() -> Vec<u8> {
     let mut buf = Vec::with_capacity(HEIGHTMAP_SIZE);
     let bytes = DEFAULT_HEIGHT_VALUE.to_le_bytes();
-    for _ in 0..(TILE_DIM * TILE_DIM) {
+    for _ in 0..(VERTS_PER_SIDE * VERTS_PER_SIDE) {
         buf.extend_from_slice(&bytes);
     }
     buf

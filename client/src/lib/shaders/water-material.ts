@@ -203,7 +203,10 @@ export function createWaterMaterial(
   // ─── Fragment: full water shading ──────────────────
   const fragmentNode = Fn(() => {
     // 1. Depth calculation
-    const terrainHeight = heightmapTex.sample(vUv).r
+    // Remap UV to align 65 vertices with 65×65 texel centers:
+    // vertex k has UV = k/64, texel center k is at (k+0.5)/65
+    const heightmapUV = vUv.mul(64.0 / 65.0).add(0.5 / 65.0)
+    const terrainHeight = heightmapTex.sample(heightmapUV).r
     const depth = max(float(0), vOrigWorldPos.y.sub(terrainHeight))
     const depthFactor = clamp(depth.div(uMaxDepth), 0.0, 1.0)
 

@@ -91,11 +91,11 @@ export class TerrainHeightManager {
     cellX: number,
     cellZ: number
   ): number {
-    // Handle cross-tile lookups for cells beyond tile boundaries
-    if (cellX >= TILE_DIM) {
+    // Heightmap stores 65×65 vertices (0-64). Cross-tile only for padding positions.
+    if (cellX >= VERTS_PER_SIDE) {
       return this.getHeightAtCell(tileX + 1, tileZ, cellX - TILE_DIM, cellZ)
     }
-    if (cellZ >= TILE_DIM) {
+    if (cellZ >= VERTS_PER_SIDE) {
       return this.getHeightAtCell(tileX, tileZ + 1, cellX, cellZ - TILE_DIM)
     }
     if (cellX < 0) {
@@ -107,7 +107,7 @@ export class TerrainHeightManager {
 
     const data = this.heightmaps.get(tileKey(tileX, tileZ))
     if (!data) return 0
-    return decodeHeight(data[cellZ * TILE_DIM + cellX])
+    return decodeHeight(data[cellZ * VERTS_PER_SIDE + cellX])
   }
 
   hasHeightData(worldX: number, worldZ: number): boolean {
@@ -181,30 +181,13 @@ export class TerrainHeightManager {
     const P = PADDED_SIDE
     const heights = _paddedHeights
 
-    // Fill 64×64 interior directly from heightmap data (no function call overhead)
-    for (let cz = 0; cz < TILE_DIM; cz++) {
-      const srcRow = cz * TILE_DIM
-      const dstRow = (cz + 1) * P + 1
-      for (let cx = 0; cx < TILE_DIM; cx++) {
-        heights[dstRow + cx] = decodeHeight(data[srcRow + cx])
-      }
-    }
-    // Edge vertices (vx=64 and vz=64) share data with neighbor tiles
+    // Fill 65×65 vertices directly from heightmap data (includes edge vertices)
     for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
-      heights[(vz + 1) * P + (TILE_DIM + 1)] = this.getHeightAtCell(
-        tileX,
-        tileZ,
-        TILE_DIM,
-        vz
-      )
-    }
-    for (let vx = 0; vx < TILE_DIM; vx++) {
-      heights[(TILE_DIM + 1) * P + (vx + 1)] = this.getHeightAtCell(
-        tileX,
-        tileZ,
-        vx,
-        TILE_DIM
-      )
+      const srcRow = vz * VERTS_PER_SIDE
+      const dstRow = (vz + 1) * P + 1
+      for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
+        heights[dstRow + vx] = decodeHeight(data[srcRow + vx])
+      }
     }
 
     // Padding edges for normal computation at boundaries
@@ -268,11 +251,35 @@ export class TerrainHeightManager {
     normalAttr.needsUpdate = true
   }
 
-  /** Re-apply height to adjacent tiles whose edge vertices reference this tile's data. */
+  /** Sync overlapping edge vertices to neighbor tiles' data, then refresh their geometry.
+   *  This tile's column 0 → neighbor(tileX-1)'s column 64
+   *  This tile's row 0 → neighbor(tileZ-1)'s row 64
+   *  This tile's vertex(0,0) → neighbor(tileX-1, tileZ-1)'s vertex(64,64) */
   refreshAdjacentTileEdges(tileX: number, tileZ: number) {
-    // Tile (tileX-1)'s right edge (vx=64) reads cell column 0 of this tile
-    // Tile (tileZ-1)'s bottom edge (vz=64) reads cell row 0 of this tile
-    // Tile (tileX-1, tileZ-1)'s corner (vx=64, vz=64) reads cell (0,0) of this tile
+    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    if (!data) return
+
+    // Sync overlapping edge data to neighbors
+    const leftData = this.heightmaps.get(tileKey(tileX - 1, tileZ))
+    if (leftData) {
+      for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
+        leftData[vz * VERTS_PER_SIDE + TILE_DIM] = data[vz * VERTS_PER_SIDE + 0]
+      }
+    }
+
+    const topData = this.heightmaps.get(tileKey(tileX, tileZ - 1))
+    if (topData) {
+      for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
+        topData[TILE_DIM * VERTS_PER_SIDE + vx] = data[0 * VERTS_PER_SIDE + vx]
+      }
+    }
+
+    const diagData = this.heightmaps.get(tileKey(tileX - 1, tileZ - 1))
+    if (diagData) {
+      diagData[TILE_DIM * VERTS_PER_SIDE + TILE_DIM] = data[0]
+    }
+
+    // Re-apply geometry for neighbors whose data was updated
     const neighbors = [
       { dx: -1, dz: 0 },
       { dx: 0, dz: -1 },
@@ -355,7 +362,7 @@ export class TerrainHeightManager {
             const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
             const heightDelta = delta * weight
 
-            const idx = cz * TILE_DIM + cx
+            const idx = cz * VERTS_PER_SIDE + cx
             const currentHeight = decodeHeight(data[idx])
             // Quantize delta to 0.05m steps (1 uint16 unit)
             const steps = Math.trunc(heightDelta / 0.05)
@@ -450,7 +457,7 @@ export class TerrainHeightManager {
                 const ncx = cx + nx
                 const ncz = cz + nz
                 if (ncx >= 0 && ncx < TILE_DIM && ncz >= 0 && ncz < TILE_DIM) {
-                  nSum += decodeHeight(data[ncz * TILE_DIM + ncx])
+                  nSum += decodeHeight(data[ncz * VERTS_PER_SIDE + ncx])
                   nCount++
                 }
               }
@@ -459,7 +466,7 @@ export class TerrainHeightManager {
             const neighborAvg = nSum / nCount
 
             const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
-            const idx = cz * TILE_DIM + cx
+            const idx = cz * VERTS_PER_SIDE + cx
             const currentHeight = decodeHeight(data[idx])
             const heightDelta = (neighborAvg - currentHeight) * weight
 
@@ -554,14 +561,18 @@ export class TerrainHeightManager {
   getHeightmapTexture(tileX: number, tileZ: number): THREE.DataTexture | null {
     const data = this.heightmaps.get(tileKey(tileX, tileZ))
     if (!data) return null
-    const decoded = new Float32Array(TILE_DIM * TILE_DIM)
-    for (let i = 0; i < data.length; i++) {
+
+    // Heightmap is already 65×65 — decode directly
+    const W = VERTS_PER_SIDE
+    const decoded = new Float32Array(W * W)
+    for (let i = 0; i < W * W; i++) {
       decoded[i] = decodeHeight(data[i])
     }
+
     const tex = new THREE.DataTexture(
       decoded,
-      TILE_DIM,
-      TILE_DIM,
+      W,
+      W,
       THREE.RedFormat,
       THREE.FloatType
     )

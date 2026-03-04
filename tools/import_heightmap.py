@@ -14,7 +14,7 @@ The source PNG (e.g. from https://tangrams.github.io/heightmapper/) is
 expected to be grayscale where 0=min_height and 255=max_height.
 
 Game heightmap format:
-    - 64x64 cells per tile, 1 m per cell
+    - 65x65 vertices per tile (vertex-based, adjacent tiles overlap by 1)
     - uint16 little-endian, height = value * 0.05 - 500.0
     - File: terrain/height/r{rx:+03}_{rz:+03}/h_{tx:+05}_{tz:+05}.bin
 """
@@ -28,6 +28,7 @@ import numpy as np
 from PIL import Image
 
 TILE_DIM = 64
+VERTS_PER_SIDE = TILE_DIM + 1  # 65
 HEIGHT_STEP = 0.05
 HEIGHT_OFFSET = 500.0
 # uint16 range: 0..65535 -> height -500.0 .. +2776.75
@@ -136,13 +137,17 @@ def main():
         f"Z [{origin_tz}..{origin_tz + tiles_z - 1}]"
     )
 
-    # Pad terrain array to exact tile multiples
-    padded_w = tiles_x * TILE_DIM
-    padded_h = tiles_z * TILE_DIM
-    if padded_w != new_w or padded_h != new_h:
-        # Pad with the edge values
+    # Pad terrain array so each tile can extract 65×65 vertices
+    padded_w = tiles_x * TILE_DIM + 1  # +1 for the last tile's overlapping edge
+    padded_h = tiles_z * TILE_DIM + 1
+    if padded_w > terrain.shape[1] or padded_h > terrain.shape[0]:
         padded = np.full((padded_h, padded_w), height_to_uint16(min_h), dtype=np.uint16)
         padded[: terrain.shape[0], : terrain.shape[1]] = terrain
+        # Extend edges for boundary tiles
+        if terrain.shape[1] < padded_w:
+            padded[:terrain.shape[0], terrain.shape[1]:] = terrain[:, -1:]
+        if terrain.shape[0] < padded_h:
+            padded[terrain.shape[0]:, :] = padded[terrain.shape[0] - 1 : terrain.shape[0], :]
         terrain = padded
 
     if args.dry_run:
@@ -153,16 +158,14 @@ def main():
         for tx_off in range(tiles_x):
             tx = origin_tx + tx_off
             tz = origin_tz + tz_off
-            # Extract 64x64 chunk
-            # Image rows go top-to-bottom; we map row 0 -> highest tz, row H-1 -> lowest tz
-            # So tile tz_off=0 gets the top rows of the image
+            # Extract 65×65 vertex chunk (overlapping with adjacent tiles)
             row_start = tz_off * TILE_DIM
             col_start = tx_off * TILE_DIM
-            chunk = terrain[row_start : row_start + TILE_DIM, col_start : col_start + TILE_DIM]
+            chunk = terrain[row_start : row_start + VERTS_PER_SIDE, col_start : col_start + VERTS_PER_SIDE]
 
             # Game format: row-major, z outer loop, x inner loop, little-endian uint16
             data = chunk.astype("<u2").tobytes()
-            assert len(data) == TILE_DIM * TILE_DIM * 2  # 8192 bytes
+            assert len(data) == VERTS_PER_SIDE * VERTS_PER_SIDE * 2  # 8450 bytes
 
             fpath = heightmap_path(base, tx, tz)
             if args.dry_run:

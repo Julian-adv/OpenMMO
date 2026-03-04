@@ -1,6 +1,7 @@
 import { createNoise2D, fbm2D, createRng } from '../utils/simplex-noise'
 
 const TILE_DIM = 64
+const VERTS_PER_SIDE = TILE_DIM + 1 // 65
 const REGION_SIZE = 16
 const REGION_CELLS = REGION_SIZE * TILE_DIM // 1024
 
@@ -22,8 +23,8 @@ export interface TerrainGenConfig {
 export interface GeneratedTile {
   tileX: number
   tileZ: number
-  heightmap: Uint16Array // 4096 values (64*64)
-  splatmap: Uint8Array // 16384 values (64*64*4)
+  heightmap: Uint16Array // 4225 values (65*65, vertex-based)
+  splatmap: Uint8Array // 16384 values (64*64*4, cell-based)
 }
 
 export interface NeighborEdgeData {
@@ -578,9 +579,23 @@ function sliceIntoTiles(
 
   for (let tz = 0; tz < REGION_SIZE; tz++) {
     for (let tx = 0; tx < REGION_SIZE; tx++) {
-      const heightmap = new Uint16Array(TILE_DIM * TILE_DIM)
+      const heightmap = new Uint16Array(VERTS_PER_SIDE * VERTS_PER_SIDE)
       const splatmap = new Uint8Array(TILE_DIM * TILE_DIM * 4)
 
+      // Height: 65×65 vertices (overlapping edges with adjacent tiles)
+      for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
+        for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
+          const regionCX = Math.min(tx * TILE_DIM + vx, N - 1)
+          const regionCZ = Math.min(tz * TILE_DIM + vz, N - 1)
+          const ri = regionCZ * N + regionCX
+          const ti = vz * VERTS_PER_SIDE + vx
+
+          const h = heightField[ri]
+          heightmap[ti] = Math.max(0, Math.min(65535, encodeHeight(h)))
+        }
+      }
+
+      // Splat: 64×64 cells (unchanged)
       for (let cz = 0; cz < TILE_DIM; cz++) {
         for (let cx = 0; cx < TILE_DIM; cx++) {
           const regionCX = tx * TILE_DIM + cx
@@ -588,11 +603,6 @@ function sliceIntoTiles(
           const ri = regionCZ * N + regionCX
           const ti = cz * TILE_DIM + cx
 
-          // Height
-          const h = heightField[ri]
-          heightmap[ti] = Math.max(0, Math.min(65535, encodeHeight(h)))
-
-          // Splat
           const rsi = ri * 4
           const tsi = ti * 4
           splatmap[tsi] = splatField[rsi]

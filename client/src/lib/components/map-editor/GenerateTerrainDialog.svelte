@@ -19,6 +19,7 @@
 
   const REGION_SIZE = 16
   const TILE_DIM = 64
+  const VERTS_PER_SIDE = TILE_DIM + 1
 
   let seed = $state(Math.floor(Math.random() * 100000))
   let minHeight = $state(-20)
@@ -90,8 +91,8 @@
 
         for (let c = 0; c < TILE_DIM; c++) {
           const idx = dir.isRow
-            ? (dir.key === 'north' ? TILE_DIM - 1 : 0) * TILE_DIM + c
-            : c * TILE_DIM + (dir.key === 'west' ? TILE_DIM - 1 : 0)
+            ? (dir.key === 'north' ? TILE_DIM - 1 : 0) * VERTS_PER_SIDE + c
+            : c * VERTS_PER_SIDE + (dir.key === 'west' ? TILE_DIM - 1 : 0)
           const encoded = data[idx]
           const meters = encoded * 0.05 - 500.0
           edgeData[t * TILE_DIM + c] = meters

@@ -79,6 +79,24 @@
     }
   }
 
+  /** Re-create water textures for adjacent tiles whose 65th edge row/column
+   *  references this tile's height data (mirrors refreshAdjacentTileEdges). */
+  function refreshAdjacentWaterTiles(tileX: number, tileZ: number) {
+    const neighbors = [
+      { dx: -1, dz: 0 },
+      { dx: 0, dz: -1 },
+      { dx: -1, dz: -1 },
+    ]
+    for (const { dx, dz } of neighbors) {
+      const nx = tileX + dx
+      const nz = tileZ + dz
+      const id = tileIdFromCoords(nx, nz)
+      if (heightTexMap.has(id)) {
+        refreshTile(id, nx, nz)
+      }
+    }
+  }
+
   // Subscribe to height changes from brush edits
   onMount(() => {
     if (!heightManager) return
@@ -86,6 +104,7 @@
       for (const { tileX, tileZ } of tiles) {
         const id = tileIdFromCoords(tileX, tileZ)
         refreshTile(id, tileX, tileZ)
+        refreshAdjacentWaterTiles(tileX, tileZ)
       }
     })
     return unsub
@@ -120,6 +139,7 @@
 
       mgr.loadHeightmap(tileX, tileZ).then(() => {
         refreshTile(tile.id, tileX, tileZ)
+        refreshAdjacentWaterTiles(tileX, tileZ)
       })
     }
   })
