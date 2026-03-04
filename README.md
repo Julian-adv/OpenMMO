@@ -1,13 +1,12 @@
 # OnlineRPG
 
-An simple online RPG prototype.
+A simple online RPG prototype.
 
 ## Tech Stack
 
 **Client:**
 - Svelte + TypeScript
 - Three.js (Threlte)
-- Socket.io-client
 - Vite
 
 **Server:**
@@ -28,32 +27,28 @@ An simple online RPG prototype.
   cargo install cargo-watch
   ```
 
-### 2. Port Assignments (Example)
+### 2. Port Assignments
 
-| Port | Service              |
-|------|----------------------|
-| 5001 | Client (Vite dev)    |
-| 5002 | Server (WebSocket)   |
-| 5003 | Server (Terrain API) |
-| 5004 | GLB Editor           |
+| Port  | Service                          |
+|-------|----------------------------------|
+| 10004 | Client (Vite dev)                |
+| 10005 | GLB Editor                       |
+| 10015 | Server WebSocket (internal only)  |
+| 10016 | Server Terrain API (internal only) |
 
-> **Port Rule:** The client automatically derives server addresses from its own port: WebSocket = `client_port + 1`, Terrain API = `client_port + 2`.
+> **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10015` and `/api/terrain` → `http://localhost:10016` automatically (see `client/vite.config.ts`).
 
 ### 3. Running the Server
 
 This project is organized as a **Cargo Workspace**. To detect changes in both the server (`server/`) and shared logic (`shared/`), it is recommended to run commands from the **root directory**.
 
 ```bash
-cargo watch -x "run -p onlinerpg-server -- --port 5012"
+cargo watch -x "run -p onlinerpg-server -- --port 10015"
 ```
 
-The terrain REST API starts automatically on port 5003 (game port + 1).
+The terrain REST API starts automatically on port 10016.
 
-https proxy
-
-```bash
-socat OPENSSL-LISTEN:10005,fork,reuseaddr,cert=client/node_modules/.vite-ssl/cert.pem,key=client/node_modules/.vite-ssl/key.pem,verify=0 TCP:127.0.0.1:5012
-```
+WebSocket and terrain API proxying is handled by Vite's dev server proxy (see `client/vite.config.ts`), so no separate socat or SSL proxy is needed.
 
 
 ### 4. Running the Client
@@ -61,7 +56,7 @@ socat OPENSSL-LISTEN:10005,fork,reuseaddr,cert=client/node_modules/.vite-ssl/cer
 ```bash
 cd client
 npm install
-npm run dev -- --port 5001
+npm run dev -- --port 10004
 ```
 
 ### 5. Automatic WASM Rebuild on Shared Code Changes (Recommended)
@@ -77,7 +72,7 @@ cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```bash
 cd tools/glb-editor
 npm install
-npm run dev -- --port 5004
+npm run dev -- --port 10005
 ```
 
 ## Features

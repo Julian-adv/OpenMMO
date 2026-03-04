@@ -454,6 +454,7 @@
         if (waterGroup) refractionManager.setWaterGroup(waterGroup)
 
         // Hide brush/grid overlay during refraction so it doesn't show through water
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const brushUniforms = (terrainMeshes[0]?.material as any)?.userData?.uniforms
         let savedBrushActive: number | undefined
         let savedGridVisible: number | undefined

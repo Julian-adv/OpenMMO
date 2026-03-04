@@ -3,11 +3,8 @@ export function getDefaultServerUrl(): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const hostname = window.location.hostname
   const port = window.location.port
-  if (port) {
-    return `${protocol}//${hostname}:${parseInt(port) + 1}`
-  } else {
-    return `${protocol}//${hostname}:5002`
-  }
+  const host = port ? `${hostname}:${port}` : hostname
+  return `${protocol}//${host}/ws`
 }
 
 export function getTerrainApiUrl(): string {
