@@ -53,6 +53,7 @@
     playerDebugInfo,
     mapEditorMode,
     teleportLoading,
+    debugSpeedMode,
   } from '../stores/debugStore'
   import { editorPanOffset } from '../stores/editorStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
@@ -685,7 +686,7 @@
     enableZoom={!$mapEditorMode}
     enabled={!$mapEditorMode}
     target={cameraTarget}
-    minZoom={1}
+    minZoom={$debugSpeedMode ? 0.15 : 1}
     maxZoom={2}
   />
 </T.OrthographicCamera>

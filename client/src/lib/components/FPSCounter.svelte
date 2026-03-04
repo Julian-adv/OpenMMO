@@ -29,6 +29,7 @@
     mapEditorMode,
     gridVisible,
     worldMapVisible,
+    debugSpeedMode,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -79,6 +80,10 @@
   function toggleGrid() {
     gridVisible.update((v) => !v)
   }
+
+  function toggleDebugSpeed() {
+    debugSpeedMode.update((v) => !v)
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -103,72 +108,85 @@
       </div>
     {/if}
 
-    <div class="button-group">
-      <button
-        class="action-btn slow-btn"
-        class:active={$timeScale < 1.0}
-        onclick={toggleSlowMode}
-        title="Toggle Slow Motion"
-      >
-        SLOW
-      </button>
-
-      <div class="seg-group" title="Sun Speed">
-        <span class="seg-label">SUN</span>
+    <div class="button-rows">
+      <div class="button-group">
         <button
-          class="seg-btn"
-          class:seg-active={$sunTimeScale === 1.0}
-          onclick={() => setSunSpeed(1.0)}
-        >OFF</button>
-        <button
-          class="seg-btn"
-          class:seg-active={$sunTimeScale === 60.0}
-          onclick={() => setSunSpeed(60.0)}
-        >3m</button>
-        <button
-          class="seg-btn"
-          class:seg-active={$sunTimeScale === 600.0}
-          onclick={() => setSunSpeed(600.0)}
-        >18s</button>
-      </div>
-      
-      <button
-        class="action-btn"
-        class:active={$cameraRotationEnabled}
-        onclick={toggleCameraRotation}
-        title="Toggle Camera Rotation"
-      >
-        CAM ROT: {$cameraRotationEnabled ? 'ON' : 'OFF'}
-      </button>
-
-      <button
-        class="action-btn cal-btn"
-        class:active={$calendarVisible}
-        onclick={toggleCalendar}
-        title="Toggle Calendar Display"
-      >
-        CAL: {$calendarVisible ? 'ON' : 'OFF'}
-      </button>
-
-      <button
-        class="action-btn orbits-btn"
-        class:active={$celestialDebugVisible}
-        onclick={toggleCelestialDebug}
-        title="Toggle Celestial Orbits Debug"
-      >
-        ORBITS: {$celestialDebugVisible ? 'ON' : 'OFF'}
-      </button>
-
-      {#if !$mapEditorMode}
-        <button
-          class="action-btn grid-btn"
-          class:active={$gridVisible}
-          onclick={toggleGrid}
-          title="Toggle Terrain Grid"
+          class="action-btn slow-btn"
+          class:active={$timeScale < 1.0}
+          onclick={toggleSlowMode}
+          title="Toggle Slow Motion"
         >
-          GRID: {$gridVisible ? 'ON' : 'OFF'}
+          SLOW
         </button>
-      {/if}
+
+        <div class="seg-group" title="Sun Speed">
+          <span class="seg-label">SUN</span>
+          <button
+            class="seg-btn"
+            class:seg-active={$sunTimeScale === 1.0}
+            onclick={() => setSunSpeed(1.0)}
+          >OFF</button>
+          <button
+            class="seg-btn"
+            class:seg-active={$sunTimeScale === 60.0}
+            onclick={() => setSunSpeed(60.0)}
+          >3m</button>
+          <button
+            class="seg-btn"
+            class:seg-active={$sunTimeScale === 600.0}
+            onclick={() => setSunSpeed(600.0)}
+          >18s</button>
+        </div>
+
+        <button
+          class="action-btn"
+          class:active={$cameraRotationEnabled}
+          onclick={toggleCameraRotation}
+          title="Toggle Camera Rotation"
+        >
+          CAM ROT: {$cameraRotationEnabled ? 'ON' : 'OFF'}
+        </button>
+
+        <button
+          class="action-btn cal-btn"
+          class:active={$calendarVisible}
+          onclick={toggleCalendar}
+          title="Toggle Calendar Display"
+        >
+          CAL: {$calendarVisible ? 'ON' : 'OFF'}
+        </button>
+      </div>
+
+      <div class="button-group">
+        <button
+          class="action-btn orbits-btn"
+          class:active={$celestialDebugVisible}
+          onclick={toggleCelestialDebug}
+          title="Toggle Celestial Orbits Debug"
+        >
+          ORBITS: {$celestialDebugVisible ? 'ON' : 'OFF'}
+        </button>
+
+        {#if !$mapEditorMode}
+          <button
+            class="action-btn grid-btn"
+            class:active={$gridVisible}
+            onclick={toggleGrid}
+            title="Toggle Terrain Grid"
+          >
+            GRID: {$gridVisible ? 'ON' : 'OFF'}
+          </button>
+        {/if}
+
+        <button
+          class="action-btn debug-speed-btn"
+          class:active={$debugSpeedMode}
+          onclick={toggleDebugSpeed}
+          title="Debug Mode: 10x Speed + Extended Zoom"
+        >
+          DEBUG: {$debugSpeedMode ? 'ON' : 'OFF'}
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -194,7 +212,7 @@
     border: 1px solid rgba(0, 255, 0, 0.3);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 15px;
     width: fit-content;
   }
@@ -213,6 +231,12 @@
 
   .player-text {
     white-space: nowrap;
+  }
+
+  .button-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .button-group {
@@ -305,5 +329,10 @@
   .action-btn.grid-btn.active {
     background: #b7791f;
     border-color: #ecc94b;
+  }
+
+  .action-btn.debug-speed-btn.active {
+    background: #c05621;
+    border-color: #ed8936;
   }
 </style>

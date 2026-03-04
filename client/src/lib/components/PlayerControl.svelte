@@ -6,7 +6,7 @@
   import { monsterManager } from '../managers/monsterManager'
   import { combatController } from '../managers/combatController'
   import { inputHandler } from '../managers/inputHandler'
-  import { mapEditorMode } from '../stores/debugStore'
+  import { mapEditorMode, debugSpeedMode } from '../stores/debugStore'
   import {
     calculateMovementStep,
     initMovementState,
@@ -43,10 +43,13 @@
   let movementState = $state<MovementState | null>(null)
   let lastSentPosition = $state<Position | null>(null)
 
-  // Use the same movement config as remote players
-  const MOVEMENT_CONFIG: MovementConfig = {
+  // Use the same movement config as remote players, with debug speed multiplier
+  let MOVEMENT_CONFIG = $derived<MovementConfig>({
     ...DEFAULT_MOVEMENT_CONFIG,
-  }
+    maxSpeed: DEFAULT_MOVEMENT_CONFIG.maxSpeed * ($debugSpeedMode ? 10 : 1),
+    acceleration: DEFAULT_MOVEMENT_CONFIG.acceleration * ($debugSpeedMode ? 10 : 1),
+    deceleration: DEFAULT_MOVEMENT_CONFIG.deceleration * ($debugSpeedMode ? 10 : 1),
+  })
 
   // Character rotation and current speed
   let playerRotation = $state(0)
