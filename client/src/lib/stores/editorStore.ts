@@ -1,6 +1,8 @@
 import { writable } from 'svelte/store'
 import type { LayerConfig } from '../utils/splatLayerLoader'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
+import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+import type { TerrainSplatManager } from '../managers/terrainSplatManager'
 
 export interface HoveredCell {
   tileX: number
@@ -79,3 +81,10 @@ export const editorMetaManager = writable<TerrainMetaManager | null>(null)
 
 // Incremented after saving region meta to trigger terrain re-render
 export const regionMetaVersion = writable<number>(0)
+
+// Procedural terrain generation dialog
+export const showGenerateDialog = writable<boolean>(false)
+
+// Manager references for terrain generation dialog
+export const editorHeightManager = writable<TerrainHeightManager | null>(null)
+export const editorSplatManager = writable<TerrainSplatManager | null>(null)

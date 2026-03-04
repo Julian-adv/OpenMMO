@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager } from '../../stores/editorStore'
   import type { EditorTool } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
@@ -292,6 +292,8 @@
 
   onMount(() => {
     if (metaManager) editorMetaManager.set(metaManager)
+    if (heightManager) editorHeightManager.set(heightManager)
+    if (splatManager) editorSplatManager.set(splatManager)
 
     const canvas = document.querySelector('canvas')
     if (!canvas) return

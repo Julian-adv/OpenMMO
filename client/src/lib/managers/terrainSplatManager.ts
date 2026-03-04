@@ -219,6 +219,31 @@ export class TerrainSplatManager {
     }
   }
 
+  /** Directly set splatmap data for a tile (used by terrain generator). */
+  setSplatmap(tileX: number, tileZ: number, data: Uint8Array): void {
+    const key = tileKey(tileX, tileZ)
+    this.splatmaps.set(key, data)
+    const existing = this.textures.get(key)
+    if (existing) {
+      ;(existing.image as unknown as { data: Uint8Array }).data.set(data)
+      existing.needsUpdate = true
+    }
+  }
+
+  /** Mark a tile as dirty so it will be saved on next save cycle. */
+  markDirty(tileX: number, tileZ: number): void {
+    this.dirtyTiles.add(tileKey(tileX, tileZ))
+  }
+
+  /** Force-save all dirty tiles immediately (cancels pending debounce). */
+  async saveAllDirty(): Promise<void> {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+    }
+    await this.saveDirtyTiles()
+  }
+
   unloadTile(tileX: number, tileZ: number) {
     const key = tileKey(tileX, tileZ)
     const texture = this.textures.get(key)

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { hoveredCell, editorTool } from '../../stores/editorStore'
+  import { hoveredCell, editorTool, showGenerateDialog } from '../../stores/editorStore'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
 </script>
@@ -24,6 +24,10 @@
       class:active={$editorTool === 'splat'}
       onclick={() => editorTool.set('splat')}
     >Splat</button>
+    <button
+      class="tool-tab generate-btn"
+      onclick={() => showGenerateDialog.set(true)}
+    >Generate</button>
   </div>
   {#if $editorTool === 'height'}
     <HeightBrushPanel />
@@ -99,5 +103,11 @@
   .tool-tab.active {
     background: rgba(226, 185, 59, 0.25);
     color: #e2b93b;
+  }
+
+  .tool-tab.generate-btn {
+    margin-left: 4px;
+    border-left: 1px solid rgba(255, 255, 255, 0.15);
+    padding-left: 14px;
   }
 </style>
