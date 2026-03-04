@@ -15,6 +15,7 @@ export interface TerrainGenConfig {
   seaProportion: number // 0..1
   plainProportion: number // 0..1
   mountainProportion: number // 0..1
+  shallowSeaRatio: number // 0..1, fraction of sea area that is shallow
   riverCount: number // 0..5
 }
 
@@ -68,7 +69,7 @@ export function generateRegionTerrain(
 
   // --- Phase 4: Coastline smoothing ---
   const coastDist = computeCoastDistance(heightField)
-  smoothCoastlines(heightField, coastDist)
+  smoothCoastlines(heightField, coastDist, config.seed, regionX, regionZ)
 
   // --- Phase 5: Region boundary blending ---
   if (neighborEdges) {
@@ -100,10 +101,19 @@ function classifyAndRemap(
   const seaFrac = propSum > 0 ? config.seaProportion / propSum : 0.33
   const plainFrac = propSum > 0 ? config.plainProportion / propSum : 0.34
 
-  const seaIdx = Math.floor(seaFrac * total)
+  // Split sea into deep and shallow zones
+  const shallowRatio = Math.max(0, Math.min(1, config.shallowSeaRatio))
+  const deepSeaFrac = seaFrac * (1 - shallowRatio)
+  const shallowSeaFrac = seaFrac * shallowRatio
+
+  const deepSeaIdx = Math.floor(deepSeaFrac * total)
+  const shallowSeaIdx = Math.floor((deepSeaFrac + shallowSeaFrac) * total)
   const plainIdx = Math.floor((seaFrac + plainFrac) * total)
 
-  const seaThreshold = seaIdx > 0 ? sorted[seaIdx - 1] : sorted[0] - 1
+  const deepSeaThreshold =
+    deepSeaIdx > 0 ? sorted[deepSeaIdx - 1] : sorted[0] - 1
+  const shallowSeaThreshold =
+    shallowSeaIdx > 0 ? sorted[shallowSeaIdx - 1] : sorted[0] - 1
   const plainThreshold =
     plainIdx < total ? sorted[plainIdx - 1] : sorted[total - 1] + 1
 
@@ -113,16 +123,25 @@ function classifyAndRemap(
   for (let i = 0; i < total; i++) {
     const raw = rawHeights[i]
 
-    if (raw <= seaThreshold) {
-      // Sea: remap to [minHeight, -0.5]
+    if (raw <= deepSeaThreshold) {
+      // Deep sea: remap to [minHeight, -1]
       const t =
-        seaThreshold > rawMin ? (raw - rawMin) / (seaThreshold - rawMin) : 0.5
-      result[i] = lerp(config.minHeight, -0.5, t)
+        deepSeaThreshold > rawMin
+          ? (raw - rawMin) / (deepSeaThreshold - rawMin)
+          : 0.5
+      result[i] = lerp(config.minHeight, -1, t)
+    } else if (raw <= shallowSeaThreshold) {
+      // Shallow sea: remap to [-1.0, -0.1]
+      const t =
+        shallowSeaThreshold > deepSeaThreshold
+          ? (raw - deepSeaThreshold) / (shallowSeaThreshold - deepSeaThreshold)
+          : 0.5
+      result[i] = lerp(-1.0, -0.1, t)
     } else if (raw <= plainThreshold) {
       // Plains: remap to [0.5, 10]
       const t =
-        plainThreshold > seaThreshold
-          ? (raw - seaThreshold) / (plainThreshold - seaThreshold)
+        plainThreshold > shallowSeaThreshold
+          ? (raw - shallowSeaThreshold) / (plainThreshold - shallowSeaThreshold)
           : 0.5
       result[i] = lerp(0.5, 10, t)
     } else {
@@ -281,36 +300,115 @@ function computeCoastDistance(heightField: Float32Array): Float32Array {
   return dist
 }
 
-function smoothCoastlines(heightField: Float32Array, coastDist: Float32Array) {
+function smoothCoastlines(
+  heightField: Float32Array,
+  _coastDist: Float32Array,
+  seed: number,
+  regionX: number,
+  regionZ: number
+) {
   const N = REGION_CELLS
-  const RADIUS = 4
-  const sigma = RADIUS / 2.0
-  const COAST_BAND = 8 // cells from coast boundary to blur
+  const MIN_BAND = 8
+  const MAX_BAND = 40
+  const MIN_RADIUS = 4
+  const MAX_RADIUS = 20
+  const SEA_SCALE = 2.0 // sea side gets wider smoothing to counteract steep depth falloff
 
-  // Identify coast boundary cells: land cells near sea or sea cells near land
-  const coastMask = new Uint8Array(N * N)
-  for (let i = 0; i < N * N; i++) {
-    // Cell is in coast band if it's near the transition
-    if (coastDist[i] > 0 && coastDist[i] <= COAST_BAND) {
-      coastMask[i] = 1
+  const worldOffsetX = regionX * N
+  const worldOffsetZ = regionZ * N
+
+  // Low-frequency noise to vary shore width per location
+  const shoreNoise = createNoise2D(seed + 7777)
+  const shoreFreq = 1 / 150
+
+  // Step 1: Compute distance from coast BOUNDARY (land/sea edge) for both sides
+  const boundaryDist = new Float32Array(N * N)
+  boundaryDist.fill(Infinity)
+  const queue: number[] = []
+
+  for (let cz = 0; cz < N; cz++) {
+    for (let cx = 0; cx < N; cx++) {
+      const i = cz * N + cx
+      const isLand = heightField[i] >= 0
+      let isBoundary = false
+      for (let dz = -1; dz <= 1 && !isBoundary; dz++) {
+        for (let dx = -1; dx <= 1 && !isBoundary; dx++) {
+          if (dx === 0 && dz === 0) continue
+          const nx = cx + dx
+          const nz = cz + dz
+          if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
+          if (heightField[nz * N + nx] >= 0 !== isLand) isBoundary = true
+        }
+      }
+      if (isBoundary) {
+        boundaryDist[i] = 0
+        queue.push(i)
+      }
     }
   }
 
-  // Apply Gaussian blur to coast-masked cells only
+  let head = 0
+  while (head < queue.length) {
+    const cur = queue[head++]
+    const cx = cur % N
+    const cz = Math.floor(cur / N)
+    const curDist = boundaryDist[cur]
+    if (curDist >= MAX_BAND * SEA_SCALE) continue
+
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dz === 0) continue
+        const nx = cx + dx
+        const nz = cz + dz
+        if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
+        const ni = nz * N + nx
+        const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
+        if (newDist < boundaryDist[ni]) {
+          boundaryDist[ni] = newDist
+          queue.push(ni)
+        }
+      }
+    }
+  }
+
+  // Step 2: Per-cell variable Gaussian blur based on shore-width noise
+  const coastMask = new Uint8Array(N * N)
+  const cellRadius = new Uint8Array(N * N)
+
+  for (let cz = 0; cz < N; cz++) {
+    for (let cx = 0; cx < N; cx++) {
+      const i = cz * N + cx
+      const wx = (worldOffsetX + cx) * shoreFreq
+      const wz = (worldOffsetZ + cz) * shoreFreq
+      const n = (fbm2D(shoreNoise, wx, wz, 3, 2.0, 0.5) + 1) * 0.5 // 0..1
+      const baseBand = MIN_BAND + n * (MAX_BAND - MIN_BAND)
+      const baseRadius = MIN_RADIUS + n * (MAX_RADIUS - MIN_RADIUS)
+      const isLand = heightField[i] >= 0
+      const band = isLand ? baseBand : baseBand * SEA_SCALE
+      const radius = isLand ? baseRadius : baseRadius * SEA_SCALE
+      if (boundaryDist[i] <= band) {
+        coastMask[i] = 1
+        cellRadius[i] = Math.ceil(radius)
+      }
+    }
+  }
+
   const blurred = new Float32Array(N * N)
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
       const i = cz * N + cx
       if (!coastMask[i]) continue
 
+      const R = cellRadius[i]
+      const s2 = 2 * (R / 2.0) * (R / 2.0)
       let weightSum = 0
       let valueSum = 0
-      for (let dz = -RADIUS; dz <= RADIUS; dz++) {
-        for (let dx = -RADIUS; dx <= RADIUS; dx++) {
+      for (let dz = -R; dz <= R; dz++) {
+        for (let dx = -R; dx <= R; dx++) {
           const nx = cx + dx
           const nz = cz + dz
           if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
-          const w = Math.exp(-(dx * dx + dz * dz) / (2 * sigma * sigma))
+          const w = Math.exp(-(dx * dx + dz * dz) / s2)
           valueSum += heightField[nz * N + nx] * w
           weightSum += w
         }
@@ -390,7 +488,7 @@ function generateSplatMap(
   const N = REGION_CELLS
   const CHANNELS = 4
   const splatField = new Uint8Array(N * N * CHANNELS)
-  const SAND_BAND = 6 // cells from water edge
+  const SAND_BAND = 12 // cells from water edge
   const snowStart = config.maxHeight * 0.7
   const snowFull = config.maxHeight * 0.85
 

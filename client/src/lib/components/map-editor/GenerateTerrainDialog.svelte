@@ -23,9 +23,10 @@
   let seed = $state(Math.floor(Math.random() * 100000))
   let minHeight = $state(-20)
   let maxHeight = $state(80)
-  let seaPct = $state(25)
-  let plainPct = $state(45)
-  let mountainPct = $state(25)
+  let seaPct = $state(30)
+  let shallowSeaPct = $state(30)
+  let plainPct = $state(50)
+  let mountainPct = $state(20)
   let riverCount = $state(2)
 
   let generating = $state(false)
@@ -133,6 +134,7 @@
         seaProportion: seaPct / 100,
         plainProportion: plainPct / 100,
         mountainProportion: mountainPct / 100,
+        shallowSeaRatio: shallowSeaPct / 100,
         riverCount,
       }
 
@@ -273,6 +275,11 @@
           <input type="range" min={0} max={60} step={1} bind:value={seaPct} />
         </div>
 
+        <div class="control-row sub-control">
+          <label>Shallow Sea <span class="value">{shallowSeaPct}%</span></label>
+          <input type="range" min={0} max={80} step={1} bind:value={shallowSeaPct} />
+        </div>
+
         <div class="control-row">
           <label>Plains <span class="value">{plainPct}%</span></label>
           <input type="range" min={0} max={80} step={1} bind:value={plainPct} />
@@ -391,6 +398,11 @@
 
   .randomize-btn:hover {
     background: rgba(255, 255, 255, 0.2);
+  }
+
+  .sub-control {
+    padding-left: 12px;
+    border-left: 2px solid rgba(226, 185, 59, 0.2);
   }
 
   .separator {
