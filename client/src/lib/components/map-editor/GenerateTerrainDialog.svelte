@@ -213,10 +213,7 @@
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/octet-stream' },
-              body: tile.heightmap.buffer.slice(
-                tile.heightmap.byteOffset,
-                tile.heightmap.byteOffset + tile.heightmap.byteLength
-              ),
+              body: tile.heightmap.slice().buffer as ArrayBuffer,
             }
           ),
           fetch(
@@ -224,10 +221,7 @@
             {
               method: 'PUT',
               headers: { 'Content-Type': 'application/octet-stream' },
-              body: tile.splatmap.buffer.slice(
-                tile.splatmap.byteOffset,
-                tile.splatmap.byteOffset + tile.splatmap.byteLength
-              ),
+              body: tile.splatmap.slice().buffer as ArrayBuffer,
             }
           ),
         ])
@@ -247,9 +241,10 @@
     {#if !generating}
       <div class="controls">
         <div class="control-row">
-          <label>Seed</label>
+          <label for="terrain-seed">Seed</label>
           <div class="seed-row">
             <input
+              id="terrain-seed"
               type="number"
               bind:value={seed}
               class="seed-input"
@@ -259,40 +254,40 @@
         </div>
 
         <div class="control-row">
-          <label>Min Height <span class="value">{minHeight}m</span></label>
-          <input type="range" min={-500} max={0} step={1} bind:value={minHeight} />
+          <label for="terrain-min-height">Min Height <span class="value">{minHeight}m</span></label>
+          <input id="terrain-min-height" type="range" min={-500} max={0} step={1} bind:value={minHeight} />
         </div>
 
         <div class="control-row">
-          <label>Max Height <span class="value">{maxHeight}m</span></label>
-          <input type="range" min={1} max={3276} step={1} bind:value={maxHeight} />
+          <label for="terrain-max-height">Max Height <span class="value">{maxHeight}m</span></label>
+          <input id="terrain-max-height" type="range" min={1} max={3276} step={1} bind:value={maxHeight} />
         </div>
 
         <div class="separator"></div>
 
         <div class="control-row">
-          <label>Sea <span class="value">{seaPct}%</span></label>
-          <input type="range" min={0} max={60} step={1} bind:value={seaPct} />
+          <label for="terrain-sea">Sea <span class="value">{seaPct}%</span></label>
+          <input id="terrain-sea" type="range" min={0} max={60} step={1} bind:value={seaPct} />
         </div>
 
         <div class="control-row sub-control">
-          <label>Shallow Sea <span class="value">{shallowSeaPct}%</span></label>
-          <input type="range" min={0} max={80} step={1} bind:value={shallowSeaPct} />
+          <label for="terrain-shallow-sea">Shallow Sea <span class="value">{shallowSeaPct}%</span></label>
+          <input id="terrain-shallow-sea" type="range" min={0} max={80} step={1} bind:value={shallowSeaPct} />
         </div>
 
         <div class="control-row">
-          <label>Plains <span class="value">{plainPct}%</span></label>
-          <input type="range" min={0} max={80} step={1} bind:value={plainPct} />
+          <label for="terrain-plains">Plains <span class="value">{plainPct}%</span></label>
+          <input id="terrain-plains" type="range" min={0} max={80} step={1} bind:value={plainPct} />
         </div>
 
         <div class="control-row">
-          <label>Mountain <span class="value">{mountainPct}%</span></label>
-          <input type="range" min={0} max={60} step={1} bind:value={mountainPct} />
+          <label for="terrain-mountain">Mountain <span class="value">{mountainPct}%</span></label>
+          <input id="terrain-mountain" type="range" min={0} max={60} step={1} bind:value={mountainPct} />
         </div>
 
         <div class="control-row">
-          <label>Rivers <span class="value">{riverCount}</span></label>
-          <input type="range" min={0} max={5} step={1} bind:value={riverCount} />
+          <label for="terrain-rivers">Rivers <span class="value">{riverCount}</span></label>
+          <input id="terrain-rivers" type="range" min={0} max={5} step={1} bind:value={riverCount} />
         </div>
       </div>
 
