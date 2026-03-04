@@ -2,7 +2,6 @@
   import { onMount } from 'svelte'
   import { getDefaultServerUrl } from '../utils/networkUtils'
 
-  const STORAGE_KEY_SERVER = 'onlinerpg_lastServerUrl'
   const STORAGE_KEY_PLAYER = 'onlinerpg_lastPlayerName'
 
   interface Props {
@@ -17,7 +16,6 @@
 
   let { onLogin, kickedMessage }: Props = $props()
 
-  let serverUrl = $state('ws://127.0.0.1:8080')
   let accountName = $state('')
   let password = $state('')
   let isConnecting = $state(false)
@@ -25,21 +23,13 @@
   let errorMessage = $state('')
 
   onMount(() => {
-    const savedServerUrl = localStorage.getItem(STORAGE_KEY_SERVER)
     const savedPlayerName = localStorage.getItem(STORAGE_KEY_PLAYER)
-
-    serverUrl = savedServerUrl || getDefaultServerUrl()
-
     if (savedPlayerName) {
       accountName = savedPlayerName
     }
   })
 
   function validateForm(): string | null {
-    if (!serverUrl.trim()) {
-      return 'Please enter server address'
-    }
-
     if (!accountName.trim()) {
       return 'Please enter account name'
     }
@@ -63,7 +53,7 @@
     pendingAction = createAccount ? 'create' : 'login'
 
     const result = await onLogin(
-      serverUrl.trim(),
+      getDefaultServerUrl(),
       accountName.trim(),
       password.trim(),
       createAccount
@@ -75,8 +65,6 @@
       return
     }
 
-    // Save to localStorage for next time
-    localStorage.setItem(STORAGE_KEY_SERVER, serverUrl.trim())
     localStorage.setItem(STORAGE_KEY_PLAYER, accountName.trim())
   }
 
@@ -95,17 +83,6 @@
     {/if}
 
     <form onsubmit={handleSubmit}>
-      <div class="form-group">
-        <label for="serverUrl">Server Address</label>
-        <input
-          type="text"
-          id="serverUrl"
-          bind:value={serverUrl}
-          placeholder="ws://192.168.0.17:8080"
-          disabled={isConnecting}
-        />
-      </div>
-
       <div class="form-group">
         <label for="playerName">Account Name</label>
         <input

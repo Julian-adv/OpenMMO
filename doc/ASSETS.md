@@ -12,8 +12,10 @@
 
 ## terrain
 
-- "3D field inspection" (https://skfb.ly/oJx7N) by matousekfoto is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
-- https://polyhaven.com/a/gravel_floor
+- https://polyhaven.com/a/gravel_floor -> 자갈
+- https://polyhaven.com/a/rocky_terrain_02 -> 잔디
+- https://polyhaven.com/a/snow_02 -> 눈
+- https://polyhaven.com/a/red_laterite_soil_stones -> 흙
 
 ## sea
 
