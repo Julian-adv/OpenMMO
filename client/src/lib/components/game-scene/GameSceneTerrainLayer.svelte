@@ -138,16 +138,8 @@
     splatTexture: THREE.Texture | null
     regionLayers: ResolvedRegionLayers | null
   }
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- intentionally non-reactive; read in onBeforeRender hot path, not in template
   const tileRenderState = new Map<string, TileRenderState>()
-
-  // Track last-applied texture/layers per tile so we can detect changes
-  // and force WebGPU bind-group recreation via Texture.needsUpdate.
-  // (TextureNode has no "version" property; bumping it was a no-op.)
-  interface TileAppliedState {
-    splat: THREE.Texture | null
-    layers: ResolvedRegionLayers | null
-  }
-  const tileApplied = new Map<string, TileAppliedState>()
 
   function getTileCoords(tile: TerrainTile): { tileX: number; tileZ: number } {
     return {
@@ -207,22 +199,7 @@
           u.uTile3.value = rl.layers[3].tile
         }
 
-        // Detect when this tile's splatmap or region layers change and
-        // force a Texture.needsUpdate so the WebGPU Sampler binding sees
-        // a version bump → triggers bind-group recreation.
-        let applied = tileApplied.get(tileId)
-        if (!applied) {
-          applied = { splat: null, layers: null }
-          tileApplied.set(tileId, applied)
-        }
-        if (applied.splat !== splat || applied.layers !== rl) {
-          applied.splat = splat
-          applied.layers = rl
-          // Bump the real THREE.Texture.version via needsUpdate.
-          // This is the mechanism Sampler.update() checks — the only
-          // way to force WebGPU bind-group recreation for a shared material.
-          splat.needsUpdate = true
-        }
+        splat.needsUpdate = true
       }
     }
   }
@@ -264,7 +241,6 @@
         geo.dispose()
         geoMap.delete(id)
         tileRenderState.delete(id)
-        tileApplied.delete(id)
       }
     }
 

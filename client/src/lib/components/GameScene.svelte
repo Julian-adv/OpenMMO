@@ -120,8 +120,8 @@
   let waterSunColor = $state<THREE.Color | null>(null)
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
-  const _waterSunDirTmp = new THREE.Vector3()
-  const _waterCamDirTmp = new THREE.Vector3()
+  const waterSunDirTmp = new THREE.Vector3()
+  const waterCamDirTmp = new THREE.Vector3()
   let refractionManager = $state<RefractionRenderManager | null>(null)
   let refractionTexture = $state<THREE.Texture | null>(null)
   let cameraInitialized = $state(false)
@@ -448,13 +448,13 @@
       // Update water uniforms
       waterTime += realDeltaSeconds
       if (directionalLight) {
-        _waterSunDirTmp.copy(directionalLight.position).sub(directionalLight.target.position).normalize()
-        waterSunDir = _waterSunDirTmp.clone()
+        waterSunDirTmp.copy(directionalLight.position).sub(directionalLight.target.position).normalize()
+        waterSunDir = waterSunDirTmp.clone()
         waterSunColor = directionalLight.color.clone()
       }
       if (camera) {
-        camera.getWorldDirection(_waterCamDirTmp)
-        waterCamDir = _waterCamDirTmp.clone()
+        camera.getWorldDirection(waterCamDirTmp)
+        waterCamDir = waterCamDirTmp.clone()
       }
 
       // Render refraction pass (scene without water)
