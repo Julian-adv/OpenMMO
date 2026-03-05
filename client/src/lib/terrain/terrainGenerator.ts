@@ -490,6 +490,7 @@ function generateSplatMap(
   const CHANNELS = 4
   const splatField = new Uint8Array(N * N * CHANNELS)
   const SAND_BAND = 12 // cells from water edge
+  const SAND_HEIGHT_MAX = 0.9 // meters — sand fades out above this height
   const snowStart = config.maxHeight * 0.7
   const snowFull = config.maxHeight * 0.85
 
@@ -515,9 +516,11 @@ function generateSplatMap(
       if (h < 0) {
         // Underwater: sandy
         sand = 1.0
-      } else if (dist < SAND_BAND) {
-        // Coastline: blend sand with grass
-        const sandFactor = 1.0 - dist / SAND_BAND
+      } else if (dist < SAND_BAND && h < SAND_HEIGHT_MAX) {
+        // Coastline: blend sand with grass (fades by distance and height)
+        const distFactor = 1.0 - dist / SAND_BAND
+        const heightFactor = 1.0 - smoothstep(0, SAND_HEIGHT_MAX, h)
+        const sandFactor = distFactor * heightFactor
         sand = sandFactor
         grass = 1.0 - sandFactor
       } else if (slope > 1.5) {
