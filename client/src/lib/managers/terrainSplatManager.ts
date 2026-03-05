@@ -48,31 +48,39 @@ export class TerrainSplatManager {
     const inflight = this.inflightSplatmaps.get(key)
     if (inflight) return inflight
 
-    const promise = (async () => {
-      const url = `${this.terrainApiUrl}/api/terrain/splat/${tileX}/${tileZ}`
-      const response = await fetch(url)
-      if (!response.ok) {
-        console.error(
-          `Failed to load splatmap (${tileX}, ${tileZ}): ${response.status}`
-        )
-        // Return a default splatmap (all grass = channel 0)
-        const data = new Uint8Array(TILE_DIM * TILE_DIM * CHANNELS)
-        for (let i = 0; i < TILE_DIM * TILE_DIM; i++) {
-          data[i * CHANNELS] = 255 // R = grass
-        }
-        this.splatmaps.set(key, data)
-        const texture = this.createTexture(data)
-        this.textures.set(key, texture)
-        this.inflightSplatmaps.delete(key)
-        return texture
+    const defaultFallback = (): THREE.DataTexture => {
+      const data = new Uint8Array(TILE_DIM * TILE_DIM * CHANNELS)
+      for (let i = 0; i < TILE_DIM * TILE_DIM; i++) {
+        data[i * CHANNELS] = 255 // R = grass
       }
-      const buffer = await response.arrayBuffer()
-      const data = new Uint8Array(buffer)
       this.splatmaps.set(key, data)
       const texture = this.createTexture(data)
       this.textures.set(key, texture)
-      this.inflightSplatmaps.delete(key)
       return texture
+    }
+
+    const promise = (async () => {
+      try {
+        const url = `${this.terrainApiUrl}/api/terrain/splat/${tileX}/${tileZ}`
+        const response = await fetch(url)
+        if (!response.ok) {
+          console.error(
+            `Failed to load splatmap (${tileX}, ${tileZ}): ${response.status}`
+          )
+          return defaultFallback()
+        }
+        const buffer = await response.arrayBuffer()
+        const data = new Uint8Array(buffer)
+        this.splatmaps.set(key, data)
+        const texture = this.createTexture(data)
+        this.textures.set(key, texture)
+        return texture
+      } catch (e) {
+        console.error(`Splatmap fetch error (${tileX}, ${tileZ}):`, e)
+        return defaultFallback()
+      } finally {
+        this.inflightSplatmaps.delete(key)
+      }
     })()
     this.inflightSplatmaps.set(key, promise)
     return promise

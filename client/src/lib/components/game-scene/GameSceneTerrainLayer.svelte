@@ -7,16 +7,18 @@
   import {
     makeSplatStandardMaterial,
   } from '../makeSplatStandardMaterial'
+  import type { ResolvedRegionLayers } from '../../managers/terrainMetaManager'
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
-  import type { TerrainMetaManager, ResolvedRegionLayers } from '../../managers/terrainMetaManager'
+  import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
   import { tileToRegion } from '../../managers/terrainMetaManager'
   import { loadSplatLayers } from '../../utils/splatLayerLoader'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
   import { brushWorldPos, brushSize, brushMode, editorTool, regionMetaVersion, currentEditorRegion } from '../../stores/editorStore'
   import type { BrushMode, EditorTool } from '../../stores/editorStore'
+  import { enqueueTileWork } from '../../utils/tileWorkQueue'
 
   interface Props {
     terrainGeometry: THREE.BufferGeometry | null
@@ -25,6 +27,7 @@
     heightManager?: TerrainHeightManager | null
     splatManager?: TerrainSplatManager | null
     metaManager?: TerrainMetaManager | null
+    syncTileMeshes?: () => void
   }
 
   let {
@@ -34,11 +37,12 @@
     heightManager = null,
     splatManager = null,
     metaManager = null,
+    syncTileMeshes = $bindable<() => void>(() => {}),
   }: Props = $props()
 
   // ── Shared material (created once) ──────────────────────
   let sharedMaterial = $state<MeshStandardNodeMaterial | null>(null)
-  let defaultRegionLayers = $state<ResolvedRegionLayers | null>(null)
+  let defaultRegionLayers: ResolvedRegionLayers | null = null
   let brushUnsubs: (() => void)[] = []
 
   // Default 1x1 all-grass splatmap for initial material creation
@@ -53,6 +57,25 @@
   defaultSplat.minFilter = THREE.LinearFilter
   defaultSplat.magFilter = THREE.LinearFilter
   defaultSplat.needsUpdate = true
+
+  // Placeholder textures for missing normal/ORM maps
+  const placeholderNorm = new THREE.DataTexture(
+    new Uint8Array([128, 128, 255, 255]),
+    1,
+    1,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType
+  )
+  placeholderNorm.needsUpdate = true
+
+  const placeholderORM = new THREE.DataTexture(
+    new Uint8Array([255, 255, 0, 255]),
+    1,
+    1,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType
+  )
+  placeholderORM.needsUpdate = true
 
   loadSplatLayers().then((layers) => {
     defaultRegionLayers = { layers }
@@ -107,12 +130,24 @@
     brushUnsubs = []
   })
 
-  // ── Geometry, splatmap & region layer management ──────────
-  // Use SvelteMaps directly in the template (keyed by tile id) to avoid
-  // index mismatch when terrainTiles reorders during tile transitions.
+  // ── Geometry management (SvelteMap, needed for template) ──────
   const geoMap = new SvelteMap<string, THREE.BufferGeometry>()
-  const splatTexMap = new SvelteMap<string, THREE.Texture>()
-  const regionLayerMap = new SvelteMap<string, ResolvedRegionLayers>()
+
+  // ── Per-tile render data (plain Map, read by onBeforeRender) ──
+  interface TileRenderState {
+    splatTexture: THREE.Texture | null
+    regionLayers: ResolvedRegionLayers | null
+  }
+  const tileRenderState = new Map<string, TileRenderState>()
+
+  // Track last-applied texture/layers per tile so we can detect changes
+  // and force WebGPU bind-group recreation via Texture.needsUpdate.
+  // (TextureNode has no "version" property; bumping it was a no-op.)
+  interface TileAppliedState {
+    splat: THREE.Texture | null
+    layers: ResolvedRegionLayers | null
+  }
+  const tileApplied = new Map<string, TileAppliedState>()
 
   function getTileCoords(tile: TerrainTile): { tileX: number; tileZ: number } {
     return {
@@ -121,76 +156,119 @@
     }
   }
 
-  // ── Batched edge refresh ──────────────────────────────
-  // When multiple tiles load in the same microtask (common on localhost),
-  // batch their edge refreshes to avoid redundant applyHeightToGeometry calls.
-  let pendingEdgeTiles: { tileX: number; tileZ: number }[] = []
-  let edgeBatchScheduled = false
+  // ── onBeforeRender setup (called from game loop) ────────────
+  // Sets up onBeforeRender on any mesh that doesn't have it yet.
+  // The callback reads per-tile data from the plain tileRenderState Map,
+  // so it always gets the latest values without Svelte reactivity.
+  syncTileMeshes = () => {
+    const mat = sharedMaterial
+    if (!mat) return
+    for (let i = 0; i < terrainTiles.length; i++) {
+      const mesh = terrainMeshes[i]
+      if (!mesh || mesh.userData.__tileOBR) continue
+      const tile = terrainTiles[i]
+      if (!tile) continue
 
-  function scheduleEdgeRefresh(tileX: number, tileZ: number) {
-    pendingEdgeTiles.push({ tileX, tileZ })
-    if (!edgeBatchScheduled) {
-      edgeBatchScheduled = true
-      requestAnimationFrame(flushEdgeRefreshes)
-    }
-  }
+      mesh.userData.__tileOBR = true
+      const tileId = tile.id
+      mesh.onBeforeRender = () => {
+        const u = mat.userData?.uniforms
+        if (!u) return
 
-  function flushEdgeRefreshes() {
-    edgeBatchScheduled = false
-    if (!heightManager) return
-    const tiles = pendingEdgeTiles
-    pendingEdgeTiles = []
+        const rs = tileRenderState.get(tileId)
+        const splat = rs?.splatTexture ?? defaultSplat
+        const rl = rs?.regionLayers ?? defaultRegionLayers
 
-    // Collect unique neighbor tiles that need re-application (dedup)
-    const newlyLoaded = new Set(tiles.map((t) => `${t.tileX},${t.tileZ}`))
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const toRefresh = new Set<string>()
-    for (const { tileX, tileZ } of tiles) {
-      for (const { dx, dz } of [{ dx: -1, dz: 0 }, { dx: 0, dz: -1 }, { dx: -1, dz: -1 }]) {
-        const nk = `${tileX + dx},${tileZ + dz}`
-        if (!newlyLoaded.has(nk)) toRefresh.add(nk)
-      }
-    }
+        u.splatMap.value = splat
 
-    // Also refresh newly loaded tiles that are neighbors of OTHER newly loaded tiles
-    for (const { tileX, tileZ } of tiles) {
-      const key = `${tileX},${tileZ}`
-      for (const other of tiles) {
-        for (const { dx, dz } of [{ dx: -1, dz: 0 }, { dx: 0, dz: -1 }, { dx: -1, dz: -1 }]) {
-          if (other.tileX + dx === tileX && other.tileZ + dz === tileZ) {
-            toRefresh.add(key)
+        if (rl) {
+          u.diffTex0.value = rl.layers[0].map
+          u.diffTex1.value = rl.layers[1].map
+          u.diffTex2.value = rl.layers[2].map
+          u.diffTex3.value = rl.layers[3].map
+
+          if (u.normTex0) {
+            u.normTex0.value = rl.layers[0].normalMap ?? placeholderNorm
+            u.normTex1.value = rl.layers[1].normalMap ?? placeholderNorm
+            u.normTex2.value = rl.layers[2].normalMap ?? placeholderNorm
+            u.normTex3.value = rl.layers[3].normalMap ?? placeholderNorm
           }
+
+          if (u.ormTex0) {
+            u.ormTex0.value = rl.layers[0].orm ?? placeholderORM
+            u.ormTex1.value = rl.layers[1].orm ?? placeholderORM
+            u.ormTex2.value = rl.layers[2].orm ?? placeholderORM
+            u.ormTex3.value = rl.layers[3].orm ?? placeholderORM
+          }
+
+          u.uTile0.value = rl.layers[0].tile
+          u.uTile1.value = rl.layers[1].tile
+          u.uTile2.value = rl.layers[2].tile
+          u.uTile3.value = rl.layers[3].tile
+        }
+
+        // Detect when this tile's splatmap or region layers change and
+        // force a Texture.needsUpdate so the WebGPU Sampler binding sees
+        // a version bump → triggers bind-group recreation.
+        let applied = tileApplied.get(tileId)
+        if (!applied) {
+          applied = { splat: null, layers: null }
+          tileApplied.set(tileId, applied)
+        }
+        if (applied.splat !== splat || applied.layers !== rl) {
+          applied.splat = splat
+          applied.layers = rl
+          // Bump the real THREE.Texture.version via needsUpdate.
+          // This is the mechanism Sampler.update() checks — the only
+          // way to force WebGPU bind-group recreation for a shared material.
+          splat.needsUpdate = true
         }
       }
     }
+  }
 
-    const mgr = heightManager
-    for (const key of toRefresh) {
-      const [tx, tz] = key.split(',').map(Number)
-      const geoKey = `${tx}_${tz}`
-      const geo = geoMap.get(geoKey)
-      if (geo && mgr.getHeightmap(tx, tz)) {
-        mgr.applyHeightToGeometry(tx, tz, geo)
+  // ── Edge refresh queue ──────────────────────────────────
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const edgeRefreshQueued = new Set<string>()
+
+  function scheduleEdgeRefresh(tileX: number, tileZ: number) {
+    if (!heightManager) return
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dz === 0) continue
+        const nx = tileX + dx
+        const nz = tileZ + dz
+        const key = `${nx},${nz}`
+        if (edgeRefreshQueued.has(key)) continue
+        const geo = geoMap.get(`${nx}_${nz}`)
+        if (geo && heightManager.getHeightmap(nx, nz)) {
+          edgeRefreshQueued.add(key)
+          enqueueTileWork(() => {
+            edgeRefreshQueued.delete(key)
+            heightManager?.applyHeightToGeometry(nx, nz, geo)
+          })
+        }
       }
     }
   }
 
+  // ── Tile lifecycle (geometry + async data loading) ──────────
   $effect(() => {
     if (!terrainGeometry || !heightManager) return
 
     const currentTileIds = new Set(terrainTiles.map((t) => t.id))
 
-    // Remove geometries for tiles no longer in the list
+    // Remove data for tiles no longer in the list
     for (const [id, geo] of geoMap) {
       if (!currentTileIds.has(id)) {
         geo.dispose()
         geoMap.delete(id)
-        splatTexMap.delete(id)
-        regionLayerMap.delete(id)
+        tileRenderState.delete(id)
+        tileApplied.delete(id)
       }
     }
 
-    // Create geometries for new tiles
+    // Create geometries + kick off async loads for new tiles
     const mgr = heightManager
     const sMgr = splatManager
     const mMgr = metaManager
@@ -199,6 +277,10 @@
 
       const geo = terrainGeometry.clone()
       geoMap.set(tile.id, geo)
+
+      // Create mutable render state (read by onBeforeRender each frame)
+      const rs: TileRenderState = { splatTexture: null, regionLayers: null }
+      tileRenderState.set(tile.id, rs)
 
       const { tileX, tileZ } = getTileCoords(tile)
       mgr.registerGeometry(tileX, tileZ, geo)
@@ -210,13 +292,13 @@
 
       if (sMgr) {
         sMgr.loadSplatmap(tileX, tileZ).then((tex) => {
-          splatTexMap.set(tile.id, tex)
+          rs.splatTexture = tex
         })
       }
 
       if (mMgr) {
         mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-          regionLayerMap.set(tile.id, resolved)
+          rs.regionLayers = resolved
         })
       }
     }
@@ -237,9 +319,12 @@
     for (const tile of terrainTiles) {
       const { tileX, tileZ } = getTileCoords(tile)
       if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
-        mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-          regionLayerMap.set(tile.id, resolved)
-        })
+        const rs = tileRenderState.get(tile.id)
+        if (rs) {
+          mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
+            rs.regionLayers = resolved
+          })
+        }
       }
     }
   })
@@ -253,9 +338,6 @@
         geometry={geo}
         material={sharedMaterial}
         position={tile.position}
-        splatTexture={splatTexMap.get(tile.id) ?? null}
-        regionLayers={regionLayerMap.get(tile.id) ?? null}
-        fallbackLayers={defaultRegionLayers}
         bind:mesh={terrainMeshes[index]}
       />
     {/if}

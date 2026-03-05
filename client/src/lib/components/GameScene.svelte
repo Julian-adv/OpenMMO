@@ -24,6 +24,7 @@
   import type Monster from './Monster.svelte'
   import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
   import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
+  import { drainTileWork } from '../utils/tileWorkQueue'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
@@ -103,6 +104,7 @@
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let ambientLight = $state<THREE.AmbientLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
+  let syncTileMeshes = $state<() => void>(() => {})
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let terrainTiles = $state<TerrainTile[]>([])
   let terrainCenterChunk = $state({ x: 0, z: 0 })
@@ -284,8 +286,7 @@
 
     // Immediately keep existing tiles and remove stale ones.
     // Do NOT reset terrainMeshes to a new sparse array — that would
-    // temporarily set all bind:mesh props to undefined, disrupting
-    // the $effect in SplatTerrain that captures splatTexture/regionLayers.
+    // null out kept tile mesh refs during transitions.
     // The #each block's keyed bind:mesh will naturally update the indices.
     terrainTiles = keptTiles
 
@@ -365,6 +366,8 @@
       }
       updateTerrainTilesFromPlayer()
       drainTileQueue()
+      drainTileWork()
+      syncTileMeshes()
       // Finalize teleport once full 3x3 heightmap grid is loaded
       if ($teleportLoading && currentPlayer &&
           terrainHeightManager.hasHeightDataForGrid(currentPlayer.position.x, currentPlayer.position.z)) {
@@ -720,6 +723,7 @@
   {terrainGeometry}
   {terrainTiles}
   bind:terrainMeshes={terrainMeshes}
+  bind:syncTileMeshes={syncTileMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
   metaManager={terrainMetaManager}
