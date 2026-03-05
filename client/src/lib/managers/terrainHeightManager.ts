@@ -583,6 +583,25 @@ export class TerrainHeightManager {
     return tex
   }
 
+  /** Update an existing DataTexture in-place with current heightmap data.
+   *  Returns true if the texture was updated, false if no heightmap data exists. */
+  updateHeightmapTexture(
+    tileX: number,
+    tileZ: number,
+    tex: THREE.DataTexture
+  ): boolean {
+    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    if (!data) return false
+
+    const W = VERTS_PER_SIDE
+    const buf = tex.image.data as Float32Array
+    for (let i = 0; i < W * W; i++) {
+      buf[i] = decodeHeight(data[i])
+    }
+    tex.needsUpdate = true
+    return true
+  }
+
   /** Re-apply height to geometry if the tile has a registered geometry. */
   refreshTileGeometry(tileX: number, tileZ: number): void {
     const key = tileKey(tileX, tileZ)

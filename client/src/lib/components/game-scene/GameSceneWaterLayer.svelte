@@ -61,13 +61,17 @@
 
     const hasW = heightManager.hasWater(tileX, tileZ)
     if (hasW) {
-      const oldTex = heightTexMap.get(id)
-      oldTex?.dispose()
-
-      const tex = heightManager.getHeightmapTexture(tileX, tileZ)
-      if (tex) {
-        heightTexMap.set(id, tex)
-        waterTileSet.set(id, true)
+      const existingTex = heightTexMap.get(id)
+      if (existingTex) {
+        // In-place update — no new texture, no SvelteMap trigger, no material recompile
+        heightManager.updateHeightmapTexture(tileX, tileZ, existingTex)
+      } else {
+        // First time — create new texture (triggers reactivity once)
+        const tex = heightManager.getHeightmapTexture(tileX, tileZ)
+        if (tex) {
+          heightTexMap.set(id, tex)
+          waterTileSet.set(id, true)
+        }
       }
     } else {
       const oldTex = heightTexMap.get(id)

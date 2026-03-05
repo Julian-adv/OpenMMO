@@ -2,7 +2,8 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import type { NodeMaterial } from 'three/webgpu'
-  import { createWaterMaterial, type WaterMaterialResult } from '../shaders/water-material'
+  import { createWaterMaterial } from '../shaders/water-material'
+  import { onMount, tick } from 'svelte'
 
   interface Props {
     geometry: THREE.BufferGeometry
@@ -33,64 +34,34 @@
   }: Props = $props()
 
   let material = $state<NodeMaterial | null>(null)
-  let waterResult = $state<WaterMaterialResult | null>(null)
+  let meshRef = $state<THREE.Mesh | undefined>(undefined)
 
-  // Track previous texture references to skip redundant material recreation.
-  // Svelte reactivity can re-trigger this $effect many times per tile transition
-  // (SvelteMap changes → parent $effect → syncArrays → prop re-evaluation).
-  // Without this guard, ~60 NodeMaterials get created per transition, stalling the GPU.
-  let prevHm: THREE.DataTexture | null = null
-  let prevNm: THREE.Texture | null = null
-
-  // Create/recreate material only when texture inputs actually change
-  $effect(() => {
-    const hm = heightmapTexture
-    const nm = normalMap
-    if (!hm || !nm) return
-
-    const fm = foamMap
-    const sm = surfaceMap
-    if (!fm || !sm) return
-
-    // Skip if the key textures haven't changed (same object reference)
-    if (hm === prevHm && nm === prevNm && waterResult) return
-
-    prevHm = hm
-    prevNm = nm
-
-    // Dispose previous material
-    if (waterResult) {
-      waterResult.material.dispose()
-    }
-
+  onMount(() => {
     const result = createWaterMaterial({
-      heightmapTexture: hm,
-      normalMap: nm,
-      foamMap: fm,
-      surfaceMap: sm,
+      heightmapTexture,
+      normalMap,
+      foamMap,
+      surfaceMap,
       refractionMap,
     })
-    waterResult = result
     material = result.material
-  })
 
-  // Update time uniform every frame
-  $effect(() => {
-    if (waterResult) waterResult.uniforms.uTime.value = time
-  })
+    // After Svelte renders {#if material} → meshRef is set
+    tick().then(() => {
+      if (!meshRef) return
+      meshRef.onBeforeRender = () => {
+        const u = result.uniforms
+        u.uHeightmapTexture.value = heightmapTexture
+        u.uTime.value = time
+        if (sunDirection) u.uSunDirection.value.copy(sunDirection)
+        if (sunColor) u.uSunColor.value.copy(sunColor)
+        if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
+        if (refractionMap) u.uRefractionMap.value = refractionMap
+      }
+    })
 
-  // Update sun uniforms
-  $effect(() => {
-    if (!waterResult) return
-    if (sunDirection) waterResult.uniforms.uSunDirection.value.copy(sunDirection)
-    if (sunColor) waterResult.uniforms.uSunColor.value.copy(sunColor)
-    if (cameraDirection) waterResult.uniforms.uCameraDirection.value.copy(cameraDirection)
-  })
-
-  // Update refraction map when it changes
-  $effect(() => {
-    if (waterResult && refractionMap) {
-      waterResult.uniforms.uRefractionMap.value = refractionMap
+    return () => {
+      result.material.dispose()
     }
   })
 
@@ -100,6 +71,7 @@
 
 {#if material}
   <T.Mesh
+    bind:ref={meshRef}
     {geometry}
     {material}
     position={waterPosition}
