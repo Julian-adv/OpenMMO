@@ -11,6 +11,7 @@
     position?: [number, number, number]
     splatTexture?: THREE.Texture | null
     regionLayers?: ResolvedRegionLayers | null
+    fallbackLayers?: ResolvedRegionLayers | null
   }
 
   let {
@@ -20,6 +21,7 @@
     position = [0, 0, 0],
     splatTexture = null,
     regionLayers = null,
+    fallbackLayers = null,
   }: Props = $props()
 
   // Default 1x1 all-grass splatmap used until the real one loads
@@ -58,7 +60,7 @@
   $effect(() => {
     if (!mesh) return
     const tex = splatTexture ?? defaultSplat
-    const rl = regionLayers
+    const rl = regionLayers ?? fallbackLayers
 
     mesh.onBeforeRender = () => {
       const u = material.userData?.uniforms

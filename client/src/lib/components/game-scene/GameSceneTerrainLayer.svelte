@@ -38,6 +38,7 @@
 
   // ── Shared material (created once) ──────────────────────
   let sharedMaterial = $state<MeshStandardNodeMaterial | null>(null)
+  let defaultRegionLayers = $state<ResolvedRegionLayers | null>(null)
   let brushUnsubs: (() => void)[] = []
 
   // Default 1x1 all-grass splatmap for initial material creation
@@ -54,6 +55,7 @@
   defaultSplat.needsUpdate = true
 
   loadSplatLayers().then((layers) => {
+    defaultRegionLayers = { layers }
     sharedMaterial = makeSplatStandardMaterial({
       layers,
       splatMap: defaultSplat,
@@ -253,6 +255,7 @@
         position={tile.position}
         splatTexture={splatTexMap.get(tile.id) ?? null}
         regionLayers={regionLayerMap.get(tile.id) ?? null}
+        fallbackLayers={defaultRegionLayers}
         bind:mesh={terrainMeshes[index]}
       />
     {/if}

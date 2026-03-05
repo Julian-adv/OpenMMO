@@ -282,9 +282,12 @@
     const keptTiles = terrainTiles.filter((t) => newTileIds.has(t.id))
     const keptIds = new Set(keptTiles.map((t) => t.id))
 
-    // Immediately keep existing tiles and remove stale ones
+    // Immediately keep existing tiles and remove stale ones.
+    // Do NOT reset terrainMeshes to a new sparse array — that would
+    // temporarily set all bind:mesh props to undefined, disrupting
+    // the $effect in SplatTerrain that captures splatTexture/regionLayers.
+    // The #each block's keyed bind:mesh will naturally update the indices.
     terrainTiles = keptTiles
-    terrainMeshes = new Array(allTiles.length)
 
     // Queue truly new tiles for one-per-frame loading
     pendingTileQueue = allTiles.filter((t) => !keptIds.has(t.id))
