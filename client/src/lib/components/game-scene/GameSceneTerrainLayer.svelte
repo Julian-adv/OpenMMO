@@ -3,6 +3,7 @@
   import type { MeshStandardNodeMaterial } from 'three/webgpu'
   import { SvelteMap } from 'svelte/reactivity'
   import { onDestroy } from 'svelte'
+  import { get } from 'svelte/store'
   import SplatTerrain from '../SplatTerrain.svelte'
   import {
     makeSplatStandardMaterial,
@@ -281,16 +282,12 @@
   })
 
   // Re-resolve region layers when meta changes (texture swap in SplatBrushPanel)
-  let metaVer = $state(0)
-  regionMetaVersion.subscribe((v) => (metaVer = v))
-
-  let changedRegion = $state<{ rx: number; rz: number } | null>(null)
-  currentEditorRegion.subscribe((v) => (changedRegion = v))
-
-  $effect(() => {
-    if (metaVer === 0 || !changedRegion || !metaManager) return
+  regionMetaVersion.subscribe((ver) => {
+    if (ver === 0 || !metaManager) return
+    const region = get(currentEditorRegion)
+    if (!region) return
+    const { rx, rz } = region
     const mMgr = metaManager
-    const { rx, rz } = changedRegion
 
     for (const tile of terrainTiles) {
       const { tileX, tileZ } = getTileCoords(tile)
