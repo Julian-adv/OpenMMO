@@ -1,12 +1,32 @@
 <script lang="ts">
-  import { hoveredCell, editorTool, showGenerateDialog, showMinimapDialog } from '../../stores/editorStore'
+  import { hoveredCell, editorTool, showGenerateDialog, showMinimapDialog, currentEditorRegion } from '../../stores/editorStore'
+  import { get } from 'svelte/store'
+  import { playerDebugInfo } from '../../stores/debugStore'
+  import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
+  import { tileToRegion } from '../../managers/terrainMetaManager'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
+
+  function getPlayerRegion(): { rx: number; rz: number } | null {
+    const info = get(playerDebugInfo)
+    if (!info) return null
+    const tileX = Math.round(info.position.x / TERRAIN_TILE_SIZE)
+    const tileZ = Math.round(info.position.z / TERRAIN_TILE_SIZE)
+    return { rx: tileToRegion(tileX), rz: tileToRegion(tileZ) }
+  }
+
+  function openGenerateDialog() {
+    const region = getPlayerRegion()
+    if (region) {
+      showGenerateDialog.set({ rx: region.rx, rz: region.rz })
+    }
+  }
 </script>
 
 <div class="editor-mode-badge">
   MAP EDITOR{#if $hoveredCell}
     <span class="cell-info">
+      {#if $currentEditorRegion}R({$currentEditorRegion.rx}, {$currentEditorRegion.rz}){/if}
       T({$hoveredCell.tileX}, {$hoveredCell.tileZ})
       C({$hoveredCell.cellX}, {$hoveredCell.cellZ})
     </span>
@@ -26,11 +46,11 @@
     >Splat</button>
     <button
       class="tool-tab generate-btn"
-      onclick={() => showGenerateDialog.set(true)}
+      onclick={openGenerateDialog}
     >Generate</button>
     <button
       class="tool-tab generate-btn"
-      onclick={() => showMinimapDialog.set(true)}
+      onclick={() => { const r = getPlayerRegion(); if (r) showMinimapDialog.set(r) }}
     >Minimap</button>
   </div>
   {#if $editorTool === 'height'}

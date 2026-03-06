@@ -2,7 +2,6 @@
   import { get } from 'svelte/store'
   import {
     showGenerateDialog,
-    currentEditorRegion,
     editorMetaManager,
     editorHeightManager,
     editorSplatManager,
@@ -39,7 +38,7 @@
   }
 
   function close() {
-    showGenerateDialog.set(false)
+    showGenerateDialog.set(null)
   }
 
   async function fetchNeighborEdges(
@@ -108,7 +107,7 @@
   }
 
   async function handleGenerate() {
-    const region = get(currentEditorRegion)
+    const region = get(showGenerateDialog)
     const heightManager = get(editorHeightManager)
     const splatManager = get(editorSplatManager)
     const metaManager = get(editorMetaManager)
@@ -237,7 +236,7 @@
 
 <div class="backdrop" role="dialog" aria-modal="true">
   <div class="dialog">
-    <h2>Generate Terrain</h2>
+    <h2>Generate Terrain <span class="region-label">Region ({$showGenerateDialog?.rx}, {$showGenerateDialog?.rz})</span></h2>
 
     {#if !generating}
       <div class="controls">
@@ -333,6 +332,13 @@
     font-size: 16px;
     color: #e2b93b;
     letter-spacing: 1px;
+  }
+
+  .region-label {
+    font-size: 12px;
+    color: #aaa;
+    font-weight: normal;
+    letter-spacing: 0;
   }
 
   .controls {

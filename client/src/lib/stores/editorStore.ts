@@ -82,11 +82,11 @@ export const editorMetaManager = writable<TerrainMetaManager | null>(null)
 // Incremented after saving region meta to trigger terrain re-render
 export const regionMetaVersion = writable<number>(0)
 
-// Procedural terrain generation dialog
-export const showGenerateDialog = writable<boolean>(false)
+// Procedural terrain generation dialog (stores the target region snapshot, null = closed)
+export const showGenerateDialog = writable<{ rx: number; rz: number } | null>(null)
 
-// Region minimap generation dialog
-export const showMinimapDialog = writable<boolean>(false)
+// Region minimap generation dialog (stores the target region snapshot, null = closed)
+export const showMinimapDialog = writable<{ rx: number; rz: number } | null>(null)
 
 // Bumped after minimap upload to bust cached img src
 export const minimapVersion = writable<number>(0)

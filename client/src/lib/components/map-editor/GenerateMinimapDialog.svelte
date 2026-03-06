@@ -2,7 +2,6 @@
   import { get } from 'svelte/store'
   import {
     showMinimapDialog,
-    currentEditorRegion,
     editorMetaManager,
     minimapVersion,
   } from '../../stores/editorStore'
@@ -13,11 +12,11 @@
   let progressLabel = $state('')
 
   function close() {
-    showMinimapDialog.set(false)
+    showMinimapDialog.set(null)
   }
 
   async function handleGenerate() {
-    const region = get(currentEditorRegion)
+    const region = get(showMinimapDialog)
     const metaManager = get(editorMetaManager)
     if (!region || !metaManager) return
 
@@ -55,7 +54,7 @@
 
 <div class="backdrop" role="dialog" aria-modal="true">
   <div class="dialog">
-    <h2>Generate Region Minimap</h2>
+    <h2>Generate Region Minimap <span class="region-label">Region ({$showMinimapDialog?.rx}, {$showMinimapDialog?.rz})</span></h2>
 
     {#if !generating}
       <p class="description">
@@ -104,6 +103,13 @@
     font-size: 16px;
     color: #e2b93b;
     letter-spacing: 1px;
+  }
+
+  .region-label {
+    font-size: 12px;
+    color: #aaa;
+    font-weight: normal;
+    letter-spacing: 0;
   }
 
   .description {
