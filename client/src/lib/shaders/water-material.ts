@@ -262,7 +262,8 @@ export function createWaterMaterial(
     const causticsLayer1 = causticsTex.sample(cUV1).r
     const causticsLayer2 = causticsTex.sample(cUV2).r
     const rawCaustics = causticsLayer1.min(causticsLayer2)
-    const causticsPattern = rawCaustics.min(float(0.5)).div(float(0.5))
+    const causticsDetail = foamMapTex.sample(vOrigWorldPos.xz.mul(0.3).add(uTime.mul(0.01))).r
+    const causticsPattern = rawCaustics.min(float(0.5)).div(float(0.5)).mul(causticsDetail)
     // Shimmer: high-frequency flicker based on position + time
     const shimmer = sin(vOrigWorldPos.x.mul(0.4).add(vOrigWorldPos.z.mul(0.6)).add(uTime.mul(0.5)))
       .mul(0.4).add(0.8) // oscillate between 0.4 and 1.2
@@ -453,18 +454,20 @@ export function createWaterMaterial(
 
 
     // 7. Shore edge — noisy holes near coastline to reveal terrain underneath
+    // shoreZone: 1 at water edge (depth=0), 0 at depth>=0.6
     const shoreZone = float(1).sub(smoothstep(float(0), float(0.6), depth))
     const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.8).add(uTime.mul(0.07)))
     const sn2 = valueNoise(vOrigWorldPos.xz.mul(1.5).add(uTime.mul(0.04)))
     const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(uTime.mul(0.1)))
     const holeMask = sn1.mul(0.5).add(sn2.mul(0.3)).add(sn3.mul(0.2))
-    // Near shore: if noise < threshold, punch alpha to 0
-    const holeThreshold = shoreZone.mul(0.6)
+    // Hard cutoff at edge: depth < 0.05 → always hole; noisy holes up to depth 0.6
+    const edgeCutoff = smoothstep(float(0), float(0.01), depth)
+    const holeThreshold = shoreZone.mul(0.9)
     const holeAlpha = smoothstep(
       holeThreshold.sub(0.05),
       holeThreshold.add(0.05),
       holeMask
-    )
+    ).mul(edgeCutoff)
     alpha.mulAssign(holeAlpha)
 
     return vec4(finalColor, alpha)
