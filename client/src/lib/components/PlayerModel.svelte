@@ -423,6 +423,10 @@
     tryAttachSword(modelRoot)
   })
 
+  export function getNametagGroup() {
+    return nametagGroup
+  }
+
   // Function to update mixer and animation state and nametag - called from GameScene gameLoop
   export function update(deltaTime: number) {
     // Sync Three.js group position directly from the Vector3 prop

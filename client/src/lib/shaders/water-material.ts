@@ -113,6 +113,7 @@ export interface WaterMaterialOptions {
   foamMap: THREE.Texture
   surfaceMap: THREE.Texture
   refractionMap?: THREE.Texture | null
+  reflectionMap?: THREE.Texture | null
 }
 
 export interface WaterMaterialUniforms {
@@ -121,6 +122,7 @@ export interface WaterMaterialUniforms {
   uSunColor: { value: THREE.Color }
   uCameraDirection: { value: THREE.Vector3 }
   uRefractionMap: { value: THREE.Texture }
+  uReflectionMap: { value: THREE.Texture }
   uHeightmapTexture: { value: THREE.Texture }
 }
 
@@ -169,6 +171,7 @@ export function createWaterMaterial(
   const normalMapTex = texture(options.normalMap)
   const foamMapTex = texture(options.foamMap)
   const refractionTex = texture(options.refractionMap ?? fallbackTex)
+  const reflectionTex = texture(options.reflectionMap ?? fallbackTex)
 
   // ─── Vertex: Gerstner wave displacement ────────────
   const vOrigWorldPos = varying(vec3(0), 'v_origWorldPos')
@@ -310,6 +313,17 @@ export function createWaterMaterial(
       vec3(uSunColor).mul(pow(sunDot, float(8)).mul(0.25))
     )
 
+    // Entity reflection (planar reflection pass)
+    // Y-flip to convert from clip-space UV to render-target texture UV
+    const reflUV = vec2(screenUV.x, float(1.0).sub(screenUV.y))
+    const reflectionSample = reflectionTex.sample(
+      clamp(reflUV.add(surfaceNormal.xz.mul(0.01)), 0.0, 1.0)
+    )
+    // Where alpha > 0, use entity reflection instead of sky
+    skyReflection.assign(
+      mix(skyReflection, reflectionSample.rgb, reflectionSample.a)
+    )
+
     // 5. Shore foam — wide breaking waves
     const foamNoise = noise.x.mul(0.5).add(0.5)
 
@@ -389,7 +403,21 @@ export function createWaterMaterial(
       1.0
     )
     const foamColor = mix(vec3(0.85, 0.92, 0.95), vec3(1, 1, 1), foamWithTex)
-    const finalColor = mix(surfaceColor, foamColor, foamWithTex.mul(0.9))
+    const finalColorBeforeRefl = mix(
+      surfaceColor,
+      foamColor,
+      foamWithTex.mul(0.9)
+    ).toVar()
+
+    // Overlay entity reflection directly (bypass fresnel attenuation)
+    finalColorBeforeRefl.assign(
+      mix(
+        finalColorBeforeRefl,
+        reflectionSample.rgb,
+        reflectionSample.a.mul(0.6)
+      )
+    )
+    const finalColor = finalColorBeforeRefl
 
     // 6. Alpha
     const alpha = mix(float(0.15), float(0.85), smoothDepth)
@@ -432,6 +460,7 @@ export function createWaterMaterial(
       uSunColor,
       uCameraDirection,
       uRefractionMap: refractionTex,
+      uReflectionMap: reflectionTex,
       uHeightmapTexture: heightmapTex,
     },
   }

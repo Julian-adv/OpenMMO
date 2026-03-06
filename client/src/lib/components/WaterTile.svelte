@@ -17,6 +17,7 @@
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
     refractionMap?: THREE.Texture | null
+    reflectionMap?: THREE.Texture | null
   }
 
   let {
@@ -31,6 +32,7 @@
     sunColor = null,
     cameraDirection = null,
     refractionMap = null,
+    reflectionMap = null,
   }: Props = $props()
 
   let material = $state<NodeMaterial | null>(null)
@@ -43,6 +45,7 @@
       foamMap,
       surfaceMap,
       refractionMap,
+      reflectionMap,
     })
     material = result.material
 
@@ -57,6 +60,7 @@
         if (sunColor) u.uSunColor.value.copy(sunColor)
         if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
         if (refractionMap) u.uRefractionMap.value = refractionMap
+        if (reflectionMap) u.uReflectionMap.value = reflectionMap
       }
     })
 
