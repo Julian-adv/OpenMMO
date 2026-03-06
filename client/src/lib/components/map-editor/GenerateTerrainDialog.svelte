@@ -1,3 +1,16 @@
+<script module lang="ts">
+  const persistedValues = {
+    seed: Math.floor(Math.random() * 100000),
+    minHeight: -20,
+    maxHeight: 80,
+    seaPct: 30,
+    shallowSeaPct: 30,
+    plainPct: 50,
+    mountainPct: 20,
+    riverCount: 2,
+  }
+</script>
+
 <script lang="ts">
   import { get } from 'svelte/store'
   import {
@@ -22,24 +35,36 @@
   const TILE_DIM = 64
   const VERTS_PER_SIDE = TILE_DIM + 1
 
-  let seed = $state(Math.floor(Math.random() * 100000))
-  let minHeight = $state(-20)
-  let maxHeight = $state(80)
-  let seaPct = $state(30)
-  let shallowSeaPct = $state(30)
-  let plainPct = $state(50)
-  let mountainPct = $state(20)
-  let riverCount = $state(2)
+  let seed = $state(persistedValues.seed)
+  let minHeight = $state(persistedValues.minHeight)
+  let maxHeight = $state(persistedValues.maxHeight)
+  let seaPct = $state(persistedValues.seaPct)
+  let shallowSeaPct = $state(persistedValues.shallowSeaPct)
+  let plainPct = $state(persistedValues.plainPct)
+  let mountainPct = $state(persistedValues.mountainPct)
+  let riverCount = $state(persistedValues.riverCount)
 
   let generating = $state(false)
   let progress = $state(0)
   let progressLabel = $state('')
+
+  function saveValues() {
+    persistedValues.seed = seed
+    persistedValues.minHeight = minHeight
+    persistedValues.maxHeight = maxHeight
+    persistedValues.seaPct = seaPct
+    persistedValues.shallowSeaPct = shallowSeaPct
+    persistedValues.plainPct = plainPct
+    persistedValues.mountainPct = mountainPct
+    persistedValues.riverCount = riverCount
+  }
 
   function randomizeSeed() {
     seed = Math.floor(Math.random() * 100000)
   }
 
   function close() {
+    saveValues()
     showGenerateDialog.set(null)
   }
 
