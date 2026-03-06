@@ -1,9 +1,5 @@
-<script lang="ts">
+<script module lang="ts">
   import { SvelteMap } from 'svelte/reactivity'
-  import { gameStore } from '../stores/gameStore'
-  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
-  import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
-  import { networkManager } from '../network/socket'
 
   const REGION_SIZE = 16
   const TILE_DIM = 64
@@ -13,9 +9,21 @@
   const MAX_ZOOM = 32
   const DEFAULT_ZOOM = 8
 
-  // --- Image cache (module-level, persists across re-renders) ---
+  // --- Image cache (module-level, persists across component lifecycle) ---
   const imageCache = new SvelteMap<string, HTMLImageElement | null>()
   const pendingLoads = new SvelteMap<string, Promise<HTMLImageElement | null>>()
+
+  // --- Persisted view state (survives dialog close/reopen) ---
+  let savedCamX: number | null = null
+  let savedCamZ: number | null = null
+  let savedZoom: number | null = null
+</script>
+
+<script lang="ts">
+  import { gameStore } from '../stores/gameStore'
+  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
+  import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
+  import { networkManager } from '../network/socket'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
     const key = `${rx},${rz}`
@@ -53,16 +61,24 @@
   let camX = $state(0)
   let camZ = $state(0)
 
-  // Reset camera to player position when dialog opens
-  $effect(() => {
-    if ($worldMapVisible) {
-      camX = playerX
-      camZ = playerZ
-    }
-  })
-
   // --- Zoom state (in regions/km) ---
   let zoomSpan = $state(DEFAULT_ZOOM)
+
+  // Restore saved view state or center on player when dialog opens
+  $effect(() => {
+    if ($worldMapVisible) {
+      if (savedCamX !== null && savedCamZ !== null) {
+        camX = savedCamX
+        camZ = savedCamZ
+      } else {
+        camX = playerX
+        camZ = playerZ
+      }
+      if (savedZoom !== null) {
+        zoomSpan = savedZoom
+      }
+    }
+  })
 
   // --- Drag state ---
   let isDragging = $state(false)
@@ -173,11 +189,14 @@
 
   function zoomReset() {
     zoomSpan = DEFAULT_ZOOM
+    savedZoom = null
   }
 
   function resetCamera() {
     camX = playerX
     camZ = playerZ
+    savedCamX = null
+    savedCamZ = null
   }
 
   function handleWheel(event: WheelEvent) {
@@ -227,6 +246,15 @@
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       window.removeEventListener('mouseup', handleMouseUp)
+    }
+  })
+
+  // Save view state on component destroy (covers all close paths)
+  $effect(() => {
+    return () => {
+      savedCamX = camX
+      savedCamZ = camZ
+      savedZoom = zoomSpan
     }
   })
 
