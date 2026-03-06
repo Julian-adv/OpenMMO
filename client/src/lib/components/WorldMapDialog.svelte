@@ -9,8 +9,9 @@
   const TILE_DIM = 64
   const REGION_PX = REGION_SIZE * TILE_DIM // 1024
 
-  const ZOOM_LEVELS = [1, 4, 8, 16, 32]
-  const DEFAULT_ZOOM_INDEX = 2
+  const MIN_ZOOM = 1
+  const MAX_ZOOM = 32
+  const DEFAULT_ZOOM = 8
 
   // --- Image cache (module-level, persists across re-renders) ---
   const imageCache = new SvelteMap<string, HTMLImageElement | null>()
@@ -48,18 +49,27 @@
   let playerX = $derived($gameStore.currentPlayer?.position.x ?? 0)
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
 
-  // --- Zoom state (normal mode) ---
-  let zoomIndex = $state(DEFAULT_ZOOM_INDEX)
-  let zoomSpan = $derived(ZOOM_LEVELS[zoomIndex])
+  // --- Camera state (world coordinates of view center) ---
+  let camX = $state(0)
+  let camZ = $state(0)
 
-  // Player's region coordinates
-  let playerRx = $derived(Math.floor((playerX + TILE_DIM / 2) / REGION_PX))
-  let playerRz = $derived(Math.floor((playerZ + TILE_DIM / 2) / REGION_PX))
+  // Reset camera to player position when dialog opens
+  $effect(() => {
+    if ($worldMapVisible) {
+      camX = playerX
+      camZ = playerZ
+    }
+  })
 
-  // Visible region range
-  let halfSpan = $derived(Math.floor(zoomSpan / 2))
-  let startRx = $derived(playerRx - halfSpan)
-  let startRz = $derived(playerRz - halfSpan)
+  // --- Zoom state (in regions/km) ---
+  let zoomSpan = $state(DEFAULT_ZOOM)
+
+  // --- Drag state ---
+  let isDragging = $state(false)
+  let dragStartMouseX = 0
+  let dragStartMouseZ = 0
+  let dragStartCamX = 0
+  let dragStartCamZ = 0
 
   // --- Canvas rendering ---
   let renderGeneration = 0
@@ -68,8 +78,8 @@
     if (!canvasEl || containerW <= 0 || containerH <= 0) return
 
     const span = zoomSpan
-    const srx = startRx
-    const srz = startRz
+    const cx = camX
+    const cz = camZ
     const px = playerX
     const pz = playerZ
     const cw = containerW
@@ -77,11 +87,27 @@
     const gen = ++renderGeneration
 
     const ctx = canvasEl.getContext('2d')!
-    const regionDrawSize = Math.min(cw, ch) / span
-    const gridW = span * regionDrawSize
-    const gridH = span * regionDrawSize
-    const ox = (cw - gridW) / 2
-    const oy = (ch - gridH) / 2
+
+    // Scale: how many canvas pixels per world unit
+    // At current zoom, we show `span` regions across the shorter dimension
+    const viewSize = span * REGION_PX // world units visible along shorter axis
+    const canvasSize = Math.min(cw, ch)
+    const scale = canvasSize / viewSize
+
+    // World-space extents of the viewport
+    const viewWorldW = cw / scale
+    const viewWorldH = ch / scale
+
+    // World-space top-left of viewport
+    const viewLeft = cx - viewWorldW / 2
+    const viewTop = cz - viewWorldH / 2
+
+    // Determine which regions overlap the viewport
+    // Region (rx, rz) covers world x: [rx*REGION_PX - TILE_DIM/2, (rx+1)*REGION_PX - TILE_DIM/2)
+    const regionMinRx = Math.floor((viewLeft + TILE_DIM / 2) / REGION_PX)
+    const regionMaxRx = Math.floor((viewLeft + viewWorldW + TILE_DIM / 2) / REGION_PX)
+    const regionMinRz = Math.floor((viewTop + TILE_DIM / 2) / REGION_PX)
+    const regionMaxRz = Math.floor((viewTop + viewWorldH + TILE_DIM / 2) / REGION_PX)
 
     // Clear to black
     ctx.clearRect(0, 0, cw, ch)
@@ -89,18 +115,22 @@
     ctx.fillRect(0, 0, cw, ch)
 
     const promises: Promise<void>[] = []
-    for (let dz = 0; dz < span; dz++) {
-      for (let dx = 0; dx < span; dx++) {
-        const rx = srx + dx
-        const rz = srz + dz
-        const drawX = ox + dx * regionDrawSize
-        const drawY = oy + dz * regionDrawSize
+    for (let rz = regionMinRz; rz <= regionMaxRz; rz++) {
+      for (let rx = regionMinRx; rx <= regionMaxRx; rx++) {
+        // Region world origin
+        const regionWorldX = rx * REGION_PX - TILE_DIM / 2
+        const regionWorldZ = rz * REGION_PX - TILE_DIM / 2
+
+        // Canvas position
+        const drawX = (regionWorldX - viewLeft) * scale
+        const drawY = (regionWorldZ - viewTop) * scale
+        const drawSize = REGION_PX * scale
 
         promises.push(
           loadRegionImage(rx, rz).then((img) => {
             if (gen !== renderGeneration) return
             if (img) {
-              ctx.drawImage(img, drawX, drawY, regionDrawSize, regionDrawSize)
+              ctx.drawImage(img, drawX, drawY, drawSize, drawSize)
             }
           })
         )
@@ -111,8 +141,8 @@
       if (gen !== renderGeneration) return
 
       // Player marker
-      const playerCanvasX = ox + ((px + TILE_DIM / 2) / REGION_PX - srx) * regionDrawSize
-      const playerCanvasZ = oy + ((pz + TILE_DIM / 2) / REGION_PX - srz) * regionDrawSize
+      const playerCanvasX = (px - viewLeft) * scale
+      const playerCanvasZ = (pz - viewTop) * scale
 
       ctx.save()
       ctx.beginPath()
@@ -132,13 +162,30 @@
     })
   })
 
-  // --- Mouse wheel zoom ---
+  // --- Zoom controls ---
+  function zoomIn() {
+    zoomSpan = Math.max(MIN_ZOOM, zoomSpan - 1)
+  }
+
+  function zoomOut() {
+    zoomSpan = Math.min(MAX_ZOOM, zoomSpan + 1)
+  }
+
+  function zoomReset() {
+    zoomSpan = DEFAULT_ZOOM
+  }
+
+  function resetCamera() {
+    camX = playerX
+    camZ = playerZ
+  }
+
   function handleWheel(event: WheelEvent) {
     event.preventDefault()
     if (event.deltaY > 0) {
-      zoomIndex = Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1)
+      zoomOut()
     } else {
-      zoomIndex = Math.max(0, zoomIndex - 1)
+      zoomIn()
     }
   }
 
@@ -146,6 +193,41 @@
     if (!containerEl) return
     containerEl.addEventListener('wheel', handleWheel, { passive: false })
     return () => containerEl!.removeEventListener('wheel', handleWheel)
+  })
+
+  // --- Drag to pan ---
+  function handleMouseDown(event: MouseEvent) {
+    if (event.ctrlKey) return // let Ctrl+click through for teleport
+    if (event.button !== 0) return
+    isDragging = true
+    dragStartMouseX = event.clientX
+    dragStartMouseZ = event.clientY
+    dragStartCamX = camX
+    dragStartCamZ = camZ
+  }
+
+  function handleMouseMove(event: MouseEvent) {
+    if (!isDragging) return
+    const viewSize = zoomSpan * REGION_PX
+    const canvasSize = Math.min(containerW, containerH)
+    const scale = canvasSize / viewSize
+
+    camX = dragStartCamX - (event.clientX - dragStartMouseX) / scale
+    camZ = dragStartCamZ - (event.clientY - dragStartMouseZ) / scale
+  }
+
+  function handleMouseUp() {
+    isDragging = false
+  }
+
+  $effect(() => {
+    if (!isDragging) return
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
   })
 
   // --- Actions ---
@@ -174,15 +256,12 @@
     const pixelX = event.clientX - rect.left
     const pixelY = event.clientY - rect.top
 
-    const span = zoomSpan
-    const regionDrawSize = Math.min(containerW, containerH) / span
-    const gridW = span * regionDrawSize
-    const gridH = span * regionDrawSize
-    const ox = (containerW - gridW) / 2
-    const oy = (containerH - gridH) / 2
+    const viewSize = zoomSpan * REGION_PX
+    const canvasSize = Math.min(containerW, containerH)
+    const scale = canvasSize / viewSize
 
-    const worldX = ((pixelX - ox) / regionDrawSize + startRx) * REGION_PX - TILE_DIM / 2
-    const worldZ = ((pixelY - oy) / regionDrawSize + startRz) * REGION_PX - TILE_DIM / 2
+    const worldX = camX + (pixelX - containerW / 2) / scale
+    const worldZ = camZ + (pixelY - containerH / 2) / scale
 
     const position = { x: worldX, y: 0, z: worldZ }
 
@@ -220,11 +299,23 @@
   <div class="dialog" role="dialog" aria-modal="true">
     <div class="header">
       <h2>World Map ({zoomSpan}&times;{zoomSpan} km)</h2>
+      <div class="controls">
+        <button class="ctrl-btn" onclick={zoomIn} title="Zoom In">+</button>
+        <button class="ctrl-btn" onclick={zoomOut} title="Zoom Out">&minus;</button>
+        <button class="ctrl-btn" onclick={zoomReset} title="Reset Zoom">1:{DEFAULT_ZOOM}</button>
+        <button class="ctrl-btn" onclick={resetCamera} title="Center on Player">&#8982;</button>
+      </div>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="map-container" bind:this={containerEl} onclick={handleMapClick}>
+    <div
+      class="map-container"
+      class:dragging={isDragging}
+      bind:this={containerEl}
+      onmousedown={handleMouseDown}
+      onclick={handleMapClick}
+    >
       <canvas
         bind:this={canvasEl}
         width={containerW}
@@ -272,6 +363,27 @@
     font-weight: 600;
   }
 
+  .controls {
+    display: flex;
+    gap: 4px;
+  }
+
+  .ctrl-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #ccc;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 2px 8px;
+    line-height: 1.4;
+  }
+
+  .ctrl-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+  }
+
   .close-btn {
     background: none;
     border: none;
@@ -291,6 +403,11 @@
     position: relative;
     min-height: 0;
     overflow: hidden;
+    cursor: grab;
+  }
+
+  .map-container.dragging {
+    cursor: grabbing;
   }
 
   .map-canvas {
