@@ -32,3 +32,9 @@ pub fn meta_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("meta")
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
+
+/// Build filesystem path for a region minimap PNG file.
+pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("minimap")
+        .join(format!("r{:+03}_{:+03}.png", rx, rz))
+}

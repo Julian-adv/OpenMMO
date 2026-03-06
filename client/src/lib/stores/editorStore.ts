@@ -85,6 +85,12 @@ export const regionMetaVersion = writable<number>(0)
 // Procedural terrain generation dialog
 export const showGenerateDialog = writable<boolean>(false)
 
+// Region minimap generation dialog
+export const showMinimapDialog = writable<boolean>(false)
+
+// Bumped after minimap upload to bust cached img src
+export const minimapVersion = writable<number>(0)
+
 // Manager references for terrain generation dialog
 export const editorHeightManager = writable<TerrainHeightManager | null>(null)
 export const editorSplatManager = writable<TerrainSplatManager | null>(null)

@@ -17,7 +17,8 @@
   import { createWebGPURenderer } from './lib/utils/renderer'
   import MapEditorPanel from './lib/components/map-editor/MapEditorPanel.svelte'
   import GenerateTerrainDialog from './lib/components/map-editor/GenerateTerrainDialog.svelte'
-  import { showGenerateDialog } from './lib/stores/editorStore'
+  import GenerateMinimapDialog from './lib/components/map-editor/GenerateMinimapDialog.svelte'
+  import { showGenerateDialog, showMinimapDialog } from './lib/stores/editorStore'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
@@ -231,6 +232,9 @@
         <MapEditorPanel />
         {#if $showGenerateDialog}
           <GenerateTerrainDialog />
+        {/if}
+        {#if $showMinimapDialog}
+          <GenerateMinimapDialog />
         {/if}
       {/if}
       {#if selectedCharacter}
