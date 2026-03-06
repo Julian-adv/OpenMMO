@@ -86,6 +86,15 @@ impl TerrainIO {
         fs::write(&path, data).await
     }
 
+    pub async fn meta_exists(&self, rx: i32, rz: i32) -> std::io::Result<bool> {
+        let path = coords::meta_path(&self.base_dir, rx, rz);
+        match fs::metadata(&path).await {
+            Ok(_) => Ok(true),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
     pub async fn read_meta(&self, rx: i32, rz: i32) -> std::io::Result<serde_json::Value> {
         let path = coords::meta_path(&self.base_dir, rx, rz);
         match fs::read_to_string(&path).await {
