@@ -8,6 +8,7 @@
     material: MeshStandardNodeMaterial
     mesh?: THREE.Mesh | undefined
     position?: [number, number, number]
+    onBeforeRender?: THREE.Mesh['onBeforeRender'] | null
   }
 
   let {
@@ -15,7 +16,12 @@
     material,
     mesh = $bindable(undefined),
     position = [0, 0, 0],
+    onBeforeRender = null,
   }: Props = $props()
+
+  function handleCreate(ref: THREE.Mesh) {
+    if (onBeforeRender) ref.onBeforeRender = onBeforeRender
+  }
 </script>
 
 <T.Mesh
@@ -26,4 +32,5 @@
   castShadow
   receiveShadow
   frustumCulled={false}
+  oncreate={handleCreate}
 />
