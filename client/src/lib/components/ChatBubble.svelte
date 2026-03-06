@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T } from '@threlte/core'
-  import CanvasText from './CanvasText.svelte'
+  import TextLabel from './TextLabel.svelte'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
 
@@ -17,7 +17,7 @@
 
   let textBounds = $state({ width: 1, height: 0.3 })
 
-  let textRef = $state<CanvasText | null>(null)
+  let textRef = $state<any>(null)
   let bubbleGroup = $state<THREE.Group | undefined>(undefined)
 
   function handleTextSync() {
@@ -139,7 +139,7 @@
   </T.LineLoop>
 
   <!-- Chat bubble text -->
-  <CanvasText
+  <TextLabel
     bind:this={textRef}
     text={displayText}
     position={[0, bubbleCenterY + cornerRadius, 0.01]}

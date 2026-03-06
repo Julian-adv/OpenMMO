@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T, useTask } from '@threlte/core'
-  import CanvasText from './CanvasText.svelte'
+  import TextLabel from './TextLabel.svelte'
   import * as THREE from 'three'
   import type { AccountCharacter } from '../network/socket'
 
@@ -117,7 +117,7 @@
 
   {#if character}
     <!-- Character name -->
-    <CanvasText
+    <TextLabel
       text={character.name}
       position={[0, panelHeight / 2 - 0.12, 0.02]}
       fontSize={0.13}
@@ -128,7 +128,7 @@
     />
 
     <!-- Level -->
-    <CanvasText
+    <TextLabel
       text={`Lv. ${character.level}  HP ${character.max_hp}`}
       position={[0, panelHeight / 2 - 0.27, 0.02]}
       fontSize={0.1}
@@ -150,7 +150,7 @@
       {@const colX = stat.col === 0 ? -STAT_COL_GAP : 0.02}
       {@const rowY = STATS_START_Y + (2 - stat.row) * STAT_ROW_GAP}
       <!-- Stat label -->
-      <CanvasText
+      <TextLabel
         text={stat.label}
         position={[colX, rowY, 0.02]}
         fontSize={STAT_FONT_SIZE}
@@ -160,7 +160,7 @@
         depthOffset={-1}
       />
       <!-- Stat value -->
-      <CanvasText
+      <TextLabel
         text={String(stat.value)}
         position={[colX + STAT_VALUE_OFFSET, rowY, 0.02]}
         fontSize={STAT_FONT_SIZE}
@@ -172,7 +172,7 @@
     {/each}
   {:else}
     <!-- Empty slot -->
-    <CanvasText
+    <TextLabel
       text="+ Create"
       position={[0, 0, 0.02]}
       fontSize={0.12}

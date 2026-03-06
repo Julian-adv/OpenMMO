@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T } from '@threlte/core'
-  import CanvasText from './CanvasText.svelte'
+  import TextLabel from './TextLabel.svelte'
   import * as THREE from 'three'
 
   interface Props {
@@ -45,13 +45,14 @@
 <!-- Outer group: billboard at monster position -->
 <T.Group bind:ref={group}>
   <!-- Inner offset: local Y = screen up -->
-  <CanvasText
+  <TextLabel
     {text}
     fontSize={0.25}
     {color}
     fillOpacity={opacity}
-    position={[0, yOffset, 0]}
+    position.y={yOffset}
     anchorX="center"
     anchorY="middle"
+    depthOffset={-1}
   />
 </T.Group>

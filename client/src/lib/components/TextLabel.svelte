@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import { MeshBasicNodeMaterial } from 'three/webgpu'
   import { onDestroy } from 'svelte'
 
   interface Props {
@@ -16,6 +17,7 @@
     depthOffset?: number
     onsync?: () => void
     position?: [number, number, number]
+    'position.y'?: number
   }
 
   let {
@@ -31,6 +33,7 @@
     depthOffset,
     onsync,
     position = [0, 0, 0],
+    'position.y': positionY,
   }: Props = $props()
 
   const PIXELS_PER_UNIT = 256
@@ -49,12 +52,11 @@
   let anchorOffsetX = $state(0)
   let anchorOffsetY = $state(0)
 
-  const material = new THREE.MeshBasicMaterial({
-    map: texture,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  })
+  const material = new MeshBasicNodeMaterial()
+  material.map = texture
+  material.transparent = true
+  material.depthWrite = false
+  material.side = THREE.DoubleSide
 
   function wrapText(
     inputText: string,
@@ -164,7 +166,6 @@
   }
 
   // Re-render canvas when visual properties change
-  // (Svelte 5 auto-tracks all reactive reads inside renderCanvas)
   $effect(() => {
     renderCanvas()
   })
@@ -183,16 +184,25 @@
     }
   })
 
+  let meshRef = $state<THREE.Mesh | undefined>(undefined)
+
   onDestroy(() => {
-    texture.dispose()
-    material.dispose()
+    // Hide mesh immediately so the renderer won't try to draw it
+    if (meshRef) meshRef.visible = false
+    // Defer disposal to next frame so the renderer finishes the current
+    // frame without encountering null texture bindings
+    requestAnimationFrame(() => {
+      texture.dispose()
+      material.dispose()
+    })
   })
 </script>
 
 <T.Mesh
+  bind:ref={meshRef}
   position={[
     (position[0] ?? 0) + anchorOffsetX,
-    (position[1] ?? 0) + anchorOffsetY,
+    (positionY ?? position[1] ?? 0) + anchorOffsetY,
     position[2] ?? 0,
   ]}
 >

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { T, useLoader } from '@threlte/core'
-  import CanvasText from './CanvasText.svelte'
+  import TextLabel from './TextLabel.svelte'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
   import { GLTFLoader } from 'three/examples/jsm/Addons.js'
@@ -566,7 +566,7 @@
 
 <!-- Name tag (separate from character to avoid rotation inheritance) -->
 <T.Group bind:ref={nametagGroup}>
-  <CanvasText
+  <TextLabel
     text={name}
     fontSize={0.3}
     color={isCurrentPlayer ? '#4299e1' : '#ffffff'}
@@ -594,7 +594,7 @@
   {/if}
 
   {#if animDebugInfo}
-    <CanvasText
+    <TextLabel
       text={animDebugInfo}
       fontSize={0.2}
       color="#ffff00"
