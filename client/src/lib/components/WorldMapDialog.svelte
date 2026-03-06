@@ -1,71 +1,154 @@
 <script lang="ts">
+  import { SvelteMap } from 'svelte/reactivity'
   import { gameStore } from '../stores/gameStore'
-  import { worldMapVisible, teleportLoading, mapEditorMode } from '../stores/debugStore'
-  import { currentEditorRegion, minimapVersion } from '../stores/editorStore'
+  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
   import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
   import { networkManager } from '../network/socket'
 
-  const WORLD_MAP_WIDTH = 3696
-  const WORLD_MAP_HEIGHT = 3924
   const REGION_SIZE = 16
   const TILE_DIM = 64
   const REGION_PX = REGION_SIZE * TILE_DIM // 1024
 
+  const ZOOM_LEVELS = [1, 4, 8, 16, 32]
+  const DEFAULT_ZOOM_INDEX = 2
+
+  // --- Image cache (module-level, persists across re-renders) ---
+  const imageCache = new SvelteMap<string, HTMLImageElement | null>()
+  const pendingLoads = new SvelteMap<string, Promise<HTMLImageElement | null>>()
+
+  function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
+    const key = `${rx},${rz}`
+    if (imageCache.has(key)) return Promise.resolve(imageCache.get(key)!)
+    if (pendingLoads.has(key)) return pendingLoads.get(key)!
+
+    const promise = new Promise<HTMLImageElement | null>((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        imageCache.set(key, img)
+        pendingLoads.delete(key)
+        resolve(img)
+      }
+      img.onerror = () => {
+        imageCache.set(key, null)
+        pendingLoads.delete(key)
+        resolve(null)
+      }
+      img.src = regionMinimapServerUrl(rx, rz)
+    })
+    pendingLoads.set(key, promise)
+    return promise
+  }
+
+  // --- Component state ---
   let containerEl = $state<HTMLDivElement>()
+  let canvasEl = $state<HTMLCanvasElement>()
   let containerW = $state(0)
   let containerH = $state(0)
 
   let playerX = $derived($gameStore.currentPlayer?.position.x ?? 0)
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
 
-  // Server URL with cache-bust query param
-  let minimapSrc = $derived(
-    $currentEditorRegion
-      ? `${regionMinimapServerUrl($currentEditorRegion.rx, $currentEditorRegion.rz)}?v=${$minimapVersion}`
-      : ''
-  )
-  let minimapLoaded = $state(false)
+  // --- Zoom state (normal mode) ---
+  let zoomIndex = $state(DEFAULT_ZOOM_INDEX)
+  let zoomSpan = $derived(ZOOM_LEVELS[zoomIndex])
 
-  // Probe the server to see if a minimap exists for this region
+  // Player's region coordinates
+  let playerRx = $derived(Math.floor((playerX + TILE_DIM / 2) / REGION_PX))
+  let playerRz = $derived(Math.floor((playerZ + TILE_DIM / 2) / REGION_PX))
+
+  // Visible region range
+  let halfSpan = $derived(Math.floor(zoomSpan / 2))
+  let startRx = $derived(playerRx - halfSpan)
+  let startRz = $derived(playerRz - halfSpan)
+
+  // --- Canvas rendering ---
+  let renderGeneration = 0
+
   $effect(() => {
-    minimapLoaded = false
-    if (!$mapEditorMode || !$currentEditorRegion) return
-    const src = minimapSrc
-    const img = new Image()
-    img.onload = () => { minimapLoaded = true }
-    img.onerror = () => { minimapLoaded = false }
-    img.src = src
+    if (!canvasEl || containerW <= 0 || containerH <= 0) return
+
+    const span = zoomSpan
+    const srx = startRx
+    const srz = startRz
+    const px = playerX
+    const pz = playerZ
+    const cw = containerW
+    const ch = containerH
+    const gen = ++renderGeneration
+
+    const ctx = canvasEl.getContext('2d')!
+    const regionDrawSize = Math.min(cw, ch) / span
+    const gridW = span * regionDrawSize
+    const gridH = span * regionDrawSize
+    const ox = (cw - gridW) / 2
+    const oy = (ch - gridH) / 2
+
+    // Clear to black
+    ctx.clearRect(0, 0, cw, ch)
+    ctx.fillStyle = '#000'
+    ctx.fillRect(0, 0, cw, ch)
+
+    const promises: Promise<void>[] = []
+    for (let dz = 0; dz < span; dz++) {
+      for (let dx = 0; dx < span; dx++) {
+        const rx = srx + dx
+        const rz = srz + dz
+        const drawX = ox + dx * regionDrawSize
+        const drawY = oy + dz * regionDrawSize
+
+        promises.push(
+          loadRegionImage(rx, rz).then((img) => {
+            if (gen !== renderGeneration) return
+            if (img) {
+              ctx.drawImage(img, drawX, drawY, regionDrawSize, regionDrawSize)
+            }
+          })
+        )
+      }
+    }
+
+    Promise.all(promises).then(() => {
+      if (gen !== renderGeneration) return
+
+      // Player marker
+      const playerCanvasX = ox + ((px + TILE_DIM / 2) / REGION_PX - srx) * regionDrawSize
+      const playerCanvasZ = oy + ((pz + TILE_DIM / 2) / REGION_PX - srz) * regionDrawSize
+
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(playerCanvasX, playerCanvasZ, 6, 0, Math.PI * 2)
+      ctx.fillStyle = '#ff3333'
+      ctx.fill()
+      ctx.lineWidth = 2
+      ctx.strokeStyle = '#ffffff'
+      ctx.stroke()
+      ctx.shadowColor = 'rgba(255, 50, 50, 0.8)'
+      ctx.shadowBlur = 6
+      ctx.beginPath()
+      ctx.arc(playerCanvasX, playerCanvasZ, 6, 0, Math.PI * 2)
+      ctx.fillStyle = '#ff3333'
+      ctx.fill()
+      ctx.restore()
+    })
   })
 
-  let showRegionMap = $derived($mapEditorMode && minimapLoaded)
+  // --- Mouse wheel zoom ---
+  function handleWheel(event: WheelEvent) {
+    event.preventDefault()
+    if (event.deltaY > 0) {
+      zoomIndex = Math.min(ZOOM_LEVELS.length - 1, zoomIndex + 1)
+    } else {
+      zoomIndex = Math.max(0, zoomIndex - 1)
+    }
+  }
 
-  let mapWidth = $derived(showRegionMap ? REGION_PX : WORLD_MAP_WIDTH)
-  let mapHeight = $derived(showRegionMap ? REGION_PX : WORLD_MAP_HEIGHT)
-  let mapSrc = $derived(showRegionMap ? minimapSrc : '/textures/height_map.png')
+  $effect(() => {
+    if (!containerEl) return
+    containerEl.addEventListener('wheel', handleWheel, { passive: false })
+    return () => containerEl!.removeEventListener('wheel', handleWheel)
+  })
 
-  // Fit image into container preserving aspect ratio
-  let scale = $derived(Math.min(containerW / mapWidth, containerH / mapHeight))
-  let drawW = $derived(mapWidth * scale)
-  let drawH = $derived(mapHeight * scale)
-  let offsetX = $derived((containerW - drawW) / 2)
-  let offsetY = $derived((containerH - drawH) / 2)
-
-  // Region world-space origin (top-left corner)
-  let regionOriginX = $derived(($currentEditorRegion?.rx ?? 0) * REGION_SIZE * TILE_DIM - TILE_DIM / 2)
-  let regionOriginZ = $derived(($currentEditorRegion?.rz ?? 0) * REGION_SIZE * TILE_DIM - TILE_DIM / 2)
-
-  // Player marker position
-  let markerLeft = $derived(
-    showRegionMap
-      ? offsetX + (playerX - regionOriginX) * scale
-      : offsetX + (WORLD_MAP_WIDTH / 2 + playerX) * scale
-  )
-  let markerTop = $derived(
-    showRegionMap
-      ? offsetY + (playerZ - regionOriginZ) * scale
-      : offsetY + (WORLD_MAP_HEIGHT / 2 + playerZ) * scale
-  )
-
+  // --- Actions ---
   function close() {
     worldMapVisible.set(false)
   }
@@ -83,7 +166,7 @@
   }
 
   function handleMapClick(event: MouseEvent) {
-    if (!event.ctrlKey || !containerEl || scale <= 0) return
+    if (!event.ctrlKey || !containerEl || containerW <= 0 || containerH <= 0) return
     event.preventDefault()
     event.stopPropagation()
 
@@ -91,18 +174,18 @@
     const pixelX = event.clientX - rect.left
     const pixelY = event.clientY - rect.top
 
-    let worldX: number, worldZ: number
-    if (showRegionMap) {
-      worldX = (pixelX - offsetX) / scale + regionOriginX
-      worldZ = (pixelY - offsetY) / scale + regionOriginZ
-    } else {
-      worldX = (pixelX - offsetX) / scale - WORLD_MAP_WIDTH / 2
-      worldZ = (pixelY - offsetY) / scale - WORLD_MAP_HEIGHT / 2
-    }
+    const span = zoomSpan
+    const regionDrawSize = Math.min(containerW, containerH) / span
+    const gridW = span * regionDrawSize
+    const gridH = span * regionDrawSize
+    const ox = (containerW - gridW) / 2
+    const oy = (containerH - gridH) / 2
+
+    const worldX = ((pixelX - ox) / regionDrawSize + startRx) * REGION_PX - TILE_DIM / 2
+    const worldZ = ((pixelY - oy) / regionDrawSize + startRz) * REGION_PX - TILE_DIM / 2
 
     const position = { x: worldX, y: 0, z: worldZ }
 
-    // Optimistic local update
     gameStore.update((state) => {
       if (!state.currentPlayer) return state
       state.currentPlayer.position.set(worldX, 0, worldZ)
@@ -114,6 +197,7 @@
     close()
   }
 
+  // --- Resize observer ---
   $effect(() => {
     if (!containerEl) return
     const ro = new ResizeObserver((entries) => {
@@ -135,24 +219,18 @@
 <div class="backdrop" onclick={handleBackdropClick}>
   <div class="dialog" role="dialog" aria-modal="true">
     <div class="header">
-      <h2>{showRegionMap ? `Region Map (${$currentEditorRegion?.rx}, ${$currentEditorRegion?.rz})` : 'World Map'}</h2>
+      <h2>World Map ({zoomSpan}&times;{zoomSpan} km)</h2>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div class="map-container" bind:this={containerEl} onclick={handleMapClick}>
-      {#if scale > 0}
-        <img
-          src={mapSrc}
-          alt={showRegionMap ? 'Region Minimap' : 'World Map'}
-          class="map-image"
-          style="width: {drawW}px; height: {drawH}px; left: {offsetX}px; top: {offsetY}px;"
-        />
-        <div
-          class="player-marker"
-          style="left: {markerLeft}px; top: {markerTop}px;"
-        ></div>
-      {/if}
+      <canvas
+        bind:this={canvasEl}
+        width={containerW}
+        height={containerH}
+        class="map-canvas"
+      ></canvas>
     </div>
   </div>
 </div>
@@ -215,20 +293,10 @@
     overflow: hidden;
   }
 
-  .map-image {
+  .map-canvas {
     position: absolute;
+    inset: 0;
     display: block;
   }
 
-  .player-marker {
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #ff3333;
-    border: 2px solid #ffffff;
-    transform: translate(-50%, -50%);
-    pointer-events: none;
-    box-shadow: 0 0 6px rgba(255, 50, 50, 0.8);
-  }
 </style>
