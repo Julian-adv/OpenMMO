@@ -84,6 +84,10 @@
   function toggleDebugSpeed() {
     debugSpeedMode.update((v) => !v)
   }
+
+  function toggleMapEditor() {
+    mapEditorMode.update((v) => !v)
+  }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -116,11 +120,11 @@
           onclick={toggleSlowMode}
           title="Toggle Slow Motion"
         >
-          SLOW
+          SLOW TIME
         </button>
 
         <div class="seg-group" title="Sun Speed">
-          <span class="seg-label">SUN</span>
+          <span class="seg-label">FAST DAY</span>
           <button
             class="seg-btn"
             class:seg-active={$sunTimeScale === 1.0}
@@ -144,7 +148,7 @@
           onclick={toggleCameraRotation}
           title="Toggle Camera Rotation"
         >
-          CAM ROT: {$cameraRotationEnabled ? 'ON' : 'OFF'}
+          CAM ROT
         </button>
 
         <button
@@ -153,7 +157,7 @@
           onclick={toggleCalendar}
           title="Toggle Calendar Display"
         >
-          CAL: {$calendarVisible ? 'ON' : 'OFF'}
+          CAL
         </button>
       </div>
 
@@ -164,7 +168,7 @@
           onclick={toggleCelestialDebug}
           title="Toggle Celestial Orbits Debug"
         >
-          ORBITS: {$celestialDebugVisible ? 'ON' : 'OFF'}
+          ORBITS
         </button>
 
         {#if !$mapEditorMode}
@@ -174,9 +178,18 @@
             onclick={toggleGrid}
             title="Toggle Terrain Grid"
           >
-            GRID: {$gridVisible ? 'ON' : 'OFF'}
+            GRID
           </button>
         {/if}
+
+        <button
+          class="action-btn map-editor-btn"
+          class:active={$mapEditorMode}
+          onclick={toggleMapEditor}
+          title="Toggle Map Editor (Ctrl+M)"
+        >
+          MAP EDIT
+        </button>
 
         <button
           class="action-btn debug-speed-btn"
@@ -184,7 +197,7 @@
           onclick={toggleDebugSpeed}
           title="Debug Mode: 10x Speed + Extended Zoom"
         >
-          DEBUG: {$debugSpeedMode ? 'ON' : 'OFF'}
+          FAST MOVE
         </button>
       </div>
     </div>
@@ -329,6 +342,11 @@
   .action-btn.grid-btn.active {
     background: #b7791f;
     border-color: #ecc94b;
+  }
+
+  .action-btn.map-editor-btn.active {
+    background: #2c7a7b;
+    border-color: #4fd1c5;
   }
 
   .action-btn.debug-speed-btn.active {
