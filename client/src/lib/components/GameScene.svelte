@@ -56,7 +56,7 @@
     teleportLoading,
     debugSpeedMode,
   } from '../stores/debugStore'
-  import { editorPanOffset } from '../stores/editorStore'
+  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, terrainForceRebuild } from '../stores/editorStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
   import {
@@ -115,6 +115,9 @@
   const terrainSplatManager = new TerrainSplatManager()
   const terrainMetaManager = new TerrainMetaManager()
   monsterManager.heightManager = terrainHeightManager
+  editorHeightManager.set(terrainHeightManager)
+  editorSplatManager.set(terrainSplatManager)
+  editorMetaManager.set(terrainMetaManager)
   let waterNormalMap = $state<THREE.Texture | null>(null)
   let waterFoamMap = $state<THREE.Texture | null>(null)
   let waterSurfaceMap = $state<THREE.Texture | null>(null)
@@ -322,6 +325,16 @@
     terrainCenterChunk = nextChunk
     rebuildTerrainTiles(nextChunk.x, nextChunk.z)
   }
+
+  // Force terrain rebuild when requested (e.g. after region delete)
+  let lastRebuildVersion = 0
+  $effect(() => {
+    const v = $terrainForceRebuild
+    if (v > lastRebuildVersion) {
+      lastRebuildVersion = v
+      terrainCenterChunk = { x: NaN, z: NaN }
+    }
+  })
 
   gameStore.subscribe((state) => {
     currentPlayer = state.currentPlayer

@@ -21,8 +21,12 @@
 
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
-  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
+  import { worldMapVisible, debugVisible, teleportLoading } from '../stores/debugStore'
+  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
+  import { get } from 'svelte/store'
   import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
+  import { tileToRegion } from '../managers/terrainMetaManager'
+  import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
@@ -57,6 +61,10 @@
   let playerX = $derived($gameStore.currentPlayer?.position.x ?? 0)
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
 
+  let playerRegionRx = $derived(tileToRegion(Math.round(playerX / TILE_DIM)))
+  let playerRegionRz = $derived(tileToRegion(Math.round(playerZ / TILE_DIM)))
+  let deleting = $state(false)
+
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
   let camZ = $state(0)
@@ -87,12 +95,20 @@
   let dragStartCamX = 0
   let dragStartCamZ = 0
 
+  // --- Minimap version tracking: flush cache when minimaps are regenerated ---
+  $effect(() => {
+    const _ver = $minimapVersion // track dependency
+    imageCache.clear()
+    pendingLoads.clear()
+  })
+
   // --- Canvas rendering ---
   let renderGeneration = 0
 
   $effect(() => {
     if (!canvasEl || containerW <= 0 || containerH <= 0) return
 
+    const _mmVer = $minimapVersion // re-render when minimaps change
     const span = zoomSpan
     const cx = camX
     const cz = camZ
@@ -258,6 +274,57 @@
     }
   })
 
+  // --- Debug actions ---
+  function handleGenerate() {
+    showGenerateDialog.set({ rx: playerRegionRx, rz: playerRegionRz })
+    close()
+  }
+
+  async function handleDelete() {
+    const rx = playerRegionRx
+    const rz = playerRegionRz
+    if (!confirm(`Delete all terrain data for region (${rx}, ${rz})?`)) return
+
+    deleting = true
+    try {
+      const resp = await fetch(
+        `${getTerrainApiUrl()}/api/terrain/region/${rx}/${rz}`,
+        { method: 'DELETE' }
+      )
+      if (!resp.ok) throw new Error(`Server returned ${resp.status}`)
+
+      // Evict cached tile data (without disposing GPU resources still in use)
+      const heightManager = get(editorHeightManager)
+      const splatManager = get(editorSplatManager)
+      const metaManager = get(editorMetaManager)
+      for (let tz = 0; tz < REGION_SIZE; tz++) {
+        for (let tx = 0; tx < REGION_SIZE; tx++) {
+          const tileX = rx * REGION_SIZE + tx
+          const tileZ = rz * REGION_SIZE + tz
+          heightManager?.evictCachedData(tileX, tileZ)
+          splatManager?.evictCachedData(tileX, tileZ)
+        }
+      }
+      metaManager?.invalidateRegion(rx, rz)
+      regionMetaVersion.update((v) => v + 1)
+
+      // Invalidate minimap cache
+      imageCache.delete(`${rx},${rz}`)
+      pendingLoads.delete(`${rx},${rz}`)
+      minimapVersion.update((v) => v + 1)
+
+      // Force terrain tiles to rebuild with fresh server data
+      terrainForceRebuild.update((v) => v + 1)
+
+      close()
+    } catch (e) {
+      console.error('Failed to delete region:', e)
+      alert(`Failed to delete region: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      deleting = false
+    }
+  }
+
   // --- Actions ---
   function close() {
     worldMapVisible.set(false)
@@ -332,6 +399,11 @@
         <button class="ctrl-btn" onclick={zoomOut} title="Zoom Out">&minus;</button>
         <button class="ctrl-btn" onclick={zoomReset} title="Reset Zoom">1:{DEFAULT_ZOOM}</button>
         <button class="ctrl-btn" onclick={resetCamera} title="Center on Player">&#8982;</button>
+        {#if $debugVisible}
+          <span class="controls-separator"></span>
+          <button class="ctrl-btn debug-btn" onclick={handleGenerate} title="Generate terrain for region ({playerRegionRx}, {playerRegionRz})">Gen</button>
+          <button class="ctrl-btn debug-btn danger" onclick={handleDelete} disabled={deleting} title="Delete terrain for region ({playerRegionRx}, {playerRegionRz})">Del</button>
+        {/if}
       </div>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
@@ -410,6 +482,38 @@
   .ctrl-btn:hover {
     background: rgba(255, 255, 255, 0.2);
     color: #fff;
+  }
+
+  .controls-separator {
+    width: 1px;
+    height: 18px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 0 4px;
+  }
+
+  .debug-btn {
+    color: #e2b93b;
+    border-color: rgba(226, 185, 59, 0.3);
+  }
+
+  .debug-btn:hover {
+    background: rgba(226, 185, 59, 0.2);
+    color: #f0c94d;
+  }
+
+  .debug-btn.danger {
+    color: #ff6b6b;
+    border-color: rgba(255, 107, 107, 0.3);
+  }
+
+  .debug-btn.danger:hover {
+    background: rgba(255, 107, 107, 0.2);
+    color: #ff8888;
+  }
+
+  .debug-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   .close-btn {

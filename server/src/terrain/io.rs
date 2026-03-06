@@ -122,6 +122,29 @@ impl TerrainIO {
         fs::write(&path, data).await
     }
 
+    pub async fn delete_region(&self, rx: i32, rz: i32) -> std::io::Result<()> {
+        let height_dir = coords::height_region_dir(&self.base_dir, rx, rz);
+        let splat_dir = coords::splat_region_dir(&self.base_dir, rx, rz);
+        let meta_file = coords::meta_path(&self.base_dir, rx, rz);
+        let minimap_file = coords::minimap_path(&self.base_dir, rx, rz);
+
+        for dir in [&height_dir, &splat_dir] {
+            match fs::remove_dir_all(dir).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        }
+        for file in [&meta_file, &minimap_file] {
+            match fs::remove_file(file).await {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(())
+    }
+
     pub async fn write_meta(&self, rx: i32, rz: i32, json: &serde_json::Value) -> std::io::Result<()> {
         let layers = json.get("layers")
             .and_then(|l| l.as_array())

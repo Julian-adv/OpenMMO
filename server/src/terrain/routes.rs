@@ -3,7 +3,7 @@ use axum::{
     extract::{Path, State},
     http::{header, StatusCode},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{delete, get},
     Json, Router,
 };
 use std::sync::Arc;
@@ -28,6 +28,10 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
         .route(
             "/api/terrain/minimap/{rx}/{rz}",
             get(get_minimap).put(put_minimap),
+        )
+        .route(
+            "/api/terrain/region/{rx}/{rz}",
+            delete(delete_region_handler),
         )
         .with_state(terrain_io)
 }
@@ -188,6 +192,20 @@ async fn put_minimap(
         .await
         .map_err(|e| {
             error!("Failed to write minimap ({}, {}): {}", rx, rz, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_region_handler(
+    Path((rx, rz)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<StatusCode, StatusCode> {
+    terrain
+        .delete_region(rx, rz)
+        .await
+        .map_err(|e| {
+            error!("Failed to delete region ({}, {}): {}", rx, rz, e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)
