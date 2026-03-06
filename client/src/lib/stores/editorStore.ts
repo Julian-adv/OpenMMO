@@ -83,10 +83,14 @@ export const editorMetaManager = writable<TerrainMetaManager | null>(null)
 export const regionMetaVersion = writable<number>(0)
 
 // Procedural terrain generation dialog (stores the target region snapshot, null = closed)
-export const showGenerateDialog = writable<{ rx: number; rz: number } | null>(null)
+export const showGenerateDialog = writable<{ rx: number; rz: number } | null>(
+  null
+)
 
 // Region minimap generation dialog (stores the target region snapshot, null = closed)
-export const showMinimapDialog = writable<{ rx: number; rz: number } | null>(null)
+export const showMinimapDialog = writable<{ rx: number; rz: number } | null>(
+  null
+)
 
 // Bumped after minimap upload to bust cached img src
 export const minimapVersion = writable<number>(0)

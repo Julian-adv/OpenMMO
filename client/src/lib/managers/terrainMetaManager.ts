@@ -88,12 +88,18 @@ export class TerrainMetaManager {
     if (inflight) return inflight
 
     const promise = (async () => {
-      const meta = await this.fetchMeta(rx, rz)
-      const layers = await loadSplatLayers(meta.layers)
-      const resolved: ResolvedRegionLayers = { layers }
-      this.layerCache.set(key, resolved)
-      this.inflightLayers.delete(key)
-      return resolved
+      try {
+        const meta = await this.fetchMeta(rx, rz)
+        const layers = await loadSplatLayers(meta.layers)
+        const resolved: ResolvedRegionLayers = { layers }
+        this.layerCache.set(key, resolved)
+        return resolved
+      } catch (e) {
+        console.error(`Failed to load layers for region (${rx}, ${rz}):`, e)
+        throw e
+      } finally {
+        this.inflightLayers.delete(key)
+      }
     })()
     this.inflightLayers.set(key, promise)
     return promise

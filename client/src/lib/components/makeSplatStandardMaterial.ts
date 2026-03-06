@@ -34,12 +34,35 @@ export type SplatParams = {
   layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] // RGBA order
   splatMap: THREE.Texture // RGBA weight map (R=layer0, G=layer1, B=layer2, A=layer3)
   splatScale?: number // UV scale of the splat map (default 1)
+  sharedBrushUniforms?: SplatBrushUniforms // Reuse brush/grid uniforms across materials
+}
+
+/** Shared brush/grid uniform nodes — create once, pass to every per-tile material. */
+export interface SplatBrushUniforms {
+  brushCenter: ReturnType<typeof uniform<THREE.Vector2>>
+  brushRadius: ReturnType<typeof uniform<number>>
+  brushActive: ReturnType<typeof uniform<number>>
+  brushRaise: ReturnType<typeof uniform<number>>
+  brushToolMode: ReturnType<typeof uniform<number>>
+  gridVisible: ReturnType<typeof uniform<number>>
+}
+
+export function createSplatBrushUniforms(): SplatBrushUniforms {
+  return {
+    brushCenter: uniform(new THREE.Vector2(0, 0)),
+    brushRadius: uniform(3.0),
+    brushActive: uniform(0.0),
+    brushRaise: uniform(1.0),
+    brushToolMode: uniform(0.0),
+    gridVisible: uniform(0.0),
+  }
 }
 
 export function makeSplatStandardMaterial({
   layers,
   splatMap,
   splatScale = 1,
+  sharedBrushUniforms,
 }: SplatParams) {
   // Recommended common texture settings
   const prepare = (t: THREE.Texture, isColor = false) => {
@@ -61,13 +84,14 @@ export function makeSplatStandardMaterial({
   const uTile3 = uniform(layers[3].tile)
   const uSplatScale = uniform(splatScale)
 
-  // Brush overlay
-  const uBrushCenter = uniform(new THREE.Vector2(0, 0))
-  const uBrushRadius = uniform(3.0)
-  const uBrushActive = uniform(0.0)
-  const uBrushRaise = uniform(1.0)
-  const uBrushToolMode = uniform(0.0)
-  const uGridVisible = uniform(0.0)
+  // Brush overlay — shared across materials when provided
+  const uBrushCenter =
+    sharedBrushUniforms?.brushCenter ?? uniform(new THREE.Vector2(0, 0))
+  const uBrushRadius = sharedBrushUniforms?.brushRadius ?? uniform(3.0)
+  const uBrushActive = sharedBrushUniforms?.brushActive ?? uniform(0.0)
+  const uBrushRaise = sharedBrushUniforms?.brushRaise ?? uniform(1.0)
+  const uBrushToolMode = sharedBrushUniforms?.brushToolMode ?? uniform(0.0)
+  const uGridVisible = sharedBrushUniforms?.gridVisible ?? uniform(0.0)
 
   // ─── Texture nodes ───────────────────────────────────
   // Fragment: 1 splat + 4 diffuse + 4 normal + 4 ORM = 13
