@@ -1,4 +1,6 @@
 <script module lang="ts">
+  import type { ReferenceImageData } from '../../terrain/referenceImageSampler'
+
   const persistedValues = {
     seed: Math.floor(Math.random() * 100000),
     minHeight: -20,
@@ -8,6 +10,8 @@
     plainPct: 50,
     mountainPct: 20,
     riverCount: 2,
+    referenceImageData: null as ReferenceImageData | null,
+    referenceImagePreview: null as string | null,
   }
 </script>
 
@@ -27,6 +31,7 @@
     type GeneratedTile,
     type NeighborEdgeData,
   } from '../../terrain/terrainGenerator'
+  import { loadReferenceImage } from '../../terrain/referenceImageSampler'
   import type { RegionMeta } from '../../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../../utils/networkUtils'
   import { generateRegionMinimap } from '../../terrain/regionMinimapGenerator'
@@ -43,6 +48,10 @@
   let plainPct = $state(persistedValues.plainPct)
   let mountainPct = $state(persistedValues.mountainPct)
   let riverCount = $state(persistedValues.riverCount)
+  let referenceImageData = $state(persistedValues.referenceImageData)
+  let referenceImagePreview = $state(persistedValues.referenceImagePreview)
+
+  let hasRefImage = $derived(!!referenceImageData)
 
   let generating = $state(false)
   let progress = $state(0)
@@ -57,10 +66,28 @@
     persistedValues.plainPct = plainPct
     persistedValues.mountainPct = mountainPct
     persistedValues.riverCount = riverCount
+    persistedValues.referenceImageData = referenceImageData
+    persistedValues.referenceImagePreview = referenceImagePreview
   }
 
   function randomizeSeed() {
     seed = Math.floor(Math.random() * 100000)
+  }
+
+  async function handleImageUpload(e: Event) {
+    const input = e.target as HTMLInputElement
+    const file = input.files?.[0]
+    if (!file) return
+    referenceImageData = await loadReferenceImage(file)
+    referenceImagePreview = URL.createObjectURL(file)
+  }
+
+  function clearReferenceImage() {
+    referenceImageData = null
+    if (referenceImagePreview) {
+      URL.revokeObjectURL(referenceImagePreview)
+      referenceImagePreview = null
+    }
   }
 
   function close() {
@@ -172,6 +199,7 @@
         mountainProportion: mountainPct / 100,
         shallowSeaRatio: shallowSeaPct / 100,
         riverCount,
+        referenceImage: referenceImageData ?? undefined,
       }
 
       const tiles = generateRegionTerrain(
@@ -314,26 +342,51 @@
           <input id="terrain-max-height" type="range" min={1} max={3276} step={1} bind:value={maxHeight} />
         </div>
 
+        <div class="control-row">
+          <label>Reference Image</label>
+          <div class="ref-image-row">
+            {#if referenceImagePreview}
+              <img src={referenceImagePreview} alt="Reference" class="ref-preview" />
+              <div class="ref-info">
+                <span class="ref-size">{referenceImageData?.width} x {referenceImageData?.height} px</span>
+                <span class="ref-size">= {(referenceImageData?.width ?? 0) * 32}m x {(referenceImageData?.height ?? 0) * 32}m</span>
+              </div>
+              <button class="clear-btn" onclick={clearReferenceImage}>Clear</button>
+            {:else}
+              <label class="file-btn">
+                Browse...
+                <input type="file" accept="image/*" onchange={handleImageUpload} hidden />
+              </label>
+              <span class="ref-hint">1px = 32m, color = biome</span>
+            {/if}
+          </div>
+        </div>
+
         <div class="separator"></div>
 
-        <div class="control-row">
-          <label for="terrain-sea">Sea <span class="value">{seaPct}%</span></label>
-          <input id="terrain-sea" type="range" min={0} max={60} step={1} bind:value={seaPct} />
+        {#if hasRefImage}
+          <p class="ref-note">Biome proportions determined by reference image</p>
+        {/if}
+        <div class="biome-sliders" class:disabled={hasRefImage}>
+          <div class="control-row">
+            <label for="terrain-sea">Sea <span class="value">{seaPct}%</span></label>
+            <input id="terrain-sea" type="range" min={0} max={60} step={1} bind:value={seaPct} disabled={hasRefImage} />
+          </div>
+
+          <div class="control-row">
+            <label for="terrain-plains">Plains <span class="value">{plainPct}%</span></label>
+            <input id="terrain-plains" type="range" min={0} max={80} step={1} bind:value={plainPct} disabled={hasRefImage} />
+          </div>
+
+          <div class="control-row">
+            <label for="terrain-mountain">Mountain <span class="value">{mountainPct}%</span></label>
+            <input id="terrain-mountain" type="range" min={0} max={60} step={1} bind:value={mountainPct} disabled={hasRefImage} />
+          </div>
         </div>
 
         <div class="control-row sub-control">
           <label for="terrain-shallow-sea">Shallow Sea <span class="value">{shallowSeaPct}%</span></label>
           <input id="terrain-shallow-sea" type="range" min={0} max={80} step={1} bind:value={shallowSeaPct} />
-        </div>
-
-        <div class="control-row">
-          <label for="terrain-plains">Plains <span class="value">{plainPct}%</span></label>
-          <input id="terrain-plains" type="range" min={0} max={80} step={1} bind:value={plainPct} />
-        </div>
-
-        <div class="control-row">
-          <label for="terrain-mountain">Mountain <span class="value">{mountainPct}%</span></label>
-          <input id="terrain-mountain" type="range" min={0} max={60} step={1} bind:value={mountainPct} />
         </div>
 
         <div class="control-row">
@@ -456,6 +509,87 @@
   .sub-control {
     padding-left: 12px;
     border-left: 2px solid rgba(226, 185, 59, 0.2);
+  }
+
+  .ref-image-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .ref-preview {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    background: #000;
+  }
+
+  .ref-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+  }
+
+  .ref-size {
+    font-size: 10px;
+    color: #888;
+  }
+
+  .ref-hint {
+    font-size: 10px;
+    color: #666;
+  }
+
+  .file-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #ccc;
+    padding: 4px 10px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+  }
+
+  .file-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .clear-btn {
+    background: rgba(255, 80, 80, 0.2);
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 4px;
+    color: #f88;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 10px;
+  }
+
+  .clear-btn:hover {
+    background: rgba(255, 80, 80, 0.3);
+  }
+
+  .biome-sliders {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .biome-sliders.disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+
+  .ref-note {
+    margin: 0;
+    font-size: 10px;
+    color: #e2b93b;
+    font-style: italic;
   }
 
   .separator {
