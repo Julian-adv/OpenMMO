@@ -286,8 +286,8 @@ export function createWaterMaterial(
     const sp1 = normalMapTex.sample(spUV1).r
     const sp2 = normalMapTex.sample(spUV2).g
     // Boost sparkles on wave crests, dim in troughs
-    const waveCrestFactor = smoothstep(float(-0.05), float(0.1), vWaveHeight)
-    const sparkle = smoothstep(float(1.2), float(1.38), sp1.add(sp2))
+    const waveCrestFactor = smoothstep(float(-0.05), float(0.1), vWaveHeight).mul(0.8).add(0.2)
+    const sparkle = smoothstep(float(1.3), float(1.45), sp1.add(sp2))
       .mul(3.0)
       .mul(waveCrestFactor)
       .mul(
@@ -446,7 +446,7 @@ export function createWaterMaterial(
     const finalColor = finalColorBeforeRefl
 
     // 6. Alpha
-    const alpha = mix(float(0.15), float(0.85), smoothDepth)
+    const alpha = mix(float(0.15), float(0.98), smoothDepth)
       .add(foamWithTex.mul(0.5))
       .add(sparkle)
       .min(1.0)

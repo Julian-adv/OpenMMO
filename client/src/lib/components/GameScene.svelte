@@ -84,7 +84,7 @@
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { TerrainMetaManager } from '../managers/terrainMetaManager'
-  import { loadWaterNormalMap } from '../shaders/water-normal-gen'
+  import { generateWaterNormalMap } from '../shaders/water-normal-gen'
   import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
   import { generateCausticsTexture } from '../shaders/caustics-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
@@ -648,7 +648,7 @@
     })
 
     terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
-    loadWaterNormalMap().then((tex) => { waterNormalMap = tex })
+    waterNormalMap = generateWaterNormalMap()
     loadFoamTexture().then((tex) => { waterFoamMap = tex })
     loadSurfaceTexture().then((tex) => { waterSurfaceMap = tex })
     waterCausticsMap = generateCausticsTexture()
