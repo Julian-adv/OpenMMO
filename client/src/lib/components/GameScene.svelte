@@ -87,6 +87,7 @@
   import { loadWaterNormalMap } from '../shaders/water-normal-gen'
   import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
+  import { ReflectionRenderManager } from '../managers/reflectionRenderManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
 
   interface Props {
@@ -120,10 +121,13 @@
   let waterSunColor = $state<THREE.Color | null>(null)
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
+  let entityGroup = $state<THREE.Group | undefined>(undefined)
   const waterSunDirTmp = new THREE.Vector3()
   const waterCamDirTmp = new THREE.Vector3()
   let refractionManager = $state<RefractionRenderManager | null>(null)
   let refractionTexture = $state<THREE.Texture | null>(null)
+  let reflectionManager = $state<ReflectionRenderManager | null>(null)
+  let reflectionTexture = $state<THREE.Texture | null>(null)
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.5) // Default 1.5s
 
@@ -457,7 +461,7 @@
         waterCamDir = waterCamDirTmp.clone()
       }
 
-      // Render refraction pass (scene without water)
+      // Render refraction pass (scene without water or entities — terrain only)
       if (refractionManager) {
         if (camera) refractionManager.setCamera(camera)
         if (waterGroup) refractionManager.setWaterGroup(waterGroup)
@@ -474,12 +478,42 @@
           brushUniforms.gridVisible.value = 0.0
         }
 
+        // Hide entities so they only appear via the reflection pass
+        const savedEntityVisible = entityGroup?.visible
+        if (entityGroup) entityGroup.visible = false
+
         refractionManager.render()
+
+        if (entityGroup) entityGroup.visible = savedEntityVisible ?? true
 
         if (brushUniforms) {
           brushUniforms.brushActive.value = savedBrushActive
           brushUniforms.gridVisible.value = savedGridVisible
         }
+      }
+
+      // Render reflection pass (entities only, mirrored camera)
+      if (reflectionManager) {
+        if (camera) reflectionManager.setCamera(camera)
+        reflectionManager.setTerrainMeshes(terrainMeshes)
+        if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
+
+        // Hide nametags/HP bars during reflection render
+        const nametagGroups: THREE.Group[] = []
+        const ntCurrent = currentPlayerModel?.getNametagGroup()
+        if (ntCurrent) { nametagGroups.push(ntCurrent); ntCurrent.visible = false }
+        for (const pm of otherPlayerModels) {
+          const nt = pm?.getNametagGroup()
+          if (nt) { nametagGroups.push(nt); nt.visible = false }
+        }
+        for (const mm of monsterModels) {
+          const nt = mm?.getNametagGroup()
+          if (nt) { nametagGroups.push(nt); nt.visible = false }
+        }
+
+        reflectionManager.render()
+
+        for (const nt of nametagGroups) nt.visible = true
       }
 
       loopProfiler.record('frameWork', performance.now() - frameWorkStart)
@@ -594,6 +628,7 @@
     const unsubscribeViewportSize = size.subscribe((nextSize) => {
       viewportSize = nextSize
       if (refractionManager) refractionManager.resize(nextSize.width, nextSize.height)
+      if (reflectionManager) reflectionManager.resize(nextSize.width, nextSize.height)
     })
 
     const unsubscribeCameraReset = cameraResetNonce.subscribe((nonce) => {
@@ -619,6 +654,12 @@
     const refMgr = new RefractionRenderManager(renderer, scene, viewportSize.width, viewportSize.height)
     refractionManager = refMgr
     refractionTexture = refMgr.texture
+
+    // Initialize reflection render manager (planar reflection for entities)
+    const reflMgr = new ReflectionRenderManager(renderer, scene, viewportSize.width, viewportSize.height)
+    reflectionManager = reflMgr
+    reflectionTexture = reflMgr.texture
+
 
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
 
@@ -674,6 +715,9 @@
       refractionManager?.dispose()
       refractionManager = null
       refractionTexture = null
+      reflectionManager?.dispose()
+      reflectionManager = null
+      reflectionTexture = null
       terrainTiles = []
       terrainMeshes = []
       resetGameStore()
@@ -741,37 +785,40 @@
   sunColor={waterSunColor}
   cameraDirection={waterCamDir}
   refractionMap={refractionTexture}
+  reflectionMap={reflectionTexture}
   bind:waterGroup={waterGroup}
 />
 
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
 <!-- <TerrainField /> -->
 
-<GameScenePlayersLayer
-  {camera}
-  {cameraInitialized}
-  {currentPlayer}
-  {otherPlayers}
-  remotePlayers={remotePlayerManager.players}
-  {chatBubbles}
-  {currentPlayerState}
-  {terrainMeshes}
-  {monsterModels}
-  {playerAttackDuration}
-  heightManager={terrainHeightManager}
-  onStateChange={handlePlayerStateChange}
-  onAttackDuration={(duration) => (playerAttackDuration = duration)}
-  {onCurrentPlayerDyingFinished}
-  bind:isCurrentPlayerLoading={isCurrentPlayerLoading}
-  bind:playerControl={playerControl}
-  bind:currentPlayerModel={currentPlayerModel}
-  bind:otherPlayerModels={otherPlayerModels}
-/>
+<T.Group bind:ref={entityGroup}>
+  <GameScenePlayersLayer
+    {camera}
+    {cameraInitialized}
+    {currentPlayer}
+    {otherPlayers}
+    remotePlayers={remotePlayerManager.players}
+    {chatBubbles}
+    {currentPlayerState}
+    {terrainMeshes}
+    {monsterModels}
+    {playerAttackDuration}
+    heightManager={terrainHeightManager}
+    onStateChange={handlePlayerStateChange}
+    onAttackDuration={(duration) => (playerAttackDuration = duration)}
+    {onCurrentPlayerDyingFinished}
+    bind:isCurrentPlayerLoading={isCurrentPlayerLoading}
+    bind:playerControl={playerControl}
+    bind:currentPlayerModel={currentPlayerModel}
+    bind:otherPlayerModels={otherPlayerModels}
+  />
 
-<GameSceneMonstersLayer
-  monsters={monsterManager.monsters}
-  bind:monsterModels={monsterModels}
-/>
+  <GameSceneMonstersLayer
+    monsters={monsterManager.monsters}
+    bind:monsterModels={monsterModels}
+  />
+</T.Group>
 
 {#if $mapEditorMode}
   <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />

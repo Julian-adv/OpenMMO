@@ -132,6 +132,14 @@
   }
 
   export function update(deltaTime: number, camera?: THREE.Camera) {
+    // 0. Sync Three.js group position imperatively so the refraction render
+    //    (which runs during the game loop, before Svelte's reactive updates)
+    //    sees the monster at its current position.
+    if (group) {
+      group.position.set(position.x, position.y, position.z)
+      group.rotation.y = rotation
+    }
+
     // 1. Sync animation with state
     if (
       lastMonsterState !== monsterState ||
@@ -220,6 +228,10 @@
   // Export the model group for raycasting from parent
   export function getMeshGroup() {
     return group
+  }
+
+  export function getNametagGroup() {
+    return nametagGroup
   }
 </script>
 

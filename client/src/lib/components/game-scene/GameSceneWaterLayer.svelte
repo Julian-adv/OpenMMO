@@ -21,6 +21,7 @@
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
     refractionMap?: THREE.Texture | null
+    reflectionMap?: THREE.Texture | null
     waterGroup?: THREE.Group | undefined
   }
 
@@ -36,6 +37,7 @@
     sunColor = null,
     cameraDirection = null,
     refractionMap = null,
+    reflectionMap = null,
     waterGroup = $bindable(undefined),
   }: Props = $props()
 
@@ -167,6 +169,7 @@
           {sunColor}
           {cameraDirection}
           {refractionMap}
+          {reflectionMap}
         />
       {/if}
     {/each}
