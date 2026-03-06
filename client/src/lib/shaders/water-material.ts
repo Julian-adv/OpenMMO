@@ -260,14 +260,17 @@ export function createWaterMaterial(
     const specBroad = pow(NdotH, float(64)).mul(0.35)
     const specular = vec3(uSunColor).mul(specBroad).toVar()
 
-    // Sun sparkles
+    // Sun sparkles – use displaced world pos so sparkles ride the waves
     const spT = uTime.mul(0.04)
-    const spUV1 = vOrigWorldPos.xz.mul(0.5).add(vec2(spT, spT.mul(0.7)))
-    const spUV2 = vOrigWorldPos.xz.mul(0.8).sub(vec2(spT.mul(0.6), spT))
+    const spUV1 = vWorldPos.xz.mul(0.5).add(vec2(spT, spT.mul(0.7)))
+    const spUV2 = vWorldPos.xz.mul(0.8).sub(vec2(spT.mul(0.6), spT))
     const sp1 = normalMapTex.sample(spUV1).r
     const sp2 = normalMapTex.sample(spUV2).g
+    // Boost sparkles on wave crests, dim in troughs
+    const waveCrestFactor = smoothstep(float(-0.05), float(0.1), vWaveHeight)
     const sparkle = smoothstep(float(1.2), float(1.38), sp1.add(sp2))
-      .mul(0.8)
+      .mul(5.0)
+      .mul(waveCrestFactor)
       .mul(
         smoothstep(float(0), float(0.15), uSunDirection.y).mul(
           float(0.3).add(float(0.7).mul(uSunDirection.y))
