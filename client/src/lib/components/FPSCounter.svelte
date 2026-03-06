@@ -19,6 +19,8 @@
 
 <script lang="ts">
   import { cameraDistance } from '../stores/cameraStore'
+  import { TERRAIN_TILE_SIZE } from './game-scene/terrain-utils'
+  import { tileToRegion } from '../managers/terrainMetaManager'
   import { timeScale, sunTimeScale } from '../stores/timeStore'
   import {
     debugVisible,
@@ -35,6 +37,15 @@
   function toDegrees(radians: number) {
     const degrees = (radians * 180) / Math.PI
     return ((degrees % 360) + 360) % 360
+  }
+
+  function worldToTileCell(wx: number, wz: number) {
+    const S = TERRAIN_TILE_SIZE
+    const tileX = Math.round(wx / S)
+    const tileZ = Math.round(wz / S)
+    const cellX = Math.max(0, Math.min(S - 1, Math.floor(wx - tileX * S + S / 2)))
+    const cellZ = Math.max(0, Math.min(S - 1, Math.floor(wz - tileZ * S + S / 2)))
+    return { tileX, tileZ, cellX, cellZ }
   }
 
   function handleKeydown(event: KeyboardEvent) {
@@ -100,11 +111,15 @@
           FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}
         </span>
         {#if $playerDebugInfo}
+          {@const tc = worldToTileCell($playerDebugInfo.position.x, $playerDebugInfo.position.z)}
           <span class="player-text">
             POS: ({$playerDebugInfo.position.x.toFixed(2)},
             {$playerDebugInfo.position.y.toFixed(2)},
             {$playerDebugInfo.position.z.toFixed(2)}) | ROT:
             {toDegrees($playerDebugInfo.rotation).toFixed(1)}°
+          </span>
+          <span class="player-text">
+            RGN: ({tileToRegion(tc.tileX)}, {tileToRegion(tc.tileZ)}) | TILE: ({tc.tileX}, {tc.tileZ}) | CELL: ({tc.cellX}, {tc.cellZ})
           </span>
         {:else}
           <span class="player-text">POS: (-, -, -) | ROT: -</span>
