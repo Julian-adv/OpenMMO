@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 
 /**
- * Generate a tileable Voronoi-based caustics texture (256x256) using Canvas2D.
- * The min(layer1, layer2) trick in the terrain shader creates a convincing
- * light-focusing pattern from this single texture.
+ * Generate a tileable Voronoi distance-field texture (256x256) using Canvas2D.
+ * Bright = far from cell centers, dark = near cell centers.
+ * The water shader samples this twice with offset UVs and takes min(a, b)
+ * to create animated caustics (bright web pattern where cells overlap).
  */
 export function generateCausticsTexture(): THREE.CanvasTexture {
   const size = 256
@@ -15,7 +16,7 @@ export function generateCausticsTexture(): THREE.CanvasTexture {
   const data = imageData.data
 
   // Generate random Voronoi cell centers, replicated for tiling
-  const cellCount = 24
+  const cellCount = 128
   const rng = mulberry32(42) // deterministic seed
   const points: { x: number; y: number }[] = []
   for (let i = 0; i < cellCount; i++) {
@@ -49,11 +50,9 @@ export function generateCausticsTexture(): THREE.CanvasTexture {
         }
       }
 
-      // Edge detection: bright lines where d2 - d1 is small (cell boundaries)
-      const edge = d2 - d1
-      // Normalize and invert: thin bright lines on dark background
-      const maxEdge = 18
-      const v = Math.pow(1 - Math.min(edge / maxEdge, 1), 3)
+      // Sharpen toward cell edges: pow concentrates brightness at boundaries
+      const maxDist = size / Math.sqrt(cellCount)
+      const v = Math.pow(Math.min(d1 / maxDist, 1), 2.5)
       const byte = Math.floor(v * 255)
 
       const idx = (y * size + x) * 4

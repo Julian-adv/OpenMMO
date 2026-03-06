@@ -112,6 +112,7 @@ export interface WaterMaterialOptions {
   normalMap: THREE.Texture
   foamMap: THREE.Texture
   surfaceMap: THREE.Texture
+  causticsMap: THREE.Texture
   refractionMap?: THREE.Texture | null
   reflectionMap?: THREE.Texture | null
 }
@@ -170,6 +171,7 @@ export function createWaterMaterial(
   const heightmapTex = texture(options.heightmapTexture)
   const normalMapTex = texture(options.normalMap)
   const foamMapTex = texture(options.foamMap)
+  const causticsTex = texture(options.causticsMap)
   const refractionTex = texture(options.refractionMap ?? fallbackTex)
   const reflectionTex = texture(options.reflectionMap ?? fallbackTex)
 
@@ -253,6 +255,22 @@ export function createWaterMaterial(
       smoothstep(float(0), float(0.7), smoothDepth)
     )
     waterColor.assign(mix(waterColor, refractionColor, refractionMix.mul(0.7)))
+
+    // Underwater caustics — light pattern on the seafloor, seen through refraction
+    const cUV1 = vOrigWorldPos.xz.mul(0.10).add(vec2(uTime.mul(0.015), uTime.mul(0.01)))
+    const cUV2 = vOrigWorldPos.xz.mul(0.095).sub(vec2(uTime.mul(0.008), uTime.mul(0.01)))
+    const causticsLayer1 = causticsTex.sample(cUV1).r
+    const causticsLayer2 = causticsTex.sample(cUV2).r
+    const rawCaustics = causticsLayer1.min(causticsLayer2)
+    const causticsPattern = rawCaustics.min(float(0.5)).div(float(0.5))
+    // Shimmer: high-frequency flicker based on position + time
+    const shimmer = sin(vOrigWorldPos.x.mul(0.4).add(vOrigWorldPos.z.mul(0.6)).add(uTime.mul(0.5)))
+      .mul(0.4).add(0.8) // oscillate between 0.4 and 1.2
+    const causticsShimmer = causticsPattern.mul(shimmer)
+    const causticsStrength = float(1).sub(smoothstep(float(0), float(0.5), depthFactor))
+    // Brighten the refraction (seafloor) where caustics lines are, then blend into water
+    const litFloor = refractionColor.add(vec3(uSunColor).mul(causticsShimmer.mul(1.2)))
+    waterColor.assign(mix(waterColor, litFloor, clamp(causticsStrength.mul(1.5), 0.0, 1.0)))
 
     // Specular: broad sun reflection
     const halfDir = normalize(vec3(uSunDirection).add(viewDir))
@@ -420,6 +438,10 @@ export function createWaterMaterial(
         reflectionSample.a.mul(0.6)
       )
     )
+    // Caustics glow — additive emissive-like light on the final surface
+    const causticsGlow = vec3(uSunColor).mul(pow(causticsShimmer, float(2.0)).mul(causticsStrength).mul(1.5))
+    finalColorBeforeRefl.addAssign(causticsGlow)
+
     const finalColor = finalColorBeforeRefl
 
     // 6. Alpha
@@ -428,6 +450,7 @@ export function createWaterMaterial(
       .add(sparkle)
       .min(1.0)
       .toVar()
+
 
     // 7. Shore edge — noisy holes near coastline to reveal terrain underneath
     const shoreZone = float(1).sub(smoothstep(float(0), float(0.6), depth))
