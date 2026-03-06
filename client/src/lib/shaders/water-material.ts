@@ -269,7 +269,7 @@ export function createWaterMaterial(
     // Boost sparkles on wave crests, dim in troughs
     const waveCrestFactor = smoothstep(float(-0.05), float(0.1), vWaveHeight)
     const sparkle = smoothstep(float(1.2), float(1.38), sp1.add(sp2))
-      .mul(5.0)
+      .mul(3.0)
       .mul(waveCrestFactor)
       .mul(
         smoothstep(float(0), float(0.15), uSunDirection.y).mul(
