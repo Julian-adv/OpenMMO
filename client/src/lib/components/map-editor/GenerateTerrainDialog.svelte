@@ -58,6 +58,15 @@
     for (const dir of directions) {
       const nrx = rx + dir.drx
       const nrz = rz + dir.drz
+
+      // Check if the neighbor region has actually been generated
+      try {
+        const headResp = await fetch(`${apiUrl}/api/terrain/meta/${nrx}/${nrz}`, { method: 'HEAD' })
+        if (!headResp.ok) continue
+      } catch {
+        continue
+      }
+
       const edgeData = new Float32Array(REGION_SIZE * TILE_DIM)
       let hasData = false
 

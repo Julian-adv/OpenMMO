@@ -21,7 +21,10 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
             "/api/terrain/splat/{x}/{z}",
             get(get_splatmap).put(put_splatmap),
         )
-        .route("/api/terrain/meta/{rx}/{rz}", get(get_meta).put(put_meta))
+        .route(
+            "/api/terrain/meta/{rx}/{rz}",
+            get(get_meta).put(put_meta).head(head_meta),
+        )
         .route(
             "/api/terrain/minimap/{rx}/{rz}",
             get(get_minimap).put(put_minimap),
@@ -141,6 +144,17 @@ async fn put_meta(
             }
         })?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn head_meta(
+    Path((rx, rz)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> StatusCode {
+    match terrain.meta_exists(rx, rz).await {
+        Ok(true) => StatusCode::OK,
+        Ok(false) => StatusCode::NOT_FOUND,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
 }
 
 async fn get_minimap(
