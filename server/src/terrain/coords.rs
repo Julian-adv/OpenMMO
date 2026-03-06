@@ -14,23 +14,29 @@ fn region_dir_name(rx: i32, rz: i32) -> String {
 /// Build filesystem path for a heightmap tile file.
 pub fn heightmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
-    base.join("height")
-        .join(region_dir_name(rx, rz))
-        .join(format!("h_{:+05}_{:+05}.bin", tx, tz))
+    height_region_dir(base, rx, rz).join(format!("h_{:+05}_{:+05}.bin", tx, tz))
 }
 
 /// Build filesystem path for a splatmap tile file.
 pub fn splatmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
-    base.join("splat")
-        .join(region_dir_name(rx, rz))
-        .join(format!("s_{:+05}_{:+05}.bin", tx, tz))
+    splat_region_dir(base, rx, rz).join(format!("s_{:+05}_{:+05}.bin", tx, tz))
 }
 
 /// Build filesystem path for a region metadata JSON file.
 pub fn meta_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("meta")
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
+}
+
+/// Build filesystem path for a region's height tile directory.
+pub fn height_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("height").join(region_dir_name(rx, rz))
+}
+
+/// Build filesystem path for a region's splat tile directory.
+pub fn splat_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("splat").join(region_dir_name(rx, rz))
 }
 
 /// Build filesystem path for a region minimap PNG file.

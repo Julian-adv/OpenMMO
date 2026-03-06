@@ -229,9 +229,9 @@
       <CelestialDebugDialog />
       {#if $mapEditorMode}
         <MapEditorPanel />
-        {#if $showGenerateDialog}
-          <GenerateTerrainDialog />
-        {/if}
+      {/if}
+      {#if $showGenerateDialog}
+        <GenerateTerrainDialog />
       {/if}
       {#if selectedCharacter}
         <CharacterAttributesHud

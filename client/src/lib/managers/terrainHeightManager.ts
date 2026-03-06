@@ -647,6 +647,11 @@ export class TerrainHeightManager {
     this.geometries.delete(key)
   }
 
+  /** Remove cached data without touching GPU resources (geometries may still be rendered). */
+  evictCachedData(tileX: number, tileZ: number) {
+    this.heightmaps.delete(tileKey(tileX, tileZ))
+  }
+
   destroy() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)

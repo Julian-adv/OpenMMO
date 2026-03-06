@@ -95,6 +95,9 @@ export const showMinimapDialog = writable<{ rx: number; rz: number } | null>(
 // Bumped after minimap upload to bust cached img src
 export const minimapVersion = writable<number>(0)
 
+// Bumped to force terrain tile rebuild (e.g. after region delete)
+export const terrainForceRebuild = writable<number>(0)
+
 // Manager references for terrain generation dialog
 export const editorHeightManager = writable<TerrainHeightManager | null>(null)
 export const editorSplatManager = writable<TerrainSplatManager | null>(null)

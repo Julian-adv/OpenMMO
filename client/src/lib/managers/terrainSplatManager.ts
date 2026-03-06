@@ -262,6 +262,13 @@ export class TerrainSplatManager {
     this.textures.delete(key)
   }
 
+  /** Remove cached data without disposing GPU textures (they may still be rendered). */
+  evictCachedData(tileX: number, tileZ: number) {
+    const key = tileKey(tileX, tileZ)
+    this.splatmaps.delete(key)
+    this.textures.delete(key)
+  }
+
   destroy() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)
