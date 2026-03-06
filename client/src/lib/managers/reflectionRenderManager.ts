@@ -42,7 +42,7 @@ export class ReflectionRenderManager {
   }
   private scene: THREE.Scene
   private camera: THREE.Camera | null = null
-  private terrainMeshes: (THREE.Mesh | undefined)[] = []
+  private terrainGroup: THREE.Group | null = null
   private waterGroup: THREE.Group | null = null
 
   /** A dedicated camera that receives the mirrored transform each frame. */
@@ -118,8 +118,8 @@ export class ReflectionRenderManager {
     this.camera = camera
   }
 
-  setTerrainMeshes(meshes: (THREE.Mesh | undefined)[]) {
-    this.terrainMeshes = meshes
+  setTerrainGroup(group: THREE.Group | null) {
+    this.terrainGroup = group
   }
 
   setWaterGroup(group: THREE.Group | null) {
@@ -153,14 +153,8 @@ export class ReflectionRenderManager {
     rc.projectionMatrixInverse.copy(cam.projectionMatrixInverse)
 
     // --- hide non-entity objects ---
-    const savedTerrain: boolean[] = []
-    for (let i = 0; i < this.terrainMeshes.length; i++) {
-      const m = this.terrainMeshes[i]
-      if (m) {
-        savedTerrain[i] = m.visible
-        m.visible = false
-      }
-    }
+    const savedTerrain = this.terrainGroup?.visible
+    if (this.terrainGroup) this.terrainGroup.visible = false
     const savedWater = this.waterGroup?.visible
     if (this.waterGroup) this.waterGroup.visible = false
 
@@ -184,10 +178,7 @@ export class ReflectionRenderManager {
     this.renderer.setClearColor(savedClearColor, savedClearAlpha)
 
     // --- restore visibility ---
-    for (let i = 0; i < this.terrainMeshes.length; i++) {
-      const m = this.terrainMeshes[i]
-      if (m) m.visible = savedTerrain[i]
-    }
+    if (this.terrainGroup) this.terrainGroup.visible = savedTerrain ?? true
     if (this.waterGroup) this.waterGroup.visible = savedWater ?? true
   }
 

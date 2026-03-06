@@ -69,13 +69,24 @@ export class TerrainHeightManager {
     if (inflight) return inflight
 
     const promise = (async () => {
-      const url = `${this.terrainApiUrl}/api/terrain/height/${tileX}/${tileZ}`
-      const response = await fetch(url)
-      const buffer = await response.arrayBuffer()
-      const data = new Uint16Array(buffer)
-      this.heightmaps.set(key, data)
-      this.inflightHeightmaps.delete(key)
-      return data
+      try {
+        const url = `${this.terrainApiUrl}/api/terrain/height/${tileX}/${tileZ}`
+        const response = await fetch(url)
+        if (!response.ok) {
+          throw new Error(
+            `HTTP ${response.status} for heightmap (${tileX}, ${tileZ})`
+          )
+        }
+        const buffer = await response.arrayBuffer()
+        const data = new Uint16Array(buffer)
+        this.heightmaps.set(key, data)
+        return data
+      } catch (e) {
+        console.error(`Failed to load heightmap (${tileX}, ${tileZ}):`, e)
+        throw e
+      } finally {
+        this.inflightHeightmaps.delete(key)
+      }
     })()
     this.inflightHeightmaps.set(key, promise)
     return promise

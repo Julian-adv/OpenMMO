@@ -155,12 +155,15 @@ export function loadSplatLayer(
   if (existing) return existing.then((t) => ({ ...t, tile: tileScale }))
 
   const promise = (async () => {
-    const glbLoader = new GLTFLoader()
-    const gltf = await glbLoader.loadAsync(`/textures/${textureName}.glb`)
-    const textures = extractTextures(gltf)
-    textureCache.set(textureName, textures)
-    inflightTextures.delete(textureName)
-    return textures
+    try {
+      const glbLoader = new GLTFLoader()
+      const gltf = await glbLoader.loadAsync(`/textures/${textureName}.glb`)
+      const textures = extractTextures(gltf)
+      textureCache.set(textureName, textures)
+      return textures
+    } finally {
+      inflightTextures.delete(textureName)
+    }
   })()
   inflightTextures.set(textureName, promise)
   return promise.then((t) => ({ ...t, tile: tileScale }))

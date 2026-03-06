@@ -106,6 +106,7 @@
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let ambientLight = $state<THREE.AmbientLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
+  let terrainGroup = $state<THREE.Group | undefined>(undefined)
   let syncTileMeshes = $state<() => void>(() => {})
   let terrainGeometry = $state<THREE.BufferGeometry | null>(null)
   let terrainTiles = $state<TerrainTile[]>([])
@@ -497,7 +498,7 @@
       // Render reflection pass (entities only, mirrored camera)
       if (reflectionManager) {
         if (camera) reflectionManager.setCamera(camera)
-        reflectionManager.setTerrainMeshes(terrainMeshes)
+        reflectionManager.setTerrainGroup(terrainGroup ?? null)
         if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
 
         // Hide nametags/HP bars during reflection render
@@ -772,6 +773,7 @@
   {terrainGeometry}
   {terrainTiles}
   bind:terrainMeshes={terrainMeshes}
+  bind:terrainGroup={terrainGroup}
   bind:syncTileMeshes={syncTileMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}

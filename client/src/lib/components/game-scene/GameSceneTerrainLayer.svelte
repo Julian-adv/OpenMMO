@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { T } from '@threlte/core'
   import * as THREE from 'three'
   import type { MeshStandardNodeMaterial } from 'three/webgpu'
   import { SvelteMap } from 'svelte/reactivity'
@@ -7,6 +8,8 @@
   import SplatTerrain from '../SplatTerrain.svelte'
   import {
     makeSplatStandardMaterial,
+    createSplatBrushUniforms,
+    type SplatBrushUniforms,
   } from '../makeSplatStandardMaterial'
   import type { ResolvedRegionLayers } from '../../managers/terrainMetaManager'
   import type { TerrainTile } from './terrain-utils'
@@ -16,6 +19,7 @@
   import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
   import { tileToRegion } from '../../managers/terrainMetaManager'
   import { loadSplatLayers } from '../../utils/splatLayerLoader'
+  import type { SplatLayer } from '../makeSplatStandardMaterial'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
   import { brushWorldPos, brushSize, brushMode, editorTool, regionMetaVersion, currentEditorRegion } from '../../stores/editorStore'
   import type { BrushMode, EditorTool } from '../../stores/editorStore'
@@ -25,6 +29,7 @@
     terrainGeometry: THREE.BufferGeometry | null
     terrainTiles: TerrainTile[]
     terrainMeshes?: (THREE.Mesh | undefined)[]
+    terrainGroup?: THREE.Group | undefined
     heightManager?: TerrainHeightManager | null
     splatManager?: TerrainSplatManager | null
     metaManager?: TerrainMetaManager | null
@@ -35,18 +40,19 @@
     terrainGeometry,
     terrainTiles,
     terrainMeshes = $bindable<(THREE.Mesh | undefined)[]>([]),
+    terrainGroup = $bindable<THREE.Group | undefined>(undefined),
     heightManager = null,
     splatManager = null,
     metaManager = null,
     syncTileMeshes = $bindable<() => void>(() => {}),
   }: Props = $props()
 
-  // ── Shared material (created once) ──────────────────────
-  let sharedMaterial = $state<MeshStandardNodeMaterial | null>(null)
-  let defaultRegionLayers: ResolvedRegionLayers | null = null
+  // ── Default resources (created once) ──────────────────
+  let defaultLayers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null = null
+  let materialsReady = $state(false)
   let brushUnsubs: (() => void)[] = []
 
-  // Default 1x1 all-grass splatmap for initial material creation
+  // Default 1x1 all-grass splatmap for tiles whose splatmap hasn't loaded yet
   const defaultSplat = new THREE.DataTexture(
     new Uint8Array([255, 0, 0, 0]),
     1,
@@ -59,36 +65,17 @@
   defaultSplat.magFilter = THREE.LinearFilter
   defaultSplat.needsUpdate = true
 
-  // Placeholder textures for missing normal/ORM maps
-  const placeholderNorm = new THREE.DataTexture(
-    new Uint8Array([128, 128, 255, 255]),
-    1,
-    1,
-    THREE.RGBAFormat,
-    THREE.UnsignedByteType
-  )
-  placeholderNorm.needsUpdate = true
-
-  const placeholderORM = new THREE.DataTexture(
-    new Uint8Array([255, 255, 0, 255]),
-    1,
-    1,
-    THREE.RGBAFormat,
-    THREE.UnsignedByteType
-  )
-  placeholderORM.needsUpdate = true
+  // Shared brush/grid uniforms — created once, shared across all per-tile materials
+  const brushUniforms: SplatBrushUniforms = createSplatBrushUniforms()
 
   loadSplatLayers().then((layers) => {
-    defaultRegionLayers = { layers }
-    sharedMaterial = makeSplatStandardMaterial({
-      layers,
-      splatMap: defaultSplat,
-      splatScale: 1.0,
-    })
-    setupBrushSync(sharedMaterial)
+    defaultLayers = layers
+    materialsReady = true
+    setupBrushSync()
   })
 
-  function setupBrushSync(mat: MeshStandardNodeMaterial) {
+  // ── Brush sync (updates shared uniform nodes → affects all materials) ──
+  function setupBrushSync() {
     brushUnsubs.forEach((u) => u())
     brushUnsubs = []
 
@@ -102,17 +89,15 @@
     const modeToShaderValue: Record<BrushMode, number> = { lower: 0.0, raise: 1.0, flatten: 2.0 }
 
     function sync() {
-      const u = mat.userData?.uniforms
-      if (!u) return
-      u.gridVisible.value = (editorActive || gridOn) ? 1.0 : 0.0
+      brushUniforms.gridVisible.value = (editorActive || gridOn) ? 1.0 : 0.0
       if (editorActive && pos) {
-        u.brushActive.value = 1.0
-        u.brushCenter.value.set(pos.x, pos.z)
-        u.brushRadius.value = size
-        u.brushRaise.value = modeToShaderValue[mode]
-        u.brushToolMode.value = tool === 'splat' ? 1.0 : 0.0
+        brushUniforms.brushActive.value = 1.0
+        brushUniforms.brushCenter.value.set(pos.x, pos.z)
+        brushUniforms.brushRadius.value = size
+        brushUniforms.brushRaise.value = modeToShaderValue[mode]
+        brushUniforms.brushToolMode.value = tool === 'splat' ? 1.0 : 0.0
       } else {
-        u.brushActive.value = 0.0
+        brushUniforms.brushActive.value = 0.0
       }
     }
 
@@ -134,13 +119,8 @@
   // ── Geometry management (SvelteMap, needed for template) ──────
   const geoMap = new SvelteMap<string, THREE.BufferGeometry>()
 
-  // ── Per-tile render data (plain Map, read by onBeforeRender) ──
-  interface TileRenderState {
-    splatTexture: THREE.Texture | null
-    regionLayers: ResolvedRegionLayers | null
-  }
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity -- intentionally non-reactive; read in onBeforeRender hot path, not in template
-  const tileRenderState = new Map<string, TileRenderState>()
+  // ── Per-tile material map (SvelteMap, reactive for template) ──
+  const matMap = new SvelteMap<string, MeshStandardNodeMaterial>()
 
   function getTileCoords(tile: TerrainTile): { tileX: number; tileZ: number } {
     return {
@@ -149,61 +129,59 @@
     }
   }
 
-  // ── onBeforeRender setup (called from game loop) ────────────
-  // Sets up onBeforeRender on any mesh that doesn't have it yet.
-  // The callback reads per-tile data from the plain tileRenderState Map,
-  // so it always gets the latest values without Svelte reactivity.
-  syncTileMeshes = () => {
-    const mat = sharedMaterial
-    if (!mat) return
-    for (let i = 0; i < terrainTiles.length; i++) {
-      const mesh = terrainMeshes[i]
-      if (!mesh || mesh.userData.__tileOBR) continue
-      const tile = terrainTiles[i]
-      if (!tile) continue
+  /** Create a per-tile material with its own texture nodes. */
+  function createTileMaterial(
+    splatTex: THREE.Texture,
+    regionLayers: ResolvedRegionLayers | null,
+  ): MeshStandardNodeMaterial {
+    const layers = regionLayers?.layers ?? defaultLayers!
+    return makeSplatStandardMaterial({
+      layers,
+      splatMap: splatTex,
+      splatScale: 1.0,
+      sharedBrushUniforms: brushUniforms,
+    })
+  }
 
-      mesh.userData.__tileOBR = true
-      const tileId = tile.id
-      mesh.onBeforeRender = () => {
-        const u = mat.userData?.uniforms
-        if (!u) return
-
-        const rs = tileRenderState.get(tileId)
-        const splat = rs?.splatTexture ?? defaultSplat
-        const rl = rs?.regionLayers ?? defaultRegionLayers
-
-        u.splatMap.value = splat
-
-        if (rl) {
-          u.diffTex0.value = rl.layers[0].map
-          u.diffTex1.value = rl.layers[1].map
-          u.diffTex2.value = rl.layers[2].map
-          u.diffTex3.value = rl.layers[3].map
-
-          if (u.normTex0) {
-            u.normTex0.value = rl.layers[0].normalMap ?? placeholderNorm
-            u.normTex1.value = rl.layers[1].normalMap ?? placeholderNorm
-            u.normTex2.value = rl.layers[2].normalMap ?? placeholderNorm
-            u.normTex3.value = rl.layers[3].normalMap ?? placeholderNorm
-          }
-
-          if (u.ormTex0) {
-            u.ormTex0.value = rl.layers[0].orm ?? placeholderORM
-            u.ormTex1.value = rl.layers[1].orm ?? placeholderORM
-            u.ormTex2.value = rl.layers[2].orm ?? placeholderORM
-            u.ormTex3.value = rl.layers[3].orm ?? placeholderORM
-          }
-
-          u.uTile0.value = rl.layers[0].tile
-          u.uTile1.value = rl.layers[1].tile
-          u.uTile2.value = rl.layers[2].tile
-          u.uTile3.value = rl.layers[3].tile
-        }
-
-        splat.needsUpdate = true
+  /** Update a tile material's textures in-place (no material recreation). */
+  function updateTileMaterialTextures(
+    mat: MeshStandardNodeMaterial,
+    splatTex: THREE.Texture | null,
+    regionLayers: ResolvedRegionLayers | null,
+  ) {
+    const u = mat.userData?.uniforms
+    if (!u) return
+    if (splatTex) {
+      u.splatMap.value = splatTex
+    }
+    if (regionLayers) {
+      const rl = regionLayers.layers
+      u.diffTex0.value = rl[0].map
+      u.diffTex1.value = rl[1].map
+      u.diffTex2.value = rl[2].map
+      u.diffTex3.value = rl[3].map
+      if (u.normTex0) {
+        u.normTex0.value = rl[0].normalMap ?? u.normTex0.value
+        u.normTex1.value = rl[1].normalMap ?? u.normTex1.value
+        u.normTex2.value = rl[2].normalMap ?? u.normTex2.value
+        u.normTex3.value = rl[3].normalMap ?? u.normTex3.value
       }
+      if (u.ormTex0) {
+        u.ormTex0.value = rl[0].orm ?? u.ormTex0.value
+        u.ormTex1.value = rl[1].orm ?? u.ormTex1.value
+        u.ormTex2.value = rl[2].orm ?? u.ormTex2.value
+        u.ormTex3.value = rl[3].orm ?? u.ormTex3.value
+      }
+      u.uTile0.value = rl[0].tile
+      u.uTile1.value = rl[1].tile
+      u.uTile2.value = rl[2].tile
+      u.uTile3.value = rl[3].tile
     }
   }
+
+  // syncTileMeshes is no longer needed — each tile has its own material.
+  // Keep as no-op for the parent component's game loop call.
+  syncTileMeshes = () => {}
 
   // ── Edge refresh queue ──────────────────────────────────
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -230,9 +208,9 @@
     }
   }
 
-  // ── Tile lifecycle (geometry + async data loading) ──────────
+  // ── Tile lifecycle (geometry + material + async data loading) ──
   $effect(() => {
-    if (!terrainGeometry || !heightManager) return
+    if (!terrainGeometry || !heightManager || !materialsReady) return
 
     const currentTileIds = new Set(terrainTiles.map((t) => t.id))
 
@@ -241,11 +219,13 @@
       if (!currentTileIds.has(id)) {
         geo.dispose()
         geoMap.delete(id)
-        tileRenderState.delete(id)
+        const mat = matMap.get(id)
+        if (mat) mat.dispose()
+        matMap.delete(id)
       }
     }
 
-    // Create geometries + kick off async loads for new tiles
+    // Create geometries + materials + kick off async loads for new tiles
     const mgr = heightManager
     const sMgr = splatManager
     const mMgr = metaManager
@@ -255,9 +235,9 @@
       const geo = terrainGeometry.clone()
       geoMap.set(tile.id, geo)
 
-      // Create mutable render state (read by onBeforeRender each frame)
-      const rs: TileRenderState = { splatTexture: null, regionLayers: null }
-      tileRenderState.set(tile.id, rs)
+      // Create per-tile material with default textures
+      const tileMat = createTileMaterial(defaultSplat, null)
+      matMap.set(tile.id, tileMat)
 
       const { tileX, tileZ } = getTileCoords(tile)
       mgr.registerGeometry(tileX, tileZ, geo)
@@ -265,17 +245,24 @@
       mgr.loadHeightmap(tileX, tileZ).then(() => {
         mgr.applyHeightToGeometry(tileX, tileZ, geo)
         scheduleEdgeRefresh(tileX, tileZ)
+      }).catch(() => {
+        // Heightmap load failed; will retry on next tile rebuild
       })
 
+      const tileId = tile.id
       if (sMgr) {
         sMgr.loadSplatmap(tileX, tileZ).then((tex) => {
-          rs.splatTexture = tex
+          const m = matMap.get(tileId)
+          if (m) updateTileMaterialTextures(m, tex, null)
         })
       }
 
       if (mMgr) {
         mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-          rs.regionLayers = resolved
+          const m = matMap.get(tileId)
+          if (m) updateTileMaterialTextures(m, null, resolved)
+        }).catch(() => {
+          // Region layer load failed; will use default layers
         })
       }
     }
@@ -292,27 +279,28 @@
     for (const tile of terrainTiles) {
       const { tileX, tileZ } = getTileCoords(tile)
       if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
-        const rs = tileRenderState.get(tile.id)
-        if (rs) {
-          mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-            rs.regionLayers = resolved
-          })
-        }
+        mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
+          const m = matMap.get(tile.id)
+          if (m) updateTileMaterialTextures(m, null, resolved)
+        })
       }
     }
   })
 </script>
 
-{#if terrainGeometry && sharedMaterial}
-  {#each terrainTiles as tile, index (tile.id)}
-    {@const geo = geoMap.get(tile.id) ?? null}
-    {#if geo}
-      <SplatTerrain
-        geometry={geo}
-        material={sharedMaterial}
-        position={tile.position}
-        bind:mesh={terrainMeshes[index]}
-      />
-    {/if}
-  {/each}
+{#if terrainGeometry && materialsReady}
+  <T.Group bind:ref={terrainGroup}>
+    {#each terrainTiles as tile, index (tile.id)}
+      {@const geo = geoMap.get(tile.id) ?? null}
+      {@const tileMat = matMap.get(tile.id) ?? null}
+      {#if geo && tileMat}
+        <SplatTerrain
+          geometry={geo}
+          material={tileMat}
+          position={tile.position}
+          bind:mesh={terrainMeshes[index]}
+        />
+      {/if}
+    {/each}
+  </T.Group>
 {/if}
