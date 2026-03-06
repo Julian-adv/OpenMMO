@@ -1,4 +1,8 @@
 import { createNoise2D, fbm2D, createRng } from '../utils/simplex-noise'
+import {
+  sampleBiomeWeights,
+  type ReferenceImageData,
+} from './referenceImageSampler'
 
 const TILE_DIM = 64
 const VERTS_PER_SIDE = TILE_DIM + 1 // 65
@@ -18,6 +22,7 @@ export interface TerrainGenConfig {
   mountainProportion: number // 0..1
   shallowSeaRatio: number // 0..1, fraction of sea area that is shallow
   riverCount: number // 0..5
+  referenceImage?: ReferenceImageData // optional reference image for biome placement
 }
 
 export interface GeneratedTile {
@@ -62,8 +67,15 @@ export function generateRegionTerrain(
     }
   }
 
-  // --- Phase 2: Quantile-based classification & height remapping ---
-  const heightField = classifyAndRemap(rawHeights, config)
+  // --- Phase 2: Classification & height remapping ---
+  const heightField = config.referenceImage
+    ? classifyAndRemapWithReference(
+        rawHeights,
+        config,
+        worldOffsetX,
+        worldOffsetZ
+      )
+    : classifyAndRemap(rawHeights, config)
 
   // --- Phase 3: River carving ---
   carveRivers(heightField, config)
@@ -152,6 +164,72 @@ function classifyAndRemap(
           ? (raw - plainThreshold) / (rawMax - plainThreshold)
           : 0.5
       result[i] = lerp(10, config.maxHeight, t)
+    }
+  }
+
+  return result
+}
+
+function classifyAndRemapWithReference(
+  rawHeights: Float32Array,
+  config: TerrainGenConfig,
+  worldOffsetX: number,
+  worldOffsetZ: number
+): Float32Array {
+  const N = REGION_CELLS
+  const total = N * N
+  const result = new Float32Array(total)
+  const img = config.referenceImage!
+
+  // Pre-compute quantile-based fallback for cells outside the image
+  const fallback = classifyAndRemap(rawHeights, config)
+
+  for (let cz = 0; cz < N; cz++) {
+    for (let cx = 0; cx < N; cx++) {
+      const i = cz * N + cx
+      const worldX = worldOffsetX + cx
+      const worldZ = worldOffsetZ + cz
+
+      const weights = sampleBiomeWeights(img, worldX, worldZ)
+      if (!weights) {
+        result[i] = fallback[i]
+        continue
+      }
+
+      // Normalize noise to [0, 1]
+      const t = (rawHeights[i] + 1) * 0.5
+
+      // Compute height from biome weights
+      // Split sea into deep/shallow based on shallowSeaRatio
+      let seaHeight: number
+      const shallowRatio = Math.max(0, Math.min(1, config.shallowSeaRatio))
+      if (t < 1 - shallowRatio) {
+        // Deep sea zone within the sea portion
+        const deepT = 1 - shallowRatio > 0 ? t / (1 - shallowRatio) : 0.5
+        seaHeight = lerp(config.minHeight, -1, deepT)
+      } else {
+        // Shallow sea zone
+        const shallowT =
+          shallowRatio > 0 ? (t - (1 - shallowRatio)) / shallowRatio : 0.5
+        seaHeight = lerp(-1.0, -0.1, shallowT)
+      }
+
+      // River: shallow negative height (carved channel)
+      const riverHeight = lerp(-2.0, -0.5, t)
+
+      const refHeight =
+        weights.sea * seaHeight +
+        weights.plains * lerp(0.5, 25, t) +
+        weights.mountain * lerp(10, config.maxHeight, t) +
+        weights.highland * lerp(config.maxHeight * 0.7, config.maxHeight, t) +
+        weights.river * riverHeight
+
+      // Blend with fallback at image edges
+      if (weights.edgeFade < 1.0) {
+        result[i] = lerp(fallback[i], refHeight, weights.edgeFade)
+      } else {
+        result[i] = refHeight
+      }
     }
   }
 
@@ -263,21 +341,27 @@ function carveRivers(heightField: Float32Array, config: TerrainGenConfig) {
 
 function computeCoastDistance(heightField: Float32Array): Float32Array {
   const N = REGION_CELLS
-  const dist = new Float32Array(N * N)
+  const total = N * N
+  const dist = new Float32Array(total)
   dist.fill(Infinity)
 
-  // BFS from all sea cells
-  const queue: number[] = []
-  for (let i = 0; i < N * N; i++) {
+  // BFS from all sea cells using fixed-size queue with visited tracking
+  const queue = new Uint32Array(total)
+  const inQueue = new Uint8Array(total)
+  let head = 0
+  let tail = 0
+
+  for (let i = 0; i < total; i++) {
     if (heightField[i] < 0) {
       dist[i] = 0
-      queue.push(i)
+      queue[tail++] = i
+      inQueue[i] = 1
     }
   }
 
-  let head = 0
-  while (head < queue.length) {
+  while (head < tail) {
     const cur = queue[head++]
+    inQueue[cur] = 0
     const cx = cur % N
     const cz = Math.floor(cur / N)
     const curDist = dist[cur]
@@ -292,7 +376,10 @@ function computeCoastDistance(heightField: Float32Array): Float32Array {
         const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
         if (newDist < dist[ni]) {
           dist[ni] = newDist
-          queue.push(ni)
+          if (!inQueue[ni]) {
+            queue[tail++] = ni
+            inQueue[ni] = 1
+          }
         }
       }
     }
@@ -323,9 +410,13 @@ function smoothCoastlines(
   const shoreFreq = 1 / 150
 
   // Step 1: Compute distance from coast BOUNDARY (land/sea edge) for both sides
-  const boundaryDist = new Float32Array(N * N)
+  const total = N * N
+  const boundaryDist = new Float32Array(total)
   boundaryDist.fill(Infinity)
-  const queue: number[] = []
+  const queue = new Uint32Array(total)
+  const inQueue = new Uint8Array(total)
+  let head = 0
+  let tail = 0
 
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
@@ -343,14 +434,15 @@ function smoothCoastlines(
       }
       if (isBoundary) {
         boundaryDist[i] = 0
-        queue.push(i)
+        queue[tail++] = i
+        inQueue[i] = 1
       }
     }
   }
 
-  let head = 0
-  while (head < queue.length) {
+  while (head < tail) {
     const cur = queue[head++]
+    inQueue[cur] = 0
     const cx = cur % N
     const cz = Math.floor(cur / N)
     const curDist = boundaryDist[cur]
@@ -366,7 +458,10 @@ function smoothCoastlines(
         const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
         if (newDist < boundaryDist[ni]) {
           boundaryDist[ni] = newDist
-          queue.push(ni)
+          if (!inQueue[ni]) {
+            queue[tail++] = ni
+            inQueue[ni] = 1
+          }
         }
       }
     }
