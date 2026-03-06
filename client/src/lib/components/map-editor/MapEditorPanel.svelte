@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { hoveredCell, editorTool, showGenerateDialog, showMinimapDialog, currentEditorRegion } from '../../stores/editorStore'
+  import { hoveredCell, editorTool, showGenerateDialog, currentEditorRegion } from '../../stores/editorStore'
   import { get } from 'svelte/store'
   import { playerDebugInfo } from '../../stores/debugStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
@@ -48,10 +48,6 @@
       class="tool-tab generate-btn"
       onclick={openGenerateDialog}
     >Generate</button>
-    <button
-      class="tool-tab generate-btn"
-      onclick={() => { const r = getPlayerRegion(); if (r) showMinimapDialog.set(r) }}
-    >Minimap</button>
   </div>
   {#if $editorTool === 'height'}
     <HeightBrushPanel />

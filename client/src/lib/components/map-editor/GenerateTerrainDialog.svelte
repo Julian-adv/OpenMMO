@@ -6,6 +6,7 @@
     editorHeightManager,
     editorSplatManager,
     regionMetaVersion,
+    minimapVersion,
   } from '../../stores/editorStore'
   import {
     generateRegionTerrain,
@@ -15,6 +16,7 @@
   } from '../../terrain/terrainGenerator'
   import type { RegionMeta } from '../../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../../utils/networkUtils'
+  import { generateRegionMinimap } from '../../terrain/regionMinimapGenerator'
 
   const REGION_SIZE = 16
   const TILE_DIM = 64
@@ -191,11 +193,26 @@
       // Save in parallel batches
       await saveTilesBatched(tiles)
 
-      progress = 100
-      progressLabel = 'Done!'
+      progress = 80
+      progressLabel = 'Generating minimap...'
 
       // Trigger region meta re-resolution
       regionMetaVersion.update((v) => v + 1)
+
+      // Generate minimap
+      await generateRegionMinimap(
+        region.rx,
+        region.rz,
+        metaManager,
+        (pct, label) => {
+          progress = 80 + Math.round(pct * 0.18)
+          progressLabel = label
+        }
+      )
+      minimapVersion.update((v) => v + 1)
+
+      progress = 100
+      progressLabel = 'Done!'
 
       // Brief delay to show completion
       await new Promise((r) => setTimeout(r, 300))
@@ -237,7 +254,7 @@
       )
 
       const batchNum = Math.floor(i / BATCH_SIZE) + 1
-      progress = 50 + Math.round((batchNum / totalBatches) * 50)
+      progress = 50 + Math.round((batchNum / totalBatches) * 30)
       progressLabel = `Saving tiles... ${batchNum}/${totalBatches}`
     }
   }
