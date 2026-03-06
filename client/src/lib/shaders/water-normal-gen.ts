@@ -56,8 +56,9 @@ export function generateWaterNormalMap(): THREE.CanvasTexture {
         const v01 = grid[(iy + 1) * stride + ix]
         const v11 = grid[(iy + 1) * stride + ix + 1]
 
-        const v = (v00 * (1 - sx) + v10 * sx) * (1 - sy) +
-                  (v01 * (1 - sx) + v11 * sx) * sy
+        const v =
+          (v00 * (1 - sx) + v10 * sx) * (1 - sy) +
+          (v01 * (1 - sx) + v11 * sx) * sy
 
         heights[y * size + x] += v * oct.amp
       }

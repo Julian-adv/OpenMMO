@@ -1,10 +1,15 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
-  import { worldMapVisible, teleportLoading } from '../stores/debugStore'
+  import { worldMapVisible, teleportLoading, mapEditorMode } from '../stores/debugStore'
+  import { currentEditorRegion, minimapVersion } from '../stores/editorStore'
+  import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
   import { networkManager } from '../network/socket'
 
-  const MAP_WIDTH = 3696
-  const MAP_HEIGHT = 3924
+  const WORLD_MAP_WIDTH = 3696
+  const WORLD_MAP_HEIGHT = 3924
+  const REGION_SIZE = 16
+  const TILE_DIM = 64
+  const REGION_PX = REGION_SIZE * TILE_DIM // 1024
 
   let containerEl = $state<HTMLDivElement>()
   let containerW = $state(0)
@@ -13,16 +18,53 @@
   let playerX = $derived($gameStore.currentPlayer?.position.x ?? 0)
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
 
+  // Server URL with cache-bust query param
+  let minimapSrc = $derived(
+    $currentEditorRegion
+      ? `${regionMinimapServerUrl($currentEditorRegion.rx, $currentEditorRegion.rz)}?v=${$minimapVersion}`
+      : ''
+  )
+  let minimapLoaded = $state(false)
+
+  // Probe the server to see if a minimap exists for this region
+  $effect(() => {
+    minimapLoaded = false
+    if (!$mapEditorMode || !$currentEditorRegion) return
+    const src = minimapSrc
+    const img = new Image()
+    img.onload = () => { minimapLoaded = true }
+    img.onerror = () => { minimapLoaded = false }
+    img.src = src
+  })
+
+  let showRegionMap = $derived($mapEditorMode && minimapLoaded)
+
+  let mapWidth = $derived(showRegionMap ? REGION_PX : WORLD_MAP_WIDTH)
+  let mapHeight = $derived(showRegionMap ? REGION_PX : WORLD_MAP_HEIGHT)
+  let mapSrc = $derived(showRegionMap ? minimapSrc : '/textures/height_map.png')
+
   // Fit image into container preserving aspect ratio
-  let scale = $derived(Math.min(containerW / MAP_WIDTH, containerH / MAP_HEIGHT))
-  let drawW = $derived(MAP_WIDTH * scale)
-  let drawH = $derived(MAP_HEIGHT * scale)
+  let scale = $derived(Math.min(containerW / mapWidth, containerH / mapHeight))
+  let drawW = $derived(mapWidth * scale)
+  let drawH = $derived(mapHeight * scale)
   let offsetX = $derived((containerW - drawW) / 2)
   let offsetY = $derived((containerH - drawH) / 2)
 
-  // Player marker position: center of image = world (0,0), 1px = 1m
-  let markerLeft = $derived(offsetX + (MAP_WIDTH / 2 + playerX) * scale)
-  let markerTop = $derived(offsetY + (MAP_HEIGHT / 2 + playerZ) * scale)
+  // Region world-space origin (top-left corner)
+  let regionOriginX = $derived(($currentEditorRegion?.rx ?? 0) * REGION_SIZE * TILE_DIM - TILE_DIM / 2)
+  let regionOriginZ = $derived(($currentEditorRegion?.rz ?? 0) * REGION_SIZE * TILE_DIM - TILE_DIM / 2)
+
+  // Player marker position
+  let markerLeft = $derived(
+    showRegionMap
+      ? offsetX + (playerX - regionOriginX) * scale
+      : offsetX + (WORLD_MAP_WIDTH / 2 + playerX) * scale
+  )
+  let markerTop = $derived(
+    showRegionMap
+      ? offsetY + (playerZ - regionOriginZ) * scale
+      : offsetY + (WORLD_MAP_HEIGHT / 2 + playerZ) * scale
+  )
 
   function close() {
     worldMapVisible.set(false)
@@ -49,9 +91,14 @@
     const pixelX = event.clientX - rect.left
     const pixelY = event.clientY - rect.top
 
-    // Reverse the marker calculation: markerLeft = offsetX + (MAP_WIDTH/2 + playerX) * scale
-    const worldX = (pixelX - offsetX) / scale - MAP_WIDTH / 2
-    const worldZ = (pixelY - offsetY) / scale - MAP_HEIGHT / 2
+    let worldX: number, worldZ: number
+    if (showRegionMap) {
+      worldX = (pixelX - offsetX) / scale + regionOriginX
+      worldZ = (pixelY - offsetY) / scale + regionOriginZ
+    } else {
+      worldX = (pixelX - offsetX) / scale - WORLD_MAP_WIDTH / 2
+      worldZ = (pixelY - offsetY) / scale - WORLD_MAP_HEIGHT / 2
+    }
 
     const position = { x: worldX, y: 0, z: worldZ }
 
@@ -88,7 +135,7 @@
 <div class="backdrop" onclick={handleBackdropClick}>
   <div class="dialog" role="dialog" aria-modal="true">
     <div class="header">
-      <h2>World Map</h2>
+      <h2>{showRegionMap ? `Region Map (${$currentEditorRegion?.rx}, ${$currentEditorRegion?.rz})` : 'World Map'}</h2>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -96,8 +143,8 @@
     <div class="map-container" bind:this={containerEl} onclick={handleMapClick}>
       {#if scale > 0}
         <img
-          src="/textures/height_map.png"
-          alt="World Map"
+          src={mapSrc}
+          alt={showRegionMap ? 'Region Minimap' : 'World Map'}
           class="map-image"
           style="width: {drawW}px; height: {drawH}px; left: {offsetX}px; top: {offsetY}px;"
         />

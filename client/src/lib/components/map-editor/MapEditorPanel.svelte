@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { hoveredCell, editorTool, showGenerateDialog } from '../../stores/editorStore'
+  import { hoveredCell, editorTool, showGenerateDialog, showMinimapDialog } from '../../stores/editorStore'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
 </script>
@@ -28,6 +28,10 @@
       class="tool-tab generate-btn"
       onclick={() => showGenerateDialog.set(true)}
     >Generate</button>
+    <button
+      class="tool-tab generate-btn"
+      onclick={() => showMinimapDialog.set(true)}
+    >Minimap</button>
   </div>
   {#if $editorTool === 'height'}
     <HeightBrushPanel />

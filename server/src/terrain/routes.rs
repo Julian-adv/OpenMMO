@@ -22,6 +22,10 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
             get(get_splatmap).put(put_splatmap),
         )
         .route("/api/terrain/meta/{rx}/{rz}", get(get_meta).put(put_meta))
+        .route(
+            "/api/terrain/minimap/{rx}/{rz}",
+            get(get_minimap).put(put_minimap),
+        )
         .with_state(terrain_io)
 }
 
@@ -135,6 +139,42 @@ async fn put_meta(
                     "Internal server error".to_string(),
                 )
             }
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_minimap(
+    Path((rx, rz)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    let data = terrain.read_minimap(rx, rz).await.map_err(|e| {
+        error!("Failed to read minimap ({}, {}): {}", rx, rz, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    match data {
+        Some(bytes) => Ok((
+            [
+                (header::CONTENT_TYPE, "image/png"),
+                (header::CACHE_CONTROL, "public, max-age=3600"),
+            ],
+            bytes,
+        )
+            .into_response()),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn put_minimap(
+    Path((rx, rz)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+    body: Bytes,
+) -> Result<StatusCode, StatusCode> {
+    terrain
+        .write_minimap(rx, rz, &body)
+        .await
+        .map_err(|e| {
+            error!("Failed to write minimap ({}, {}): {}", rx, rz, e);
+            StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)
 }

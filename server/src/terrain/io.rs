@@ -96,6 +96,23 @@ impl TerrainIO {
         }
     }
 
+    pub async fn read_minimap(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
+        let path = coords::minimap_path(&self.base_dir, rx, rz);
+        match fs::read(&path).await {
+            Ok(data) => Ok(Some(data)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn write_minimap(&self, rx: i32, rz: i32, data: &[u8]) -> std::io::Result<()> {
+        let path = coords::minimap_path(&self.base_dir, rx, rz);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::write(&path, data).await
+    }
+
     pub async fn write_meta(&self, rx: i32, rz: i32, json: &serde_json::Value) -> std::io::Result<()> {
         let layers = json.get("layers")
             .and_then(|l| l.as_array())
