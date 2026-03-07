@@ -1,6 +1,7 @@
 import { createNoise2D, fbm2D, createRng } from '../utils/simplex-noise'
 import {
   sampleBiomeWeights,
+  sampleLandDensity,
   type ReferenceImageData,
 } from './referenceImageSampler'
 
@@ -184,6 +185,7 @@ function classifyAndRemapWithReference(
   // Pre-compute quantile-based fallback for cells outside the image
   const fallback = classifyAndRemap(rawHeights, config)
 
+  // --- Pass 1: Initial height assignment (all sea as deep) ---
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
       const i = cz * N + cx
@@ -199,20 +201,8 @@ function classifyAndRemapWithReference(
       // Normalize noise to [0, 1]
       const t = (rawHeights[i] + 1) * 0.5
 
-      // Compute height from biome weights
-      // Split sea into deep/shallow based on shallowSeaRatio
-      let seaHeight: number
-      const shallowRatio = Math.max(0, Math.min(1, config.shallowSeaRatio))
-      if (t < 1 - shallowRatio) {
-        // Deep sea zone within the sea portion
-        const deepT = 1 - shallowRatio > 0 ? t / (1 - shallowRatio) : 0.5
-        seaHeight = lerp(config.minHeight, -1, deepT)
-      } else {
-        // Shallow sea zone
-        const shallowT =
-          shallowRatio > 0 ? (t - (1 - shallowRatio)) / shallowRatio : 0.5
-        seaHeight = lerp(-1.0, -0.1, shallowT)
-      }
+      // All sea starts as deep
+      const seaHeight = lerp(config.minHeight, -1, t)
 
       // River: shallow negative height (carved channel)
       const riverHeight = lerp(-2.0, -0.5, t)
@@ -224,11 +214,144 @@ function classifyAndRemapWithReference(
         weights.highland * lerp(config.maxHeight * 0.7, config.maxHeight, t) +
         weights.river * riverHeight
 
-      // Blend with fallback at image edges
-      if (weights.edgeFade < 1.0) {
-        result[i] = lerp(fallback[i], refHeight, weights.edgeFade)
+      result[i] = refHeight
+    }
+  }
+
+  // --- Pass 2: Compute land density from reference image (captures large-scale curvature) ---
+  const DENSITY_PIXEL_RADIUS = 10 // pixels in ref image (~320m world)
+  // Sample density at tile granularity (64 cells) and interpolate for efficiency
+  const densityGridSize = Math.ceil(N / TILE_DIM) + 1
+  const densityGrid = new Float32Array(densityGridSize * densityGridSize)
+  for (let gz = 0; gz < densityGridSize; gz++) {
+    for (let gx = 0; gx < densityGridSize; gx++) {
+      const wx = worldOffsetX + gx * TILE_DIM
+      const wz = worldOffsetZ + gz * TILE_DIM
+      densityGrid[gz * densityGridSize + gx] = sampleLandDensity(
+        img,
+        wx,
+        wz,
+        DENSITY_PIXEL_RADIUS
+      )
+    }
+  }
+  // Bilinear interpolation of density per cell
+  const landDensity = new Float32Array(total)
+  for (let cz = 0; cz < N; cz++) {
+    for (let cx = 0; cx < N; cx++) {
+      const gx = cx / TILE_DIM
+      const gz = cz / TILE_DIM
+      const gx0 = Math.min(Math.floor(gx), densityGridSize - 2)
+      const gz0 = Math.min(Math.floor(gz), densityGridSize - 2)
+      const fx = gx - gx0
+      const fz = gz - gz0
+      const d00 = densityGrid[gz0 * densityGridSize + gx0]
+      const d10 = densityGrid[gz0 * densityGridSize + gx0 + 1]
+      const d01 = densityGrid[(gz0 + 1) * densityGridSize + gx0]
+      const d11 = densityGrid[(gz0 + 1) * densityGridSize + gx0 + 1]
+      landDensity[cz * N + cx] =
+        d00 * (1 - fx) * (1 - fz) +
+        d10 * fx * (1 - fz) +
+        d01 * (1 - fx) * fz +
+        d11 * fx * fz
+    }
+  }
+
+  // --- Pass 3: BFS from coastline, propagating distance AND coast density ---
+  const SHALLOW_MIN = 8 // convex coast (peninsula)
+  const SHALLOW_MAX = 48 // concave coast (bay)
+  const FADE_DIST = 32
+  const GLOBAL_MAX_DIST = SHALLOW_MAX + FADE_DIST
+  const landDist = new Float32Array(total)
+  landDist.fill(Infinity)
+  const coastDensity = new Float32Array(total) // density at nearest coastline point
+
+  const queue = new Uint32Array(total * 2)
+  const inQueue = new Uint8Array(total)
+  let head = 0
+  let tail = 0
+
+  // Seed BFS from coastline cells (sea cells adjacent to land)
+  for (let cz = 0; cz < N; cz++) {
+    for (let cx = 0; cx < N; cx++) {
+      const i = cz * N + cx
+      if (result[i] >= 0) continue // skip land
+      let adjacentToLand = false
+      for (let dz = -1; dz <= 1 && !adjacentToLand; dz++) {
+        for (let dx = -1; dx <= 1 && !adjacentToLand; dx++) {
+          if (dx === 0 && dz === 0) continue
+          const nx = cx + dx
+          const nz = cz + dz
+          if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
+          if (result[nz * N + nx] >= 0) adjacentToLand = true
+        }
+      }
+      if (adjacentToLand) {
+        landDist[i] = 0
+        coastDensity[i] = landDensity[i]
+        queue[tail++] = i
+        inQueue[i] = 1
+      }
+    }
+  }
+
+  while (head < tail) {
+    const cur = queue[head++]
+    inQueue[cur] = 0
+    const cx = cur % N
+    const cz = Math.floor(cur / N)
+    const curDist = landDist[cur]
+    if (curDist >= GLOBAL_MAX_DIST) continue
+
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dz === 0) continue
+        const nx = cx + dx
+        const nz = cz + dz
+        if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
+        const ni = nz * N + nx
+        if (result[ni] >= 0) continue // don't propagate into land
+        const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
+        if (newDist < landDist[ni]) {
+          landDist[ni] = newDist
+          coastDensity[ni] = coastDensity[cur] // propagate coast's density
+          if (!inQueue[ni]) {
+            queue[tail++] = ni
+            inQueue[ni] = 1
+          }
+        }
+      }
+    }
+  }
+
+  // Remap sea cells near land to shallow, using coastline's density
+  for (let i = 0; i < total; i++) {
+    if (result[i] >= 0) continue // skip land
+    const dist = landDist[i]
+    if (dist === Infinity) continue
+    // Use the density at the nearest coastline point
+    const density = coastDensity[i]
+    // density ≈ 0.5 at straight coast, > 0.5 = concave (bay), < 0.5 = convex (peninsula)
+    let shallowDist: number
+    if (density <= 0.4) {
+      // Very convex (peninsula tip): 2 ~ 8
+      const t = Math.max(0, density / 0.4) // 0 → 0, 0.4 → 1
+      shallowDist = lerp(2, SHALLOW_MIN, t)
+    } else {
+      // Straight to concave: 8 ~ 48
+      const t = Math.min(1, (density - 0.4) / 0.2) // 0.4 → 0, 0.6 → 1
+      shallowDist = lerp(SHALLOW_MIN, SHALLOW_MAX, t)
+    }
+    const maxDist = shallowDist + FADE_DIST
+    if (dist < maxDist) {
+      const shallowT = Math.min(dist / shallowDist, 1)
+      const shallowHeight = lerp(-0.1, -1.0, shallowT)
+      if (dist < shallowDist) {
+        result[i] = Math.max(result[i], shallowHeight)
       } else {
-        result[i] = refHeight
+        const fadeT = smoothstep(0, 1, (dist - shallowDist) / FADE_DIST)
+        const blended = lerp(shallowHeight, result[i], fadeT)
+        result[i] = Math.max(result[i], blended)
       }
     }
   }

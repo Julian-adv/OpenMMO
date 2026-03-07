@@ -10,7 +10,6 @@ export interface BiomeWeights {
   mountain: number
   highland: number
   river: number
-  edgeFade: number // 1.0 = fully inside image, 0.0 = at image boundary
 }
 
 // Reference colors for each biome (RGB)
@@ -23,7 +22,6 @@ const BIOME_COLORS = [
 ] as const
 
 const PIXELS_PER_METER = 1 / 32 // 1 pixel = 32m
-const EDGE_FADE_PIXELS = 5 // 160m fade-out at image edges
 
 export async function loadReferenceImage(
   file: File
@@ -106,7 +104,6 @@ function colorToBiomeWeights(r: number, g: number, b: number): BiomeWeights {
     mountain: weights[2] / totalWeight,
     highland: weights[3] / totalWeight,
     river: weights[4] / totalWeight,
-    edgeFade: 1.0,
   }
 }
 
@@ -120,21 +117,55 @@ export function sampleBiomeWeights(
   const pz = worldZ * PIXELS_PER_METER + img.height / 2
 
   // Outside image bounds
-  if (px < -EDGE_FADE_PIXELS || px >= img.width + EDGE_FADE_PIXELS) return null
-  if (pz < -EDGE_FADE_PIXELS || pz >= img.height + EDGE_FADE_PIXELS) return null
-
-  // Completely outside the actual pixel data
   if (px < 0 || px >= img.width || pz < 0 || pz >= img.height) return null
 
-  // Compute edge fade
-  const distFromEdge = Math.min(px, pz, img.width - 1 - px, img.height - 1 - pz)
-  const edgeFade = Math.min(1.0, distFromEdge / EDGE_FADE_PIXELS)
-
-  if (edgeFade <= 0) return null
-
   const [r, g, b] = samplePixelBilinear(img, px, pz)
-  const weights = colorToBiomeWeights(r, g, b)
-  weights.edgeFade = edgeFade
+  return colorToBiomeWeights(r, g, b)
+}
 
-  return weights
+// Sea color reference for land detection
+const SEA_REF = BIOME_COLORS[0]
+const SEA_DIST_THRESHOLD = 80 // color distance — below this = sea
+
+function isLandPixel(img: ReferenceImageData, ix: number, iz: number): boolean {
+  const idx = (iz * img.width + ix) * 4
+  const dr = img.pixels[idx] - SEA_REF.r
+  const dg = img.pixels[idx + 1] - SEA_REF.g
+  const db = img.pixels[idx + 2] - SEA_REF.b
+  return Math.sqrt(dr * dr + dg * dg + db * db) > SEA_DIST_THRESHOLD
+}
+
+/**
+ * Compute land density at a world position by sampling a radius of pixels
+ * in the reference image. Returns 0 (open ocean) to 1 (surrounded by land).
+ * Uses the reference image's full extent, so it captures large-scale curvature.
+ */
+export function sampleLandDensity(
+  img: ReferenceImageData,
+  worldX: number,
+  worldZ: number,
+  radiusPixels: number
+): number {
+  const px = worldX * PIXELS_PER_METER + img.width / 2
+  const pz = worldZ * PIXELS_PER_METER + img.height / 2
+
+  const cx = Math.round(px)
+  const cz = Math.round(pz)
+  const r = radiusPixels
+
+  let landCount = 0
+  let totalCount = 0
+
+  for (let dz = -r; dz <= r; dz++) {
+    const iz = cz + dz
+    if (iz < 0 || iz >= img.height) continue
+    for (let dx = -r; dx <= r; dx++) {
+      const ix = cx + dx
+      if (ix < 0 || ix >= img.width) continue
+      totalCount++
+      if (isLandPixel(img, ix, iz)) landCount++
+    }
+  }
+
+  return totalCount > 0 ? landCount / totalCount : 0
 }
