@@ -24,6 +24,7 @@
     editorSplatManager,
     regionMetaVersion,
     minimapVersion,
+    terrainForceRebuild,
   } from '../../stores/editorStore'
   import {
     generateRegionTerrain,
@@ -263,6 +264,9 @@
         }
       )
       minimapVersion.update((v) => v + 1)
+
+      // Force terrain tiles to rebuild with fresh data
+      terrainForceRebuild.update((v) => v + 1)
 
       progress = 100
       progressLabel = 'Done!'

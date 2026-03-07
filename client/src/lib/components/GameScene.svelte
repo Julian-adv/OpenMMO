@@ -333,12 +333,15 @@
     rebuildTerrainTiles(nextChunk.x, nextChunk.z)
   }
 
-  // Force terrain rebuild when requested (e.g. after region delete)
+  // Force terrain rebuild when requested (e.g. after region delete/generate)
   let lastRebuildVersion = 0
   $effect(() => {
     const v = $terrainForceRebuild
     if (v > lastRebuildVersion) {
       lastRebuildVersion = v
+      // Clear all existing tiles so they are treated as new and reload from server
+      terrainTiles = []
+      pendingTileQueue = []
       terrainCenterChunk = { x: NaN, z: NaN }
     }
   })
