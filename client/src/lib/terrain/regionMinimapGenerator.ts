@@ -1,4 +1,5 @@
 import { getTerrainApiUrl } from '../utils/networkUtils'
+import { DEEP_WATER_THRESHOLD } from './terrainGenerator'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 
 const REGION_SIZE = 16
@@ -107,7 +108,7 @@ export async function generateRegionMinimap(
 
           let r: number, g: number, b: number
 
-          if (height < -1.5) {
+          if (height < DEEP_WATER_THRESHOLD) {
             ;[r, g, b] = COLOR_DEEP_WATER
           } else if (height < -0.4) {
             ;[r, g, b] = COLOR_SHALLOW_WATER
