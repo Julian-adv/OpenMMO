@@ -2,7 +2,7 @@
   import { T, useThrelte } from '@threlte/core'
   import { OrbitControls } from '@threlte/extras'
   import * as THREE from 'three'
-  import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
+  import { PMREMGenerator, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
   import { onMount } from 'svelte'
   import {
@@ -127,7 +127,14 @@
   let waterSunColor = $state<THREE.Color | null>(null)
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
-  let entityGroup = $state<THREE.Group | undefined>(undefined)
+  let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
+  /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
+  const entityClipGroupObj = (() => {
+    const g = new ClippingGroup()
+    g.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)]
+    g.enabled = false
+    return g
+  })()
   const waterSunDirTmp = new THREE.Vector3()
   const waterCamDirTmp = new THREE.Vector3()
   let refractionManager = $state<RefractionRenderManager | null>(null)
@@ -495,12 +502,12 @@
         }
 
         // Hide entities so they only appear via the reflection pass
-        const savedEntityVisible = entityGroup?.visible
-        if (entityGroup) entityGroup.visible = false
+        const savedEntityVisible = entityClipGroup?.visible
+        if (entityClipGroup) entityClipGroup.visible = false
 
         refractionManager.render()
 
-        if (entityGroup) entityGroup.visible = savedEntityVisible ?? true
+        if (entityClipGroup) entityClipGroup.visible = savedEntityVisible ?? true
 
         if (brushUniforms) {
           brushUniforms.brushActive.value = savedBrushActive
@@ -513,6 +520,7 @@
         if (camera) reflectionManager.setCamera(camera)
         reflectionManager.setTerrainGroup(terrainGroup ?? null)
         if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
+        if (entityClipGroup) reflectionManager.setEntityClipGroup(entityClipGroup)
 
         // Hide nametags/HP bars during reflection render
         const nametagGroups: THREE.Group[] = []
@@ -813,7 +821,7 @@
 <!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
 <!-- <TerrainField /> -->
 
-<T.Group bind:ref={entityGroup}>
+<T is={entityClipGroupObj} bind:ref={entityClipGroup}>
   <GameScenePlayersLayer
     {camera}
     {cameraInitialized}
@@ -839,7 +847,7 @@
     monsters={monsterManager.monsters}
     bind:monsterModels={monsterModels}
   />
-</T.Group>
+</T>
 
 {#if $mapEditorMode}
   <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />

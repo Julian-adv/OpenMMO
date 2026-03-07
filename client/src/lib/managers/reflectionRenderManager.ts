@@ -4,6 +4,10 @@ import { RenderTarget } from 'three/webgpu'
 /**
  * Renders the scene (entities only) with the camera mirrored across the water
  * plane so the water shader can sample it as a planar reflection texture.
+ *
+ * Below-water entity fragments are clipped via a ClippingGroup that wraps the
+ * entity hierarchy.  The group's `enabled` flag is toggled on only during the
+ * reflection render so normal rendering is unaffected.
  */
 
 const WATER_Y = 0
@@ -45,17 +49,11 @@ export class ReflectionRenderManager {
   private terrainGroup: THREE.Group | null = null
   private waterGroup: THREE.Group | null = null
 
+  /** The ClippingGroup wrapping entities — clipping toggled per frame. */
+  private entityClipGroup: { enabled: boolean } | null = null
+
   /** A dedicated camera that receives the mirrored transform each frame. */
   private reflCam: THREE.OrthographicCamera
-
-  /**
-   * Invisible plane at Y = WATER_Y rendered AFTER entities (renderOrder 999)
-   * with depthFunc = GREATER.  From the mirrored camera below the water,
-   * entity fragments below Y=0 are *closer* than the plane, so the plane's
-   * depth is GREATER → it passes the depth test there.  Custom zero-blending
-   * erases those below-water pixels to transparent.
-   */
-  private eraserMesh: THREE.Mesh
 
   constructor(
     renderer: {
@@ -86,28 +84,6 @@ export class ReflectionRenderManager {
     this.reflCam = new THREE.OrthographicCamera()
     this.reflCam.matrixAutoUpdate = false
     this.reflCam.matrixWorldAutoUpdate = false
-
-    // Build the eraser plane
-    const eraserMat = new THREE.MeshBasicMaterial({
-      side: THREE.DoubleSide,
-      transparent: true,
-      depthTest: true,
-      depthWrite: false,
-      depthFunc: THREE.GreaterDepth,
-      blending: THREE.CustomBlending,
-      blendSrc: THREE.ZeroFactor,
-      blendDst: THREE.ZeroFactor,
-      blendSrcAlpha: THREE.ZeroFactor,
-      blendDstAlpha: THREE.ZeroFactor,
-    })
-    this.eraserMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(2000, 2000),
-      eraserMat
-    )
-    this.eraserMesh.rotation.x = -Math.PI / 2 // horizontal
-    this.eraserMesh.position.y = WATER_Y
-    this.eraserMesh.renderOrder = 999
-    this.eraserMesh.frustumCulled = false
   }
 
   get texture(): THREE.Texture {
@@ -124,6 +100,10 @@ export class ReflectionRenderManager {
 
   setWaterGroup(group: THREE.Group | null) {
     this.waterGroup = group
+  }
+
+  setEntityClipGroup(group: { enabled: boolean } | null) {
+    this.entityClipGroup = group
   }
 
   /** Render reflected entities to the reflection target. */
@@ -158,6 +138,9 @@ export class ReflectionRenderManager {
     const savedWater = this.waterGroup?.visible
     if (this.waterGroup) this.waterGroup.visible = false
 
+    // --- enable clipping to discard below-water fragments ---
+    if (this.entityClipGroup) this.entityClipGroup.enabled = true
+
     // --- render with transparent background ---
     const savedClearColor = new THREE.Color()
     this.renderer.getClearColor(savedClearColor)
@@ -165,19 +148,15 @@ export class ReflectionRenderManager {
 
     this.renderer.setClearColor(0x000000, 0)
 
-    // Add eraser plane to the scene for this render only
-    this.scene.add(this.eraserMesh)
-
     const prev = this.renderer.getRenderTarget()
     this.renderer.setRenderTarget(this.target)
     this.renderer.render(this.scene, this.reflCam)
     this.renderer.setRenderTarget(prev)
 
-    this.scene.remove(this.eraserMesh)
-
     this.renderer.setClearColor(savedClearColor, savedClearAlpha)
 
-    // --- restore visibility ---
+    // --- restore ---
+    if (this.entityClipGroup) this.entityClipGroup.enabled = false
     if (this.terrainGroup) this.terrainGroup.visible = savedTerrain ?? true
     if (this.waterGroup) this.waterGroup.visible = savedWater ?? true
   }
@@ -190,8 +169,6 @@ export class ReflectionRenderManager {
   }
 
   dispose() {
-    ;(this.eraserMesh.material as THREE.Material).dispose()
-    this.eraserMesh.geometry.dispose()
     this.target.dispose()
   }
 }
