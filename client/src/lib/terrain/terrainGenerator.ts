@@ -84,9 +84,8 @@ export function generateRegionTerrain(
   // --- Phase 3: River carving ---
   carveRivers(heightField, config)
 
-  // --- Phase 4: Coastline smoothing ---
+  // --- Phase 4: Coast distance (used by splat map) ---
   const coastDist = computeCoastDistance(heightField)
-  smoothCoastlines(heightField, coastDist, config.seed, regionX, regionZ)
 
   // --- Phase 5: Region boundary blending ---
   if (neighborEdges) {
@@ -508,138 +507,6 @@ function computeCoastDistance(heightField: Float32Array): Float32Array {
   return dist
 }
 
-function smoothCoastlines(
-  heightField: Float32Array,
-  _coastDist: Float32Array,
-  seed: number,
-  regionX: number,
-  regionZ: number
-) {
-  const N = REGION_CELLS
-  const MIN_BAND = 8
-  const MAX_BAND = 40
-  const MIN_RADIUS = 4
-  const MAX_RADIUS = 20
-  const SEA_SCALE = 2.0 // sea side gets wider smoothing to counteract steep depth falloff
-
-  const worldOffsetX = regionX * N
-  const worldOffsetZ = regionZ * N
-
-  // Low-frequency noise to vary shore width per location
-  const shoreNoise = createNoise2D(seed + 7777)
-  const shoreFreq = 1 / 150
-
-  // Step 1: Compute distance from coast BOUNDARY (land/sea edge) for both sides
-  const total = N * N
-  const boundaryDist = new Float32Array(total)
-  boundaryDist.fill(Infinity)
-  const queue = new Uint32Array(total)
-  const inQueue = new Uint8Array(total)
-  let head = 0
-  let tail = 0
-
-  for (let cz = 0; cz < N; cz++) {
-    for (let cx = 0; cx < N; cx++) {
-      const i = cz * N + cx
-      const isLand = heightField[i] >= 0
-      let isBoundary = false
-      for (let dz = -1; dz <= 1 && !isBoundary; dz++) {
-        for (let dx = -1; dx <= 1 && !isBoundary; dx++) {
-          if (dx === 0 && dz === 0) continue
-          const nx = cx + dx
-          const nz = cz + dz
-          if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
-          if (heightField[nz * N + nx] >= 0 !== isLand) isBoundary = true
-        }
-      }
-      if (isBoundary) {
-        boundaryDist[i] = 0
-        queue[tail++] = i
-        inQueue[i] = 1
-      }
-    }
-  }
-
-  while (head < tail) {
-    const cur = queue[head++]
-    inQueue[cur] = 0
-    const cx = cur % N
-    const cz = Math.floor(cur / N)
-    const curDist = boundaryDist[cur]
-    if (curDist >= MAX_BAND * SEA_SCALE) continue
-
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dz === 0) continue
-        const nx = cx + dx
-        const nz = cz + dz
-        if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
-        const ni = nz * N + nx
-        const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
-        if (newDist < boundaryDist[ni]) {
-          boundaryDist[ni] = newDist
-          if (!inQueue[ni]) {
-            queue[tail++] = ni
-            inQueue[ni] = 1
-          }
-        }
-      }
-    }
-  }
-
-  // Step 2: Per-cell variable Gaussian blur based on shore-width noise
-  const coastMask = new Uint8Array(N * N)
-  const cellRadius = new Uint8Array(N * N)
-
-  for (let cz = 0; cz < N; cz++) {
-    for (let cx = 0; cx < N; cx++) {
-      const i = cz * N + cx
-      const wx = (worldOffsetX + cx) * shoreFreq
-      const wz = (worldOffsetZ + cz) * shoreFreq
-      const n = (fbm2D(shoreNoise, wx, wz, 3, 2.0, 0.5) + 1) * 0.5 // 0..1
-      const baseBand = MIN_BAND + n * (MAX_BAND - MIN_BAND)
-      const baseRadius = MIN_RADIUS + n * (MAX_RADIUS - MIN_RADIUS)
-      const isLand = heightField[i] >= 0
-      const band = isLand ? baseBand : baseBand * SEA_SCALE
-      const radius = isLand ? baseRadius : baseRadius * SEA_SCALE
-      if (boundaryDist[i] <= band) {
-        coastMask[i] = 1
-        cellRadius[i] = Math.ceil(radius)
-      }
-    }
-  }
-
-  const blurred = new Float32Array(N * N)
-  for (let cz = 0; cz < N; cz++) {
-    for (let cx = 0; cx < N; cx++) {
-      const i = cz * N + cx
-      if (!coastMask[i]) continue
-
-      const R = cellRadius[i]
-      const s2 = 2 * (R / 2.0) * (R / 2.0)
-      let weightSum = 0
-      let valueSum = 0
-      for (let dz = -R; dz <= R; dz++) {
-        for (let dx = -R; dx <= R; dx++) {
-          const nx = cx + dx
-          const nz = cz + dz
-          if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
-          const w = Math.exp(-(dx * dx + dz * dz) / s2)
-          valueSum += heightField[nz * N + nx] * w
-          weightSum += w
-        }
-      }
-      blurred[i] = valueSum / weightSum
-    }
-  }
-
-  // Write back blurred values
-  for (let i = 0; i < N * N; i++) {
-    if (coastMask[i]) {
-      heightField[i] = blurred[i]
-    }
-  }
-}
 
 function blendBoundaries(heightField: Float32Array, edges: NeighborEdgeData) {
   const N = REGION_CELLS
