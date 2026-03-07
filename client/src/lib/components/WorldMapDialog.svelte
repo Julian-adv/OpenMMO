@@ -154,9 +154,9 @@
         const regionWorldZ = rz * REGION_PX - TILE_DIM / 2
 
         // Canvas position
-        const drawX = (regionWorldX - viewLeft) * scale
-        const drawY = (regionWorldZ - viewTop) * scale
-        const drawSize = REGION_PX * scale
+        const drawX = Math.floor((regionWorldX - viewLeft) * scale)
+        const drawY = Math.floor((regionWorldZ - viewTop) * scale)
+        const drawSize = Math.ceil(REGION_PX * scale)
 
         promises.push(
           loadRegionImage(rx, rz).then((img) => {
