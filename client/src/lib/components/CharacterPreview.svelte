@@ -27,7 +27,8 @@
   let { positionX, positionY, positionZ, selected, characterClass }: Props = $props()
 
   // Load only this character's own model + shared animation packs
-  const characterGltf = useLoader(GLTFLoader).load(getCharacterModelPath(characterClass))
+  const characterModelPath = $derived(getCharacterModelPath(characterClass))
+  const characterGltf = $derived(useLoader(GLTFLoader).load(characterModelPath))
   const locomotionGltf = useLoader(GLTFLoader).load(
     CHARACTER_ANIMATION_PACK_PATHS.locomotion
   )

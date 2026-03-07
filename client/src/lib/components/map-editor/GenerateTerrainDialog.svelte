@@ -343,7 +343,7 @@
         </div>
 
         <div class="control-row">
-          <label>Reference Image</label>
+          <span class="label">Reference Image</span>
           <div class="ref-image-row">
             {#if referenceImagePreview}
               <img src={referenceImagePreview} alt="Reference" class="ref-preview" />
@@ -457,7 +457,8 @@
     gap: 3px;
   }
 
-  .control-row label {
+  .control-row label,
+  .control-row .label {
     font-size: 11px;
     color: #aaa;
     display: flex;

@@ -17,7 +17,7 @@
 
   let textBounds = $state({ width: 1, height: 0.3 })
 
-  let textRef = $state<any>(null)
+  let textRef = $state<TextLabel | null>(null)
   let bubbleGroup = $state<THREE.Group | undefined>(undefined)
 
   function handleTextSync() {
