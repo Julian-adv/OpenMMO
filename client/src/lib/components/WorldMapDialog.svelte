@@ -134,13 +134,6 @@
     const viewLeft = cx - viewWorldW / 2
     const viewTop = cz - viewWorldH / 2
 
-    // Determine which regions overlap the viewport
-    // Region (rx, rz) covers world x: [rx*REGION_PX - TILE_DIM/2, (rx+1)*REGION_PX - TILE_DIM/2)
-    const regionMinRx = Math.floor((viewLeft + TILE_DIM / 2) / REGION_PX)
-    const regionMaxRx = Math.floor((viewLeft + viewWorldW + TILE_DIM / 2) / REGION_PX)
-    const regionMinRz = Math.floor((viewTop + TILE_DIM / 2) / REGION_PX)
-    const regionMaxRz = Math.floor((viewTop + viewWorldH + TILE_DIM / 2) / REGION_PX)
-
     // Clear to black
     ctx.clearRect(0, 0, cw, ch)
     ctx.fillStyle = '#000'
