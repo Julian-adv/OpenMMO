@@ -182,7 +182,10 @@
     for (let i = 0; i < terrainMeshes.length; i++) {
       const mesh = terrainMeshes[i]
       if (!mesh) continue
-      const tileId = terrainTiles[i]?.id
+      // Use tileId stored on the mesh itself to avoid index mismatch
+      // between terrainMeshes[] (old order) and terrainTiles[] (new order)
+      // during the frame when tiles are added/removed.
+      const tileId = mesh.userData.tileId as string | undefined
       if (!tileId) continue
       const texData = tileTexMap.get(tileId)
 
@@ -325,6 +328,7 @@
         <SplatTerrain
           geometry={geo}
           material={sharedMaterial}
+          tileId={tile.id}
           position={tile.position}
           bind:mesh={terrainMeshes[index]}
         />

@@ -7,6 +7,7 @@
     geometry: THREE.BufferGeometry
     material: MeshStandardNodeMaterial
     mesh?: THREE.Mesh | undefined
+    tileId?: string
     position?: [number, number, number]
     onBeforeRender?: THREE.Mesh['onBeforeRender'] | null
   }
@@ -15,11 +16,13 @@
     geometry,
     material,
     mesh = $bindable(undefined),
+    tileId = '',
     position = [0, 0, 0],
     onBeforeRender = null,
   }: Props = $props()
 
   function handleCreate(ref: THREE.Mesh) {
+    ref.userData.tileId = tileId
     if (onBeforeRender) ref.onBeforeRender = onBeforeRender
   }
 </script>
