@@ -146,14 +146,28 @@
     ctx.fillStyle = '#000'
     ctx.fillRect(0, 0, cw, ch)
 
+    // 45-degree rotation: expand visible region to cover rotated corners
+    const ROTATE_ANGLE = -Math.PI / 4
+    const expand = Math.SQRT2 // rotated square needs ~1.41x coverage
+
+    const expandedViewWorldW = viewWorldW * expand
+    const expandedViewWorldH = viewWorldH * expand
+    const expandedViewLeft = cx - expandedViewWorldW / 2
+    const expandedViewTop = cz - expandedViewWorldH / 2
+
+    const expRegionMinRx = Math.floor((expandedViewLeft + TILE_DIM / 2) / REGION_PX)
+    const expRegionMaxRx = Math.floor((expandedViewLeft + expandedViewWorldW + TILE_DIM / 2) / REGION_PX)
+    const expRegionMinRz = Math.floor((expandedViewTop + TILE_DIM / 2) / REGION_PX)
+    const expRegionMaxRz = Math.floor((expandedViewTop + expandedViewWorldH + TILE_DIM / 2) / REGION_PX)
+
     const promises: Promise<void>[] = []
-    for (let rz = regionMinRz; rz <= regionMaxRz; rz++) {
-      for (let rx = regionMinRx; rx <= regionMaxRx; rx++) {
+    for (let rz = expRegionMinRz; rz <= expRegionMaxRz; rz++) {
+      for (let rx = expRegionMinRx; rx <= expRegionMaxRx; rx++) {
         // Region world origin
         const regionWorldX = rx * REGION_PX - TILE_DIM / 2
         const regionWorldZ = rz * REGION_PX - TILE_DIM / 2
 
-        // Canvas position
+        // Canvas position (before rotation, relative to view center)
         const drawX = Math.floor((regionWorldX - viewLeft) * scale)
         const drawY = Math.floor((regionWorldZ - viewTop) * scale)
         const drawSize = Math.ceil(REGION_PX * scale)
@@ -162,7 +176,12 @@
           loadRegionImage(rx, rz).then((img) => {
             if (gen !== renderGeneration) return
             if (img) {
+              ctx.save()
+              ctx.translate(cw / 2, ch / 2)
+              ctx.rotate(ROTATE_ANGLE)
+              ctx.translate(-cw / 2, -ch / 2)
               ctx.drawImage(img, drawX, drawY, drawSize, drawSize)
+              ctx.restore()
             }
           })
         )
@@ -172,11 +191,14 @@
     Promise.all(promises).then(() => {
       if (gen !== renderGeneration) return
 
-      // Player marker
+      // Player marker (also rotated with the map)
       const playerCanvasX = (px - viewLeft) * scale
       const playerCanvasZ = (pz - viewTop) * scale
 
       ctx.save()
+      ctx.translate(cw / 2, ch / 2)
+      ctx.rotate(ROTATE_ANGLE)
+      ctx.translate(-cw / 2, -ch / 2)
       ctx.beginPath()
       ctx.arc(playerCanvasX, playerCanvasZ, 6, 0, Math.PI * 2)
       ctx.fillStyle = '#ff3333'
@@ -247,8 +269,14 @@
     const canvasSize = Math.min(containerW, containerH)
     const scale = canvasSize / viewSize
 
-    camX = dragStartCamX - (event.clientX - dragStartMouseX) / scale
-    camZ = dragStartCamZ - (event.clientY - dragStartMouseZ) / scale
+    // Rotate mouse delta by +45 degrees to undo the canvas rotation
+    const dx = (event.clientX - dragStartMouseX) / scale
+    const dz = (event.clientY - dragStartMouseZ) / scale
+    const angle = Math.PI / 4
+    const cosA = Math.cos(angle)
+    const sinA = Math.sin(angle)
+    camX = dragStartCamX - (dx * cosA - dz * sinA)
+    camZ = dragStartCamZ - (dx * sinA + dz * cosA)
   }
 
   function handleMouseUp() {
@@ -355,8 +383,14 @@
     const canvasSize = Math.min(containerW, containerH)
     const scale = canvasSize / viewSize
 
-    const worldX = camX + (pixelX - containerW / 2) / scale
-    const worldZ = camZ + (pixelY - containerH / 2) / scale
+    // Screen offset from center, then rotate by +45 degrees to undo canvas rotation
+    const sx = (pixelX - containerW / 2) / scale
+    const sz = (pixelY - containerH / 2) / scale
+    const angle = Math.PI / 4
+    const cosA = Math.cos(angle)
+    const sinA = Math.sin(angle)
+    const worldX = camX + (sx * cosA - sz * sinA)
+    const worldZ = camZ + (sx * sinA + sz * cosA)
 
     const position = { x: worldX, y: 0, z: worldZ }
 
