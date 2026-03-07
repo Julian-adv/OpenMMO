@@ -103,9 +103,16 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<div class="hud-container">
+{#if !$debugVisible}
+  <button class="debug-toggle-btn" onclick={() => debugVisible.set(true)} title="Show Debug Panel (Ctrl+D)">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v1h4" /><path d="M18 8h-2V6a4 4 0 0 0-4-4" /><path d="M20 10a2 2 0 0 0-2-2" /><path d="M2 13h4" /><path d="M18 13h4" /><path d="M6 18H4a2 2 0 0 1-2-2" /><path d="M20 18h2" /><path d="M6 8v10a6 6 0 0 0 12 0V8" /><path d="M2 10h4" /><path d="M18 10h4" />
+    </svg>
+  </button>
+{:else}
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<div class="hud-container" role="button" tabindex="-1" onclick={() => debugVisible.set(false)}>
   <div class="hud-box">
-    {#if $debugVisible}
       <div class="stats-text">
         <span class="fps-text">
           FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}
@@ -125,9 +132,10 @@
           <span class="player-text">POS: (-, -, -) | ROT: -</span>
         {/if}
       </div>
-    {/if}
 
-    <div class="button-rows">
+    <!-- svelte-ignore a11y_click_events_have_key_events -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div class="button-rows" onclick={(e) => e.stopPropagation()}>
       <div class="button-group">
         <button
           class="action-btn slow-btn"
@@ -218,8 +226,32 @@
     </div>
   </div>
 </div>
+{/if}
 
 <style>
+  .debug-toggle-btn {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 1000;
+    background: rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    padding: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+
+  .debug-toggle-btn:hover {
+    background: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    border-color: rgba(0, 255, 0, 0.3);
+  }
+
   .hud-container {
     position: fixed;
     top: 10px;
@@ -243,6 +275,7 @@
     align-items: flex-start;
     gap: 15px;
     width: fit-content;
+    cursor: pointer;
   }
 
   .fps-text {
