@@ -261,7 +261,7 @@ function classifyAndRemapWithReference(
 
   // --- Pass 3: BFS from coastline, propagating distance AND coast density ---
   const SHALLOW_MIN = 8 // convex coast (peninsula)
-  const SHALLOW_MAX = 48 // concave coast (bay)
+  const SHALLOW_MAX = 36 // concave coast (bay)
   const landDist = new Float32Array(total)
   landDist.fill(Infinity)
   const coastDensity = new Float32Array(total) // density at nearest coastline point
@@ -347,7 +347,7 @@ function classifyAndRemapWithReference(
       result[i] = lerp(-0.1, DEEP_WATER_THRESHOLD, smoothstep(0, 1, t))
     } else {
       // Deep zone: DEEP_WATER_THRESHOLD → config.minHeight
-      const t = Math.min(1, (dist - shallowDist) / shallowDist)
+      const t = Math.min(1, (dist - shallowDist) / SHALLOW_MAX)
       result[i] = lerp(DEEP_WATER_THRESHOLD, config.minHeight, smoothstep(0, 1, t))
     }
   }
