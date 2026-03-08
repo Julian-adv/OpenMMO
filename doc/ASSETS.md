@@ -16,6 +16,7 @@
 - https://polyhaven.com/a/rocky_terrain_02 -> 잔디
 - https://polyhaven.com/a/snow_02 -> 눈
 - https://polyhaven.com/a/red_laterite_soil_stones -> 흙
+- https://polyhaven.com/a/sandy_gravel_02 -> 모래
 
 ## sea
 
@@ -119,3 +120,7 @@
   - `splatLayerLoader.ts`가 GLB를 로드한 뒤 첫 번째 `MeshStandardMaterial`에서 `map`, `normalMap`, `roughnessMap`, `metalnessMap`, `aoMap`만 꺼내 쓴다.
   - 터레인 geometry는 별도로 `PlaneGeometry(64, 64)`를 생성한다.
 - 중요한 것은 Blender에서 material에 올바른 텍스처(albedo, normal, roughness 등)가 할당되어 있는지이다.
+
+## Icon
+
+- https://icon-sets.iconify.design/fa6-solid/people-group/
