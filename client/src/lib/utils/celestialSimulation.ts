@@ -29,8 +29,8 @@ export const SUN_DAY_COLOR_HEX = '#ffffff'
 export const SUN_TWILIGHT_COLOR_HEX = '#ff9b86'
 export const MOON_LIGHT_COLOR_HEX = '#d6e2ff'
 export const MOON_VISIBILITY_THRESHOLD = 0.02
-export const ELDER_MOON_MAX_INTENSITY = 1.2
-export const SWIFT_MOON_MAX_INTENSITY = 0.9
+export const ELDER_MOON_MAX_INTENSITY = 0.8
+export const SWIFT_MOON_MAX_INTENSITY = 0.6
 export const MOON_ILLUMINATION_SOFTENING_EXPONENT = 0.7
 export const MOON_LIGHT_FLOOR = 0.3
 
@@ -539,7 +539,11 @@ export function computeCelestialDirectionalLightState(
   const sunPeriod = getSunPeriodFromElevation(sunLightState.direction.y)
   const sunAboveHorizon =
     sunLightState.direction.y > 0 && sunLightState.intensity > 0
-  const ambientNightFactor = sunLightState.direction.y <= 0 ? 1 : 0
+  // Smooth transition: fully day above 0.1, fully night below -0.05
+  const ambientNightFactor = Math.min(
+    1,
+    Math.max(0, (0.1 - sunLightState.direction.y) / 0.15)
+  )
 
   if (!sunAboveHorizon) {
     const moonLightSamples = getMoonLightSamples(

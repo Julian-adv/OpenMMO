@@ -477,11 +477,14 @@
       updateLightPosition()
       loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
-      // Update water uniforms
+      // Update water uniforms — always use real sun direction (not moon)
       waterTime += realDeltaSeconds
-      if (directionalLight) {
-        waterSunDirTmp.copy(directionalLight.position).sub(directionalLight.target.position).normalize()
+      {
+        const sunSnapshot = computeSunLightSnapshot(getLocalGameHour(), localCalendarDate)
+        waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
         waterSunDir = waterSunDirTmp.clone()
+      }
+      if (directionalLight) {
         waterSunColor = directionalLight.color.clone()
       }
       if (camera) {
@@ -623,6 +626,7 @@
       localCalendarDate,
       ambientLight,
       directionalLight,
+      scene,
       sunLightSnapshot: computeSunLightSnapshot(
         getLocalGameHour(),
         localCalendarDate

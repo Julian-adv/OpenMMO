@@ -9,7 +9,7 @@ import {
 } from '../../utils/celestialSimulation'
 
 export const AMBIENT_DAY_INTENSITY = 0.95
-export const AMBIENT_NIGHT_INTENSITY = 1.4
+export const AMBIENT_NIGHT_INTENSITY = 0.3
 
 export interface Vector3Like {
   x: number
@@ -22,6 +22,7 @@ export interface SceneLightingUpdateParams {
   localCalendarDate: CalendarDate
   ambientLight: THREE.AmbientLight | undefined
   directionalLight: THREE.DirectionalLight | undefined
+  scene: THREE.Scene
   sunLightSnapshot: SunLightSnapshot
   eclipseFactor: number
 }
@@ -62,6 +63,14 @@ export function createSceneLightingController(): SceneLightingController {
       params.ambientLight.intensity =
         celestialLightState.ambientIntensity * (1 - eclipse * 0.5)
     }
+
+    // Scale IBL environment intensity with day/night cycle
+    const envDayIntensity = 0.5
+    const envNightIntensity = 0.03
+    params.scene.environmentIntensity =
+      envDayIntensity +
+      (envNightIntensity - envDayIntensity) *
+        celestialLightState.ambientNightFactor
 
     if (!params.directionalLight) return
 

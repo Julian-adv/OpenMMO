@@ -287,8 +287,19 @@ export function createWaterMaterial(
       smoothstep(float(0), float(0.5), depthFactor)
     )
     // Brighten the refraction (seafloor) where caustics lines are, then blend into water
+    // At night use dim blue-grey tint instead of sunColor
+    const causticsNightFactor = smoothstep(
+      float(-0.05),
+      float(0.1),
+      uSunDirection.y
+    )
+    const causticsLightColor = mix(
+      vec3(0.08, 0.1, 0.15),
+      vec3(uSunColor),
+      causticsNightFactor
+    )
     const litFloor = refractionColor.add(
-      vec3(uSunColor).mul(causticsShimmer.mul(1.2))
+      causticsLightColor.mul(causticsShimmer.mul(1.2))
     )
     waterColor.assign(
       mix(waterColor, litFloor, clamp(causticsStrength.mul(1.5), 0.0, 1.0))
@@ -310,14 +321,19 @@ export function createWaterMaterial(
     const waveCrestFactor = smoothstep(float(-0.05), float(0.1), vWaveHeight)
       .mul(0.8)
       .add(0.2)
+    const sunSparkleStrength = smoothstep(
+      float(0),
+      float(0.15),
+      uSunDirection.y
+    ).mul(float(0.3).add(float(0.7).mul(uSunDirection.y)))
+    // At night, keep a faint moonlit sparkle
+    const moonSparkleStrength = float(1)
+      .sub(smoothstep(float(-0.05), float(0.05), uSunDirection.y))
+      .mul(0.15)
     const sparkle = smoothstep(float(1.3), float(1.45), sp1.add(sp2))
       .mul(3.0)
       .mul(waveCrestFactor)
-      .mul(
-        smoothstep(float(0), float(0.15), uSunDirection.y).mul(
-          float(0.3).add(float(0.7).mul(uSunDirection.y))
-        )
-      )
+      .mul(max(sunSparkleStrength, moonSparkleStrength))
     specular.addAssign(vec3(uSunColor).mul(sparkle))
 
     // Smoothed normal for reflection
@@ -329,22 +345,57 @@ export function createWaterMaterial(
       float(0.9).mul(pow(float(1).sub(cosTheta), float(2)))
     )
 
-    // Procedural sky reflection
+    // Procedural sky reflection — time-of-day color palette
     const reflectDir = reflect(viewDir.negate(), reflNormal)
     const skyY = clamp(reflectDir.y.mul(0.5).add(0.5), 0.0, 1.0)
-    const skyBrightness = smoothstep(float(-0.1), float(0.3), uSunDirection.y)
+    const sunY = uSunDirection.y
 
-    const groundColor = vec3(0.08, 0.12, 0.15).mul(skyBrightness)
-    const hazeColorBase = vec3(0.55, 0.65, 0.75).mul(skyBrightness)
-    const zenithColor = vec3(0.12, 0.25, 0.5).mul(skyBrightness)
+    // Blend factors: night → twilight → day
+    const nightFactor = float(1).sub(
+      smoothstep(float(-0.15), float(0.05), sunY)
+    )
+    const twilightFactor = smoothstep(float(-0.15), float(0.0), sunY).mul(
+      float(1).sub(smoothstep(float(0.05), float(0.3), sunY))
+    )
+    const dayFactor = smoothstep(float(0.05), float(0.3), sunY)
 
-    const sunsetFactor = float(1).sub(
-      smoothstep(float(0), float(0.5), uSunDirection.y)
+    // Night palette — dark blues
+    const nightGround = vec3(0.02, 0.03, 0.06)
+    const nightHaze = vec3(0.04, 0.06, 0.12)
+    const nightZenith = vec3(0.02, 0.04, 0.1)
+
+    // Twilight palette — warm oranges/purples
+    const twiGround = vec3(0.12, 0.06, 0.04)
+    const twiHaze = vec3(0.7, 0.35, 0.15)
+    const twiZenith = vec3(0.15, 0.1, 0.25)
+
+    // Day palette
+    const dayGround = vec3(0.08, 0.12, 0.15)
+    const dayHaze = vec3(0.55, 0.65, 0.75)
+    const dayZenith = vec3(0.12, 0.25, 0.5)
+
+    // Blend palettes by time of day
+    const groundColor = nightGround
+      .mul(nightFactor)
+      .add(twiGround.mul(twilightFactor))
+      .add(dayGround.mul(dayFactor))
+    const hazeColorBase = nightHaze
+      .mul(nightFactor)
+      .add(twiHaze.mul(twilightFactor))
+      .add(dayHaze.mul(dayFactor))
+    const zenithColor = nightZenith
+      .mul(nightFactor)
+      .add(twiZenith.mul(twilightFactor))
+      .add(dayZenith.mul(dayFactor))
+
+    // Tint haze with sun color during sunset/sunrise
+    const sunsetFactor = smoothstep(float(-0.05), float(0.0), sunY).mul(
+      float(1).sub(smoothstep(float(0.0), float(0.3), sunY))
     )
     const hazeColor = mix(
       hazeColorBase,
-      vec3(uSunColor).mul(0.5),
-      sunsetFactor.mul(0.3)
+      vec3(uSunColor).mul(0.6),
+      sunsetFactor.mul(0.5)
     )
 
     const skyReflection = mix(
@@ -353,6 +404,7 @@ export function createWaterMaterial(
       smoothstep(float(0.35), float(0.7), skyY)
     ).toVar()
 
+    // Sun highlight on water
     const sunDot = max(dot(reflectDir, vec3(uSunDirection)), 0.0)
     skyReflection.addAssign(
       vec3(uSunColor).mul(pow(sunDot, float(8)).mul(0.25))
@@ -447,7 +499,14 @@ export function createWaterMaterial(
       0.0,
       1.0
     )
-    const foamColor = mix(vec3(0.85, 0.92, 0.95), vec3(1, 1, 1), foamWithTex)
+    const foamBright = mix(vec3(0.85, 0.92, 0.95), vec3(1, 1, 1), foamWithTex)
+    const foamDark = mix(
+      vec3(0.06, 0.08, 0.12),
+      vec3(0.12, 0.15, 0.2),
+      foamWithTex
+    )
+    const foamDayNight = smoothstep(float(-0.05), float(0.1), sunY)
+    const foamColor = mix(foamDark, foamBright, foamDayNight)
     const finalColorBeforeRefl = mix(
       surfaceColor,
       foamColor,
@@ -462,11 +521,23 @@ export function createWaterMaterial(
         reflectionSample.a.mul(0.3)
       )
     )
-    // Caustics glow — additive emissive-like light on the final surface
-    const causticsGlow = vec3(uSunColor).mul(
+    // Caustics glow — additive light on the final surface, dim blue-grey at night
+    const glowNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
+    const glowColor = mix(
+      vec3(0.08, 0.1, 0.15),
+      vec3(uSunColor),
+      glowNightFactor
+    )
+    const causticsGlow = glowColor.mul(
       pow(causticsShimmer, float(2.0)).mul(causticsStrength).mul(1.5)
     )
     finalColorBeforeRefl.addAssign(causticsGlow)
+
+    // Darken water surface at night (match scene ambient)
+    const nightDarken = smoothstep(float(-0.05), float(0.1), sunY)
+      .mul(0.9)
+      .add(0.1)
+    finalColorBeforeRefl.mulAssign(nightDarken)
 
     const finalColor = finalColorBeforeRefl
 
