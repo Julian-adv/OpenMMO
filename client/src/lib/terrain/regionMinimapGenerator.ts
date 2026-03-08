@@ -2,6 +2,9 @@ import { getTerrainApiUrl } from '../utils/networkUtils'
 import { DEEP_WATER_THRESHOLD } from './terrainGenerator'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 
+/** Height above which shore holes in water shader reveal sand underneath (~0.2-0.25m depth) */
+const VISIBLE_SAND_THRESHOLD = -0.25
+
 const REGION_SIZE = 16
 const TILE_DIM = 64
 const VERTS_PER_SIDE = TILE_DIM + 1
@@ -110,7 +113,7 @@ export async function generateRegionMinimap(
 
           if (height < DEEP_WATER_THRESHOLD) {
             ;[r, g, b] = COLOR_DEEP_WATER
-          } else if (height < -0.4) {
+          } else if (height < VISIBLE_SAND_THRESHOLD) {
             ;[r, g, b] = COLOR_SHALLOW_WATER
           } else if (splatData) {
             // Find dominant splat channel

@@ -1,6 +1,9 @@
 import { createNoise2D, fbm2D, createRng } from '../utils/simplex-noise'
 
-/** Height threshold below which water is considered deep sea (used for minimap coloring) */
+/** Height threshold at/above which water is considered shallow sea (upper bound of sea) */
+export const SHALLOW_WATER_THRESHOLD = -0.1
+
+/** Height threshold below which water is considered deep sea */
 export const DEEP_WATER_THRESHOLD = -1.5
 import {
   sampleBiomeWeights,
@@ -147,12 +150,12 @@ function classifyAndRemap(
           : 0.5
       result[i] = lerp(config.minHeight, DEEP_WATER_THRESHOLD, t)
     } else if (raw <= shallowSeaThreshold) {
-      // Shallow sea: remap to [DEEP_WATER_THRESHOLD, -0.1]
+      // Shallow sea: remap to [DEEP_WATER_THRESHOLD, SHALLOW_WATER_THRESHOLD]
       const t =
         shallowSeaThreshold > deepSeaThreshold
           ? (raw - deepSeaThreshold) / (shallowSeaThreshold - deepSeaThreshold)
           : 0.5
-      result[i] = lerp(DEEP_WATER_THRESHOLD, -0.1, t)
+      result[i] = lerp(DEEP_WATER_THRESHOLD, SHALLOW_WATER_THRESHOLD, t)
     } else if (raw <= plainThreshold) {
       // Plains: remap to [0.5, 10]
       const t =
@@ -200,8 +203,8 @@ function classifyAndRemapWithReference(
         continue
       }
 
-      // Normalize noise to [0, 1]
-      const t = (rawHeights[i] + 1) * 0.5
+      // Normalize noise to [0, 1] (fBm can exceed ±1, so clamp)
+      const t = Math.max(0, Math.min(1, (rawHeights[i] + 1) * 0.5))
 
       // All sea starts as deep
       const seaHeight = lerp(config.minHeight, -1, t)
@@ -342,13 +345,21 @@ function classifyAndRemapWithReference(
       shallowDist = lerp(SHALLOW_MIN, SHALLOW_MAX, t)
     }
     if (dist < shallowDist) {
-      // Shallow zone: -0.1 → DEEP_WATER_THRESHOLD
+      // Shallow zone: SHALLOW_WATER_THRESHOLD → DEEP_WATER_THRESHOLD
       const t = dist / shallowDist
-      result[i] = lerp(-0.1, DEEP_WATER_THRESHOLD, smoothstep(0, 1, t))
+      result[i] = lerp(
+        SHALLOW_WATER_THRESHOLD,
+        DEEP_WATER_THRESHOLD,
+        smoothstep(0, 1, t)
+      )
     } else {
       // Deep zone: DEEP_WATER_THRESHOLD → config.minHeight
       const t = Math.min(1, (dist - shallowDist) / SHALLOW_MAX)
-      result[i] = lerp(DEEP_WATER_THRESHOLD, config.minHeight, smoothstep(0, 1, t))
+      result[i] = lerp(
+        DEEP_WATER_THRESHOLD,
+        config.minHeight,
+        smoothstep(0, 1, t)
+      )
     }
   }
 
@@ -506,7 +517,6 @@ function computeCoastDistance(heightField: Float32Array): Float32Array {
 
   return dist
 }
-
 
 function blendBoundaries(heightField: Float32Array, edges: NeighborEdgeData) {
   const N = REGION_CELLS
