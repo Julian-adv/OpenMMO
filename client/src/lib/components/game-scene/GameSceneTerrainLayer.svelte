@@ -11,14 +11,15 @@
     createSplatBrushUniforms,
     type SplatBrushUniforms,
   } from '../makeSplatStandardMaterial'
+  import type { SplatLayer } from '../makeSplatStandardMaterial'
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
   import { tileToRegion } from '../../managers/terrainMetaManager'
-  import { loadSplatLayers } from '../../utils/splatLayerLoader'
-  import type { SplatLayer } from '../makeSplatStandardMaterial'
+  import { loadSplatLayers, buildSplatAtlas } from '../../utils/splatLayerLoader'
+  import type { SplatAtlasSet } from '../../utils/splatLayerLoader'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
   import {
     brushWorldPos,
@@ -54,8 +55,9 @@
   }: Props = $props()
 
   // ── Default resources (created once) ──────────────────
-  let defaultLayers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null =
+  let _defaultLayers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null =
     null
+  let defaultAtlas: SplatAtlasSet | null = null
   let sharedMaterial = $state<MeshStandardNodeMaterial | null>(null)
   let brushUnsubs: (() => void)[] = []
 
@@ -76,9 +78,11 @@
   const brushUniforms: SplatBrushUniforms = createSplatBrushUniforms()
 
   loadSplatLayers().then((layers) => {
-    defaultLayers = layers
+    _defaultLayers = layers
+    defaultAtlas = buildSplatAtlas(layers)
     sharedMaterial = makeSplatStandardMaterial({
-      layers,
+      atlas: defaultAtlas,
+      tileScales: [layers[0].tile, layers[1].tile, layers[2].tile, layers[3].tile],
       splatMap: defaultSplat,
       splatScale: 1.0,
       sharedBrushUniforms: brushUniforms,
@@ -157,7 +161,8 @@
   // ── Per-tile texture data (plain Map, no reactivity needed) ──
   interface TileTexData {
     splatTex: THREE.Texture
-    layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null
+    atlas: SplatAtlasSet | null
+    tileScales: [number, number, number, number] | null
   }
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const tileTexMap = new Map<string, TileTexData>()
@@ -191,28 +196,22 @@
 
       mesh.onBeforeRender = () => {
         u.splatMap.value = texData?.splatTex ?? defaultSplat
-        const rl = texData?.layers ?? defaultLayers
-        if (rl) {
-          u.diffTex0.value = rl[0].map
-          u.diffTex1.value = rl[1].map
-          u.diffTex2.value = rl[2].map
-          u.diffTex3.value = rl[3].map
-          if (u.normTex0) {
-            u.normTex0.value = rl[0].normalMap ?? u.normTex0.value
-            u.normTex1.value = rl[1].normalMap ?? u.normTex1.value
-            u.normTex2.value = rl[2].normalMap ?? u.normTex2.value
-            u.normTex3.value = rl[3].normalMap ?? u.normTex3.value
+        const tileAtlas = texData?.atlas ?? defaultAtlas
+        const scales = texData?.tileScales
+        if (tileAtlas) {
+          u.diffuseAtlas.value = tileAtlas.diffuseAtlas
+          if (u.normalAtlas && tileAtlas.normalAtlas) {
+            u.normalAtlas.value = tileAtlas.normalAtlas
           }
-          if (u.ormTex0) {
-            u.ormTex0.value = rl[0].orm ?? u.ormTex0.value
-            u.ormTex1.value = rl[1].orm ?? u.ormTex1.value
-            u.ormTex2.value = rl[2].orm ?? u.ormTex2.value
-            u.ormTex3.value = rl[3].orm ?? u.ormTex3.value
+          if (u.ormAtlas && tileAtlas.ormAtlas) {
+            u.ormAtlas.value = tileAtlas.ormAtlas
           }
-          u.uTile0.value = rl[0].tile
-          u.uTile1.value = rl[1].tile
-          u.uTile2.value = rl[2].tile
-          u.uTile3.value = rl[3].tile
+        }
+        if (scales) {
+          u.uTile0.value = scales[0]
+          u.uTile1.value = scales[1]
+          u.uTile2.value = scales[2]
+          u.uTile3.value = scales[3]
         }
       }
     }
@@ -267,7 +266,7 @@
 
       const geo = terrainGeometry.clone()
       geoMap.set(tile.id, geo)
-      tileTexMap.set(tile.id, { splatTex: defaultSplat, layers: null })
+      tileTexMap.set(tile.id, { splatTex: defaultSplat, atlas: null, tileScales: null })
 
       const { tileX, tileZ } = getTileCoords(tile)
       mgr.registerGeometry(tileX, tileZ, geo)
@@ -293,7 +292,13 @@
           .getLayersForTile(tileX, tileZ)
           .then((resolved) => {
             const td = tileTexMap.get(tileId)
-            if (td) td.layers = resolved.layers
+            if (td) {
+              td.atlas = buildSplatAtlas(resolved.layers)
+              td.tileScales = [
+                resolved.layers[0].tile, resolved.layers[1].tile,
+                resolved.layers[2].tile, resolved.layers[3].tile,
+              ]
+            }
           })
           .catch(() => {})
       }
@@ -313,7 +318,13 @@
       if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
         mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
           const td = tileTexMap.get(tile.id)
-          if (td) td.layers = resolved.layers
+          if (td) {
+            td.atlas = buildSplatAtlas(resolved.layers)
+            td.tileScales = [
+              resolved.layers[0].tile, resolved.layers[1].tile,
+              resolved.layers[2].tile, resolved.layers[3].tile,
+            ]
+          }
         })
       }
     }

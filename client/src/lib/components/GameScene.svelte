@@ -801,7 +801,7 @@
   intensity={SUN_MAX_INTENSITY}
   castShadow
   shadow.bias={-0.0002}
-  shadow.normalBias={0.01}
+  shadow.normalBias={0.15}
   shadow.mapSize.width={2048}
   shadow.mapSize.height={2048}
 />

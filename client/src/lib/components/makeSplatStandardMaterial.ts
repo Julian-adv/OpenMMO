@@ -1,4 +1,4 @@
-// makeSplatStandardMaterial.ts — TSL/WebGPU version
+// makeSplatStandardMaterial.ts — TSL/WebGPU version (atlas-based)
 import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import {
@@ -21,8 +21,14 @@ import {
   fract,
   abs,
   distance,
+  dFdx,
+  dFdy,
   TBNViewMatrix,
 } from 'three/tsl'
+import type Node from 'three/src/nodes/core/Node.js'
+import type TextureNode from 'three/src/nodes/accessors/TextureNode.js'
+import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js'
+import type { SplatAtlasSet } from '../utils/splatLayerLoader'
 
 export type SplatLayer = {
   map: THREE.Texture // Albedo (sRGB)
@@ -32,7 +38,8 @@ export type SplatLayer = {
 }
 
 export type SplatParams = {
-  layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] // RGBA order
+  atlas: SplatAtlasSet
+  tileScales: [number, number, number, number]
   splatMap: THREE.Texture // RGBA weight map (R=layer0, G=layer1, B=layer2, A=layer3)
   splatScale?: number // UV scale of the splat map (default 1)
   sharedBrushUniforms?: SplatBrushUniforms // Reuse brush/grid uniforms across materials
@@ -59,30 +66,29 @@ export function createSplatBrushUniforms(): SplatBrushUniforms {
   }
 }
 
+// ─── Atlas quadrant offsets (2×2 layout) ─────────────────────
+// [0]=TL, [1]=TR, [2]=BL, [3]=BR — matches buildAtlasTexture layout
+const QUAD_OFFSETS = [vec2(0, 0), vec2(0.5, 0), vec2(0, 0.5), vec2(0.5, 0.5)]
+
 export function makeSplatStandardMaterial({
-  layers,
+  atlas,
+  tileScales,
   splatMap,
   splatScale = 1,
   sharedBrushUniforms,
 }: SplatParams) {
-  // Recommended common texture settings
-  const prepare = (t: THREE.Texture, isColor = false) => {
-    t.wrapS = t.wrapT = THREE.RepeatWrapping
-    t.anisotropy = 8
-    if (isColor) t.colorSpace = THREE.SRGBColorSpace
-    t.needsUpdate = true
-  }
-
-  layers.forEach((l) => prepare(l.map, true))
-  prepare(splatMap, false)
+  // Prepare splat map
+  splatMap.wrapS = splatMap.wrapT = THREE.RepeatWrapping
+  splatMap.anisotropy = 8
   splatMap.minFilter = THREE.LinearMipMapLinearFilter
   splatMap.magFilter = THREE.LinearFilter
+  splatMap.needsUpdate = true
 
   // ─── Scalar uniforms ─────────────────────────────────
-  const uTile0 = uniform(layers[0].tile)
-  const uTile1 = uniform(layers[1].tile)
-  const uTile2 = uniform(layers[2].tile)
-  const uTile3 = uniform(layers[3].tile)
+  const uTile0 = uniform(tileScales[0])
+  const uTile1 = uniform(tileScales[1])
+  const uTile2 = uniform(tileScales[2])
+  const uTile3 = uniform(tileScales[3])
   const uSplatScale = uniform(splatScale)
 
   // Brush overlay — shared across materials when provided
@@ -94,44 +100,13 @@ export function makeSplatStandardMaterial({
   const uBrushToolMode = sharedBrushUniforms?.brushToolMode ?? uniform(0.0)
   const uGridVisible = sharedBrushUniforms?.gridVisible ?? uniform(0.0)
 
-  // ─── Texture nodes ───────────────────────────────────
-  // Fragment: 1 splat + 4 diffuse + 4 normal + 4 ORM = 13
-  // Plus internal (shadow map, envBRDF, etc.) stays within WebGPU limit of 16
+  // ─── Atlas texture nodes ──────────────────────────────
+  // 1 splat + 1 diffuse atlas + 1 normal atlas + 1 ORM atlas = 4 textures
+  // (vs. 13 before) — leaves plenty of room for shadow maps etc.
   const splatTex = texture(splatMap)
-  const diffTex0 = texture(layers[0].map)
-  const diffTex1 = texture(layers[1].map)
-  const diffTex2 = texture(layers[2].map)
-  const diffTex3 = texture(layers[3].map)
-
-  const hasN = layers.some((l) => !!l.normalMap)
-  const hasORM = false // TEMP: disabled to free texture slots for PointLight shadow
-  // const hasORM = layers.some((l) => !!l.orm)
-
-  // Placeholder texture for missing layers
-  const placeholderTex = new THREE.DataTexture(
-    new Uint8Array([128, 128, 255, 255]),
-    1,
-    1,
-    THREE.RGBAFormat
-  )
-  placeholderTex.needsUpdate = true
-  const placeholderORM = new THREE.DataTexture(
-    new Uint8Array([255, 255, 0, 255]),
-    1,
-    1,
-    THREE.RGBAFormat
-  )
-  placeholderORM.needsUpdate = true
-
-  const normTex0 = hasN ? texture(layers[0].normalMap ?? placeholderTex) : null
-  const normTex1 = hasN ? texture(layers[1].normalMap ?? placeholderTex) : null
-  const normTex2 = hasN ? texture(layers[2].normalMap ?? placeholderTex) : null
-  const normTex3 = hasN ? texture(layers[3].normalMap ?? placeholderTex) : null
-
-  const ormTex0 = hasORM ? texture(layers[0].orm ?? placeholderORM) : null
-  const ormTex1 = hasORM ? texture(layers[1].orm ?? placeholderORM) : null
-  const ormTex2 = hasORM ? texture(layers[2].orm ?? placeholderORM) : null
-  const ormTex3 = hasORM ? texture(layers[3].orm ?? placeholderORM) : null
+  const diffAtlasTex = texture(atlas.diffuseAtlas)
+  const normAtlasTex = atlas.normalAtlas ? texture(atlas.normalAtlas) : null
+  const ormAtlasTex = atlas.ormAtlas ? texture(atlas.ormAtlas) : null
 
   // ─── Varyings: world position from vertex ─────────
   const vUvSplat = varying(vec2(0), 'v_uvSplat')
@@ -145,6 +120,28 @@ export function makeSplatStandardMaterial({
     w.assign(mix(w, w.div(wSum), smoothstep(float(0), float(1e-5), wSum)))
     return w
   })
+
+  // ─── Helper: sample atlas with correct tiling + mipmapping ──
+  // Uses fract() for manual repeat + .grad() with continuous derivatives
+  // to avoid the mipmap seam that fract() discontinuity would cause.
+  function sampleAtlas(
+    atlasTex: ShaderNodeObject<TextureNode>,
+    baseUv: ReturnType<typeof uv>,
+    tileScale: ReturnType<typeof uniform>,
+    quadOffset: ShaderNodeObject<Node>,
+    dUVdx: ReturnType<typeof dFdx>,
+    dUVdy: ReturnType<typeof dFdy>
+  ) {
+    const tiledUv = baseUv.mul(tileScale)
+    const atlasUv = fract(tiledUv).mul(0.5).add(quadOffset)
+    // Gradients from continuous UV (before fract) scaled to atlas quadrant space
+    const gx = dUVdx.mul(tileScale).mul(0.5)
+    const gy = dUVdy.mul(tileScale).mul(0.5)
+    // .sample() types return ShaderNodeObject<Node> but runtime is a TextureNode clone
+    return (
+      atlasTex.sample(atlasUv) as unknown as ShaderNodeObject<TextureNode>
+    ).grad(gx, gy)
+  }
 
   // ─── Vertex position node (adds varyings) ─────────
   const vertexNode = Fn(() => {
@@ -160,11 +157,41 @@ export function makeSplatStandardMaterial({
   const colorNode = Fn(() => {
     const localUv = uv()
     const weights = getWeights(vUvSplat)
+    const uvDx = dFdx(localUv)
+    const uvDy = dFdy(localUv)
 
-    const c0 = diffTex0.sample(localUv.mul(uTile0)).rgb
-    const c1 = diffTex1.sample(localUv.mul(uTile1)).rgb
-    const c2 = diffTex2.sample(localUv.mul(uTile2)).rgb
-    const c3 = diffTex3.sample(localUv.mul(uTile3)).rgb
+    const c0 = sampleAtlas(
+      diffAtlasTex,
+      localUv,
+      uTile0,
+      QUAD_OFFSETS[0],
+      uvDx,
+      uvDy
+    ).rgb
+    const c1 = sampleAtlas(
+      diffAtlasTex,
+      localUv,
+      uTile1,
+      QUAD_OFFSETS[1],
+      uvDx,
+      uvDy
+    ).rgb
+    const c2 = sampleAtlas(
+      diffAtlasTex,
+      localUv,
+      uTile2,
+      QUAD_OFFSETS[2],
+      uvDx,
+      uvDy
+    ).rgb
+    const c3 = sampleAtlas(
+      diffAtlasTex,
+      localUv,
+      uTile3,
+      QUAD_OFFSETS[3],
+      uvDx,
+      uvDy
+    ).rgb
     const blended = c0
       .mul(weights.r)
       .add(c1.mul(weights.g))
@@ -239,29 +266,55 @@ export function makeSplatStandardMaterial({
     return vec4(blended, 1.0)
   })()
 
-  // ─── Normal node (splat-blended normals) ──────────
-  const normalNode = hasN
+  // ─── Normal node (splat-blended normals from atlas) ──────────
+  const normalNode = normAtlasTex
     ? Fn(() => {
         const localUv = uv()
         const w = getWeights(vUvSplat)
+        const uvDx = dFdx(localUv)
+        const uvDy = dFdy(localUv)
 
-        const n0 = normTex0!
-          .sample(localUv.mul(uTile0))
+        const n0 = sampleAtlas(
+          normAtlasTex,
+          localUv,
+          uTile0,
+          QUAD_OFFSETS[0],
+          uvDx,
+          uvDy
+        )
           .xyz.mul(2.0)
           .sub(1.0)
           .mul(w.r)
-        const n1 = normTex1!
-          .sample(localUv.mul(uTile1))
+        const n1 = sampleAtlas(
+          normAtlasTex,
+          localUv,
+          uTile1,
+          QUAD_OFFSETS[1],
+          uvDx,
+          uvDy
+        )
           .xyz.mul(2.0)
           .sub(1.0)
           .mul(w.g)
-        const n2 = normTex2!
-          .sample(localUv.mul(uTile2))
+        const n2 = sampleAtlas(
+          normAtlasTex,
+          localUv,
+          uTile2,
+          QUAD_OFFSETS[2],
+          uvDx,
+          uvDy
+        )
           .xyz.mul(2.0)
           .sub(1.0)
           .mul(w.b)
-        const n3 = normTex3!
-          .sample(localUv.mul(uTile3))
+        const n3 = sampleAtlas(
+          normAtlasTex,
+          localUv,
+          uTile3,
+          QUAD_OFFSETS[3],
+          uvDx,
+          uvDy
+        )
           .xyz.mul(2.0)
           .sub(1.0)
           .mul(w.a)
@@ -274,46 +327,136 @@ export function makeSplatStandardMaterial({
       })()
     : undefined
 
-  // ─── Roughness node (ORM G channel) ───────────────
-  const roughnessNode = hasORM
+  // ─── Roughness node (ORM atlas G channel) ───────────────
+  const roughnessNode = ormAtlasTex
     ? Fn(() => {
         const localUv = uv()
         const w = getWeights(vUvSplat)
+        const uvDx = dFdx(localUv)
+        const uvDy = dFdy(localUv)
 
-        const r0 = ormTex0!.sample(localUv.mul(uTile0)).g
-        const r1 = ormTex1!.sample(localUv.mul(uTile1)).g
-        const r2 = ormTex2!.sample(localUv.mul(uTile2)).g
-        const r3 = ormTex3!.sample(localUv.mul(uTile3)).g
+        const r0 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile0,
+          QUAD_OFFSETS[0],
+          uvDx,
+          uvDy
+        ).g
+        const r1 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile1,
+          QUAD_OFFSETS[1],
+          uvDx,
+          uvDy
+        ).g
+        const r2 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile2,
+          QUAD_OFFSETS[2],
+          uvDx,
+          uvDy
+        ).g
+        const r3 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile3,
+          QUAD_OFFSETS[3],
+          uvDx,
+          uvDy
+        ).g
 
         return r0.mul(w.r).add(r1.mul(w.g)).add(r2.mul(w.b)).add(r3.mul(w.a))
       })()
     : undefined
 
-  // ─── Metalness node (ORM B channel) ───────────────
-  const metalnessNode = hasORM
+  // ─── Metalness node (ORM atlas B channel) ───────────────
+  const metalnessNode = ormAtlasTex
     ? Fn(() => {
         const localUv = uv()
         const w = getWeights(vUvSplat)
+        const uvDx = dFdx(localUv)
+        const uvDy = dFdy(localUv)
 
-        const m0 = ormTex0!.sample(localUv.mul(uTile0)).b
-        const m1 = ormTex1!.sample(localUv.mul(uTile1)).b
-        const m2 = ormTex2!.sample(localUv.mul(uTile2)).b
-        const m3 = ormTex3!.sample(localUv.mul(uTile3)).b
+        const m0 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile0,
+          QUAD_OFFSETS[0],
+          uvDx,
+          uvDy
+        ).b
+        const m1 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile1,
+          QUAD_OFFSETS[1],
+          uvDx,
+          uvDy
+        ).b
+        const m2 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile2,
+          QUAD_OFFSETS[2],
+          uvDx,
+          uvDy
+        ).b
+        const m3 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile3,
+          QUAD_OFFSETS[3],
+          uvDx,
+          uvDy
+        ).b
 
         return m0.mul(w.r).add(m1.mul(w.g)).add(m2.mul(w.b)).add(m3.mul(w.a))
       })()
     : undefined
 
-  // ─── AO node (ORM R channel) ──────────────────────
-  const aoNode = hasORM
+  // ─── AO node (ORM atlas R channel) ──────────────────────
+  const aoNode = ormAtlasTex
     ? Fn(() => {
         const localUv = uv()
         const w = getWeights(vUvSplat)
+        const uvDx = dFdx(localUv)
+        const uvDy = dFdy(localUv)
 
-        const ao0 = ormTex0!.sample(localUv.mul(uTile0)).r
-        const ao1 = ormTex1!.sample(localUv.mul(uTile1)).r
-        const ao2 = ormTex2!.sample(localUv.mul(uTile2)).r
-        const ao3 = ormTex3!.sample(localUv.mul(uTile3)).r
+        const ao0 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile0,
+          QUAD_OFFSETS[0],
+          uvDx,
+          uvDy
+        ).r
+        const ao1 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile1,
+          QUAD_OFFSETS[1],
+          uvDx,
+          uvDy
+        ).r
+        const ao2 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile2,
+          QUAD_OFFSETS[2],
+          uvDx,
+          uvDy
+        ).r
+        const ao3 = sampleAtlas(
+          ormAtlasTex,
+          localUv,
+          uTile3,
+          QUAD_OFFSETS[3],
+          uvDx,
+          uvDy
+        ).r
 
         return ao0
           .mul(w.r)
@@ -336,15 +479,12 @@ export function makeSplatStandardMaterial({
   if (metalnessNode) mat.metalnessNode = metalnessNode
   if (aoNode) mat.aoNode = aoNode
 
-  // Store uniforms for external access (layer textures swappable per-tile)
+  // Store uniforms for external access (atlas textures swappable per-tile)
   mat.userData.uniforms = {
     splatMap: splatTex,
-    diffTex0,
-    diffTex1,
-    diffTex2,
-    diffTex3,
-    ...(normTex0 ? { normTex0, normTex1, normTex2, normTex3 } : {}),
-    ...(ormTex0 ? { ormTex0, ormTex1, ormTex2, ormTex3 } : {}),
+    diffuseAtlas: diffAtlasTex,
+    ...(normAtlasTex ? { normalAtlas: normAtlasTex } : {}),
+    ...(ormAtlasTex ? { ormAtlas: ormAtlasTex } : {}),
     uTile0,
     uTile1,
     uTile2,

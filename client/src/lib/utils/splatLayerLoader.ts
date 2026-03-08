@@ -31,6 +31,13 @@ export const ALL_SPLAT_TEXTURES: { name: string; defaultTileScale: number }[] =
     { name: 'sandy_gravel_02_1k', defaultTileScale: 8.0 },
   ]
 
+/** Atlas set: 2×2 packed textures for diffuse, normal, ORM */
+export interface SplatAtlasSet {
+  diffuseAtlas: THREE.Texture
+  normalAtlas: THREE.Texture | null
+  ormAtlas: THREE.Texture | null
+}
+
 /** Cache: texture name → extracted textures (without tile scale) */
 interface CachedTextures {
   map: THREE.Texture
@@ -40,6 +47,7 @@ interface CachedTextures {
 
 const textureCache = new Map<string, CachedTextures>()
 const inflightTextures = new Map<string, Promise<CachedTextures>>()
+const atlasCache = new Map<string, SplatAtlasSet>()
 
 function prepColorTex(t: THREE.Texture | null) {
   if (!t) return null
@@ -181,4 +189,87 @@ export function loadSplatLayers(
   return Promise.all(
     configs.map((c) => loadSplatLayer(c.texture, c.tileScale))
   ) as Promise<[SplatLayer, SplatLayer, SplatLayer, SplatLayer]>
+}
+
+// ── Atlas building ──────────────────────────────────────────────
+
+/**
+ * Pack 4 textures into a 2×2 atlas (2048×2048 from 1024×1024 sources).
+ * Layout: [0]=TL, [1]=TR, [2]=BL, [3]=BR
+ */
+function buildAtlasTexture(
+  textures: (THREE.Texture | null | undefined)[],
+  fallbackFill: string,
+  isColor: boolean
+): THREE.Texture | null {
+  const hasAny = textures.some((t) => t?.image)
+  if (!hasAny) return null
+
+  const firstImg = textures.find((t) => t?.image)?.image as
+    | HTMLImageElement
+    | HTMLCanvasElement
+    | ImageBitmap
+    | undefined
+  const size =
+    (firstImg &&
+      ('naturalWidth' in firstImg
+        ? firstImg.naturalWidth || firstImg.width
+        : firstImg.width)) ||
+    1024
+
+  const canvas = document.createElement('canvas')
+  canvas.width = size * 2
+  canvas.height = size * 2
+  const ctx = canvas.getContext('2d')!
+
+  ctx.fillStyle = fallbackFill
+  ctx.fillRect(0, 0, size * 2, size * 2)
+
+  for (let i = 0; i < 4; i++) {
+    const tex = textures[i]
+    if (tex?.image) {
+      const x = (i % 2) * size
+      const y = Math.floor(i / 2) * size
+      ctx.drawImage(tex.image as CanvasImageSource, x, y, size, size)
+    }
+  }
+
+  const atlasTex = new THREE.CanvasTexture(canvas)
+  atlasTex.wrapS = atlasTex.wrapT = THREE.ClampToEdgeWrapping
+  atlasTex.anisotropy = 8
+  atlasTex.flipY = false
+  if (isColor) atlasTex.colorSpace = THREE.SRGBColorSpace
+  atlasTex.needsUpdate = true
+  return atlasTex
+}
+
+/** Build a 2×2 atlas set from 4 splat layers. Results are cached by texture UUIDs. */
+export function buildSplatAtlas(
+  layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer]
+): SplatAtlasSet {
+  const key = layers.map((l) => l.map.uuid).join(',')
+  const cached = atlasCache.get(key)
+  if (cached) return cached
+
+  const diffuseAtlas = buildAtlasTexture(
+    layers.map((l) => l.map),
+    'rgb(128,128,128)',
+    true
+  )!
+
+  const normalAtlas = buildAtlasTexture(
+    layers.map((l) => l.normalMap),
+    'rgb(128,128,255)',
+    false
+  )
+
+  const ormAtlas = buildAtlasTexture(
+    layers.map((l) => l.orm),
+    'rgb(255,255,0)',
+    false
+  )
+
+  const result: SplatAtlasSet = { diffuseAtlas, normalAtlas, ormAtlas }
+  atlasCache.set(key, result)
+  return result
 }
