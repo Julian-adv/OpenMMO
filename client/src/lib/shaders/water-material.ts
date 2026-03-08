@@ -165,7 +165,7 @@ export function createWaterMaterial(
   const uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.3).normalize())
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
   const uCameraDirection = uniform(new THREE.Vector3(0, -1, 0))
-  const uRefractionStrength = uniform(0.02)
+  const uRefractionStrength = uniform(0.08)
 
   // Texture nodes (use texture() directly — update via .value)
   const heightmapTex = texture(options.heightmapTexture)
@@ -241,20 +241,23 @@ export function createWaterMaterial(
     // View direction
     const viewDir = normalize(vec3(uCameraDirection).negate())
 
-    // 4. Refraction
+    // 4. Refraction — distort UV by surface normals for underwater ripple
     const screenUV = vClipPos.xy.mul(0.5).add(0.5)
+    // Y-flip for WebGPU render target coordinate convention
+    const refractionBaseUV = vec2(screenUV.x, float(1.0).sub(screenUV.y))
+    const refractionDistort = surfaceNormal.xz.mul(uRefractionStrength)
     const refractionUV = clamp(
-      screenUV.add(surfaceNormal.xz.mul(uRefractionStrength)),
+      refractionBaseUV.add(refractionDistort),
       0.0,
       1.0
     )
     const refractionColor = refractionTex.sample(refractionUV).rgb
 
-    // Blend refraction with depth tint
+    // Blend refraction with depth tint — shallow shows terrain, deep shows water
     const refractionMix = float(1).sub(
       smoothstep(float(0), float(0.7), smoothDepth)
     )
-    waterColor.assign(mix(waterColor, refractionColor, refractionMix.mul(0.7)))
+    waterColor.assign(mix(waterColor, refractionColor, refractionMix))
 
     // Underwater caustics — light pattern on the seafloor, seen through refraction
     const cUV1 = vOrigWorldPos.xz
@@ -363,7 +366,7 @@ export function createWaterMaterial(
     )
     // Where alpha > 0, use entity reflection instead of sky
     skyReflection.assign(
-      mix(skyReflection, reflectionSample.rgb, reflectionSample.a)
+      mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
     )
 
     // 5. Shore foam — wide breaking waves
@@ -456,7 +459,7 @@ export function createWaterMaterial(
       mix(
         finalColorBeforeRefl,
         reflectionSample.rgb,
-        reflectionSample.a.mul(0.6)
+        reflectionSample.a.mul(0.3)
       )
     )
     // Caustics glow — additive emissive-like light on the final surface
@@ -467,8 +470,9 @@ export function createWaterMaterial(
 
     const finalColor = finalColorBeforeRefl
 
-    // 6. Alpha
-    const alpha = mix(float(0.15), float(0.98), smoothDepth)
+    // 6. Alpha — opaque so terrain is only visible via refraction (distorted)
+    const baseAlpha = mix(float(0.7), float(0.98), smoothDepth)
+    const alpha = baseAlpha
       .add(foamWithTex.mul(0.5))
       .add(sparkle)
       .min(1.0)

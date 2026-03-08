@@ -55,6 +55,8 @@
     mapEditorMode,
     teleportLoading,
     debugSpeedMode,
+    refractionEnabled,
+    reflectionEnabled,
   } from '../stores/debugStore'
   import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, terrainForceRebuild } from '../stores/editorStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
@@ -488,7 +490,7 @@
       }
 
       // Render refraction pass (scene without water or entities — terrain only)
-      if (refractionManager) {
+      if (refractionManager && $refractionEnabled) {
         if (camera) refractionManager.setCamera(camera)
         if (waterGroup) refractionManager.setWaterGroup(waterGroup)
 
@@ -516,10 +518,12 @@
           brushUniforms.brushActive.value = savedBrushActive
           brushUniforms.gridVisible.value = savedGridVisible
         }
+      } else if (refractionManager) {
+        refractionManager.clear()
       }
 
       // Render reflection pass (entities only, mirrored camera)
-      if (reflectionManager) {
+      if (reflectionManager && $reflectionEnabled) {
         if (camera) reflectionManager.setCamera(camera)
         reflectionManager.setTerrainGroup(terrainGroup ?? null)
         if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
@@ -541,6 +545,8 @@
         reflectionManager.render()
 
         for (const nt of nametagGroups) nt.visible = true
+      } else if (reflectionManager) {
+        reflectionManager.clear()
       }
 
       loopProfiler.record('frameWork', performance.now() - frameWorkStart)

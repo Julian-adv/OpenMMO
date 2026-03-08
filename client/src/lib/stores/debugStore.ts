@@ -8,6 +8,8 @@ export const mapEditorMode = writable(false)
 export const gridVisible = writable(false)
 export const worldMapVisible = writable(false)
 export const debugSpeedMode = writable(false)
+export const refractionEnabled = writable(true)
+export const reflectionEnabled = writable(true)
 export const teleportLoading = writable(false)
 
 export interface PlayerDebugInfo {

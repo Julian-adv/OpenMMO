@@ -161,6 +161,23 @@ export class ReflectionRenderManager {
     if (this.waterGroup) this.waterGroup.visible = savedWater ?? true
   }
 
+  /** Clear the reflection target to transparent black. */
+  clear() {
+    const savedClearColor = new THREE.Color()
+    this.renderer.getClearColor(savedClearColor)
+    const savedClearAlpha = this.renderer.getClearAlpha()
+    this.renderer.setClearColor(0x000000, 0)
+    const prev = this.renderer.getRenderTarget()
+    this.renderer.setRenderTarget(this.target)
+    // Render with scene hidden to produce only the clear color
+    const savedVisible = this.scene.visible
+    this.scene.visible = false
+    this.renderer.render(this.scene, this.reflCam)
+    this.scene.visible = savedVisible
+    this.renderer.setRenderTarget(prev)
+    this.renderer.setClearColor(savedClearColor, savedClearAlpha)
+  }
+
   resize(width: number, height: number) {
     this.target.setSize(
       Math.max(1, Math.floor(width / 2)),

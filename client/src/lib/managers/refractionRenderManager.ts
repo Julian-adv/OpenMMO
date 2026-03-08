@@ -68,6 +68,17 @@ export class RefractionRenderManager {
     if (this.waterGroup) this.waterGroup.visible = true
   }
 
+  /** Clear the refraction target to black. */
+  clear() {
+    const currentRenderTarget = this.renderer.getRenderTarget()
+    this.renderer.setRenderTarget(this.target)
+    const savedVisible = this.scene.visible
+    this.scene.visible = false
+    this.renderer.render(this.scene, this.camera!)
+    this.scene.visible = savedVisible
+    this.renderer.setRenderTarget(currentRenderTarget)
+  }
+
   resize(width: number, height: number) {
     this.target.setSize(
       Math.max(1, Math.floor(width / 2)),

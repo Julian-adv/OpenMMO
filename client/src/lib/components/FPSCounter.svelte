@@ -32,6 +32,8 @@
     gridVisible,
     worldMapVisible,
     debugSpeedMode,
+    refractionEnabled,
+    reflectionEnabled,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -94,6 +96,14 @@
 
   function toggleDebugSpeed() {
     debugSpeedMode.update((v) => !v)
+  }
+
+  function toggleRefraction() {
+    refractionEnabled.update((v) => !v)
+  }
+
+  function toggleReflection() {
+    reflectionEnabled.update((v) => !v)
   }
 
   function toggleMapEditor() {
@@ -221,6 +231,24 @@
           title="Debug Mode: 10x Speed + Extended Zoom"
         >
           FAST MOVE
+        </button>
+
+        <button
+          class="action-btn refraction-btn"
+          class:active={$refractionEnabled}
+          onclick={toggleRefraction}
+          title="Toggle Water Refraction"
+        >
+          REFRACT
+        </button>
+
+        <button
+          class="action-btn reflection-btn"
+          class:active={$reflectionEnabled}
+          onclick={toggleReflection}
+          title="Toggle Water Reflection"
+        >
+          REFLECT
         </button>
       </div>
     </div>
@@ -400,5 +428,15 @@
   .action-btn.debug-speed-btn.active {
     background: #c05621;
     border-color: #ed8936;
+  }
+
+  .action-btn.refraction-btn.active {
+    background: #2b6cb0;
+    border-color: #63b3ed;
+  }
+
+  .action-btn.reflection-btn.active {
+    background: #553b8a;
+    border-color: #b794f4;
   }
 </style>
