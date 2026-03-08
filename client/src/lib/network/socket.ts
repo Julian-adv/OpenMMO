@@ -318,6 +318,10 @@ class NetworkManager {
     this.sendMessage({ DebugTeleport: { position } })
   }
 
+  sendTorchToggle(enabled: boolean) {
+    this.sendMessage({ TorchToggle: { enabled } })
+  }
+
   sendChatMessage(message: string) {
     this.sendMessage({ ChatMessage: { message } })
   }

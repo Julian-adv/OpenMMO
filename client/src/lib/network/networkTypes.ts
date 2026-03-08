@@ -15,6 +15,7 @@ export type ServerPlayer = {
   health: number
   max_health: number
   class: CharacterClass
+  torch_on: boolean
 }
 
 export type ServerMonster = {
@@ -105,6 +106,7 @@ export type ClientMessage =
   | { MonsterAttack: { monster_id: string; target_player_id: string } }
   | 'RequestRespawn'
   | { DebugTeleport: { position: Position } }
+  | { TorchToggle: { enabled: boolean } }
 
 export type AuthSuccessPayload = {
   accountName: string

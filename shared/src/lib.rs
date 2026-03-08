@@ -114,6 +114,8 @@ pub struct Player {
     pub health: u32,
     pub max_health: u32,
     pub class: CharacterClass,
+    #[serde(default)]
+    pub torch_on: bool,
     #[serde(skip)]
     pub last_combat_at: u64,
 }
@@ -211,6 +213,9 @@ pub enum ClientMessage {
     RequestRespawn,
     DebugTeleport {
         position: Position,
+    },
+    TorchToggle {
+        enabled: bool,
     },
 }
 
@@ -323,6 +328,10 @@ pub enum ServerMessage {
     Kicked {
         player_id: String,
         reason: String,
+    },
+    PlayerTorchToggled {
+        player_id: String,
+        enabled: bool,
     },
 }
 

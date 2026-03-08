@@ -548,6 +548,14 @@ async fn handle_client_message(
                 warn!("Received debug teleport from client that is not in game");
             }
         }
+
+        ClientMessage::TorchToggle { enabled } => {
+            if let Some(id) = &state.player_id {
+                game_state.toggle_player_torch(id, enabled).await;
+            } else {
+                warn!("Received torch toggle from client that is not in game");
+            }
+        }
     }
 
     Ok(vec![])

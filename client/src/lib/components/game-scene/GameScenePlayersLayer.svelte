@@ -1,6 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
-  import PlayerModel from '../PlayerModel.svelte'
+  import { SvelteMap } from 'svelte/reactivity'
+  import PlayerModel, { type TorchMode } from '../PlayerModel.svelte'
   import PlayerControl from '../PlayerControl.svelte'
   import type {
     ChatBubble,
@@ -10,6 +11,10 @@
   import type { PlayerState } from '../../utils/movementUtils'
   import type Monster from '../Monster.svelte'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+
+  // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
+  // crashes when castShadow is toggled dynamically, so remote torches are light-only).
+  const MAX_REMOTE_TORCH_LIGHTS = 4
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
@@ -52,6 +57,40 @@
     currentPlayerModel = $bindable<PlayerModel | null>(null),
     otherPlayerModels = $bindable<(PlayerModel | undefined)[]>([]),
   }: Props = $props()
+
+  // Compute torch mode for each remote player:
+  // - Closest N torch-bearing players get 'light-only'
+  // - Rest get 'off'
+  let remoteTorchModes = $derived.by(() => {
+    const modes = new SvelteMap<string, TorchMode>()
+    if (!currentPlayer) return modes
+
+    const playerPos = currentPlayer.position
+    const torchPlayers: { id: string; dist: number }[] = []
+
+    for (const [id, player] of otherPlayers) {
+      if (!player.torchOn) {
+        modes.set(id, 'off')
+        continue
+      }
+      const rp = remotePlayers.get(id)
+      if (!rp) {
+        modes.set(id, 'off')
+        continue
+      }
+      const dx = rp.position.x - playerPos.x
+      const dz = rp.position.z - playerPos.z
+      torchPlayers.push({ id, dist: dx * dx + dz * dz })
+    }
+
+    torchPlayers.sort((a, b) => a.dist - b.dist)
+
+    for (let i = 0; i < torchPlayers.length; i++) {
+      modes.set(torchPlayers[i].id, i < MAX_REMOTE_TORCH_LIGHTS ? 'light-only' : 'off')
+    }
+
+    return modes
+  })
 </script>
 
 {#if camera && terrainMeshes.some((mesh) => mesh !== undefined)}
@@ -89,6 +128,7 @@
     bind:isLoading={isCurrentPlayerLoading}
     lastDamageInfo={currentPlayer.lastDamageInfo}
     lastRegenInfo={currentPlayer.lastRegenInfo}
+    torchMode="local"
   />
 {/if}
 
@@ -115,6 +155,7 @@
         characterClass={player.characterClass}
         health={player.health}
         maxHealth={player.maxHealth}
+        torchMode={remoteTorchModes.get(player.id) ?? 'off'}
       />
     {/if}
   {/each}

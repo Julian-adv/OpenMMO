@@ -21,6 +21,7 @@ pub fn new_player(
         health: max_health,
         max_health,
         class,
+        torch_on: false,
         last_combat_at: 0,
     }
 }

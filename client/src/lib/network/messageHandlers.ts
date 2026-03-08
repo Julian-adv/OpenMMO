@@ -131,6 +131,7 @@ export function handleServerMessage(
         health: serverPlayer.health,
         maxHealth: serverPlayer.max_health,
         characterClass: serverPlayer.class,
+        torchOn: serverPlayer.torch_on,
       }
       gameStore.update((state) => {
         if (!state.currentPlayer) {
@@ -219,6 +220,7 @@ export function handleServerMessage(
                 health: serverPlayer.health,
                 maxHealth: serverPlayer.max_health,
                 characterClass: serverPlayer.class,
+                torchOn: serverPlayer.torch_on,
               }
               remotePlayerManager.initPlayer(
                 serverPlayer.id,
@@ -437,6 +439,15 @@ export function handleServerMessage(
         maxHealth: data.max_health,
         ...(isCurrentPlayer ? { lastRegenInfo: regenInfo } : {}),
       })
+      break
+    }
+
+    case 'PlayerTorchToggled': {
+      const state = get(gameStore)
+      if (state.currentPlayer?.id === data.player_id) {
+        break
+      }
+      updatePlayer(data.player_id, { torchOn: data.enabled })
       break
     }
 

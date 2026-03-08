@@ -18,6 +18,7 @@
 </script>
 
 <script lang="ts">
+  import { networkManager } from '../network/socket'
   import { cameraDistance } from '../stores/cameraStore'
   import { TERRAIN_TILE_SIZE } from './game-scene/terrain-utils'
   import { tileToRegion } from '../managers/terrainMetaManager'
@@ -112,7 +113,11 @@
   }
 
   function toggleTorchLight() {
-    torchLightEnabled.update((v) => !v)
+    torchLightEnabled.update((v) => {
+      const newValue = !v
+      networkManager.sendTorchToggle(newValue)
+      return newValue
+    })
   }
 </script>
 

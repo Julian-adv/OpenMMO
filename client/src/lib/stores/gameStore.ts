@@ -17,6 +17,7 @@ interface PlayerBase {
   health: number
   maxHealth: number
   characterClass: CharacterClass
+  torchOn?: boolean
   lastDamageInfo?: PlayerDamageInfo
   lastRegenInfo?: PlayerDamageInfo
 }

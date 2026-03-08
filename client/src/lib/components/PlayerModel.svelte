@@ -28,6 +28,8 @@
   import type { PlayerDamageInfo } from '../stores/gameStore'
   import { torchLightEnabled } from '../stores/debugStore'
 
+  export type TorchMode = 'local' | 'shadow' | 'light-only' | 'off'
+
   interface Props {
     position: Vector3
     name: string
@@ -47,6 +49,7 @@
     isLoading?: boolean
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
+    torchMode?: TorchMode
   }
 
   let {
@@ -68,6 +71,7 @@
     isLoading = $bindable(false),
     lastDamageInfo,
     lastRegenInfo,
+    torchMode = 'off',
   }: Props = $props()
 
   let nametagScale = $state(1)
@@ -78,6 +82,19 @@
 
   // Floating damage text
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
+
+  // Blob shadow for remote torch (shared across instances)
+  const BLOB_SHADOW_RADIUS = 0.45
+  const blobShadowGeometry = new THREE.CircleGeometry(BLOB_SHADOW_RADIUS, 16)
+  const blobShadowMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.35,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  })
 
   // Torch light flickering
   const TORCH_BASE_INTENSITY = 50
@@ -498,8 +515,9 @@
       chatBubbleInstance.update()
     }
 
-    // Torch light flickering
-    if (torchLight && get(torchLightEnabled)) {
+    // Torch light flickering (works for both local and remote torches)
+    const torchActive = isCurrentPlayer ? get(torchLightEnabled) : torchMode !== 'off'
+    if (torchLight && torchActive) {
       torchFlickerTime += deltaTime
       const baseIntensity = TORCH_BASE_INTENSITY
       const flicker =
@@ -584,23 +602,35 @@
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />
 
-    <!-- Debug torch light (upper-left of head, like holding a torch) -->
-    {#if isCurrentPlayer}
-      <T.PointLight
-        bind:ref={torchLight}
-        position={[-0.5, 5.0, 0.3]}
-        color="#ffcc66"
-        intensity={$torchLightEnabled ? TORCH_BASE_INTENSITY : 0}
-        distance={20}
-        decay={1.8}
-        castShadow
-        shadow.mapSize.width={512}
-        shadow.mapSize.height={512}
-        shadow.camera.near={0.5}
-        shadow.camera.far={20}
-        shadow.bias={-0.005}
-        shadow.normalBias={0.05}
-        shadow.radius={5}
+    <!-- Torch point light (always mounted, controlled via intensity to avoid WebGPU shader recompilation) -->
+    <!-- castShadow is static: true for local player only. WebGPU PointShadowNode crashes
+         if castShadow is toggled dynamically (depthTexture null on shadow map resources). -->
+    <T.PointLight
+      bind:ref={torchLight}
+      position={[-0.5, 5.0, 0.3]}
+      color="#ffcc66"
+      intensity={isCurrentPlayer
+        ? ($torchLightEnabled ? TORCH_BASE_INTENSITY : 0)
+        : (torchMode !== 'off' ? TORCH_BASE_INTENSITY : 0)}
+      distance={20}
+      decay={1.8}
+      castShadow={isCurrentPlayer}
+      shadow.mapSize.width={512}
+      shadow.mapSize.height={512}
+      shadow.camera.near={0.5}
+      shadow.camera.far={20}
+      shadow.bias={-0.005}
+      shadow.normalBias={0.05}
+      shadow.radius={5}
+    />
+
+    <!-- Blob shadow circle for remote torches (no real shadow casting) -->
+    {#if !isCurrentPlayer && torchMode !== 'off'}
+      <T.Mesh
+        geometry={blobShadowGeometry}
+        material={blobShadowMaterial}
+        position.y={0.05}
+        rotation.x={-Math.PI / 2}
       />
     {/if}
   </T.Group>

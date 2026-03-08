@@ -245,6 +245,20 @@ impl super::GameState {
         map.get(player_id).map(|(char_id, _, _)| *char_id)
     }
 
+    pub async fn toggle_player_torch(&self, player_id: &PlayerId, enabled: bool) {
+        let mut players = self.players.write().await;
+        if let Some(player) = players.get_mut(player_id) {
+            player.torch_on = enabled;
+            self.broadcast(
+                ServerMessage::PlayerTorchToggled {
+                    player_id: player_id.clone(),
+                    enabled,
+                },
+                None,
+            );
+        }
+    }
+
     #[allow(dead_code)]
     pub async fn get_player_count(&self) -> usize {
         self.players.read().await.len()
