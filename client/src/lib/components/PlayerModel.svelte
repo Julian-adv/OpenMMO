@@ -611,7 +611,7 @@
       color="#ffcc66"
       intensity={isCurrentPlayer
         ? ($torchLightEnabled ? TORCH_BASE_INTENSITY : 0)
-        : (torchMode !== 'off' ? TORCH_BASE_INTENSITY : 0)}
+        : (torchMode === 'light-only' ? TORCH_BASE_INTENSITY : 0)}
       distance={20}
       decay={1.8}
       castShadow={isCurrentPlayer}
@@ -625,7 +625,7 @@
     />
 
     <!-- Blob shadow circle for remote torches (no real shadow casting) -->
-    {#if !isCurrentPlayer && torchMode !== 'off'}
+    {#if !isCurrentPlayer && torchMode === 'light-only'}
       <T.Mesh
         geometry={blobShadowGeometry}
         material={blobShadowMaterial}
