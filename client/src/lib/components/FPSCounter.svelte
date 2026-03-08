@@ -34,6 +34,7 @@
     debugSpeedMode,
     refractionEnabled,
     reflectionEnabled,
+    torchLightEnabled,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -108,6 +109,10 @@
 
   function toggleMapEditor() {
     mapEditorMode.update((v) => !v)
+  }
+
+  function toggleTorchLight() {
+    torchLightEnabled.update((v) => !v)
   }
 </script>
 
@@ -249,6 +254,15 @@
           title="Toggle Water Reflection"
         >
           REFLECT
+        </button>
+
+        <button
+          class="action-btn torch-btn"
+          class:active={$torchLightEnabled}
+          onclick={toggleTorchLight}
+          title="Toggle Torch Point Light"
+        >
+          TORCH
         </button>
       </div>
     </div>
@@ -438,5 +452,10 @@
   .action-btn.reflection-btn.active {
     background: #553b8a;
     border-color: #b794f4;
+  }
+
+  .action-btn.torch-btn.active {
+    background: #b7791f;
+    border-color: #ecc94b;
   }
 </style>

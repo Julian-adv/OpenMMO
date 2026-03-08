@@ -21,6 +21,7 @@ import {
   fract,
   abs,
   distance,
+  TBNViewMatrix,
 } from 'three/tsl'
 
 export type SplatLayer = {
@@ -103,7 +104,8 @@ export function makeSplatStandardMaterial({
   const diffTex3 = texture(layers[3].map)
 
   const hasN = layers.some((l) => !!l.normalMap)
-  const hasORM = layers.some((l) => !!l.orm)
+  const hasORM = false // TEMP: disabled to free texture slots for PointLight shadow
+  // const hasORM = layers.some((l) => !!l.orm)
 
   // Placeholder texture for missing layers
   const placeholderTex = new THREE.DataTexture(
@@ -264,7 +266,11 @@ export function makeSplatStandardMaterial({
           .sub(1.0)
           .mul(w.a)
 
-        return n0.add(n1).add(n2).add(n3).normalize()
+        const tangentNormal = n0.add(n1).add(n2).add(n3).normalize()
+        // Convert tangent-space normal to view-space via TBN matrix.
+        // mat.normalNode is used directly as normalView, so we must provide
+        // a view-space normal — not a tangent-space one.
+        return TBNViewMatrix.mul(tangentNormal).normalize()
       })()
     : undefined
 

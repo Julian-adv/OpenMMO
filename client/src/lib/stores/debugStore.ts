@@ -11,6 +11,7 @@ export const debugSpeedMode = writable(false)
 export const refractionEnabled = writable(true)
 export const reflectionEnabled = writable(true)
 export const teleportLoading = writable(false)
+export const torchLightEnabled = writable(false)
 
 export interface PlayerDebugInfo {
   position: { x: number; y: number; z: number }

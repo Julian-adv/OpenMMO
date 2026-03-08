@@ -26,6 +26,7 @@
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
   import type { PlayerDamageInfo } from '../stores/gameStore'
+  import { torchLightEnabled } from '../stores/debugStore'
 
   interface Props {
     position: Vector3
@@ -77,6 +78,10 @@
 
   // Floating damage text
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
+
+  // Torch light flickering
+  let torchLight = $state<THREE.PointLight | undefined>(undefined)
+  let torchFlickerTime = 0
 
   // Load animated model (both models are loaded; Threlte caches by URL)
   const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
@@ -427,6 +432,10 @@
     return nametagGroup
   }
 
+  export function getTorchLight() {
+    return torchLight
+  }
+
   // Function to update mixer and animation state and nametag - called from GameScene gameLoop
   export function update(deltaTime: number) {
     // Sync Three.js group position directly from the Vector3 prop
@@ -486,6 +495,18 @@
 
     if (chatBubbleInstance) {
       chatBubbleInstance.update()
+    }
+
+    // Torch light flickering
+    if (torchLight && get(torchLightEnabled)) {
+      torchFlickerTime += deltaTime
+      const baseIntensity = 50
+      const flicker =
+        Math.sin(torchFlickerTime * 3.1) * 1.5 +
+        Math.sin(torchFlickerTime * 5.7) * 1.0
+      torchLight.intensity = baseIntensity + flicker
+      torchLight.position.x = -0.5 + Math.sin(torchFlickerTime * 2.3) * 0.015
+      torchLight.position.y = 3.0 + Math.sin(torchFlickerTime * 3.1) * 0.02
     }
 
     if (!mixer) return
@@ -561,6 +582,25 @@
   >
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />
+
+    <!-- Debug torch light (upper-left of head, like holding a torch) -->
+    {#if isCurrentPlayer}
+      <T.PointLight
+        bind:ref={torchLight}
+        position={[-0.5, 5.0, 0.3]}
+        color="#ffcc66"
+        intensity={$torchLightEnabled ? 0.5 : 0}
+        distance={20}
+        decay={1.8}
+        castShadow
+        shadow.mapSize.width={512}
+        shadow.mapSize.height={512}
+        shadow.camera.near={0.5}
+        shadow.camera.far={20}
+        shadow.bias={-0.005}
+        shadow.normalBias={0.05}
+      />
+    {/if}
   </T.Group>
 {/if}
 
