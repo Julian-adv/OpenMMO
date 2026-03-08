@@ -6,6 +6,7 @@ mod game_state;
 mod monster_defs;
 mod terrain;
 mod types;
+mod world_config;
 
 use auth::AuthService;
 use clap::Parser;
@@ -43,6 +44,7 @@ async fn main() {
     tracing_subscriber::fmt::init();
 
     let args = Args::parse();
+    world_config::log_world_config();
     let monster_defs = monster_defs::MonsterDefs::load();
     let auth_service = match AuthService::new(AuthService::default_db_path()) {
         Ok(service) => Arc::new(service),

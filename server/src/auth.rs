@@ -1,4 +1,5 @@
 use crate::types::{CharacterAttributes, GameDateTime};
+use crate::world_config::world_config;
 use onlinerpg_shared::CharacterClass;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -196,26 +197,30 @@ impl AuthService {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<HashSet<_>, _>>()?;
 
-        let expected_columns = [
-            ("level", "INTEGER NOT NULL DEFAULT 1"),
-            ("xp", "INTEGER NOT NULL DEFAULT 0"),
-            ("max_hp", "INTEGER NOT NULL DEFAULT 16"),
-            ("attr_str", "INTEGER NOT NULL DEFAULT 12"),
-            ("attr_dex", "INTEGER NOT NULL DEFAULT 12"),
-            ("attr_con", "INTEGER NOT NULL DEFAULT 12"),
-            ("attr_int", "INTEGER NOT NULL DEFAULT 12"),
-            ("attr_wis", "INTEGER NOT NULL DEFAULT 12"),
-            ("attr_cha", "INTEGER NOT NULL DEFAULT 12"),
-            ("attr_guard", "INTEGER NOT NULL DEFAULT 10"),
-            ("class", "TEXT NOT NULL DEFAULT 'knight'"),
-            ("last_x", "REAL NOT NULL DEFAULT 0.0"),
-            ("last_y", "REAL NOT NULL DEFAULT 0.0"),
-            ("last_z", "REAL NOT NULL DEFAULT 0.0"),
-            ("last_rotation", "REAL NOT NULL DEFAULT 0.0"),
+        let spawn = &world_config().spawn_position;
+        let expected_columns: Vec<(&str, String)> = vec![
+            ("level", "INTEGER NOT NULL DEFAULT 1".into()),
+            ("xp", "INTEGER NOT NULL DEFAULT 0".into()),
+            ("max_hp", "INTEGER NOT NULL DEFAULT 16".into()),
+            ("attr_str", "INTEGER NOT NULL DEFAULT 12".into()),
+            ("attr_dex", "INTEGER NOT NULL DEFAULT 12".into()),
+            ("attr_con", "INTEGER NOT NULL DEFAULT 12".into()),
+            ("attr_int", "INTEGER NOT NULL DEFAULT 12".into()),
+            ("attr_wis", "INTEGER NOT NULL DEFAULT 12".into()),
+            ("attr_cha", "INTEGER NOT NULL DEFAULT 12".into()),
+            ("attr_guard", "INTEGER NOT NULL DEFAULT 10".into()),
+            ("class", "TEXT NOT NULL DEFAULT 'knight'".into()),
+            ("last_x", format!("REAL NOT NULL DEFAULT {}", spawn.x)),
+            ("last_y", format!("REAL NOT NULL DEFAULT {}", spawn.y)),
+            ("last_z", format!("REAL NOT NULL DEFAULT {}", spawn.z)),
+            (
+                "last_rotation",
+                format!("REAL NOT NULL DEFAULT {}", spawn.rotation),
+            ),
         ];
 
-        for (column_name, column_def) in expected_columns {
-            if !existing_columns.contains(column_name) {
+        for (column_name, column_def) in &expected_columns {
+            if !existing_columns.contains(*column_name) {
                 let sql = format!(
                     "ALTER TABLE characters ADD COLUMN {} {}",
                     column_name, column_def
@@ -393,8 +398,12 @@ impl AuthService {
                 attr_wis,
                 attr_cha,
                 attr_guard,
-                class
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                class,
+                last_x,
+                last_y,
+                last_z,
+                last_rotation
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
             params![
                 account_name,
                 character_name,
@@ -408,6 +417,10 @@ impl AuthService {
                 i64::from(attributes.cha),
                 i64::from(attributes.guard),
                 class.as_str(),
+                f64::from(world_config().spawn_position.x),
+                f64::from(world_config().spawn_position.y),
+                f64::from(world_config().spawn_position.z),
+                f64::from(world_config().spawn_position.rotation),
             ],
         )?;
 
@@ -427,10 +440,10 @@ impl AuthService {
             max_hp,
             attributes: attributes.clone(),
             class,
-            last_x: 0.0,
-            last_y: 0.0,
-            last_z: 0.0,
-            last_rotation: 0.0,
+            last_x: world_config().spawn_position.x,
+            last_y: world_config().spawn_position.y,
+            last_z: world_config().spawn_position.z,
+            last_rotation: world_config().spawn_position.rotation,
         })
     }
 

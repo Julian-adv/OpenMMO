@@ -1,4 +1,5 @@
 use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
+use crate::world_config::world_config;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
@@ -211,12 +212,13 @@ impl super::GameState {
                     return;
                 }
                 player.health = player.max_health;
+                let spawn = &world_config().spawn_position;
                 player.position = Position {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
+                    x: spawn.x,
+                    y: spawn.y,
+                    z: spawn.z,
                 };
-                player.rotation = 0.0;
+                player.rotation = spawn.rotation;
                 Some(player.clone())
             } else {
                 None
