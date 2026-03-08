@@ -4,6 +4,7 @@
   import * as THREE from 'three'
   import { PMREMGenerator, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+  import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js'
   import { onMount } from 'svelte'
   import {
     gameStore,
@@ -31,8 +32,6 @@
   import { type PlayerState } from '../utils/movementUtils'
   import {
     GAME_START_YEAR,
-    SHADOW_CAMERA_EXTENT,
-    SHADOW_CAMERA_FAR,
     SUN_DAY_DURATION_SECONDS,
     SUN_MAX_INTENSITY,
     SUN_START_HOUR,
@@ -194,6 +193,21 @@
   })
 
   const sceneLighting = createSceneLightingController()
+
+  // Cascaded Shadow Maps for directional light
+  const CSM_MAX_FAR = 200
+  const CSM_CASCADES = 2
+  $effect(() => {
+    if (!directionalLight) return
+    const csm = new CSMShadowNode(directionalLight, {
+      cascades: CSM_CASCADES,
+      maxFar: CSM_MAX_FAR,
+      mode: 'practical',
+      lightMargin: 100,
+    })
+    csm.fade = true
+    directionalLight.shadow.shadowNode = csm
+  })
 
   let localCalendarDate = $state<CalendarDate>({
     year: GAME_START_YEAR,
@@ -786,12 +800,6 @@
   position={[10, 10, 10]}
   intensity={SUN_MAX_INTENSITY}
   castShadow
-  shadow.camera.left={-SHADOW_CAMERA_EXTENT}
-  shadow.camera.right={SHADOW_CAMERA_EXTENT}
-  shadow.camera.top={SHADOW_CAMERA_EXTENT}
-  shadow.camera.bottom={-SHADOW_CAMERA_EXTENT}
-  shadow.camera.near={1}
-  shadow.camera.far={SHADOW_CAMERA_FAR}
   shadow.bias={-0.0002}
   shadow.normalBias={0.01}
   shadow.mapSize.width={2048}

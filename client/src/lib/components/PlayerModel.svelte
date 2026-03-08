@@ -80,6 +80,7 @@
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
 
   // Torch light flickering
+  const TORCH_BASE_INTENSITY = 50
   let torchLight = $state<THREE.PointLight | undefined>(undefined)
   let torchFlickerTime = 0
 
@@ -500,7 +501,7 @@
     // Torch light flickering
     if (torchLight && get(torchLightEnabled)) {
       torchFlickerTime += deltaTime
-      const baseIntensity = 50
+      const baseIntensity = TORCH_BASE_INTENSITY
       const flicker =
         Math.sin(torchFlickerTime * 3.1) * 1.5 +
         Math.sin(torchFlickerTime * 5.7) * 1.0
@@ -589,7 +590,7 @@
         bind:ref={torchLight}
         position={[-0.5, 5.0, 0.3]}
         color="#ffcc66"
-        intensity={$torchLightEnabled ? 0.5 : 0}
+        intensity={$torchLightEnabled ? TORCH_BASE_INTENSITY : 0}
         distance={20}
         decay={1.8}
         castShadow
@@ -599,6 +600,7 @@
         shadow.camera.far={20}
         shadow.bias={-0.005}
         shadow.normalBias={0.05}
+        shadow.radius={5}
       />
     {/if}
   </T.Group>
