@@ -447,24 +447,24 @@ export function createWaterMaterial(
     const cycle2 = fract(uTime.mul(waveSpeed).add(0.5))
 
     // Waves move from deeper water toward shore
-    const spawnDepth = float(1.0)
-    const shoreDepth = float(0.05)
-    const move1 = smoothstep(float(0), float(0.75), cycle1)
-    const move2 = smoothstep(float(0), float(0.75), cycle2)
+    const spawnDepth = float(1.5)
+    const shoreDepth = float(0.15)
+    const move1 = smoothstep(float(0), float(0.7), cycle1)
+    const move2 = smoothstep(float(0), float(0.7), cycle2)
     const center1 = mix(spawnDepth, shoreDepth, move1)
     const center2 = mix(spawnDepth, shoreDepth, move2)
 
     // Fade in/out
     const fade1 = smoothstep(float(0), float(0.1), cycle1).mul(
-      float(1).sub(smoothstep(float(0.8), float(1), cycle1))
+      float(1).sub(smoothstep(float(0.9), float(1), cycle1))
     )
     const fade2 = smoothstep(float(0), float(0.1), cycle2).mul(
-      float(1).sub(smoothstep(float(0.8), float(1), cycle2))
+      float(1).sub(smoothstep(float(0.9), float(1), cycle2))
     )
 
-    // Wide bands — thick near spawn, thinner near shore
-    const bandWidth1 = float(0.12).add(float(0.18).mul(float(1).sub(move1)))
-    const bandWidth2 = float(0.12).add(float(0.18).mul(float(1).sub(move2)))
+    // Bands widen near shore (wave shoaling) — narrow at spawn, wide when breaking
+    const bandWidth1 = float(0.06).add(float(0.18).mul(move1))
+    const bandWidth2 = float(0.06).add(float(0.18).mul(move2))
 
     // Soft band shape
     const band1 = smoothstep(center1.sub(bandWidth1), center1, noisyD)
@@ -527,7 +527,12 @@ export function createWaterMaterial(
     const finalColorBeforeRefl = mix(
       surfaceColor,
       foamColor,
-      foamWithTex.mul(0.9).mul(shallowDamp)
+      foamWithTex.mul(0.9).mul(
+        float(1)
+          .sub(smoothstep(float(0.3), float(0.7), depthFactor))
+          .mul(0.7)
+          .add(0.3)
+      )
     ).toVar()
 
     // Overlay entity reflection — DISABLED for testing
@@ -538,17 +543,17 @@ export function createWaterMaterial(
     //     reflectionSample.a.mul(0.3)
     //   )
     // )
-    // Caustics glow — additive light on the final surface, dim blue-grey at night
-    const glowNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
-    const glowColor = mix(
-      vec3(0.08, 0.1, 0.15),
-      vec3(uSunColor),
-      glowNightFactor
-    )
-    const causticsGlow = glowColor
-      .mul(pow(causticsShimmer, float(2.0)).mul(causticsStrength).mul(1.5))
-      .mul(causticsDepthGate)
-    finalColorBeforeRefl.addAssign(causticsGlow)
+    // Caustics glow — DISABLED for testing
+    // const glowNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
+    // const glowColor = mix(
+    //   vec3(0.08, 0.1, 0.15),
+    //   vec3(uSunColor),
+    //   glowNightFactor
+    // )
+    // const causticsGlow = glowColor
+    //   .mul(pow(causticsShimmer, float(2.0)).mul(causticsStrength).mul(1.5))
+    //   .mul(causticsDepthGate)
+    // finalColorBeforeRefl.addAssign(causticsGlow)
 
     // Darken water surface at night (match scene ambient)
     const nightDarken = smoothstep(float(-0.05), float(0.1), sunY)
