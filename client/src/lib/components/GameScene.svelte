@@ -293,8 +293,9 @@
   let currentPlayerModel = $state<PlayerModel | null>(null)
   let otherPlayerModels = $state<(PlayerModel | undefined)[]>([])
 
-  // Reference to PlayerControl component
+  // Reference to PlayerControl and PlayersLayer components
   let playerControl = $state<PlayerControl>()
+  let playersLayer = $state<GameScenePlayersLayer>()
 
   // Handle player state changes from PlayerControl
   function handlePlayerStateChange(newState: PlayerState) {
@@ -454,6 +455,9 @@
         'otherPlayerAnimation',
         performance.now() - otherPlayerAnimationStart
       )
+
+      // Update remote shadow light flickering
+      playersLayer?.updateRemoteShadowFlicker(deltaTime / 1000)
 
       // Update monster animations
       const monsterAnimationStart = performance.now()
@@ -844,6 +848,7 @@
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>
   <GameScenePlayersLayer
+    bind:this={playersLayer}
     {camera}
     {cameraInitialized}
     {currentPlayer}

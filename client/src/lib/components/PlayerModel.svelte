@@ -27,6 +27,7 @@
   import DamageText from './DamageText.svelte'
   import type { PlayerDamageInfo } from '../stores/gameStore'
   import { torchLightEnabled } from '../stores/debugStore'
+  import { applyTorchFlicker, TORCH_BASE_INTENSITY, TORCH_BASE_POSITION } from '../utils/torchFlicker'
 
   export type TorchMode = 'local' | 'shadow' | 'light-only' | 'off'
 
@@ -97,7 +98,6 @@
   })
 
   // Torch light flickering
-  const TORCH_BASE_INTENSITY = 50
   let torchLight = $state<THREE.PointLight | undefined>(undefined)
   let torchFlickerTime = 0
 
@@ -516,16 +516,9 @@
     }
 
     // Torch light flickering (works for both local and remote torches)
-    const torchActive = isCurrentPlayer ? get(torchLightEnabled) : torchMode !== 'off'
+    const torchActive = isCurrentPlayer ? get(torchLightEnabled) : torchMode === 'light-only'
     if (torchLight && torchActive) {
-      torchFlickerTime += deltaTime
-      const baseIntensity = TORCH_BASE_INTENSITY
-      const flicker =
-        Math.sin(torchFlickerTime * 3.1) * 1.5 +
-        Math.sin(torchFlickerTime * 5.7) * 1.0
-      torchLight.intensity = baseIntensity + flicker
-      torchLight.position.x = -0.5 + Math.sin(torchFlickerTime * 2.3) * 0.015
-      torchLight.position.y = 3.0 + Math.sin(torchFlickerTime * 3.1) * 0.02
+      torchFlickerTime = applyTorchFlicker(torchLight, torchFlickerTime, deltaTime)
     }
 
     if (!mixer) return
@@ -607,7 +600,7 @@
          if castShadow is toggled dynamically (depthTexture null on shadow map resources). -->
     <T.PointLight
       bind:ref={torchLight}
-      position={[-0.5, 5.0, 0.3]}
+      position={[TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z]}
       color="#ffcc66"
       intensity={isCurrentPlayer
         ? ($torchLightEnabled ? TORCH_BASE_INTENSITY : 0)

@@ -12,12 +12,12 @@
   import type { PlayerState } from '../../utils/movementUtils'
   import type Monster from '../Monster.svelte'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
   // crashes when castShadow is toggled dynamically, so remote torches are light-only).
   const MAX_REMOTE_TORCH_LIGHTS = 4
-  const TORCH_OFFSET = new THREE.Vector3(-0.5, 5.0, 0.3)
-  const TORCH_BASE_INTENSITY = 50
+  const TORCH_OFFSET = new THREE.Vector3(TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z)
   const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
   interface Props {
@@ -131,6 +131,18 @@
     const offset = TORCH_OFFSET.clone().applyAxisAngle(Y_AXIS, rp.rotation)
     return base.add(offset)
   })
+
+  let remoteShadowLight = $state<THREE.PointLight | undefined>(undefined)
+  let remoteShadowFlickerTime = 0
+
+  export function updateRemoteShadowFlicker(deltaTime: number) {
+    if (remoteShadowLight && remoteShadowLightPos) {
+      remoteShadowFlickerTime = applyTorchFlickerWorld(
+        remoteShadowLight, remoteShadowFlickerTime, deltaTime,
+        remoteShadowLightPos.x, remoteShadowLightPos.y, remoteShadowLightPos.z,
+      )
+    }
+  }
 </script>
 
 {#if camera && terrainMeshes.some((mesh) => mesh !== undefined)}
@@ -203,6 +215,7 @@
   <!-- Standalone shadow-casting point light for closest remote torch player.
        castShadow is always true (never toggled). Intensity=0 when no target. -->
   <T.PointLight
+    bind:ref={remoteShadowLight}
     position={remoteShadowLightPos
       ? [remoteShadowLightPos.x, remoteShadowLightPos.y, remoteShadowLightPos.z]
       : [0, 0, 0]}
@@ -218,6 +231,5 @@
     shadow.bias={-0.005}
     shadow.normalBias={0.05}
     shadow.radius={5}
-    shadow.intensity={5}
   />
 {/if}
