@@ -1,6 +1,8 @@
 import type * as THREE from 'three'
 
 export const TORCH_BASE_INTENSITY = 50
+export const TORCH_BASE_DISTANCE = 30
+export const TORCH_BASE_DECAY = 1.8
 export const TORCH_BASE_POSITION = { x: -0.5, y: 3.0, z: 0.3 } as const
 
 export interface TorchFlickerState {

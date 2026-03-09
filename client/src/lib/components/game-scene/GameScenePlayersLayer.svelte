@@ -12,7 +12,7 @@
   import type { PlayerState } from '../../utils/movementUtils'
   import type Monster from '../Monster.svelte'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
-  import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
+  import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
   // crashes when castShadow is toggled dynamically, so remote torches are light-only).
@@ -221,13 +221,13 @@
       : [0, 0, 0]}
     color="#ffcc66"
     intensity={remoteShadowLightPos ? TORCH_BASE_INTENSITY : 0}
-    distance={20}
-    decay={1.8}
+    distance={TORCH_BASE_DISTANCE}
+    decay={TORCH_BASE_DECAY}
     castShadow
     shadow.mapSize.width={512}
     shadow.mapSize.height={512}
     shadow.camera.near={0.5}
-    shadow.camera.far={20}
+    shadow.camera.far={TORCH_BASE_DISTANCE}
     shadow.bias={-0.005}
     shadow.normalBias={0.05}
     shadow.radius={5}

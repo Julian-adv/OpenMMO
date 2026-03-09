@@ -27,7 +27,7 @@
   import DamageText from './DamageText.svelte'
   import type { PlayerDamageInfo } from '../stores/gameStore'
   import { torchLightEnabled } from '../stores/debugStore'
-  import { applyTorchFlicker, TORCH_BASE_INTENSITY, TORCH_BASE_POSITION } from '../utils/torchFlicker'
+  import { applyTorchFlicker, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../utils/torchFlicker'
 
   export type TorchMode = 'local' | 'shadow' | 'light-only' | 'off'
 
@@ -605,13 +605,13 @@
       intensity={isCurrentPlayer
         ? ($torchLightEnabled ? TORCH_BASE_INTENSITY : 0)
         : (torchMode === 'light-only' ? TORCH_BASE_INTENSITY : 0)}
-      distance={20}
-      decay={1.8}
+      distance={TORCH_BASE_DISTANCE}
+      decay={TORCH_BASE_DECAY}
       castShadow={isCurrentPlayer}
       shadow.mapSize.width={512}
       shadow.mapSize.height={512}
       shadow.camera.near={0.5}
-      shadow.camera.far={20}
+      shadow.camera.far={TORCH_BASE_DISTANCE}
       shadow.bias={-0.005}
       shadow.normalBias={0.05}
       shadow.radius={5}
