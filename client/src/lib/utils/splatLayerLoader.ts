@@ -29,6 +29,7 @@ export const ALL_SPLAT_TEXTURES: { name: string; defaultTileScale: number }[] =
     { name: 'snow_02_1k', defaultTileScale: 4.0 },
     { name: 'gravel_road_1k', defaultTileScale: 8.0 },
     { name: 'sandy_gravel_02_1k', defaultTileScale: 8.0 },
+    { name: 'fine_sand_material', defaultTileScale: 8.0 },
   ]
 
 /** Atlas set: 2×2 packed textures for diffuse, normal, ORM */
