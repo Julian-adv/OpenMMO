@@ -673,30 +673,18 @@ export function createWaterMaterial(
       0.0,
       1.0
     )
-    const foamBright = mix(vec3(0.85, 0.92, 0.95), vec3(1, 1, 1), foamWithTex)
-    // Night foam: slightly brighter than surrounding water color so it doesn't look darker
-    const foamDark = mix(
-      surfaceColor,
-      surfaceColor.mul(1.3).add(0.03),
-      foamWithTex
-    )
+    // Foam: purely additive — no color replacement, just add white on top
     const foamDayNight = smoothstep(float(-0.05), float(0.1), sunY)
-    const foamColor = mix(foamDark, foamBright, foamDayNight)
-    // Reduce foam blend strength at night so bands don't contrast harshly
-    const foamBlendStrength = mix(float(0.3), float(0.9), foamDayNight)
-    const finalColorBeforeRefl = mix(
-      surfaceColor,
-      foamColor,
-      foamWithTex.mul(foamBlendStrength).mul(
-        float(1)
-          .sub(smoothstep(float(0.3), float(0.7), depthFactor))
-          .mul(0.7)
-          .add(0.3)
-      )
-    ).toVar()
-
-    // Additive glow on shore foam to make it pop white
-    finalColorBeforeRefl.addAssign(vec3(1, 1, 1).mul(shoreBaseTex.mul(0.4)))
+    const foamDepthMask = float(1)
+      .sub(smoothstep(float(0.3), float(0.7), depthFactor))
+      .mul(0.7)
+      .add(0.3)
+    // Daytime: bright white additive. Night: dimmer additive.
+    const foamAddStrength = mix(float(0.06), float(0.7), foamDayNight)
+    const foamAdd = vec3(1, 1, 1).mul(
+      foamWithTex.mul(foamAddStrength).mul(foamDepthMask)
+    )
+    const finalColorBeforeRefl = surfaceColor.toVar()
 
     // Overlay entity reflection
     finalColorBeforeRefl.assign(
@@ -731,14 +719,12 @@ export function createWaterMaterial(
     const nightExtra = float(1).sub(
       float(1).sub(nightDarken).mul(midDepthWeight).mul(0.35)
     )
-    // Foam areas darken less at night (lerp toward 1.0 based on foam strength)
     const nightDarkenFull = nightDarken.mul(nightExtra)
-    const foamNightProtect = mix(
-      nightDarkenFull,
-      max(nightDarkenFull, float(0.7)),
-      foamWithTex
-    )
-    finalColorBeforeRefl.mulAssign(foamNightProtect)
+    finalColorBeforeRefl.mulAssign(nightDarkenFull)
+
+    // Additive foam AFTER night darkening — so foam white isn't darkened with the base
+    finalColorBeforeRefl.addAssign(foamAdd)
+    finalColorBeforeRefl.addAssign(vec3(1, 1, 1).mul(shoreBaseTex.mul(0.4)))
 
     const finalColor = finalColorBeforeRefl
 

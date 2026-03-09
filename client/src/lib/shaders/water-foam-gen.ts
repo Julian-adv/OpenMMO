@@ -6,7 +6,7 @@ import * as THREE from 'three'
  */
 export async function loadFoamTexture(): Promise<THREE.Texture> {
   const loader = new THREE.TextureLoader()
-  const tex = await loader.loadAsync('/textures/13843.jpg')
+  const tex = await loader.loadAsync('/textures/13843.png')
   tex.wrapS = THREE.RepeatWrapping
   tex.wrapT = THREE.RepeatWrapping
   return tex
