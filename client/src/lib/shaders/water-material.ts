@@ -158,7 +158,6 @@ export function createWaterMaterial(
   const uWaveA = uniform(new THREE.Vector4(ax, az, 0.03, 20))
   const uWaveB = uniform(new THREE.Vector4(bx, bz, 0.02, 15))
   const uWaveC = uniform(new THREE.Vector4(cx, cz, 0.015, 10))
-  const uFoamBandColor = uniform(new THREE.Color(0.7, 0.9, 0.92))
   const uShallowColor = uniform(new THREE.Color(0.1, 0.7, 0.7))
   const uMidColor = uniform(new THREE.Color(0.0, 0.4, 0.6))
   const uDeepColor = uniform(new THREE.Color(0.0, 0.05, 0.14))
@@ -218,17 +217,12 @@ export function createWaterMaterial(
     const depth = max(float(0), vOrigWorldPos.y.sub(terrainHeight))
     const depthFactor = clamp(depth.div(uMaxDepth), 0.0, 1.0)
 
-    // 2. Depth-based color (4-stop gradient)
+    // 2. Depth-based color (3-stop gradient, foamBandColor only used for foam/caustics)
     const smoothDepth = smoothstep(float(0), float(1), depthFactor)
-    const c1 = mix(
-      uFoamBandColor,
-      uShallowColor,
-      smoothstep(float(0), float(0.15), depthFactor)
-    )
     const c2 = mix(
-      c1,
+      uShallowColor,
       uMidColor,
-      smoothstep(float(0.15), float(0.4), depthFactor)
+      smoothstep(float(0.0), float(0.4), depthFactor)
     )
     const waterColor = mix(
       c2,
@@ -255,12 +249,29 @@ export function createWaterMaterial(
     )
     const refractionColor = refractionTex.sample(refractionUV).rgb
 
-    // Blend refraction with depth tint — shallow shows terrain, deep shows water
-    // Use depthFactor directly for sharper refraction falloff in shallows
-    const refractionMix = float(1).sub(
-      smoothstep(float(0), float(0.35), depthFactor)
+    // Darken water color at night before mixing (prevents emerald tint on dark refraction)
+    const waterNightFactor = smoothstep(
+      float(-0.05),
+      float(0.1),
+      uSunDirection.y
     )
-    waterColor.assign(mix(waterColor, refractionColor, refractionMix))
+      .mul(0.85)
+      .add(0.15)
+    waterColor.mulAssign(waterNightFactor)
+
+    // Darken refraction in shallows (wet sand effect) — deeper = more tinted
+    const wetDarken = mix(
+      float(0.65),
+      float(1.0),
+      smoothstep(float(0), float(0.3), depthFactor)
+    )
+    const wetRefractionColor = refractionColor.mul(wetDarken)
+
+    // Blend refraction with depth tint — shallow = darkened refraction (wet sand), deep = water color
+    const refractionMix = float(1).sub(
+      smoothstep(float(0), float(0.9), depthFactor)
+    )
+    waterColor.assign(mix(waterColor, wetRefractionColor, refractionMix))
 
     // Underwater caustics — light pattern on the seafloor, seen through refraction
     const cUV1 = vOrigWorldPos.xz
@@ -301,11 +312,13 @@ export function createWaterMaterial(
       vec3(uSunColor),
       causticsNightFactor
     )
-    const litFloor = refractionColor.add(
-      causticsLightColor.mul(causticsShimmer.mul(1.2))
-    )
-    waterColor.assign(
-      mix(waterColor, litFloor, clamp(causticsStrength.mul(1.5), 0.0, 1.0))
+    // Additive caustics on water surface — only where caustics pattern exists
+    const causticsDepthGate = smoothstep(float(0.05), float(0.25), depthFactor)
+    waterColor.addAssign(
+      causticsLightColor
+        .mul(causticsShimmer.mul(1.2))
+        .mul(causticsStrength)
+        .mul(causticsDepthGate)
     )
 
     // Specular: broad sun reflection
@@ -486,8 +499,14 @@ export function createWaterMaterial(
       .mul(0.1)
 
     // Blend water with sky reflection via Fresnel, then add specular
-    const surfaceColor = mix(waterColor, skyReflection, fresnel.mul(0.6))
-      .add(specular)
+    // Dampen fresnel and specular in shallows to keep refracted sand clean
+    const shallowDamp = smoothstep(float(0.3), float(0.8), depthFactor)
+    const surfaceColor = mix(
+      waterColor,
+      skyReflection,
+      fresnel.mul(0.6).mul(shallowDamp)
+    )
+      .add(specular.mul(shallowDamp))
       .toVar()
 
     // Foam texture with band movement
@@ -514,17 +533,17 @@ export function createWaterMaterial(
     const finalColorBeforeRefl = mix(
       surfaceColor,
       foamColor,
-      foamWithTex.mul(0.9)
+      foamWithTex.mul(0.9).mul(shallowDamp)
     ).toVar()
 
-    // Overlay entity reflection directly (bypass fresnel attenuation)
-    finalColorBeforeRefl.assign(
-      mix(
-        finalColorBeforeRefl,
-        reflectionSample.rgb,
-        reflectionSample.a.mul(0.3)
-      )
-    )
+    // Overlay entity reflection — DISABLED for testing
+    // finalColorBeforeRefl.assign(
+    //   mix(
+    //     finalColorBeforeRefl,
+    //     reflectionSample.rgb,
+    //     reflectionSample.a.mul(0.3)
+    //   )
+    // )
     // Caustics glow — additive light on the final surface, dim blue-grey at night
     const glowNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
     const glowColor = mix(
@@ -532,16 +551,25 @@ export function createWaterMaterial(
       vec3(uSunColor),
       glowNightFactor
     )
-    const causticsGlow = glowColor.mul(
-      pow(causticsShimmer, float(2.0)).mul(causticsStrength).mul(1.5)
-    )
+    const causticsGlow = glowColor
+      .mul(pow(causticsShimmer, float(2.0)).mul(causticsStrength).mul(1.5))
+      .mul(causticsDepthGate)
     finalColorBeforeRefl.addAssign(causticsGlow)
 
     // Darken water surface at night (match scene ambient)
     const nightDarken = smoothstep(float(-0.05), float(0.1), sunY)
       .mul(0.75)
       .add(0.25)
-    finalColorBeforeRefl.mulAssign(nightDarken)
+    // Extra darkening for mid-depth water at night (emerald zone)
+    const midDepthWeight = smoothstep(
+      float(0.15),
+      float(0.35),
+      depthFactor
+    ).mul(float(1).sub(smoothstep(float(0.5), float(0.8), depthFactor)))
+    const nightExtra = float(1).sub(
+      float(1).sub(nightDarken).mul(midDepthWeight).mul(0.35)
+    )
+    finalColorBeforeRefl.mulAssign(nightDarken.mul(nightExtra))
 
     const finalColor = finalColorBeforeRefl
 
@@ -569,6 +597,12 @@ export function createWaterMaterial(
       holeMask
     ).mul(edgeCutoff)
     alpha.mulAssign(holeAlpha)
+
+    // At night, make shallow water more transparent (reveal sand instead of going black)
+    const nightAlphaReduce = float(1).sub(
+      float(1).sub(nightDarken).mul(float(1).sub(smoothDepth)).mul(0.5)
+    )
+    alpha.mulAssign(nightAlphaReduce)
 
     return vec4(finalColor, alpha)
   })()
