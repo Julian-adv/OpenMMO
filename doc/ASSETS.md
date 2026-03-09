@@ -12,11 +12,12 @@
 
 ## terrain
 
-- https://polyhaven.com/a/gravel_floor -> 자갈
-- https://polyhaven.com/a/rocky_terrain_02 -> 잔디
-- https://polyhaven.com/a/snow_02 -> 눈
-- https://polyhaven.com/a/red_laterite_soil_stones -> 흙
-- https://polyhaven.com/a/sandy_gravel_02 -> 모래
+- 자갈: https://polyhaven.com/a/gravel_floor
+- 잔디: https://polyhaven.com/a/rocky_terrain_02
+- 눈: https://polyhaven.com/a/snow_02
+- 흙: https://polyhaven.com/a/red_laterite_soil_stones
+- 모래: https://polyhaven.com/a/sandy_gravel_02
+- 해안 모래: https://sketchfab.com/3d-models/fine-sand-material-6e54464d405a4c1e8bdb0f81e8d74db2
 
 ## sea
 

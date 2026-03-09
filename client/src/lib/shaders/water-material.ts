@@ -236,9 +236,15 @@ export function createWaterMaterial(
     new THREE.Vector4(0, 1, waveConfigs[2].steepness, waveConfigs[2].wavelength)
   )
   const waveUniforms = [uWaveA, uWaveB, uWaveC]
-  const uShallowColor = uniform(new THREE.Color(0.3, 0.88, 0.82))
-  const uMidColor = uniform(new THREE.Color(0.06, 0.7, 0.68))
-  const uDeepColor = uniform(new THREE.Color(0.01, 0.18, 0.32))
+  // 4-stop water color gradient (hex references from target image)
+  // 1. Very shallow: nearly transparent mint
+  const uVeryShallowColor = uniform(new THREE.Color(0.75, 0.88, 0.78))
+  // 2. Shallow: turquoise-green (바다2)
+  const uShallowColor = uniform(new THREE.Color(0.2, 0.58, 0.42))
+  // 3. Mid: darker turquoise-navy (바다3)
+  const uMidColor = uniform(new THREE.Color(0.02, 0.34, 0.32))
+  // 4. Deep: deep navy (바다4)
+  const uDeepColor = uniform(new THREE.Color(0.002, 0.06, 0.18))
   const uMaxDepth = uniform(2.5)
   const uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.3).normalize())
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
@@ -295,17 +301,24 @@ export function createWaterMaterial(
     const depth = max(float(0), vOrigWorldPos.y.sub(terrainHeight))
     const depthFactor = clamp(depth.div(uMaxDepth), 0.0, 1.0)
 
-    // 2. Depth-based color (3-stop gradient, foamBandColor only used for foam/caustics)
-    const smoothDepth = smoothstep(float(0), float(1), depthFactor)
-    const c2 = mix(
+    // 2. Depth-based color (4-stop gradient)
+    // Very shallow → Shallow (0.0 ~ 0.08)
+    const c1 = mix(
+      uVeryShallowColor,
       uShallowColor,
-      uMidColor,
-      smoothstep(float(0.0), float(0.2), depthFactor)
+      smoothstep(float(0.0), float(0.08), depthFactor)
     )
+    // Shallow → Mid (0.08 ~ 0.25)
+    const c2 = mix(
+      c1,
+      uMidColor,
+      smoothstep(float(0.08), float(0.25), depthFactor)
+    )
+    // Mid → Deep (0.25 ~ 0.7)
     const waterColor = mix(
       c2,
       uDeepColor,
-      smoothstep(float(0.3), float(1.0), depthFactor)
+      smoothstep(float(0.25), float(0.7), depthFactor)
     ).toVar()
 
     // 3a. Gerstner wave analytical normal (large swells)
@@ -358,10 +371,10 @@ export function createWaterMaterial(
       .add(0.15)
     waterColor.mulAssign(waterNightFactor)
 
-    // Refraction — only blend in very shallow shore area for wet sand effect
+    // Refraction — visible in 바다1 and 바다2 (depthFactor 0 ~ 0.25)
     const refractionMix = float(1)
-      .sub(smoothstep(float(0.0), float(0.15), depthFactor))
-      .mul(0.4)
+      .sub(smoothstep(float(0.0), float(0.25), depthFactor))
+      .mul(0.7)
     waterColor.assign(mix(waterColor, refractionColor, refractionMix))
 
     // Underwater caustics — light pattern on the seafloor, seen through refraction
@@ -524,8 +537,28 @@ export function createWaterMaterial(
       mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
     )
 
+    // Hole edge detection (computed early so shore foam can use it)
+    const shoreZone = float(1).sub(smoothstep(float(0), float(0.6), depth))
+    const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.8).add(uTime.mul(0.07)))
+    const sn2 = valueNoise(vOrigWorldPos.xz.mul(1.5).add(uTime.mul(0.04)))
+    const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(uTime.mul(0.1)))
+    const holeMask = sn1.mul(0.5).add(sn2.mul(0.3)).add(sn3.mul(0.2))
+    const edgeCutoff = smoothstep(float(0), float(0.01), depth)
+    const holeThreshold = shoreZone.mul(0.9)
+    const holeAlpha = smoothstep(
+      holeThreshold.sub(0.05),
+      holeThreshold.add(0.05),
+      holeMask
+    ).mul(edgeCutoff)
+    // Hole edge foam — water side: use distance from threshold into water
+    // holeMask > holeThreshold = water side. Wider fringe by measuring how far past threshold.
+    const distFromHole = holeMask.sub(holeThreshold)
+    // Foam on water side: starts at threshold (0), fades out 0.5 past it
+    const holeEdge = smoothstep(float(0.0), float(0.01), distFromHole)
+      .mul(float(1).sub(smoothstep(float(0.01), float(0.5), distFromHole)))
+      .mul(shoreZone)
+
     // 5. Shore foam — wide breaking waves
-    const foamNoise = valueNoise(vOrigWorldPos.xz.mul(0.5))
 
     // Noise-perturbed depth for irregular edges
     const foamNoise2 = valueNoise(vOrigWorldPos.xz.mul(0.3))
@@ -556,7 +589,7 @@ export function createWaterMaterial(
       float(1).sub(smoothstep(float(0.9), float(1), cycle2))
     )
 
-    // Bands widen near shore (wave shoaling) — narrow and subtle for calm tropical water
+    // Bands widen near shore (wave shoaling)
     const bandWidth1 = float(0.04).add(float(0.1).mul(move1))
     const bandWidth2 = float(0.04).add(float(0.1).mul(move2))
 
@@ -576,10 +609,8 @@ export function createWaterMaterial(
     band1.mulAssign(smoothstep(float(0.2), float(0.5), bn1))
     band2.mulAssign(smoothstep(float(0.2), float(0.5), bn2))
 
-    // Persistent shore foam — visible white edge at coastline
-    const shoreBase = float(1)
-      .sub(smoothstep(float(0), float(0.4), noisyD))
-      .mul(0.7)
+    // Shore foam at hole edges — foam fringe at water boundary
+    const shoreBase = holeEdge
 
     // Brightening near shore
     const foamGlow = float(1)
@@ -602,15 +633,16 @@ export function createWaterMaterial(
     // Tint sky reflection toward turquoise so it doesn't wash out the water color
     const tintedSkyReflection = mix(
       skyReflection,
-      vec3(uMidColor).mul(1.5),
-      float(0.6)
+      vec3(uMidColor).mul(1.3),
+      float(0.7)
     )
-    const shallowDamp = smoothstep(float(0.15), float(0.5), depthFactor)
-    const fresnel = pow(float(1).sub(NdotV), float(2)).mul(0.12)
+    // Less reflection in shallows to preserve transparent look
+    const shallowDamp = smoothstep(float(0.1), float(0.4), depthFactor)
+    const fresnel = pow(float(1).sub(NdotV), float(2)).mul(0.08)
     const surfaceColor = mix(
       waterColor,
       tintedSkyReflection,
-      mix(float(0.01), float(0.08), shallowDamp).add(fresnel)
+      mix(float(0.005), float(0.06), shallowDamp).add(fresnel)
     )
       .add(specular.mul(shallowDamp))
       .toVar()
@@ -621,31 +653,50 @@ export function createWaterMaterial(
     const foamTex1 = foamMapTex.sample(foamUV1).r
     const foamTex2 = foamMapTex.sample(foamUV2).r
 
+    // Shore foam texture (two layers at different scales, slowly moving)
+    const shoreFoamUV1 = vOrigWorldPos.xz
+      .mul(0.5)
+      .add(vec2(uTime.mul(0.006), uTime.mul(0.004)))
+    const shoreFoamUV2 = vOrigWorldPos.xz
+      .mul(0.35)
+      .sub(vec2(uTime.mul(0.003), uTime.mul(0.005)))
+    const shoreFoamTex = max(
+      foamMapTex.sample(shoreFoamUV1).r,
+      foamMapTex.sample(shoreFoamUV2).r
+    )
+    const shoreBaseTex = shoreBase.mul(shoreFoamTex)
+
     // Blend foam — combine wave bands, persistent shore foam, and glow
     const waveFoam = max(band1.mul(foamTex1), band2.mul(foamTex2))
     const foamWithTex = clamp(
-      max(max(waveFoam, shoreBase.mul(foamNoise)), foamGlow),
+      max(max(waveFoam, shoreBaseTex), foamGlow),
       0.0,
       1.0
     )
     const foamBright = mix(vec3(0.85, 0.92, 0.95), vec3(1, 1, 1), foamWithTex)
+    // Night foam: slightly brighter than surrounding water color so it doesn't look darker
     const foamDark = mix(
-      vec3(0.06, 0.08, 0.12),
-      vec3(0.12, 0.15, 0.2),
+      surfaceColor,
+      surfaceColor.mul(1.3).add(0.03),
       foamWithTex
     )
     const foamDayNight = smoothstep(float(-0.05), float(0.1), sunY)
     const foamColor = mix(foamDark, foamBright, foamDayNight)
+    // Reduce foam blend strength at night so bands don't contrast harshly
+    const foamBlendStrength = mix(float(0.3), float(0.9), foamDayNight)
     const finalColorBeforeRefl = mix(
       surfaceColor,
       foamColor,
-      foamWithTex.mul(0.9).mul(
+      foamWithTex.mul(foamBlendStrength).mul(
         float(1)
           .sub(smoothstep(float(0.3), float(0.7), depthFactor))
           .mul(0.7)
           .add(0.3)
       )
     ).toVar()
+
+    // Additive glow on shore foam to make it pop white
+    finalColorBeforeRefl.addAssign(vec3(1, 1, 1).mul(shoreBaseTex.mul(0.4)))
 
     // Overlay entity reflection
     finalColorBeforeRefl.assign(
@@ -680,42 +731,44 @@ export function createWaterMaterial(
     const nightExtra = float(1).sub(
       float(1).sub(nightDarken).mul(midDepthWeight).mul(0.35)
     )
-    finalColorBeforeRefl.mulAssign(nightDarken.mul(nightExtra))
+    // Foam areas darken less at night (lerp toward 1.0 based on foam strength)
+    const nightDarkenFull = nightDarken.mul(nightExtra)
+    const foamNightProtect = mix(
+      nightDarkenFull,
+      max(nightDarkenFull, float(0.7)),
+      foamWithTex
+    )
+    finalColorBeforeRefl.mulAssign(foamNightProtect)
 
     const finalColor = finalColorBeforeRefl
 
-    // 6. Alpha — transparent shallows (visible sand + mint tint), opaque deep
-    const baseAlpha = mix(
+    // 6. Alpha — very transparent at shore, gradually opaque
+    // Very shallow: 0.05 (sand clearly visible), shallow: 0.35, mid+: 0.97
+    const a1 = mix(
+      float(0.05),
       float(0.35),
-      float(0.99),
-      smoothstep(float(0), float(0.5), depthFactor)
+      smoothstep(float(0.0), float(0.08), depthFactor)
+    )
+    const baseAlpha = mix(
+      a1,
+      float(0.97),
+      smoothstep(float(0.08), float(0.35), depthFactor)
     )
     const alpha = baseAlpha
-      .add(foamWithTex.mul(0.5))
+      .add(foamWithTex.mul(0.9))
       .add(sparkle)
       .min(1.0)
       .toVar()
 
-    // 7. Shore edge — noisy holes near coastline to reveal terrain underneath
-    // shoreZone: 1 at water edge (depth=0), 0 at depth>=0.6
-    const shoreZone = float(1).sub(smoothstep(float(0), float(0.6), depth))
-    const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.8).add(uTime.mul(0.07)))
-    const sn2 = valueNoise(vOrigWorldPos.xz.mul(1.5).add(uTime.mul(0.04)))
-    const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(uTime.mul(0.1)))
-    const holeMask = sn1.mul(0.5).add(sn2.mul(0.3)).add(sn3.mul(0.2))
-    // Hard cutoff at edge: depth < 0.05 → always hole; noisy holes up to depth 0.6
-    const edgeCutoff = smoothstep(float(0), float(0.01), depth)
-    const holeThreshold = shoreZone.mul(0.9)
-    const holeAlpha = smoothstep(
-      holeThreshold.sub(0.05),
-      holeThreshold.add(0.05),
-      holeMask
-    ).mul(edgeCutoff)
+    // 7. Shore edge — reuse hole variables computed earlier
     alpha.mulAssign(holeAlpha)
 
-    // At night, make shallow water more transparent (reveal sand instead of going black)
+    // At night, only make very shallow water (바다1) more transparent
+    const veryShallowWeight = float(1).sub(
+      smoothstep(float(0.0), float(0.08), depthFactor)
+    )
     const nightAlphaReduce = float(1).sub(
-      float(1).sub(nightDarken).mul(float(1).sub(smoothDepth)).mul(0.5)
+      float(1).sub(nightDarken).mul(veryShallowWeight).mul(0.5)
     )
     alpha.mulAssign(nightAlphaReduce)
 
