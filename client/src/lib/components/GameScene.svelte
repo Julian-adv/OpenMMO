@@ -127,6 +127,7 @@
   let waterSunDir = $state<THREE.Vector3 | null>(null)
   let waterSunColor = $state<THREE.Color | null>(null)
   let waterCamDir = $state<THREE.Vector3 | null>(null)
+  let waterMoonBrightness = $state(0)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
@@ -504,6 +505,8 @@
       }
       if (directionalLight) {
         waterSunColor = directionalLight.color.clone()
+        // Moon brightness: use directional light intensity when sun is below horizon
+        waterMoonBrightness = waterSunDirTmp.y <= 0 ? directionalLight.intensity : 0
       }
       if (camera) {
         camera.getWorldDirection(waterCamDirTmp)
@@ -838,6 +841,7 @@
   sunDirection={waterSunDir}
   sunColor={waterSunColor}
   cameraDirection={waterCamDir}
+  moonBrightness={waterMoonBrightness}
   refractionMap={refractionTexture}
   reflectionMap={reflectionTexture}
   bind:waterGroup={waterGroup}
