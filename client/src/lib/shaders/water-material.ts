@@ -261,15 +261,15 @@ export function createWaterMaterial(
 
     // Darken refraction in shallows (wet sand effect) — deeper = more tinted
     const wetDarken = mix(
-      float(0.65),
+      float(0.4),
       float(1.0),
-      smoothstep(float(0), float(0.3), depthFactor)
+      smoothstep(float(0), float(0.5), depthFactor)
     )
     const wetRefractionColor = refractionColor.mul(wetDarken)
 
     // Blend refraction with depth tint — shallow = darkened refraction (wet sand), deep = water color
     const refractionMix = float(1).sub(
-      smoothstep(float(0), float(0.9), depthFactor)
+      smoothstep(float(0.3), float(0.7), depthFactor)
     )
     waterColor.assign(mix(waterColor, wetRefractionColor, refractionMix))
 
@@ -355,12 +355,6 @@ export function createWaterMaterial(
 
     // Smoothed normal for reflection
     const reflNormal = normalize(mix(vec3(0, 1, 0), surfaceNormal, 0.3))
-
-    // Fresnel reflection
-    const cosTheta = max(dot(viewDir, reflNormal), 0.0)
-    const fresnel = float(0.1).add(
-      float(0.9).mul(pow(float(1).sub(cosTheta), float(2)))
-    )
 
     // Procedural sky reflection — time-of-day color palette
     const reflectDir = reflect(viewDir.negate(), reflNormal)
@@ -500,11 +494,11 @@ export function createWaterMaterial(
 
     // Blend water with sky reflection via Fresnel, then add specular
     // Dampen fresnel and specular in shallows to keep refracted sand clean
-    const shallowDamp = smoothstep(float(0.3), float(0.8), depthFactor)
+    const shallowDamp = smoothstep(float(0.15), float(0.45), depthFactor)
     const surfaceColor = mix(
       waterColor,
       skyReflection,
-      fresnel.mul(0.6).mul(shallowDamp)
+      mix(float(0.01), float(0.2), shallowDamp)
     )
       .add(specular.mul(shallowDamp))
       .toVar()
