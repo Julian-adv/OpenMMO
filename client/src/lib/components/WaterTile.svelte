@@ -17,6 +17,7 @@
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
+    moonBrightness?: number
     refractionMap?: THREE.Texture | null
     reflectionMap?: THREE.Texture | null
   }
@@ -33,6 +34,7 @@
     sunDirection = null,
     sunColor = null,
     cameraDirection = null,
+    moonBrightness = 0,
     refractionMap = null,
     reflectionMap = null,
   }: Props = $props()
@@ -62,6 +64,7 @@
         if (sunDirection) u.uSunDirection.value.copy(sunDirection)
         if (sunColor) u.uSunColor.value.copy(sunColor)
         if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
+        u.uMoonBrightness.value = moonBrightness
         if (refractionMap) u.uRefractionMap.value = refractionMap
         if (reflectionMap) u.uReflectionMap.value = reflectionMap
       }

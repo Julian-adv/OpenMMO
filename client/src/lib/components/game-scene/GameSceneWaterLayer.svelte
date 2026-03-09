@@ -21,6 +21,7 @@
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
+    moonBrightness?: number
     refractionMap?: THREE.Texture | null
     reflectionMap?: THREE.Texture | null
     waterGroup?: THREE.Group | undefined
@@ -38,6 +39,7 @@
     sunDirection = null,
     sunColor = null,
     cameraDirection = null,
+    moonBrightness = 0,
     refractionMap = null,
     reflectionMap = null,
     waterGroup = $bindable(undefined),
@@ -171,6 +173,7 @@
           {sunDirection}
           {sunColor}
           {cameraDirection}
+          {moonBrightness}
           {refractionMap}
           {reflectionMap}
         />

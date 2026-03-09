@@ -122,6 +122,7 @@ export interface WaterMaterialUniforms {
   uSunDirection: { value: THREE.Vector3 }
   uSunColor: { value: THREE.Color }
   uCameraDirection: { value: THREE.Vector3 }
+  uMoonBrightness: { value: number }
   uRefractionMap: { value: THREE.Texture }
   uReflectionMap: { value: THREE.Texture }
   uHeightmapTexture: { value: THREE.Texture }
@@ -165,6 +166,7 @@ export function createWaterMaterial(
   const uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.3).normalize())
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
   const uCameraDirection = uniform(new THREE.Vector3(0, -1, 0))
+  const uMoonBrightness = uniform(0)
   const uRefractionStrength = uniform(0.08)
 
   // Texture nodes (use texture() directly — update via .value)
@@ -254,8 +256,9 @@ export function createWaterMaterial(
     const refractionColor = refractionTex.sample(refractionUV).rgb
 
     // Blend refraction with depth tint — shallow shows terrain, deep shows water
+    // Use depthFactor directly for sharper refraction falloff in shallows
     const refractionMix = float(1).sub(
-      smoothstep(float(0), float(0.7), smoothDepth)
+      smoothstep(float(0), float(0.35), depthFactor)
     )
     waterColor.assign(mix(waterColor, refractionColor, refractionMix))
 
@@ -326,10 +329,11 @@ export function createWaterMaterial(
       float(0.15),
       uSunDirection.y
     ).mul(float(0.3).add(float(0.7).mul(uSunDirection.y)))
-    // At night, keep a faint moonlit sparkle
+    // At night, keep a faint moonlit sparkle (only when a moon is actually visible)
     const moonSparkleStrength = float(1)
       .sub(smoothstep(float(-0.05), float(0.05), uSunDirection.y))
       .mul(0.15)
+      .mul(smoothstep(float(0), float(0.1), uMoonBrightness))
     const sparkle = smoothstep(float(1.3), float(1.45), sp1.add(sp2))
       .mul(3.0)
       .mul(waveCrestFactor)
@@ -535,8 +539,8 @@ export function createWaterMaterial(
 
     // Darken water surface at night (match scene ambient)
     const nightDarken = smoothstep(float(-0.05), float(0.1), sunY)
-      .mul(0.9)
-      .add(0.1)
+      .mul(0.75)
+      .add(0.25)
     finalColorBeforeRefl.mulAssign(nightDarken)
 
     const finalColor = finalColorBeforeRefl
@@ -584,6 +588,7 @@ export function createWaterMaterial(
       uSunDirection,
       uSunColor,
       uCameraDirection,
+      uMoonBrightness,
       uRefractionMap: refractionTex,
       uReflectionMap: reflectionTex,
       uHeightmapTexture: heightmapTex,
