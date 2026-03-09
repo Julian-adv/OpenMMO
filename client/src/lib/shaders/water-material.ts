@@ -50,7 +50,45 @@ const gerstnerWave = /* #__PURE__ */ Fn(
     const d = normalize(wave.xy)
     const f = k.mul(dot(d, p.xz).sub(c.mul(time).mul(0.1)))
     const a = steepness.div(k)
-    return vec3(d.x.mul(a).mul(cos(f)), a.mul(sin(f)), d.y.mul(a).mul(cos(f)))
+    // Only vertical (Y) displacement to avoid tile boundary tearing
+    return vec3(0, a.mul(sin(f)), 0)
+  }
+)
+
+// ─── Gerstner Wave Normal contribution ──────────────────
+// Returns the tangent/bitangent partial derivatives for a single wave
+// so we can analytically compute the surface normal from summed waves.
+const gerstnerNormal = /* #__PURE__ */ Fn(
+  ([wave_immutable, p_immutable, time_immutable]: [
+    ReturnType<typeof vec4>,
+    ReturnType<typeof vec3>,
+    ReturnType<typeof float>,
+  ]) => {
+    const wave = vec4(wave_immutable)
+    const p = vec3(p_immutable)
+    const time = float(time_immutable)
+
+    const steepness = wave.z
+    const wavelength = wave.w
+    const k = PI.mul(2).div(wavelength)
+    const c = sqrt(float(9.8).div(k))
+    const d = normalize(wave.xy)
+    const f = k.mul(dot(d, p.xz).sub(c.mul(time).mul(0.1)))
+
+    // Partial derivatives: dP/dx and dP/dz contributions
+    // tangent_x += -d.x * d.x * steepness * sin(f)
+    // tangent_y +=  d.x * steepness * cos(f)
+    // bitangent_z += -d.y * d.y * steepness * sin(f)
+    // bitangent_y +=  d.y * steepness * cos(f)
+    const sf = sin(f)
+    const cf = cos(f)
+    // Return vec4(tx, ty, bz, by) for accumulation
+    return vec4(
+      d.x.mul(d.x).mul(steepness).mul(sf).negate(),
+      d.x.mul(steepness).mul(cf),
+      d.y.mul(d.y).mul(steepness).mul(sf).negate(),
+      d.y.mul(steepness).mul(cf)
+    )
   }
 )
 
@@ -78,29 +116,48 @@ const valueNoise = /* #__PURE__ */ Fn(
 
 // ─── 4-sample normal noise ──────────────────────────────
 const getNoise = /* #__PURE__ */ Fn(
-  ([worldXZ_immutable, normalMapTex, time_immutable]: [
+  ([
+    worldXZ_immutable,
+    normalMapTex,
+    time_immutable,
+    waveA_immutable,
+    waveB_immutable,
+    waveC_immutable,
+  ]: [
     ReturnType<typeof vec2>,
     ReturnType<typeof texture>,
     ReturnType<typeof float>,
+    ReturnType<typeof vec4>,
+    ReturnType<typeof vec4>,
+    ReturnType<typeof vec4>,
   ]) => {
     const worldXZ = vec2(worldXZ_immutable)
     const time = float(time_immutable)
     const t = time.mul(0.06)
 
-    const uv0 = worldXZ.div(79.0).add(vec2(t.div(17.0), t.div(29.0)))
-    const uv1 = worldXZ.div(263.0).sub(vec2(t.div(-19.0), t.div(31.0)))
-    const uv2 = worldXZ
-      .div(vec2(8907.0, 9803.0))
-      .add(vec2(t.div(101.0), t.div(97.0)))
-    const uv3 = worldXZ
-      .div(vec2(1091.0, 1027.0))
-      .sub(vec2(t.div(109.0), t.div(-113.0)))
+    // Wave directions and phase speeds from Gerstner uniforms
+    const dirA = normalize(vec4(waveA_immutable).xy)
+    const dirB = normalize(vec4(waveB_immutable).xy)
+    const dirC = normalize(vec4(waveC_immutable).xy)
+    const kA = PI.mul(2).div(vec4(waveA_immutable).w)
+    const kB = PI.mul(2).div(vec4(waveB_immutable).w)
+    const kC = PI.mul(2).div(vec4(waveC_immutable).w)
+    const cA = sqrt(float(9.8).div(kA)).mul(0.1)
+    const cB = sqrt(float(9.8).div(kB)).mul(0.1)
+    const cC = sqrt(float(9.8).div(kC)).mul(0.1)
+
+    // UV offset follows wave direction * phase speed * time
+    const wlA = vec4(waveA_immutable).w
+    const wlB = vec4(waveB_immutable).w
+    const wlC = vec4(waveC_immutable).w
+    const uv0 = worldXZ.div(wlA.mul(0.5)).add(dirA.mul(cA.mul(t).mul(0.3)))
+    const uv1 = worldXZ.div(wlB.mul(0.5)).add(dirB.mul(cB.mul(t).mul(0.2)))
+    const uv2 = worldXZ.div(wlC.mul(0.5)).add(dirC.mul(cC.mul(t).mul(0.1)))
 
     const noise = normalMapTex
       .sample(uv0)
       .add(normalMapTex.sample(uv1))
       .add(normalMapTex.sample(uv2))
-      .add(normalMapTex.sample(uv3))
 
     return noise.mul(0.5).sub(1.0)
   }
@@ -128,8 +185,31 @@ export interface WaterMaterialUniforms {
   uHeightmapTexture: { value: THREE.Texture }
 }
 
+// Module-level wave configs shared across all tiles to ensure matching heights at boundaries
+const waveConfigs = [
+  {
+    angle: Math.random() * Math.PI * 2,
+    speed: 0.0013,
+    steepness: 0.06,
+    wavelength: 20,
+  },
+  {
+    angle: Math.random() * Math.PI * 2,
+    speed: 0.0021,
+    steepness: 0.04,
+    wavelength: 14,
+  },
+  {
+    angle: Math.random() * Math.PI * 2,
+    speed: 0.0009,
+    steepness: 0.03,
+    wavelength: 9,
+  },
+]
+
 export interface WaterMaterialResult {
   material: NodeMaterial
+  updateWaveDirections: (elapsed: number) => void
   uniforms: WaterMaterialUniforms
 }
 
@@ -144,29 +224,27 @@ export function createWaterMaterial(
   )
   fallbackTex.needsUpdate = true
 
-  // Gerstner wave direction helpers
-  const degToDir = (deg: number) => {
-    const rad = (deg * Math.PI) / 180
-    return [Math.sin(rad), Math.cos(rad)]
-  }
-  const [ax, az] = degToDir(0)
-  const [bx, bz] = degToDir(30)
-  const [cx, cz] = degToDir(60)
-
   // Scalar/vector uniforms
   const uTime = uniform(0)
-  const uWaveA = uniform(new THREE.Vector4(ax, az, 0.03, 20))
-  const uWaveB = uniform(new THREE.Vector4(bx, bz, 0.02, 15))
-  const uWaveC = uniform(new THREE.Vector4(cx, cz, 0.015, 10))
-  const uShallowColor = uniform(new THREE.Color(0.1, 0.7, 0.7))
-  const uMidColor = uniform(new THREE.Color(0.0, 0.4, 0.6))
-  const uDeepColor = uniform(new THREE.Color(0.0, 0.05, 0.14))
-  const uMaxDepth = uniform(1.8)
+  const uWaveA = uniform(
+    new THREE.Vector4(0, 1, waveConfigs[0].steepness, waveConfigs[0].wavelength)
+  )
+  const uWaveB = uniform(
+    new THREE.Vector4(0, 1, waveConfigs[1].steepness, waveConfigs[1].wavelength)
+  )
+  const uWaveC = uniform(
+    new THREE.Vector4(0, 1, waveConfigs[2].steepness, waveConfigs[2].wavelength)
+  )
+  const waveUniforms = [uWaveA, uWaveB, uWaveC]
+  const uShallowColor = uniform(new THREE.Color(0.3, 0.88, 0.82))
+  const uMidColor = uniform(new THREE.Color(0.06, 0.7, 0.68))
+  const uDeepColor = uniform(new THREE.Color(0.01, 0.18, 0.32))
+  const uMaxDepth = uniform(2.5)
   const uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.3).normalize())
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
   const uCameraDirection = uniform(new THREE.Vector3(0, -1, 0))
   const uMoonBrightness = uniform(0)
-  const uRefractionStrength = uniform(0.08)
+  const uRefractionStrength = uniform(0.04)
 
   // Texture nodes (use texture() directly — update via .value)
   const heightmapTex = texture(options.heightmapTexture)
@@ -222,17 +300,38 @@ export function createWaterMaterial(
     const c2 = mix(
       uShallowColor,
       uMidColor,
-      smoothstep(float(0.0), float(0.4), depthFactor)
+      smoothstep(float(0.0), float(0.2), depthFactor)
     )
     const waterColor = mix(
       c2,
       uDeepColor,
-      smoothstep(float(0.4), float(1.0), depthFactor)
+      smoothstep(float(0.3), float(1.0), depthFactor)
     ).toVar()
 
-    // 3. Surface normal from 4-sample noise
-    const noise = getNoise(vOrigWorldPos.xz, normalMapTex, uTime).toVar()
-    const surfaceNormal = normalize(noise.xzy.mul(vec3(1.5, 1.0, 1.5)))
+    // 3a. Gerstner wave analytical normal (large swells)
+    const waveP = vOrigWorldPos
+    const gnA = gerstnerNormal(uWaveA, waveP, uTime)
+    const gnB = gerstnerNormal(uWaveB, waveP, uTime)
+    const gnC = gerstnerNormal(uWaveC, waveP, uTime)
+    const tx = float(1.0).add(gnA.x).add(gnB.x).add(gnC.x)
+    const ty = gnA.y.add(gnB.y).add(gnC.y)
+    const bz = float(1.0).add(gnA.z).add(gnB.z).add(gnC.z)
+    const by = gnA.w.add(gnB.w).add(gnC.w)
+    const gerstnerN = normalize(vec3(ty.negate(), tx.mul(bz), by.negate()))
+
+    // 3b. Normal map sampling for small ripples
+    const rippleNoise = getNoise(
+      vOrigWorldPos.xz,
+      normalMapTex,
+      uTime,
+      uWaveA,
+      uWaveB,
+      uWaveC
+    )
+    const rippleN = rippleNoise.xzy.mul(vec3(1.5, 0.0, 1.5))
+
+    // 3c. Combine: perturb Gerstner normal with ripple detail
+    const surfaceNormal = normalize(gerstnerN.add(rippleN))
 
     // View direction
     const viewDir = normalize(vec3(uCameraDirection).negate())
@@ -259,19 +358,11 @@ export function createWaterMaterial(
       .add(0.15)
     waterColor.mulAssign(waterNightFactor)
 
-    // Darken refraction in shallows (wet sand effect) — deeper = more tinted
-    const wetDarken = mix(
-      float(0.4),
-      float(1.0),
-      smoothstep(float(0), float(0.5), depthFactor)
-    )
-    const wetRefractionColor = refractionColor.mul(wetDarken)
-
-    // Blend refraction with depth tint — shallow = darkened refraction (wet sand), deep = water color
-    const refractionMix = float(1).sub(
-      smoothstep(float(0.3), float(0.7), depthFactor)
-    )
-    waterColor.assign(mix(waterColor, wetRefractionColor, refractionMix))
+    // Refraction — only blend in very shallow shore area for wet sand effect
+    const refractionMix = float(1)
+      .sub(smoothstep(float(0.0), float(0.15), depthFactor))
+      .mul(0.4)
+    waterColor.assign(mix(waterColor, refractionColor, refractionMix))
 
     // Underwater caustics — light pattern on the seafloor, seen through refraction
     const cUV1 = vOrigWorldPos.xz
@@ -321,10 +412,11 @@ export function createWaterMaterial(
         .mul(causticsDepthGate)
     )
 
-    // Specular: broad sun reflection
+    // Specular: use gentle normal to avoid cloud-like patches
+    const specNormal = normalize(mix(vec3(0, 1, 0), surfaceNormal, 0.3))
     const halfDir = normalize(vec3(uSunDirection).add(viewDir))
-    const NdotH = max(dot(surfaceNormal, halfDir), 0.0)
-    const specBroad = pow(NdotH, float(64)).mul(0.35)
+    const NdotH = max(dot(specNormal, halfDir), 0.0)
+    const specBroad = pow(NdotH, float(128)).mul(0.3)
     const specular = vec3(uSunColor).mul(specBroad).toVar()
 
     // Sun sparkles – use displaced world pos so sparkles ride the waves
@@ -433,16 +525,18 @@ export function createWaterMaterial(
     )
 
     // 5. Shore foam — wide breaking waves
-    const foamNoise = noise.x.mul(0.5).add(0.5)
+    const foamNoise = valueNoise(vOrigWorldPos.xz.mul(0.5))
 
     // Noise-perturbed depth for irregular edges
+    const foamNoise2 = valueNoise(vOrigWorldPos.xz.mul(0.3))
+    const foamNoise3 = valueNoise(vOrigWorldPos.xz.mul(0.15))
     const noisyD = depth
-      .add(noise.x.mul(0.15))
-      .add(noise.z.mul(0.1))
+      .add(foamNoise2.mul(0.15))
+      .add(foamNoise3.mul(0.1))
       .add(valueNoise(vOrigWorldPos.xz.mul(0.2)).mul(0.3))
 
-    // Two wave cycles offset by half phase
-    const waveSpeed = float(0.02)
+    // Two wave cycles offset by half phase — slow for calm tropical water
+    const waveSpeed = float(0.012)
     const cycle1 = fract(uTime.mul(waveSpeed))
     const cycle2 = fract(uTime.mul(waveSpeed).add(0.5))
 
@@ -462,9 +556,9 @@ export function createWaterMaterial(
       float(1).sub(smoothstep(float(0.9), float(1), cycle2))
     )
 
-    // Bands widen near shore (wave shoaling) — narrow at spawn, wide when breaking
-    const bandWidth1 = float(0.06).add(float(0.18).mul(move1))
-    const bandWidth2 = float(0.06).add(float(0.18).mul(move2))
+    // Bands widen near shore (wave shoaling) — narrow and subtle for calm tropical water
+    const bandWidth1 = float(0.04).add(float(0.1).mul(move1))
+    const bandWidth2 = float(0.04).add(float(0.1).mul(move2))
 
     // Soft band shape
     const band1 = smoothstep(center1.sub(bandWidth1), center1, noisyD)
@@ -482,23 +576,41 @@ export function createWaterMaterial(
     band1.mulAssign(smoothstep(float(0.2), float(0.5), bn1))
     band2.mulAssign(smoothstep(float(0.2), float(0.5), bn2))
 
-    // Persistent shore foam — always present near the edge
+    // Persistent shore foam — visible white edge at coastline
     const shoreBase = float(1)
-      .sub(smoothstep(float(0), float(0.5), noisyD))
-      .mul(0.6)
+      .sub(smoothstep(float(0), float(0.4), noisyD))
+      .mul(0.7)
 
-    // Subtle brightening near shore
+    // Brightening near shore
     const foamGlow = float(1)
-      .sub(smoothstep(float(0), float(0.5), depth))
-      .mul(0.1)
+      .sub(smoothstep(float(0), float(0.4), depth))
+      .mul(0.15)
 
     // Blend water with sky reflection via Fresnel, then add specular
     // Dampen fresnel and specular in shallows to keep refracted sand clean
-    const shallowDamp = smoothstep(float(0.15), float(0.45), depthFactor)
+    // Normal-based ripple shading — directly modulate water brightness
+    const fresnelViewDir = normalize(vec3(viewDir.x, float(0.15), viewDir.z))
+    const NdotV = max(dot(surfaceNormal, fresnelViewDir), 0.0)
+    // Ripple brightness: normals facing away get brighter, facing toward get darker
+    const rippleBright = mix(
+      float(0.75),
+      float(1.25),
+      pow(float(1).sub(NdotV), float(1.5))
+    )
+    waterColor.mulAssign(rippleBright)
+
+    // Tint sky reflection toward turquoise so it doesn't wash out the water color
+    const tintedSkyReflection = mix(
+      skyReflection,
+      vec3(uMidColor).mul(1.5),
+      float(0.6)
+    )
+    const shallowDamp = smoothstep(float(0.15), float(0.5), depthFactor)
+    const fresnel = pow(float(1).sub(NdotV), float(2)).mul(0.12)
     const surfaceColor = mix(
       waterColor,
-      skyReflection,
-      mix(float(0.01), float(0.2), shallowDamp)
+      tintedSkyReflection,
+      mix(float(0.01), float(0.08), shallowDamp).add(fresnel)
     )
       .add(specular.mul(shallowDamp))
       .toVar()
@@ -535,14 +647,14 @@ export function createWaterMaterial(
       )
     ).toVar()
 
-    // Overlay entity reflection — DISABLED for testing
-    // finalColorBeforeRefl.assign(
-    //   mix(
-    //     finalColorBeforeRefl,
-    //     reflectionSample.rgb,
-    //     reflectionSample.a.mul(0.3)
-    //   )
-    // )
+    // Overlay entity reflection
+    finalColorBeforeRefl.assign(
+      mix(
+        finalColorBeforeRefl,
+        reflectionSample.rgb,
+        reflectionSample.a.mul(0.3)
+      )
+    )
     // Caustics glow — DISABLED for testing
     // const glowNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
     // const glowColor = mix(
@@ -572,8 +684,12 @@ export function createWaterMaterial(
 
     const finalColor = finalColorBeforeRefl
 
-    // 6. Alpha — opaque so terrain is only visible via refraction (distorted)
-    const baseAlpha = mix(float(0.7), float(0.98), smoothDepth)
+    // 6. Alpha — transparent shallows (visible sand + mint tint), opaque deep
+    const baseAlpha = mix(
+      float(0.35),
+      float(0.99),
+      smoothstep(float(0), float(0.5), depthFactor)
+    )
     const alpha = baseAlpha
       .add(foamWithTex.mul(0.5))
       .add(sparkle)
@@ -614,8 +730,20 @@ export function createWaterMaterial(
   material.vertexNode = positionNode
   material.fragmentNode = fragmentNode
 
+  // Update wave directions based on elapsed time
+  const updateWaveDirections = (elapsed: number) => {
+    for (let i = 0; i < waveConfigs.length; i++) {
+      const cfg = waveConfigs[i]
+      const angle = cfg.angle + elapsed * cfg.speed
+      const v = waveUniforms[i].value
+      v.x = Math.sin(angle)
+      v.y = Math.cos(angle)
+    }
+  }
+
   return {
     material,
+    updateWaveDirections,
     uniforms: {
       uTime,
       uSunDirection,
