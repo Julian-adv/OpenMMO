@@ -249,7 +249,7 @@ export function createWaterMaterial(
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
   const uCameraDirection = uniform(new THREE.Vector3(0, -1, 0))
   const uMoonBrightness = uniform(0)
-  const uRefractionStrength = uniform(0.04)
+  const uRefractionStrength = uniform(0.1)
 
   // Texture nodes (use texture() directly — update via .value)
   const heightmapTex = texture(options.heightmapTexture)
@@ -360,7 +360,14 @@ export function createWaterMaterial(
     const screenUV = vClipPos.xy.mul(0.5).add(0.5)
     // Y-flip for WebGPU render target coordinate convention
     const refractionBaseUV = vec2(screenUV.x, float(1.0).sub(screenUV.y))
-    const refractionDistort = surfaceNormal.xz.mul(uRefractionStrength)
+    // Sample normal map directly for stronger refraction distortion
+    const refrUV1 = vOrigWorldPos.xz.mul(0.08).add(uTime.mul(0.015))
+    const refrUV2 = vOrigWorldPos.xz.mul(0.06).sub(uTime.mul(0.01))
+    const refrNoise = normalMapTex
+      .sample(refrUV1)
+      .rg.add(normalMapTex.sample(refrUV2).rg)
+      .sub(1.0) // center around 0 (each sample 0~1, sum 0~2, -1 → -1~1)
+    const refractionDistort = refrNoise.mul(uRefractionStrength)
     const refractionUV = clamp(
       refractionBaseUV.add(refractionDistort),
       0.0,
@@ -379,9 +386,10 @@ export function createWaterMaterial(
     waterColor.mulAssign(waterNightFactor)
 
     // Refraction — visible in 바다1 and 바다2 (depthFactor 0 ~ 0.25)
+    // Stay strong (0.95) up to depthFactor 0.15, then drop sharply to 0 by 0.35
     const refractionMix = float(1)
-      .sub(smoothstep(float(0.0), float(0.25), depthFactor))
-      .mul(0.7)
+      .sub(smoothstep(float(0.05), float(0.35), depthFactor))
+      .mul(0.95)
     waterColor.assign(mix(waterColor, refractionColor, refractionMix))
 
     // Underwater caustics — light pattern on the seafloor, seen through refraction
@@ -763,7 +771,10 @@ export function createWaterMaterial(
       float(0.97),
       smoothstep(float(0.08), float(0.35), depthFactor)
     )
-    const alpha = baseAlpha
+    // Boost alpha where refraction is active so the undistorted terrain beneath
+    // doesn't bleed through and cancel the refraction distortion effect
+    const refrAlphaBoost = refractionMix.mul(0.9)
+    const alpha = max(baseAlpha, refrAlphaBoost)
       .add(foamWithTex.mul(0.9))
       .add(sparkle)
       .min(1.0)
