@@ -13,7 +13,7 @@
   } from '../makeSplatStandardMaterial'
   import type { SplatLayer } from '../makeSplatStandardMaterial'
   import type { TerrainTile } from './terrain-utils'
-  import { TERRAIN_TILE_SIZE } from './terrain-utils'
+  import { TERRAIN_TILE_SIZE, TERRAIN_GRID_RADIUS } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
@@ -58,7 +58,7 @@
   let _defaultLayers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null =
     null
   let defaultAtlas: SplatAtlasSet | null = null
-  let sharedMaterial = $state<MeshStandardNodeMaterial | null>(null)
+  let materialsReady = $state(false)
   let brushUnsubs: (() => void)[] = []
 
   // Default 1x1 all-grass splatmap for tiles whose splatmap hasn't loaded yet
@@ -77,20 +77,79 @@
   // Shared brush/grid uniforms
   const brushUniforms: SplatBrushUniforms = createSplatBrushUniforms()
 
+  // ── Material pool (pre-created, reused across tile lifecycles) ──
+  const MAX_TILES = (2 * TERRAIN_GRID_RADIUS + 1) ** 2 // 9 for radius=1
+  const materialPool: MeshStandardNodeMaterial[] = []
+
   loadSplatLayers().then((layers) => {
     _defaultLayers = layers
     defaultAtlas = buildSplatAtlas(layers)
-    sharedMaterial = makeSplatStandardMaterial({
-      atlas: defaultAtlas,
-      tileScales: [layers[0].tile, layers[1].tile, layers[2].tile, layers[3].tile],
-      splatMap: defaultSplat,
-      splatScale: 1.0,
-      sharedBrushUniforms: brushUniforms,
-    })
+    // Pre-create all materials once to avoid per-tile shader compilation stutter
+    for (let i = 0; i < MAX_TILES; i++) {
+      materialPool.push(makeSplatStandardMaterial({
+        atlas: defaultAtlas,
+        tileScales: [layers[0].tile, layers[1].tile, layers[2].tile, layers[3].tile],
+        splatMap: defaultSplat,
+        splatScale: 1.0,
+        sharedBrushUniforms: brushUniforms,
+      }))
+    }
+    materialsReady = true
     setupBrushSync()
   })
 
-  // ── Brush sync (updates shared uniform nodes → affects the material) ──
+  /** Take a material from the pool, resetting its textures to defaults. */
+  function acquireMaterial(): MeshStandardNodeMaterial | null {
+    const mat = materialPool.pop() ?? null
+    if (mat) resetMaterialToDefaults(mat)
+    return mat
+  }
+
+  /** Return a material to the pool for reuse. */
+  function releaseMaterial(mat: MeshStandardNodeMaterial) {
+    materialPool.push(mat)
+  }
+
+  /** Reset a pooled material's uniforms back to defaults. */
+  function resetMaterialToDefaults(mat: MeshStandardNodeMaterial) {
+    const u = mat.userData?.uniforms
+    if (!u || !defaultAtlas || !_defaultLayers) return
+    u.splatMap.value = defaultSplat
+    u.diffuseAtlas.value = defaultAtlas.diffuseAtlas
+    if (u.normalAtlas && defaultAtlas.normalAtlas) {
+      u.normalAtlas.value = defaultAtlas.normalAtlas
+    }
+    if (u.ormAtlas && defaultAtlas.ormAtlas) {
+      u.ormAtlas.value = defaultAtlas.ormAtlas
+    }
+    u.uTile0.value = _defaultLayers[0].tile
+    u.uTile1.value = _defaultLayers[1].tile
+    u.uTile2.value = _defaultLayers[2].tile
+    u.uTile3.value = _defaultLayers[3].tile
+  }
+
+  /** Update a per-tile material's atlas/tileScales from resolved region layers. */
+  function applyLayersToMaterial(
+    mat: MeshStandardNodeMaterial,
+    resolved: { layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] },
+  ) {
+    const atlas = buildSplatAtlas(resolved.layers)
+    const u = mat.userData?.uniforms
+    if (!u) return
+    u.diffuseAtlas.value = atlas.diffuseAtlas
+    if (u.normalAtlas && atlas.normalAtlas) {
+      u.normalAtlas.value = atlas.normalAtlas
+    }
+    if (u.ormAtlas && atlas.ormAtlas) {
+      u.ormAtlas.value = atlas.ormAtlas
+    }
+    u.uTile0.value = resolved.layers[0].tile
+    u.uTile1.value = resolved.layers[1].tile
+    u.uTile2.value = resolved.layers[2].tile
+    u.uTile3.value = resolved.layers[3].tile
+  }
+
+  // ── Brush sync (updates shared uniform nodes → affects all materials) ──
   function setupBrushSync() {
     brushUnsubs.forEach((u) => u())
     brushUnsubs = []
@@ -158,14 +217,8 @@
   // ── Geometry management (SvelteMap, needed for template) ──────
   const geoMap = new SvelteMap<string, THREE.BufferGeometry>()
 
-  // ── Per-tile texture data (plain Map, no reactivity needed) ──
-  interface TileTexData {
-    splatTex: THREE.Texture
-    atlas: SplatAtlasSet | null
-    tileScales: [number, number, number, number] | null
-  }
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const tileTexMap = new Map<string, TileTexData>()
+  // ── Per-tile materials (SvelteMap for template reactivity) ──
+  const materialMap = new SvelteMap<string, MeshStandardNodeMaterial>()
 
   function getTileCoords(tile: TerrainTile): {
     tileX: number
@@ -177,45 +230,8 @@
     }
   }
 
-  // ── syncTileMeshes: swap shared material uniforms per-tile before each render ──
-  syncTileMeshes = () => {
-    const mat = sharedMaterial
-    if (!mat) return
-    const u = mat.userData?.uniforms
-    if (!u) return
-
-    for (let i = 0; i < terrainMeshes.length; i++) {
-      const mesh = terrainMeshes[i]
-      if (!mesh) continue
-      // Use tileId stored on the mesh itself to avoid index mismatch
-      // between terrainMeshes[] (old order) and terrainTiles[] (new order)
-      // during the frame when tiles are added/removed.
-      const tileId = mesh.userData.tileId as string | undefined
-      if (!tileId) continue
-      const texData = tileTexMap.get(tileId)
-
-      mesh.onBeforeRender = () => {
-        u.splatMap.value = texData?.splatTex ?? defaultSplat
-        const tileAtlas = texData?.atlas ?? defaultAtlas
-        const scales = texData?.tileScales
-        if (tileAtlas) {
-          u.diffuseAtlas.value = tileAtlas.diffuseAtlas
-          if (u.normalAtlas && tileAtlas.normalAtlas) {
-            u.normalAtlas.value = tileAtlas.normalAtlas
-          }
-          if (u.ormAtlas && tileAtlas.ormAtlas) {
-            u.ormAtlas.value = tileAtlas.ormAtlas
-          }
-        }
-        if (scales) {
-          u.uTile0.value = scales[0]
-          u.uTile1.value = scales[1]
-          u.uTile2.value = scales[2]
-          u.uTile3.value = scales[3]
-        }
-      }
-    }
-  }
+  // No-op: per-tile materials handle their own textures, no onBeforeRender needed.
+  syncTileMeshes = () => {}
 
   // ── Edge refresh queue ──────────────────────────────────
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -242,31 +258,36 @@
     }
   }
 
-  // ── Tile lifecycle (geometry + async data loading) ──
+  // ── Tile lifecycle (geometry + per-tile material + async data loading) ──
   $effect(() => {
-    if (!terrainGeometry || !heightManager || !sharedMaterial) return
+    if (!terrainGeometry || !heightManager || !materialsReady) return
 
     const currentTileIds = new Set(terrainTiles.map((t) => t.id))
 
-    // Remove data for tiles no longer in the list
+    // Remove data for tiles no longer in the list, return materials to pool
     for (const [id, geo] of geoMap) {
       if (!currentTileIds.has(id)) {
         geo.dispose()
         geoMap.delete(id)
-        tileTexMap.delete(id)
+        const mat = materialMap.get(id)
+        if (mat) releaseMaterial(mat)
+        materialMap.delete(id)
       }
     }
 
-    // Create geometries + kick off async loads for new tiles
+    // Create geometries + assign pooled material + kick off async loads for new tiles
     const mgr = heightManager
     const sMgr = splatManager
     const mMgr = metaManager
     for (const tile of terrainTiles) {
       if (geoMap.has(tile.id)) continue
 
+      const tileMat = acquireMaterial()
+      if (!tileMat) continue // pool exhausted (shouldn't happen)
+
       const geo = terrainGeometry.clone()
       geoMap.set(tile.id, geo)
-      tileTexMap.set(tile.id, { splatTex: defaultSplat, atlas: null, tileScales: null })
+      materialMap.set(tile.id, tileMat)
 
       const { tileX, tileZ } = getTileCoords(tile)
       mgr.registerGeometry(tileX, tileZ, geo)
@@ -282,8 +303,8 @@
       const tileId = tile.id
       if (sMgr) {
         sMgr.loadSplatmap(tileX, tileZ).then((tex) => {
-          const td = tileTexMap.get(tileId)
-          if (td) td.splatTex = tex
+          const mat = materialMap.get(tileId)
+          if (mat) mat.userData.uniforms.splatMap.value = tex
         })
       }
 
@@ -291,14 +312,8 @@
         mMgr
           .getLayersForTile(tileX, tileZ)
           .then((resolved) => {
-            const td = tileTexMap.get(tileId)
-            if (td) {
-              td.atlas = buildSplatAtlas(resolved.layers)
-              td.tileScales = [
-                resolved.layers[0].tile, resolved.layers[1].tile,
-                resolved.layers[2].tile, resolved.layers[3].tile,
-              ]
-            }
+            const mat = materialMap.get(tileId)
+            if (mat) applyLayersToMaterial(mat, resolved)
           })
           .catch(() => {})
       }
@@ -317,28 +332,23 @@
       const { tileX, tileZ } = getTileCoords(tile)
       if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
         mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-          const td = tileTexMap.get(tile.id)
-          if (td) {
-            td.atlas = buildSplatAtlas(resolved.layers)
-            td.tileScales = [
-              resolved.layers[0].tile, resolved.layers[1].tile,
-              resolved.layers[2].tile, resolved.layers[3].tile,
-            ]
-          }
+          const mat = materialMap.get(tile.id)
+          if (mat) applyLayersToMaterial(mat, resolved)
         })
       }
     }
   })
 </script>
 
-{#if terrainGeometry && sharedMaterial}
+{#if terrainGeometry && materialsReady}
   <T.Group bind:ref={terrainGroup}>
     {#each terrainTiles as tile, index (tile.id)}
       {@const geo = geoMap.get(tile.id) ?? null}
-      {#if geo}
+      {@const tileMat = materialMap.get(tile.id) ?? null}
+      {#if geo && tileMat}
         <SplatTerrain
           geometry={geo}
-          material={sharedMaterial}
+          material={tileMat}
           tileId={tile.id}
           position={tile.position}
           bind:mesh={terrainMeshes[index]}
