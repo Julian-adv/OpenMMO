@@ -195,7 +195,48 @@ export function loadSplatLayers(
 // ── Atlas building ──────────────────────────────────────────────
 
 /**
- * Pack 4 textures into a 2×2 atlas (2048×2048 from 1024×1024 sources).
+ * Border pixels around each sub-texture in the atlas to prevent mipmap bleeding.
+ * Filled with wrapping-edge pixels from the source texture.
+ */
+export const ATLAS_BORDER = 8
+
+/**
+ * Draw a single sub-texture into its atlas slot with wrapping borders.
+ * The border pixels are taken from the opposite edges of the source (tiling wrap).
+ */
+function drawWithWrapBorder(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImageSource,
+  slotX: number,
+  slotY: number,
+  srcSize: number,
+  border: number
+) {
+  const B = border
+  const S = srcSize
+
+  // Main texture
+  ctx.drawImage(img, 0, 0, S, S, slotX + B, slotY + B, S, S)
+
+  // Left border: rightmost B columns of source
+  ctx.drawImage(img, S - B, 0, B, S, slotX, slotY + B, B, S)
+  // Right border: leftmost B columns of source
+  ctx.drawImage(img, 0, 0, B, S, slotX + B + S, slotY + B, B, S)
+  // Top border: bottom B rows of source
+  ctx.drawImage(img, 0, S - B, S, B, slotX + B, slotY, S, B)
+  // Bottom border: top B rows of source
+  ctx.drawImage(img, 0, 0, S, B, slotX + B, slotY + B + S, S, B)
+
+  // Corners (diagonal wrapping)
+  ctx.drawImage(img, S - B, S - B, B, B, slotX, slotY, B, B) // TL ← BR of src
+  ctx.drawImage(img, 0, S - B, B, B, slotX + B + S, slotY, B, B) // TR ← BL of src
+  ctx.drawImage(img, S - B, 0, B, B, slotX, slotY + B + S, B, B) // BL ← TR of src
+  ctx.drawImage(img, 0, 0, B, B, slotX + B + S, slotY + B + S, B, B) // BR ← TL of src
+}
+
+/**
+ * Pack 4 textures into a 2×2 atlas with wrapping border padding.
+ * Each slot is (srcSize + 2*ATLAS_BORDER) px. Atlas total = slot*2 per axis.
  * Layout: [0]=TL, [1]=TR, [2]=BL, [3]=BR
  */
 function buildAtlasTexture(
@@ -211,27 +252,37 @@ function buildAtlasTexture(
     | HTMLCanvasElement
     | ImageBitmap
     | undefined
-  const size =
+  const srcSize =
     (firstImg &&
       ('naturalWidth' in firstImg
         ? firstImg.naturalWidth || firstImg.width
         : firstImg.width)) ||
     1024
 
+  const slotSize = srcSize + ATLAS_BORDER * 2
+  const atlasSize = slotSize * 2
+
   const canvas = document.createElement('canvas')
-  canvas.width = size * 2
-  canvas.height = size * 2
+  canvas.width = atlasSize
+  canvas.height = atlasSize
   const ctx = canvas.getContext('2d')!
 
   ctx.fillStyle = fallbackFill
-  ctx.fillRect(0, 0, size * 2, size * 2)
+  ctx.fillRect(0, 0, atlasSize, atlasSize)
 
   for (let i = 0; i < 4; i++) {
     const tex = textures[i]
     if (tex?.image) {
-      const x = (i % 2) * size
-      const y = Math.floor(i / 2) * size
-      ctx.drawImage(tex.image as CanvasImageSource, x, y, size, size)
+      const slotX = (i % 2) * slotSize
+      const slotY = Math.floor(i / 2) * slotSize
+      drawWithWrapBorder(
+        ctx,
+        tex.image as CanvasImageSource,
+        slotX,
+        slotY,
+        srcSize,
+        ATLAS_BORDER
+      )
     }
   }
 

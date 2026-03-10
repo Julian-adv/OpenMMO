@@ -28,7 +28,7 @@ import {
 import type Node from 'three/src/nodes/core/Node.js'
 import type TextureNode from 'three/src/nodes/accessors/TextureNode.js'
 import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js'
-import type { SplatAtlasSet } from '../utils/splatLayerLoader'
+import { ATLAS_BORDER, type SplatAtlasSet } from '../utils/splatLayerLoader'
 
 export type SplatLayer = {
   map: THREE.Texture // Albedo (sRGB)
@@ -66,7 +66,9 @@ export function createSplatBrushUniforms(): SplatBrushUniforms {
   }
 }
 
-// ─── Atlas quadrant offsets (2×2 layout) ─────────────────────
+// ─── Atlas quadrant offsets (2×2 layout with border padding) ──
+// Each slot is (srcSize + 2*ATLAS_BORDER). Slot occupies exactly 0.5 of atlas.
+// Sub-texture starts at ATLAS_BORDER pixels into each slot.
 // [0]=TL, [1]=TR, [2]=BL, [3]=BR — matches buildAtlasTexture layout
 const QUAD_OFFSETS = [vec2(0, 0), vec2(0.5, 0), vec2(0, 0.5), vec2(0.5, 0.5)]
 
@@ -124,6 +126,21 @@ export function makeSplatStandardMaterial({
   // ─── Helper: sample atlas with correct tiling + mipmapping ──
   // Uses fract() for manual repeat + .grad() with continuous derivatives
   // to avoid the mipmap seam that fract() discontinuity would cause.
+  // UV is mapped to the inner sub-texture region, skipping the border padding.
+  //
+  // Atlas layout per slot: [BORDER | srcTexture | BORDER]
+  // slotSize = srcSize + 2*BORDER, atlas = slotSize*2 per axis
+  // borderNorm = BORDER / (slotSize * 2)  — border in normalized atlas UV
+  // subTexNorm = srcSize / (slotSize * 2) — sub-texture extent in atlas UV
+  // Since slotSize*2 = atlas width, and each slot = 0.5 of atlas:
+  //   borderInQuad = BORDER / slotSize (within the 0.5 quadrant)
+  //   subTexInQuad = srcSize / slotSize
+  // We assume srcSize=1024 (the dominant case).
+  const _srcSize = 1024
+  const _slotSize = _srcSize + ATLAS_BORDER * 2
+  const _borderNorm = ATLAS_BORDER / (_slotSize * 2) // border in full atlas UV
+  const _subTexNorm = _srcSize / (_slotSize * 2) // sub-texture size in full atlas UV
+
   function sampleAtlas(
     atlasTex: ShaderNodeObject<TextureNode>,
     baseUv: ReturnType<typeof uv>,
@@ -133,11 +150,15 @@ export function makeSplatStandardMaterial({
     dUVdy: ReturnType<typeof dFdy>
   ) {
     const tiledUv = baseUv.mul(tileScale)
-    const atlasUv = fract(tiledUv).mul(0.5).add(quadOffset)
-    // Gradients from continuous UV (before fract) scaled to atlas quadrant space
-    const gx = dUVdx.mul(tileScale).mul(0.5)
-    const gy = dUVdy.mul(tileScale).mul(0.5)
-    // .sample() types return ShaderNodeObject<Node> but runtime is a TextureNode clone
+    // Map fract() [0,1) to the sub-texture region within the quadrant,
+    // offset past the border padding.
+    const atlasUv = fract(tiledUv)
+      .mul(_subTexNorm)
+      .add(quadOffset)
+      .add(_borderNorm)
+    // Gradients scaled to sub-texture size in atlas space
+    const gx = dUVdx.mul(tileScale).mul(_subTexNorm)
+    const gy = dUVdy.mul(tileScale).mul(_subTexNorm)
     return (
       atlasTex.sample(atlasUv) as unknown as ShaderNodeObject<TextureNode>
     ).grad(gx, gy)
