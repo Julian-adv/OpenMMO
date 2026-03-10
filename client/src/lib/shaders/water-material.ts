@@ -275,9 +275,17 @@ export function createWaterMaterial(
     vOrigWorldPos.assign(worldPos.xyz)
 
     const p = worldPos.xyz
+    // Sample heightmap in vertex to get approximate depth for wave damping
+    const vtxHeightUV = vUv.mul(64.0 / 65.0).add(0.5 / 65.0)
+    const vtxTerrainH = heightmapTex.sample(vtxHeightUV).r
+    const vtxDepth = max(float(0), p.y.sub(vtxTerrainH))
+    // Dampen Gerstner waves in shallow water (fade out over depth 0~1.5)
+    const waveDamping = smoothstep(float(0.0), float(1.5), vtxDepth)
+
     const offset = gerstnerWave(uWaveA, p, uTime)
       .add(gerstnerWave(uWaveB, p, uTime))
       .add(gerstnerWave(uWaveC, p, uTime))
+      .mul(waveDamping)
       .toVar()
 
     worldPos.xyz.addAssign(offset)
