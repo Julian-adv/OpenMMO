@@ -552,9 +552,12 @@ export function createWaterMaterial(
     const move2 = smoothstep(float(0), float(0.7), cycle2)
 
     // Shore drawback — smooth sine oscillation, 2x frequency to match two foam bands
-    const shorePhase = uTime.mul(waveSpeed).mul(PI.mul(4))
+    const shorePhase = uTime
+      .mul(waveSpeed)
+      .mul(PI.mul(4))
+      .sub(PI.mul(1.0 / 2.0))
     const shoreRecede = sin(shorePhase).mul(0.5).add(0.5)
-    const shoreDepthOffset = shoreRecede.mul(0.8)
+    const shoreDepthOffset = shoreRecede.mul(0.35)
     const shoreAdjustedDepth = max(float(0), depth.sub(shoreDepthOffset))
     const shoreZone = float(1).sub(
       smoothstep(float(0), float(0.45), shoreAdjustedDepth)
