@@ -550,13 +550,18 @@ export function createWaterMaterial(
       holeThreshold.add(0.05),
       holeMask
     ).mul(edgeCutoff)
-    // Hole edge foam — water side: use distance from threshold into water
-    // holeMask > holeThreshold = water side. Wider fringe by measuring how far past threshold.
+    // Hole edge foam — straddles the threshold so foam bleeds slightly into hole side
     const distFromHole = holeMask.sub(holeThreshold)
-    // Foam on water side: starts at threshold (0), fades out 0.5 past it
-    const holeEdge = smoothstep(float(0.0), float(0.01), distFromHole)
+    // Foam ramps up from slightly inside hole (-0.03) and fades out into water (0.5)
+    const holeEdge = smoothstep(float(-0.03), float(0.01), distFromHole)
       .mul(float(1).sub(smoothstep(float(0.01), float(0.5), distFromHole)))
       .mul(shoreZone)
+    // Keep alpha visible in the hole-side foam fringe
+    const holeFoamFringe = smoothstep(
+      float(-0.03),
+      float(0.0),
+      distFromHole
+    ).mul(shoreZone)
 
     // 5. Shore foam — wide breaking waves
 
@@ -610,7 +615,9 @@ export function createWaterMaterial(
     band2.mulAssign(smoothstep(float(0.2), float(0.5), bn2))
 
     // Shore foam at hole edges — foam fringe at water boundary
-    const shoreBase = holeEdge
+    // Dim shore foam at night so it matches wave foam brightness
+    const shoreDayNight = smoothstep(float(-0.05), float(0.1), sunY)
+    const shoreBase = holeEdge.mul(mix(float(0.5), float(1.4), shoreDayNight))
 
     // Brightening near shore
     const foamGlow = float(1)
@@ -747,7 +754,7 @@ export function createWaterMaterial(
       .toVar()
 
     // 7. Shore edge — reuse hole variables computed earlier
-    alpha.mulAssign(holeAlpha)
+    alpha.mulAssign(max(holeAlpha, holeFoamFringe))
 
     // At night, only make very shallow water (바다1) more transparent
     const veryShallowWeight = float(1).sub(
