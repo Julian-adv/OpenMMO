@@ -770,6 +770,26 @@ export function createWaterMaterial(
     // 7. Shore edge — reuse hole variables computed earlier
     alpha.mulAssign(max(holeAlpha, holeFoamFringe))
 
+    // 7b. Wet sand — darken refraction (terrain) color near hole boundary
+    // Uses actual terrain appearance instead of flat color for natural look
+    const wetMask = smoothstep(float(-0.55), float(-0.05), distFromHole)
+      .mul(float(1).sub(smoothstep(float(0.0), float(0.02), distFromHole)))
+      .mul(edgeCutoff)
+      .mul(
+        mix(
+          smoothstep(float(0.85), float(0.9), shoreRecede), // 밀물: 빨리 사라짐
+          smoothstep(float(0.05), float(0.15), shoreRecede), // 썰물: 빨리 나타남
+          smoothstep(float(0.0), float(0.1), cos(shorePhase)) // 방향 감지
+        )
+      )
+    // Sample refraction (terrain color) and darken it to simulate wetness
+    const wetTerrainColor = refractionColor.mul(0.5)
+    finalColorBeforeRefl.assign(
+      mix(finalColorBeforeRefl, wetTerrainColor, wetMask)
+    )
+    // Restore alpha in wet zone so darkened terrain is visible through holes
+    alpha.assign(max(alpha, wetMask.mul(0.85)))
+
     // At night, only make very shallow water (바다1) more transparent
     const veryShallowWeight = float(1).sub(
       smoothstep(float(0.0), float(0.08), depthFactor)
