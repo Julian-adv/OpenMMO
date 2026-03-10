@@ -547,9 +547,9 @@ export function createWaterMaterial(
 
     // Hole edge detection (computed early so shore foam can use it)
     const shoreZone = float(1).sub(smoothstep(float(0), float(0.6), depth))
-    const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.8).add(uTime.mul(0.07)))
-    const sn2 = valueNoise(vOrigWorldPos.xz.mul(1.5).add(uTime.mul(0.04)))
-    const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.3).add(uTime.mul(0.1)))
+    const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.2).add(uTime.mul(0.07)))
+    const sn2 = valueNoise(vOrigWorldPos.xz.mul(0.4).add(uTime.mul(0.04)))
+    const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.08).add(uTime.mul(0.1)))
     const holeMask = sn1.mul(0.5).add(sn2.mul(0.3)).add(sn3.mul(0.2))
     const edgeCutoff = smoothstep(float(0), float(0.01), depth)
     const holeThreshold = shoreZone.mul(0.9)
