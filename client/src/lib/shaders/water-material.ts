@@ -545,9 +545,21 @@ export function createWaterMaterial(
       mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
     )
 
-    // Hole edge detection (computed early so shore foam can use it)
-    // Shift smoothstep range toward shore — same shape, shallower position
-    const shoreZone = float(1).sub(smoothstep(float(0), float(0.45), depth))
+    // Wave speed & cycles (shared by shore drawback + foam bands)
+    const waveSpeed = float(0.012)
+    const cycle1 = fract(uTime.mul(waveSpeed))
+    const cycle2 = fract(uTime.mul(waveSpeed).add(0.5))
+    const move1 = smoothstep(float(0), float(0.7), cycle1)
+    const move2 = smoothstep(float(0), float(0.7), cycle2)
+
+    // Shore drawback — smooth sine oscillation, 2x frequency to match two foam bands
+    const shorePhase = uTime.mul(waveSpeed).mul(PI.mul(4))
+    const shoreRecede = sin(shorePhase).mul(0.5).add(0.5)
+    const shoreDepthOffset = shoreRecede.mul(0.8)
+    const shoreAdjustedDepth = max(float(0), depth.sub(shoreDepthOffset))
+    const shoreZone = float(1).sub(
+      smoothstep(float(0), float(0.45), shoreAdjustedDepth)
+    )
     const sn1 = valueNoise(vOrigWorldPos.xz.mul(0.2).add(uTime.mul(0.07)))
     const sn2 = valueNoise(vOrigWorldPos.xz.mul(0.4).add(uTime.mul(0.04)))
     const sn3 = valueNoise(vOrigWorldPos.xz.mul(0.08).add(uTime.mul(0.1)))
@@ -582,16 +594,9 @@ export function createWaterMaterial(
       .add(foamNoise3.mul(0.1))
       .add(valueNoise(vOrigWorldPos.xz.mul(0.2)).mul(0.3))
 
-    // Two wave cycles offset by half phase — slow for calm tropical water
-    const waveSpeed = float(0.012)
-    const cycle1 = fract(uTime.mul(waveSpeed))
-    const cycle2 = fract(uTime.mul(waveSpeed).add(0.5))
-
     // Waves move from deeper water toward shore
     const spawnDepth = float(1.5)
     const shoreDepth = float(0.15)
-    const move1 = smoothstep(float(0), float(0.7), cycle1)
-    const move2 = smoothstep(float(0), float(0.7), cycle2)
     const center1 = mix(spawnDepth, shoreDepth, move1)
     const center2 = mix(spawnDepth, shoreDepth, move2)
 
