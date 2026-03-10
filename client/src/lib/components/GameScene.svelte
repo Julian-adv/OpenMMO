@@ -85,7 +85,7 @@
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { TerrainMetaManager } from '../managers/terrainMetaManager'
-  import { loadFoamTexture, loadSurfaceTexture } from '../shaders/water-foam-gen'
+  import { loadFoamTexture } from '../shaders/water-foam-gen'
   import { generateCausticsTexture } from '../shaders/caustics-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
   import { ReflectionRenderManager } from '../managers/reflectionRenderManager'
@@ -120,7 +120,6 @@
   editorMetaManager.set(terrainMetaManager)
   let waterNormalMap = $state<THREE.Texture | null>(null)
   let waterFoamMap = $state<THREE.Texture | null>(null)
-  let waterSurfaceMap = $state<THREE.Texture | null>(null)
   let waterCausticsMap = $state<THREE.Texture | null>(null)
   let waterTime = $state(0)
   let waterSunDir = $state<THREE.Vector3 | null>(null)
@@ -710,7 +709,6 @@
       waterNormalMap = tex
     }
     loadFoamTexture().then((tex) => { waterFoamMap = tex })
-    loadSurfaceTexture().then((tex) => { waterSurfaceMap = tex })
     waterCausticsMap = generateCausticsTexture()
 
     // Initialize refraction render manager
@@ -773,8 +771,6 @@
       waterNormalMap = null
       waterFoamMap?.dispose()
       waterFoamMap = null
-      waterSurfaceMap?.dispose()
-      waterSurfaceMap = null
       waterCausticsMap?.dispose()
       waterCausticsMap = null
       refractionManager?.dispose()
@@ -839,7 +835,6 @@
   heightManager={terrainHeightManager}
   normalMap={waterNormalMap}
   foamMap={waterFoamMap}
-  surfaceMap={waterSurfaceMap}
   causticsMap={waterCausticsMap}
   time={waterTime}
   sunDirection={waterSunDir}

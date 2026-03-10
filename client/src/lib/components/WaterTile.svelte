@@ -11,7 +11,6 @@
     heightmapTexture: THREE.DataTexture
     normalMap: THREE.Texture
     foamMap: THREE.Texture
-    surfaceMap: THREE.Texture
     causticsMap: THREE.Texture
     time?: number
     sunDirection?: THREE.Vector3 | null
@@ -28,7 +27,6 @@
     heightmapTexture,
     normalMap,
     foamMap,
-    surfaceMap,
     causticsMap,
     time = 0,
     sunDirection = null,
@@ -47,7 +45,6 @@
       heightmapTexture,
       normalMap,
       foamMap,
-      surfaceMap,
       causticsMap,
       refractionMap,
       reflectionMap,

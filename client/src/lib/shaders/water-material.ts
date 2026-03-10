@@ -168,7 +168,6 @@ export interface WaterMaterialOptions {
   heightmapTexture: THREE.DataTexture
   normalMap: THREE.Texture
   foamMap: THREE.Texture
-  surfaceMap: THREE.Texture
   causticsMap: THREE.Texture
   refractionMap?: THREE.Texture | null
   reflectionMap?: THREE.Texture | null
@@ -461,7 +460,7 @@ export function createWaterMaterial(
       .mul(0.15)
       .mul(smoothstep(float(0), float(0.1), uMoonBrightness))
     const sparkle = smoothstep(float(1.3), float(1.45), sp1.add(sp2))
-      .mul(3.0)
+      .mul(8.0)
       .mul(waveCrestFactor)
       .mul(max(sunSparkleStrength, moonSparkleStrength))
     specular.addAssign(vec3(uSunColor).mul(sparkle))

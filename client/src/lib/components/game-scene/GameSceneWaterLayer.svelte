@@ -15,7 +15,6 @@
     heightManager?: TerrainHeightManager | null
     normalMap?: THREE.Texture | null
     foamMap?: THREE.Texture | null
-    surfaceMap?: THREE.Texture | null
     causticsMap?: THREE.Texture | null
     time?: number
     sunDirection?: THREE.Vector3 | null
@@ -33,7 +32,6 @@
     heightManager = null,
     normalMap = null,
     foamMap = null,
-    surfaceMap = null,
     causticsMap = null,
     time = 0,
     sunDirection = null,
@@ -155,7 +153,7 @@
   })
 </script>
 
-{#if terrainGeometry && normalMap && foamMap && surfaceMap && causticsMap}
+{#if terrainGeometry && normalMap && foamMap && causticsMap}
   <T.Group bind:ref={waterGroup}>
     {#each terrainTiles as tile (tile.id)}
       {@const hasWater = waterTileSet.get(tile.id) ?? false}
@@ -167,7 +165,6 @@
           heightmapTexture={heightTex}
           {normalMap}
           foamMap={foamMap!}
-          surfaceMap={surfaceMap!}
           causticsMap={causticsMap!}
           {time}
           {sunDirection}
