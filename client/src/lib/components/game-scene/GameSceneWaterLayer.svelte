@@ -4,10 +4,16 @@
   import { SvelteMap } from 'svelte/reactivity'
   import { onMount } from 'svelte'
   import WaterTile from '../WaterTile.svelte'
+  import {
+    createWaterMaterial,
+    waterHeightFallbackTex,
+    type WaterMaterialResult,
+  } from '../../shaders/water-material'
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { AffectedTile } from '../../managers/terrainHeightManager'
+  import { enqueueTileWork } from '../../utils/tileWorkQueue'
 
   interface Props {
     terrainGeometry: THREE.BufferGeometry | null
@@ -49,6 +55,39 @@
   // Track which tiles have water (keyed by tile id)
   const waterTileSet = new SvelteMap<string, boolean>()
 
+  // ── Water material pool (reused across tile lifecycles) ──
+  const waterMatPool: WaterMaterialResult[] = []
+  const waterMatMap = new SvelteMap<string, WaterMaterialResult>()
+
+  function acquireWaterMaterial(): WaterMaterialResult | null {
+    const pooled = waterMatPool.pop()
+    if (pooled) return pooled
+    // Shared textures must be loaded before creating a new material
+    if (!normalMap || !foamMap || !causticsMap) return null
+    return createWaterMaterial({
+      heightmapTexture: waterHeightFallbackTex,
+      normalMap,
+      foamMap,
+      causticsMap,
+      refractionMap,
+      reflectionMap,
+    })
+  }
+
+  function releaseWaterMaterial(id: string) {
+    const result = waterMatMap.get(id)
+    if (result) {
+      // Swap heightmap to fallback BEFORE the real heightmap is disposed.
+      // Three.js Sampler binding listens for 'dispose' events and nulls its
+      // .texture reference — if that happens while the material is still in
+      // the scene graph, createBindGroup() crashes with "Invalid value used
+      // as weak map key" because backend.get(null) fails.
+      result.uniforms.uHeightmapTexture.value = waterHeightFallbackTex
+      waterMatMap.delete(id)
+      waterMatPool.push(result)
+    }
+  }
+
   function tileIdFromCoords(tileX: number, tileZ: number): string {
     return `${tileX}_${tileZ}`
   }
@@ -70,19 +109,34 @@
         // In-place update — no new texture, no SvelteMap trigger, no material recompile
         heightManager.updateHeightmapTexture(tileX, tileZ, existingTex)
       } else {
-        // First time — create new texture (triggers reactivity once)
+        // First time — create new texture + acquire pooled material
         const tex = heightManager.getHeightmapTexture(tileX, tileZ)
         if (tex) {
           heightTexMap.set(id, tex)
           waterTileSet.set(id, true)
+          // Acquire material from pool and set ALL textures before rendering
+          if (!waterMatMap.has(id)) {
+            const matResult = acquireWaterMaterial()
+            if (!matResult) return // shared textures not ready yet
+            const u = matResult.uniforms
+            u.uHeightmapTexture.value = tex
+            if (normalMap) u.uNormalMap.value = normalMap
+            if (foamMap) u.uFoamMap.value = foamMap
+            if (causticsMap) u.uCausticsMap.value = causticsMap
+            if (refractionMap) u.uRefractionMap.value = refractionMap
+            if (reflectionMap) u.uReflectionMap.value = reflectionMap
+            waterMatMap.set(id, matResult)
+          }
         }
       }
     } else {
-      const oldTex = heightTexMap.get(id)
-      if (oldTex) {
-        oldTex.dispose()
-        heightTexMap.delete(id)
-      }
+      releaseWaterMaterial(id)
+      // Don't dispose heightmap texture — Three.js Sampler binding listens for
+      // 'dispose' events and nullifies .texture, but _init doesn't sync Sampler
+      // bindings (only _update does). If the material is re-pooled and later
+      // rendered on a new mesh, createBindGroup sees null → crash.
+      // Let GC reclaim it instead; 3x3 grid = at most ~3 textures at a time.
+      heightTexMap.delete(id)
       waterTileSet.set(id, false)
     }
   }
@@ -124,10 +178,10 @@
 
     const currentTileIds = new Set(terrainTiles.map((t) => t.id))
 
-    // Remove data for tiles no longer in the list
-    for (const [id, tex] of heightTexMap) {
+    // Remove data for tiles no longer in the list, return materials to pool
+    for (const [id] of heightTexMap) {
       if (!currentTileIds.has(id)) {
-        tex.dispose()
+        releaseWaterMaterial(id)
         heightTexMap.delete(id)
         waterTileSet.delete(id)
       }
@@ -135,6 +189,7 @@
     // Also clean waterTileSet entries without textures
     for (const [id] of waterTileSet) {
       if (!currentTileIds.has(id)) {
+        releaseWaterMaterial(id)
         waterTileSet.delete(id)
       }
     }
@@ -146,8 +201,11 @@
       const { tileX, tileZ } = getTileCoords(tile)
 
       mgr.loadHeightmap(tileX, tileZ).then(() => {
-        refreshTile(tile.id, tileX, tileZ)
-        refreshAdjacentWaterTiles(tileX, tileZ)
+        // Route through work queue to prevent clustering when heightmaps are cached
+        enqueueTileWork(() => {
+          refreshTile(tile.id, tileX, tileZ)
+          refreshAdjacentWaterTiles(tileX, tileZ)
+        })
       })
     }
   })
@@ -158,14 +216,13 @@
     {#each terrainTiles as tile (tile.id)}
       {@const hasWater = waterTileSet.get(tile.id) ?? false}
       {@const heightTex = heightTexMap.get(tile.id) ?? null}
-      {#if hasWater && heightTex}
+      {@const waterResult = waterMatMap.get(tile.id) ?? null}
+      {#if hasWater && heightTex && waterResult}
         <WaterTile
           geometry={terrainGeometry}
           position={tile.position}
           heightmapTexture={heightTex}
-          {normalMap}
-          foamMap={foamMap!}
-          causticsMap={causticsMap!}
+          {waterResult}
           {time}
           {sunDirection}
           {sunColor}

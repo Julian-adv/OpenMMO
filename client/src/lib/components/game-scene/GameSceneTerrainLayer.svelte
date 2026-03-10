@@ -77,9 +77,13 @@
   // Shared brush/grid uniforms
   const brushUniforms: SplatBrushUniforms = createSplatBrushUniforms()
 
-  // ── Material pool (pre-created, reused across tile lifecycles) ──
+  // ── Material + Geometry pools (pre-created, reused across tile lifecycles) ──
   const MAX_TILES = (2 * TERRAIN_GRID_RADIUS + 1) ** 2 // 9 for radius=1
   const materialPool: MeshStandardNodeMaterial[] = []
+  const geometryPool: THREE.BufferGeometry[] = []
+  // Template arrays for fast geometry reset (flat plane positions/normals)
+  let templatePositions: Float32Array | null = null
+  let templateNormals: Float32Array | null = null
 
   loadSplatLayers().then((layers) => {
     _defaultLayers = layers
@@ -108,6 +112,25 @@
   /** Return a material to the pool for reuse. */
   function releaseMaterial(mat: MeshStandardNodeMaterial) {
     materialPool.push(mat)
+  }
+
+  /** Take a geometry from the pool (reset to flat), or clone if pool empty. */
+  function acquireGeometry(): THREE.BufferGeometry {
+    const geo = geometryPool.pop()
+    if (geo && templatePositions && templateNormals) {
+      // Fast memcpy reset to flat plane — avoids full clone cost
+      ;(geo.getAttribute('position').array as Float32Array).set(templatePositions)
+      geo.getAttribute('position').needsUpdate = true
+      ;(geo.getAttribute('normal').array as Float32Array).set(templateNormals)
+      geo.getAttribute('normal').needsUpdate = true
+      return geo
+    }
+    return terrainGeometry!.clone()
+  }
+
+  /** Return a geometry to the pool for reuse. */
+  function releaseGeometry(geo: THREE.BufferGeometry) {
+    geometryPool.push(geo)
   }
 
   /** Reset a pooled material's uniforms back to defaults. */
@@ -262,12 +285,20 @@
   $effect(() => {
     if (!terrainGeometry || !heightManager || !materialsReady) return
 
+    // Capture template data once for geometry pool resets
+    if (!templatePositions) {
+      const pos = terrainGeometry.getAttribute('position')
+      templatePositions = new Float32Array(pos.array as Float32Array)
+      const norm = terrainGeometry.getAttribute('normal')
+      templateNormals = new Float32Array(norm.array as Float32Array)
+    }
+
     const currentTileIds = new Set(terrainTiles.map((t) => t.id))
 
-    // Remove data for tiles no longer in the list, return materials to pool
+    // Remove data for tiles no longer in the list, return to pools
     for (const [id, geo] of geoMap) {
       if (!currentTileIds.has(id)) {
-        geo.dispose()
+        releaseGeometry(geo)
         geoMap.delete(id)
         const mat = materialMap.get(id)
         if (mat) releaseMaterial(mat)
@@ -285,18 +316,23 @@
       const tileMat = acquireMaterial()
       if (!tileMat) continue // pool exhausted (shouldn't happen)
 
-      const geo = terrainGeometry.clone()
+      const geo = acquireGeometry()
       geoMap.set(tile.id, geo)
       materialMap.set(tile.id, tileMat)
 
       const { tileX, tileZ } = getTileCoords(tile)
       mgr.registerGeometry(tileX, tileZ, geo)
 
+      // Route heightmap application through work queue to prevent
+      // multiple applyHeightToGeometry calls from clustering in one frame
+      // (especially when heightmaps are already cached and .then() resolves as microtask)
       mgr
         .loadHeightmap(tileX, tileZ)
         .then(() => {
-          mgr.applyHeightToGeometry(tileX, tileZ, geo)
-          scheduleEdgeRefresh(tileX, tileZ)
+          enqueueTileWork(() => {
+            mgr.applyHeightToGeometry(tileX, tileZ, geo)
+            scheduleEdgeRefresh(tileX, tileZ)
+          })
         })
         .catch(() => {})
 

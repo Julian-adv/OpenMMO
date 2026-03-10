@@ -412,7 +412,7 @@
       }
       updateTerrainTilesFromPlayer()
       drainTileQueue()
-      drainTileWork()
+      drainTileWork(2)
       syncTileMeshes()
       // Finalize teleport once full 3x3 heightmap grid is loaded
       if ($teleportLoading && currentPlayer &&

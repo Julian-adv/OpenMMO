@@ -182,7 +182,30 @@ export interface WaterMaterialUniforms {
   uRefractionMap: { value: THREE.Texture }
   uReflectionMap: { value: THREE.Texture }
   uHeightmapTexture: { value: THREE.Texture }
+  uNormalMap: { value: THREE.Texture }
+  uFoamMap: { value: THREE.Texture }
+  uCausticsMap: { value: THREE.Texture }
 }
+
+/** Module-level fallback texture — shared across all water materials for pooling safety. */
+export const waterFallbackTex = new THREE.DataTexture(
+  new Uint8Array([128, 128, 128, 255]),
+  1,
+  1,
+  THREE.RGBAFormat
+)
+waterFallbackTex.needsUpdate = true
+
+/** Heightmap-compatible fallback (RedFormat + FloatType) — must match the format
+ *  the heightmap TextureNode was compiled with, otherwise WebGPU bind groups fail. */
+export const waterHeightFallbackTex = new THREE.DataTexture(
+  new Float32Array([0]),
+  1,
+  1,
+  THREE.RedFormat,
+  THREE.FloatType
+)
+waterHeightFallbackTex.needsUpdate = true
 
 // Module-level wave configs shared across all tiles to ensure matching heights at boundaries
 const waveConfigs = [
@@ -215,14 +238,6 @@ export interface WaterMaterialResult {
 export function createWaterMaterial(
   options: WaterMaterialOptions
 ): WaterMaterialResult {
-  const fallbackTex = new THREE.DataTexture(
-    new Uint8Array([128, 128, 128, 255]),
-    1,
-    1,
-    THREE.RGBAFormat
-  )
-  fallbackTex.needsUpdate = true
-
   // Scalar/vector uniforms
   const uTime = uniform(0)
   const uWaveA = uniform(
@@ -256,8 +271,8 @@ export function createWaterMaterial(
   const normalMapTex = texture(options.normalMap)
   const foamMapTex = texture(options.foamMap)
   const causticsTex = texture(options.causticsMap)
-  const refractionTex = texture(options.refractionMap ?? fallbackTex)
-  const reflectionTex = texture(options.reflectionMap ?? fallbackTex)
+  const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
+  const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
 
   // ─── Vertex: Gerstner wave displacement ────────────
   const vOrigWorldPos = varying(vec3(0), 'v_origWorldPos')
@@ -846,6 +861,9 @@ export function createWaterMaterial(
       uRefractionMap: refractionTex,
       uReflectionMap: reflectionTex,
       uHeightmapTexture: heightmapTex,
+      uNormalMap: normalMapTex,
+      uFoamMap: foamMapTex,
+      uCausticsMap: causticsTex,
     },
   }
 }
