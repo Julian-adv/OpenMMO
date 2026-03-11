@@ -106,9 +106,10 @@
     return shape
   }
 
-  // Create line geometry from shape for border
+  // Create line geometry from shape for border (closed loop)
   function createBorderGeometry(shape: THREE.Shape): THREE.BufferGeometry {
     const points = shape.getPoints(32)
+    points.push(points[0]) // close the loop
     const geometry = new THREE.BufferGeometry().setFromPoints(points)
     return geometry
   }
@@ -133,10 +134,10 @@
   </T.Mesh>
 
   <!-- Chat bubble border (white line) -->
-  <T.LineLoop position={[0, cornerRadius, 0.001]}>
+  <T.Line position={[0, cornerRadius, 0.001]}>
     <T is={createBorderGeometry(bubbleShape)} />
     <T.LineBasicMaterial color="#ffffff" />
-  </T.LineLoop>
+  </T.Line>
 
   <!-- Chat bubble text -->
   <TextLabel

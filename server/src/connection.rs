@@ -173,7 +173,6 @@ pub async fn handle_connection(
                     }
                     if is_kicked {
                         info!("Player {:?} kicked", state.player_id);
-                        state.player_id = None;
                         break;
                     }
                 }
