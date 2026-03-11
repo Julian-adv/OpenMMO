@@ -51,6 +51,7 @@ data/*.db
 data/monsters.json
 data/terrain/
 server/data/game_data.db
+agent-client/data/config.toml
 
 # Claude Code (keep agents for sharing)
 .claude/*

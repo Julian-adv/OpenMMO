@@ -1,34 +1,27 @@
-use clap::Parser;
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
     deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
 };
+use serde::Deserialize;
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, info, warn};
 
-#[derive(Parser)]
-#[command(name = "agent-client", about = "AI agent client for OnlineRPG")]
-struct Args {
+#[derive(Deserialize)]
+struct Config {
     /// Server WebSocket URL
-    #[arg(short, long, default_value = "ws://127.0.0.1:8080")]
     server: String,
-
     /// Account name
-    #[arg(short, long)]
     account: String,
-
     /// Password
-    #[arg(short, long)]
     password: String,
-
     /// Create a new account instead of logging in
-    #[arg(long)]
+    #[serde(default)]
     create_account: bool,
-
     /// Character ID to enter game with (if omitted, lists characters and exits)
-    #[arg(short, long)]
     character_id: Option<i64>,
 }
+
+const CONFIG_PATH: &str = "data/config.toml";
 
 /// FNV-1a 32-bit hash (matches the JS client implementation)
 fn fnv1a_hash(input: &str) -> String {
@@ -44,19 +37,32 @@ fn fnv1a_hash(input: &str) -> String {
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let args = Args::parse();
-    let password_hash = fnv1a_hash(&args.password);
+    let config_text = std::fs::read_to_string(CONFIG_PATH)
+        .map_err(|e| anyhow::anyhow!("Failed to read {CONFIG_PATH}: {e}"))?;
+    let config: Config = toml::from_str(&config_text)
+        .map_err(|e| anyhow::anyhow!("Failed to parse {CONFIG_PATH}: {e}"))?;
 
-    info!("Connecting to {}", args.server);
-    let (ws_stream, _) = tokio_tungstenite::connect_async(&args.server).await?;
+    let password_hash = fnv1a_hash(&config.password);
+
+    // Connect with retry (server may be restarting)
+    let ws_stream = loop {
+        info!("Connecting to {}", config.server);
+        match tokio_tungstenite::connect_async(&config.server).await {
+            Ok((stream, _)) => break stream,
+            Err(e) => {
+                warn!("Connection failed: {e} — retrying in 3s...");
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+        }
+    };
     let (mut tx, mut rx) = ws_stream.split();
     info!("Connected");
 
     // Authenticate
     let auth_msg = ClientMessage::Authenticate {
-        account_name: args.account.clone(),
+        account_name: config.account.clone(),
         password_hash,
-        create_account: args.create_account,
+        create_account: config.create_account,
     };
     send(&mut tx, &auth_msg).await?;
 
@@ -66,10 +72,7 @@ async fn main() -> anyhow::Result<()> {
             ServerMessage::AuthSuccess { characters, .. } => {
                 info!("Authenticated. {} character(s):", characters.len());
                 for c in &characters {
-                    info!(
-                        "  [{}] {} (Lv.{} {:?})",
-                        c.id, c.name, c.level, c.class
-                    );
+                    info!("  [{}] {} (Lv.{} {:?})", c.id, c.name, c.level, c.class);
                 }
                 break characters;
             }
@@ -84,13 +87,13 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // Enter game
-    let char_id = match args.character_id {
+    let char_id = match config.character_id {
         Some(id) => id,
         None => {
             if characters.is_empty() {
                 info!("No characters. Create one in the game client first.");
             } else {
-                info!("Pass --character-id <ID> to enter the game.");
+                info!("Set character_id in {CONFIG_PATH} to enter the game.");
             }
             return Ok(());
         }
@@ -132,10 +135,13 @@ fn handle_message(msg: &ServerMessage) {
                 players.len(),
                 monsters.len()
             );
-            for (_, p) in players {
-                info!("  Player: {} (Lv.{} HP {}/{})", p.name, p.level, p.health, p.max_health);
+            for p in players.values() {
+                info!(
+                    "  Player: {} (Lv.{} HP {}/{})",
+                    p.name, p.level, p.health, p.max_health
+                );
             }
-            for (_, m) in monsters {
+            for m in monsters.values() {
                 info!(
                     "  Monster: {} [{}] HP {}/{}",
                     m.monster_type, m.state, m.health, m.max_health
@@ -164,8 +170,17 @@ fn handle_message(msg: &ServerMessage) {
         ServerMessage::PlayerLeft { player_id } => {
             info!("Player left: {player_id}");
         }
-        ServerMessage::PlayerMoved { player_id, position, .. } => {
-            tracing::debug!("Player {player_id} moved to ({:.1}, {:.1}, {:.1})", position.x, position.y, position.z);
+        ServerMessage::PlayerMoved {
+            player_id,
+            position,
+            ..
+        } => {
+            tracing::debug!(
+                "Player {player_id} moved to ({:.1}, {:.1}, {:.1})",
+                position.x,
+                position.y,
+                position.z
+            );
         }
         ServerMessage::MonsterSpawned { monster } => {
             info!("Monster spawned: {} ({})", monster.id, monster.monster_type);
@@ -180,9 +195,7 @@ fn handle_message(msg: &ServerMessage) {
             roll,
             damage,
         } => {
-            info!(
-                "Player {player_id} attacks {monster_id}: roll={roll} hit={hit} dmg={damage}"
-            );
+            info!("Player {player_id} attacks {monster_id}: roll={roll} hit={hit} dmg={damage}");
         }
         ServerMessage::MonsterAttackedPlayer {
             monster_id,
@@ -200,7 +213,10 @@ fn handle_message(msg: &ServerMessage) {
             warn!("Player died: {player_id}");
         }
         ServerMessage::PlayerRespawned { player } => {
-            info!("Player respawned: {} HP {}/{}", player.name, player.health, player.max_health);
+            info!(
+                "Player respawned: {} HP {}/{}",
+                player.name, player.health, player.max_health
+            );
         }
         ServerMessage::XpGained {
             xp_amount,
@@ -255,16 +271,12 @@ fn msg_name(msg: &ServerMessage) -> &'static str {
 }
 
 type WsTx = futures_util::stream::SplitSink<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
     Message,
 >;
 
 type WsRx = futures_util::stream::SplitStream<
-    tokio_tungstenite::WebSocketStream<
-        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-    >,
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
 
 async fn send(tx: &mut WsTx, msg: &ClientMessage) -> anyhow::Result<()> {

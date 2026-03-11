@@ -1,0 +1,14 @@
+# Agent client configuration
+
+# Server WebSocket URL
+server = "ws://127.0.0.1:10015"
+
+# Account credentials
+account = ""
+password = ""
+
+# Set to true to create a new account instead of logging in
+create_account = false
+
+# Character ID to enter game with (comment out to list characters and exit)
+# character_id = 1
