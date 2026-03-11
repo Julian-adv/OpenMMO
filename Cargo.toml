@@ -1,3 +1,3 @@
 [workspace]
-members = ["server", "shared"]
+members = ["agent-client","server", "shared"]
 resolver = "2"
