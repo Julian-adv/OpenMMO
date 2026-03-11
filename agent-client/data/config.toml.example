@@ -10,5 +10,9 @@ password = ""
 # Set to true to create a new account instead of logging in
 create_account = false
 
-# Character ID to enter game with (comment out to list characters and exit)
+# Character ID to enter game with
+# If omitted, starts MCP HTTP server and waits for LLM to select a character
 # character_id = 1
+
+# MCP HTTP server port (default: 8808)
+# mcp_port = 8808
