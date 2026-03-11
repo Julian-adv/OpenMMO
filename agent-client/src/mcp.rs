@@ -14,6 +14,9 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use tracing::info;
 
+use axum::http::HeaderName;
+use tower_http::cors::{Any, CorsLayer};
+
 use crate::SharedState;
 
 #[derive(Clone)]
@@ -40,6 +43,16 @@ pub struct EnterGameParams {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CreateCharacterParams {
+    #[schemars(description = "The character name")]
+    pub character_name: String,
+    #[schemars(
+        description = "Character class: warrior, knight, thief"
+    )]
+    pub character_class: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct SayParams {
     #[schemars(description = "The message to say in chat")]
     pub message: String,
@@ -54,7 +67,7 @@ impl AgentMcpServer {
         let state = self.state.lock().await;
         let chars = &state.characters;
         if chars.is_empty() {
-            return "No characters found. Create one in the game client first.".to_string();
+            return "No characters found. Use create_character to make one.".to_string();
         }
         let mut lines = Vec::new();
         for c in chars {
@@ -73,6 +86,48 @@ impl AgentMcpServer {
             ));
         }
         lines.join("\n")
+    }
+
+    #[tool(description = "Create a new character on this account")]
+    async fn create_character(
+        &self,
+        Parameters(params): Parameters<CreateCharacterParams>,
+    ) -> Result<CallToolResult, rmcp::ErrorData> {
+        let class: onlinerpg_shared::CharacterClass =
+            match serde_json::from_value(serde_json::Value::String(params.character_class.clone()))
+            {
+                Ok(c) => c,
+                Err(_) => {
+                    return Ok(CallToolResult::error(vec![Content::text(format!(
+                        "Unknown class '{}'. Valid: warrior, knight, thief",
+                        params.character_class
+                    ))]));
+                }
+            };
+
+        // Step 1: Roll stats first (server requires this before CreateCharacter)
+        let mut state = self.state.lock().await;
+        if let Err(e) = state.send_command(ClientMessage::RollCharacterStats).await {
+            return Ok(CallToolResult::error(vec![Content::text(format!(
+                "Failed to send RollCharacterStats: {e}"
+            ))]));
+        }
+
+        // Step 2: Send CreateCharacter
+        let msg = ClientMessage::CreateCharacter {
+            character_name: params.character_name.clone(),
+            character_class: class,
+        };
+        if let Err(e) = state.send_command(msg).await {
+            return Ok(CallToolResult::error(vec![Content::text(format!(
+                "Failed to send CreateCharacter: {e}"
+            ))]));
+        }
+
+        Ok(CallToolResult::success(vec![Content::text(format!(
+            "Creating character '{}' as {}. Use get_events to see the result, then list_characters.",
+            params.character_name, params.character_class
+        ))]))
     }
 
     #[tool(description = "Enter the game world with a specific character")]
@@ -286,6 +341,25 @@ fn format_event(msg: &ServerMessage) -> String {
             }
             s
         }
+        ServerMessage::CharacterError { message } => {
+            format!("[CharacterError] {message}")
+        }
+        ServerMessage::CharacterCreated { character } => {
+            format!(
+                "[CharacterCreated] id={} {} Lv.{} {:?}",
+                character.id, character.name, character.level, character.class
+            )
+        }
+        ServerMessage::CharacterStatsRolled {
+            attributes,
+            max_hp,
+        } => {
+            format!(
+                "[StatsRolled] STR:{} DEX:{} CON:{} INT:{} WIS:{} CHA:{} HP:{}",
+                attributes.r#str, attributes.dex, attributes.con,
+                attributes.int, attributes.wis, attributes.cha, max_hp
+            )
+        }
         ServerMessage::Kicked { reason, .. } => {
             format!("[Kicked] {reason}")
         }
@@ -305,7 +379,15 @@ pub async fn run_mcp_server(state: Arc<Mutex<SharedState>>, port: u16) -> anyhow
             config,
         );
 
-    let router = axum::Router::new().nest_service("/mcp", service);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any)
+        .expose_headers([HeaderName::from_static("mcp-session-id")]);
+
+    let router = axum::Router::new()
+        .nest_service("/mcp", service)
+        .layer(cors);
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port)).await?;
     info!("MCP HTTP server listening on http://0.0.0.0:{port}/mcp");
 

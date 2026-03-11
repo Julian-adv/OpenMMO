@@ -169,6 +169,12 @@ async fn main() -> anyhow::Result<()> {
             match recv(&mut ws_rx).await {
                 Ok(msg) => {
                     let mut s = state_for_rx.lock().await;
+                    if let ServerMessage::CharacterCreated { ref character } = msg {
+                        s.characters.push(character.clone());
+                    }
+                    if let ServerMessage::JoinSuccess { .. } = msg {
+                        s.in_game = true;
+                    }
                     s.push_event(msg);
                 }
                 Err(e) => {
