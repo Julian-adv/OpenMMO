@@ -1,8 +1,13 @@
+mod mcp;
+
+use std::sync::Arc;
+
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
-    deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
+    deserialize_server_msg, serialize_client_msg, Character, ClientMessage, ServerMessage,
 };
 use serde::Deserialize;
+use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, info, warn};
 
@@ -17,11 +22,55 @@ struct Config {
     /// Create a new account instead of logging in
     #[serde(default)]
     create_account: bool,
-    /// Character ID to enter game with (if omitted, lists characters and exits)
+    /// Character ID to enter game with (if omitted, waits for MCP connection)
     character_id: Option<i64>,
+    /// MCP HTTP server port (default: 8808)
+    #[serde(default = "default_mcp_port")]
+    mcp_port: u16,
+}
+
+fn default_mcp_port() -> u16 {
+    8808
 }
 
 const CONFIG_PATH: &str = "data/config.toml";
+
+/// Shared state between MCP server and WebSocket background tasks.
+pub struct SharedState {
+    pub characters: Vec<Character>,
+    pub in_game: bool,
+    events: Vec<ServerMessage>,
+    cmd_tx: mpsc::Sender<ClientMessage>,
+}
+
+impl SharedState {
+    fn new(characters: Vec<Character>, cmd_tx: mpsc::Sender<ClientMessage>) -> Self {
+        Self {
+            characters,
+            in_game: false,
+            events: Vec::new(),
+            cmd_tx,
+        }
+    }
+
+    pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
+        self.cmd_tx
+            .send(msg)
+            .await
+            .map_err(|e| anyhow::anyhow!("Command channel closed: {e}"))
+    }
+
+    pub fn push_event(&mut self, msg: ServerMessage) {
+        if matches!(msg, ServerMessage::JoinSuccess { .. }) {
+            self.in_game = true;
+        }
+        self.events.push(msg);
+    }
+
+    pub fn drain_events(&mut self) -> Vec<ServerMessage> {
+        std::mem::take(&mut self.events)
+    }
+}
 
 /// FNV-1a 32-bit hash (matches the JS client implementation)
 fn fnv1a_hash(input: &str) -> String {
@@ -55,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
     };
-    let (mut tx, mut rx) = ws_stream.split();
+    let (ws_tx, mut ws_rx) = ws_stream.split();
     info!("Connected");
 
     // Authenticate
@@ -64,11 +113,12 @@ async fn main() -> anyhow::Result<()> {
         password_hash,
         create_account: config.create_account,
     };
-    send(&mut tx, &auth_msg).await?;
+    let mut ws_tx = ws_tx;
+    send(&mut ws_tx, &auth_msg).await?;
 
     // Wait for auth response
     let characters = loop {
-        match recv(&mut rx).await? {
+        match recv(&mut ws_rx).await? {
             ServerMessage::AuthSuccess { characters, .. } => {
                 info!("Authenticated. {} character(s):", characters.len());
                 for c in &characters {
@@ -86,188 +136,61 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
-    // Enter game
-    let char_id = match config.character_id {
-        Some(id) => id,
-        None => {
-            if characters.is_empty() {
-                info!("No characters. Create one in the game client first.");
-            } else {
-                info!("Set character_id in {CONFIG_PATH} to enter the game.");
-            }
-            return Ok(());
-        }
-    };
+    // Set up shared state and command channel
+    let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
+    let state = Arc::new(Mutex::new(SharedState::new(characters.clone(), cmd_tx)));
 
-    let enter_msg = ClientMessage::EnterGame {
-        character_id: char_id,
-    };
-    send(&mut tx, &enter_msg).await?;
+    // If character_id is set in config, enter game directly
+    if let Some(char_id) = config.character_id {
+        send(
+            &mut ws_tx,
+            &ClientMessage::EnterGame {
+                character_id: char_id,
+            },
+        )
+        .await?;
+        info!("Entering game with character {char_id}...");
+    }
 
-    // Main message loop
-    info!("Entering game with character {char_id}...");
-    loop {
-        match recv(&mut rx).await {
-            Ok(msg) => handle_message(&msg),
-            Err(e) => {
-                error!("Connection lost: {e}");
+    // Background task: forward commands from channel to WebSocket
+    let tx_task = tokio::spawn(async move {
+        while let Some(msg) = cmd_rx.recv().await {
+            if let Err(e) = send(&mut ws_tx, &msg).await {
+                error!("Failed to send command: {e}");
                 break;
             }
         }
+    });
+
+    // Background task: read WebSocket messages into shared state
+    let state_for_rx = Arc::clone(&state);
+    let rx_task = tokio::spawn(async move {
+        loop {
+            match recv(&mut ws_rx).await {
+                Ok(msg) => {
+                    let mut s = state_for_rx.lock().await;
+                    s.push_event(msg);
+                }
+                Err(e) => {
+                    error!("Connection lost: {e}");
+                    break;
+                }
+            }
+        }
+    });
+
+    if config.character_id.is_some() {
+        // Direct mode: just wait for the WS reader to finish
+        info!("Running in direct mode (character_id set in config)");
+        let _ = rx_task.await;
+    } else {
+        // MCP mode: start HTTP MCP server and wait for LLM to drive the session
+        info!("No character_id configured — starting MCP HTTP server on port {}...", config.mcp_port);
+        mcp::run_mcp_server(state, config.mcp_port).await?;
     }
 
+    tx_task.abort();
     Ok(())
-}
-
-fn handle_message(msg: &ServerMessage) {
-    match msg {
-        ServerMessage::JoinSuccess { player } => {
-            info!(
-                "Joined as {} at ({:.1}, {:.1}, {:.1})",
-                player.name, player.position.x, player.position.y, player.position.z
-            );
-        }
-        ServerMessage::GameState {
-            players, monsters, ..
-        } => {
-            info!(
-                "World state: {} player(s), {} monster(s)",
-                players.len(),
-                monsters.len()
-            );
-            for p in players.values() {
-                info!(
-                    "  Player: {} (Lv.{} HP {}/{})",
-                    p.name, p.level, p.health, p.max_health
-                );
-            }
-            for m in monsters.values() {
-                info!(
-                    "  Monster: {} [{}] HP {}/{}",
-                    m.monster_type, m.state, m.health, m.max_health
-                );
-            }
-        }
-        ServerMessage::GameTimeSync { datetime, is_night } => {
-            info!(
-                "Time: Year {} Month {} Day {} {:02}:{:02} ({})",
-                datetime.year,
-                datetime.month,
-                datetime.day,
-                datetime.hour,
-                datetime.minute,
-                if *is_night { "night" } else { "day" }
-            );
-        }
-        ServerMessage::ChatMessage {
-            player_id, message, ..
-        } => {
-            info!("[Chat] {player_id}: {message}");
-        }
-        ServerMessage::PlayerJoined { player } => {
-            info!("Player joined: {}", player.name);
-        }
-        ServerMessage::PlayerLeft { player_id } => {
-            info!("Player left: {player_id}");
-        }
-        ServerMessage::PlayerMoved {
-            player_id,
-            position,
-            ..
-        } => {
-            tracing::debug!(
-                "Player {player_id} moved to ({:.1}, {:.1}, {:.1})",
-                position.x,
-                position.y,
-                position.z
-            );
-        }
-        ServerMessage::MonsterSpawned { monster } => {
-            info!("Monster spawned: {} ({})", monster.id, monster.monster_type);
-        }
-        ServerMessage::MonsterDead { monster_id } => {
-            info!("Monster died: {monster_id}");
-        }
-        ServerMessage::PlayerAttacked {
-            player_id,
-            monster_id,
-            hit,
-            roll,
-            damage,
-        } => {
-            info!("Player {player_id} attacks {monster_id}: roll={roll} hit={hit} dmg={damage}");
-        }
-        ServerMessage::MonsterAttackedPlayer {
-            monster_id,
-            player_id,
-            hit,
-            damage,
-            current_health,
-            ..
-        } => {
-            info!(
-                "Monster {monster_id} attacks {player_id}: hit={hit} dmg={damage} hp={current_health}"
-            );
-        }
-        ServerMessage::PlayerDead { player_id } => {
-            warn!("Player died: {player_id}");
-        }
-        ServerMessage::PlayerRespawned { player } => {
-            info!(
-                "Player respawned: {} HP {}/{}",
-                player.name, player.health, player.max_health
-            );
-        }
-        ServerMessage::XpGained {
-            xp_amount,
-            total_xp,
-            new_level,
-            leveled_up,
-            ..
-        } => {
-            info!("XP +{xp_amount} (total: {total_xp}, level: {new_level})");
-            if *leveled_up {
-                info!("LEVEL UP! Now level {new_level}");
-            }
-        }
-        ServerMessage::Kicked { reason, .. } => {
-            warn!("Kicked: {reason}");
-        }
-        _ => {
-            tracing::debug!("Received: {:?}", msg_name(msg));
-        }
-    }
-}
-
-fn msg_name(msg: &ServerMessage) -> &'static str {
-    match msg {
-        ServerMessage::AuthSuccess { .. } => "AuthSuccess",
-        ServerMessage::AuthError { .. } => "AuthError",
-        ServerMessage::JoinSuccess { .. } => "JoinSuccess",
-        ServerMessage::CharacterCreated { .. } => "CharacterCreated",
-        ServerMessage::CharacterStatsRolled { .. } => "CharacterStatsRolled",
-        ServerMessage::CharacterDeleted { .. } => "CharacterDeleted",
-        ServerMessage::CharacterError { .. } => "CharacterError",
-        ServerMessage::PlayerJoined { .. } => "PlayerJoined",
-        ServerMessage::PlayerLeft { .. } => "PlayerLeft",
-        ServerMessage::PlayerMoved { .. } => "PlayerMoved",
-        ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
-        ServerMessage::ChatMessage { .. } => "ChatMessage",
-        ServerMessage::GameState { .. } => "GameState",
-        ServerMessage::GameTimeSync { .. } => "GameTimeSync",
-        ServerMessage::MonsterSpawned { .. } => "MonsterSpawned",
-        ServerMessage::MonsterMoved { .. } => "MonsterMoved",
-        ServerMessage::MonsterRemoved { .. } => "MonsterRemoved",
-        ServerMessage::MonsterDead { .. } => "MonsterDead",
-        ServerMessage::PlayerAttacked { .. } => "PlayerAttacked",
-        ServerMessage::MonsterAttackedPlayer { .. } => "MonsterAttackedPlayer",
-        ServerMessage::PlayerDead { .. } => "PlayerDead",
-        ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",
-        ServerMessage::PlayerHealthUpdate { .. } => "PlayerHealthUpdate",
-        ServerMessage::XpGained { .. } => "XpGained",
-        ServerMessage::Kicked { .. } => "Kicked",
-        ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
-    }
 }
 
 type WsTx = futures_util::stream::SplitSink<
@@ -300,5 +223,36 @@ async fn recv(rx: &mut WsRx) -> anyhow::Result<ServerMessage> {
             Some(Err(e)) => anyhow::bail!("WebSocket error: {e}"),
             None => anyhow::bail!("WebSocket stream ended"),
         }
+    }
+}
+
+fn msg_name(msg: &ServerMessage) -> &'static str {
+    match msg {
+        ServerMessage::AuthSuccess { .. } => "AuthSuccess",
+        ServerMessage::AuthError { .. } => "AuthError",
+        ServerMessage::JoinSuccess { .. } => "JoinSuccess",
+        ServerMessage::CharacterCreated { .. } => "CharacterCreated",
+        ServerMessage::CharacterStatsRolled { .. } => "CharacterStatsRolled",
+        ServerMessage::CharacterDeleted { .. } => "CharacterDeleted",
+        ServerMessage::CharacterError { .. } => "CharacterError",
+        ServerMessage::PlayerJoined { .. } => "PlayerJoined",
+        ServerMessage::PlayerLeft { .. } => "PlayerLeft",
+        ServerMessage::PlayerMoved { .. } => "PlayerMoved",
+        ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
+        ServerMessage::ChatMessage { .. } => "ChatMessage",
+        ServerMessage::GameState { .. } => "GameState",
+        ServerMessage::GameTimeSync { .. } => "GameTimeSync",
+        ServerMessage::MonsterSpawned { .. } => "MonsterSpawned",
+        ServerMessage::MonsterMoved { .. } => "MonsterMoved",
+        ServerMessage::MonsterRemoved { .. } => "MonsterRemoved",
+        ServerMessage::MonsterDead { .. } => "MonsterDead",
+        ServerMessage::PlayerAttacked { .. } => "PlayerAttacked",
+        ServerMessage::MonsterAttackedPlayer { .. } => "MonsterAttackedPlayer",
+        ServerMessage::PlayerDead { .. } => "PlayerDead",
+        ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",
+        ServerMessage::PlayerHealthUpdate { .. } => "PlayerHealthUpdate",
+        ServerMessage::XpGained { .. } => "XpGained",
+        ServerMessage::Kicked { .. } => "Kicked",
+        ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
     }
 }

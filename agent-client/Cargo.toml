@@ -13,3 +13,6 @@ toml = "0.8"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 anyhow = "1.0"
+rmcp = { version = "1", features = ["server", "transport-streamable-http-server"] }
+axum = "0.8"
+tokio-util = "0.7"
