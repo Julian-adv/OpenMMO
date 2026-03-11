@@ -17,7 +17,7 @@ use tracing::info;
 use axum::http::HeaderName;
 use tower_http::cors::{Any, CorsLayer};
 
-use crate::SharedState;
+use crate::state::SharedState;
 
 #[derive(Clone)]
 pub struct AgentMcpServer {
@@ -358,6 +358,17 @@ fn format_event(msg: &ServerMessage) -> String {
                 "[StatsRolled] STR:{} DEX:{} CON:{} INT:{} WIS:{} CHA:{} HP:{}",
                 attributes.r#str, attributes.dex, attributes.con,
                 attributes.int, attributes.wis, attributes.cha, max_hp
+            )
+        }
+        ServerMessage::MonsterMoved {
+            monster_id,
+            position,
+            state,
+            ..
+        } => {
+            format!(
+                "[MonsterMoved] {monster_id} -> ({:.1}, {:.1}, {:.1}) state={state}",
+                position.x, position.y, position.z
             )
         }
         ServerMessage::Kicked { reason, .. } => {

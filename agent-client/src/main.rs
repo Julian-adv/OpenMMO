@@ -1,11 +1,13 @@
 mod mcp;
+mod state;
 
 use std::sync::Arc;
 
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
-    deserialize_server_msg, serialize_client_msg, Character, ClientMessage, ServerMessage,
+    deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
 };
+use state::SharedState;
 use serde::Deserialize;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
@@ -35,42 +37,6 @@ fn default_mcp_port() -> u16 {
 
 const CONFIG_PATH: &str = "data/config.toml";
 
-/// Shared state between MCP server and WebSocket background tasks.
-pub struct SharedState {
-    pub characters: Vec<Character>,
-    pub in_game: bool,
-    events: Vec<ServerMessage>,
-    cmd_tx: mpsc::Sender<ClientMessage>,
-}
-
-impl SharedState {
-    fn new(characters: Vec<Character>, cmd_tx: mpsc::Sender<ClientMessage>) -> Self {
-        Self {
-            characters,
-            in_game: false,
-            events: Vec::new(),
-            cmd_tx,
-        }
-    }
-
-    pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
-        self.cmd_tx
-            .send(msg)
-            .await
-            .map_err(|e| anyhow::anyhow!("Command channel closed: {e}"))
-    }
-
-    pub fn push_event(&mut self, msg: ServerMessage) {
-        if matches!(msg, ServerMessage::JoinSuccess { .. }) {
-            self.in_game = true;
-        }
-        self.events.push(msg);
-    }
-
-    pub fn drain_events(&mut self) -> Vec<ServerMessage> {
-        std::mem::take(&mut self.events)
-    }
-}
 
 /// FNV-1a 32-bit hash (matches the JS client implementation)
 fn fnv1a_hash(input: &str) -> String {
