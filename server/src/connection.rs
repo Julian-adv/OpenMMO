@@ -17,11 +17,15 @@ use tracing::{error, info, warn};
 
 const FALLBACK_DEFAULT_MAX_HP: u32 = 13;
 
+/// How many seconds without a heartbeat before we consider the client dead.
+const HEARTBEAT_TIMEOUT_SECS: u64 = 30;
+
 struct ConnectionState {
     account_name: Option<String>,
     player_id: Option<PlayerId>,
     direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>>,
     pending_character_attributes: Option<CharacterAttributes>,
+    last_heartbeat: std::time::Instant,
 }
 
 impl ConnectionState {
@@ -31,6 +35,7 @@ impl ConnectionState {
             player_id: None,
             direct_rx: None,
             pending_character_attributes: None,
+            last_heartbeat: std::time::Instant::now(),
         }
     }
 
@@ -77,8 +82,21 @@ pub async fn handle_connection(
     let mut game_receiver = game_state.subscribe();
     let mut state = ConnectionState::new();
 
+    let mut heartbeat_check = tokio::time::interval(std::time::Duration::from_secs(10));
+
     loop {
         tokio::select! {
+            // Heartbeat timeout check (only for in-game players)
+            _ = heartbeat_check.tick() => {
+                if state.player_id.is_some()
+                    && state.last_heartbeat.elapsed().as_secs() > HEARTBEAT_TIMEOUT_SECS
+                {
+                    warn!("Heartbeat timeout for player {:?}", state.player_id);
+                    break;
+                }
+                continue;
+            }
+
             // Handle incoming messages from client
             msg = ws_receiver.next() => {
                 match msg {
@@ -554,6 +572,10 @@ async fn handle_client_message(
             } else {
                 warn!("Received torch toggle from client that is not in game");
             }
+        }
+
+        ClientMessage::Heartbeat => {
+            state.last_heartbeat = std::time::Instant::now();
         }
     }
 

@@ -134,6 +134,14 @@ async fn main() -> anyhow::Result<()> {
         loop {
             match recv(&mut ws_rx).await {
                 Ok(msg) => {
+                    // Respond to time sync with heartbeat
+                    if matches!(msg, ServerMessage::GameTimeSync { .. }) {
+                        let mut s = state_for_rx.lock().await;
+                        let _ = s.send_command(ClientMessage::Heartbeat).await;
+                        s.push_event(msg);
+                        continue;
+                    }
+
                     let mut s = state_for_rx.lock().await;
                     if let ServerMessage::CharacterCreated { ref character } = msg {
                         s.characters.push(character.clone());

@@ -138,6 +138,14 @@ class NetworkManager {
         handleServerMessage(message, this.messageEvents, () =>
           this.disconnect()
         )
+        // Respond to time sync with heartbeat so the server knows we're alive
+        if (
+          message &&
+          typeof message === 'object' &&
+          'GameTimeSync' in message
+        ) {
+          this.sendMessage('Heartbeat')
+        }
       } catch (error) {
         console.error('Error deserializing server message:', error)
       }

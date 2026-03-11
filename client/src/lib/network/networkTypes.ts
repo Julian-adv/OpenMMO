@@ -107,6 +107,7 @@ export type ClientMessage =
   | 'RequestRespawn'
   | { DebugTeleport: { position: Position } }
   | { TorchToggle: { enabled: boolean } }
+  | 'Heartbeat'
 
 export type AuthSuccessPayload = {
   accountName: string

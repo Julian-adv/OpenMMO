@@ -217,6 +217,7 @@ pub enum ClientMessage {
     TorchToggle {
         enabled: bool,
     },
+    Heartbeat,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
