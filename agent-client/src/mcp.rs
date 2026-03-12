@@ -227,7 +227,7 @@ impl ServerHandler for AgentMcpServer {
 
 // --- Event formatting ---
 
-fn format_event(msg: &ServerMessage) -> String {
+pub fn format_event(msg: &ServerMessage) -> String {
     match msg {
         ServerMessage::JoinSuccess { player } => {
             format!(

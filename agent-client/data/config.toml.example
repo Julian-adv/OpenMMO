@@ -15,4 +15,15 @@ create_account = false
 # character_id = 1
 
 # MCP HTTP server port (default: 8808)
+# Used when character_id is not set (MCP polling mode)
 # mcp_port = 8808
+
+# Claude CLI integration (stream-json long-lived subprocess)
+# When enabled with character_id set, the agent-client drives Claude directly
+# via stdin/stdout instead of waiting for MCP polling.
+[claude]
+enabled = false
+model = "sonnet"                            # "sonnet", "opus", "haiku", or full model ID
+min_interval_secs = 5                       # Minimum seconds between prompts (includes debounce)
+debounce_secs = 2                           # Extra wait to batch events when min_interval already passed
+system_prompt_file = "data/system_prompt.txt"  # Path to system prompt file

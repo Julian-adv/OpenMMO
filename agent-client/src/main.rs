@@ -1,8 +1,10 @@
+mod claude;
 mod mcp;
 mod state;
 
 use std::sync::Arc;
 
+use claude::ClaudeConfig;
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
     deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
@@ -29,6 +31,9 @@ struct Config {
     /// MCP HTTP server port (default: 8808)
     #[serde(default = "default_mcp_port")]
     mcp_port: u16,
+    /// Claude CLI integration config
+    #[serde(default)]
+    claude: ClaudeConfig,
 }
 
 fn default_mcp_port() -> u16 {
@@ -106,8 +111,17 @@ async fn main() -> anyhow::Result<()> {
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
     let state = Arc::new(Mutex::new(SharedState::new(characters.clone(), cmd_tx)));
 
-    // If character_id is set in config, enter game directly
-    if let Some(char_id) = config.character_id {
+    // Determine which character to enter game with
+    let enter_char_id = if let Some(char_id) = config.character_id {
+        Some(char_id)
+    } else if config.claude.enabled {
+        // Claude mode: auto-select first character
+        characters.first().map(|c| c.id)
+    } else {
+        None
+    };
+
+    if let Some(char_id) = enter_char_id {
         send(
             &mut ws_tx,
             &ClientMessage::EnterGame {
@@ -143,12 +157,6 @@ async fn main() -> anyhow::Result<()> {
                     }
 
                     let mut s = state_for_rx.lock().await;
-                    if let ServerMessage::CharacterCreated { ref character } = msg {
-                        s.characters.push(character.clone());
-                    }
-                    if let ServerMessage::JoinSuccess { .. } = msg {
-                        s.in_game = true;
-                    }
                     s.push_event(msg);
                 }
                 Err(e) => {
@@ -159,10 +167,28 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    if config.character_id.is_some() {
-        // Direct mode: just wait for the WS reader to finish
-        info!("Running in direct mode (character_id set in config)");
-        let _ = rx_task.await;
+    // Start Claude driver if enabled
+    let claude_task = if config.claude.enabled {
+        info!("Claude CLI integration enabled (model={})", config.claude.model);
+        let state_for_claude = Arc::clone(&state);
+        let claude_config = config.claude.clone();
+        Some(tokio::spawn(async move {
+            claude::claude_driver(state_for_claude, claude_config).await;
+        }))
+    } else {
+        None
+    };
+
+    if enter_char_id.is_some() {
+        if config.claude.enabled {
+            // Claude mode: run until WS reader finishes
+            info!("Running in Claude-driven mode");
+            let _ = rx_task.await;
+        } else {
+            // Direct mode: just wait for the WS reader to finish
+            info!("Running in direct mode (character_id set in config)");
+            let _ = rx_task.await;
+        }
     } else {
         // MCP mode: start HTTP MCP server and wait for LLM to drive the session
         info!("No character_id configured — starting MCP HTTP server on port {}...", config.mcp_port);
@@ -170,6 +196,9 @@ async fn main() -> anyhow::Result<()> {
     }
 
     tx_task.abort();
+    if let Some(ct) = claude_task {
+        ct.abort();
+    }
     Ok(())
 }
 
