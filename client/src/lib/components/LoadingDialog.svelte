@@ -1,7 +1,15 @@
+<script lang="ts">
+  interface Props {
+    message?: string
+  }
+
+  let { message = 'Loading...' }: Props = $props()
+</script>
+
 <div class="loading-backdrop">
   <div class="loading-dialog" role="dialog" aria-modal="true">
     <div class="spinner"></div>
-    <p>Loading...</p>
+    <p>{message}</p>
   </div>
 </div>
 

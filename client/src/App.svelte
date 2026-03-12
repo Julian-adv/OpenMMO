@@ -42,6 +42,7 @@
   )
   let wasPlayerDead = false
   let isCurrentPlayerLoading = $state(false)
+  let isSceneCompiling = $state(true)
   let kickedMessage = $state('')
 
   $effect(() => {
@@ -112,6 +113,7 @@
   ): Promise<{ ok: boolean; message?: string }> {
     const result = await networkManager.requestEnterGame(characterId)
     if (result.ok) {
+      isSceneCompiling = true
       screen = 'game'
     }
     return result
@@ -221,6 +223,7 @@
           {serverUrl}
           onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
           bind:isCurrentPlayerLoading
+          bind:isSceneCompiling
         />
       </Canvas>
       <ChatPanel />
@@ -258,8 +261,8 @@
       </div>
     </div>
 
-    {#if isCurrentPlayerLoading || $teleportLoading}
-      <LoadingDialog />
+    {#if isCurrentPlayerLoading || isSceneCompiling || $teleportLoading}
+      <LoadingDialog message={isSceneCompiling ? 'Preparing world...' : 'Loading...'} />
     {/if}
 
     {#if showRespawnDialog}

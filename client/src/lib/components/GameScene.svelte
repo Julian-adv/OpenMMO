@@ -95,9 +95,10 @@
     serverUrl: string
     onCurrentPlayerDyingFinished?: () => void
     isCurrentPlayerLoading?: boolean
+    isSceneCompiling?: boolean
   }
 
-  let { serverUrl, onCurrentPlayerDyingFinished, isCurrentPlayerLoading = $bindable(false) }: Props = $props()
+  let { serverUrl, onCurrentPlayerDyingFinished, isCurrentPlayerLoading = $bindable(false), isSceneCompiling = $bindable(true) }: Props = $props()
 
   let currentPlayer = $state<LocalPlayer | null>(null)
   let otherPlayers = $state<Map<string, RemotePlayer>>(new Map())
@@ -152,7 +153,17 @@
   const renderer = _renderer as unknown as WebGPURenderer
   let viewportSize = $state({ width: 1, height: 1 })
 
-  const CAMERA_OFFSET = { ...DEFAULT_CAMERA_OFFSET }
+  const CAMERA_OFFSET = import.meta.hot?.data?.cameraOffset ?? { ...DEFAULT_CAMERA_OFFSET }
+  let _hmrCameraZoom: number | null = import.meta.hot?.data?.cameraZoom ?? null
+  let _hmrCameraInitialized: boolean = import.meta.hot?.data?.cameraInitialized ?? false
+
+  if (import.meta.hot) {
+    import.meta.hot.dispose((data) => {
+      data.cameraOffset = { ...CAMERA_OFFSET }
+      data.cameraInitialized = cameraInitialized
+      data.cameraZoom = camera?.zoom ?? null
+    })
+  }
 
   // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
   let prevDebugVisible = $state(false)
@@ -729,7 +740,11 @@
       // Allow Svelte to render the terrain meshes, then compile
       requestAnimationFrame(() => {
         if (camera) {
-          renderer.compileAsync(scene, camera).catch(() => {})
+          renderer.compileAsync(scene, camera)
+            .then(() => { isSceneCompiling = false })
+            .catch(() => { isSceneCompiling = false })
+        } else {
+          isSceneCompiling = false
         }
       })
     })
@@ -745,12 +760,28 @@
     networkManager.connect(serverUrl)
 
     // Initialize camera position after a short delay to ensure camera ref is available
-    setTimeout(() => {
-      if (camera && currentPlayer) {
-        resetCameraToInitialState()
-        cameraInitialized = true
+    if (_hmrCameraInitialized) {
+      // HMR: restore previous camera state instead of resetting
+      cameraInitialized = true
+      if (_hmrCameraZoom !== null) {
+        const restoreZoom = _hmrCameraZoom
+        // Defer until camera ref is bound by Threlte
+        requestAnimationFrame(() => {
+          if (camera) {
+            camera.zoom = restoreZoom
+            camera.updateProjectionMatrix()
+          }
+        })
       }
-    }, 1100)
+      _hmrCameraZoom = null
+    } else {
+      setTimeout(() => {
+        if (camera && currentPlayer) {
+          resetCameraToInitialState()
+          cameraInitialized = true
+        }
+      }, 1100)
+    }
 
     return () => {
       scene.environment?.dispose()
