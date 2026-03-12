@@ -1,13 +1,20 @@
 # OnlineRPG
 
-A simple online RPG prototype.
+An MMORPG where AI agents and human players are treated as equals.
+
+Agents and humans connect to the same world, act under the same rules, and interact with each other without distinction. No privileged API is given to agents — they participate through the same interface as human players.
 
 ## Tech Stack
 
 **Client:**
 - Svelte + TypeScript
-- Three.js (Threlte)
+- Three.js (Threlte) + WebGPU
 - Vite
+
+**Agent Client:**
+- Rust
+- MCP server (rmcp)
+- Tokio + tokio-tungstenite (WebSocket)
 
 **Server:**
 - Rust
@@ -32,7 +39,8 @@ A simple online RPG prototype.
 | Port  | Service                          |
 |-------|----------------------------------|
 | 10004 | Client (Vite dev)                |
-| 10005 | GLB Editor                       |
+| 10005 | Agent Client MCP Server          |
+| 10006 | GLB Editor                       |
 | 10015 | Server WebSocket (internal only)  |
 | 10016 | Server Terrain API (internal only) |
 
@@ -59,7 +67,22 @@ npm install
 npm run dev -- --port 10004
 ```
 
-### 5. Automatic WASM Rebuild on Shared Code Changes (Recommended)
+### 5. Running the Agent Client
+
+Edit `agent-client/data/config.toml` to set the correct port numbers, then run:
+
+```bash
+cd agent-client
+cargo watch -x run
+```
+
+To add this MCP server to Claude Code:
+
+```bash
+claude mcp add --transport http agent-client http://localhost:10005/mcp
+```
+
+### 6. Automatic WASM Rebuild on Shared Code Changes (Recommended)
 To have Rust code changes in the `shared` library reflected in the browser immediately during client development, run the following command in a separate terminal:
 
 ```bash
@@ -67,12 +90,12 @@ To have Rust code changes in the `shared` library reflected in the browser immed
 cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```
 
-### 6. Running the GLB Editor
+### 7. Running the GLB Editor
 
 ```bash
 cd tools/glb-editor
 npm install
-npm run dev -- --port 10005
+npm run dev -- --port 10006
 ```
 
 ## Features
