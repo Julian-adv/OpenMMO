@@ -41,11 +41,20 @@
   // Exported for ChatBubble compatibility (bind:this → ref.textRenderInfo.blockBounds)
   export const textRenderInfo = { blockBounds: [0, 0, 0, 0] as number[] }
 
-  const canvas = document.createElement('canvas')
-  const ctx = canvas.getContext('2d')!
-  const texture = new THREE.CanvasTexture(canvas)
+  let canvas = document.createElement('canvas')
+  let ctx = canvas.getContext('2d')!
+
+  let texture = new THREE.CanvasTexture(canvas)
   texture.minFilter = THREE.LinearFilter
   texture.magFilter = THREE.LinearFilter
+
+  // Track previous canvas dimensions. When they change we must create a
+  // new canvas + CanvasTexture so the WebGPU backend allocates a GPUTexture
+  // with the correct size (it only creates the GPUTexture once per Texture).
+  // A new canvas is needed because the old texture still references the old
+  // canvas — resizing a shared canvas would corrupt the old GPUTexture.
+  let prevCanvasW = 0
+  let prevCanvasH = 0
 
   let worldWidth = $state(0.01)
   let worldHeight = $state(0.01)
@@ -124,8 +133,26 @@
     const cw = Math.max(1, Math.ceil(maxLineWidth + pad * 2))
     const ch = Math.max(1, Math.ceil(totalTextHeight + pad * 2))
 
-    canvas.width = cw
-    canvas.height = ch
+    // WebGPU allocates a GPUTexture once per THREE.Texture and never resizes
+    // it. If canvas dimensions change we must create a fresh canvas + texture
+    // so the backend allocates a new GPUTexture with the correct size.
+    // A new canvas is needed because the old texture still references the old one.
+    if (cw !== prevCanvasW || ch !== prevCanvasH) {
+      prevCanvasW = cw
+      prevCanvasH = ch
+
+      canvas = document.createElement('canvas')
+      canvas.width = cw
+      canvas.height = ch
+      ctx = canvas.getContext('2d')!
+
+      // Do NOT dispose the old texture (see onDestroy comment).
+      texture = new THREE.CanvasTexture(canvas)
+      texture.minFilter = THREE.LinearFilter
+      texture.magFilter = THREE.LinearFilter
+      material.map = texture
+    }
+
     ctx.clearRect(0, 0, cw, ch)
     ctx.font = font
     ctx.fillStyle = color
@@ -187,14 +214,16 @@
   let meshRef = $state<THREE.Mesh | undefined>(undefined)
 
   onDestroy(() => {
-    // Hide mesh immediately so the renderer won't try to draw it
+    // Hide mesh immediately so the renderer won't try to draw it.
     if (meshRef) meshRef.visible = false
-    // Defer disposal to next frame so the renderer finishes the current
-    // frame without encountering null texture bindings
-    requestAnimationFrame(() => {
-      texture.dispose()
-      material.dispose()
-    })
+    // Do NOT call texture.dispose() or material.dispose() here.
+    // All MeshBasicNodeMaterial+CanvasTexture instances share a NodeBuilderState
+    // whose original Sampler bindings hold a dispose listener on the texture.
+    // Disposing the texture sets the original Sampler._texture = null, and
+    // Binding.clone() copies _texture via Object.assign (bypassing the setter),
+    // so all future cloned bindings inherit null — crashing createBindGroup
+    // with "Invalid value used as weak map key".
+    // Let GC reclaim the texture and material instead.
   })
 </script>
 

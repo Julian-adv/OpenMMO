@@ -35,5 +35,6 @@
   castShadow
   receiveShadow
   frustumCulled={false}
+  dispose={false}
   oncreate={handleCreate}
 />

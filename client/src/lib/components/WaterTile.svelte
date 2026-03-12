@@ -65,4 +65,5 @@
   position={waterPosition}
   receiveShadow={false}
   castShadow={false}
+  dispose={false}
 />
