@@ -168,6 +168,30 @@ impl SharedState {
             ServerMessage::CharacterCreated { ref character } => {
                 self.characters.push(character.clone());
             }
+            ServerMessage::PlayerMoved {
+                player_id,
+                position,
+                ..
+            } => {
+                // Update tracked position for self and nearby players
+                if self.self_player_id.as_deref() == Some(player_id.as_str()) {
+                    if let Some(ref mut p) = self.self_player {
+                        p.position = position.clone();
+                    }
+                }
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.position = position.clone();
+                }
+            }
+            ServerMessage::MonsterMoved {
+                monster_id,
+                position,
+                ..
+            } => {
+                if let Some(m) = self.nearby_monsters.get_mut(monster_id) {
+                    m.position = position.clone();
+                }
+            }
             _ => {}
         }
 
@@ -239,8 +263,8 @@ impl SharedState {
                 continue;
             }
             lines.push(format!(
-                "Player: {} [{}] Lv.{} HP {}/{} at ({:.1}, {:.1}, {:.1})",
-                p.name, p.id, p.level, p.health, p.max_health,
+                "Player: {} Lv.{} HP {}/{} at ({:.1}, {:.1}, {:.1})",
+                p.name, p.level, p.health, p.max_health,
                 p.position.x, p.position.y, p.position.z
             ));
         }

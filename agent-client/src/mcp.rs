@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use onlinerpg_shared::{ClientMessage, ServerMessage};
+use onlinerpg_shared::ClientMessage;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{CallToolResult, Content, ServerCapabilities, ServerInfo},
@@ -182,7 +182,10 @@ impl AgentMcpServer {
         if events.is_empty() {
             return "No new events.".to_string();
         }
-        let lines: Vec<String> = events.iter().map(format_event).collect();
+        let lines: Vec<String> = events
+            .iter()
+            .filter_map(|e| crate::driver::format_event(&state, e))
+            .collect();
         lines.join("\n")
     }
 
@@ -226,157 +229,6 @@ impl ServerHandler for AgentMcpServer {
 }
 
 // --- Event formatting ---
-
-pub fn format_event(msg: &ServerMessage) -> String {
-    match msg {
-        ServerMessage::JoinSuccess { player } => {
-            format!(
-                "[Join] You joined as {} at ({:.1}, {:.1}, {:.1})",
-                player.name, player.position.x, player.position.y, player.position.z
-            )
-        }
-        ServerMessage::GameState {
-            players, monsters, ..
-        } => {
-            let mut lines = vec![format!(
-                "[World] {} player(s), {} monster(s)",
-                players.len(),
-                monsters.len()
-            )];
-            for p in players.values() {
-                lines.push(format!(
-                    "  Player: {} Lv.{} HP {}/{}",
-                    p.name, p.level, p.health, p.max_health
-                ));
-            }
-            for m in monsters.values() {
-                lines.push(format!(
-                    "  Monster: {} [{}] HP {}/{}",
-                    m.monster_type, m.state, m.health, m.max_health
-                ));
-            }
-            lines.join("\n")
-        }
-        ServerMessage::GameTimeSync { datetime, is_night } => {
-            format!(
-                "[Time] Y{} M{} D{} {:02}:{:02} ({})",
-                datetime.year,
-                datetime.month,
-                datetime.day,
-                datetime.hour,
-                datetime.minute,
-                if *is_night { "night" } else { "day" }
-            )
-        }
-        ServerMessage::ChatMessage {
-            player_id, message, ..
-        } => {
-            format!("[Chat] {player_id}: {message}")
-        }
-        ServerMessage::PlayerJoined { player } => {
-            format!("[PlayerJoined] {}", player.name)
-        }
-        ServerMessage::PlayerLeft { player_id } => {
-            format!("[PlayerLeft] {player_id}")
-        }
-        ServerMessage::PlayerMoved {
-            player_id,
-            position,
-            ..
-        } => {
-            format!(
-                "[Move] Player {player_id} -> ({:.1}, {:.1}, {:.1})",
-                position.x, position.y, position.z
-            )
-        }
-        ServerMessage::MonsterSpawned { monster } => {
-            format!(
-                "[MonsterSpawned] {} ({})",
-                monster.id, monster.monster_type
-            )
-        }
-        ServerMessage::MonsterDead { monster_id } => {
-            format!("[MonsterDead] {monster_id}")
-        }
-        ServerMessage::PlayerAttacked {
-            player_id,
-            monster_id,
-            hit,
-            damage,
-            ..
-        } => {
-            format!("[Attack] Player {player_id} -> {monster_id}: hit={hit} dmg={damage}")
-        }
-        ServerMessage::MonsterAttackedPlayer {
-            monster_id,
-            player_id,
-            hit,
-            damage,
-            current_health,
-            ..
-        } => {
-            format!(
-                "[MonsterAttack] {monster_id} -> {player_id}: hit={hit} dmg={damage} hp={current_health}"
-            )
-        }
-        ServerMessage::PlayerDead { player_id } => {
-            format!("[PlayerDead] {player_id}")
-        }
-        ServerMessage::PlayerRespawned { player } => {
-            format!(
-                "[Respawn] {} HP {}/{}",
-                player.name, player.health, player.max_health
-            )
-        }
-        ServerMessage::XpGained {
-            xp_amount,
-            total_xp,
-            new_level,
-            leveled_up,
-            ..
-        } => {
-            let mut s = format!("[XP] +{xp_amount} (total: {total_xp}, level: {new_level})");
-            if *leveled_up {
-                s.push_str(" LEVEL UP!");
-            }
-            s
-        }
-        ServerMessage::CharacterError { message } => {
-            format!("[CharacterError] {message}")
-        }
-        ServerMessage::CharacterCreated { character } => {
-            format!(
-                "[CharacterCreated] id={} {} Lv.{} {:?}",
-                character.id, character.name, character.level, character.class
-            )
-        }
-        ServerMessage::CharacterStatsRolled {
-            attributes,
-            max_hp,
-        } => {
-            format!(
-                "[StatsRolled] STR:{} DEX:{} CON:{} INT:{} WIS:{} CHA:{} HP:{}",
-                attributes.r#str, attributes.dex, attributes.con,
-                attributes.int, attributes.wis, attributes.cha, max_hp
-            )
-        }
-        ServerMessage::MonsterMoved {
-            monster_id,
-            position,
-            state,
-            ..
-        } => {
-            format!(
-                "[MonsterMoved] {monster_id} -> ({:.1}, {:.1}, {:.1}) state={state}",
-                position.x, position.y, position.z
-            )
-        }
-        ServerMessage::Kicked { reason, .. } => {
-            format!("[Kicked] {reason}")
-        }
-        _ => format!("[Event] {:?}", std::mem::discriminant(msg)),
-    }
-}
 
 /// Start the MCP server as an HTTP (Streamable HTTP) endpoint.
 pub async fn run_mcp_server(state: Arc<Mutex<SharedState>>, port: u16) -> anyhow::Result<()> {

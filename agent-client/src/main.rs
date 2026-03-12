@@ -1,19 +1,37 @@
 mod claude;
+mod driver;
 mod mcp;
+mod openrouter;
 mod state;
 
 use std::sync::Arc;
+
+use std::time::Duration;
 
 use claude::ClaudeConfig;
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
     deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
 };
+use openrouter::OpenRouterConfig;
 use state::SharedState;
 use serde::Deserialize;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, info, warn};
+
+/// Which LLM backend to use for the agent driver.
+#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum LlmType {
+    /// No LLM driver (MCP or direct mode)
+    #[default]
+    None,
+    /// Claude CLI (stdio subprocess)
+    Claude,
+    /// OpenRouter API (HTTP)
+    Openrouter,
+}
 
 #[derive(Deserialize)]
 struct Config {
@@ -31,9 +49,15 @@ struct Config {
     /// MCP HTTP server port (default: 8808)
     #[serde(default = "default_mcp_port")]
     mcp_port: u16,
+    /// LLM backend type: "none", "claude", "openrouter"
+    #[serde(default)]
+    llm: LlmType,
     /// Claude CLI integration config
     #[serde(default)]
     claude: ClaudeConfig,
+    /// OpenRouter API integration config
+    #[serde(default)]
+    openrouter: OpenRouterConfig,
 }
 
 fn default_mcp_port() -> u16 {
@@ -53,6 +77,8 @@ fn fnv1a_hash(input: &str) -> String {
     format!("{hash:08x}")
 }
 
+const RECONNECT_DELAY: Duration = Duration::from_secs(5);
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
@@ -62,75 +88,84 @@ async fn main() -> anyhow::Result<()> {
     let config: Config = toml::from_str(&config_text)
         .map_err(|e| anyhow::anyhow!("Failed to parse {CONFIG_PATH}: {e}"))?;
 
-    let password_hash = fnv1a_hash(&config.password);
+    let llm_enabled = config.llm != LlmType::None;
 
-    // Connect with retry (server may be restarting)
-    let ws_stream = loop {
-        info!("Connecting to {}", config.server);
-        match tokio_tungstenite::connect_async(&config.server).await {
-            Ok((stream, _)) => break stream,
+    // MCP mode doesn't reconnect — it runs the HTTP server
+    if config.character_id.is_none() && !llm_enabled {
+        return run_mcp_mode(&config).await;
+    }
+
+    // Reconnect loop for game sessions
+    loop {
+        match run_session(&config).await {
+            Ok(()) => {
+                info!("Session ended cleanly. Reconnecting in {}s...", RECONNECT_DELAY.as_secs());
+            }
             Err(e) => {
-                warn!("Connection failed: {e} — retrying in 3s...");
-                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                warn!("Session failed: {e}. Reconnecting in {}s...", RECONNECT_DELAY.as_secs());
             }
         }
-    };
-    let (ws_tx, mut ws_rx) = ws_stream.split();
-    info!("Connected");
+        tokio::time::sleep(RECONNECT_DELAY).await;
+    }
+}
 
-    // Authenticate
-    let auth_msg = ClientMessage::Authenticate {
+/// MCP mode: single session with HTTP server (no reconnect).
+async fn run_mcp_mode(config: &Config) -> anyhow::Result<()> {
+    let password_hash = fnv1a_hash(&config.password);
+
+    let ws_stream = connect_ws(&config.server).await;
+    let (mut ws_tx, mut ws_rx) = ws_stream.split();
+
+    send(&mut ws_tx, &ClientMessage::Authenticate {
         account_name: config.account.clone(),
         password_hash,
         create_account: config.create_account,
-    };
-    let mut ws_tx = ws_tx;
-    send(&mut ws_tx, &auth_msg).await?;
+    }).await?;
 
-    // Wait for auth response
-    let characters = loop {
-        match recv(&mut ws_rx).await? {
-            ServerMessage::AuthSuccess { characters, .. } => {
-                info!("Authenticated. {} character(s):", characters.len());
-                for c in &characters {
-                    info!("  [{}] {} (Lv.{} {:?})", c.id, c.name, c.level, c.class);
-                }
-                break characters;
-            }
-            ServerMessage::AuthError { message } => {
-                error!("Auth failed: {message}");
-                return Ok(());
-            }
-            other => {
-                warn!("Unexpected message during auth: {:?}", msg_name(&other));
-            }
-        }
-    };
+    let characters = wait_for_auth(&mut ws_rx).await?;
 
-    // Set up shared state and command channel
-    let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
-    let state = Arc::new(Mutex::new(SharedState::new(characters.clone(), cmd_tx)));
+    let (cmd_tx, _cmd_rx) = mpsc::channel::<ClientMessage>(32);
+    let state = Arc::new(Mutex::new(SharedState::new(characters, cmd_tx)));
+
+    info!("No character_id configured — starting MCP HTTP server on port {}...", config.mcp_port);
+    mcp::run_mcp_server(state, config.mcp_port).await
+}
+
+/// Run a single game session: connect, authenticate, enter game, run until disconnected.
+async fn run_session(config: &Config) -> anyhow::Result<()> {
+    let password_hash = fnv1a_hash(&config.password);
+
+    // Connect with retry
+    let ws_stream = connect_ws(&config.server).await;
+    let (mut ws_tx, mut ws_rx) = ws_stream.split();
+
+    // Authenticate
+    send(&mut ws_tx, &ClientMessage::Authenticate {
+        account_name: config.account.clone(),
+        password_hash,
+        create_account: config.create_account,
+    }).await?;
+
+    let characters = wait_for_auth(&mut ws_rx).await?;
 
     // Determine which character to enter game with
+    let llm_enabled = config.llm != LlmType::None;
     let enter_char_id = if let Some(char_id) = config.character_id {
         Some(char_id)
-    } else if config.claude.enabled {
-        // Claude mode: auto-select first character
+    } else if llm_enabled {
         characters.first().map(|c| c.id)
     } else {
         None
     };
 
     if let Some(char_id) = enter_char_id {
-        send(
-            &mut ws_tx,
-            &ClientMessage::EnterGame {
-                character_id: char_id,
-            },
-        )
-        .await?;
+        send(&mut ws_tx, &ClientMessage::EnterGame { character_id: char_id }).await?;
         info!("Entering game with character {char_id}...");
     }
+
+    // Set up shared state and command channel
+    let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
+    let state = Arc::new(Mutex::new(SharedState::new(characters, cmd_tx)));
 
     // Background task: forward commands from channel to WebSocket
     let tx_task = tokio::spawn(async move {
@@ -148,7 +183,6 @@ async fn main() -> anyhow::Result<()> {
         loop {
             match recv(&mut ws_rx).await {
                 Ok(msg) => {
-                    // Respond to time sync with heartbeat
                     if matches!(msg, ServerMessage::GameTimeSync { .. }) {
                         let mut s = state_for_rx.lock().await;
                         let _ = s.send_command(ClientMessage::Heartbeat).await;
@@ -167,39 +201,95 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // Start Claude driver if enabled
-    let claude_task = if config.claude.enabled {
-        info!("Claude CLI integration enabled (model={})", config.claude.model);
-        let state_for_claude = Arc::clone(&state);
-        let claude_config = config.claude.clone();
-        Some(tokio::spawn(async move {
-            claude::claude_driver(state_for_claude, claude_config).await;
-        }))
-    } else {
-        None
+    // Start LLM driver based on configured backend
+    let llm_task = match config.llm {
+        LlmType::Claude => {
+            info!("Claude CLI integration enabled (model={})", config.claude.model);
+            let state_for_llm = Arc::clone(&state);
+            let min_interval = Duration::from_secs(config.claude.min_interval_secs);
+            let debounce = Duration::from_secs(config.claude.debounce_secs);
+            match claude::ClaudeInvoker::new(&config.claude) {
+                Ok(invoker) => Some(tokio::spawn(async move {
+                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce).await;
+                })),
+                Err(e) => {
+                    error!("Failed to create Claude invoker: {e}");
+                    None
+                }
+            }
+        }
+        LlmType::Openrouter => {
+            info!("OpenRouter API integration enabled (model={})", config.openrouter.model);
+            let state_for_llm = Arc::clone(&state);
+            let min_interval = Duration::from_secs(config.openrouter.min_interval_secs);
+            let debounce = Duration::from_secs(config.openrouter.debounce_secs);
+            match openrouter::OpenRouterInvoker::new(&config.openrouter) {
+                Ok(invoker) => Some(tokio::spawn(async move {
+                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce).await;
+                })),
+                Err(e) => {
+                    error!("Failed to create OpenRouter invoker: {e}");
+                    None
+                }
+            }
+        }
+        LlmType::None => None,
     };
 
-    if enter_char_id.is_some() {
-        if config.claude.enabled {
-            // Claude mode: run until WS reader finishes
-            info!("Running in Claude-driven mode");
-            let _ = rx_task.await;
-        } else {
-            // Direct mode: just wait for the WS reader to finish
-            info!("Running in direct mode (character_id set in config)");
-            let _ = rx_task.await;
-        }
+    if llm_enabled {
+        info!("Running in LLM-driven mode");
     } else {
-        // MCP mode: start HTTP MCP server and wait for LLM to drive the session
-        info!("No character_id configured — starting MCP HTTP server on port {}...", config.mcp_port);
-        mcp::run_mcp_server(state, config.mcp_port).await?;
+        info!("Running in direct mode (character_id set in config)");
     }
 
+    // Wait until the WebSocket reader dies (connection lost)
+    let _ = rx_task.await;
+
+    // Clean up
     tx_task.abort();
-    if let Some(ct) = claude_task {
-        ct.abort();
+    if let Some(t) = llm_task {
+        t.abort();
     }
+
     Ok(())
+}
+
+/// Connect to WebSocket with retry loop.
+async fn connect_ws(url: &str) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>> {
+    loop {
+        info!("Connecting to {url}");
+        match tokio_tungstenite::connect_async(url).await {
+            Ok((stream, _)) => {
+                info!("Connected");
+                return stream;
+            }
+            Err(e) => {
+                warn!("Connection failed: {e} — retrying in 3s...");
+                tokio::time::sleep(Duration::from_secs(3)).await;
+            }
+        }
+    }
+}
+
+/// Wait for AuthSuccess, returning the character list.
+async fn wait_for_auth(ws_rx: &mut WsRx) -> anyhow::Result<Vec<onlinerpg_shared::Character>> {
+    loop {
+        match recv(ws_rx).await? {
+            ServerMessage::AuthSuccess { characters, .. } => {
+                info!("Authenticated. {} character(s):", characters.len());
+                for c in &characters {
+                    info!("  [{}] {} (Lv.{} {:?})", c.id, c.name, c.level, c.class);
+                }
+                return Ok(characters);
+            }
+            ServerMessage::AuthError { message } => {
+                anyhow::bail!("Auth failed: {message}");
+            }
+            other => {
+                warn!("Unexpected message during auth: {:?}", msg_name(&other));
+            }
+        }
+    }
 }
 
 type WsTx = futures_util::stream::SplitSink<

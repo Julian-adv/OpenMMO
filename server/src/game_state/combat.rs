@@ -129,7 +129,7 @@ impl super::GameState {
                                             Err(err) => {
                                                 warn!(
                                                     "Failed to roll level-up HP for player {}: {}",
-                                                    player_id, err
+                                                    player_name, err
                                                 );
                                                 break;
                                             }
@@ -200,7 +200,7 @@ impl super::GameState {
 
                             info!(
                                 "Player {} gained {} XP (total: {}, level: {}{})",
-                                player_id,
+                                player_name,
                                 xp_amount,
                                 new_xp,
                                 new_level,
@@ -274,10 +274,13 @@ impl super::GameState {
         };
 
         // 2. Check if target player exists and is alive
+        let target_player_name;
         {
             let players = self.players.read().await;
             match players.get(target_player_id) {
-                Some(player) if player.health > 0 => {}
+                Some(player) if player.health > 0 => {
+                    target_player_name = player.name.clone();
+                }
                 _ => return,
             }
         }
@@ -286,7 +289,7 @@ impl super::GameState {
 
         info!(
             "Monster {} attacks player {}: Roll {}, Hit: {}, Damage: {}",
-            monster_id, target_player_id, result.roll, result.hit, result.damage
+            monster_id, target_player_name, result.roll, result.hit, result.damage
         );
 
         // Update player HP and combat timestamp
@@ -401,6 +404,11 @@ impl super::GameState {
             }
         };
 
+        let player_name = {
+            let players = self.players.read().await;
+            players.get(player_id).map(|p| p.name.clone()).unwrap_or_else(|| player_id.clone())
+        };
+
         let penalty = xp::apply_death_penalty(old_xp);
         let progression_changed =
             penalty.new_xp != penalty.old_xp || penalty.new_level != penalty.old_level;
@@ -435,7 +443,7 @@ impl super::GameState {
                         Err(err) => {
                             warn!(
                                 "Failed to compute level 1 HP floor for player {}: {}",
-                                player_id, err
+                                player_name, err
                             );
                             1
                         }
@@ -457,7 +465,7 @@ impl super::GameState {
                         Err(err) => {
                             warn!(
                                 "Failed to roll level-down HP delta for player {}: {}",
-                                player_id, err
+                                player_name, err
                             );
                         }
                     }
@@ -501,7 +509,7 @@ impl super::GameState {
 
         info!(
             "Player {} death penalty: XP {} -> {} (penalty {}), level {} -> {}{}",
-            player_id,
+            player_name,
             penalty.old_xp,
             penalty.new_xp,
             penalty.xp_penalty,
