@@ -1,4 +1,5 @@
 mod claude;
+mod codex;
 mod driver;
 mod mcp;
 mod openrouter;
@@ -13,6 +14,7 @@ use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
     deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
 };
+use codex::CodexConfig;
 use openrouter::OpenRouterConfig;
 use state::SharedState;
 use serde::Deserialize;
@@ -31,6 +33,8 @@ enum LlmType {
     Claude,
     /// OpenRouter API (HTTP)
     Openrouter,
+    /// Codex CLI (stdio subprocess)
+    Codex,
 }
 
 #[derive(Deserialize)]
@@ -49,7 +53,7 @@ struct Config {
     /// MCP HTTP server port (default: 8808)
     #[serde(default = "default_mcp_port")]
     mcp_port: u16,
-    /// LLM backend type: "none", "claude", "openrouter"
+    /// LLM backend type: "none", "claude", "openrouter", "codex"
     #[serde(default)]
     llm: LlmType,
     /// Claude CLI integration config
@@ -58,6 +62,9 @@ struct Config {
     /// OpenRouter API integration config
     #[serde(default)]
     openrouter: OpenRouterConfig,
+    /// Codex CLI integration config
+    #[serde(default)]
+    codex: CodexConfig,
 }
 
 fn default_mcp_port() -> u16 {
@@ -229,6 +236,21 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
                 })),
                 Err(e) => {
                     error!("Failed to create OpenRouter invoker: {e}");
+                    None
+                }
+            }
+        }
+        LlmType::Codex => {
+            info!("Codex CLI integration enabled (model={})", config.codex.model);
+            let state_for_llm = Arc::clone(&state);
+            let min_interval = Duration::from_secs(config.codex.min_interval_secs);
+            let debounce = Duration::from_secs(config.codex.debounce_secs);
+            match codex::CodexInvoker::new(&config.codex) {
+                Ok(invoker) => Some(tokio::spawn(async move {
+                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce).await;
+                })),
+                Err(e) => {
+                    error!("Failed to create Codex invoker: {e}");
                     None
                 }
             }
