@@ -201,11 +201,13 @@ export class TerrainSplatManager {
 
   private async saveDirtyTiles() {
     const tilesToSave = [...this.dirtyTiles]
-    this.dirtyTiles.clear()
 
     for (const key of tilesToSave) {
       const data = this.splatmaps.get(key)
-      if (!data) continue
+      if (!data) {
+        this.dirtyTiles.delete(key)
+        continue
+      }
 
       const [txStr, tzStr] = key.split(',')
       const tx = parseInt(txStr)
@@ -220,9 +222,9 @@ export class TerrainSplatManager {
           headers: { 'Content-Type': 'application/octet-stream' },
           body,
         })
+        this.dirtyTiles.delete(key)
       } catch (e) {
         console.error(`Failed to save splatmap for tile (${tx}, ${tz}):`, e)
-        this.dirtyTiles.add(key)
       }
     }
   }
@@ -262,19 +264,22 @@ export class TerrainSplatManager {
     this.textures.delete(key)
   }
 
-  /** Remove cached data without disposing GPU textures (they may still be rendered). */
+  /** Remove cached data without disposing GPU textures (they may still be rendered).
+   *  Refuses to evict if the tile has unsaved changes. */
   evictCachedData(tileX: number, tileZ: number) {
     const key = tileKey(tileX, tileZ)
+    if (this.dirtyTiles.has(key)) return
     this.splatmaps.delete(key)
     this.textures.delete(key)
   }
 
-  destroy() {
+  async destroy() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)
+      this.saveTimer = null
     }
     if (this.dirtyTiles.size > 0) {
-      this.saveDirtyTiles()
+      await this.saveDirtyTiles()
     }
     for (const texture of this.textures.values()) {
       texture.dispose()
