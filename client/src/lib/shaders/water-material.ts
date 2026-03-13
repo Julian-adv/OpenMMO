@@ -799,18 +799,33 @@ export function createWaterMaterial(
     alpha.mulAssign(max(holeAlpha, holeFoamFringe))
 
     // 7b. Wet sand — texture-based wetness from RT capture
-    // Threshold the 128x128 wetness to prevent boundary bleed (bilinear
-    // interpolation at the water edge leaks partial values beyond the
-    // actual water boundary, causing wet sand to appear ahead of waves).
-    const rawWetness = wetnessMapTex.sample(vUv).r
+    // The wetness RT stores holeAlpha² (due to alpha blending) which
+    // naturally suppresses bilinear interpolation bleed at boundaries.
+    // 4-tap box blur smooths out speckle noise at decayed wave boundaries
+    // where individual texels straddle the smoothstep threshold.
+    const wTexelSize = float(1.0 / 256) // WETNESS_SIZE
+    const rawWetness = wetnessMapTex
+      .sample(vUv.add(vec2(wTexelSize, 0)))
+      .r.add(wetnessMapTex.sample(vUv.add(vec2(wTexelSize.negate(), 0))).r)
+      .add(wetnessMapTex.sample(vUv.add(vec2(0, wTexelSize))).r)
+      .add(wetnessMapTex.sample(vUv.add(vec2(0, wTexelSize.negate()))).r)
+      .mul(0.25)
     const wetness = smoothstep(float(0.4), float(0.8), rawWetness)
-    const inHoleFactor = float(1).sub(max(holeAlpha, holeFoamFringe))
+    // Only exclude the actual water hole, NOT foam fringe — otherwise a
+    // visible gap forms between the shore foam and wet sand ("double line").
+    const inHoleFactor = float(1).sub(holeAlpha)
     const wetMask = wetness.mul(inHoleFactor)
+    const wetBlend = smoothstep(float(0.05), float(0.3), wetMask)
     const wetTerrainColor = refractionColor.mul(0.5)
+    // Suppress color darkening where foam fringe is present — otherwise
+    // partially mixing foam-bright finalColorBeforeRefl toward dark
+    // wetTerrainColor creates a visible white band. Alpha is unaffected
+    // because shore foam already dominates alpha in that zone.
+    const colorWetBlend = wetBlend.mul(float(1).sub(holeFoamFringe))
     finalColorBeforeRefl.assign(
-      mix(finalColorBeforeRefl, wetTerrainColor, wetMask.mul(3.0).min(1.0))
+      mix(finalColorBeforeRefl, wetTerrainColor, colorWetBlend)
     )
-    alpha.assign(max(alpha, wetMask.mul(0.7)))
+    alpha.assign(max(alpha, wetBlend.mul(0.6)))
 
     // At night, only make very shallow water (바다1) more transparent
     const veryShallowWeight = float(1).sub(
@@ -821,9 +836,9 @@ export function createWaterMaterial(
     )
     alpha.mulAssign(nightAlphaReduce)
 
-    // In capture mode, output only holeAlpha as alpha — excludes holeFoamFringe
-    // which extends beyond the water boundary and would cause wet sand to appear
-    // ahead of the actual wave
+    // In capture mode, output only holeAlpha — excludes holeFoamFringe
+    // which extends beyond the water boundary and would cause wet sand
+    // to appear ahead of the actual wave.
     const outputAlpha = mix(alpha, holeAlpha, uCaptureMode)
     return vec4(finalColor, outputAlpha)
   })()

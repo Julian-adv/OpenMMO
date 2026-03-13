@@ -106,6 +106,10 @@ export function createWetnessSystem(
 
   decayMat.fragmentNode = Fn(() => {
     const vUv = uv()
+    // The capture pass renders with the water material (transparent: true),
+    // so alpha blending squares the alpha (alpha_out = src_alpha²). This
+    // naturally suppresses bilinear interpolation bleed at the water
+    // boundary — do NOT compensate with sqrt, as it amplifies the bleed.
     const waterAlpha = captureTexNode.sample(vUv).a
     // Y-flip for WebGPU RT coordinate convention: the capture camera's
     // render introduces a V-flip (clip Y=+1 → texture V=0), and the
