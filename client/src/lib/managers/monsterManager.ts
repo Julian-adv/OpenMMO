@@ -419,9 +419,26 @@ class MonsterManager {
 
               const newX = monster.position.x + (dx / dist) * moveStep
               const newZ = monster.position.z + (dz / dist) * moveStep
+              const newY = this.sampleHeight(newX, newZ)
+
+              // Don't chase into water — give up pursuit
+              if (newY < 0) {
+                monster.state = 'idle'
+                monster.targetPlayerId = undefined
+                monster.stateTimer = 0
+                networkManager.sendMonsterMove(
+                  monster.id,
+                  monster.position,
+                  monster.rotation,
+                  'idle',
+                  monster.position
+                )
+                return
+              }
+
               monster.position = {
                 x: newX,
-                y: this.sampleHeight(newX, newZ),
+                y: newY,
                 z: newZ,
               }
 
@@ -469,9 +486,17 @@ class MonsterManager {
 
     const targetX = monster.position.x + Math.cos(angle) * distance
     const targetZ = monster.position.z + Math.sin(angle) * distance
+    const targetY = this.sampleHeight(targetX, targetZ)
+
+    // Don't move into water — stay idle instead
+    if (targetY < 0) {
+      monster.state = 'idle'
+      return
+    }
+
     monster.targetPosition = {
       x: targetX,
-      y: this.sampleHeight(targetX, targetZ),
+      y: targetY,
       z: targetZ,
     }
 
@@ -502,14 +527,18 @@ class MonsterManager {
     const moveStep = (monster.moveSpeed * deltaTime) / 1000
 
     if (distance <= moveStep) {
-      monster.position = { ...target, y: this.sampleHeight(target.x, target.z) }
+      const y = this.sampleHeight(target.x, target.z)
+      if (y < 0) return true // Stop — treat as arrived to prevent entering water
+      monster.position = { ...target, y }
       return true
     } else {
       const newX = monster.position.x + (dx / distance) * moveStep
       const newZ = monster.position.z + (dz / distance) * moveStep
+      const newY = this.sampleHeight(newX, newZ)
+      if (newY < 0) return true // Stop — prevent entering water
       monster.position = {
         x: newX,
-        y: this.sampleHeight(newX, newZ),
+        y: newY,
         z: newZ,
       }
       return false
@@ -554,10 +583,15 @@ class MonsterManager {
     const x = playerPos.x + Math.cos(angle) * distance
     const z = playerPos.z + Math.sin(angle) * distance
 
+    const y = this.sampleHeight(x, z)
+
+    // Don't spawn underwater
+    if (y < 0) return
+
     // Request spawn from server
     networkManager.requestSpawnMonster(
       'scp939',
-      { x, y: this.sampleHeight(x, z), z },
+      { x, y, z },
       Math.random() * Math.PI * 2
     )
   }

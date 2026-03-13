@@ -143,7 +143,7 @@
   let reflectionManager = $state<ReflectionRenderManager | null>(null)
   let reflectionTexture = $state<THREE.Texture | null>(null)
   let cameraInitialized = $state(false)
-  let playerAttackDuration = $state(1.5) // Default 1.5s
+  let playerAttackDuration = $state(1.533) // Default from slash1 animation (data/animation_durations.json)
 
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])

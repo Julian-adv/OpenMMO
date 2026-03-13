@@ -168,11 +168,15 @@ export function handleServerMessage(
       if (state.currentPlayer?.id === data.player_id) {
         break
       }
-      remotePlayerManager.setTargetPosition(data.player_id, {
-        x: data.position.x,
-        y: data.position.y,
-        z: data.position.z,
-      })
+      remotePlayerManager.setTargetPosition(
+        data.player_id,
+        {
+          x: data.position.x,
+          y: data.position.y,
+          z: data.position.z,
+        },
+        data.rotation
+      )
       break
     }
 

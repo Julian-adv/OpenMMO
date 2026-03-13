@@ -12,6 +12,7 @@
   import type { PlayerState } from '../../utils/movementUtils'
   import type Monster from '../Monster.svelte'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import { remotePlayerManager } from '../../managers/remotePlayerManager'
   import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
@@ -61,6 +62,11 @@
     currentPlayerModel = $bindable<PlayerModel | null>(null),
     otherPlayerModels = $bindable<(PlayerModel | undefined)[]>([]),
   }: Props = $props()
+
+  // Sync attack animation duration to remote player manager
+  $effect(() => {
+    remotePlayerManager.attackAnimationDuration = playerAttackDuration
+  })
 
   // Compute torch mode for each remote player:
   // - Closest N torch-bearing players get 'light-only'

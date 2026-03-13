@@ -60,6 +60,17 @@ impl SharedState {
     }
 
     pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
+        // Update local position immediately so subsequent reads don't use stale data
+        if let ClientMessage::PlayerMove {
+            ref position,
+            rotation,
+        } = msg
+        {
+            if let Some(ref mut p) = self.self_player {
+                p.position = position.clone();
+                p.rotation = rotation;
+            }
+        }
         self.cmd_tx
             .send(msg)
             .await

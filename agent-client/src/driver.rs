@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -26,7 +27,7 @@ pub struct AgentResponse {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type")]
 pub enum AgentAction {
-    #[serde(rename = "say")]
+    #[serde(rename = "say", alias = "chat")]
     Say { message: String },
     #[serde(rename = "attack")]
     Attack {
@@ -285,7 +286,7 @@ pub fn action_to_command(
             let rotation = if let Some(pp) = player_pos {
                 let dx = pos.x - pp.x;
                 let dz = pos.z - pp.z;
-                dz.atan2(dx)
+                dx.atan2(dz)
             } else {
                 0.0
             };
@@ -367,9 +368,11 @@ pub async fn llm_driver(
 
     info!("LLM driver: in game, ready.");
 
+    let attack_cooldown = load_attack_cooldown();
+
     let mut last_prompt_at = Instant::now() - min_interval;
     let mut attack_target: Option<String> = None;
-    let mut last_attack_at = Instant::now() - ATTACK_COOLDOWN;
+    let mut last_attack_at = Instant::now() - attack_cooldown;
     let mut llm_in_flight: Option<tokio::task::JoinHandle<anyhow::Result<String>>> = None;
     let mut prompt_pending_since: Option<Instant> = None;
 
@@ -392,7 +395,7 @@ pub async fn llm_driver(
     loop {
         // Tick interval: ATTACK_COOLDOWN when in combat, otherwise 1s (responsive to events)
         let tick_duration = if attack_target.is_some() {
-            ATTACK_COOLDOWN.saturating_sub(last_attack_at.elapsed())
+            attack_cooldown.saturating_sub(last_attack_at.elapsed())
         } else {
             Duration::from_secs(1)
         };
@@ -409,7 +412,7 @@ pub async fn llm_driver(
         }
 
         // === Combat tick ===
-        if attack_target.is_some() && last_attack_at.elapsed() >= ATTACK_COOLDOWN {
+        if attack_target.is_some() && last_attack_at.elapsed() >= attack_cooldown {
             attack_target = tick_combat(&state, attack_target.unwrap()).await;
             last_attack_at = Instant::now();
         }
@@ -487,34 +490,13 @@ pub async fn llm_driver(
 /// Execute one combat tick: check if target is alive and in range, chase or attack.
 /// Returns Some(monster_id) to keep targeting, or None if combat ended.
 async fn tick_combat(state: &Arc<Mutex<SharedState>>, monster_id: String) -> Option<String> {
-    let combat_info = {
-        let s = state.lock().await;
-        let monster_alive = s.nearby_monsters.contains_key(&monster_id);
-        let player_alive = s.self_player.as_ref().is_some_and(|p| p.health > 0);
-        if !monster_alive || !player_alive {
-            None
-        } else {
-            Some(compute_move_to_monster(&s, &monster_id))
+    // Chase until in range (handles monster movement during chase)
+    match chase_monster(state, &monster_id).await {
+        ChaseResult::InRange => {}
+        ChaseResult::Lost | ChaseResult::Error => {
+            info!("Combat ended: monster {monster_id} lost or error during chase");
+            return None;
         }
-    };
-
-    let Some(move_info) = combat_info else {
-        info!("Combat ended: monster {monster_id} dead or player dead");
-        return None;
-    };
-
-    // Chase if out of range
-    if let Some((cmd, travel_secs)) = move_info {
-        debug!("Chasing monster {monster_id} ({travel_secs:.1}s)");
-        {
-            let mut s = state.lock().await;
-            if let Err(e) = s.send_command(cmd).await {
-                error!("Failed to send chase move: {e}");
-                return None;
-            }
-        }
-        let wait = Duration::from_secs_f32(travel_secs + ARRIVAL_BUFFER_SECS);
-        tokio::time::sleep(wait).await;
     }
 
     // Face the monster before attacking (matches web client behavior)
@@ -543,14 +525,115 @@ async fn tick_combat(state: &Arc<Mutex<SharedState>>, monster_id: String) -> Opt
     Some(monster_id)
 }
 
+enum ChaseResult {
+    InRange,
+    Lost,
+    Error,
+}
+
+/// How often to check monster position during chase (ms).
+const CHASE_TICK_MS: u64 = 200;
+/// Maximum chase duration before giving up (seconds).
+const MAX_CHASE_SECS: f32 = 15.0;
+/// How far the monster must move from our last target before we re-route.
+const REROUTE_THRESHOLD: f32 = 1.5;
+
+/// Chase the monster until we're in attack range, re-routing if it moves.
+/// Polls monster position every CHASE_TICK_MS and sends new move commands
+/// when the monster has moved significantly from our current destination.
+async fn chase_monster(state: &Arc<Mutex<SharedState>>, monster_id: &str) -> ChaseResult {
+    let chase_start = Instant::now();
+    let mut last_target = onlinerpg_shared::Position {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
+
+    loop {
+        // Timeout guard
+        if chase_start.elapsed().as_secs_f32() > MAX_CHASE_SECS {
+            warn!("Chase timeout for monster {monster_id}");
+            return ChaseResult::Lost;
+        }
+
+        let move_info = {
+            let s = state.lock().await;
+            let monster_alive = s.nearby_monsters.contains_key(monster_id);
+            let player_alive = s.self_player.as_ref().is_some_and(|p| p.health > 0);
+            if !monster_alive || !player_alive {
+                return ChaseResult::Lost;
+            }
+            compute_move_to_monster(&s, monster_id)
+        };
+
+        let Some((cmd, _travel_secs)) = move_info else {
+            // Already in attack range
+            return ChaseResult::InRange;
+        };
+
+        // Check if monster moved enough to warrant a new move command
+        let new_target = match &cmd {
+            ClientMessage::PlayerMove { position, .. } => position.clone(),
+            _ => unreachable!(),
+        };
+
+        let dx = new_target.x - last_target.x;
+        let dz = new_target.z - last_target.z;
+        let shift = (dx * dx + dz * dz).sqrt();
+
+        if shift > REROUTE_THRESHOLD || last_target.x == 0.0 && last_target.z == 0.0 {
+            debug!(
+                "Chase {monster_id}: sending move (monster shifted {shift:.1} units)"
+            );
+            last_target = new_target;
+            let mut s = state.lock().await;
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send chase move: {e}");
+                return ChaseResult::Error;
+            }
+        }
+
+        tokio::time::sleep(Duration::from_millis(CHASE_TICK_MS)).await;
+    }
+}
+
 /// Minimum distance to a monster before attacking (matches client-side threshold).
 const ATTACK_RANGE: f32 = 2.0;
 /// Character movement speed in units/sec (matches client DEFAULT_MOVEMENT_CONFIG.maxSpeed).
 const MOVE_SPEED: f32 = 3.0;
-/// Extra buffer time (seconds) so the client-side interpolation fully arrives before attack.
-const ARRIVAL_BUFFER_SECS: f32 = 0.3;
-/// Player attack cooldown matching client animation duration (1.5s default).
-const ATTACK_COOLDOWN: Duration = Duration::from_millis(1500);
+/// Fallback attack cooldown if animation data is unavailable.
+const DEFAULT_ATTACK_COOLDOWN_MS: u64 = 1500;
+
+/// Path to animation durations JSON (generated by tools/extract-animation-durations.mjs).
+/// Relative to agent-client working directory.
+const ANIMATION_DURATIONS_PATH: &str = "data/animation_durations.json";
+
+/// Load the attack (slash1) animation duration from the shared JSON file.
+/// Returns the duration as milliseconds, or the default if loading fails.
+fn load_attack_cooldown() -> Duration {
+    let Ok(text) = std::fs::read_to_string(ANIMATION_DURATIONS_PATH) else {
+        warn!("Could not read {ANIMATION_DURATIONS_PATH}, using default attack cooldown");
+        return Duration::from_millis(DEFAULT_ATTACK_COOLDOWN_MS);
+    };
+
+    // Structure: { "combat_melee": { "slash1": 1.533, ... }, ... }
+    let Ok(data) = serde_json::from_str::<HashMap<String, HashMap<String, f64>>>(&text) else {
+        warn!("Could not parse {ANIMATION_DURATIONS_PATH}, using default attack cooldown");
+        return Duration::from_millis(DEFAULT_ATTACK_COOLDOWN_MS);
+    };
+
+    if let Some(duration_secs) = data
+        .get("combat_melee")
+        .and_then(|m| m.get("slash1"))
+    {
+        let ms = (*duration_secs * 1000.0) as u64;
+        info!("Loaded attack cooldown from animation data: {ms}ms");
+        Duration::from_millis(ms)
+    } else {
+        warn!("slash1 animation not found in {ANIMATION_DURATIONS_PATH}, using default");
+        Duration::from_millis(DEFAULT_ATTACK_COOLDOWN_MS)
+    }
+}
 
 /// Parse and execute the agent's response.
 /// Returns the monster_id if the last action was an attack (for combat loop).
@@ -567,36 +650,25 @@ async fn handle_response(state: &Arc<Mutex<SharedState>>, response: &str) -> Opt
     let mut last_attack_target = None;
 
     for action in &agent_resp.actions {
-        // For attack actions, walk to the monster first if not in range
+        // For attack actions, chase the monster and attack
         if let AgentAction::Attack { monster_id } = action {
-            let move_info = {
-                let s = state.lock().await;
-                compute_move_to_monster(&s, monster_id)
-            };
-            if let Some((cmd, travel_secs)) = move_info {
-                info!(
-                    "Auto-moving to monster {monster_id} ({travel_secs:.1}s travel time)"
-                );
-                {
+            info!("Agent attacking monster {monster_id}, chasing...");
+            match chase_monster(state, monster_id).await {
+                ChaseResult::InRange => {
+                    // Face the monster before attacking
                     let mut s = state.lock().await;
-                    if let Err(e) = s.send_command(cmd).await {
-                        error!("Failed to send move-to-monster command: {e}");
+                    if let Some(face_cmd) = compute_face_monster(&s, monster_id) {
+                        if let Err(e) = s.send_command(face_cmd).await {
+                            error!("Failed to send face-monster move: {e}");
+                        }
                     }
                 }
-                let wait = Duration::from_secs_f32(travel_secs + ARRIVAL_BUFFER_SECS);
-                tokio::time::sleep(wait).await;
-            }
-            last_attack_target = Some(monster_id.clone());
-        }
-
-        // Face the monster before attacking (matches web client behavior)
-        if let AgentAction::Attack { monster_id } = action {
-            let mut s = state.lock().await;
-            if let Some(face_cmd) = compute_face_monster(&s, monster_id) {
-                if let Err(e) = s.send_command(face_cmd).await {
-                    error!("Failed to send face-monster move: {e}");
+                ChaseResult::Lost | ChaseResult::Error => {
+                    warn!("Could not reach monster {monster_id}, skipping attack");
+                    continue;
                 }
             }
+            last_attack_target = Some(monster_id.clone());
         }
 
         {
@@ -622,7 +694,7 @@ fn compute_face_monster(state: &SharedState, monster_id: &str) -> Option<ClientM
 
     let dx = monster.position.x - self_player.position.x;
     let dz = monster.position.z - self_player.position.z;
-    let rotation = dz.atan2(dx);
+    let rotation = dx.atan2(dz);
 
     Some(ClientMessage::PlayerMove {
         position: self_player.position.clone(),
@@ -669,7 +741,7 @@ fn compute_move_to_monster(
             y: monster.position.y,
             z: target_z,
         },
-        rotation: dz.atan2(dx),
+        rotation: dx.atan2(dz),
     };
 
     Some((cmd, travel_secs))

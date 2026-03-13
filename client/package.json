@@ -13,7 +13,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint . --ext .js,.ts,.svelte",
     "lint:fix": "eslint . --ext .js,.ts,.svelte --fix",
-    "generate:data": "node ../tools/convert.mjs"
+    "generate:data": "node ../tools/convert.mjs && node ../tools/extract-animation-durations.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
