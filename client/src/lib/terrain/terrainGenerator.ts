@@ -363,6 +363,80 @@ function classifyAndRemapWithReference(
     }
   }
 
+  // --- Pass 3b: Smooth land-side coastal slope ---
+  // BFS from coastline into land to create a gentle slope down to sea level,
+  // eliminating the abrupt cliff between land (0.5~25m) and water (-0.1m).
+  const COASTAL_BLEND_DIST = 24 // cells (~24m) of gradual slope on land side
+  const COASTAL_TARGET_HEIGHT = 0.05 // height at the very edge of land (near water)
+  const seaDist = new Float32Array(total)
+  seaDist.fill(Infinity)
+
+  const landQueue = new Uint32Array(total * 2)
+  const landInQueue = new Uint8Array(total)
+  let landHead = 0
+  let landTail = 0
+
+  // Seed: land cells adjacent to sea
+  for (let cz = 0; cz < N; cz++) {
+    for (let cx = 0; cx < N; cx++) {
+      const i = cz * N + cx
+      if (result[i] < 0) continue // skip sea
+      let adjacentToSea = false
+      for (let dz = -1; dz <= 1 && !adjacentToSea; dz++) {
+        for (let dx = -1; dx <= 1 && !adjacentToSea; dx++) {
+          if (dx === 0 && dz === 0) continue
+          const nx = cx + dx
+          const nz = cz + dz
+          if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
+          if (result[nz * N + nx] < 0) adjacentToSea = true
+        }
+      }
+      if (adjacentToSea) {
+        seaDist[i] = 0
+        landQueue[landTail++] = i
+        landInQueue[i] = 1
+      }
+    }
+  }
+
+  while (landHead < landTail) {
+    const cur = landQueue[landHead++]
+    landInQueue[cur] = 0
+    const cx = cur % N
+    const cz = Math.floor(cur / N)
+    const curDist = seaDist[cur]
+    if (curDist >= COASTAL_BLEND_DIST) continue
+
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        if (dx === 0 && dz === 0) continue
+        const nx = cx + dx
+        const nz = cz + dz
+        if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
+        const ni = nz * N + nx
+        if (result[ni] < 0) continue // don't enter sea
+        const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
+        if (newDist < seaDist[ni]) {
+          seaDist[ni] = newDist
+          if (!landInQueue[ni]) {
+            landQueue[landTail++] = ni
+            landInQueue[ni] = 1
+          }
+        }
+      }
+    }
+  }
+
+  // Blend land heights: near coast → low, far from coast → original
+  for (let i = 0; i < total; i++) {
+    if (result[i] < 0) continue // skip sea
+    const d = seaDist[i]
+    if (d >= COASTAL_BLEND_DIST) continue
+    // smoothstep: 0 at coast edge → 1 at blend boundary
+    const t = smoothstep(0, 1, d / COASTAL_BLEND_DIST)
+    result[i] = lerp(COASTAL_TARGET_HEIGHT, result[i], t)
+  }
+
   return result
 }
 
