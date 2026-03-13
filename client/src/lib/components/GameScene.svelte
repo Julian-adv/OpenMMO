@@ -128,6 +128,7 @@
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterMoonBrightness = $state(0)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
+  let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
   const entityClipGroupObj = (() => {
@@ -522,6 +523,9 @@
         waterCamDir = waterCamDirTmp.clone()
       }
 
+      // Render wetness pre-pass (small 128x128 RT per water tile)
+      waterLayerRef?.renderWetness(renderer)
+
       // Render refraction pass (scene without water or entities — terrain only)
       if (refractionManager && $refractionEnabled) {
         if (camera) refractionManager.setCamera(camera)
@@ -861,6 +865,7 @@
 />
 
 <GameSceneWaterLayer
+  bind:this={waterLayerRef}
   {terrainGeometry}
   {terrainTiles}
   heightManager={terrainHeightManager}

@@ -19,7 +19,6 @@ import {
   clamp,
   pow,
   fract,
-  floor,
   max,
   reflect,
   varying,
@@ -92,27 +91,8 @@ const gerstnerNormal = /* #__PURE__ */ Fn(
   }
 )
 
-// ─── Hash-based value noise ─────────────────────────────
-const hash = /* #__PURE__ */ Fn(([p_immutable]: [ReturnType<typeof vec2>]) => {
-  const p = vec2(p_immutable)
-  return fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453))
-})
-
-const valueNoise = /* #__PURE__ */ Fn(
-  ([p_immutable]: [ReturnType<typeof vec2>]) => {
-    const p = vec2(p_immutable)
-    const i = floor(p)
-    const fv = fract(p)
-    const f = fv.mul(fv).mul(float(3).sub(fv.mul(2))) // smoothstep interpolation
-
-    const a = hash(i)
-    const b = hash(i.add(vec2(1.0, 0.0)))
-    const c = hash(i.add(vec2(0.0, 1.0)))
-    const d = hash(i.add(vec2(1.0, 1.0)))
-
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y)
-  }
-)
+// ─── Hash-based value noise (shared with wetness compute) ────
+import { valueNoise } from './tsl-noise'
 
 // ─── 4-sample normal noise ──────────────────────────────
 const getNoise = /* #__PURE__ */ Fn(
@@ -171,6 +151,7 @@ export interface WaterMaterialOptions {
   causticsMap: THREE.Texture
   refractionMap?: THREE.Texture | null
   reflectionMap?: THREE.Texture | null
+  wetnessMap?: THREE.Texture | null
 }
 
 export interface WaterMaterialUniforms {
@@ -185,6 +166,11 @@ export interface WaterMaterialUniforms {
   uNormalMap: { value: THREE.Texture }
   uFoamMap: { value: THREE.Texture }
   uCausticsMap: { value: THREE.Texture }
+  uWetnessMap: { value: THREE.Texture }
+  uCaptureMode: { value: number }
+  uWaveA: { value: THREE.Vector4 }
+  uWaveB: { value: THREE.Vector4 }
+  uWaveC: { value: THREE.Vector4 }
 }
 
 /** Module-level fallback texture — shared across all water materials for pooling safety. */
@@ -195,6 +181,15 @@ export const waterFallbackTex = new THREE.DataTexture(
   THREE.RGBAFormat
 )
 waterFallbackTex.needsUpdate = true
+
+/** Wetness fallback (RGBA8, r=0) — matches StorageTexture default format. */
+export const waterWetnessFallbackTex = new THREE.DataTexture(
+  new Uint8Array([0, 0, 0, 255]),
+  1,
+  1,
+  THREE.RGBAFormat
+)
+waterWetnessFallbackTex.needsUpdate = true
 
 /** Heightmap-compatible fallback (RedFormat + FloatType) — must match the format
  *  the heightmap TextureNode was compiled with, otherwise WebGPU bind groups fail. */
@@ -273,6 +268,8 @@ export function createWaterMaterial(
   const causticsTex = texture(options.causticsMap)
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
+  const wetnessMapTex = texture(options.wetnessMap ?? waterWetnessFallbackTex)
+  const uCaptureMode = uniform(0)
 
   // ─── Vertex: Gerstner wave displacement ────────────
   const vOrigWorldPos = varying(vec3(0), 'v_origWorldPos')
@@ -296,11 +293,14 @@ export function createWaterMaterial(
     // Dampen Gerstner waves in shallow water (fade out over depth 0~1.5)
     const waveDamping = smoothstep(float(0.0), float(1.5), vtxDepth)
 
-    const offset = gerstnerWave(uWaveA, p, uTime)
+    const gerstnerOffset = gerstnerWave(uWaveA, p, uTime)
       .add(gerstnerWave(uWaveB, p, uTime))
       .add(gerstnerWave(uWaveC, p, uTime))
       .mul(waveDamping)
       .toVar()
+
+    // Skip Gerstner displacement in capture mode so UV↔screen mapping stays exact
+    const offset = mix(gerstnerOffset, vec3(0), uCaptureMode).toVar()
 
     worldPos.xyz.addAssign(offset)
     vWaveHeight.assign(offset.y)
@@ -798,25 +798,19 @@ export function createWaterMaterial(
     // 7. Shore edge — reuse hole variables computed earlier
     alpha.mulAssign(max(holeAlpha, holeFoamFringe))
 
-    // 7b. Wet sand — darken refraction (terrain) color near hole boundary
-    // Uses actual terrain appearance instead of flat color for natural look
-    const wetMask = smoothstep(float(-0.55), float(-0.05), distFromHole)
-      .mul(float(1).sub(smoothstep(float(0.0), float(0.02), distFromHole)))
-      .mul(edgeCutoff)
-      .mul(
-        mix(
-          smoothstep(float(0.85), float(0.9), shoreRecede), // 밀물: 빨리 사라짐
-          smoothstep(float(0.05), float(0.15), shoreRecede), // 썰물: 빨리 나타남
-          smoothstep(float(0.0), float(0.1), cos(shorePhase)) // 방향 감지
-        )
-      )
-    // Sample refraction (terrain color) and darken it to simulate wetness
+    // 7b. Wet sand — texture-based wetness from RT capture
+    // Threshold the 128x128 wetness to prevent boundary bleed (bilinear
+    // interpolation at the water edge leaks partial values beyond the
+    // actual water boundary, causing wet sand to appear ahead of waves).
+    const rawWetness = wetnessMapTex.sample(vUv).r
+    const wetness = smoothstep(float(0.4), float(0.8), rawWetness)
+    const inHoleFactor = float(1).sub(max(holeAlpha, holeFoamFringe))
+    const wetMask = wetness.mul(inHoleFactor)
     const wetTerrainColor = refractionColor.mul(0.5)
     finalColorBeforeRefl.assign(
-      mix(finalColorBeforeRefl, wetTerrainColor, wetMask)
+      mix(finalColorBeforeRefl, wetTerrainColor, wetMask.mul(3.0).min(1.0))
     )
-    // Restore alpha in wet zone so darkened terrain is visible through holes
-    alpha.assign(max(alpha, wetMask.mul(0.85)))
+    alpha.assign(max(alpha, wetMask.mul(0.7)))
 
     // At night, only make very shallow water (바다1) more transparent
     const veryShallowWeight = float(1).sub(
@@ -827,7 +821,11 @@ export function createWaterMaterial(
     )
     alpha.mulAssign(nightAlphaReduce)
 
-    return vec4(finalColor, alpha)
+    // In capture mode, output only holeAlpha as alpha — excludes holeFoamFringe
+    // which extends beyond the water boundary and would cause wet sand to appear
+    // ahead of the actual wave
+    const outputAlpha = mix(alpha, holeAlpha, uCaptureMode)
+    return vec4(finalColor, outputAlpha)
   })()
 
   // ─── Build material ────────────────────────────────
@@ -864,6 +862,11 @@ export function createWaterMaterial(
       uNormalMap: normalMapTex,
       uFoamMap: foamMapTex,
       uCausticsMap: causticsTex,
+      uWetnessMap: wetnessMapTex,
+      uCaptureMode,
+      uWaveA,
+      uWaveB,
+      uWaveC,
     },
   }
 }
