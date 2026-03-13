@@ -140,7 +140,11 @@ impl LlmBackend for ClaudeInvoker {
             }
         }
 
-        info!("<<< FROM CLAUDE ({} bytes):\n{}", full_text.len(), full_text);
+        info!(
+            "<<< FROM CLAUDE ({} bytes):\n{}",
+            full_text.len(),
+            full_text
+        );
         Ok(full_text)
     }
 }

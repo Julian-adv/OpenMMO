@@ -46,9 +46,7 @@ pub struct EnterGameParams {
 pub struct CreateCharacterParams {
     #[schemars(description = "The character name")]
     pub character_name: String,
-    #[schemars(
-        description = "Character class: warrior, knight, thief"
-    )]
+    #[schemars(description = "Character class: warrior, knight, thief")]
     pub character_class: String,
 }
 
@@ -144,7 +142,11 @@ impl AgentMcpServer {
         }
 
         // Validate character_id
-        let char_name = match state.characters.iter().find(|c| c.id == params.character_id) {
+        let char_name = match state
+            .characters
+            .iter()
+            .find(|c| c.id == params.character_id)
+        {
             Some(c) => c.name.clone(),
             None => {
                 return Ok(CallToolResult::error(vec![Content::text(format!(
@@ -179,13 +181,15 @@ impl AgentMcpServer {
     async fn get_events(&self) -> String {
         let mut state = self.state.lock().await;
         let events = state.drain_events();
-        if events.is_empty() {
+        let agent_events = state.drain_agent_events();
+        if events.is_empty() && agent_events.is_empty() {
             return "No new events.".to_string();
         }
-        let lines: Vec<String> = events
+        let mut lines: Vec<String> = events
             .iter()
             .filter_map(|e| crate::driver::format_event(&state, e))
             .collect();
+        lines.extend(agent_events);
         lines.join("\n")
     }
 
@@ -220,11 +224,10 @@ impl AgentMcpServer {
 #[tool_handler]
 impl ServerHandler for AgentMcpServer {
     fn get_info(&self) -> ServerInfo {
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_instructions(
-                "OnlineRPG agent client. Use list_characters to see available characters, \
+        ServerInfo::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(
+            "OnlineRPG agent client. Use list_characters to see available characters, \
                  enter_game to join the world, then get_events to observe what happens.",
-            )
+        )
     }
 }
 

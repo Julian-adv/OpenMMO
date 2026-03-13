@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 onlinerpg-shared = { path = "../shared" }
+onlinerpg-terrain = { path = "../terrain" }
 tokio = { version = "1.0", features = ["full"] }
 tokio-tungstenite = "0.26"
 bytes = "1"

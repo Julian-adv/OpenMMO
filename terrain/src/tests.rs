@@ -1,7 +1,7 @@
 use std::path::Path;
 
-use super::coords;
-use super::defaults;
+use crate::coords;
+use crate::defaults;
 
 #[test]
 fn tile_to_region_positive() {
@@ -88,7 +88,7 @@ fn default_meta_has_4_layers() {
 #[tokio::test]
 async fn read_missing_heightmap_returns_default() {
     let io =
-        super::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
+        crate::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
     let data = io.read_heightmap(999, 999).await.unwrap();
     assert_eq!(data.len(), defaults::HEIGHTMAP_SIZE);
     let value = u16::from_le_bytes([data[0], data[1]]);
@@ -98,7 +98,7 @@ async fn read_missing_heightmap_returns_default() {
 #[tokio::test]
 async fn read_missing_splatmap_returns_default() {
     let io =
-        super::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
+        crate::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
     let data = io.read_splatmap(999, 999).await.unwrap();
     assert_eq!(data.len(), defaults::SPLATMAP_SIZE);
     assert_eq!(data[0], 255);
@@ -109,7 +109,7 @@ async fn heightmap_write_read_roundtrip() {
     let dir = std::env::temp_dir().join("_onlinerpg_test_roundtrip_h");
     let _ = tokio::fs::remove_dir_all(&dir).await;
 
-    let io = super::io::TerrainIO::new(dir.clone());
+    let io = crate::io::TerrainIO::new(dir.clone());
     let mut data = defaults::default_heightmap();
     // Set first cell to 6000 (= -200.0m)
     let custom: u16 = 6000;
@@ -128,7 +128,7 @@ async fn splatmap_write_read_roundtrip() {
     let dir = std::env::temp_dir().join("_onlinerpg_test_roundtrip_s");
     let _ = tokio::fs::remove_dir_all(&dir).await;
 
-    let io = super::io::TerrainIO::new(dir.clone());
+    let io = crate::io::TerrainIO::new(dir.clone());
     let mut data = defaults::default_splatmap();
     // Paint second pixel to 100% snow (A channel)
     data[4] = 0;
@@ -144,9 +144,23 @@ async fn splatmap_write_read_roundtrip() {
 #[tokio::test]
 async fn write_invalid_size_returns_error() {
     let io =
-        super::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
+        crate::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
     let bad_data = vec![0u8; 100];
     let result = io.write_heightmap(0, 0, &bad_data).await;
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::InvalidData);
+}
+
+#[tokio::test]
+async fn height_sampler_flat_terrain() {
+    // Default heightmap is all sea level (0.0m)
+    let dir = std::path::PathBuf::from("/tmp/_onlinerpg_test_sampler_nonexistent");
+    let terrain_io = crate::io::TerrainIO::new(dir);
+    let mut sampler = crate::height::HeightSampler::new(terrain_io);
+
+    let h = sampler.sample_height(0.0, 0.0).await.unwrap();
+    assert!((h - 0.0).abs() < 0.001, "Expected sea level, got {h}");
+
+    let h2 = sampler.sample_height(10.5, -5.3).await.unwrap();
+    assert!((h2 - 0.0).abs() < 0.001, "Expected sea level, got {h2}");
 }

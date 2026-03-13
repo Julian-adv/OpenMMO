@@ -406,7 +406,10 @@ impl super::GameState {
 
         let player_name = {
             let players = self.players.read().await;
-            players.get(player_id).map(|p| p.name.clone()).unwrap_or_else(|| player_id.clone())
+            players
+                .get(player_id)
+                .map(|p| p.name.clone())
+                .unwrap_or_else(|| player_id.clone())
         };
 
         let penalty = xp::apply_death_penalty(old_xp);

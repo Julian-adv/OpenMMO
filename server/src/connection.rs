@@ -6,8 +6,8 @@ use crate::types::{
     new_player, Character, CharacterAttributes, CharacterClass, ClientMessage, PlayerId, Position,
     ServerMessage,
 };
-use futures_util::{SinkExt, StreamExt};
 use bytes::Bytes;
+use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -558,9 +558,7 @@ async fn handle_client_message(
                     .await
                     .map(|(_, rot)| rot)
                     .unwrap_or(0.0);
-                game_state
-                    .teleport_player(id, position, rotation)
-                    .await;
+                game_state.teleport_player(id, position, rotation).await;
             } else {
                 warn!("Received debug teleport from client that is not in game");
             }
@@ -604,7 +602,10 @@ fn default_character_max_hp(
         Err(err) => {
             warn!(
                 "Failed to resolve level 1 max HP for race='{}', class='{}', con='{}': {}",
-                DEFAULT_CHARACTER_RACE, character_class.as_str(), attributes.con, err
+                DEFAULT_CHARACTER_RACE,
+                character_class.as_str(),
+                attributes.con,
+                err
             );
             FALLBACK_DEFAULT_MAX_HP
         }

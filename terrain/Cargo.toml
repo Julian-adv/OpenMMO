@@ -1,0 +1,12 @@
+[package]
+name = "onlinerpg-terrain"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tokio = { version = "1.0", features = ["fs"] }
+tracing = "0.1"
+serde_json = "1.0"
+
+[dev-dependencies]
+tokio = { version = "1.0", features = ["full"] }

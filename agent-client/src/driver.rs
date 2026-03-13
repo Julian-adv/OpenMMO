@@ -31,7 +31,12 @@ pub enum AgentAction {
     Say { message: String },
     #[serde(rename = "attack")]
     Attack {
-        #[serde(alias = "targetId", alias = "target_id", alias = "target", alias = "id")]
+        #[serde(
+            alias = "targetId",
+            alias = "target_id",
+            alias = "target",
+            alias = "id"
+        )]
         monster_id: String,
     },
     #[serde(rename = "move")]
@@ -111,10 +116,11 @@ pub fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> 
         )),
         ServerMessage::ChatMessage {
             player_id, message, ..
-        } => Some(format!("[Chat] {}: {message}", player_name(state, player_id))),
-        ServerMessage::PlayerJoined { player } => {
-            Some(format!("[PlayerJoined] {}", player.name))
-        }
+        } => Some(format!(
+            "[Chat] {}: {message}",
+            player_name(state, player_id)
+        )),
+        ServerMessage::PlayerJoined { player } => Some(format!("[PlayerJoined] {}", player.name)),
         ServerMessage::PlayerLeft { player_id } => {
             Some(format!("[PlayerLeft] {}", player_name(state, player_id)))
         }
@@ -125,15 +131,15 @@ pub fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> 
         } => Some(format!(
             "[Move] {} -> ({:.1}, {:.1}, {:.1})",
             player_name(state, player_id),
-            position.x, position.y, position.z
+            position.x,
+            position.y,
+            position.z
         )),
         ServerMessage::MonsterSpawned { monster } => Some(format!(
             "[MonsterSpawned] {} ({})",
             monster.id, monster.monster_type
         )),
-        ServerMessage::MonsterDead { monster_id } => {
-            Some(format!("[MonsterDead] {monster_id}"))
-        }
+        ServerMessage::MonsterDead { monster_id } => Some(format!("[MonsterDead] {monster_id}")),
         ServerMessage::PlayerAttacked {
             player_id,
             monster_id,
@@ -175,20 +181,20 @@ pub fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> 
             }
             Some(s)
         }
-        ServerMessage::CharacterError { message } => {
-            Some(format!("[CharacterError] {message}"))
-        }
+        ServerMessage::CharacterError { message } => Some(format!("[CharacterError] {message}")),
         ServerMessage::CharacterCreated { character } => Some(format!(
             "[CharacterCreated] id={} {} Lv.{} {:?}",
             character.id, character.name, character.level, character.class
         )),
-        ServerMessage::CharacterStatsRolled {
-            attributes,
-            max_hp,
-        } => Some(format!(
+        ServerMessage::CharacterStatsRolled { attributes, max_hp } => Some(format!(
             "[StatsRolled] STR:{} DEX:{} CON:{} INT:{} WIS:{} CHA:{} HP:{}",
-            attributes.r#str, attributes.dex, attributes.con,
-            attributes.int, attributes.wis, attributes.cha, max_hp
+            attributes.r#str,
+            attributes.dex,
+            attributes.con,
+            attributes.int,
+            attributes.wis,
+            attributes.cha,
+            max_hp
         )),
         ServerMessage::MonsterMoved {
             monster_id,
@@ -264,9 +270,7 @@ pub fn action_to_command(
         } => {
             let pos = if let (Some(x), Some(z)) = (x, z) {
                 // Absolute coordinates
-                let y = y.unwrap_or_else(|| {
-                    player_pos.map(|p| p.y).unwrap_or(0.0)
-                });
+                let y = y.unwrap_or_else(|| player_pos.map(|p| p.y).unwrap_or(0.0));
                 onlinerpg_shared::Position { x: *x, y, z: *z }
             } else if let (Some(dir), Some(dist), Some(pp)) =
                 (direction.as_deref(), distance, player_pos)
@@ -319,20 +323,29 @@ fn direction_to_offset(dir: &str) -> (f32, f32) {
 }
 
 /// Build a prompt string from current state and events.
-pub fn build_prompt(state: &SharedState, events: &[ServerMessage]) -> String {
+pub fn build_prompt(
+    state: &SharedState,
+    events: &[ServerMessage],
+    agent_events: &[String],
+) -> String {
     let mut prompt = String::new();
 
     prompt.push_str("=== CURRENT STATE ===\n");
     prompt.push_str(&state.format_world_state());
     prompt.push('\n');
 
-    if !events.is_empty() {
+    let has_server_events = events.iter().any(|e| format_event(state, e).is_some());
+    if has_server_events || !agent_events.is_empty() {
         prompt.push_str("\n=== EVENTS ===\n");
         for event in events {
             if let Some(line) = format_event(state, event) {
                 prompt.push_str(&line);
                 prompt.push('\n');
             }
+        }
+        for line in agent_events {
+            prompt.push_str(line);
+            prompt.push('\n');
         }
     }
 
@@ -382,8 +395,9 @@ pub async fn llm_driver(
 
     // Send initial world state (blocking is fine here, no combat yet)
     let initial_prompt = {
-        let s = state.lock().await;
-        build_prompt(&*s, &[])
+        let mut s = state.lock().await;
+        let agent_events = s.drain_agent_events();
+        build_prompt(&*s, &[], &agent_events)
     };
     info!("LLM driver: sending initial world state");
     match invoker.send_message(&initial_prompt).await {
@@ -452,16 +466,14 @@ pub async fn llm_driver(
         }
 
         // Periodic prompt — use short interval only when recently active (chat/combat)
-        let active = attack_target.is_some()
-            || last_activity_at.elapsed() < activity_window;
+        let active = attack_target.is_some() || last_activity_at.elapsed() < activity_window;
         let effective_interval = if active { min_interval } else { idle_interval };
         if prompt_pending_since.is_none() && last_prompt_at.elapsed() >= effective_interval {
             prompt_pending_since = Some(Instant::now());
         }
 
         // Debounce: wait at least `debounce` after the trigger before actually prompting
-        let ready_to_prompt = prompt_pending_since
-            .is_some_and(|t| t.elapsed() >= debounce);
+        let ready_to_prompt = prompt_pending_since.is_some_and(|t| t.elapsed() >= debounce);
 
         if !ready_to_prompt {
             continue;
@@ -477,8 +489,9 @@ pub async fn llm_driver(
         let (prompt, has_events) = {
             let mut s = state.lock().await;
             let events = s.drain_events();
-            let has_events = !events.is_empty();
-            let prompt = build_prompt(&*s, &events);
+            let agent_events = s.drain_agent_events();
+            let has_events = !events.is_empty() || !agent_events.is_empty();
+            let prompt = build_prompt(&*s, &events, &agent_events);
             (prompt, has_events)
         };
 
@@ -489,9 +502,7 @@ pub async fn llm_driver(
         // Spawn LLM call as background task (doesn't block combat ticks)
         info!("LLM driver: sending prompt ({} chars)", prompt.len());
         let inv = Arc::clone(&invoker);
-        llm_in_flight = Some(tokio::spawn(async move {
-            inv.send_message(&prompt).await
-        }));
+        llm_in_flight = Some(tokio::spawn(async move { inv.send_message(&prompt).await }));
     }
 }
 
@@ -590,9 +601,7 @@ async fn chase_monster(state: &Arc<Mutex<SharedState>>, monster_id: &str) -> Cha
         let shift = (dx * dx + dz * dz).sqrt();
 
         if shift > REROUTE_THRESHOLD || last_target.x == 0.0 && last_target.z == 0.0 {
-            debug!(
-                "Chase {monster_id}: sending move (monster shifted {shift:.1} units)"
-            );
+            debug!("Chase {monster_id}: sending move (monster shifted {shift:.1} units)");
             last_target = new_target;
             let mut s = state.lock().await;
             if let Err(e) = s.send_command(cmd).await {
@@ -630,10 +639,7 @@ fn load_attack_cooldown() -> Duration {
         return Duration::from_millis(DEFAULT_ATTACK_COOLDOWN_MS);
     };
 
-    if let Some(duration_secs) = data
-        .get("combat_melee")
-        .and_then(|m| m.get("slash1"))
-    {
+    if let Some(duration_secs) = data.get("combat_melee").and_then(|m| m.get("slash1")) {
         let ms = (*duration_secs * 1000.0) as u64;
         info!("Loaded attack cooldown from animation data: {ms}ms");
         Duration::from_millis(ms)
@@ -712,10 +718,7 @@ fn compute_face_monster(state: &SharedState, monster_id: &str) -> Option<ClientM
 
 /// If the agent is too far from the target monster, return a PlayerMove command
 /// and the estimated travel time in seconds (based on client walk speed).
-fn compute_move_to_monster(
-    state: &SharedState,
-    monster_id: &str,
-) -> Option<(ClientMessage, f32)> {
+fn compute_move_to_monster(state: &SharedState, monster_id: &str) -> Option<(ClientMessage, f32)> {
     let monster = state.nearby_monsters.get(monster_id)?;
     let self_player = state.self_player.as_ref()?;
 

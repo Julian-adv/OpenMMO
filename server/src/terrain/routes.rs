@@ -187,13 +187,10 @@ async fn put_minimap(
     State(terrain): State<Arc<TerrainIO>>,
     body: Bytes,
 ) -> Result<StatusCode, StatusCode> {
-    terrain
-        .write_minimap(rx, rz, &body)
-        .await
-        .map_err(|e| {
-            error!("Failed to write minimap ({}, {}): {}", rx, rz, e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    terrain.write_minimap(rx, rz, &body).await.map_err(|e| {
+        error!("Failed to write minimap ({}, {}): {}", rx, rz, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -201,12 +198,9 @@ async fn delete_region_handler(
     Path((rx, rz)): Path<(i32, i32)>,
     State(terrain): State<Arc<TerrainIO>>,
 ) -> Result<StatusCode, StatusCode> {
-    terrain
-        .delete_region(rx, rz)
-        .await
-        .map_err(|e| {
-            error!("Failed to delete region ({}, {}): {}", rx, rz, e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    terrain.delete_region(rx, rz).await.map_err(|e| {
+        error!("Failed to delete region ({}, {}): {}", rx, rz, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }

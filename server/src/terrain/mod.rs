@@ -1,7 +1,3 @@
-pub mod coords;
-pub mod defaults;
-pub mod io;
-pub mod routes;
+pub use onlinerpg_terrain::io;
 
-#[cfg(test)]
-mod tests;
+pub mod routes;

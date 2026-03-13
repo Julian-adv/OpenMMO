@@ -152,7 +152,10 @@ impl LlmBackend for OpenRouterInvoker {
             *messages = std::iter::once(system)
                 .chain(messages[keep_from..].iter().cloned())
                 .collect();
-            warn!("OpenRouter: trimmed conversation history to {} messages", messages.len());
+            warn!(
+                "OpenRouter: trimmed conversation history to {} messages",
+                messages.len()
+            );
         }
 
         let request = ChatRequest {
@@ -181,8 +184,9 @@ impl LlmBackend for OpenRouterInvoker {
             anyhow::bail!("OpenRouter API error (HTTP {status}): {body}");
         }
 
-        let chat_response: ChatResponse = serde_json::from_str(&body)
-            .map_err(|e| anyhow::anyhow!("Failed to parse OpenRouter response: {e}\nRaw: {body}"))?;
+        let chat_response: ChatResponse = serde_json::from_str(&body).map_err(|e| {
+            anyhow::anyhow!("Failed to parse OpenRouter response: {e}\nRaw: {body}")
+        })?;
 
         let result = chat_response
             .choices

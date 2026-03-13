@@ -10,14 +10,16 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use claude::ClaudeConfig;
+use codex::CodexConfig;
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{
     deserialize_server_msg, serialize_client_msg, ClientMessage, ServerMessage,
 };
-use codex::CodexConfig;
+use onlinerpg_terrain::height::HeightSampler;
+use onlinerpg_terrain::io::TerrainIO;
 use openrouter::OpenRouterConfig;
-use state::SharedState;
 use serde::Deserialize;
+use state::SharedState;
 use tokio::sync::{mpsc, Mutex};
 use tokio_tungstenite::tungstenite::Message;
 use tracing::{error, info, warn};
@@ -77,6 +79,13 @@ struct Config {
     /// Codex CLI integration config
     #[serde(default)]
     codex: CodexConfig,
+    /// Path to terrain data directory (for heightmap sampling)
+    #[serde(default = "default_terrain_dir")]
+    terrain_dir: String,
+}
+
+fn default_terrain_dir() -> String {
+    "../data/terrain".to_string()
 }
 
 fn default_mcp_port() -> u16 {
@@ -100,7 +109,6 @@ fn default_activity_window_secs() -> u64 {
 }
 
 const CONFIG_PATH: &str = "data/config.toml";
-
 
 /// FNV-1a 32-bit hash (matches the JS client implementation)
 fn fnv1a_hash(input: &str) -> String {
@@ -134,10 +142,16 @@ async fn main() -> anyhow::Result<()> {
     loop {
         match run_session(&config).await {
             Ok(()) => {
-                info!("Session ended cleanly. Reconnecting in {}s...", RECONNECT_DELAY.as_secs());
+                info!(
+                    "Session ended cleanly. Reconnecting in {}s...",
+                    RECONNECT_DELAY.as_secs()
+                );
             }
             Err(e) => {
-                warn!("Session failed: {e}. Reconnecting in {}s...", RECONNECT_DELAY.as_secs());
+                warn!(
+                    "Session failed: {e}. Reconnecting in {}s...",
+                    RECONNECT_DELAY.as_secs()
+                );
             }
         }
         tokio::time::sleep(RECONNECT_DELAY).await;
@@ -151,18 +165,30 @@ async fn run_mcp_mode(config: &Config) -> anyhow::Result<()> {
     let ws_stream = connect_ws(&config.server).await;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
-    send(&mut ws_tx, &ClientMessage::Authenticate {
-        account_name: config.account.clone(),
-        password_hash,
-        create_account: config.create_account,
-    }).await?;
+    send(
+        &mut ws_tx,
+        &ClientMessage::Authenticate {
+            account_name: config.account.clone(),
+            password_hash,
+            create_account: config.create_account,
+        },
+    )
+    .await?;
 
     let characters = wait_for_auth(&mut ws_rx).await?;
 
     let (cmd_tx, _cmd_rx) = mpsc::channel::<ClientMessage>(32);
-    let state = Arc::new(Mutex::new(SharedState::new(characters, cmd_tx)));
+    let height_sampler = create_height_sampler(&config.terrain_dir);
+    let state = Arc::new(Mutex::new(SharedState::new(
+        characters,
+        cmd_tx,
+        height_sampler,
+    )));
 
-    info!("No character_id configured — starting MCP HTTP server on port {}...", config.mcp_port);
+    info!(
+        "No character_id configured — starting MCP HTTP server on port {}...",
+        config.mcp_port
+    );
     mcp::run_mcp_server(state, config.mcp_port).await
 }
 
@@ -175,11 +201,15 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
     // Authenticate
-    send(&mut ws_tx, &ClientMessage::Authenticate {
-        account_name: config.account.clone(),
-        password_hash,
-        create_account: config.create_account,
-    }).await?;
+    send(
+        &mut ws_tx,
+        &ClientMessage::Authenticate {
+            account_name: config.account.clone(),
+            password_hash,
+            create_account: config.create_account,
+        },
+    )
+    .await?;
 
     let characters = wait_for_auth(&mut ws_rx).await?;
 
@@ -194,13 +224,24 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
     };
 
     if let Some(char_id) = enter_char_id {
-        send(&mut ws_tx, &ClientMessage::EnterGame { character_id: char_id }).await?;
+        send(
+            &mut ws_tx,
+            &ClientMessage::EnterGame {
+                character_id: char_id,
+            },
+        )
+        .await?;
         info!("Entering game with character {char_id}...");
     }
 
     // Set up shared state and command channel
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
-    let state = Arc::new(Mutex::new(SharedState::new(characters, cmd_tx)));
+    let height_sampler = create_height_sampler(&config.terrain_dir);
+    let state = Arc::new(Mutex::new(SharedState::new(
+        characters,
+        cmd_tx,
+        height_sampler,
+    )));
 
     // Background task: forward commands from channel to WebSocket
     let tx_task = tokio::spawn(async move {
@@ -225,8 +266,19 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
                         continue;
                     }
 
+                    let needs_height_sync = matches!(
+                        msg,
+                        ServerMessage::JoinSuccess { .. } | ServerMessage::PlayerRespawned { .. }
+                    );
+
                     let mut s = state_for_rx.lock().await;
                     s.push_event(msg);
+
+                    if needs_height_sync {
+                        if let Err(e) = s.sync_height().await {
+                            warn!("Failed to sync height after spawn: {e}");
+                        }
+                    }
                 }
                 Err(e) => {
                     error!("Connection lost: {e}");
@@ -239,7 +291,10 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
     // Start LLM driver based on configured backend
     let llm_task = match config.llm {
         LlmType::Claude => {
-            info!("Claude CLI integration enabled (model={})", config.claude.model);
+            info!(
+                "Claude CLI integration enabled (model={})",
+                config.claude.model
+            );
             let state_for_llm = Arc::clone(&state);
             let min_interval = Duration::from_secs(config.min_interval_secs);
             let debounce = Duration::from_secs(config.debounce_secs);
@@ -247,7 +302,15 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
             let activity_window = Duration::from_secs(config.activity_window_secs);
             match claude::ClaudeInvoker::new(&config.claude) {
                 Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce, idle_interval, activity_window).await;
+                    driver::llm_driver(
+                        state_for_llm,
+                        Arc::new(invoker),
+                        min_interval,
+                        debounce,
+                        idle_interval,
+                        activity_window,
+                    )
+                    .await;
                 })),
                 Err(e) => {
                     error!("Failed to create Claude invoker: {e}");
@@ -256,7 +319,10 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
             }
         }
         LlmType::Openrouter => {
-            info!("OpenRouter API integration enabled (model={})", config.openrouter.model);
+            info!(
+                "OpenRouter API integration enabled (model={})",
+                config.openrouter.model
+            );
             let state_for_llm = Arc::clone(&state);
             let min_interval = Duration::from_secs(config.min_interval_secs);
             let debounce = Duration::from_secs(config.debounce_secs);
@@ -264,7 +330,15 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
             let activity_window = Duration::from_secs(config.activity_window_secs);
             match openrouter::OpenRouterInvoker::new(&config.openrouter) {
                 Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce, idle_interval, activity_window).await;
+                    driver::llm_driver(
+                        state_for_llm,
+                        Arc::new(invoker),
+                        min_interval,
+                        debounce,
+                        idle_interval,
+                        activity_window,
+                    )
+                    .await;
                 })),
                 Err(e) => {
                     error!("Failed to create OpenRouter invoker: {e}");
@@ -273,7 +347,10 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
             }
         }
         LlmType::Codex => {
-            info!("Codex CLI integration enabled (model={})", config.codex.model);
+            info!(
+                "Codex CLI integration enabled (model={})",
+                config.codex.model
+            );
             let state_for_llm = Arc::clone(&state);
             let min_interval = Duration::from_secs(config.min_interval_secs);
             let debounce = Duration::from_secs(config.debounce_secs);
@@ -281,7 +358,15 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
             let activity_window = Duration::from_secs(config.activity_window_secs);
             match codex::CodexInvoker::new(&config.codex) {
                 Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce, idle_interval, activity_window).await;
+                    driver::llm_driver(
+                        state_for_llm,
+                        Arc::new(invoker),
+                        min_interval,
+                        debounce,
+                        idle_interval,
+                        activity_window,
+                    )
+                    .await;
                 })),
                 Err(e) => {
                     error!("Failed to create Codex invoker: {e}");
@@ -310,8 +395,14 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn create_height_sampler(terrain_dir: &str) -> HeightSampler {
+    HeightSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain_dir)))
+}
+
 /// Connect to WebSocket with retry loop.
-async fn connect_ws(url: &str) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>> {
+async fn connect_ws(
+    url: &str,
+) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>> {
     loop {
         info!("Connecting to {url}");
         match tokio_tungstenite::connect_async(url).await {

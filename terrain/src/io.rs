@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use tokio::fs;
 use tracing::warn;
 
-use super::coords;
-use super::defaults;
+use crate::coords;
+use crate::defaults;
 
 pub struct TerrainIO {
     base_dir: PathBuf,
@@ -12,6 +12,10 @@ pub struct TerrainIO {
 impl TerrainIO {
     pub fn new(base_dir: PathBuf) -> Self {
         Self { base_dir }
+    }
+
+    pub fn base_dir(&self) -> &PathBuf {
+        &self.base_dir
     }
 
     pub async fn read_heightmap(&self, tx: i32, tz: i32) -> std::io::Result<Vec<u8>> {
@@ -145,13 +149,21 @@ impl TerrainIO {
         Ok(())
     }
 
-    pub async fn write_meta(&self, rx: i32, rz: i32, json: &serde_json::Value) -> std::io::Result<()> {
-        let layers = json.get("layers")
+    pub async fn write_meta(
+        &self,
+        rx: i32,
+        rz: i32,
+        json: &serde_json::Value,
+    ) -> std::io::Result<()> {
+        let layers = json
+            .get("layers")
             .and_then(|l| l.as_array())
-            .ok_or_else(|| std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "meta must contain \"layers\" array",
-            ))?;
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "meta must contain \"layers\" array",
+                )
+            })?;
         if layers.len() != 4 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,

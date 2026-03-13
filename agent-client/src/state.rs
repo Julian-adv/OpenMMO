@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
-use onlinerpg_shared::{ClientMessage, Character, Monster, Player, ServerMessage};
-use tokio::sync::{mpsc, Notify};
+use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
+use onlinerpg_terrain::height::HeightSampler;
 use std::sync::Arc;
+use tokio::sync::{mpsc, Notify};
 
 const MAX_EVENTS: usize = 200;
+/// Distance threshold for "player appeared nearby" agent events (in game units).
+const NEARBY_PLAYER_RADIUS: f32 = 10.0;
 
 /// How urgently an event needs LLM attention.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -36,13 +39,23 @@ pub struct SharedState {
     latest_player_moves: HashMap<String, ServerMessage>,
     /// Latest game time — only the most recent matters
     latest_time: Option<ServerMessage>,
+    /// Players we've already seen within NEARBY_PLAYER_RADIUS — prevents duplicate events
+    seen_nearby_players: HashSet<String>,
+    /// Synthetic agent-side events (e.g. "player appeared nearby")
+    agent_events: Vec<String>,
+    /// Terrain height sampler for correcting Y coordinates
+    pub height_sampler: HeightSampler,
     cmd_tx: mpsc::Sender<ClientMessage>,
     /// Notified when an urgent event arrives
     pub urgent_notify: Arc<Notify>,
 }
 
 impl SharedState {
-    pub fn new(characters: Vec<Character>, cmd_tx: mpsc::Sender<ClientMessage>) -> Self {
+    pub fn new(
+        characters: Vec<Character>,
+        cmd_tx: mpsc::Sender<ClientMessage>,
+        height_sampler: HeightSampler,
+    ) -> Self {
         Self {
             characters,
             in_game: false,
@@ -54,27 +67,111 @@ impl SharedState {
             latest_monster_moves: HashMap::new(),
             latest_player_moves: HashMap::new(),
             latest_time: None,
+            seen_nearby_players: HashSet::new(),
+            agent_events: Vec::new(),
+            height_sampler,
             cmd_tx,
             urgent_notify: Arc::new(Notify::new()),
         }
     }
 
+    /// Check all nearby players and emit an agent event for any player
+    /// that just entered NEARBY_PLAYER_RADIUS for the first time.
+    fn check_nearby_player_proximity(&mut self) {
+        let self_pos = match self.self_player.as_ref() {
+            Some(p) => &p.position,
+            None => return,
+        };
+        let self_id = match self.self_player_id.as_deref() {
+            Some(id) => id,
+            None => return,
+        };
+
+        for (pid, player) in &self.nearby_players {
+            if pid.as_str() == self_id {
+                continue;
+            }
+            if self.seen_nearby_players.contains(pid) {
+                continue;
+            }
+            let dx = player.position.x - self_pos.x;
+            let dz = player.position.z - self_pos.z;
+            let dist = (dx * dx + dz * dz).sqrt();
+            if dist <= NEARBY_PLAYER_RADIUS {
+                self.seen_nearby_players.insert(pid.clone());
+                self.agent_events.push(format!(
+                    "[PlayerNearby] {} Lv.{} appeared {:.1}m away at ({:.1}, {:.1}, {:.1})",
+                    player.name,
+                    player.level,
+                    dist,
+                    player.position.x,
+                    player.position.y,
+                    player.position.z
+                ));
+                self.urgent_notify.notify_one();
+            }
+        }
+    }
+
     pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
-        // Update local position immediately so subsequent reads don't use stale data
-        if let ClientMessage::PlayerMove {
-            ref position,
+        // Correct Y coordinate for PlayerMove using terrain height
+        let msg = if let ClientMessage::PlayerMove {
+            mut position,
             rotation,
         } = msg
         {
+            let original_y = position.y;
+            match self
+                .height_sampler
+                .sample_height(position.x, position.z)
+                .await
+            {
+                Ok(terrain_y) => {
+                    tracing::debug!(
+                        "Height correction: ({:.1}, {:.1}) y: {:.2} -> {:.2}",
+                        position.x,
+                        position.z,
+                        original_y,
+                        terrain_y
+                    );
+                    position.y = terrain_y;
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to sample terrain height at ({:.1}, {:.1}): {e}",
+                        position.x,
+                        position.z
+                    );
+                }
+            }
+            // Update local position immediately so subsequent reads don't use stale data
             if let Some(ref mut p) = self.self_player {
                 p.position = position.clone();
                 p.rotation = rotation;
             }
-        }
+            ClientMessage::PlayerMove { position, rotation }
+        } else {
+            msg
+        };
         self.cmd_tx
             .send(msg)
             .await
             .map_err(|e| anyhow::anyhow!("Command channel closed: {e}"))
+    }
+
+    /// Send a position sync to correct Y to terrain height.
+    /// Should be called after JoinSuccess or PlayerRespawned to snap to ground.
+    pub async fn sync_height(&mut self) -> anyhow::Result<()> {
+        let Some(ref p) = self.self_player else {
+            return Ok(());
+        };
+        let pos = p.position.clone();
+        let rotation = p.rotation;
+        self.send_command(ClientMessage::PlayerMove {
+            position: pos,
+            rotation,
+        })
+        .await
     }
 
     /// Classify how urgent a server event is for LLM processing.
@@ -172,16 +269,19 @@ impl SharedState {
                 }
             }
             ServerMessage::PlayerJoined { player } => {
-                self.nearby_players.insert(player.id.clone(), player.clone());
+                self.nearby_players
+                    .insert(player.id.clone(), player.clone());
             }
             ServerMessage::PlayerLeft { player_id } => {
                 self.nearby_players.remove(player_id);
+                self.seen_nearby_players.remove(player_id);
             }
             ServerMessage::MonsterSpawned { monster } => {
                 self.nearby_monsters
                     .insert(monster.id.clone(), monster.clone());
             }
-            ServerMessage::MonsterDead { monster_id } | ServerMessage::MonsterRemoved { monster_id } => {
+            ServerMessage::MonsterDead { monster_id }
+            | ServerMessage::MonsterRemoved { monster_id } => {
                 self.nearby_monsters.remove(monster_id);
             }
             ServerMessage::CharacterCreated { ref character } => {
@@ -214,18 +314,26 @@ impl SharedState {
             _ => {}
         }
 
+        // Check if any player just entered the nearby radius
+        match &msg {
+            ServerMessage::GameState { .. }
+            | ServerMessage::PlayerJoined { .. }
+            | ServerMessage::PlayerMoved { .. } => {
+                self.check_nearby_player_proximity();
+            }
+            _ => {}
+        }
+
         let urgency = self.classify_event(&msg);
 
         // Deduplicate high-frequency movement events: keep only latest per entity
         match &msg {
             ServerMessage::MonsterMoved { monster_id, .. } => {
-                self.latest_monster_moves
-                    .insert(monster_id.clone(), msg);
+                self.latest_monster_moves.insert(monster_id.clone(), msg);
                 return urgency;
             }
             ServerMessage::PlayerMoved { player_id, .. } => {
-                self.latest_player_moves
-                    .insert(player_id.clone(), msg);
+                self.latest_player_moves.insert(player_id.clone(), msg);
                 return urgency;
             }
             ServerMessage::GameTimeSync { .. } => {
@@ -264,6 +372,11 @@ impl SharedState {
         events
     }
 
+    /// Drain synthetic agent-side events (e.g. player proximity alerts).
+    pub fn drain_agent_events(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.agent_events)
+    }
+
     /// Build a text summary of current world state for the LLM prompt.
     pub fn format_world_state(&self) -> String {
         let mut lines = Vec::new();
@@ -271,8 +384,14 @@ impl SharedState {
         if let Some(ref p) = self.self_player {
             lines.push(format!(
                 "You: {} Lv.{} {:?} HP {}/{} at ({:.1}, {:.1}, {:.1})",
-                p.name, p.level, p.class, p.health, p.max_health,
-                p.position.x, p.position.y, p.position.z
+                p.name,
+                p.level,
+                p.class,
+                p.health,
+                p.max_health,
+                p.position.x,
+                p.position.y,
+                p.position.z
             ));
         }
 
@@ -283,8 +402,7 @@ impl SharedState {
             }
             lines.push(format!(
                 "Player: {} Lv.{} HP {}/{} at ({:.1}, {:.1}, {:.1})",
-                p.name, p.level, p.health, p.max_health,
-                p.position.x, p.position.y, p.position.z
+                p.name, p.level, p.health, p.max_health, p.position.x, p.position.y, p.position.z
             ));
         }
 
@@ -292,8 +410,14 @@ impl SharedState {
         for m in self.nearby_monsters.values() {
             lines.push(format!(
                 "Monster: {} [{}] HP {}/{} state={} at ({:.1}, {:.1}, {:.1})",
-                m.monster_type, m.id, m.health, m.max_health, m.state,
-                m.position.x, m.position.y, m.position.z
+                m.monster_type,
+                m.id,
+                m.health,
+                m.max_health,
+                m.state,
+                m.position.x,
+                m.position.y,
+                m.position.z
             ));
         }
 
