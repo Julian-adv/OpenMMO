@@ -56,6 +56,18 @@ struct Config {
     /// LLM backend type: "none", "claude", "openrouter", "codex"
     #[serde(default)]
     llm: LlmType,
+    /// Minimum interval between LLM prompts in seconds
+    #[serde(default = "default_min_interval_secs")]
+    min_interval_secs: u64,
+    /// Debounce window for batching urgent events in seconds
+    #[serde(default = "default_debounce_secs")]
+    debounce_secs: u64,
+    /// Idle interval (secs): LLM call frequency when no chat/combat activity
+    #[serde(default = "default_idle_interval_secs")]
+    idle_interval_secs: u64,
+    /// Activity window (secs): how long after last chat/combat to stay in active mode
+    #[serde(default = "default_activity_window_secs")]
+    activity_window_secs: u64,
     /// Claude CLI integration config
     #[serde(default)]
     claude: ClaudeConfig,
@@ -69,6 +81,22 @@ struct Config {
 
 fn default_mcp_port() -> u16 {
     8808
+}
+
+fn default_min_interval_secs() -> u64 {
+    5
+}
+
+fn default_debounce_secs() -> u64 {
+    2
+}
+
+fn default_idle_interval_secs() -> u64 {
+    3600
+}
+
+fn default_activity_window_secs() -> u64 {
+    30
 }
 
 const CONFIG_PATH: &str = "data/config.toml";
@@ -213,11 +241,13 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
         LlmType::Claude => {
             info!("Claude CLI integration enabled (model={})", config.claude.model);
             let state_for_llm = Arc::clone(&state);
-            let min_interval = Duration::from_secs(config.claude.min_interval_secs);
-            let debounce = Duration::from_secs(config.claude.debounce_secs);
+            let min_interval = Duration::from_secs(config.min_interval_secs);
+            let debounce = Duration::from_secs(config.debounce_secs);
+            let idle_interval = Duration::from_secs(config.idle_interval_secs);
+            let activity_window = Duration::from_secs(config.activity_window_secs);
             match claude::ClaudeInvoker::new(&config.claude) {
                 Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce).await;
+                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce, idle_interval, activity_window).await;
                 })),
                 Err(e) => {
                     error!("Failed to create Claude invoker: {e}");
@@ -228,11 +258,13 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
         LlmType::Openrouter => {
             info!("OpenRouter API integration enabled (model={})", config.openrouter.model);
             let state_for_llm = Arc::clone(&state);
-            let min_interval = Duration::from_secs(config.openrouter.min_interval_secs);
-            let debounce = Duration::from_secs(config.openrouter.debounce_secs);
+            let min_interval = Duration::from_secs(config.min_interval_secs);
+            let debounce = Duration::from_secs(config.debounce_secs);
+            let idle_interval = Duration::from_secs(config.idle_interval_secs);
+            let activity_window = Duration::from_secs(config.activity_window_secs);
             match openrouter::OpenRouterInvoker::new(&config.openrouter) {
                 Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce).await;
+                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce, idle_interval, activity_window).await;
                 })),
                 Err(e) => {
                     error!("Failed to create OpenRouter invoker: {e}");
@@ -243,11 +275,13 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
         LlmType::Codex => {
             info!("Codex CLI integration enabled (model={})", config.codex.model);
             let state_for_llm = Arc::clone(&state);
-            let min_interval = Duration::from_secs(config.codex.min_interval_secs);
-            let debounce = Duration::from_secs(config.codex.debounce_secs);
+            let min_interval = Duration::from_secs(config.min_interval_secs);
+            let debounce = Duration::from_secs(config.debounce_secs);
+            let idle_interval = Duration::from_secs(config.idle_interval_secs);
+            let activity_window = Duration::from_secs(config.activity_window_secs);
             match codex::CodexInvoker::new(&config.codex) {
                 Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce).await;
+                    driver::llm_driver(state_for_llm, Arc::new(invoker), min_interval, debounce, idle_interval, activity_window).await;
                 })),
                 Err(e) => {
                     error!("Failed to create Codex invoker: {e}");

@@ -349,6 +349,8 @@ pub async fn llm_driver(
     invoker: Arc<dyn LlmBackend>,
     min_interval: Duration,
     debounce: Duration,
+    idle_interval: Duration,
+    activity_window: Duration,
 ) {
     let urgent_notify = {
         let s = state.lock().await;
@@ -375,6 +377,8 @@ pub async fn llm_driver(
     let mut last_attack_at = Instant::now() - attack_cooldown;
     let mut llm_in_flight: Option<tokio::task::JoinHandle<anyhow::Result<String>>> = None;
     let mut prompt_pending_since: Option<Instant> = None;
+    // Track last chat/combat activity to decide polling interval
+    let mut last_activity_at = Instant::now() - idle_interval;
 
     // Send initial world state (blocking is fine here, no combat yet)
     let initial_prompt = {
@@ -403,6 +407,7 @@ pub async fn llm_driver(
         tokio::select! {
             _ = urgent_notify.notified() => {
                 debug!("LLM driver: urgent event received");
+                last_activity_at = Instant::now();
                 // Mark that we want to prompt soon (start debounce window)
                 if prompt_pending_since.is_none() && llm_in_flight.is_none() {
                     prompt_pending_since = Some(Instant::now());
@@ -446,8 +451,11 @@ pub async fn llm_driver(
             continue;
         }
 
-        // Periodic prompt if min_interval has passed
-        if prompt_pending_since.is_none() && last_prompt_at.elapsed() >= min_interval {
+        // Periodic prompt — use short interval only when recently active (chat/combat)
+        let active = attack_target.is_some()
+            || last_activity_at.elapsed() < activity_window;
+        let effective_interval = if active { min_interval } else { idle_interval };
+        if prompt_pending_since.is_none() && last_prompt_at.elapsed() >= effective_interval {
             prompt_pending_since = Some(Instant::now());
         }
 

@@ -15,12 +15,6 @@ pub struct OpenRouterConfig {
     /// Model identifier (e.g. "google/gemini-2.0-flash-001", "meta-llama/llama-3-70b-instruct")
     #[serde(default = "default_openrouter_model")]
     pub model: String,
-    /// Minimum interval between prompts in seconds (default: 5)
-    #[serde(default = "default_min_interval")]
-    pub min_interval_secs: u64,
-    /// Debounce window for batching urgent events in seconds (default: 2)
-    #[serde(default = "default_debounce")]
-    pub debounce_secs: u64,
     /// Path to system prompt file (default: "data/system_prompt.txt")
     #[serde(default = "default_system_prompt_file")]
     pub system_prompt_file: String,
@@ -34,12 +28,6 @@ pub struct OpenRouterConfig {
 
 fn default_openrouter_model() -> String {
     "openrouter/hunter-alpha".to_string()
-}
-fn default_min_interval() -> u64 {
-    5
-}
-fn default_debounce() -> u64 {
-    2
 }
 fn default_system_prompt_file() -> String {
     "data/system_prompt.txt".to_string()
@@ -56,8 +44,6 @@ impl Default for OpenRouterConfig {
         Self {
             api_key: String::new(),
             model: default_openrouter_model(),
-            min_interval_secs: default_min_interval(),
-            debounce_secs: default_debounce(),
             system_prompt_file: default_system_prompt_file(),
             max_tokens: default_max_tokens(),
             temperature: default_temperature(),

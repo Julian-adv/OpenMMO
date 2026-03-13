@@ -25,11 +25,15 @@ create_account = false
 # - codex: Codex CLI (stdio subprocess)
 llm = "none"
 
+# LLM timing (seconds)
+min_interval_secs = 5                       # Minimum seconds between prompts (active mode)
+debounce_secs = 2                           # Extra wait to batch events after trigger
+idle_interval_secs = 3600                   # Interval when no chat/combat activity (idle mode)
+activity_window_secs = 30                   # How long after last activity to stay in active mode
+
 # Claude CLI settings (used when llm = "claude")
 [claude]
 model = "sonnet"                            # "sonnet", "opus", "haiku", or full model ID
-min_interval_secs = 5                       # Minimum seconds between prompts (includes debounce)
-debounce_secs = 2                           # Extra wait to batch events when min_interval already passed
 system_prompt_file = "data/system_prompt.txt"  # Path to system prompt file
 
 # OpenRouter API settings (used when llm = "openrouter")
@@ -37,8 +41,6 @@ system_prompt_file = "data/system_prompt.txt"  # Path to system prompt file
 [openrouter]
 # api_key = "sk-or-..."                        # Or set OPENROUTER_API_KEY env var
 model = "openrouter/hunter-alpha"              # Any model ID from openrouter.ai/models
-min_interval_secs = 5
-debounce_secs = 2
 system_prompt_file = "data/system_prompt.txt"
 max_tokens = 1024                              # Max response tokens
 temperature = 0.7
@@ -47,6 +49,4 @@ temperature = 0.7
 # Requires `codex` CLI installed (npm i -g @openai/codex) and OPENAI_API_KEY set.
 [codex]
 model = "o4-mini"                                # Any OpenAI model ID
-min_interval_secs = 5
-debounce_secs = 2
 system_prompt_file = "data/system_prompt.txt"

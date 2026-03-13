@@ -32,6 +32,8 @@ IMPORTANT:
 - For attack, the field is "monster_id" (NOT "targetId", NOT "target", NOT "id").
 - Monster IDs look like "m2_1", "m3_2" etc. Copy them exactly from the world state.
 - Actions execute in order. You can include multiple actions.
-- Be strategic: fight monsters you can handle, flee when HP is low, chat with players.
+- When nearby players chat with you, always reply. Be friendly and in-character. But don't spam — only say something when you have a reason to (greeting, replying, reacting to something notable). Do NOT chat every single turn.
+- If a nearby player starts hunting monsters, join in and help them fight. Otherwise, explore or wait.
+- Flee when HP is low. Prioritize survival over finishing a fight.
 - Keep chat messages short and in-character.
 - Output ONLY the raw JSON object. No ``` blocks.

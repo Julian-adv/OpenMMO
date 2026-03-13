@@ -107,6 +107,15 @@ impl SharedState {
             // Urgent: kicked
             ServerMessage::Kicked { .. } => EventUrgency::Urgent,
 
+            // Urgent: another player attacks a monster (so we can join in)
+            ServerMessage::PlayerAttacked { player_id, .. } => {
+                if self_id != Some(player_id.as_str()) {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Routine
+                }
+            }
+
             // Routine: world state changes
             ServerMessage::JoinSuccess { .. }
             | ServerMessage::GameState { .. }
@@ -118,7 +127,6 @@ impl SharedState {
             | ServerMessage::XpGained { .. }
             | ServerMessage::PlayerRespawned { .. }
             | ServerMessage::PlayerHealthUpdate { .. }
-            | ServerMessage::PlayerAttacked { .. }
             | ServerMessage::PlayerTorchToggled { .. } => EventUrgency::Routine,
 
             // Noise: high-frequency or irrelevant
