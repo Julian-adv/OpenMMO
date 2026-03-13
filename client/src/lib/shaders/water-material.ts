@@ -810,13 +810,16 @@ export function createWaterMaterial(
       .add(wetnessMapTex.sample(vUv.add(vec2(0, wTexelSize))).r)
       .add(wetnessMapTex.sample(vUv.add(vec2(0, wTexelSize.negate()))).r)
       .mul(0.25)
-    const wetness = smoothstep(float(0.4), float(0.8), rawWetness)
+    const wetness = smoothstep(float(0.2), float(0.7), rawWetness)
     // Only exclude the actual water hole, NOT foam fringe — otherwise a
     // visible gap forms between the shore foam and wet sand ("double line").
     const inHoleFactor = float(1).sub(holeAlpha)
     const wetMask = wetness.mul(inHoleFactor)
     const wetBlend = smoothstep(float(0.05), float(0.3), wetMask)
-    const wetTerrainColor = refractionColor.mul(0.5)
+    // Wetness intensity drives darkening: high wetness (near water) = dark,
+    // low wetness (decaying, land-side) = lighter tint
+    const wetDarken = mix(float(0.85), float(0.35), wetness)
+    const wetTerrainColor = refractionColor.mul(wetDarken)
     // Suppress color darkening where foam fringe is present — otherwise
     // partially mixing foam-bright finalColorBeforeRefl toward dark
     // wetTerrainColor creates a visible white band. Alpha is unaffected

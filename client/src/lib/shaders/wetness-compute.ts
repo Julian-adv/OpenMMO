@@ -15,7 +15,7 @@ import {
 
 const WETNESS_SIZE = 256
 /** Wetness decays to this fraction per second */
-const DECAY_RATE = 0.83
+const DECAY_RATE = 0.92
 
 export interface WetnessResult {
   /**
@@ -86,7 +86,7 @@ export function createWetnessSystem(
   // ── Decay pass: fullscreen quad combining captured alpha + previous wetness ──
   const rtOpts: THREE.RenderTargetOptions = {
     format: THREE.RGBAFormat,
-    type: THREE.UnsignedByteType,
+    type: THREE.HalfFloatType,
     minFilter: THREE.LinearFilter,
     magFilter: THREE.LinearFilter,
     depthBuffer: false,
@@ -121,8 +121,8 @@ export function createWetnessSystem(
     const prev = prevWetnessNode.sample(prevUV).r
     const decay = pow(float(DECAY_RATE), uDeltaTime)
     const decayed = prev.mul(decay)
-    // Cut off low values to prevent 8-bit quantization from keeping faint wetness forever
-    const cleaned = decayed.mul(step(float(0.02), decayed))
+    // Cut off near-zero values so they don't linger indefinitely
+    const cleaned = decayed.mul(step(float(0.01), decayed))
     const newVal = max(waterAlpha, cleaned)
     return vec4(newVal, 0, 0, 1)
   })()
