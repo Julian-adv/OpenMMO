@@ -34,7 +34,15 @@ pub enum AgentAction {
         monster_id: String,
     },
     #[serde(rename = "move")]
-    Move { x: f32, y: f32, z: f32 },
+    Move {
+        // Absolute coordinates (preferred)
+        x: Option<f32>,
+        y: Option<f32>,
+        z: Option<f32>,
+        // Direction + distance fallback (LLMs sometimes use this)
+        direction: Option<String>,
+        distance: Option<f32>,
+    },
     #[serde(rename = "respawn")]
     Respawn,
     #[serde(rename = "wait", alias = "idle", alias = "observe", alias = "none")]
@@ -234,7 +242,11 @@ fn extract_json(text: &str) -> &str {
 }
 
 /// Convert an AgentAction into a ClientMessage for the game server.
-pub fn action_to_command(action: &AgentAction) -> Option<ClientMessage> {
+/// `player_pos` is needed to resolve relative move directions and to compute rotation.
+pub fn action_to_command(
+    action: &AgentAction,
+    player_pos: Option<&onlinerpg_shared::Position>,
+) -> Option<ClientMessage> {
     match action {
         AgentAction::Say { message } => Some(ClientMessage::ChatMessage {
             message: message.clone(),
@@ -242,16 +254,66 @@ pub fn action_to_command(action: &AgentAction) -> Option<ClientMessage> {
         AgentAction::Attack { monster_id } => Some(ClientMessage::PlayerAttack {
             monster_id: monster_id.clone(),
         }),
-        AgentAction::Move { x, y, z } => Some(ClientMessage::PlayerMove {
-            position: onlinerpg_shared::Position {
-                x: *x,
-                y: *y,
-                z: *z,
-            },
-            rotation: 0.0,
-        }),
+        AgentAction::Move {
+            x,
+            y,
+            z,
+            direction,
+            distance,
+        } => {
+            let pos = if let (Some(x), Some(z)) = (x, z) {
+                // Absolute coordinates
+                let y = y.unwrap_or_else(|| {
+                    player_pos.map(|p| p.y).unwrap_or(0.0)
+                });
+                onlinerpg_shared::Position { x: *x, y, z: *z }
+            } else if let (Some(dir), Some(dist), Some(pp)) =
+                (direction.as_deref(), distance, player_pos)
+            {
+                // Direction + distance relative to current position
+                let (dx, dz) = direction_to_offset(dir);
+                onlinerpg_shared::Position {
+                    x: pp.x + dx * dist,
+                    y: pp.y,
+                    z: pp.z + dz * dist,
+                }
+            } else {
+                warn!("Move action missing coordinates and direction/distance, skipping");
+                return None;
+            };
+            // Compute rotation toward target
+            let rotation = if let Some(pp) = player_pos {
+                let dx = pos.x - pp.x;
+                let dz = pos.z - pp.z;
+                dz.atan2(dx)
+            } else {
+                0.0
+            };
+            Some(ClientMessage::PlayerMove {
+                position: pos,
+                rotation,
+            })
+        }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
         AgentAction::Wait => None,
+    }
+}
+
+/// Convert a cardinal/ordinal direction string to a (dx, dz) unit offset.
+fn direction_to_offset(dir: &str) -> (f32, f32) {
+    match dir.to_lowercase().as_str() {
+        "north" | "n" => (0.0, -1.0),
+        "south" | "s" => (0.0, 1.0),
+        "east" | "e" => (1.0, 0.0),
+        "west" | "w" => (-1.0, 0.0),
+        "northeast" | "ne" => (0.707, -0.707),
+        "northwest" | "nw" => (-0.707, -0.707),
+        "southeast" | "se" => (0.707, 0.707),
+        "southwest" | "sw" => (-0.707, 0.707),
+        _ => {
+            warn!("Unknown direction '{dir}', defaulting to north");
+            (0.0, -1.0)
+        }
     }
 }
 
@@ -455,6 +517,17 @@ async fn tick_combat(state: &Arc<Mutex<SharedState>>, monster_id: String) -> Opt
         tokio::time::sleep(wait).await;
     }
 
+    // Face the monster before attacking (matches web client behavior)
+    {
+        let mut s = state.lock().await;
+        if let Some(face_cmd) = compute_face_monster(&s, &monster_id) {
+            if let Err(e) = s.send_command(face_cmd).await {
+                error!("Failed to send face-monster move: {e}");
+                return None;
+            }
+        }
+    }
+
     // Send attack
     {
         let mut s = state.lock().await;
@@ -516,15 +589,45 @@ async fn handle_response(state: &Arc<Mutex<SharedState>>, response: &str) -> Opt
             last_attack_target = Some(monster_id.clone());
         }
 
-        if let Some(cmd) = action_to_command(action) {
+        // Face the monster before attacking (matches web client behavior)
+        if let AgentAction::Attack { monster_id } = action {
             let mut s = state.lock().await;
-            if let Err(e) = s.send_command(cmd).await {
-                error!("Failed to send agent command: {e}");
+            if let Some(face_cmd) = compute_face_monster(&s, monster_id) {
+                if let Err(e) = s.send_command(face_cmd).await {
+                    error!("Failed to send face-monster move: {e}");
+                }
+            }
+        }
+
+        {
+            let mut s = state.lock().await;
+            let player_pos = s.self_player.as_ref().map(|p| &p.position).cloned();
+            if let Some(cmd) = action_to_command(action, player_pos.as_ref()) {
+                if let Err(e) = s.send_command(cmd).await {
+                    error!("Failed to send agent command: {e}");
+                }
             }
         }
     }
 
     last_attack_target
+}
+
+/// Return a PlayerMove command at the current position but rotated to face the monster.
+/// Matches the web client's behavior of sending a position sync with facing rotation
+/// before each attack.
+fn compute_face_monster(state: &SharedState, monster_id: &str) -> Option<ClientMessage> {
+    let monster = state.nearby_monsters.get(monster_id)?;
+    let self_player = state.self_player.as_ref()?;
+
+    let dx = monster.position.x - self_player.position.x;
+    let dz = monster.position.z - self_player.position.z;
+    let rotation = dz.atan2(dx);
+
+    Some(ClientMessage::PlayerMove {
+        position: self_player.position.clone(),
+        rotation,
+    })
 }
 
 /// If the agent is too far from the target monster, return a PlayerMove command

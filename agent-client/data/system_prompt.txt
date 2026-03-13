@@ -16,8 +16,11 @@ Available action types (use EXACTLY these field names):
 2. Attack a monster (use the monster's ID from the world state, field name MUST be "monster_id"):
    {"type": "attack", "monster_id": "m2_1"}
 
-3. Move to position:
+3. Move to position (use exact coordinates from world state when possible):
    {"type": "move", "x": 10.0, "y": 0.0, "z": -5.0}
+   Or move by direction and distance:
+   {"type": "move", "direction": "north", "distance": 10.0}
+   Directions: north, south, east, west, northeast, northwest, southeast, southwest
 
 4. Respawn when dead:
    {"type": "respawn"}
