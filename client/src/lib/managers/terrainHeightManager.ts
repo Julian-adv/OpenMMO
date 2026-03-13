@@ -530,11 +530,13 @@ export class TerrainHeightManager {
 
   private async saveDirtyTiles() {
     const tilesToSave = [...this.dirtyTiles]
-    this.dirtyTiles.clear()
 
     for (const key of tilesToSave) {
       const data = this.heightmaps.get(key)
-      if (!data) continue
+      if (!data) {
+        this.dirtyTiles.delete(key)
+        continue
+      }
 
       const [txStr, tzStr] = key.split(',')
       const tx = parseInt(txStr)
@@ -552,10 +554,9 @@ export class TerrainHeightManager {
           headers: { 'Content-Type': 'application/octet-stream' },
           body,
         })
+        this.dirtyTiles.delete(key)
       } catch (e) {
         console.error(`Failed to save heightmap for tile (${tx}, ${tz}):`, e)
-        // Re-mark as dirty for retry
-        this.dirtyTiles.add(key)
       }
     }
   }
@@ -647,18 +648,21 @@ export class TerrainHeightManager {
     this.geometries.delete(key)
   }
 
-  /** Remove cached data without touching GPU resources (geometries may still be rendered). */
+  /** Remove cached data without touching GPU resources (geometries may still be rendered).
+   *  Refuses to evict if the tile has unsaved changes. */
   evictCachedData(tileX: number, tileZ: number) {
-    this.heightmaps.delete(tileKey(tileX, tileZ))
+    const key = tileKey(tileX, tileZ)
+    if (this.dirtyTiles.has(key)) return
+    this.heightmaps.delete(key)
   }
 
-  destroy() {
+  async destroy() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)
+      this.saveTimer = null
     }
-    // Save any remaining dirty tiles synchronously-ish
     if (this.dirtyTiles.size > 0) {
-      this.saveDirtyTiles()
+      await this.saveDirtyTiles()
     }
   }
 }
