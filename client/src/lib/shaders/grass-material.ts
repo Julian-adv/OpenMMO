@@ -102,10 +102,10 @@ export function createGrassMaterial(): {
   uniforms: GrassMaterialUniforms
 } {
   const uTime = uniform(0)
-  const uWindStrength = uniform(0.1)
+  const uWindStrength = uniform(0.06)
   const uWindFrequency = uniform(2.0)
   const uInteractionRadius = uniform(1.5)
-  const uInteractionStrength = uniform(0.25)
+  const uInteractionStrength = uniform(0.15)
 
   // 5 individual trail point uniforms: vec3(worldX, worldZ, strength)
   const uTrail = Array.from({ length: GRASS_TRAIL_COUNT }, () =>
@@ -121,28 +121,46 @@ export function createGrassMaterial(): {
   const instanceWorldXZ = attribute(GRASS_INSTANCE_POS_ATTR, 'vec2')
 
   // ── Color: base → tip gradient with per-instance variation ──
-  const baseColor = vec3(0.03, 0.08, 0.015)
-  const tipColor = vec3(0.08, 0.17, 0.04)
+  const baseColor = vec3(0.015, 0.04, 0.008) // dark root
+  const tipColor = vec3(0.06, 0.14, 0.03) // bright tip
   const uvY = attribute('uv').y
   const gradientColor = mix(
     baseColor,
     tipColor,
-    smoothstep(float(0), float(1), uvY)
+    smoothstep(float(0), float(0.8), uvY)
   )
 
-  // Per-instance brightness variation via hash of instanceIndex
+  // Per-instance hue/brightness variation via hashes of instanceIndex
   const brightnessHash = hash(
     vec2(instanceIndex.toFloat().mul(0.37), float(1.7))
   )
-  const brightness = float(0.9).add(brightnessHash.mul(0.2)) // 0.9 ~ 1.1
-  mat.colorNode = gradientColor.mul(brightness)
+  const hueHash = hash(vec2(instanceIndex.toFloat().mul(0.73), float(3.1)))
+  const brightness = float(0.85).add(brightnessHash.mul(0.3)) // 0.85 ~ 1.15
+  // Slight yellow-green ↔ blue-green hue shift per instance
+  const hueShift = vec3(
+    float(1.0).add(hueHash.sub(0.5).mul(0.15)),
+    float(1.0),
+    float(1.0).add(hueHash.sub(0.5).mul(-0.1))
+  )
+  mat.colorNode = gradientColor.mul(brightness).mul(hueShift)
 
   // Do NOT set normalNode — the geometry normals (0,1,0) will be
   // automatically transformed to view-space by the default pipeline.
   // Setting normalNode directly treats it as view-space which breaks lighting.
 
+  // ── Per-instance shape variation: width & height ──
+  const shapeHash1 = hash(vec2(instanceIndex.toFloat().mul(0.53), float(2.3)))
+  const shapeHash2 = hash(vec2(instanceIndex.toFloat().mul(0.91), float(4.7)))
+  // Width: 0.7x ~ 1.4x, Height: 0.8x ~ 1.2x
+  const widthScale = float(0.7).add(shapeHash1.mul(0.7))
+  const heightScale = float(0.8).add(shapeHash2.mul(0.4))
+
   // ── Wind: displace upper vertices ──
-  const localPos = positionLocal.toVar()
+  const rawPos = positionLocal.toVar()
+  // Apply per-instance shape variation (width x, height y)
+  const localPosX = rawPos.x.mul(widthScale)
+  const localPosY = rawPos.y.mul(heightScale)
+  const localPosZ = rawPos.z.mul(widthScale)
   const windPhase = uTime.mul(uWindFrequency)
 
   const instanceHash = hash(vec2(instanceIndex.toFloat().mul(0.1), float(0.5)))
@@ -174,7 +192,8 @@ export function createGrassMaterial(): {
   // Clamp total strength to 1
   const clampedStr = totalStr.min(float(1.0))
   const pushStrength = clampedStr.mul(uInteractionStrength)
-  const bendProfile = uvY.mul(uvY).mul(float(1.5))
+  // uvY=0→0, uvY=0.4(mid)→0.19, uvY=1(tip)→1.2 (tip > mid but less extreme)
+  const bendProfile = uvY.mul(uvY).mul(float(1.2))
   const pushFactor = pushStrength.mul(bendProfile)
   // Normalize accumulated direction
   const totalLen = totalPushX
@@ -187,9 +206,9 @@ export function createGrassMaterial(): {
   const pushY = pushStrength.mul(heightFactor).mul(-0.15)
 
   mat.positionNode = vec3(
-    localPos.x.add(windX).add(pushX),
-    localPos.y.add(pushY),
-    localPos.z.add(windZ).add(pushZ)
+    localPosX.add(windX).add(pushX),
+    localPosY.add(pushY),
+    localPosZ.add(windZ).add(pushZ)
   )
 
   return {

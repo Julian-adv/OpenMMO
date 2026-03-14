@@ -189,7 +189,7 @@
         count,
       )
       instancedMesh.castShadow = false
-      instancedMesh.receiveShadow = false
+      instancedMesh.receiveShadow = true
       instancedMesh.frustumCulled = true
 
       // Per-instance world XZ positions for player interaction shader
