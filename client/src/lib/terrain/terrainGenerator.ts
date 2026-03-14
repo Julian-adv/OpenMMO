@@ -657,8 +657,8 @@ function generateSplatMap(
   heightField: Float32Array,
   coastDist: Float32Array,
   config: TerrainGenConfig,
-  _regionX: number,
-  _regionZ: number
+  regionX: number,
+  regionZ: number
 ): Uint8Array {
   const N = REGION_CELLS
   const CHANNELS = 4
@@ -743,71 +743,84 @@ function generateSplatMap(
     }
   }
 
-  // --- Grass circle scatter: stamp random circles onto grass-eligible cells ---
-  // First, demote all grass-dominant cells to "no grass blades" (R just below threshold)
-  // Then stamp circles to bring cells back up to 230–255 range
+  // --- Grass circle scatter (world-space deterministic) ---
+  // Uses "scatter cells" so circles are consistent across region boundaries.
+  // Each scatter cell generates circles with a seed derived from world position.
   const grassMask = new Uint8Array(N * N) // 1 = eligible for grass circles
   for (let i = 0; i < N * N; i++) {
     if (splatField[i * CHANNELS] >= GRASS_DENSITY_MIN) {
       grassMask[i] = 1
-      splatField[i * CHANNELS] = GRASS_DENSITY_MIN - 1 // demote: green ground, no blades
+      splatField[i * CHANNELS] = GRASS_DENSITY_MIN - 1
     }
   }
 
-  // Seeded RNG for circle placement
-  const grassRng = createRng(config.seed ^ 0x47524153)
-  const TARGET_COVERAGE = 0.6
-  const CIRCLE_RADII = [5, 7, 8, 10, 12, 15] // meters (= cells, since 1 cell = 1m)
-  let coveredCount = 0
-  let eligibleCount = 0
-  for (let i = 0; i < N * N; i++) {
-    if (grassMask[i]) eligibleCount++
-  }
-  const targetCovered = Math.floor(eligibleCount * TARGET_COVERAGE)
-
-  // Density grid: 0..GRASS_DENSITY_RANGE per cell, tracks max density stamped
   const densityGrid = new Uint8Array(N * N)
+  const CIRCLE_RADII = [5, 7, 8, 10, 12, 15]
+  const MAX_RADIUS = 15
+  const SCATTER_CELL = 64 // world-space scatter cell size
+  const CIRCLES_PER_SCATTER = 20 // circles generated per scatter cell
 
-  const MAX_ATTEMPTS = eligibleCount * 2
-  let attempts = 0
-  while (coveredCount < targetCovered && attempts < MAX_ATTEMPTS) {
-    attempts++
-    // Fractional center for non-grid-aligned edges
-    const fcx = grassRng() * N
-    const fcz = grassRng() * N
-    const icx = Math.floor(fcx)
-    const icz = Math.floor(fcz)
-    if (icx < 0 || icx >= N || icz < 0 || icz >= N) continue
-    if (!grassMask[icz * N + icx]) continue
+  // Region origin in world-space cells
+  const regionOX = regionX * N
+  const regionOZ = regionZ * N
 
-    const radius = CIRCLE_RADII[Math.floor(grassRng() * CIRCLE_RADII.length)]
-    const r2 = radius * radius
-    // Density for this circle: bias toward max (230–255)
-    const circleDensity = Math.round(
-      GRASS_DENSITY_RANGE * (0.6 + grassRng() * 0.4)
-    )
+  // Iterate scatter cells overlapping this region (with padding for circle overshoot)
+  const scMinX = Math.floor((regionOX - MAX_RADIUS) / SCATTER_CELL)
+  const scMaxX = Math.floor((regionOX + N - 1 + MAX_RADIUS) / SCATTER_CELL)
+  const scMinZ = Math.floor((regionOZ - MAX_RADIUS) / SCATTER_CELL)
+  const scMaxZ = Math.floor((regionOZ + N - 1 + MAX_RADIUS) / SCATTER_CELL)
 
-    const minX = Math.max(0, Math.floor(fcx - radius))
-    const maxX = Math.min(N - 1, Math.ceil(fcx + radius))
-    const minZ = Math.max(0, Math.floor(fcz - radius))
-    const maxZ = Math.min(N - 1, Math.ceil(fcz + radius))
+  for (let scz = scMinZ; scz <= scMaxZ; scz++) {
+    for (let scx = scMinX; scx <= scMaxX; scx++) {
+      // Deterministic seed per scatter cell
+      const cellSeed =
+        (config.seed ^ 0x47524153) +
+        Math.imul(scx, 73856093) +
+        Math.imul(scz, 19349663)
+      const rng = createRng(cellSeed)
+      const cellOX = scx * SCATTER_CELL
+      const cellOZ = scz * SCATTER_CELL
 
-    for (let z = minZ; z <= maxZ; z++) {
-      for (let x = minX; x <= maxX; x++) {
-        const dx = x - fcx
-        const dz = z - fcz
-        if (dx * dx + dz * dz > r2) continue
-        const idx = z * N + x
-        if (!grassMask[idx]) continue
+      for (let c = 0; c < CIRCLES_PER_SCATTER; c++) {
+        // Circle center in world-space (fractional)
+        const wcx = cellOX + rng() * SCATTER_CELL
+        const wcz = cellOZ + rng() * SCATTER_CELL
+        const radius = CIRCLE_RADII[Math.floor(rng() * CIRCLE_RADII.length)]
+        const circleDensity = Math.round(
+          GRASS_DENSITY_RANGE * (0.6 + rng() * 0.4)
+        )
 
-        // Falloff: full density in inner 30%, fades to 0 at edge
-        const dist = Math.sqrt(dx * dx + dz * dz)
-        const falloff = 1.0 - smoothstep(radius * 0.3, radius, dist)
-        const d = Math.round(circleDensity * falloff)
+        // Check if center is on grass (skip stamping if not, but keep RNG consistent)
+        const lcx = Math.floor(wcx) - regionOX
+        const lcz = Math.floor(wcz) - regionOZ
+        const centerInRegion = lcx >= 0 && lcx < N && lcz >= 0 && lcz < N
+        if (centerInRegion && !grassMask[lcz * N + lcx]) continue
 
-        if (d > densityGrid[idx]) {
-          if (densityGrid[idx] === 0) coveredCount++
-          densityGrid[idx] = d
+        // Bounding box in region-local coords
+        const lMinX = Math.max(0, Math.floor(wcx - radius) - regionOX)
+        const lMaxX = Math.min(N - 1, Math.ceil(wcx + radius) - regionOX)
+        const lMinZ = Math.max(0, Math.floor(wcz - radius) - regionOZ)
+        const lMaxZ = Math.min(N - 1, Math.ceil(wcz + radius) - regionOZ)
+        if (lMinX > N - 1 || lMaxX < 0 || lMinZ > N - 1 || lMaxZ < 0) continue
+
+        const r2 = radius * radius
+        for (let z = lMinZ; z <= lMaxZ; z++) {
+          for (let x = lMinX; x <= lMaxX; x++) {
+            const wx = regionOX + x
+            const wz = regionOZ + z
+            const dx = wx - wcx
+            const dz = wz - wcz
+            if (dx * dx + dz * dz > r2) continue
+            const idx = z * N + x
+            if (!grassMask[idx]) continue
+
+            const dist = Math.sqrt(dx * dx + dz * dz)
+            const falloff = 1.0 - smoothstep(radius * 0.3, radius, dist)
+            const d = Math.round(circleDensity * falloff)
+            if (d > densityGrid[idx]) {
+              densityGrid[idx] = d
+            }
+          }
         }
       }
     }
