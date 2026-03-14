@@ -33,6 +33,8 @@ export interface WetnessResult {
   ) => void
   /** Current wetness texture for fragment shader sampling */
   readonly readTexture: THREE.Texture
+  /** Reposition this wetness system to a new tile */
+  reposition: (tileX: number, tileZ: number) => void
 }
 
 /**
@@ -136,6 +138,17 @@ export function createWetnessSystem(
   let prevTime = -1
 
   return {
+    reposition(newTileX: number, newTileZ: number) {
+      const newPx = newTileX * tileSize
+      const newPz = newTileZ * tileSize
+      captureMesh.position.set(newPx, 0.01, newPz)
+      captureCamera.position.set(newPx, 10, newPz)
+      captureCamera.lookAt(newPx, 0, newPz)
+      // Reset decay state so old wetness doesn't bleed into new position
+      phase = 0
+      prevTime = -1
+    },
+
     update(renderer: WebGPURenderer, material: THREE.Material, time: number) {
       const dt = prevTime >= 0 ? Math.min(time - prevTime, 0.1) : 0
       prevTime = time

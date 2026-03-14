@@ -107,8 +107,9 @@
   // Track which tiles have water (keyed by tile id)
   const waterTileSet = new SvelteMap<string, boolean>()
 
-  // ── Wetness compute system per tile ──
+  // ── Wetness compute system per tile (pooled) ──
   const wetnessMap = new SvelteMap<string, WetnessResult>()
+  const wetnessPool: WetnessResult[] = []
 
   // ── Water material pool (reused across tile lifecycles) ──
   const waterMatPool: WaterMaterialResult[] = []
@@ -132,16 +133,15 @@
   function releaseWaterMaterial(id: string) {
     const result = waterMatMap.get(id)
     if (result) {
-      // Swap heightmap to fallback BEFORE the real heightmap is disposed.
-      // Three.js Sampler binding listens for 'dispose' events and nulls its
-      // .texture reference — if that happens while the material is still in
-      // the scene graph, createBindGroup() crashes with "Invalid value used
-      // as weak map key" because backend.get(null) fails.
       result.uniforms.uHeightmapTexture.value = waterHeightFallbackTex
       waterMatMap.delete(id)
       waterMatPool.push(result)
     }
-    wetnessMap.delete(id)
+    const wetness = wetnessMap.get(id)
+    if (wetness) {
+      wetnessMap.delete(id)
+      wetnessPool.push(wetness)
+    }
   }
 
   function tileIdFromCoords(tileX: number, tileZ: number): string {
@@ -181,14 +181,20 @@
             if (causticsMap) u.uCausticsMap.value = causticsMap
             if (refractionMap) u.uRefractionMap.value = refractionMap
             if (reflectionMap) u.uReflectionMap.value = reflectionMap
-            // Create wetness render system for this tile
-            const wetness = createWetnessSystem(
-              terrainGeometry!,
-              tileX,
-              tileZ,
-              TERRAIN_TILE_SIZE
-            )
-            wetnessMap.set(id, wetness)
+            // Acquire or create wetness render system for this tile
+            const pooledWetness = wetnessPool.pop()
+            if (pooledWetness) {
+              pooledWetness.reposition(tileX, tileZ)
+              wetnessMap.set(id, pooledWetness)
+            } else {
+              const wetness = createWetnessSystem(
+                terrainGeometry!,
+                tileX,
+                tileZ,
+                TERRAIN_TILE_SIZE
+              )
+              wetnessMap.set(id, wetness)
+            }
             waterMatMap.set(id, matResult)
           }
         }
