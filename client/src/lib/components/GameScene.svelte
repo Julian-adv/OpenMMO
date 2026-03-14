@@ -425,7 +425,7 @@
       }
       updateTerrainTilesFromPlayer()
       drainTileQueue()
-      drainTileWork(2)
+      drainTileWork(1)
       syncTileMeshes()
       // Finalize teleport once full 3x3 heightmap grid is loaded
       if ($teleportLoading && currentPlayer &&
@@ -870,6 +870,7 @@
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
   time={waterTime}
+  playerPosition={currentPlayer?.position ?? null}
 />
 
 <GameSceneWaterLayer
