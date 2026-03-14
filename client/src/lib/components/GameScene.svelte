@@ -25,6 +25,7 @@
   import type Monster from './Monster.svelte'
   import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
   import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
+  import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
   import { drainTileWork } from '../utils/tileWorkQueue'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
@@ -862,6 +863,13 @@
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
   metaManager={terrainMetaManager}
+/>
+
+<GameSceneGrassLayer
+  {terrainTiles}
+  heightManager={terrainHeightManager}
+  splatManager={terrainSplatManager}
+  time={waterTime}
 />
 
 <GameSceneWaterLayer

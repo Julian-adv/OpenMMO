@@ -90,6 +90,11 @@ export class TerrainSplatManager {
     return this.textures.get(tileKey(tileX, tileZ)) ?? null
   }
 
+  /** Get raw splatmap RGBA data for a tile (64×64×4 Uint8Array), or null if not loaded. */
+  getSplatData(tileX: number, tileZ: number): Uint8Array | null {
+    return this.splatmaps.get(tileKey(tileX, tileZ)) ?? null
+  }
+
   applySplatBrush(
     worldX: number,
     worldZ: number,
