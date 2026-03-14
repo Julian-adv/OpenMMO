@@ -44,14 +44,13 @@ export function createGrassBladeGeometry(
      0,  height, 0,   // 4: tip
   ])
 
-  // Normals point up (0,1,0) so blades receive light from above
   // prettier-ignore
   const normals = new Float32Array([
-    0, 1, 0,
-    0, 1, 0,
-    0, 1, 0,
-    0, 1, 0,
-    0, 1, 0,
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
   ])
 
   // UV: u=horizontal (0-1), v=vertical (0=base, 1=tip)

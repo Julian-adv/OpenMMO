@@ -24,10 +24,11 @@
   import { worldMapVisible, debugVisible, teleportLoading } from '../stores/debugStore'
   import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
   import { get } from 'svelte/store'
-  import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
+  import { regionMinimapServerUrl, generateRegionMinimap } from '../terrain/regionMinimapGenerator'
   import { tileToRegion } from '../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
+  import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
     const key = `${rx},${rz}`
@@ -64,6 +65,7 @@
   let playerRegionRx = $derived(tileToRegion(Math.round(playerX / TILE_DIM)))
   let playerRegionRz = $derived(tileToRegion(Math.round(playerZ / TILE_DIM)))
   let deleting = $state(false)
+  let resplatting = $state(false)
 
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
@@ -346,6 +348,102 @@
     }
   }
 
+  async function handleResplat() {
+    const rx = playerRegionRx
+    const rz = playerRegionRz
+    const heightManager = get(editorHeightManager)
+    const splatManager = get(editorSplatManager)
+    const metaManager = get(editorMetaManager)
+    if (!heightManager || !splatManager || !metaManager) return
+
+    resplatting = true
+    try {
+      const apiUrl = getTerrainApiUrl()
+
+      // Check if region exists
+      const metaResp = await fetch(`${apiUrl}/api/terrain/meta/${rx}/${rz}`, { method: 'HEAD' })
+      if (!metaResp.ok) {
+        alert(`Region (${rx}, ${rz}) has no terrain data.`)
+        return
+      }
+
+      // Fetch all heightmaps for the region
+      const tileHeightmaps: { tileX: number; tileZ: number; heightmap: Uint16Array }[] = []
+      const fetches: Promise<void>[] = []
+      for (let tz = 0; tz < REGION_SIZE; tz++) {
+        for (let tx = 0; tx < REGION_SIZE; tx++) {
+          const tileX = rx * REGION_SIZE + tx
+          const tileZ = rz * REGION_SIZE + tz
+          fetches.push(
+            heightManager.loadHeightmap(tileX, tileZ).then((data) => {
+              tileHeightmaps.push({ tileX, tileZ, heightmap: data })
+            })
+          )
+        }
+      }
+      await Promise.all(fetches)
+
+      const config: TerrainGenConfig = {
+        seed: 0, // only used for grass noise seed
+        minHeight: -20,
+        maxHeight: 80,
+        seaProportion: 0,
+        plainProportion: 0,
+        mountainProportion: 0,
+        shallowSeaRatio: 0,
+        riverCount: 0,
+      }
+
+      // Estimate maxHeight from actual heightmap data
+      let actualMax = 0
+      for (const tile of tileHeightmaps) {
+        for (let i = 0; i < tile.heightmap.length; i++) {
+          const h = tile.heightmap[i] * 0.05 - 500.0
+          if (h > actualMax) actualMax = h
+        }
+      }
+      config.maxHeight = Math.max(actualMax, 1)
+
+      // Regenerate splatmaps
+      const results = regenerateRegionSplatmaps(rx, rz, tileHeightmaps, config)
+
+      // Apply to managers
+      for (const tile of results) {
+        splatManager.setSplatmap(tile.tileX, tile.tileZ, tile.splatmap)
+        splatManager.markDirty(tile.tileX, tile.tileZ)
+      }
+
+      // Save splatmaps to server in batches
+      const BATCH_SIZE = 8
+      for (let i = 0; i < results.length; i += BATCH_SIZE) {
+        const batch = results.slice(i, i + BATCH_SIZE)
+        await Promise.all(
+          batch.map((tile) =>
+            fetch(`${apiUrl}/api/terrain/splat/${tile.tileX}/${tile.tileZ}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/octet-stream' },
+              body: tile.splatmap.slice().buffer as ArrayBuffer,
+            })
+          )
+        )
+      }
+
+      // Regenerate minimap
+      await generateRegionMinimap(rx, rz, metaManager)
+      minimapVersion.update((v) => v + 1)
+
+      // Force terrain rebuild
+      terrainForceRebuild.update((v) => v + 1)
+
+      close()
+    } catch (e) {
+      console.error('Resplat failed:', e)
+      alert(`Resplat failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      resplatting = false
+    }
+  }
+
   // --- Actions ---
   function close() {
     worldMapVisible.set(false)
@@ -429,6 +527,7 @@
         {#if $debugVisible}
           <span class="controls-separator"></span>
           <button class="ctrl-btn debug-btn" onclick={handleGenerate} title="Generate terrain for region ({playerRegionRx}, {playerRegionRz})">Gen</button>
+          <button class="ctrl-btn debug-btn" onclick={handleResplat} disabled={resplatting} title="Regenerate splatmaps for region ({playerRegionRx}, {playerRegionRz})">{resplatting ? '...' : 'Resplat'}</button>
           <button class="ctrl-btn debug-btn danger" onclick={handleDelete} disabled={deleting} title="Delete terrain for region ({playerRegionRx}, {playerRegionRz})">Del</button>
         {/if}
       </div>

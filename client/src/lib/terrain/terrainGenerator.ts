@@ -96,7 +96,13 @@ export function generateRegionTerrain(
   }
 
   // --- Phase 6: Splat map generation ---
-  const splatField = generateSplatMap(heightField, coastDist, config)
+  const splatField = generateSplatMap(
+    heightField,
+    coastDist,
+    config,
+    regionX,
+    regionZ
+  )
 
   // --- Slice into per-tile data ---
   return sliceIntoTiles(regionX, regionZ, heightField, splatField)
@@ -650,7 +656,9 @@ function blendBoundaries(heightField: Float32Array, edges: NeighborEdgeData) {
 function generateSplatMap(
   heightField: Float32Array,
   coastDist: Float32Array,
-  config: TerrainGenConfig
+  config: TerrainGenConfig,
+  _regionX: number,
+  _regionZ: number
 ): Uint8Array {
   const N = REGION_CELLS
   const CHANNELS = 4
@@ -659,6 +667,9 @@ function generateSplatMap(
   const SAND_HEIGHT_MAX = 0.9 // meters — sand fades out above this height
   const snowStart = config.maxHeight * 0.7
   const snowFull = config.maxHeight * 0.85
+
+  const GRASS_DENSITY_MIN = 230
+  const GRASS_DENSITY_RANGE = 25 // 230..255
 
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
@@ -732,6 +743,84 @@ function generateSplatMap(
     }
   }
 
+  // --- Grass circle scatter: stamp random circles onto grass-eligible cells ---
+  // First, demote all grass-dominant cells to "no grass blades" (R just below threshold)
+  // Then stamp circles to bring cells back up to 230–255 range
+  const grassMask = new Uint8Array(N * N) // 1 = eligible for grass circles
+  for (let i = 0; i < N * N; i++) {
+    if (splatField[i * CHANNELS] >= GRASS_DENSITY_MIN) {
+      grassMask[i] = 1
+      splatField[i * CHANNELS] = GRASS_DENSITY_MIN - 1 // demote: green ground, no blades
+    }
+  }
+
+  // Seeded RNG for circle placement
+  const grassRng = createRng(config.seed ^ 0x47524153)
+  const TARGET_COVERAGE = 0.6
+  const CIRCLE_RADII = [5, 7, 8, 10, 12, 15] // meters (= cells, since 1 cell = 1m)
+  let coveredCount = 0
+  let eligibleCount = 0
+  for (let i = 0; i < N * N; i++) {
+    if (grassMask[i]) eligibleCount++
+  }
+  const targetCovered = Math.floor(eligibleCount * TARGET_COVERAGE)
+
+  // Density grid: 0..GRASS_DENSITY_RANGE per cell, tracks max density stamped
+  const densityGrid = new Uint8Array(N * N)
+
+  const MAX_ATTEMPTS = eligibleCount * 2
+  let attempts = 0
+  while (coveredCount < targetCovered && attempts < MAX_ATTEMPTS) {
+    attempts++
+    // Fractional center for non-grid-aligned edges
+    const fcx = grassRng() * N
+    const fcz = grassRng() * N
+    const icx = Math.floor(fcx)
+    const icz = Math.floor(fcz)
+    if (icx < 0 || icx >= N || icz < 0 || icz >= N) continue
+    if (!grassMask[icz * N + icx]) continue
+
+    const radius = CIRCLE_RADII[Math.floor(grassRng() * CIRCLE_RADII.length)]
+    const r2 = radius * radius
+    // Density for this circle: bias toward max (230–255)
+    const circleDensity = Math.round(
+      GRASS_DENSITY_RANGE * (0.6 + grassRng() * 0.4)
+    )
+
+    const minX = Math.max(0, Math.floor(fcx - radius))
+    const maxX = Math.min(N - 1, Math.ceil(fcx + radius))
+    const minZ = Math.max(0, Math.floor(fcz - radius))
+    const maxZ = Math.min(N - 1, Math.ceil(fcz + radius))
+
+    for (let z = minZ; z <= maxZ; z++) {
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - fcx
+        const dz = z - fcz
+        if (dx * dx + dz * dz > r2) continue
+        const idx = z * N + x
+        if (!grassMask[idx]) continue
+
+        // Falloff: full density in inner 30%, fades to 0 at edge
+        const dist = Math.sqrt(dx * dx + dz * dz)
+        const falloff = 1.0 - smoothstep(radius * 0.3, radius, dist)
+        const d = Math.round(circleDensity * falloff)
+
+        if (d > densityGrid[idx]) {
+          if (densityGrid[idx] === 0) coveredCount++
+          densityGrid[idx] = d
+        }
+      }
+    }
+  }
+
+  // Write density back to splatField R channel
+  for (let i = 0; i < N * N; i++) {
+    if (densityGrid[i] > 0) {
+      splatField[i * CHANNELS] =
+        GRASS_DENSITY_MIN + Math.min(densityGrid[i], GRASS_DENSITY_RANGE)
+    }
+  }
+
   return splatField
 }
 
@@ -791,6 +880,70 @@ function sliceIntoTiles(
   }
 
   return tiles
+}
+
+/**
+ * Regenerate only splatmaps for a region using existing heightmap data.
+ * Returns per-tile splatmap data (heightmaps unchanged).
+ */
+export function regenerateRegionSplatmaps(
+  regionX: number,
+  regionZ: number,
+  tileHeightmaps: { tileX: number; tileZ: number; heightmap: Uint16Array }[],
+  config: TerrainGenConfig
+): { tileX: number; tileZ: number; splatmap: Uint8Array }[] {
+  const N = REGION_CELLS
+
+  // Reconstruct region-wide heightField from per-tile heightmaps
+  const heightField = new Float32Array(N * N)
+  const baseTileX = regionX * REGION_SIZE
+  const baseTileZ = regionZ * REGION_SIZE
+
+  for (const tile of tileHeightmaps) {
+    const tx = tile.tileX - baseTileX
+    const tz = tile.tileZ - baseTileZ
+    if (tx < 0 || tx >= REGION_SIZE || tz < 0 || tz >= REGION_SIZE) continue
+
+    for (let cz = 0; cz < TILE_DIM; cz++) {
+      for (let cx = 0; cx < TILE_DIM; cx++) {
+        const regionCX = tx * TILE_DIM + cx
+        const regionCZ = tz * TILE_DIM + cz
+        // Use vertex (cx, cz) height for cell (cx, cz)
+        const encoded = tile.heightmap[cz * VERTS_PER_SIDE + cx]
+        heightField[regionCZ * N + regionCX] = encoded * 0.05 - 500.0
+      }
+    }
+  }
+
+  const coastDist = computeCoastDistance(heightField)
+  const splatField = generateSplatMap(
+    heightField,
+    coastDist,
+    config,
+    regionX,
+    regionZ
+  )
+
+  // Slice splatmap into per-tile data
+  const results: { tileX: number; tileZ: number; splatmap: Uint8Array }[] = []
+  for (let tz = 0; tz < REGION_SIZE; tz++) {
+    for (let tx = 0; tx < REGION_SIZE; tx++) {
+      const splatmap = new Uint8Array(TILE_DIM * TILE_DIM * 4)
+      for (let cz = 0; cz < TILE_DIM; cz++) {
+        for (let cx = 0; cx < TILE_DIM; cx++) {
+          const ri = (tz * TILE_DIM + cz) * N + (tx * TILE_DIM + cx)
+          const ti = cz * TILE_DIM + cx
+          splatmap[ti * 4] = splatField[ri * 4]
+          splatmap[ti * 4 + 1] = splatField[ri * 4 + 1]
+          splatmap[ti * 4 + 2] = splatField[ri * 4 + 2]
+          splatmap[ti * 4 + 3] = splatField[ri * 4 + 3]
+        }
+      }
+      results.push({ tileX: baseTileX + tx, tileZ: baseTileZ + tz, splatmap })
+    }
+  }
+
+  return results
 }
 
 // --- Utility functions ---
