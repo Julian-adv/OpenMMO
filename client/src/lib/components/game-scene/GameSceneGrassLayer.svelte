@@ -10,6 +10,8 @@
   import {
     createGrassBladeGeometry,
     createGrassMaterial,
+    GRASS_INSTANCE_POS_ATTR,
+    GRASS_TRAIL_COUNT,
   } from '../../shaders/grass-material'
 
   interface Props {
@@ -44,9 +46,53 @@
   const { material: grassMaterial, uniforms: grassUniforms } =
     createGrassMaterial()
 
-  // Update wind time
+  // ── Player interaction trail with decay ────────────────────
+  const TRAIL_MIN_DIST = 0.5 // min distance between trail points
+  const TRAIL_RISE = 8.0 // strength gained per second (ramp up over ~0.15s)
+  const TRAIL_DECAY = 1.5 // strength lost per second
+  const trail: { x: number; z: number; strength: number; decaying: boolean }[] = []
+  let lastTrailX = 0
+  let lastTrailZ = 0
+  let prevTime = 0
+
   $effect(() => {
+    const dt = Math.min(time - prevTime, 0.1)
+    prevTime = time
     grassUniforms.uTime.value = time
+
+    // Rise until peak, then decay. Prune dead points.
+    for (let i = trail.length - 1; i >= 0; i--) {
+      if (trail[i].strength < 1.0 && !trail[i].decaying) {
+        trail[i].strength = Math.min(1.0, trail[i].strength + TRAIL_RISE * dt)
+        if (trail[i].strength >= 1.0) trail[i].decaying = true
+      } else {
+        trail[i].decaying = true
+        trail[i].strength -= TRAIL_DECAY * dt
+      }
+      if (trail[i].strength <= 0) trail.splice(i, 1)
+    }
+
+    // Add new trail point if player moved enough
+    if (playerPosition) {
+      const dx = playerPosition.x - lastTrailX
+      const dz = playerPosition.z - lastTrailZ
+      if (dx * dx + dz * dz > TRAIL_MIN_DIST * TRAIL_MIN_DIST) {
+        if (trail.length >= GRASS_TRAIL_COUNT) trail.shift()
+        trail.push({ x: playerPosition.x, z: playerPosition.z, strength: 0, decaying: false })
+        lastTrailX = playerPosition.x
+        lastTrailZ = playerPosition.z
+      }
+    }
+
+    // Write trail into individual uniforms
+    const uTrail = grassUniforms.uTrail
+    for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
+      if (i < trail.length) {
+        uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
+      } else {
+        uTrail[i].value.set(0, 0, 0) // inactive
+      }
+    }
   })
 
   // ── Seeded pseudo-random (deterministic per-tile) ──────
@@ -136,14 +182,18 @@
 
     // --- Chunked placement pass ---
     function startPlacement() {
+      const tileGeometry = bladeGeometry.clone()
       const instancedMesh = new THREE.InstancedMesh(
-        bladeGeometry,
+        tileGeometry,
         grassMaterial,
         count,
       )
       instancedMesh.castShadow = false
       instancedMesh.receiveShadow = false
       instancedMesh.frustumCulled = true
+
+      // Per-instance world XZ positions for player interaction shader
+      const worldXZArray = new Float32Array(count * 2)
 
       const placeRand = mulberry32(tileSeed(tileX, tileZ))
       const dummy = new THREE.Object3D()
@@ -152,6 +202,7 @@
 
       const placeChunk = () => {
         if (!pendingTiles.has(tileId)) {
+          instancedMesh.geometry.dispose()
           instancedMesh.dispose()
           return
         }
@@ -181,6 +232,8 @@
                 dummy.scale.setScalar(scale)
                 dummy.updateMatrix()
                 instancedMesh.setMatrixAt(idx, dummy.matrix)
+                worldXZArray[idx * 2] = worldX
+                worldXZArray[idx * 2 + 1] = worldZ
                 idx++
               }
             }
@@ -192,11 +245,17 @@
           enqueueTileWork(placeChunk)
         } else {
           instancedMesh.instanceMatrix.needsUpdate = true
+
+          // Attach per-instance world XZ attribute
+          const xzAttr = new THREE.InstancedBufferAttribute(worldXZArray, 2)
+          instancedMesh.geometry.setAttribute(GRASS_INSTANCE_POS_ATTR, xzAttr)
+
           instancedMesh.computeBoundingBox()
           instancedMesh.computeBoundingSphere()
 
           if (!pendingTiles.has(tileId)) {
-            instancedMesh.dispose()
+            instancedMesh.geometry.dispose()
+          instancedMesh.dispose()
             return
           }
           pendingTiles.delete(tileId)
@@ -234,6 +293,7 @@
     for (const [id, mesh] of tileGrassMap) {
       const tile = terrainTiles.find((t) => t.id === id)
       if (!currentTileIds.has(id) || !tile || !isTileInGrassRange(tile)) {
+        mesh.geometry.dispose()
         mesh.dispose()
         tileGrassMap.delete(id)
         pendingTiles.delete(id)

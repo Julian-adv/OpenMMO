@@ -15,6 +15,9 @@ import {
   attribute,
 } from 'three/tsl'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type N = any // TSL node -- broad type for shader node expressions
+
 // ── Grass blade geometry ─────────────────────────────────
 // 5 vertices forming a tapered blade (2 triangles bottom + 1 triangle tip)
 //
@@ -75,11 +78,24 @@ export function createGrassBladeGeometry(
 
 // ── TSL grass material ───────────────────────────────────
 
+export const GRASS_TRAIL_COUNT = 5
+
 export interface GrassMaterialUniforms {
   uTime: { value: number }
   uWindStrength: { value: number }
   uWindFrequency: { value: number }
+  /** vec3(worldX, worldZ, strength) per trail point */
+  uTrail: { value: THREE.Vector3 }[]
+  uInteractionRadius: { value: number }
+  uInteractionStrength: { value: number }
 }
+
+/**
+ * Per-instance world position attribute name.
+ * Each InstancedMesh must have an InstancedBufferAttribute with this name
+ * containing vec2 (worldX, worldZ) per instance.
+ */
+export const GRASS_INSTANCE_POS_ATTR = 'aInstanceWorldXZ'
 
 export function createGrassMaterial(): {
   material: MeshStandardNodeMaterial
@@ -88,11 +104,21 @@ export function createGrassMaterial(): {
   const uTime = uniform(0)
   const uWindStrength = uniform(0.1)
   const uWindFrequency = uniform(2.0)
+  const uInteractionRadius = uniform(1.5)
+  const uInteractionStrength = uniform(0.25)
+
+  // 5 individual trail point uniforms: vec3(worldX, worldZ, strength)
+  const uTrail = Array.from({ length: GRASS_TRAIL_COUNT }, () =>
+    uniform(new THREE.Vector3(0, 0, 0))
+  )
 
   const mat = new MeshStandardNodeMaterial()
   mat.side = THREE.DoubleSide
   mat.roughness = 0.8
   mat.metalness = 0.0
+
+  // ── Per-instance world position (vec2: x, z) ──
+  const instanceWorldXZ = attribute(GRASS_INSTANCE_POS_ATTR, 'vec2')
 
   // ── Color: base → tip gradient with per-instance variation ──
   const baseColor = vec3(0.03, 0.08, 0.015)
@@ -122,17 +148,48 @@ export function createGrassMaterial(): {
   const instanceHash = hash(vec2(instanceIndex.toFloat().mul(0.1), float(0.5)))
   const phaseOffset = instanceHash.mul(6.283)
 
-  // Wind displacement increases with height squared
-  const windAmount = uvY.mul(uvY).mul(uWindStrength)
+  const heightFactor = uvY.mul(uvY)
+  const windAmount = heightFactor.mul(uWindStrength)
   const windX = sin(windPhase.add(phaseOffset)).mul(windAmount)
   const windZ = cos(windPhase.mul(0.7).add(phaseOffset.mul(1.3))).mul(
     windAmount.mul(0.5)
   )
 
+  // ── Player interaction: additive trail push (pure functional, no assign) ──
+  let totalPushX: N = float(0)
+  let totalPushZ: N = float(0)
+  let totalStr: N = float(0)
+
+  for (const tp of uTrail) {
+    const dx = instanceWorldXZ.x.sub(tp.x)
+    const dz = instanceWorldXZ.y.sub(tp.y) // vec2.y = worldZ
+    const d = dx.mul(dx).add(dz.mul(dz)).sqrt().add(float(0.001))
+    const prox = float(1.0).sub(smoothstep(float(0), uInteractionRadius, d))
+    const str = prox.mul(prox).mul(tp.z) // tp.z = strength
+    totalPushX = totalPushX.add(dx.div(d).mul(str))
+    totalPushZ = totalPushZ.add(dz.div(d).mul(str))
+    totalStr = totalStr.add(str)
+  }
+
+  // Clamp total strength to 1
+  const clampedStr = totalStr.min(float(1.0))
+  const pushStrength = clampedStr.mul(uInteractionStrength)
+  const bendProfile = uvY.mul(uvY).mul(float(1.5))
+  const pushFactor = pushStrength.mul(bendProfile)
+  // Normalize accumulated direction
+  const totalLen = totalPushX
+    .mul(totalPushX)
+    .add(totalPushZ.mul(totalPushZ))
+    .sqrt()
+    .add(float(0.001))
+  const pushX = totalPushX.div(totalLen).mul(pushFactor)
+  const pushZ = totalPushZ.div(totalLen).mul(pushFactor)
+  const pushY = pushStrength.mul(heightFactor).mul(-0.15)
+
   mat.positionNode = vec3(
-    localPos.x.add(windX),
-    localPos.y,
-    localPos.z.add(windZ)
+    localPos.x.add(windX).add(pushX),
+    localPos.y.add(pushY),
+    localPos.z.add(windZ).add(pushZ)
   )
 
   return {
@@ -141,6 +198,11 @@ export function createGrassMaterial(): {
       uTime: uTime as unknown as { value: number },
       uWindStrength: uWindStrength as unknown as { value: number },
       uWindFrequency: uWindFrequency as unknown as { value: number },
+      uTrail: uTrail as unknown as { value: THREE.Vector3 }[],
+      uInteractionRadius: uInteractionRadius as unknown as { value: number },
+      uInteractionStrength: uInteractionStrength as unknown as {
+        value: number
+      },
     },
   }
 }
