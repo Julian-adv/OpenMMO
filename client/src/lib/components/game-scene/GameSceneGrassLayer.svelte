@@ -118,6 +118,14 @@
     const dt = Math.min(deltaTime / 1000, 0.1)
     elapsedTime += dt
 
+    // Update snapped player position (THREE.Vector3 is mutated in-place,
+    // so $derived cannot track changes — we do it here instead)
+    hasPlayer = !!playerPosition
+    if (playerPosition) {
+      snappedX = Math.round(playerPosition.x / SNAP_SIZE) * SNAP_SIZE
+      snappedZ = Math.round(playerPosition.z / SNAP_SIZE) * SNAP_SIZE
+    }
+
     // Rise until peak, then decay. Prune dead points.
     for (let i = trail.length - 1; i >= 0; i--) {
       if (trail[i].strength < 1.0 && !trail[i].decaying) {
@@ -403,10 +411,12 @@
 
   // Quantize player position to avoid re-running $effect on every frame.
   // Only changes when player moves across a SNAP_SIZE boundary.
+  // NOTE: playerPosition is a THREE.Vector3 mutated in-place, so $derived
+  // cannot track .x/.z changes. We update these in update() instead.
   const SNAP_SIZE = 8
-  let snappedX = $derived(playerPosition ? Math.round(playerPosition.x / SNAP_SIZE) * SNAP_SIZE : 0)
-  let snappedZ = $derived(playerPosition ? Math.round(playerPosition.z / SNAP_SIZE) * SNAP_SIZE : 0)
-  let hasPlayer = $derived(!!playerPosition)
+  let snappedX = $state(0)
+  let snappedZ = $state(0)
+  let hasPlayer = $state(false)
 
   function isTileInGrassRange(tile: TerrainTile, px: number, pz: number): boolean {
     const half = TERRAIN_TILE_SIZE / 2
