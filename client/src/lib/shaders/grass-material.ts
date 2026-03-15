@@ -14,94 +14,70 @@ import {
   instanceIndex,
   hash,
   attribute,
+  texture,
 } from 'three/tsl'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any // TSL node -- broad type for shader node expressions
 
-// ── Grass blade geometry ─────────────────────────────────
-// 5 vertices forming a tapered blade (2 triangles bottom + 1 triangle tip)
-//
-//        4 (tip)
-//       / \
-//      /   \
-//    2 ───── 3  (mid, narrower)
-//    |       |
-//    0 ───── 1  (base, full width)
+// ── Grass billboard geometry from GLB ─────────────────────
+// Loads grassLODs.glb and extracts the LOD00 mesh geometry.
+// UV y is flipped so that y=0 at base, y=1 at tip (matching our shader convention).
 
-export function createGrassBladeGeometry(
-  width = 0.04,
-  height = 0.2,
-  midFrac = 0.4,
-  midWidthFrac = 0.5,
-  secondHeightFrac = 0.65
-): THREE.BufferGeometry {
-  const hw = width / 2
-  const mh = height * midFrac
-  const mw = hw * midWidthFrac
+const gltfLoader = new GLTFLoader()
 
-  // Second blade: shorter, rotated 90° (in ZY plane)
-  const h2 = height * secondHeightFrac
-  const mh2 = h2 * midFrac
+export function loadGrassBillboardGeometry(
+  url = '/models/grassLODs.glb',
+  scale = 5
+): Promise<THREE.BufferGeometry> {
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(
+      url,
+      (gltf) => {
+        let found: THREE.BufferGeometry | null = null
+        gltf.scene.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.name.includes('LOD01')) {
+            found = child.geometry
+          }
+        })
+        if (!found) {
+          reject(new Error('LOD01 mesh not found in grassLODs.glb'))
+          return
+        }
+        const geometry: THREE.BufferGeometry = found
+        geometry.scale(scale, scale, scale)
 
-  // prettier-ignore
-  const positions = new Float32Array([
-    // Blade 1 (XY plane, faces Z)
-    -hw, 0,      0,   // 0: base-left
-     hw, 0,      0,   // 1: base-right
-    -mw, mh,     0,   // 2: mid-left
-     mw, mh,     0,   // 3: mid-right
-     0,  height, 0,   // 4: tip
-    // Blade 2 (ZY plane, faces X) — shorter
-     0,  0,     -hw,  // 5: base-left
-     0,  0,      hw,  // 6: base-right
-     0,  mh2,   -mw,  // 7: mid-left
-     0,  mh2,    mw,  // 8: mid-right
-     0,  h2,     0,   // 9: tip
-  ])
+        // Flip UV y: GLB has y=1 at base, y=0 at tip → our convention y=0 base, y=1 tip
+        const uvAttr = geometry.getAttribute('uv')
+        if (uvAttr) {
+          for (let i = 0; i < uvAttr.count; i++) {
+            uvAttr.setY(i, 1 - uvAttr.getY(i))
+          }
+          uvAttr.needsUpdate = true
+        }
 
-  // prettier-ignore
-  const normals = new Float32Array([
-    0, 0, 1,
-    0, 0, 1,
-    0, 0, 1,
-    0, 0, 1,
-    0, 0, 1,
-    1, 0, 0,
-    1, 0, 0,
-    1, 0, 0,
-    1, 0, 0,
-    1, 0, 0,
-  ])
+        resolve(geometry)
+      },
+      undefined,
+      reject
+    )
+  })
+}
 
-  // UV: u=horizontal (0-1), v=vertical (0=base, 1=tip)
-  // Both blades use full 0→1 v range so wind bending applies equally
-  // prettier-ignore
-  const uvs = new Float32Array([
-    0, 0,
-    1, 0,
-    0, midFrac,
-    1, midFrac,
-    0.5, 1,
-    0, 0,
-    1, 0,
-    0, midFrac,
-    1, midFrac,
-    0.5, 1,
-  ])
-
-  // prettier-ignore
-  const indices = [
-    0, 1, 2,  1, 3, 2,  2, 3, 4,  // blade 1
-    5, 6, 7,  6, 8, 7,  7, 8, 9,  // blade 2
-  ]
-
-  const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-  geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
-  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
-  geo.setIndex(indices)
-  return geo
+export function loadGrassAlphaTexture(
+  url = '/textures/grass1.jpeg'
+): Promise<THREE.Texture> {
+  return new Promise((resolve, reject) => {
+    new THREE.TextureLoader().load(
+      url,
+      (tex) => {
+        resolve(tex)
+      },
+      undefined,
+      reject
+    )
+  })
 }
 
 // ── Splatmap R-channel vegetation subtype ranges ─────────
@@ -142,6 +118,7 @@ export interface GrassMaterialConfig {
   heightScaleExtent?: number
   interactionRadius?: number
   interactionStrength?: number
+  alphaMap?: THREE.Texture
 }
 
 export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
@@ -199,6 +176,14 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   mat.side = THREE.DoubleSide
   mat.roughness = 0.8
   mat.metalness = 0.0
+
+  // ── Alpha map (billboard texture) ──
+  if (cfg?.alphaMap) {
+    mat.transparent = true
+    mat.alphaTest = 0.1
+    const alphaTexNode = texture(cfg.alphaMap)
+    mat.opacityNode = alphaTexNode.r
+  }
 
   // ── Per-instance attributes ──
   const instanceWorldXZ = attribute(GRASS_INSTANCE_POS_ATTR, 'vec2')
@@ -294,7 +279,7 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
 
   // Lean amount: base lean + gust modulation
   const leanAmount = heightFactor.mul(uWindStrength.mul(5.0))
-  const leanWave = leanAmount.mul(float(1.0).add(gust.mul(2.0)))
+  const leanWave = leanAmount.mul(float(1.0).add(gust.mul(1.0)))
   const windX = localWindX.mul(leanWave)
   const windZ = localWindZ.mul(leanWave)
 

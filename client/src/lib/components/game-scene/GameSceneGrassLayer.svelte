@@ -8,7 +8,8 @@
   import { windDebugVisible } from '../../stores/debugStore'
   import { getInstanceData } from '../../utils/grass-data'
   import {
-    createGrassBladeGeometry,
+    loadGrassBillboardGeometry,
+    loadGrassAlphaTexture,
     createGrassMaterial,
     GRASS_INSTANCE_POS_ATTR,
     GRASS_INSTANCE_ROT_ATTR,
@@ -33,21 +34,29 @@
   const GRASS_RADIUS = 30 // grass render distance from player (meters)
   const _dummy = new THREE.Object3D()
 
-  // ── Shared geometries (created once) ─────────────────
-  const shortBladeGeometry = createGrassBladeGeometry(0.03, 0.4, 0.4, 0.5)
-  const tallBladeGeometry = createGrassBladeGeometry(0.05, 0.8, 0.35, 0.4)
+  // ── Async-loaded geometry & materials ─────────────────
+  // These are set once the GLB + texture finish loading.
+  let grassGeometry = $state<THREE.BufferGeometry | null>(null)
+  let shortGrassMaterial = $state<THREE.Material | null>(null)
+  let tallGrassMaterial = $state<THREE.Material | null>(null)
+  let allUniforms: GrassMaterialUniforms[] = []
+  let baseWindStrengths: number[] = []
+  let assetsReady = $state(false)
 
-  // ── Shared TSL materials (created once) ──────────────
-  const { material: shortGrassMaterial, uniforms: shortGrassUniforms } =
-    createGrassMaterial()
-  const { material: tallGrassMaterial, uniforms: tallGrassUniforms } =
-    createGrassMaterial(TALL_GRASS_CONFIG)
+  Promise.all([loadGrassBillboardGeometry(), loadGrassAlphaTexture()]).then(
+    ([geometry, alphaMap]) => {
+      grassGeometry = geometry
 
-  const allUniforms: GrassMaterialUniforms[] = [
-    shortGrassUniforms,
-    tallGrassUniforms,
-  ]
-  const baseWindStrengths = allUniforms.map((u) => u.uWindStrength.value)
+      const shortResult = createGrassMaterial({ alphaMap })
+      const tallResult = createGrassMaterial({ ...TALL_GRASS_CONFIG, alphaMap })
+      shortGrassMaterial = shortResult.material
+      tallGrassMaterial = tallResult.material
+
+      allUniforms = [shortResult.uniforms, tallResult.uniforms]
+      baseWindStrengths = allUniforms.map((u) => u.uWindStrength.value)
+      assetsReady = true
+    },
+  )
 
   // ── Wind debug arrow ──────────────────────────────────────
   const WIND_ARROW_COLOR = 0x00ff88
@@ -115,6 +124,7 @@
   let gustSpeed = 0
 
   export function update(deltaTime: number) {
+    if (!assetsReady) return
     const dt = Math.min(deltaTime / 1000, 0.1)
     elapsedTime += dt
 
@@ -333,29 +343,29 @@
 
   interface VegetationConfig {
     keyPrefix: string
-    geometry: THREE.BufferGeometry
     material: THREE.Material
     outputMap: SvelteMap<string, THREE.InstancedMesh>
     grassType: 'short' | 'tall'
   }
 
-  const SHORT_GRASS_CFG: VegetationConfig = {
-    keyPrefix: 's',
-    geometry: shortBladeGeometry,
-    material: shortGrassMaterial,
-    outputMap: shortGrassMap,
-    grassType: 'short',
+  // Configs are built lazily once assets are ready
+  function getAllConfigs(): VegetationConfig[] | null {
+    if (!grassGeometry || !shortGrassMaterial || !tallGrassMaterial) return null
+    return [
+      {
+        keyPrefix: 's',
+        material: shortGrassMaterial,
+        outputMap: shortGrassMap,
+        grassType: 'short',
+      },
+      {
+        keyPrefix: 't',
+        material: tallGrassMaterial,
+        outputMap: tallGrassMap,
+        grassType: 'tall',
+      },
+    ]
   }
-
-  const TALL_GRASS_CFG: VegetationConfig = {
-    keyPrefix: 't',
-    geometry: tallBladeGeometry,
-    material: tallGrassMaterial,
-    outputMap: tallGrassMap,
-    grassType: 'tall',
-  }
-
-  const allConfigs = [SHORT_GRASS_CFG, TALL_GRASS_CFG]
 
   // ── Create InstancedMesh from pre-computed binary data ──
   function createMeshFromPrecomputed(
@@ -366,7 +376,7 @@
     const count = instanceData.length / 5
     if (count === 0) return true // nothing to render, still "success"
 
-    const tileGeometry = cfg.geometry.clone()
+    const tileGeometry = grassGeometry!.clone()
     const instancedMesh = new THREE.InstancedMesh(tileGeometry, cfg.material, count)
     instancedMesh.castShadow = false
     instancedMesh.receiveShadow = true
@@ -440,7 +450,10 @@
 
   // ── Tile lifecycle ─────────────────────────────────────
   $effect(() => {
-    if (!hasPlayer) return
+    if (!hasPlayer || !assetsReady) return
+    const configs = getAllConfigs()
+    if (!configs) return
+
     const px = snappedX
     const pz = snappedZ
     const tileById = new Map(terrainTiles.map((t) => [t.id, t]))
@@ -451,7 +464,7 @@
         const tile = tileById.get(id)
         if (!tile || !isTileInGrassRange(tile, px, pz)) {
           disposeMeshFromMap(map, id)
-          for (const cfg of allConfigs) pendingTiles.delete(`${cfg.keyPrefix}:${id}`)
+          for (const cfg of configs) pendingTiles.delete(`${cfg.keyPrefix}:${id}`)
         }
       }
     }
@@ -462,7 +475,7 @@
       if (!isTileInGrassRange(tile, px, pz)) continue
 
       // Skip if all types already exist or are pending
-      const allReady = allConfigs.every(
+      const allReady = configs.every(
         (cfg) => cfg.outputMap.has(tile.id) || pendingTiles.has(`${cfg.keyPrefix}:${tile.id}`),
       )
       if (allReady) continue
@@ -473,7 +486,7 @@
       const tileId = tile.id
 
       // Mark all configs as pending
-      for (const cfg of allConfigs) {
+      for (const cfg of configs) {
         const key = `${cfg.keyPrefix}:${tileId}`
         if (!cfg.outputMap.has(tileId) && !pendingTiles.has(key)) {
           pendingTiles.add(key)
@@ -483,8 +496,10 @@
       gMgr
         .loadGrassData(tileX, tileZ)
         .then((grassData) => {
+          const cfgs = getAllConfigs()
+          if (!cfgs) return
           if (grassData) {
-            for (const cfg of allConfigs) {
+            for (const cfg of cfgs) {
               const key = `${cfg.keyPrefix}:${tileId}`
               if (cfg.outputMap.has(tileId) || !pendingTiles.has(key)) continue
               const instanceData = getInstanceData(grassData, cfg.grassType)
@@ -492,12 +507,14 @@
               pendingTiles.delete(key)
             }
           } else {
-            // No pre-computed data — don't render grass for this tile
-            for (const cfg of allConfigs) pendingTiles.delete(`${cfg.keyPrefix}:${tileId}`)
+            for (const cfg of cfgs) pendingTiles.delete(`${cfg.keyPrefix}:${tileId}`)
           }
         })
         .catch(() => {
-          for (const cfg of allConfigs) pendingTiles.delete(`${cfg.keyPrefix}:${tileId}`)
+          const cfgs = getAllConfigs()
+          if (cfgs) {
+            for (const cfg of cfgs) pendingTiles.delete(`${cfg.keyPrefix}:${tileId}`)
+          }
         })
     }
   })

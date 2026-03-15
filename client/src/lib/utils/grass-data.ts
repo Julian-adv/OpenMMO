@@ -22,7 +22,7 @@ import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 const TILE_DIM = 64
 const VERTS_PER_SIDE = 65
 const CHANNELS = 4
-const BLADES_PER_AXIS = 10
+const BLADES_PER_AXIS = 3
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
 
 const SHORT_SCALE_MIN = 0.7
