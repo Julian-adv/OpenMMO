@@ -86,6 +86,7 @@ export const TALL_GRASS_R_MAX = 249
 // ── TSL grass material ───────────────────────────────────
 
 export const GRASS_TRAIL_COUNT = 5
+export const GRASS_GUST_COUNT = 3
 
 export interface GrassMaterialUniforms {
   uTime: { value: number }
@@ -93,10 +94,10 @@ export interface GrassMaterialUniforms {
   uWindFrequency: { value: number }
   /** Normalized wind direction (x, z) */
   uWindDir: { value: THREE.Vector2 }
-  /** Accumulated gust wave phase (monotonically increasing) */
-  uGustPhase: { value: number }
-  /** Gust intensity (0 = calm, 1 = full gust) */
-  uGustIntensity: { value: number }
+  /** Accumulated gust wave phase per gust slot (monotonically increasing) */
+  uGustPhase: { value: number }[]
+  /** Gust intensity per slot (0 = calm, 1 = full gust) */
+  uGustIntensity: { value: number }[]
   /** vec3(worldX, worldZ, strength) per trail point */
   uTrail: { value: THREE.Vector3 }[]
   uInteractionRadius: { value: number }
@@ -155,8 +156,10 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const uWindStrength = uniform(ws)
   const uWindFrequency = uniform(wf)
   const uWindDir = uniform(new THREE.Vector2(1, 0))
-  const uGustPhase = uniform(0)
-  const uGustIntensity = uniform(0)
+  const uGustPhase = Array.from({ length: GRASS_GUST_COUNT }, () => uniform(0))
+  const uGustIntensity = Array.from({ length: GRASS_GUST_COUNT }, () =>
+    uniform(0)
+  )
   const uInteractionRadius = uniform(ir)
   const uInteractionStrength = uniform(is)
 
@@ -244,16 +247,23 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
     .add(instanceWorldXZ.y.mul(uWindDir.x))
   // Smooth arc: offset phase by sin of perpendicular position
   const gustCurve = sin(gustPerp.mul(0.15)).mul(4.0)
-  const gustCycle = fract(
-    gustSpatial
-      .add(gustCurve)
-      .sub(uGustPhase)
-      .mul(1.0 / 60.0)
-  )
-  const gustPulse = smoothstep(float(0), float(0.03), gustCycle).mul(
-    float(1).sub(smoothstep(float(0.03), float(0.08), gustCycle))
-  )
-  const gust = gustPulse.mul(uGustIntensity)
+
+  // Sum contributions from all gust slots
+  let gust: N = float(0)
+  for (let gi = 0; gi < GRASS_GUST_COUNT; gi++) {
+    const gustCycle = fract(
+      gustSpatial
+        .add(gustCurve)
+        .sub(uGustPhase[gi])
+        .mul(1.0 / 60.0)
+    )
+    const gustPulse = smoothstep(float(0), float(0.03), gustCycle).mul(
+      float(1).sub(smoothstep(float(0.03), float(0.08), gustCycle))
+    )
+    gust = gust.add(gustPulse.mul(uGustIntensity[gi]))
+  }
+  // Clamp combined gust to avoid over-saturation
+  gust = gust.min(float(1.5))
 
   // Lean amount: base lean + gust modulation
   const leanAmount = heightFactor.mul(uWindStrength.mul(5.0))
@@ -306,8 +316,8 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
       uWindStrength: uWindStrength as unknown as { value: number },
       uWindFrequency: uWindFrequency as unknown as { value: number },
       uWindDir: uWindDir as unknown as { value: THREE.Vector2 },
-      uGustPhase: uGustPhase as unknown as { value: number },
-      uGustIntensity: uGustIntensity as unknown as { value: number },
+      uGustPhase: uGustPhase as unknown as { value: number }[],
+      uGustIntensity: uGustIntensity as unknown as { value: number }[],
       uTrail: uTrail as unknown as { value: THREE.Vector3 }[],
       uInteractionRadius: uInteractionRadius as unknown as { value: number },
       uInteractionStrength: uInteractionStrength as unknown as {
