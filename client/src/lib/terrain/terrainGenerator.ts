@@ -1,4 +1,5 @@
 import { createNoise2D, fbm2D, createRng } from '../utils/simplex-noise'
+import { SHORT_GRASS_R_MIN, TALL_GRASS_R_MIN } from '../shaders/grass-material'
 
 /** Height threshold at/above which water is considered shallow sea (upper bound of sea) */
 export const SHALLOW_WATER_THRESHOLD = -0.1
@@ -668,8 +669,8 @@ function generateSplatMap(
   const snowStart = config.maxHeight * 0.7
   const snowFull = config.maxHeight * 0.85
 
-  const GRASS_DENSITY_MIN = 230
-  const GRASS_DENSITY_RANGE = 25 // 230..255
+  const SUBTYPE_DENSITY_RANGE = TALL_GRASS_R_MIN - SHORT_GRASS_R_MIN - 1 // 0..9 within each subtype
+  const TALL_GRASS_PROB = 0.3
 
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
@@ -748,13 +749,14 @@ function generateSplatMap(
   // Each scatter cell generates circles with a seed derived from world position.
   const grassMask = new Uint8Array(N * N) // 1 = eligible for grass circles
   for (let i = 0; i < N * N; i++) {
-    if (splatField[i * CHANNELS] >= GRASS_DENSITY_MIN) {
+    if (splatField[i * CHANNELS] >= SHORT_GRASS_R_MIN) {
       grassMask[i] = 1
-      splatField[i * CHANNELS] = GRASS_DENSITY_MIN - 1
+      splatField[i * CHANNELS] = SHORT_GRASS_R_MIN - 1
     }
   }
 
   const densityGrid = new Uint8Array(N * N)
+  const typeGrid = new Uint8Array(N * N) // 0 = short, 1 = tall
   const CIRCLE_RADII = [5, 7, 8, 10, 12, 15]
   const MAX_RADIUS = 15
   const SCATTER_CELL = 64 // world-space scatter cell size
@@ -786,8 +788,9 @@ function generateSplatMap(
         const wcx = cellOX + rng() * SCATTER_CELL
         const wcz = cellOZ + rng() * SCATTER_CELL
         const radius = CIRCLE_RADII[Math.floor(rng() * CIRCLE_RADII.length)]
+        const isTall = rng() < TALL_GRASS_PROB
         const circleDensity = Math.round(
-          GRASS_DENSITY_RANGE * (0.6 + rng() * 0.4)
+          SUBTYPE_DENSITY_RANGE * (0.6 + rng() * 0.4)
         )
 
         // Check if center is on grass (skip stamping if not, but keep RNG consistent)
@@ -819,6 +822,7 @@ function generateSplatMap(
             const d = Math.round(circleDensity * falloff)
             if (d > densityGrid[idx]) {
               densityGrid[idx] = d
+              typeGrid[idx] = isTall ? 1 : 0
             }
           }
         }
@@ -826,11 +830,12 @@ function generateSplatMap(
     }
   }
 
-  // Write density back to splatField R channel
+  // Write density + subtype back to splatField R channel
   for (let i = 0; i < N * N; i++) {
     if (densityGrid[i] > 0) {
+      const base = typeGrid[i] === 1 ? TALL_GRASS_R_MIN : SHORT_GRASS_R_MIN
       splatField[i * CHANNELS] =
-        GRASS_DENSITY_MIN + Math.min(densityGrid[i], GRASS_DENSITY_RANGE)
+        base + Math.min(densityGrid[i], SUBTYPE_DENSITY_RANGE)
     }
   }
 

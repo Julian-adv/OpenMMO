@@ -7,11 +7,18 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import { enqueueTileWork } from '../../utils/tileWorkQueue'
+  import { createRng } from '../../utils/simplex-noise'
   import {
     createGrassBladeGeometry,
     createGrassMaterial,
     GRASS_INSTANCE_POS_ATTR,
     GRASS_TRAIL_COUNT,
+    TALL_GRASS_CONFIG,
+    SHORT_GRASS_R_MIN,
+    SHORT_GRASS_R_MAX,
+    TALL_GRASS_R_MIN,
+    TALL_GRASS_R_MAX,
+    type GrassMaterialUniforms,
   } from '../../shaders/grass-material'
 
   interface Props {
@@ -35,16 +42,23 @@
   // ── Constants ──────────────────────────────────────────
   const TILE_DIM = 64
   const CHANNELS = 4
-  const GRASS_DENSITY_MIN = 230 // R channel minimum for grass blades
-  const GRASS_DENSITY_MAX = 255
-  const GRASS_DENSITY = 10 // blades per cell per axis → 100 blades/cell
 
-  // ── Shared grass blade geometry (created once) ─────────
-  const bladeGeometry = createGrassBladeGeometry(0.03, 0.4, 0.4, 0.5)
+  const GRASS_BLADES_PER_AXIS = 10 // blades per cell per axis → 100 blades/cell
 
-  // ── Shared TSL grass material (created once) ───────────
-  const { material: grassMaterial, uniforms: grassUniforms } =
+  // ── Shared geometries (created once) ─────────────────
+  const shortBladeGeometry = createGrassBladeGeometry(0.03, 0.4, 0.4, 0.5)
+  const tallBladeGeometry = createGrassBladeGeometry(0.05, 0.8, 0.35, 0.4)
+
+  // ── Shared TSL materials (created once) ──────────────
+  const { material: shortGrassMaterial, uniforms: shortGrassUniforms } =
     createGrassMaterial()
+  const { material: tallGrassMaterial, uniforms: tallGrassUniforms } =
+    createGrassMaterial(TALL_GRASS_CONFIG)
+
+  const allUniforms: GrassMaterialUniforms[] = [
+    shortGrassUniforms,
+    tallGrassUniforms,
+  ]
 
   // ── Player interaction trail with decay ────────────────────
   const TRAIL_MIN_DIST = 0.5 // min distance between trail points
@@ -58,7 +72,6 @@
   $effect(() => {
     const dt = Math.min(time - prevTime, 0.1)
     prevTime = time
-    grassUniforms.uTime.value = time
 
     // Rise until peak, then decay. Prune dead points.
     for (let i = trail.length - 1; i >= 0; i--) {
@@ -84,36 +97,29 @@
       }
     }
 
-    // Write trail into individual uniforms
-    const uTrail = grassUniforms.uTrail
-    for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
-      if (i < trail.length) {
-        uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
-      } else {
-        uTrail[i].value.set(0, 0, 0) // inactive
+    // Write trail into all material uniforms
+    for (const u of allUniforms) {
+      u.uTime.value = time
+      for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
+        if (i < trail.length) {
+          u.uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
+        } else {
+          u.uTrail[i].value.set(0, 0, 0)
+        }
       }
     }
   })
-
-  // ── Seeded pseudo-random (deterministic per-tile) ──────
-  function mulberry32(seed: number) {
-    return () => {
-      seed |= 0
-      seed = (seed + 0x6d2b79f5) | 0
-      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-    }
-  }
 
   function tileSeed(tileX: number, tileZ: number): number {
     return ((tileX * 73856093) ^ (tileZ * 19349663)) | 0
   }
 
-  // ── Per-tile InstancedMesh ─────────────────────────────
-  const tileGrassMap = new SvelteMap<string, THREE.InstancedMesh>()
+  // ── Per-tile InstancedMesh maps ──────────────────────
+  const shortGrassMap = new SvelteMap<string, THREE.InstancedMesh>()
+  const tallGrassMap = new SvelteMap<string, THREE.InstancedMesh>()
+  const allMaps = [shortGrassMap, tallGrassMap]
 
-  // Track in-flight generation to avoid duplicates
+  // Track in-flight generation to avoid duplicates (prefixed keys)
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const pendingTiles = new Set<string>()
 
@@ -126,36 +132,74 @@
 
   const ROWS_PER_CHUNK = 2 // rows of cells to process per work item
 
-  function generateGrassForTile(
+  interface VegetationConfig {
+    keyPrefix: string
+    rMin: number
+    rMax: number
+    bladesPerAxis: number
+    geometry: THREE.BufferGeometry
+    material: THREE.Material
+    outputMap: SvelteMap<string, THREE.InstancedMesh>
+    scaleMin: number
+    scaleRange: number
+  }
+
+  const SHORT_GRASS_CFG: VegetationConfig = {
+    keyPrefix: 's',
+    rMin: SHORT_GRASS_R_MIN,
+    rMax: SHORT_GRASS_R_MAX,
+    bladesPerAxis: GRASS_BLADES_PER_AXIS,
+    geometry: shortBladeGeometry,
+    material: shortGrassMaterial,
+    outputMap: shortGrassMap,
+    scaleMin: 0.7,
+    scaleRange: 0.6,
+  }
+
+  const TALL_GRASS_CFG: VegetationConfig = {
+    keyPrefix: 't',
+    rMin: TALL_GRASS_R_MIN,
+    rMax: TALL_GRASS_R_MAX,
+    bladesPerAxis: GRASS_BLADES_PER_AXIS,
+    geometry: tallBladeGeometry,
+    material: tallGrassMaterial,
+    outputMap: tallGrassMap,
+    scaleMin: 0.8,
+    scaleRange: 0.5,
+  }
+
+  const allConfigs = [SHORT_GRASS_CFG, TALL_GRASS_CFG]
+
+  function generateVegetationForTile(
+    cfg: VegetationConfig,
     tileX: number,
     tileZ: number,
     tileId: string,
     splatData: Uint8Array,
     hMgr: TerrainHeightManager,
   ) {
+    const pendingKey = `${cfg.keyPrefix}:${tileId}`
     const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
     const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-    const step = 1.0 / GRASS_DENSITY
+    const step = 1.0 / cfg.bladesPerAxis
+    const densityRange = cfg.rMax - cfg.rMin
 
     // --- Chunked count pass ---
-    const countRand = mulberry32(tileSeed(tileX, tileZ))
+    const countRand = createRng(tileSeed(tileX, tileZ) ^ cfg.rMin)
     let count = 0
     let countRow = 0
 
     const countChunk = () => {
-      if (!pendingTiles.has(tileId)) {
-        pendingTiles.delete(tileId)
-        return
-      }
+      if (!pendingTiles.has(pendingKey)) return
 
       const rowEnd = Math.min(countRow + ROWS_PER_CHUNK, TILE_DIM)
       for (let cz = countRow; cz < rowEnd; cz++) {
         for (let cx = 0; cx < TILE_DIM; cx++) {
           const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
-          if (rVal < GRASS_DENSITY_MIN) continue
-          const density = (rVal - GRASS_DENSITY_MIN) / (GRASS_DENSITY_MAX - GRASS_DENSITY_MIN)
-          for (let dz = 0; dz < GRASS_DENSITY; dz++) {
-            for (let dx = 0; dx < GRASS_DENSITY; dx++) {
+          if (rVal < cfg.rMin || rVal > cfg.rMax) continue
+          const density = densityRange > 0 ? (rVal - cfg.rMin) / densityRange : 1
+          for (let dz = 0; dz < cfg.bladesPerAxis; dz++) {
+            for (let dx = 0; dx < cfg.bladesPerAxis; dx++) {
               const worldX = tileMinX + cx + dx * step + countRand() * step
               const worldZ = tileMinZ + cz + dz * step + countRand() * step
               if (countRand() >= density) continue
@@ -171,9 +215,8 @@
       if (countRow < TILE_DIM) {
         enqueueTileWork(countChunk)
       } else {
-        // Count done — start placement
-        if (count === 0 || !pendingTiles.has(tileId)) {
-          pendingTiles.delete(tileId)
+        if (count === 0 || !pendingTiles.has(pendingKey)) {
+          pendingTiles.delete(pendingKey)
           return
         }
         startPlacement()
@@ -182,26 +225,25 @@
 
     // --- Chunked placement pass ---
     function startPlacement() {
-      const tileGeometry = bladeGeometry.clone()
+      const tileGeometry = cfg.geometry.clone()
       const instancedMesh = new THREE.InstancedMesh(
         tileGeometry,
-        grassMaterial,
+        cfg.material,
         count,
       )
       instancedMesh.castShadow = false
       instancedMesh.receiveShadow = true
       instancedMesh.frustumCulled = true
 
-      // Per-instance world XZ positions for player interaction shader
       const worldXZArray = new Float32Array(count * 2)
 
-      const placeRand = mulberry32(tileSeed(tileX, tileZ))
+      const placeRand = createRng(tileSeed(tileX, tileZ) ^ cfg.rMin)
       const dummy = new THREE.Object3D()
       let idx = 0
       let placeRow = 0
 
       const placeChunk = () => {
-        if (!pendingTiles.has(tileId)) {
+        if (!pendingTiles.has(pendingKey)) {
           instancedMesh.geometry.dispose()
           instancedMesh.dispose()
           return
@@ -211,11 +253,11 @@
         for (let cz = placeRow; cz < rowEnd; cz++) {
           for (let cx = 0; cx < TILE_DIM; cx++) {
             const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
-            if (rVal < GRASS_DENSITY_MIN) continue
-            const density = (rVal - GRASS_DENSITY_MIN) / (GRASS_DENSITY_MAX - GRASS_DENSITY_MIN)
+            if (rVal < cfg.rMin || rVal > cfg.rMax) continue
+            const density = densityRange > 0 ? (rVal - cfg.rMin) / densityRange : 1
 
-            for (let dz = 0; dz < GRASS_DENSITY; dz++) {
-              for (let dx = 0; dx < GRASS_DENSITY; dx++) {
+            for (let dz = 0; dz < cfg.bladesPerAxis; dz++) {
+              for (let dx = 0; dx < cfg.bladesPerAxis; dx++) {
                 const jitterX = placeRand() * step
                 const jitterZ = placeRand() * step
                 const worldX = tileMinX + cx + dx * step + jitterX
@@ -225,7 +267,7 @@
                 if (worldY < 0.05) continue
 
                 const rotation = placeRand() * Math.PI * 2
-                const scale = 0.7 + placeRand() * 0.6
+                const scale = cfg.scaleMin + placeRand() * cfg.scaleRange
 
                 dummy.position.set(worldX, worldY, worldZ)
                 dummy.rotation.set(0, rotation, 0)
@@ -246,27 +288,25 @@
         } else {
           instancedMesh.instanceMatrix.needsUpdate = true
 
-          // Attach per-instance world XZ attribute
           const xzAttr = new THREE.InstancedBufferAttribute(worldXZArray, 2)
           instancedMesh.geometry.setAttribute(GRASS_INSTANCE_POS_ATTR, xzAttr)
 
           instancedMesh.computeBoundingBox()
           instancedMesh.computeBoundingSphere()
 
-          if (!pendingTiles.has(tileId)) {
+          if (!pendingTiles.has(pendingKey)) {
             instancedMesh.geometry.dispose()
-          instancedMesh.dispose()
+            instancedMesh.dispose()
             return
           }
-          pendingTiles.delete(tileId)
-          tileGrassMap.set(tileId, instancedMesh)
+          pendingTiles.delete(pendingKey)
+          cfg.outputMap.set(tileId, instancedMesh)
         }
       }
 
       enqueueTileWork(placeChunk)
     }
 
-    // Kick off count pass
     enqueueTileWork(countChunk)
   }
 
@@ -277,26 +317,34 @@
     const tileMaxX = tile.position[0] + half
     const tileMinZ = tile.position[2] - half
     const tileMaxZ = tile.position[2] + half
-    // Distance from player to nearest point on tile AABB
     const dx = Math.max(tileMinX - playerPosition.x, 0, playerPosition.x - tileMaxX)
     const dz = Math.max(tileMinZ - playerPosition.z, 0, playerPosition.z - tileMaxZ)
     return dx * dx + dz * dz < GRASS_RADIUS * GRASS_RADIUS
+  }
+
+  function disposeMeshFromMap(map: SvelteMap<string, THREE.InstancedMesh>, id: string) {
+    const mesh = map.get(id)
+    if (mesh) {
+      mesh.geometry.dispose()
+      mesh.dispose()
+      map.delete(id)
+    }
   }
 
   // ── Tile lifecycle ─────────────────────────────────────
   $effect(() => {
     if (!heightManager || !splatManager) return
 
-    const currentTileIds = new Set(terrainTiles.map((t) => t.id))
+    const tileById = new Map(terrainTiles.map((t) => [t.id, t]))
 
     // Remove grass for tiles no longer in range or no longer visible
-    for (const [id, mesh] of tileGrassMap) {
-      const tile = terrainTiles.find((t) => t.id === id)
-      if (!currentTileIds.has(id) || !tile || !isTileInGrassRange(tile)) {
-        mesh.geometry.dispose()
-        mesh.dispose()
-        tileGrassMap.delete(id)
-        pendingTiles.delete(id)
+    for (const map of allMaps) {
+      for (const [id] of map) {
+        const tile = tileById.get(id)
+        if (!tile || !isTileInGrassRange(tile)) {
+          disposeMeshFromMap(map, id)
+          for (const cfg of allConfigs) pendingTiles.delete(`${cfg.keyPrefix}:${id}`)
+        }
       }
     }
 
@@ -304,12 +352,16 @@
     const hMgr = heightManager
     const sMgr = splatManager
     for (const tile of terrainTiles) {
-      if (tileGrassMap.has(tile.id) || pendingTiles.has(tile.id)) continue
       if (!isTileInGrassRange(tile)) continue
+
+      // Skip if all types already exist or are pending
+      const allReady = allConfigs.every(
+        (cfg) => cfg.outputMap.has(tile.id) || pendingTiles.has(`${cfg.keyPrefix}:${tile.id}`),
+      )
+      if (allReady) continue
 
       const { tileX, tileZ } = getTileCoords(tile)
       const tileId = tile.id
-      pendingTiles.add(tileId)
 
       Promise.all([
         hMgr.loadHeightmap(tileX, tileZ),
@@ -317,22 +369,27 @@
       ])
         .then(() => {
           const splatData = sMgr.getSplatData(tileX, tileZ)
-          if (!splatData || !pendingTiles.has(tileId)) {
-            pendingTiles.delete(tileId)
-            return
-          }
+          if (!splatData) return
 
-          enqueueTileWork(() => {
-            generateGrassForTile(tileX, tileZ, tileId, splatData, hMgr)
-          })
+          for (const cfg of allConfigs) {
+            const key = `${cfg.keyPrefix}:${tileId}`
+            if (cfg.outputMap.has(tileId) || pendingTiles.has(key)) continue
+            pendingTiles.add(key)
+            enqueueTileWork(() => {
+              generateVegetationForTile(cfg, tileX, tileZ, tileId, splatData, hMgr)
+            })
+          }
         })
         .catch(() => {
-          pendingTiles.delete(tileId)
+          for (const cfg of allConfigs) pendingTiles.delete(`${cfg.keyPrefix}:${tileId}`)
         })
     }
   })
 </script>
 
-{#each [...tileGrassMap] as [tileId, mesh] (tileId)}
+{#each [...shortGrassMap] as [tileId, mesh] (tileId)}
+  <T is={mesh} />
+{/each}
+{#each [...tallGrassMap] as [tileId, mesh] (`tall_${tileId}`)}
   <T is={mesh} />
 {/each}

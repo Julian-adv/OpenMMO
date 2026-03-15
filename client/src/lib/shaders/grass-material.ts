@@ -76,6 +76,12 @@ export function createGrassBladeGeometry(
   return geo
 }
 
+// ── Splatmap R-channel vegetation subtype ranges ─────────
+export const SHORT_GRASS_R_MIN = 230
+export const SHORT_GRASS_R_MAX = 239
+export const TALL_GRASS_R_MIN = 240
+export const TALL_GRASS_R_MAX = 249
+
 // ── TSL grass material ───────────────────────────────────
 
 export const GRASS_TRAIL_COUNT = 5
@@ -90,6 +96,31 @@ export interface GrassMaterialUniforms {
   uInteractionStrength: { value: number }
 }
 
+export interface GrassMaterialConfig {
+  baseColor?: [number, number, number]
+  tipColor?: [number, number, number]
+  windStrength?: number
+  windFrequency?: number
+  widthScaleMin?: number
+  widthScaleExtent?: number
+  heightScaleMin?: number
+  heightScaleExtent?: number
+  interactionRadius?: number
+  interactionStrength?: number
+}
+
+export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
+  baseColor: [0.012, 0.035, 0.01],
+  tipColor: [0.04, 0.09, 0.02],
+  windStrength: 0.12,
+  widthScaleMin: 0.6,
+  widthScaleExtent: 0.6,
+  heightScaleMin: 0.7,
+  heightScaleExtent: 0.6,
+  interactionRadius: 2.0,
+  interactionStrength: 0.35,
+}
+
 /**
  * Per-instance world position attribute name.
  * Each InstancedMesh must have an InstancedBufferAttribute with this name
@@ -97,15 +128,26 @@ export interface GrassMaterialUniforms {
  */
 export const GRASS_INSTANCE_POS_ATTR = 'aInstanceWorldXZ'
 
-export function createGrassMaterial(): {
+export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   material: MeshStandardNodeMaterial
   uniforms: GrassMaterialUniforms
 } {
+  const bc = cfg?.baseColor ?? [0.015, 0.04, 0.008]
+  const tc = cfg?.tipColor ?? [0.06, 0.14, 0.03]
+  const ws = cfg?.windStrength ?? 0.06
+  const wf = cfg?.windFrequency ?? 2.0
+  const wsMin = cfg?.widthScaleMin ?? 0.7
+  const wsExt = cfg?.widthScaleExtent ?? 0.7
+  const hsMin = cfg?.heightScaleMin ?? 0.8
+  const hsExt = cfg?.heightScaleExtent ?? 0.4
+  const ir = cfg?.interactionRadius ?? 1.5
+  const is = cfg?.interactionStrength ?? 0.15
+
   const uTime = uniform(0)
-  const uWindStrength = uniform(0.06)
-  const uWindFrequency = uniform(2.0)
-  const uInteractionRadius = uniform(1.5)
-  const uInteractionStrength = uniform(0.15)
+  const uWindStrength = uniform(ws)
+  const uWindFrequency = uniform(wf)
+  const uInteractionRadius = uniform(ir)
+  const uInteractionStrength = uniform(is)
 
   // 5 individual trail point uniforms: vec3(worldX, worldZ, strength)
   const uTrail = Array.from({ length: GRASS_TRAIL_COUNT }, () =>
@@ -121,8 +163,8 @@ export function createGrassMaterial(): {
   const instanceWorldXZ = attribute(GRASS_INSTANCE_POS_ATTR, 'vec2')
 
   // ── Color: base → tip gradient with per-instance variation ──
-  const baseColor = vec3(0.015, 0.04, 0.008) // dark root
-  const tipColor = vec3(0.06, 0.14, 0.03) // bright tip
+  const baseColor = vec3(bc[0], bc[1], bc[2])
+  const tipColor = vec3(tc[0], tc[1], tc[2])
   const uvY = attribute('uv').y
   const gradientColor = mix(
     baseColor,
@@ -151,9 +193,8 @@ export function createGrassMaterial(): {
   // ── Per-instance shape variation: width & height ──
   const shapeHash1 = hash(vec2(instanceIndex.toFloat().mul(0.53), float(2.3)))
   const shapeHash2 = hash(vec2(instanceIndex.toFloat().mul(0.91), float(4.7)))
-  // Width: 0.7x ~ 1.4x, Height: 0.8x ~ 1.2x
-  const widthScale = float(0.7).add(shapeHash1.mul(0.7))
-  const heightScale = float(0.8).add(shapeHash2.mul(0.4))
+  const widthScale = float(wsMin).add(shapeHash1.mul(wsExt))
+  const heightScale = float(hsMin).add(shapeHash2.mul(hsExt))
 
   // ── Wind: displace upper vertices ──
   const rawPos = positionLocal.toVar()
