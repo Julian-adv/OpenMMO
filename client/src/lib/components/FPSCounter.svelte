@@ -36,6 +36,7 @@
     refractionEnabled,
     reflectionEnabled,
     torchLightEnabled,
+    windDebugVisible,
   } from '../stores/debugStore'
 
   function toDegrees(radians: number) {
@@ -118,6 +119,10 @@
       networkManager.sendTorchToggle(newValue)
       return newValue
     })
+  }
+
+  function toggleWindDebug() {
+    windDebugVisible.update((v) => !v)
   }
 </script>
 
@@ -268,6 +273,15 @@
           title="Toggle Torch Point Light"
         >
           TORCH
+        </button>
+
+        <button
+          class="action-btn wind-btn"
+          class:active={$windDebugVisible}
+          onclick={toggleWindDebug}
+          title="Toggle Wind Direction Arrow"
+        >
+          WIND
         </button>
       </div>
     </div>
@@ -462,5 +476,10 @@
   .action-btn.torch-btn.active {
     background: #b7791f;
     border-color: #ecc94b;
+  }
+
+  .action-btn.wind-btn.active {
+    background: #2f855a;
+    border-color: #68d391;
   }
 </style>
