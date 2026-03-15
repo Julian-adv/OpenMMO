@@ -130,6 +130,7 @@
   let waterMoonBrightness = $state(0)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
+  let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
   const entityClipGroupObj = (() => {
@@ -496,6 +497,9 @@
         playerDebugInfo.set(null)
       }
       loopProfiler.record('monsterLogic', performance.now() - monsterLogicStart)
+
+      // Update grass wind & trail
+      grassLayerRef?.update(deltaTime)
 
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()
@@ -866,10 +870,10 @@
 />
 
 <GameSceneGrassLayer
+  bind:this={grassLayerRef}
   {terrainTiles}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
-  time={waterTime}
   playerPosition={currentPlayer?.position ?? null}
 />
 

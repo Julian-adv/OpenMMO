@@ -7,11 +7,13 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import { enqueueTileWork } from '../../utils/tileWorkQueue'
+  import { windDebugVisible } from '../../stores/debugStore'
   import { createRng } from '../../utils/simplex-noise'
   import {
     createGrassBladeGeometry,
     createGrassMaterial,
     GRASS_INSTANCE_POS_ATTR,
+    GRASS_INSTANCE_ROT_ATTR,
     GRASS_TRAIL_COUNT,
     TALL_GRASS_CONFIG,
     SHORT_GRASS_R_MIN,
@@ -25,7 +27,6 @@
     terrainTiles: TerrainTile[]
     heightManager: TerrainHeightManager | null
     splatManager: TerrainSplatManager | null
-    time?: number
     playerPosition?: THREE.Vector3 | null
   }
 
@@ -33,7 +34,6 @@
     terrainTiles,
     heightManager = null,
     splatManager = null,
-    time = 0,
     playerPosition = null,
   }: Props = $props()
 
@@ -59,6 +59,21 @@
     shortGrassUniforms,
     tallGrassUniforms,
   ]
+  const baseWindStrengths = allUniforms.map((u) => u.uWindStrength.value)
+
+  // ── Wind debug arrow ──────────────────────────────────────
+  const WIND_ARROW_COLOR = 0x00ff88
+  const GUST_ARROW_COLOR = 0xff4444
+  const windArrowDir = new THREE.Vector3(1, 0, 0)
+  const windArrow = new THREE.ArrowHelper(
+    windArrowDir,
+    new THREE.Vector3(),
+    3,
+    WIND_ARROW_COLOR,
+    0.6,
+    0.3,
+  )
+  windArrow.visible = false
 
   // ── Player interaction trail with decay ────────────────────
   const TRAIL_MIN_DIST = 0.5 // min distance between trail points
@@ -67,11 +82,47 @@
   const trail: { x: number; z: number; strength: number; decaying: boolean }[] = []
   let lastTrailX = 0
   let lastTrailZ = 0
-  let prevTime = 0
+  let elapsedTime = 0
 
-  $effect(() => {
-    const dt = Math.min(time - prevTime, 0.1)
-    prevTime = time
+  // ── Wind direction: slowly drifts over time ──────────────
+  const WIND_TURN_MIN = 15 // seconds before direction change
+  const WIND_TURN_MAX = 40
+  const WIND_TURN_SPEED = 0.3 // radians per second (smooth lerp)
+  let windAngle = Math.random() * Math.PI * 2
+  let windTargetAngle = windAngle
+  let windChangeTimer = WIND_TURN_MIN + Math.random() * (WIND_TURN_MAX - WIND_TURN_MIN)
+
+  // ── Wind strength variation ──────────────────────────────
+  const WIND_STR_MIN = 0.3 // minimum multiplier (calm breeze)
+  const WIND_STR_MAX = 1.0 // maximum multiplier (strong wind)
+  const WIND_STR_CHANGE_MIN = 8 // seconds between strength changes
+  const WIND_STR_CHANGE_MAX = 20
+  const WIND_STR_LERP_SPEED = 0.5 // how fast strength transitions
+  let windStrengthMul = 0.5
+  let windStrengthTarget = 0.5
+  let windStrengthTimer = WIND_STR_CHANGE_MIN + Math.random() * (WIND_STR_CHANGE_MAX - WIND_STR_CHANGE_MIN)
+
+  const GUST_SPEED_MIN = 0.8 // band travel speed at weakest wind
+  const GUST_SPEED_MAX = 5.0 // band travel speed at strongest wind
+  let gustPhase = 0
+
+  // ── Gust lifecycle: active → rest → active ────────────
+  // Rest: long when calm, short/none when strong
+  const GUST_REST_MIN_CALM = 15
+  const GUST_REST_MAX_CALM = 30
+  const GUST_REST_MIN_STRONG = 0
+  const GUST_REST_MAX_STRONG = 2
+  const GUST_FADE_IN = 2.0
+  const GUST_ACTIVE_MIN = 10
+  const GUST_ACTIVE_MAX = 25
+  const GUST_FADE_OUT = 3.0
+  let gustIntensity = 0
+  let gustState: 'rest' | 'fade-in' | 'active' | 'fade-out' = 'rest'
+  let gustStateTimer = GUST_REST_MIN_CALM + Math.random() * (GUST_REST_MAX_CALM - GUST_REST_MIN_CALM)
+
+  export function update(deltaTime: number) {
+    const dt = Math.min(deltaTime / 1000, 0.1)
+    elapsedTime += dt
 
     // Rise until peak, then decay. Prune dead points.
     for (let i = trail.length - 1; i >= 0; i--) {
@@ -97,9 +148,88 @@
       }
     }
 
+    // ── Update wind strength ──
+    windStrengthTimer -= dt
+    if (windStrengthTimer <= 0) {
+      windStrengthTarget = WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
+      windStrengthTimer = WIND_STR_CHANGE_MIN + Math.random() * (WIND_STR_CHANGE_MAX - WIND_STR_CHANGE_MIN)
+    }
+    windStrengthMul += (windStrengthTarget - windStrengthMul) * Math.min(1, WIND_STR_LERP_SPEED * dt)
+
+    // ── Update wind direction (only during gust rest) ──
+    const gustResting = gustState === 'rest'
+    windChangeTimer -= dt
+    if (windChangeTimer <= 0) {
+      if (gustResting) {
+        windTargetAngle = windAngle + (Math.random() - 0.5) * Math.PI * 1.2
+        windChangeTimer = WIND_TURN_MIN + Math.random() * (WIND_TURN_MAX - WIND_TURN_MIN)
+      } else {
+        windChangeTimer = 0.5 // retry when gust finishes
+      }
+    }
+    if (gustResting) {
+      let angleDiff = windTargetAngle - windAngle
+      angleDiff = ((angleDiff + Math.PI) % (Math.PI * 2)) - Math.PI
+      if (angleDiff < -Math.PI) angleDiff += Math.PI * 2
+      windAngle += angleDiff * Math.min(1, WIND_TURN_SPEED * dt)
+    }
+
+    const windDirX = Math.cos(windAngle)
+    const windDirZ = Math.sin(windAngle)
+
+    // ── Gust lifecycle state machine ──
+    gustStateTimer -= dt
+    if (gustStateTimer <= 0) {
+      switch (gustState) {
+        case 'rest': {
+          gustState = 'fade-in'
+          gustStateTimer = GUST_FADE_IN
+          break
+        }
+        case 'fade-in': {
+          gustState = 'active'
+          gustStateTimer = GUST_ACTIVE_MIN + Math.random() * (GUST_ACTIVE_MAX - GUST_ACTIVE_MIN)
+          break
+        }
+        case 'active': {
+          gustState = 'fade-out'
+          gustStateTimer = GUST_FADE_OUT
+          break
+        }
+        case 'fade-out': {
+          gustState = 'rest'
+          // Rest duration depends on wind strength: calm → long rest, strong → short/no rest
+          const w = windStrengthMul
+          const restMin = GUST_REST_MIN_CALM + (GUST_REST_MIN_STRONG - GUST_REST_MIN_CALM) * w
+          const restMax = GUST_REST_MAX_CALM + (GUST_REST_MAX_STRONG - GUST_REST_MAX_CALM) * w
+          gustStateTimer = restMin + Math.random() * (restMax - restMin)
+          break
+        }
+      }
+    }
+    // Gust intensity envelope scaled by wind strength
+    const gustEnvelope = (() => {
+      switch (gustState) {
+        case 'rest': return 0
+        case 'fade-in': return 1 - gustStateTimer / GUST_FADE_IN
+        case 'active': return 1
+        case 'fade-out': return gustStateTimer / GUST_FADE_OUT
+      }
+    })()
+    gustIntensity = gustEnvelope * (0.3 + windStrengthMul * 0.7)
+
+    // Accumulate gust phase: faster when wind is strong
+    const gustSpeed = GUST_SPEED_MIN + (GUST_SPEED_MAX - GUST_SPEED_MIN) * windStrengthMul
+    gustPhase += gustSpeed * dt
+
     // Write trail into all material uniforms
-    for (const u of allUniforms) {
-      u.uTime.value = time
+    for (let ui = 0; ui < allUniforms.length; ui++) {
+      const u = allUniforms[ui]
+      u.uTime.value = elapsedTime
+      u.uWindStrength.value = baseWindStrengths[ui] * windStrengthMul
+      u.uWindDir.value.set(windDirX, windDirZ)
+      u.uGustPhase.value = gustPhase
+      u.uGustIntensity.value = gustIntensity
       for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
         if (i < trail.length) {
           u.uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
@@ -108,7 +238,20 @@
         }
       }
     }
-  })
+
+    // ── Update wind debug arrow ──
+    const showArrow = $windDebugVisible
+    windArrow.visible = showArrow
+    if (showArrow && playerPosition) {
+      const arrowLen = 1.5 + windStrengthMul * 3.5
+      windArrowDir.set(windDirX, 0, windDirZ)
+      windArrow.position.set(playerPosition.x, playerPosition.y + 3, playerPosition.z)
+      windArrow.setDirection(windArrowDir)
+      windArrow.setLength(arrowLen, arrowLen * 0.2, arrowLen * 0.1)
+      const arrowColor = gustIntensity > 0.1 ? GUST_ARROW_COLOR : WIND_ARROW_COLOR
+      windArrow.setColor(arrowColor)
+    }
+  }
 
   function tileSeed(tileX: number, tileZ: number): number {
     return ((tileX * 73856093) ^ (tileZ * 19349663)) | 0
@@ -236,6 +379,7 @@
       instancedMesh.frustumCulled = true
 
       const worldXZArray = new Float32Array(count * 2)
+      const rotationArray = new Float32Array(count)
 
       const placeRand = createRng(tileSeed(tileX, tileZ) ^ cfg.rMin)
       const dummy = new THREE.Object3D()
@@ -276,6 +420,7 @@
                 instancedMesh.setMatrixAt(idx, dummy.matrix)
                 worldXZArray[idx * 2] = worldX
                 worldXZArray[idx * 2 + 1] = worldZ
+                rotationArray[idx] = rotation
                 idx++
               }
             }
@@ -290,6 +435,8 @@
 
           const xzAttr = new THREE.InstancedBufferAttribute(worldXZArray, 2)
           instancedMesh.geometry.setAttribute(GRASS_INSTANCE_POS_ATTR, xzAttr)
+          const rotAttr = new THREE.InstancedBufferAttribute(rotationArray, 1)
+          instancedMesh.geometry.setAttribute(GRASS_INSTANCE_ROT_ATTR, rotAttr)
 
           instancedMesh.computeBoundingBox()
           instancedMesh.computeBoundingSphere()
@@ -393,3 +540,4 @@
 {#each [...tallGrassMap] as [tileId, mesh] (`tall_${tileId}`)}
   <T is={mesh} />
 {/each}
+<T is={windArrow} />

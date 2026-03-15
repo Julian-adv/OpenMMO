@@ -9,6 +9,7 @@ import {
   cos,
   mix,
   smoothstep,
+  fract,
   positionLocal,
   instanceIndex,
   hash,
@@ -90,6 +91,12 @@ export interface GrassMaterialUniforms {
   uTime: { value: number }
   uWindStrength: { value: number }
   uWindFrequency: { value: number }
+  /** Normalized wind direction (x, z) */
+  uWindDir: { value: THREE.Vector2 }
+  /** Accumulated gust wave phase (monotonically increasing) */
+  uGustPhase: { value: number }
+  /** Gust intensity (0 = calm, 1 = full gust) */
+  uGustIntensity: { value: number }
   /** vec3(worldX, worldZ, strength) per trail point */
   uTrail: { value: THREE.Vector3 }[]
   uInteractionRadius: { value: number }
@@ -127,6 +134,7 @@ export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
  * containing vec2 (worldX, worldZ) per instance.
  */
 export const GRASS_INSTANCE_POS_ATTR = 'aInstanceWorldXZ'
+export const GRASS_INSTANCE_ROT_ATTR = 'aInstanceRotation'
 
 export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   material: MeshStandardNodeMaterial
@@ -146,6 +154,9 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const uTime = uniform(0)
   const uWindStrength = uniform(ws)
   const uWindFrequency = uniform(wf)
+  const uWindDir = uniform(new THREE.Vector2(1, 0))
+  const uGustPhase = uniform(0)
+  const uGustIntensity = uniform(0)
   const uInteractionRadius = uniform(ir)
   const uInteractionStrength = uniform(is)
 
@@ -159,8 +170,9 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   mat.roughness = 0.8
   mat.metalness = 0.0
 
-  // ── Per-instance world position (vec2: x, z) ──
+  // ── Per-instance attributes ──
   const instanceWorldXZ = attribute(GRASS_INSTANCE_POS_ATTR, 'vec2')
+  const instanceRotation = attribute(GRASS_INSTANCE_ROT_ATTR, 'float')
 
   // ── Color: base → tip gradient with per-instance variation ──
   const baseColor = vec3(bc[0], bc[1], bc[2])
@@ -196,23 +208,58 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const widthScale = float(wsMin).add(shapeHash1.mul(wsExt))
   const heightScale = float(hsMin).add(shapeHash2.mul(hsExt))
 
-  // ── Wind: displace upper vertices ──
+  // ── Vertex displacement ──
   const rawPos = positionLocal.toVar()
   // Apply per-instance shape variation (width x, height y)
   const localPosX = rawPos.x.mul(widthScale)
   const localPosY = rawPos.y.mul(heightScale)
   const localPosZ = rawPos.z.mul(widthScale)
-  const windPhase = uTime.mul(uWindFrequency)
 
   const instanceHash = hash(vec2(instanceIndex.toFloat().mul(0.1), float(0.5)))
   const phaseOffset = instanceHash.mul(6.283)
 
   const heightFactor = uvY.mul(uvY)
-  const windAmount = heightFactor.mul(uWindStrength)
-  const windX = sin(windPhase.add(phaseOffset)).mul(windAmount)
-  const windZ = cos(windPhase.mul(0.7).add(phaseOffset.mul(1.3))).mul(
-    windAmount.mul(0.5)
+
+  // ── Idle sway: gentle in-place oscillation (original behavior) ──
+  const idleAmount = heightFactor.mul(uWindStrength)
+  const idleX = sin(uTime.mul(uWindFrequency).add(phaseOffset)).mul(idleAmount)
+  const idleZ = cos(
+    uTime.mul(uWindFrequency.mul(0.7)).add(phaseOffset.mul(1.3))
+  ).mul(idleAmount.mul(0.5))
+
+  // ── Directional wind: lean toward wind direction ──
+  // Inverse-rotate world-space wind direction into blade local space
+  const cosR = cos(instanceRotation)
+  const sinR = sin(instanceRotation)
+  const localWindX = uWindDir.x.mul(cosR).sub(uWindDir.y.mul(sinR))
+  const localWindZ = uWindDir.x.mul(sinR).add(uWindDir.y.mul(cosR))
+
+  // Narrow gust band: projects onto wind direction
+  const gustSpatial = instanceWorldXZ.x
+    .mul(uWindDir.x)
+    .add(instanceWorldXZ.y.mul(uWindDir.y))
+  // Perpendicular position for wavefront curvature
+  const gustPerp = instanceWorldXZ.x
+    .mul(uWindDir.y.negate())
+    .add(instanceWorldXZ.y.mul(uWindDir.x))
+  // Smooth arc: offset phase by sin of perpendicular position
+  const gustCurve = sin(gustPerp.mul(0.15)).mul(4.0)
+  const gustCycle = fract(
+    gustSpatial
+      .add(gustCurve)
+      .sub(uGustPhase)
+      .mul(1.0 / 60.0)
   )
+  const gustPulse = smoothstep(float(0), float(0.03), gustCycle).mul(
+    float(1).sub(smoothstep(float(0.03), float(0.08), gustCycle))
+  )
+  const gust = gustPulse.mul(uGustIntensity)
+
+  // Lean amount: base lean + gust modulation
+  const leanAmount = heightFactor.mul(uWindStrength.mul(5.0))
+  const leanWave = leanAmount.mul(float(1.0).add(gust.mul(2.0)))
+  const windX = localWindX.mul(leanWave)
+  const windZ = localWindZ.mul(leanWave)
 
   // ── Player interaction: additive trail push (pure functional, no assign) ──
   let totalPushX: N = float(0)
@@ -247,9 +294,9 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const pushY = pushStrength.mul(heightFactor).mul(-0.15)
 
   mat.positionNode = vec3(
-    localPosX.add(windX).add(pushX),
+    localPosX.add(idleX).add(windX).add(pushX),
     localPosY.add(pushY),
-    localPosZ.add(windZ).add(pushZ)
+    localPosZ.add(idleZ).add(windZ).add(pushZ)
   )
 
   return {
@@ -258,6 +305,9 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
       uTime: uTime as unknown as { value: number },
       uWindStrength: uWindStrength as unknown as { value: number },
       uWindFrequency: uWindFrequency as unknown as { value: number },
+      uWindDir: uWindDir as unknown as { value: THREE.Vector2 },
+      uGustPhase: uGustPhase as unknown as { value: number },
+      uGustIntensity: uGustIntensity as unknown as { value: number },
       uTrail: uTrail as unknown as { value: THREE.Vector3 }[],
       uInteractionRadius: uInteractionRadius as unknown as { value: number },
       uInteractionStrength: uInteractionStrength as unknown as {
