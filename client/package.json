@@ -25,7 +25,7 @@
     "globals": "^16.3.0",
     "jiti": "^2.5.1",
     "prettier": "^3.6.2",
-    "svelte": "^5.37.3",
+    "svelte": "^5.53.12",
     "svelte-check": "^4.3.1",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.39.0",
@@ -33,10 +33,10 @@
     "vite-plugin-wasm": "^3.5.0"
   },
   "dependencies": {
-    "@threlte/core": "^8.1.4",
-    "@threlte/extras": "^9.4.4",
+    "@threlte/core": "^8.4.1",
+    "@threlte/extras": "^9.8.1",
     "@types/three": "^0.179.0",
     "socket.io-client": "^4.8.1",
-    "three": "^0.179.1"
+    "three": "^0.183.2"
   }
 }
