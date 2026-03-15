@@ -33,19 +33,31 @@ export function createGrassBladeGeometry(
   width = 0.04,
   height = 0.2,
   midFrac = 0.4,
-  midWidthFrac = 0.5
+  midWidthFrac = 0.5,
+  secondHeightFrac = 0.65
 ): THREE.BufferGeometry {
   const hw = width / 2
   const mh = height * midFrac
   const mw = hw * midWidthFrac
 
+  // Second blade: shorter, rotated 90° (in ZY plane)
+  const h2 = height * secondHeightFrac
+  const mh2 = h2 * midFrac
+
   // prettier-ignore
   const positions = new Float32Array([
+    // Blade 1 (XY plane, faces Z)
     -hw, 0,      0,   // 0: base-left
      hw, 0,      0,   // 1: base-right
     -mw, mh,     0,   // 2: mid-left
      mw, mh,     0,   // 3: mid-right
      0,  height, 0,   // 4: tip
+    // Blade 2 (ZY plane, faces X) — shorter
+     0,  0,     -hw,  // 5: base-left
+     0,  0,      hw,  // 6: base-right
+     0,  mh2,   -mw,  // 7: mid-left
+     0,  mh2,    mw,  // 8: mid-right
+     0,  h2,     0,   // 9: tip
   ])
 
   // prettier-ignore
@@ -55,9 +67,15 @@ export function createGrassBladeGeometry(
     0, 0, 1,
     0, 0, 1,
     0, 0, 1,
+    1, 0, 0,
+    1, 0, 0,
+    1, 0, 0,
+    1, 0, 0,
+    1, 0, 0,
   ])
 
   // UV: u=horizontal (0-1), v=vertical (0=base, 1=tip)
+  // Both blades use full 0→1 v range so wind bending applies equally
   // prettier-ignore
   const uvs = new Float32Array([
     0, 0,
@@ -65,9 +83,18 @@ export function createGrassBladeGeometry(
     0, midFrac,
     1, midFrac,
     0.5, 1,
+    0, 0,
+    1, 0,
+    0, midFrac,
+    1, midFrac,
+    0.5, 1,
   ])
 
-  const indices = [0, 1, 2, 1, 3, 2, 2, 3, 4]
+  // prettier-ignore
+  const indices = [
+    0, 1, 2,  1, 3, 2,  2, 3, 4,  // blade 1
+    5, 6, 7,  6, 8, 7,  7, 8, 9,  // blade 2
+  ]
 
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
