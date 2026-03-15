@@ -3,6 +3,7 @@ import type { LayerConfig } from '../utils/splatLayerLoader'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import type { TerrainSplatManager } from '../managers/terrainSplatManager'
+import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
 
 export interface HoveredCell {
   tileX: number
@@ -101,3 +102,6 @@ export const terrainForceRebuild = writable<number>(0)
 // Manager references for terrain generation dialog
 export const editorHeightManager = writable<TerrainHeightManager | null>(null)
 export const editorSplatManager = writable<TerrainSplatManager | null>(null)
+export const editorGrassDataManager = writable<TerrainGrassDataManager | null>(
+  null
+)

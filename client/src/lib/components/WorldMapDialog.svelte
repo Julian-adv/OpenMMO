@@ -22,13 +22,14 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
   import { worldMapVisible, debugVisible, teleportLoading } from '../stores/debugStore'
-  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
+  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
   import { get } from 'svelte/store'
   import { regionMinimapServerUrl, generateRegionMinimap } from '../terrain/regionMinimapGenerator'
   import { tileToRegion } from '../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
+  import { generateAndSaveGrassData } from '../utils/grass-data'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
     const key = `${rx},${rz}`
@@ -66,6 +67,7 @@
   let playerRegionRz = $derived(tileToRegion(Math.round(playerZ / TILE_DIM)))
   let deleting = $state(false)
   let resplatting = $state(false)
+  let resplatProgress = $state('')
 
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
@@ -357,6 +359,7 @@
     if (!heightManager || !splatManager || !metaManager) return
 
     resplatting = true
+    resplatProgress = 'Loading heightmaps...'
     try {
       const apiUrl = getTerrainApiUrl()
 
@@ -405,6 +408,8 @@
       config.maxHeight = Math.max(actualMax, 1)
 
       // Regenerate splatmaps
+      resplatProgress = 'Generating splatmaps...'
+      await new Promise((r) => setTimeout(r, 0))
       const results = regenerateRegionSplatmaps(rx, rz, tileHeightmaps, config)
 
       // Apply to managers
@@ -414,6 +419,7 @@
       }
 
       // Save splatmaps to server in batches
+      resplatProgress = 'Saving splatmaps...'
       const BATCH_SIZE = 8
       for (let i = 0; i < results.length; i += BATCH_SIZE) {
         const batch = results.slice(i, i + BATCH_SIZE)
@@ -428,7 +434,16 @@
         )
       }
 
+      // Generate and save grass placement data
+      const grassMgr = get(editorGrassDataManager)
+      if (grassMgr) {
+        await generateAndSaveGrassData(results, heightManager, grassMgr, (label) => {
+          resplatProgress = label
+        })
+      }
+
       // Regenerate minimap
+      resplatProgress = 'Generating minimap...'
       await generateRegionMinimap(rx, rz, metaManager)
       minimapVersion.update((v) => v + 1)
 
@@ -527,7 +542,7 @@
         {#if $debugVisible}
           <span class="controls-separator"></span>
           <button class="ctrl-btn debug-btn" onclick={handleGenerate} title="Generate terrain for region ({playerRegionRx}, {playerRegionRz})">Gen</button>
-          <button class="ctrl-btn debug-btn" onclick={handleResplat} disabled={resplatting} title="Regenerate splatmaps for region ({playerRegionRx}, {playerRegionRz})">{resplatting ? '...' : 'Resplat'}</button>
+          <button class="ctrl-btn debug-btn" onclick={handleResplat} disabled={resplatting} title="Regenerate splatmaps for region ({playerRegionRx}, {playerRegionRz})">{resplatting ? resplatProgress : 'Resplat'}</button>
           <button class="ctrl-btn debug-btn danger" onclick={handleDelete} disabled={deleting} title="Delete terrain for region ({playerRegionRx}, {playerRegionRz})">Del</button>
         {/if}
       </div>

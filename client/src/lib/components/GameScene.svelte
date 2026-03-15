@@ -58,7 +58,7 @@
     refractionEnabled,
     reflectionEnabled,
   } from '../stores/debugStore'
-  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, terrainForceRebuild } from '../stores/editorStore'
+  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, terrainForceRebuild } from '../stores/editorStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
   import {
@@ -86,6 +86,7 @@
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { TerrainMetaManager } from '../managers/terrainMetaManager'
+  import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { loadFoamTexture } from '../shaders/water-foam-gen'
   import { generateCausticsTexture } from '../shaders/caustics-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
@@ -116,10 +117,12 @@
   const terrainHeightManager = new TerrainHeightManager()
   const terrainSplatManager = new TerrainSplatManager()
   const terrainMetaManager = new TerrainMetaManager()
+  const terrainGrassDataManager = new TerrainGrassDataManager()
   monsterManager.heightManager = terrainHeightManager
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
   editorMetaManager.set(terrainMetaManager)
+  editorGrassDataManager.set(terrainGrassDataManager)
   let waterNormalMap = $state<THREE.Texture | null>(null)
   let waterFoamMap = $state<THREE.Texture | null>(null)
   let waterCausticsMap = $state<THREE.Texture | null>(null)
@@ -426,7 +429,7 @@
       }
       updateTerrainTilesFromPlayer()
       drainTileQueue()
-      drainTileWork(1)
+      drainTileWork()
       syncTileMeshes()
       // Finalize teleport once full 3x3 heightmap grid is loaded
       if ($teleportLoading && currentPlayer &&
@@ -872,8 +875,7 @@
 <GameSceneGrassLayer
   bind:this={grassLayerRef}
   {terrainTiles}
-  heightManager={terrainHeightManager}
-  splatManager={terrainSplatManager}
+  grassDataManager={terrainGrassDataManager}
   playerPosition={currentPlayer?.position ?? null}
 />
 

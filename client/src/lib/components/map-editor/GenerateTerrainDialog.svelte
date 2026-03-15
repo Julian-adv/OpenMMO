@@ -22,6 +22,7 @@
     editorMetaManager,
     editorHeightManager,
     editorSplatManager,
+    editorGrassDataManager,
     regionMetaVersion,
     minimapVersion,
     terrainForceRebuild,
@@ -36,6 +37,7 @@
   import type { RegionMeta } from '../../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../../utils/networkUtils'
   import { generateRegionMinimap } from '../../terrain/regionMinimapGenerator'
+  import { generateAndSaveGrassData } from '../../utils/grass-data'
 
   const REGION_SIZE = 16
   const TILE_DIM = 64
@@ -246,6 +248,17 @@
 
       // Save in parallel batches
       await saveTilesBatched(tiles)
+
+      progress = 70
+      progressLabel = 'Generating grass data...'
+
+      // Generate and save grass placement data
+      const grassMgr = get(editorGrassDataManager)
+      if (grassMgr) {
+        await generateAndSaveGrassData(tiles, heightManager, grassMgr, (label) => {
+          progressLabel = label
+        })
+      }
 
       progress = 80
       progressLabel = 'Generating minimap...'

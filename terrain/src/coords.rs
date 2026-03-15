@@ -39,6 +39,17 @@ pub fn splat_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("splat").join(region_dir_name(rx, rz))
 }
 
+/// Build filesystem path for a grass placement data file.
+pub fn grass_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
+    let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
+    grass_region_dir(base, rx, rz).join(format!("g_{:+05}_{:+05}.bin", tx, tz))
+}
+
+/// Build filesystem path for a region's grass tile directory.
+pub fn grass_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("grass").join(region_dir_name(rx, rz))
+}
+
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("minimap")
