@@ -34,7 +34,7 @@
   const SUB_CHUNK_SIZE = 16
   const SUB_CHUNK_GRID_RADIUS = 2 // 2 = 5×5 grid (80m coverage)
   const GRID_COUNT = (SUB_CHUNK_GRID_RADIUS * 2 + 1) ** 2 // 25
-  const MESH_CAPACITY = 1024
+  const MESH_CAPACITY = 2560
 
   // ── Async-loaded geometry & materials ─────────────────
   // Stored for reference/disposal only; meshes are created imperatively below
