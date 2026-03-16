@@ -248,6 +248,9 @@
           FAST MOVE
         </button>
 
+      </div>
+
+      <div class="button-group">
         <button
           class="action-btn refraction-btn"
           class:active={$refractionEnabled}
