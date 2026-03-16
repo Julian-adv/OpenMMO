@@ -199,6 +199,13 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
     smoothstep(float(0), float(0.8), uvY)
   )
 
+  // Root darkening (AO): darken the bottom of each blade
+  const rootAO = mix(
+    float(0.45),
+    float(1.0),
+    smoothstep(float(0), float(0.35), uvY)
+  )
+
   // Per-instance hue/brightness variation via hashes of instanceIndex
   const brightnessHash = hash(
     vec2(instanceIndex.toFloat().mul(0.37), float(1.7))
@@ -211,7 +218,7 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
     float(1.0),
     float(1.0).add(hueHash.sub(0.5).mul(-0.1))
   )
-  mat.colorNode = gradientColor.mul(brightness).mul(hueShift)
+  mat.colorNode = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
 
   // Do NOT set normalNode — the geometry normals (0,1,0) will be
   // automatically transformed to view-space by the default pipeline.
