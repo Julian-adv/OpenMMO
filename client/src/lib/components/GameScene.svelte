@@ -555,7 +555,14 @@
         const savedEntityVisible = entityClipGroup?.visible
         if (entityClipGroup) entityClipGroup.visible = false
 
+        // Hide grass during refraction — InstancedMesh per-pass overhead is too high
+        const grassGrp = grassLayerRef?.getGroup()
+        const savedGrassVisible = grassGrp?.visible
+        if (grassGrp) grassGrp.visible = false
+
         refractionManager.render()
+
+        if (grassGrp) grassGrp.visible = savedGrassVisible ?? true
 
         if (entityClipGroup) entityClipGroup.visible = savedEntityVisible ?? true
 
@@ -587,8 +594,14 @@
           if (nt) { nametagGroups.push(nt); nt.visible = false }
         }
 
+        // Hide grass during reflection — InstancedMesh per-pass overhead
+        const grassGrpRefl = grassLayerRef?.getGroup()
+        const savedGrassVisibleRefl = grassGrpRefl?.visible
+        if (grassGrpRefl) grassGrpRefl.visible = false
+
         reflectionManager.render()
 
+        if (grassGrpRefl) grassGrpRefl.visible = savedGrassVisibleRefl ?? true
         for (const nt of nametagGroups) nt.visible = true
       } else if (reflectionManager) {
         reflectionManager.clear()

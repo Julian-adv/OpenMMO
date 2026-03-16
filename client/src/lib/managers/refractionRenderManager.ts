@@ -8,6 +8,7 @@ import { RenderTarget } from 'three/webgpu'
 export class RefractionRenderManager {
   readonly target: RenderTarget
   private renderer: {
+    _initialized: boolean
     getRenderTarget(): THREE.RenderTarget | null
     setRenderTarget(target: THREE.RenderTarget | null): void
     render(scene: THREE.Scene, camera: THREE.Camera): void
@@ -18,6 +19,7 @@ export class RefractionRenderManager {
 
   constructor(
     renderer: {
+      _initialized: boolean
       getRenderTarget(): THREE.RenderTarget | null
       setRenderTarget(target: THREE.RenderTarget | null): void
       render(scene: THREE.Scene, camera: THREE.Camera): void
@@ -54,7 +56,7 @@ export class RefractionRenderManager {
 
   /** Render scene without water to the refraction target. */
   render() {
-    if (!this.camera) return
+    if (!this.camera || !this.renderer._initialized) return
 
     // Hide water meshes
     if (this.waterGroup) this.waterGroup.visible = false
@@ -70,6 +72,7 @@ export class RefractionRenderManager {
 
   /** Clear the refraction target to black. */
   clear() {
+    if (!this.renderer._initialized || !this.camera) return
     const currentRenderTarget = this.renderer.getRenderTarget()
     this.renderer.setRenderTarget(this.target)
     const savedVisible = this.scene.visible

@@ -36,6 +36,7 @@ const _reflectionMatrix = /* @__PURE__ */ new THREE.Matrix4().set(
 export class ReflectionRenderManager {
   readonly target: RenderTarget
   private renderer: {
+    _initialized: boolean
     getRenderTarget(): THREE.RenderTarget | null
     setRenderTarget(target: THREE.RenderTarget | null): void
     render(scene: THREE.Scene, camera: THREE.Camera): void
@@ -57,6 +58,7 @@ export class ReflectionRenderManager {
 
   constructor(
     renderer: {
+      _initialized: boolean
       getRenderTarget(): THREE.RenderTarget | null
       setRenderTarget(target: THREE.RenderTarget | null): void
       render(scene: THREE.Scene, camera: THREE.Camera): void
@@ -108,7 +110,7 @@ export class ReflectionRenderManager {
 
   /** Render reflected entities to the reflection target. */
   render() {
-    if (!this.camera) return
+    if (!this.camera || !this.renderer._initialized) return
 
     // --- build reflected camera (avoid copy() which resets auto-update flags) ---
     const cam = this.camera as THREE.OrthographicCamera
@@ -163,6 +165,7 @@ export class ReflectionRenderManager {
 
   /** Clear the reflection target to transparent black. */
   clear() {
+    if (!this.renderer._initialized) return
     const savedClearColor = new THREE.Color()
     this.renderer.getClearColor(savedClearColor)
     const savedClearAlpha = this.renderer.getClearAlpha()

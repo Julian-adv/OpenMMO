@@ -47,6 +47,11 @@
 
   // ── Mesh management via THREE.Group (no Svelte proxy) ──
   const grassGroup = new THREE.Group()
+
+  /** Expose grassGroup for visibility toggling during render passes */
+  export function getGroup(): THREE.Group {
+    return grassGroup
+  }
   let shortMeshes: THREE.InstancedMesh[] = []
   let tallMeshes: THREE.InstancedMesh[] = []
 
