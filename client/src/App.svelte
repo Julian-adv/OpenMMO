@@ -7,7 +7,9 @@
   import CelestialDebugDialog from './lib/components/CelestialDebugDialog.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
+  import CharacterSelectScene from './lib/components/CharacterSelectScene.svelte'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
+  import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
   import LoadingDialog from './lib/components/LoadingDialog.svelte'
   import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
@@ -44,6 +46,12 @@
   let isCurrentPlayerLoading = $state(false)
   let isSceneCompiling = $state(true)
   let kickedMessage = $state('')
+
+  // Character create screen state
+  let createSelectedClass = $state<CharacterClass>('warrior')
+
+  // Whether the shared Canvas should be mounted (all screens except login)
+  let showCanvas = $derived(screen !== 'login')
 
   $effect(() => {
     if (selectedCharacterId === null) {
@@ -216,16 +224,41 @@
 </script>
 
 <main>
-  {#if screen === 'game'}
-    <div class="game-shell" class:dead={isPlayerDead}>
+  <!-- Shared Canvas: one WebGPU device across character select, create, and game.
+       Pipelines compiled during character select are reused in game. -->
+  {#if showCanvas}
+    <div class="canvas-layer" class:dead={screen === 'game' && isPlayerDead}>
       <Canvas renderMode="always" shadows createRenderer={createWebGPURenderer}>
-        <GameScene
-          {serverUrl}
-          onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
-          bind:isCurrentPlayerLoading
-          bind:isSceneCompiling
-        />
+        {#if screen === 'character-select'}
+          <CharacterSelectScene
+            characters={accountCharacters}
+            {selectedCharacterId}
+            onSlotClick={(i) => {
+              const c = accountCharacters[i]
+              if (c) { handleSelectCharacter(c.id) } else { handleOpenCreateCharacterScreen() }
+            }}
+            onSlotDoubleClick={(i) => {
+              const c = accountCharacters[i]
+              if (c) { handleSelectCharacter(c.id); handleStartGame(c.id) }
+            }}
+          />
+        {:else if screen === 'character-create'}
+          <CharacterCreateScene characterClass={createSelectedClass} />
+        {:else if screen === 'game'}
+          <GameScene
+            {serverUrl}
+            onCurrentPlayerDyingFinished={handleCurrentPlayerDyingFinished}
+            bind:isCurrentPlayerLoading
+            bind:isSceneCompiling
+          />
+        {/if}
       </Canvas>
+    </div>
+  {/if}
+
+  <!-- UI overlays (outside Canvas) -->
+  {#if screen === 'game'}
+    <div class="game-hud">
       <ChatPanel />
       <FPSCounter />
       <GameTimeWidget />
@@ -277,8 +310,6 @@
       {accountName}
       characters={accountCharacters}
       {selectedCharacterId}
-      onSelectCharacter={handleSelectCharacter}
-      onRequestCreateCharacter={handleOpenCreateCharacterScreen}
       onStartGame={handleStartGame}
       onDeleteCharacter={handleDeleteCharacter}
       onLogout={handleLogoutToLogin}
@@ -287,6 +318,8 @@
     <CharacterCreateScreen
       {accountName}
       characters={accountCharacters}
+      selectedClass={createSelectedClass}
+      onClassChange={(cls) => { createSelectedClass = cls }}
       onRollCharacterStats={handleRollCharacterStats}
       onCreateCharacter={handleCreateCharacter}
       onCharacterCreated={handleCharacterCreated}
@@ -311,14 +344,27 @@
     position: relative;
   }
 
-  .game-shell {
-    width: 100%;
-    height: 100%;
+  .canvas-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
     transition: filter 180ms ease;
   }
 
-  .game-shell.dead {
+  .canvas-layer.dead {
     filter: grayscale(100%);
+  }
+
+  .game-hud {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  /* Allow pointer events on interactive HUD children */
+  .game-hud :global(*) {
+    pointer-events: auto;
   }
 
   .corner-actions {

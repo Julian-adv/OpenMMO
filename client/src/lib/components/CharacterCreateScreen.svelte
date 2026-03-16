@@ -1,19 +1,18 @@
 <script lang="ts">
-  import { Canvas } from '@threlte/core'
   import type {
     AccountCharacter,
     CharacterClass,
     CharacterRollResult,
     RollCharacterStatsResult,
   } from '../network/socket'
-  import CharacterCreateScene from './CharacterCreateScene.svelte'
-  import { createWebGPURenderer } from '../utils/renderer'
 
   const MAX_CHARACTER_SLOTS = 3
 
   interface Props {
     accountName: string
     characters: AccountCharacter[]
+    selectedClass: CharacterClass
+    onClassChange: (cls: CharacterClass) => void
     onRollCharacterStats: () => Promise<RollCharacterStatsResult>
     onCreateCharacter: (
       characterName: string,
@@ -26,6 +25,8 @@
   let {
     accountName,
     characters,
+    selectedClass,
+    onClassChange,
     onRollCharacterStats,
     onCreateCharacter,
     onCharacterCreated,
@@ -33,7 +34,6 @@
   }: Props = $props()
 
   let createCharacterName = $state('')
-  let selectedClass = $state<CharacterClass>('warrior')
   let rolledStats = $state<CharacterRollResult | null>(null)
   let isCreating = $state(false)
   let isRolling = $state(false)
@@ -45,6 +45,11 @@
 
   function atSlotLimit() {
     return characters.length >= MAX_CHARACTER_SLOTS
+  }
+
+  function selectClass(cls: CharacterClass) {
+    onClassChange(cls)
+    rolledStats = null
   }
 
   async function handleRoll() {
@@ -107,124 +112,105 @@
   }
 </script>
 
-<div class="character-create-screen">
-  <div class="canvas-layer">
-    <Canvas renderMode="always" shadows createRenderer={createWebGPURenderer}>
-      <CharacterCreateScene characterClass={selectedClass} />
-    </Canvas>
+<!-- UI overlay only — the 3D scene is rendered in the shared Canvas in App.svelte -->
+<div class="character-create-overlay">
+  <div class="top-bar">
+    <h1 class="title">Create Character</h1>
+    <p class="account-name">Account: {accountName}</p>
   </div>
 
-  <div class="overlay-layer">
-    <div class="top-bar">
-      <h1 class="title">Create Character</h1>
-      <p class="account-name">Account: {accountName}</p>
-    </div>
+  <div class="bottom-bar">
+    {#if errorMessage}
+      <div class="error-message">{errorMessage}</div>
+    {/if}
 
-    <div class="bottom-bar">
-      {#if errorMessage}
-        <div class="error-message">{errorMessage}</div>
-      {/if}
-
-      <form class="create-form" onsubmit={submitCreateCharacter}>
-        <div class="class-field">
-          <span>Class</span>
-          <div class="class-buttons">
-            <button
-              type="button"
-              class="class-btn"
-              class:class-selected={selectedClass === 'warrior'}
-              disabled={isBusy()}
-              onclick={() => { selectedClass = 'warrior'; rolledStats = null }}
-            >
-              Warrior
-            </button>
-            <button
-              type="button"
-              class="class-btn"
-              class:class-selected={selectedClass === 'knight'}
-              disabled={isBusy()}
-              onclick={() => { selectedClass = 'knight'; rolledStats = null }}
-            >
-              Knight
-            </button>
-            <button
-              type="button"
-              class="class-btn"
-              class:class-selected={selectedClass === 'thief'}
-              disabled={isBusy()}
-              onclick={() => { selectedClass = 'thief'; rolledStats = null }}
-            >
-              Thief
-            </button>
-          </div>
-        </div>
-
-        <label class="name-field" for="characterName">
-          <span>Name</span>
-          <input
-            id="characterName"
-            type="text"
-            bind:value={createCharacterName}
-            maxlength={24}
-            placeholder="Enter character name"
-            disabled={isBusy()}
-          />
-        </label>
-
-        <div class="rolled-attributes">
-          {#if rolledStats}
-            <div class="attr">STR {rolledStats.attributes.str}</div>
-            <div class="attr">DEX {rolledStats.attributes.dex}</div>
-            <div class="attr">CON {rolledStats.attributes.con}</div>
-            <div class="attr">INT {rolledStats.attributes.int}</div>
-            <div class="attr">WIS {rolledStats.attributes.wis}</div>
-            <div class="attr">CHA {rolledStats.attributes.cha}</div>
-            <div class="attr">HP {rolledStats.maxHp}</div>
-          {:else}
-            <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
-          {/if}
-        </div>
-
-        <div class="create-actions">
-          <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
-            {isRolling ? 'Rolling...' : 'Roll'}
-          </button>
+    <form class="create-form" onsubmit={submitCreateCharacter}>
+      <div class="class-field">
+        <span>Class</span>
+        <div class="class-buttons">
           <button
-            type="submit"
-            class="primary"
-            disabled={isBusy() || !rolledStats || atSlotLimit()}
+            type="button"
+            class="class-btn"
+            class:class-selected={selectedClass === 'warrior'}
+            disabled={isBusy()}
+            onclick={() => selectClass('warrior')}
           >
-            {isCreating ? 'Creating...' : 'Create'}
+            Warrior
           </button>
           <button
             type="button"
-            class="secondary"
+            class="class-btn"
+            class:class-selected={selectedClass === 'knight'}
             disabled={isBusy()}
-            onclick={onCancel}
+            onclick={() => selectClass('knight')}
           >
-            Cancel
+            Knight
+          </button>
+          <button
+            type="button"
+            class="class-btn"
+            class:class-selected={selectedClass === 'thief'}
+            disabled={isBusy()}
+            onclick={() => selectClass('thief')}
+          >
+            Thief
           </button>
         </div>
-      </form>
-    </div>
+      </div>
+
+      <label class="name-field" for="characterName">
+        <span>Name</span>
+        <input
+          id="characterName"
+          type="text"
+          bind:value={createCharacterName}
+          maxlength={24}
+          placeholder="Enter character name"
+          disabled={isBusy()}
+        />
+      </label>
+
+      <div class="rolled-attributes">
+        {#if rolledStats}
+          <div class="attr">STR {rolledStats.attributes.str}</div>
+          <div class="attr">DEX {rolledStats.attributes.dex}</div>
+          <div class="attr">CON {rolledStats.attributes.con}</div>
+          <div class="attr">INT {rolledStats.attributes.int}</div>
+          <div class="attr">WIS {rolledStats.attributes.wis}</div>
+          <div class="attr">CHA {rolledStats.attributes.cha}</div>
+          <div class="attr">HP {rolledStats.maxHp}</div>
+        {:else}
+          <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
+        {/if}
+      </div>
+
+      <div class="create-actions">
+        <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
+          {isRolling ? 'Rolling...' : 'Roll'}
+        </button>
+        <button
+          type="submit"
+          class="primary"
+          disabled={isBusy() || !rolledStats || atSlotLimit()}
+        >
+          {isCreating ? 'Creating...' : 'Create'}
+        </button>
+        <button
+          type="button"
+          class="secondary"
+          disabled={isBusy()}
+          onclick={onCancel}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
   </div>
 </div>
 
 <style>
-  .character-create-screen {
+  .character-create-overlay {
     position: fixed;
-    inset: 0;
-    background: linear-gradient(140deg, #0f1621 0%, #1e2d43 55%, #263a58 100%);
-  }
-
-  .canvas-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-  }
-
-  .overlay-layer {
-    position: absolute;
     inset: 0;
     z-index: 1;
     display: flex;
@@ -232,6 +218,7 @@
     justify-content: space-between;
     color: #edf2f7;
     pointer-events: none;
+    /* No background — the gradient is rendered behind the shared Canvas in App.svelte */
   }
 
   .top-bar {

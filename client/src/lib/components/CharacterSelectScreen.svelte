@@ -1,17 +1,10 @@
 <script lang="ts">
-  import { Canvas } from '@threlte/core'
   import type { AccountCharacter } from '../network/socket'
-  import CharacterSelectScene from './CharacterSelectScene.svelte'
-  import { createWebGPURenderer } from '../utils/renderer'
-
-  const MAX_CHARACTER_SLOTS = 3
 
   interface Props {
     accountName: string
     characters: AccountCharacter[]
     selectedCharacterId: number | null
-    onSelectCharacter: (characterId: number) => void
-    onRequestCreateCharacter: () => void
     onStartGame: (characterId: number) => Promise<{ ok: boolean; message?: string }>
     onDeleteCharacter: (
       characterId: number
@@ -23,8 +16,6 @@
     accountName,
     characters,
     selectedCharacterId,
-    onSelectCharacter,
-    onRequestCreateCharacter,
     onStartGame,
     onDeleteCharacter,
     onLogout,
@@ -36,32 +27,6 @@
 
   function isBusy() {
     return isStarting || isDeleting
-  }
-
-  function handleSlotClick(slotIndex: number) {
-    if (isBusy()) return
-
-    const character = characters[slotIndex]
-    errorMessage = ''
-    if (character) {
-      onSelectCharacter(character.id)
-      return
-    }
-
-    if (characters.length >= MAX_CHARACTER_SLOTS) {
-      errorMessage = 'A maximum of 3 characters can be created.'
-      return
-    }
-
-    onRequestCreateCharacter()
-  }
-
-  async function handleSlotDoubleClick(slotIndex: number) {
-    if (isBusy()) return
-    const character = characters[slotIndex]
-    if (!character) return
-    onSelectCharacter(character.id)
-    await handleStart(character.id)
   }
 
   async function handleStart(characterId?: number) {
@@ -100,73 +65,49 @@
   }
 </script>
 
-<div class="character-select-screen">
-  <div class="canvas-layer">
-    <Canvas renderMode="always" shadows createRenderer={createWebGPURenderer}>
-      <CharacterSelectScene
-        {characters}
-        {selectedCharacterId}
-        onSlotClick={handleSlotClick}
-        onSlotDoubleClick={handleSlotDoubleClick}
-      />
-    </Canvas>
+<!-- UI overlay only — the 3D scene is rendered in the shared Canvas in App.svelte -->
+<div class="character-select-overlay">
+  <div class="top-bar">
+    <h1 class="title">Character Select</h1>
+    <p class="account-name">Account: {accountName}</p>
   </div>
 
-  <div class="overlay-layer">
-    <div class="top-bar">
-      <h1 class="title">Character Select</h1>
-      <p class="account-name">Account: {accountName}</p>
-    </div>
-
-    <div class="bottom-bar">
-      {#if errorMessage}
-        <div class="error-message">{errorMessage}</div>
-      {/if}
-      <div class="actions">
-        <button
-          type="button"
-          class="secondary"
-          onclick={onLogout}
-          disabled={isBusy()}
-        >
-          Back
-        </button>
-        <button
-          type="button"
-          class="primary"
-          onclick={() => handleStart()}
-          disabled={!selectedCharacterId || isBusy()}
-        >
-          {isStarting ? 'Starting...' : 'Start'}
-        </button>
-        <button
-          type="button"
-          class="danger"
-          onclick={handleDelete}
-          disabled={!selectedCharacterId || isBusy()}
-        >
-          {isDeleting ? 'Deleting...' : 'Delete'}
-        </button>
-      </div>
+  <div class="bottom-bar">
+    {#if errorMessage}
+      <div class="error-message">{errorMessage}</div>
+    {/if}
+    <div class="actions">
+      <button
+        type="button"
+        class="secondary"
+        onclick={onLogout}
+        disabled={isBusy()}
+      >
+        Back
+      </button>
+      <button
+        type="button"
+        class="primary"
+        onclick={() => handleStart()}
+        disabled={!selectedCharacterId || isBusy()}
+      >
+        {isStarting ? 'Starting...' : 'Start'}
+      </button>
+      <button
+        type="button"
+        class="danger"
+        onclick={handleDelete}
+        disabled={!selectedCharacterId || isBusy()}
+      >
+        {isDeleting ? 'Deleting...' : 'Delete'}
+      </button>
     </div>
   </div>
 </div>
 
 <style>
-  .character-select-screen {
+  .character-select-overlay {
     position: fixed;
-    inset: 0;
-    background: linear-gradient(140deg, #0f1621 0%, #1e2d43 55%, #263a58 100%);
-  }
-
-  .canvas-layer {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-  }
-
-  .overlay-layer {
-    position: absolute;
     inset: 0;
     z-index: 1;
     display: flex;
@@ -174,6 +115,7 @@
     justify-content: space-between;
     pointer-events: none;
     color: #edf2f7;
+    /* No background — the gradient is rendered behind the shared Canvas in App.svelte */
   }
 
   .top-bar {

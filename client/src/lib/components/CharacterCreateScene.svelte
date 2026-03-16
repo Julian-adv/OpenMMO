@@ -66,7 +66,10 @@
   })
 
   onMount(() => {
+    scene.background = new THREE.Color('#1a2a40')
+
     return () => {
+      scene.background = null
       if (spotlightsAdded) {
         scene.remove(keyLight, fillLight, spotlightTarget)
         spotlightsAdded = false
