@@ -13,7 +13,7 @@
   } from '../makeSplatStandardMaterial'
   import type { SplatLayer } from '../makeSplatStandardMaterial'
   import type { TerrainTile } from './terrain-utils'
-  import { TERRAIN_TILE_SIZE, TERRAIN_GRID_RADIUS } from './terrain-utils'
+  import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
@@ -77,8 +77,7 @@
   // Shared brush/grid uniforms
   const brushUniforms: SplatBrushUniforms = createSplatBrushUniforms()
 
-  // ── Material + Geometry pools (pre-created, reused across tile lifecycles) ──
-  const MAX_TILES = (2 * TERRAIN_GRID_RADIUS + 1) ** 2 // 9 for radius=1
+  // ── Material + Geometry pools (created on demand, reused across tile lifecycles) ──
   const materialPool: MeshStandardNodeMaterial[] = []
   const geometryPool: THREE.BufferGeometry[] = []
   // Template arrays for fast geometry reset (flat plane positions/normals)
@@ -88,25 +87,32 @@
   loadSplatLayers().then((layers) => {
     _defaultLayers = layers
     defaultAtlas = buildSplatAtlas(layers)
-    // Pre-create all materials once to avoid per-tile shader compilation stutter
-    for (let i = 0; i < MAX_TILES; i++) {
-      materialPool.push(makeSplatStandardMaterial({
-        atlas: defaultAtlas,
-        tileScales: [layers[0].tile, layers[1].tile, layers[2].tile, layers[3].tile],
-        splatMap: defaultSplat,
-        splatScale: 1.0,
-        sharedBrushUniforms: brushUniforms,
-      }))
-    }
     materialsReady = true
     setupBrushSync()
   })
 
-  /** Take a material from the pool, resetting its textures to defaults. */
-  function acquireMaterial(): MeshStandardNodeMaterial | null {
-    const mat = materialPool.pop() ?? null
-    if (mat) resetMaterialToDefaults(mat)
+  /** Create a new terrain material using the default atlas. */
+  function createDefaultMaterial(): MeshStandardNodeMaterial {
+    const mat = makeSplatStandardMaterial({
+      atlas: defaultAtlas!,
+      tileScales: [_defaultLayers![0].tile, _defaultLayers![1].tile, _defaultLayers![2].tile, _defaultLayers![3].tile],
+      splatMap: defaultSplat,
+      splatScale: 1.0,
+      sharedBrushUniforms: brushUniforms,
+    })
     return mat
+  }
+
+  /** Take a material from the pool, or create one on demand. */
+  function acquireMaterial(): MeshStandardNodeMaterial | null {
+    const mat = materialPool.pop()
+    if (mat) {
+      resetMaterialToDefaults(mat)
+      return mat
+    }
+    // Create on demand — spreads TSL construction across frames
+    if (!defaultAtlas || !_defaultLayers) return null
+    return createDefaultMaterial()
   }
 
   /** Return a material to the pool for reuse. */

@@ -49,6 +49,10 @@ const HIP_BONE_CANDIDATES = [
   'mixamorigHips',
 ] as const
 const retargetedClipCache = new Map<string, THREE.AnimationClip>()
+/** Top-level cache: source scene UUIDs + clip names → full result array.
+ *  Avoids expensive SkeletonUtils.clone() when the same retarget was already done
+ *  (e.g. character select → game scene for the same class). */
+const retargetBatchCache = new Map<string, THREE.AnimationClip[]>()
 const ENABLE_RUNTIME_BONE_RETARGETING = true
 
 export function getGltfAnimations(gltf: unknown): THREE.AnimationClip[] {
@@ -248,13 +252,20 @@ function correctHipHeightInClip(
   }
 }
 
-export function retargetAnimationsForCharacterModel(
+export async function retargetAnimationsForCharacterModel(
   targetScene: THREE.Object3D,
   retargetSourceScene: THREE.Object3D | null | undefined,
   clips: THREE.AnimationClip[]
-): THREE.AnimationClip[] {
+): Promise<THREE.AnimationClip[]> {
   if (!ENABLE_RUNTIME_BONE_RETARGETING) return clips
   if (clips.length === 0 || !retargetSourceScene) return clips
+
+  // Fast path: check batch cache using clip names (avoids expensive cloning).
+  // The same character class retargeted in character select can be reused in game.
+  const batchKey = clips.map((c) => c.name).join(',')
+  const cachedBatch = retargetBatchCache.get(batchKey)
+  if (cachedBatch) return cachedBatch
+
   // Operate on clones only. Both target and source scenes can come from shared
   // loader instances, and retarget internals mutate skeleton transforms.
   const targetSceneClone = SkeletonUtils.clone(targetScene) as THREE.Object3D
@@ -291,11 +302,13 @@ export function retargetAnimationsForCharacterModel(
   const hipYDelta =
     targetHipY !== null && sourceHipY !== null ? targetHipY - sourceHipY : 0
 
-  const retargetedClips = clips.map((clip) => {
+  const retargetedClips: THREE.AnimationClip[] = []
+  for (const clip of clips) {
     const cacheKey = `${targetProfileKey}::${sourceProfileKey}::${clip.name}`
     const cachedClip = retargetedClipCache.get(cacheKey)
     if (cachedClip) {
-      return cachedClip
+      retargetedClips.push(cachedClip)
+      continue
     }
 
     try {
@@ -319,27 +332,32 @@ export function retargetAnimationsForCharacterModel(
         clip.name
       )
       if (normalizedClip.tracks.length === 0) {
-        return clip
+        retargetedClips.push(clip)
+        continue
       }
       if (Math.abs(hipYDelta) > 0.001) {
         correctHipHeightInClip(normalizedClip, hipBoneName, hipYDelta)
       }
       retargetedClipCache.set(cacheKey, normalizedClip)
-      return normalizedClip
+      retargetedClips.push(normalizedClip)
     } catch (error) {
       console.warn(`Failed to retarget animation clip "${clip.name}"`, error)
-      return clip
+      retargetedClips.push(clip)
     }
-  })
 
+    // Yield to the browser after each clip so the render loop keeps running
+    await new Promise((r) => setTimeout(r, 0))
+  }
+
+  retargetBatchCache.set(batchKey, retargetedClips)
   return retargetedClips
 }
 
-export function retargetOrderedCharacterAnimationsForModel(
+export async function retargetOrderedCharacterAnimationsForModel(
   targetScene: THREE.Object3D,
   orderedSelections: OrderedAnimationSelection[],
   sourceScenes: RetargetSourceScenes
-): THREE.AnimationClip[] {
+): Promise<THREE.AnimationClip[]> {
   if (!ENABLE_RUNTIME_BONE_RETARGETING) {
     return orderedSelections.map((selection) => selection.clip)
   }
@@ -354,22 +372,29 @@ export function retargetOrderedCharacterAnimationsForModel(
     ),
   }
 
+  // Each call yields per-clip internally so the browser can render frames
+  const retargetedBase = await retargetAnimationsForCharacterModel(
+    targetScene,
+    sourceScenes.base,
+    bySource.base.map((selection) => selection.clip)
+  )
+
+  const retargetedLocomotion = await retargetAnimationsForCharacterModel(
+    targetScene,
+    sourceScenes.locomotion,
+    bySource.locomotion.map((selection) => selection.clip)
+  )
+
+  const retargetedCombatMelee = await retargetAnimationsForCharacterModel(
+    targetScene,
+    sourceScenes.combatMelee ?? sourceScenes.locomotion,
+    bySource.combat_melee.map((selection) => selection.clip)
+  )
+
   const retargetedBySource = {
-    base: retargetAnimationsForCharacterModel(
-      targetScene,
-      sourceScenes.base,
-      bySource.base.map((selection) => selection.clip)
-    ),
-    locomotion: retargetAnimationsForCharacterModel(
-      targetScene,
-      sourceScenes.locomotion,
-      bySource.locomotion.map((selection) => selection.clip)
-    ),
-    combat_melee: retargetAnimationsForCharacterModel(
-      targetScene,
-      sourceScenes.combatMelee ?? sourceScenes.locomotion,
-      bySource.combat_melee.map((selection) => selection.clip)
-    ),
+    base: retargetedBase,
+    locomotion: retargetedLocomotion,
+    combat_melee: retargetedCombatMelee,
   }
 
   let baseIndex = 0

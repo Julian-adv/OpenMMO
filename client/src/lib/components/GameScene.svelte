@@ -607,7 +607,8 @@
         reflectionManager.clear()
       }
 
-      loopProfiler.record('frameWork', performance.now() - frameWorkStart)
+      const frameWorkMs = performance.now() - frameWorkStart
+      loopProfiler.record('frameWork', frameWorkMs)
 
       if (unclampedSteps > MAX_CATCH_UP_STEPS) {
         // Drop excessive backlog after long stalls (tab switch, debugger pause, etc.).
@@ -757,19 +758,19 @@
     reflectionManager = reflMgr
     reflectionTexture = reflMgr.texture
 
-
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
 
-    // Pre-compile all WebGPU shaders once materials are ready
+    // Show the scene as soon as materials are ready, then kick off
+    // background shader compilation to reduce on-demand stutter.
     loadSplatLayers().then(() => {
-      // Allow Svelte to render the terrain meshes, then compile
       requestAnimationFrame(() => {
+        isSceneCompiling = false
+
+        // Fire-and-forget: start compiling all current scene shaders in the
+        // background via the GPU process. Objects that render before compilation
+        // finishes will stall briefly, but many will already be compiled.
         if (camera) {
-          renderer.compileAsync(scene, camera)
-            .then(() => { isSceneCompiling = false })
-            .catch(() => { isSceneCompiling = false })
-        } else {
-          isSceneCompiling = false
+          renderer.compileAsync(scene, camera).catch(() => {})
         }
       })
     })
@@ -872,6 +873,22 @@
   bind:ref={ambientLight}
   intensity={sceneLighting.ambientDayIntensity}
   color="#ffffff"
+/>
+<!-- Placeholder shadow-casting PointLight so WebGPU compiles ALL material
+     pipelines with point-light shadow support from the start. Without this,
+     adding the player's torch later triggers a cascade recompilation of every
+     existing material (~12s stall). Intensity 0 = invisible but pipelines
+     are compiled with shadow support. -->
+<T.PointLight
+  position={[0, 0, 0]}
+  intensity={0}
+  distance={50}
+  decay={1.2}
+  castShadow
+  shadow.mapSize.width={512}
+  shadow.mapSize.height={512}
+  shadow.camera.near={0.5}
+  shadow.camera.far={50}
 />
 
 <GameSceneTerrainLayer

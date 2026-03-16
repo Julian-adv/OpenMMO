@@ -8,8 +8,14 @@
   import type { AccountCharacter } from '../network/socket'
   import CharacterPreview from './CharacterPreview.svelte'
   import CharacterSlotLabel from './CharacterSlotLabel.svelte'
+  import { loadSplatLayers } from '../utils/splatLayerLoader'
+  import { loadGLB } from '../utils/gltfCache'
 
   interactivity()
+
+  // Preload assets needed by game scene so they're cached when it mounts
+  loadSplatLayers()
+  loadGLB('/models/sword.glb')
 
   interface Props {
     characters: AccountCharacter[]

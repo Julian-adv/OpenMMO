@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { T, useLoader } from '@threlte/core'
+  import { T } from '@threlte/core'
   import * as THREE from 'three'
-  import { GLTFLoader } from 'three/examples/jsm/Addons.js'
+  import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onDestroy } from 'svelte'
   import { AnimationIndex } from '../types/animations'
   import {
@@ -14,6 +14,7 @@
     CHARACTER_ANIMATION_PACK_PATHS,
     getCharacterModelPath,
   } from '../utils/modelPaths'
+  import { loadGLB } from '../utils/gltfCache'
   import type { CharacterClass } from '../network/networkTypes'
 
   interface Props {
@@ -26,15 +27,14 @@
 
   let { positionX, positionY, positionZ, selected, characterClass }: Props = $props()
 
-  // Load only this character's own model + shared animation packs
-  const characterModelPath = $derived(getCharacterModelPath(characterClass))
-  const characterGltf = $derived(useLoader(GLTFLoader).load(characterModelPath))
-  const locomotionGltf = useLoader(GLTFLoader).load(
-    CHARACTER_ANIMATION_PACK_PATHS.locomotion
-  )
-  const combatMeleeGltf = useLoader(GLTFLoader).load(
-    CHARACTER_ANIMATION_PACK_PATHS.combatMelee
-  )
+  // Load via shared cache so GLBs persist across Canvas lifecycles
+  let characterGltfData = $state<GLTF | null>(null)
+  let locomotionGltfData = $state<GLTF | null>(null)
+  let combatMeleeGltfData = $state<GLTF | null>(null)
+
+  loadGLB(getCharacterModelPath(characterClass)).then((g) => { characterGltfData = g })
+  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
+  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
@@ -44,7 +44,7 @@
 
   const OVERLAP_BEFORE_END = 0.3
 
-  let gltfReady = $derived(!!$characterGltf && !!$locomotionGltf && !!$combatMeleeGltf)
+  let gltfReady = $derived(!!characterGltfData && !!locomotionGltfData && !!combatMeleeGltfData)
 
   function playIdleAnimation() {
     if (!mixer || validAnimations.length === 0) return
@@ -85,44 +85,47 @@
   }
 
   export function setup(): void {
-    if (setupDone || !$characterGltf || !$locomotionGltf || !$combatMeleeGltf) return
+    if (setupDone || !characterGltfData || !locomotionGltfData || !combatMeleeGltfData) return
+    setupDone = true
 
-    const sourceScene = $characterGltf.scene
+    const sourceScene = characterGltfData.scene
     const { modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
-    modelRoot = newModelRoot
 
     const orderedAnims = selectOrderedCharacterAnimations(
-      getGltfAnimations($characterGltf),
-      getGltfAnimations($locomotionGltf),
-      getGltfAnimations($combatMeleeGltf)
+      getGltfAnimations(characterGltfData),
+      getGltfAnimations(locomotionGltfData),
+      getGltfAnimations(combatMeleeGltfData)
     )
 
-    validAnimations = retargetOrderedCharacterAnimationsForModel(
+    retargetOrderedCharacterAnimationsForModel(
       newModelRoot,
       orderedAnims,
       {
         base: sourceScene,
-        locomotion: $locomotionGltf.scene,
-        combatMelee: $combatMeleeGltf.scene,
+        locomotion: locomotionGltfData.scene,
+        combatMelee: combatMeleeGltfData.scene,
       }
-    )
+    ).then((clips) => {
+      validAnimations = clips
 
-    if (validAnimations.length > 0) {
-      try {
-        mixer = new THREE.AnimationMixer(newModelRoot)
-        playIdleAnimation()
-      } catch (error) {
-        console.warn('Failed to start preview animation clips', error)
-        if (mixer) {
-          mixer.stopAllAction()
-          mixer = null
+      if (validAnimations.length > 0) {
+        try {
+          mixer = new THREE.AnimationMixer(newModelRoot)
+          playIdleAnimation()
+        } catch (error) {
+          console.warn('Failed to start preview animation clips', error)
+          if (mixer) {
+            mixer.stopAllAction()
+            mixer = null
+          }
+          currentAction = null
+          validAnimations = []
         }
-        currentAction = null
-        validAnimations = []
       }
-    }
 
-    setupDone = true
+      // Set modelRoot only after animation is playing to avoid T-pose flash
+      modelRoot = newModelRoot
+    })
   }
 
   export function update(delta: number): void {

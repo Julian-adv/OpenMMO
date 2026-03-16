@@ -55,32 +55,44 @@
   let shortMeshes: THREE.InstancedMesh[] = []
   let tallMeshes: THREE.InstancedMesh[] = []
 
+  // Load grass assets in parallel; defer material + mesh creation.
+  // Meshes are created lazily (not all 50 upfront) to spread the cost.
+  let _grassAlphaMap: THREE.Texture | null = null
+
   Promise.all([loadGrassBillboardGeometry(), loadGrassAlphaTexture()]).then(
     ([geometry, alphaMap]) => {
       _grassGeometry = geometry
-
-      const shortResult = createGrassMaterial({ alphaMap })
-      const tallResult = createGrassMaterial({ ...TALL_GRASS_CONFIG, alphaMap })
-      _shortGrassMaterial = shortResult.material
-      _tallGrassMaterial = tallResult.material
-
-      allUniforms = [shortResult.uniforms, tallResult.uniforms]
-      baseWindStrengths = allUniforms.map((u) => u.uWindStrength.value)
-
-      shortMeshes = Array.from({ length: GRID_COUNT }, () =>
-        createSlotMesh(geometry, shortResult.material),
-      )
-      tallMeshes = Array.from({ length: GRID_COUNT }, () =>
-        createSlotMesh(geometry, tallResult.material),
-      )
-
-      // Add all meshes to the group imperatively — bypasses Svelte entirely
-      for (const m of shortMeshes) grassGroup.add(m)
-      for (const m of tallMeshes) grassGroup.add(m)
-
+      _grassAlphaMap = alphaMap
       assetsReady = true
     },
   )
+
+  /** Create grass materials on first use. */
+  function ensureMaterials(): boolean {
+    if (_shortGrassMaterial && _tallGrassMaterial) return true
+    if (!_grassGeometry || !_grassAlphaMap) return false
+
+    const shortResult = createGrassMaterial({ alphaMap: _grassAlphaMap })
+    const tallResult = createGrassMaterial({ ...TALL_GRASS_CONFIG, alphaMap: _grassAlphaMap })
+    _shortGrassMaterial = shortResult.material
+    _tallGrassMaterial = tallResult.material
+
+    allUniforms = [shortResult.uniforms, tallResult.uniforms]
+    baseWindStrengths = allUniforms.map((u) => u.uWindStrength.value)
+    return true
+  }
+
+  /** Get or create the slot mesh at the given index. */
+  function ensureSlotMesh(
+    pool: THREE.InstancedMesh[],
+    index: number,
+    material: THREE.Material,
+  ): THREE.InstancedMesh {
+    if (!pool[index]) {
+      pool[index] = createSlotMesh(_grassGeometry!, material)
+    }
+    return pool[index]
+  }
 
   function createSlotMesh(
     baseGeometry: THREE.BufferGeometry,
@@ -463,17 +475,19 @@
   const tallKeyToSlot = new Map<string, number>()
 
   function rebuildGrassBuffers() {
-    if (shortMeshes.length === 0) return
     needsRebuild = false
+    // Lazily create materials on first rebuild with actual data
+    if (!ensureMaterials()) return
 
     const wantedKeys = new Set(getActiveSubChunkKeys())
 
-    rebuildType(shortMeshes, shortKeyToSlot, wantedKeys, (c) => c?.short)
-    rebuildType(tallMeshes, tallKeyToSlot, wantedKeys, (c) => c?.tall)
+    rebuildType(shortMeshes, _shortGrassMaterial!, shortKeyToSlot, wantedKeys, (c) => c?.short)
+    rebuildType(tallMeshes, _tallGrassMaterial!, tallKeyToSlot, wantedKeys, (c) => c?.tall)
   }
 
   function rebuildType(
     meshes: THREE.InstancedMesh[],
+    material: THREE.Material,
     keyToSlot: Map<string, number>,
     wantedKeys: Set<string>,
     getData: (cached: { short: SubChunkData; tall: SubChunkData } | undefined) => SubChunkData | undefined,
@@ -482,7 +496,11 @@
     const freeSlots: number[] = []
     for (const [key, slot] of keyToSlot) {
       if (!wantedKeys.has(key)) {
-        meshes[slot].count = 0
+        if (meshes[slot]) {
+          meshes[slot].count = 0
+          // Remove from scene so empty meshes don't waste GPU cycles
+          if (meshes[slot].parent) meshes[slot].parent.remove(meshes[slot])
+        }
         keyToSlot.delete(key)
         freeSlots.push(slot)
       }
@@ -490,11 +508,11 @@
 
     // Collect unassigned slots
     const usedSlots = new Set(keyToSlot.values())
-    for (let i = 0; i < meshes.length; i++) {
+    for (let i = 0; i < GRID_COUNT; i++) {
       if (!usedSlots.has(i)) freeSlots.push(i)
     }
 
-    // Assign new keys to free slots
+    // Assign new keys to free slots — mesh is created lazily if needed
     for (const key of wantedKeys) {
       if (keyToSlot.has(key)) continue // already showing correct data
 
@@ -504,7 +522,8 @@
       if (freeSlots.length === 0) continue
       const slot = freeSlots.pop()!
 
-      writeMeshData(meshes[slot], data)
+      const mesh = ensureSlotMesh(meshes, slot, material)
+      writeMeshData(mesh, data)
       keyToSlot.set(key, slot)
     }
   }
@@ -512,6 +531,7 @@
   function writeMeshData(mesh: THREE.InstancedMesh, data?: SubChunkData) {
     if (!data || data.count === 0) {
       if (mesh.count > 0) mesh.count = 0
+      if (mesh.parent) mesh.parent.remove(mesh)
       return
     }
 
@@ -531,12 +551,10 @@
 
     mesh.count = count
 
-    // Force WebGPU to re-create GPU bindings by re-adding to scene graph
-    const parent = mesh.parent
-    if (parent) {
-      parent.remove(mesh)
-      parent.add(mesh)
-    }
+    // Force WebGPU to re-create GPU bindings by re-adding to scene graph.
+    // Also handles the initial case where mesh hasn't been added yet.
+    if (mesh.parent) mesh.parent.remove(mesh)
+    grassGroup.add(mesh)
   }
 
   // ── Tile data lifecycle ─────────────────────────────────

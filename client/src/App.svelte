@@ -261,7 +261,7 @@
       </div>
     </div>
 
-    {#if isCurrentPlayerLoading || isSceneCompiling || $teleportLoading}
+    {#if isSceneCompiling || $teleportLoading}
       <LoadingDialog message={isSceneCompiling ? 'Preparing world...' : 'Loading...'} />
     {/if}
 

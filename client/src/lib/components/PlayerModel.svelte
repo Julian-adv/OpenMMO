@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { T, useLoader } from '@threlte/core'
+  import { T } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
   import type { Vector3 } from 'three'
   import * as THREE from 'three'
-  import { GLTFLoader } from 'three/examples/jsm/Addons.js'
+  import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { get } from 'svelte/store'
@@ -17,10 +17,9 @@
   } from '../utils/characterAnimationUtils'
   import {
     CHARACTER_ANIMATION_PACK_PATHS,
-    WARRIOR_CHARACTER_MODEL_PATH,
-    KNIGHT_CHARACTER_MODEL_PATH,
-    THIEF_CHARACTER_MODEL_PATH,
+    getCharacterModelPath,
   } from '../utils/modelPaths'
+  import { loadGLB } from '../utils/gltfCache'
   import type { CharacterClass } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
@@ -101,19 +100,19 @@
   let torchLight = $state<THREE.PointLight | undefined>(undefined)
   let torchFlickerTime = 0
 
-  // Load animated model (both models are loaded; Threlte caches by URL)
-  const warriorGltf = useLoader(GLTFLoader).load(WARRIOR_CHARACTER_MODEL_PATH)
-  const knightGltf = useLoader(GLTFLoader).load(KNIGHT_CHARACTER_MODEL_PATH)
-  const thiefGltf = useLoader(GLTFLoader).load(THIEF_CHARACTER_MODEL_PATH)
-  const locomotionGltf = useLoader(GLTFLoader).load(
-    CHARACTER_ANIMATION_PACK_PATHS.locomotion
-  )
-  const combatMeleeGltf = useLoader(GLTFLoader).load(
-    CHARACTER_ANIMATION_PACK_PATHS.combatMelee
-  )
+  // Load only the active character model + shared animation packs via shared cache.
+  // This cache persists across Threlte Canvas lifecycles, so GLBs loaded in
+  // character select don't re-download when entering the game scene.
+  let activeGltfData = $state<GLTF | null>(null)
+  let locomotionGltfData = $state<GLTF | null>(null)
+  let combatMeleeGltfData = $state<GLTF | null>(null)
+  let swordGltfData = $state<GLTF | null>(null)
 
-  // Load sword model
-  const swordGltf = useLoader(GLTFLoader).load('/models/sword.glb')
+  const modelPath = getCharacterModelPath(characterClass)
+  loadGLB(modelPath).then((g) => { activeGltfData = g })
+  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
+  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
+  loadGLB('/models/sword.glb').then((g) => { swordGltfData = g })
 
   // Animation system - following gpt-all-in-one.html approach
   let mixer = $state<THREE.AnimationMixer | null>(null)
@@ -202,7 +201,7 @@
   }
 
   function tryAttachSword(characterRoot: THREE.Object3D): boolean {
-    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !$swordGltf) return false
+    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !swordGltfData) return false
 
     const rightHandBone = findMainRightHandBone(characterRoot)
     if (!rightHandBone) {
@@ -210,7 +209,7 @@
       return false
     }
 
-    const swordClone = $swordGltf.scene.clone()
+    const swordClone = swordGltfData.scene.clone()
     rightHandBone.add(swordClone)
     swordAttached = true
     console.log('Sword attached successfully to', rightHandBone.name)
@@ -296,22 +295,22 @@
     currentAction = newAction
   }
 
-  function setupRealAnimation() {
-    const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
+  async function setupRealAnimation() {
+    const activeGltf = activeGltfData
     if (activeGltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
 
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      if (ENABLE_SWORD_ATTACHMENT && !$swordGltf) {
+      if (ENABLE_SWORD_ATTACHMENT && !swordGltfData) {
         console.log('Sword GLB not ready yet; will attach when loaded')
       }
       tryAttachSword(cloned)
 
       const baseAnimations = getGltfAnimations(activeGltf)
-      const locomotionAnimations = getGltfAnimations($locomotionGltf)
-      const combatMeleeAnimations = getGltfAnimations($combatMeleeGltf)
+      const locomotionAnimations = getGltfAnimations(locomotionGltfData)
+      const combatMeleeAnimations = getGltfAnimations(combatMeleeGltfData)
 
       console.log(`Found ${baseAnimations.length} base animation clips`)
       console.log(`Found ${locomotionAnimations.length} locomotion animation clips`)
@@ -332,13 +331,13 @@
         locomotionAnimations,
         combatMeleeAnimations
       )
-      validAnimations = retargetOrderedCharacterAnimationsForModel(
+      validAnimations = await retargetOrderedCharacterAnimationsForModel(
         newModelRoot,
         orderedSelections,
         {
           base: activeGltf.scene,
-          locomotion: $locomotionGltf?.scene,
-          combatMelee: $combatMeleeGltf?.scene,
+          locomotion: locomotionGltfData?.scene,
+          combatMelee: combatMeleeGltfData?.scene,
         }
       )
 
@@ -416,10 +415,11 @@
     // Wait for all GLTFs (character model + animation packs) to load
     isLoading = true
     const checkGltf = () => {
-      const activeGltf = characterClass === 'warrior' ? $warriorGltf : characterClass === 'thief' ? $thiefGltf : $knightGltf
-      if (activeGltf && $locomotionGltf && $combatMeleeGltf) {
-        isLoading = false
-        setupRealAnimation()
+      const activeGltf = activeGltfData
+      if (activeGltf && locomotionGltfData && combatMeleeGltfData) {
+        setupRealAnimation().then(() => {
+          isLoading = false
+        })
       } else {
         setTimeout(checkGltf, 100)
       }
@@ -440,7 +440,7 @@
   })
 
   $effect(() => {
-    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !modelRoot || !$swordGltf) {
+    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !modelRoot || !swordGltfData) {
       return
     }
     tryAttachSword(modelRoot)
