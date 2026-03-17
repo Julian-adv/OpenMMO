@@ -26,7 +26,7 @@ import {
   cameraViewMatrix,
 } from 'three/tsl'
 import { PI, gerstnerWave, gerstnerNormal } from './gerstner'
-import { valueNoise, sampleNormalNoise } from './tsl-noise'
+import { sampleNormalNoise } from './tsl-noise'
 import {
   type WaterMaterialOptions,
   type WaterMaterialResult,
@@ -51,6 +51,21 @@ export type {
 type N = any // TSL node — broad type for internal helper params
 
 // ─── Create Water Material ─────────────────────────────
+
+// Pre-baked tileable value noise texture (512×512, 64 periods with smoothstep
+// interpolation baked in). Replaces procedural hash+valueNoise Fn() in the
+// shader to reduce WGSL code size and pipeline compilation time.
+let _noiseTex: THREE.Texture | null = null
+function getNoiseTexture(): THREE.Texture {
+  if (!_noiseTex) {
+    const loader = new THREE.TextureLoader()
+    _noiseTex = loader.load('/textures/value-noise.jpg')
+    _noiseTex.wrapS = _noiseTex.wrapT = THREE.RepeatWrapping
+    _noiseTex.minFilter = THREE.LinearMipMapLinearFilter
+    _noiseTex.magFilter = THREE.LinearFilter
+  }
+  return _noiseTex
+}
 
 export function createWaterMaterial(
   options: WaterMaterialOptions
@@ -87,6 +102,7 @@ export function createWaterMaterial(
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
   const wetnessMapTex = texture(options.wetnessMap ?? waterWetnessFallbackTex)
+  const noiseTex = texture(getNoiseTexture())
   const uCaptureMode = uniform(0)
 
   // ── Varyings ──
@@ -98,6 +114,11 @@ export function createWaterMaterial(
 
   // Aligns 65 vertices with 65×65 texel centers
   const toHeightmapUV = (uvCoord: N) => uvCoord.mul(64.0 / 65.0).add(0.5 / 65.0)
+
+  // Sample pre-baked noise: texture has 64 periods, so UV = noiseCoord / 64
+  const NOISE_PERIODS = 64
+  const sampleNoise = (noiseCoord: N) =>
+    noiseTex.sample(noiseCoord.div(NOISE_PERIODS)).r
 
   // ── Fragment Helpers ──────────────────────────────────
   // Plain JS functions that build TSL node sub-graphs.
@@ -305,9 +326,11 @@ export function createWaterMaterial(
       smoothstep(float(0), float(0.45), shoreAdjustedDepth)
     )
 
-    const sn1 = valueNoise(worldPos.xz.mul(0.2).add(uTime.mul(0.07)))
-    const sn2 = valueNoise(worldPos.xz.mul(0.4).add(uTime.mul(0.04)))
-    const sn3 = valueNoise(worldPos.xz.mul(0.08).add(uTime.mul(0.1)))
+    // Texture-based noise replaces procedural valueNoise() to reduce WGSL
+    // code size (removes hash + valueNoise Fn inlining from the shader).
+    const sn1 = sampleNoise(worldPos.xz.mul(0.2).add(uTime.mul(0.07)))
+    const sn2 = sampleNoise(worldPos.xz.mul(0.4).add(uTime.mul(0.04)))
+    const sn3 = sampleNoise(worldPos.xz.mul(0.08).add(uTime.mul(0.1)))
     const holeMask = sn1.mul(0.5).add(sn2.mul(0.3)).add(sn3.mul(0.2))
 
     const edgeCutoff = smoothstep(float(0), float(0.01), depth)
@@ -342,11 +365,11 @@ export function createWaterMaterial(
     holeEdge: N,
     sunY: N
   ) {
-    // Noise-perturbed depth for irregular edges
+    // Noise-perturbed depth for irregular edges (texture-based noise)
     const noisyD = depth
-      .add(valueNoise(worldPos.xz.mul(0.3)).mul(0.15))
-      .add(valueNoise(worldPos.xz.mul(0.15)).mul(0.1))
-      .add(valueNoise(worldPos.xz.mul(0.2)).mul(0.3))
+      .add(sampleNoise(worldPos.xz.mul(0.3)).mul(0.15))
+      .add(sampleNoise(worldPos.xz.mul(0.15)).mul(0.1))
+      .add(sampleNoise(worldPos.xz.mul(0.2)).mul(0.3))
 
     // Wave bands move from deeper water toward shore
     const spawnDepth = float(1.5)
@@ -374,19 +397,19 @@ export function createWaterMaterial(
       .mul(fade2)
       .toVar()
 
-    // Break up with large-scale noise for organic edges
+    // Break up with large-scale noise for organic edges (texture-based)
     band1.mulAssign(
       smoothstep(
         float(0.2),
         float(0.5),
-        valueNoise(worldPos.xz.mul(0.15).add(center1.mul(1.5)))
+        sampleNoise(worldPos.xz.mul(0.15).add(center1.mul(1.5)))
       )
     )
     band2.mulAssign(
       smoothstep(
         float(0.2),
         float(0.5),
-        valueNoise(worldPos.xz.mul(0.15).add(center2.mul(1.5)))
+        sampleNoise(worldPos.xz.mul(0.15).add(center2.mul(1.5)))
       )
     )
 

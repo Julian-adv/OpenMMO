@@ -557,8 +557,10 @@
         waterCamDir = waterCamDirTmp.clone()
       }
 
-      // Render wetness pre-pass (small 128x128 RT per water tile)
-      if (multiPassReady) waterLayerRef?.renderWetness(renderer)
+      // Render wetness pre-pass (small 256x256 RT per water tile).
+      // Not gated behind multiPassReady — it's a tiny RT with negligible
+      // pipeline overhead, and deferring it causes blocky wet sand.
+      waterLayerRef?.renderWetness(renderer)
 
       // Count warmup frames after loading to let main pass compile pipelines
       // before adding refraction/reflection overhead.
