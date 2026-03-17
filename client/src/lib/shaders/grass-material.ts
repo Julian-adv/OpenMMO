@@ -327,7 +327,8 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const bendDirZ = totalBendZ.div(bendMag)
 
   // Per-vertex bend angle (quadratic profile: stiff at base, flexible at tip)
-  const vertexAngle = bendMag.mul(heightFactor)
+  const maxBend = float(1.22) // ~70°
+  const vertexAngle = bendMag.mul(heightFactor).min(maxBend)
   const bendSin = sin(vertexAngle)
   const bendCos = cos(vertexAngle)
 
