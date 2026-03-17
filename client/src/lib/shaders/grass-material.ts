@@ -9,7 +9,6 @@ import {
   cos,
   mix,
   smoothstep,
-  fract,
   positionLocal,
   instanceIndex,
   hash,
@@ -89,7 +88,6 @@ export const TALL_GRASS_R_MAX = 249
 // ── TSL grass material ───────────────────────────────────
 
 export const GRASS_TRAIL_COUNT = 5
-export const GRASS_GUST_COUNT = 3
 
 export interface GrassMaterialUniforms {
   uTime: { value: number }
@@ -97,10 +95,8 @@ export interface GrassMaterialUniforms {
   uWindFrequency: { value: number }
   /** Normalized wind direction (x, z) */
   uWindDir: { value: THREE.Vector2 }
-  /** Accumulated gust wave phase per gust slot (monotonically increasing) */
-  uGustPhase: { value: number }[]
-  /** Gust intensity per slot (0 = calm, 1 = full gust) */
-  uGustIntensity: { value: number }[]
+  /** Gust envelope (0 = calm, 1 = full gust), controlled by JS state machine */
+  uGustStrength: { value: number }
   /** vec3(worldX, worldZ, strength) per trail point */
   uTrail: { value: THREE.Vector3 }[]
   uInteractionRadius: { value: number }
@@ -160,10 +156,7 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const uWindStrength = uniform(ws)
   const uWindFrequency = uniform(wf)
   const uWindDir = uniform(new THREE.Vector2(1, 0))
-  const uGustPhase = Array.from({ length: GRASS_GUST_COUNT }, () => uniform(0))
-  const uGustIntensity = Array.from({ length: GRASS_GUST_COUNT }, () =>
-    uniform(0)
-  )
+  const uGustStrength = uniform(0)
   const uInteractionRadius = uniform(ir)
   const uInteractionStrength = uniform(is)
 
@@ -242,53 +235,78 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
 
   const heightFactor = uvY.mul(uvY)
 
-  // ── Idle sway: gentle in-place oscillation (original behavior) ──
-  const idleAmount = heightFactor.mul(uWindStrength)
-  const idleX = sin(uTime.mul(uWindFrequency).add(phaseOffset)).mul(idleAmount)
-  const idleZ = cos(
-    uTime.mul(uWindFrequency.mul(0.7)).add(phaseOffset.mul(1.3))
-  ).mul(idleAmount.mul(0.5))
-
-  // ── Directional wind: lean toward wind direction ──
-  // Inverse-rotate world-space wind direction into blade local space
+  // ── Directional wind: inverse-rotate into blade local space ──
   const cosR = cos(instanceRotation)
   const sinR = sin(instanceRotation)
   const localWindX = uWindDir.x.mul(cosR).sub(uWindDir.y.mul(sinR))
   const localWindZ = uWindDir.x.mul(sinR).add(uWindDir.y.mul(cosR))
 
-  // Narrow gust band: projects onto wind direction
-  const gustSpatial = instanceWorldXZ.x
-    .mul(uWindDir.x)
-    .add(instanceWorldXZ.y.mul(uWindDir.y))
-  // Perpendicular position for wavefront curvature
-  const gustPerp = instanceWorldXZ.x
-    .mul(uWindDir.y.negate())
-    .add(instanceWorldXZ.y.mul(uWindDir.x))
-  // Smooth arc: offset phase by sin of perpendicular position
-  const gustCurve = sin(gustPerp.mul(0.15)).mul(4.0)
+  // ── Gerstner wave gusts ──────────────────────────────────
+  // Each wave layer has: freq, speed, amplitude, Q (steepness), dirAngle (offset from wind)
+  // Gerstner phase distortion (phase + Q*sin(phase)) creates sharp crests (fast gust onset)
+  // and broad troughs (slow recovery) — naturally asymmetric.
+  const gustWaves = [
+    { freq: 0.628, speed: 1.3, amp: 1.0, Q: 0.75, dirAngle: 0 }, // 10m, ~2m/s
+    { freq: 0.35, speed: 0.8, amp: 0.6, Q: 0.7, dirAngle: 0.4 }, // 18m, ~2.3m/s
+    { freq: 0.17, speed: 0.5, amp: 0.7, Q: 0.95, dirAngle: -0.3 }, // 7m, ~2m/s
+  ]
 
-  // Sum contributions from all gust slots
   let gust: N = float(0)
-  for (let gi = 0; gi < GRASS_GUST_COUNT; gi++) {
-    const gustCycle = fract(
-      gustSpatial
-        .add(gustCurve)
-        .sub(uGustPhase[gi])
-        .mul(1.0 / 60.0)
-    )
-    const gustPulse = smoothstep(float(0), float(0.03), gustCycle).mul(
-      float(1).sub(smoothstep(float(0.03), float(0.08), gustCycle))
-    )
-    gust = gust.add(gustPulse.mul(uGustIntensity[gi]))
-  }
-  // Clamp combined gust to avoid over-saturation
-  gust = gust.min(float(1.5))
+  for (const w of gustWaves) {
+    // Rotate wind direction by wave's offset angle
+    const cOff = float(Math.cos(w.dirAngle))
+    const sOff = float(Math.sin(w.dirAngle))
+    const wDirX = uWindDir.x.mul(cOff).sub(uWindDir.y.mul(sOff))
+    const wDirZ = uWindDir.x.mul(sOff).add(uWindDir.y.mul(cOff))
 
-  // Lean amount: base lean + gust modulation
-  const leanAmount = heightFactor.mul(uWindStrength.mul(5.0))
-  const leanWave = leanAmount.mul(float(1.0).add(gust.mul(1.0)))
-  const windX = localWindX.mul(leanWave)
-  const windZ = localWindZ.mul(leanWave)
+    // Spatial phase along wave direction
+    const spatial = instanceWorldXZ.x
+      .mul(wDirX)
+      .add(instanceWorldXZ.y.mul(wDirZ))
+    const phase = spatial.mul(w.freq).sub(uTime.mul(w.speed))
+
+    // Gerstner phase distortion: bunches crests, spreads troughs
+    const gerstnerPhase = phase.add(float(w.Q).mul(sin(phase)))
+
+    // Wave value mapped to [0, 1]
+    const waveVal = cos(gerstnerPhase).add(1).mul(0.5)
+    gust = gust.add(waveVal.mul(w.amp))
+  }
+
+  // Always-active baseline ripple + JS-controlled gust boost
+  gust = gust.mul(float(0.15).add(uGustStrength.mul(0.85)))
+
+  // ── Circular bending: combine wind + idle sway into a bend angle ──
+  // Wind bend angle (base lean + gust modulation)
+  const windBendAngle = uWindStrength.mul(5.0).mul(float(1.0).add(gust))
+  const bendFromWindX = localWindX.mul(windBendAngle)
+  const bendFromWindZ = localWindZ.mul(windBendAngle)
+
+  // Idle sway: per-instance random direction, gentle in-place oscillation
+  const idleSwayAngle = sin(uTime.mul(uWindFrequency).add(phaseOffset)).mul(
+    uWindStrength
+  )
+  const idleDirAngle = phaseOffset // random direction per instance
+  const idleBendX = cos(idleDirAngle).mul(idleSwayAngle)
+  const idleBendZ = sin(idleDirAngle).mul(idleSwayAngle)
+
+  // Combined bend angle (local-space X and Z components)
+  const totalBendX = bendFromWindX.add(idleBendX)
+  const totalBendZ = bendFromWindZ.add(idleBendZ)
+
+  // Bend magnitude and normalized direction
+  const bendMag = totalBendX
+    .mul(totalBendX)
+    .add(totalBendZ.mul(totalBendZ))
+    .sqrt()
+    .add(float(0.0001))
+  const bendDirX = totalBendX.div(bendMag)
+  const bendDirZ = totalBendZ.div(bendMag)
+
+  // Per-vertex bend angle (quadratic profile: stiff at base, flexible at tip)
+  const vertexAngle = bendMag.mul(heightFactor)
+  const bendSin = sin(vertexAngle)
+  const bendCos = cos(vertexAngle)
 
   // ── Player interaction: additive trail push (pure functional, no assign) ──
   let totalPushX: N = float(0)
@@ -322,10 +340,11 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const pushZ = totalPushZ.div(totalLen).mul(pushFactor)
   const pushY = pushStrength.mul(heightFactor).mul(-0.15)
 
+  // Spine rotation (circular bend) + lateral offset + push interaction
   mat.positionNode = vec3(
-    localPosX.add(idleX).add(windX).add(pushX),
-    localPosY.add(pushY),
-    localPosZ.add(idleZ).add(windZ).add(pushZ)
+    localPosX.add(bendDirX.mul(bendSin).mul(localPosY)).add(pushX),
+    bendCos.mul(localPosY).add(pushY),
+    localPosZ.add(bendDirZ.mul(bendSin).mul(localPosY)).add(pushZ)
   )
 
   return {
@@ -335,8 +354,7 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
       uWindStrength: uWindStrength as unknown as { value: number },
       uWindFrequency: uWindFrequency as unknown as { value: number },
       uWindDir: uWindDir as unknown as { value: THREE.Vector2 },
-      uGustPhase: uGustPhase as unknown as { value: number }[],
-      uGustIntensity: uGustIntensity as unknown as { value: number }[],
+      uGustStrength: uGustStrength as unknown as { value: number },
       uTrail: uTrail as unknown as { value: THREE.Vector3 }[],
       uInteractionRadius: uInteractionRadius as unknown as { value: number },
       uInteractionStrength: uInteractionStrength as unknown as {

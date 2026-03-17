@@ -13,7 +13,6 @@
     GRASS_INSTANCE_POS_ATTR,
     GRASS_INSTANCE_ROT_ATTR,
     GRASS_TRAIL_COUNT,
-    GRASS_GUST_COUNT,
     TALL_GRASS_CONFIG,
     type GrassMaterialUniforms,
   } from '../../shaders/grass-material'
@@ -152,33 +151,20 @@
   let windStrengthTarget = windStrengthMul
 
   // ── Gust cycle constants ───────────────────────────────
-  const GUST_SPEED_MIN = 0.8
-  const GUST_SPEED_MAX = 5.0
   const GUST_FADE_IN = 2.0
   const GUST_ACTIVE_MIN = 10
   const GUST_ACTIVE_MAX = 25
   const GUST_FADE_OUT = 3.0
-  const GUST_BAND_STAGGER_MIN = 2.0
-  const GUST_BAND_STAGGER_MAX = 5.0
   const GUST_REST_MAX = 10.0
-
-  interface GustBand {
-    phase: number
-    intensity: number
-    state: 'waiting' | 'fade-in' | 'active' | 'fade-out' | 'done'
-    timer: number
-    activeTime: number
-  }
 
   function smoothstep(t: number): number {
     return t * t * (3 - 2 * t)
   }
 
-  let cycleState: 'resting' | 'gusting' = 'resting'
-  let cycleRestTimer = 0
-  let cycleRestDuration = 0
-  let activeBands: GustBand[] = []
-  let gustSpeed = 0
+  let cycleState: 'resting' | 'fade-in' | 'active' | 'fade-out' = 'resting'
+  let cycleTimer = 0
+  let cycleDuration = 0
+  let gustStrength = 0
 
   // ── Player sub-chunk tracking ─────────────────────────
   let hasPlayer = $state(false)
@@ -226,129 +212,83 @@
       }
     }
 
-    // ── Gust cycle state machine ──
-    if (cycleState === 'resting') {
-      cycleRestTimer -= dt
-      if (cycleRestDuration > 0) {
-        const t = smoothstep(Math.min(1, 1 - cycleRestTimer / cycleRestDuration))
-        windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
-        let angleDelta = windAngleTarget - windAngleStart
-        angleDelta = ((angleDelta + Math.PI) % (Math.PI * 2)) - Math.PI
-        windAngle = windAngleStart + angleDelta * t
-      }
-      if (cycleRestTimer <= 0) {
-        windAngle = windAngleTarget
-        windStrengthMul = windStrengthTarget
-        const raw = windStrengthMul * 2 + (Math.random() - 0.3) * 2
-        const bandCount = Math.min(GRASS_GUST_COUNT, Math.max(1, Math.round(raw)))
-        gustSpeed = GUST_SPEED_MIN + (GUST_SPEED_MAX - GUST_SPEED_MIN) * windStrengthMul
-        const PHASE_PERIOD = 60
-        const phaseBase = Math.random() * PHASE_PERIOD
-        const phaseSlice = PHASE_PERIOD / bandCount
-        const phaseJitter = phaseSlice * 0.25
-        activeBands = []
-        for (let i = 0; i < bandCount; i++) {
-          const stagger = i * (GUST_BAND_STAGGER_MIN + Math.random() * (GUST_BAND_STAGGER_MAX - GUST_BAND_STAGGER_MIN))
-          const phase = phaseBase + i * phaseSlice + (Math.random() - 0.5) * 2 * phaseJitter
-          activeBands.push({
-            phase,
-            intensity: 0,
-            state: 'waiting',
-            timer: stagger,
-            activeTime: GUST_ACTIVE_MIN + Math.random() * (GUST_ACTIVE_MAX - GUST_ACTIVE_MIN),
-          })
+    // ── Gust cycle state machine (simplified: single envelope) ──
+    cycleTimer -= dt
+    switch (cycleState) {
+      case 'resting': {
+        gustStrength = 0
+        if (cycleDuration > 0) {
+          const t = smoothstep(Math.min(1, 1 - cycleTimer / cycleDuration))
+          windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
+          let angleDelta = windAngleTarget - windAngleStart
+          angleDelta = ((angleDelta + Math.PI) % (Math.PI * 2)) - Math.PI
+          windAngle = windAngleStart + angleDelta * t
         }
-        cycleState = 'gusting'
+        if (cycleTimer <= 0) {
+          windAngle = windAngleTarget
+          windStrengthMul = windStrengthTarget
+          cycleState = 'fade-in'
+          cycleDuration = GUST_FADE_IN
+          cycleTimer = cycleDuration
+        }
+        break
+      }
+      case 'fade-in': {
+        const intensityScale = 0.3 + windStrengthMul * 0.7
+        gustStrength = smoothstep(1 - cycleTimer / cycleDuration) * intensityScale
+        if (cycleTimer <= 0) {
+          gustStrength = intensityScale
+          cycleState = 'active'
+          cycleDuration = GUST_ACTIVE_MIN + Math.random() * (GUST_ACTIVE_MAX - GUST_ACTIVE_MIN)
+          cycleTimer = cycleDuration
+        }
+        break
+      }
+      case 'active': {
+        gustStrength = 0.3 + windStrengthMul * 0.7
+        if (cycleTimer <= 0) {
+          cycleState = 'fade-out'
+          cycleDuration = GUST_FADE_OUT
+          cycleTimer = cycleDuration
+        }
+        break
+      }
+      case 'fade-out': {
+        const intensityScale = 0.3 + windStrengthMul * 0.7
+        gustStrength = smoothstep(cycleTimer / cycleDuration) * intensityScale
+        if (cycleTimer <= 0) {
+          gustStrength = 0
+          cycleState = 'resting'
+          // Pick new wind direction/strength for next rest period
+          windAngleStart = windAngle
+          windStrengthStart = windStrengthMul
+          windStrengthTarget = WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
+          const bigTurn = Math.random() < 0.1
+          const sign = Math.random() < 0.5 ? -1 : 1
+          if (bigTurn) {
+            const angle = Math.PI / 4 + Math.random() * (Math.PI * 0.35)
+            windAngleTarget = windAngle + sign * angle
+            cycleDuration = GUST_REST_MAX - 3 + Math.random() * 3
+          } else {
+            const angle = Math.random() * (Math.PI / 4)
+            windAngleTarget = windAngle + sign * angle
+            cycleDuration = Math.random() * 3
+          }
+          cycleTimer = cycleDuration
+        }
+        break
       }
     }
 
     const windDirX = Math.cos(windAngle)
     const windDirZ = Math.sin(windAngle)
 
-    if (cycleState === 'gusting') {
-      const intensityScale = 0.3 + windStrengthMul * 0.7
-      let allDone = true
-      for (const b of activeBands) {
-        if (b.state === 'done') continue
-        allDone = false
-        b.timer -= dt
-        while (b.timer <= 0 && b.state !== 'done') {
-          switch (b.state) {
-            case 'waiting': {
-              b.state = 'fade-in'
-              b.timer += GUST_FADE_IN
-              break
-            }
-            case 'fade-in': {
-              b.state = 'active'
-              b.timer += b.activeTime
-              break
-            }
-            case 'active': {
-              b.state = 'fade-out'
-              b.timer += GUST_FADE_OUT
-              break
-            }
-            case 'fade-out': {
-              b.state = 'done'
-              break
-            }
-          }
-        }
-        switch (b.state) {
-          case 'waiting':
-          case 'done': {
-            b.intensity = 0
-            break
-          }
-          case 'fade-in': {
-            b.intensity = (1 - b.timer / GUST_FADE_IN) * intensityScale
-            break
-          }
-          case 'active': {
-            b.intensity = intensityScale
-            break
-          }
-          case 'fade-out': {
-            b.intensity = (b.timer / GUST_FADE_OUT) * intensityScale
-            break
-          }
-        }
-        b.phase += gustSpeed * dt
-      }
-      if (allDone) {
-        cycleState = 'resting'
-        windAngleStart = windAngle
-        windStrengthStart = windStrengthMul
-        windStrengthTarget = WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
-        const bigTurn = Math.random() < 0.1
-        const sign = Math.random() < 0.5 ? -1 : 1
-        if (bigTurn) {
-          const angle = Math.PI / 4 + Math.random() * (Math.PI * 0.35)
-          windAngleTarget = windAngle + sign * angle
-          cycleRestDuration = GUST_REST_MAX - 3 + Math.random() * 3
-        } else {
-          const angle = Math.random() * (Math.PI / 4)
-          windAngleTarget = windAngle + sign * angle
-          cycleRestDuration = Math.random() * 3
-        }
-        cycleRestTimer = cycleRestDuration
-      }
-    }
-
     for (let ui = 0; ui < allUniforms.length; ui++) {
       const u = allUniforms[ui]
       u.uTime.value = elapsedTime
       u.uWindStrength.value = baseWindStrengths[ui] * windStrengthMul
       u.uWindDir.value.set(windDirX, windDirZ)
-      for (let gi = 0; gi < GRASS_GUST_COUNT; gi++) {
-        if (gi < activeBands.length) {
-          u.uGustPhase[gi].value = activeBands[gi].phase
-          u.uGustIntensity[gi].value = activeBands[gi].intensity
-        } else {
-          u.uGustIntensity[gi].value = 0
-        }
-      }
+      u.uGustStrength.value = gustStrength
       for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
         if (i < trail.length) {
           u.uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
@@ -366,8 +306,7 @@
       windArrow.position.set(playerPosition.x, playerPosition.y + 3, playerPosition.z)
       windArrow.setDirection(windArrowDir)
       windArrow.setLength(arrowLen, arrowLen * 0.2, arrowLen * 0.1)
-      const anyGustActive = activeBands.some((b) => b.intensity > 0.1)
-      const arrowColor = anyGustActive ? GUST_ARROW_COLOR : WIND_ARROW_COLOR
+      const arrowColor = gustStrength > 0.1 ? GUST_ARROW_COLOR : WIND_ARROW_COLOR
       windArrow.setColor(arrowColor)
     }
   }
