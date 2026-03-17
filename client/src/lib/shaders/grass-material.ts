@@ -279,7 +279,14 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
     const spatial = instanceWorldXZ.x
       .mul(wDirX)
       .add(instanceWorldXZ.y.mul(wDirZ))
-    const phase = spatial.mul(wFreq).sub(uTime.mul(wSpeed))
+
+    // Perpendicular coordinate for wavefront warping
+    const perp = instanceWorldXZ.x
+      .mul(wDirZ.negate())
+      .add(instanceWorldXZ.y.mul(wDirX))
+    const warp = sin(perp.mul(0.15)).mul(2.5)
+
+    const phase = spatial.mul(wFreq).add(warp).sub(uTime.mul(wSpeed))
 
     // Gerstner phase distortion: bunches crests, spreads troughs
     const gerstnerPhase = phase.add(wQ.mul(sin(phase)))
