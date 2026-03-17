@@ -73,7 +73,6 @@
     updateOrthographicFrustum,
   } from './game-scene/camera-utils'
   import {
-    TERRAIN_GRID_RADIUS,
     TERRAIN_TILE_SEGMENTS,
     TERRAIN_TILE_SIZE,
     type TerrainTile,
@@ -355,7 +354,6 @@
       centerChunkX,
       centerChunkZ,
       TERRAIN_TILE_SIZE,
-      TERRAIN_GRID_RADIUS
     )
 
     const newTileIds = new Set(allTiles.map((t) => t.id))
