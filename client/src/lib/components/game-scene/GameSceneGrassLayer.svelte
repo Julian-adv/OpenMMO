@@ -33,11 +33,11 @@
   }: Props = $props()
 
   // ── Sub-chunk grass rendering ──────────────────────────
-  const SUB_CHUNK_SIZE = 16
-  const SUB_CHUNK_GRID_RADIUS = 2 // 2 = 5×5 grid (80m coverage)
-  const GRID_COUNT = (SUB_CHUNK_GRID_RADIUS * 2 + 1) ** 2 // 25
-  const MESH_CAPACITY = 2560
-  const FLOWER_MESH_CAPACITY = 512
+  const SUB_CHUNK_SIZE = 32
+  const SUB_CHUNK_GRID_RADIUS = 1 // 1 = 3×3 grid (96m coverage)
+  const GRID_COUNT = (SUB_CHUNK_GRID_RADIUS * 2 + 1) ** 2 // 9
+  const MESH_CAPACITY = 10240
+  const FLOWER_MESH_CAPACITY = 2048
 
   // ── Async-loaded geometry & materials ─────────────────
   // Stored for reference/disposal only; meshes are created imperatively below
@@ -443,7 +443,7 @@
     return result
   }
 
-  // ── Collect active sub-chunk keys ──
+  // ── Collect active sub-chunk keys (3×3 grid around player) ──
   function getActiveSubChunkKeys(): string[] {
     const keys: string[] = []
     for (let dz = -SUB_CHUNK_GRID_RADIUS; dz <= SUB_CHUNK_GRID_RADIUS; dz++) {
