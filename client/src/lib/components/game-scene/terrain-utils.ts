@@ -21,39 +21,43 @@ export const SEA_LEVEL_ENCODED = 10000
 
 export const TERRAIN_TILE_SIZE = 64
 export const TERRAIN_TILE_SEGMENTS = 64
-export const TERRAIN_GRID_RADIUS = 1 // 1 => 3x3 tiles around player
 
+/**
+ * Create a 2×2 tile grid based on the player's floor-rounded chunk position.
+ * The 4 tiles always cover the player: (fx,fz), (fx+1,fz), (fx,fz+1), (fx+1,fz+1).
+ * This is sufficient for an orthographic camera viewport with 64-unit tiles.
+ */
 export function createTerrainTiles(
-  centerChunkX: number,
-  centerChunkZ: number,
-  tileSize = TERRAIN_TILE_SIZE,
-  gridRadius = TERRAIN_GRID_RADIUS
+  floorChunkX: number,
+  floorChunkZ: number,
+  tileSize = TERRAIN_TILE_SIZE
 ): TerrainTile[] {
-  const nextTiles: TerrainTile[] = []
-
-  for (let dz = -gridRadius; dz <= gridRadius; dz++) {
-    for (let dx = -gridRadius; dx <= gridRadius; dx++) {
-      nextTiles.push({
-        id: `${centerChunkX + dx}_${centerChunkZ + dz}`,
-        position: [
-          (centerChunkX + dx) * tileSize,
-          0,
-          (centerChunkZ + dz) * tileSize,
-        ],
+  const tiles: TerrainTile[] = []
+  for (let dz = 0; dz <= 1; dz++) {
+    for (let dx = 0; dx <= 1; dx++) {
+      const cx = floorChunkX + dx
+      const cz = floorChunkZ + dz
+      tiles.push({
+        id: `${cx}_${cz}`,
+        position: [cx * tileSize, 0, cz * tileSize],
       })
     }
   }
-
-  return nextTiles
+  return tiles
 }
 
+/**
+ * Get the floor-based chunk coordinate for a world position.
+ * Combined with the 2×2 grid, this ensures the player is always
+ * surrounded by terrain regardless of where they stand within a tile.
+ */
 export function getTerrainChunkFromPosition(
   position: Vector3Like,
   tileSize = TERRAIN_TILE_SIZE
 ): TerrainChunk {
   return {
-    x: Math.round(position.x / tileSize),
-    z: Math.round(position.z / tileSize),
+    x: Math.floor(position.x / tileSize),
+    z: Math.floor(position.z / tileSize),
   }
 }
 

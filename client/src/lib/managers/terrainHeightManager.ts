@@ -127,12 +127,12 @@ export class TerrainHeightManager {
     )
   }
 
-  hasHeightDataForGrid(worldX: number, worldZ: number, radius = 1): boolean {
-    const centerTileX = worldToTileCoord(worldX)
-    const centerTileZ = worldToTileCoord(worldZ)
-    for (let dz = -radius; dz <= radius; dz++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (!this.heightmaps.has(tileKey(centerTileX + dx, centerTileZ + dz))) {
+  hasHeightDataForGrid(worldX: number, worldZ: number): boolean {
+    const floorX = Math.floor(worldX / TERRAIN_TILE_SIZE)
+    const floorZ = Math.floor(worldZ / TERRAIN_TILE_SIZE)
+    for (let dz = 0; dz <= 1; dz++) {
+      for (let dx = 0; dx <= 1; dx++) {
+        if (!this.heightmaps.has(tileKey(floorX + dx, floorZ + dz))) {
           return false
         }
       }

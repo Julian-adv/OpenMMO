@@ -174,62 +174,67 @@ export function makeSplatStandardMaterial({
     return positionLocal
   })()
 
-  // ─── Color node (albedo blending + overlays) ──────
-  const colorNode = Fn(() => {
-    const localUv = uv()
-    const weights = getWeights(vUvSplat)
-    const uvDx = dFdx(localUv)
-    const uvDy = dFdy(localUv)
+  // ─── Shared fragment inputs (computed once, reused across all nodes) ──
+  // TSL deduplicates node references within the same shader, so computing
+  // weights + UV derivatives once and reusing the results avoids redundant
+  // getWeights/dFdx/dFdy evaluations across color/normal/ORM nodes.
+  const fLocalUv = uv()
+  const fWeights = getWeights(vUvSplat)
+  const fUvDx = dFdx(fLocalUv)
+  const fUvDy = dFdy(fLocalUv)
 
+  // ─── Color node (albedo blending + editor overlays) ──────
+  const colorNode = Fn(() => {
     const c0 = sampleAtlas(
       diffAtlasTex,
-      localUv,
+      fLocalUv,
       uTile0,
       QUAD_OFFSETS[0],
-      uvDx,
-      uvDy
+      fUvDx,
+      fUvDy
     ).rgb
     const c1 = sampleAtlas(
       diffAtlasTex,
-      localUv,
+      fLocalUv,
       uTile1,
       QUAD_OFFSETS[1],
-      uvDx,
-      uvDy
+      fUvDx,
+      fUvDy
     ).rgb
     const c2 = sampleAtlas(
       diffAtlasTex,
-      localUv,
+      fLocalUv,
       uTile2,
       QUAD_OFFSETS[2],
-      uvDx,
-      uvDy
+      fUvDx,
+      fUvDy
     ).rgb
     const c3 = sampleAtlas(
       diffAtlasTex,
-      localUv,
+      fLocalUv,
       uTile3,
       QUAD_OFFSETS[3],
-      uvDx,
-      uvDy
+      fUvDx,
+      fUvDy
     ).rgb
     const blended = c0
-      .mul(weights.r)
-      .add(c1.mul(weights.g))
-      .add(c2.mul(weights.b))
-      .add(c3.mul(weights.a))
+      .mul(fWeights.r)
+      .add(c1.mul(fWeights.g))
+      .add(c2.mul(fWeights.b))
+      .add(c3.mul(fWeights.a))
       .toVar()
 
-    // Grid visualization
-    const gridCoords = localUv.mul(64.0)
+    // Editor grid + brush overlay (controlled by uniforms; cost is zero when
+    // gridVisible=0 and brushActive=0 since smoothstep gates everything).
+    const gridActive = smoothstep(float(0.49), float(0.51), uGridVisible)
+
+    const gridCoords = fLocalUv.mul(64.0)
     const grid1 = abs(fract(gridCoords.sub(0.5)).sub(0.5)).div(
       fwidth(gridCoords)
     )
     const line1 = float(1).sub(min(min(grid1.x, grid1.y), float(1)))
-    const grid64 = abs(fract(localUv.sub(0.5)).sub(0.5)).div(fwidth(localUv))
+    const grid64 = abs(fract(fLocalUv.sub(0.5)).sub(0.5)).div(fwidth(fLocalUv))
     const line64 = float(1).sub(min(min(grid64.x, grid64.y), float(1)))
-
-    // Region boundary grid (16 tiles = 1024 world units, offset by half tile)
     const regionCoords = vWorldXZ.add(32.0).div(1024.0)
     const gridRegion = abs(fract(regionCoords.sub(0.5)).sub(0.5)).div(
       fwidth(regionCoords)
@@ -238,7 +243,6 @@ export function makeSplatStandardMaterial({
       min(min(gridRegion.x, gridRegion.y), float(1))
     )
 
-    const gridActive = smoothstep(float(0.49), float(0.51), uGridVisible)
     blended.assign(
       mix(blended, mix(blended, vec3(0, 0, 0), line1.mul(0.3)), gridActive)
     )
@@ -249,7 +253,6 @@ export function makeSplatStandardMaterial({
       mix(blended, vec3(0.886, 0.725, 0.231), lineRegion.mul(gridActive))
     )
 
-    // Brush overlay
     const bDist = distance(vWorldXZ, vec2(uBrushCenter))
     const ringWidth = max(float(0.5), float(uBrushRadius).mul(0.1))
     const innerRadius = float(uBrushRadius).sub(ringWidth)
@@ -258,27 +261,20 @@ export function makeSplatStandardMaterial({
         smoothstep(float(uBrushRadius), float(uBrushRadius).add(0.1), bDist)
       )
     )
-
-    const splatColor = vec3(1.0, 0.7, 0.2)
-    const flattenColor = vec3(0.3, 0.6, 1.0)
-    const raiseColor = vec3(0.3, 1.0, 0.3)
-    const lowerColor = vec3(1.0, 0.3, 0.3)
-
     const heightColor = mix(
-      lowerColor,
+      vec3(1.0, 0.3, 0.3),
       mix(
-        raiseColor,
-        flattenColor,
+        vec3(0.3, 1.0, 0.3),
+        vec3(0.3, 0.6, 1.0),
         smoothstep(float(1.49), float(1.51), uBrushRaise)
       ),
       smoothstep(float(0.49), float(0.51), uBrushRaise)
     )
     const brushColor = mix(
       heightColor,
-      splatColor,
+      vec3(1.0, 0.7, 0.2),
       smoothstep(float(0.49), float(0.51), uBrushToolMode)
     )
-
     const brushAlpha = inRing
       .mul(0.35)
       .mul(smoothstep(float(0.49), float(0.51), uBrushActive))
@@ -290,202 +286,102 @@ export function makeSplatStandardMaterial({
   // ─── Normal node (splat-blended normals from atlas) ──────────
   const normalNode = normAtlasTex
     ? Fn(() => {
-        const localUv = uv()
-        const w = getWeights(vUvSplat)
-        const uvDx = dFdx(localUv)
-        const uvDy = dFdy(localUv)
-
         const n0 = sampleAtlas(
           normAtlasTex,
-          localUv,
+          fLocalUv,
           uTile0,
           QUAD_OFFSETS[0],
-          uvDx,
-          uvDy
+          fUvDx,
+          fUvDy
         )
           .xyz.mul(2.0)
           .sub(1.0)
-          .mul(w.r)
+          .mul(fWeights.r)
         const n1 = sampleAtlas(
           normAtlasTex,
-          localUv,
+          fLocalUv,
           uTile1,
           QUAD_OFFSETS[1],
-          uvDx,
-          uvDy
+          fUvDx,
+          fUvDy
         )
           .xyz.mul(2.0)
           .sub(1.0)
-          .mul(w.g)
+          .mul(fWeights.g)
         const n2 = sampleAtlas(
           normAtlasTex,
-          localUv,
+          fLocalUv,
           uTile2,
           QUAD_OFFSETS[2],
-          uvDx,
-          uvDy
+          fUvDx,
+          fUvDy
         )
           .xyz.mul(2.0)
           .sub(1.0)
-          .mul(w.b)
+          .mul(fWeights.b)
         const n3 = sampleAtlas(
           normAtlasTex,
-          localUv,
+          fLocalUv,
           uTile3,
           QUAD_OFFSETS[3],
-          uvDx,
-          uvDy
+          fUvDx,
+          fUvDy
         )
           .xyz.mul(2.0)
           .sub(1.0)
-          .mul(w.a)
-
+          .mul(fWeights.a)
         const tangentNormal = n0.add(n1).add(n2).add(n3).normalize()
-        // Convert tangent-space normal to view-space via TBN matrix.
-        // mat.normalNode is used directly as normalView, so we must provide
-        // a view-space normal — not a tangent-space one.
         return TBNViewMatrix.mul(tangentNormal).normalize()
       })()
     : undefined
 
-  // ─── Roughness node (ORM atlas G channel) ───────────────
-  const roughnessNode = ormAtlasTex
+  // ─── ORM node (single pass: sample atlas once, extract AO/roughness/metalness) ──
+  // Previously roughness, metalness, and AO were separate Fn()s each sampling
+  // the ORM atlas 4 times (12 total). Merged into one Fn with 4 samples.
+  const ormBlended = ormAtlasTex
     ? Fn(() => {
-        const localUv = uv()
-        const w = getWeights(vUvSplat)
-        const uvDx = dFdx(localUv)
-        const uvDy = dFdy(localUv)
-
-        const r0 = sampleAtlas(
+        const o0 = sampleAtlas(
           ormAtlasTex,
-          localUv,
+          fLocalUv,
           uTile0,
           QUAD_OFFSETS[0],
-          uvDx,
-          uvDy
-        ).g
-        const r1 = sampleAtlas(
+          fUvDx,
+          fUvDy
+        ).rgb
+        const o1 = sampleAtlas(
           ormAtlasTex,
-          localUv,
+          fLocalUv,
           uTile1,
           QUAD_OFFSETS[1],
-          uvDx,
-          uvDy
-        ).g
-        const r2 = sampleAtlas(
+          fUvDx,
+          fUvDy
+        ).rgb
+        const o2 = sampleAtlas(
           ormAtlasTex,
-          localUv,
+          fLocalUv,
           uTile2,
           QUAD_OFFSETS[2],
-          uvDx,
-          uvDy
-        ).g
-        const r3 = sampleAtlas(
+          fUvDx,
+          fUvDy
+        ).rgb
+        const o3 = sampleAtlas(
           ormAtlasTex,
-          localUv,
+          fLocalUv,
           uTile3,
           QUAD_OFFSETS[3],
-          uvDx,
-          uvDy
-        ).g
-
-        return r0.mul(w.r).add(r1.mul(w.g)).add(r2.mul(w.b)).add(r3.mul(w.a))
+          fUvDx,
+          fUvDy
+        ).rgb
+        return o0
+          .mul(fWeights.r)
+          .add(o1.mul(fWeights.g))
+          .add(o2.mul(fWeights.b))
+          .add(o3.mul(fWeights.a))
       })()
-    : undefined
-
-  // ─── Metalness node (ORM atlas B channel) ───────────────
-  const metalnessNode = ormAtlasTex
-    ? Fn(() => {
-        const localUv = uv()
-        const w = getWeights(vUvSplat)
-        const uvDx = dFdx(localUv)
-        const uvDy = dFdy(localUv)
-
-        const m0 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile0,
-          QUAD_OFFSETS[0],
-          uvDx,
-          uvDy
-        ).b
-        const m1 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile1,
-          QUAD_OFFSETS[1],
-          uvDx,
-          uvDy
-        ).b
-        const m2 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile2,
-          QUAD_OFFSETS[2],
-          uvDx,
-          uvDy
-        ).b
-        const m3 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile3,
-          QUAD_OFFSETS[3],
-          uvDx,
-          uvDy
-        ).b
-
-        return m0.mul(w.r).add(m1.mul(w.g)).add(m2.mul(w.b)).add(m3.mul(w.a))
-      })()
-    : undefined
-
-  // ─── AO node (ORM atlas R channel) ──────────────────────
-  const aoNode = ormAtlasTex
-    ? Fn(() => {
-        const localUv = uv()
-        const w = getWeights(vUvSplat)
-        const uvDx = dFdx(localUv)
-        const uvDy = dFdy(localUv)
-
-        const ao0 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile0,
-          QUAD_OFFSETS[0],
-          uvDx,
-          uvDy
-        ).r
-        const ao1 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile1,
-          QUAD_OFFSETS[1],
-          uvDx,
-          uvDy
-        ).r
-        const ao2 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile2,
-          QUAD_OFFSETS[2],
-          uvDx,
-          uvDy
-        ).r
-        const ao3 = sampleAtlas(
-          ormAtlasTex,
-          localUv,
-          uTile3,
-          QUAD_OFFSETS[3],
-          uvDx,
-          uvDy
-        ).r
-
-        return ao0
-          .mul(w.r)
-          .add(ao1.mul(w.g))
-          .add(ao2.mul(w.b))
-          .add(ao3.mul(w.a))
-      })()
-    : undefined
+    : null
+  const roughnessNode = ormBlended ? ormBlended.g : undefined
+  const metalnessNode = ormBlended ? ormBlended.b : undefined
+  const aoNode = ormBlended ? ormBlended.r : undefined
 
   // ─── Build material ────────────────────────────────
   const mat = new MeshStandardNodeMaterial()
