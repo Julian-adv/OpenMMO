@@ -56,6 +56,17 @@
   export function getGroup(): THREE.Group {
     return grassGroup
   }
+
+  /** Eagerly create grass materials + one mesh per type so compileAsync can
+   *  pre-compile the grass shader pipelines. Returns true when done. */
+  export function ensureMaterialsForCompile(): boolean {
+    if (!ensureMaterials() || !_grassGeometry) return false
+    // Create at least one mesh per type so the pipeline exists in the scene
+    ensureSlotMesh(shortMeshes, 0, _grassGeometry, _shortGrassMaterial!, MESH_CAPACITY)
+    ensureSlotMesh(tallMeshes, 0, _grassGeometry, _tallGrassMaterial!, MESH_CAPACITY)
+    ensureSlotMesh(flowerMeshes, 0, _grassGeometry, _flowerMaterial!, FLOWER_MESH_CAPACITY)
+    return true
+  }
   let shortMeshes: THREE.InstancedMesh[] = []
   let tallMeshes: THREE.InstancedMesh[] = []
   let flowerMeshes: THREE.InstancedMesh[] = []

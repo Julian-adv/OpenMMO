@@ -88,10 +88,15 @@
   import { TerrainMetaManager } from '../managers/terrainMetaManager'
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { loadFoamTexture } from '../shaders/water-foam-gen'
-  import { generateCausticsTexture } from '../shaders/caustics-gen'
+  import { loadCausticsTexture } from '../shaders/caustics-gen'
   import { RefractionRenderManager } from '../managers/refractionRenderManager'
   import { ReflectionRenderManager } from '../managers/reflectionRenderManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
+  import {
+    loadGrassBillboardGeometry,
+    loadGrassAlphaTexture,
+    loadFlowerAlphaTexture,
+  } from '../shaders/grass-material'
 
   interface Props {
     serverUrl: string
@@ -151,6 +156,21 @@
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.533) // Default from slash1 animation (data/animation_durations.json)
 
+  // Defer multi-pass rendering (refraction/reflection) after initial load to
+  // avoid tripling the pipeline compilation cost during first frames.
+  let multiPassReady = false
+  let multiPassWarmupFrames = 0
+  const MULTI_PASS_WARMUP_FRAMES = 5
+
+  // Track whether all initial data is loaded (terrain + splat + grass assets).
+  // The loading dialog stays until frames render smoothly (pipeline compilation
+  // done by Threlte's render loop under the dialog overlay).
+  let initialDataReady = false
+  let smoothFrameCount = 0
+  const SMOOTH_FRAME_THRESHOLD = 3 // consecutive smooth frames to consider ready
+  const SMOOTH_FRAME_TIME_MS = 100 // frame must be under this to count
+
+
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
 
@@ -170,6 +190,14 @@
       data.cameraZoom = camera?.zoom ?? null
     })
   }
+
+  // Initialize camera as soon as both camera ref and currentPlayer are available
+  $effect(() => {
+    if (!cameraInitialized && camera && currentPlayer) {
+      resetCameraToInitialState()
+      cameraInitialized = true
+    }
+  })
 
   // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
   let prevDebugVisible = $state(false)
@@ -532,10 +560,19 @@
       }
 
       // Render wetness pre-pass (small 128x128 RT per water tile)
-      waterLayerRef?.renderWetness(renderer)
+      if (multiPassReady) waterLayerRef?.renderWetness(renderer)
+
+      // Count warmup frames after loading to let main pass compile pipelines
+      // before adding refraction/reflection overhead.
+      if (!multiPassReady && !isSceneCompiling) {
+        multiPassWarmupFrames++
+        if (multiPassWarmupFrames >= MULTI_PASS_WARMUP_FRAMES) {
+          multiPassReady = true
+        }
+      }
 
       // Render refraction pass (scene without water or entities — terrain only)
-      if (refractionManager && $refractionEnabled) {
+      if (refractionManager && $refractionEnabled && multiPassReady) {
         if (camera) refractionManager.setCamera(camera)
         if (waterGroup) refractionManager.setWaterGroup(waterGroup)
 
@@ -575,7 +612,7 @@
       }
 
       // Render reflection pass (entities only, mirrored camera)
-      if (reflectionManager && $reflectionEnabled) {
+      if (reflectionManager && $reflectionEnabled && multiPassReady) {
         if (camera) reflectionManager.setCamera(camera)
         reflectionManager.setTerrainGroup(terrainGroup ?? null)
         if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
@@ -609,6 +646,19 @@
 
       const frameWorkMs = performance.now() - frameWorkStart
       loopProfiler.record('frameWork', frameWorkMs)
+
+      // Detect when pipeline compilation is done: once data is ready,
+      // wait for a few consecutive smooth frames before hiding the loading dialog.
+      if (isSceneCompiling && initialDataReady) {
+        if (rawDeltaTime < SMOOTH_FRAME_TIME_MS) {
+          smoothFrameCount++
+          if (smoothFrameCount >= SMOOTH_FRAME_THRESHOLD) {
+            isSceneCompiling = false
+          }
+        } else {
+          smoothFrameCount = 0
+        }
+      }
 
       if (unclampedSteps > MAX_CATCH_UP_STEPS) {
         // Drop excessive backlog after long stalls (tab switch, debugger pause, etc.).
@@ -746,7 +796,7 @@
       waterNormalMap = tex
     }
     loadFoamTexture().then((tex) => { waterFoamMap = tex })
-    waterCausticsMap = generateCausticsTexture()
+    loadCausticsTexture().then((tex) => { waterCausticsMap = tex })
 
     // Initialize refraction render manager
     const refMgr = new RefractionRenderManager(renderer, scene, viewportSize.width, viewportSize.height)
@@ -758,20 +808,50 @@
     reflectionManager = reflMgr
     reflectionTexture = reflMgr.texture
 
+    // Load all terrain tiles immediately (no staggering during initial load)
     rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
+    while (pendingTileQueue.length > 0) {
+      drainTileQueue()
+    }
 
-    // Show the scene as soon as materials are ready, then kick off
-    // background shader compilation to reduce on-demand stutter.
-    loadSplatLayers().then(() => {
+    // Pre-fetch all tile heightmaps so they're cached when the TerrainLayer
+    // $effect fires. This allows work items to be enqueued immediately.
+    const tileCoords = terrainTiles.map((t) => ({
+      x: Math.round(t.position[0] / TERRAIN_TILE_SIZE),
+      z: Math.round(t.position[2] / TERRAIN_TILE_SIZE),
+    }))
+    const heightPromises = tileCoords.map((c) =>
+      terrainHeightManager.loadHeightmap(c.x, c.z).catch(() => {})
+    )
+
+    const splatPromise = loadSplatLayers()
+
+    // Also await grass asset loading so grass materials can be compiled
+    const grassAssetsPromise = Promise.all([
+      loadGrassBillboardGeometry(),
+      loadGrassAlphaTexture(),
+      loadFlowerAlphaTexture(),
+    ])
+
+    // Wait for terrain data + grass assets, let the TerrainLayer $effect run
+    // and enqueue work, eagerly create grass materials, then let the renderer
+    // compile pipelines while the loading dialog is still visible.
+    Promise.all([splatPromise, grassAssetsPromise, ...heightPromises]).then(() => {
+      // Wait two frames: one for Svelte to flush the $effect that enqueues
+      // tile work, and another to ensure all microtask .then() chains complete.
       requestAnimationFrame(() => {
-        isSceneCompiling = false
+        requestAnimationFrame(() => {
+          drainTileWork(Infinity)
 
-        // Fire-and-forget: start compiling all current scene shaders in the
-        // background via the GPU process. Objects that render before compilation
-        // finishes will stall briefly, but many will already be compiled.
-        if (camera) {
-          renderer.compileAsync(scene, camera).catch(() => {})
-        }
+          // Eagerly create grass materials + meshes so Threlte's render loop
+          // compiles their pipelines while the loading dialog is still visible.
+          grassLayerRef?.ensureMaterialsForCompile()
+
+          // Mark data as ready. Threlte's render loop compiles WebGPU pipelines
+          // on-demand (synchronously per frame) under the loading dialog overlay.
+          // The smooth frame detector waits until compilation is done.
+          initialDataReady = true
+        })
       })
     })
 
@@ -785,13 +865,12 @@
 
     networkManager.connect(serverUrl)
 
-    // Initialize camera position after a short delay to ensure camera ref is available
+    // Initialize camera position: HMR restores previous state,
+    // otherwise a reactive $effect waits for camera + player to be ready.
     if (_hmrCameraInitialized) {
-      // HMR: restore previous camera state instead of resetting
       cameraInitialized = true
       if (_hmrCameraZoom !== null) {
         const restoreZoom = _hmrCameraZoom
-        // Defer until camera ref is bound by Threlte
         requestAnimationFrame(() => {
           if (camera) {
             camera.zoom = restoreZoom
@@ -800,13 +879,6 @@
         })
       }
       _hmrCameraZoom = null
-    } else {
-      setTimeout(() => {
-        if (camera && currentPlayer) {
-          resetCameraToInitialState()
-          cameraInitialized = true
-        }
-      }, 1100)
     }
 
     return () => {
