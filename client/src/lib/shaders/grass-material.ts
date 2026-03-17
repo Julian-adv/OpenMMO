@@ -64,20 +64,16 @@ export function loadGrassBillboardGeometry(
   })
 }
 
-export function loadGrassAlphaTexture(
-  url = '/textures/grass1.jpeg'
-): Promise<THREE.Texture> {
-  return new Promise((resolve, reject) => {
-    new THREE.TextureLoader().load(
-      url,
-      (tex) => {
-        resolve(tex)
-      },
-      undefined,
-      reject
-    )
-  })
+const textureLoader = new THREE.TextureLoader()
+
+export function loadAlphaTexture(url: string): Promise<THREE.Texture> {
+  return textureLoader.loadAsync(url)
 }
+
+export const loadGrassAlphaTexture = () =>
+  loadAlphaTexture('/textures/grass1.jpeg')
+export const loadFlowerAlphaTexture = () =>
+  loadAlphaTexture('/textures/flower.png')
 
 // ── Splatmap R-channel vegetation subtype ranges ─────────
 export const SHORT_GRASS_R_MIN = 230
@@ -123,6 +119,9 @@ export interface GrassMaterialConfig {
   interactionRadius?: number
   interactionStrength?: number
   alphaMap?: THREE.Texture
+  /** Petal color palette for flowers. When set, each instance picks a random
+   *  color from this list and blends it into the upper portion of the billboard. */
+  flowerColors?: [number, number, number][]
 }
 
 export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
@@ -135,6 +134,24 @@ export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
   heightScaleExtent: 0.6,
   interactionRadius: 2.0,
   interactionStrength: 0.35,
+}
+
+export const FLOWER_CONFIG: GrassMaterialConfig = {
+  baseColor: [0.02, 0.06, 0.015],
+  tipColor: [0.06, 0.12, 0.03],
+  windStrength: 0.04,
+  widthScaleMin: 0.8,
+  widthScaleExtent: 0.5,
+  heightScaleMin: 0.6,
+  heightScaleExtent: 0.5,
+  interactionRadius: 1.5,
+  interactionStrength: 0.12,
+  flowerColors: [
+    [0.9, 0.85, 0.2], // yellow (dandelion)
+    [0.95, 0.5, 0.6], // pink (cosmos)
+    [0.95, 0.95, 0.9], // white (daisy)
+    [0.7, 0.5, 0.85], // lavender
+  ],
 }
 
 /**
@@ -218,15 +235,36 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const brightnessHash = hash(
     vec2(instanceIndex.toFloat().mul(0.37), float(1.7))
   )
-  const hueHash = hash(vec2(instanceIndex.toFloat().mul(0.73), float(3.1)))
   const brightness = float(0.85).add(brightnessHash.mul(0.3)) // 0.85 ~ 1.15
-  // Slight yellow-green ↔ blue-green hue shift per instance
-  const hueShift = vec3(
-    float(1.0).add(hueHash.sub(0.5).mul(0.15)),
-    float(1.0),
-    float(1.0).add(hueHash.sub(0.5).mul(-0.1))
-  )
-  mat.colorNode = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
+
+  const fc = cfg?.flowerColors
+  let finalColor: N
+  if (fc && fc.length > 0) {
+    // Pick a random petal color per instance from the palette
+    const colorHash = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.3)))
+    // Start with first color, mix in others based on hash thresholds
+    let petalColor: N = vec3(fc[0][0], fc[0][1], fc[0][2])
+    for (let ci = 1; ci < fc.length; ci++) {
+      const threshold = float(ci / fc.length)
+      const nextColor = vec3(fc[ci][0], fc[ci][1], fc[ci][2])
+      petalColor = mix(petalColor, nextColor, colorHash.step(threshold))
+    }
+    // Blend petal color into the upper portion (uvY > 0.4)
+    const petalBlend = smoothstep(float(0.35), float(0.6), uvY)
+    finalColor = mix(gradientColor, petalColor, petalBlend)
+      .mul(brightness)
+      .mul(rootAO)
+  } else {
+    // Slight yellow-green ↔ blue-green hue shift per instance
+    const hueHash = hash(vec2(instanceIndex.toFloat().mul(0.73), float(3.1)))
+    const hueShift = vec3(
+      float(1.0).add(hueHash.sub(0.5).mul(0.15)),
+      float(1.0),
+      float(1.0).add(hueHash.sub(0.5).mul(-0.1))
+    )
+    finalColor = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
+  }
+  mat.colorNode = finalColor
 
   // Do NOT set normalNode — the geometry normals (0,1,0) will be
   // automatically transformed to view-space by the default pipeline.
