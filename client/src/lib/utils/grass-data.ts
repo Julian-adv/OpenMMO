@@ -1,12 +1,13 @@
 /**
  * Grass placement data: binary encode/decode and placement computation.
  *
- * Binary format per tile:
- *   [u32 shortCount] [u32 tallCount]
+ * Binary format per tile (v2):
+ *   [u32 shortCount] [u32 tallCount] [u32 flowerCount]
  *   [shortCount × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
  *   [tallCount   × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
+ *   [flowerCount × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
  *
- * 8-byte header + 20 bytes per instance.
+ * 12-byte header + 20 bytes per instance.
  */
 
 import {
@@ -33,7 +34,8 @@ const TALL_SCALE_RANGE = 0.5
 export interface GrassPlacementData {
   shortCount: number
   tallCount: number
-  /** Interleaved f32: [x, y, z, rotation, scale] × shortCount, then × tallCount */
+  flowerCount: number
+  /** Interleaved f32: [x, y, z, rotation, scale] × shortCount, then × tallCount, then × flowerCount */
   buffer: ArrayBuffer
 }
 
@@ -135,6 +137,61 @@ function computeInstances(
   return new Float32Array(instances)
 }
 
+const FLOWER_SCALE_MIN = 0.42
+const FLOWER_SCALE_RANGE = 0.18
+
+/**
+ * Scatter flowers within short grass cells.
+ * Lower grass density (lower R value) → higher flower probability.
+ * R=230 (sparsest) → ~50%, R=239 (densest) → ~1%
+ */
+function computeFlowerInstances(
+  tileX: number,
+  tileZ: number,
+  splatData: Uint8Array,
+  heightmap: Uint16Array
+): Float32Array {
+  const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const rand = createRng(tileSeed(tileX, tileZ) ^ 0xf10e)
+  const densityRange = SHORT_GRASS_R_MAX - SHORT_GRASS_R_MIN
+
+  const instances: number[] = []
+
+  for (let cz = 0; cz < TILE_DIM; cz++) {
+    for (let cx = 0; cx < TILE_DIM; cx++) {
+      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
+      if (rVal < SHORT_GRASS_R_MIN || rVal > SHORT_GRASS_R_MAX) continue
+
+      // Flower probability: high when grass is sparse, low when dense
+      // t=0 (R=230, sparse) → 80%, t=1 (R=239, dense) → 10%
+      const t = (rVal - SHORT_GRASS_R_MIN) / densityRange
+      const flowerProb = 0.8 * Math.pow(0.125, t) // 0.80 → 0.10
+
+      // One flower chance per cell
+      const localX = cx + 0.5 + (rand() - 0.5) * 0.8
+      const localZ = cz + 0.5 + (rand() - 0.5) * 0.8
+      if (rand() >= flowerProb) continue
+
+      const worldY = sampleHeight(heightmap, localX, localZ)
+      if (worldY < 0.05) continue
+
+      const rotation = rand() * Math.PI * 2
+      const scale = FLOWER_SCALE_MIN + rand() * FLOWER_SCALE_RANGE
+
+      instances.push(
+        tileMinX + localX,
+        worldY,
+        tileMinZ + localZ,
+        rotation,
+        scale
+      )
+    }
+  }
+
+  return new Float32Array(instances)
+}
+
 /**
  * Compute grass placement data for a single tile.
  * Requires heightmap and splatmap data to be already loaded in the manager.
@@ -145,11 +202,11 @@ export function computeGrassPlacement(
   splatData: Uint8Array,
   hMgr: TerrainHeightManager
 ): GrassPlacementData {
+  const HEADER_BYTES = 12 // 3 × u32
   const heightmap = hMgr.getHeightmap(tileX, tileZ)
   if (!heightmap) {
-    // No heightmap → empty grass
-    const buffer = new ArrayBuffer(8)
-    return { shortCount: 0, tallCount: 0, buffer }
+    const buffer = new ArrayBuffer(HEADER_BYTES)
+    return { shortCount: 0, tallCount: 0, flowerCount: 0, buffer }
   }
 
   const shortInstances = computeInstances(
@@ -166,22 +223,32 @@ export function computeGrassPlacement(
     splatData,
     heightmap
   )
+  const flowerInstances = computeFlowerInstances(
+    tileX,
+    tileZ,
+    splatData,
+    heightmap
+  )
 
   const shortCount = shortInstances.length / FLOATS_PER_INSTANCE
   const tallCount = tallInstances.length / FLOATS_PER_INSTANCE
+  const flowerCount = flowerInstances.length / FLOATS_PER_INSTANCE
 
-  // Pack into binary: header (8 bytes) + instance data
-  const totalBytes = 8 + (shortInstances.length + tallInstances.length) * 4
+  const totalBytes =
+    HEADER_BYTES +
+    (shortInstances.length + tallInstances.length + flowerInstances.length) * 4
   const buffer = new ArrayBuffer(totalBytes)
-  const header = new Uint32Array(buffer, 0, 2)
+  const header = new Uint32Array(buffer, 0, 3)
   header[0] = shortCount
   header[1] = tallCount
+  header[2] = flowerCount
 
-  const data = new Float32Array(buffer, 8)
+  const data = new Float32Array(buffer, HEADER_BYTES)
   data.set(shortInstances, 0)
   data.set(tallInstances, shortInstances.length)
+  data.set(flowerInstances, shortInstances.length + tallInstances.length)
 
-  return { shortCount, tallCount, buffer }
+  return { shortCount, tallCount, flowerCount, buffer }
 }
 
 /**
@@ -233,29 +300,38 @@ export async function generateAndSaveGrassData(
 
 /** Decode binary grass placement data. */
 export function decodeGrassData(buffer: ArrayBuffer): GrassPlacementData {
-  const header = new Uint32Array(buffer, 0, 2)
-  const shortCount = header[0]
-  const tallCount = header[1]
-  return { shortCount, tallCount, buffer }
+  const header = new Uint32Array(buffer, 0, 3)
+  return {
+    shortCount: header[0],
+    tallCount: header[1],
+    flowerCount: header[2],
+    buffer,
+  }
 }
 
 /** Extract instance Float32Array for a given type from decoded data. */
 export function getInstanceData(
   data: GrassPlacementData,
-  type: 'short' | 'tall'
+  type: 'short' | 'tall' | 'flower'
 ): Float32Array {
-  const offset = 8 // skip header
-  if (type === 'short') {
-    return new Float32Array(
-      data.buffer,
-      offset,
-      data.shortCount * FLOATS_PER_INSTANCE
-    )
+  const headerBytes = 12
+  const shortFloats = data.shortCount * FLOATS_PER_INSTANCE
+  const tallFloats = data.tallCount * FLOATS_PER_INSTANCE
+
+  switch (type) {
+    case 'short':
+      return new Float32Array(data.buffer, headerBytes, shortFloats)
+    case 'tall':
+      return new Float32Array(
+        data.buffer,
+        headerBytes + shortFloats * 4,
+        tallFloats
+      )
+    case 'flower':
+      return new Float32Array(
+        data.buffer,
+        headerBytes + (shortFloats + tallFloats) * 4,
+        data.flowerCount * FLOATS_PER_INSTANCE
+      )
   }
-  const shortBytes = data.shortCount * FLOATS_PER_INSTANCE * 4
-  return new Float32Array(
-    data.buffer,
-    offset + shortBytes,
-    data.tallCount * FLOATS_PER_INSTANCE
-  )
 }

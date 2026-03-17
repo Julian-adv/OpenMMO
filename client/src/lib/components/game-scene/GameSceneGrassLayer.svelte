@@ -9,12 +9,14 @@
   import {
     loadGrassBillboardGeometry,
     loadGrassAlphaTexture,
+    loadFlowerAlphaTexture,
     createGrassMaterial,
     GRASS_INSTANCE_POS_ATTR,
     GRASS_INSTANCE_ROT_ATTR,
     GRASS_TRAIL_COUNT,
     GUST_WAVE_COUNT,
     TALL_GRASS_CONFIG,
+    FLOWER_CONFIG,
     type GrassMaterialUniforms,
   } from '../../shaders/grass-material'
 
@@ -35,12 +37,14 @@
   const SUB_CHUNK_GRID_RADIUS = 2 // 2 = 5×5 grid (80m coverage)
   const GRID_COUNT = (SUB_CHUNK_GRID_RADIUS * 2 + 1) ** 2 // 25
   const MESH_CAPACITY = 2560
+  const FLOWER_MESH_CAPACITY = 512
 
   // ── Async-loaded geometry & materials ─────────────────
   // Stored for reference/disposal only; meshes are created imperatively below
   let _grassGeometry: THREE.BufferGeometry | null = null
   let _shortGrassMaterial: THREE.Material | null = null
   let _tallGrassMaterial: THREE.Material | null = null
+  let _flowerMaterial: THREE.Material | null = null
   let allUniforms: GrassMaterialUniforms[] = []
   let baseWindStrengths: number[] = []
   let assetsReady = $state(false)
@@ -54,30 +58,37 @@
   }
   let shortMeshes: THREE.InstancedMesh[] = []
   let tallMeshes: THREE.InstancedMesh[] = []
+  let flowerMeshes: THREE.InstancedMesh[] = []
 
   // Load grass assets in parallel; defer material + mesh creation.
   // Meshes are created lazily (not all 50 upfront) to spread the cost.
   let _grassAlphaMap: THREE.Texture | null = null
+  let _flowerAlphaMap: THREE.Texture | null = null
 
-  Promise.all([loadGrassBillboardGeometry(), loadGrassAlphaTexture()]).then(
-    ([geometry, alphaMap]) => {
-      _grassGeometry = geometry
-      _grassAlphaMap = alphaMap
-      assetsReady = true
-    },
-  )
+  Promise.all([
+    loadGrassBillboardGeometry(),
+    loadGrassAlphaTexture(),
+    loadFlowerAlphaTexture(),
+  ]).then(([geometry, alphaMap, flowerAlphaMap]) => {
+    _grassGeometry = geometry
+    _grassAlphaMap = alphaMap
+    _flowerAlphaMap = flowerAlphaMap
+    assetsReady = true
+  })
 
   /** Create grass materials on first use. */
   function ensureMaterials(): boolean {
-    if (_shortGrassMaterial && _tallGrassMaterial) return true
-    if (!_grassGeometry || !_grassAlphaMap) return false
+    if (_shortGrassMaterial && _tallGrassMaterial && _flowerMaterial) return true
+    if (!_grassGeometry || !_grassAlphaMap || !_flowerAlphaMap) return false
 
     const shortResult = createGrassMaterial({ alphaMap: _grassAlphaMap })
     const tallResult = createGrassMaterial({ ...TALL_GRASS_CONFIG, alphaMap: _grassAlphaMap })
+    const flowerResult = createGrassMaterial({ ...FLOWER_CONFIG, alphaMap: _flowerAlphaMap })
     _shortGrassMaterial = shortResult.material
     _tallGrassMaterial = tallResult.material
+    _flowerMaterial = flowerResult.material
 
-    allUniforms = [shortResult.uniforms, tallResult.uniforms]
+    allUniforms = [shortResult.uniforms, tallResult.uniforms, flowerResult.uniforms]
     baseWindStrengths = allUniforms.map((u) => u.uWindStrength.value)
     return true
   }
@@ -86,10 +97,12 @@
   function ensureSlotMesh(
     pool: THREE.InstancedMesh[],
     index: number,
+    geometry: THREE.BufferGeometry,
     material: THREE.Material,
+    capacity = MESH_CAPACITY,
   ): THREE.InstancedMesh {
     if (!pool[index]) {
-      pool[index] = createSlotMesh(_grassGeometry!, material)
+      pool[index] = createSlotMesh(geometry, material, capacity)
     }
     return pool[index]
   }
@@ -97,17 +110,18 @@
   function createSlotMesh(
     baseGeometry: THREE.BufferGeometry,
     material: THREE.Material,
+    capacity = MESH_CAPACITY,
   ): THREE.InstancedMesh {
     const geom = baseGeometry.clone()
     geom.setAttribute(
       GRASS_INSTANCE_POS_ATTR,
-      new THREE.InstancedBufferAttribute(new Float32Array(MESH_CAPACITY * 2), 2),
+      new THREE.InstancedBufferAttribute(new Float32Array(capacity * 2), 2),
     )
     geom.setAttribute(
       GRASS_INSTANCE_ROT_ATTR,
-      new THREE.InstancedBufferAttribute(new Float32Array(MESH_CAPACITY), 1),
+      new THREE.InstancedBufferAttribute(new Float32Array(capacity), 1),
     )
-    const mesh = new THREE.InstancedMesh(geom, material, MESH_CAPACITY)
+    const mesh = new THREE.InstancedMesh(geom, material, capacity)
     // Do NOT set mesh.count = 0 here! WebGPU allocates GPU buffers based on
     // mesh.count at first render. If 0, the buffer can never grow later.
     // MESH_CAPACITY instances with zero matrices are invisible (zero scale).
@@ -336,11 +350,17 @@
     count: number
   }
 
+  interface SubChunkBundle {
+    short: SubChunkData
+    tall: SubChunkData
+    flower: SubChunkData
+  }
+
   const EMPTY_SUB_CHUNK: SubChunkData = { matrices: new Float32Array(0), worldXZ: new Float32Array(0), rotations: new Float32Array(0), count: 0 }
 
   // Non-reactive internal caches — intentionally plain Map/Set for performance
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const subChunkCache = new Map<string, { short: SubChunkData; tall: SubChunkData }>()
+  const subChunkCache = new Map<string, SubChunkBundle>()
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const fetchedTiles = new Set<string>()
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -429,6 +449,7 @@
   // Non-reactive by design — managed imperatively in rebuildType().
   const shortKeyToSlot = new Map<string, number>()
   const tallKeyToSlot = new Map<string, number>()
+  const flowerKeyToSlot = new Map<string, number>()
 
   function rebuildGrassBuffers() {
     needsRebuild = false
@@ -437,16 +458,19 @@
 
     const wantedKeys = new Set(getActiveSubChunkKeys())
 
-    rebuildType(shortMeshes, _shortGrassMaterial!, shortKeyToSlot, wantedKeys, (c) => c?.short)
-    rebuildType(tallMeshes, _tallGrassMaterial!, tallKeyToSlot, wantedKeys, (c) => c?.tall)
+    rebuildType(shortMeshes, _grassGeometry!, _shortGrassMaterial!, shortKeyToSlot, wantedKeys, (c) => c?.short)
+    rebuildType(tallMeshes, _grassGeometry!, _tallGrassMaterial!, tallKeyToSlot, wantedKeys, (c) => c?.tall)
+    rebuildType(flowerMeshes, _grassGeometry!, _flowerMaterial!, flowerKeyToSlot, wantedKeys, (c) => c?.flower, FLOWER_MESH_CAPACITY)
   }
 
   function rebuildType(
     meshes: THREE.InstancedMesh[],
+    geometry: THREE.BufferGeometry,
     material: THREE.Material,
     keyToSlot: Map<string, number>,
     wantedKeys: Set<string>,
-    getData: (cached: { short: SubChunkData; tall: SubChunkData } | undefined) => SubChunkData | undefined,
+    getData: (cached: SubChunkBundle | undefined) => SubChunkData | undefined,
+    capacity = MESH_CAPACITY,
   ) {
     // Free slots whose key is no longer in the grid
     const freeSlots: number[] = []
@@ -478,7 +502,7 @@
       if (freeSlots.length === 0) continue
       const slot = freeSlots.pop()!
 
-      const mesh = ensureSlotMesh(meshes, slot, material)
+      const mesh = ensureSlotMesh(meshes, slot, geometry, material, capacity)
       writeMeshData(mesh, data)
       keyToSlot.set(key, slot)
     }
@@ -491,7 +515,7 @@
       return
     }
 
-    const count = Math.min(data.count, MESH_CAPACITY)
+    const count = Math.min(data.count, mesh.instanceMatrix.count)
 
     const matArr = mesh.instanceMatrix.array as Float32Array
     matArr.set(data.matrices.subarray(0, count * 16))
@@ -538,12 +562,14 @@
           if (grassData) {
             const shortChunks = partitionIntoSubChunks(getInstanceData(grassData, 'short'))
             const tallChunks = partitionIntoSubChunks(getInstanceData(grassData, 'tall'))
+            const flowerChunks = partitionIntoSubChunks(getInstanceData(grassData, 'flower'))
 
-            const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys()])
+            const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
             for (const key of allKeys) {
               subChunkCache.set(key, {
                 short: shortChunks.get(key) ?? EMPTY_SUB_CHUNK,
                 tall: tallChunks.get(key) ?? EMPTY_SUB_CHUNK,
+                flower: flowerChunks.get(key) ?? EMPTY_SUB_CHUNK,
               })
             }
           }
