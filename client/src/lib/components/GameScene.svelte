@@ -26,6 +26,7 @@
   import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
   import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
+  import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
   import { drainTileWork } from '../utils/tileWorkQueue'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
@@ -138,6 +139,7 @@
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
+  let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
   const entityClipGroupObj = (() => {
@@ -530,6 +532,13 @@
       // Update grass wind & trail
       grassLayerRef?.update(deltaTime)
 
+      // Update wind-blown particles (only when grass is visible nearby)
+      {
+        const windState = grassLayerRef?.getWindState()
+        const grassCount = grassLayerRef?.getPlayerChunkGrassCount() ?? 0
+        if (windState) windParticlesRef?.update(deltaTime, camera, windState, grassCount)
+      }
+
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()
       updateCameraWithOffset(cameraOffset)
@@ -588,20 +597,12 @@
           brushUniforms.gridVisible.value = 0.0
         }
 
-        // Hide entities so they only appear via the reflection pass
-        const savedEntityVisible = entityClipGroup?.visible
-        if (entityClipGroup) entityClipGroup.visible = false
-
-        // Hide grass during refraction — InstancedMesh per-pass overhead is too high
-        const grassGrp = grassLayerRef?.getGroup()
-        const savedGrassVisible = grassGrp?.visible
-        if (grassGrp) grassGrp.visible = false
-
-        refractionManager.render()
-
-        if (grassGrp) grassGrp.visible = savedGrassVisible ?? true
-
-        if (entityClipGroup) entityClipGroup.visible = savedEntityVisible ?? true
+        // Hide entities, grass, and particles during refraction
+        const refMgrRender = () => refractionManager!.render()
+        renderWithHiddenGroups(
+          [entityClipGroup, grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
+          refMgrRender,
+        )
 
         if (brushUniforms) {
           brushUniforms.brushActive.value = savedBrushActive
@@ -631,14 +632,12 @@
           if (nt) { nametagGroups.push(nt); nt.visible = false }
         }
 
-        // Hide grass during reflection — InstancedMesh per-pass overhead
-        const grassGrpRefl = grassLayerRef?.getGroup()
-        const savedGrassVisibleRefl = grassGrpRefl?.visible
-        if (grassGrpRefl) grassGrpRefl.visible = false
-
-        reflectionManager.render()
-
-        if (grassGrpRefl) grassGrpRefl.visible = savedGrassVisibleRefl ?? true
+        // Hide grass + particles during reflection — InstancedMesh per-pass overhead
+        const reflMgrRender = () => reflectionManager!.render()
+        renderWithHiddenGroups(
+          [grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
+          reflMgrRender,
+        )
         for (const nt of nametagGroups) nt.visible = true
       } else if (reflectionManager) {
         reflectionManager.clear()
@@ -739,6 +738,21 @@
       ),
       eclipseFactor: eclipseState.factor,
     })
+  }
+
+  /** Hide a list of groups, run a callback, then restore visibility. */
+  function renderWithHiddenGroups(
+    groups: (THREE.Group | undefined)[],
+    renderFn: () => void,
+  ) {
+    const saved = groups.map((g) => g?.visible)
+    for (const g of groups) {
+      if (g) g.visible = false
+    }
+    renderFn()
+    for (let i = 0; i < groups.length; i++) {
+      if (groups[i]) groups[i]!.visible = saved[i] ?? true
+    }
   }
 
   // Stop game loop
@@ -846,6 +860,8 @@
           // Eagerly create grass materials + meshes so Threlte's render loop
           // compiles their pipelines while the loading dialog is still visible.
           grassLayerRef?.ensureMaterialsForCompile()
+          // Wind particles: lazy init on first spawn (MeshBasicNodeMaterial
+          // compiles fast, not worth blocking the loading screen for)
 
           // Mark data as ready. Threlte's render loop compiles WebGPU pipelines
           // on-demand (synchronously per frame) under the loading dialog overlay.
@@ -978,6 +994,11 @@
   bind:this={grassLayerRef}
   {terrainTiles}
   grassDataManager={terrainGrassDataManager}
+  playerPosition={currentPlayer?.position ?? null}
+/>
+
+<GameSceneWindParticles
+  bind:this={windParticlesRef}
   playerPosition={currentPlayer?.position ?? null}
 />
 
