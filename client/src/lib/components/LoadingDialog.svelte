@@ -1,15 +1,28 @@
 <script lang="ts">
+  import { onMount } from 'svelte'
+
   interface Props {
     message?: string
   }
 
   let { message = 'Loading...' }: Props = $props()
+
+  let elapsed = $state(0)
+  const startTime = performance.now()
+
+  onMount(() => {
+    const id = setInterval(() => {
+      elapsed = (performance.now() - startTime) / 1000
+    }, 100)
+    return () => clearInterval(id)
+  })
 </script>
 
 <div class="loading-backdrop">
   <div class="loading-dialog" role="dialog" aria-modal="true">
     <div class="spinner"></div>
     <p>{message}</p>
+    <span class="elapsed">{elapsed.toFixed(1)}s</span>
   </div>
 </div>
 
@@ -42,6 +55,12 @@
     margin: 0;
     font-size: 18px;
     color: #d4d4d4;
+  }
+
+  .elapsed {
+    font-size: 13px;
+    color: #888;
+    font-variant-numeric: tabular-nums;
   }
 
   .spinner {

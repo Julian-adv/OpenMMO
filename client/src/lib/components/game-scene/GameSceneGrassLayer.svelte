@@ -18,6 +18,7 @@
     TALL_GRASS_CONFIG,
     FLOWER_CONFIG,
     type GrassMaterialUniforms,
+    type WindState,
   } from '../../shaders/grass-material'
 
   interface Props {
@@ -55,6 +56,23 @@
   /** Expose grassGroup for visibility toggling during render passes */
   export function getGroup(): THREE.Group {
     return grassGroup
+  }
+
+  /** Grass instance count in the player's current sub-chunk. */
+  export function getPlayerChunkGrassCount(): number {
+    const chunk = subChunkCache.get(`${curScx},${curScz}`)
+    if (!chunk) return 0
+    return chunk.short.count + chunk.tall.count
+  }
+
+  /** Expose current wind state for particle systems */
+  export function getWindState(): WindState {
+    return {
+      windDirX: cachedWindDirX,
+      windDirZ: cachedWindDirZ,
+      windStrength: windStrengthMul,
+      time: elapsedTime,
+    }
   }
 
   /** Eagerly create grass materials + one mesh per type so compileAsync can
@@ -232,6 +250,27 @@
   }
 
   let windAngle = Math.random() * Math.PI * 2
+  let cachedWindDirX = Math.cos(windAngle)
+  let cachedWindDirZ = Math.sin(windAngle)
+
+  // Wind direction change state machine:
+  // steady → fading-out (waves die) → snap angle → waves fade-in → steady
+  let windDirPhase: 'steady' | 'fading-out' = 'steady'
+  let pendingWindAngle = windAngle
+  let windDirTimer = 15 + Math.random() * 25 // first change in 15~40s
+
+  function triggerWindDirectionChange() {
+    const shift = (Math.PI / 6) + Math.random() * (Math.PI / 3) // ±30°~90°
+    pendingWindAngle = windAngle + (Math.random() < 0.5 ? shift : -shift)
+    windDirPhase = 'fading-out'
+
+    // Force all waves to start fading out
+    for (let i = 0; i < GUST_WAVE_COUNT; i++) {
+      if (wavePhases[i] !== 'fade-out') {
+        startWaveFadeOut(i)
+      }
+    }
+  }
 
   // Strength interpolation
   let windStrengthMul = 0.5
@@ -296,13 +335,40 @@
         }
         case 'fade-out': {
           waveAmplitudes[wi] = smoothstep(waveTimers[wi] / waveDurations[wi])
-          if (waveTimers[wi] <= 0) startWaveFadeIn(wi)
+          if (waveTimers[wi] <= 0) {
+            if (windDirPhase === 'fading-out') {
+              // Park wave at 0 until direction change completes
+              waveAmplitudes[wi] = 0
+            } else {
+              startWaveFadeIn(wi)
+            }
+          }
           break
         }
         case 'fade-in': {
           waveAmplitudes[wi] = smoothstep(1 - waveTimers[wi] / waveDurations[wi])
           if (waveTimers[wi] <= 0) startWaveHold(wi)
           break
+        }
+      }
+    }
+
+    // ── Wind direction change (state machine) ──
+    if (windDirPhase === 'steady') {
+      windDirTimer -= dt
+      if (windDirTimer <= 0) {
+        triggerWindDirectionChange()
+      }
+    } else if (windDirPhase === 'fading-out') {
+      // Wait for all waves to reach ~0 amplitude
+      const allFaded = waveAmplitudes.every((a) => a < 0.01)
+      if (allFaded) {
+        // Snap direction, then restart waves with new direction
+        windAngle = pendingWindAngle
+        windDirPhase = 'steady'
+        windDirTimer = 20 + Math.random() * 30 // next change in 20~50s
+        for (let i = 0; i < GUST_WAVE_COUNT; i++) {
+          startWaveFadeIn(i)
         }
       }
     }
@@ -318,14 +384,14 @@
       pickStrengthTransition()
     }
 
-    const windDirX = Math.cos(windAngle)
-    const windDirZ = Math.sin(windAngle)
+    cachedWindDirX = Math.cos(windAngle)
+    cachedWindDirZ = Math.sin(windAngle)
 
     for (let ui = 0; ui < allUniforms.length; ui++) {
       const u = allUniforms[ui]
       u.uTime.value = elapsedTime
       u.uWindStrength.value = baseWindStrengths[ui] * windStrengthMul
-      u.uWindDir.value.set(windDirX, windDirZ)
+      u.uWindDir.value.set(cachedWindDirX, cachedWindDirZ)
       u.uGustStrength.value = windStrengthMul
       for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
         u.uWaveAngles[wi].value = waveAngles[wi]
@@ -345,7 +411,7 @@
     windArrow.visible = showArrow
     if (showArrow && playerPosition) {
       const arrowLen = 1.5 + windStrengthMul * 3.5
-      windArrowDir.set(windDirX, 0, windDirZ)
+      windArrowDir.set(cachedWindDirX, 0, cachedWindDirZ)
       windArrow.position.set(playerPosition.x, playerPosition.y + 3, playerPosition.z)
       windArrow.setDirection(windArrowDir)
       windArrow.setLength(arrowLen, arrowLen * 0.2, arrowLen * 0.1)

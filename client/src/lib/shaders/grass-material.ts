@@ -81,6 +81,15 @@ export const SHORT_GRASS_R_MAX = 239
 export const TALL_GRASS_R_MIN = 240
 export const TALL_GRASS_R_MAX = 249
 
+// ── Wind state snapshot (shared with particle systems) ───
+export interface WindState {
+  windDirX: number
+  windDirZ: number
+  /** Wind strength multiplier (0.3 .. 1.0) */
+  windStrength: number
+  time: number
+}
+
 // ── TSL grass material ───────────────────────────────────
 
 export const GRASS_TRAIL_COUNT = 5
