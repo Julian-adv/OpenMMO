@@ -13,6 +13,7 @@
     GRASS_INSTANCE_POS_ATTR,
     GRASS_INSTANCE_ROT_ATTR,
     GRASS_TRAIL_COUNT,
+    GUST_WAVE_COUNT,
     TALL_GRASS_CONFIG,
     type GrassMaterialUniforms,
   } from '../../shaders/grass-material'
@@ -118,7 +119,6 @@
 
   // ── Wind debug arrow ──────────────────────────────────────
   const WIND_ARROW_COLOR = 0x00ff88
-  const GUST_ARROW_COLOR = 0xff4444
   const windArrowDir = new THREE.Vector3(1, 0, 0)
   const windArrow = new THREE.ArrowHelper(
     windArrowDir,
@@ -142,29 +142,78 @@
   // ── Wind parameters ──────────────────────────────────────
   const WIND_STR_MIN = 0.3
   const WIND_STR_MAX = 1.0
-  let windAngle = Math.random() * Math.PI * 2
-  let windStrengthMul = 0.5
-
-  let windAngleStart = windAngle
-  let windAngleTarget = windAngle
-  let windStrengthStart = windStrengthMul
-  let windStrengthTarget = windStrengthMul
-
-  // ── Gust cycle constants ───────────────────────────────
-  const GUST_FADE_IN = 2.0
-  const GUST_ACTIVE_MIN = 10
-  const GUST_ACTIVE_MAX = 25
-  const GUST_FADE_OUT = 3.0
-  const GUST_REST_MAX = 10.0
 
   function smoothstep(t: number): number {
     return t * t * (3 - 2 * t)
   }
 
-  let cycleState: 'resting' | 'fade-in' | 'active' | 'fade-out' = 'resting'
-  let cycleTimer = 0
-  let cycleDuration = 0
-  let gustStrength = 0
+  const WAVE_HOLD_MIN = 5
+  const WAVE_HOLD_MAX = 15
+  const WAVE_FADE_DURATION = 2.0
+  const waveAngles = [0, 0.4, -0.3]
+  const waveAmplitudes = [1, 1, 1]
+  // vec4(freq, speed, amp, Q) per wave
+  const waveParams = [
+    new THREE.Vector4(0.35, 0.7, 1.5, 0.75),
+    new THREE.Vector4(0.31, 0.8, 1.6, 0.87),
+    new THREE.Vector4(0.39, 1.5, 1.7, 0.95),
+  ]
+  const wavePhases: ('hold' | 'fade-out' | 'fade-in')[] = ['hold', 'hold', 'hold']
+  const waveTimers = Array.from({ length: GUST_WAVE_COUNT }, () => 0)
+  const waveDurations = Array.from({ length: GUST_WAVE_COUNT }, () => 0)
+
+  function startWaveHold(i: number) {
+    wavePhases[i] = 'hold'
+    waveAmplitudes[i] = 1
+    waveDurations[i] = WAVE_HOLD_MIN + Math.random() * (WAVE_HOLD_MAX - WAVE_HOLD_MIN)
+    waveTimers[i] = waveDurations[i]
+  }
+
+  function startWaveFadeOut(i: number) {
+    wavePhases[i] = 'fade-out'
+    waveDurations[i] = WAVE_FADE_DURATION
+    waveTimers[i] = WAVE_FADE_DURATION
+  }
+
+  function randomWaveParams(): THREE.Vector4 {
+    const freq = 0.2 + Math.random() * 0.3 // 0.2 ~ 0.5
+    // speed scales with wind strength: weak → 0.3~0.8, strong → 0.6~1.6
+    const speedBase = 0.3 + windStrengthMul * 0.3
+    const speed = speedBase + Math.random() * (speedBase * 1.5)
+    // amp scales with wind strength: weak wind → 0.6~1.2, strong wind → 1.2~2.4
+    const ampBase = 0.6 + windStrengthMul * 0.6
+    const amp = ampBase + Math.random() * (ampBase * 0.8)
+    const Q = 0.6 + Math.random() * 0.4 // 0.6 ~ 1.0
+    return new THREE.Vector4(freq, speed, amp, Q)
+  }
+
+  const MAX_WAVE_OFFSET = Math.PI / 4 // ±45° from windAngle
+
+  function startWaveFadeIn(i: number) {
+    // Random direction within ±45° of main wind
+    waveAngles[i] = (Math.random() * 2 - 1) * MAX_WAVE_OFFSET
+    waveParams[i] = randomWaveParams()
+    wavePhases[i] = 'fade-in'
+    waveAmplitudes[i] = 0
+    waveDurations[i] = WAVE_FADE_DURATION
+    waveTimers[i] = WAVE_FADE_DURATION
+  }
+
+  function pickStrengthTransition() {
+    windStrengthTarget = WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
+    windStrengthDuration = 4 + Math.random() * 8
+    windStrengthTimer = windStrengthDuration
+    windStrengthStart = windStrengthMul
+  }
+
+  let windAngle = Math.random() * Math.PI * 2
+
+  // Strength interpolation
+  let windStrengthMul = 0.5
+  let windStrengthStart = windStrengthMul
+  let windStrengthTarget = windStrengthMul
+  let windStrengthTimer = 0
+  let windStrengthDuration = 0
 
   // ── Player sub-chunk tracking ─────────────────────────
   let hasPlayer = $state(false)
@@ -212,72 +261,36 @@
       }
     }
 
-    // ── Gust cycle state machine (simplified: single envelope) ──
-    cycleTimer -= dt
-    switch (cycleState) {
-      case 'resting': {
-        gustStrength = 0
-        if (cycleDuration > 0) {
-          const t = smoothstep(Math.min(1, 1 - cycleTimer / cycleDuration))
-          windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
-          let angleDelta = windAngleTarget - windAngleStart
-          angleDelta = ((angleDelta + Math.PI) % (Math.PI * 2)) - Math.PI
-          windAngle = windAngleStart + angleDelta * t
+    // ── Per-wave direction (hold → fade-out → snap → fade-in → hold) ──
+    for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
+      waveTimers[wi] -= dt
+      switch (wavePhases[wi]) {
+        case 'hold': {
+          if (waveTimers[wi] <= 0) startWaveFadeOut(wi)
+          break
         }
-        if (cycleTimer <= 0) {
-          windAngle = windAngleTarget
-          windStrengthMul = windStrengthTarget
-          cycleState = 'fade-in'
-          cycleDuration = GUST_FADE_IN
-          cycleTimer = cycleDuration
+        case 'fade-out': {
+          waveAmplitudes[wi] = smoothstep(waveTimers[wi] / waveDurations[wi])
+          if (waveTimers[wi] <= 0) startWaveFadeIn(wi)
+          break
         }
-        break
+        case 'fade-in': {
+          waveAmplitudes[wi] = smoothstep(1 - waveTimers[wi] / waveDurations[wi])
+          if (waveTimers[wi] <= 0) startWaveHold(wi)
+          break
+        }
       }
-      case 'fade-in': {
-        const intensityScale = 0.3 + windStrengthMul * 0.7
-        gustStrength = smoothstep(1 - cycleTimer / cycleDuration) * intensityScale
-        if (cycleTimer <= 0) {
-          gustStrength = intensityScale
-          cycleState = 'active'
-          cycleDuration = GUST_ACTIVE_MIN + Math.random() * (GUST_ACTIVE_MAX - GUST_ACTIVE_MIN)
-          cycleTimer = cycleDuration
-        }
-        break
-      }
-      case 'active': {
-        gustStrength = 0.3 + windStrengthMul * 0.7
-        if (cycleTimer <= 0) {
-          cycleState = 'fade-out'
-          cycleDuration = GUST_FADE_OUT
-          cycleTimer = cycleDuration
-        }
-        break
-      }
-      case 'fade-out': {
-        const intensityScale = 0.3 + windStrengthMul * 0.7
-        gustStrength = smoothstep(cycleTimer / cycleDuration) * intensityScale
-        if (cycleTimer <= 0) {
-          gustStrength = 0
-          cycleState = 'resting'
-          // Pick new wind direction/strength for next rest period
-          windAngleStart = windAngle
-          windStrengthStart = windStrengthMul
-          windStrengthTarget = WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
-          const bigTurn = Math.random() < 0.1
-          const sign = Math.random() < 0.5 ? -1 : 1
-          if (bigTurn) {
-            const angle = Math.PI / 4 + Math.random() * (Math.PI * 0.35)
-            windAngleTarget = windAngle + sign * angle
-            cycleDuration = GUST_REST_MAX - 3 + Math.random() * 3
-          } else {
-            const angle = Math.random() * (Math.PI / 4)
-            windAngleTarget = windAngle + sign * angle
-            cycleDuration = Math.random() * 3
-          }
-          cycleTimer = cycleDuration
-        }
-        break
-      }
+    }
+
+    // ── Wind strength (independent timer) ──
+    windStrengthTimer -= dt
+    if (windStrengthDuration > 0) {
+      const t = smoothstep(Math.min(1, 1 - windStrengthTimer / windStrengthDuration))
+      windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
+    }
+    if (windStrengthTimer <= 0) {
+      windStrengthMul = windStrengthTarget
+      pickStrengthTransition()
     }
 
     const windDirX = Math.cos(windAngle)
@@ -288,7 +301,12 @@
       u.uTime.value = elapsedTime
       u.uWindStrength.value = baseWindStrengths[ui] * windStrengthMul
       u.uWindDir.value.set(windDirX, windDirZ)
-      u.uGustStrength.value = gustStrength
+      u.uGustStrength.value = windStrengthMul
+      for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
+        u.uWaveAngles[wi].value = waveAngles[wi]
+        u.uWaveAmps[wi].value = waveAmplitudes[wi]
+        u.uWaveParams[wi].value.copy(waveParams[wi])
+      }
       for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
         if (i < trail.length) {
           u.uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
@@ -306,8 +324,7 @@
       windArrow.position.set(playerPosition.x, playerPosition.y + 3, playerPosition.z)
       windArrow.setDirection(windArrowDir)
       windArrow.setLength(arrowLen, arrowLen * 0.2, arrowLen * 0.1)
-      const arrowColor = gustStrength > 0.1 ? GUST_ARROW_COLOR : WIND_ARROW_COLOR
-      windArrow.setColor(arrowColor)
+      windArrow.setColor(WIND_ARROW_COLOR)
     }
   }
 

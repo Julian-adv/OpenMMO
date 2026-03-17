@@ -89,6 +89,8 @@ export const TALL_GRASS_R_MAX = 249
 
 export const GRASS_TRAIL_COUNT = 5
 
+export const GUST_WAVE_COUNT = 3
+
 export interface GrassMaterialUniforms {
   uTime: { value: number }
   uWindStrength: { value: number }
@@ -97,6 +99,12 @@ export interface GrassMaterialUniforms {
   uWindDir: { value: THREE.Vector2 }
   /** Gust envelope (0 = calm, 1 = full gust), controlled by JS state machine */
   uGustStrength: { value: number }
+  /** Per-wave direction angle (radians) */
+  uWaveAngles: { value: number }[]
+  /** Per-wave amplitude envelope (0 = silent, 1 = full) */
+  uWaveAmps: { value: number }[]
+  /** Per-wave params: vec4(freq, speed, amp, Q) */
+  uWaveParams: { value: THREE.Vector4 }[]
   /** vec3(worldX, worldZ, strength) per trail point */
   uTrail: { value: THREE.Vector3 }[]
   uInteractionRadius: { value: number }
@@ -157,6 +165,13 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const uWindFrequency = uniform(wf)
   const uWindDir = uniform(new THREE.Vector2(1, 0))
   const uGustStrength = uniform(0)
+  const uWaveAngles = [uniform(0), uniform(0.4), uniform(-0.3)]
+  const uWaveAmps = [uniform(1), uniform(1), uniform(1)]
+  const uWaveParams = [
+    uniform(new THREE.Vector4(0.35, 0.7, 1.5, 0.75)),
+    uniform(new THREE.Vector4(0.31, 0.8, 1.6, 0.87)),
+    uniform(new THREE.Vector4(0.39, 1.5, 1.7, 0.95)),
+  ]
   const uInteractionRadius = uniform(ir)
   const uInteractionStrength = uniform(is)
 
@@ -242,20 +257,21 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const localWindZ = uWindDir.x.mul(sinR).add(uWindDir.y.mul(cosR))
 
   // ── Gerstner wave gusts ──────────────────────────────────
-  // Each wave layer has: freq, speed, amplitude, Q (steepness), dirAngle (offset from wind)
+  // Per-wave params (freq, speed, amp, Q) and direction are all uniform-driven.
   // Gerstner phase distortion (phase + Q*sin(phase)) creates sharp crests (fast gust onset)
   // and broad troughs (slow recovery) — naturally asymmetric.
-  const gustWaves = [
-    { freq: 0.628, speed: 1.3, amp: 1.0, Q: 0.75, dirAngle: 0 }, // 10m, ~2m/s
-    { freq: 0.35, speed: 0.8, amp: 0.6, Q: 0.7, dirAngle: 0.4 }, // 18m, ~2.3m/s
-    { freq: 0.17, speed: 0.5, amp: 0.7, Q: 0.95, dirAngle: -0.3 }, // 7m, ~2m/s
-  ]
-
   let gust: N = float(0)
-  for (const w of gustWaves) {
-    // Rotate wind direction by wave's offset angle
-    const cOff = float(Math.cos(w.dirAngle))
-    const sOff = float(Math.sin(w.dirAngle))
+  for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
+    const wp = uWaveParams[wi] // vec4(freq, speed, amp, Q)
+    const wFreq = wp.x
+    const wSpeed = wp.y
+    const wAmp = wp.z
+    const wQ = wp.w
+
+    // Per-wave direction from uniform angle
+    const wAngle = uWaveAngles[wi]
+    const cOff = cos(wAngle)
+    const sOff = sin(wAngle)
     const wDirX = uWindDir.x.mul(cOff).sub(uWindDir.y.mul(sOff))
     const wDirZ = uWindDir.x.mul(sOff).add(uWindDir.y.mul(cOff))
 
@@ -263,14 +279,14 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
     const spatial = instanceWorldXZ.x
       .mul(wDirX)
       .add(instanceWorldXZ.y.mul(wDirZ))
-    const phase = spatial.mul(w.freq).sub(uTime.mul(w.speed))
+    const phase = spatial.mul(wFreq).sub(uTime.mul(wSpeed))
 
     // Gerstner phase distortion: bunches crests, spreads troughs
-    const gerstnerPhase = phase.add(float(w.Q).mul(sin(phase)))
+    const gerstnerPhase = phase.add(wQ.mul(sin(phase)))
 
-    // Wave value mapped to [0, 1]
+    // Wave value mapped to [0, 1], scaled by per-wave amplitude envelope
     const waveVal = cos(gerstnerPhase).add(1).mul(0.5)
-    gust = gust.add(waveVal.mul(w.amp))
+    gust = gust.add(waveVal.mul(wAmp).mul(uWaveAmps[wi]))
   }
 
   // Always-active baseline ripple + JS-controlled gust boost
@@ -355,6 +371,9 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
       uWindFrequency: uWindFrequency as unknown as { value: number },
       uWindDir: uWindDir as unknown as { value: THREE.Vector2 },
       uGustStrength: uGustStrength as unknown as { value: number },
+      uWaveAngles: uWaveAngles as unknown as { value: number }[],
+      uWaveAmps: uWaveAmps as unknown as { value: number }[],
+      uWaveParams: uWaveParams as unknown as { value: THREE.Vector4 }[],
       uTrail: uTrail as unknown as { value: THREE.Vector3 }[],
       uInteractionRadius: uInteractionRadius as unknown as { value: number },
       uInteractionStrength: uInteractionStrength as unknown as {
