@@ -13,6 +13,9 @@ const BGM_FILES = [
   'Untitled (9).mp3',
 ]
 
+const MIN_QUIET_SEC = 0
+const MAX_QUIET_SEC = 180
+
 const STORAGE_KEY_VOLUME = 'onlinerpg_bgmVolume'
 const STORAGE_KEY_MUTED = 'onlinerpg_bgmMuted'
 const DEFAULT_VOLUME = 0.1
@@ -64,7 +67,23 @@ function shufflePlaylist() {
   playlistIndex = 0
 }
 
+let quietTimer: ReturnType<typeof setTimeout> | undefined
+let isFirstTrack = true
+
 function playNext() {
+  if (!isFirstTrack) {
+    const delaySec =
+      MIN_QUIET_SEC + Math.random() * (MAX_QUIET_SEC - MIN_QUIET_SEC)
+    currentBgmTrack.set('')
+    clearTimeout(quietTimer)
+    quietTimer = setTimeout(playTrack, delaySec * 1000)
+    return
+  }
+  isFirstTrack = false
+  playTrack()
+}
+
+function playTrack() {
   if (playlistIndex >= playlist.length) {
     shufflePlaylist()
   }
