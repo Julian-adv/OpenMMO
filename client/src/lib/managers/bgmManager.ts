@@ -70,15 +70,19 @@ function playNext() {
   }
 
   const file = playlist[playlistIndex++]
-  currentBgmTrack.set(file.replace('.mp3', ''))
+  const trackName = file.replace('.mp3', '')
 
   if (!audio) {
     audio = new Audio()
     audio.addEventListener('ended', playNext)
     audio.addEventListener('error', playNext)
+    audio.addEventListener('playing', () => {
+      currentBgmTrack.set(audio!.dataset.trackName ?? '')
+    })
   }
 
   applyVolume()
+  audio.dataset.trackName = trackName
   audio.src = `/bgm/${file}`
   audio.play().catch(() => {})
 }

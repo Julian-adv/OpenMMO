@@ -254,15 +254,21 @@
   let cachedWindDirZ = Math.sin(windAngle)
 
   // Wind direction change state machine:
-  // steady → fading-out (waves die) → snap angle → waves fade-in → steady
-  let windDirPhase: 'steady' | 'fading-out' = 'steady'
+  // steady → fading-out (waves + strength → 0) → snap angle → fading-in (strength back) → steady
+  const WIND_DIR_FADE_OUT_DURATION = 3.0
+  const WIND_DIR_FADE_IN_DURATION = 1.5
+  let windDirPhase: 'steady' | 'fading-out' | 'fading-in' = 'steady'
   let pendingWindAngle = windAngle
+  let windDirFadeTimer = 0
+  let windStrengthBeforeFade = 0.5
   let windDirTimer = 15 + Math.random() * 25 // first change in 15~40s
 
   function triggerWindDirectionChange() {
     const shift = (Math.PI / 6) + Math.random() * (Math.PI / 3) // ±30°~90°
     pendingWindAngle = windAngle + (Math.random() < 0.5 ? shift : -shift)
     windDirPhase = 'fading-out'
+    windDirFadeTimer = WIND_DIR_FADE_OUT_DURATION
+    windStrengthBeforeFade = windStrengthMul
 
     // Force all waves to start fading out
     for (let i = 0; i < GUST_WAVE_COUNT; i++) {
@@ -336,7 +342,7 @@
         case 'fade-out': {
           waveAmplitudes[wi] = smoothstep(waveTimers[wi] / waveDurations[wi])
           if (waveTimers[wi] <= 0) {
-            if (windDirPhase === 'fading-out') {
+            if (windDirPhase !== 'steady') {
               // Park wave at 0 until direction change completes
               waveAmplitudes[wi] = 0
             } else {
@@ -360,28 +366,48 @@
         triggerWindDirectionChange()
       }
     } else if (windDirPhase === 'fading-out') {
-      // Wait for all waves to reach ~0 amplitude
+      windDirFadeTimer -= dt
+      // Fade wind strength toward 0
+      const t = smoothstep(Math.min(1, 1 - windDirFadeTimer / WIND_DIR_FADE_OUT_DURATION))
+      windStrengthMul = windStrengthBeforeFade * (1 - t)
+      // Wait for both strength ~0 and all waves ~0
       const allFaded = waveAmplitudes.every((a) => a < 0.01)
-      if (allFaded) {
-        // Snap direction, then restart waves with new direction
+      if (windDirFadeTimer <= 0 && allFaded) {
+        // Snap direction (strength is 0 so no visual pop)
         windAngle = pendingWindAngle
-        windDirPhase = 'steady'
-        windDirTimer = 20 + Math.random() * 30 // next change in 20~50s
+        windStrengthMul = 0
+        windDirPhase = 'fading-in'
+        windDirFadeTimer = WIND_DIR_FADE_IN_DURATION
         for (let i = 0; i < GUST_WAVE_COUNT; i++) {
           startWaveFadeIn(i)
         }
       }
+    } else if (windDirPhase === 'fading-in') {
+      windDirFadeTimer -= dt
+      const t = smoothstep(Math.min(1, 1 - windDirFadeTimer / WIND_DIR_FADE_IN_DURATION))
+      windStrengthMul = windStrengthBeforeFade * t
+      if (windDirFadeTimer <= 0) {
+        windStrengthMul = windStrengthBeforeFade
+        // Resume independent strength transitions from current value
+        windStrengthStart = windStrengthMul
+        windStrengthTarget = windStrengthMul
+        windStrengthTimer = 0
+        windDirPhase = 'steady'
+        windDirTimer = 20 + Math.random() * 30 // next change in 20~50s
+      }
     }
 
-    // ── Wind strength (independent timer) ──
-    windStrengthTimer -= dt
-    if (windStrengthDuration > 0) {
-      const t = smoothstep(Math.min(1, 1 - windStrengthTimer / windStrengthDuration))
-      windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
-    }
-    if (windStrengthTimer <= 0) {
-      windStrengthMul = windStrengthTarget
-      pickStrengthTransition()
+    // ── Wind strength (independent timer, paused during direction change) ──
+    if (windDirPhase === 'steady') {
+      windStrengthTimer -= dt
+      if (windStrengthDuration > 0) {
+        const t = smoothstep(Math.min(1, 1 - windStrengthTimer / windStrengthDuration))
+        windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
+      }
+      if (windStrengthTimer <= 0) {
+        windStrengthMul = windStrengthTarget
+        pickStrengthTransition()
+      }
     }
 
     cachedWindDirX = Math.cos(windAngle)
