@@ -18,6 +18,7 @@
 </script>
 
 <script lang="ts">
+  import { currentBgmTrack } from '../managers/bgmManager'
   import { networkManager } from '../network/socket'
   import { cameraDistance } from '../stores/cameraStore'
   import { TERRAIN_TILE_SIZE } from './game-scene/terrain-utils'
@@ -142,6 +143,9 @@
         <span class="fps-text">
           FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}
         </span>
+        {#if $currentBgmTrack}
+          <span class="bgm-text">♫ {$currentBgmTrack}</span>
+        {/if}
         {#if $playerDebugInfo}
           {@const tc = worldToTileCell($playerDebugInfo.position.x, $playerDebugInfo.position.z)}
           <span class="player-text">
@@ -355,6 +359,11 @@
   }
 
   .player-text {
+    white-space: nowrap;
+  }
+
+  .bgm-text {
+    color: #e2b93b;
     white-space: nowrap;
   }
 

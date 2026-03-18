@@ -21,6 +21,10 @@
   import GenerateTerrainDialog from './lib/components/map-editor/GenerateTerrainDialog.svelte'
   import { showGenerateDialog } from './lib/stores/editorStore'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
+  import { startBgm } from './lib/managers/bgmManager'
+  import SettingsPanel from './lib/components/SettingsPanel.svelte'
+
+  let showSettings = $state(false)
 
   type AppScreen = 'login' | 'character-select' | 'character-create' | 'game'
   type DeathUiState = 'alive' | 'waiting_dying' | 'dialog_open' | 'dialog_closed'
@@ -223,7 +227,9 @@
   })
 </script>
 
-<main>
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+<main onclick={startBgm}>
   <!-- Shared Canvas: one WebGPU device across character select, create, and game.
        Pipelines compiled during character select are reused in game. -->
   {#if showCanvas}
@@ -291,6 +297,9 @@
         <button class="back-to-select" onclick={() => worldMapVisible.update(v => !v)} title="World Map (M)">
           <svg xmlns="http://www.w3.org/2000/svg" width="576" height="512" viewBox="0 0 576 512"><path fill="currentColor" d="M384 476.1L192 421.2V35.9L384 90.8zM416 88.4V456l138.5-69.3c11.9-5.9 21.5-17.4 21.5-30.7V32c0-22-21.5-37.5-42.7-30.7L416 88.4zM160 421.2l-25.5-8.5C94 400.3 64 363.6 64 321.4V280h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H64V192c0-17.7-14.3-32-32-32S0 174.3 0 192v129.4C0 383.5 38.3 439 91.3 457.2l68.7 22.9V88.4L21.2 33.7C9.3 39.6 0 51.1 0 64.4v1.6h32c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v24h64c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v105.4c0 62.1 38.3 117.6 91.3 135.8l68.7 22.9z"/></svg>
         </button>
+        <button class="back-to-select" onclick={() => (showSettings = true)} title="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><path fill="currentColor" d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4l-55.7 17.7c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4c-1.1-8.4-1.7-16.9-1.7-25.5s.6-17.1 1.7-25.4l-43.3-39.4c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160a80 80 0 1 0 0 160z"/></svg>
+        </button>
       </div>
     </div>
 
@@ -327,6 +336,16 @@
     />
   {:else}
     <LoginScreen onLogin={handleLogin} {kickedMessage} />
+  {/if}
+
+  {#if screen !== 'game'}
+    <button class="settings-btn-corner" class:raised={screen !== 'login'} onclick={() => (showSettings = true)} title="Settings">
+      <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><path fill="currentColor" d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4l-55.7 17.7c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4c-1.1-8.4-1.7-16.9-1.7-25.5s.6-17.1 1.7-25.4l-43.3-39.4c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160a80 80 0 1 0 0 160z"/></svg>
+    </button>
+  {/if}
+
+  {#if showSettings}
+    <SettingsPanel onClose={() => (showSettings = false)} />
   {/if}
 </main>
 
@@ -410,6 +429,37 @@
   .back-to-select:hover {
     background: rgba(80, 80, 80, 0.95);
     color: #fff;
+  }
+
+  .settings-btn-corner {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 9999;
+    background: rgba(60, 60, 60, 0.85);
+    color: #ccc;
+    border: none;
+    border-radius: 8px;
+    padding: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .settings-btn-corner:hover {
+    background: rgba(80, 80, 80, 0.95);
+    color: #fff;
+  }
+
+  .settings-btn-corner.raised {
+    bottom: 80px;
+  }
+
+  .settings-btn-corner svg {
+    width: 20px;
+    height: 20px;
   }
 
 </style>
