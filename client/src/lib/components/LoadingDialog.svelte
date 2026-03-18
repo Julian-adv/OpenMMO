@@ -1,28 +1,20 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-
   interface Props {
     message?: string
   }
 
   let { message = 'Loading...' }: Props = $props()
 
-  let elapsed = $state(0)
-  const startTime = performance.now()
-
-  onMount(() => {
-    const id = setInterval(() => {
-      elapsed = (performance.now() - startTime) / 1000
-    }, 100)
-    return () => clearInterval(id)
-  })
 </script>
 
 <div class="loading-backdrop">
   <div class="loading-dialog" role="dialog" aria-modal="true">
     <div class="spinner"></div>
     <p>{message}</p>
-    <span class="elapsed">{elapsed.toFixed(1)}s</span>
+    <div class="gauge-track">
+      <div class="gauge-fill"></div>
+      <div class="gauge-segments"></div>
+    </div>
   </div>
 </div>
 
@@ -57,10 +49,39 @@
     color: #d4d4d4;
   }
 
-  .elapsed {
-    font-size: 13px;
-    color: #888;
-    font-variant-numeric: tabular-nums;
+  .gauge-track {
+    width: 100%;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.1);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .gauge-fill {
+    position: absolute;
+    inset: 0;
+    background: #e2b93b;
+    transform-origin: left;
+    transform: scaleX(0);
+    animation: fill-gauge 20s steps(20) forwards;
+    will-change: transform;
+  }
+
+  .gauge-segments {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to right,
+      transparent 0 calc(5% - 1px),
+      rgba(16, 16, 16, 0.95) calc(5% - 1px) 5%
+    );
+  }
+
+  @keyframes fill-gauge {
+    to {
+      transform: scaleX(1);
+    }
   }
 
   .spinner {
