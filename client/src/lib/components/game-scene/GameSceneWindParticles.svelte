@@ -393,8 +393,11 @@
     // Spawn when wind is strong enough
     if (canSpawn) {
       spawnAccumulator += dt
+      const s = windState.windStrength
       const spawnRate =
-        (windState.windStrength - WIND_SPAWN_THRESHOLD) * 8.0
+        s > 0.8
+          ? (0.8 - WIND_SPAWN_THRESHOLD) * 8.0 + (s - 0.8) * 32.0
+          : (s - WIND_SPAWN_THRESHOLD) * 8.0
       const spawnInterval = 1.0 / Math.max(spawnRate, 0.1)
 
       while (spawnAccumulator >= spawnInterval) {
