@@ -65,7 +65,6 @@
     transform-origin: left;
     transform: scaleX(0);
     animation: fill-gauge 20s steps(20) forwards;
-    will-change: transform;
   }
 
   .gauge-segments {
