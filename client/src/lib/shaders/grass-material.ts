@@ -14,54 +14,61 @@ import {
   hash,
   attribute,
   texture,
+  floor,
 } from 'three/tsl'
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { loadGLB } from '../utils/gltfCache'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any // TSL node -- broad type for shader node expressions
 
 // ── Grass billboard geometry from GLB ─────────────────────
-// Loads grassLODs.glb and extracts the LOD00 mesh geometry.
+// Loads grassLODs.glb and extracts the named LOD mesh geometry.
 // UV y is flipped so that y=0 at base, y=1 at tip (matching our shader convention).
 
-const gltfLoader = new GLTFLoader()
+async function loadLODGeometry(
+  lodName: string,
+  url = '/models/grassLODs.glb',
+  scale: number | [number, number, number] = 5
+): Promise<THREE.BufferGeometry> {
+  const gltf = await loadGLB(url)
+  let found: THREE.BufferGeometry | null = null
+  gltf.scene.traverse((child) => {
+    if (child instanceof THREE.Mesh && child.name.includes(lodName)) {
+      found = child.geometry
+    }
+  })
+  if (!found) {
+    throw new Error(`${lodName} mesh not found in ${url}`)
+  }
+  // Clone to avoid mutating the cached GLTF geometry
+  const geometry = (found as THREE.BufferGeometry).clone()
+  const [sx, sy, sz] = Array.isArray(scale) ? scale : [scale, scale, scale]
+  geometry.scale(sx, sy, sz)
+
+  // Flip UV y: GLB has y=1 at base, y=0 at tip → our convention y=0 base, y=1 tip
+  const uvAttr = geometry.getAttribute('uv')
+  if (uvAttr) {
+    for (let i = 0; i < uvAttr.count; i++) {
+      uvAttr.setY(i, 1 - uvAttr.getY(i))
+    }
+    uvAttr.needsUpdate = true
+  }
+
+  return geometry
+}
 
 export function loadGrassBillboardGeometry(
   url = '/models/grassLODs.glb',
   scale = 5
 ): Promise<THREE.BufferGeometry> {
-  return new Promise((resolve, reject) => {
-    gltfLoader.load(
-      url,
-      (gltf) => {
-        let found: THREE.BufferGeometry | null = null
-        gltf.scene.traverse((child) => {
-          if (child instanceof THREE.Mesh && child.name.includes('LOD01')) {
-            found = child.geometry
-          }
-        })
-        if (!found) {
-          reject(new Error('LOD01 mesh not found in grassLODs.glb'))
-          return
-        }
-        const geometry: THREE.BufferGeometry = found
-        geometry.scale(scale, scale, scale)
+  return loadLODGeometry('LOD01', url, scale)
+}
 
-        // Flip UV y: GLB has y=1 at base, y=0 at tip → our convention y=0 base, y=1 tip
-        const uvAttr = geometry.getAttribute('uv')
-        if (uvAttr) {
-          for (let i = 0; i < uvAttr.count; i++) {
-            uvAttr.setY(i, 1 - uvAttr.getY(i))
-          }
-          uvAttr.needsUpdate = true
-        }
-
-        resolve(geometry)
-      },
-      undefined,
-      reject
-    )
-  })
+export function loadFlowerBillboardGeometry(
+  url = '/models/grassLODs.glb',
+  scale: number | [number, number, number] = [3, 5.5, 3]
+): Promise<THREE.BufferGeometry> {
+  return loadLODGeometry('LOD02', url, scale)
 }
 
 const textureLoader = new THREE.TextureLoader()
@@ -72,8 +79,8 @@ export function loadAlphaTexture(url: string): Promise<THREE.Texture> {
 
 export const loadGrassAlphaTexture = () =>
   loadAlphaTexture('/textures/grass1.jpeg')
-export const loadFlowerAlphaTexture = () =>
-  loadAlphaTexture('/textures/flower.png')
+export const loadFlowerColorTexture = () =>
+  loadAlphaTexture('/textures/flowerx4.png')
 
 // ── Splatmap R-channel vegetation subtype ranges ─────────
 export const SHORT_GRASS_R_MIN = 230
@@ -128,9 +135,12 @@ export interface GrassMaterialConfig {
   interactionRadius?: number
   interactionStrength?: number
   alphaMap?: THREE.Texture
-  /** Petal color palette for flowers. When set, each instance picks a random
-   *  color from this list and blends it into the upper portion of the billboard. */
-  flowerColors?: [number, number, number][]
+  /** Color texture for the billboard. When set, the texture color is used
+   *  directly and alpha is derived from the texture. */
+  colorMap?: THREE.Texture
+  /** Atlas grid size (e.g. 2 for a 2×2 atlas). Each instance randomly picks
+   *  one sub-tile by offsetting UVs. Only used with colorMap. */
+  atlasGrid?: number
 }
 
 export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
@@ -155,12 +165,7 @@ export const FLOWER_CONFIG: GrassMaterialConfig = {
   heightScaleExtent: 0.5,
   interactionRadius: 1.5,
   interactionStrength: 0.12,
-  flowerColors: [
-    [0.9, 0.85, 0.2], // yellow (dandelion)
-    [0.95, 0.5, 0.6], // pink (cosmos)
-    [0.95, 0.95, 0.9], // white (daisy)
-    [0.7, 0.5, 0.85], // lavender
-  ],
+  atlasGrid: 2,
 }
 
 /**
@@ -211,8 +216,35 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   mat.roughness = 0.8
   mat.metalness = 0.0
 
+  // ── Atlas UV: pick a random sub-tile per instance for atlas textures ──
+  let texUV: N | undefined
+  if (cfg?.colorMap && cfg.atlasGrid && cfg.atlasGrid > 1) {
+    const grid = cfg.atlasGrid
+    const totalCells = float(grid * grid)
+    const atlasHash = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.3)))
+    const idx = floor(atlasHash.mul(totalCells).min(totalCells.sub(0.001)))
+    const invGrid = float(1 / grid)
+    const col = idx.sub(floor(idx.mul(invGrid)).mul(float(grid)))
+    const row = floor(idx.mul(invGrid))
+    const origUV = attribute('uv')
+    texUV = vec2(
+      origUV.x.mul(invGrid).add(col.mul(invGrid)),
+      origUV.y.mul(invGrid).add(row.mul(invGrid))
+    )
+  }
+
   // ── Alpha map (billboard texture) ──
-  if (cfg?.alphaMap) {
+  const colorTexNode = cfg?.colorMap
+    ? texUV
+      ? texture(cfg.colorMap, texUV)
+      : texture(cfg.colorMap)
+    : undefined
+
+  if (colorTexNode) {
+    mat.transparent = true
+    mat.alphaTest = 0.1
+    mat.opacityNode = colorTexNode.a
+  } else if (cfg?.alphaMap) {
     mat.transparent = true
     mat.alphaTest = 0.1
     const alphaTexNode = texture(cfg.alphaMap)
@@ -246,23 +278,10 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   )
   const brightness = float(0.85).add(brightnessHash.mul(0.3)) // 0.85 ~ 1.15
 
-  const fc = cfg?.flowerColors
   let finalColor: N
-  if (fc && fc.length > 0) {
-    // Pick a random petal color per instance from the palette
-    const colorHash = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.3)))
-    // Start with first color, mix in others based on hash thresholds
-    let petalColor: N = vec3(fc[0][0], fc[0][1], fc[0][2])
-    for (let ci = 1; ci < fc.length; ci++) {
-      const threshold = float(ci / fc.length)
-      const nextColor = vec3(fc[ci][0], fc[ci][1], fc[ci][2])
-      petalColor = mix(petalColor, nextColor, colorHash.step(threshold))
-    }
-    // Blend petal color into the upper portion (uvY > 0.4)
-    const petalBlend = smoothstep(float(0.35), float(0.6), uvY)
-    finalColor = mix(gradientColor, petalColor, petalBlend)
-      .mul(brightness)
-      .mul(rootAO)
+  if (colorTexNode) {
+    // Use color texture directly, with per-instance brightness variation
+    finalColor = colorTexNode.rgb.mul(brightness).mul(rootAO)
   } else {
     // Slight yellow-green ↔ blue-green hue shift per instance
     const hueHash = hash(vec2(instanceIndex.toFloat().mul(0.73), float(3.1)))

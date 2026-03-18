@@ -8,8 +8,9 @@
   import { getInstanceData } from '../../utils/grass-data'
   import {
     loadGrassBillboardGeometry,
+    loadFlowerBillboardGeometry,
     loadGrassAlphaTexture,
-    loadFlowerAlphaTexture,
+    loadFlowerColorTexture,
     createGrassMaterial,
     GRASS_INSTANCE_POS_ATTR,
     GRASS_INSTANCE_ROT_ATTR,
@@ -43,6 +44,7 @@
   // ── Async-loaded geometry & materials ─────────────────
   // Stored for reference/disposal only; meshes are created imperatively below
   let _grassGeometry: THREE.BufferGeometry | null = null
+  let _flowerGeometry: THREE.BufferGeometry | null = null
   let _shortGrassMaterial: THREE.Material | null = null
   let _tallGrassMaterial: THREE.Material | null = null
   let _flowerMaterial: THREE.Material | null = null
@@ -78,11 +80,11 @@
   /** Eagerly create grass materials + one mesh per type so compileAsync can
    *  pre-compile the grass shader pipelines. Returns true when done. */
   export function ensureMaterialsForCompile(): boolean {
-    if (!ensureMaterials() || !_grassGeometry) return false
+    if (!ensureMaterials() || !_grassGeometry || !_flowerGeometry) return false
     // Create at least one mesh per type so the pipeline exists in the scene
     ensureSlotMesh(shortMeshes, 0, _grassGeometry, _shortGrassMaterial!, MESH_CAPACITY)
     ensureSlotMesh(tallMeshes, 0, _grassGeometry, _tallGrassMaterial!, MESH_CAPACITY)
-    ensureSlotMesh(flowerMeshes, 0, _grassGeometry, _flowerMaterial!, FLOWER_MESH_CAPACITY)
+    ensureSlotMesh(flowerMeshes, 0, _flowerGeometry, _flowerMaterial!, FLOWER_MESH_CAPACITY)
     return true
   }
   let shortMeshes: THREE.InstancedMesh[] = []
@@ -92,27 +94,29 @@
   // Load grass assets in parallel; defer material + mesh creation.
   // Meshes are created lazily (not all 50 upfront) to spread the cost.
   let _grassAlphaMap: THREE.Texture | null = null
-  let _flowerAlphaMap: THREE.Texture | null = null
+  let _flowerColorMap: THREE.Texture | null = null
 
   Promise.all([
     loadGrassBillboardGeometry(),
+    loadFlowerBillboardGeometry(),
     loadGrassAlphaTexture(),
-    loadFlowerAlphaTexture(),
-  ]).then(([geometry, alphaMap, flowerAlphaMap]) => {
+    loadFlowerColorTexture(),
+  ]).then(([geometry, flowerGeometry, alphaMap, flowerColorMap]) => {
     _grassGeometry = geometry
+    _flowerGeometry = flowerGeometry
     _grassAlphaMap = alphaMap
-    _flowerAlphaMap = flowerAlphaMap
+    _flowerColorMap = flowerColorMap
     assetsReady = true
   })
 
   /** Create grass materials on first use. */
   function ensureMaterials(): boolean {
     if (_shortGrassMaterial && _tallGrassMaterial && _flowerMaterial) return true
-    if (!_grassGeometry || !_grassAlphaMap || !_flowerAlphaMap) return false
+    if (!_grassGeometry || !_flowerGeometry || !_grassAlphaMap || !_flowerColorMap) return false
 
     const shortResult = createGrassMaterial({ alphaMap: _grassAlphaMap })
     const tallResult = createGrassMaterial({ ...TALL_GRASS_CONFIG, alphaMap: _grassAlphaMap })
-    const flowerResult = createGrassMaterial({ ...FLOWER_CONFIG, alphaMap: _flowerAlphaMap })
+    const flowerResult = createGrassMaterial({ ...FLOWER_CONFIG, colorMap: _flowerColorMap })
     _shortGrassMaterial = shortResult.material
     _tallGrassMaterial = tallResult.material
     _flowerMaterial = flowerResult.material
@@ -563,7 +567,7 @@
 
     rebuildType(shortMeshes, _grassGeometry!, _shortGrassMaterial!, shortKeyToSlot, wantedKeys, (c) => c?.short)
     rebuildType(tallMeshes, _grassGeometry!, _tallGrassMaterial!, tallKeyToSlot, wantedKeys, (c) => c?.tall)
-    rebuildType(flowerMeshes, _grassGeometry!, _flowerMaterial!, flowerKeyToSlot, wantedKeys, (c) => c?.flower, FLOWER_MESH_CAPACITY)
+    rebuildType(flowerMeshes, _flowerGeometry!, _flowerMaterial!, flowerKeyToSlot, wantedKeys, (c) => c?.flower, FLOWER_MESH_CAPACITY)
   }
 
   function rebuildType(

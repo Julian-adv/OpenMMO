@@ -14,7 +14,7 @@ const BGM_FILES = [
 ]
 
 const MIN_QUIET_SEC = 0
-const MAX_QUIET_SEC = 180
+const MAX_QUIET_SEC = 60
 
 const STORAGE_KEY_VOLUME = 'onlinerpg_bgmVolume'
 const STORAGE_KEY_MUTED = 'onlinerpg_bgmMuted'

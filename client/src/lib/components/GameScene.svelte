@@ -94,8 +94,9 @@
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import {
     loadGrassBillboardGeometry,
+    loadFlowerBillboardGeometry,
     loadGrassAlphaTexture,
-    loadFlowerAlphaTexture,
+    loadFlowerColorTexture,
   } from '../shaders/grass-material'
 
   interface Props {
@@ -843,8 +844,9 @@
     // Also await grass asset loading so grass materials can be compiled
     const grassAssetsPromise = Promise.all([
       loadGrassBillboardGeometry(),
+      loadFlowerBillboardGeometry(),
       loadGrassAlphaTexture(),
-      loadFlowerAlphaTexture(),
+      loadFlowerColorTexture(),
     ])
 
     // Wait for terrain data + grass assets, let the TerrainLayer $effect run
