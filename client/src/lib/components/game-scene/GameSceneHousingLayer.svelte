@@ -7,6 +7,7 @@
   import {
     buildHouseGroup,
     disposeHouseGroup,
+    OFFSCREEN_Y,
     type HouseGroupResult,
   } from '../../utils/house-geometry'
   import { housingManager } from '../../managers/housingManager'
@@ -23,6 +24,7 @@
 
   const housingGroup = new THREE.Group()
   housingGroup.name = 'housingLayer'
+
   const houses = new SvelteMap<string, HouseGroupResult>()
   let playerInsideHouseId: string | null = null
   const _tmpVec = new THREE.Vector3()
@@ -91,13 +93,15 @@
     }
 
     if (insideId !== playerInsideHouseId) {
+      // Hide/show front walls by moving off-screen instead of toggling visible,
+      // to avoid WebGPU render bundle recompilation.
       if (playerInsideHouseId) {
         const prev = houses.get(playerInsideHouseId)
-        if (prev) prev.frontGroup.visible = true
+        if (prev) prev.frontGroup.position.y = 0
       }
       if (insideId) {
         const curr = houses.get(insideId)
-        if (curr) curr.frontGroup.visible = false
+        if (curr) curr.frontGroup.position.y = OFFSCREEN_Y
       }
       playerInsideHouseId = insideId
     }

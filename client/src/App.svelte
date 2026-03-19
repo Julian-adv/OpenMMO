@@ -15,9 +15,10 @@
   import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { mapEditorMode, worldMapVisible, teleportLoading } from './lib/stores/debugStore'
+  import { mapEditorMode, worldMapVisible, teleportLoading, housingEditorMode } from './lib/stores/debugStore'
   import { createWebGPURenderer } from './lib/utils/renderer'
   import MapEditorPanel from './lib/components/map-editor/MapEditorPanel.svelte'
+  import HousingEditorPanel from './lib/components/map-editor/HousingEditorPanel.svelte'
   import GenerateTerrainDialog from './lib/components/map-editor/GenerateTerrainDialog.svelte'
   import { showGenerateDialog } from './lib/stores/editorStore'
   import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
@@ -271,6 +272,9 @@
       <CelestialDebugDialog />
       {#if $mapEditorMode}
         <MapEditorPanel />
+      {/if}
+      {#if $housingEditorMode}
+        <HousingEditorPanel />
       {/if}
       {#if $showGenerateDialog}
         <GenerateTerrainDialog />

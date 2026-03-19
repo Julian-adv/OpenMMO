@@ -31,6 +31,7 @@
     celestialDebugVisible,
     playerDebugInfo,
     mapEditorMode,
+    housingEditorMode,
     gridVisible,
     worldMapVisible,
     debugSpeedMode,
@@ -241,6 +242,15 @@
           title="Toggle Map Editor (Ctrl+M)"
         >
           MAP EDIT
+        </button>
+
+        <button
+          class="action-btn"
+          class:active={$housingEditorMode}
+          onclick={() => housingEditorMode.update((v) => !v)}
+          title="Toggle Housing Editor"
+        >
+          HOUSE
         </button>
 
         <button
