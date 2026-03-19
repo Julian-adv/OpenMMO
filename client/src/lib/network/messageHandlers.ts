@@ -10,6 +10,7 @@ import type { LocalPlayer, RemotePlayer } from '../stores/gameStore'
 import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
+import { housingManager } from '../managers/housingManager'
 import type { MonsterData } from '../types/Monster'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
@@ -454,6 +455,22 @@ export function handleServerMessage(
       updatePlayer(data.player_id, { torchOn: data.enabled })
       break
     }
+
+    case 'HouseSpawned':
+      housingManager.handleRemoteHouseSpawned(data.house)
+      break
+
+    case 'HouseUpdated':
+      housingManager.handleRemoteHouseSpawned(data.house)
+      break
+
+    case 'HouseRemoved':
+      housingManager.handleRemoteHouseRemoved(data.house_id)
+      break
+
+    case 'HousesInArea':
+      housingManager.handleRemoteHousesBatch(data.houses)
+      break
 
     case 'XpGained': {
       const gameState = get(gameStore)

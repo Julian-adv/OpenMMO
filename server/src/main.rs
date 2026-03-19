@@ -3,6 +3,7 @@ mod celestial;
 mod connection;
 mod game;
 mod game_state;
+mod housing;
 mod monster_defs;
 mod terrain;
 mod types;
@@ -12,6 +13,8 @@ use auth::AuthService;
 use clap::Parser;
 use connection::handle_connection;
 use game_state::GameState;
+use housing::routes::housing_router;
+use housing::HousingIO;
 use std::sync::Arc;
 use terrain::io::TerrainIO;
 use terrain::routes::terrain_router;
@@ -119,11 +122,13 @@ async fn main() {
     // Start terrain REST API server
     let terrain_port = args.terrain_port.unwrap_or(args.port + 1);
     let terrain_io = Arc::new(TerrainIO::new(std::path::PathBuf::from(&args.terrain_dir)));
+    let housing_io = Arc::new(HousingIO::new(std::path::PathBuf::from("./data/housing")));
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
     let terrain_app = terrain_router(terrain_io)
+        .merge(housing_router(housing_io))
         .layer(cors)
         .layer(CompressionLayer::new());
     let terrain_addr = format!("0.0.0.0:{}", terrain_port);

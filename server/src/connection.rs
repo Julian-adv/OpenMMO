@@ -576,10 +576,22 @@ async fn handle_client_message(
             state.last_heartbeat = std::time::Instant::now();
         }
 
-        ClientMessage::PlaceHouse { .. }
-        | ClientMessage::ModifyRoom { .. }
-        | ClientMessage::RemoveHouse { .. } => {
-            // TODO: Phase 2 — housing server logic
+        ClientMessage::PlaceHouse { house } => {
+            let player_id = state.player_id.clone();
+            if let Some(pid) = player_id {
+                game_state.broadcast(ServerMessage::HouseSpawned { house }, Some(pid));
+            }
+        }
+
+        ClientMessage::ModifyRoom { .. } => {
+            // TODO: room modification broadcast
+        }
+
+        ClientMessage::RemoveHouse { house_id } => {
+            let player_id = state.player_id.clone();
+            if let Some(pid) = player_id {
+                game_state.broadcast(ServerMessage::HouseRemoved { house_id }, Some(pid));
+            }
         }
     }
 

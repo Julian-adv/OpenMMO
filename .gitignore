@@ -50,6 +50,7 @@ logs/
 data/*.db
 data/monsters.json
 data/terrain/
+data/housing/
 server/data/game_data.db
 agent-client/data/config.toml
 

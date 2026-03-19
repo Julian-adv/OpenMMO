@@ -9,6 +9,11 @@
     disposeHouseGroup,
     type HouseGroupResult,
   } from '../../utils/house-geometry'
+  import { housingManager } from '../../managers/housingManager'
+  import {
+    TERRAIN_TILE_SIZE,
+    getTerrainChunkFromPosition,
+  } from './terrain-utils'
 
   interface Props {
     playerPosition: { x: number; y: number; z: number } | null
@@ -21,104 +26,60 @@
   const houses = new SvelteMap<string, HouseGroupResult>()
   let playerInsideHouseId: string | null = null
   const _tmpVec = new THREE.Vector3()
+  let lastChunkX = NaN
+  let lastChunkZ = NaN
 
-  // Hardcoded test house for Phase 1
-  const TEST_HOUSES: HouseData[] = [
-    {
-      id: 'test_house_1',
-      ownerId: 'test',
-      origin: { x: -1530, y: 12, z: 475 },
-      rooms: [
-        {
-          localX: 0,
-          localZ: 0,
-          sizeX: 5,
-          sizeZ: 4,
-          floorLevel: 0,
-          floorTexture: 1,
-          roofTexture: 0,
-          wallHeight: 3,
-          wallNorth: { variant: 'window', texture: 0 },
-          wallSouth: { variant: 'door', texture: 0 },
-          wallEast: { variant: 'open', texture: 0 },
-          wallWest: { variant: 'window', texture: 0 },
-        },
-        {
-          localX: 5,
-          localZ: 0,
-          sizeX: 4,
-          sizeZ: 4,
-          floorLevel: 0,
-          floorTexture: 2,
-          roofTexture: 0,
-          wallHeight: 3,
-          wallNorth: { variant: 'solid', texture: 1 },
-          wallSouth: { variant: 'window', texture: 1 },
-          wallEast: { variant: 'solid', texture: 1 },
-          wallWest: { variant: 'open', texture: 1 },
-        },
-      ],
-    },
-    {
-      id: 'test_house_2',
-      ownerId: 'test',
-      origin: { x: -1545, y: 6.57, z: 465 },
-      rooms: [
-        {
-          localX: 0,
-          localZ: 0,
-          sizeX: 4,
-          sizeZ: 4,
-          floorLevel: 0,
-          floorTexture: 0,
-          roofTexture: 1,
-          wallHeight: 3,
-          wallNorth: { variant: 'solid', texture: 2 },
-          wallSouth: { variant: 'door', texture: 2 },
-          wallEast: { variant: 'solid', texture: 2 },
-          wallWest: { variant: 'window', texture: 2 },
-        },
-        // Second floor
-        {
-          localX: 0,
-          localZ: 0,
-          sizeX: 4,
-          sizeZ: 4,
-          floorLevel: 1,
-          floorTexture: 3,
-          roofTexture: 1,
-          wallHeight: 3,
-          wallNorth: { variant: 'window', texture: 2 },
-          wallSouth: { variant: 'solid', texture: 2 },
-          wallEast: { variant: 'window', texture: 2 },
-          wallWest: { variant: 'solid', texture: 2 },
-        },
-      ],
-    },
-  ]
-
-  // Build test houses immediately
-  for (const houseData of TEST_HOUSES) {
-    addHouse(houseData)
+  // Listen for housing data changes from the manager
+  housingManager.onHousesChanged = (allHouses: HouseData[]) => {
+    syncHouses(allHouses)
   }
 
   onDestroy(() => {
+    housingManager.onHousesChanged = null
     for (const [, result] of houses) {
       disposeHouseGroup(result.houseGroup)
     }
     houses.clear()
   })
 
-  function addHouse(data: HouseData) {
-    const result = buildHouseGroup(data)
-    houses.set(data.id, result)
-    housingGroup.add(result.houseGroup)
+  function syncHouses(allHouses: HouseData[]) {
+    const incoming = new Set(allHouses.map((h) => h.id))
+
+    // Remove houses no longer present
+    for (const [id, result] of houses) {
+      if (!incoming.has(id)) {
+        housingGroup.remove(result.houseGroup)
+        disposeHouseGroup(result.houseGroup)
+        houses.delete(id)
+      }
+    }
+
+    // Add new houses
+    for (const data of allHouses) {
+      if (!houses.has(data.id)) {
+        const result = buildHouseGroup(data)
+        houses.set(data.id, result)
+        housingGroup.add(result.houseGroup)
+      }
+    }
   }
 
-  /** Called from game loop — checks player inside state and toggles front walls */
+  /** Called from game loop — loads chunks + checks player inside state */
   export function update(_deltaTime: number) {
     if (!playerPosition) return
 
+    // Load housing chunks around player when chunk changes
+    const { x: cx, z: cz } = getTerrainChunkFromPosition(
+      playerPosition,
+      TERRAIN_TILE_SIZE
+    )
+    if (cx !== lastChunkX || cz !== lastChunkZ) {
+      lastChunkX = cx
+      lastChunkZ = cz
+      housingManager.loadChunksAround(playerPosition.x, playerPosition.z)
+    }
+
+    // Player-inside detection
     _tmpVec.set(playerPosition.x, playerPosition.y, playerPosition.z)
     let insideId: string | null = null
 
@@ -130,12 +91,10 @@
     }
 
     if (insideId !== playerInsideHouseId) {
-      // Restore previous house
       if (playerInsideHouseId) {
         const prev = houses.get(playerInsideHouseId)
         if (prev) prev.frontGroup.visible = true
       }
-      // Hide front of new house
       if (insideId) {
         const curr = houses.get(insideId)
         if (curr) curr.frontGroup.visible = false

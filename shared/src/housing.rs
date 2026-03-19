@@ -21,6 +21,7 @@ pub struct WallConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RoomData {
     pub local_x: i32,
     pub local_z: i32,
@@ -37,6 +38,7 @@ pub struct RoomData {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HouseData {
     pub id: String,
     pub owner_id: String,

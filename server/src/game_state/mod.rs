@@ -76,7 +76,7 @@ impl GameState {
         self.broadcast_tx.subscribe()
     }
 
-    fn broadcast(&self, msg: ServerMessage, skip_player_id: Option<PlayerId>) {
+    pub(crate) fn broadcast(&self, msg: ServerMessage, skip_player_id: Option<PlayerId>) {
         match serialize_server_msg(&msg) {
             Ok(bytes) => {
                 let _ = self.broadcast_tx.send(BroadcastMessage {
