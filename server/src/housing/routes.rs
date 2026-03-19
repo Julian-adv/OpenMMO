@@ -8,7 +8,7 @@ use onlinerpg_shared::housing::HouseData;
 use std::sync::Arc;
 use tracing::error;
 
-use super::HousingIO;
+use super::{validate_house, world_to_chunk, HousingIO};
 
 pub fn housing_router(housing_io: Arc<HousingIO>) -> Router {
     Router::new()
@@ -53,7 +53,19 @@ async fn put_house(
     // Ensure ID in path matches body
     house.id = house_id;
 
-    // TODO: validation (room adjacency, overlap, size constraints)
+    // Validate: room sizes, internal overlap, neighbor overlap
+    let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
+    let neighbors = housing.read_chunk(cx, cz).await.map_err(|e| {
+        error!("Failed to read chunk for validation: {}", e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    if let Err(msg) = validate_house(&house, &neighbors) {
+        return Err((StatusCode::BAD_REQUEST, msg));
+    }
 
     housing.write_house(&house).await.map_err(|e| {
         error!("Failed to write house {}: {}", house.id, e);

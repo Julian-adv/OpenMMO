@@ -1,9 +1,107 @@
 pub mod routes;
 
-use onlinerpg_shared::housing::HouseData;
+use onlinerpg_shared::housing::{HouseData, RoomData};
 use std::path::PathBuf;
 use tokio::fs;
 use tracing::{error, info};
+
+const MIN_ROOM_SIZE: u8 = 3;
+const MAX_ROOM_SIZE: u8 = 6;
+
+/// Validate a house before saving. Returns Ok(()) or an error message.
+pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), String> {
+    if house.rooms.is_empty() {
+        return Err("House must have at least one room".into());
+    }
+
+    for (i, room) in house.rooms.iter().enumerate() {
+        // Room size constraints
+        if room.size_x < MIN_ROOM_SIZE || room.size_x > MAX_ROOM_SIZE {
+            return Err(format!(
+                "Room {} size_x ({}) must be {}-{}",
+                i, room.size_x, MIN_ROOM_SIZE, MAX_ROOM_SIZE
+            ));
+        }
+        if room.size_z < MIN_ROOM_SIZE || room.size_z > MAX_ROOM_SIZE {
+            return Err(format!(
+                "Room {} size_z ({}) must be {}-{}",
+                i, room.size_z, MIN_ROOM_SIZE, MAX_ROOM_SIZE
+            ));
+        }
+        if room.wall_height <= 0.0 || room.wall_height > 10.0 {
+            return Err(format!(
+                "Room {} wall_height ({}) must be 0-10",
+                i, room.wall_height
+            ));
+        }
+    }
+
+    // Check internal room-room overlap
+    for i in 0..house.rooms.len() {
+        for j in (i + 1)..house.rooms.len() {
+            if rooms_overlap(&house.rooms[i], &house.rooms[j]) {
+                return Err(format!("Rooms {} and {} overlap", i, j));
+            }
+        }
+    }
+
+    // Check overlap with neighboring houses
+    for neighbor in neighbors {
+        if neighbor.id == house.id {
+            continue;
+        }
+        for (i, room) in house.rooms.iter().enumerate() {
+            for (j, other) in neighbor.rooms.iter().enumerate() {
+                if rooms_overlap_world(
+                    room,
+                    house.origin.x,
+                    house.origin.z,
+                    other,
+                    neighbor.origin.x,
+                    neighbor.origin.z,
+                ) {
+                    return Err(format!(
+                        "Room {} overlaps with house {} room {}",
+                        i, neighbor.id, j
+                    ));
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn rooms_overlap(a: &RoomData, b: &RoomData) -> bool {
+    let ax = a.local_x;
+    let az = a.local_z;
+    let bx = b.local_x;
+    let bz = b.local_z;
+    ax < bx + b.size_x as i32
+        && ax + a.size_x as i32 > bx
+        && az < bz + b.size_z as i32
+        && az + a.size_z as i32 > bz
+        && a.floor_level == b.floor_level
+}
+
+fn rooms_overlap_world(
+    a: &RoomData,
+    a_ox: f32,
+    a_oz: f32,
+    b: &RoomData,
+    b_ox: f32,
+    b_oz: f32,
+) -> bool {
+    let ax = a_ox + a.local_x as f32;
+    let az = a_oz + a.local_z as f32;
+    let bx = b_ox + b.local_x as f32;
+    let bz = b_oz + b.local_z as f32;
+    ax < bx + b.size_x as f32
+        && ax + a.size_x as f32 > bx
+        && az < bz + b.size_z as f32
+        && az + a.size_z as f32 > bz
+        && a.floor_level == b.floor_level
+}
 
 /// File-based housing storage, organized by terrain chunk.
 ///
