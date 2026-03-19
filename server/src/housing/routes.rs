@@ -1,21 +1,22 @@
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
 use onlinerpg_shared::housing::HouseData;
 use std::sync::Arc;
 use tracing::error;
 
-use super::{validate_house, HousingIO, CHUNK_SIZE};
+use super::{next_house_id, validate_house, world_to_chunk, HousingIO, CHUNK_SIZE};
 
 pub fn housing_router(housing_io: Arc<HousingIO>) -> Router {
     Router::new()
         .route("/api/housing/area/{cx}/{cz}", get(get_houses_in_chunk))
+        .route("/api/housing", post(create_house))
         .route(
             "/api/housing/{house_id}",
-            get(get_house).put(put_house).delete(delete_house),
+            get(get_house).delete(delete_house),
         )
         .with_state(housing_io)
 }
@@ -45,15 +46,33 @@ async fn get_house(
     }
 }
 
-async fn put_house(
-    Path(house_id): Path<String>,
+async fn create_house(
     State(housing): State<Arc<HousingIO>>,
     Json(mut house): Json<HouseData>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    // Ensure ID in path matches body
-    house.id = house_id;
+) -> Result<(StatusCode, Json<HouseData>), (StatusCode, String)> {
+    // Load neighbors for validation, then derive ID from loaded data
+    let neighbors = load_neighbors(&housing, &house).await?;
+    let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
+    house.id = next_house_id(cx, cz, &neighbors);
 
-    // Compute world AABB of the house to find all affected chunks
+    if let Err(msg) = validate_house(&house, &neighbors) {
+        return Err((StatusCode::BAD_REQUEST, msg));
+    }
+
+    housing.write_house(&house).await.map_err(|e| {
+        error!("Failed to write house {}: {}", house.id, e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+    Ok((StatusCode::CREATED, Json(house)))
+}
+
+async fn load_neighbors(
+    housing: &HousingIO,
+    house: &HouseData,
+) -> Result<Vec<HouseData>, (StatusCode, String)> {
     let mut min_x = house.origin.x;
     let mut max_x = house.origin.x;
     let mut min_z = house.origin.z;
@@ -71,7 +90,6 @@ async fn put_house(
     let c_min_z = (min_z / CHUNK_SIZE).floor() as i32;
     let c_max_z = ((max_z - 0.01) / CHUNK_SIZE).floor() as i32;
 
-    // Load neighbors from all affected chunks
     let mut neighbors = Vec::new();
     for cz in c_min_z..=c_max_z {
         for cx in c_min_x..=c_max_x {
@@ -85,19 +103,7 @@ async fn put_house(
             neighbors.extend(chunk);
         }
     }
-
-    if let Err(msg) = validate_house(&house, &neighbors) {
-        return Err((StatusCode::BAD_REQUEST, msg));
-    }
-
-    housing.write_house(&house).await.map_err(|e| {
-        error!("Failed to write house {}: {}", house.id, e);
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),
-        )
-    })?;
-    Ok(StatusCode::NO_CONTENT)
+    Ok(neighbors)
 }
 
 async fn delete_house(

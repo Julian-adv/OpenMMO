@@ -101,6 +101,30 @@ pub struct HousingIO {
 /// Chunk size in world units — matches terrain tile size.
 pub(crate) const CHUNK_SIZE: f32 = 64.0;
 
+fn chunk_prefix(cx: i32, cz: i32) -> String {
+    format!("r{:+03}_{:+03}", cx, cz)
+}
+
+/// Generate the next house ID from already-loaded houses: `r{cx}_{cz}_{n}`
+pub fn next_house_id(cx: i32, cz: i32, existing: &[HouseData]) -> String {
+    let prefix = format!("{}_", chunk_prefix(cx, cz));
+    let max_n = existing
+        .iter()
+        .filter_map(|h| h.id.strip_prefix(&prefix)?.parse::<u32>().ok())
+        .max()
+        .unwrap_or(0);
+    format!("{}{}", prefix, max_n + 1)
+}
+
+/// Parse chunk coordinates from a house ID (e.g. `r-24_+07_1` → Some((-24, 7)))
+pub fn parse_chunk_from_id(id: &str) -> Option<(i32, i32)> {
+    let s = id.strip_prefix('r')?;
+    let mut parts = s.splitn(3, '_');
+    let cx = parts.next()?.parse::<i32>().ok()?;
+    let cz = parts.next()?.parse::<i32>().ok()?;
+    Some((cx, cz))
+}
+
 pub fn world_to_chunk(x: f32, z: f32) -> (i32, i32) {
     (
         (x / CHUNK_SIZE).floor() as i32,
@@ -114,7 +138,7 @@ impl HousingIO {
     }
 
     fn chunk_dir(&self, cx: i32, cz: i32) -> PathBuf {
-        self.base_dir.join(format!("r{:+03}_{:+03}", cx, cz))
+        self.base_dir.join(chunk_prefix(cx, cz))
     }
 
     fn house_path(&self, cx: i32, cz: i32, house_id: &str) -> PathBuf {
@@ -124,12 +148,13 @@ impl HousingIO {
     /// Read all houses in a chunk.
     pub async fn read_chunk(&self, cx: i32, cz: i32) -> std::io::Result<Vec<HouseData>> {
         let dir = self.chunk_dir(cx, cz);
-        if !dir.exists() {
-            return Ok(vec![]);
-        }
+        let mut entries = match fs::read_dir(&dir).await {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(e) => return Err(e),
+        };
 
         let mut houses = Vec::new();
-        let mut entries = fs::read_dir(&dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "json") {
@@ -173,23 +198,17 @@ impl HousingIO {
         }
     }
 
-    /// Find and read a specific house by ID across all chunks.
-    /// (For removal when chunk coords aren't known.)
+    /// Find and read a house by ID. Parses chunk coords from the ID for O(1) lookup.
     pub async fn find_house(&self, house_id: &str) -> std::io::Result<Option<HouseData>> {
-        if !self.base_dir.exists() {
-            return Ok(None);
-        }
-        let mut entries = fs::read_dir(&self.base_dir).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            if entry.file_type().await?.is_dir() {
-                let path = entry.path().join(format!("{}.json", house_id));
-                if path.exists() {
-                    let content = fs::read_to_string(&path).await?;
-                    match serde_json::from_str::<HouseData>(&content) {
-                        Ok(house) => return Ok(Some(house)),
-                        Err(e) => error!("Failed to parse house {:?}: {}", path, e),
-                    }
-                }
+        if let Some((cx, cz)) = parse_chunk_from_id(house_id) {
+            let path = self.house_path(cx, cz, house_id);
+            match fs::read_to_string(&path).await {
+                Ok(content) => match serde_json::from_str::<HouseData>(&content) {
+                    Ok(house) => return Ok(Some(house)),
+                    Err(e) => error!("Failed to parse house {:?}: {}", path, e),
+                },
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => return Err(e),
             }
         }
         Ok(None)

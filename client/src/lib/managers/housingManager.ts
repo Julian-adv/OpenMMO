@@ -63,21 +63,22 @@ export class HousingManager {
     }
   }
 
-  /** Save a house to the server and add to local cache. */
-  async saveHouse(house: HouseData): Promise<boolean> {
+  /** Create a house on the server (ID assigned by server) and add to local cache. */
+  async saveHouse(house: HouseData): Promise<HouseData | null> {
     try {
-      const resp = await fetch(`${this.apiUrl}/api/housing/${house.id}`, {
-        method: 'PUT',
+      const resp = await fetch(`${this.apiUrl}/api/housing`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(house),
       })
-      if (!resp.ok) return false
+      if (!resp.ok) return null
 
-      this.addToCache(house)
+      const saved: HouseData = await resp.json()
+      this.addToCache(saved)
       this.notifyChanged()
-      return true
+      return saved
     } catch {
-      return false
+      return null
     }
   }
 

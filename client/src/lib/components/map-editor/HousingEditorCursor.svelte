@@ -224,34 +224,39 @@
     }
   }
 
-  function placeHouse() {
+  async function placeHouse() {
     if (!currentTemplate || !previewPos || !heightManager) return
 
-    const centerX = previewPos.x + currentTemplate.sizeX / 2
-    const centerZ = previewPos.z + currentTemplate.sizeZ / 2
+    const pos = { ...previewPos }
+    const template = currentTemplate
+    const centerX = pos.x + template.sizeX / 2
+    const centerZ = pos.z + template.sizeZ / 2
     const targetHeight = heightManager.getHeightAtWorldPosition(centerX, centerZ)
 
+    const houseData = templateToHouseData(template, pos.x, targetHeight, pos.z)
+
+    // Save to server first — only modify terrain/grass on success
+    const saved = await housingManager.saveHouse(houseData)
+    if (!saved) return
+
     heightManager.flattenArea(
-      previewPos.x,
-      previewPos.z,
-      previewPos.x + currentTemplate.sizeX,
-      previewPos.z + currentTemplate.sizeZ,
+      pos.x,
+      pos.z,
+      pos.x + template.sizeX,
+      pos.z + template.sizeZ,
       targetHeight,
       BLEND_RADIUS
     )
-
-    // Save flattened terrain immediately (don't rely on 1s debounce)
     heightManager.saveAllDirty()
 
-    // Remove grass under the house footprint (+ 1m margin to prevent wall clipping)
+    // Remove grass under the house footprint (+ 1m margin)
     if (grassDataManager) {
       const GRASS_MARGIN = 1
-      const rectMinX = previewPos.x - GRASS_MARGIN
-      const rectMinZ = previewPos.z - GRASS_MARGIN
-      const rectMaxX = previewPos.x + currentTemplate.sizeX + GRASS_MARGIN
-      const rectMaxZ = previewPos.z + currentTemplate.sizeZ + GRASS_MARGIN
+      const rectMinX = pos.x - GRASS_MARGIN
+      const rectMinZ = pos.z - GRASS_MARGIN
+      const rectMaxX = pos.x + template.sizeX + GRASS_MARGIN
+      const rectMaxZ = pos.z + template.sizeZ + GRASS_MARGIN
 
-      // Find affected tiles
       const tileMinX = Math.floor(
         (rectMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
       )
@@ -280,15 +285,6 @@
         }
       }
     }
-
-    const houseData = templateToHouseData(
-      currentTemplate,
-      previewPos.x,
-      targetHeight,
-      previewPos.z
-    )
-
-    housingManager.saveHouse(houseData)
   }
 
   function templateToHouseData(
@@ -318,7 +314,7 @@
     }
 
     return {
-      id: crypto.randomUUID(),
+      id: '',
       ownerId: 'local',
       origin: { x: originX, y: originY, z: originZ },
       rooms: [room],
