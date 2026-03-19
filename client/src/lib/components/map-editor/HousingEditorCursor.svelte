@@ -11,7 +11,9 @@
     floorTextureIndex,
     roofTextureIndex,
     housingDeleteMode,
+    wallVariants,
     type RoomTemplate,
+    type WallVariants,
   } from '../../stores/housingEditorStore'
   import type { HouseData, RoomData } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
@@ -51,6 +53,12 @@
   let currentTemplate = $state<RoomTemplate | null>(null)
   let currentRotation = $state(0)
   let deleteMode = $state(false)
+  let currentWallVariants = $state<WallVariants>({
+    north: 'solid',
+    south: 'door',
+    east: 'solid',
+    west: 'solid',
+  })
   let previewPos = $state<{ x: number; z: number } | null>(null)
   let previewMesh: THREE.Group | null = null
 
@@ -59,7 +67,7 @@
   const unsubs = [
     selectedRoomTemplate.subscribe((v) => {
       currentTemplate = v
-      rebuildPreview()
+      scheduleRebuildPreview()
     }),
     placementRotation.subscribe((v) => {
       currentRotation = v
@@ -68,6 +76,10 @@
     housingDeleteMode.subscribe((v) => {
       deleteMode = v
       canvas.style.cursor = v ? 'crosshair' : ''
+    }),
+    wallVariants.subscribe((v) => {
+      currentWallVariants = v
+      scheduleRebuildPreview()
     }),
   ]
 
@@ -86,6 +98,16 @@
     raycaster.setFromCamera(mouseNDC, camera)
     const intersects = raycaster.intersectObjects(meshes, false)
     return intersects.length > 0 ? intersects[0] : null
+  }
+
+  let rebuildScheduled = false
+  function scheduleRebuildPreview() {
+    if (rebuildScheduled) return
+    rebuildScheduled = true
+    queueMicrotask(() => {
+      rebuildScheduled = false
+      rebuildPreview()
+    })
   }
 
   function rebuildPreview() {
@@ -269,6 +291,7 @@
     const floorTex = get(floorTextureIndex)
     const roofTex = get(roofTextureIndex)
 
+    const wv = currentWallVariants
     const room: RoomData = {
       localX: 0,
       localZ: 0,
@@ -278,10 +301,10 @@
       floorTexture: floorTex,
       roofTexture: roofTex,
       wallHeight: 3,
-      wallNorth: { variant: template.wallNorthVariant, texture: wallTex },
-      wallSouth: { variant: template.wallSouthVariant, texture: wallTex },
-      wallEast: { variant: template.wallEastVariant, texture: wallTex },
-      wallWest: { variant: template.wallWestVariant, texture: wallTex },
+      wallNorth: { variant: wv.north, texture: wallTex },
+      wallSouth: { variant: wv.south, texture: wallTex },
+      wallEast: { variant: wv.east, texture: wallTex },
+      wallWest: { variant: wv.west, texture: wallTex },
     }
 
     return {
