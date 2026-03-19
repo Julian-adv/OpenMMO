@@ -65,9 +65,26 @@ export class HousingManager {
 
   /** Create a house on the server (ID assigned by server) and add to local cache. */
   async saveHouse(house: HouseData): Promise<HouseData | null> {
+    return this.sendHouse('POST', `${this.apiUrl}/api/housing`, house)
+  }
+
+  /** Update an existing house on the server (e.g. add room). */
+  async updateHouse(house: HouseData): Promise<HouseData | null> {
+    return this.sendHouse(
+      'PUT',
+      `${this.apiUrl}/api/housing/${house.id}`,
+      house
+    )
+  }
+
+  private async sendHouse(
+    method: 'POST' | 'PUT',
+    url: string,
+    house: HouseData
+  ): Promise<HouseData | null> {
     try {
-      const resp = await fetch(`${this.apiUrl}/api/housing`, {
-        method: 'POST',
+      const resp = await fetch(url, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(house),
       })
@@ -135,6 +152,36 @@ export class HousingManager {
           z <= rz + room.sizeZ &&
           y >= ry - 1 &&
           y <= ry + room.wallHeight + 1
+        ) {
+          return house
+        }
+      }
+    }
+    return null
+  }
+
+  /** Find an existing house that shares an edge with the given room footprint. */
+  findAdjacentHouse(
+    originX: number,
+    originZ: number,
+    sizeX: number,
+    sizeZ: number
+  ): HouseData | null {
+    for (const house of this.housesById.values()) {
+      for (const room of house.rooms) {
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+        // Rooms share an edge if they overlap on one axis and touch exactly on the other
+        const overlapX = originX < rx + room.sizeX && originX + sizeX > rx
+        const overlapZ = originZ < rz + room.sizeZ && originZ + sizeZ > rz
+        const touchN = originZ === rz + room.sizeZ
+        const touchS = originZ + sizeZ === rz
+        const touchE = originX === rx + room.sizeX
+        const touchW = originX + sizeX === rx
+
+        if (
+          (overlapX && (touchN || touchS)) ||
+          (overlapZ && (touchE || touchW))
         ) {
           return house
         }

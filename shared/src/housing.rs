@@ -31,10 +31,14 @@ pub struct RoomData {
     pub floor_texture: u8,
     pub roof_texture: u8,
     pub wall_height: f32,
-    pub wall_north: WallConfig,
-    pub wall_south: WallConfig,
-    pub wall_east: WallConfig,
-    pub wall_west: WallConfig,
+    /// 1m segments: north wall (length = size_x)
+    pub wall_north: Vec<WallConfig>,
+    /// 1m segments: south wall (length = size_x)
+    pub wall_south: Vec<WallConfig>,
+    /// 1m segments: east wall (length = size_z)
+    pub wall_east: Vec<WallConfig>,
+    /// 1m segments: west wall (length = size_z)
+    pub wall_west: Vec<WallConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

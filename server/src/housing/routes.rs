@@ -16,7 +16,7 @@ pub fn housing_router(housing_io: Arc<HousingIO>) -> Router {
         .route("/api/housing", post(create_house))
         .route(
             "/api/housing/{house_id}",
-            get(get_house).delete(delete_house),
+            get(get_house).put(update_house).delete(delete_house),
         )
         .with_state(housing_io)
 }
@@ -67,6 +67,29 @@ async fn create_house(
         )
     })?;
     Ok((StatusCode::CREATED, Json(house)))
+}
+
+async fn update_house(
+    Path(house_id): Path<String>,
+    State(housing): State<Arc<HousingIO>>,
+    Json(mut house): Json<HouseData>,
+) -> Result<Json<HouseData>, (StatusCode, String)> {
+    house.id = house_id;
+
+    let neighbors = load_neighbors(&housing, &house).await?;
+
+    if let Err(msg) = validate_house(&house, &neighbors) {
+        return Err((StatusCode::BAD_REQUEST, msg));
+    }
+
+    housing.write_house(&house).await.map_err(|e| {
+        error!("Failed to write house {}: {}", house.id, e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+    Ok(Json(house))
 }
 
 async fn load_neighbors(

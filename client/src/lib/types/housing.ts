@@ -14,10 +14,14 @@ export interface RoomData {
   floorTexture: number
   roofTexture: number
   wallHeight: number
-  wallNorth: WallConfig
-  wallSouth: WallConfig
-  wallEast: WallConfig
-  wallWest: WallConfig
+  /** 1m segments: north wall (length = sizeX) */
+  wallNorth: WallConfig[]
+  /** 1m segments: south wall (length = sizeX) */
+  wallSouth: WallConfig[]
+  /** 1m segments: east wall (length = sizeZ) */
+  wallEast: WallConfig[]
+  /** 1m segments: west wall (length = sizeZ) */
+  wallWest: WallConfig[]
 }
 
 export interface HouseData {
