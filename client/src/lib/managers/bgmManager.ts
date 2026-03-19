@@ -55,6 +55,7 @@ function applyVolume(el: HTMLAudioElement | null) {
 }
 
 let isFadingOut = false
+let battleAudio: HTMLAudioElement | null = null
 
 bgmVolume.subscribe((v) => {
   clearTimeout(volumeSaveTimer)
@@ -133,7 +134,6 @@ export function startBgm() {
 
 // --- Battle music ---
 
-let battleAudio: HTMLAudioElement | null = null
 let battleLingerTimer: ReturnType<typeof setTimeout> | undefined
 let battleFadeTimer: ReturnType<typeof setInterval> | undefined
 let battleQuietTimer: ReturnType<typeof setTimeout> | undefined

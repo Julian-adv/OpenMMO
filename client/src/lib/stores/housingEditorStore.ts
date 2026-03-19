@@ -11,6 +11,15 @@ export interface RoomTemplate {
   wallWestVariant: WallVariant
 }
 
+export interface WallVariants {
+  north: WallVariant
+  south: WallVariant
+  east: WallVariant
+  west: WallVariant
+}
+
+export const WALL_VARIANT_OPTIONS: WallVariant[] = ['solid', 'door', 'window']
+
 export const ROOM_TEMPLATES: RoomTemplate[] = [
   {
     label: 'Small (3×3)',
@@ -60,6 +69,26 @@ export const wallTextureIndex = writable<number>(0)
 export const floorTextureIndex = writable<number>(0)
 // Roof texture index (0-3)
 export const roofTextureIndex = writable<number>(0)
+
+// Per-wall variant selection (initialized from template, user can override)
+export const wallVariants = writable<WallVariants>({
+  north: 'solid',
+  south: 'door',
+  east: 'solid',
+  west: 'solid',
+})
+
+// Sync wall variants when a new template is selected
+selectedRoomTemplate.subscribe((t) => {
+  if (t) {
+    wallVariants.set({
+      north: t.wallNorthVariant,
+      south: t.wallSouthVariant,
+      east: t.wallEastVariant,
+      west: t.wallWestVariant,
+    })
+  }
+})
 
 // Delete mode: when true, clicking a house deletes it
 export const housingDeleteMode = writable<boolean>(false)

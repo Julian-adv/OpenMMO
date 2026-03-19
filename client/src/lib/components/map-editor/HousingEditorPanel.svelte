@@ -9,8 +9,12 @@
     roofTextureIndex,
     placementPreview,
     housingDeleteMode,
+    wallVariants,
+    WALL_VARIANT_OPTIONS,
     type RoomTemplate,
+    type WallVariants,
   } from '../../stores/housingEditorStore'
+  import type { WallVariant } from '../../types/housing'
   import {
     WALL_COLORS as WALL_HEX,
     FLOOR_COLORS as FLOOR_HEX,
@@ -29,6 +33,12 @@
   let selected = $state<RoomTemplate | null>(null)
   let preview = $state<{ x: number; z: number } | null>(null)
   let deleteMode = $state(false)
+  let variants = $state<WallVariants>({
+    north: 'solid',
+    south: 'door',
+    east: 'solid',
+    west: 'solid',
+  })
 
   const unsubs = [
     placementRotation.subscribe((v) => (rotation = v)),
@@ -38,6 +48,7 @@
     selectedRoomTemplate.subscribe((v) => (selected = v)),
     placementPreview.subscribe((v) => (preview = v)),
     housingDeleteMode.subscribe((v) => (deleteMode = v)),
+    wallVariants.subscribe((v) => (variants = v)),
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
@@ -48,6 +59,19 @@
 
   function rotate() {
     placementRotation.set((rotation + 90) % 360)
+  }
+
+  type WallDir = keyof WallVariants
+
+  const VARIANT_LABELS: Record<string, string> = {
+    solid: '⬜',
+    door: '🚪',
+    window: '⊞',
+  }
+
+  function setWallVariant(dir: WallDir, variant: WallVariant) {
+    if (variants[dir] === variant) return
+    wallVariants.update((v) => ({ ...v, [dir]: variant }))
   }
 
   function toggleDeleteMode() {
@@ -85,7 +109,29 @@
     <div class="section-title">Rotate <span class="hint">(R)</span></div>
     <button class="rotate-btn" onclick={rotate}>{rotation}°</button>
 
-    <div class="section-title">Wall</div>
+    {#snippet wallButtons(dir: WallDir, label: string)}
+      {#each WALL_VARIANT_OPTIONS as variant (variant)}
+        <button
+          class="variant-btn"
+          class:active={variants[dir] === variant}
+          title="{label} → {variant}"
+          onclick={() => setWallVariant(dir, variant)}
+        >{VARIANT_LABELS[variant]}</button>
+      {/each}
+    {/snippet}
+
+    <div class="section-title">Walls</div>
+    <div class="wall-cross">
+      <div class="wall-cross-top">{@render wallButtons('north', 'N')}</div>
+      <div class="wall-cross-mid">
+        <div class="wall-cross-side">{@render wallButtons('west', 'W')}</div>
+        <span class="wall-cross-center">+</span>
+        <div class="wall-cross-side">{@render wallButtons('east', 'E')}</div>
+      </div>
+      <div class="wall-cross-bot">{@render wallButtons('south', 'S')}</div>
+    </div>
+
+    <div class="section-title">Color</div>
     <div class="color-row">
       {#each WALL_COLORS as color, i (i)}
         <button
@@ -172,7 +218,7 @@
     font-family: 'Courier New', monospace;
     font-size: 12px;
     color: #ccc;
-    min-width: 180px;
+    min-width: 240px;
   }
 
   .section-title {
@@ -248,6 +294,63 @@
 
   .rotate-btn:hover {
     background: rgba(255, 255, 255, 0.1);
+  }
+
+  .wall-cross {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .wall-cross-top,
+  .wall-cross-bot {
+    display: flex;
+    gap: 2px;
+  }
+
+  .wall-cross-mid {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .wall-cross-side {
+    display: flex;
+    gap: 2px;
+  }
+
+  .wall-cross-center {
+    font-size: 14px;
+    color: #555;
+    width: 16px;
+    text-align: center;
+  }
+
+  .variant-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #aaa;
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    line-height: 26px;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .variant-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ddd;
+  }
+
+  .variant-btn.active {
+    background: rgba(123, 198, 123, 0.2);
+    border-color: rgba(123, 198, 123, 0.5);
+    color: #7bc67b;
   }
 
   .color-row {
