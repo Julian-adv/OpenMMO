@@ -1,8 +1,6 @@
 import { get, writable } from 'svelte/store'
 
 const BGM_FILES = [
-  'Blood and Bronze.mp3',
-  'Blood and Bronze (1).mp3',
   'Lonely Steppe of Ages.mp3',
   'Lonely Steppe of Ages (1).mp3',
   'Untitled (2).mp3',
@@ -13,6 +11,13 @@ const BGM_FILES = [
   'Wanderer of the Old Fields.mp3',
   'Wanderer of the Old Fields (1).mp3',
 ]
+
+const BATTLE_BGM_FILES = ['Blood and Bronze.mp3', 'Blood and Bronze (1).mp3']
+const BATTLE_LINGER_MS = 5000
+const BATTLE_FADE_OUT_MS = 3000
+const BATTLE_FADE_STEP_MS = 50
+const BATTLE_QUIET_MIN_SEC = 5
+const BATTLE_QUIET_MAX_SEC = 20
 
 const MIN_QUIET_SEC = 0
 const MAX_QUIET_SEC = 60
@@ -41,9 +46,15 @@ let playlist: string[] = []
 let playlistIndex = 0
 let volumeSaveTimer: ReturnType<typeof setTimeout> | undefined
 
-function applyVolume() {
-  if (audio) audio.volume = get(bgmMuted) ? 0 : get(bgmVolume)
+function getTargetVolume(): number {
+  return get(bgmMuted) ? 0 : get(bgmVolume)
 }
+
+function applyVolume(el: HTMLAudioElement | null) {
+  if (el) el.volume = getTargetVolume()
+}
+
+let isFadingOut = false
 
 bgmVolume.subscribe((v) => {
   clearTimeout(volumeSaveTimer)
@@ -51,12 +62,14 @@ bgmVolume.subscribe((v) => {
     () => localStorage.setItem(STORAGE_KEY_VOLUME, String(v)),
     300
   )
-  applyVolume()
+  applyVolume(audio)
+  if (!isFadingOut) applyVolume(battleAudio)
 })
 
 bgmMuted.subscribe((m) => {
   localStorage.setItem(STORAGE_KEY_MUTED, String(m))
-  applyVolume()
+  applyVolume(audio)
+  if (!isFadingOut) applyVolume(battleAudio)
 })
 
 function shufflePlaylist() {
@@ -72,6 +85,7 @@ let quietTimer: ReturnType<typeof setTimeout> | undefined
 let isFirstTrack = true
 
 function playNext() {
+  if (isBattlePlaying) return
   if (!isFirstTrack) {
     const delaySec =
       MIN_QUIET_SEC + Math.random() * (MAX_QUIET_SEC - MIN_QUIET_SEC)
@@ -85,6 +99,7 @@ function playNext() {
 }
 
 function playTrack() {
+  if (isBattlePlaying) return
   if (playlistIndex >= playlist.length) {
     shufflePlaylist()
   }
@@ -101,7 +116,7 @@ function playTrack() {
     })
   }
 
-  applyVolume()
+  applyVolume(audio)
   audio.dataset.trackName = trackName
   audio.src = `/bgm/${file}`
   audio.play().catch(() => {})
@@ -114,4 +129,119 @@ export function startBgm() {
   started = true
   shufflePlaylist()
   playNext()
+}
+
+// --- Battle music ---
+
+let battleAudio: HTMLAudioElement | null = null
+let battleLingerTimer: ReturnType<typeof setTimeout> | undefined
+let battleFadeTimer: ReturnType<typeof setInterval> | undefined
+let battleQuietTimer: ReturnType<typeof setTimeout> | undefined
+let isBattlePlaying = false
+
+export function startBattleMusic() {
+  if (isBattlePlaying) return
+  isBattlePlaying = true
+  isFadingOut = false
+
+  // Pause normal BGM
+  clearTimeout(quietTimer)
+  if (audio) {
+    audio.pause()
+  }
+  currentBgmTrack.set('')
+
+  // Clear any pending linger/fade/quiet from a previous battle
+  clearTimeout(battleLingerTimer)
+  clearInterval(battleFadeTimer)
+  clearTimeout(battleQuietTimer)
+
+  const file =
+    BATTLE_BGM_FILES[Math.floor(Math.random() * BATTLE_BGM_FILES.length)]
+  const trackName = file.replace('.mp3', '')
+
+  if (!battleAudio) {
+    battleAudio = new Audio()
+    battleAudio.loop = true
+    battleAudio.addEventListener('playing', () => {
+      currentBgmTrack.set(battleAudio!.dataset.trackName ?? '')
+    })
+  }
+
+  applyVolume(battleAudio)
+  battleAudio.dataset.trackName = trackName
+  battleAudio.currentTime = 0
+  battleAudio.src = `/bgm/${file}`
+  battleAudio.play().catch(() => {})
+}
+
+export function stopBattleMusic() {
+  if (!isBattlePlaying) return
+  isBattlePlaying = false
+
+  if (!battleAudio) {
+    resumeNormalBgm()
+    return
+  }
+
+  // Wait a bit before fading out
+  clearTimeout(battleLingerTimer)
+  battleLingerTimer = setTimeout(fadeOutBattleMusic, BATTLE_LINGER_MS)
+}
+
+function fadeOutBattleMusic() {
+  if (isBattlePlaying || !battleAudio) return
+
+  const startVol = battleAudio.volume
+  if (startVol === 0) {
+    battleAudio.pause()
+    currentBgmTrack.set('')
+    scheduleNormalBgmResume()
+    return
+  }
+
+  isFadingOut = true
+  const steps = BATTLE_FADE_OUT_MS / BATTLE_FADE_STEP_MS
+  const volStep = startVol / steps
+  let remaining = steps
+
+  clearInterval(battleFadeTimer)
+  battleFadeTimer = setInterval(() => {
+    remaining--
+    if (remaining <= 0 || !battleAudio) {
+      clearInterval(battleFadeTimer)
+      isFadingOut = false
+      if (battleAudio) {
+        battleAudio.pause()
+        battleAudio.volume = startVol
+      }
+      currentBgmTrack.set('')
+      scheduleNormalBgmResume()
+      return
+    }
+    battleAudio!.volume = Math.max(0, battleAudio!.volume - volStep)
+  }, BATTLE_FADE_STEP_MS)
+}
+
+function scheduleNormalBgmResume() {
+  const delaySec =
+    BATTLE_QUIET_MIN_SEC +
+    Math.random() * (BATTLE_QUIET_MAX_SEC - BATTLE_QUIET_MIN_SEC)
+  clearTimeout(battleQuietTimer)
+  battleQuietTimer = setTimeout(resumeNormalBgm, delaySec * 1000)
+}
+
+function resumeNormalBgm() {
+  if (isBattlePlaying) return
+  if (!audio) {
+    playTrack()
+    return
+  }
+  if (audio.ended || !audio.src) {
+    playTrack()
+  } else {
+    applyVolume(audio)
+    audio.play().catch(() => {})
+    currentBgmTrack.set(audio.dataset.trackName ?? '')
+  }
 }
