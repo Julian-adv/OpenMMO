@@ -1,4 +1,5 @@
 import type { Position } from '../utils/movementUtils'
+import { startBattleMusic, stopBattleMusic } from './bgmManager'
 
 export interface MonsterInfo {
   state?: string
@@ -32,6 +33,7 @@ class CombatController {
   }
 
   beginCombat(monsterId: string, inRange: boolean) {
+    const wasInCombat = this._targetMonsterId !== null
     this._targetMonsterId = monsterId
     this._attackTimer = 0
     if (inRange) {
@@ -40,12 +42,15 @@ class CombatController {
       this._attackCounter = 0
       this._lastChaseUpdate = Date.now()
     }
+    if (!wasInCombat) startBattleMusic()
   }
 
   cancelCombat() {
+    const wasInCombat = this._targetMonsterId !== null
     this._targetMonsterId = null
     this._attackCounter = 0
     this._attackTimer = 0
+    if (wasInCombat) stopBattleMusic()
   }
 
   update(
@@ -64,16 +69,13 @@ class CombatController {
 
     // Monster data missing or dead (and not finishing attack)
     if (!monsterInfo || (monsterInfo.state === 'dead' && !isFinishingAttack)) {
-      this._targetMonsterId = null
-      this._attackCounter = 0
-      this._attackTimer = 0
+      this.cancelCombat()
       return { action: 'idle' }
     }
 
     // Monster mesh not found
     if (!monsterObjPos) {
-      this._targetMonsterId = null
-      this._attackCounter = 0
+      this.cancelCombat()
       return { action: 'idle' }
     }
 
@@ -105,8 +107,7 @@ class CombatController {
 
     // COMBAT phase (in range)
     if (dist > 2.5 && !isFinishingAttack) {
-      this._targetMonsterId = null
-      this._attackCounter = 0
+      this.cancelCombat()
       return { action: 'idle' }
     }
 
@@ -127,9 +128,7 @@ class CombatController {
           rotation,
         }
       } else {
-        this._targetMonsterId = null
-        this._attackCounter = 0
-        this._attackTimer = 0
+        this.cancelCombat()
         return { action: 'idle' }
       }
     }
