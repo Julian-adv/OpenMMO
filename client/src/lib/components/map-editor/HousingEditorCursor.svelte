@@ -41,12 +41,19 @@
   const previewGroup = new THREE.Group()
   previewGroup.name = 'housingPreview'
 
-  // Single transparent material for preview (reused, no per-rebuild clones)
-  const previewMat = new THREE.MeshBasicMaterial({
-    vertexColors: true,
+  // Preview materials: green = valid, red = invalid
+  const previewMatValid = new THREE.MeshBasicMaterial({
+    color: 0x44cc44,
     side: THREE.DoubleSide,
     transparent: true,
-    opacity: 0.5,
+    opacity: 0.4,
+    depthWrite: false,
+  })
+  const previewMatInvalid = new THREE.MeshBasicMaterial({
+    color: 0xcc4444,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.4,
     depthWrite: false,
   })
 
@@ -61,8 +68,19 @@
   })
   let previewPos = $state<{ x: number; z: number } | null>(null)
   let previewMesh: THREE.Group | null = null
+  let placementValid = false
 
   const BLEND_RADIUS = 4
+
+  let rebuildScheduled = false
+  function scheduleRebuildPreview() {
+    if (rebuildScheduled) return
+    rebuildScheduled = true
+    queueMicrotask(() => {
+      rebuildScheduled = false
+      rebuildPreview()
+    })
+  }
 
   const unsubs = [
     selectedRoomTemplate.subscribe((v) => {
@@ -100,16 +118,6 @@
     return intersects.length > 0 ? intersects[0] : null
   }
 
-  let rebuildScheduled = false
-  function scheduleRebuildPreview() {
-    if (rebuildScheduled) return
-    rebuildScheduled = true
-    queueMicrotask(() => {
-      rebuildScheduled = false
-      rebuildPreview()
-    })
-  }
-
   function rebuildPreview() {
     if (previewMesh) {
       previewGroup.remove(previewMesh)
@@ -122,10 +130,10 @@
     const houseData = templateToHouseData(currentTemplate, 0, 0, 0)
     const result = buildHouseGroup(houseData)
 
-    // Replace shared material with transparent preview material
+    // Apply preview material
     result.houseGroup.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
-        obj.material = previewMat
+        obj.material = previewMatValid
       }
     })
 
@@ -138,6 +146,22 @@
     if (!previewMesh || !previewPos) return
     previewMesh.position.set(previewPos.x, previewMesh.position.y, previewPos.z)
     previewMesh.rotation.y = (currentRotation * Math.PI) / 180
+  }
+
+  function checkPlacementValid(): boolean {
+    if (!currentTemplate || !previewPos) return false
+    const rotated = currentRotation === 90 || currentRotation === 270
+    const sx = rotated ? currentTemplate.sizeZ : currentTemplate.sizeX
+    const sz = rotated ? currentTemplate.sizeX : currentTemplate.sizeZ
+    return !housingManager.checkOverlap(previewPos.x, previewPos.z, sx, sz)
+  }
+
+  function setPreviewMaterial(valid: boolean) {
+    if (!previewMesh) return
+    const mat = valid ? previewMatValid : previewMatInvalid
+    previewMesh.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) obj.material = mat
+    })
   }
 
   function handleMouseMove(event: MouseEvent) {
@@ -158,6 +182,9 @@
       previewMesh.visible = true
       previewMesh.position.set(x, hit.point.y, z)
       previewMesh.rotation.y = (currentRotation * Math.PI) / 180
+      const wasValid = placementValid
+      placementValid = checkPlacementValid()
+      if (placementValid !== wasValid) setPreviewMaterial(placementValid)
     } else if (previewMesh && deleteMode) {
       previewMesh.visible = false
     }
@@ -172,7 +199,7 @@
       return
     }
 
-    if (!currentTemplate || !previewPos) return
+    if (!currentTemplate || !previewPos || !placementValid) return
     placeHouse()
   }
 
@@ -186,31 +213,14 @@
     const hit = raycastTerrain(event)
     if (!hit) return
 
-    const clickPoint = hit.point
-    // Find which house contains this point
-    const allHouses = housingManager.getAllHouses()
-    for (const house of allHouses) {
-      for (const room of house.rooms) {
-        const minX = house.origin.x + room.localX
-        const minZ = house.origin.z + room.localZ
-        const maxX = minX + room.sizeX
-        const maxZ = minZ + room.sizeZ
-        const minY = house.origin.y
-        const maxY = minY + room.wallHeight
-
-        if (
-          clickPoint.x >= minX &&
-          clickPoint.x <= maxX &&
-          clickPoint.z >= minZ &&
-          clickPoint.z <= maxZ &&
-          clickPoint.y >= minY - 1 &&
-          clickPoint.y <= maxY + 1
-        ) {
-          housingManager.deleteHouse(house.id)
-          housingDeleteMode.set(false)
-          return
-        }
-      }
+    const house = housingManager.findHouseAtPoint(
+      hit.point.x,
+      hit.point.y,
+      hit.point.z
+    )
+    if (house) {
+      housingManager.deleteHouse(house.id)
+      housingDeleteMode.set(false)
     }
   }
 
@@ -326,7 +336,8 @@
     window.removeEventListener('keydown', handleKeyDown)
     canvas.style.cursor = ''
     placementPreview.set(null)
-    previewMat.dispose()
+    previewMatValid.dispose()
+    previewMatInvalid.dispose()
 
     if (previewMesh) {
       previewGroup.remove(previewMesh)

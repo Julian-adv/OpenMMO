@@ -120,6 +120,52 @@ export class HousingManager {
     return Array.from(this.housesById.values())
   }
 
+  /** Find the house whose room contains a world point, or null. */
+  findHouseAtPoint(x: number, y: number, z: number): HouseData | null {
+    for (const house of this.housesById.values()) {
+      for (const room of house.rooms) {
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+        const ry = house.origin.y
+        if (
+          x >= rx &&
+          x <= rx + room.sizeX &&
+          z >= rz &&
+          z <= rz + room.sizeZ &&
+          y >= ry - 1 &&
+          y <= ry + room.wallHeight + 1
+        ) {
+          return house
+        }
+      }
+    }
+    return null
+  }
+
+  /** Check if a room footprint overlaps any existing house. */
+  checkOverlap(
+    originX: number,
+    originZ: number,
+    sizeX: number,
+    sizeZ: number
+  ): boolean {
+    for (const house of this.housesById.values()) {
+      for (const room of house.rooms) {
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+        if (
+          originX < rx + room.sizeX &&
+          originX + sizeX > rx &&
+          originZ < rz + room.sizeZ &&
+          originZ + sizeZ > rz
+        ) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+
   private addToCache(house: HouseData) {
     this.housesById.set(house.id, house)
     const { x: cx, z: cz } = getTerrainChunkFromPosition(
