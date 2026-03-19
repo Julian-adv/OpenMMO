@@ -1,16 +1,17 @@
 import { get, writable } from 'svelte/store'
 
 const BGM_FILES = [
-  'Untitled.mp3',
-  'Untitled (1).mp3',
+  'Blood and Bronze.mp3',
+  'Blood and Bronze (1).mp3',
+  'Lonely Steppe of Ages.mp3',
+  'Lonely Steppe of Ages (1).mp3',
   'Untitled (2).mp3',
-  'Untitled (3).mp3',
   'Untitled (4).mp3',
   'Untitled (5).mp3',
-  'Untitled (6).mp3',
   'Untitled (7).mp3',
-  'Untitled (8).mp3',
   'Untitled (9).mp3',
+  'Wanderer of the Old Fields.mp3',
+  'Wanderer of the Old Fields (1).mp3',
 ]
 
 const MIN_QUIET_SEC = 0

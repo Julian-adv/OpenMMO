@@ -10,6 +10,7 @@
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
+    housingDeleteMode,
     type RoomTemplate,
   } from '../../stores/housingEditorStore'
   import type { HouseData, RoomData } from '../../types/housing'
@@ -44,6 +45,7 @@
 
   let currentTemplate = $state<RoomTemplate | null>(null)
   let currentRotation = $state(0)
+  let deleteMode = $state(false)
   let previewPos = $state<{ x: number; z: number } | null>(null)
   let previewMesh: THREE.Group | null = null
 
@@ -57,6 +59,10 @@
     placementRotation.subscribe((v) => {
       currentRotation = v
       updatePreviewTransform()
+    }),
+    housingDeleteMode.subscribe((v) => {
+      deleteMode = v
+      canvas.style.cursor = v ? 'crosshair' : ''
     }),
   ]
 
@@ -109,7 +115,7 @@
 
   function handleMouseMove(event: MouseEvent) {
     const hit = raycastTerrain(event)
-    if (!hit || !currentTemplate) {
+    if (!hit || (!currentTemplate && !deleteMode)) {
       placementPreview.set(null)
       previewPos = null
       if (previewMesh) previewMesh.visible = false
@@ -121,23 +127,62 @@
     previewPos = { x, z }
     placementPreview.set({ x, z })
 
-    if (previewMesh) {
+    if (previewMesh && !deleteMode) {
       previewMesh.visible = true
       previewMesh.position.set(x, hit.point.y, z)
       previewMesh.rotation.y = (currentRotation * Math.PI) / 180
+    } else if (previewMesh && deleteMode) {
+      previewMesh.visible = false
     }
   }
 
   function handleMouseDown(event: MouseEvent) {
     if (event.button !== 0) return
-    if (!currentTemplate || !previewPos) return
     event.preventDefault()
+
+    if (deleteMode) {
+      deleteHouseAtCursor(event)
+      return
+    }
+
+    if (!currentTemplate || !previewPos) return
     placeHouse()
   }
 
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === 'r' || event.key === 'R') {
       placementRotation.set((currentRotation + 90) % 360)
+    }
+  }
+
+  function deleteHouseAtCursor(event: MouseEvent) {
+    const hit = raycastTerrain(event)
+    if (!hit) return
+
+    const clickPoint = hit.point
+    // Find which house contains this point
+    const allHouses = housingManager.getAllHouses()
+    for (const house of allHouses) {
+      for (const room of house.rooms) {
+        const minX = house.origin.x + room.localX
+        const minZ = house.origin.z + room.localZ
+        const maxX = minX + room.sizeX
+        const maxZ = minZ + room.sizeZ
+        const minY = house.origin.y
+        const maxY = minY + room.wallHeight
+
+        if (
+          clickPoint.x >= minX &&
+          clickPoint.x <= maxX &&
+          clickPoint.z >= minZ &&
+          clickPoint.z <= maxZ &&
+          clickPoint.y >= minY - 1 &&
+          clickPoint.y <= maxY + 1
+        ) {
+          housingManager.deleteHouse(house.id)
+          return
+        }
+      }
     }
   }
 
@@ -156,6 +201,9 @@
       targetHeight,
       BLEND_RADIUS
     )
+
+    // Save flattened terrain immediately (don't rely on 1s debounce)
+    heightManager.saveAllDirty()
 
     const houseData = templateToHouseData(
       currentTemplate,
@@ -209,6 +257,7 @@
     canvas.removeEventListener('mousemove', handleMouseMove)
     canvas.removeEventListener('mousedown', handleMouseDown)
     window.removeEventListener('keydown', handleKeyDown)
+    canvas.style.cursor = ''
     placementPreview.set(null)
     previewMat.dispose()
 

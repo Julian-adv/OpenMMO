@@ -60,3 +60,6 @@ export const wallTextureIndex = writable<number>(0)
 export const floorTextureIndex = writable<number>(0)
 // Roof texture index (0-3)
 export const roofTextureIndex = writable<number>(0)
+
+// Delete mode: when true, clicking a house deletes it
+export const housingDeleteMode = writable<boolean>(false)

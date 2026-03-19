@@ -132,20 +132,51 @@
 
 suno.com에서 다음의 프롬프트로 생성
 
-```
-game bgm something like "Stones" in Ultima series. Medieval instruments(lute, recorder, harp, strings, percussion, brass), melodic, easy melody to memory. Something like that makes you to want to go adventures, vast open plains, endless oceans, rugged mountain ranges. hopeful and grand.
-```
-
 - Untitled ~ Untitled (3)
 
-```
-A sweeping medieval fantasy RPG overworld theme inspired by "Stones" from the Ultima series. Begin with a gentle, memorable melody on solo lute or recorder over soft harp arpeggios — evoking a peaceful village at dawn. Gradually layer in strings and light percussion as the melody builds, conveying the feeling of stepping out into vast open plains and endless oceans. The music swells with noble brass and full orchestral strings as the adventurer crosses rugged mountain ranges in search of treasure. The mood is hopeful and grand — a sense of the heart expanding, chest opening wide with wonder and possibility. Melodic, singable theme that lingers in memory. Warm, nostalgic, yet epic. No vocals.
-```
+  ```
+  game bgm something like "Stones" in Ultima series. Medieval instruments(lute, recorder, harp, strings, percussion, brass), melodic, easy melody to memory. Something like that makes you to want to go adventures, vast open plains, endless oceans, rugged mountain ranges. hopeful and grand.
+  ```
 
 - Untitled (4) ~ Untitled (5)
 
-```
-game bgm something like "Stones" in Ultima series. Medieval instruments(lute, recorder, harp, strings, percussion), melodic, easy melody to memory. lonely, little bit sad, peaceful, calm
-```
+  ```
+  A sweeping medieval fantasy RPG overworld theme inspired by "Stones" from the Ultima series. Begin with a gentle, memorable melody on solo lute or recorder over soft harp arpeggios — evoking a peaceful village at dawn. Gradually layer in strings and light percussion as the melody builds, conveying the feeling of stepping out into vast open plains and endless oceans. The music swells with noble brass and full orchestral strings as the adventurer crosses rugged mountain ranges in search of treasure. The mood is hopeful and grand — a sense of the heart expanding, chest opening wide with wonder and possibility. Melodic, singable theme that lingers in memory. Warm, nostalgic, yet epic. No vocals.
+  ```
 
 - Untitled (6) ~ Untitled (9)
+
+  ```
+  game bgm something like "Stones" in Ultima series. Medieval instruments(lute, recorder, harp, strings, percussion), melodic, easy melody to memory. lonely, little bit sad, peaceful, calm
+  ```
+
+- Blood and Bronze
+  ```
+  High-intensity medieval battle score, 160+ BPM, Explosive percussive stabs into rolling war drums, aggressive lute ostinatos, piercing recorder lead, and bright harp arpeggios weaving countermelodies, Constant layered tension, tight looping eight-bar structure with evolving drum accents and heroic yet desperate harmonic shifts; mix is upfront and dry for maximum impact in combat, piercing, medieval, harp
+  ```
+  
+- Wanderer of the Old Fields
+  ```
+  Medieval fantasy field BGM, Ultima-style, minor key, melancholic and bittersweet, 
+fingerpicked lute, haunting recorder melody, harp shimmer, strings swelling with quiet grandeur, 
+soft percussion, lonely wanderer, vast open world, seamless loop
+  ```
+  
+- Lonely Steppe of Ages
+  ```
+  Medieval fantasy field BGM, Ultima-style, minor key, melancholic and bittersweet, 
+haunting memorable melody, quiet grandeur, lonely wanderer crossing a vast open world, 
+seamless loop, game BGM
+  ```
+
+
+- combat
+  ```
+  Urgent combat loop, relentless driving rhythm, medieval battle music, 
+  BPM 160+, explosive percussive intro hit, war drums pounding, 
+  aggressive lute strumming, piercing recorder melody, 
+  harp arpeggios cutting through chaos, layered tension build, 
+  no breathing room, every beat hits hard, 
+  short seamless loop, game BGM, Ultima-style medieval fantasy combat, 
+  heroic but desperate, life-or-death urgency, adrenaline surge
+  ```

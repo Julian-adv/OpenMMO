@@ -8,6 +8,7 @@
     floorTextureIndex,
     roofTextureIndex,
     placementPreview,
+    housingDeleteMode,
     type RoomTemplate,
   } from '../../stores/housingEditorStore'
   import {
@@ -27,6 +28,7 @@
   let roofTex = $state(0)
   let selected = $state<RoomTemplate | null>(null)
   let preview = $state<{ x: number; z: number } | null>(null)
+  let deleteMode = $state(false)
 
   const unsubs = [
     placementRotation.subscribe((v) => (rotation = v)),
@@ -35,15 +37,25 @@
     roofTextureIndex.subscribe((v) => (roofTex = v)),
     selectedRoomTemplate.subscribe((v) => (selected = v)),
     placementPreview.subscribe((v) => (preview = v)),
+    housingDeleteMode.subscribe((v) => (deleteMode = v)),
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
   function selectTemplate(t: RoomTemplate) {
+    housingDeleteMode.set(false)
     selectedRoomTemplate.set(t)
   }
 
   function rotate() {
     placementRotation.set((rotation + 90) % 360)
+  }
+
+  function toggleDeleteMode() {
+    const next = !deleteMode
+    housingDeleteMode.set(next)
+    if (next) {
+      selectedRoomTemplate.set(null)
+    }
   }
 </script>
 
@@ -80,6 +92,7 @@
           class="color-swatch"
           class:active={wallTex === i}
           style="background: {color}"
+          aria-label="Wall color {i + 1}"
           onclick={() => wallTextureIndex.set(i)}
         ></button>
       {/each}
@@ -92,6 +105,7 @@
           class="color-swatch"
           class:active={floorTex === i}
           style="background: {color}"
+          aria-label="Floor color {i + 1}"
           onclick={() => floorTextureIndex.set(i)}
         ></button>
       {/each}
@@ -104,10 +118,16 @@
           class="color-swatch"
           class:active={roofTex === i}
           style="background: {color}"
+          aria-label="Roof color {i + 1}"
           onclick={() => roofTextureIndex.set(i)}
         ></button>
       {/each}
     </div>
+
+    <div class="section-title">Tools</div>
+    <button class="delete-btn" class:active={deleteMode} onclick={toggleDeleteMode}>
+      Delete
+    </button>
   </div>
 </div>
 
@@ -250,5 +270,29 @@
 
   .color-swatch.active {
     border-color: #7bc67b;
+  }
+
+  .delete-btn {
+    width: 100%;
+    padding: 6px 12px;
+    border: 1px solid rgba(255, 80, 80, 0.3);
+    border-radius: 4px;
+    background: rgba(255, 80, 80, 0.1);
+    color: #cc7777;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .delete-btn:hover {
+    background: rgba(255, 80, 80, 0.2);
+    color: #ff6666;
+  }
+
+  .delete-btn.active {
+    background: rgba(255, 80, 80, 0.3);
+    border-color: rgba(255, 80, 80, 0.6);
+    color: #ff4444;
   }
 </style>
