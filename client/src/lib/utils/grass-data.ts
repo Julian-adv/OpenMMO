@@ -192,6 +192,34 @@ function computeFlowerInstances(
   return new Float32Array(instances)
 }
 
+const HEADER_BYTES = 12 // 3 × u32
+
+/** Pack three instance arrays into a single GrassPlacementData buffer. */
+function packGrassBuffer(
+  shortData: Float32Array,
+  tallData: Float32Array,
+  flowerData: Float32Array
+): GrassPlacementData {
+  const shortCount = shortData.length / FLOATS_PER_INSTANCE
+  const tallCount = tallData.length / FLOATS_PER_INSTANCE
+  const flowerCount = flowerData.length / FLOATS_PER_INSTANCE
+
+  const totalBytes =
+    HEADER_BYTES + (shortData.length + tallData.length + flowerData.length) * 4
+  const buffer = new ArrayBuffer(totalBytes)
+  const header = new Uint32Array(buffer, 0, 3)
+  header[0] = shortCount
+  header[1] = tallCount
+  header[2] = flowerCount
+
+  const body = new Float32Array(buffer, HEADER_BYTES)
+  body.set(shortData, 0)
+  body.set(tallData, shortData.length)
+  body.set(flowerData, shortData.length + tallData.length)
+
+  return { shortCount, tallCount, flowerCount, buffer }
+}
+
 /**
  * Compute grass placement data for a single tile.
  * Requires heightmap and splatmap data to be already loaded in the manager.
@@ -202,11 +230,13 @@ export function computeGrassPlacement(
   splatData: Uint8Array,
   hMgr: TerrainHeightManager
 ): GrassPlacementData {
-  const HEADER_BYTES = 12 // 3 × u32
   const heightmap = hMgr.getHeightmap(tileX, tileZ)
   if (!heightmap) {
-    const buffer = new ArrayBuffer(HEADER_BYTES)
-    return { shortCount: 0, tallCount: 0, flowerCount: 0, buffer }
+    return packGrassBuffer(
+      new Float32Array(0),
+      new Float32Array(0),
+      new Float32Array(0)
+    )
   }
 
   const shortInstances = computeInstances(
@@ -230,25 +260,7 @@ export function computeGrassPlacement(
     heightmap
   )
 
-  const shortCount = shortInstances.length / FLOATS_PER_INSTANCE
-  const tallCount = tallInstances.length / FLOATS_PER_INSTANCE
-  const flowerCount = flowerInstances.length / FLOATS_PER_INSTANCE
-
-  const totalBytes =
-    HEADER_BYTES +
-    (shortInstances.length + tallInstances.length + flowerInstances.length) * 4
-  const buffer = new ArrayBuffer(totalBytes)
-  const header = new Uint32Array(buffer, 0, 3)
-  header[0] = shortCount
-  header[1] = tallCount
-  header[2] = flowerCount
-
-  const data = new Float32Array(buffer, HEADER_BYTES)
-  data.set(shortInstances, 0)
-  data.set(tallInstances, shortInstances.length)
-  data.set(flowerInstances, shortInstances.length + tallInstances.length)
-
-  return { shortCount, tallCount, flowerCount, buffer }
+  return packGrassBuffer(shortInstances, tallInstances, flowerInstances)
 }
 
 /**
@@ -296,6 +308,63 @@ export async function generateAndSaveGrassData(
       batch.map((g) => grassMgr.saveGrassData(g.tileX, g.tileZ, g.data))
     )
   }
+}
+
+/**
+ * Remove grass instances that fall within a world-space rectangle.
+ * Returns null if no instances were removed (caller can skip saving).
+ */
+export function removeGrassInRect(
+  data: GrassPlacementData,
+  minX: number,
+  minZ: number,
+  maxX: number,
+  maxZ: number
+): GrassPlacementData | null {
+  /** Two-pass filter: count survivors, then copy into a typed array. */
+  function filterInstances(raw: Float32Array): Float32Array {
+    const count = raw.length / FLOATS_PER_INSTANCE
+    // Pass 1: count survivors
+    let kept = 0
+    for (let i = 0; i < count; i++) {
+      const base = i * FLOATS_PER_INSTANCE
+      const x = raw[base]
+      const z = raw[base + 2]
+      if (!(x >= minX && x <= maxX && z >= minZ && z <= maxZ)) kept++
+    }
+    if (kept === count) return raw // nothing removed
+    // Pass 2: copy survivors
+    const out = new Float32Array(kept * FLOATS_PER_INSTANCE)
+    let offset = 0
+    for (let i = 0; i < count; i++) {
+      const base = i * FLOATS_PER_INSTANCE
+      const x = raw[base]
+      const z = raw[base + 2]
+      if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) continue
+      out.set(raw.subarray(base, base + FLOATS_PER_INSTANCE), offset)
+      offset += FLOATS_PER_INSTANCE
+    }
+    return out
+  }
+
+  const shortRaw = getInstanceData(data, 'short')
+  const tallRaw = getInstanceData(data, 'tall')
+  const flowerRaw = getInstanceData(data, 'flower')
+
+  const shortFiltered = filterInstances(shortRaw)
+  const tallFiltered = filterInstances(tallRaw)
+  const flowerFiltered = filterInstances(flowerRaw)
+
+  // Early-out: nothing was removed
+  if (
+    shortFiltered === shortRaw &&
+    tallFiltered === tallRaw &&
+    flowerFiltered === flowerRaw
+  ) {
+    return null
+  }
+
+  return packGrassBuffer(shortFiltered, tallFiltered, flowerFiltered)
 }
 
 /** Decode binary grass placement data. */

@@ -12,9 +12,20 @@ export class TerrainGrassDataManager {
   private missingTiles = new Set<string>()
   private terrainApiUrl: string
   private generation = 0
+  private tileUpdateListeners: ((tileX: number, tileZ: number) => void)[] = []
 
   constructor() {
     this.terrainApiUrl = getTerrainApiUrl()
+  }
+
+  /** Subscribe to tile data updates. Returns unsubscribe function. */
+  onTileUpdated(cb: (tileX: number, tileZ: number) => void): () => void {
+    this.tileUpdateListeners.push(cb)
+    return () => {
+      this.tileUpdateListeners = this.tileUpdateListeners.filter(
+        (l) => l !== cb
+      )
+    }
   }
 
   /**
@@ -76,6 +87,8 @@ export class TerrainGrassDataManager {
     const key = tileKey(tileX, tileZ)
     this.cache.set(key, data)
     this.missingTiles.delete(key)
+
+    for (const cb of this.tileUpdateListeners) cb(tileX, tileZ)
 
     try {
       const url = `${this.terrainApiUrl}/api/terrain/grass/${tileX}/${tileZ}`

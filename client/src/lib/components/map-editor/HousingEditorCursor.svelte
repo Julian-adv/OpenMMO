@@ -17,14 +17,19 @@
   import { housingManager } from '../../managers/housingManager'
   import { buildHouseGroup, disposeHouseGroup } from '../../utils/house-geometry'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
+  import { removeGrassInRect } from '../../utils/grass-data'
+  import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
     terrainMeshes: (THREE.Mesh | undefined)[]
     heightManager: TerrainHeightManager | null
+    grassDataManager: TerrainGrassDataManager | null
   }
 
-  let { camera, terrainMeshes, heightManager }: Props = $props()
+  let { camera, terrainMeshes, heightManager, grassDataManager }: Props =
+    $props()
 
   const { renderer } = useThrelte()
   const canvas = renderer.domElement
@@ -180,6 +185,7 @@
           clickPoint.y <= maxY + 1
         ) {
           housingManager.deleteHouse(house.id)
+          housingDeleteMode.set(false)
           return
         }
       }
@@ -204,6 +210,44 @@
 
     // Save flattened terrain immediately (don't rely on 1s debounce)
     heightManager.saveAllDirty()
+
+    // Remove grass under the house footprint (+ 1m margin to prevent wall clipping)
+    if (grassDataManager) {
+      const GRASS_MARGIN = 1
+      const rectMinX = previewPos.x - GRASS_MARGIN
+      const rectMinZ = previewPos.z - GRASS_MARGIN
+      const rectMaxX = previewPos.x + currentTemplate.sizeX + GRASS_MARGIN
+      const rectMaxZ = previewPos.z + currentTemplate.sizeZ + GRASS_MARGIN
+
+      // Find affected tiles
+      const tileMinX = Math.floor(
+        (rectMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+      )
+      const tileMaxX = Math.floor(
+        (rectMaxX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+      )
+      const tileMinZ = Math.floor(
+        (rectMinZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+      )
+      const tileMaxZ = Math.floor(
+        (rectMaxZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+      )
+
+      for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
+        for (let tx = tileMinX; tx <= tileMaxX; tx++) {
+          const cached = grassDataManager.getCachedGrassData(tx, tz)
+          if (!cached) continue
+          const filtered = removeGrassInRect(
+            cached,
+            rectMinX,
+            rectMinZ,
+            rectMaxX,
+            rectMaxZ
+          )
+          if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
+        }
+      }
+    }
 
     const houseData = templateToHouseData(
       currentTemplate,

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import { SvelteMap } from 'svelte/reactivity'
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
@@ -554,9 +555,9 @@
   // When the grid shifts, meshes already showing a still-active key keep their
   // GPU data untouched — only meshes that need NEW data get rewritten.
   // Non-reactive by design — managed imperatively in rebuildType().
-  const shortKeyToSlot = new Map<string, number>()
-  const tallKeyToSlot = new Map<string, number>()
-  const flowerKeyToSlot = new Map<string, number>()
+  const shortKeyToSlot = new SvelteMap<string, number>()
+  const tallKeyToSlot = new SvelteMap<string, number>()
+  const flowerKeyToSlot = new SvelteMap<string, number>()
 
   function rebuildGrassBuffers() {
     needsRebuild = false
@@ -697,22 +698,66 @@
         const parts = tk.split('_')
         const tileX = parseInt(parts[0])
         const tileZ = parseInt(parts[1])
-        const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMaxX = tileX * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2
-        const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMaxZ = tileZ * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2
-        const scMinX = Math.floor(tileMinX / SUB_CHUNK_SIZE)
-        const scMaxX = Math.floor((tileMaxX - 1) / SUB_CHUNK_SIZE)
-        const scMinZ = Math.floor(tileMinZ / SUB_CHUNK_SIZE)
-        const scMaxZ = Math.floor((tileMaxZ - 1) / SUB_CHUNK_SIZE)
-        for (let sz = scMinZ; sz <= scMaxZ; sz++) {
-          for (let sx = scMinX; sx <= scMaxX; sx++) {
-            subChunkCache.delete(`${sx},${sz}`)
-          }
-        }
+        clearSubChunksForTile(tileX, tileZ)
         needsRebuild = true
       }
     }
+  })
+
+  /** Compute sub-chunk index range for a tile and clear related caches. */
+  function clearSubChunksForTile(tileX: number, tileZ: number) {
+    const { scMinX, scMaxX, scMinZ, scMaxZ } = tileSubChunkRange(tileX, tileZ)
+    for (let sz = scMinZ; sz <= scMaxZ; sz++) {
+      for (let sx = scMinX; sx <= scMaxX; sx++) {
+        const key = `${sx},${sz}`
+        subChunkCache.delete(key)
+        shortKeyToSlot.delete(key)
+        tallKeyToSlot.delete(key)
+        flowerKeyToSlot.delete(key)
+      }
+    }
+  }
+
+  function tileSubChunkRange(tileX: number, tileZ: number) {
+    const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    const tileMaxX = tileX * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2
+    const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    const tileMaxZ = tileZ * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2
+    return {
+      scMinX: Math.floor(tileMinX / SUB_CHUNK_SIZE),
+      scMaxX: Math.floor((tileMaxX - 1) / SUB_CHUNK_SIZE),
+      scMinZ: Math.floor(tileMinZ / SUB_CHUNK_SIZE),
+      scMaxZ: Math.floor((tileMaxZ - 1) / SUB_CHUNK_SIZE),
+    }
+  }
+
+  // ── Listen for grass data updates (e.g. housing placement) ──
+  $effect(() => {
+    const gMgr = grassDataManager
+    if (!gMgr) return
+
+    return gMgr.onTileUpdated((tileX, tileZ) => {
+      const grassData = gMgr.getCachedGrassData(tileX, tileZ)
+      if (!grassData) return
+
+      clearSubChunksForTile(tileX, tileZ)
+
+      // Re-partition updated data
+      const shortChunks = partitionIntoSubChunks(getInstanceData(grassData, 'short'))
+      const tallChunks = partitionIntoSubChunks(getInstanceData(grassData, 'tall'))
+      const flowerChunks = partitionIntoSubChunks(getInstanceData(grassData, 'flower'))
+
+      const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
+      for (const key of allKeys) {
+        subChunkCache.set(key, {
+          short: shortChunks.get(key) ?? EMPTY_SUB_CHUNK,
+          tall: tallChunks.get(key) ?? EMPTY_SUB_CHUNK,
+          flower: flowerChunks.get(key) ?? EMPTY_SUB_CHUNK,
+        })
+      }
+
+      needsRebuild = true
+    })
   })
 </script>
 
