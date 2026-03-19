@@ -15,7 +15,12 @@
     type RoomTemplate,
     type WallVariants,
   } from '../../stores/housingEditorStore'
-  import type { HouseData, RoomData } from '../../types/housing'
+  import type {
+    HouseData,
+    RoomData,
+    WallConfig,
+    WallVariant,
+  } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
   import { buildHouseGroup, disposeHouseGroup } from '../../utils/house-geometry'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -72,6 +77,15 @@
 
   const BLEND_RADIUS = 4
 
+  function getRotatedSize() {
+    if (!currentTemplate) return { sx: 0, sz: 0 }
+    const rotated = currentRotation === 90 || currentRotation === 270
+    return {
+      sx: rotated ? currentTemplate.sizeZ : currentTemplate.sizeX,
+      sz: rotated ? currentTemplate.sizeX : currentTemplate.sizeZ,
+    }
+  }
+
   let rebuildScheduled = false
   function scheduleRebuildPreview() {
     if (rebuildScheduled) return
@@ -127,8 +141,15 @@
 
     if (!currentTemplate) return
 
-    const houseData = templateToHouseData(currentTemplate, 0, 0, 0)
-    const result = buildHouseGroup(houseData)
+    const { sx, sz } = getRotatedSize()
+    const room = buildRoomData(sx, sz)
+    const previewHouse: HouseData = {
+      id: 'preview',
+      ownerId: '',
+      origin: { x: 0, y: 0, z: 0 },
+      rooms: [room],
+    }
+    const result = buildHouseGroup(previewHouse)
 
     // Apply preview material
     result.houseGroup.traverse((obj) => {
@@ -150,9 +171,7 @@
 
   function checkPlacementValid(): boolean {
     if (!currentTemplate || !previewPos) return false
-    const rotated = currentRotation === 90 || currentRotation === 270
-    const sx = rotated ? currentTemplate.sizeZ : currentTemplate.sizeX
-    const sz = rotated ? currentTemplate.sizeX : currentTemplate.sizeZ
+    const { sx, sz } = getRotatedSize()
     return !housingManager.checkOverlap(previewPos.x, previewPos.z, sx, sz)
   }
 
@@ -228,22 +247,52 @@
     if (!currentTemplate || !previewPos || !heightManager) return
 
     const pos = { ...previewPos }
-    const template = currentTemplate
-    const centerX = pos.x + template.sizeX / 2
-    const centerZ = pos.z + template.sizeZ / 2
+    const { sx, sz } = getRotatedSize()
+    const centerX = pos.x + sx / 2
+    const centerZ = pos.z + sz / 2
     const targetHeight = heightManager.getHeightAtWorldPosition(centerX, centerZ)
 
-    const houseData = templateToHouseData(template, pos.x, targetHeight, pos.z)
+    const newRoom = buildRoomData(sx, sz)
 
-    // Save to server first — only modify terrain/grass on success
-    const saved = await housingManager.saveHouse(houseData)
+    // Check if adjacent to an existing house
+    const adjacentHouse = housingManager.findAdjacentHouse(
+      pos.x,
+      pos.z,
+      sx,
+      sz
+    )
+
+    let saved: HouseData | null
+    if (adjacentHouse) {
+      // Add room to existing house — localX/Z relative to house origin
+      newRoom.localX = pos.x - adjacentHouse.origin.x
+      newRoom.localZ = pos.z - adjacentHouse.origin.z
+
+      const updatedRooms = [...adjacentHouse.rooms, newRoom]
+      setSharedWallsOpen(updatedRooms)
+
+      const updatedHouse: HouseData = {
+        ...adjacentHouse,
+        rooms: updatedRooms,
+      }
+      saved = await housingManager.updateHouse(updatedHouse)
+    } else {
+      const houseData: HouseData = {
+        id: '',
+        ownerId: 'local',
+        origin: { x: pos.x, y: targetHeight, z: pos.z },
+        rooms: [newRoom],
+      }
+      saved = await housingManager.saveHouse(houseData)
+    }
+
     if (!saved) return
 
     heightManager.flattenArea(
       pos.x,
       pos.z,
-      pos.x + template.sizeX,
-      pos.z + template.sizeZ,
+      pos.x + sx,
+      pos.z + sz,
       targetHeight,
       BLEND_RADIUS
     )
@@ -254,8 +303,8 @@
       const GRASS_MARGIN = 1
       const rectMinX = pos.x - GRASS_MARGIN
       const rectMinZ = pos.z - GRASS_MARGIN
-      const rectMaxX = pos.x + template.sizeX + GRASS_MARGIN
-      const rectMaxZ = pos.z + template.sizeZ + GRASS_MARGIN
+      const rectMaxX = pos.x + sx + GRASS_MARGIN
+      const rectMaxZ = pos.z + sz + GRASS_MARGIN
 
       const tileMinX = Math.floor(
         (rectMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
@@ -287,37 +336,91 @@
     }
   }
 
-  function templateToHouseData(
-    template: RoomTemplate,
-    originX: number,
-    originY: number,
-    originZ: number
-  ): HouseData {
+  function fillWall(count: number, variant: WallVariant, texture: number): WallConfig[] {
+    const base: WallVariant = variant === 'door' || variant === 'window' ? 'solid' : variant
+    const segs: WallConfig[] = Array.from({ length: count }, () => ({ variant: base, texture }))
+    if (variant === 'door' || variant === 'window') {
+      segs[Math.floor(count / 2)] = { variant, texture }
+    }
+    return segs
+  }
+
+  function buildRoomData(sizeX: number, sizeZ: number): RoomData {
     const wallTex = get(wallTextureIndex)
     const floorTex = get(floorTextureIndex)
     const roofTex = get(roofTextureIndex)
-
     const wv = currentWallVariants
-    const room: RoomData = {
+
+    return {
       localX: 0,
       localZ: 0,
-      sizeX: template.sizeX,
-      sizeZ: template.sizeZ,
+      sizeX,
+      sizeZ,
       floorLevel: 0,
       floorTexture: floorTex,
       roofTexture: roofTex,
       wallHeight: 3,
-      wallNorth: { variant: wv.north, texture: wallTex },
-      wallSouth: { variant: wv.south, texture: wallTex },
-      wallEast: { variant: wv.east, texture: wallTex },
-      wallWest: { variant: wv.west, texture: wallTex },
+      wallNorth: fillWall(sizeX, wv.north, wallTex),
+      wallSouth: fillWall(sizeX, wv.south, wallTex),
+      wallEast: fillWall(sizeZ, wv.east, wallTex),
+      wallWest: fillWall(sizeZ, wv.west, wallTex),
     }
+  }
 
-    return {
-      id: '',
-      ownerId: 'local',
-      origin: { x: originX, y: originY, z: originZ },
-      rooms: [room],
+  /**
+   * Auto-set overlapping 1m wall segments to 'open' where two rooms touch.
+   * e.g. 6x4 + 3x3 on its south wall: 3 of the 6 south segments → open,
+   *      and all 3 of the 3x3's north segments → open.
+   */
+  function setSharedWallsOpen(rooms: RoomData[]) {
+    for (let i = 0; i < rooms.length; i++) {
+      const a = rooms[i]
+      for (let j = i + 1; j < rooms.length; j++) {
+        const b = rooms[j]
+
+        // N/S: a's south touches b's north
+        if (a.localZ + a.sizeZ === b.localZ) {
+          openOverlappingSegments(a, 'wallSouth', b, 'wallNorth', 'x')
+        }
+        // N/S: b's south touches a's north
+        if (b.localZ + b.sizeZ === a.localZ) {
+          openOverlappingSegments(b, 'wallSouth', a, 'wallNorth', 'x')
+        }
+        // E/W: a's east touches b's west
+        if (a.localX + a.sizeX === b.localX) {
+          openOverlappingSegments(a, 'wallEast', b, 'wallWest', 'z')
+        }
+        // E/W: b's east touches a's west
+        if (b.localX + b.sizeX === a.localX) {
+          openOverlappingSegments(b, 'wallEast', a, 'wallWest', 'z')
+        }
+      }
+    }
+  }
+
+  type WallKey = 'wallNorth' | 'wallSouth' | 'wallEast' | 'wallWest'
+
+  /** Set overlapping 1m segments to open on both rooms' touching walls. */
+  function openOverlappingSegments(
+    a: RoomData,
+    aWall: WallKey,
+    b: RoomData,
+    bWall: WallKey,
+    axis: 'x' | 'z'
+  ) {
+    const aStart = axis === 'x' ? a.localX : a.localZ
+    const aLen = axis === 'x' ? a.sizeX : a.sizeZ
+    const bStart = axis === 'x' ? b.localX : b.localZ
+    const bLen = axis === 'x' ? b.sizeX : b.sizeZ
+
+    const overlapStart = Math.max(aStart, bStart)
+    const overlapEnd = Math.min(aStart + aLen, bStart + bLen)
+
+    for (let pos = overlapStart; pos < overlapEnd; pos++) {
+      const aIdx = pos - aStart
+      const bIdx = pos - bStart
+      a[aWall][aIdx] = { variant: 'open', texture: a[aWall][aIdx].texture }
+      b[bWall][bIdx] = { variant: 'open', texture: b[bWall][bIdx].texture }
     }
   }
 

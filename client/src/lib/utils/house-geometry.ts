@@ -9,7 +9,7 @@
  */
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import type { HouseData, RoomData, WallVariant } from '../types/housing'
+import type { HouseData, RoomData, WallConfig } from '../types/housing'
 
 const WALL_THICKNESS = 0.15
 const DOOR_WIDTH = 1.0
@@ -58,6 +58,8 @@ export interface HouseGroupResult {
   frontGroup: THREE.Group
   backGroup: THREE.Group
   aabb: THREE.Box3
+  /** JSON hash of rooms for change detection */
+  roomsHash: string
 }
 
 const _aabbVec = new THREE.Vector3()
@@ -116,7 +118,13 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
     aabb.expandByPoint(_aabbVec)
   }
 
-  return { houseGroup, frontGroup, backGroup, aabb }
+  return {
+    houseGroup,
+    frontGroup,
+    backGroup,
+    aabb,
+    roomsHash: JSON.stringify(house.rooms),
+  }
 }
 
 /**
@@ -192,169 +200,131 @@ function collectRoomGeometries(
     )
   )
 
-  // Walls
-  collectWallGeos(room.wallNorth, 'north', room, frontGeos, backGeos)
-  collectWallGeos(room.wallSouth, 'south', room, frontGeos, backGeos)
-  collectWallGeos(room.wallEast, 'east', room, frontGeos, backGeos)
-  collectWallGeos(room.wallWest, 'west', room, frontGeos, backGeos)
+  // Walls — each is an array of 1m segments
+  collectWallSegments(room.wallNorth, 'north', room, frontGeos, backGeos)
+  collectWallSegments(room.wallSouth, 'south', room, frontGeos, backGeos)
+  collectWallSegments(room.wallEast, 'east', room, frontGeos, backGeos)
+  collectWallSegments(room.wallWest, 'west', room, frontGeos, backGeos)
 }
 
-function collectWallGeos(
-  config: { variant: WallVariant; texture: number },
+/** Render 1m wall segments along a wall direction. */
+function collectWallSegments(
+  segments: WallConfig[],
   dir: WallDirection,
   room: RoomData,
   frontGeos: THREE.BufferGeometry[],
   backGeos: THREE.BufferGeometry[]
 ) {
-  if (config.variant === 'open') return
-
   const dirInfo = WALL_DIR_INFO[dir]
   const target = dirInfo.isFront ? frontGeos : backGeos
-  const color = WALL_COLORS[config.texture % WALL_COLORS.length]
-
-  if (config.variant === 'solid') {
-    target.push(createSolidWallGeo(dir, room, color))
-  } else {
-    const geos = createWallWithOpeningGeos(
-      dir,
-      room,
-      color,
-      config.variant as 'door' | 'window'
-    )
-    for (const g of geos) target.push(g)
-  }
-}
-
-function getWallPos(
-  dir: WallDirection,
-  room: RoomData,
-  widthOffset: number,
-  yCenter: number,
-  yBase: number
-): { x: number; y: number; z: number; rotY: number } {
+  const wh = room.wallHeight
+  const yBase = room.floorLevel * wh
   const { localX, localZ, sizeX, sizeZ } = room
-  const cx = localX + sizeX / 2
-  const cz = localZ + sizeZ / 2
 
-  switch (dir) {
-    case 'north':
-      return { x: cx + widthOffset, y: yBase + yCenter, z: localZ, rotY: 0 }
-    case 'south':
-      return {
-        x: cx + widthOffset,
-        y: yBase + yCenter,
-        z: localZ + sizeZ,
-        rotY: 0,
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments[i]
+    if (seg.variant === 'open') continue
+
+    const color = WALL_COLORS[seg.texture % WALL_COLORS.length]
+
+    // Position: center of this 1m segment along the wall
+    const segCenter = i + 0.5 // 0.5, 1.5, 2.5, ...
+    let x: number, z: number, rotY: number
+
+    switch (dir) {
+      case 'north': {
+        x = localX + segCenter
+        z = localZ
+        rotY = 0
+        break
       }
-    case 'east':
-      return {
-        x: localX + sizeX,
-        y: yBase + yCenter,
-        z: cz + widthOffset,
-        rotY: Math.PI / 2,
+      case 'south': {
+        x = localX + segCenter
+        z = localZ + sizeZ
+        rotY = 0
+        break
       }
-    case 'west':
-      return {
-        x: localX,
-        y: yBase + yCenter,
-        z: cz + widthOffset,
-        rotY: Math.PI / 2,
+      case 'east': {
+        x = localX + sizeX
+        z = localZ + segCenter
+        rotY = Math.PI / 2
+        break
       }
-  }
-}
+      case 'west': {
+        x = localX
+        z = localZ + segCenter
+        rotY = Math.PI / 2
+        break
+      }
+    }
 
-function createSolidWallGeo(
-  dir: WallDirection,
-  room: RoomData,
-  color: number
-): THREE.BufferGeometry {
-  const width = WALL_DIR_INFO[dir].isNS ? room.sizeX : room.sizeZ
-  const wh = room.wallHeight
-  const yBase = room.floorLevel * wh
-  const pos = getWallPos(dir, room, 0, wh / 2, yBase)
-  return bakedGeo(
-    new THREE.BoxGeometry(width, wh, WALL_THICKNESS),
-    color,
-    pos.x,
-    pos.y,
-    pos.z,
-    pos.rotY
-  )
-}
-
-function createWallWithOpeningGeos(
-  dir: WallDirection,
-  room: RoomData,
-  color: number,
-  variant: 'door' | 'window'
-): THREE.BufferGeometry[] {
-  const wallWidth = WALL_DIR_INFO[dir].isNS ? room.sizeX : room.sizeZ
-  const wh = room.wallHeight
-  const yBase = room.floorLevel * wh
-
-  const openingWidth = variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
-  const openingHeight = variant === 'door' ? DOOR_HEIGHT : WINDOW_HEIGHT
-  const openingBottom = variant === 'door' ? 0 : WINDOW_BOTTOM
-
-  const geos: THREE.BufferGeometry[] = []
-
-  // Left and right segments
-  const sideWidth = (wallWidth - openingWidth) / 2
-  if (sideWidth > 0.01) {
-    for (const sign of [-1, 1]) {
-      const offset = sign * (wallWidth / 2 - sideWidth / 2)
-      const pos = getWallPos(dir, room, offset, wh / 2, yBase)
-      geos.push(
+    if (seg.variant === 'solid') {
+      target.push(
         bakedGeo(
-          new THREE.BoxGeometry(sideWidth, wh, WALL_THICKNESS),
+          new THREE.BoxGeometry(1, wh, WALL_THICKNESS),
           color,
-          pos.x,
-          pos.y,
-          pos.z,
-          pos.rotY
+          x,
+          yBase + wh / 2,
+          z,
+          rotY
         )
       )
+    } else {
+      // door or window — opening centered in the 1m segment
+      const openW = seg.variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
+      const openH = seg.variant === 'door' ? DOOR_HEIGHT : WINDOW_HEIGHT
+      const openBot = seg.variant === 'door' ? 0 : WINDOW_BOTTOM
+      const sideW = (1 - openW) / 2
+
+      // Left and right solid strips
+      if (sideW > 0.01) {
+        for (const sign of [-1, 1]) {
+          const offset = sign * (0.5 - sideW / 2)
+          const sx = dir === 'north' || dir === 'south' ? x + offset : x
+          const sz = dir === 'east' || dir === 'west' ? z + offset : z
+          target.push(
+            bakedGeo(
+              new THREE.BoxGeometry(sideW, wh, WALL_THICKNESS),
+              color,
+              sx,
+              yBase + wh / 2,
+              sz,
+              rotY
+            )
+          )
+        }
+      }
+
+      // Bottom strip (windows)
+      if (openBot > 0.01) {
+        target.push(
+          bakedGeo(
+            new THREE.BoxGeometry(openW, openBot, WALL_THICKNESS),
+            color,
+            x,
+            yBase + openBot / 2,
+            z,
+            rotY
+          )
+        )
+      }
+
+      // Top strip
+      const topH = wh - openBot - openH
+      if (topH > 0.01) {
+        target.push(
+          bakedGeo(
+            new THREE.BoxGeometry(openW, topH, WALL_THICKNESS),
+            color,
+            x,
+            yBase + openBot + openH + topH / 2,
+            z,
+            rotY
+          )
+        )
+      }
     }
   }
-
-  // Bottom segment (windows only)
-  if (openingBottom > 0.01) {
-    const pos = getWallPos(dir, room, 0, openingBottom / 2, yBase)
-    geos.push(
-      bakedGeo(
-        new THREE.BoxGeometry(openingWidth, openingBottom, WALL_THICKNESS),
-        color,
-        pos.x,
-        pos.y,
-        pos.z,
-        pos.rotY
-      )
-    )
-  }
-
-  // Top segment
-  const topHeight = wh - openingBottom - openingHeight
-  if (topHeight > 0.01) {
-    const pos = getWallPos(
-      dir,
-      room,
-      0,
-      openingBottom + openingHeight + topHeight / 2,
-      yBase
-    )
-    geos.push(
-      bakedGeo(
-        new THREE.BoxGeometry(openingWidth, topHeight, WALL_THICKNESS),
-        color,
-        pos.x,
-        pos.y,
-        pos.z,
-        pos.rotY
-      )
-    )
-  }
-
-  return geos
 }
 
 /** Dispose merged geometries in a house group */

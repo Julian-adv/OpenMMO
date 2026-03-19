@@ -45,24 +45,30 @@
   })
 
   function syncHouses(allHouses: HouseData[]) {
-    const incoming = new Set(allHouses.map((h) => h.id))
+    const incomingById = new Map(allHouses.map((h) => [h.id, h]))
 
     // Remove houses no longer present
     for (const [id, result] of houses) {
-      if (!incoming.has(id)) {
+      if (!incomingById.has(id)) {
         housingGroup.remove(result.houseGroup)
         disposeHouseGroup(result.houseGroup)
         houses.delete(id)
       }
     }
 
-    // Add new houses
+    // Add or rebuild changed houses
     for (const data of allHouses) {
-      if (!houses.has(data.id)) {
-        const result = buildHouseGroup(data)
-        houses.set(data.id, result)
-        housingGroup.add(result.houseGroup)
+      const existing = houses.get(data.id)
+      const newHash = JSON.stringify(data.rooms)
+      if (existing && existing.roomsHash === newHash) continue
+
+      if (existing) {
+        housingGroup.remove(existing.houseGroup)
+        disposeHouseGroup(existing.houseGroup)
       }
+      const result = buildHouseGroup(data)
+      houses.set(data.id, result)
+      housingGroup.add(result.houseGroup)
     }
   }
 

@@ -34,6 +34,19 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
                 i, room.wall_height
             ));
         }
+        // Wall segment counts must match room dimensions
+        let sx = room.size_x as usize;
+        let sz = room.size_z as usize;
+        if room.wall_north.len() != sx
+            || room.wall_south.len() != sx
+            || room.wall_east.len() != sz
+            || room.wall_west.len() != sz
+        {
+            return Err(format!(
+                "Room {} wall segment counts don't match room size",
+                i
+            ));
+        }
     }
 
     // Check internal room-room overlap
