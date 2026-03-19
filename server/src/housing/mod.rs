@@ -39,7 +39,7 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
     // Check internal room-room overlap
     for i in 0..house.rooms.len() {
         for j in (i + 1)..house.rooms.len() {
-            if rooms_overlap(&house.rooms[i], &house.rooms[j]) {
+            if rooms_overlap_world(&house.rooms[i], 0.0, 0.0, &house.rooms[j], 0.0, 0.0) {
                 return Err(format!("Rooms {} and {} overlap", i, j));
             }
         }
@@ -51,7 +51,7 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
             continue;
         }
         for (i, room) in house.rooms.iter().enumerate() {
-            for (j, other) in neighbor.rooms.iter().enumerate() {
+            for (_j, other) in neighbor.rooms.iter().enumerate() {
                 if rooms_overlap_world(
                     room,
                     house.origin.x,
@@ -60,28 +60,13 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
                     neighbor.origin.x,
                     neighbor.origin.z,
                 ) {
-                    return Err(format!(
-                        "Room {} overlaps with house {} room {}",
-                        i, neighbor.id, j
-                    ));
+                    return Err(format!("Room {} overlaps with a neighboring house", i));
                 }
             }
         }
     }
 
     Ok(())
-}
-
-fn rooms_overlap(a: &RoomData, b: &RoomData) -> bool {
-    let ax = a.local_x;
-    let az = a.local_z;
-    let bx = b.local_x;
-    let bz = b.local_z;
-    ax < bx + b.size_x as i32
-        && ax + a.size_x as i32 > bx
-        && az < bz + b.size_z as i32
-        && az + a.size_z as i32 > bz
-        && a.floor_level == b.floor_level
 }
 
 fn rooms_overlap_world(
@@ -114,7 +99,7 @@ pub struct HousingIO {
 }
 
 /// Chunk size in world units — matches terrain tile size.
-const CHUNK_SIZE: f32 = 64.0;
+pub(crate) const CHUNK_SIZE: f32 = 64.0;
 
 pub fn world_to_chunk(x: f32, z: f32) -> (i32, i32) {
     (
