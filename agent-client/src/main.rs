@@ -500,5 +500,9 @@ fn msg_name(msg: &ServerMessage) -> &'static str {
         ServerMessage::XpGained { .. } => "XpGained",
         ServerMessage::Kicked { .. } => "Kicked",
         ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
+        ServerMessage::HouseSpawned { .. } => "HouseSpawned",
+        ServerMessage::HouseUpdated { .. } => "HouseUpdated",
+        ServerMessage::HouseRemoved { .. } => "HouseRemoved",
+        ServerMessage::HousesInArea { .. } => "HousesInArea",
     }
 }

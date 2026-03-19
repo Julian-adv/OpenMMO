@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub mod housing;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CharacterClass {
     #[serde(rename = "warrior")]
@@ -218,6 +220,17 @@ pub enum ClientMessage {
         enabled: bool,
     },
     Heartbeat,
+    PlaceHouse {
+        house: housing::HouseData,
+    },
+    ModifyRoom {
+        house_id: String,
+        room_index: u32,
+        room: housing::RoomData,
+    },
+    RemoveHouse {
+        house_id: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,6 +346,18 @@ pub enum ServerMessage {
     PlayerTorchToggled {
         player_id: String,
         enabled: bool,
+    },
+    HouseSpawned {
+        house: housing::HouseData,
+    },
+    HouseUpdated {
+        house: housing::HouseData,
+    },
+    HouseRemoved {
+        house_id: String,
+    },
+    HousesInArea {
+        houses: Vec<housing::HouseData>,
     },
 }
 

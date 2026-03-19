@@ -27,6 +27,7 @@
   import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
+  import GameSceneHousingLayer from './game-scene/GameSceneHousingLayer.svelte'
   import { drainTileWork } from '../utils/tileWorkQueue'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
@@ -141,6 +142,7 @@
   let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
+  let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
   const entityClipGroupObj = (() => {
@@ -529,6 +531,9 @@
         playerDebugInfo.set(null)
       }
       loopProfiler.record('monsterLogic', performance.now() - monsterLogicStart)
+
+      // Update housing (player-inside detection + front wall toggling)
+      housingLayerRef?.update(deltaTime)
 
       // Update grass wind & trail
       grassLayerRef?.update(deltaTime)
@@ -990,6 +995,11 @@
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
   metaManager={terrainMetaManager}
+/>
+
+<GameSceneHousingLayer
+  bind:this={housingLayerRef}
+  playerPosition={currentPlayer?.position ?? null}
 />
 
 <GameSceneGrassLayer

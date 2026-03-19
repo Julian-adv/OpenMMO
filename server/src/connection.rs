@@ -575,6 +575,12 @@ async fn handle_client_message(
         ClientMessage::Heartbeat => {
             state.last_heartbeat = std::time::Instant::now();
         }
+
+        ClientMessage::PlaceHouse { .. }
+        | ClientMessage::ModifyRoom { .. }
+        | ClientMessage::RemoveHouse { .. } => {
+            // TODO: Phase 2 — housing server logic
+        }
     }
 
     Ok(vec![])
