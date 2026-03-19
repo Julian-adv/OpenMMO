@@ -32,6 +32,7 @@
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
+  import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
     GAME_START_YEAR,
@@ -59,6 +60,7 @@
     debugSpeedMode,
     refractionEnabled,
     reflectionEnabled,
+    housingEditorMode,
   } from '../stores/debugStore'
   import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, terrainForceRebuild } from '../stores/editorStore'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
@@ -454,7 +456,7 @@
 
       // Update player controls (skip in map editor mode)
       const playerControlStart = performance.now()
-      if (playerControl && !$mapEditorMode) {
+      if (playerControl && !$mapEditorMode && !$housingEditorMode) {
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }
@@ -1066,4 +1068,8 @@
 
 {#if $mapEditorMode}
   <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />
+{/if}
+
+{#if $housingEditorMode}
+  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} />
 {/if}

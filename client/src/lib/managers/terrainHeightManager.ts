@@ -518,6 +518,119 @@ export class TerrainHeightManager {
     return affected
   }
 
+  /**
+   * Flatten a rectangular area to a target height with smooth blending around edges.
+   * Used by housing placement to level terrain under buildings.
+   *
+   * @param minX - West edge of the area (world coords)
+   * @param minZ - North edge of the area (world coords)
+   * @param maxX - East edge of the area (world coords)
+   * @param maxZ - South edge of the area (world coords)
+   * @param targetHeight - Height in meters to flatten to
+   * @param blendRadius - Radius in meters for smooth edge blending
+   */
+  flattenArea(
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number,
+    targetHeight: number,
+    blendRadius: number
+  ): AffectedTile[] {
+    const affected: AffectedTile[] = []
+    const affectedKeys = new Set<string>()
+    const targetEncoded = encodeHeight(targetHeight)
+
+    // Expand bounds by blendRadius for the outer blend zone
+    const expandedMinX = minX - blendRadius
+    const expandedMinZ = minZ - blendRadius
+    const expandedMaxX = maxX + blendRadius
+    const expandedMaxZ = maxZ + blendRadius
+
+    const minTileX = worldToTileCoord(expandedMinX)
+    const maxTileX = worldToTileCoord(expandedMaxX)
+    const minTileZ = worldToTileCoord(expandedMinZ)
+    const maxTileZ = worldToTileCoord(expandedMaxZ)
+
+    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+      for (let tx = minTileX; tx <= maxTileX; tx++) {
+        const key = tileKey(tx, tz)
+        const data = this.heightmaps.get(key)
+        if (!data) continue
+
+        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+
+        const startCX = Math.max(0, Math.floor(expandedMinX - tileMinX))
+        const endCX = Math.min(
+          TILE_DIM - 1,
+          Math.floor(expandedMaxX - tileMinX)
+        )
+        const startCZ = Math.max(0, Math.floor(expandedMinZ - tileMinZ))
+        const endCZ = Math.min(
+          TILE_DIM - 1,
+          Math.floor(expandedMaxZ - tileMinZ)
+        )
+
+        for (let cz = startCZ; cz <= endCZ; cz++) {
+          for (let cx = startCX; cx <= endCX; cx++) {
+            const worldCX = tileMinX + cx
+            const worldCZ = tileMinZ + cz
+
+            // Distance from the inner rectangle edge (0 = inside, >0 = outside)
+            const dx = Math.max(minX - worldCX, 0, worldCX - maxX)
+            const dz = Math.max(minZ - worldCZ, 0, worldCZ - maxZ)
+            const distFromEdge = Math.sqrt(dx * dx + dz * dz)
+
+            const idx = cz * VERTS_PER_SIDE + cx
+
+            if (distFromEdge <= 0) {
+              // Inside the flat area: force to target height
+              data[idx] = Math.max(0, Math.min(65535, targetEncoded))
+            } else if (distFromEdge < blendRadius) {
+              // Blend zone: smoothstep interpolation
+              const t = distFromEdge / blendRadius
+              // Smoothstep: 3t^2 - 2t^3
+              const blend = 1 - t * t * (3 - 2 * t)
+              const currentHeight = decodeHeight(data[idx])
+              const newHeight =
+                currentHeight + (targetHeight - currentHeight) * blend
+              const newValue = Math.max(
+                0,
+                Math.min(65535, encodeHeight(newHeight))
+              )
+              data[idx] = newValue
+            } else {
+              continue
+            }
+
+            if (!affectedKeys.has(key)) {
+              affectedKeys.add(key)
+              affected.push({ tileX: tx, tileZ: tz })
+              this.dirtyTiles.add(key)
+            }
+          }
+        }
+
+        const geometry = this.geometries.get(key)
+        if (geometry) {
+          this.applyHeightToGeometry(tx, tz, geometry)
+        }
+      }
+    }
+
+    for (const { tileX: tx, tileZ: tz } of affected) {
+      this.refreshAdjacentTileEdges(tx, tz)
+    }
+
+    if (affected.length > 0) {
+      this.scheduleSave()
+      this.notifyHeightChanged(affected)
+    }
+
+    return affected
+  }
+
   private scheduleSave() {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)

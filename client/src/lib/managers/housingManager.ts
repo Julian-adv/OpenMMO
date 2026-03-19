@@ -46,7 +46,10 @@ export class HousingManager {
   private async fetchChunk(cx: number, cz: number, key: string) {
     try {
       const resp = await fetch(`${this.apiUrl}/api/housing/area/${cx}/${cz}`)
-      if (!resp.ok) return // Don't cache failed fetches — allow retry
+      if (!resp.ok) {
+        this.chunkCache.set(key, []) // Cache as empty to prevent retry storm
+        return
+      }
       const houses: HouseData[] = await resp.json()
       this.chunkCache.set(key, houses)
       for (const h of houses) {
@@ -54,7 +57,7 @@ export class HousingManager {
       }
       this.notifyChanged()
     } catch {
-      // Network error — don't cache, allow retry on next chunk crossing
+      this.chunkCache.set(key, []) // Cache as empty to prevent retry storm
     } finally {
       this.inflight.delete(key)
     }
