@@ -76,7 +76,7 @@
 
 <div class="login-container">
   <div class="login-panel">
-    <h1 class="title">Online RPG</h1>
+    <h1 class="title">BottlVille</h1>
 
     {#if kickedMessage}
       <div class="kicked-message">{kickedMessage}</div>
