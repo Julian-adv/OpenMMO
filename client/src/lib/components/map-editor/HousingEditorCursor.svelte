@@ -10,10 +10,14 @@
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
-    housingDeleteMode,
+    housingEditorTool,
+    selectedHouseId,
+    selectedRoomIndex,
+    populateEditStoresFromRoom,
     wallVariants,
     type RoomTemplate,
     type WallVariants,
+    type HousingEditorTool,
   } from '../../stores/housingEditorStore'
   import type {
     HouseData,
@@ -64,7 +68,7 @@
 
   let currentTemplate = $state<RoomTemplate | null>(null)
   let currentRotation = $state(0)
-  let deleteMode = $state(false)
+  let currentTool = $state<HousingEditorTool>('place')
   let currentWallVariants = $state<WallVariants>({
     north: 'solid',
     south: 'door',
@@ -74,6 +78,10 @@
   let previewPos = $state<{ x: number; z: number } | null>(null)
   let previewMesh: THREE.Group | null = null
   let placementValid = false
+
+  // Highlight outline for selected room
+  const highlightEdgeMat = new THREE.LineBasicMaterial({ color: 0x44aaff })
+  let highlightEdges: THREE.LineSegments | null = null
 
   const BLEND_RADIUS = 4
 
@@ -105,15 +113,59 @@
       currentRotation = v
       updatePreviewTransform()
     }),
-    housingDeleteMode.subscribe((v) => {
-      deleteMode = v
-      canvas.style.cursor = v ? 'crosshair' : ''
+    housingEditorTool.subscribe((v) => {
+      currentTool = v
+      canvas.style.cursor = v === 'delete' ? 'crosshair' : v === 'select' ? 'pointer' : ''
+      if (v !== 'select') clearHighlight()
     }),
+    selectedHouseId.subscribe(() => scheduleUpdateHighlight()),
+    selectedRoomIndex.subscribe(() => scheduleUpdateHighlight()),
     wallVariants.subscribe((v) => {
       currentWallVariants = v
       scheduleRebuildPreview()
     }),
   ]
+
+  let highlightScheduled = false
+  function scheduleUpdateHighlight() {
+    if (highlightScheduled) return
+    highlightScheduled = true
+    queueMicrotask(() => {
+      highlightScheduled = false
+      updateHighlight()
+    })
+  }
+
+  function clearHighlight() {
+    if (highlightEdges) {
+      previewGroup.remove(highlightEdges)
+      highlightEdges.geometry.dispose()
+      highlightEdges = null
+    }
+  }
+
+  function updateHighlight() {
+    clearHighlight()
+
+    const houseId = get(selectedHouseId)
+    const roomIdx = get(selectedRoomIndex)
+    if (houseId == null || roomIdx == null) return
+
+    const house = housingManager.getHouseById(houseId)
+    if (!house || roomIdx >= house.rooms.length) return
+
+    const room = house.rooms[roomIdx]
+    const geo = new THREE.BoxGeometry(room.sizeX, room.wallHeight, room.sizeZ)
+    const edgesGeo = new THREE.EdgesGeometry(geo)
+    geo.dispose()
+    highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
+    highlightEdges.position.set(
+      house.origin.x + room.localX + room.sizeX / 2,
+      house.origin.y + room.wallHeight / 2,
+      house.origin.z + room.localZ + room.sizeZ / 2
+    )
+    previewGroup.add(highlightEdges)
+  }
 
   function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
     if (!camera) return null
@@ -185,7 +237,7 @@
 
   function handleMouseMove(event: MouseEvent) {
     const hit = raycastTerrain(event)
-    if (!hit || (!currentTemplate && !deleteMode)) {
+    if (!hit || (!currentTemplate && currentTool === 'place')) {
       placementPreview.set(null)
       previewPos = null
       if (previewMesh) previewMesh.visible = false
@@ -197,14 +249,14 @@
     previewPos = { x, z }
     placementPreview.set({ x, z })
 
-    if (previewMesh && !deleteMode) {
+    if (currentTool === 'place' && previewMesh) {
       previewMesh.visible = true
       previewMesh.position.set(x, hit.point.y, z)
       previewMesh.rotation.y = (currentRotation * Math.PI) / 180
       const wasValid = placementValid
       placementValid = checkPlacementValid()
       if (placementValid !== wasValid) setPreviewMaterial(placementValid)
-    } else if (previewMesh && deleteMode) {
+    } else if (previewMesh) {
       previewMesh.visible = false
     }
   }
@@ -213,8 +265,13 @@
     if (event.button !== 0) return
     event.preventDefault()
 
-    if (deleteMode) {
+    if (currentTool === 'delete') {
       deleteHouseAtCursor(event)
+      return
+    }
+
+    if (currentTool === 'select') {
+      selectRoomAtCursor(event)
       return
     }
 
@@ -239,7 +296,26 @@
     )
     if (house) {
       housingManager.deleteHouse(house.id)
-      housingDeleteMode.set(false)
+      housingEditorTool.set('place')
+    }
+  }
+
+  function selectRoomAtCursor(event: MouseEvent) {
+    const hit = raycastTerrain(event)
+    if (!hit) return
+
+    const result = housingManager.findRoomAtPoint(
+      hit.point.x,
+      hit.point.y,
+      hit.point.z
+    )
+    if (result) {
+      selectedHouseId.set(result.house.id)
+      selectedRoomIndex.set(result.roomIndex)
+      populateEditStoresFromRoom(result.house.rooms[result.roomIndex])
+    } else {
+      selectedHouseId.set(null)
+      selectedRoomIndex.set(null)
     }
   }
 
@@ -437,6 +513,8 @@
     placementPreview.set(null)
     previewMatValid.dispose()
     previewMatInvalid.dispose()
+    highlightEdgeMat.dispose()
+    clearHighlight()
 
     if (previewMesh) {
       previewGroup.remove(previewMesh)

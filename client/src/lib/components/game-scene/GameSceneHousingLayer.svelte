@@ -77,6 +77,10 @@
         disposeHouseGroup(existing.houseGroup)
       }
       const result = buildHouseGroup(data)
+      // Re-apply front group offset if player is inside this house
+      if (data.id === playerInsideHouseId) {
+        result.frontGroup.position.y = OFFSCREEN_Y
+      }
       houses.set(data.id, result)
       housingGroup.add(result.houseGroup)
     }

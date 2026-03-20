@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store'
-import type { WallVariant } from '../types/housing'
+import type { RoomData, WallVariant } from '../types/housing'
 
 export interface RoomTemplate {
   label: string
@@ -90,5 +90,41 @@ selectedRoomTemplate.subscribe((t) => {
   }
 })
 
-// Delete mode: when true, clicking a house deletes it
-export const housingDeleteMode = writable<boolean>(false)
+// Editor tool mode (replaces housingDeleteMode)
+export type HousingEditorTool = 'place' | 'select' | 'delete'
+export const housingEditorTool = writable<HousingEditorTool>('place')
+
+// Selection state for edit mode
+export const selectedHouseId = writable<string | null>(null)
+export const selectedRoomIndex = writable<number | null>(null)
+
+// Clear selection when switching away from select mode
+housingEditorTool.subscribe((tool) => {
+  if (tool !== 'select') {
+    selectedHouseId.set(null)
+    selectedRoomIndex.set(null)
+  }
+  if (tool !== 'place') {
+    selectedRoomTemplate.set(null)
+  }
+})
+
+/** Populate texture stores from a selected room's current data */
+export function populateEditStoresFromRoom(room: RoomData) {
+  floorTextureIndex.set(room.floorTexture)
+  roofTextureIndex.set(room.roofTexture)
+  // Use the first non-open segment's texture as the wall texture
+  for (const wall of [
+    room.wallNorth,
+    room.wallSouth,
+    room.wallEast,
+    room.wallWest,
+  ]) {
+    for (const seg of wall) {
+      if (seg.variant !== 'open') {
+        wallTextureIndex.set(seg.texture)
+        return
+      }
+    }
+  }
+}

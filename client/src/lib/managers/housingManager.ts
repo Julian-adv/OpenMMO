@@ -138,10 +138,26 @@ export class HousingManager {
     return Array.from(this.housesById.values())
   }
 
+  /** Get a house by its ID, or undefined if not loaded. */
+  getHouseById(id: string): HouseData | undefined {
+    return this.housesById.get(id)
+  }
+
   /** Find the house whose room contains a world point, or null. */
   findHouseAtPoint(x: number, y: number, z: number): HouseData | null {
+    const result = this.findRoomAtPoint(x, y, z)
+    return result ? result.house : null
+  }
+
+  /** Find the house and specific room index containing a world point. */
+  findRoomAtPoint(
+    x: number,
+    y: number,
+    z: number
+  ): { house: HouseData; roomIndex: number } | null {
     for (const house of this.housesById.values()) {
-      for (const room of house.rooms) {
+      for (let i = 0; i < house.rooms.length; i++) {
+        const room = house.rooms[i]
         const rx = house.origin.x + room.localX
         const rz = house.origin.z + room.localZ
         const ry = house.origin.y
@@ -153,11 +169,17 @@ export class HousingManager {
           y >= ry - 1 &&
           y <= ry + room.wallHeight + 1
         ) {
-          return house
+          return { house, roomIndex: i }
         }
       }
     }
     return null
+  }
+
+  /** Update local cache without server call (triggers geometry rebuild). */
+  updateLocalCache(house: HouseData) {
+    this.addToCache(house)
+    this.notifyChanged()
   }
 
   /** Find an existing house that shares an edge with the given room footprint. */
