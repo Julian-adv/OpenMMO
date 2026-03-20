@@ -3,7 +3,7 @@ use axum::{
     extract::{DefaultBodyLimit, Path, State},
     http::{header, StatusCode},
     response::{IntoResponse, Response},
-    routing::{delete, get},
+    routing::{delete, get, post},
     Json, Router,
 };
 use std::sync::Arc;
@@ -22,10 +22,28 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
             get(get_splatmap).put(put_splatmap),
         )
         .route(
+            "/api/terrain/height-original/{x}/{z}",
+            get(get_original_heightmap).put(put_original_heightmap),
+        )
+        .route(
+            "/api/terrain/height-original/{x}/{z}/ensure",
+            post(ensure_original_heightmap),
+        )
+        .route(
             "/api/terrain/grass/{x}/{z}",
             get(get_grass)
                 .put(put_grass)
                 .layer(DefaultBodyLimit::max(16 * 1024 * 1024)),
+        )
+        .route(
+            "/api/terrain/grass-original/{x}/{z}",
+            get(get_original_grass)
+                .put(put_original_grass)
+                .layer(DefaultBodyLimit::max(16 * 1024 * 1024)),
+        )
+        .route(
+            "/api/terrain/grass-original/{x}/{z}/ensure",
+            post(ensure_original_grass),
         )
         .route(
             "/api/terrain/meta/{rx}/{rz}",
@@ -79,6 +97,107 @@ async fn put_heightmap(
             }
         })?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_original_heightmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    let data = terrain.read_original_heightmap(x, z).await.map_err(|e| {
+        error!("Failed to read original heightmap ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    match data {
+        Some(bytes) => {
+            Ok(([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response())
+        }
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn put_original_heightmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+    body: Bytes,
+) -> Result<StatusCode, (StatusCode, String)> {
+    terrain
+        .write_original_heightmap(x, z, &body)
+        .await
+        .map_err(|e| match e.kind() {
+            std::io::ErrorKind::InvalidData => (StatusCode::BAD_REQUEST, e.to_string()),
+            _ => {
+                error!("Failed to write original heightmap ({}, {}): {}", x, z, e);
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Internal server error".to_string(),
+                )
+            }
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_original_grass(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    let data = terrain.read_original_grass(x, z).await.map_err(|e| {
+        error!("Failed to read original grass ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    match data {
+        Some(bytes) => {
+            Ok(([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response())
+        }
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn put_original_grass(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+    body: Bytes,
+) -> Result<StatusCode, (StatusCode, String)> {
+    terrain
+        .write_original_grass(x, z, &body)
+        .await
+        .map_err(|e| {
+            error!("Failed to write original grass ({}, {}): {}", x, z, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn ensure_original_heightmap(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<StatusCode, StatusCode> {
+    let created = terrain.ensure_original_heightmap(x, z).await.map_err(|e| {
+        error!("Failed to ensure original heightmap ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    if created {
+        Ok(StatusCode::CREATED)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
+}
+
+async fn ensure_original_grass(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<StatusCode, StatusCode> {
+    let created = terrain.ensure_original_grass(x, z).await.map_err(|e| {
+        error!("Failed to ensure original grass ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    if created {
+        Ok(StatusCode::CREATED)
+    } else {
+        Ok(StatusCode::NO_CONTENT)
+    }
 }
 
 async fn get_splatmap(

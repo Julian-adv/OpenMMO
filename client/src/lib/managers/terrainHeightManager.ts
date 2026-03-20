@@ -35,9 +35,12 @@ export type HeightChangedCallback = (tiles: AffectedTile[]) => void
 
 export class TerrainHeightManager {
   private heightmaps = new Map<string, Uint16Array>()
+  private originalHeightmaps = new Map<string, Uint16Array>()
+  private missingOriginalTiles = new Set<string>()
   private inflightHeightmaps = new Map<string, Promise<Uint16Array>>()
   private geometries = new Map<string, THREE.BufferGeometry>()
   private dirtyTiles = new Set<string>()
+  private dirtyOriginalTiles = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private terrainApiUrl: string
   private heightChangedListeners: HeightChangedCallback[] = []
@@ -80,6 +83,8 @@ export class TerrainHeightManager {
         const buffer = await response.arrayBuffer()
         const data = new Uint16Array(buffer)
         this.heightmaps.set(key, data)
+        // Also try loading the original heightmap (fire-and-forget)
+        this.loadOriginalHeightmap(tileX, tileZ)
         return data
       } catch (e) {
         console.error(`Failed to load heightmap (${tileX}, ${tileZ}):`, e)
@@ -90,6 +95,122 @@ export class TerrainHeightManager {
     })()
     this.inflightHeightmaps.set(key, promise)
     return promise
+  }
+
+  /** Sync a cell value to the original heightmap (brush edits become the new "original"). */
+  private syncToOriginal(key: string, idx: number, value: number): void {
+    const origData = this.originalHeightmaps.get(key)
+    if (origData) {
+      origData[idx] = value
+      this.dirtyOriginalTiles.add(key)
+    }
+  }
+
+  /** Load original (pre-housing) heightmap from server. Returns null if none exists. */
+  async loadOriginalHeightmap(
+    tileX: number,
+    tileZ: number
+  ): Promise<Uint16Array | null> {
+    const key = tileKey(tileX, tileZ)
+    if (this.originalHeightmaps.has(key))
+      return this.originalHeightmaps.get(key)!
+    if (this.missingOriginalTiles.has(key)) return null
+    try {
+      const url = `${this.terrainApiUrl}/api/terrain/height-original/${tileX}/${tileZ}`
+      const response = await fetch(url)
+      if (response.status === 404) {
+        this.missingOriginalTiles.add(key)
+        return null
+      }
+      if (!response.ok) return null
+      const buffer = await response.arrayBuffer()
+      const data = new Uint16Array(buffer)
+      this.originalHeightmaps.set(key, data)
+      return data
+    } catch {
+      return null
+    }
+  }
+
+  /** Ensure an original heightmap snapshot exists for the given tile.
+   *  If none exists yet, tells the server to copy the current heightmap as the original,
+   *  and caches a local copy. */
+  ensureOriginalHeightmap(tileX: number, tileZ: number): void {
+    const key = tileKey(tileX, tileZ)
+    if (this.originalHeightmaps.has(key)) return
+    const current = this.heightmaps.get(key)
+    if (!current) return
+    // Cache locally
+    this.originalHeightmaps.set(key, new Uint16Array(current))
+    this.missingOriginalTiles.delete(key)
+    // Tell server to snapshot (fire-and-forget, no data transfer)
+    fetch(
+      `${this.terrainApiUrl}/api/terrain/height-original/${tileX}/${tileZ}/ensure`,
+      { method: 'POST' }
+    ).catch(() => {})
+  }
+
+  /** Restore heightmap cells within a world-space rectangle from original data.
+   *  Returns the list of affected tiles. */
+  restoreFromOriginal(
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number
+  ): AffectedTile[] {
+    const affected: AffectedTile[] = []
+    const minTileX = worldToTileCoord(minX)
+    const maxTileX = worldToTileCoord(maxX)
+    const minTileZ = worldToTileCoord(minZ)
+    const maxTileZ = worldToTileCoord(maxZ)
+
+    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+      for (let tx = minTileX; tx <= maxTileX; tx++) {
+        const key = tileKey(tx, tz)
+        const original = this.originalHeightmaps.get(key)
+        const current = this.heightmaps.get(key)
+        if (!original || !current) continue
+
+        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+
+        const startCX = Math.max(0, Math.floor(minX - tileMinX))
+        const endCX = Math.min(TILE_DIM, Math.floor(maxX - tileMinX))
+        const startCZ = Math.max(0, Math.floor(minZ - tileMinZ))
+        const endCZ = Math.min(TILE_DIM, Math.floor(maxZ - tileMinZ))
+
+        let changed = false
+        for (let cz = startCZ; cz <= endCZ; cz++) {
+          for (let cx = startCX; cx <= endCX; cx++) {
+            const idx = cz * VERTS_PER_SIDE + cx
+            if (current[idx] !== original[idx]) {
+              current[idx] = original[idx]
+              changed = true
+            }
+          }
+        }
+
+        if (changed) {
+          affected.push({ tileX: tx, tileZ: tz })
+          this.dirtyTiles.add(key)
+          const geometry = this.geometries.get(key)
+          if (geometry) {
+            this.applyHeightToGeometry(tx, tz, geometry)
+          }
+        }
+      }
+    }
+
+    for (const { tileX: tx, tileZ: tz } of affected) {
+      this.refreshAdjacentTileEdges(tx, tz)
+    }
+
+    if (affected.length > 0) {
+      this.scheduleSave()
+      this.notifyHeightChanged(affected)
+    }
+
+    return affected
   }
 
   getHeightmap(tileX: number, tileZ: number): Uint16Array | undefined {
@@ -385,6 +506,8 @@ export class TerrainHeightManager {
             )
             data[idx] = newValue
 
+            this.syncToOriginal(key, idx, newValue)
+
             if (!affectedKeys.has(key)) {
               affectedKeys.add(key)
               affected.push({ tileX: tx, tileZ: tz })
@@ -490,6 +613,13 @@ export class TerrainHeightManager {
             )
             data[idx] = newValue
 
+            // Sync to original heightmap so smooth brush edits become the new "original"
+            const origData = this.originalHeightmaps.get(key)
+            if (origData) {
+              origData[idx] = newValue
+              this.dirtyOriginalTiles.add(key)
+            }
+
             if (!affectedKeys.has(key)) {
               affectedKeys.add(key)
               affected.push({ tileX: tx, tileZ: tz })
@@ -552,6 +682,13 @@ export class TerrainHeightManager {
     const maxTileX = worldToTileCoord(expandedMaxX)
     const minTileZ = worldToTileCoord(expandedMinZ)
     const maxTileZ = worldToTileCoord(expandedMaxZ)
+
+    // Snapshot original heightmaps before any modification (lazy, first-time only)
+    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+      for (let tx = minTileX; tx <= maxTileX; tx++) {
+        this.ensureOriginalHeightmap(tx, tz)
+      }
+    }
 
     for (let tz = minTileZ; tz <= maxTileZ; tz++) {
       for (let tx = minTileX; tx <= maxTileX; tx++) {
@@ -645,13 +782,16 @@ export class TerrainHeightManager {
     }, 1000)
   }
 
-  private async saveDirtyTiles() {
-    const tilesToSave = [...this.dirtyTiles]
-
-    for (const key of tilesToSave) {
-      const data = this.heightmaps.get(key)
+  private async saveTileSet(
+    dirtySet: Set<string>,
+    dataMap: Map<string, Uint16Array>,
+    urlSegment: string
+  ) {
+    const keys = [...dirtySet]
+    for (const key of keys) {
+      const data = dataMap.get(key)
       if (!data) {
-        this.dirtyTiles.delete(key)
+        dirtySet.delete(key)
         continue
       }
 
@@ -659,7 +799,7 @@ export class TerrainHeightManager {
       const tx = parseInt(txStr)
       const tz = parseInt(tzStr)
 
-      const url = `${this.terrainApiUrl}/api/terrain/height/${tx}/${tz}`
+      const url = `${this.terrainApiUrl}/api/terrain/${urlSegment}/${tx}/${tz}`
       const body = (data.buffer as ArrayBuffer).slice(
         data.byteOffset,
         data.byteOffset + data.byteLength
@@ -671,11 +811,23 @@ export class TerrainHeightManager {
           headers: { 'Content-Type': 'application/octet-stream' },
           body,
         })
-        this.dirtyTiles.delete(key)
+        dirtySet.delete(key)
       } catch (e) {
-        console.error(`Failed to save heightmap for tile (${tx}, ${tz}):`, e)
+        console.error(
+          `Failed to save ${urlSegment} for tile (${tx}, ${tz}):`,
+          e
+        )
       }
     }
+  }
+
+  private async saveDirtyTiles() {
+    await this.saveTileSet(this.dirtyTiles, this.heightmaps, 'height')
+    await this.saveTileSet(
+      this.dirtyOriginalTiles,
+      this.originalHeightmaps,
+      'height-original'
+    )
   }
 
   hasWater(tileX: number, tileZ: number): boolean {
@@ -762,6 +914,7 @@ export class TerrainHeightManager {
   unloadTile(tileX: number, tileZ: number) {
     const key = tileKey(tileX, tileZ)
     this.heightmaps.delete(key)
+    this.originalHeightmaps.delete(key)
     this.geometries.delete(key)
   }
 
@@ -771,6 +924,9 @@ export class TerrainHeightManager {
     const key = tileKey(tileX, tileZ)
     if (this.dirtyTiles.has(key)) return
     this.heightmaps.delete(key)
+    if (!this.dirtyOriginalTiles.has(key)) {
+      this.originalHeightmaps.delete(key)
+    }
   }
 
   async destroy() {
@@ -778,7 +934,7 @@ export class TerrainHeightManager {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
     }
-    if (this.dirtyTiles.size > 0) {
+    if (this.dirtyTiles.size > 0 || this.dirtyOriginalTiles.size > 0) {
       await this.saveDirtyTiles()
     }
   }

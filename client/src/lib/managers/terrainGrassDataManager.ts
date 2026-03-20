@@ -7,6 +7,7 @@ function tileKey(tileX: number, tileZ: number): string {
 
 export class TerrainGrassDataManager {
   private cache = new Map<string, GrassPlacementData>()
+  private originalGrass = new Map<string, GrassPlacementData>()
   private inflight = new Map<string, Promise<GrassPlacementData | null>>()
   /** Tiles known to have no server data (404). Prevents repeated fetches. */
   private missingTiles = new Set<string>()
@@ -66,6 +67,8 @@ export class TerrainGrassDataManager {
         if (gen !== this.generation) return null
         const data = decodeGrassData(buffer)
         this.cache.set(key, data)
+        // Also try loading the original grass (fire-and-forget)
+        this.loadOriginalGrass(tileX, tileZ)
         return data
       } catch (e) {
         console.error(`Grass data fetch error (${tileX}, ${tileZ}):`, e)
@@ -76,6 +79,65 @@ export class TerrainGrassDataManager {
     })()
     this.inflight.set(key, promise)
     return promise
+  }
+
+  /** Ensure an original grass snapshot exists for the given tile.
+   *  Tells the server to copy current grass as original if none exists yet,
+   *  and caches a local copy. */
+  ensureOriginalGrass(tileX: number, tileZ: number): void {
+    const key = tileKey(tileX, tileZ)
+    if (this.originalGrass.has(key)) return
+    const current = this.cache.get(key)
+    if (!current) return
+    // Cache locally
+    this.originalGrass.set(key, {
+      shortCount: current.shortCount,
+      tallCount: current.tallCount,
+      flowerCount: current.flowerCount,
+      buffer: current.buffer.slice(0),
+    })
+    // Tell server to snapshot (fire-and-forget, no data transfer)
+    fetch(
+      `${this.terrainApiUrl}/api/terrain/grass-original/${tileX}/${tileZ}/ensure`,
+      { method: 'POST' }
+    ).catch(() => {})
+  }
+
+  /** Load original (pre-housing) grass data from server. Returns null if none exists. */
+  async loadOriginalGrass(
+    tileX: number,
+    tileZ: number
+  ): Promise<GrassPlacementData | null> {
+    const key = tileKey(tileX, tileZ)
+    if (this.originalGrass.has(key)) return this.originalGrass.get(key)!
+    try {
+      const url = `${this.terrainApiUrl}/api/terrain/grass-original/${tileX}/${tileZ}`
+      const response = await fetch(url)
+      if (response.status === 404 || !response.ok) return null
+      const buffer = await response.arrayBuffer()
+      const data = decodeGrassData(buffer)
+      this.originalGrass.set(key, data)
+      return data
+    } catch {
+      return null
+    }
+  }
+
+  /** Restore grass data for a tile from the original snapshot.
+   *  Returns true if restored, false if no original exists. */
+  async restoreFromOriginal(tileX: number, tileZ: number): Promise<boolean> {
+    const key = tileKey(tileX, tileZ)
+    const original = this.originalGrass.get(key)
+    if (!original) return false
+    // Deep copy so original stays pristine
+    const restored: GrassPlacementData = {
+      shortCount: original.shortCount,
+      tallCount: original.tallCount,
+      flowerCount: original.flowerCount,
+      buffer: original.buffer.slice(0),
+    }
+    await this.saveGrassData(tileX, tileZ, restored)
+    return true
   }
 
   /** Save pre-computed grass data to the server. */
@@ -123,6 +185,7 @@ export class TerrainGrassDataManager {
   invalidateAll(): void {
     this.generation++
     this.cache.clear()
+    this.originalGrass.clear()
     this.missingTiles.clear()
     this.inflight.clear()
   }
@@ -130,7 +193,10 @@ export class TerrainGrassDataManager {
   /** Evict cached data for tiles not in the given set. */
   evictExcept(keepKeys: Set<string>): void {
     for (const key of this.cache.keys()) {
-      if (!keepKeys.has(key)) this.cache.delete(key)
+      if (!keepKeys.has(key)) {
+        this.cache.delete(key)
+        this.originalGrass.delete(key)
+      }
     }
   }
 }

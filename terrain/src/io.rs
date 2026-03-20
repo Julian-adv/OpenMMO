@@ -146,14 +146,122 @@ impl TerrainIO {
         fs::write(&path, data).await
     }
 
+    /// Read original (pre-housing) heightmap. Returns None if not found.
+    pub async fn read_original_heightmap(
+        &self,
+        tx: i32,
+        tz: i32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
+        let path = coords::original_heightmap_path(&self.base_dir, tx, tz);
+        match fs::read(&path).await {
+            Ok(data) if data.len() == defaults::HEIGHTMAP_SIZE => Ok(Some(data)),
+            Ok(data) => {
+                warn!(
+                    "Original heightmap {:?} has wrong size {} (expected {}), ignoring",
+                    path,
+                    data.len(),
+                    defaults::HEIGHTMAP_SIZE
+                );
+                Ok(None)
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Write original (pre-housing) heightmap.
+    pub async fn write_original_heightmap(
+        &self,
+        tx: i32,
+        tz: i32,
+        data: &[u8],
+    ) -> std::io::Result<()> {
+        if data.len() != defaults::HEIGHTMAP_SIZE {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Original heightmap: expected {} bytes, got {}",
+                    defaults::HEIGHTMAP_SIZE,
+                    data.len()
+                ),
+            ));
+        }
+        let path = coords::original_heightmap_path(&self.base_dir, tx, tz);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::write(&path, data).await
+    }
+
+    /// Read original (pre-housing) grass placement data. Returns None if not found.
+    pub async fn read_original_grass(
+        &self,
+        tx: i32,
+        tz: i32,
+    ) -> std::io::Result<Option<Vec<u8>>> {
+        let path = coords::original_grass_path(&self.base_dir, tx, tz);
+        match fs::read(&path).await {
+            Ok(data) => Ok(Some(data)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Write original (pre-housing) grass placement data.
+    pub async fn write_original_grass(
+        &self,
+        tx: i32,
+        tz: i32,
+        data: &[u8],
+    ) -> std::io::Result<()> {
+        let path = coords::original_grass_path(&self.base_dir, tx, tz);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::write(&path, data).await
+    }
+
+    /// Copy current heightmap → original heightmap if original doesn't exist yet.
+    /// No-op if original already exists. Returns true if a copy was made.
+    pub async fn ensure_original_heightmap(&self, tx: i32, tz: i32) -> std::io::Result<bool> {
+        let orig_path = coords::original_heightmap_path(&self.base_dir, tx, tz);
+        match fs::metadata(&orig_path).await {
+            Ok(_) => return Ok(false), // already exists
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+        let data = self.read_heightmap(tx, tz).await?;
+        self.write_original_heightmap(tx, tz, &data).await?;
+        Ok(true)
+    }
+
+    /// Copy current grass → original grass if original doesn't exist yet.
+    /// No-op if original already exists. Returns true if a copy was made.
+    pub async fn ensure_original_grass(&self, tx: i32, tz: i32) -> std::io::Result<bool> {
+        let orig_path = coords::original_grass_path(&self.base_dir, tx, tz);
+        match fs::metadata(&orig_path).await {
+            Ok(_) => return Ok(false), // already exists
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+        let data = match self.read_grass(tx, tz).await? {
+            Some(d) => d,
+            None => return Ok(false), // no grass data to snapshot
+        };
+        self.write_original_grass(tx, tz, &data).await?;
+        Ok(true)
+    }
+
     pub async fn delete_region(&self, rx: i32, rz: i32) -> std::io::Result<()> {
         let height_dir = coords::height_region_dir(&self.base_dir, rx, rz);
         let splat_dir = coords::splat_region_dir(&self.base_dir, rx, rz);
         let grass_dir = coords::grass_region_dir(&self.base_dir, rx, rz);
+        let orig_height_dir = coords::original_height_region_dir(&self.base_dir, rx, rz);
+        let orig_grass_dir = coords::original_grass_region_dir(&self.base_dir, rx, rz);
         let meta_file = coords::meta_path(&self.base_dir, rx, rz);
         let minimap_file = coords::minimap_path(&self.base_dir, rx, rz);
 
-        for dir in [&height_dir, &splat_dir, &grass_dir] {
+        for dir in [&height_dir, &splat_dir, &grass_dir, &orig_height_dir, &orig_grass_dir] {
             match fs::remove_dir_all(dir).await {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}

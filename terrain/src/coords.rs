@@ -50,6 +50,28 @@ pub fn grass_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("grass").join(region_dir_name(rx, rz))
 }
 
+/// Build filesystem path for an original (pre-housing) heightmap tile file.
+pub fn original_heightmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
+    let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
+    original_height_region_dir(base, rx, rz).join(format!("o_{:+05}_{:+05}.bin", tx, tz))
+}
+
+/// Build filesystem path for a region's original height tile directory.
+pub fn original_height_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("height-original").join(region_dir_name(rx, rz))
+}
+
+/// Build filesystem path for an original (pre-housing) grass placement data file.
+pub fn original_grass_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
+    let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
+    original_grass_region_dir(base, rx, rz).join(format!("g_{:+05}_{:+05}.bin", tx, tz))
+}
+
+/// Build filesystem path for a region's original grass tile directory.
+pub fn original_grass_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("grass-original").join(region_dir_name(rx, rz))
+}
+
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("minimap")

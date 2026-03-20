@@ -454,7 +454,7 @@
 
   let lastSelectKey = ''
 
-  function deleteRoomAtCursor() {
+  async function deleteRoomAtCursor() {
     if (!deleteTarget) {
       // No target but overlapping rooms exist — cycle to next
       if (deleteResults.length > 1) {
@@ -465,6 +465,8 @@
     }
     const house = housingManager.getHouseById(deleteTarget.houseId)
     if (!house) return
+
+    const deletedRoom = house.rooms[deleteTarget.roomIndex]
 
     if (house.rooms.length <= 1) {
       housingManager.deleteHouse(house.id)
@@ -477,6 +479,144 @@
     }
     clearDeleteHighlight()
     deleteResults = []
+
+    // Restore terrain and grass for 1F non-stairwell rooms
+    if (
+      deletedRoom.floorLevel === 0 &&
+      deletedRoom.roomType !== 'stairwell' &&
+      heightManager
+    ) {
+      const roomWorldX = house.origin.x + deletedRoom.localX
+      const roomWorldZ = house.origin.z + deletedRoom.localZ
+      const roomMaxX = roomWorldX + deletedRoom.sizeX
+      const roomMaxZ = roomWorldZ + deletedRoom.sizeZ
+
+      // 1. Restore heightmap from original (footprint + blend radius)
+      const restoreMinX = roomWorldX - BLEND_RADIUS
+      const restoreMinZ = roomWorldZ - BLEND_RADIUS
+      const restoreMaxX = roomMaxX + BLEND_RADIUS
+      const restoreMaxZ = roomMaxZ + BLEND_RADIUS
+      heightManager.restoreFromOriginal(
+        restoreMinX,
+        restoreMinZ,
+        restoreMaxX,
+        restoreMaxZ
+      )
+
+      // 2. Re-flatten for all remaining nearby 1F rooms
+      const allHouses = housingManager.getAllHouses()
+      for (const h of allHouses) {
+        for (const room of h.rooms) {
+          if (room.floorLevel !== 0 || room.roomType === 'stairwell') continue
+          const rx = h.origin.x + room.localX
+          const rz = h.origin.z + room.localZ
+          const rmx = rx + room.sizeX
+          const rmz = rz + room.sizeZ
+          // Check if this room's flatten zone overlaps the restored area
+          if (
+            rx - BLEND_RADIUS > restoreMaxX ||
+            rmx + BLEND_RADIUS < restoreMinX ||
+            rz - BLEND_RADIUS > restoreMaxZ ||
+            rmz + BLEND_RADIUS < restoreMinZ
+          )
+            continue
+          // Build protected rects from other 1F rooms
+          const protectedRects: {
+            minX: number
+            minZ: number
+            maxX: number
+            maxZ: number
+          }[] = []
+          for (const h2 of allHouses) {
+            for (const r2 of h2.rooms) {
+              if (r2 === room) continue
+              if (r2.floorLevel !== 0 || r2.roomType === 'stairwell') continue
+              const r2x = h2.origin.x + r2.localX
+              const r2z = h2.origin.z + r2.localZ
+              protectedRects.push({
+                minX: r2x,
+                minZ: r2z,
+                maxX: r2x + r2.sizeX,
+                maxZ: r2z + r2.sizeZ,
+              })
+            }
+          }
+          const targetHeight = h.origin.y
+          heightManager.flattenArea(rx, rz, rmx, rmz, targetHeight, BLEND_RADIUS, (wx, wz) =>
+            protectedRects.some(
+              (r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ
+            )
+          )
+        }
+      }
+      heightManager.saveAllDirty()
+
+      // 3. Restore grass from original, then re-remove for remaining houses
+      if (grassDataManager) {
+        const GRASS_MARGIN = 1
+        const grassMinX = roomWorldX - GRASS_MARGIN
+        const grassMinZ = roomWorldZ - GRASS_MARGIN
+        const grassMaxX = roomMaxX + GRASS_MARGIN
+        const grassMaxZ = roomMaxZ + GRASS_MARGIN
+
+        const tileMinX = Math.floor(
+          (grassMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+        const tileMaxX = Math.floor(
+          (grassMaxX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+        const tileMinZ = Math.floor(
+          (grassMinZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+        const tileMaxZ = Math.floor(
+          (grassMaxZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+
+        // Restore original grass for affected tiles
+        const restorePromises: Promise<boolean>[] = []
+        for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
+          for (let tx = tileMinX; tx <= tileMaxX; tx++) {
+            restorePromises.push(grassDataManager.restoreFromOriginal(tx, tz))
+          }
+        }
+        await Promise.all(restorePromises)
+
+        // Re-remove grass under remaining 1F rooms
+        for (const h of allHouses) {
+          for (const room of h.rooms) {
+            if (room.floorLevel !== 0 || room.roomType === 'stairwell') continue
+            const rx = h.origin.x + room.localX
+            const rz = h.origin.z + room.localZ
+            const rMinX = rx - GRASS_MARGIN
+            const rMinZ = rz - GRASS_MARGIN
+            const rMaxX = rx + room.sizeX + GRASS_MARGIN
+            const rMaxZ = rz + room.sizeZ + GRASS_MARGIN
+            // Only process if overlapping the restored grass area
+            if (
+              rMinX > grassMaxX ||
+              rMaxX < grassMinX ||
+              rMinZ > grassMaxZ ||
+              rMaxZ < grassMinZ
+            )
+              continue
+            for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
+              for (let tx = tileMinX; tx <= tileMaxX; tx++) {
+                const cached = grassDataManager.getCachedGrassData(tx, tz)
+                if (!cached) continue
+                const filtered = removeGrassInRect(
+                  cached,
+                  rMinX,
+                  rMinZ,
+                  rMaxX,
+                  rMaxZ
+                )
+                if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
+              }
+            }
+          }
+        }
+      }
+    }
   }
 
   function selectRoomAtCursor(event: MouseEvent) {
@@ -615,6 +755,7 @@
 
         for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
           for (let tx = tileMinX; tx <= tileMaxX; tx++) {
+            grassDataManager.ensureOriginalGrass(tx, tz)
             const cached = grassDataManager.getCachedGrassData(tx, tz)
             if (!cached) continue
             const filtered = removeGrassInRect(
