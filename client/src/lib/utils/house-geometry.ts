@@ -13,6 +13,7 @@ import type { HouseData, RoomData, WallConfig } from '../types/housing'
 import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 
 const WALL_THICKNESS = 0.15
+const FLOOR_THICKNESS = 0.1
 const DOOR_WIDTH = 1.0
 const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
@@ -166,11 +167,9 @@ function collectRoomGeometries(
 
   // Floor → back
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
-  const floorPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
-  floorPlane.rotateX(-Math.PI / 2)
   backEntries.push({
     geo: bakedGeo(
-      floorPlane,
+      new THREE.BoxGeometry(sizeX, FLOOR_THICKNESS, sizeZ),
       localX + sizeX / 2,
       yBase,
       localZ + sizeZ / 2,
@@ -189,7 +188,7 @@ function collectRoomGeometries(
     geo: bakedGeo(
       roofPlane,
       localX + sizeX / 2,
-      yBase + wallHeight,
+      yBase + wallHeight + 0.001,
       localZ + sizeZ / 2,
       0,
       sizeX,
@@ -229,27 +228,28 @@ function collectWallSegments(
     const segCenter = i + 0.5 // 0.5, 1.5, 2.5, ...
     let x: number, z: number, rotY: number
 
+    const halfT = WALL_THICKNESS / 2
     switch (dir) {
       case 'north': {
         x = localX + segCenter
-        z = localZ
+        z = localZ + halfT
         rotY = 0
         break
       }
       case 'south': {
         x = localX + segCenter
-        z = localZ + sizeZ
+        z = localZ + sizeZ - halfT
         rotY = 0
         break
       }
       case 'east': {
-        x = localX + sizeX
+        x = localX + sizeX - halfT
         z = localZ + segCenter
         rotY = Math.PI / 2
         break
       }
       case 'west': {
-        x = localX
+        x = localX + halfT
         z = localZ + segCenter
         rotY = Math.PI / 2
         break
