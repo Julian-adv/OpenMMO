@@ -1,6 +1,6 @@
 pub mod routes;
 
-use onlinerpg_shared::housing::{HouseData, RoomData};
+use onlinerpg_shared::housing::{HouseData, RoomData, RoomType};
 use std::path::PathBuf;
 use tokio::fs;
 use tracing::{error, info};
@@ -15,17 +15,22 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
     }
 
     for (i, room) in house.rooms.iter().enumerate() {
-        // Room size constraints
-        if room.size_x < MIN_ROOM_SIZE || room.size_x > MAX_ROOM_SIZE {
+        // Room size constraints (stairwells allow smaller sizes)
+        let min_size = if room.room_type == RoomType::Stairwell {
+            1
+        } else {
+            MIN_ROOM_SIZE
+        };
+        if room.size_x < min_size || room.size_x > MAX_ROOM_SIZE {
             return Err(format!(
                 "Room {} size_x ({}) must be {}-{}",
-                i, room.size_x, MIN_ROOM_SIZE, MAX_ROOM_SIZE
+                i, room.size_x, min_size, MAX_ROOM_SIZE
             ));
         }
-        if room.size_z < MIN_ROOM_SIZE || room.size_z > MAX_ROOM_SIZE {
+        if room.size_z < min_size || room.size_z > MAX_ROOM_SIZE {
             return Err(format!(
                 "Room {} size_z ({}) must be {}-{}",
-                i, room.size_z, MIN_ROOM_SIZE, MAX_ROOM_SIZE
+                i, room.size_z, min_size, MAX_ROOM_SIZE
             ));
         }
         if room.wall_height <= 0.0 || room.wall_height > 10.0 {
@@ -55,10 +60,15 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
         }
     }
 
-    // Check internal room-room overlap
+    // Check internal room-room overlap (stairwells may overlap normal rooms)
     for i in 0..house.rooms.len() {
         for j in (i + 1)..house.rooms.len() {
-            if rooms_overlap_world(&house.rooms[i], 0.0, 0.0, &house.rooms[j], 0.0, 0.0) {
+            let a = &house.rooms[i];
+            let b = &house.rooms[j];
+            if a.room_type == RoomType::Stairwell || b.room_type == RoomType::Stairwell {
+                continue;
+            }
+            if rooms_overlap_world(a, 0.0, 0.0, b, 0.0, 0.0) {
                 return Err(format!("Rooms {} and {} overlap", i, j));
             }
         }

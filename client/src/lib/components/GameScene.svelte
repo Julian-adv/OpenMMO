@@ -456,7 +456,7 @@
 
       // Update player controls (skip in map editor mode)
       const playerControlStart = performance.now()
-      if (playerControl && !$mapEditorMode && !$housingEditorMode) {
+      if (playerControl && !$mapEditorMode) {
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }

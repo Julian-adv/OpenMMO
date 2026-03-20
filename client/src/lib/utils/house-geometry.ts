@@ -213,6 +213,11 @@ function collectRoomGeometries(
   backEntries: GeoEntry[],
   suppressRoof: boolean = false
 ) {
+  if (room.roomType === 'stairwell') {
+    collectStairwellGeometries(room, frontEntries, backEntries)
+    return
+  }
+
   const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
   const yBase = floorLevel * wallHeight
 
@@ -255,6 +260,115 @@ function collectRoomGeometries(
   collectWallSegments(room.wallSouth, 'south', room, frontEntries, backEntries)
   collectWallSegments(room.wallEast, 'east', room, frontEntries, backEntries)
   collectWallSegments(room.wallWest, 'west', room, frontEntries, backEntries)
+}
+
+/**
+ * Generate stairwell geometry: steps ascending along the longer axis,
+ * within 1 floor height. No walls, no roof. Includes landings at top/bottom.
+ * Placed inside an existing room.
+ */
+const LANDING_DEPTH = 0.5
+
+function collectStairwellGeometries(
+  room: RoomData,
+  _frontEntries: GeoEntry[],
+  backEntries: GeoEntry[]
+) {
+  const { localX, localZ, sizeX, sizeZ, wallHeight } = room
+  const yBase = FLOOR_THICKNESS / 2
+  const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
+
+  // Steps ascend along the longer axis
+  const alongZ = sizeZ >= sizeX
+  const stairLen = alongZ ? sizeZ : sizeX
+  const stairWidth = alongZ ? sizeX : sizeZ
+
+  const stairRun = stairLen - LANDING_DEPTH * 2
+  const stepCount = Math.round(wallHeight / 0.25)
+  const stepHeight = wallHeight / stepCount
+  const stepDepth = stairRun / stepCount
+
+  // Helper: create a step box with world-tiled UVs (1 repeat/meter)
+  // BoxGeometry(w,h,d) vertices: 0-3 +X, 4-7 -X, 8-11 +Y, 12-15 -Y, 16-19 +Z, 20-23 -Z
+  const addBox = (
+    w: number,
+    h: number,
+    d: number,
+    cx: number,
+    cy: number,
+    cz: number
+  ) => {
+    const bw = alongZ ? w : d
+    const bd = alongZ ? d : w
+    const geo = new THREE.BoxGeometry(bw, h, bd)
+    const uv = geo.getAttribute('uv')
+    const pos = geo.getAttribute('position')
+    for (let vi = 0; vi < pos.count; vi++) {
+      const px = pos.getX(vi) + cx
+      const py = pos.getY(vi) + cy
+      const pz = pos.getZ(vi) + cz
+      const face = Math.floor(vi / 4)
+      // 0,1: ±X → (Z, Y)  2,3: ±Y → (X, Z)  4,5: ±Z → (X, Y)
+      if (face <= 1) {
+        uv.setXY(vi, pz, py)
+      } else if (face <= 3) {
+        uv.setXY(vi, px, pz)
+      } else {
+        uv.setXY(vi, px, py)
+      }
+    }
+    backEntries.push({
+      geo: bakedGeo(geo, cx, cy, cz, 0, 1, 1),
+      textureIndex: floorIdx,
+    })
+  }
+
+  // Bottom landing
+  {
+    const cx = localX + sizeX / 2
+    const cz = localZ + sizeZ / 2
+    const offset = -(stairLen / 2) + LANDING_DEPTH / 2
+    addBox(
+      stairWidth,
+      FLOOR_THICKNESS,
+      LANDING_DEPTH,
+      alongZ ? cx : cx + offset,
+      yBase,
+      alongZ ? cz + offset : cz
+    )
+  }
+
+  // Steps
+  for (let i = 0; i < stepCount; i++) {
+    const stepY = yBase + i * stepHeight + stepHeight / 2
+    const offset =
+      -(stairLen / 2) + LANDING_DEPTH + i * stepDepth + stepDepth / 2
+    const cx = localX + sizeX / 2
+    const cz = localZ + sizeZ / 2
+    addBox(
+      stairWidth,
+      stepHeight,
+      stepDepth,
+      alongZ ? cx : cx + offset,
+      stepY,
+      alongZ ? cz + offset : cz
+    )
+  }
+
+  // Top landing
+  {
+    const cx = localX + sizeX / 2
+    const cz = localZ + sizeZ / 2
+    const offset = stairLen / 2 - LANDING_DEPTH / 2
+    addBox(
+      stairWidth,
+      FLOOR_THICKNESS,
+      LANDING_DEPTH,
+      alongZ ? cx : cx + offset,
+      yBase + wallHeight,
+      alongZ ? cz + offset : cz
+    )
+  }
 }
 
 /** Render 1m wall segments along a wall direction. */

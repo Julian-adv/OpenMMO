@@ -1,5 +1,5 @@
 import { writable } from 'svelte/store'
-import type { RoomData, WallVariant } from '../types/housing'
+import type { RoomData, RoomType, WallVariant } from '../types/housing'
 
 export interface RoomTemplate {
   label: string
@@ -19,6 +19,27 @@ export interface WallVariants {
 }
 
 export const WALL_VARIANT_OPTIONS: WallVariant[] = ['solid', 'door', 'window']
+
+export const STAIR_TEMPLATES: RoomTemplate[] = [
+  {
+    label: 'Narrow (1×4)',
+    sizeX: 1,
+    sizeZ: 4,
+    wallNorthVariant: 'solid',
+    wallSouthVariant: 'solid',
+    wallEastVariant: 'solid',
+    wallWestVariant: 'solid',
+  },
+  {
+    label: 'Wide (2×4)',
+    sizeX: 2,
+    sizeZ: 4,
+    wallNorthVariant: 'solid',
+    wallSouthVariant: 'solid',
+    wallEastVariant: 'solid',
+    wallWestVariant: 'solid',
+  },
+]
 
 export const ROOM_TEMPLATES: RoomTemplate[] = [
   {
@@ -63,6 +84,7 @@ export const selectedRoomTemplate = writable<RoomTemplate | null>(null)
 export const placementRotation = writable<number>(0)
 export const placementPreview = writable<{ x: number; z: number } | null>(null)
 export const placementFloorLevel = writable<number>(0)
+export const placementRoomType = writable<RoomType>('normal')
 
 // Wall texture index (0-3)
 export const wallTextureIndex = writable<number>(0)
@@ -89,6 +111,11 @@ selectedRoomTemplate.subscribe((t) => {
       west: t.wallWestVariant,
     })
   }
+})
+
+// Clear template selection when room type changes
+placementRoomType.subscribe(() => {
+  selectedRoomTemplate.set(null)
 })
 
 // Editor tool mode (replaces housingDeleteMode)

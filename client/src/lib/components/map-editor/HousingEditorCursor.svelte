@@ -2,12 +2,14 @@
   import { T, useThrelte } from '@threlte/core'
   import * as THREE from 'three'
   import { onDestroy } from 'svelte'
+  import { SvelteSet } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import {
     selectedRoomTemplate,
     placementRotation,
     placementPreview,
     placementFloorLevel,
+    placementRoomType,
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
@@ -23,6 +25,7 @@
   import type {
     HouseData,
     RoomData,
+    RoomType,
     WallConfig,
     WallVariant,
   } from '../../types/housing'
@@ -77,13 +80,17 @@
     west: 'solid',
   })
   let currentFloorLevel = $state(0)
+  let currentRoomType = $state<RoomType>('normal')
   let previewPos = $state<{ x: number; z: number } | null>(null)
   let previewMesh: THREE.Group | null = null
   let placementValid = false
 
-  // Highlight outline for selected room
+  // Highlight outline for selected room (blue) and delete preview (red)
   const highlightEdgeMat = new THREE.LineBasicMaterial({ color: 0x44aaff })
+  const deleteEdgeMat = new THREE.LineBasicMaterial({ color: 0xff4444 })
   let highlightEdges: THREE.LineSegments | null = null
+  let deleteHighlight: THREE.LineSegments | null = null
+  let deleteTarget: { houseId: string; roomIndex: number } | null = null
 
   const BLEND_RADIUS = 4
 
@@ -124,6 +131,51 @@
     }
   }
 
+  function clearDeleteHighlight() {
+    if (deleteHighlight) {
+      previewGroup.remove(deleteHighlight)
+      deleteHighlight.geometry.dispose()
+      deleteHighlight = null
+    }
+    deleteTarget = null
+    deleteResults = []
+    deleteResultIdx = 0
+  }
+
+  let deleteResults: { house: HouseData; roomIndex: number }[] = []
+  let deleteResultIdx = 0
+
+  function updateDeleteHighlight(wx: number, wz: number, groundY: number) {
+    clearDeleteHighlight()
+    deleteResults = collectRoomsAtXZ(wx, wz, groundY)
+    deleteResultIdx = 0
+    showDeleteHighlightForResult()
+  }
+
+  function showDeleteHighlightForResult() {
+    if (deleteHighlight) {
+      previewGroup.remove(deleteHighlight)
+      deleteHighlight.geometry.dispose()
+      deleteHighlight = null
+    }
+    deleteTarget = null
+    if (deleteResults.length === 0) return
+
+    const result = deleteResults[deleteResultIdx % deleteResults.length]
+    const room = result.house.rooms[result.roomIndex]
+    const geo = new THREE.BoxGeometry(room.sizeX, room.wallHeight, room.sizeZ)
+    const edgesGeo = new THREE.EdgesGeometry(geo)
+    geo.dispose()
+    deleteHighlight = new THREE.LineSegments(edgesGeo, deleteEdgeMat)
+    deleteHighlight.position.set(
+      result.house.origin.x + room.localX + room.sizeX / 2,
+      result.house.origin.y + room.floorLevel * room.wallHeight + room.wallHeight / 2,
+      result.house.origin.z + room.localZ + room.sizeZ / 2
+    )
+    previewGroup.add(deleteHighlight)
+    deleteTarget = { houseId: result.house.id, roomIndex: result.roomIndex }
+  }
+
   function updateHighlight() {
     clearHighlight()
 
@@ -154,12 +206,13 @@
     }),
     placementRotation.subscribe((v) => {
       currentRotation = v
-      updatePreviewTransform()
+      scheduleRebuildPreview()
     }),
     housingEditorTool.subscribe((v) => {
       currentTool = v
       canvas.style.cursor = v === 'delete' ? 'crosshair' : v === 'select' ? 'pointer' : ''
       if (v !== 'select') clearHighlight()
+      if (v !== 'delete') clearDeleteHighlight()
     }),
     selectedHouseId.subscribe(() => scheduleUpdateHighlight()),
     selectedRoomIndex.subscribe(() => scheduleUpdateHighlight()),
@@ -169,6 +222,10 @@
     }),
     placementFloorLevel.subscribe((v) => {
       currentFloorLevel = v
+      scheduleRebuildPreview()
+    }),
+    placementRoomType.subscribe((v) => {
+      currentRoomType = v
       scheduleRebuildPreview()
     }),
   ]
@@ -224,12 +281,22 @@
   function updatePreviewTransform() {
     if (!previewMesh || !previewPos) return
     previewMesh.position.set(previewPos.x, previewMesh.position.y, previewPos.z)
-    previewMesh.rotation.y = (currentRotation * Math.PI) / 180
   }
 
   function checkPlacementValid(): boolean {
     if (!currentTemplate || !previewPos) return false
     const { sx, sz } = getRotatedSize()
+
+    if (currentRoomType === 'stairwell') {
+      // Stairwells must be placed inside an existing 1F room
+      return housingManager.hasFloorSupport(
+        previewPos.x,
+        previewPos.z,
+        sx,
+        sz
+      )
+    }
+
     const hasOverlap = housingManager.checkOverlap(
       previewPos.x,
       previewPos.z,
@@ -264,6 +331,7 @@
       placementPreview.set(null)
       previewPos = null
       if (previewMesh) previewMesh.visible = false
+      if (currentTool === 'delete') clearDeleteHighlight()
       return
     }
 
@@ -276,7 +344,6 @@
     if (currentTool === 'place' && previewMesh) {
       previewMesh.visible = true
       previewMesh.position.set(x, hit.point.y, z)
-      previewMesh.rotation.y = (currentRotation * Math.PI) / 180
       if (posChanged) {
         const wasValid = placementValid
         placementValid = checkPlacementValid()
@@ -285,14 +352,20 @@
     } else if (previewMesh) {
       previewMesh.visible = false
     }
+
+    if (currentTool === 'delete' && posChanged) {
+      updateDeleteHighlight(hit.point.x, hit.point.z, hit.point.y)
+    }
   }
 
   function handleMouseDown(event: MouseEvent) {
     if (event.button !== 0) return
+    // Ctrl+click passes through to player movement
+    if (event.ctrlKey || event.metaKey) return
     event.preventDefault()
 
     if (currentTool === 'delete') {
-      deleteHouseAtCursor(event)
+      deleteRoomAtCursor()
       return
     }
 
@@ -311,39 +384,86 @@
     }
   }
 
-  /** Find house/room at cursor XZ, checking all floor levels (raycast Y is ground level). */
-  function findAtCursorXZ(event: MouseEvent) {
-    const hit = raycastTerrain(event)
-    if (!hit) return null
-    const { x, z } = hit.point
-    const groundY = hit.point.y
-    // Try each floor level (highest first so 2F takes priority)
+  /** Collect all unique rooms at world XZ across both floor levels. */
+  function collectRoomsAtXZ(
+    wx: number,
+    wz: number,
+    groundY: number
+  ): { house: HouseData; roomIndex: number }[] {
+    const results: { house: HouseData; roomIndex: number }[] = []
+    const seen = new SvelteSet<string>()
     for (let fl = 1; fl >= 0; fl--) {
-      const testY = groundY + fl * DEFAULT_WALL_HEIGHT + 1 // inside the room volume
-      const result = housingManager.findRoomAtPoint(x, testY, z)
-      if (result) return result
+      const testY = groundY + fl * DEFAULT_WALL_HEIGHT + 1
+      for (const r of housingManager.findAllRoomsAtPoint(wx, testY, wz)) {
+        const key = `${r.house.id}:${r.roomIndex}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          results.push(r)
+        }
+      }
     }
-    return null
+    return results
   }
 
-  function deleteHouseAtCursor(event: MouseEvent) {
-    const result = findAtCursorXZ(event)
-    if (result) {
-      housingManager.deleteHouse(result.house.id)
-      housingEditorTool.set('place')
+  /** Find all rooms at cursor XZ via raycast. */
+  function findAllAtCursorXZ(event: MouseEvent) {
+    const hit = raycastTerrain(event)
+    if (!hit) return []
+    return collectRoomsAtXZ(hit.point.x, hit.point.z, hit.point.y)
+  }
+
+  let lastSelectKey = ''
+
+  function deleteRoomAtCursor() {
+    if (!deleteTarget) {
+      // No target but overlapping rooms exist — cycle to next
+      if (deleteResults.length > 1) {
+        deleteResultIdx = (deleteResultIdx + 1) % deleteResults.length
+        showDeleteHighlightForResult()
+      }
+      return
     }
+    const house = housingManager.getHouseById(deleteTarget.houseId)
+    if (!house) return
+
+    if (house.rooms.length <= 1) {
+      housingManager.deleteHouse(house.id)
+    } else {
+      const updatedRooms = house.rooms.filter(
+        (_, i) => i !== deleteTarget!.roomIndex
+      )
+      const updatedHouse: HouseData = { ...house, rooms: updatedRooms }
+      housingManager.updateHouse(updatedHouse)
+    }
+    clearDeleteHighlight()
+    deleteResults = []
   }
 
   function selectRoomAtCursor(event: MouseEvent) {
-    const result = findAtCursorXZ(event)
-    if (result) {
-      selectedHouseId.set(result.house.id)
-      selectedRoomIndex.set(result.roomIndex)
-      populateEditStoresFromRoom(result.house.rooms[result.roomIndex])
-    } else {
+    const results = findAllAtCursorXZ(event)
+    if (results.length === 0) {
       selectedHouseId.set(null)
       selectedRoomIndex.set(null)
+      lastSelectKey = ''
+      return
     }
+
+    // Cycle through overlapping rooms on repeated clicks
+    let idx = 0
+    if (results.length > 1) {
+      const currentIdx = results.findIndex(
+        (r) => `${r.house.id}:${r.roomIndex}` === lastSelectKey
+      )
+      if (currentIdx >= 0) {
+        idx = (currentIdx + 1) % results.length
+      }
+    }
+
+    const result = results[idx]
+    lastSelectKey = `${result.house.id}:${result.roomIndex}`
+    selectedHouseId.set(result.house.id)
+    selectedRoomIndex.set(result.roomIndex)
+    populateEditStoresFromRoom(result.house.rooms[result.roomIndex])
   }
 
   async function placeHouse() {
@@ -357,10 +477,10 @@
 
     const newRoom = buildRoomData(sx, sz)
 
-    // For 2F rooms, find the house with supporting 1F rooms
-    // For 1F rooms, check edge adjacency
+    // Stairwells and 2F rooms attach to the house with supporting 1F rooms
+    // 1F rooms check edge adjacency
     let targetHouse: HouseData | null
-    if (currentFloorLevel >= 1) {
+    if (currentRoomType === 'stairwell' || currentFloorLevel >= 1) {
       targetHouse = housingManager.findSupportingHouse(pos.x, pos.z, sx, sz)
     } else {
       targetHouse = housingManager.findAdjacentHouse(pos.x, pos.z, sx, sz)
@@ -382,8 +502,8 @@
       }
       saved = await housingManager.updateHouse(updatedHouse)
     } else {
-      // 2F rooms must always attach to an existing house
-      if (currentFloorLevel >= 1) return
+      // 2F rooms and stairwells must attach to an existing house
+      if (currentRoomType === 'stairwell' || currentFloorLevel >= 1) return
 
       const houseData: HouseData = {
         id: '',
@@ -396,8 +516,8 @@
 
     if (!saved) return
 
-    // Skip terrain flatten and grass removal for 2F rooms
-    if (currentFloorLevel === 0) {
+    // Skip terrain flatten and grass removal for 2F rooms and stairwells
+    if (currentFloorLevel === 0 && currentRoomType !== 'stairwell') {
       heightManager.flattenArea(
         pos.x,
         pos.z,
@@ -463,11 +583,12 @@
     const wv = currentWallVariants
 
     return {
+      roomType: currentRoomType,
       localX: 0,
       localZ: 0,
       sizeX,
       sizeZ,
-      floorLevel: currentFloorLevel,
+      floorLevel: currentRoomType === 'stairwell' ? 0 : currentFloorLevel,
       floorTexture: floorTex,
       roofTexture: roofTex,
       wallHeight: DEFAULT_WALL_HEIGHT,
@@ -551,7 +672,9 @@
     previewMatValid.dispose()
     previewMatInvalid.dispose()
     highlightEdgeMat.dispose()
+    deleteEdgeMat.dispose()
     clearHighlight()
+    clearDeleteHighlight()
 
     if (previewMesh) {
       previewGroup.remove(previewMesh)

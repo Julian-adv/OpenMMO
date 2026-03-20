@@ -2,9 +2,11 @@
   import { onDestroy } from 'svelte'
   import {
     ROOM_TEMPLATES,
+    STAIR_TEMPLATES,
     selectedRoomTemplate,
     placementRotation,
     placementFloorLevel,
+    placementRoomType,
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
@@ -12,13 +14,11 @@
     housingEditorTool,
     selectedHouseId,
     selectedRoomIndex,
-    wallVariants,
     WALL_VARIANT_OPTIONS,
     type RoomTemplate,
-    type WallVariants,
     type HousingEditorTool,
   } from '../../stores/housingEditorStore'
-  import type { HouseData, RoomData, WallVariant } from '../../types/housing'
+  import type { HouseData, RoomData, RoomType } from '../../types/housing'
   import { HOUSING_TEXTURES } from '../../utils/housing-textures'
   import { housingManager } from '../../managers/housingManager'
 
@@ -35,13 +35,8 @@
   let selected = $state<RoomTemplate | null>(null)
   let preview = $state<{ x: number; z: number } | null>(null)
   let tool = $state<HousingEditorTool>('place')
-  let variants = $state<WallVariants>({
-    north: 'solid',
-    south: 'door',
-    east: 'solid',
-    west: 'solid',
-  })
   let floorLvl = $state(0)
+  let roomType = $state<RoomType>('normal')
   let editHouseId = $state<string | null>(null)
   let editRoomIdx = $state<number | null>(null)
   let editVersion = $state(0)
@@ -63,8 +58,8 @@
     selectedRoomTemplate.subscribe((v) => (selected = v)),
     placementPreview.subscribe((v) => (preview = v)),
     housingEditorTool.subscribe((v) => (tool = v)),
-    wallVariants.subscribe((v) => (variants = v)),
     placementFloorLevel.subscribe((v) => (floorLvl = v)),
+    placementRoomType.subscribe((v) => (roomType = v)),
     selectedHouseId.subscribe((v) => (editHouseId = v)),
     selectedRoomIndex.subscribe((v) => (editRoomIdx = v)),
   ]
@@ -86,17 +81,10 @@
     placementRotation.set((rotation + 90) % 360)
   }
 
-  type WallDir = keyof WallVariants
-
   const VARIANT_LABELS: Record<string, string> = {
     solid: '⬜',
     door: '🚪',
     window: '⊞',
-  }
-
-  function setWallVariant(dir: WallDir, variant: WallVariant) {
-    if (variants[dir] === variant) return
-    wallVariants.update((v) => ({ ...v, [dir]: variant }))
   }
 
   // --- Edit mode functions ---
@@ -137,9 +125,13 @@
     { label: 'W', wallKey: 'wallWest' },
   ]
 
-  function setSegmentVariant(wallKey: WallDirKey, segIdx: number, variant: WallVariant) {
+  function cycleSegmentVariant(wallKey: WallDirKey, segIdx: number) {
     applyRoomEdit((room) => {
-      room[wallKey][segIdx] = { ...room[wallKey][segIdx], variant }
+      const seg = room[wallKey][segIdx]
+      if (seg.variant === 'open') return
+      const idx = WALL_VARIANT_OPTIONS.indexOf(seg.variant)
+      const next = WALL_VARIANT_OPTIONS[(idx + 1) % WALL_VARIANT_OPTIONS.length]
+      room[wallKey][segIdx] = { ...seg, variant: next }
     })
   }
 
@@ -201,37 +193,43 @@
       </div>
     {/snippet}
 
-    {#snippet wallButtons(dir: WallDir, label: string)}
-      {#each WALL_VARIANT_OPTIONS as variant (variant)}
-        <button
-          class="variant-btn"
-          class:active={variants[dir] === variant}
-          disabled={tool !== 'place'}
-          title="{label} → {variant}"
-          onclick={() => setWallVariant(dir, variant)}
-        >{VARIANT_LABELS[variant]}</button>
-      {/each}
-    {/snippet}
-
-    <div class="section-title">Floor</div>
+    <div class="section-title">Type</div>
     <div class="tool-row">
       <button
         class="tool-btn"
-        class:active={floorLvl === 0}
+        class:active={roomType === 'normal'}
         disabled={tool !== 'place'}
-        onclick={() => placementFloorLevel.set(0)}
-      >1F</button>
+        onclick={() => placementRoomType.set('normal')}
+      >Room</button>
       <button
         class="tool-btn"
-        class:active={floorLvl === 1}
+        class:active={roomType === 'stairwell'}
         disabled={tool !== 'place'}
-        onclick={() => placementFloorLevel.set(1)}
-      >2F</button>
+        onclick={() => placementRoomType.set('stairwell')}
+      >Stairs</button>
     </div>
 
-    <div class="section-title">Room</div>
+    {#if roomType === 'normal'}
+      <div class="section-title">Floor</div>
+      <div class="tool-row">
+        <button
+          class="tool-btn"
+          class:active={floorLvl === 0}
+          disabled={tool !== 'place'}
+          onclick={() => placementFloorLevel.set(0)}
+        >1F</button>
+        <button
+          class="tool-btn"
+          class:active={floorLvl === 1}
+          disabled={tool !== 'place'}
+          onclick={() => placementFloorLevel.set(1)}
+        >2F</button>
+      </div>
+    {/if}
+
+    <div class="section-title">{roomType === 'stairwell' ? 'Stairs' : 'Room'}</div>
     <div class="room-grid">
-      {#each ROOM_TEMPLATES as t (t.label)}
+      {#each (roomType === 'stairwell' ? STAIR_TEMPLATES : ROOM_TEMPLATES) as t (t.label)}
         <button
           class="room-btn"
           class:active={selected === t && tool === 'place'}
@@ -247,17 +245,6 @@
     <div class="section-title">Rotate <span class="hint">(R)</span></div>
     <button class="rotate-btn" disabled={tool !== 'place'} onclick={rotate}>{rotation}°</button>
 
-    <div class="section-title">Walls</div>
-    <div class="wall-cross">
-      <div class="wall-cross-top">{@render wallButtons('north', 'N')}</div>
-      <div class="wall-cross-mid">
-        <div class="wall-cross-side">{@render wallButtons('west', 'W')}</div>
-        <span class="wall-cross-center">+</span>
-        <div class="wall-cross-side">{@render wallButtons('east', 'E')}</div>
-      </div>
-      <div class="wall-cross-bot">{@render wallButtons('south', 'S')}</div>
-    </div>
-
     {@render texturePicker('Wall', wallTex, (i) => { if (tool === 'select') onEditTextureChange('wall', i); else wallTextureIndex.set(i) })}
     {@render texturePicker('Floor', floorTex, (i) => { if (tool === 'select') onEditTextureChange('floor', i); else floorTextureIndex.set(i) })}
     {@render texturePicker('Roof', roofTex, (i) => { if (tool === 'select') onEditTextureChange('roof', i); else roofTextureIndex.set(i) })}
@@ -270,20 +257,12 @@
         <div class="section-title">{dir.label} Wall ({wall.length} seg)</div>
         <div class="segment-row">
           {#each wall as seg, segIdx (segIdx)}
-            <div class="segment-group">
-              {#each WALL_VARIANT_OPTIONS as variant (variant)}
-                <button
-                  class="variant-btn"
-                  class:active={seg.variant === variant}
-                  disabled={seg.variant === 'open'}
-                  title="Seg {segIdx + 1} → {variant}"
-                  onclick={() => setSegmentVariant(dir.wallKey, segIdx, variant)}
-                >{VARIANT_LABELS[variant]}</button>
-              {/each}
-              {#if seg.variant === 'open'}
-                <span class="open-label">open</span>
-              {/if}
-            </div>
+            <button
+              class="variant-btn"
+              disabled={seg.variant === 'open'}
+              title="Seg {segIdx + 1}: {seg.variant}"
+              onclick={() => cycleSegmentVariant(dir.wallKey, segIdx)}
+            >{seg.variant === 'open' ? '−' : VARIANT_LABELS[seg.variant]}</button>
           {/each}
         </div>
       {/each}
@@ -467,36 +446,6 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .wall-cross {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .wall-cross-top,
-  .wall-cross-bot {
-    display: flex;
-    gap: 2px;
-  }
-
-  .wall-cross-mid {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .wall-cross-side {
-    display: flex;
-    gap: 2px;
-  }
-
-  .wall-cross-center {
-    font-size: 14px;
-    color: #555;
-    width: 16px;
-    text-align: center;
-  }
 
   .variant-btn {
     width: 26px;
@@ -518,11 +467,6 @@
     color: #ddd;
   }
 
-  .variant-btn.active {
-    background: rgba(123, 198, 123, 0.2);
-    border-color: rgba(123, 198, 123, 0.5);
-    color: #7bc67b;
-  }
 
   .variant-btn:disabled {
     opacity: 0.3;
@@ -531,20 +475,8 @@
 
   .segment-row {
     display: flex;
-    gap: 6px;
+    gap: 3px;
     flex-wrap: wrap;
-  }
-
-  .segment-group {
-    display: flex;
-    gap: 1px;
-    align-items: center;
-  }
-
-  .open-label {
-    font-size: 9px;
-    color: #666;
-    margin-left: 2px;
   }
 
   .tex-row {

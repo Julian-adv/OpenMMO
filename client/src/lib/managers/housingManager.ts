@@ -149,7 +149,7 @@ export class HousingManager {
     return result ? result.house : null
   }
 
-  /** Find the house and specific room index containing a world point. */
+  /** Find the first room containing a world point (fast, no allocation). */
   findRoomAtPoint(
     x: number,
     y: number,
@@ -174,6 +174,35 @@ export class HousingManager {
       }
     }
     return null
+  }
+
+  /** Find ALL rooms containing a world point (for overlapping stairwells etc). */
+  findAllRoomsAtPoint(
+    x: number,
+    y: number,
+    z: number
+  ): { house: HouseData; roomIndex: number }[] {
+    const results: { house: HouseData; roomIndex: number }[] = []
+    for (const house of this.housesById.values()) {
+      for (let i = 0; i < house.rooms.length; i++) {
+        const room = house.rooms[i]
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+        const ryBase = house.origin.y + room.floorLevel * room.wallHeight
+        const roomHeight = room.wallHeight
+        if (
+          x >= rx &&
+          x <= rx + room.sizeX &&
+          z >= rz &&
+          z <= rz + room.sizeZ &&
+          y >= ryBase - 1 &&
+          y <= ryBase + roomHeight + 1
+        ) {
+          results.push({ house, roomIndex: i })
+        }
+      }
+    }
+    return results
   }
 
   /** Update local cache without server call (triggers geometry rebuild). */
