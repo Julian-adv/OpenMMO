@@ -197,7 +197,7 @@ function collectRoomGeometries(
     geo: bakedGeo(
       roofPlane,
       localX + sizeX / 2,
-      yBase + wallHeight + 0.001,
+      yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
       localZ + sizeZ / 2,
       0,
       sizeX,
@@ -224,7 +224,7 @@ function collectWallSegments(
   const dirInfo = WALL_DIR_INFO[dir]
   const target = dirInfo.isFront ? frontEntries : backEntries
   const wh = room.wallHeight
-  const yBase = room.floorLevel * wh
+  const yBase = room.floorLevel * wh + FLOOR_THICKNESS / 2
   const { localX, localZ, sizeX, sizeZ } = room
 
   for (let i = 0; i < segments.length; i++) {

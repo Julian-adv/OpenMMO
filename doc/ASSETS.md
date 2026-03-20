@@ -94,7 +94,7 @@
 
 # Blender
 
-- Use version 5.0.1
+- Use version 5.1.0
 - blender-scripts
   - fix_mixamo_transforms.py
   
@@ -127,6 +127,19 @@
 ## Icon
 
 - https://icon-sets.iconify.design/fa6-solid/people-group/
+
+## House
+
+Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
+
+- wood_planks_1k.glb -> https://polyhaven.com/a/wood_planks
+- planks_brown_10_1k.glb -> https://polyhaven.com/a/planks_brown_10
+- dark_wooden_planks_1k.glb -> https://polyhaven.com/a/dark_wooden_planks
+- marble_01_1k.glb -> https://polyhaven.com/a/marble_01
+- weathered_planks_1k.glb -> https://polyhaven.com/a/weathered_planks
+- wood_trunk_wall_1k.glb -> https://polyhaven.com/a/wood_trunk_wall
+- wood_shutter_1k.glb -> https://polyhaven.com/a/wood_shutter
+- wood_plank_wall_1k.glb -> https://polyhaven.com/a/wood_plank_wall
 
 ## BGM
 
@@ -169,14 +182,12 @@ haunting memorable melody, quiet grandeur, lonely wanderer crossing a vast open 
 seamless loop, game BGM
   ```
 
-
-- combat
+- Hearthside Respite
   ```
-  Urgent combat loop, relentless driving rhythm, medieval battle music, 
-  BPM 160+, explosive percussive intro hit, war drums pounding, 
-  aggressive lute strumming, piercing recorder melody, 
-  harp arpeggios cutting through chaos, layered tension build, 
-  no breathing room, every beat hits hard, 
-  short seamless loop, game BGM, Ultima-style medieval fantasy combat, 
-  heroic but desperate, life-or-death urgency, adrenaline surge
+  Warm and relaxed medieval tavern music. Gentle lute fingerpicking sets a cozy mood. Soft fiddle plays a slow, sweet melody. Harp adds delicate touches. Feels like resting by the fireplace with a mug of ale after a long journey. Calm and inviting. No vocals.
+  ```
+
+- Triumphal Procession
+  ```
+  Epic orchestral score with bold brass fanfare, sweeping strings, and thunderous percussion, Opens with brilliant trumpets and French horns over timpani swells, then locks into a ceremonial march guided by snare, Middle section softens into harp arpeggios and warm woodwinds, then surges back into a fuller, more heroic reprise that climbs into a massive, shining crescendo to close, harp, soft, soaring, orchestral
   ```

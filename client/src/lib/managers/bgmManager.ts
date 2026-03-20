@@ -8,7 +8,10 @@ const BGM_FILES = [
   'Untitled (5).mp3',
   'Untitled (7).mp3',
   'Untitled (9).mp3',
-  'Wanderer of the Old Fields.mp3',
+  'Hearthside Respite.mp3',
+  'Hearthside Respite (1).mp3',
+  'Triumphal Procession.mp3',
+  'Triumphal Procession (1).mp3',
   'Wanderer of the Old Fields (1).mp3',
 ]
 

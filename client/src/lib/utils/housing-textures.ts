@@ -21,8 +21,14 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     glb: 'red_laterite_soil_stones_1k',
     fallbackColor: 0xa85032,
   },
-  { label: 'Wood', glb: 'planks_brown_10_1k', fallbackColor: 0x8b6914 },
-  { label: 'Marble', glb: 'snow_02_1k', fallbackColor: 0xe0d8cc },
+  { label: 'Wood', glb: 'housing/planks_brown_10_1k', fallbackColor: 0x8b6914 },
+  { label: 'Marble', glb: 'housing/marble_01_1k', fallbackColor: 0xe0d8cc },
+  { label: 'Plank', glb: 'housing/wood_planks_1k', fallbackColor: 0x9e7c4e },
+  { label: 'Dark Wood', glb: 'housing/dark_wooden_planks_1k', fallbackColor: 0x4a3728 },
+  { label: 'Weathered', glb: 'housing/weathered_planks_1k', fallbackColor: 0x8a8070 },
+  { label: 'Log Wall', glb: 'housing/wood_trunk_wall_1k', fallbackColor: 0x7a5c3a },
+  { label: 'Shutter', glb: 'housing/wood_shutter_1k', fallbackColor: 0x6b5a3e },
+  { label: 'Plank Wall', glb: 'housing/wood_plank_wall_1k', fallbackColor: 0x8b7355 },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */

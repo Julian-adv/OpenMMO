@@ -104,28 +104,6 @@
     })
   }
 
-  const unsubs = [
-    selectedRoomTemplate.subscribe((v) => {
-      currentTemplate = v
-      scheduleRebuildPreview()
-    }),
-    placementRotation.subscribe((v) => {
-      currentRotation = v
-      updatePreviewTransform()
-    }),
-    housingEditorTool.subscribe((v) => {
-      currentTool = v
-      canvas.style.cursor = v === 'delete' ? 'crosshair' : v === 'select' ? 'pointer' : ''
-      if (v !== 'select') clearHighlight()
-    }),
-    selectedHouseId.subscribe(() => scheduleUpdateHighlight()),
-    selectedRoomIndex.subscribe(() => scheduleUpdateHighlight()),
-    wallVariants.subscribe((v) => {
-      currentWallVariants = v
-      scheduleRebuildPreview()
-    }),
-  ]
-
   let highlightScheduled = false
   function scheduleUpdateHighlight() {
     if (highlightScheduled) return
@@ -166,6 +144,28 @@
     )
     previewGroup.add(highlightEdges)
   }
+
+  const unsubs = [
+    selectedRoomTemplate.subscribe((v) => {
+      currentTemplate = v
+      scheduleRebuildPreview()
+    }),
+    placementRotation.subscribe((v) => {
+      currentRotation = v
+      updatePreviewTransform()
+    }),
+    housingEditorTool.subscribe((v) => {
+      currentTool = v
+      canvas.style.cursor = v === 'delete' ? 'crosshair' : v === 'select' ? 'pointer' : ''
+      if (v !== 'select') clearHighlight()
+    }),
+    selectedHouseId.subscribe(() => scheduleUpdateHighlight()),
+    selectedRoomIndex.subscribe(() => scheduleUpdateHighlight()),
+    wallVariants.subscribe((v) => {
+      currentWallVariants = v
+      scheduleRebuildPreview()
+    }),
+  ]
 
   function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
     if (!camera) return null
