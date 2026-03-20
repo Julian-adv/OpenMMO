@@ -1,15 +1,16 @@
 /**
  * house-geometry.ts — Assembles a THREE.Group from HouseData.
  *
- * All geometry for a house is merged into 2 meshes:
- * - frontMesh: south walls + west walls + roofs (hidden when player is inside)
- * - backMesh: north walls + east walls + floors (always visible)
+ * Geometries are grouped by (isFront, textureIndex) and merged into one mesh
+ * per group. Each mesh uses a shared MeshStandardMaterial from housing-textures.ts.
  *
- * This keeps draw calls to 2 per house regardless of room count.
+ * Front group: south walls + west walls + roofs (hidden when player is inside)
+ * Back group:  north walls + east walls + floors (always visible)
  */
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { HouseData, RoomData, WallConfig } from '../types/housing'
+import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 
 const WALL_THICKNESS = 0.15
 const DOOR_WIDTH = 1.0
@@ -17,11 +18,6 @@ const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
 const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
-
-// Placeholder colors per texture index (Phase 1)
-export const WALL_COLORS = [0xc8b090, 0xa85032, 0x8b6914, 0x888888]
-export const FLOOR_COLORS = [0x8b6914, 0xa0522d, 0xd2b48c, 0x808080]
-export const ROOF_COLORS = [0x8b4513, 0x654321, 0xa0522d, 0x696969]
 
 /** Y offset used to hide front walls instead of toggling visible (WebGPU workaround) */
 export const OFFSCREEN_Y = -10000
@@ -41,18 +37,6 @@ const WALL_DIR_INFO: Record<WallDirection, WallDirInfo> = {
 
 type WallDirection = 'north' | 'south' | 'east' | 'west'
 
-// Single shared material for all housing (Phase 1 placeholder)
-let _housingMat: THREE.MeshBasicMaterial | null = null
-function getHousingMaterial(): THREE.MeshBasicMaterial {
-  if (!_housingMat) {
-    _housingMat = new THREE.MeshBasicMaterial({
-      vertexColors: true,
-      side: THREE.DoubleSide,
-    })
-  }
-  return _housingMat
-}
-
 export interface HouseGroupResult {
   houseGroup: THREE.Group
   frontGroup: THREE.Group
@@ -63,8 +47,12 @@ export interface HouseGroupResult {
 }
 
 const _aabbVec = new THREE.Vector3()
-const _tmpColor = new THREE.Color()
 const _tmpMatrix = new THREE.Matrix4()
+
+interface GeoEntry {
+  geo: THREE.BufferGeometry
+  textureIndex: number
+}
 
 export function buildHouseGroup(house: HouseData): HouseGroupResult {
   const houseGroup = new THREE.Group()
@@ -78,29 +66,16 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
   houseGroup.add(frontGroup)
   houseGroup.add(backGroup)
 
-  // Collect geometries with baked positions and vertex colors
-  const frontGeos: THREE.BufferGeometry[] = []
-  const backGeos: THREE.BufferGeometry[] = []
+  const frontEntries: GeoEntry[] = []
+  const backEntries: GeoEntry[] = []
 
   for (const room of house.rooms) {
-    collectRoomGeometries(room, frontGeos, backGeos)
+    collectRoomGeometries(room, frontEntries, backEntries)
   }
 
-  const mat = getHousingMaterial()
-
-  if (frontGeos.length > 0) {
-    const merged = mergeGeometries(frontGeos, false)
-    if (merged) {
-      frontGroup.add(new THREE.Mesh(merged, mat))
-    }
-  }
-
-  if (backGeos.length > 0) {
-    const merged = mergeGeometries(backGeos, false)
-    if (merged) {
-      backGroup.add(new THREE.Mesh(merged, mat))
-    }
-  }
+  // Group by texture index and merge
+  addMergedMeshes(frontGroup, frontEntries)
+  addMergedMeshes(backGroup, backEntries)
 
   // Compute world-space AABB
   const aabb = new THREE.Box3()
@@ -127,20 +102,40 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
   }
 }
 
+/** Group entries by texture index, merge geometries per group, create meshes. */
+function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]) {
+  if (entries.length === 0) return
+
+  const byTex = new Map<number, THREE.BufferGeometry[]>()
+  for (const e of entries) {
+    const list = byTex.get(e.textureIndex)
+    if (list) {
+      list.push(e.geo)
+    } else {
+      byTex.set(e.textureIndex, [e.geo])
+    }
+  }
+
+  for (const [texIdx, geos] of byTex) {
+    const merged = mergeGeometries(geos, false)
+    if (merged) {
+      group.add(new THREE.Mesh(merged, getHousingMaterial(texIdx)))
+    }
+  }
+}
+
 /**
- * Create geometry with baked position + vertex colors for a single piece,
- * then add it to the front or back geometry list.
+ * Create geometry with baked position and tiled UVs for a single piece.
  */
 function bakedGeo(
   baseGeo: THREE.BufferGeometry,
-  color: number,
   px: number,
   py: number,
   pz: number,
-  rotY: number = 0
+  rotY: number = 0,
+  uvScaleX: number = 1,
+  uvScaleY: number = 1
 ): THREE.BufferGeometry {
-  const geo = baseGeo.clone()
-
   // Apply position and rotation by modifying vertices directly
   if (rotY !== 0) {
     _tmpMatrix.makeRotationY(rotY)
@@ -148,63 +143,66 @@ function bakedGeo(
   } else {
     _tmpMatrix.makeTranslation(px, py, pz)
   }
-  geo.applyMatrix4(_tmpMatrix)
+  baseGeo.applyMatrix4(_tmpMatrix)
 
-  // Add vertex colors
-  const count = geo.getAttribute('position').count
-  const colors = new Float32Array(count * 3)
-  _tmpColor.set(color)
-  for (let i = 0; i < count; i++) {
-    colors[i * 3] = _tmpColor.r
-    colors[i * 3 + 1] = _tmpColor.g
-    colors[i * 3 + 2] = _tmpColor.b
+  // Scale UVs for texture tiling (1 repeat per meter)
+  const uv = baseGeo.getAttribute('uv')
+  if (uv) {
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, uv.getX(i) * uvScaleX, uv.getY(i) * uvScaleY)
+    }
   }
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
 
-  return geo
+  return baseGeo
 }
 
 function collectRoomGeometries(
   room: RoomData,
-  frontGeos: THREE.BufferGeometry[],
-  backGeos: THREE.BufferGeometry[]
+  frontEntries: GeoEntry[],
+  backEntries: GeoEntry[]
 ) {
   const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
   const yBase = floorLevel * wallHeight
 
   // Floor → back
-  const floorColor = FLOOR_COLORS[room.floorTexture % FLOOR_COLORS.length]
+  const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
   const floorPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
   floorPlane.rotateX(-Math.PI / 2)
-  backGeos.push(
-    bakedGeo(
+  backEntries.push({
+    geo: bakedGeo(
       floorPlane,
-      floorColor,
       localX + sizeX / 2,
       yBase,
-      localZ + sizeZ / 2
-    )
-  )
+      localZ + sizeZ / 2,
+      0,
+      sizeX,
+      sizeZ
+    ),
+    textureIndex: floorIdx,
+  })
 
   // Roof → front
-  const roofColor = ROOF_COLORS[room.roofTexture % ROOF_COLORS.length]
+  const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
   const roofPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
   roofPlane.rotateX(-Math.PI / 2)
-  frontGeos.push(
-    bakedGeo(
+  frontEntries.push({
+    geo: bakedGeo(
       roofPlane,
-      roofColor,
       localX + sizeX / 2,
       yBase + wallHeight,
-      localZ + sizeZ / 2
-    )
-  )
+      localZ + sizeZ / 2,
+      0,
+      sizeX,
+      sizeZ
+    ),
+    textureIndex: roofIdx,
+  })
 
   // Walls — each is an array of 1m segments
-  collectWallSegments(room.wallNorth, 'north', room, frontGeos, backGeos)
-  collectWallSegments(room.wallSouth, 'south', room, frontGeos, backGeos)
-  collectWallSegments(room.wallEast, 'east', room, frontGeos, backGeos)
-  collectWallSegments(room.wallWest, 'west', room, frontGeos, backGeos)
+  collectWallSegments(room.wallNorth, 'north', room, frontEntries, backEntries)
+  collectWallSegments(room.wallSouth, 'south', room, frontEntries, backEntries)
+  collectWallSegments(room.wallEast, 'east', room, frontEntries, backEntries)
+  collectWallSegments(room.wallWest, 'west', room, frontEntries, backEntries)
 }
 
 /** Render 1m wall segments along a wall direction. */
@@ -212,11 +210,11 @@ function collectWallSegments(
   segments: WallConfig[],
   dir: WallDirection,
   room: RoomData,
-  frontGeos: THREE.BufferGeometry[],
-  backGeos: THREE.BufferGeometry[]
+  frontEntries: GeoEntry[],
+  backEntries: GeoEntry[]
 ) {
   const dirInfo = WALL_DIR_INFO[dir]
-  const target = dirInfo.isFront ? frontGeos : backGeos
+  const target = dirInfo.isFront ? frontEntries : backEntries
   const wh = room.wallHeight
   const yBase = room.floorLevel * wh
   const { localX, localZ, sizeX, sizeZ } = room
@@ -225,7 +223,7 @@ function collectWallSegments(
     const seg = segments[i]
     if (seg.variant === 'open') continue
 
-    const color = WALL_COLORS[seg.texture % WALL_COLORS.length]
+    const texIdx = seg.texture % HOUSING_TEXTURES.length
 
     // Position: center of this 1m segment along the wall
     const segCenter = i + 0.5 // 0.5, 1.5, 2.5, ...
@@ -259,16 +257,18 @@ function collectWallSegments(
     }
 
     if (seg.variant === 'solid') {
-      target.push(
-        bakedGeo(
+      target.push({
+        geo: bakedGeo(
           new THREE.BoxGeometry(1, wh, WALL_THICKNESS),
-          color,
           x,
           yBase + wh / 2,
           z,
-          rotY
-        )
-      )
+          rotY,
+          1,
+          wh
+        ),
+        textureIndex: texIdx,
+      })
     } else {
       // door or window — opening centered in the 1m segment
       const openW = seg.variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
@@ -282,46 +282,52 @@ function collectWallSegments(
           const offset = sign * (0.5 - sideW / 2)
           const sx = dir === 'north' || dir === 'south' ? x + offset : x
           const sz = dir === 'east' || dir === 'west' ? z + offset : z
-          target.push(
-            bakedGeo(
+          target.push({
+            geo: bakedGeo(
               new THREE.BoxGeometry(sideW, wh, WALL_THICKNESS),
-              color,
               sx,
               yBase + wh / 2,
               sz,
-              rotY
-            )
-          )
+              rotY,
+              sideW,
+              wh
+            ),
+            textureIndex: texIdx,
+          })
         }
       }
 
       // Bottom strip (windows)
       if (openBot > 0.01) {
-        target.push(
-          bakedGeo(
+        target.push({
+          geo: bakedGeo(
             new THREE.BoxGeometry(openW, openBot, WALL_THICKNESS),
-            color,
             x,
             yBase + openBot / 2,
             z,
-            rotY
-          )
-        )
+            rotY,
+            openW,
+            openBot
+          ),
+          textureIndex: texIdx,
+        })
       }
 
       // Top strip
       const topH = wh - openBot - openH
       if (topH > 0.01) {
-        target.push(
-          bakedGeo(
+        target.push({
+          geo: bakedGeo(
             new THREE.BoxGeometry(openW, topH, WALL_THICKNESS),
-            color,
             x,
             yBase + openBot + openH + topH / 2,
             z,
-            rotY
-          )
-        )
+            rotY,
+            openW,
+            topH
+          ),
+          textureIndex: texIdx,
+        })
       }
     }
   }
@@ -333,7 +339,7 @@ export function disposeHouseGroup(group: THREE.Group) {
     if (obj instanceof THREE.Mesh) {
       // Merged geometries are unique per house — dispose them
       obj.geometry?.dispose()
-      // Material is shared singleton — don't dispose
+      // Materials are shared singletons — don't dispose
     }
   })
 }

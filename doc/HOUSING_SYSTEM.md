@@ -194,7 +194,7 @@ HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
 7. **배치 유효성 검증 + 피드백** — 기존 집 겹침 검사, 건축 불가 영역 체크, 프리뷰 색상 피드백 (빨강=불가, 초록=가능)
 8. **서버 검증** — 방 크기 제약(3~6m), 겹침 검사, 인접 벽 Open 일치, 소유자 권한 (routes.rs TODO)
 9. **다중 방 편집** — 기존 집에 방 추가/연결, 인접 면 Open 자동 설정
-10. **텍스쳐 에셋 적용** — placeholder 색상 → 실제 텍스쳐(stone, brick, wood, marble 등)
+10. ~~텍스쳐 에셋 적용~~ ✅
 
 ### Phase 4: Second Floor + Stairs
 

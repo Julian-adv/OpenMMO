@@ -10,6 +10,10 @@
     OFFSCREEN_Y,
     type HouseGroupResult,
   } from '../../utils/house-geometry'
+  import {
+    initHousingTextures,
+    disposeHousingMaterials,
+  } from '../../utils/housing-textures'
   import { housingManager } from '../../managers/housingManager'
   import {
     TERRAIN_TILE_SIZE,
@@ -31,6 +35,9 @@
   let lastChunkX = NaN
   let lastChunkZ = NaN
 
+  // Load housing textures (materials update in-place via needsUpdate)
+  initHousingTextures()
+
   // Listen for housing data changes from the manager
   housingManager.onHousesChanged = (allHouses: HouseData[]) => {
     syncHouses(allHouses)
@@ -42,6 +49,7 @@
       disposeHouseGroup(result.houseGroup)
     }
     houses.clear()
+    disposeHousingMaterials()
   })
 
   function syncHouses(allHouses: HouseData[]) {

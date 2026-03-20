@@ -15,16 +15,14 @@
     type WallVariants,
   } from '../../stores/housingEditorStore'
   import type { WallVariant } from '../../types/housing'
-  import {
-    WALL_COLORS as WALL_HEX,
-    FLOOR_COLORS as FLOOR_HEX,
-    ROOF_COLORS as ROOF_HEX,
-  } from '../../utils/house-geometry'
+  import type { Writable } from 'svelte/store'
+  import { HOUSING_TEXTURES } from '../../utils/housing-textures'
 
   const toCSS = (c: number) => `#${c.toString(16).padStart(6, '0')}`
-  const WALL_COLORS = WALL_HEX.map(toCSS)
-  const FLOOR_COLORS = FLOOR_HEX.map(toCSS)
-  const ROOF_COLORS = ROOF_HEX.map(toCSS)
+  const TEX_ENTRIES = HOUSING_TEXTURES.map((t) => ({
+    label: t.label,
+    color: toCSS(t.fallbackColor),
+  }))
 
   let rotation = $state(0)
   let wallTex = $state(0)
@@ -131,44 +129,26 @@
       <div class="wall-cross-bot">{@render wallButtons('south', 'S')}</div>
     </div>
 
-    <div class="section-title">Color</div>
-    <div class="color-row">
-      {#each WALL_COLORS as color, i (i)}
-        <button
-          class="color-swatch"
-          class:active={wallTex === i}
-          style="background: {color}"
-          aria-label="Wall color {i + 1}"
-          onclick={() => wallTextureIndex.set(i)}
-        ></button>
-      {/each}
-    </div>
+    {#snippet texturePicker(title: string, activeIdx: number, store: Writable<number>)}
+      <div class="section-title">{title}</div>
+      <div class="tex-row">
+        {#each TEX_ENTRIES as entry, i (i)}
+          <button
+            class="tex-btn"
+            class:active={activeIdx === i}
+            style="--swatch-color: {entry.color}"
+            onclick={() => store.set(i)}
+          >
+            <span class="tex-swatch"></span>
+            <span class="tex-label">{entry.label}</span>
+          </button>
+        {/each}
+      </div>
+    {/snippet}
 
-    <div class="section-title">Floor</div>
-    <div class="color-row">
-      {#each FLOOR_COLORS as color, i (i)}
-        <button
-          class="color-swatch"
-          class:active={floorTex === i}
-          style="background: {color}"
-          aria-label="Floor color {i + 1}"
-          onclick={() => floorTextureIndex.set(i)}
-        ></button>
-      {/each}
-    </div>
-
-    <div class="section-title">Roof</div>
-    <div class="color-row">
-      {#each ROOF_COLORS as color, i (i)}
-        <button
-          class="color-swatch"
-          class:active={roofTex === i}
-          style="background: {color}"
-          aria-label="Roof color {i + 1}"
-          onclick={() => roofTextureIndex.set(i)}
-        ></button>
-      {/each}
-    </div>
+    {@render texturePicker('Wall', wallTex, wallTextureIndex)}
+    {@render texturePicker('Floor', floorTex, floorTextureIndex)}
+    {@render texturePicker('Roof', roofTex, roofTextureIndex)}
 
     <div class="section-title">Tools</div>
     <button class="delete-btn" class:active={deleteMode} onclick={toggleDeleteMode}>
@@ -353,26 +333,48 @@
     color: #7bc67b;
   }
 
-  .color-row {
+  .tex-row {
     display: flex;
-    gap: 4px;
+    gap: 3px;
   }
 
-  .color-swatch {
-    width: 24px;
-    height: 24px;
+  .tex-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
-    border: 2px solid transparent;
+    background: rgba(255, 255, 255, 0.05);
+    color: #aaa;
     cursor: pointer;
-    transition: border-color 150ms ease;
+    font-family: 'Courier New', monospace;
+    font-size: 9px;
+    transition: background 150ms ease, color 150ms ease;
   }
 
-  .color-swatch:hover {
-    border-color: rgba(255, 255, 255, 0.4);
+  .tex-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ddd;
   }
 
-  .color-swatch.active {
-    border-color: #7bc67b;
+  .tex-btn.active {
+    background: rgba(123, 198, 123, 0.2);
+    border-color: rgba(123, 198, 123, 0.5);
+    color: #7bc67b;
+  }
+
+  .tex-swatch {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    background: var(--swatch-color);
+  }
+
+  .tex-label {
+    white-space: nowrap;
   }
 
   .delete-btn {
