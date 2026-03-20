@@ -7,6 +7,7 @@
   import {
     buildHouseGroup,
     disposeHouseGroup,
+    FLOOR_THICKNESS,
     OFFSCREEN_Y,
     type HouseGroupResult,
   } from '../../utils/house-geometry'
@@ -19,6 +20,7 @@
     TERRAIN_TILE_SIZE,
     getTerrainChunkFromPosition,
   } from './terrain-utils'
+  import { playerFloorOffset } from '../../stores/housingStore'
 
   interface Props {
     playerPosition: { x: number; y: number; z: number } | null
@@ -118,6 +120,7 @@
         if (curr) curr.frontGroup.position.y = OFFSCREEN_Y
       }
       playerInsideHouseId = insideId
+      playerFloorOffset.set(insideId ? FLOOR_THICKNESS / 2 : 0)
     }
   }
 

@@ -19,6 +19,8 @@
     type MovementMode,
   } from '../utils/movementUtils'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+  import { playerFloorOffset } from '../stores/housingStore'
+  import { get } from 'svelte/store'
 
   interface Props {
     onStateChange: (state: PlayerState) => void
@@ -32,7 +34,7 @@
   let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, attackCooldown }: Props = $props()
 
   function sampleHeight(x: number, z: number): number {
-    return heightManager.getHeightAtWorldPosition(x, z)
+    return heightManager.getHeightAtWorldPosition(x, z) + get(playerFloorOffset)
   }
 
   let currentPlayer = $state<LocalPlayer | null>(null)

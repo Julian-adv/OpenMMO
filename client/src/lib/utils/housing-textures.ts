@@ -42,7 +42,7 @@ export function getHousingMaterial(
     const entry = HOUSING_TEXTURES[idx]
     mat = new THREE.MeshStandardMaterial({
       color: entry.fallbackColor,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
       roughness: 0.85,
       metalness: 0.0,
     })

@@ -13,7 +13,7 @@ import type { HouseData, RoomData, WallConfig } from '../types/housing'
 import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 
 const WALL_THICKNESS = 0.15
-const FLOOR_THICKNESS = 0.1
+export const FLOOR_THICKNESS = 0.1
 const DOOR_WIDTH = 1.0
 const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
@@ -120,7 +120,10 @@ function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]) {
   for (const [texIdx, geos] of byTex) {
     const merged = mergeGeometries(geos, false)
     if (merged) {
-      group.add(new THREE.Mesh(merged, getHousingMaterial(texIdx)))
+      const mesh = new THREE.Mesh(merged, getHousingMaterial(texIdx))
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      group.add(mesh)
     }
   }
 }
@@ -135,7 +138,9 @@ function bakedGeo(
   pz: number,
   rotY: number = 0,
   uvScaleX: number = 1,
-  uvScaleY: number = 1
+  uvScaleY: number = 1,
+  uvOffsetX: number = 0,
+  uvOffsetY: number = 0
 ): THREE.BufferGeometry {
   // Apply position and rotation by modifying vertices directly
   if (rotY !== 0) {
@@ -146,11 +151,15 @@ function bakedGeo(
   }
   baseGeo.applyMatrix4(_tmpMatrix)
 
-  // Scale UVs for texture tiling (1 repeat per meter)
+  // Scale and offset UVs for texture tiling (1 repeat per meter)
   const uv = baseGeo.getAttribute('uv')
   if (uv) {
     for (let i = 0; i < uv.count; i++) {
-      uv.setXY(i, uv.getX(i) * uvScaleX, uv.getY(i) * uvScaleY)
+      uv.setXY(
+        i,
+        uv.getX(i) * uvScaleX + uvOffsetX,
+        uv.getY(i) * uvScaleY + uvOffsetY
+      )
     }
   }
 
@@ -282,6 +291,8 @@ function collectWallSegments(
           const offset = sign * (0.5 - sideW / 2)
           const sx = dir === 'north' || dir === 'south' ? x + offset : x
           const sz = dir === 'east' || dir === 'west' ? z + offset : z
+          // Left strip: uvOffsetX=0, right strip: uvOffsetX=1-sideW
+          const uOffX = sign === -1 ? 0 : 1 - sideW
           target.push({
             geo: bakedGeo(
               new THREE.BoxGeometry(sideW, wh, WALL_THICKNESS),
@@ -290,7 +301,9 @@ function collectWallSegments(
               sz,
               rotY,
               sideW,
-              wh
+              wh,
+              uOffX,
+              0
             ),
             textureIndex: texIdx,
           })
@@ -307,7 +320,9 @@ function collectWallSegments(
             z,
             rotY,
             openW,
-            openBot
+            openBot,
+            sideW,
+            0
           ),
           textureIndex: texIdx,
         })
@@ -324,7 +339,9 @@ function collectWallSegments(
             z,
             rotY,
             openW,
-            topH
+            topH,
+            sideW,
+            openBot + openH
           ),
           textureIndex: texIdx,
         })

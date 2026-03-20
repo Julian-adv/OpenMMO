@@ -13,6 +13,7 @@
   import type Monster from '../Monster.svelte'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
+  import { playerFloorOffset } from '../../stores/housingStore'
   import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
@@ -198,7 +199,7 @@
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
           remotePlayer.position.x,
-          heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) || remotePlayer.position.y,
+          (heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) || remotePlayer.position.y) + $playerFloorOffset,
           remotePlayer.position.z
         )}
         name={player.name}
