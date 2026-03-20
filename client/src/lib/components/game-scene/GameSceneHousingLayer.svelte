@@ -33,6 +33,7 @@
 
   const houses = new SvelteMap<string, HouseGroupResult>()
   let playerInsideHouseId: string | null = null
+  let lastFloorOffset = 0
   const _tmpVec = new THREE.Vector3()
   let lastChunkX = NaN
   let lastChunkZ = NaN
@@ -101,14 +102,25 @@
       housingManager.loadChunksAround(playerPosition.x, playerPosition.z)
     }
 
-    // Player-inside detection
+    // Player-inside detection (per-room, floor-aware)
     _tmpVec.set(playerPosition.x, playerPosition.y, playerPosition.z)
     let insideId: string | null = null
+    let insideRoom: { floorLevel: number; wallHeight: number } | null = null
 
     for (const [id, result] of houses) {
       if (result.aabb.containsPoint(_tmpVec)) {
-        insideId = id
-        break
+        // Fine-grained per-room check
+        const roomResult = housingManager.findRoomAtPoint(
+          playerPosition.x,
+          playerPosition.y,
+          playerPosition.z
+        )
+        if (roomResult && roomResult.house.id === id) {
+          insideId = id
+          const room = roomResult.house.rooms[roomResult.roomIndex]
+          insideRoom = { floorLevel: room.floorLevel, wallHeight: room.wallHeight }
+          break
+        }
       }
     }
 
@@ -124,7 +136,14 @@
         if (curr) curr.frontGroup.position.y = OFFSCREEN_Y
       }
       playerInsideHouseId = insideId
-      playerFloorOffset.set(insideId ? FLOOR_THICKNESS / 2 : 0)
+    }
+
+    const newOffset = insideRoom
+      ? insideRoom.floorLevel * insideRoom.wallHeight + FLOOR_THICKNESS / 2
+      : 0
+    if (newOffset !== lastFloorOffset) {
+      lastFloorOffset = newOffset
+      playerFloorOffset.set(newOffset)
     }
   }
 

@@ -4,6 +4,7 @@
     ROOM_TEMPLATES,
     selectedRoomTemplate,
     placementRotation,
+    placementFloorLevel,
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
@@ -40,6 +41,7 @@
     east: 'solid',
     west: 'solid',
   })
+  let floorLvl = $state(0)
   let editHouseId = $state<string | null>(null)
   let editRoomIdx = $state<number | null>(null)
   let editVersion = $state(0)
@@ -62,6 +64,7 @@
     placementPreview.subscribe((v) => (preview = v)),
     housingEditorTool.subscribe((v) => (tool = v)),
     wallVariants.subscribe((v) => (variants = v)),
+    placementFloorLevel.subscribe((v) => (floorLvl = v)),
     selectedHouseId.subscribe((v) => (editHouseId = v)),
     selectedRoomIndex.subscribe((v) => (editRoomIdx = v)),
   ]
@@ -198,86 +201,98 @@
       </div>
     {/snippet}
 
-    {#if tool === 'place'}
-      <div class="section-title">Room</div>
-      <div class="room-grid">
-        {#each ROOM_TEMPLATES as t (t.label)}
-          <button
-            class="room-btn"
-            class:active={selected === t}
-            onclick={() => selectTemplate(t)}
-          >
-            <span class="room-size">{t.sizeX}×{t.sizeZ}</span>
-            <span class="room-label">{t.label.split('(')[0].trim()}</span>
-          </button>
-        {/each}
+    {#snippet wallButtons(dir: WallDir, label: string)}
+      {#each WALL_VARIANT_OPTIONS as variant (variant)}
+        <button
+          class="variant-btn"
+          class:active={variants[dir] === variant}
+          disabled={tool !== 'place'}
+          title="{label} → {variant}"
+          onclick={() => setWallVariant(dir, variant)}
+        >{VARIANT_LABELS[variant]}</button>
+      {/each}
+    {/snippet}
+
+    <div class="section-title">Floor</div>
+    <div class="tool-row">
+      <button
+        class="tool-btn"
+        class:active={floorLvl === 0}
+        disabled={tool !== 'place'}
+        onclick={() => placementFloorLevel.set(0)}
+      >1F</button>
+      <button
+        class="tool-btn"
+        class:active={floorLvl === 1}
+        disabled={tool !== 'place'}
+        onclick={() => placementFloorLevel.set(1)}
+      >2F</button>
+    </div>
+
+    <div class="section-title">Room</div>
+    <div class="room-grid">
+      {#each ROOM_TEMPLATES as t (t.label)}
+        <button
+          class="room-btn"
+          class:active={selected === t && tool === 'place'}
+          disabled={tool !== 'place'}
+          onclick={() => selectTemplate(t)}
+        >
+          <span class="room-size">{t.sizeX}×{t.sizeZ}</span>
+          <span class="room-label">{t.label.split('(')[0].trim()}</span>
+        </button>
+      {/each}
+    </div>
+
+    <div class="section-title">Rotate <span class="hint">(R)</span></div>
+    <button class="rotate-btn" disabled={tool !== 'place'} onclick={rotate}>{rotation}°</button>
+
+    <div class="section-title">Walls</div>
+    <div class="wall-cross">
+      <div class="wall-cross-top">{@render wallButtons('north', 'N')}</div>
+      <div class="wall-cross-mid">
+        <div class="wall-cross-side">{@render wallButtons('west', 'W')}</div>
+        <span class="wall-cross-center">+</span>
+        <div class="wall-cross-side">{@render wallButtons('east', 'E')}</div>
       </div>
+      <div class="wall-cross-bot">{@render wallButtons('south', 'S')}</div>
+    </div>
 
-      <div class="section-title">Rotate <span class="hint">(R)</span></div>
-      <button class="rotate-btn" onclick={rotate}>{rotation}°</button>
+    {@render texturePicker('Wall', wallTex, (i) => { if (tool === 'select') onEditTextureChange('wall', i); else wallTextureIndex.set(i) })}
+    {@render texturePicker('Floor', floorTex, (i) => { if (tool === 'select') onEditTextureChange('floor', i); else floorTextureIndex.set(i) })}
+    {@render texturePicker('Roof', roofTex, (i) => { if (tool === 'select') onEditTextureChange('roof', i); else roofTextureIndex.set(i) })}
 
-      {#snippet wallButtons(dir: WallDir, label: string)}
-        {#each WALL_VARIANT_OPTIONS as variant (variant)}
-          <button
-            class="variant-btn"
-            class:active={variants[dir] === variant}
-            title="{label} → {variant}"
-            onclick={() => setWallVariant(dir, variant)}
-          >{VARIANT_LABELS[variant]}</button>
-        {/each}
-      {/snippet}
+    {#if tool === 'select' && editRoom && editRoomIdx != null}
+      <div class="section-title">Editing Room {editRoomIdx + 1} ({editRoom.sizeX}×{editRoom.sizeZ})</div>
 
-      <div class="section-title">Walls</div>
-      <div class="wall-cross">
-        <div class="wall-cross-top">{@render wallButtons('north', 'N')}</div>
-        <div class="wall-cross-mid">
-          <div class="wall-cross-side">{@render wallButtons('west', 'W')}</div>
-          <span class="wall-cross-center">+</span>
-          <div class="wall-cross-side">{@render wallButtons('east', 'E')}</div>
+      {#each WALL_DIRS as dir (dir.wallKey)}
+        {@const wall = editRoom[dir.wallKey]}
+        <div class="section-title">{dir.label} Wall ({wall.length} seg)</div>
+        <div class="segment-row">
+          {#each wall as seg, segIdx (segIdx)}
+            <div class="segment-group">
+              {#each WALL_VARIANT_OPTIONS as variant (variant)}
+                <button
+                  class="variant-btn"
+                  class:active={seg.variant === variant}
+                  disabled={seg.variant === 'open'}
+                  title="Seg {segIdx + 1} → {variant}"
+                  onclick={() => setSegmentVariant(dir.wallKey, segIdx, variant)}
+                >{VARIANT_LABELS[variant]}</button>
+              {/each}
+              {#if seg.variant === 'open'}
+                <span class="open-label">open</span>
+              {/if}
+            </div>
+          {/each}
         </div>
-        <div class="wall-cross-bot">{@render wallButtons('south', 'S')}</div>
-      </div>
-
-      {@render texturePicker('Wall', wallTex, (i) => wallTextureIndex.set(i))}
-      {@render texturePicker('Floor', floorTex, (i) => floorTextureIndex.set(i))}
-      {@render texturePicker('Roof', roofTex, (i) => roofTextureIndex.set(i))}
-
+      {/each}
     {:else if tool === 'select'}
-      {#if editRoom && editRoomIdx != null}
-        <div class="section-title">Room {editRoomIdx + 1} ({editRoom.sizeX}×{editRoom.sizeZ})</div>
-
-        {#each WALL_DIRS as dir (dir.wallKey)}
-          {@const wall = editRoom[dir.wallKey]}
-          <div class="section-title">{dir.label} Wall ({wall.length} seg)</div>
-          <div class="segment-row">
-            {#each wall as seg, segIdx (segIdx)}
-              <div class="segment-group">
-                {#each WALL_VARIANT_OPTIONS as variant (variant)}
-                  <button
-                    class="variant-btn"
-                    class:active={seg.variant === variant}
-                    disabled={seg.variant === 'open'}
-                    title="Seg {segIdx + 1} → {variant}"
-                    onclick={() => setSegmentVariant(dir.wallKey, segIdx, variant)}
-                  >{VARIANT_LABELS[variant]}</button>
-                {/each}
-                {#if seg.variant === 'open'}
-                  <span class="open-label">open</span>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        {/each}
-
-        {@render texturePicker('Wall', wallTex, (i) => onEditTextureChange('wall', i))}
-        {@render texturePicker('Floor', floorTex, (i) => onEditTextureChange('floor', i))}
-        {@render texturePicker('Roof', roofTex, (i) => onEditTextureChange('roof', i))}
-      {:else}
-        <div class="info-text">Click a house to select a room</div>
-      {/if}
-
+      <div class="info-text">Click a house to select a room</div>
     {:else if tool === 'delete'}
       <div class="info-text">Click a house to delete it</div>
+    {:else}
+      <div class="info-text">Select a room size and click to place</div>
     {/if}
   </div>
 </div>

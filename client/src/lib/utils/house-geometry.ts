@@ -14,6 +14,7 @@ import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 
 const WALL_THICKNESS = 0.15
 export const FLOOR_THICKNESS = 0.1
+export const DEFAULT_WALL_HEIGHT = 3
 const DOOR_WIDTH = 1.0
 const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
@@ -70,8 +71,48 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
   const frontEntries: GeoEntry[] = []
   const backEntries: GeoEntry[] = []
 
+  // Build set of 2F room footprints for roof suppression
+  const secondFloorFootprints: {
+    x: number
+    z: number
+    sx: number
+    sz: number
+  }[] = []
   for (const room of house.rooms) {
-    collectRoomGeometries(room, frontEntries, backEntries)
+    if (room.floorLevel >= 1) {
+      secondFloorFootprints.push({
+        x: room.localX,
+        z: room.localZ,
+        sx: room.sizeX,
+        sz: room.sizeZ,
+      })
+    }
+  }
+
+  for (const room of house.rooms) {
+    // Only suppress roof if every 1m² cell of the 1F room is covered by a 2F room
+    let suppressRoof = false
+    if (room.floorLevel === 0 && secondFloorFootprints.length > 0) {
+      suppressRoof = true
+      for (
+        let x = room.localX;
+        x < room.localX + room.sizeX && suppressRoof;
+        x++
+      ) {
+        for (
+          let z = room.localZ;
+          z < room.localZ + room.sizeZ && suppressRoof;
+          z++
+        ) {
+          const covered = secondFloorFootprints.some(
+            (fp) =>
+              x >= fp.x && x < fp.x + fp.sx && z >= fp.z && z < fp.z + fp.sz
+          )
+          if (!covered) suppressRoof = false
+        }
+      }
+    }
+    collectRoomGeometries(room, frontEntries, backEntries, suppressRoof)
   }
 
   // Group by texture index and merge
@@ -169,7 +210,8 @@ function bakedGeo(
 function collectRoomGeometries(
   room: RoomData,
   frontEntries: GeoEntry[],
-  backEntries: GeoEntry[]
+  backEntries: GeoEntry[],
+  suppressRoof: boolean = false
 ) {
   const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
   const yBase = floorLevel * wallHeight
@@ -189,22 +231,24 @@ function collectRoomGeometries(
     textureIndex: floorIdx,
   })
 
-  // Roof → front
-  const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
-  const roofPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
-  roofPlane.rotateX(-Math.PI / 2)
-  frontEntries.push({
-    geo: bakedGeo(
-      roofPlane,
-      localX + sizeX / 2,
-      yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
-      localZ + sizeZ / 2,
-      0,
-      sizeX,
-      sizeZ
-    ),
-    textureIndex: roofIdx,
-  })
+  // Roof → front (suppressed when a 2F room sits above)
+  if (!suppressRoof) {
+    const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
+    const roofPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
+    roofPlane.rotateX(-Math.PI / 2)
+    frontEntries.push({
+      geo: bakedGeo(
+        roofPlane,
+        localX + sizeX / 2,
+        yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
+        localZ + sizeZ / 2,
+        0,
+        sizeX,
+        sizeZ
+      ),
+      textureIndex: roofIdx,
+    })
+  }
 
   // Walls — each is an array of 1m segments
   collectWallSegments(room.wallNorth, 'north', room, frontEntries, backEntries)

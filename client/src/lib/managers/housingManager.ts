@@ -160,14 +160,14 @@ export class HousingManager {
         const room = house.rooms[i]
         const rx = house.origin.x + room.localX
         const rz = house.origin.z + room.localZ
-        const ry = house.origin.y
+        const ryBase = house.origin.y + room.floorLevel * room.wallHeight
         if (
           x >= rx &&
           x <= rx + room.sizeX &&
           z >= rz &&
           z <= rz + room.sizeZ &&
-          y >= ry - 1 &&
-          y <= ry + room.wallHeight + 1
+          y >= ryBase - 1 &&
+          y <= ryBase + room.wallHeight + 1
         ) {
           return { house, roomIndex: i }
         }
@@ -212,15 +212,17 @@ export class HousingManager {
     return null
   }
 
-  /** Check if a room footprint overlaps any existing house. */
+  /** Check if a room footprint overlaps any existing house on the same floor level. */
   checkOverlap(
     originX: number,
     originZ: number,
     sizeX: number,
-    sizeZ: number
+    sizeZ: number,
+    floorLevel: number = 0
   ): boolean {
     for (const house of this.housesById.values()) {
       for (const room of house.rooms) {
+        if (room.floorLevel !== floorLevel) continue
         const rx = house.origin.x + room.localX
         const rz = house.origin.z + room.localZ
         if (
@@ -234,6 +236,62 @@ export class HousingManager {
       }
     }
     return false
+  }
+
+  /**
+   * Check if a 2F room footprint is fully supported by 1F rooms in a given house.
+   * Returns true if the entire XZ rectangle is covered by floor_level=0 rooms.
+   */
+  hasFloorSupport(
+    originX: number,
+    originZ: number,
+    sizeX: number,
+    sizeZ: number,
+    houseId?: string
+  ): boolean {
+    // Check each 1m² cell of the proposed 2F footprint
+    for (let x = originX; x < originX + sizeX; x++) {
+      for (let z = originZ; z < originZ + sizeZ; z++) {
+        let supported = false
+        for (const house of this.housesById.values()) {
+          if (houseId && house.id !== houseId) continue
+          for (const room of house.rooms) {
+            if (room.floorLevel !== 0) continue
+            const rx = house.origin.x + room.localX
+            const rz = house.origin.z + room.localZ
+            if (
+              x >= rx &&
+              x < rx + room.sizeX &&
+              z >= rz &&
+              z < rz + room.sizeZ
+            ) {
+              supported = true
+              break
+            }
+          }
+          if (supported) break
+        }
+        if (!supported) return false
+      }
+    }
+    return true
+  }
+
+  /**
+   * Find a house that has 1F rooms supporting the given 2F footprint.
+   */
+  findSupportingHouse(
+    originX: number,
+    originZ: number,
+    sizeX: number,
+    sizeZ: number
+  ): HouseData | null {
+    for (const house of this.housesById.values()) {
+      if (this.hasFloorSupport(originX, originZ, sizeX, sizeZ, house.id)) {
+        return house
+      }
+    }
+    return null
   }
 
   private addToCache(house: HouseData) {

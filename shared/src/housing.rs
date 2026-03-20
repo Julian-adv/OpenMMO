@@ -3,6 +3,20 @@ use serde::{Deserialize, Serialize};
 use crate::Position;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum RoomType {
+    #[serde(rename = "normal")]
+    Normal,
+    #[serde(rename = "stairwell")]
+    Stairwell,
+}
+
+impl Default for RoomType {
+    fn default() -> Self {
+        Self::Normal
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum WallVariant {
     #[serde(rename = "solid")]
     Solid,
@@ -23,6 +37,8 @@ pub struct WallConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RoomData {
+    #[serde(default)]
+    pub room_type: RoomType,
     pub local_x: i32,
     pub local_z: i32,
     pub size_x: u8,

@@ -7,6 +7,7 @@
     selectedRoomTemplate,
     placementRotation,
     placementPreview,
+    placementFloorLevel,
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
@@ -26,7 +27,7 @@
     WallVariant,
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
-  import { buildHouseGroup, disposeHouseGroup } from '../../utils/house-geometry'
+  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT } from '../../utils/house-geometry'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
   import { removeGrassInRect } from '../../utils/grass-data'
@@ -75,6 +76,7 @@
     east: 'solid',
     west: 'solid',
   })
+  let currentFloorLevel = $state(0)
   let previewPos = $state<{ x: number; z: number } | null>(null)
   let previewMesh: THREE.Group | null = null
   let placementValid = false
@@ -139,7 +141,7 @@
     highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
     highlightEdges.position.set(
       house.origin.x + room.localX + room.sizeX / 2,
-      house.origin.y + room.wallHeight / 2,
+      house.origin.y + room.floorLevel * room.wallHeight + room.wallHeight / 2,
       house.origin.z + room.localZ + room.sizeZ / 2
     )
     previewGroup.add(highlightEdges)
@@ -163,6 +165,10 @@
     selectedRoomIndex.subscribe(() => scheduleUpdateHighlight()),
     wallVariants.subscribe((v) => {
       currentWallVariants = v
+      scheduleRebuildPreview()
+    }),
+    placementFloorLevel.subscribe((v) => {
+      currentFloorLevel = v
       scheduleRebuildPreview()
     }),
   ]
@@ -224,7 +230,24 @@
   function checkPlacementValid(): boolean {
     if (!currentTemplate || !previewPos) return false
     const { sx, sz } = getRotatedSize()
-    return !housingManager.checkOverlap(previewPos.x, previewPos.z, sx, sz)
+    const hasOverlap = housingManager.checkOverlap(
+      previewPos.x,
+      previewPos.z,
+      sx,
+      sz,
+      currentFloorLevel
+    )
+    if (hasOverlap) return false
+    // 2F rooms need full floor support from 1F rooms
+    if (currentFloorLevel >= 1) {
+      return housingManager.hasFloorSupport(
+        previewPos.x,
+        previewPos.z,
+        sx,
+        sz
+      )
+    }
+    return true
   }
 
   function setPreviewMaterial(valid: boolean) {
@@ -246,16 +269,19 @@
 
     const x = Math.floor(hit.point.x)
     const z = Math.floor(hit.point.z)
+    const posChanged = !previewPos || previewPos.x !== x || previewPos.z !== z
     previewPos = { x, z }
-    placementPreview.set({ x, z })
+    if (posChanged) placementPreview.set({ x, z })
 
     if (currentTool === 'place' && previewMesh) {
       previewMesh.visible = true
       previewMesh.position.set(x, hit.point.y, z)
       previewMesh.rotation.y = (currentRotation * Math.PI) / 180
-      const wasValid = placementValid
-      placementValid = checkPlacementValid()
-      if (placementValid !== wasValid) setPreviewMaterial(placementValid)
+      if (posChanged) {
+        const wasValid = placementValid
+        placementValid = checkPlacementValid()
+        if (placementValid !== wasValid) setPreviewMaterial(placementValid)
+      }
     } else if (previewMesh) {
       previewMesh.visible = false
     }
@@ -285,30 +311,31 @@
     }
   }
 
-  function deleteHouseAtCursor(event: MouseEvent) {
+  /** Find house/room at cursor XZ, checking all floor levels (raycast Y is ground level). */
+  function findAtCursorXZ(event: MouseEvent) {
     const hit = raycastTerrain(event)
-    if (!hit) return
+    if (!hit) return null
+    const { x, z } = hit.point
+    const groundY = hit.point.y
+    // Try each floor level (highest first so 2F takes priority)
+    for (let fl = 1; fl >= 0; fl--) {
+      const testY = groundY + fl * DEFAULT_WALL_HEIGHT + 1 // inside the room volume
+      const result = housingManager.findRoomAtPoint(x, testY, z)
+      if (result) return result
+    }
+    return null
+  }
 
-    const house = housingManager.findHouseAtPoint(
-      hit.point.x,
-      hit.point.y,
-      hit.point.z
-    )
-    if (house) {
-      housingManager.deleteHouse(house.id)
+  function deleteHouseAtCursor(event: MouseEvent) {
+    const result = findAtCursorXZ(event)
+    if (result) {
+      housingManager.deleteHouse(result.house.id)
       housingEditorTool.set('place')
     }
   }
 
   function selectRoomAtCursor(event: MouseEvent) {
-    const hit = raycastTerrain(event)
-    if (!hit) return
-
-    const result = housingManager.findRoomAtPoint(
-      hit.point.x,
-      hit.point.y,
-      hit.point.z
-    )
+    const result = findAtCursorXZ(event)
     if (result) {
       selectedHouseId.set(result.house.id)
       selectedRoomIndex.set(result.roomIndex)
@@ -330,29 +357,34 @@
 
     const newRoom = buildRoomData(sx, sz)
 
-    // Check if adjacent to an existing house
-    const adjacentHouse = housingManager.findAdjacentHouse(
-      pos.x,
-      pos.z,
-      sx,
-      sz
-    )
+    // For 2F rooms, find the house with supporting 1F rooms
+    // For 1F rooms, check edge adjacency
+    let targetHouse: HouseData | null
+    if (currentFloorLevel >= 1) {
+      targetHouse = housingManager.findSupportingHouse(pos.x, pos.z, sx, sz)
+    } else {
+      targetHouse = housingManager.findAdjacentHouse(pos.x, pos.z, sx, sz)
+    }
 
     let saved: HouseData | null
-    if (adjacentHouse) {
+    if (targetHouse) {
       // Add room to existing house — localX/Z relative to house origin
-      newRoom.localX = pos.x - adjacentHouse.origin.x
-      newRoom.localZ = pos.z - adjacentHouse.origin.z
+      newRoom.localX = pos.x - targetHouse.origin.x
+      newRoom.localZ = pos.z - targetHouse.origin.z
 
-      const updatedRooms = [...adjacentHouse.rooms, newRoom]
+      const updatedRooms = [...targetHouse.rooms, newRoom]
+      // Only set shared walls open for same-floor rooms
       setSharedWallsOpen(updatedRooms)
 
       const updatedHouse: HouseData = {
-        ...adjacentHouse,
+        ...targetHouse,
         rooms: updatedRooms,
       }
       saved = await housingManager.updateHouse(updatedHouse)
     } else {
+      // 2F rooms must always attach to an existing house
+      if (currentFloorLevel >= 1) return
+
       const houseData: HouseData = {
         id: '',
         ownerId: 'local',
@@ -364,49 +396,52 @@
 
     if (!saved) return
 
-    heightManager.flattenArea(
-      pos.x,
-      pos.z,
-      pos.x + sx,
-      pos.z + sz,
-      targetHeight,
-      BLEND_RADIUS
-    )
-    heightManager.saveAllDirty()
+    // Skip terrain flatten and grass removal for 2F rooms
+    if (currentFloorLevel === 0) {
+      heightManager.flattenArea(
+        pos.x,
+        pos.z,
+        pos.x + sx,
+        pos.z + sz,
+        targetHeight,
+        BLEND_RADIUS
+      )
+      heightManager.saveAllDirty()
 
-    // Remove grass under the house footprint (+ 1m margin)
-    if (grassDataManager) {
-      const GRASS_MARGIN = 1
-      const rectMinX = pos.x - GRASS_MARGIN
-      const rectMinZ = pos.z - GRASS_MARGIN
-      const rectMaxX = pos.x + sx + GRASS_MARGIN
-      const rectMaxZ = pos.z + sz + GRASS_MARGIN
+      // Remove grass under the house footprint (+ 1m margin)
+      if (grassDataManager) {
+        const GRASS_MARGIN = 1
+        const rectMinX = pos.x - GRASS_MARGIN
+        const rectMinZ = pos.z - GRASS_MARGIN
+        const rectMaxX = pos.x + sx + GRASS_MARGIN
+        const rectMaxZ = pos.z + sz + GRASS_MARGIN
 
-      const tileMinX = Math.floor(
-        (rectMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-      )
-      const tileMaxX = Math.floor(
-        (rectMaxX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-      )
-      const tileMinZ = Math.floor(
-        (rectMinZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-      )
-      const tileMaxZ = Math.floor(
-        (rectMaxZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-      )
+        const tileMinX = Math.floor(
+          (rectMinX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+        const tileMaxX = Math.floor(
+          (rectMaxX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+        const tileMinZ = Math.floor(
+          (rectMinZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
+        const tileMaxZ = Math.floor(
+          (rectMaxZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
+        )
 
-      for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
-        for (let tx = tileMinX; tx <= tileMaxX; tx++) {
-          const cached = grassDataManager.getCachedGrassData(tx, tz)
-          if (!cached) continue
-          const filtered = removeGrassInRect(
-            cached,
-            rectMinX,
-            rectMinZ,
-            rectMaxX,
-            rectMaxZ
-          )
-          if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
+        for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
+          for (let tx = tileMinX; tx <= tileMaxX; tx++) {
+            const cached = grassDataManager.getCachedGrassData(tx, tz)
+            if (!cached) continue
+            const filtered = removeGrassInRect(
+              cached,
+              rectMinX,
+              rectMinZ,
+              rectMaxX,
+              rectMaxZ
+            )
+            if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
+          }
         }
       }
     }
@@ -432,10 +467,10 @@
       localZ: 0,
       sizeX,
       sizeZ,
-      floorLevel: 0,
+      floorLevel: currentFloorLevel,
       floorTexture: floorTex,
       roofTexture: roofTex,
-      wallHeight: 3,
+      wallHeight: DEFAULT_WALL_HEIGHT,
       wallNorth: fillWall(sizeX, wv.north, wallTex),
       wallSouth: fillWall(sizeX, wv.south, wallTex),
       wallEast: fillWall(sizeZ, wv.east, wallTex),
@@ -453,6 +488,8 @@
       const a = rooms[i]
       for (let j = i + 1; j < rooms.length; j++) {
         const b = rooms[j]
+        // Only open walls between rooms on the same floor
+        if (a.floorLevel !== b.floorLevel) continue
 
         // N/S: a's south touches b's north
         if (a.localZ + a.sizeZ === b.localZ) {

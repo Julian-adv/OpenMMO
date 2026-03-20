@@ -34,6 +34,12 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
                 i, room.wall_height
             ));
         }
+        if room.floor_level > 1 {
+            return Err(format!(
+                "Room {} floor_level ({}) must be 0 or 1",
+                i, room.floor_level
+            ));
+        }
         // Wall segment counts must match room dimensions
         let sx = room.size_x as usize;
         let sz = room.size_z as usize;
@@ -74,6 +80,33 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
                     neighbor.origin.z,
                 ) {
                     return Err(format!("Room {} overlaps with a neighboring house", i));
+                }
+            }
+        }
+    }
+
+    // Validate 2F rooms have full floor support from 1F rooms
+    for (i, room) in house.rooms.iter().enumerate() {
+        if room.floor_level == 0 {
+            continue;
+        }
+        let rx = room.local_x;
+        let rz = room.local_z;
+        // Check each 1m² cell is supported by a 1F room
+        for x in rx..(rx + room.size_x as i32) {
+            for z in rz..(rz + room.size_z as i32) {
+                let supported = house.rooms.iter().any(|other| {
+                    other.floor_level == 0
+                        && x >= other.local_x
+                        && x < other.local_x + other.size_x as i32
+                        && z >= other.local_z
+                        && z < other.local_z + other.size_z as i32
+                });
+                if !supported {
+                    return Err(format!(
+                        "Room {} (2F) at ({},{}) has no floor support from 1F",
+                        i, x, z
+                    ));
                 }
             }
         }

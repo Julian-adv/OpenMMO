@@ -1,3 +1,5 @@
+export type RoomType = 'normal' | 'stairwell'
+
 export type WallVariant = 'solid' | 'door' | 'window' | 'open'
 
 export interface WallConfig {
@@ -6,6 +8,7 @@ export interface WallConfig {
 }
 
 export interface RoomData {
+  roomType?: RoomType
   localX: number
   localZ: number
   sizeX: number

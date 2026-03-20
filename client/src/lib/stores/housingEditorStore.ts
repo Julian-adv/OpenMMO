@@ -62,6 +62,7 @@ export const ROOM_TEMPLATES: RoomTemplate[] = [
 export const selectedRoomTemplate = writable<RoomTemplate | null>(null)
 export const placementRotation = writable<number>(0)
 export const placementPreview = writable<{ x: number; z: number } | null>(null)
+export const placementFloorLevel = writable<number>(0)
 
 // Wall texture index (0-3)
 export const wallTextureIndex = writable<number>(0)
