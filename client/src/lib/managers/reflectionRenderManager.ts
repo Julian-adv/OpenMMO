@@ -49,6 +49,7 @@ export class ReflectionRenderManager {
   private camera: THREE.Camera | null = null
   private terrainGroup: THREE.Group | null = null
   private waterGroup: THREE.Group | null = null
+  private housingGroup: THREE.Group | null = null
 
   /** The ClippingGroup wrapping entities — clipping toggled per frame. */
   private entityClipGroup: { enabled: boolean } | null = null
@@ -104,6 +105,10 @@ export class ReflectionRenderManager {
     this.waterGroup = group
   }
 
+  setHousingGroup(group: THREE.Group | null) {
+    this.housingGroup = group
+  }
+
   setEntityClipGroup(group: { enabled: boolean } | null) {
     this.entityClipGroup = group
   }
@@ -139,6 +144,8 @@ export class ReflectionRenderManager {
     if (this.terrainGroup) this.terrainGroup.visible = false
     const savedWater = this.waterGroup?.visible
     if (this.waterGroup) this.waterGroup.visible = false
+    const savedHousing = this.housingGroup?.visible
+    if (this.housingGroup) this.housingGroup.visible = false
 
     // --- enable clipping to discard below-water fragments ---
     if (this.entityClipGroup) this.entityClipGroup.enabled = true
@@ -161,6 +168,7 @@ export class ReflectionRenderManager {
     if (this.entityClipGroup) this.entityClipGroup.enabled = false
     if (this.terrainGroup) this.terrainGroup.visible = savedTerrain ?? true
     if (this.waterGroup) this.waterGroup.visible = savedWater ?? true
+    if (this.housingGroup) this.housingGroup.visible = savedHousing ?? true
   }
 
   /** Clear the reflection target to transparent black. */

@@ -13,7 +13,7 @@
   import type Monster from '../Monster.svelte'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
-  import { playerFloorOffset } from '../../stores/housingStore'
+
   import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
@@ -31,6 +31,7 @@
     chatBubbles: Map<string, ChatBubble>
     currentPlayerState: PlayerState
     terrainMeshes: (THREE.Mesh | undefined)[]
+    housingGroup: THREE.Group | null
     monsterModels: (Monster | undefined)[]
     playerAttackDuration: number
     heightManager: TerrainHeightManager
@@ -52,6 +53,7 @@
     chatBubbles,
     currentPlayerState,
     terrainMeshes,
+    housingGroup,
     monsterModels,
     playerAttackDuration,
     heightManager,
@@ -158,7 +160,10 @@
     onStateChange={onStateChange}
     {camera}
     {heightManager}
-    groundMeshes={terrainMeshes.filter((mesh) => mesh !== undefined) as THREE.Mesh[]}
+    groundMeshes={[
+      ...terrainMeshes.filter((mesh) => mesh !== undefined) as THREE.Mesh[],
+      ...(housingGroup ? [housingGroup] : []),
+    ]}
     monsterMeshes={monsterModels
       .map((model) => model?.getMeshGroup())
       .filter((group) => group !== undefined) as THREE.Group[]}
@@ -199,7 +204,7 @@
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
           remotePlayer.position.x,
-          (heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) || remotePlayer.position.y) + $playerFloorOffset,
+          heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) || remotePlayer.position.y,
           remotePlayer.position.z
         )}
         name={player.name}

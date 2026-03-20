@@ -26,7 +26,7 @@
     onStateChange: (state: PlayerState) => void
     camera: THREE.Camera
     heightManager: TerrainHeightManager
-    groundMeshes: THREE.Mesh[]
+    groundMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
     attackCooldown?: number
   }
@@ -508,11 +508,7 @@
 
   // Handle canvas click intent from input handler
   function handleCanvasClickIntent(event: MouseEvent) {
-    if ($mapEditorMode) return
-    if ($housingEditorMode) {
-      // Ctrl+click allows movement in housing editor mode
-      if (!(event.ctrlKey || event.metaKey)) return
-    }
+    if ($mapEditorMode || $housingEditorMode) return
     if (!currentPlayer || currentPlayer.health <= 0) return
 
     const intent = inputHandler.processCanvasClick(event, {

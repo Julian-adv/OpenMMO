@@ -41,8 +41,8 @@ type WallDirection = 'north' | 'south' | 'east' | 'west'
 
 export interface HouseGroupResult {
   houseGroup: THREE.Group
-  frontGroup: THREE.Group
-  backGroup: THREE.Group
+  /** Per-floor groups: key = floorLevel, value = { front, back } */
+  floorGroups: Map<number, { front: THREE.Group; back: THREE.Group }>
   aabb: THREE.Box3
   /** JSON hash of rooms for change detection */
   roomsHash: string
@@ -60,16 +60,6 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
   const houseGroup = new THREE.Group()
   houseGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
   houseGroup.name = `house_${house.id}`
-
-  const frontGroup = new THREE.Group()
-  frontGroup.name = 'front'
-  const backGroup = new THREE.Group()
-  backGroup.name = 'back'
-  houseGroup.add(frontGroup)
-  houseGroup.add(backGroup)
-
-  const frontEntries: GeoEntry[] = []
-  const backEntries: GeoEntry[] = []
 
   // Build set of 2F room footprints for roof suppression
   const secondFloorFootprints: {
@@ -89,7 +79,22 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
     }
   }
 
+  // Collect geometry entries per floor level
+  const perFloor = new Map<number, { front: GeoEntry[]; back: GeoEntry[] }>()
+
+  const getFloorEntries = (fl: number) => {
+    let entries = perFloor.get(fl)
+    if (!entries) {
+      entries = { front: [], back: [] }
+      perFloor.set(fl, entries)
+    }
+    return entries
+  }
+
   for (const room of house.rooms) {
+    const fl = room.roomType === 'stairwell' ? 0 : room.floorLevel
+    const entries = getFloorEntries(fl)
+
     // Only suppress roof if every 1m² cell of the 1F room is covered by a 2F room
     let suppressRoof = false
     if (room.floorLevel === 0 && secondFloorFootprints.length > 0) {
@@ -112,12 +117,26 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
         }
       }
     }
-    collectRoomGeometries(room, frontEntries, backEntries, suppressRoof)
+    collectRoomGeometries(room, entries.front, entries.back, suppressRoof)
   }
 
-  // Group by texture index and merge
-  addMergedMeshes(frontGroup, frontEntries)
-  addMergedMeshes(backGroup, backEntries)
+  // Create per-floor groups and merge geometry
+  const floorGroups = new Map<
+    number,
+    { front: THREE.Group; back: THREE.Group }
+  >()
+
+  for (const [fl, entries] of perFloor) {
+    const front = new THREE.Group()
+    front.name = `front_f${fl}`
+    const back = new THREE.Group()
+    back.name = `back_f${fl}`
+    addMergedMeshes(front, entries.front)
+    addMergedMeshes(back, entries.back)
+    houseGroup.add(front)
+    houseGroup.add(back)
+    floorGroups.set(fl, { front, back })
+  }
 
   // Compute world-space AABB
   const aabb = new THREE.Box3()
@@ -137,8 +156,7 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
 
   return {
     houseGroup,
-    frontGroup,
-    backGroup,
+    floorGroups,
     aabb,
     roomsHash: JSON.stringify(house.rooms),
   }
@@ -506,6 +524,41 @@ function collectWallSegments(
       }
     }
   }
+}
+
+/**
+ * Calculate the Y offset for a player standing on a stairwell.
+ * Returns the height above ground based on position along the stair.
+ * wx/wz are world coordinates, house is the containing house.
+ */
+export function getStairwellYOffset(
+  room: RoomData,
+  houseOriginX: number,
+  houseOriginZ: number,
+  wx: number,
+  wz: number
+): number {
+  const { localX, localZ, sizeX, sizeZ, wallHeight } = room
+  const alongZ = sizeZ >= sizeX
+  const stairLen = alongZ ? sizeZ : sizeX
+
+  // Player position along the stair axis (0 = start, stairLen = end)
+  const roomStartX = houseOriginX + localX
+  const roomStartZ = houseOriginZ + localZ
+  const posAlongStair = alongZ ? wz - roomStartZ : wx - roomStartX
+
+  // Clamp to [0, stairLen]
+  const t = Math.max(0, Math.min(stairLen, posAlongStair))
+
+  // Bottom landing: t in [0, LANDING_DEPTH] → height = 0
+  if (t <= LANDING_DEPTH) return FLOOR_THICKNESS / 2
+
+  // Top landing: t in [stairLen - LANDING_DEPTH, stairLen] → height = wallHeight
+  if (t >= stairLen - LANDING_DEPTH) return wallHeight + FLOOR_THICKNESS / 2
+
+  // Steps region: linear interpolation
+  const stairT = (t - LANDING_DEPTH) / (stairLen - LANDING_DEPTH * 2)
+  return stairT * wallHeight + FLOOR_THICKNESS / 2
 }
 
 /** Dispose merged geometries in a house group */

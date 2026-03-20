@@ -31,6 +31,8 @@
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
   import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT } from '../../utils/house-geometry'
+  import { editorPanOffset } from '../../stores/editorStore'
+  import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
   import { removeGrassInRect } from '../../utils/grass-data'
@@ -93,6 +95,14 @@
   let deleteTarget: { houseId: string; roomIndex: number } | null = null
 
   const BLEND_RADIUS = 4
+
+  // Middle-button camera panning
+  let isPanning = false
+  let lastPanX = 0
+  let lastPanY = 0
+  const _panRight = new THREE.Vector3()
+  const _panUp = new THREE.Vector3()
+  const _panFwd = new THREE.Vector3()
 
   function getRotatedSize() {
     if (!currentTemplate) return { sx: 0, sz: 0 }
@@ -213,6 +223,7 @@
       canvas.style.cursor = v === 'delete' ? 'crosshair' : v === 'select' ? 'pointer' : ''
       if (v !== 'select') clearHighlight()
       if (v !== 'delete') clearDeleteHighlight()
+      isPanning = false
     }),
     selectedHouseId.subscribe(() => scheduleUpdateHighlight()),
     selectedRoomIndex.subscribe(() => scheduleUpdateHighlight()),
@@ -326,6 +337,30 @@
   }
 
   function handleMouseMove(event: MouseEvent) {
+    if (isPanning) {
+      if (!camera) return
+      const dx = event.clientX - lastPanX
+      const dy = event.clientY - lastPanY
+      lastPanX = event.clientX
+      lastPanY = event.clientY
+
+      camera.matrixWorld.extractBasis(_panRight, _panUp, _panFwd)
+      _panRight.y = 0
+      _panRight.normalize()
+      _panFwd.y = 0
+      _panFwd.normalize()
+
+      const rect = canvas.getBoundingClientRect()
+      const scale = ORTHOGRAPHIC_FRUSTUM_HEIGHT / (camera.zoom * rect.height)
+
+      const current = get(editorPanOffset)
+      editorPanOffset.set({
+        x: current.x - (_panRight.x * dx + _panFwd.x * dy) * scale,
+        z: current.z - (_panRight.z * dx + _panFwd.z * dy) * scale,
+      })
+      return
+    }
+
     const hit = raycastTerrain(event)
     if (!hit || (!currentTemplate && currentTool === 'place')) {
       placementPreview.set(null)
@@ -359,9 +394,14 @@
   }
 
   function handleMouseDown(event: MouseEvent) {
+    if (event.button === 1) {
+      event.preventDefault()
+      isPanning = true
+      lastPanX = event.clientX
+      lastPanY = event.clientY
+      return
+    }
     if (event.button !== 0) return
-    // Ctrl+click passes through to player movement
-    if (event.ctrlKey || event.metaKey) return
     event.preventDefault()
 
     if (currentTool === 'delete') {
@@ -658,14 +698,32 @@
     }
   }
 
+  function handleMouseUp(event: MouseEvent) {
+    if (event.button === 1) {
+      isPanning = false
+    }
+  }
+
+  function handleWheel(event: WheelEvent) {
+    if (!camera) return
+    event.preventDefault()
+    const factor = event.deltaY > 0 ? 0.95 : 1 / 0.95
+    camera.zoom = Math.max(0.15, Math.min(2, camera.zoom * factor))
+    camera.updateProjectionMatrix()
+  }
+
   canvas.addEventListener('mousemove', handleMouseMove)
   canvas.addEventListener('mousedown', handleMouseDown)
+  canvas.addEventListener('mouseup', handleMouseUp)
+  canvas.addEventListener('wheel', handleWheel, { passive: false })
   window.addEventListener('keydown', handleKeyDown)
 
   onDestroy(() => {
     unsubs.forEach((u) => u())
     canvas.removeEventListener('mousemove', handleMouseMove)
     canvas.removeEventListener('mousedown', handleMouseDown)
+    canvas.removeEventListener('mouseup', handleMouseUp)
+    canvas.removeEventListener('wheel', handleWheel)
     window.removeEventListener('keydown', handleKeyDown)
     canvas.style.cursor = ''
     placementPreview.set(null)

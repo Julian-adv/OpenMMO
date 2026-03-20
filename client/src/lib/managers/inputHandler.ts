@@ -15,7 +15,7 @@ export type ClickIntent =
 export interface RaycastContext {
   camera: THREE.Camera
   monsterMeshes: THREE.Group[]
-  groundMeshes: THREE.Mesh[]
+  groundMeshes: THREE.Object3D[]
   playerPosition: Position
   isMonsterDead: (monsterId: string) => boolean
 }
@@ -125,7 +125,7 @@ class InputHandler {
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.setFromCamera(centerNDC, context.camera)
-    const intersects = raycaster.intersectObjects(context.groundMeshes, false)
+    const intersects = raycaster.intersectObjects(context.groundMeshes, true)
 
     if (intersects.length > 0) {
       const point = intersects[0].point

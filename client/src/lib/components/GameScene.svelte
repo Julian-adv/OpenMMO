@@ -456,7 +456,7 @@
 
       // Update player controls (skip in map editor mode)
       const playerControlStart = performance.now()
-      if (playerControl && !$mapEditorMode) {
+      if (playerControl && !$mapEditorMode && !$housingEditorMode) {
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }
@@ -625,6 +625,7 @@
         if (camera) reflectionManager.setCamera(camera)
         reflectionManager.setTerrainGroup(terrainGroup ?? null)
         if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
+        reflectionManager.setHousingGroup(housingLayerRef?.getGroup() ?? null)
         if (entityClipGroup) reflectionManager.setEntityClipGroup(entityClipGroup)
 
         // Hide nametags/HP bars during reflection render
@@ -697,7 +698,7 @@
   function updateCameraWithOffset(offset: { x: number; y: number; z: number }) {
     if (!currentPlayer || !camera) return
 
-    if ($mapEditorMode) {
+    if ($mapEditorMode || $housingEditorMode) {
       // Apply editor pan offset so middle-mouse drag moves the viewport
       const pan = $editorPanOffset
       const panPos = {
@@ -946,10 +947,10 @@
   zoom={ORTHOGRAPHIC_DEFAULT_ZOOM}
 >
   <OrbitControls
-    enableRotate={$mapEditorMode ? false : $cameraRotationEnabled}
+    enableRotate={$mapEditorMode || $housingEditorMode ? false : $cameraRotationEnabled}
     enablePan={false}
-    enableZoom={!$mapEditorMode}
-    enabled={!$mapEditorMode}
+    enableZoom={!$mapEditorMode && !$housingEditorMode}
+    enabled={!$mapEditorMode && !$housingEditorMode}
     target={cameraTarget}
     minZoom={$debugSpeedMode ? 0.15 : 1}
     maxZoom={2}
@@ -1048,6 +1049,7 @@
     {chatBubbles}
     {currentPlayerState}
     {terrainMeshes}
+    housingGroup={housingLayerRef?.getGroup() ?? null}
     {monsterModels}
     {playerAttackDuration}
     heightManager={terrainHeightManager}

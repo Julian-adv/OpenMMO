@@ -96,7 +96,7 @@
           fill="url(#flowerPattern)"
           font-family="'Black Han Sans', sans-serif"
           font-size="260"
-        >봇들마을</textPath>
+        >봇들필드</textPath>
       </text>
     </svg>
     <h1 class="title">BottleField</h1>
