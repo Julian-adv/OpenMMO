@@ -75,8 +75,33 @@
 </script>
 
 <div class="login-container">
+  <div class="login-wrapper">
+    <svg class="arch-title" viewBox="-100 -80 1000 500" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <path id="archPath" d="M 40,320 Q 400,0 760,320" fill="none" />
+        <pattern id="flowerPattern" patternUnits="userSpaceOnUse" width="256" height="256">
+          <image href="/textures/flowerx4.png" width="256" height="256" />
+        </pattern>
+      </defs>
+      <text
+        stroke="white"
+        stroke-width="3"
+        paint-order="stroke"
+      >
+        <textPath
+          href="#archPath"
+          startOffset="50%"
+          text-anchor="middle"
+          dominant-baseline="auto"
+          fill="url(#flowerPattern)"
+          font-family="'Black Han Sans', sans-serif"
+          font-size="260"
+        >봇들마을</textPath>
+      </text>
+    </svg>
+    <h1 class="title">BottleField</h1>
+
   <div class="login-panel">
-    <h1 class="title">BottleVille</h1>
 
     {#if kickedMessage}
       <div class="kicked-message">{kickedMessage}</div>
@@ -126,6 +151,7 @@
       </div>
     </form>
   </div>
+  </div>
 </div>
 
 <style>
@@ -136,9 +162,34 @@
     width: 100vw;
     height: 100vh;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  }
+
+  .login-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .arch-title {
+    width: 800px;
+    height: 350px;
+    margin-bottom: -20px;
+    filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.6));
+  }
+
+  .title {
+    margin: 0 0 20px 0;
+    color: #a0aec0;
+    font-size: 18px;
+    font-weight: 400;
+    text-align: center;
+    letter-spacing: 6px;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .login-panel {
@@ -148,16 +199,6 @@
     border: 1px solid #4a5568;
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  }
-
-  .title {
-    margin: 0 0 30px 0;
-    color: #ffffff;
-    font-size: 28px;
-    font-weight: 700;
-    text-align: center;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   form {
