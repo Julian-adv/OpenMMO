@@ -516,6 +516,26 @@
     const targetHeight = heightManager.getHeightAtWorldPosition(centerX, centerZ)
 
     const newRoom = buildRoomData(sx, sz)
+    const shouldFlattenTerrain = currentFloorLevel === 0 && currentRoomType !== 'stairwell'
+
+    // Build protected rects BEFORE saving (so the new room isn't included)
+    const protectedRects: { minX: number; minZ: number; maxX: number; maxZ: number }[] = []
+    if (shouldFlattenTerrain) {
+      for (const house of housingManager.getAllHouses()) {
+        for (const room of house.rooms) {
+          if (room.floorLevel === 0 && room.roomType !== 'stairwell') {
+            const rx = house.origin.x + room.localX
+            const rz = house.origin.z + room.localZ
+            protectedRects.push({
+              minX: rx,
+              minZ: rz,
+              maxX: rx + room.sizeX,
+              maxZ: rz + room.sizeZ,
+            })
+          }
+        }
+      }
+    }
 
     // Stairwells and 2F rooms attach to the house with supporting 1F rooms
     // 1F rooms check edge adjacency
@@ -557,14 +577,18 @@
     if (!saved) return
 
     // Skip terrain flatten and grass removal for 2F rooms and stairwells
-    if (currentFloorLevel === 0 && currentRoomType !== 'stairwell') {
+    if (shouldFlattenTerrain) {
       heightManager.flattenArea(
         pos.x,
         pos.z,
         pos.x + sx,
         pos.z + sz,
         targetHeight,
-        BLEND_RADIUS
+        BLEND_RADIUS,
+        (wx, wz) =>
+          protectedRects.some(
+            (r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ
+          )
       )
       heightManager.saveAllDirty()
 

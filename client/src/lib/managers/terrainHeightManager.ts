@@ -535,7 +535,8 @@ export class TerrainHeightManager {
     maxX: number,
     maxZ: number,
     targetHeight: number,
-    blendRadius: number
+    blendRadius: number,
+    isProtected?: (worldX: number, worldZ: number) => boolean
   ): AffectedTile[] {
     const affected: AffectedTile[] = []
     const affectedKeys = new Set<string>()
@@ -583,6 +584,9 @@ export class TerrainHeightManager {
             const distFromEdge = Math.sqrt(dx * dx + dz * dz)
 
             const idx = cz * VERTS_PER_SIDE + cx
+
+            // Skip pixels that belong to another house's footprint
+            if (isProtected && isProtected(worldCX, worldCZ)) continue
 
             if (distFromEdge <= 0) {
               // Inside the flat area: force to target height
