@@ -20,6 +20,7 @@ const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
 const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
+const LANDING_DEPTH = 0.5
 
 /** Y offset used to hide front walls instead of toggling visible (WebGPU workaround) */
 export const OFFSCREEN_Y = -10000
@@ -356,8 +357,6 @@ function collectRoomGeometries(
  * within 1 floor height. No walls, no roof. Includes landings at top/bottom.
  * Placed inside an existing room.
  */
-const LANDING_DEPTH = 0.5
-
 function collectStairwellGeometries(
   room: RoomData,
   backEntries: GeoEntry[],

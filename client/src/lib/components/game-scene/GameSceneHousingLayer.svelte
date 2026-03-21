@@ -169,11 +169,12 @@
           playerPosition.x,
           playerPosition.z
         )
+        // Transition at 90% of total rise to avoid flickering at exact boundary
+        const floorThreshold = floorYBase(1, room.wallHeight) * 0.9
         if (playerInsideFloor <= 0) {
-          effectiveFloor =
-            newOffset >= floorYBase(1, room.wallHeight) ? 1 : 0
+          effectiveFloor = newOffset >= floorThreshold ? 1 : 0
         } else {
-          effectiveFloor = newOffset <= FLOOR_THICKNESS ? 0 : 1
+          effectiveFloor = newOffset <= floorThreshold ? 0 : 1
         }
       } else if (floorResult) {
         const room = floorResult.house.rooms[floorResult.roomIndex]
