@@ -25,10 +25,12 @@
   import { housingManager } from '../../managers/housingManager'
 
   const toCSS = (c: number) => `#${c.toString(16).padStart(6, '0')}`
-  const TEX_ENTRIES = HOUSING_TEXTURES.map((t) => ({
+  const TEX_ENTRIES = HOUSING_TEXTURES.map((t, i) => ({
+    idx: i,
     label: t.label,
     color: toCSS(t.fallbackColor),
-  }))
+    sortOrder: t.sortOrder ?? i,
+  })).sort((a, b) => a.sortOrder - b.sortOrder)
 
   let texPreviews = $state<(string | null)[]>(HOUSING_TEXTURES.map(() => null))
   let openDropdown = $state<string | null>(null)
@@ -198,11 +200,12 @@
       {/if}
     </div>
 
-    {#snippet texSwatch(idx: number)}
-      {#if texPreviews[idx]}
-        <img class="tex-swatch" src={texPreviews[idx]} alt="" />
+    {#snippet texSwatch(texIdx: number)}
+      {#if texPreviews[texIdx]}
+        <img class="tex-swatch" src={texPreviews[texIdx]} alt="" />
       {:else}
-        <span class="tex-swatch" style="background: {TEX_ENTRIES[idx].color}"></span>
+        {@const entry = TEX_ENTRIES.find((e) => e.idx === texIdx)}
+        <span class="tex-swatch" style="background: {entry?.color ?? '#888'}"></span>
       {/if}
     {/snippet}
 
@@ -214,18 +217,18 @@
           onclick={() => { openDropdown = openDropdown === title ? null : title }}
         >
           {@render texSwatch(activeIdx)}
-          <span>{TEX_ENTRIES[activeIdx].label}</span>
+          <span>{TEX_ENTRIES.find((e) => e.idx === activeIdx)?.label}</span>
           <span class="tex-arrow">{openDropdown === title ? '▲' : '▼'}</span>
         </button>
         {#if openDropdown === title}
           <div class="tex-dropdown-list">
-            {#each TEX_ENTRIES as entry, i (i)}
+            {#each TEX_ENTRIES as entry (entry.idx)}
               <button
                 class="tex-dropdown-item"
-                class:active={activeIdx === i}
-                onclick={() => { onChange(i); openDropdown = null }}
+                class:active={activeIdx === entry.idx}
+                onclick={() => { onChange(entry.idx); openDropdown = null }}
               >
-                {@render texSwatch(i)}
+                {@render texSwatch(entry.idx)}
                 <span>{entry.label}</span>
               </button>
             {/each}
