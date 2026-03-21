@@ -10,6 +10,7 @@
     DEFAULT_WALL_HEIGHT,
     FLOOR_THICKNESS,
     OFFSCREEN_Y,
+    floorYBase,
     getStairwellYOffset,
     type HouseGroupResult,
   } from '../../utils/house-geometry'
@@ -129,7 +130,7 @@
       _allRooms.length = 0
       _seenRooms.clear()
       for (let fl = 1; fl >= 0; fl--) {
-        const testY = groundY + fl * DEFAULT_WALL_HEIGHT + 1
+        const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
         for (const r of housingManager.findAllRoomsAtPoint(
           playerPosition.x,
           testY,
@@ -169,7 +170,8 @@
           playerPosition.z
         )
         if (playerInsideFloor <= 0) {
-          effectiveFloor = newOffset >= room.wallHeight ? 1 : 0
+          effectiveFloor =
+            newOffset >= floorYBase(1, room.wallHeight) ? 1 : 0
         } else {
           effectiveFloor = newOffset <= FLOOR_THICKNESS ? 0 : 1
         }
@@ -177,7 +179,7 @@
         const room = floorResult.house.rooms[floorResult.roomIndex]
         insideId = id
         newOffset =
-          room.floorLevel * room.wallHeight + FLOOR_THICKNESS / 2
+          floorYBase(room.floorLevel, room.wallHeight) + FLOOR_THICKNESS / 2
         effectiveFloor = room.floorLevel
       }
       if (insideId) break

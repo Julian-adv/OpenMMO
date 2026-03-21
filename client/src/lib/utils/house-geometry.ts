@@ -24,6 +24,11 @@ const WINDOW_BOTTOM = 1.2
 /** Y offset used to hide front walls instead of toggling visible (WebGPU workaround) */
 export const OFFSCREEN_Y = -10000
 
+/** Compute the Y base for a given floor level, accounting for floor thickness. */
+export function floorYBase(floorLevel: number, wallHeight: number): number {
+  return floorLevel * (wallHeight + FLOOR_THICKNESS)
+}
+
 // Wall direction descriptors
 interface WallDirInfo {
   isNS: boolean
@@ -141,7 +146,7 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
   // Compute world-space AABB
   const aabb = new THREE.Box3()
   for (const room of house.rooms) {
-    const yBase = room.floorLevel * room.wallHeight
+    const yBase = floorYBase(room.floorLevel, room.wallHeight)
     const minX = house.origin.x + room.localX
     const minZ = house.origin.z + room.localZ
     _aabbVec.set(minX, house.origin.y + yBase, minZ)
@@ -237,7 +242,7 @@ function collectRoomGeometries(
   }
 
   const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
-  const yBase = floorLevel * wallHeight
+  const yBase = floorYBase(floorLevel, wallHeight)
 
   // Floor → back
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
@@ -293,7 +298,9 @@ function collectStairwellGeometries(
   backEntries: GeoEntry[]
 ) {
   const { localX, localZ, sizeX, sizeZ, wallHeight } = room
+  // Stairwells always connect floor 0 → floor 1
   const yBase = FLOOR_THICKNESS / 2
+  const totalRise = floorYBase(1, wallHeight)
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
 
   // Steps ascend along the longer axis
@@ -302,8 +309,8 @@ function collectStairwellGeometries(
   const stairWidth = alongZ ? sizeX : sizeZ
 
   const stairRun = stairLen - LANDING_DEPTH * 2
-  const stepCount = Math.round(wallHeight / 0.25)
-  const stepHeight = wallHeight / stepCount
+  const stepCount = Math.round(totalRise / 0.25)
+  const stepHeight = totalRise / stepCount
   const stepDepth = stairRun / stepCount
 
   // Helper: create a step box with world-tiled UVs (1 repeat/meter)
@@ -383,7 +390,7 @@ function collectStairwellGeometries(
       FLOOR_THICKNESS,
       LANDING_DEPTH,
       alongZ ? cx : cx + offset,
-      yBase + wallHeight,
+      yBase + totalRise,
       alongZ ? cz + offset : cz
     )
   }
@@ -400,7 +407,7 @@ function collectWallSegments(
   const dirInfo = WALL_DIR_INFO[dir]
   const target = dirInfo.isFront ? frontEntries : backEntries
   const wh = room.wallHeight
-  const yBase = room.floorLevel * wh + FLOOR_THICKNESS / 2
+  const yBase = floorYBase(room.floorLevel, wh) + FLOOR_THICKNESS / 2
   const { localX, localZ, sizeX, sizeZ } = room
 
   for (let i = 0; i < segments.length; i++) {
@@ -541,6 +548,7 @@ export function getStairwellYOffset(
   const { localX, localZ, sizeX, sizeZ, wallHeight } = room
   const alongZ = sizeZ >= sizeX
   const stairLen = alongZ ? sizeZ : sizeX
+  const totalRise = floorYBase(1, wallHeight)
 
   // Player position along the stair axis (0 = start, stairLen = end)
   const roomStartX = houseOriginX + localX
@@ -553,12 +561,12 @@ export function getStairwellYOffset(
   // Bottom landing: t in [0, LANDING_DEPTH] → height = 0
   if (t <= LANDING_DEPTH) return FLOOR_THICKNESS / 2
 
-  // Top landing: t in [stairLen - LANDING_DEPTH, stairLen] → height = wallHeight
-  if (t >= stairLen - LANDING_DEPTH) return wallHeight + FLOOR_THICKNESS / 2
+  // Top landing: t in [stairLen - LANDING_DEPTH, stairLen] → height = totalRise
+  if (t >= stairLen - LANDING_DEPTH) return totalRise + FLOOR_THICKNESS / 2
 
   // Steps region: linear interpolation
   const stairT = (t - LANDING_DEPTH) / (stairLen - LANDING_DEPTH * 2)
-  return stairT * wallHeight + FLOOR_THICKNESS / 2
+  return stairT * totalRise + FLOOR_THICKNESS / 2
 }
 
 /** Dispose merged geometries in a house group */

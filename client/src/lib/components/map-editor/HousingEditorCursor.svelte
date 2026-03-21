@@ -30,7 +30,7 @@
     WallVariant,
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
-  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT } from '../../utils/house-geometry'
+  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, floorYBase } from '../../utils/house-geometry'
   import { editorPanOffset } from '../../stores/editorStore'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -179,7 +179,7 @@
     deleteHighlight = new THREE.LineSegments(edgesGeo, deleteEdgeMat)
     deleteHighlight.position.set(
       result.house.origin.x + room.localX + room.sizeX / 2,
-      result.house.origin.y + room.floorLevel * room.wallHeight + room.wallHeight / 2,
+      result.house.origin.y + floorYBase(room.floorLevel, room.wallHeight) + room.wallHeight / 2,
       result.house.origin.z + room.localZ + room.sizeZ / 2
     )
     previewGroup.add(deleteHighlight)
@@ -203,7 +203,7 @@
     highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
     highlightEdges.position.set(
       house.origin.x + room.localX + room.sizeX / 2,
-      house.origin.y + room.floorLevel * room.wallHeight + room.wallHeight / 2,
+      house.origin.y + floorYBase(room.floorLevel, room.wallHeight) + room.wallHeight / 2,
       house.origin.z + room.localZ + room.sizeZ / 2
     )
     previewGroup.add(highlightEdges)
@@ -433,7 +433,7 @@
     const results: { house: HouseData; roomIndex: number }[] = []
     const seen = new SvelteSet<string>()
     for (let fl = 1; fl >= 0; fl--) {
-      const testY = groundY + fl * DEFAULT_WALL_HEIGHT + 1
+      const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
       for (const r of housingManager.findAllRoomsAtPoint(wx, testY, wz)) {
         const key = `${r.house.id}:${r.roomIndex}`
         if (!seen.has(key)) {

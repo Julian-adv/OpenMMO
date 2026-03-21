@@ -4,6 +4,7 @@ import {
   getTerrainChunkFromPosition,
 } from '../components/game-scene/terrain-utils'
 import type { HouseData } from '../types/housing'
+import { floorYBase } from '../utils/house-geometry'
 
 function chunkKey(cx: number, cz: number): string {
   return `${cx},${cz}`
@@ -160,7 +161,8 @@ export class HousingManager {
         const room = house.rooms[i]
         const rx = house.origin.x + room.localX
         const rz = house.origin.z + room.localZ
-        const ryBase = house.origin.y + room.floorLevel * room.wallHeight
+        const ryBase =
+          house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
         if (
           x >= rx &&
           x <= rx + room.sizeX &&
@@ -188,7 +190,8 @@ export class HousingManager {
         const room = house.rooms[i]
         const rx = house.origin.x + room.localX
         const rz = house.origin.z + room.localZ
-        const ryBase = house.origin.y + room.floorLevel * room.wallHeight
+        const ryBase =
+          house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
         const roomHeight = room.wallHeight
         if (
           x >= rx &&
