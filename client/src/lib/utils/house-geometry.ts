@@ -12,7 +12,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { HouseData, RoomData, WallConfig } from '../types/housing'
 import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 
-const WALL_THICKNESS = 0.15
+const WALL_THICKNESS = 0.1
 export const FLOOR_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 3
 const DOOR_WIDTH = 1.0
@@ -122,7 +122,13 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
         }
       }
     }
-    collectRoomGeometries(room, entries.front, entries.back, suppressRoof)
+    collectRoomGeometries(
+      room,
+      entries.front,
+      entries.back,
+      suppressRoof,
+      house.rooms
+    )
   }
 
   // Create per-floor groups and merge geometry
@@ -234,10 +240,11 @@ function collectRoomGeometries(
   room: RoomData,
   frontEntries: GeoEntry[],
   backEntries: GeoEntry[],
-  suppressRoof: boolean = false
+  suppressRoof: boolean = false,
+  allRooms: RoomData[] = []
 ) {
   if (room.roomType === 'stairwell') {
-    collectStairwellGeometries(room, frontEntries, backEntries)
+    collectStairwellGeometries(room, backEntries, allRooms)
     return
   }
 
@@ -294,8 +301,8 @@ const LANDING_DEPTH = 0.5
 
 function collectStairwellGeometries(
   room: RoomData,
-  _frontEntries: GeoEntry[],
-  backEntries: GeoEntry[]
+  backEntries: GeoEntry[],
+  allRooms: RoomData[]
 ) {
   const { localX, localZ, sizeX, sizeZ, wallHeight } = room
   // Stairwells always connect floor 0 → floor 1
@@ -308,7 +315,87 @@ function collectStairwellGeometries(
   const stairLen = alongZ ? sizeZ : sizeX
   const stairWidth = alongZ ? sizeX : sizeZ
 
-  const stairRun = stairLen - LANDING_DEPTH * 2
+  // Detect solid walls on each side of the stairwell to inset geometry.
+  // Each edge can have a wall from the containing room (same-side) or adjacent room (opposite-side).
+  const hasSolidWall = (segs: WallConfig[]) =>
+    segs.some((s) => s.variant !== 'open')
+  const edgeChecks: {
+    dir: 'north' | 'south' | 'east' | 'west'
+    edge: number
+    overlapAxis: 'x' | 'z'
+    matches: {
+      otherEdge: (o: RoomData) => number
+      wall: (o: RoomData) => WallConfig[]
+    }[]
+  }[] = [
+    {
+      dir: 'north',
+      edge: localZ,
+      overlapAxis: 'x',
+      matches: [
+        { otherEdge: (o) => o.localZ, wall: (o) => o.wallNorth },
+        { otherEdge: (o) => o.localZ + o.sizeZ, wall: (o) => o.wallSouth },
+      ],
+    },
+    {
+      dir: 'south',
+      edge: localZ + sizeZ,
+      overlapAxis: 'x',
+      matches: [
+        { otherEdge: (o) => o.localZ + o.sizeZ, wall: (o) => o.wallSouth },
+        { otherEdge: (o) => o.localZ, wall: (o) => o.wallNorth },
+      ],
+    },
+    {
+      dir: 'west',
+      edge: localX,
+      overlapAxis: 'z',
+      matches: [
+        { otherEdge: (o) => o.localX, wall: (o) => o.wallWest },
+        { otherEdge: (o) => o.localX + o.sizeX, wall: (o) => o.wallEast },
+      ],
+    },
+    {
+      dir: 'east',
+      edge: localX + sizeX,
+      overlapAxis: 'z',
+      matches: [
+        { otherEdge: (o) => o.localX + o.sizeX, wall: (o) => o.wallEast },
+        { otherEdge: (o) => o.localX, wall: (o) => o.wallWest },
+      ],
+    },
+  ]
+
+  const inset = { north: 0, south: 0, east: 0, west: 0 }
+  for (const other of allRooms) {
+    if (other === room || other.roomType === 'stairwell') continue
+    const xOverlap =
+      localX < other.localX + other.sizeX && localX + sizeX > other.localX
+    const zOverlap =
+      localZ < other.localZ + other.sizeZ && localZ + sizeZ > other.localZ
+
+    for (const check of edgeChecks) {
+      if (!(check.overlapAxis === 'x' ? xOverlap : zOverlap)) continue
+      for (const m of check.matches) {
+        if (check.edge === m.otherEdge(other) && hasSolidWall(m.wall(other))) {
+          inset[check.dir] = WALL_THICKNESS
+        }
+      }
+    }
+  }
+
+  // Compute effective insets along stair axes
+  // "left/right" = perpendicular to stair direction, "start/end" = along stair direction
+  const insetLeft = alongZ ? inset.west : inset.north
+  const insetRight = alongZ ? inset.east : inset.south
+  const insetStart = alongZ ? inset.north : inset.west
+  const insetEnd = alongZ ? inset.south : inset.east
+  const effectiveWidth = stairWidth - insetLeft - insetRight
+  const widthOffset = (insetLeft - insetRight) / 2
+  const effectiveLen = stairLen - insetStart - insetEnd
+  const lenOffset = (insetEnd - insetStart) / 2
+
+  const stairRun = effectiveLen - LANDING_DEPTH * 2
   const stepCount = Math.round(totalRise / 0.25)
   const stepHeight = totalRise / stepCount
   const stepDepth = stairRun / stepCount
@@ -348,18 +435,20 @@ function collectStairwellGeometries(
     })
   }
 
+  // Center offset accounting for wall insets
+  const baseCx = localX + sizeX / 2 + (alongZ ? widthOffset : -lenOffset)
+  const baseCz = localZ + sizeZ / 2 + (alongZ ? -lenOffset : widthOffset)
+
   // Bottom landing
   {
-    const cx = localX + sizeX / 2
-    const cz = localZ + sizeZ / 2
-    const offset = -(stairLen / 2) + LANDING_DEPTH / 2
+    const offset = -(effectiveLen / 2) + LANDING_DEPTH / 2
     addBox(
-      stairWidth,
+      effectiveWidth,
       FLOOR_THICKNESS,
       LANDING_DEPTH,
-      alongZ ? cx : cx + offset,
+      alongZ ? baseCx : baseCx + offset,
       yBase,
-      alongZ ? cz + offset : cz
+      alongZ ? baseCz + offset : baseCz
     )
   }
 
@@ -367,31 +456,27 @@ function collectStairwellGeometries(
   for (let i = 0; i < stepCount; i++) {
     const stepY = yBase + i * stepHeight + stepHeight / 2
     const offset =
-      -(stairLen / 2) + LANDING_DEPTH + i * stepDepth + stepDepth / 2
-    const cx = localX + sizeX / 2
-    const cz = localZ + sizeZ / 2
+      -(effectiveLen / 2) + LANDING_DEPTH + i * stepDepth + stepDepth / 2
     addBox(
-      stairWidth,
+      effectiveWidth,
       stepHeight,
       stepDepth,
-      alongZ ? cx : cx + offset,
+      alongZ ? baseCx : baseCx + offset,
       stepY,
-      alongZ ? cz + offset : cz
+      alongZ ? baseCz + offset : baseCz
     )
   }
 
   // Top landing
   {
-    const cx = localX + sizeX / 2
-    const cz = localZ + sizeZ / 2
-    const offset = stairLen / 2 - LANDING_DEPTH / 2
+    const offset = effectiveLen / 2 - LANDING_DEPTH / 2
     addBox(
-      stairWidth,
+      effectiveWidth,
       FLOOR_THICKNESS,
       LANDING_DEPTH,
-      alongZ ? cx : cx + offset,
+      alongZ ? baseCx : baseCx + offset,
       yBase + totalRise,
-      alongZ ? cz + offset : cz
+      alongZ ? baseCz + offset : baseCz
     )
   }
 }
