@@ -202,5 +202,4 @@ HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
 ### Phase 5: Optimization
 
 1. InstancedMesh 배칭 (동일 벽 타입끼리)
-2. 원거리 LOD (집 → 단순 박스)
-3. 프로파일링 + 드로우콜 최적화
+2. 프로파일링 + 드로우콜 최적화

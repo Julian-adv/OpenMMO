@@ -60,18 +60,18 @@ export class HousingInstancePool {
 
   constructor(parent: THREE.Group) {
     this.parent = parent
-    this.createTemplateGeometries()
   }
 
-  private createTemplateGeometries() {
-    // Wall: 1m wide × 3m tall × 0.1m thick
-    const wallGeo = new THREE.BoxGeometry(
-      1,
-      DEFAULT_WALL_HEIGHT,
-      WALL_THICKNESS
-    )
-    this.scaleUVs(wallGeo, 1, DEFAULT_WALL_HEIGHT)
-    this.templateGeos.set('wall', wallGeo)
+  /** Lazily create template geometry by name. */
+  private getOrCreateGeo(template: InstanceTemplate): THREE.BufferGeometry {
+    let geo = this.templateGeos.get(template)
+    if (geo) return geo
+
+    geo = new THREE.BoxGeometry(1, DEFAULT_WALL_HEIGHT, WALL_THICKNESS)
+    this.scaleUVs(geo, 1, DEFAULT_WALL_HEIGHT)
+
+    this.templateGeos.set(template, geo)
+    return geo
   }
 
   /**
@@ -100,7 +100,7 @@ export class HousingInstancePool {
     let batch = this.batches.get(key)
     if (batch) return batch
 
-    const geo = this.templateGeos.get(template)!
+    const geo = this.getOrCreateGeo(template)
     const mat = getHousingMaterial(textureIndex % HOUSING_TEXTURES.length)
     const capacity = INITIAL_CAPACITY
     const mesh = new THREE.InstancedMesh(geo, mat, capacity)
@@ -277,6 +277,15 @@ export class HousingInstancePool {
       this.parent.add(batch.mesh)
       batch.dirty = false
     }
+  }
+
+  /** Return stats for profiling: batch count (= draw calls) and active instance count. */
+  getStats(): { batches: number; instances: number } {
+    let instances = 0
+    for (const batch of this.batches.values()) {
+      instances += batch.nextSlot - batch.freeSlots.length
+    }
+    return { batches: this.batches.size, instances }
   }
 
   /** Clean up all GPU resources. */

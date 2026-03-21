@@ -25,6 +25,8 @@
     getTerrainChunkFromPosition,
   } from './terrain-utils'
   import { playerFloorOffset } from '../../stores/housingStore'
+  import { debugVisible } from '../../stores/debugStore'
+  import { get } from 'svelte/store'
 
   interface Props {
     playerPosition: { x: number; y: number; z: number } | null
@@ -103,6 +105,13 @@
     }
 
     pool.flush()
+
+    if (houses.size > 0 && get(debugVisible)) {
+      const s = getStats()
+      console.log(
+        `[housing] ${s.houses} houses | ${s.instanceBatches} batches, ${s.instanceCount} instances | ${s.mergedMeshes} merged meshes | ${s.totalDrawCalls} draw calls`
+      )
+    }
   }
 
   /** Called from game loop — loads chunks + checks player inside state */
@@ -254,6 +263,22 @@
 
   export function getGroup(): THREE.Group {
     return housingGroup
+  }
+
+  /** Return housing draw call stats for profiling. */
+  export function getStats() {
+    const poolStats = pool.getStats()
+    let mergedMeshes = 0
+    for (const [, result] of houses) {
+      mergedMeshes += result.mergedMeshCount
+    }
+    return {
+      houses: houses.size,
+      instanceBatches: poolStats.batches,
+      instanceCount: poolStats.instances,
+      mergedMeshes,
+      totalDrawCalls: poolStats.batches + mergedMeshes,
+    }
   }
 </script>
 

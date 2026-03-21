@@ -64,6 +64,8 @@ export interface HouseGeometryResult {
   mergedFloorGroups: Map<number, { front: THREE.Group; back: THREE.Group }>
   aabb: THREE.Box3
   roomsHash: string
+  /** Number of merged meshes (for profiling). */
+  mergedMeshCount: number
 }
 
 const _aabbVec = new THREE.Vector3()
@@ -291,13 +293,14 @@ export function buildHouseGeometry(house: HouseData): HouseGeometryResult {
     { front: THREE.Group; back: THREE.Group }
   >()
 
+  let mergedMeshCount = 0
   for (const [fl, entries] of perFloor) {
     const front = new THREE.Group()
     front.name = `merged_front_f${fl}`
     const back = new THREE.Group()
     back.name = `merged_back_f${fl}`
-    addMergedMeshes(front, entries.front)
-    addMergedMeshes(back, entries.back)
+    mergedMeshCount += addMergedMeshes(front, entries.front)
+    mergedMeshCount += addMergedMeshes(back, entries.back)
     mergedGroup.add(front)
     mergedGroup.add(back)
     mergedFloorGroups.set(fl, { front, back })
@@ -309,6 +312,7 @@ export function buildHouseGeometry(house: HouseData): HouseGeometryResult {
     mergedFloorGroups,
     aabb: computeHouseAABB(house),
     roomsHash: JSON.stringify(house.rooms),
+    mergedMeshCount,
   }
 }
 
@@ -446,9 +450,9 @@ function collectWallSegmentsInstanced(
   }
 }
 
-/** Group entries by texture index, merge geometries per group, create meshes. */
-function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]) {
-  if (entries.length === 0) return
+/** Group entries by texture index, merge geometries per group, create meshes. Returns mesh count. */
+function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]): number {
+  if (entries.length === 0) return 0
 
   const byTex = new Map<number, THREE.BufferGeometry[]>()
   for (const e of entries) {
@@ -460,6 +464,7 @@ function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]) {
     }
   }
 
+  let count = 0
   for (const [texIdx, geos] of byTex) {
     const merged = mergeGeometries(geos, false)
     if (merged) {
@@ -467,8 +472,10 @@ function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]) {
       mesh.castShadow = true
       mesh.receiveShadow = true
       group.add(mesh)
+      count++
     }
   }
+  return count
 }
 
 /**
