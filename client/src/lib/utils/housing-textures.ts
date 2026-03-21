@@ -13,45 +13,81 @@ export interface HousingTextureEntry {
   fallbackColor: number
   /** UV scale multiplier — smaller = larger tiles. Default 1.0 */
   uvScale?: number
+  /** UI display order — lower values appear first. Defaults to array index. */
+  sortOrder?: number
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
 export const HOUSING_TEXTURES: HousingTextureEntry[] = [
-  { label: 'Stone', glb: 'rocky_terrain_02_1k', fallbackColor: 0x888888 },
+  // Stone
+  {
+    label: 'Stone',
+    glb: 'rocky_terrain_02_1k',
+    fallbackColor: 0x888888,
+    sortOrder: 0,
+  },
   {
     label: 'Brick',
     glb: 'red_laterite_soil_stones_1k',
     fallbackColor: 0xa85032,
+    sortOrder: 1,
   },
-  { label: 'Wood', glb: 'housing/planks_brown_10_1k', fallbackColor: 0x8b6914 },
-  { label: 'Marble', glb: 'housing/marble_01_1k', fallbackColor: 0xe0d8cc },
-  { label: 'Plank', glb: 'housing/wood_planks_1k', fallbackColor: 0x9e7c4e },
+  {
+    label: 'Marble',
+    glb: 'housing/marble_01_1k',
+    fallbackColor: 0xe0d8cc,
+    sortOrder: 2,
+  },
+  // Wood
+  {
+    label: 'Wood',
+    glb: 'housing/planks_brown_10_1k',
+    fallbackColor: 0x8b6914,
+    sortOrder: 10,
+  },
+  {
+    label: 'Plank',
+    glb: 'housing/wood_planks_1k',
+    fallbackColor: 0x9e7c4e,
+    sortOrder: 11,
+  },
   {
     label: 'Dark Wood',
     glb: 'housing/dark_wooden_planks_1k',
     fallbackColor: 0x4a3728,
+    sortOrder: 12,
   },
   {
     label: 'Weathered',
     glb: 'housing/weathered_planks_1k',
     fallbackColor: 0x8a8070,
+    sortOrder: 13,
   },
   {
     label: 'Log Wall',
     glb: 'housing/wood_trunk_wall_1k',
     fallbackColor: 0x7a5c3a,
+    sortOrder: 14,
   },
-  { label: 'Shutter', glb: 'housing/wood_shutter_1k', fallbackColor: 0x6b5a3e },
+  {
+    label: 'Shutter',
+    glb: 'housing/wood_shutter_1k',
+    fallbackColor: 0x6b5a3e,
+    sortOrder: 15,
+  },
   {
     label: 'Plank Wall',
     glb: 'housing/wood_plank_wall_1k',
     fallbackColor: 0x8b7355,
+    sortOrder: 16,
   },
+  // Clay
   {
     label: 'Clay Roof',
     glb: 'housing/clay_roof_tiles_02_1k',
     fallbackColor: 0xb86b4a,
     uvScale: 0.3,
+    sortOrder: 20,
   },
 ]
 
