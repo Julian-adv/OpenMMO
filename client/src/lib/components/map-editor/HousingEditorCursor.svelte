@@ -469,13 +469,13 @@
     const deletedRoom = house.rooms[deleteTarget.roomIndex]
 
     if (house.rooms.length <= 1) {
-      housingManager.deleteHouse(house.id)
+      await housingManager.deleteHouse(house.id)
     } else {
       const updatedRooms = house.rooms.filter(
         (_, i) => i !== deleteTarget!.roomIndex
       )
       const updatedHouse: HouseData = { ...house, rooms: updatedRooms }
-      housingManager.updateHouse(updatedHouse)
+      await housingManager.updateHouse(updatedHouse)
     }
     clearDeleteHighlight()
     deleteResults = []

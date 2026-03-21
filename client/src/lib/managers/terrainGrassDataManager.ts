@@ -127,7 +127,10 @@ export class TerrainGrassDataManager {
    *  Returns true if restored, false if no original exists. */
   async restoreFromOriginal(tileX: number, tileZ: number): Promise<boolean> {
     const key = tileKey(tileX, tileZ)
-    const original = this.originalGrass.get(key)
+    const original =
+      this.originalGrass.get(key) ??
+      // Try loading from server (e.g. after page refresh)
+      (await this.loadOriginalGrass(tileX, tileZ))
     if (!original) return false
     // Deep copy so original stays pristine
     const restored: GrassPlacementData = {

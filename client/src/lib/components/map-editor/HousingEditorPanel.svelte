@@ -232,7 +232,7 @@
       {#each (roomType === 'stairwell' ? STAIR_TEMPLATES : ROOM_TEMPLATES) as t (t.label)}
         <button
           class="room-btn"
-          class:active={selected === t && tool === 'place'}
+          class:active={selected?.label === t.label && tool === 'place'}
           disabled={tool !== 'place'}
           onclick={() => selectTemplate(t)}
         >
