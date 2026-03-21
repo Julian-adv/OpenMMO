@@ -16,8 +16,17 @@ export class HousingManager {
   private housesById = new Map<string, HouseData>()
   private inflight = new Set<string>()
 
-  /** Callback when houses are loaded/changed. */
-  onHousesChanged: ((houses: HouseData[]) => void) | null = null
+  private housesChangedListeners: ((houses: HouseData[]) => void)[] = []
+
+  /** Subscribe to house data changes. Returns an unsubscribe function. */
+  onHousesChanged(cb: (houses: HouseData[]) => void): () => void {
+    this.housesChangedListeners.push(cb)
+    return () => {
+      this.housesChangedListeners = this.housesChangedListeners.filter(
+        (l) => l !== cb
+      )
+    }
+  }
 
   constructor() {
     this.apiUrl = getTerrainApiUrl()
@@ -363,7 +372,8 @@ export class HousingManager {
   }
 
   private notifyChanged() {
-    this.onHousesChanged?.(this.getAllHouses())
+    const all = this.getAllHouses()
+    for (const cb of this.housesChangedListeners) cb(all)
   }
 }
 

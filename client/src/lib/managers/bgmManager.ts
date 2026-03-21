@@ -13,6 +13,9 @@ const BGM_FILES = [
   'Triumphal Procession.mp3',
   'Triumphal Procession (1).mp3',
   'Wanderer of the Old Fields (1).mp3',
+  'Crescendo of Remembering.mp3',
+  'Sky of Burning Wings.mp3',
+  'Sky of Burning Wings (1).mp3',
 ]
 
 const BATTLE_BGM_FILES = ['Blood and Bronze.mp3', 'Blood and Bronze (1).mp3']

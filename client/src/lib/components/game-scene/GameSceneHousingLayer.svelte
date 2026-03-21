@@ -51,12 +51,12 @@
   initHousingTextures()
 
   // Listen for housing data changes from the manager
-  housingManager.onHousesChanged = (allHouses: HouseData[]) => {
+  const unsubHouses = housingManager.onHousesChanged((allHouses) => {
     syncHouses(allHouses)
-  }
+  })
 
   onDestroy(() => {
-    housingManager.onHousesChanged = null
+    unsubHouses()
     for (const [, result] of houses) {
       disposeHouseGroup(result.mergedGroup)
     }
