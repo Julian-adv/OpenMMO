@@ -194,11 +194,7 @@ impl TerrainIO {
     }
 
     /// Read original (pre-housing) grass placement data. Returns None if not found.
-    pub async fn read_original_grass(
-        &self,
-        tx: i32,
-        tz: i32,
-    ) -> std::io::Result<Option<Vec<u8>>> {
+    pub async fn read_original_grass(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::original_grass_path(&self.base_dir, tx, tz);
         match fs::read(&path).await {
             Ok(data) => Ok(Some(data)),
@@ -208,12 +204,7 @@ impl TerrainIO {
     }
 
     /// Write original (pre-housing) grass placement data.
-    pub async fn write_original_grass(
-        &self,
-        tx: i32,
-        tz: i32,
-        data: &[u8],
-    ) -> std::io::Result<()> {
+    pub async fn write_original_grass(&self, tx: i32, tz: i32, data: &[u8]) -> std::io::Result<()> {
         let path = coords::original_grass_path(&self.base_dir, tx, tz);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await?;
@@ -261,7 +252,13 @@ impl TerrainIO {
         let meta_file = coords::meta_path(&self.base_dir, rx, rz);
         let minimap_file = coords::minimap_path(&self.base_dir, rx, rz);
 
-        for dir in [&height_dir, &splat_dir, &grass_dir, &orig_height_dir, &orig_grass_dir] {
+        for dir in [
+            &height_dir,
+            &splat_dir,
+            &grass_dir,
+            &orig_height_dir,
+            &orig_grass_dir,
+        ] {
             match fs::remove_dir_all(dir).await {
                 Ok(()) => {}
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
