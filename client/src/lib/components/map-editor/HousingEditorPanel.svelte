@@ -14,6 +14,7 @@
     housingEditorTool,
     selectedHouseId,
     selectedRoomIndex,
+    deleteSelectedRoom,
     WALL_VARIANT_OPTIONS,
     type RoomTemplate,
     type HousingEditorTool,
@@ -171,9 +172,12 @@
       <button class="tool-btn tool-select" class:active={tool === 'select'} onclick={() => setTool('select')}>
         Select
       </button>
-      <button class="tool-btn tool-delete" class:active={tool === 'delete'} onclick={() => setTool('delete')}>
-        Delete
-      </button>
+      {#if tool === 'select' && editHouseId != null && editRoomIdx != null}
+        <button
+          class="tool-btn tool-delete"
+          onclick={() => deleteSelectedRoom?.()}
+        >Delete</button>
+      {/if}
     </div>
 
     {#snippet texturePicker(title: string, activeIdx: number, onChange: (idx: number) => void)}
@@ -228,7 +232,7 @@
     {/if}
 
     <div class="section-title">{roomType === 'stairwell' ? 'Stairs' : 'Room'}</div>
-    <div class="room-grid">
+    <div class="room-row">
       {#each (roomType === 'stairwell' ? STAIR_TEMPLATES : ROOM_TEMPLATES) as t (t.label)}
         <button
           class="room-btn"
@@ -236,8 +240,7 @@
           disabled={tool !== 'place'}
           onclick={() => selectTemplate(t)}
         >
-          <span class="room-size">{t.sizeX}×{t.sizeZ}</span>
-          <span class="room-label">{t.label.split('(')[0].trim()}</span>
+          {t.sizeX}×{t.sizeZ}
         </button>
       {/each}
     </div>
@@ -266,10 +269,9 @@
           {/each}
         </div>
       {/each}
+
     {:else if tool === 'select'}
       <div class="info-text">Click a house to select a room</div>
-    {:else if tool === 'delete'}
-      <div class="info-text">Click a house to delete it</div>
     {:else}
       <div class="info-text">Select a room size and click to place</div>
     {/if}
@@ -375,10 +377,14 @@
     color: #44aaff;
   }
 
-  .tool-delete.active {
-    background: rgba(255, 80, 80, 0.2);
+  .tool-delete {
+    background: rgba(255, 80, 80, 0.15);
     border-color: rgba(255, 80, 80, 0.5);
     color: #ff6666;
+  }
+
+  .tool-delete:hover {
+    background: rgba(255, 80, 80, 0.3);
   }
 
   .info-text {
@@ -389,17 +395,14 @@
     padding: 8px;
   }
 
-  .room-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+  .room-row {
+    display: flex;
     gap: 3px;
   }
 
   .room-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 6px 4px;
+    flex: 1;
+    padding: 5px 4px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.05);
@@ -407,6 +410,7 @@
     cursor: pointer;
     font-family: 'Courier New', monospace;
     font-size: 11px;
+    font-weight: bold;
     transition: background 150ms ease, color 150ms ease;
   }
 
@@ -419,16 +423,6 @@
     background: rgba(123, 198, 123, 0.2);
     border-color: rgba(123, 198, 123, 0.5);
     color: #7bc67b;
-  }
-
-  .room-size {
-    font-size: 14px;
-    font-weight: bold;
-  }
-
-  .room-label {
-    font-size: 9px;
-    opacity: 0.7;
   }
 
   .rotate-btn {

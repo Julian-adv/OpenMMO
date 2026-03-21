@@ -2,7 +2,6 @@
   import { T, useThrelte } from '@threlte/core'
   import * as THREE from 'three'
   import { onDestroy } from 'svelte'
-  import { SvelteSet } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import {
     selectedRoomTemplate,
@@ -16,6 +15,7 @@
     housingEditorTool,
     selectedHouseId,
     selectedRoomIndex,
+    setDeleteSelectedRoom,
     populateEditStoresFromRoom,
     wallVariants,
     type RoomTemplate,
@@ -87,12 +87,9 @@
   let previewMesh: THREE.Group | null = null
   let placementValid = false
 
-  // Highlight outline for selected room (blue) and delete preview (red)
+  // Highlight outline for selected room (blue)
   const highlightEdgeMat = new THREE.LineBasicMaterial({ color: 0x44aaff })
-  const deleteEdgeMat = new THREE.LineBasicMaterial({ color: 0xff4444 })
   let highlightEdges: THREE.LineSegments | null = null
-  let deleteHighlight: THREE.LineSegments | null = null
-  let deleteTarget: { houseId: string; roomIndex: number } | null = null
 
   const BLEND_RADIUS = 4
 
@@ -141,51 +138,6 @@
     }
   }
 
-  function clearDeleteHighlight() {
-    if (deleteHighlight) {
-      previewGroup.remove(deleteHighlight)
-      deleteHighlight.geometry.dispose()
-      deleteHighlight = null
-    }
-    deleteTarget = null
-    deleteResults = []
-    deleteResultIdx = 0
-  }
-
-  let deleteResults: { house: HouseData; roomIndex: number }[] = []
-  let deleteResultIdx = 0
-
-  function updateDeleteHighlight(wx: number, wz: number, groundY: number) {
-    clearDeleteHighlight()
-    deleteResults = collectRoomsAtXZ(wx, wz, groundY)
-    deleteResultIdx = 0
-    showDeleteHighlightForResult()
-  }
-
-  function showDeleteHighlightForResult() {
-    if (deleteHighlight) {
-      previewGroup.remove(deleteHighlight)
-      deleteHighlight.geometry.dispose()
-      deleteHighlight = null
-    }
-    deleteTarget = null
-    if (deleteResults.length === 0) return
-
-    const result = deleteResults[deleteResultIdx % deleteResults.length]
-    const room = result.house.rooms[result.roomIndex]
-    const geo = new THREE.BoxGeometry(room.sizeX, room.wallHeight, room.sizeZ)
-    const edgesGeo = new THREE.EdgesGeometry(geo)
-    geo.dispose()
-    deleteHighlight = new THREE.LineSegments(edgesGeo, deleteEdgeMat)
-    deleteHighlight.position.set(
-      result.house.origin.x + room.localX + room.sizeX / 2,
-      result.house.origin.y + floorYBase(room.floorLevel, room.wallHeight) + room.wallHeight / 2,
-      result.house.origin.z + room.localZ + room.sizeZ / 2
-    )
-    previewGroup.add(deleteHighlight)
-    deleteTarget = { houseId: result.house.id, roomIndex: result.roomIndex }
-  }
-
   function updateHighlight() {
     clearHighlight()
 
@@ -220,9 +172,8 @@
     }),
     housingEditorTool.subscribe((v) => {
       currentTool = v
-      canvas.style.cursor = v === 'delete' ? 'crosshair' : v === 'select' ? 'pointer' : ''
+      canvas.style.cursor = v === 'select' ? 'pointer' : ''
       if (v !== 'select') clearHighlight()
-      if (v !== 'delete') clearDeleteHighlight()
       isPanning = false
     }),
     selectedHouseId.subscribe(() => scheduleUpdateHighlight()),
@@ -240,6 +191,9 @@
       scheduleRebuildPreview()
     }),
   ]
+
+  // Register delete callback for Panel button
+  setDeleteSelectedRoom(() => deleteSelectedRoom())
 
   function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
     if (!camera) return null
@@ -366,7 +320,6 @@
       placementPreview.set(null)
       previewPos = null
       if (previewMesh) previewMesh.visible = false
-      if (currentTool === 'delete') clearDeleteHighlight()
       return
     }
 
@@ -388,9 +341,6 @@
       previewMesh.visible = false
     }
 
-    if (currentTool === 'delete' && posChanged) {
-      updateDeleteHighlight(hit.point.x, hit.point.z, hit.point.y)
-    }
   }
 
   function handleMouseDown(event: MouseEvent) {
@@ -403,11 +353,6 @@
     }
     if (event.button !== 0) return
     event.preventDefault()
-
-    if (currentTool === 'delete') {
-      deleteRoomAtCursor()
-      return
-    }
 
     if (currentTool === 'select') {
       selectRoomAtCursor(event)
@@ -422,6 +367,9 @@
     if (event.key === 'r' || event.key === 'R') {
       placementRotation.set((currentRotation + 90) % 360)
     }
+    if (event.key === 'Delete' && currentTool === 'select') {
+      deleteSelectedRoom()
+    }
   }
 
   /** Collect all unique rooms at world XZ across both floor levels. */
@@ -431,7 +379,7 @@
     groundY: number
   ): { house: HouseData; roomIndex: number }[] {
     const results: { house: HouseData; roomIndex: number }[] = []
-    const seen = new SvelteSet<string>()
+    const seen = new Set<string>() // eslint-disable-line svelte/prefer-svelte-reactivity
     for (let fl = 1; fl >= 0; fl--) {
       const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
       for (const r of housingManager.findAllRoomsAtPoint(wx, testY, wz)) {
@@ -454,31 +402,27 @@
 
   let lastSelectKey = ''
 
-  async function deleteRoomAtCursor() {
-    if (!deleteTarget) {
-      // No target but overlapping rooms exist — cycle to next
-      if (deleteResults.length > 1) {
-        deleteResultIdx = (deleteResultIdx + 1) % deleteResults.length
-        showDeleteHighlightForResult()
-      }
-      return
-    }
-    const house = housingManager.getHouseById(deleteTarget.houseId)
-    if (!house) return
+  async function deleteSelectedRoom() {
+    const houseId = get(selectedHouseId)
+    const roomIdx = get(selectedRoomIndex)
+    if (houseId == null || roomIdx == null) return
 
-    const deletedRoom = house.rooms[deleteTarget.roomIndex]
+    const house = housingManager.getHouseById(houseId)
+    if (!house || roomIdx >= house.rooms.length) return
+
+    const deletedRoom = house.rooms[roomIdx]
+
+    // Clear selection before deletion
+    selectedHouseId.set(null)
+    selectedRoomIndex.set(null)
 
     if (house.rooms.length <= 1) {
       await housingManager.deleteHouse(house.id)
     } else {
-      const updatedRooms = house.rooms.filter(
-        (_, i) => i !== deleteTarget!.roomIndex
-      )
+      const updatedRooms = house.rooms.filter((_, i) => i !== roomIdx)
       const updatedHouse: HouseData = { ...house, rooms: updatedRooms }
       await housingManager.updateHouse(updatedHouse)
     }
-    clearDeleteHighlight()
-    deleteResults = []
 
     // Restore terrain and grass for 1F non-stairwell rooms
     if (
@@ -891,13 +835,12 @@
     canvas.removeEventListener('wheel', handleWheel)
     window.removeEventListener('keydown', handleKeyDown)
     canvas.style.cursor = ''
+    setDeleteSelectedRoom(null)
     placementPreview.set(null)
     previewMatValid.dispose()
     previewMatInvalid.dispose()
     highlightEdgeMat.dispose()
-    deleteEdgeMat.dispose()
     clearHighlight()
-    clearDeleteHighlight()
 
     if (previewMesh) {
       previewGroup.remove(previewMesh)

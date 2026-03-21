@@ -118,9 +118,15 @@ placementRoomType.subscribe(() => {
   selectedRoomTemplate.set(null)
 })
 
-// Editor tool mode (replaces housingDeleteMode)
-export type HousingEditorTool = 'place' | 'select' | 'delete'
+// Editor tool mode
+export type HousingEditorTool = 'place' | 'select'
 export const housingEditorTool = writable<HousingEditorTool>('place')
+
+// Callback for deleting the currently selected room (set by HousingEditorCursor)
+export let deleteSelectedRoom: (() => void) | null = null
+export function setDeleteSelectedRoom(fn: (() => void) | null) {
+  deleteSelectedRoom = fn
+}
 
 // Selection state for edit mode
 export const selectedHouseId = writable<string | null>(null)
