@@ -61,21 +61,21 @@ interface GeoEntry {
   textureIndex: number
 }
 
-export function buildHouseGroup(house: HouseData): HouseGroupResult {
-  const houseGroup = new THREE.Group()
-  houseGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
-  houseGroup.name = `house_${house.id}`
+interface RoomFootprint {
+  x: number
+  z: number
+  sx: number
+  sz: number
+}
 
-  // Build set of 2F room footprints for roof suppression
-  const secondFloorFootprints: {
-    x: number
-    z: number
-    sx: number
-    sz: number
-  }[] = []
-  for (const room of house.rooms) {
-    if (room.floorLevel >= 1) {
-      secondFloorFootprints.push({
+function collectFootprints(
+  rooms: RoomData[],
+  predicate: (room: RoomData) => boolean
+): RoomFootprint[] {
+  const result: RoomFootprint[] = []
+  for (const room of rooms) {
+    if (predicate(room)) {
+      result.push({
         x: room.localX,
         z: room.localZ,
         sx: room.sizeX,
@@ -83,6 +83,27 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
       })
     }
   }
+  return result
+}
+
+function cellInFootprint(cx: number, cz: number, fp: RoomFootprint): boolean {
+  return cx >= fp.x && cx < fp.x + fp.sx && cz >= fp.z && cz < fp.z + fp.sz
+}
+
+export function buildHouseGroup(house: HouseData): HouseGroupResult {
+  const houseGroup = new THREE.Group()
+  houseGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
+  houseGroup.name = `house_${house.id}`
+
+  // Build footprint sets for roof suppression and floor hole punching
+  const secondFloorFootprints = collectFootprints(
+    house.rooms,
+    (r) => r.floorLevel >= 1
+  )
+  const stairwellFootprints = collectFootprints(
+    house.rooms,
+    (r) => r.roomType === 'stairwell'
+  )
 
   // Collect geometry entries per floor level
   const perFloor = new Map<number, { front: GeoEntry[]; back: GeoEntry[] }>()
@@ -114,9 +135,8 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
           z < room.localZ + room.sizeZ && suppressRoof;
           z++
         ) {
-          const covered = secondFloorFootprints.some(
-            (fp) =>
-              x >= fp.x && x < fp.x + fp.sx && z >= fp.z && z < fp.z + fp.sz
+          const covered = secondFloorFootprints.some((fp) =>
+            cellInFootprint(x, z, fp)
           )
           if (!covered) suppressRoof = false
         }
@@ -127,7 +147,8 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
       entries.front,
       entries.back,
       suppressRoof,
-      house.rooms
+      house.rooms,
+      stairwellFootprints
     )
   }
 
@@ -241,7 +262,8 @@ function collectRoomGeometries(
   frontEntries: GeoEntry[],
   backEntries: GeoEntry[],
   suppressRoof: boolean = false,
-  allRooms: RoomData[] = []
+  allRooms: RoomData[] = [],
+  stairwellFootprints: RoomFootprint[] = []
 ) {
   if (room.roomType === 'stairwell') {
     collectStairwellGeometries(room, backEntries, allRooms)
@@ -252,19 +274,56 @@ function collectRoomGeometries(
   const yBase = floorYBase(floorLevel, wallHeight)
 
   // Floor → back
+  // For 2F+ rooms, punch holes where stairwells are below
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
-  backEntries.push({
-    geo: bakedGeo(
-      new THREE.BoxGeometry(sizeX, FLOOR_THICKNESS, sizeZ),
-      localX + sizeX / 2,
-      yBase,
-      localZ + sizeZ / 2,
-      0,
-      sizeX,
-      sizeZ
-    ),
-    textureIndex: floorIdx,
-  })
+  const hasStairwellOverlap =
+    floorLevel >= 1 &&
+    stairwellFootprints.some(
+      (fp) =>
+        localX < fp.x + fp.sx &&
+        localX + sizeX > fp.x &&
+        localZ < fp.z + fp.sz &&
+        localZ + sizeZ > fp.z
+    )
+
+  if (hasStairwellOverlap) {
+    // Generate 1m² tiles, skipping cells that overlap any stairwell
+    for (let cx = localX; cx < localX + sizeX; cx++) {
+      for (let cz = localZ; cz < localZ + sizeZ; cz++) {
+        const inStairwell = stairwellFootprints.some((fp) =>
+          cellInFootprint(cx, cz, fp)
+        )
+        if (inStairwell) continue
+        backEntries.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(1, FLOOR_THICKNESS, 1),
+            cx + 0.5,
+            yBase,
+            cz + 0.5,
+            0,
+            1,
+            1,
+            cx - localX,
+            cz - localZ
+          ),
+          textureIndex: floorIdx,
+        })
+      }
+    }
+  } else {
+    backEntries.push({
+      geo: bakedGeo(
+        new THREE.BoxGeometry(sizeX, FLOOR_THICKNESS, sizeZ),
+        localX + sizeX / 2,
+        yBase,
+        localZ + sizeZ / 2,
+        0,
+        sizeX,
+        sizeZ
+      ),
+      textureIndex: floorIdx,
+    })
+  }
 
   // Roof → front (suppressed when a 2F room sits above)
   if (!suppressRoof) {
