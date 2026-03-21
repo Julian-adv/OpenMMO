@@ -22,6 +22,8 @@ const WINDOW_WIDTH = 1.0
 const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
 const LANDING_DEPTH = 0.5
+const ROOF_OVERHANG = 0.3
+const ROOF_PITCH_RATIO = 0.8
 
 /** Y offset used to hide front walls instead of toggling visible (WebGPU workaround) */
 export const OFFSCREEN_Y = -10000
@@ -125,12 +127,19 @@ function computeHouseAABB(house: HouseData): THREE.Box3 {
     const yBase = floorYBase(room.floorLevel, room.wallHeight)
     const minX = house.origin.x + room.localX
     const minZ = house.origin.z + room.localZ
-    _aabbVec.set(minX, house.origin.y + yBase, minZ)
+    let maxY = room.wallHeight
+    let oh = 0
+    if (room.roofType === 'gabled') {
+      const { ridgeHeight } = gabledRoofDims(room)
+      maxY += ridgeHeight
+      oh = ROOF_OVERHANG
+    }
+    _aabbVec.set(minX - oh, house.origin.y + yBase, minZ - oh)
     aabb.expandByPoint(_aabbVec)
     _aabbVec.set(
-      minX + room.sizeX,
-      house.origin.y + yBase + room.wallHeight,
-      minZ + room.sizeZ
+      minX + room.sizeX + oh,
+      house.origin.y + yBase + maxY,
+      minZ + room.sizeZ + oh
     )
     aabb.expandByPoint(_aabbVec)
   }
@@ -247,9 +256,9 @@ export function buildHouseGeometry(house: HouseData): HouseGeometryResult {
     // Floor → merged geometry (back)
     collectFloorGeometry(room, entries.back, stairwellFootprints)
 
-    // Roof → merged geometry (front), suppressed if covered by 2F
+    // Roof → merged geometry (front + back for gable walls), suppressed if covered by 2F
     if (!shouldSuppressRoof(room, secondFloorFootprints)) {
-      collectRoofGeometry(room, entries.front)
+      collectRoofGeometry(room, entries.front, entries.back)
     }
 
     // Walls: solid → instance, door/window → merged
@@ -574,8 +583,20 @@ function collectFloorGeometry(
   }
 }
 
-/** Generate roof geometry for a room. */
-function collectRoofGeometry(room: RoomData, target: GeoEntry[]) {
+/** Generate roof geometry for a room (flat or gabled). */
+function collectRoofGeometry(
+  room: RoomData,
+  frontTarget: GeoEntry[],
+  backTarget?: GeoEntry[]
+) {
+  if (room.roofType === 'gabled') {
+    collectGabledRoof(room, frontTarget, backTarget ?? frontTarget)
+  } else {
+    collectFlatRoof(room, frontTarget)
+  }
+}
+
+function collectFlatRoof(room: RoomData, target: GeoEntry[]) {
   const { localX, localZ, sizeX, sizeZ, wallHeight } = room
   const yBase = floorYBase(room.floorLevel, wallHeight)
   const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
@@ -595,6 +616,167 @@ function collectRoofGeometry(room: RoomData, target: GeoEntry[]) {
   })
 }
 
+/** Compute gabled roof dimensions from room data. */
+function gabledRoofDims(room: RoomData) {
+  const dir = room.roofRidgeDir ?? 'auto'
+  const ridgeAlongX =
+    dir === 'x' ? true : dir === 'z' ? false : room.sizeX >= room.sizeZ
+  const shortDim = ridgeAlongX ? room.sizeZ : room.sizeX
+  const ridgeHeight = (shortDim / 2) * ROOF_PITCH_RATIO
+  return { ridgeAlongX, shortDim, ridgeHeight }
+}
+
+/**
+ * Build a gabled (맞배지붕) roof:
+ * - 2 sloped rectangular planes
+ * - 2 triangular gable walls at each end
+ * - ROOF_OVERHANG eaves on all sides
+ */
+function collectGabledRoof(
+  room: RoomData,
+  frontTarget: GeoEntry[],
+  backTarget: GeoEntry[]
+) {
+  const { localX, localZ, sizeX, sizeZ, wallHeight } = room
+  const yBase = floorYBase(room.floorLevel, wallHeight)
+  const wallTopY = yBase + FLOOR_THICKNESS / 2 + wallHeight
+  const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
+  const { ridgeAlongX, shortDim, ridgeHeight } = gabledRoofDims(room)
+
+  const cx = localX + sizeX / 2
+  const cz = localZ + sizeZ / 2
+  const oh = ROOF_OVERHANG
+
+  // Half-widths
+  const halfShort = shortDim / 2
+  const halfLong = ridgeAlongX ? sizeX / 2 : sizeZ / 2
+
+  // Slope angle aligned to wall boundary (passes through wall top at halfShort)
+  const slopeAngle = Math.atan2(ridgeHeight, halfShort)
+  // Eave drops below wall top due to overhang extension
+  const eaveDropY = (oh * ridgeHeight) / halfShort
+  // Full slope length including overhang
+  const slopeLen =
+    ((halfShort + oh) * Math.sqrt(halfShort ** 2 + ridgeHeight ** 2)) /
+    halfShort
+  // Ridge length (with overhang on both ends)
+  const ridgeLen = halfLong * 2 + oh * 2
+
+  // Build two slope slabs (BoxGeometry with WALL_THICKNESS)
+  for (const side of [-1, 1] as const) {
+    const geo = new THREE.BoxGeometry(ridgeLen, WALL_THICKNESS, slopeLen)
+
+    // Scale UVs for 1-meter tiling on all faces
+    const uv = geo.getAttribute('uv')
+    for (let i = 0; i < uv.count; i++) {
+      uv.setXY(i, uv.getX(i) * ridgeLen, uv.getY(i) * slopeLen)
+    }
+
+    // Offset so outer (+Y) face sits on the slope center line,
+    // making outer surfaces meet at the ridge peak
+    geo.translate(0, -WALL_THICKNESS / 2, 0)
+
+    // Rotate to slope angle around X axis, then optionally rotate 90° for ridgeAlongZ
+    _tmpMatrix.makeRotationX(side * slopeAngle)
+    geo.applyMatrix4(_tmpMatrix)
+
+    if (!ridgeAlongX) {
+      _tmpMatrix.makeRotationY(Math.PI / 2)
+      geo.applyMatrix4(_tmpMatrix)
+    }
+
+    // Translate to slope center position
+    // Slope passes through wall at wallTopY, eave drops below by eaveDropY
+    const perpCenter = (side * (halfShort + oh)) / 2
+    const yCenter = wallTopY + (ridgeHeight - eaveDropY) / 2
+    const tx = cx + (ridgeAlongX ? 0 : perpCenter)
+    const tz = cz + (ridgeAlongX ? perpCenter : 0)
+    _tmpMatrix.makeTranslation(tx, yCenter, tz)
+    geo.applyMatrix4(_tmpMatrix)
+
+    frontTarget.push({ geo, textureIndex: roofIdx })
+  }
+
+  // Build two triangular gable walls at each end of the ridge
+  // Gable walls use the wall texture from the corresponding end wall
+  for (const endSign of [-1, 1] as const) {
+    const geo = new THREE.BufferGeometry()
+
+    // Determine which wall's texture to use
+    let wallSegs: WallConfig[]
+    if (ridgeAlongX) {
+      wallSegs = endSign === -1 ? room.wallWest : room.wallEast
+    } else {
+      wallSegs = endSign === -1 ? room.wallNorth : room.wallSouth
+    }
+    const gableTexIdx =
+      (wallSegs.find((s) => s.variant !== 'open')?.texture ??
+        room.roofTexture) % HOUSING_TEXTURES.length
+
+    // Triangle: base along the short dimension, peak at ridge
+    const positions = new Float32Array(3 * 3)
+    const normals = new Float32Array(3 * 3)
+    const uvs = new Float32Array(3 * 2)
+
+    const endOffset = ridgeAlongX
+      ? (endSign * sizeX) / 2
+      : (endSign * sizeZ) / 2
+
+    // Normal pointing outward along the long axis end
+    const gnx = ridgeAlongX ? endSign : 0
+    const gnz = ridgeAlongX ? 0 : endSign
+
+    // Vertex 0: bottom-left, Vertex 1: bottom-right, Vertex 2: peak
+    for (let i = 0; i < 3; i++) {
+      let perpOffset: number, y: number
+      if (i === 2) {
+        // Peak
+        perpOffset = 0
+        y = wallTopY + ridgeHeight
+      } else {
+        // Base corners at wall boundary — slope passes through here at wallTopY
+        perpOffset = (i === 0 ? -1 : 1) * halfShort
+        y = wallTopY
+      }
+
+      const px = cx + (ridgeAlongX ? endOffset : perpOffset)
+      const pz = cz + (ridgeAlongX ? perpOffset : endOffset)
+
+      positions[i * 3] = px
+      positions[i * 3 + 1] = y
+      positions[i * 3 + 2] = pz
+
+      normals[i * 3] = gnx
+      normals[i * 3 + 1] = 0
+      normals[i * 3 + 2] = gnz
+
+      // UV: u along base width, v along height
+      if (i === 2) {
+        uvs[i * 2] = shortDim / 2
+        uvs[i * 2 + 1] = ridgeHeight
+      } else {
+        uvs[i * 2] = i === 0 ? 0 : shortDim
+        uvs[i * 2 + 1] = 0
+      }
+    }
+
+    // Winding: ensure triangle faces outward (CCW for outward-facing normal)
+    // Axis swap between ridgeAlongX/Z flips the winding
+    const flipWinding = ridgeAlongX ? endSign === 1 : endSign === -1
+    geo.setIndex(flipWinding ? [0, 2, 1] : [0, 1, 2])
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    geo.setAttribute('normal', new THREE.BufferAttribute(normals, 3))
+    geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
+
+    // Gable walls follow front/back convention:
+    // ridgeAlongX: west(-1) → front, east(+1) → back
+    // ridgeAlongZ: south(+1) → front, north(-1) → back
+    const isFront = ridgeAlongX ? endSign === -1 : endSign === 1
+    const target = isFront ? frontTarget : backTarget
+    target.push({ geo, textureIndex: gableTexIdx })
+  }
+}
+
 function collectRoomGeometries(
   room: RoomData,
   frontEntries: GeoEntry[],
@@ -609,7 +791,7 @@ function collectRoomGeometries(
   }
 
   collectFloorGeometry(room, backEntries, stairwellFootprints)
-  if (!suppressRoof) collectRoofGeometry(room, frontEntries)
+  if (!suppressRoof) collectRoofGeometry(room, frontEntries, backEntries)
 
   collectWallSegments(room.wallNorth, 'north', room, frontEntries, backEntries)
   collectWallSegments(room.wallSouth, 'south', room, frontEntries, backEntries)

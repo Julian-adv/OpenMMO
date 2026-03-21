@@ -17,6 +17,36 @@ impl Default for RoomType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum RoofType {
+    #[serde(rename = "flat")]
+    Flat,
+    #[serde(rename = "gabled")]
+    Gabled,
+}
+
+impl Default for RoofType {
+    fn default() -> Self {
+        Self::Flat
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum RoofRidgeDir {
+    #[serde(rename = "auto")]
+    Auto,
+    #[serde(rename = "x")]
+    X,
+    #[serde(rename = "z")]
+    Z,
+}
+
+impl Default for RoofRidgeDir {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum WallVariant {
     #[serde(rename = "solid")]
     Solid,
@@ -39,6 +69,10 @@ pub struct WallConfig {
 pub struct RoomData {
     #[serde(default)]
     pub room_type: RoomType,
+    #[serde(default)]
+    pub roof_type: RoofType,
+    #[serde(default)]
+    pub roof_ridge_dir: RoofRidgeDir,
     pub local_x: i32,
     pub local_z: i32,
     pub size_x: u8,

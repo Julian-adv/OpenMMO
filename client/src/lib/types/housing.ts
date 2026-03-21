@@ -7,8 +7,13 @@ export interface WallConfig {
   texture: number
 }
 
+export type RoofType = 'flat' | 'gabled'
+export type RoofRidgeDir = 'auto' | 'x' | 'z'
+
 export interface RoomData {
   roomType?: RoomType
+  roofType?: RoofType
+  roofRidgeDir?: RoofRidgeDir
   localX: number
   localZ: number
   sizeX: number

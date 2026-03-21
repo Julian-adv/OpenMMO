@@ -10,6 +10,7 @@
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
+    placementRoofType,
     placementPreview,
     housingEditorTool,
     selectedHouseId,
@@ -19,7 +20,7 @@
     type RoomTemplate,
     type HousingEditorTool,
   } from '../../stores/housingEditorStore'
-  import type { HouseData, RoomData, RoomType } from '../../types/housing'
+  import type { HouseData, RoofRidgeDir, RoofType, RoomData, RoomType } from '../../types/housing'
   import { HOUSING_TEXTURES } from '../../utils/housing-textures'
   import { housingManager } from '../../managers/housingManager'
 
@@ -33,6 +34,7 @@
   let wallTex = $state(0)
   let floorTex = $state(0)
   let roofTex = $state(0)
+  let roofType = $state<RoofType>('flat')
   let selected = $state<RoomTemplate | null>(null)
   let preview = $state<{ x: number; z: number } | null>(null)
   let tool = $state<HousingEditorTool>('place')
@@ -56,6 +58,7 @@
     wallTextureIndex.subscribe((v) => (wallTex = v)),
     floorTextureIndex.subscribe((v) => (floorTex = v)),
     roofTextureIndex.subscribe((v) => (roofTex = v)),
+    placementRoofType.subscribe((v) => (roofType = v)),
     selectedRoomTemplate.subscribe((v) => (selected = v)),
     placementPreview.subscribe((v) => (preview = v)),
     housingEditorTool.subscribe((v) => (tool = v)),
@@ -251,6 +254,35 @@
     {@render texturePicker('Wall', wallTex, (i) => { if (tool === 'select') onEditTextureChange('wall', i); else wallTextureIndex.set(i) })}
     {@render texturePicker('Floor', floorTex, (i) => { if (tool === 'select') onEditTextureChange('floor', i); else floorTextureIndex.set(i) })}
     {@render texturePicker('Roof', roofTex, (i) => { if (tool === 'select') onEditTextureChange('roof', i); else roofTextureIndex.set(i) })}
+
+    <div class="section-title">Roof Shape</div>
+    <div class="tool-row">
+      {#each [['flat', 'Flat'], ['gabled', 'Gabled']] as [type, label] (type)}
+        <button
+          class="tool-btn"
+          class:active={roofType === type}
+          onclick={() => {
+            placementRoofType.set(type as RoofType)
+            if (tool === 'select') applyRoomEdit((room) => { room.roofType = type as RoofType })
+          }}
+        >{label}</button>
+      {/each}
+    </div>
+
+    {#if tool === 'select' && editRoom && roofType === 'gabled'}
+      <div class="section-title">Ridge Direction</div>
+      <div class="tool-row">
+        {#each [['auto', 'Auto'], ['x', 'X →'], ['z', 'Z ↓']] as [dir, label] (dir)}
+          <button
+            class="tool-btn"
+            class:active={(editRoom.roofRidgeDir ?? 'auto') === dir}
+            onclick={() => {
+              applyRoomEdit((room) => { room.roofRidgeDir = dir as RoofRidgeDir })
+            }}
+          >{label}</button>
+        {/each}
+      </div>
+    {/if}
 
     {#if tool === 'select' && editRoom && editRoomIdx != null}
       <div class="section-title">Editing Room {editRoomIdx + 1} ({editRoom.sizeX}×{editRoom.sizeZ})</div>

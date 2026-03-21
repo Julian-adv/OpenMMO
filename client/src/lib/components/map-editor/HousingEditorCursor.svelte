@@ -12,6 +12,7 @@
     wallTextureIndex,
     floorTextureIndex,
     roofTextureIndex,
+    placementRoofType,
     housingEditorTool,
     selectedHouseId,
     selectedRoomIndex,
@@ -733,6 +734,7 @@
 
     return {
       roomType: currentRoomType,
+      roofType: get(placementRoofType),
       localX: 0,
       localZ: 0,
       sizeX,

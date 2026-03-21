@@ -1,5 +1,10 @@
 import { writable } from 'svelte/store'
-import type { RoomData, RoomType, WallVariant } from '../types/housing'
+import type {
+  RoofType,
+  RoomData,
+  RoomType,
+  WallVariant,
+} from '../types/housing'
 
 export interface RoomTemplate {
   label: string
@@ -92,6 +97,8 @@ export const wallTextureIndex = writable<number>(0)
 export const floorTextureIndex = writable<number>(0)
 // Roof texture index (0-3)
 export const roofTextureIndex = writable<number>(0)
+// Roof type
+export const placementRoofType = writable<RoofType>('flat')
 
 // Per-wall variant selection (initialized from template, user can override)
 export const wallVariants = writable<WallVariants>({
@@ -147,6 +154,7 @@ housingEditorTool.subscribe((tool) => {
 export function populateEditStoresFromRoom(room: RoomData) {
   floorTextureIndex.set(room.floorTexture)
   roofTextureIndex.set(room.roofTexture)
+  placementRoofType.set(room.roofType ?? 'flat')
   // Use the first non-open segment's texture as the wall texture
   for (const wall of [
     room.wallNorth,
