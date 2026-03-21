@@ -31,7 +31,7 @@
     WallVariant,
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
-  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, floorYBase } from '../../utils/house-geometry'
+  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, FLOOR_THICKNESS, floorYBase } from '../../utils/house-geometry'
   import { editorPanOffset } from '../../stores/editorStore'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -154,9 +154,10 @@
     const edgesGeo = new THREE.EdgesGeometry(geo)
     geo.dispose()
     highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
+    const yBase = floorYBase(room.floorLevel, room.wallHeight) + FLOOR_THICKNESS / 2
     highlightEdges.position.set(
       house.origin.x + room.localX + room.sizeX / 2,
-      house.origin.y + floorYBase(room.floorLevel, room.wallHeight) + room.wallHeight / 2,
+      house.origin.y + yBase + room.wallHeight / 2,
       house.origin.z + room.localZ + room.sizeZ / 2
     )
     previewGroup.add(highlightEdges)

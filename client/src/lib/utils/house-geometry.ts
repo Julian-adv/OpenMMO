@@ -23,7 +23,10 @@ const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
 const LANDING_DEPTH = 0.5
 const ROOF_OVERHANG = 0.3
-const ROOF_PITCH_RATIO = 0.8
+const ROOF_PITCH: Record<string, number> = {
+  gabled: 0.8,
+  steep: 1.4,
+}
 
 /** Y offset used to hide front walls instead of toggling visible (WebGPU workaround) */
 export const OFFSCREEN_Y = -10000
@@ -129,7 +132,7 @@ function computeHouseAABB(house: HouseData): THREE.Box3 {
     const minZ = house.origin.z + room.localZ
     let maxY = room.wallHeight
     let oh = 0
-    if (room.roofType === 'gabled') {
+    if (room.roofType && room.roofType !== 'flat') {
       const { ridgeHeight } = gabledRoofDims(room)
       maxY += ridgeHeight
       oh = ROOF_OVERHANG
@@ -589,7 +592,7 @@ function collectRoofGeometry(
   frontTarget: GeoEntry[],
   backTarget?: GeoEntry[]
 ) {
-  if (room.roofType === 'gabled') {
+  if (room.roofType && room.roofType !== 'flat') {
     collectGabledRoof(room, frontTarget, backTarget ?? frontTarget)
   } else {
     collectFlatRoof(room, frontTarget)
@@ -622,7 +625,7 @@ function gabledRoofDims(room: RoomData) {
   const ridgeAlongX =
     dir === 'x' ? true : dir === 'z' ? false : room.sizeX >= room.sizeZ
   const shortDim = ridgeAlongX ? room.sizeZ : room.sizeX
-  const ridgeHeight = (shortDim / 2) * ROOF_PITCH_RATIO
+  const ridgeHeight = (shortDim / 2) * ROOF_PITCH[room.roofType!]
   return { ridgeAlongX, shortDim, ridgeHeight }
 }
 
@@ -662,19 +665,38 @@ function collectGabledRoof(
   // Ridge length (with overhang on both ends)
   const ridgeLen = halfLong * 2 + oh * 2
 
+  // Extend slope toward ridge so outer faces meet at the peak
+  const ridgeExt = (WALL_THICKNESS * ridgeHeight) / halfShort
+  const totalSlopeLen = slopeLen + ridgeExt
+
   // Build two slope slabs (BoxGeometry with WALL_THICKNESS)
   for (const side of [-1, 1] as const) {
-    const geo = new THREE.BoxGeometry(ridgeLen, WALL_THICKNESS, slopeLen)
+    const geo = new THREE.BoxGeometry(ridgeLen, WALL_THICKNESS, totalSlopeLen)
 
     // Scale UVs for 1-meter tiling on all faces
     const uv = geo.getAttribute('uv')
     for (let i = 0; i < uv.count; i++) {
-      uv.setXY(i, uv.getX(i) * ridgeLen, uv.getY(i) * slopeLen)
+      uv.setXY(i, uv.getX(i) * ridgeLen, uv.getY(i) * totalSlopeLen)
     }
 
-    // Offset so outer (+Y) face sits on the slope center line,
-    // making outer surfaces meet at the ridge peak
-    geo.translate(0, -WALL_THICKNESS / 2, 0)
+    // Miter cut: pull inner (-Y) vertices at ridge end back toward eave,
+    // creating a tapered cross-section so inner faces don't penetrate the opposite slope.
+    // Ridge end is at -Z for side=+1, +Z for side=-1
+    const pos = geo.getAttribute('position')
+    const innerY = -WALL_THICKNESS / 2
+    const ridgeEndZ = (-side * totalSlopeLen) / 2
+    for (let i = 0; i < pos.count; i++) {
+      if (
+        Math.abs(pos.getY(i) - innerY) < 0.001 &&
+        Math.abs(pos.getZ(i) - ridgeEndZ) < 0.001
+      ) {
+        pos.setZ(i, ridgeEndZ + side * ridgeExt)
+      }
+    }
+
+    // Y: inner face flush with wall outer faces
+    // Z: shift ridge extension to ridge side only (eave stays in place)
+    geo.translate(0, WALL_THICKNESS / 2, (-side * ridgeExt) / 2)
 
     // Rotate to slope angle around X axis, then optionally rotate 90° for ridgeAlongZ
     _tmpMatrix.makeRotationX(side * slopeAngle)

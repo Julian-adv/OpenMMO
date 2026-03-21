@@ -22,6 +22,8 @@ pub enum RoofType {
     Flat,
     #[serde(rename = "gabled")]
     Gabled,
+    #[serde(rename = "steep")]
+    Steep,
 }
 
 impl Default for RoofType {

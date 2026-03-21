@@ -257,7 +257,7 @@
 
     <div class="section-title">Roof Shape</div>
     <div class="tool-row">
-      {#each [['flat', 'Flat'], ['gabled', 'Gabled']] as [type, label] (type)}
+      {#each [['flat', 'Flat'], ['gabled', 'Gabled'], ['steep', 'Steep']] as [type, label] (type)}
         <button
           class="tool-btn"
           class:active={roofType === type}
@@ -269,7 +269,7 @@
       {/each}
     </div>
 
-    {#if tool === 'select' && editRoom && roofType === 'gabled'}
+    {#if tool === 'select' && editRoom && roofType !== 'flat'}
       <div class="section-title">Ridge Direction</div>
       <div class="tool-row">
         {#each [['auto', 'Auto'], ['x', 'X →'], ['z', 'Z ↓']] as [dir, label] (dir)}
