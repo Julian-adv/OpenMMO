@@ -1,7 +1,7 @@
 /**
  * housing-instance-pool.ts — InstancedMesh batching pool for housing.
  *
- * Groups uniform 1m template pieces (wall, floor, roof) into shared
+ * Groups uniform 1m template pieces (wall) into shared
  * InstancedMeshes keyed by (template, textureIndex). This reduces draw calls
  * from O(houses) to O(templates × textures) ≈ 30.
  *
@@ -12,13 +12,12 @@ import * as THREE from 'three'
 import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 import {
   DEFAULT_WALL_HEIGHT,
-  FLOOR_THICKNESS,
   WALL_THICKNESS,
   OFFSCREEN_Y,
 } from './house-geometry'
 const INITIAL_CAPACITY = 2048
 
-export type InstanceTemplate = 'wall' | 'floor' | 'roof'
+export type InstanceTemplate = 'wall'
 
 export interface InstanceDescriptor {
   template: InstanceTemplate
@@ -73,16 +72,6 @@ export class HousingInstancePool {
     )
     this.scaleUVs(wallGeo, 1, DEFAULT_WALL_HEIGHT)
     this.templateGeos.set('wall', wallGeo)
-
-    // Floor: 1m × FLOOR_THICKNESS × 1m
-    const floorGeo = new THREE.BoxGeometry(1, FLOOR_THICKNESS, 1)
-    // Default UVs [0,1]×[0,1] = 1 repeat/meter — correct as-is
-    this.templateGeos.set('floor', floorGeo)
-
-    // Roof: 1m × 1m plane facing up
-    const roofGeo = new THREE.PlaneGeometry(1, 1)
-    roofGeo.rotateX(-Math.PI / 2)
-    this.templateGeos.set('roof', roofGeo)
   }
 
   /**

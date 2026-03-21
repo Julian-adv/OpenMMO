@@ -209,9 +209,9 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
 }
 
 /**
- * Build instance descriptors + merged leftovers for a house.
- * Solid walls, floor tiles, and roof tiles → InstanceDescriptor (pool).
- * Door/window frames, stairwell steps → merged geometry (per-house group).
+ * Build instance descriptors + merged geometry for a house.
+ * Solid walls → InstanceDescriptor (pool).
+ * Floors, roofs, door/window frames, stairwell steps → merged geometry (per-house group).
  */
 export function buildHouseGeometry(house: HouseData): HouseGeometryResult {
   const mergedGroup = new THREE.Group()
@@ -242,50 +242,12 @@ export function buildHouseGeometry(house: HouseData): HouseGeometryResult {
       continue
     }
 
-    const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
-    const yBase = floorYBase(floorLevel, wallHeight)
+    // Floor → merged geometry (back)
+    collectFloorGeometry(room, entries.back, stairwellFootprints)
 
-    // Floor → 1m² tiles → instances (back)
-    const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
-    for (let cx = localX; cx < localX + sizeX; cx++) {
-      for (let cz = localZ; cz < localZ + sizeZ; cz++) {
-        // Skip stairwell cells for 2F+ floors
-        if (
-          floorLevel >= 1 &&
-          stairwellFootprints.some((fp) => cellInFootprint(cx, cz, fp))
-        ) {
-          continue
-        }
-        instances.push({
-          template: 'floor',
-          textureIndex: floorIdx,
-          x: cx + 0.5,
-          y: yBase,
-          z: cz + 0.5,
-          rotY: 0,
-          floorLevel,
-          isFront: false,
-        })
-      }
-    }
-
-    // Roof → 1m² tiles → instances (front), suppressed if covered by 2F
+    // Roof → merged geometry (front), suppressed if covered by 2F
     if (!shouldSuppressRoof(room, secondFloorFootprints)) {
-      const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
-      for (let cx = localX; cx < localX + sizeX; cx++) {
-        for (let cz = localZ; cz < localZ + sizeZ; cz++) {
-          instances.push({
-            template: 'roof',
-            textureIndex: roofIdx,
-            x: cx + 0.5,
-            y: yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
-            z: cz + 0.5,
-            rotY: 0,
-            floorLevel,
-            isFront: true,
-          })
-        }
-      }
+      collectRoofGeometry(room, entries.front)
     }
 
     // Walls: solid → instance, door/window → merged
@@ -547,25 +509,16 @@ function bakedGeo(
   return baseGeo
 }
 
-function collectRoomGeometries(
+/** Generate floor geometry for a room, punching stairwell holes on 2F+. */
+function collectFloorGeometry(
   room: RoomData,
-  frontEntries: GeoEntry[],
-  backEntries: GeoEntry[],
-  suppressRoof: boolean = false,
-  allRooms: RoomData[] = [],
-  stairwellFootprints: RoomFootprint[] = []
+  target: GeoEntry[],
+  stairwellFootprints: RoomFootprint[]
 ) {
-  if (room.roomType === 'stairwell') {
-    collectStairwellGeometries(room, backEntries, allRooms)
-    return
-  }
-
-  const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
-  const yBase = floorYBase(floorLevel, wallHeight)
-
-  // Floor → back
-  // For 2F+ rooms, punch holes where stairwells are below
+  const { localX, localZ, sizeX, sizeZ, floorLevel } = room
+  const yBase = floorYBase(floorLevel, room.wallHeight)
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
+
   const hasStairwellOverlap =
     floorLevel >= 1 &&
     stairwellFootprints.some(
@@ -577,14 +530,12 @@ function collectRoomGeometries(
     )
 
   if (hasStairwellOverlap) {
-    // Generate 1m² tiles, skipping cells that overlap any stairwell
     for (let cx = localX; cx < localX + sizeX; cx++) {
       for (let cz = localZ; cz < localZ + sizeZ; cz++) {
-        const inStairwell = stairwellFootprints.some((fp) =>
-          cellInFootprint(cx, cz, fp)
-        )
-        if (inStairwell) continue
-        backEntries.push({
+        if (stairwellFootprints.some((fp) => cellInFootprint(cx, cz, fp))) {
+          continue
+        }
+        target.push({
           geo: bakedGeo(
             new THREE.BoxGeometry(1, FLOOR_THICKNESS, 1),
             cx + 0.5,
@@ -601,7 +552,7 @@ function collectRoomGeometries(
       }
     }
   } else {
-    backEntries.push({
+    target.push({
       geo: bakedGeo(
         new THREE.BoxGeometry(sizeX, FLOOR_THICKNESS, sizeZ),
         localX + sizeX / 2,
@@ -614,27 +565,45 @@ function collectRoomGeometries(
       textureIndex: floorIdx,
     })
   }
+}
 
-  // Roof → front (suppressed when a 2F room sits above)
-  if (!suppressRoof) {
-    const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
-    const roofPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
-    roofPlane.rotateX(-Math.PI / 2)
-    frontEntries.push({
-      geo: bakedGeo(
-        roofPlane,
-        localX + sizeX / 2,
-        yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
-        localZ + sizeZ / 2,
-        0,
-        sizeX,
-        sizeZ
-      ),
-      textureIndex: roofIdx,
-    })
+/** Generate roof geometry for a room. */
+function collectRoofGeometry(room: RoomData, target: GeoEntry[]) {
+  const { localX, localZ, sizeX, sizeZ, wallHeight } = room
+  const yBase = floorYBase(room.floorLevel, wallHeight)
+  const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
+  const roofPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
+  roofPlane.rotateX(-Math.PI / 2)
+  target.push({
+    geo: bakedGeo(
+      roofPlane,
+      localX + sizeX / 2,
+      yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
+      localZ + sizeZ / 2,
+      0,
+      sizeX,
+      sizeZ
+    ),
+    textureIndex: roofIdx,
+  })
+}
+
+function collectRoomGeometries(
+  room: RoomData,
+  frontEntries: GeoEntry[],
+  backEntries: GeoEntry[],
+  suppressRoof: boolean = false,
+  allRooms: RoomData[] = [],
+  stairwellFootprints: RoomFootprint[] = []
+) {
+  if (room.roomType === 'stairwell') {
+    collectStairwellGeometries(room, backEntries, allRooms)
+    return
   }
 
-  // Walls — each is an array of 1m segments
+  collectFloorGeometry(room, backEntries, stairwellFootprints)
+  if (!suppressRoof) collectRoofGeometry(room, frontEntries)
+
   collectWallSegments(room.wallNorth, 'north', room, frontEntries, backEntries)
   collectWallSegments(room.wallSouth, 'south', room, frontEntries, backEntries)
   collectWallSegments(room.wallEast, 'east', room, frontEntries, backEntries)
