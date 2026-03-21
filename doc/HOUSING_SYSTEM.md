@@ -197,7 +197,7 @@ HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
 
 1. ✅ 2층 방 배치 로직
 2. ✅ 계단 메쉬/variant
-3. 카메라 전환 (1층↔2층 뷰)
+3. ✅ 카메라 전환 (1층↔2층 뷰) — 높이 오프셋 + 벽 숨기기로 충분
 
 ### Phase 5: Optimization
 

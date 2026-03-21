@@ -5,19 +5,20 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import type { HouseData } from '../../types/housing'
   import {
-    buildHouseGroup,
+    buildHouseGeometry,
     disposeHouseGroup,
     DEFAULT_WALL_HEIGHT,
     FLOOR_THICKNESS,
     OFFSCREEN_Y,
     floorYBase,
     getStairwellYOffset,
-    type HouseGroupResult,
+    type HouseGeometryResult,
   } from '../../utils/house-geometry'
   import {
     initHousingTextures,
     disposeHousingMaterials,
   } from '../../utils/housing-textures'
+  import { HousingInstancePool } from '../../utils/housing-instance-pool'
   import { housingManager } from '../../managers/housingManager'
   import {
     TERRAIN_TILE_SIZE,
@@ -34,7 +35,8 @@
   const housingGroup = new THREE.Group()
   housingGroup.name = 'housingLayer'
 
-  const houses = new SvelteMap<string, HouseGroupResult>()
+  const pool = new HousingInstancePool(housingGroup)
+  const houses = new SvelteMap<string, HouseGeometryResult>()
   let playerInsideHouseId: string | null = null
   let playerInsideFloor = -1
   let lastFloorOffset = 0
@@ -56,9 +58,10 @@
   onDestroy(() => {
     housingManager.onHousesChanged = null
     for (const [, result] of houses) {
-      disposeHouseGroup(result.houseGroup)
+      disposeHouseGroup(result.mergedGroup)
     }
     houses.clear()
+    pool.dispose()
     disposeHousingMaterials()
   })
 
@@ -68,8 +71,9 @@
     // Remove houses no longer present
     for (const [id, result] of houses) {
       if (!incomingById.has(id)) {
-        housingGroup.remove(result.houseGroup)
-        disposeHouseGroup(result.houseGroup)
+        pool.removeHouse(id)
+        housingGroup.remove(result.mergedGroup)
+        disposeHouseGroup(result.mergedGroup)
         houses.delete(id)
       }
     }
@@ -81,17 +85,24 @@
       if (existing && existing.roomsHash === newHash) continue
 
       if (existing) {
-        housingGroup.remove(existing.houseGroup)
-        disposeHouseGroup(existing.houseGroup)
+        pool.removeHouse(data.id)
+        housingGroup.remove(existing.mergedGroup)
+        disposeHouseGroup(existing.mergedGroup)
       }
-      const result = buildHouseGroup(data)
+      const result = buildHouseGeometry(data)
+      pool.addHouse(data.id, result.instances, data.origin)
+      // Free instance descriptors — only needed for pool.addHouse
+      result.instances.length = 0
+      houses.set(data.id, result)
+      housingGroup.add(result.mergedGroup)
+
       // Re-apply visibility if player is inside this house
       if (data.id === playerInsideHouseId) {
         applyFloorVisibility(result, playerInsideFloor)
       }
-      houses.set(data.id, result)
-      housingGroup.add(result.houseGroup)
     }
+
+    pool.flush()
   }
 
   /** Called from game loop — loads chunks + checks player inside state */
@@ -195,14 +206,17 @@
       if (playerInsideHouseId) {
         const prev = houses.get(playerInsideHouseId)
         if (prev) resetFloorVisibility(prev)
+        pool.resetVisibility(playerInsideHouseId)
       }
       // Apply new visibility
       if (insideId) {
         const curr = houses.get(insideId)
         if (curr) applyFloorVisibility(curr, effectiveFloor)
+        pool.setVisibility(insideId, effectiveFloor)
       }
       playerInsideHouseId = insideId
       playerInsideFloor = effectiveFloor
+      pool.flush()
     }
 
     if (newOffset !== lastFloorOffset) {
@@ -212,28 +226,27 @@
   }
 
   /**
-   * On 1F: hide 1F front + all of 2F (front+back) so ceiling/upper floor doesn't block view
+   * Hide merged (non-instanceable) parts based on player floor.
+   * On 1F: hide 1F front + all of 2F (front+back)
    * On 2F: hide 2F front only, 1F stays fully visible
    */
   function applyFloorVisibility(
-    result: HouseGroupResult,
+    result: HouseGeometryResult,
     floor: number
   ) {
-    for (const [fl, groups] of result.floorGroups) {
+    for (const [fl, groups] of result.mergedFloorGroups) {
       if (fl === floor) {
-        // Current floor: hide front (south/west walls + roof)
         groups.front.position.y = OFFSCREEN_Y
       } else if (fl > floor) {
-        // Floors above: hide everything (front + back) so they don't block view
         groups.front.position.y = OFFSCREEN_Y
         groups.back.position.y = OFFSCREEN_Y
       }
     }
   }
 
-  /** Restore all groups to normal position */
-  function resetFloorVisibility(result: HouseGroupResult) {
-    for (const [, groups] of result.floorGroups) {
+  /** Restore merged groups to normal position */
+  function resetFloorVisibility(result: HouseGeometryResult) {
+    for (const [, groups] of result.mergedFloorGroups) {
       groups.front.position.y = 0
       groups.back.position.y = 0
     }
