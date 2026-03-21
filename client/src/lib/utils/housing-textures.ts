@@ -11,6 +11,8 @@ export interface HousingTextureEntry {
   label: string
   glb: string
   fallbackColor: number
+  /** UV scale multiplier — smaller = larger tiles. Default 1.0 */
+  uvScale?: number
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -44,6 +46,12 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     label: 'Plank Wall',
     glb: 'housing/wood_plank_wall_1k',
     fallbackColor: 0x8b7355,
+  },
+  {
+    label: 'Clay Roof',
+    glb: 'housing/clay_roof_tiles_02_1k',
+    fallbackColor: 0xb86b4a,
+    uvScale: 0.3,
   },
 ]
 
@@ -88,13 +96,23 @@ export function initHousingTextures(): Promise<void> {
         const layer = await loadSplatLayer(entry.glb, 1.0)
         const mat = getHousingMaterial(idx)
 
+        const scale = entry.uvScale ?? 1.0
+        const applyRepeat = (tex: THREE.Texture) => {
+          if (scale !== 1.0) tex.repeat.set(scale, scale)
+        }
+
         mat.map = layer.map
-        if (layer.normalMap) mat.normalMap = layer.normalMap
+        applyRepeat(layer.map)
+        if (layer.normalMap) {
+          mat.normalMap = layer.normalMap
+          applyRepeat(layer.normalMap)
+        }
         if (layer.orm) {
           // ORM packed: R=AO, G=roughness, B=metallic
           mat.roughnessMap = layer.orm
           mat.metalnessMap = layer.orm
           mat.aoMap = layer.orm
+          applyRepeat(layer.orm)
         }
 
         // Switch from fallback color to texture-driven color
@@ -110,6 +128,25 @@ export function initHousingTextures(): Promise<void> {
   })()
 
   return _initPromise
+}
+
+/** Generate preview data URLs from loaded textures. Returns null for unloaded entries. */
+export function getTexturePreviewUrls(): (string | null)[] {
+  const canvas = document.createElement('canvas')
+  canvas.width = 32
+  canvas.height = 32
+  const ctx = canvas.getContext('2d')!
+  return HOUSING_TEXTURES.map((_, idx) => {
+    const mat = materialCache.get(idx)
+    if (!mat?.map?.image) return null
+    ctx.clearRect(0, 0, 32, 32)
+    const img = mat.map.image
+    const entry = HOUSING_TEXTURES[idx]
+    const cropSize =
+      (Math.min(img.width, img.height) / 2) * (entry.uvScale ?? 1.0)
+    ctx.drawImage(img, 0, 0, cropSize, cropSize, 0, 0, 32, 32)
+    return canvas.toDataURL()
+  })
 }
 
 /** Dispose all cached housing materials. Call on layer teardown. */

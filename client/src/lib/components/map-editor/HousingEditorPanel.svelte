@@ -21,7 +21,7 @@
     type HousingEditorTool,
   } from '../../stores/housingEditorStore'
   import type { HouseData, RoofRidgeDir, RoofType, RoomData, RoomType } from '../../types/housing'
-  import { HOUSING_TEXTURES } from '../../utils/housing-textures'
+  import { HOUSING_TEXTURES, initHousingTextures, getTexturePreviewUrls } from '../../utils/housing-textures'
   import { housingManager } from '../../managers/housingManager'
 
   const toCSS = (c: number) => `#${c.toString(16).padStart(6, '0')}`
@@ -29,6 +29,13 @@
     label: t.label,
     color: toCSS(t.fallbackColor),
   }))
+
+  let texPreviews = $state<(string | null)[]>(HOUSING_TEXTURES.map(() => null))
+  let openDropdown = $state<string | null>(null)
+
+  initHousingTextures().then(() => {
+    texPreviews = getTexturePreviewUrls()
+  })
 
   let rotation = $state(0)
   let wallTex = $state(0)
@@ -67,9 +74,17 @@
     selectedHouseId.subscribe((v) => (editHouseId = v)),
     selectedRoomIndex.subscribe((v) => (editRoomIdx = v)),
   ]
+  function onWindowClick(e: MouseEvent) {
+    if (openDropdown && !(e.target as Element)?.closest('.tex-dropdown')) {
+      openDropdown = null
+    }
+  }
+  window.addEventListener('click', onWindowClick)
+
   onDestroy(() => {
     unsubs.forEach((u) => u())
     if (editSaveTimer) clearTimeout(editSaveTimer)
+    window.removeEventListener('click', onWindowClick)
   })
 
   function setTool(t: HousingEditorTool) {
@@ -183,20 +198,39 @@
       {/if}
     </div>
 
+    {#snippet texSwatch(idx: number)}
+      {#if texPreviews[idx]}
+        <img class="tex-swatch" src={texPreviews[idx]} alt="" />
+      {:else}
+        <span class="tex-swatch" style="background: {TEX_ENTRIES[idx].color}"></span>
+      {/if}
+    {/snippet}
+
     {#snippet texturePicker(title: string, activeIdx: number, onChange: (idx: number) => void)}
       <div class="section-title">{title}</div>
-      <div class="tex-row">
-        {#each TEX_ENTRIES as entry, i (i)}
-          <button
-            class="tex-btn"
-            class:active={activeIdx === i}
-            style="--swatch-color: {entry.color}"
-            onclick={() => onChange(i)}
-          >
-            <span class="tex-swatch"></span>
-            <span class="tex-label">{entry.label}</span>
-          </button>
-        {/each}
+      <div class="tex-dropdown">
+        <button
+          class="tex-dropdown-btn"
+          onclick={() => { openDropdown = openDropdown === title ? null : title }}
+        >
+          {@render texSwatch(activeIdx)}
+          <span>{TEX_ENTRIES[activeIdx].label}</span>
+          <span class="tex-arrow">{openDropdown === title ? '▲' : '▼'}</span>
+        </button>
+        {#if openDropdown === title}
+          <div class="tex-dropdown-list">
+            {#each TEX_ENTRIES as entry, i (i)}
+              <button
+                class="tex-dropdown-item"
+                class:active={activeIdx === i}
+                onclick={() => { onChange(i); openDropdown = null }}
+              >
+                {@render texSwatch(i)}
+                <span>{entry.label}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
     {/snippet}
 
@@ -505,47 +539,80 @@
     flex-wrap: wrap;
   }
 
-  .tex-row {
-    display: flex;
-    gap: 3px;
+  .tex-dropdown {
+    position: relative;
   }
 
-  .tex-btn {
+  .tex-dropdown-btn {
+    width: 100%;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 2px;
-    padding: 4px 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.05);
-    color: #aaa;
+    color: #ccc;
     cursor: pointer;
     font-family: 'Courier New', monospace;
-    font-size: 9px;
-    transition: background 150ms ease, color 150ms ease;
+    font-size: 11px;
+    text-align: left;
   }
 
-  .tex-btn:hover {
+  .tex-dropdown-btn:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .tex-arrow {
+    margin-left: auto;
+    font-size: 8px;
+    color: #888;
+  }
+
+  .tex-dropdown-list {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    z-index: 10;
+    max-height: 200px;
+    overflow-y: auto;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    margin-top: 2px;
+  }
+
+  .tex-dropdown-item {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: none;
+    background: none;
+    color: #ccc;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    text-align: left;
+  }
+
+  .tex-dropdown-item:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #ddd;
   }
 
-  .tex-btn.active {
-    background: rgba(123, 198, 123, 0.2);
-    border-color: rgba(123, 198, 123, 0.5);
+  .tex-dropdown-item.active {
+    background: rgba(123, 198, 123, 0.15);
     color: #7bc67b;
   }
 
   .tex-swatch {
-    display: block;
-    width: 20px;
-    height: 20px;
+    display: inline-block;
+    width: 18px;
+    height: 18px;
     border-radius: 3px;
-    background: var(--swatch-color);
-  }
-
-  .tex-label {
-    white-space: nowrap;
+    flex-shrink: 0;
+    object-fit: cover;
   }
 </style>

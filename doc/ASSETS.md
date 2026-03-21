@@ -191,3 +191,13 @@ seamless loop, game BGM
   ```
   Epic orchestral score with bold brass fanfare, sweeping strings, and thunderous percussion, Opens with brilliant trumpets and French horns over timpani swells, then locks into a ceremonial march guided by snare, Middle section softens into harp arpeggios and warm woodwinds, then surges back into a fuller, more heroic reprise that climbs into a massive, shining crescendo to close, harp, soft, soaring, orchestral
   ```
+
+- Crescendo of Remembering
+  ```
+  Cinematic orchestral build: intimate felt-piano and warm synth pads bloom into nostalgic strings, then widen with harp arpeggios and airy choir aahs before cresting in a full-ensemble, brass-driven climax with heroic choir and cymbal swells, ending in a tender, dissolving echo, nostalgic, orchestral, gentle, soaring, soft, emotional, harp
+  ```
+
+- Sky of Burning Wings
+  ```
+  Blazing 80s-style anime score at high tempo: gated drums and a piercing synth lead open in unison, then electric guitar and string stabs carry a heroic melody, Arrangement swells with counter-melodies, modulated key changes, and tom fills that kick into half-time hits before racing back, Final act erupts into full orchestra with soaring brass fanfares, cymbal swells, and a massive choir carrying the main theme in stacked harmonies, ending on a held, radiant chord, orchestral, bright, anime
+  ```
