@@ -16,6 +16,7 @@ THREE.Material.prototype.dispose = function () {
 
 export function createWebGPURenderer(canvas: HTMLCanvasElement) {
   const renderer = new WebGPURenderer({ canvas, antialias: true })
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   // Guard renderer.dispose() — Threlte calls it on Canvas unmount,
   // but WebGPU backend.info may not exist if init() hasn't completed.

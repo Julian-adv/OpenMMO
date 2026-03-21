@@ -41,6 +41,35 @@ export function createSceneLightingController(): SceneLightingController {
   const ambientNightColor = new THREE.Color('#8ea8ff')
   const ambientColor = new THREE.Color()
 
+  // Quantize shadow light direction to prevent shadow map flickering.
+  // Tiny per-frame direction changes rotate the shadow texel grid, causing
+  // boundary pixels to oscillate. Snapping to discrete angular steps keeps
+  // the grid stable between updates. Comparison uses squared values to
+  // avoid per-frame sqrt calls.
+  const SHADOW_DIR_SNAP_SQ = 0.0005 * 0.0005
+  let snappedOffset: { x: number; y: number; z: number } | null = null
+
+  function snapShadowDirection(offset: Vector3Like): Vector3Like {
+    if (snappedOffset !== null) {
+      const dx = offset.x - snappedOffset.x
+      const dy = offset.y - snappedOffset.y
+      const dz = offset.z - snappedOffset.z
+      const lenSq =
+        offset.x * offset.x + offset.y * offset.y + offset.z * offset.z
+      if (
+        lenSq === 0 ||
+        dx * dx + dy * dy + dz * dz < SHADOW_DIR_SNAP_SQ * lenSq
+      ) {
+        return snappedOffset
+      }
+    }
+    snappedOffset = snappedOffset ?? { x: 0, y: 0, z: 0 }
+    snappedOffset.x = offset.x
+    snappedOffset.y = offset.y
+    snappedOffset.z = offset.z
+    return snappedOffset
+  }
+
   function update(params: SceneLightingUpdateParams) {
     if (!params.currentPlayerPosition) return
 
@@ -77,10 +106,13 @@ export function createSceneLightingController(): SceneLightingController {
     const directionalLightState = celestialLightState.directional
     const playerPos = params.currentPlayerPosition
 
+    const shadowOffset = snapShadowDirection(
+      directionalLightState.positionOffset
+    )
     params.directionalLight.position.set(
-      playerPos.x + directionalLightState.positionOffset.x,
-      playerPos.y + directionalLightState.positionOffset.y,
-      playerPos.z + directionalLightState.positionOffset.z
+      playerPos.x + shadowOffset.x,
+      playerPos.y + shadowOffset.y,
+      playerPos.z + shadowOffset.z
     )
     params.directionalLight.intensity =
       directionalLightState.intensity * (1 - eclipse * 0.95)
