@@ -89,6 +89,54 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     uvScale: 0.3,
     sortOrder: 20,
   },
+  {
+    label: 'Clay Roof 2',
+    glb: 'housing/clay_roof_tiles_03_1k',
+    fallbackColor: 0xc47850,
+    uvScale: 0.3,
+    sortOrder: 21,
+  },
+  // Thatch
+  {
+    label: 'Reed Roof',
+    glb: 'housing/reed_roof_03_1k',
+    fallbackColor: 0x9a8a60,
+    uvScale: 0.3,
+    sortOrder: 30,
+  },
+  {
+    label: 'Grey Roof',
+    glb: 'housing/grey_roof_tiles_02_1k',
+    fallbackColor: 0x707070,
+    uvScale: 0.3,
+    sortOrder: 22,
+  },
+  {
+    label: 'Red Brick',
+    glb: 'housing/red_brick_1k',
+    fallbackColor: 0xb04030,
+    uvScale: 0.5,
+    sortOrder: 3,
+  },
+  {
+    label: 'Medieval Stone',
+    glb: 'housing/medieval_blocks_03_1k',
+    fallbackColor: 0x8a8070,
+    sortOrder: 4,
+  },
+  {
+    label: 'Sandstone',
+    glb: 'housing/sandstone_blocks_04_1k',
+    fallbackColor: 0xc4a878,
+    uvScale: 0.5,
+    sortOrder: 5,
+  },
+  {
+    label: 'Plaster Wall',
+    glb: 'housing/worn_mossy_plasterwall_1k',
+    fallbackColor: 0x7a7060,
+    sortOrder: 6,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
