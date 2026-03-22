@@ -22,9 +22,19 @@ export interface RaycastContext {
 
 class InputHandler {
   private keysPressed = new Set<string>()
+  private _interactJustPressed = false
 
   get hasKeysPressed(): boolean {
     return this.keysPressed.size > 0
+  }
+
+  /** Returns true once per E key press, then resets. */
+  consumeInteract(): boolean {
+    if (this._interactJustPressed) {
+      this._interactJustPressed = false
+      return true
+    }
+    return false
   }
 
   getMovementDirection(): { x: number; z: number } | null {
@@ -127,11 +137,13 @@ class InputHandler {
     raycaster.setFromCamera(centerNDC, context.camera)
     const intersects = raycaster.intersectObjects(context.groundMeshes, true)
 
-    if (intersects.length > 0) {
-      const point = intersects[0].point
-      return {
-        type: 'move_to_ground',
-        position: { x: point.x, y: point.y, z: point.z },
+    // Pick the first hit with an upward-facing normal (floor/terrain, not walls)
+    for (const hit of intersects) {
+      if (hit.face && hit.face.normal.y > 0.5) {
+        return {
+          type: 'move_to_ground',
+          position: { x: hit.point.x, y: hit.point.y, z: hit.point.z },
+        }
       }
     }
 
@@ -145,6 +157,9 @@ class InputHandler {
     }
     if (event.ctrlKey) return false
 
+    if (event.code === 'KeyE' && !event.repeat) {
+      this._interactJustPressed = true
+    }
     this.keysPressed.add(event.code)
     return true
   }

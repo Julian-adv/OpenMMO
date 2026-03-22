@@ -215,10 +215,13 @@ HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
 
 ### Phase 7: Doors & Windows Interaction
 
-1. `WallConfig`에 `is_open: bool` 추가 (문 전용, 기본 false)
-2. 문 세그먼트의 상단 벽(문 위 0.8m)은 merged geometry에 유지, 문짝(`DOOR_WIDTH × DOOR_HEIGHT`)만 별도 Mesh로 분리 → 힌지 기준 회전 애니메이션
-3. 상호작용 키(E) 또는 마우스 클릭으로 열기/닫기, 서버 동기화
-4. 닫힌 문 = 충돌, 열린 문 = 통과 (Phase 6 충돌 시스템 연동)
+#### 구현 순서
+1. `WallConfig`에 `isOpen: bool` 추가 (TS `isOpen?: boolean`, Rust `#[serde(default)] is_open: bool`)
+2. 문짝 메시 분리: 문틀(상단+좌우)은 merged geometry 유지, 문짝(`DOOR_WIDTH × DOOR_HEIGHT`)만 별도 Mesh → `THREE.Group` 힌지 피벗으로 감싸서 Y축 회전 애니메이션
+3. 충돌 시스템 연동: `isOpen === true` → 통과, `false`/미설정 → 차단 (Phase 6 `crossesWallLine` hitTest 수정)
+4. 문 열림/닫힘 애니메이션: 게임 루프에서 `hingePivot.rotation.y`를 목표값으로 lerp (0=닫힘, -PI/2=열림)
+5. 네트워크 메시지 추가: `ClientMessage::ToggleDoor { house_id, room_index, wall_dir, segment_index }` → `ServerMessage::DoorToggled { ..., is_open }`, 서버에서 검증+영속+브로드캐스트
+6. 상호작용 시스템: E키 → 플레이어 근처(2m) 문 탐색(`findNearestDoor`) → 낙관적 토글 + 서버 전송
 
 ### Phase 8: Third Floor+ (Optional)
 

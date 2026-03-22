@@ -234,6 +234,24 @@
     onStateChange(revivedState)
   }
 
+  /** Check E key interaction (door toggle). Call from game loop. */
+  export function checkInteraction() {
+    if (!currentPlayer || currentPlayer.health <= 0) return
+    if (!inputHandler.consumeInteract()) return
+
+    const door = housingManager.findNearestDoor(
+      currentPlayer.position.x,
+      currentPlayer.position.z,
+      currentPlayer.position.y,
+      2.0
+    )
+    if (!door) return
+
+    // Optimistic local toggle + send to server
+    housingManager.toggleDoor(door.houseId, door.roomIndex, door.wallDir, door.segmentIndex)
+    networkManager.sendToggleDoor(door.houseId, door.roomIndex, door.wallDir, door.segmentIndex)
+  }
+
   // Update player movement (click-to-move) with acceleration/deceleration
   export function updatePlayerMovement(deltaTime: number) {
     // Dead players cannot move

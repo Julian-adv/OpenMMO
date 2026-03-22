@@ -5,6 +5,7 @@ export type WallVariant = 'solid' | 'door' | 'window' | 'open'
 export interface WallConfig {
   variant: WallVariant
   texture: number
+  isOpen?: boolean
 }
 
 export type RoofType = 'flat' | 'gabled' | 'steep'

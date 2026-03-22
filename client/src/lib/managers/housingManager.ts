@@ -3,8 +3,25 @@ import {
   TERRAIN_TILE_SIZE,
   getTerrainChunkFromPosition,
 } from '../components/game-scene/terrain-utils'
-import type { HouseData, WallConfig } from '../types/housing'
-import { floorYBase, LANDING_DEPTH } from '../utils/house-geometry'
+import type { HouseData, RoomData, WallConfig } from '../types/housing'
+import {
+  floorYBase,
+  LANDING_DEPTH,
+  type WallDirection,
+} from '../utils/house-geometry'
+
+export function getWallByDir(room: RoomData, dir: WallDirection): WallConfig[] {
+  switch (dir) {
+    case 'north':
+      return room.wallNorth
+    case 'south':
+      return room.wallSouth
+    case 'east':
+      return room.wallEast
+    case 'west':
+      return room.wallWest
+  }
+}
 
 /** Virtual wall half-thickness — player stops this far from the wall plane */
 const WALL_HALF_THICKNESS = 0.3
@@ -147,6 +164,116 @@ export class HousingManager {
   handleRemoteHouseRemoved(houseId: string) {
     this.removeFromCache(houseId)
     this.notifyChanged()
+  }
+
+  /** Optimistic local toggle — flips isOpen and notifies. */
+  toggleDoor(
+    houseId: string,
+    roomIndex: number,
+    wallDir: WallDirection,
+    segmentIndex: number
+  ) {
+    const house = this.housesById.get(houseId)
+    if (!house) return
+    const room = house.rooms[roomIndex]
+    if (!room) return
+
+    const seg = getWallByDir(room, wallDir)[segmentIndex]
+    if (!seg) return
+
+    seg.isOpen = !seg.isOpen
+    this.notifyChanged()
+  }
+
+  /** Handle a door toggle from another player or server confirmation. */
+  handleDoorToggled(
+    houseId: string,
+    roomIndex: number,
+    wallDir: WallDirection,
+    segmentIndex: number,
+    isOpen: boolean
+  ) {
+    const house = this.housesById.get(houseId)
+    if (!house) return
+    const room = house.rooms[roomIndex]
+    if (!room) return
+
+    const wall = getWallByDir(room, wallDir)
+    if (!wall[segmentIndex]) return
+
+    wall[segmentIndex].isOpen = isOpen
+    this.notifyChanged()
+  }
+
+  /** Find the nearest door segment within maxDist of (x, z). */
+  findNearestDoor(
+    x: number,
+    z: number,
+    y: number,
+    maxDist: number
+  ): {
+    houseId: string
+    roomIndex: number
+    wallDir: WallDirection
+    segmentIndex: number
+    distance: number
+  } | null {
+    let best: ReturnType<typeof this.findNearestDoor> = null
+
+    const dirs: [WallDirection, number][] = [
+      ['north', 0],
+      ['south', 0],
+      ['east', 1],
+      ['west', 1],
+    ]
+
+    for (const house of this.housesById.values()) {
+      for (let ri = 0; ri < house.rooms.length; ri++) {
+        const room = house.rooms[ri]
+        const ryBase =
+          house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
+        if (y < ryBase - 0.5 || y >= ryBase + room.wallHeight) continue
+
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+
+        for (const [dir, axis] of dirs) {
+          const segs = getWallByDir(room, dir)
+          const wallCoord =
+            dir === 'north'
+              ? rz
+              : dir === 'south'
+                ? rz + room.sizeZ
+                : dir === 'east'
+                  ? rx + room.sizeX
+                  : rx
+
+          for (let si = 0; si < segs.length; si++) {
+            if (segs[si].variant !== 'door') continue
+
+            const segCenter = si + 0.5
+            const startB = axis === 0 ? rx : rz
+            const doorB = startB + segCenter
+
+            const dx = axis === 0 ? doorB - x : wallCoord - x
+            const dz = axis === 0 ? wallCoord - z : doorB - z
+            const dist = Math.sqrt(dx * dx + dz * dz)
+
+            if (dist < maxDist && (!best || dist < best.distance)) {
+              best = {
+                houseId: house.id,
+                roomIndex: ri,
+                wallDir: dir,
+                segmentIndex: si,
+                distance: dist,
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return best
   }
 
   /** Get all currently loaded houses. */
@@ -356,12 +483,11 @@ export class HousingManager {
   ): boolean {
     return this.crossesWallLine(fromA, fromB, toA, toB, wallA, (b) => {
       const segIdx = Math.floor(b - wallStartB)
-      return (
-        segIdx >= 0 &&
-        segIdx < wallLen &&
-        segments[segIdx].variant !== 'open' &&
-        segments[segIdx].variant !== 'door'
-      )
+      if (segIdx < 0 || segIdx >= wallLen) return false
+      const seg = segments[segIdx]
+      if (seg.variant === 'open') return false
+      if (seg.variant === 'door') return !seg.isOpen
+      return true
     })
   }
 

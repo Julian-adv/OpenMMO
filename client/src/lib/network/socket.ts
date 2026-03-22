@@ -344,6 +344,22 @@ class NetworkManager {
     })
   }
 
+  sendToggleDoor(
+    houseId: string,
+    roomIndex: number,
+    wallDir: string,
+    segmentIndex: number
+  ) {
+    this.sendMessage({
+      ToggleDoor: {
+        house_id: houseId,
+        room_index: roomIndex,
+        wall_dir: wallDir,
+        segment_index: segmentIndex,
+      },
+    })
+  }
+
   // --- Auth & character request methods ---
 
   authenticate(accountName: string, password: string, createAccount: boolean) {

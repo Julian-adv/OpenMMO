@@ -472,6 +472,16 @@ export function handleServerMessage(
       housingManager.handleRemoteHousesBatch(data.houses)
       break
 
+    case 'DoorToggled':
+      housingManager.handleDoorToggled(
+        data.house_id,
+        data.room_index,
+        data.wall_dir,
+        data.segment_index,
+        data.is_open
+      )
+      break
+
     case 'XpGained': {
       const gameState = get(gameStore)
       const previousPlayer = gameState.currentPlayer
