@@ -388,28 +388,42 @@ export const GRASS_DENSITY_SCALE = 0.7
 function thinInstances(src: Float32Array, keep: number): Float32Array {
   if (keep >= 1) return src
   const count = src.length / FLOATS_PER_INSTANCE
-  const kept: number[] = []
-  // Use position hash for deterministic, spatially stable thinning
+
+  // Pass 1: count survivors
+  let survived = 0
   for (let i = 0; i < count; i++) {
     const x = src[i * FLOATS_PER_INSTANCE]
     const z = src[i * FLOATS_PER_INSTANCE + 2]
-    // Fast hash from world position — stable across frames
+    const h =
+      ((Math.imul((x * 374761) | 0, 668265263) ^
+        Math.imul((z * 550929) | 0, 374761393)) >>>
+        0) /
+      0xffffffff
+    if (h < keep) survived++
+  }
+  if (survived === count) return src
+
+  // Pass 2: copy survivors into pre-allocated buffer
+  const out = new Float32Array(survived * FLOATS_PER_INSTANCE)
+  let offset = 0
+  for (let i = 0; i < count; i++) {
+    const base = i * FLOATS_PER_INSTANCE
+    const x = src[base]
+    const z = src[base + 2]
     const h =
       ((Math.imul((x * 374761) | 0, 668265263) ^
         Math.imul((z * 550929) | 0, 374761393)) >>>
         0) /
       0xffffffff
     if (h < keep) {
-      const base = i * FLOATS_PER_INSTANCE
-      for (let f = 0; f < FLOATS_PER_INSTANCE; f++) {
-        kept.push(src[base + f])
-      }
+      out.set(src.subarray(base, base + FLOATS_PER_INSTANCE), offset)
+      offset += FLOATS_PER_INSTANCE
     }
   }
-  return new Float32Array(kept)
+  return out
 }
 
-/** Extract instance Float32Array for a given type from decoded data. */
+/** Extract raw instance Float32Array for a given type from decoded data. */
 export function getInstanceData(
   data: GrassPlacementData,
   type: 'short' | 'tall' | 'flower'
@@ -418,18 +432,15 @@ export function getInstanceData(
   const shortFloats = data.shortCount * FLOATS_PER_INSTANCE
   const tallFloats = data.tallCount * FLOATS_PER_INSTANCE
 
-  let raw: Float32Array
   switch (type) {
     case 'short':
-      raw = new Float32Array(data.buffer, headerBytes, shortFloats)
-      break
+      return new Float32Array(data.buffer, headerBytes, shortFloats)
     case 'tall':
-      raw = new Float32Array(
+      return new Float32Array(
         data.buffer,
         headerBytes + shortFloats * 4,
         tallFloats
       )
-      break
     case 'flower':
       return new Float32Array(
         data.buffer,
@@ -437,5 +448,17 @@ export function getInstanceData(
         data.flowerCount * FLOATS_PER_INSTANCE
       )
   }
+}
+
+/**
+ * Extract instance data with density thinning applied.
+ * Use this for display; use getInstanceData() for data manipulation.
+ */
+export function getThinnedInstanceData(
+  data: GrassPlacementData,
+  type: 'short' | 'tall' | 'flower'
+): Float32Array {
+  const raw = getInstanceData(data, type)
+  if (type === 'flower') return raw
   return thinInstances(raw, GRASS_DENSITY_SCALE)
 }

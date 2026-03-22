@@ -6,7 +6,7 @@
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
   import { windDebugVisible } from '../../stores/debugStore'
-  import { getInstanceData } from '../../utils/grass-data'
+  import { getThinnedInstanceData } from '../../utils/grass-data'
   import {
     loadGrassBillboardGeometry,
     loadFlowerBillboardGeometry,
@@ -616,9 +616,6 @@
     }
   }
 
-  // Reusable objects for bounding sphere computation
-  const _chunkCenter = new THREE.Vector3()
-  const _chunkSphere = new THREE.Sphere()
   // Half-diagonal of a 32×32 sub-chunk + vertical margin for grass height
   const SUB_CHUNK_HALF_DIAG = Math.sqrt(SUB_CHUNK_SIZE * SUB_CHUNK_SIZE * 0.5 + 10 * 10)
 
@@ -648,13 +645,10 @@
     // Set bounding sphere from sub-chunk key for frustum culling.
     // Key format: "scx,scz" → world center = (scx+0.5)*SIZE, (scz+0.5)*SIZE
     const [scx, scz] = subChunkKey.split(',').map(Number)
-    _chunkCenter.set(
-      (scx + 0.5) * SUB_CHUNK_SIZE,
-      0,
-      (scz + 0.5) * SUB_CHUNK_SIZE,
+    mesh.boundingSphere = new THREE.Sphere(
+      new THREE.Vector3((scx + 0.5) * SUB_CHUNK_SIZE, 0, (scz + 0.5) * SUB_CHUNK_SIZE),
+      SUB_CHUNK_HALF_DIAG,
     )
-    _chunkSphere.set(_chunkCenter, SUB_CHUNK_HALF_DIAG)
-    mesh.boundingSphere = _chunkSphere.clone()
 
     // Force WebGPU to re-create GPU bindings by re-adding to scene graph.
     // Also handles the initial case where mesh hasn't been added yet.
@@ -685,9 +679,9 @@
           pendingTiles.delete(tk)
 
           if (grassData) {
-            const shortChunks = partitionIntoSubChunks(getInstanceData(grassData, 'short'))
-            const tallChunks = partitionIntoSubChunks(getInstanceData(grassData, 'tall'))
-            const flowerChunks = partitionIntoSubChunks(getInstanceData(grassData, 'flower'))
+            const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
+            const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
+            const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
 
             const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
             for (const key of allKeys) {
@@ -760,9 +754,9 @@
       clearSubChunksForTile(tileX, tileZ)
 
       // Re-partition updated data
-      const shortChunks = partitionIntoSubChunks(getInstanceData(grassData, 'short'))
-      const tallChunks = partitionIntoSubChunks(getInstanceData(grassData, 'tall'))
-      const flowerChunks = partitionIntoSubChunks(getInstanceData(grassData, 'flower'))
+      const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
+      const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
+      const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
 
       const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
       for (const key of allKeys) {
