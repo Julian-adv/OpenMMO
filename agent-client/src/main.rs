@@ -504,5 +504,6 @@ fn msg_name(msg: &ServerMessage) -> &'static str {
         ServerMessage::HouseUpdated { .. } => "HouseUpdated",
         ServerMessage::HouseRemoved { .. } => "HouseRemoved",
         ServerMessage::HousesInArea { .. } => "HousesInArea",
+        ServerMessage::DoorToggled { .. } => "DoorToggled",
     }
 }

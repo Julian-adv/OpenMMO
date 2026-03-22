@@ -18,6 +18,7 @@
     initHousingTextures,
     disposeHousingMaterials,
   } from '../../utils/housing-textures'
+  import { getWallByDir } from '../../managers/housingManager'
   import { housingManager } from '../../managers/housingManager'
   import {
     TERRAIN_TILE_SIZE,
@@ -81,7 +82,10 @@
     for (const data of allHouses) {
       const existing = houses.get(data.id)
       const newHash = JSON.stringify(data.rooms)
+
+      // Fast path: if only door isOpen changed, sync door states without rebuild
       if (existing && existing.roomsHash === newHash) continue
+      if (existing && syncDoorStates(existing, data, newHash)) continue
 
       if (existing) {
         housingGroup.remove(existing.houseGroup)
@@ -104,6 +108,29 @@
       )
     }
   }
+
+  const isOpenReplacer = (_k: string, v: unknown) => _k === 'isOpen' ? undefined : v
+
+  /** Returns true if the only changes were door isOpen flags (no geometry rebuild needed). */
+  function syncDoorStates(existing: HouseGroupResult, data: HouseData, newHash: string): boolean {
+    // Compare geometry excluding isOpen — both sides stripped from their full hashes
+    if (
+      JSON.stringify(JSON.parse(newHash), isOpenReplacer) !==
+      JSON.stringify(JSON.parse(existing.roomsHash), isOpenReplacer)
+    ) return false
+
+    for (const door of existing.doors) {
+      const room = data.rooms[door.roomIndex]
+      if (!room) continue
+      const seg = getWallByDir(room, door.wallDir)[door.segmentIndex]
+      if (seg) door.isOpen = seg.isOpen ?? false
+    }
+
+    existing.roomsHash = newHash
+    return true
+  }
+
+  const DOOR_SWING_SPEED = Math.PI // radians per second (~0.5s for 90°)
 
   /** Called from game loop — loads chunks + checks player inside state */
   export function update(_deltaTime: number) {
@@ -219,6 +246,23 @@
     if (newOffset !== lastFloorOffset) {
       lastFloorOffset = newOffset
       playerFloorOffset.set(newOffset)
+    }
+
+    // Animate door pivots
+    const dt = _deltaTime / 1000
+    for (const [, result] of houses) {
+      for (const door of result.doors) {
+        const target = door.isOpen ? -Math.PI / 2 : 0
+        const current = door.pivot.rotation.y
+        if (Math.abs(current - target) > 0.01) {
+          const step = DOOR_SWING_SPEED * dt
+          if (current < target) {
+            door.pivot.rotation.y = Math.min(current + step, target)
+          } else {
+            door.pivot.rotation.y = Math.max(current - step, target)
+          }
+        }
+      }
     }
   }
 

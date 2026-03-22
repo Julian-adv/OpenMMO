@@ -81,10 +81,12 @@ async fn main() {
         }
     };
 
+    let housing_io = Arc::new(HousingIO::new(std::path::PathBuf::from("./data/housing")));
     let game_state = Arc::new(GameState::new(
         monster_defs,
         initial_game_time,
         Arc::clone(&auth_service),
+        Arc::clone(&housing_io),
     ));
     let game_state_for_time_sync = Arc::clone(&game_state);
     let auth_service_for_time_sync = Arc::clone(&auth_service);
@@ -122,7 +124,6 @@ async fn main() {
     // Start terrain REST API server
     let terrain_port = args.terrain_port.unwrap_or(args.port + 1);
     let terrain_io = Arc::new(TerrainIO::new(std::path::PathBuf::from(&args.terrain_dir)));
-    let housing_io = Arc::new(HousingIO::new(std::path::PathBuf::from("./data/housing")));
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)

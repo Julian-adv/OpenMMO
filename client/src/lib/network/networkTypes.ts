@@ -107,6 +107,14 @@ export type ClientMessage =
   | 'RequestRespawn'
   | { DebugTeleport: { position: Position } }
   | { TorchToggle: { enabled: boolean } }
+  | {
+      ToggleDoor: {
+        house_id: string
+        room_index: number
+        wall_dir: string
+        segment_index: number
+      }
+    }
   | 'Heartbeat'
 
 export type AuthSuccessPayload = {

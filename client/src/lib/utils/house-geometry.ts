@@ -15,6 +15,9 @@ import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
 export const WALL_THICKNESS = 0.1
 export const FLOOR_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 3
+const DOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
+  (e) => e.glb === 'housing/wood_shutter_1k'
+)
 const DOOR_WIDTH = 1.0
 const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
@@ -48,7 +51,16 @@ const WALL_DIR_INFO: Record<WallDirection, WallDirInfo> = {
   west: { isNS: false, isFront: true },
 }
 
-type WallDirection = 'north' | 'south' | 'east' | 'west'
+export type WallDirection = 'north' | 'south' | 'east' | 'west'
+
+export interface DoorMeshInfo {
+  /** Hinge pivot group (rotate .rotation.y to open/close) */
+  pivot: THREE.Group
+  roomIndex: number
+  wallDir: WallDirection
+  segmentIndex: number
+  isOpen: boolean
+}
 
 export interface HouseGroupResult {
   houseGroup: THREE.Group
@@ -59,6 +71,8 @@ export interface HouseGroupResult {
   roomsHash: string
   /** Number of merged meshes (for profiling). */
   mergedMeshCount: number
+  /** Door panel meshes with hinge pivots for animation */
+  doors: DoorMeshInfo[]
 }
 
 const _aabbVec = new THREE.Vector3()
@@ -98,7 +112,11 @@ function cellInFootprint(cx: number, cz: number, fp: RoomFootprint): boolean {
   return cx >= fp.x && cx < fp.x + fp.sx && cz >= fp.z && cz < fp.z + fp.sz
 }
 
-type FloorEntries = { front: GeoEntry[]; back: GeoEntry[] }
+type FloorEntries = {
+  front: GeoEntry[]
+  back: GeoEntry[]
+  doors: DoorMeshInfo[]
+}
 
 function getOrCreateFloorEntries(
   perFloor: Map<number, FloorEntries>,
@@ -106,7 +124,7 @@ function getOrCreateFloorEntries(
 ): FloorEntries {
   let entries = perFloor.get(fl)
   if (!entries) {
-    entries = { front: [], back: [] }
+    entries = { front: [], back: [], doors: [] }
     perFloor.set(fl, entries)
   }
   return entries
@@ -173,14 +191,17 @@ export function buildHouseGroup(
   // Collect geometry entries per floor level
   const perFloor = new Map<number, FloorEntries>()
 
-  for (const room of house.rooms) {
+  for (let ri = 0; ri < house.rooms.length; ri++) {
+    const room = house.rooms[ri]
     const fl = room.roomType === 'stairwell' ? 0 : room.floorLevel
     const entries = getOrCreateFloorEntries(perFloor, fl)
 
     collectRoomGeometries(
       room,
+      ri,
       entries.front,
       entries.back,
+      entries.doors,
       shouldSuppressRoof(room, secondFloorFootprints),
       house.rooms,
       stairwellFootprints
@@ -194,6 +215,8 @@ export function buildHouseGroup(
   >()
 
   let mergedMeshCount = 0
+  const allDoors: DoorMeshInfo[] = []
+
   for (const [fl, entries] of perFloor) {
     const front = new THREE.Group()
     front.name = `front_f${fl}`
@@ -201,6 +224,15 @@ export function buildHouseGroup(
     back.name = `back_f${fl}`
     mergedMeshCount += addMergedMeshes(front, entries.front)
     mergedMeshCount += addMergedMeshes(back, entries.back)
+
+    // Add door pivots to appropriate front/back group
+    for (const door of entries.doors) {
+      const dirInfo = WALL_DIR_INFO[door.wallDir]
+      const group = dirInfo.isFront ? front : back
+      group.add(door.pivot)
+      allDoors.push(door)
+    }
+
     houseGroup.add(front)
     houseGroup.add(back)
     floorGroups.set(fl, { front, back })
@@ -212,6 +244,7 @@ export function buildHouseGroup(
     aabb: computeHouseAABB(house),
     roomsHash: roomsHash ?? JSON.stringify(house.rooms),
     mergedMeshCount,
+    doors: allDoors,
   }
 }
 
@@ -555,8 +588,10 @@ function collectGabledRoof(
 
 function collectRoomGeometries(
   room: RoomData,
+  roomIndex: number,
   frontEntries: GeoEntry[],
   backEntries: GeoEntry[],
+  doors: DoorMeshInfo[],
   suppressRoof: boolean = false,
   allRooms: RoomData[] = [],
   stairwellFootprints: RoomFootprint[] = []
@@ -569,10 +604,42 @@ function collectRoomGeometries(
   collectFloorGeometry(room, backEntries, stairwellFootprints)
   if (!suppressRoof) collectRoofGeometry(room, frontEntries, backEntries)
 
-  collectWallSegments(room.wallNorth, 'north', room, frontEntries, backEntries)
-  collectWallSegments(room.wallSouth, 'south', room, frontEntries, backEntries)
-  collectWallSegments(room.wallEast, 'east', room, frontEntries, backEntries)
-  collectWallSegments(room.wallWest, 'west', room, frontEntries, backEntries)
+  collectWallSegments(
+    room.wallNorth,
+    'north',
+    room,
+    roomIndex,
+    frontEntries,
+    backEntries,
+    doors
+  )
+  collectWallSegments(
+    room.wallSouth,
+    'south',
+    room,
+    roomIndex,
+    frontEntries,
+    backEntries,
+    doors
+  )
+  collectWallSegments(
+    room.wallEast,
+    'east',
+    room,
+    roomIndex,
+    frontEntries,
+    backEntries,
+    doors
+  )
+  collectWallSegments(
+    room.wallWest,
+    'west',
+    room,
+    roomIndex,
+    frontEntries,
+    backEntries,
+    doors
+  )
 }
 
 /**
@@ -767,8 +834,10 @@ function collectWallSegments(
   segments: WallConfig[],
   dir: WallDirection,
   room: RoomData,
+  roomIndex: number,
   frontEntries: GeoEntry[],
-  backEntries: GeoEntry[]
+  backEntries: GeoEntry[],
+  doors: DoorMeshInfo[]
 ) {
   const dirInfo = WALL_DIR_INFO[dir]
   const target = dirInfo.isFront ? frontEntries : backEntries
@@ -893,6 +962,53 @@ function collectWallSegments(
             openBot + openH
           ),
           textureIndex: texIdx,
+        })
+      }
+
+      // Door panel mesh with hinge pivot
+      if (seg.variant === 'door') {
+        const panelGeo = new THREE.BoxGeometry(
+          DOOR_WIDTH,
+          DOOR_HEIGHT,
+          WALL_THICKNESS
+        )
+        const panel = new THREE.Mesh(
+          panelGeo,
+          getHousingMaterial(DOOR_TEXTURE_IDX >= 0 ? DOOR_TEXTURE_IDX : texIdx)
+        )
+        panel.castShadow = true
+        panel.raycast = () => {} // Exclude from click-to-move raycasting
+
+        // Offset panel so its left edge is at the pivot (hinge on left side)
+        panel.position.set(DOOR_WIDTH / 2, DOOR_HEIGHT / 2, 0)
+
+        // Pivot group at the left edge of the door opening, at floor level
+        const pivot = new THREE.Group()
+        pivot.name = `door_r${roomIndex}_${dir}_${i}`
+
+        // Position pivot at the hinge edge (left side of opening in local wall space)
+        // The wall center is at (x, z). The hinge is at -DOOR_WIDTH/2 along the wall.
+        const hingeOffset = -DOOR_WIDTH / 2
+        if (dir === 'north' || dir === 'south') {
+          pivot.position.set(x + hingeOffset, yBase, z)
+        } else {
+          pivot.position.set(x, yBase, z + hingeOffset)
+          pivot.rotation.y = Math.PI / 2
+        }
+
+        pivot.add(panel)
+
+        const isOpen = seg.isOpen ?? false
+        if (isOpen) {
+          pivot.rotation.y += -Math.PI / 2
+        }
+
+        doors.push({
+          pivot,
+          roomIndex,
+          wallDir: dir,
+          segmentIndex: i,
+          isOpen,
         })
       }
     }

@@ -61,9 +61,12 @@ pub enum WallVariant {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WallConfig {
     pub variant: WallVariant,
     pub texture: u8,
+    #[serde(default)]
+    pub is_open: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

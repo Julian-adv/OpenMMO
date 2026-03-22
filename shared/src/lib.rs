@@ -231,6 +231,12 @@ pub enum ClientMessage {
     RemoveHouse {
         house_id: String,
     },
+    ToggleDoor {
+        house_id: String,
+        room_index: u32,
+        wall_dir: String,
+        segment_index: u32,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -358,6 +364,13 @@ pub enum ServerMessage {
     },
     HousesInArea {
         houses: Vec<housing::HouseData>,
+    },
+    DoorToggled {
+        house_id: String,
+        room_index: u32,
+        wall_dir: String,
+        segment_index: u32,
+        is_open: bool,
     },
 }
 
