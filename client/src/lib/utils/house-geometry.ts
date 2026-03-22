@@ -20,7 +20,7 @@ const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 1.0
 const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
-const LANDING_DEPTH = 0.5
+export const LANDING_DEPTH = 0.5
 const ROOF_OVERHANG = 0.3
 const ROOF_PITCH: Record<string, number> = {
   gabled: 0.8,

@@ -761,8 +761,13 @@
       const a = rooms[i]
       for (let j = i + 1; j < rooms.length; j++) {
         const b = rooms[j]
-        // Only open walls between rooms on the same floor
-        if (a.floorLevel !== b.floorLevel) continue
+        // Open walls between rooms on the same floor,
+        // AND between stairwells (floorLevel=0) and 2F rooms (floorLevel=1)
+        const sameFloor = a.floorLevel === b.floorLevel
+        const stairwellCrossFloor =
+          (a.roomType === 'stairwell' && b.floorLevel === a.floorLevel + 1) ||
+          (b.roomType === 'stairwell' && a.floorLevel === b.floorLevel + 1)
+        if (!sameFloor && !stairwellCrossFloor) continue
 
         // N/S: a's south touches b's north
         if (a.localZ + a.sizeZ === b.localZ) {

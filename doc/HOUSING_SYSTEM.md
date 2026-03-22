@@ -44,6 +44,7 @@ pub struct RoomData {
 pub struct WallConfig {
     pub variant: WallVariant,
     pub texture: u8,
+    pub is_open: bool,          // 문 열림 상태 (WithDoor 전용, 기본 false)
 }
 
 pub enum WallVariant {
@@ -201,5 +202,34 @@ HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
 
 ### Phase 5: Optimization
 
-1. InstancedMesh 배칭 (동일 벽 타입끼리)
-2. 프로파일링 + 드로우콜 최적화
+1. ✅ InstancedMesh 배칭 → merged geometry per house
+2. ✅ 프로파일링 + 드로우콜 최적화
+
+### Phase 6: Wall Collision
+
+1. 벽을 축 정렬 선분(plane segment)으로 표현 — 남/북벽은 Z 고정 X 범위, 동/서벽은 X 고정 Z 범위
+2. 1m 세그먼트 단위로 Open 구간 제외, Door는 `is_open` 상태에 따라 제외/포함
+3. `housingManager`에 `checkWallCollision(from, to)` 추가 — 이동 벡터와 선분 교차 검사
+4. Window/Solid → 충돌, Open → 통과, Door → 문 상태에 따라
+5. 플레이어 이동 로직에서 충돌 검사 호출
+
+### Phase 7: Doors & Windows Interaction
+
+1. `WallConfig`에 `is_open: bool` 추가 (문 전용, 기본 false)
+2. 문 세그먼트의 상단 벽(문 위 0.8m)은 merged geometry에 유지, 문짝(`DOOR_WIDTH × DOOR_HEIGHT`)만 별도 Mesh로 분리 → 힌지 기준 회전 애니메이션
+3. 상호작용 키(E) 또는 마우스 클릭으로 열기/닫기, 서버 동기화
+4. 닫힌 문 = 충돌, 열린 문 = 통과 (Phase 6 충돌 시스템 연동)
+
+### Phase 8: Third Floor+ (Optional)
+
+1. `floor_level` 최대 4층 (`floor_level` 0~3)
+2. visibility 로직 N층 일반화: 플레이어 층 이상의 앞벽+지붕 숨기기
+3. `hasFloorSupport` 검증 N층 확장
+4. 에디터 층 선택 UI 확장
+
+### Phase 9: Roof Connection
+
+1. 인접 방의 지붕 교차선(valley line) 계산
+2. 작은 방 지붕 끝단을 큰 방 경사면 높이에 맞춰 조정
+3. Valley 부분에 이음새 삼각형 메쉬 추가
+4. ridge direction이 다른 경우(직각 배치)의 교차선 처리

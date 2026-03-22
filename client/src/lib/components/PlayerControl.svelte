@@ -20,6 +20,7 @@
   } from '../utils/movementUtils'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { playerFloorOffset } from '../stores/housingStore'
+  import { housingManager } from '../managers/housingManager'
   import { get } from 'svelte/store'
 
   interface Props {
@@ -56,6 +57,14 @@
   // Character rotation and current speed
   let playerRotation = $state(0)
   let currentSpeed = $state(0)
+
+  function stopMovement() {
+    isMoving = false
+    movementTarget = null
+    movementState = null
+    currentSpeed = 0
+    updatePlayerState()
+  }
 
   // Wrapper for sending move packets to track last sent position
   function sendPlayerMove(position: Position, rotation: number) {
@@ -377,6 +386,21 @@
     playerRotation = result.rotation
 
     if (result.arrived) {
+      // Check wall collision before finalizing arrival
+      if (
+        movementTarget &&
+        housingManager.isMovementBlocked(
+          currentPos.x,
+          currentPos.z,
+          movementTarget.x,
+          movementTarget.z,
+          currentPos.y
+        )
+      ) {
+        stopMovement()
+        return
+      }
+
       // Movement complete
       gameStore.update((state) => {
         if (state.currentPlayer && movementTarget) {
@@ -389,18 +413,27 @@
       // Send final position to server
       sendPlayerMove(movementTarget, playerRotation)
 
-      isMoving = false
-      movementTarget = null
-      movementState = null
-      currentSpeed = 0
-      updatePlayerState()
+      stopMovement()
 
       // If we were chasing a target, attack it now
       if (combatController.isInCombat) {
         initiateAttack(combatController.targetMonsterId!)
       }
     } else {
-      // Continue movement
+      // Check wall collision before updating position
+      if (
+        housingManager.isMovementBlocked(
+          currentPos.x,
+          currentPos.z,
+          result.newPos.x,
+          result.newPos.z,
+          currentPos.y
+        )
+      ) {
+        stopMovement()
+        return
+      }
+
       gameStore.update((state) => {
         if (state.currentPlayer) {
           const y = sampleHeight(result.newPos.x, result.newPos.z)
@@ -436,13 +469,27 @@
       // Use fixed speed for keyboard movement (instant response)
       currentSpeed = MOVEMENT_CONFIG.maxSpeed
       const speed = MOVEMENT_CONFIG.maxSpeed * (1000 / 120 / 1000) // Adjust for frame rate (120 FPS target)
-      const newX = currentPlayer.position.x + dir.x * speed
-      const newZ = currentPlayer.position.z + dir.z * speed
+      let newX = currentPlayer.position.x + dir.x * speed
+      let newZ = currentPlayer.position.z + dir.z * speed
+
+      // Wall collision check (use current Y for correct floor matching)
+      if (
+        housingManager.isMovementBlocked(
+          currentPlayer.position.x,
+          currentPlayer.position.z,
+          newX,
+          newZ,
+          currentPlayer.position.y
+        )
+      ) {
+        stopMovement()
+        return
+      }
+
+      const groundY = sampleHeight(newX, newZ)
 
       // Calculate rotation based on movement direction
       playerRotation = Math.atan2(dir.x, dir.z)
-
-      const groundY = sampleHeight(newX, newZ)
 
       gameStore.update((state) => {
         if (state.currentPlayer) {
