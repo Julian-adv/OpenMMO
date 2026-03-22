@@ -140,6 +140,14 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 - wood_trunk_wall_1k.glb -> https://polyhaven.com/a/wood_trunk_wall
 - wood_shutter_1k.glb -> https://polyhaven.com/a/wood_shutter
 - wood_plank_wall_1k.glb -> https://polyhaven.com/a/wood_plank_wall
+- clay_roof_tiles_02_1k.glb -> https://polyhaven.com/a/clay_roof_tiles_02
+- clay_roof_tiles_03_1k.glb -> https://polyhaven.com/a/clay_roof_tiles_03
+- grey_roof_tiles_02_1k.glb -> https://polyhaven.com/a/grey_roof_tiles_02
+- medieval_blocks_03_1k.glb -> https://polyhaven.com/a/medieval_blocks_03
+- red_brick_1k.glb -> https://polyhaven.com/a/red_brick
+- reed_roof_03_1k.glb -> https://polyhaven.com/a/reed_roof_03
+- sandstone_blocks_04_1k.glb -> https://polyhaven.com/a/sandstone_blocks_04
+- worn_mossy_plasterwall_1k.glb -> https://polyhaven.com/a/worn_mossy_plasterwall
 
 ## BGM
 
