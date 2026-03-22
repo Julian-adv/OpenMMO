@@ -2,23 +2,22 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { onDestroy } from 'svelte'
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
+  import { SvelteMap } from 'svelte/reactivity'
   import type { HouseData } from '../../types/housing'
   import {
-    buildHouseGeometry,
+    buildHouseGroup,
     disposeHouseGroup,
     DEFAULT_WALL_HEIGHT,
     FLOOR_THICKNESS,
     OFFSCREEN_Y,
     floorYBase,
     getStairwellYOffset,
-    type HouseGeometryResult,
+    type HouseGroupResult,
   } from '../../utils/house-geometry'
   import {
     initHousingTextures,
     disposeHousingMaterials,
   } from '../../utils/housing-textures'
-  import { HousingInstancePool } from '../../utils/housing-instance-pool'
   import { housingManager } from '../../managers/housingManager'
   import {
     TERRAIN_TILE_SIZE,
@@ -37,15 +36,15 @@
   const housingGroup = new THREE.Group()
   housingGroup.name = 'housingLayer'
 
-  const pool = new HousingInstancePool(housingGroup)
-  const houses = new SvelteMap<string, HouseGeometryResult>()
+  const houses = new SvelteMap<string, HouseGroupResult>()
   let playerInsideHouseId: string | null = null
   let playerInsideFloor = -1
   let lastFloorOffset = 0
   const _tmpVec = new THREE.Vector3()
   // Preallocated for per-frame room detection (avoid GC)
   const _allRooms: { house: HouseData; roomIndex: number }[] = []
-  const _seenRooms = new SvelteSet<string>()
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const _seenRooms = new Set<string>()
   let lastChunkX = NaN
   let lastChunkZ = NaN
 
@@ -60,10 +59,9 @@
   onDestroy(() => {
     unsubHouses()
     for (const [, result] of houses) {
-      disposeHouseGroup(result.mergedGroup)
+      disposeHouseGroup(result.houseGroup)
     }
     houses.clear()
-    pool.dispose()
     disposeHousingMaterials()
   })
 
@@ -73,9 +71,8 @@
     // Remove houses no longer present
     for (const [id, result] of houses) {
       if (!incomingById.has(id)) {
-        pool.removeHouse(id)
-        housingGroup.remove(result.mergedGroup)
-        disposeHouseGroup(result.mergedGroup)
+        housingGroup.remove(result.houseGroup)
+        disposeHouseGroup(result.houseGroup)
         houses.delete(id)
       }
     }
@@ -87,16 +84,12 @@
       if (existing && existing.roomsHash === newHash) continue
 
       if (existing) {
-        pool.removeHouse(data.id)
-        housingGroup.remove(existing.mergedGroup)
-        disposeHouseGroup(existing.mergedGroup)
+        housingGroup.remove(existing.houseGroup)
+        disposeHouseGroup(existing.houseGroup)
       }
-      const result = buildHouseGeometry(data)
-      pool.addHouse(data.id, result.instances, data.origin)
-      // Free instance descriptors — only needed for pool.addHouse
-      result.instances.length = 0
+      const result = buildHouseGroup(data, newHash)
       houses.set(data.id, result)
-      housingGroup.add(result.mergedGroup)
+      housingGroup.add(result.houseGroup)
 
       // Re-apply visibility if player is inside this house
       if (data.id === playerInsideHouseId) {
@@ -104,12 +97,10 @@
       }
     }
 
-    pool.flush()
-
     if (houses.size > 0 && get(debugVisible)) {
       const s = getStats()
       console.log(
-        `[housing] ${s.houses} houses | ${s.instanceBatches} batches, ${s.instanceCount} instances | ${s.mergedMeshes} merged meshes | ${s.totalDrawCalls} draw calls`
+        `[housing] ${s.houses} houses | ${s.mergedMeshes} merged meshes (draw calls)`
       )
     }
   }
@@ -215,17 +206,14 @@
       if (playerInsideHouseId) {
         const prev = houses.get(playerInsideHouseId)
         if (prev) resetFloorVisibility(prev)
-        pool.resetVisibility(playerInsideHouseId)
       }
       // Apply new visibility
       if (insideId) {
         const curr = houses.get(insideId)
         if (curr) applyFloorVisibility(curr, effectiveFloor)
-        pool.setVisibility(insideId, effectiveFloor)
       }
       playerInsideHouseId = insideId
       playerInsideFloor = effectiveFloor
-      pool.flush()
     }
 
     if (newOffset !== lastFloorOffset) {
@@ -235,15 +223,15 @@
   }
 
   /**
-   * Hide merged (non-instanceable) parts based on player floor.
+   * Hide front/back groups based on player floor.
    * On 1F: hide 1F front + all of 2F (front+back)
    * On 2F: hide 2F front only, 1F stays fully visible
    */
   function applyFloorVisibility(
-    result: HouseGeometryResult,
+    result: HouseGroupResult,
     floor: number
   ) {
-    for (const [fl, groups] of result.mergedFloorGroups) {
+    for (const [fl, groups] of result.floorGroups) {
       if (fl === floor) {
         groups.front.position.y = OFFSCREEN_Y
       } else if (fl > floor) {
@@ -254,8 +242,8 @@
   }
 
   /** Restore merged groups to normal position */
-  function resetFloorVisibility(result: HouseGeometryResult) {
-    for (const [, groups] of result.mergedFloorGroups) {
+  function resetFloorVisibility(result: HouseGroupResult) {
+    for (const [, groups] of result.floorGroups) {
       groups.front.position.y = 0
       groups.back.position.y = 0
     }
@@ -267,17 +255,13 @@
 
   /** Return housing draw call stats for profiling. */
   export function getStats() {
-    const poolStats = pool.getStats()
     let mergedMeshes = 0
     for (const [, result] of houses) {
       mergedMeshes += result.mergedMeshCount
     }
     return {
       houses: houses.size,
-      instanceBatches: poolStats.batches,
-      instanceCount: poolStats.instances,
       mergedMeshes,
-      totalDrawCalls: poolStats.batches + mergedMeshes,
     }
   }
 </script>

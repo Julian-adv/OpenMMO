@@ -11,7 +11,6 @@ import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { HouseData, RoomData, WallConfig } from '../types/housing'
 import { getHousingMaterial, HOUSING_TEXTURES } from './housing-textures'
-import type { InstanceDescriptor } from './housing-instance-pool'
 
 export const WALL_THICKNESS = 0.1
 export const FLOOR_THICKNESS = 0.1
@@ -57,17 +56,6 @@ export interface HouseGroupResult {
   floorGroups: Map<number, { front: THREE.Group; back: THREE.Group }>
   aabb: THREE.Box3
   /** JSON hash of rooms for change detection */
-  roomsHash: string
-}
-
-export interface HouseGeometryResult {
-  /** Instance descriptors for the pool (local-space positions). */
-  instances: InstanceDescriptor[]
-  /** Merged group for non-instanceable parts (door/window frames, stairwells). */
-  mergedGroup: THREE.Group
-  /** Per-floor groups within mergedGroup for visibility control. */
-  mergedFloorGroups: Map<number, { front: THREE.Group; back: THREE.Group }>
-  aabb: THREE.Box3
   roomsHash: string
   /** Number of merged meshes (for profiling). */
   mergedMeshCount: number
@@ -164,7 +152,10 @@ function shouldSuppressRoof(
   return true
 }
 
-export function buildHouseGroup(house: HouseData): HouseGroupResult {
+export function buildHouseGroup(
+  house: HouseData,
+  roomsHash?: string
+): HouseGroupResult {
   const houseGroup = new THREE.Group()
   houseGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
   houseGroup.name = `house_${house.id}`
@@ -202,13 +193,14 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
     { front: THREE.Group; back: THREE.Group }
   >()
 
+  let mergedMeshCount = 0
   for (const [fl, entries] of perFloor) {
     const front = new THREE.Group()
     front.name = `front_f${fl}`
     const back = new THREE.Group()
     back.name = `back_f${fl}`
-    addMergedMeshes(front, entries.front)
-    addMergedMeshes(back, entries.back)
+    mergedMeshCount += addMergedMeshes(front, entries.front)
+    mergedMeshCount += addMergedMeshes(back, entries.back)
     houseGroup.add(front)
     houseGroup.add(back)
     floorGroups.set(fl, { front, back })
@@ -218,247 +210,8 @@ export function buildHouseGroup(house: HouseData): HouseGroupResult {
     houseGroup,
     floorGroups,
     aabb: computeHouseAABB(house),
-    roomsHash: JSON.stringify(house.rooms),
-  }
-}
-
-/**
- * Build instance descriptors + merged geometry for a house.
- * Solid walls → InstanceDescriptor (pool).
- * Floors, roofs, door/window frames, stairwell steps → merged geometry (per-house group).
- */
-export function buildHouseGeometry(house: HouseData): HouseGeometryResult {
-  const mergedGroup = new THREE.Group()
-  mergedGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
-  mergedGroup.name = `house_merged_${house.id}`
-
-  const instances: InstanceDescriptor[] = []
-
-  const secondFloorFootprints = collectFootprints(
-    house.rooms,
-    (r) => r.floorLevel >= 1
-  )
-  const stairwellFootprints = collectFootprints(
-    house.rooms,
-    (r) => r.roomType === 'stairwell'
-  )
-
-  // Per-floor merged geometry entries (door/window frames + stairwells only)
-  const perFloor = new Map<number, FloorEntries>()
-
-  for (const room of house.rooms) {
-    const fl = room.roomType === 'stairwell' ? 0 : room.floorLevel
-    const entries = getOrCreateFloorEntries(perFloor, fl)
-
-    if (room.roomType === 'stairwell') {
-      // Stairwell steps → merged (variable geometry)
-      collectStairwellGeometries(room, entries.back, house.rooms)
-      continue
-    }
-
-    // Floor → merged geometry (back)
-    collectFloorGeometry(room, entries.back, stairwellFootprints)
-
-    // Roof → merged geometry (front + back for gable walls), suppressed if covered by 2F
-    if (!shouldSuppressRoof(room, secondFloorFootprints)) {
-      collectRoofGeometry(room, entries.front, entries.back)
-    }
-
-    // Walls: solid → instance, door/window → merged
-    collectWallSegmentsInstanced(
-      room.wallNorth,
-      'north',
-      room,
-      instances,
-      entries.front,
-      entries.back
-    )
-    collectWallSegmentsInstanced(
-      room.wallSouth,
-      'south',
-      room,
-      instances,
-      entries.front,
-      entries.back
-    )
-    collectWallSegmentsInstanced(
-      room.wallEast,
-      'east',
-      room,
-      instances,
-      entries.front,
-      entries.back
-    )
-    collectWallSegmentsInstanced(
-      room.wallWest,
-      'west',
-      room,
-      instances,
-      entries.front,
-      entries.back
-    )
-  }
-
-  // Build merged per-floor groups (door/window frames + stairwells)
-  const mergedFloorGroups = new Map<
-    number,
-    { front: THREE.Group; back: THREE.Group }
-  >()
-
-  let mergedMeshCount = 0
-  for (const [fl, entries] of perFloor) {
-    const front = new THREE.Group()
-    front.name = `merged_front_f${fl}`
-    const back = new THREE.Group()
-    back.name = `merged_back_f${fl}`
-    mergedMeshCount += addMergedMeshes(front, entries.front)
-    mergedMeshCount += addMergedMeshes(back, entries.back)
-    mergedGroup.add(front)
-    mergedGroup.add(back)
-    mergedFloorGroups.set(fl, { front, back })
-  }
-
-  return {
-    instances,
-    mergedGroup,
-    mergedFloorGroups,
-    aabb: computeHouseAABB(house),
-    roomsHash: JSON.stringify(house.rooms),
+    roomsHash: roomsHash ?? JSON.stringify(house.rooms),
     mergedMeshCount,
-  }
-}
-
-/**
- * Wall segment collector for instanced path.
- * Solid → InstanceDescriptor, door/window frames → GeoEntry (merged).
- */
-function collectWallSegmentsInstanced(
-  segments: WallConfig[],
-  dir: WallDirection,
-  room: RoomData,
-  instances: InstanceDescriptor[],
-  frontEntries: GeoEntry[],
-  backEntries: GeoEntry[]
-) {
-  const dirInfo = WALL_DIR_INFO[dir]
-  const mergedTarget = dirInfo.isFront ? frontEntries : backEntries
-  const wh = room.wallHeight
-  const yBase = floorYBase(room.floorLevel, wh) + FLOOR_THICKNESS / 2
-  const { localX, localZ, sizeX, sizeZ } = room
-
-  for (let i = 0; i < segments.length; i++) {
-    const seg = segments[i]
-    if (seg.variant === 'open') continue
-
-    const texIdx = seg.texture % HOUSING_TEXTURES.length
-    const segCenter = i + 0.5
-    let x: number, z: number, rotY: number
-
-    const halfT = WALL_THICKNESS / 2
-    switch (dir) {
-      case 'north': {
-        x = localX + segCenter
-        z = localZ + halfT
-        rotY = 0
-        break
-      }
-      case 'south': {
-        x = localX + segCenter
-        z = localZ + sizeZ - halfT
-        rotY = 0
-        break
-      }
-      case 'east': {
-        x = localX + sizeX - halfT
-        z = localZ + segCenter
-        rotY = Math.PI / 2
-        break
-      }
-      case 'west': {
-        x = localX + halfT
-        z = localZ + segCenter
-        rotY = Math.PI / 2
-        break
-      }
-    }
-
-    if (seg.variant === 'solid') {
-      // Solid wall → instance
-      instances.push({
-        template: 'wall',
-        textureIndex: texIdx,
-        x,
-        y: yBase + wh / 2,
-        z,
-        rotY,
-        floorLevel: room.floorLevel,
-        isFront: dirInfo.isFront,
-      })
-    } else {
-      // Door/window frame pieces → merged geometry (variable shapes)
-      const openW = seg.variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
-      const openH = seg.variant === 'door' ? DOOR_HEIGHT : WINDOW_HEIGHT
-      const openBot = seg.variant === 'door' ? 0 : WINDOW_BOTTOM
-      const sideW = (1 - openW) / 2
-
-      if (sideW > 0.01) {
-        for (const sign of [-1, 1]) {
-          const offset = sign * (0.5 - sideW / 2)
-          const sx = dir === 'north' || dir === 'south' ? x + offset : x
-          const sz = dir === 'east' || dir === 'west' ? z + offset : z
-          const uOffX = sign === -1 ? 0 : 1 - sideW
-          mergedTarget.push({
-            geo: bakedGeo(
-              new THREE.BoxGeometry(sideW, wh, WALL_THICKNESS),
-              sx,
-              yBase + wh / 2,
-              sz,
-              rotY,
-              sideW,
-              wh,
-              uOffX,
-              0
-            ),
-            textureIndex: texIdx,
-          })
-        }
-      }
-
-      if (openBot > 0.01) {
-        mergedTarget.push({
-          geo: bakedGeo(
-            new THREE.BoxGeometry(openW, openBot, WALL_THICKNESS),
-            x,
-            yBase + openBot / 2,
-            z,
-            rotY,
-            openW,
-            openBot,
-            sideW,
-            0
-          ),
-          textureIndex: texIdx,
-        })
-      }
-
-      const topH = wh - openBot - openH
-      if (topH > 0.01) {
-        mergedTarget.push({
-          geo: bakedGeo(
-            new THREE.BoxGeometry(openW, topH, WALL_THICKNESS),
-            x,
-            yBase + openBot + openH + topH / 2,
-            z,
-            rotY,
-            openW,
-            topH,
-            sideW,
-            openBot + openH
-          ),
-          textureIndex: texIdx,
-        })
-      }
-    }
   }
 }
 
@@ -479,6 +232,7 @@ function addMergedMeshes(group: THREE.Group, entries: GeoEntry[]): number {
   let count = 0
   for (const [texIdx, geos] of byTex) {
     const merged = mergeGeometries(geos, false)
+    for (const g of geos) g.dispose()
     if (merged) {
       const mesh = new THREE.Mesh(merged, getHousingMaterial(texIdx))
       mesh.castShadow = true
