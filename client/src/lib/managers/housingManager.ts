@@ -3,8 +3,14 @@ import {
   TERRAIN_TILE_SIZE,
   getTerrainChunkFromPosition,
 } from '../components/game-scene/terrain-utils'
-import type { HouseData } from '../types/housing'
-import { floorYBase } from '../utils/house-geometry'
+import type { HouseData, WallConfig } from '../types/housing'
+import { floorYBase, LANDING_DEPTH } from '../utils/house-geometry'
+
+/** Virtual wall half-thickness — player stops this far from the wall plane */
+const WALL_HALF_THICKNESS = 0.3
+
+/** Y threshold above floor base: below this the player is on the ground floor, not on stairs */
+const GROUND_Y_THRESHOLD = 1.0
 
 function chunkKey(cx: number, cz: number): string {
   return `${cx},${cz}`
@@ -215,6 +221,247 @@ export class HousingManager {
       }
     }
     return results
+  }
+
+  /**
+   * Check if movement from→to is blocked by any wall.
+   * Pure line-segment vs wall-line intersection — no circular proximity check.
+   */
+  isMovementBlocked(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    y: number
+  ): boolean {
+    // Movement AABB for fast rejection
+    const minX = Math.min(fromX, toX) - WALL_HALF_THICKNESS
+    const maxX = Math.max(fromX, toX) + WALL_HALF_THICKNESS
+    const minZ = Math.min(fromZ, toZ) - WALL_HALF_THICKNESS
+    const maxZ = Math.max(fromZ, toZ) + WALL_HALF_THICKNESS
+
+    for (const house of this.housesById.values()) {
+      for (const room of house.rooms) {
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+
+        // AABB rejection: skip rooms nowhere near the movement
+        if (
+          maxX < rx ||
+          minX > rx + room.sizeX ||
+          maxZ < rz ||
+          minZ > rz + room.sizeZ
+        )
+          continue
+
+        const ryBase =
+          house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
+
+        if (y < ryBase - 0.5 || y >= ryBase + room.wallHeight) {
+          // Stairwell hole check (2F over a 1F stairwell)
+          if (room.roomType === 'stairwell' && room.floorLevel === 0) {
+            const ry2F = house.origin.y + floorYBase(1, room.wallHeight)
+            if (y >= ry2F - 0.5 && y < ry2F + room.wallHeight) {
+              const fromInFootprint =
+                fromX > rx &&
+                fromX < rx + room.sizeX &&
+                fromZ > rz &&
+                fromZ < rz + room.sizeZ
+              if (
+                !fromInFootprint &&
+                this.insideStairwellHole(toX, toZ, rx, rz, room)
+              ) {
+                return true
+              }
+            }
+          }
+          continue
+        }
+
+        if (room.roomType === 'stairwell') {
+          if (
+            this.stairwellWallBlocks(
+              fromX,
+              fromZ,
+              toX,
+              toZ,
+              rx,
+              rz,
+              room,
+              y,
+              ryBase
+            )
+          )
+            return true
+        } else if (
+          this.segmentCrossesWall(
+            fromX,
+            fromZ,
+            toX,
+            toZ,
+            rx,
+            rz,
+            room.sizeZ,
+            room.wallWest
+          ) ||
+          this.segmentCrossesWall(
+            fromX,
+            fromZ,
+            toX,
+            toZ,
+            rx + room.sizeX,
+            rz,
+            room.sizeZ,
+            room.wallEast
+          ) ||
+          this.segmentCrossesWall(
+            fromZ,
+            fromX,
+            toZ,
+            toX,
+            rz,
+            rx,
+            room.sizeX,
+            room.wallNorth
+          ) ||
+          this.segmentCrossesWall(
+            fromZ,
+            fromX,
+            toZ,
+            toX,
+            rz + room.sizeZ,
+            rx,
+            room.sizeX,
+            room.wallSouth
+          )
+        ) {
+          return true
+        }
+      }
+    }
+
+    return false
+  }
+
+  /** Check if movement segment crosses or approaches a segmented wall. */
+  private segmentCrossesWall(
+    fromA: number,
+    fromB: number,
+    toA: number,
+    toB: number,
+    wallA: number,
+    wallStartB: number,
+    wallLen: number,
+    segments: WallConfig[]
+  ): boolean {
+    return this.crossesWallLine(fromA, fromB, toA, toB, wallA, (b) => {
+      const segIdx = Math.floor(b - wallStartB)
+      return (
+        segIdx >= 0 &&
+        segIdx < wallLen &&
+        segments[segIdx].variant !== 'open' &&
+        segments[segIdx].variant !== 'door'
+      )
+    })
+  }
+
+  /** Virtual stairwell walls: sides along stair axis + high-end ground blocker. */
+  private stairwellWallBlocks(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    rx: number,
+    rz: number,
+    room: { sizeX: number; sizeZ: number },
+    y: number,
+    ryBase: number
+  ): boolean {
+    const alongZ = room.sizeZ >= room.sizeX
+    const onGround = y < ryBase + GROUND_Y_THRESHOLD
+
+    if (alongZ) {
+      const zStart = rz + LANDING_DEPTH
+      const zEnd = rz + room.sizeZ - LANDING_DEPTH
+      const inZRange = (b: number) => b >= zStart && b <= zEnd
+      const inXRange = (b: number) => b >= rx && b <= rx + room.sizeX
+      if (
+        this.crossesWallLine(fromX, fromZ, toX, toZ, rx, inZRange) ||
+        this.crossesWallLine(fromX, fromZ, toX, toZ, rx + room.sizeX, inZRange)
+      )
+        return true
+      if (
+        onGround &&
+        this.crossesWallLine(fromZ, fromX, toZ, toX, rz + room.sizeZ, inXRange)
+      )
+        return true
+    } else {
+      const xStart = rx + LANDING_DEPTH
+      const xEnd = rx + room.sizeX - LANDING_DEPTH
+      const inXRange = (b: number) => b >= xStart && b <= xEnd
+      const inZRange = (b: number) => b >= rz && b <= rz + room.sizeZ
+      if (
+        this.crossesWallLine(fromZ, fromX, toZ, toX, rz, inXRange) ||
+        this.crossesWallLine(fromZ, fromX, toZ, toX, rz + room.sizeZ, inXRange)
+      )
+        return true
+      if (
+        onGround &&
+        this.crossesWallLine(fromX, fromZ, toX, toZ, rx + room.sizeX, inZRange)
+      )
+        return true
+    }
+
+    return false
+  }
+
+  /**
+   * Core crossing + proximity check against a wall line at A=wallA.
+   * hitTest(b) determines if the crossing/proximity point is on a solid part.
+   */
+  private crossesWallLine(
+    fromA: number,
+    fromB: number,
+    toA: number,
+    toB: number,
+    wallA: number,
+    hitTest: (b: number) => boolean
+  ): boolean {
+    if (toA !== fromA && (fromA - wallA) * (toA - wallA) <= 0) {
+      const t = (wallA - fromA) / (toA - fromA)
+      if (hitTest(fromB + t * (toB - fromB))) return true
+    }
+
+    const toDist = Math.abs(toA - wallA)
+    if (toDist < WALL_HALF_THICKNESS && toDist < Math.abs(fromA - wallA)) {
+      if (hitTest(toB)) return true
+    }
+
+    return false
+  }
+
+  private insideStairwellHole(
+    x: number,
+    z: number,
+    rx: number,
+    rz: number,
+    room: { sizeX: number; sizeZ: number }
+  ): boolean {
+    const t = WALL_HALF_THICKNESS
+    if (
+      x <= rx - t ||
+      x >= rx + room.sizeX + t ||
+      z <= rz - t ||
+      z >= rz + room.sizeZ + t
+    )
+      return false
+
+    const alongZ = room.sizeZ >= room.sizeX
+    if (alongZ) {
+      return z < rz + room.sizeZ - LANDING_DEPTH
+    } else {
+      return x < rx + room.sizeX - LANDING_DEPTH
+    }
   }
 
   /** Update local cache without server call (triggers geometry rebuild). */
