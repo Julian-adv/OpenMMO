@@ -535,16 +535,26 @@
       loopProfiler.record('monsterLogic', performance.now() - monsterLogicStart)
 
       // Update housing (player-inside detection + front wall toggling)
-      housingLayerRef?.update(deltaTime)
+      {
+        const housingStart = performance.now()
+        housingLayerRef?.update(deltaTime)
+        loopProfiler.record('housingUpdate', performance.now() - housingStart)
+      }
 
       // Update grass wind & trail
-      grassLayerRef?.update(deltaTime)
+      {
+        const grassStart = performance.now()
+        grassLayerRef?.update(deltaTime)
+        loopProfiler.record('grassUpdate', performance.now() - grassStart)
+      }
 
       // Update wind-blown particles (only when grass is visible nearby)
       {
+        const windStart = performance.now()
         const windState = grassLayerRef?.getWindState()
         const grassCount = grassLayerRef?.getPlayerChunkGrassCount() ?? 0
         if (windState) windParticlesRef?.update(deltaTime, camera, windState, grassCount)
+        loopProfiler.record('windParticles', performance.now() - windStart)
       }
 
       // Update camera with preserved offset
@@ -574,10 +584,16 @@
         waterCamDir = waterCamDirTmp.clone()
       }
 
+      // Track draw calls across all render passes in this frame.
+      // renderer.info auto-resets on each render() call, so we snapshot after each pass.
       // Render wetness pre-pass (small 256x256 RT per water tile).
       // Not gated behind multiPassReady — it's a tiny RT with negligible
       // pipeline overhead, and deferring it causes blocky wet sand.
-      waterLayerRef?.renderWetness(renderer)
+      {
+        const wetnessStart = performance.now()
+        waterLayerRef?.renderWetness(renderer)
+        loopProfiler.record('wetnessPass', performance.now() - wetnessStart)
+      }
 
       // Count warmup frames after loading to let main pass compile pipelines
       // before adding refraction/reflection overhead.
@@ -589,67 +605,75 @@
       }
 
       // Render refraction pass (scene without water or entities — terrain only)
-      if (refractionManager && $refractionEnabled && multiPassReady) {
-        if (camera) refractionManager.setCamera(camera)
-        if (waterGroup) refractionManager.setWaterGroup(waterGroup)
+      {
+        const refractionStart = performance.now()
+        if (refractionManager && $refractionEnabled && multiPassReady) {
+          if (camera) refractionManager.setCamera(camera)
+          if (waterGroup) refractionManager.setWaterGroup(waterGroup)
 
-        // Hide brush/grid overlay during refraction so it doesn't show through water
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const brushUniforms = (terrainMeshes[0]?.material as any)?.userData?.uniforms
-        let savedBrushActive: number | undefined
-        let savedGridVisible: number | undefined
-        if (brushUniforms) {
-          savedBrushActive = brushUniforms.brushActive.value
-          savedGridVisible = brushUniforms.gridVisible.value
-          brushUniforms.brushActive.value = 0.0
-          brushUniforms.gridVisible.value = 0.0
+          // Hide brush/grid overlay during refraction so it doesn't show through water
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const brushUniforms = (terrainMeshes[0]?.material as any)?.userData?.uniforms
+          let savedBrushActive: number | undefined
+          let savedGridVisible: number | undefined
+          if (brushUniforms) {
+            savedBrushActive = brushUniforms.brushActive.value
+            savedGridVisible = brushUniforms.gridVisible.value
+            brushUniforms.brushActive.value = 0.0
+            brushUniforms.gridVisible.value = 0.0
+          }
+
+          // Hide entities, grass, and particles during refraction
+          const refMgrRender = () => refractionManager!.render()
+          renderWithHiddenGroups(
+            [entityClipGroup, grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
+            refMgrRender,
+          )
+
+          if (brushUniforms) {
+            brushUniforms.brushActive.value = savedBrushActive
+            brushUniforms.gridVisible.value = savedGridVisible
+          }
+        } else if (refractionManager) {
+          refractionManager.clear()
         }
-
-        // Hide entities, grass, and particles during refraction
-        const refMgrRender = () => refractionManager!.render()
-        renderWithHiddenGroups(
-          [entityClipGroup, grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
-          refMgrRender,
-        )
-
-        if (brushUniforms) {
-          brushUniforms.brushActive.value = savedBrushActive
-          brushUniforms.gridVisible.value = savedGridVisible
-        }
-      } else if (refractionManager) {
-        refractionManager.clear()
+        loopProfiler.record('refractionPass', performance.now() - refractionStart)
       }
 
       // Render reflection pass (entities only, mirrored camera)
-      if (reflectionManager && $reflectionEnabled && multiPassReady) {
-        if (camera) reflectionManager.setCamera(camera)
-        reflectionManager.setTerrainGroup(terrainGroup ?? null)
-        if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
-        reflectionManager.setHousingGroup(housingLayerRef?.getGroup() ?? null)
-        if (entityClipGroup) reflectionManager.setEntityClipGroup(entityClipGroup)
+      {
+        const reflectionStart = performance.now()
+        if (reflectionManager && $reflectionEnabled && multiPassReady) {
+          if (camera) reflectionManager.setCamera(camera)
+          reflectionManager.setTerrainGroup(terrainGroup ?? null)
+          if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
+          reflectionManager.setHousingGroup(housingLayerRef?.getGroup() ?? null)
+          if (entityClipGroup) reflectionManager.setEntityClipGroup(entityClipGroup)
 
-        // Hide nametags/HP bars during reflection render
-        const nametagGroups: THREE.Group[] = []
-        const ntCurrent = currentPlayerModel?.getNametagGroup()
-        if (ntCurrent) { nametagGroups.push(ntCurrent); ntCurrent.visible = false }
-        for (const pm of otherPlayerModels) {
-          const nt = pm?.getNametagGroup()
-          if (nt) { nametagGroups.push(nt); nt.visible = false }
-        }
-        for (const mm of monsterModels) {
-          const nt = mm?.getNametagGroup()
-          if (nt) { nametagGroups.push(nt); nt.visible = false }
-        }
+          // Hide nametags/HP bars during reflection render
+          const nametagGroups: THREE.Group[] = []
+          const ntCurrent = currentPlayerModel?.getNametagGroup()
+          if (ntCurrent) { nametagGroups.push(ntCurrent); ntCurrent.visible = false }
+          for (const pm of otherPlayerModels) {
+            const nt = pm?.getNametagGroup()
+            if (nt) { nametagGroups.push(nt); nt.visible = false }
+          }
+          for (const mm of monsterModels) {
+            const nt = mm?.getNametagGroup()
+            if (nt) { nametagGroups.push(nt); nt.visible = false }
+          }
 
-        // Hide grass + particles during reflection — InstancedMesh per-pass overhead
-        const reflMgrRender = () => reflectionManager!.render()
-        renderWithHiddenGroups(
-          [grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
-          reflMgrRender,
-        )
-        for (const nt of nametagGroups) nt.visible = true
-      } else if (reflectionManager) {
-        reflectionManager.clear()
+          // Hide grass + particles during reflection — InstancedMesh per-pass overhead
+          const reflMgrRender = () => reflectionManager!.render()
+          renderWithHiddenGroups(
+            [grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
+            reflMgrRender,
+          )
+          for (const nt of nametagGroups) nt.visible = true
+        } else if (reflectionManager) {
+          reflectionManager.clear()
+        }
+        loopProfiler.record('reflectionPass', performance.now() - reflectionStart)
       }
 
       const frameWorkMs = performance.now() - frameWorkStart
@@ -775,6 +799,67 @@
   onMount(() => {
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
+
+    // Expose profiler toggle in browser console: __profile() to start, __profile() again to stop
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(window as any).__profile = () => {
+      loopProfileEnabled = !loopProfileEnabled
+      if (loopProfileEnabled) {
+        loopProfiler.resetWindow(performance.now())
+        console.log('[LoopProfile] STARTED — stats will print every 1s')
+      } else {
+        console.log('[LoopProfile] STOPPED')
+      }
+    }
+    // Expose GPU profiling toggles in browser console
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any
+    w.__ri = () => {
+      const r = renderer.info.render
+      console.log(`[RendererInfo] calls=${r.calls} tris=${r.triangles} points=${r.points} lines=${r.lines}`)
+      console.log('[RendererInfo] raw:', renderer.info)
+    }
+    // Toggle visibility of scene layers to isolate GPU bottleneck
+    w.__toggleGrass = () => {
+      const g = grassLayerRef?.getGroup()
+      if (g) { g.visible = !g.visible; console.log(`[Toggle] grass visible=${g.visible}`) }
+    }
+    w.__toggleHousing = () => {
+      const g = housingLayerRef?.getGroup()
+      if (g) { g.visible = !g.visible; console.log(`[Toggle] housing visible=${g.visible}`) }
+    }
+    w.__toggleRefraction = () => {
+      refractionEnabled.update((v: boolean) => !v)
+      console.log(`[Toggle] refraction`)
+    }
+    w.__toggleReflection = () => {
+      reflectionEnabled.update((v: boolean) => !v)
+      console.log(`[Toggle] reflection`)
+    }
+    w.__toggleTerrain = () => {
+      if (terrainGroup) { terrainGroup.visible = !terrainGroup.visible; console.log(`[Toggle] terrain visible=${terrainGroup.visible}`) }
+    }
+    // Count visible meshes in scene
+    w.__countMeshes = () => {
+      let meshCount = 0, instancedCount = 0, totalTris = 0, totalInstances = 0
+      scene.traverse((obj: THREE.Object3D) => {
+        if (!obj.visible) return
+        if ((obj as THREE.InstancedMesh).isInstancedMesh) {
+          const im = obj as THREE.InstancedMesh
+          instancedCount++
+          totalInstances += im.count
+          const geo = im.geometry
+          const idxCount = geo.index ? geo.index.count : geo.attributes.position.count
+          totalTris += (idxCount / 3) * im.count
+        } else if ((obj as THREE.Mesh).isMesh) {
+          meshCount++
+          const geo = (obj as THREE.Mesh).geometry
+          const idxCount = geo.index ? geo.index.count : geo.attributes.position.count
+          totalTris += idxCount / 3
+        }
+      })
+      console.log(`[SceneCount] meshes=${meshCount} instanced=${instancedCount} (${totalInstances} instances) totalTris=${(totalTris/1e6).toFixed(2)}M`)
+    }
     setGameHour(getLocalGameHour())
     syncCalendarToWidget()
 

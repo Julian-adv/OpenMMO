@@ -9,6 +9,12 @@ export type LoopProfileSection =
   | 'monsterLogic'
   | 'cameraUpdate'
   | 'lightUpdate'
+  | 'housingUpdate'
+  | 'grassUpdate'
+  | 'windParticles'
+  | 'wetnessPass'
+  | 'refractionPass'
+  | 'reflectionPass'
 
 export const LOOP_PROFILE_SECTIONS: readonly LoopProfileSection[] = [
   'frameWork',
@@ -21,6 +27,12 @@ export const LOOP_PROFILE_SECTIONS: readonly LoopProfileSection[] = [
   'monsterLogic',
   'cameraUpdate',
   'lightUpdate',
+  'housingUpdate',
+  'grassUpdate',
+  'windParticles',
+  'wetnessPass',
+  'refractionPass',
+  'reflectionPass',
 ] as const
 
 interface LoopProfileStats {

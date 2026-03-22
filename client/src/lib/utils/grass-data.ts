@@ -378,6 +378,37 @@ export function decodeGrassData(buffer: ArrayBuffer): GrassPlacementData {
   }
 }
 
+/**
+ * Global grass density multiplier (0–1). Applied at load time to thin out
+ * pre-computed grass instances. Flowers are not affected.
+ */
+export const GRASS_DENSITY_SCALE = 0.7
+
+/** Deterministically thin a Float32Array of instances by keeping only a fraction. */
+function thinInstances(src: Float32Array, keep: number): Float32Array {
+  if (keep >= 1) return src
+  const count = src.length / FLOATS_PER_INSTANCE
+  const kept: number[] = []
+  // Use position hash for deterministic, spatially stable thinning
+  for (let i = 0; i < count; i++) {
+    const x = src[i * FLOATS_PER_INSTANCE]
+    const z = src[i * FLOATS_PER_INSTANCE + 2]
+    // Fast hash from world position — stable across frames
+    const h =
+      ((Math.imul((x * 374761) | 0, 668265263) ^
+        Math.imul((z * 550929) | 0, 374761393)) >>>
+        0) /
+      0xffffffff
+    if (h < keep) {
+      const base = i * FLOATS_PER_INSTANCE
+      for (let f = 0; f < FLOATS_PER_INSTANCE; f++) {
+        kept.push(src[base + f])
+      }
+    }
+  }
+  return new Float32Array(kept)
+}
+
 /** Extract instance Float32Array for a given type from decoded data. */
 export function getInstanceData(
   data: GrassPlacementData,
@@ -387,15 +418,18 @@ export function getInstanceData(
   const shortFloats = data.shortCount * FLOATS_PER_INSTANCE
   const tallFloats = data.tallCount * FLOATS_PER_INSTANCE
 
+  let raw: Float32Array
   switch (type) {
     case 'short':
-      return new Float32Array(data.buffer, headerBytes, shortFloats)
+      raw = new Float32Array(data.buffer, headerBytes, shortFloats)
+      break
     case 'tall':
-      return new Float32Array(
+      raw = new Float32Array(
         data.buffer,
         headerBytes + shortFloats * 4,
         tallFloats
       )
+      break
     case 'flower':
       return new Float32Array(
         data.buffer,
@@ -403,4 +437,5 @@ export function getInstanceData(
         data.flowerCount * FLOATS_PER_INSTANCE
       )
   }
+  return thinInstances(raw, GRASS_DENSITY_SCALE)
 }

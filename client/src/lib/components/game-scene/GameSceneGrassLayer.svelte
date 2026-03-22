@@ -161,7 +161,7 @@
     // MESH_CAPACITY instances with zero matrices are invisible (zero scale).
     mesh.castShadow = false
     mesh.receiveShadow = true
-    mesh.frustumCulled = false
+    mesh.frustumCulled = true
     return mesh
   }
 
@@ -611,12 +611,18 @@
       const slot = freeSlots.pop()!
 
       const mesh = ensureSlotMesh(meshes, slot, geometry, material, capacity)
-      writeMeshData(mesh, data)
+      writeMeshData(mesh, data, key)
       keyToSlot.set(key, slot)
     }
   }
 
-  function writeMeshData(mesh: THREE.InstancedMesh, data?: SubChunkData) {
+  // Reusable objects for bounding sphere computation
+  const _chunkCenter = new THREE.Vector3()
+  const _chunkSphere = new THREE.Sphere()
+  // Half-diagonal of a 32×32 sub-chunk + vertical margin for grass height
+  const SUB_CHUNK_HALF_DIAG = Math.sqrt(SUB_CHUNK_SIZE * SUB_CHUNK_SIZE * 0.5 + 10 * 10)
+
+  function writeMeshData(mesh: THREE.InstancedMesh, data: SubChunkData | undefined, subChunkKey: string) {
     if (!data || data.count === 0) {
       if (mesh.count > 0) mesh.count = 0
       if (mesh.parent) mesh.parent.remove(mesh)
@@ -638,6 +644,17 @@
     rotAttr.needsUpdate = true
 
     mesh.count = count
+
+    // Set bounding sphere from sub-chunk key for frustum culling.
+    // Key format: "scx,scz" → world center = (scx+0.5)*SIZE, (scz+0.5)*SIZE
+    const [scx, scz] = subChunkKey.split(',').map(Number)
+    _chunkCenter.set(
+      (scx + 0.5) * SUB_CHUNK_SIZE,
+      0,
+      (scz + 0.5) * SUB_CHUNK_SIZE,
+    )
+    _chunkSphere.set(_chunkCenter, SUB_CHUNK_HALF_DIAG)
+    mesh.boundingSphere = _chunkSphere.clone()
 
     // Force WebGPU to re-create GPU bindings by re-adding to scene graph.
     // Also handles the initial case where mesh hasn't been added yet.
