@@ -33,9 +33,20 @@ export interface RoomData {
   wallWest: WallConfig[]
 }
 
+export interface PassabilityGrid {
+  floorLevel: number
+  originX: number
+  originZ: number
+  width: number
+  depth: number
+  /** Packed edge bits per cell (N=1, E=2, S=4, W=8). Length = width * depth. */
+  cells: number[]
+}
+
 export interface HouseData {
   id: string
   ownerId: string
   origin: { x: number; y: number; z: number }
   rooms: RoomData[]
+  passability?: PassabilityGrid[]
 }

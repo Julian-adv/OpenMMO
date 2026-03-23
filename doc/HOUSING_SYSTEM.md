@@ -16,6 +16,7 @@ pub struct HouseData {
     pub owner_id: String,
     pub origin: Position,          // 월드 좌표 (1m 그리드 스냅)
     pub rooms: Vec<RoomData>,
+    pub passability: Vec<PassabilityGrid>,  // 셀 기반 통행 가능 여부
 }
 ```
 
@@ -23,6 +24,9 @@ pub struct HouseData {
 
 ```rust
 pub struct RoomData {
+    pub room_type: RoomType,        // Normal | Stairwell
+    pub roof_type: RoofType,        // Flat | Gabled | Steep
+    pub roof_ridge_dir: RoofRidgeDir, // Auto | X | Z
     pub local_x: i32,              // house origin 기준 오프셋 (미터)
     pub local_z: i32,
     pub size_x: u8,                // 3~6m
@@ -31,10 +35,11 @@ pub struct RoomData {
     pub floor_texture: u8,         // 텍스쳐 카탈로그 인덱스
     pub roof_texture: u8,
     pub wall_height: f32,          // 기본 3m
-    pub wall_north: WallConfig,
-    pub wall_south: WallConfig,
-    pub wall_east: WallConfig,
-    pub wall_west: WallConfig,
+    /// 벽은 1m 세그먼트 배열 (예: 5m 북벽 → 5개 WallConfig)
+    pub wall_north: Vec<WallConfig>,  // length = size_x
+    pub wall_south: Vec<WallConfig>,  // length = size_x
+    pub wall_east: Vec<WallConfig>,   // length = size_z
+    pub wall_west: Vec<WallConfig>,   // length = size_z
 }
 ```
 
@@ -55,9 +60,64 @@ pub enum WallVariant {
 }
 ```
 
+### PassabilityGrid
+
+```rust
+pub struct PassabilityGrid {
+    pub floor_level: u8,
+    pub origin_x: i32,         // house local 좌표 기준 그리드 원점
+    pub origin_z: i32,
+    pub width: u8,             // X 셀 수
+    pub depth: u8,             // Z 셀 수
+    pub cells: Vec<u8>,        // N=1, E=2, S=4, W=8 비트마스크
+}
+```
+
 - 방 크기: 3~6m (정해진 세트), 배치 그리드: 1m 단위 스냅
+- 벽은 1m 세그먼트 단위: 5m 북벽 → `wall_north` 길이 5
 - 인접 방 공유 면: 양쪽 모두 `Open`이어야 함 (서버 검증)
-- 2층 방의 `floor_level: 1`, y 오프셋 = wall_height
+- 2층 방의 `floor_level: 1`, y 오프셋 = wall_height + FLOOR_THICKNESS
+
+## Wall Collision (Cell-Based Passability)
+
+### 개요
+
+1m 셀 기반 통행 가능 여부 시스템. 각 셀에 동서남북(N/E/S/W) 4비트로 해당 방향 edge가 막혀있는지 저장.
+
+### Passability Build
+
+집 건축/편집 시 클라이언트에서 `buildPassability(house)` 호출 → HouseData에 포함하여 서버 저장.
+
+- 층별(floor level) 별도 그리드
+- 벽 세그먼트 순회: `variant !== 'open'`이면 해당 셀 edge 비트 set
+- 양쪽 셀 모두 비트 set (안쪽 셀 + 바깥쪽 인접 셀)
+- 저장 시 정적 구조 기준 (모든 문은 닫힌 상태로 취급)
+
+### Stairwell 처리
+
+1F stairwell을 1F/2F 두 grid에 모두 등록:
+
+- **1F grid**: 계단 양쪽 측면 벽 blocked (stair-run 구간만), 아래쪽 랜딩(entry) open, 위쪽 끝 blocked
+- **2F grid**: 계단 양쪽 측면 벽 blocked (stair-run 구간만), 위쪽 랜딩(exit) open, 아래쪽 끝 blocked
+- 랜딩 셀(첫/마지막 행)은 edge 비트 없음 — open platform
+
+계단 방향: `sizeZ >= sizeX`이면 Z축(entry=north, exit=south), 아니면 X축(entry=west, exit=east)
+
+### Runtime
+
+- 집 로드 시 저장된 passability에서 런타임 그리드 생성 (없으면 fallback 계산)
+- 열린 문 상태 overlay: door segment의 edge 비트 clear
+- `toggleDoor`/`handleDoorToggled` 시 해당 edge 비트만 O(1) flip
+
+### Movement Check
+
+`isMovementBlocked(fromX, fromZ, toX, toZ, y)`:
+
+1. house AABB fast rejection
+2. Y로 해당 floor grid 매칭
+3. world → house local → grid cell 좌표 변환
+4. X축/Z축 각각 셀 edge 교차 검사
+5. `WALL_HALF_THICKNESS(0.3m)` proximity buffer — 벽에서 0.3m 거리에서 정지
 
 ## Rendering
 
@@ -72,19 +132,16 @@ pub enum WallVariant {
 
 | Group | 포함 메쉬 | 플레이어 inside 시 |
 |-------|----------|-------------------|
-| `frontGroup` | 남쪽벽, 서쪽벽, 지붕 | `visible = false` |
+| `frontGroup` | 남쪽벽, 서쪽벽, 지붕 | Y를 OFFSCREEN_Y로 이동 |
 | `backGroup` | 북쪽벽, 동쪽벽, 바닥 | `visible = true` (항상) |
 
 멀티패스 렌더링(refraction/reflection) 시에는 모든 벽 visible 유지.
 
 ### Mesh Construction
 
-- **벽**: Blender GLB (solid/door/window 변형 × 사이즈별)
-  - `gltfCache.ts`로 로드, geometry clone
-  - 사이즈: 3m, 4m, 5m, 6m × variant 3종 = 12개 GLB
-- **바닥/지붕**: `PlaneGeometry` 프로시저럴 생성
-- **방 하나** = 최대 6 메쉬 (벽 4 + 바닥 + 지붕)
-- **집 하나 (4방)** ≈ 16~24 메쉬
+- 벽/바닥/지붕/계단: `house-geometry.ts`에서 프로시저럴 생성
+- 방별 geometry를 집 단위로 merged geometry 생성 (draw call 최소화)
+- 문짝만 별도 Mesh → `THREE.Group` 힌지 피벗으로 Y축 회전 애니메이션
 
 ### Materials
 
@@ -96,132 +153,88 @@ pub enum WallVariant {
 
 ### 2층 처리
 
-- `floor_level: 0` = 지상, `floor_level: 1` = 2층 (y = wall_height)
+- `floor_level: 0` = 지상, `floor_level: 1` = 2층 (y = wall_height + FLOOR_THICKNESS)
 - 2층 방 아래 1층 방 존재 시 → 1층 지붕 메쉬 생략 (2층 바닥이 대체)
-- 계단: Phase 4에서 별도 variant 또는 오브젝트로 구현
+- 계단: `room_type: Stairwell` — 별도 geometry, 랜딩+계단 스텝 메쉬
 - 2층 inside 시: 1층+2층 앞벽 모두 숨김
+
+## Door Interaction
+
+1. E키 → 플레이어 근처(2m) 문 탐색 (`findNearestDoor`)
+2. 낙관적 로컬 토글 + 서버 전송 (`ToggleDoor`)
+3. 서버 검증 → 브로드캐스트 (`DoorToggled`)
+4. 문짝 애니메이션: 게임 루프에서 힌지 피벗 Y축 회전 lerp (0=닫힘, -π/2=열림)
+5. Passability 연동: 문 열기 → edge 비트 clear, 닫기 → edge 비트 set
 
 ## Network Protocol
 
-### ClientMessage 추가
+### ClientMessage
 
 ```rust
-PlaceHouse { house: HouseData },
-ModifyRoom { house_id: String, room_index: u32, room: RoomData },
-RemoveHouse { house_id: String },
+ToggleDoor { house_id, room_index, wall_dir, segment_index }
 ```
 
-### ServerMessage 추가
+### ServerMessage
 
 ```rust
 HouseSpawned { house: HouseData },
 HouseUpdated { house: HouseData },
 HouseRemoved { house_id: String },
 HousesInArea { houses: Vec<HouseData> },  // 청크 진입 시 전송
+DoorToggled { house_id, room_index, wall_dir, segment_index, is_open }
 ```
 
 ## Server Storage
 
-- 파일 기반: `data/housing/{chunk_x}_{chunk_z}/{house_id}.json`
+- 파일 기반: `data/housing/r{cx}_{cz}/{house_id}.json`
 - REST 엔드포인트:
   - `GET /api/housing/area/{cx}/{cz}` — 청크 내 모든 집
-  - `PUT /api/housing/{id}` — 생성/수정
+  - `POST /api/housing` — 생성 (ID 서버 할당)
+  - `PUT /api/housing/{id}` — 수정
   - `DELETE /api/housing/{id}` — 삭제
-- 서버 검증: 인접 벽 유효성, 겹침 검사, 소유자 권한, 건축 가능 영역
+- 서버 검증: 인접 벽 유효성, 겹침 검사, 소유자 권한, 2층 floor support
 
 ## File Structure
 
-### New Files
+### Key Files
 
 | Path | Description |
 |------|-------------|
-| `shared/src/housing.rs` | HouseData, RoomData, WallConfig, WallVariant |
+| `shared/src/housing.rs` | HouseData, RoomData, WallConfig, PassabilityGrid 등 공유 타입 |
 | `client/src/lib/types/housing.ts` | 클라이언트 타입 미러 |
-| `client/src/lib/managers/housingManager.ts` | 집 로딩/캐싱, 플레이어-내부 감지 |
-| `client/src/lib/utils/house-geometry.ts` | GLB 로드, geometry cache, 집 Group 조립 |
+| `client/src/lib/managers/housingManager.ts` | 집 로딩/캐싱, passability, 문 토글, 벽 충돌 |
+| `client/src/lib/utils/house-geometry.ts` | 프로시저럴 geometry 생성, merged geometry 조립 |
 | `client/src/lib/components/game-scene/GameSceneHousingLayer.svelte` | 하우징 렌더 레이어 |
-| `server/src/housing/mod.rs` | 하우징 게임 로직 |
+| `client/src/lib/components/map-editor/HousingEditorCursor.svelte` | 건축 에디터 |
+| `client/src/lib/components/map-editor/HousingEditorPanel.svelte` | 건축 UI 패널 |
+| `server/src/housing/mod.rs` | 하우징 게임 로직 + 검증 |
 | `server/src/housing/routes.rs` | REST 엔드포인트 |
-
-### Files to Modify
-
-| Path | Change |
-|------|--------|
-| `shared/src/lib.rs` | `pub mod housing`, ClientMessage/ServerMessage variants |
-| `client/src/lib/components/GameScene.svelte` | HousingLayer 추가, update 루프 연결 |
-| `server/src/main.rs` | housing routes 등록 |
-| `server/src/connection.rs` | housing 메시지 라우팅 |
-| `server/src/game_state/mod.rs` | houses HashMap 추가 |
-
-### Reference Patterns
-
-| Pattern | Source File |
-|---------|-------------|
-| Material pooling | `GameSceneTerrainLayer.svelte` |
-| InstancedMesh + Group visibility | `GameSceneGrassLayer.svelte` |
-| GLB 로딩/캐싱 | `gltfCache.ts` |
-| REST + 파일 저장 | `terrain/routes.rs` |
-| 멀티패스 visibility 토글 | `reflectionRenderManager.ts` |
 
 ## Implementation Phases
 
-### Phase 1: Static House Rendering (MVP)
+### Phase 1: Static House Rendering (MVP) ✅
 
-1. `shared/src/housing.rs` — 데이터 타입 정의
-2. `shared/src/lib.rs` — housing 모듈 연결, 메시지 타입 추가
-3. 벽 GLB 에셋 제작 (1개 사이즈, solid/door/window)
-4. `house-geometry.ts` — HouseData → THREE.Group 조립
-5. `GameSceneHousingLayer.svelte` — 하드코딩 테스트 집 렌더링
-6. 앞벽/지붕 숨기기 (AABB 플레이어 감지)
+### Phase 2: Server Integration ✅
 
-### Phase 2: Server Integration
+### Phase 3: Building UI ✅
 
-1. `server/src/housing/` — REST + 파일 저장
-2. `housingManager.ts` — 청크 기반 로딩/캐싱
-3. ClientMessage/ServerMessage 하우징 핸들링
-4. 멀티플레이어 동기화
+### Phase 4: Second Floor + Stairs ✅
 
-### Phase 3: Building UI
+### Phase 5: Optimization ✅
 
-1. ✅ 건축 모드 진입/종료
-2. ✅ 방 배치 프리뷰 + 그리드 스냅
-3. ✅ 벽/바닥/지붕 텍스쳐 선택 (placeholder 색상)
-4. ✅ 삭제 모드
-5. ✅ 지형 평탄화 + 잔디 제거
-6. ✅ 벽 variant 개별 선택 UI
-7. ✅ 배치 유효성 검증 + 피드백
-8. ✅ 서버 검증
-9. ✅ 다중 방 편집
-10. ✅ 텍스쳐 에셋 적용
+Merged geometry per house, draw call 최소화.
 
-### Phase 4: Second Floor + Stairs
+### Phase 6: Wall Collision ✅
 
-1. ✅ 2층 방 배치 로직
-2. ✅ 계단 메쉬/variant
-3. ✅ 카메라 전환 (1층↔2층 뷰) — 높이 오프셋 + 벽 숨기기로 충분
+셀 기반 passability grid로 구현. 이전의 line-segment intersection 방식에서 전환.
+- 각 셀 N/E/S/W 4비트 edge 마스크
+- 집 건축/편집 시 계산 → 서버 저장
+- 런타임에 door overlay + O(1) bit flip
+- 계단 전용 처리 (측면 벽 + 랜딩 open)
 
-### Phase 5: Optimization
+### Phase 7: Doors & Windows Interaction ✅
 
-1. ✅ InstancedMesh 배칭 → merged geometry per house
-2. ✅ 프로파일링 + 드로우콜 최적화
-
-### Phase 6: Wall Collision
-
-1. 벽을 축 정렬 선분(plane segment)으로 표현 — 남/북벽은 Z 고정 X 범위, 동/서벽은 X 고정 Z 범위
-2. 1m 세그먼트 단위로 Open 구간 제외, Door는 `is_open` 상태에 따라 제외/포함
-3. `housingManager`에 `checkWallCollision(from, to)` 추가 — 이동 벡터와 선분 교차 검사
-4. Window/Solid → 충돌, Open → 통과, Door → 문 상태에 따라
-5. 플레이어 이동 로직에서 충돌 검사 호출
-
-### Phase 7: Doors & Windows Interaction
-
-#### 구현 순서
-1. `WallConfig`에 `isOpen: bool` 추가 (TS `isOpen?: boolean`, Rust `#[serde(default)] is_open: bool`)
-2. 문짝 메시 분리: 문틀(상단+좌우)은 merged geometry 유지, 문짝(`DOOR_WIDTH × DOOR_HEIGHT`)만 별도 Mesh → `THREE.Group` 힌지 피벗으로 감싸서 Y축 회전 애니메이션
-3. 충돌 시스템 연동: `isOpen === true` → 통과, `false`/미설정 → 차단 (Phase 6 `crossesWallLine` hitTest 수정)
-4. 문 열림/닫힘 애니메이션: 게임 루프에서 `hingePivot.rotation.y`를 목표값으로 lerp (0=닫힘, -PI/2=열림)
-5. 네트워크 메시지 추가: `ClientMessage::ToggleDoor { house_id, room_index, wall_dir, segment_index }` → `ServerMessage::DoorToggled { ..., is_open }`, 서버에서 검증+영속+브로드캐스트
-6. 상호작용 시스템: E키 → 플레이어 근처(2m) 문 탐색(`findNearestDoor`) → 낙관적 토글 + 서버 전송
+문짝 힌지 애니메이션, E키 상호작용, 네트워크 동기화, passability 연동.
 
 ### Phase 8: Third Floor+ (Optional)
 

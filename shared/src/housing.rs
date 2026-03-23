@@ -98,9 +98,23 @@ pub struct RoomData {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PassabilityGrid {
+    pub floor_level: u8,
+    pub origin_x: i32,
+    pub origin_z: i32,
+    pub width: u8,
+    pub depth: u8,
+    /// Packed edge bits per cell (N=1, E=2, S=4, W=8). Length = width * depth.
+    pub cells: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct HouseData {
     pub id: String,
     pub owner_id: String,
     pub origin: Position,
     pub rooms: Vec<RoomData>,
+    #[serde(default)]
+    pub passability: Vec<PassabilityGrid>,
 }
