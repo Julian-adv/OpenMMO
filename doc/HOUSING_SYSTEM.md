@@ -6,6 +6,8 @@
 벽/바닥/지붕 텍스쳐 커스터마이즈, 문/창문 배치, 2층 지원.
 집 안에 들어가면 앞벽+지붕이 숨겨져 내부가 보인다.
 
+리퍼런스: https://www.youtube.com/watch?v=5jvJUPrmS18&t=5s
+
 ## Data Model
 
 ### HouseData

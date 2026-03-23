@@ -109,8 +109,9 @@
     // Set scene background to match the character select gradient
     scene.background = new THREE.Color('#1a2a40')
 
-    const pmremGenerator = new PMREMGenerator(renderer)
-    pmremGenerator.fromSceneAsync(new RoomEnvironment()).then((rt) => {
+    renderer.init().then(() => {
+      const pmremGenerator = new PMREMGenerator(renderer)
+      const rt = pmremGenerator.fromScene(new RoomEnvironment())
       scene.environment = rt.texture
       scene.environmentIntensity = 0.1
       pmremGenerator.dispose()

@@ -29,8 +29,9 @@ export function initScene(
   viewportHeight: number
 ): SceneInitResult {
   // Generate environment map
-  const pmremGenerator = new PMREMGenerator(renderer)
-  pmremGenerator.fromSceneAsync(new RoomEnvironment()).then((rt) => {
+  renderer.init().then(() => {
+    const pmremGenerator = new PMREMGenerator(renderer)
+    const rt = pmremGenerator.fromScene(new RoomEnvironment())
     scene.environment = rt.texture
     scene.environmentIntensity = 0.5
     pmremGenerator.dispose()
