@@ -247,8 +247,6 @@
     )
     if (!door) return
 
-    // Optimistic local toggle + send to server
-    housingManager.toggleDoor(door.houseId, door.roomIndex, door.wallDir, door.segmentIndex)
     networkManager.sendToggleDoor(door.houseId, door.roomIndex, door.wallDir, door.segmentIndex)
   }
 

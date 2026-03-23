@@ -601,11 +601,13 @@ async fn handle_client_message(
             segment_index,
         } => {
             // Toggle door is_open and broadcast to all players
-            if let Some(pid) = state.player_id.clone() {
+            if state.player_id.is_some() {
                 let toggled = game_state
                     .toggle_door(&house_id, room_index, &wall_dir, segment_index)
                     .await;
                 if let Some(is_open) = toggled {
+                    // Broadcast to ALL players (including sender) so everyone
+                    // converges on the server-authoritative door state.
                     game_state.broadcast(
                         ServerMessage::DoorToggled {
                             house_id,
@@ -614,7 +616,7 @@ async fn handle_client_message(
                             segment_index,
                             is_open,
                         },
-                        Some(pid),
+                        None,
                     );
                 }
             }

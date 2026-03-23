@@ -382,27 +382,7 @@ export class HousingManager {
     this.notifyChanged()
   }
 
-  /** Optimistic local toggle — flips isOpen and updates passability. */
-  toggleDoor(
-    houseId: string,
-    roomIndex: number,
-    wallDir: WallDirection,
-    segmentIndex: number
-  ) {
-    const house = this.housesById.get(houseId)
-    if (!house) return
-    const room = house.rooms[roomIndex]
-    if (!room) return
-
-    const seg = getWallByDir(room, wallDir)[segmentIndex]
-    if (!seg) return
-
-    seg.isOpen = !seg.isOpen
-    this.updateDoorEdge(houseId, room, wallDir, segmentIndex, seg.isOpen)
-    this.notifyChanged()
-  }
-
-  /** Handle a door toggle from another player or server confirmation. */
+  /** Handle a door toggle from the server (authoritative state). */
   handleDoorToggled(
     houseId: string,
     roomIndex: number,

@@ -161,10 +161,10 @@ pub struct PassabilityGrid {
 ## Door Interaction
 
 1. E키 → 플레이어 근처(2m) 문 탐색 (`findNearestDoor`)
-2. 낙관적 로컬 토글 + 서버 전송 (`ToggleDoor`)
-3. 서버 검증 → 브로드캐스트 (`DoorToggled`)
-4. 문짝 애니메이션: 게임 루프에서 힌지 피벗 Y축 회전 lerp (0=닫힘, -π/2=열림)
-5. Passability 연동: 문 열기 → edge 비트 clear, 닫기 → edge 비트 set
+2. 서버에 `ToggleDoor` 전송 (낙관적 토글 없음)
+3. 서버가 토글 후 **모든 플레이어(요청자 포함)**에게 `DoorToggled` 브로드캐스트 — 서버 권위적 상태
+4. 클라이언트: `handleDoorToggled`로 서버 상태 적용 + passability edge 비트 업데이트
+5. 문짝 애니메이션: 게임 루프에서 힌지 피벗 Y축 회전 lerp (0=닫힘, -π/2=열림)
 
 ## Network Protocol
 
