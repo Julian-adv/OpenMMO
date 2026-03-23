@@ -2,6 +2,7 @@ import type { WebGPURenderer } from 'three/webgpu'
 import type * as THREE from 'three'
 import type { LoopProfiler } from './loop-profiler'
 import type { Writable } from 'svelte/store'
+import { passabilityDebugVisible } from '../../stores/debugStore'
 
 export interface DebugConsoleDeps {
   loopProfiler: LoopProfiler
@@ -24,6 +25,7 @@ const DEBUG_KEYS = [
   '__toggleRefraction',
   '__toggleReflection',
   '__toggleTerrain',
+  '__togglePassability',
   '__countMeshes',
 ] as const
 
@@ -78,6 +80,11 @@ export function registerDebugConsole(
   w.__toggleReflection = () => {
     getDeps().reflectionEnabled.update((v: boolean) => !v)
     console.log(`[Toggle] reflection`)
+  }
+
+  w.__togglePassability = () => {
+    passabilityDebugVisible.update((v: boolean) => !v)
+    console.log(`[Toggle] passability debug`)
   }
 
   w.__toggleTerrain = () => {

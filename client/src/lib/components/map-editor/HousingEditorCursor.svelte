@@ -32,7 +32,6 @@
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
   import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, FLOOR_THICKNESS, floorYBase } from '../../utils/house-geometry'
-  import { MAX_FLOOR_LEVEL } from '../../utils/house-geo-utils'
   import { editorPanOffset } from '../../stores/editorStore'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -220,10 +219,9 @@
     return intersects.length > 0 ? intersects[0] : null
   }
 
-  function raycastHousing(event: MouseEvent): THREE.Intersection | null {
-    if (!housingGroup || !updateRaycaster(event)) return null
-    const intersects = raycaster.intersectObjects(housingGroup.children, true)
-    return intersects.length > 0 ? intersects[0] : null
+  function raycastHousingAll(event: MouseEvent): THREE.Intersection[] {
+    if (!housingGroup || !updateRaycaster(event)) return []
+    return raycaster.intersectObjects(housingGroup.children, true)
   }
 
   function rebuildPreview() {
@@ -384,34 +382,6 @@
     if (event.key === 'Delete' && currentTool === 'select') {
       deleteSelectedRoom()
     }
-  }
-
-  /** Collect all unique rooms at world XZ across all floor levels. */
-  function collectRoomsAtXZ(
-    wx: number,
-    wz: number,
-    groundY: number
-  ): { house: HouseData; roomIndex: number }[] {
-    const results: { house: HouseData; roomIndex: number }[] = []
-    const seen = new Set<string>() // eslint-disable-line svelte/prefer-svelte-reactivity
-    for (let fl = MAX_FLOOR_LEVEL; fl >= 0; fl--) {
-      const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
-      for (const r of housingManager.findAllRoomsAtPoint(wx, testY, wz)) {
-        const key = `${r.house.id}:${r.roomIndex}`
-        if (!seen.has(key)) {
-          seen.add(key)
-          results.push(r)
-        }
-      }
-    }
-    return results
-  }
-
-  /** Find all rooms at cursor XZ via raycast. */
-  function findAllAtCursorXZ(event: MouseEvent) {
-    const hit = raycastTerrain(event)
-    if (!hit) return []
-    return collectRoomsAtXZ(hit.point.x, hit.point.z, hit.point.y)
   }
 
   let lastSelectKey = ''
@@ -594,20 +564,56 @@
     populateEditStoresFromRoom(result.house.rooms[result.roomIndex])
   }
 
+  /** Find rooms containing a world point. When checkY is true, validates Y range too. */
+  function findRoomsAtPoint(
+    px: number, py: number, pz: number,
+    checkY: boolean,
+    seen: Set<string>,
+    out: { house: HouseData; roomIndex: number }[]
+  ) {
+    for (const house of housingManager.getAllHouses()) {
+      for (let i = 0; i < house.rooms.length; i++) {
+        const room = house.rooms[i]
+        const rx = house.origin.x + room.localX
+        const rz = house.origin.z + room.localZ
+        if (px < rx || px > rx + room.sizeX) continue
+        if (pz < rz || pz > rz + room.sizeZ) continue
+        if (checkY) {
+          const ryBase = house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
+          const yTop = room.roomType === 'stairwell'
+            ? house.origin.y + floorYBase(room.floorLevel + 1, room.wallHeight) + room.wallHeight
+            : ryBase + room.wallHeight
+          if (py < ryBase - 0.5 || py > yTop + 0.5) continue
+        }
+        const key = `${house.id}:${i}`
+        if (!seen.has(key)) {
+          seen.add(key)
+          out.push({ house, roomIndex: i })
+        }
+      }
+    }
+  }
+
   function selectRoomAtCursor(event: MouseEvent) {
-    // Try housing mesh raycast first for direct floor-level selection
-    const housingHit = raycastHousing(event)
-    if (housingHit) {
-      const p = housingHit.point
-      const direct = housingManager.findAllRoomsAtPoint(p.x, p.y, p.z)
-      if (direct.length > 0) {
-        applyRoomSelection(direct)
-        return
+    const results: { house: HouseData; roomIndex: number }[] = []
+    const seen = new Set<string>()
+
+    // Raycast through all housing meshes — each hit point is matched
+    // to its room, giving a natural cycle of only the rooms the ray pierces.
+    for (const hit of raycastHousingAll(event)) {
+      const p = hit.point
+      findRoomsAtPoint(p.x, p.y, p.z, true, seen, results)
+    }
+
+    // Fallback: terrain raycast for clicking on exposed floor (XZ only)
+    if (results.length === 0) {
+      const terrainHit = raycastTerrain(event)
+      if (terrainHit) {
+        const p = terrainHit.point
+        findRoomsAtPoint(p.x, p.y, p.z, false, seen, results)
       }
     }
 
-    // Fallback: terrain raycast + floor-level sweep
-    const results = findAllAtCursorXZ(event)
     if (results.length === 0) {
       selectedHouseId.set(null)
       selectedRoomIndex.set(null)

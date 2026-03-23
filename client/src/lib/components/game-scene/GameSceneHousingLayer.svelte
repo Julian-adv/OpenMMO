@@ -26,7 +26,8 @@
     getTerrainChunkFromPosition,
   } from './terrain-utils'
   import { playerFloorOffset, playerFloorLevel } from '../../stores/housingStore'
-  import { debugVisible } from '../../stores/debugStore'
+  import { debugVisible, passabilityDebugVisible } from '../../stores/debugStore'
+  import { EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../managers/housing-passability'
   import { get } from 'svelte/store'
 
   interface Props {
@@ -50,21 +51,101 @@
   let lastChunkX = NaN
   let lastChunkZ = NaN
 
+  // Debug passability wireframe
+  const debugPassGroup = new THREE.Group()
+  debugPassGroup.name = 'passabilityDebug'
+  debugPassGroup.visible = false
+  housingGroup.add(debugPassGroup)
+
+  const debugLineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
+  let debugPassDirty = false
+
+  const unsubPassDebug = passabilityDebugVisible.subscribe((v) => {
+    debugPassGroup.visible = v
+    if (v) debugPassDirty = true
+  })
+
+  function rebuildPassabilityDebug() {
+    // Clear old
+    while (debugPassGroup.children.length > 0) {
+      const child = debugPassGroup.children[0]
+      debugPassGroup.remove(child)
+      if (child instanceof THREE.LineSegments) {
+        child.geometry.dispose()
+      }
+    }
+
+    const WALL_Y = 0.05 // slightly above floor
+    const WALL_H = 0.2  // line height
+
+    for (const [houseId, rp] of housingManager.getPassabilityEntries()) {
+      const house = housingManager.getHouseById(houseId)
+      if (!house) continue
+
+      const vertices: number[] = []
+
+      for (const floor of rp.floors) {
+        const baseY = floor.yBase
+        const ox = house.origin.x + floor.originX
+        const oz = house.origin.z + floor.originZ
+
+        for (let gz = 0; gz < floor.depth; gz++) {
+          for (let gx = 0; gx < floor.width; gx++) {
+            const bits = floor.cells[gx + gz * floor.width]
+            if (bits === 0) continue
+
+            const cx = ox + gx
+            const cz = oz + gz
+            const y0 = baseY + WALL_Y
+            const y1 = baseY + WALL_Y + WALL_H
+
+            const pushQuad = (x0: number, z0: number, x1: number, z1: number) => {
+              vertices.push(x0, y0, z0, x1, y0, z1) // bottom
+              vertices.push(x0, y1, z0, x1, y1, z1) // top
+              vertices.push(x0, y0, z0, x0, y1, z0) // left vertical
+              vertices.push(x1, y0, z1, x1, y1, z1) // right vertical
+            }
+            if (bits & EDGE_N) pushQuad(cx, cz, cx + 1, cz)
+            if (bits & EDGE_S) pushQuad(cx, cz + 1, cx + 1, cz + 1)
+            if (bits & EDGE_W) pushQuad(cx, cz, cx, cz + 1)
+            if (bits & EDGE_E) pushQuad(cx + 1, cz, cx + 1, cz + 1)
+          }
+        }
+      }
+
+      if (vertices.length > 0) {
+        const geo = new THREE.BufferGeometry()
+        geo.setAttribute(
+          'position',
+          new THREE.Float32BufferAttribute(vertices, 3)
+        )
+        const lines = new THREE.LineSegments(geo, debugLineMaterial)
+        lines.frustumCulled = false
+        debugPassGroup.add(lines)
+      }
+    }
+
+    debugPassDirty = false
+  }
+
   // Load housing textures (materials update in-place via needsUpdate)
   initHousingTextures()
 
   // Listen for housing data changes from the manager
   const unsubHouses = housingManager.onHousesChanged((allHouses) => {
     syncHouses(allHouses)
+    if (debugPassGroup.visible) debugPassDirty = true
   })
 
   onDestroy(() => {
     unsubHouses()
+    unsubPassDebug()
     for (const [, result] of houses) {
       disposeHouseGroup(result.houseGroup)
     }
     houses.clear()
     disposeHousingMaterials()
+    debugLineMaterial.dispose()
   })
 
   function syncHouses(allHouses: HouseData[]) {
@@ -136,6 +217,9 @@
   /** Called from game loop — loads chunks + checks player inside state */
   export function update(_deltaTime: number) {
     if (!playerPosition) return
+
+    // Rebuild passability debug lines if needed
+    if (debugPassDirty && debugPassGroup.visible) rebuildPassabilityDebug()
 
     // Load housing chunks around player when chunk changes
     const { x: cx, z: cz } = getTerrainChunkFromPosition(

@@ -14,6 +14,7 @@ export const teleportLoading = writable(false)
 export const torchLightEnabled = writable(false)
 export const windDebugVisible = writable(false)
 export const housingEditorMode = writable(false)
+export const passabilityDebugVisible = writable(false)
 
 export interface PlayerDebugInfo {
   position: { x: number; y: number; z: number }

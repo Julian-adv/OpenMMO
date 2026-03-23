@@ -311,6 +311,11 @@ export class HousingManager {
     )
   }
 
+  /** Expose passability cache for debug visualization. */
+  getPassabilityEntries(): ReadonlyMap<string, RuntimePassability> {
+    return this.passabilityCache
+  }
+
   private addToCache(house: HouseData) {
     this.housesById.set(house.id, house)
     const { x: cx, z: cz } = getTerrainChunkFromPosition(
