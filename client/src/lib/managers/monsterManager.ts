@@ -549,7 +549,7 @@ class MonsterManager {
     id: string,
     position: { x: number; y: number; z: number },
     rotation: number,
-    state: string,
+    state: MonsterData['state'],
     targetPosition: { x: number; y: number; z: number }
   ) {
     const monster = this.monsters.get(id)
@@ -561,7 +561,7 @@ class MonsterManager {
 
       monster.position = position
       monster.rotation = rotation
-      monster.state = state as MonsterData['state']
+      monster.state = state
 
       // Update moveSpeed based on state for remote monsters
       const def = getMonsterDef(monster.type)

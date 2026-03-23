@@ -1,6 +1,7 @@
 import { Vector2, Raycaster } from 'three'
 import * as THREE from 'three'
 import type { Position } from '../utils/movementUtils'
+import type { WallDirection } from '../utils/house-geometry'
 
 const MAX_DOOR_INTERACT_DISTANCE = 1.5
 
@@ -15,7 +16,7 @@ export type ClickIntent =
       type: 'toggle_door'
       houseId: string
       roomIndex: number
-      wallDir: string
+      wallDir: WallDirection
       segmentIndex: number
     }
   | { type: 'move_to_ground'; position: Position }

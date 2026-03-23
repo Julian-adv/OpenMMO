@@ -1,3 +1,6 @@
+import type { MonsterData } from '../types/Monster'
+import type { WallDirection } from '../utils/house-geometry'
+
 export type Position = {
   x: number
   y: number
@@ -23,7 +26,7 @@ export type ServerMonster = {
   monster_type: string
   position: Position
   rotation: number
-  state: string
+  state: MonsterData['state']
   owner_id?: string
   health: number
   max_health: number
@@ -100,7 +103,7 @@ export type ClientMessage =
         monster_id: string
         position: Position
         rotation: number
-        state: string
+        state: MonsterData['state']
         target_position: Position
       }
     }
@@ -113,7 +116,7 @@ export type ClientMessage =
       ToggleDoor: {
         house_id: string
         room_index: number
-        wall_dir: string
+        wall_dir: WallDirection
         segment_index: number
       }
     }

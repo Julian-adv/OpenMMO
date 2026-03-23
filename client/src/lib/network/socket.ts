@@ -1,4 +1,6 @@
 import type { Position } from './networkTypes'
+import type { MonsterData } from '../types/Monster'
+import type { WallDirection } from '../utils/house-geometry'
 import { gameStore, resetGameStore } from '../stores/gameStore'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
@@ -311,7 +313,7 @@ class NetworkManager {
     monsterId: string,
     position: { x: number; y: number; z: number },
     rotation: number,
-    state: string,
+    state: MonsterData['state'],
     targetPosition: { x: number; y: number; z: number }
   ) {
     this.sendMessage({
@@ -350,7 +352,7 @@ class NetworkManager {
   sendToggleDoor(
     houseId: string,
     roomIndex: number,
-    wallDir: string,
+    wallDir: WallDirection,
     segmentIndex: number
   ) {
     this.sendMessage({
