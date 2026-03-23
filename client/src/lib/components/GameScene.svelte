@@ -2,8 +2,7 @@
   import { T, useThrelte } from '@threlte/core'
   import { OrbitControls } from '@threlte/extras'
   import * as THREE from 'three'
-  import { PMREMGenerator, ClippingGroup, type WebGPURenderer } from 'three/webgpu'
-  import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+  import { ClippingGroup, type WebGPURenderer } from 'three/webgpu'
   import { CSMShadowNode } from 'three/addons/csm/CSMShadowNode.js'
   import { onMount } from 'svelte'
   import {
@@ -35,21 +34,14 @@
   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
-    GAME_START_YEAR,
-    SUN_DAY_DURATION_SECONDS,
     SUN_MAX_INTENSITY,
-    SUN_START_HOUR,
-    type CalendarDate,
     computeSunLightSnapshot,
-    getCalendarDateFromGameDayIndex,
-    getGameCalendarDayIndex,
   } from '../utils/celestialSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import {
     timeScale,
     sunTimeScale,
     serverGameTime,
-    type ServerGameTime,
   } from '../stores/timeStore'
   import {
     debugVisible,
@@ -77,12 +69,8 @@
     updateOrthographicFrustum,
   } from './game-scene/camera-utils'
   import {
-    TERRAIN_TILE_SEGMENTS,
     TERRAIN_TILE_SIZE,
     type TerrainTile,
-    createTerrainGeometry,
-    createTerrainTiles,
-    getTerrainChunkFromPosition,
   } from './game-scene/terrain-utils'
   import { createLoopProfiler } from './game-scene/loop-profiler'
   import { createSceneLightingController } from './game-scene/scene-lighting'
@@ -90,10 +78,6 @@
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { TerrainMetaManager } from '../managers/terrainMetaManager'
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
-  import { loadFoamTexture } from '../shaders/water-foam-gen'
-  import { loadCausticsTexture } from '../shaders/caustics-gen'
-  import { RefractionRenderManager } from '../managers/refractionRenderManager'
-  import { ReflectionRenderManager } from '../managers/reflectionRenderManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import {
     loadGrassBillboardGeometry,
@@ -101,6 +85,11 @@
     loadGrassAlphaTexture,
     loadFlowerColorTexture,
   } from '../shaders/grass-material'
+  import { createCalendarSystem } from './game-scene/calendar-system'
+  import { createTerrainTileManager } from './game-scene/terrain-tile-manager'
+  import { registerDebugConsole } from './game-scene/debug-console'
+  import { initScene } from './game-scene/scene-init'
+  import { createMultiPassRenderer } from './game-scene/multi-pass-rendering'
 
   interface Props {
     serverUrl: string
@@ -155,18 +144,14 @@
   })()
   const waterSunDirTmp = new THREE.Vector3()
   const waterCamDirTmp = new THREE.Vector3()
-  let refractionManager = $state<RefractionRenderManager | null>(null)
+  let refractionManager = $state<import('../managers/refractionRenderManager').RefractionRenderManager | null>(null)
   let refractionTexture = $state<THREE.Texture | null>(null)
-  let reflectionManager = $state<ReflectionRenderManager | null>(null)
+  let reflectionManager = $state<import('../managers/reflectionRenderManager').ReflectionRenderManager | null>(null)
   let reflectionTexture = $state<THREE.Texture | null>(null)
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.533) // Default from slash1 animation (data/animation_durations.json)
 
-  // Defer multi-pass rendering (refraction/reflection) after initial load to
-  // avoid tripling the pipeline compilation cost during first frames.
-  let multiPassReady = false
-  let multiPassWarmupFrames = 0
-  const MULTI_PASS_WARMUP_FRAMES = 5
+  const multiPassRenderer = createMultiPassRenderer()
 
   // Track whether all initial data is loaded (terrain + splat + grass assets).
   // The loading dialog stays until frames render smoothly (pipeline compilation
@@ -259,66 +244,13 @@
     directionalLight.shadow.shadowNode = csm
   })
 
-  let localCalendarDate = $state<CalendarDate>({
-    year: GAME_START_YEAR,
-    month: 1,
-    day: 1,
+  const calendarSystem = createCalendarSystem({
+    onDateChanged: setGameDate,
+    onHourChanged: setGameHour,
   })
-  let localDayElapsedSeconds = $state(
-    (SUN_START_HOUR / 24) * SUN_DAY_DURATION_SECONDS
-  )
 
-  let latestServerGameTime = $state<ServerGameTime | null>(null)
-  let latestSunTimeScale = $state(1)
-
-  function syncCalendarToWidget() {
-    setGameDate(
-      localCalendarDate.year,
-      localCalendarDate.month,
-      localCalendarDate.day
-    )
-  }
-
-  function syncLocalCalendarToServer(gameTime: ServerGameTime) {
-    localCalendarDate = {
-      year: gameTime.year,
-      month: gameTime.month,
-      day: gameTime.day,
-    }
-    localDayElapsedSeconds =
-      ((gameTime.hour + gameTime.minute / 60) / 24) * SUN_DAY_DURATION_SECONDS
-    syncCalendarToWidget()
-    setGameHour(getLocalGameHour())
-  }
-
-  function getLocalGameHour() {
-    return (localDayElapsedSeconds / SUN_DAY_DURATION_SECONDS) * 24
-  }
-
-  function addLocalCalendarDays(daysToAdd: number) {
-    if (daysToAdd === 0) return
-    const currentDayIndex = getGameCalendarDayIndex(localCalendarDate)
-    localCalendarDate = getCalendarDateFromGameDayIndex(
-      currentDayIndex + daysToAdd
-    )
-  }
-
-  function advanceLocalCalendar(deltaSeconds: number) {
-    if (deltaSeconds <= 0) return
-    localDayElapsedSeconds += deltaSeconds
-    if (localDayElapsedSeconds < SUN_DAY_DURATION_SECONDS) return
-
-    const elapsedDays = Math.floor(localDayElapsedSeconds / SUN_DAY_DURATION_SECONDS)
-    addLocalCalendarDays(elapsedDays)
-    localDayElapsedSeconds -= elapsedDays * SUN_DAY_DURATION_SECONDS
-    syncCalendarToWidget()
-  }
-
-  function applyServerGameHourIfAllowed() {
-    if (latestSunTimeScale > 1) return
-    if (latestServerGameTime === null) return
-    syncLocalCalendarToServer(latestServerGameTime)
-  }
+  let latestServerGameTime: import('../stores/timeStore').ServerGameTime | null = null
+  let latestSunTimeScale = 1
 
   // Game loop
   let gameLoopId = $state<number | null>(null)
@@ -352,52 +284,12 @@
     currentPlayerState = newState
   }
 
-  // Queue for staggered tile loading: add one new tile per frame
-  // to spread geometry cloning + heightmap application across frames.
-  let pendingTileQueue: TerrainTile[] = []
-
-  function rebuildTerrainTiles(centerChunkX: number, centerChunkZ: number) {
-    const allTiles = createTerrainTiles(
-      centerChunkX,
-      centerChunkZ,
-      TERRAIN_TILE_SIZE,
-    )
-
-    const newTileIds = new Set(allTiles.map((t) => t.id))
-    const keptTiles = terrainTiles.filter((t) => newTileIds.has(t.id))
-    const keptIds = new Set(keptTiles.map((t) => t.id))
-
-    // Immediately keep existing tiles and remove stale ones.
-    // Do NOT reset terrainMeshes to a new sparse array — that would
-    // null out kept tile mesh refs during transitions.
-    // The #each block's keyed bind:mesh will naturally update the indices.
-    terrainTiles = keptTiles
-
-    // Queue truly new tiles for one-per-frame loading
-    pendingTileQueue = allTiles.filter((t) => !keptIds.has(t.id))
-  }
-
-  function drainTileQueue() {
-    if (pendingTileQueue.length === 0) return
-    const tile = pendingTileQueue.shift()!
-    terrainTiles = [...terrainTiles, tile]
-  }
-
-  function updateTerrainTilesFromPlayer() {
-    if (!currentPlayer) return
-    const nextChunk = getTerrainChunkFromPosition(
-      currentPlayer.position,
-      TERRAIN_TILE_SIZE
-    )
-    if (
-      nextChunk.x === terrainCenterChunk.x &&
-      nextChunk.z === terrainCenterChunk.z
-    ) {
-      return
-    }
-    terrainCenterChunk = nextChunk
-    rebuildTerrainTiles(nextChunk.x, nextChunk.z)
-  }
+  const tileManager = createTerrainTileManager({
+    getTiles: () => terrainTiles,
+    setTiles: (tiles) => { terrainTiles = tiles },
+    getCenterChunk: () => terrainCenterChunk,
+    setCenterChunk: (chunk) => { terrainCenterChunk = chunk },
+  })
 
   // Force terrain rebuild when requested (e.g. after region delete/generate)
   let lastRebuildVersion = 0
@@ -405,10 +297,7 @@
     const v = $terrainForceRebuild
     if (v > lastRebuildVersion) {
       lastRebuildVersion = v
-      // Clear all existing tiles so they are treated as new and reload from server
-      terrainTiles = []
-      pendingTileQueue = []
-      terrainCenterChunk = { x: NaN, z: NaN }
+      tileManager.resetForForceRebuild()
     }
   })
 
@@ -446,8 +335,8 @@
       // Apply time scale for slow motion debugging
       const deltaTime = fixedDeltaTime * $timeScale
       const sunDeltaSeconds = realDeltaSeconds * $sunTimeScale
-      advanceLocalCalendar(sunDeltaSeconds)
-      setGameHour(getLocalGameHour())
+      calendarSystem.advance(sunDeltaSeconds)
+      setGameHour(calendarSystem.getGameHour())
 
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
@@ -461,8 +350,8 @@
         playerControl.updateKeyboardMovement()
         playerControl.updatePlayerMovement(deltaTime)
       }
-      updateTerrainTilesFromPlayer()
-      drainTileQueue()
+      tileManager.updateFromPlayerPosition(currentPlayer?.position ?? null)
+      tileManager.drainQueue()
       drainTileWork()
       syncTileMeshes()
       // Finalize teleport once full 3x3 heightmap grid is loaded
@@ -571,7 +460,7 @@
       // Update water uniforms — always use real sun direction (not moon)
       waterTime += realDeltaSeconds
       {
-        const sunSnapshot = computeSunLightSnapshot(getLocalGameHour(), localCalendarDate)
+        const sunSnapshot = computeSunLightSnapshot(calendarSystem.getGameHour(), calendarSystem.getDate())
         waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
         waterSunDir = waterSunDirTmp.clone()
       }
@@ -596,86 +485,37 @@
         loopProfiler.record('wetnessPass', performance.now() - wetnessStart)
       }
 
-      // Count warmup frames after loading to let main pass compile pipelines
-      // before adding refraction/reflection overhead.
-      if (!multiPassReady && !isSceneCompiling) {
-        multiPassWarmupFrames++
-        if (multiPassWarmupFrames >= MULTI_PASS_WARMUP_FRAMES) {
-          multiPassReady = true
-        }
-      }
+      // Multi-pass warmup + refraction/reflection
+      multiPassRenderer.tickWarmup(isSceneCompiling)
 
-      // Render refraction pass (scene without water or entities — terrain only)
-      {
-        const refractionStart = performance.now()
-        if (refractionManager && $refractionEnabled && multiPassReady) {
-          if (camera) refractionManager.setCamera(camera)
-          if (waterGroup) refractionManager.setWaterGroup(waterGroup)
+      multiPassRenderer.renderRefraction({
+        camera, refractionManager, refractionEnabled: $refractionEnabled,
+        waterGroup, terrainMeshes, entityClipGroup,
+        grassGroup: grassLayerRef?.getGroup(),
+        windParticlesGroup: windParticlesRef?.getGroup(),
+      }, loopProfiler)
 
-          // Hide brush/grid overlay during refraction so it doesn't show through water
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const brushUniforms = (terrainMeshes[0]?.material as any)?.userData?.uniforms
-          let savedBrushActive: number | undefined
-          let savedGridVisible: number | undefined
-          if (brushUniforms) {
-            savedBrushActive = brushUniforms.brushActive.value
-            savedGridVisible = brushUniforms.gridVisible.value
-            brushUniforms.brushActive.value = 0.0
-            brushUniforms.gridVisible.value = 0.0
-          }
-
-          // Hide entities, grass, and particles during refraction
-          const refMgrRender = () => refractionManager!.render()
-          renderWithHiddenGroups(
-            [entityClipGroup, grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
-            refMgrRender,
-          )
-
-          if (brushUniforms) {
-            brushUniforms.brushActive.value = savedBrushActive
-            brushUniforms.gridVisible.value = savedGridVisible
-          }
-        } else if (refractionManager) {
-          refractionManager.clear()
-        }
-        loopProfiler.record('refractionPass', performance.now() - refractionStart)
-      }
-
-      // Render reflection pass (entities only, mirrored camera)
-      {
-        const reflectionStart = performance.now()
-        if (reflectionManager && $reflectionEnabled && multiPassReady) {
-          if (camera) reflectionManager.setCamera(camera)
-          reflectionManager.setTerrainGroup(terrainGroup ?? null)
-          if (waterGroup) reflectionManager.setWaterGroup(waterGroup)
-          reflectionManager.setHousingGroup(housingLayerRef?.getGroup() ?? null)
-          if (entityClipGroup) reflectionManager.setEntityClipGroup(entityClipGroup)
-
-          // Hide nametags/HP bars during reflection render
-          const nametagGroups: THREE.Group[] = []
+      multiPassRenderer.renderReflection({
+        camera, reflectionManager, reflectionEnabled: $reflectionEnabled,
+        waterGroup, terrainGroup, housingGroup: housingLayerRef?.getGroup(),
+        entityClipGroup,
+        grassGroup: grassLayerRef?.getGroup(),
+        windParticlesGroup: windParticlesRef?.getGroup(),
+        getNametagGroups: () => {
+          const groups: THREE.Group[] = []
           const ntCurrent = currentPlayerModel?.getNametagGroup()
-          if (ntCurrent) { nametagGroups.push(ntCurrent); ntCurrent.visible = false }
+          if (ntCurrent) groups.push(ntCurrent)
           for (const pm of otherPlayerModels) {
             const nt = pm?.getNametagGroup()
-            if (nt) { nametagGroups.push(nt); nt.visible = false }
+            if (nt) groups.push(nt)
           }
           for (const mm of monsterModels) {
             const nt = mm?.getNametagGroup()
-            if (nt) { nametagGroups.push(nt); nt.visible = false }
+            if (nt) groups.push(nt)
           }
-
-          // Hide grass + particles during reflection — InstancedMesh per-pass overhead
-          const reflMgrRender = () => reflectionManager!.render()
-          renderWithHiddenGroups(
-            [grassLayerRef?.getGroup(), windParticlesRef?.getGroup()],
-            reflMgrRender,
-          )
-          for (const nt of nametagGroups) nt.visible = true
-        } else if (reflectionManager) {
-          reflectionManager.clear()
-        }
-        loopProfiler.record('reflectionPass', performance.now() - reflectionStart)
-      }
+          return groups
+        },
+      }, loopProfiler)
 
       const frameWorkMs = performance.now() - frameWorkStart
       loopProfiler.record('frameWork', frameWorkMs)
@@ -760,33 +600,19 @@
   }
 
   function updateLightPosition() {
+    const calDate = calendarSystem.getDate()
     sceneLighting.update({
       currentPlayerPosition: currentPlayer?.position ?? null,
-      localCalendarDate,
+      localCalendarDate: calDate,
       ambientLight,
       directionalLight,
       scene,
       sunLightSnapshot: computeSunLightSnapshot(
-        getLocalGameHour(),
-        localCalendarDate
+        calendarSystem.getGameHour(),
+        calDate,
       ),
       eclipseFactor: eclipseState.factor,
     })
-  }
-
-  /** Hide a list of groups, run a callback, then restore visibility. */
-  function renderWithHiddenGroups(
-    groups: (THREE.Group | undefined)[],
-    renderFn: () => void,
-  ) {
-    const saved = groups.map((g) => g?.visible)
-    for (const g of groups) {
-      if (g) g.visible = false
-    }
-    renderFn()
-    for (let i = 0; i < groups.length; i++) {
-      if (groups[i]) groups[i]!.visible = saved[i] ?? true
-    }
   }
 
   // Stop game loop
@@ -801,79 +627,30 @@
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
 
-    // Expose profiler toggle in browser console: __profile() to start, __profile() again to stop
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(window as any).__profile = () => {
-      loopProfileEnabled = !loopProfileEnabled
-      if (loopProfileEnabled) {
-        loopProfiler.resetWindow(performance.now())
-        console.log('[LoopProfile] STARTED — stats will print every 1s')
-      } else {
-        console.log('[LoopProfile] STOPPED')
-      }
-    }
-    // Expose GPU profiling toggles in browser console
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any
-    w.__ri = () => {
-      const r = renderer.info.render
-      console.log(`[RendererInfo] calls=${r.calls} tris=${r.triangles} points=${r.points} lines=${r.lines}`)
-      console.log('[RendererInfo] raw:', renderer.info)
-    }
-    // Toggle visibility of scene layers to isolate GPU bottleneck
-    w.__toggleGrass = () => {
-      const g = grassLayerRef?.getGroup()
-      if (g) { g.visible = !g.visible; console.log(`[Toggle] grass visible=${g.visible}`) }
-    }
-    w.__toggleHousing = () => {
-      const g = housingLayerRef?.getGroup()
-      if (g) { g.visible = !g.visible; console.log(`[Toggle] housing visible=${g.visible}`) }
-    }
-    w.__toggleRefraction = () => {
-      refractionEnabled.update((v: boolean) => !v)
-      console.log(`[Toggle] refraction`)
-    }
-    w.__toggleReflection = () => {
-      reflectionEnabled.update((v: boolean) => !v)
-      console.log(`[Toggle] reflection`)
-    }
-    w.__toggleTerrain = () => {
-      if (terrainGroup) { terrainGroup.visible = !terrainGroup.visible; console.log(`[Toggle] terrain visible=${terrainGroup.visible}`) }
-    }
-    // Count visible meshes in scene
-    w.__countMeshes = () => {
-      let meshCount = 0, instancedCount = 0, totalTris = 0, totalInstances = 0
-      scene.traverse((obj: THREE.Object3D) => {
-        if (!obj.visible) return
-        if ((obj as THREE.InstancedMesh).isInstancedMesh) {
-          const im = obj as THREE.InstancedMesh
-          instancedCount++
-          totalInstances += im.count
-          const geo = im.geometry
-          const idxCount = geo.index ? geo.index.count : geo.attributes.position.count
-          totalTris += (idxCount / 3) * im.count
-        } else if ((obj as THREE.Mesh).isMesh) {
-          meshCount++
-          const geo = (obj as THREE.Mesh).geometry
-          const idxCount = geo.index ? geo.index.count : geo.attributes.position.count
-          totalTris += idxCount / 3
-        }
-      })
-      console.log(`[SceneCount] meshes=${meshCount} instanced=${instancedCount} (${totalInstances} instances) totalTris=${(totalTris/1e6).toFixed(2)}M`)
-    }
-    setGameHour(getLocalGameHour())
-    syncCalendarToWidget()
+    const cleanupDebugConsole = registerDebugConsole(() => ({
+      loopProfiler,
+      getLoopProfileEnabled: () => loopProfileEnabled,
+      setLoopProfileEnabled: (v) => { loopProfileEnabled = v },
+      renderer,
+      scene,
+      getGrassGroup: () => grassLayerRef?.getGroup(),
+      getHousingGroup: () => housingLayerRef?.getGroup(),
+      getTerrainGroup: () => terrainGroup,
+      refractionEnabled,
+      reflectionEnabled,
+    }))
+    setGameHour(calendarSystem.getGameHour())
 
     const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
       latestServerGameTime = gameTime
-      applyServerGameHourIfAllowed()
+      calendarSystem.applyServerTimeIfAllowed(latestServerGameTime, latestSunTimeScale)
     })
 
     const unsubscribeSunTimeScale = sunTimeScale.subscribe((scale) => {
       const wasFastSun = latestSunTimeScale > 1
       latestSunTimeScale = scale
       if (wasFastSun && scale <= 1) {
-        applyServerGameHourIfAllowed()
+        calendarSystem.applyServerTimeIfAllowed(latestServerGameTime, latestSunTimeScale)
       }
     })
 
@@ -890,38 +667,19 @@
       }
     })
 
-    const pmremGenerator = new PMREMGenerator(renderer)
-    pmremGenerator.fromSceneAsync(new RoomEnvironment()).then((rt) => {
-      scene.environment = rt.texture
-      scene.environmentIntensity = 0.5
-      pmremGenerator.dispose()
-    })
-
-    terrainGeometry = createTerrainGeometry(TERRAIN_TILE_SIZE, TERRAIN_TILE_SEGMENTS)
-    {
-      const loader = new THREE.TextureLoader()
-      const tex = loader.load('/textures/waternormals.jpg')
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-      waterNormalMap = tex
-    }
-    loadFoamTexture().then((tex) => { waterFoamMap = tex })
-    loadCausticsTexture().then((tex) => { waterCausticsMap = tex })
-
-    // Initialize refraction render manager
-    const refMgr = new RefractionRenderManager(renderer, scene, viewportSize.width, viewportSize.height)
-    refractionManager = refMgr
-    refractionTexture = refMgr.texture
-
-    // Initialize reflection render manager (planar reflection for entities)
-    const reflMgr = new ReflectionRenderManager(renderer, scene, viewportSize.width, viewportSize.height)
-    reflectionManager = reflMgr
-    reflectionTexture = reflMgr.texture
+    const sceneRes = initScene(renderer, scene, viewportSize.width, viewportSize.height)
+    terrainGeometry = sceneRes.terrainGeometry
+    waterNormalMap = sceneRes.waterNormalMap
+    sceneRes.waterFoamMapPromise.then((tex) => { waterFoamMap = tex })
+    sceneRes.waterCausticsMapPromise.then((tex) => { waterCausticsMap = tex })
+    refractionManager = sceneRes.refractionManager
+    refractionTexture = sceneRes.refractionTexture
+    reflectionManager = sceneRes.reflectionManager
+    reflectionTexture = sceneRes.reflectionTexture
 
     // Load all terrain tiles immediately (no staggering during initial load)
-    rebuildTerrainTiles(terrainCenterChunk.x, terrainCenterChunk.z)
-    while (pendingTileQueue.length > 0) {
-      drainTileQueue()
-    }
+    tileManager.rebuild(terrainCenterChunk.x, terrainCenterChunk.z)
+    tileManager.drainAll()
 
     // Pre-fetch all tile heightmaps so they're cached when the TerrainLayer
     // $effect fires. This allows work items to be enqueued immediately.
@@ -994,6 +752,7 @@
     }
 
     return () => {
+      cleanupDebugConsole()
       scene.environment?.dispose()
       scene.environment = null
       unsubscribeViewportSize()
