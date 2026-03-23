@@ -1,13 +1,15 @@
 import { getTerrainApiUrl } from '../utils/networkUtils'
-import { DEEP_WATER_THRESHOLD } from './terrainGenerator'
+import {
+  DEEP_WATER_THRESHOLD,
+  REGION_SIZE,
+  TILE_DIM,
+  VERTS_PER_SIDE,
+} from './terrain-constants'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 
 /** Height above which shore holes in water shader reveal sand underneath (~0.2-0.25m depth) */
 const VISIBLE_SAND_THRESHOLD = -0.25
 
-const REGION_SIZE = 16
-const TILE_DIM = 64
-const VERTS_PER_SIDE = TILE_DIM + 1
 const MAP_PX = REGION_SIZE * TILE_DIM // 1024
 
 /** Texture name → minimap RGB color */
