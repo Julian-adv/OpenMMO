@@ -299,9 +299,12 @@ class NetworkManager {
 
   sendPlayerMove(
     position: { x: number; y: number; z: number },
-    rotation: number
+    rotation: number,
+    floorLevel: number
   ) {
-    this.sendMessage({ PlayerMove: { position, rotation } })
+    this.sendMessage({
+      PlayerMove: { position, rotation, floor_level: floorLevel },
+    })
   }
 
   sendMonsterMove(

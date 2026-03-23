@@ -118,6 +118,8 @@ pub struct Player {
     pub class: CharacterClass,
     #[serde(default)]
     pub torch_on: bool,
+    #[serde(default)]
+    pub floor_level: i8,
     #[serde(skip)]
     pub last_combat_at: u64,
 }
@@ -189,6 +191,8 @@ pub enum ClientMessage {
     PlayerMove {
         position: Position,
         rotation: f32,
+        #[serde(default)]
+        floor_level: i8,
     },
     ChatMessage {
         message: String,
@@ -434,15 +438,21 @@ mod tests {
                 z: 3.0,
             },
             rotation: 1.5,
+            floor_level: 1,
         };
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
         match decoded {
-            ClientMessage::PlayerMove { position, rotation } => {
+            ClientMessage::PlayerMove {
+                position,
+                rotation,
+                floor_level,
+            } => {
                 assert_eq!(position.x, 1.0);
                 assert_eq!(position.y, 2.0);
                 assert_eq!(position.z, 3.0);
                 assert_eq!(rotation, 1.5);
+                assert_eq!(floor_level, 1);
             }
             _ => panic!("Wrong variant"),
         }
@@ -474,6 +484,8 @@ mod tests {
                 health: 10,
                 max_health: 10,
                 class: CharacterClass::Knight,
+                torch_on: false,
+                floor_level: 0,
                 last_combat_at: 0,
             },
         );

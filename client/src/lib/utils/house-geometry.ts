@@ -59,6 +59,7 @@ export interface DoorMeshInfo {
   roomIndex: number
   wallDir: WallDirection
   segmentIndex: number
+  floorLevel: number
   isOpen: boolean
 }
 
@@ -225,11 +226,9 @@ export function buildHouseGroup(
     mergedMeshCount += addMergedMeshes(front, entries.front)
     mergedMeshCount += addMergedMeshes(back, entries.back)
 
-    // Add door pivots to appropriate front/back group
+    // Collect door pivots (added to houseGroup directly so they're
+    // never hidden by the indoor cutaway front/back visibility toggle)
     for (const door of entries.doors) {
-      const dirInfo = WALL_DIR_INFO[door.wallDir]
-      const group = dirInfo.isFront ? front : back
-      group.add(door.pivot)
       allDoors.push(door)
     }
 
@@ -238,14 +237,17 @@ export function buildHouseGroup(
     floorGroups.set(fl, { front, back })
   }
 
-  // Tag door pivots with userData for raycast identification
+  // Add door pivots directly to houseGroup (not front/back groups)
+  // so they remain visible during indoor cutaway
   for (const door of allDoors) {
     door.pivot.userData = {
       doorHouseId: house.id,
       doorRoomIndex: door.roomIndex,
       doorWallDir: door.wallDir,
       doorSegmentIndex: door.segmentIndex,
+      doorFloorLevel: door.floorLevel,
     }
+    houseGroup.add(door.pivot)
   }
 
   return {
@@ -1017,6 +1019,7 @@ function collectWallSegments(
           roomIndex,
           wallDir: dir,
           segmentIndex: i,
+          floorLevel: room.floorLevel,
           isOpen,
         })
       }

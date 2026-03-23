@@ -19,7 +19,7 @@
     type MovementMode,
   } from '../utils/movementUtils'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
-  import { playerFloorOffset } from '../stores/housingStore'
+  import { playerFloorOffset, playerFloorLevel } from '../stores/housingStore'
   import { housingManager } from '../managers/housingManager'
   import { get } from 'svelte/store'
 
@@ -70,7 +70,7 @@
   // Wrapper for sending move packets to track last sent position
   function sendPlayerMove(position: Position, rotation: number) {
     lastSentPosition = { ...position }
-    networkManager.sendPlayerMove(position, rotation)
+    networkManager.sendPlayerMove(position, rotation, get(playerFloorLevel))
   }
 
   // Current player state
@@ -585,6 +585,7 @@
         y: currentPlayer.position.y,
         z: currentPlayer.position.z,
       },
+      playerFloorLevel: get(playerFloorLevel),
       isMonsterDead: (id) => {
         const m = monsterManager.monsters.get(id)
         return m?.state === 'dead' || false

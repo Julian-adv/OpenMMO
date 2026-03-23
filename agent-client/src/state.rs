@@ -118,6 +118,7 @@ impl SharedState {
         let msg = if let ClientMessage::PlayerMove {
             mut position,
             rotation,
+            ..
         } = msg
         {
             let original_y = position.y;
@@ -149,7 +150,11 @@ impl SharedState {
                 p.position = position.clone();
                 p.rotation = rotation;
             }
-            ClientMessage::PlayerMove { position, rotation }
+            ClientMessage::PlayerMove {
+                position,
+                rotation,
+                floor_level: 0,
+            }
         } else {
             msg
         };
@@ -170,6 +175,7 @@ impl SharedState {
         self.send_command(ClientMessage::PlayerMove {
             position: pos,
             rotation,
+            floor_level: 0,
         })
         .await
     }

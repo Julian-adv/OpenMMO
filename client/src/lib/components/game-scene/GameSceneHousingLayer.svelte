@@ -24,7 +24,7 @@
     TERRAIN_TILE_SIZE,
     getTerrainChunkFromPosition,
   } from './terrain-utils'
-  import { playerFloorOffset } from '../../stores/housingStore'
+  import { playerFloorOffset, playerFloorLevel } from '../../stores/housingStore'
   import { debugVisible } from '../../stores/debugStore'
   import { get } from 'svelte/store'
 
@@ -241,6 +241,7 @@
       }
       playerInsideHouseId = insideId
       playerInsideFloor = effectiveFloor
+      playerFloorLevel.set(effectiveFloor)
     }
 
     if (newOffset !== lastFloorOffset) {

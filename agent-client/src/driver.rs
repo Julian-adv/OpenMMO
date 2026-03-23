@@ -297,6 +297,7 @@ pub fn action_to_command(
             Some(ClientMessage::PlayerMove {
                 position: pos,
                 rotation,
+                floor_level: 0,
             })
         }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
@@ -713,6 +714,7 @@ fn compute_face_monster(state: &SharedState, monster_id: &str) -> Option<ClientM
     Some(ClientMessage::PlayerMove {
         position: self_player.position.clone(),
         rotation,
+        floor_level: 0,
     })
 }
 
@@ -753,6 +755,7 @@ fn compute_move_to_monster(state: &SharedState, monster_id: &str) -> Option<(Cli
             z: target_z,
         },
         rotation: dx.atan2(dz),
+        floor_level: 0,
     };
 
     Some((cmd, travel_secs))

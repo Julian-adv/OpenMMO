@@ -84,7 +84,9 @@ export type ClientMessage =
   | { DeleteCharacter: { character_id: number } }
   | 'RollCharacterStats'
   | { EnterGame: { character_id: number } }
-  | { PlayerMove: { position: Position; rotation: number } }
+  | {
+      PlayerMove: { position: Position; rotation: number; floor_level: number }
+    }
   | { ChatMessage: { message: string } }
   | {
       RequestSpawnMonster: {

@@ -22,6 +22,7 @@ pub fn new_player(
         max_health,
         class,
         torch_on: false,
+        floor_level: 0,
         last_combat_at: 0,
     }
 }

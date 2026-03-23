@@ -3,9 +3,10 @@ use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use bytes::Bytes;
-use onlinerpg_shared::housing::WallVariant;
+use onlinerpg_shared::housing::{RoomData, WallVariant};
 use onlinerpg_shared::serialize_server_msg;
-use std::collections::HashMap;
+use onlinerpg_shared::Position;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, RwLock};
@@ -51,6 +52,8 @@ pub struct GameState {
     // player_id → (character_id, current_xp, attributes)
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
     housing_io: Arc<HousingIO>,
+    /// In-memory set of currently open doors: (house_id, room_index, wall_dir, segment_index)
+    open_doors: Arc<RwLock<HashSet<(String, u32, String, u32)>>>,
 }
 
 impl GameState {
@@ -74,6 +77,7 @@ impl GameState {
             auth_service,
             player_characters: Arc::new(RwLock::new(HashMap::new())),
             housing_io,
+            open_doors: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 
@@ -93,15 +97,23 @@ impl GameState {
         }
     }
 
-    /// Toggle a door's is_open state. Returns the new state, or None if invalid.
+    /// Toggle a door's is_open state (in-memory only, no disk I/O).
+    /// Validates that the player is within 1.5m (XZ) and on the same floor.
     pub async fn toggle_door(
         &self,
+        player_id: &PlayerId,
         house_id: &str,
         room_index: u32,
         wall_dir: &str,
         segment_index: u32,
     ) -> Option<bool> {
-        let mut house = match self.housing_io.find_house(house_id).await {
+        let (player_pos, player_floor) = {
+            let players = self.players.read().await;
+            let p = players.get(player_id)?;
+            (p.position.clone(), p.floor_level)
+        };
+
+        let house = match self.housing_io.find_house(house_id).await {
             Ok(Some(h)) => h,
             _ => {
                 warn!("toggle_door: house {} not found", house_id);
@@ -109,27 +121,105 @@ impl GameState {
             }
         };
 
-        let room = house.rooms.get_mut(room_index as usize)?;
+        let room = house.rooms.get(room_index as usize)?;
+
+        // Validate door exists
         let wall = match wall_dir {
-            "north" => &mut room.wall_north,
-            "south" => &mut room.wall_south,
-            "east" => &mut room.wall_east,
-            "west" => &mut room.wall_west,
+            "north" => &room.wall_north,
+            "south" => &room.wall_south,
+            "east" => &room.wall_east,
+            "west" => &room.wall_west,
             _ => return None,
         };
-
-        let seg = wall.get_mut(segment_index as usize)?;
+        let seg = wall.get(segment_index as usize)?;
         if seg.variant != WallVariant::WithDoor {
             return None;
         }
 
-        seg.is_open = !seg.is_open;
-        let new_state = seg.is_open;
-
-        if let Err(e) = self.housing_io.write_house(&house).await {
-            error!("toggle_door: failed to save house {}: {}", house_id, e);
+        // Validate distance and floor
+        if !is_player_near_door(
+            room,
+            &house.origin,
+            wall_dir,
+            segment_index,
+            &player_pos,
+            player_floor,
+        ) {
+            return None;
         }
 
-        Some(new_state)
+        // Toggle in-memory state
+        let key = (
+            house_id.to_string(),
+            room_index,
+            wall_dir.to_string(),
+            segment_index,
+        );
+        let mut open_doors = self.open_doors.write().await;
+        let is_open = if open_doors.contains(&key) {
+            open_doors.remove(&key);
+            false
+        } else {
+            open_doors.insert(key);
+            true
+        };
+
+        Some(is_open)
     }
+}
+
+const MAX_DOOR_DISTANCE: f32 = 1.5;
+
+/// Check that the player is within range of a door and on the same floor.
+fn is_player_near_door(
+    room: &RoomData,
+    house_origin: &Position,
+    wall_dir: &str,
+    segment_index: u32,
+    player_pos: &Position,
+    player_floor: i8,
+) -> bool {
+    // Floor check
+    if player_floor != room.floor_level as i8 {
+        warn!(
+            "toggle_door: wrong floor — player floor={} door floor={}",
+            player_floor, room.floor_level
+        );
+        return false;
+    }
+
+    let seg_center = segment_index as f32 + 0.5;
+    let local_x = room.local_x as f32;
+    let local_z = room.local_z as f32;
+    let size_x = room.size_x as f32;
+    let size_z = room.size_z as f32;
+
+    // Door world position (center of 1m segment along the wall)
+    let (door_x, door_z) = match wall_dir {
+        "north" => (local_x + seg_center, local_z),
+        "south" => (local_x + seg_center, local_z + size_z),
+        "east" => (local_x + size_x, local_z + seg_center),
+        "west" => (local_x, local_z + seg_center),
+        _ => return false,
+    };
+    let world_x = house_origin.x + door_x;
+    let world_z = house_origin.z + door_z;
+
+    // XZ distance check
+    let dx = player_pos.x - world_x;
+    let dz = player_pos.z - world_z;
+    let dist_sq = dx * dx + dz * dz;
+    if dist_sq > MAX_DOOR_DISTANCE * MAX_DOOR_DISTANCE {
+        warn!(
+            "toggle_door: too far — player ({:.1},{:.1}) door ({:.1},{:.1}) dist={:.2}",
+            player_pos.x,
+            player_pos.z,
+            world_x,
+            world_z,
+            dist_sq.sqrt()
+        );
+        return false;
+    }
+
+    true
 }

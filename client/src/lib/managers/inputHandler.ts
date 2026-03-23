@@ -2,6 +2,8 @@ import { Vector2, Raycaster } from 'three'
 import * as THREE from 'three'
 import type { Position } from '../utils/movementUtils'
 
+const MAX_DOOR_INTERACT_DISTANCE = 1.5
+
 export type ClickIntent =
   | {
       type: 'attack_monster'
@@ -25,6 +27,7 @@ export interface RaycastContext {
   doorMeshes: THREE.Object3D[]
   groundMeshes: THREE.Object3D[]
   playerPosition: Position
+  playerFloorLevel: number
   isMonsterDead: (monsterId: string) => boolean
 }
 
@@ -139,23 +142,36 @@ class InputHandler {
     )
     raycaster.setFromCamera(centerNDC, context.camera)
 
-    // Check intersection with door meshes
+    // Check intersection with door meshes (within 1.5m of player)
     if (context.doorMeshes?.length > 0) {
       const doorHits = raycaster.intersectObjects(context.doorMeshes, true)
       if (doorHits.length > 0) {
-        let obj: THREE.Object3D | null = doorHits[0].object
-        while (obj) {
-          const d = obj.userData
-          if (d && d.doorHouseId) {
-            return {
-              type: 'toggle_door',
-              houseId: d.doorHouseId,
-              roomIndex: d.doorRoomIndex,
-              wallDir: d.doorWallDir,
-              segmentIndex: d.doorSegmentIndex,
+        const hitPoint = doorHits[0].point
+        const pp = context.playerPosition
+        const dx = hitPoint.x - pp.x
+        const dz = hitPoint.z - pp.z
+        if (
+          dx * dx + dz * dz <=
+          MAX_DOOR_INTERACT_DISTANCE * MAX_DOOR_INTERACT_DISTANCE
+        ) {
+          let obj: THREE.Object3D | null = doorHits[0].object
+          while (obj) {
+            const d = obj.userData
+            if (
+              d &&
+              d.doorHouseId &&
+              d.doorFloorLevel === context.playerFloorLevel
+            ) {
+              return {
+                type: 'toggle_door',
+                houseId: d.doorHouseId,
+                roomIndex: d.doorRoomIndex,
+                wallDir: d.doorWallDir,
+                segmentIndex: d.doorSegmentIndex,
+              }
             }
+            obj = obj.parent
           }
-          obj = obj.parent
         }
       }
     }

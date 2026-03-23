@@ -468,10 +468,14 @@ async fn handle_client_message(
             return Ok(responses);
         }
 
-        ClientMessage::PlayerMove { position, rotation } => {
+        ClientMessage::PlayerMove {
+            position,
+            rotation,
+            floor_level,
+        } => {
             if let Some(id) = &state.player_id {
                 game_state
-                    .update_player_position(id, position, rotation)
+                    .update_player_position(id, position, rotation, floor_level)
                     .await;
             } else {
                 warn!("Received move from client that is not in game");
@@ -601,9 +605,9 @@ async fn handle_client_message(
             segment_index,
         } => {
             // Toggle door is_open and broadcast to all players
-            if state.player_id.is_some() {
+            if let Some(ref pid) = state.player_id {
                 let toggled = game_state
-                    .toggle_door(&house_id, room_index, &wall_dir, segment_index)
+                    .toggle_door(pid, &house_id, room_index, &wall_dir, segment_index)
                     .await;
                 if let Some(is_open) = toggled {
                     // Broadcast to ALL players (including sender) so everyone

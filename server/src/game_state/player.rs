@@ -160,12 +160,14 @@ impl super::GameState {
         player_id: &PlayerId,
         new_position: Position,
         new_rotation: f32,
+        floor_level: i8,
     ) {
         let mut players = self.players.write().await;
 
         if let Some(player) = players.get_mut(player_id) {
             player.position = new_position.clone();
             player.rotation = new_rotation;
+            player.floor_level = floor_level;
             self.broadcast(
                 ServerMessage::PlayerMoved {
                     player_id: player_id.clone(),
