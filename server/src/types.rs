@@ -1,6 +1,6 @@
 pub use onlinerpg_shared::{
-    Character, CharacterAttributes, CharacterClass, ClientMessage, GameDateTime, Monster, Player,
-    PlayerId, Position, ServerMessage,
+    Character, CharacterAttributes, CharacterClass, ClientMessage, GameDateTime, Monster,
+    MonsterState, Player, PlayerId, Position, ServerMessage,
 };
 use uuid::Uuid;
 

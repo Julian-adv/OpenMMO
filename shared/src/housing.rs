@@ -48,6 +48,18 @@ impl Default for RoofRidgeDir {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum WallDirection {
+    #[serde(rename = "north")]
+    North,
+    #[serde(rename = "south")]
+    South,
+    #[serde(rename = "east")]
+    East,
+    #[serde(rename = "west")]
+    West,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum WallVariant {
     #[serde(rename = "solid")]
@@ -94,6 +106,17 @@ pub struct RoomData {
     pub wall_east: Vec<WallConfig>,
     /// 1m segments: west wall (length = size_z)
     pub wall_west: Vec<WallConfig>,
+}
+
+impl RoomData {
+    pub fn wall(&self, dir: WallDirection) -> &[WallConfig] {
+        match dir {
+            WallDirection::North => &self.wall_north,
+            WallDirection::South => &self.wall_south,
+            WallDirection::East => &self.wall_east,
+            WallDirection::West => &self.wall_west,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

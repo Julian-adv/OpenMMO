@@ -1,4 +1,4 @@
-use crate::types::{Position, ServerMessage};
+use crate::types::{MonsterState, Position, ServerMessage};
 use tracing::{info, warn};
 
 impl super::GameState {
@@ -34,7 +34,7 @@ impl super::GameState {
             monster_type: monster_type.clone(),
             position,
             rotation,
-            state: "idle".to_string(),
+            state: MonsterState::Idle,
             owner_id,
             health,
             max_health: health,
@@ -58,18 +58,18 @@ impl super::GameState {
         monster_id: String,
         new_position: Position,
         rotation: f32,
-        state: String,
+        state: MonsterState,
         target_position: Position,
     ) {
         let mut monsters = self.monsters.write().await;
 
         if let Some(monster) = monsters.get_mut(&monster_id) {
-            if monster.state == "dead" {
+            if monster.state == MonsterState::Dead {
                 return;
             }
             monster.position = new_position.clone();
             monster.rotation = rotation;
-            monster.state = state.clone();
+            monster.state = state;
 
             self.broadcast(
                 ServerMessage::MonsterMoved {

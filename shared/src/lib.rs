@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fmt;
 
 pub mod housing;
 
@@ -124,13 +125,42 @@ pub struct Player {
     pub last_combat_at: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MonsterState {
+    #[serde(rename = "idle")]
+    Idle,
+    #[serde(rename = "walk")]
+    Walk,
+    #[serde(rename = "run")]
+    Run,
+    #[serde(rename = "attack")]
+    Attack,
+    #[serde(rename = "hit")]
+    Hit,
+    #[serde(rename = "dead")]
+    Dead,
+}
+
+impl fmt::Display for MonsterState {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Idle => write!(f, "idle"),
+            Self::Walk => write!(f, "walk"),
+            Self::Run => write!(f, "run"),
+            Self::Attack => write!(f, "attack"),
+            Self::Hit => write!(f, "hit"),
+            Self::Dead => write!(f, "dead"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Monster {
     pub id: String,
     pub monster_type: String,
     pub position: Position,
     pub rotation: f32,
-    pub state: String,
+    pub state: MonsterState,
     pub owner_id: Option<String>,
     pub health: u32,
     pub max_health: u32,
@@ -206,7 +236,7 @@ pub enum ClientMessage {
         monster_id: String,
         position: Position,
         rotation: f32,
-        state: String,
+        state: MonsterState,
         target_position: Position,
     },
     PlayerAttack {
@@ -238,7 +268,7 @@ pub enum ClientMessage {
     ToggleDoor {
         house_id: String,
         room_index: u32,
-        wall_dir: String,
+        wall_dir: housing::WallDirection,
         segment_index: u32,
     },
 }
@@ -303,7 +333,7 @@ pub enum ServerMessage {
         monster_id: String,
         position: Position,
         rotation: f32,
-        state: String,
+        state: MonsterState,
         target_position: Position,
         owner_id: Option<String>,
     },
@@ -372,7 +402,7 @@ pub enum ServerMessage {
     DoorToggled {
         house_id: String,
         room_index: u32,
-        wall_dir: String,
+        wall_dir: housing::WallDirection,
         segment_index: u32,
         is_open: bool,
     },

@@ -1,5 +1,5 @@
 use crate::game::{character_hp, combat, xp};
-use crate::types::{PlayerId, ServerMessage};
+use crate::types::{MonsterState, PlayerId, ServerMessage};
 use tracing::{info, warn};
 
 impl super::GameState {
@@ -8,7 +8,7 @@ impl super::GameState {
         let monster_type = {
             let monsters = self.monsters.read().await;
             let monster = monsters.get(&monster_id);
-            if monster.is_none() || monster.unwrap().state == "dead" {
+            if monster.is_none() || monster.unwrap().state == MonsterState::Dead {
                 return;
             }
             monster.unwrap().monster_type.clone()
@@ -61,7 +61,7 @@ impl super::GameState {
                 let mut is_dead = false;
 
                 if let Some(monster) = monsters.get_mut(&monster_id) {
-                    if monster.state == "dead" {
+                    if monster.state == MonsterState::Dead {
                         return; // Already dead
                     }
 
@@ -72,7 +72,7 @@ impl super::GameState {
                     );
 
                     if monster.health == 0 {
-                        monster.state = "dead".to_string();
+                        monster.state = MonsterState::Dead;
                         is_dead = true;
                     }
                 }
@@ -216,7 +216,7 @@ impl super::GameState {
                         tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
                         let mut monsters = game_state.monsters.write().await;
                         if let Some(monster) = monsters.get(&id_to_remove) {
-                            if monster.state == "dead" {
+                            if monster.state == MonsterState::Dead {
                                 monsters.remove(&id_to_remove);
                                 info!("Monster {} removed after 30s corpse time", id_to_remove);
                                 game_state.broadcast(
@@ -249,7 +249,7 @@ impl super::GameState {
         {
             let mut monsters = self.monsters.write().await;
             if let Some(monster) = monsters.get_mut(monster_id) {
-                if monster.state != "dead"
+                if monster.state != MonsterState::Dead
                     && monster.owner_id.as_deref() == Some(attacker_player_id)
                 {
                     let def = self.monster_defs.get(&monster.monster_type);

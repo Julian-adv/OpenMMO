@@ -1,4 +1,5 @@
 use super::*;
+use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterClass, Position, ServerMessage};
 use std::path::PathBuf;
@@ -13,10 +14,16 @@ fn make_test_game_state(test_name: &str) -> (GameState, PathBuf) {
     let auth_service = Arc::new(
         AuthService::new(db_path.clone()).expect("Failed to initialize test auth service"),
     );
+    let housing_dir = std::env::temp_dir().join(format!(
+        "onlinerpg_{test_name}_housing_{}",
+        uuid::Uuid::new_v4()
+    ));
+    let housing_io = Arc::new(HousingIO::new(housing_dir));
     let game_state = GameState::new(
         MonsterDefs::load(),
         GameState::default_start_datetime(),
         auth_service,
+        housing_io,
     );
     (game_state, db_path)
 }
@@ -44,6 +51,8 @@ async fn respawn_player_revives_dead_player_only() {
         health: 0,
         max_health: 30,
         class: CharacterClass::Knight,
+        torch_on: false,
+        floor_level: 0,
         last_combat_at: 0,
     };
     let player_id = player.id.clone();
@@ -97,6 +106,8 @@ async fn respawn_player_ignores_alive_player() {
         health: 18,
         max_health: 20,
         class: CharacterClass::Knight,
+        torch_on: false,
+        floor_level: 0,
         last_combat_at: 0,
     };
     let player_id = player.id.clone();

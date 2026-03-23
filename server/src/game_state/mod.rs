@@ -3,7 +3,7 @@ use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use bytes::Bytes;
-use onlinerpg_shared::housing::{RoomData, WallVariant};
+use onlinerpg_shared::housing::{RoomData, WallDirection, WallVariant};
 use onlinerpg_shared::serialize_server_msg;
 use onlinerpg_shared::Position;
 use std::collections::{HashMap, HashSet};
@@ -11,6 +11,14 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc, RwLock};
 use tracing::{error, warn};
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct DoorKey {
+    house_id: String,
+    room_index: u32,
+    wall_dir: WallDirection,
+    segment_index: u32,
+}
 
 #[derive(Debug, Clone)]
 pub struct BroadcastMessage {
@@ -52,8 +60,8 @@ pub struct GameState {
     // player_id → (character_id, current_xp, attributes)
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
     housing_io: Arc<HousingIO>,
-    /// In-memory set of currently open doors: (house_id, room_index, wall_dir, segment_index)
-    open_doors: Arc<RwLock<HashSet<(String, u32, String, u32)>>>,
+    /// In-memory set of currently open doors.
+    open_doors: Arc<RwLock<HashSet<DoorKey>>>,
 }
 
 impl GameState {
@@ -104,7 +112,7 @@ impl GameState {
         player_id: &PlayerId,
         house_id: &str,
         room_index: u32,
-        wall_dir: &str,
+        wall_dir: WallDirection,
         segment_index: u32,
     ) -> Option<bool> {
         let (player_pos, player_floor) = {
@@ -124,14 +132,7 @@ impl GameState {
         let room = house.rooms.get(room_index as usize)?;
 
         // Validate door exists
-        let wall = match wall_dir {
-            "north" => &room.wall_north,
-            "south" => &room.wall_south,
-            "east" => &room.wall_east,
-            "west" => &room.wall_west,
-            _ => return None,
-        };
-        let seg = wall.get(segment_index as usize)?;
+        let seg = room.wall(wall_dir).get(segment_index as usize)?;
         if seg.variant != WallVariant::WithDoor {
             return None;
         }
@@ -149,12 +150,12 @@ impl GameState {
         }
 
         // Toggle in-memory state
-        let key = (
-            house_id.to_string(),
+        let key = DoorKey {
+            house_id: house_id.to_string(),
             room_index,
-            wall_dir.to_string(),
+            wall_dir,
             segment_index,
-        );
+        };
         let mut open_doors = self.open_doors.write().await;
         let is_open = if open_doors.contains(&key) {
             open_doors.remove(&key);
@@ -174,7 +175,7 @@ const MAX_DOOR_DISTANCE: f32 = 1.5;
 fn is_player_near_door(
     room: &RoomData,
     house_origin: &Position,
-    wall_dir: &str,
+    wall_dir: WallDirection,
     segment_index: u32,
     player_pos: &Position,
     player_floor: i8,
@@ -196,11 +197,10 @@ fn is_player_near_door(
 
     // Door world position (center of 1m segment along the wall)
     let (door_x, door_z) = match wall_dir {
-        "north" => (local_x + seg_center, local_z),
-        "south" => (local_x + seg_center, local_z + size_z),
-        "east" => (local_x + size_x, local_z + seg_center),
-        "west" => (local_x, local_z + seg_center),
-        _ => return false,
+        WallDirection::North => (local_x + seg_center, local_z),
+        WallDirection::South => (local_x + seg_center, local_z + size_z),
+        WallDirection::East => (local_x + size_x, local_z + seg_center),
+        WallDirection::West => (local_x, local_z + seg_center),
     };
     let world_x = house_origin.x + door_x;
     let world_z = house_origin.z + door_z;

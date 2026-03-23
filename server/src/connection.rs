@@ -607,7 +607,7 @@ async fn handle_client_message(
             // Toggle door is_open and broadcast to all players
             if let Some(ref pid) = state.player_id {
                 let toggled = game_state
-                    .toggle_door(pid, &house_id, room_index, &wall_dir, segment_index)
+                    .toggle_door(pid, &house_id, room_index, wall_dir, segment_index)
                     .await;
                 if let Some(is_open) = toggled {
                     // Broadcast to ALL players (including sender) so everyone
