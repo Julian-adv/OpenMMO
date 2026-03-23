@@ -4,43 +4,45 @@ import {
   TERRAIN_TILE_SIZE,
   SEA_LEVEL_ENCODED,
 } from '../components/game-scene/terrain-utils'
+import {
+  VERTS_PER_SIDE,
+  tileKey,
+  decodeHeight,
+  worldToTileCoord,
+  type TerrainHeightState,
+  type AffectedTile,
+  type HeightChangedCallback,
+} from './terrain-height-types'
+import {
+  getHeightAtCell,
+  applyHeightToGeometry as applyHeightToGeo,
+  refreshAdjacentTileEdges as doRefreshAdjacentEdges,
+} from './terrain-height-geometry'
+import {
+  applyBrush as doBrush,
+  applyFlatten as doFlatten,
+  flattenArea as doFlattenArea,
+  restoreFromOriginal as doRestore,
+} from './terrain-height-brushes'
+import {
+  loadHeightmap as doLoad,
+  loadOriginalHeightmap as doLoadOriginal,
+  ensureOriginalHeightmap as doEnsureOriginal,
+  saveDirtyTiles,
+} from './terrain-height-persistence'
 
-const TILE_DIM = 64
-const VERTS_PER_SIDE = TILE_DIM + 1 // 65 vertices per axis
-const PADDED_SIDE = VERTS_PER_SIDE + 2 // 67 — padded grid for analytical normals
-const _paddedHeights = new Float32Array(PADDED_SIDE * PADDED_SIDE) // reusable buffer
-
-function tileKey(tileX: number, tileZ: number): string {
-  return `${tileX},${tileZ}`
-}
-
-function encodeHeight(meters: number): number {
-  return Math.round((meters + 500.0) / 0.05)
-}
-
-function decodeHeight(value: number): number {
-  return value * 0.05 - 500.0
-}
-
-function worldToTileCoord(worldCoord: number): number {
-  return Math.floor((worldCoord + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE)
-}
-
-export interface AffectedTile {
-  tileX: number
-  tileZ: number
-}
-
-export type HeightChangedCallback = (tiles: AffectedTile[]) => void
+export type { AffectedTile, HeightChangedCallback }
 
 export class TerrainHeightManager {
-  private heightmaps = new Map<string, Uint16Array>()
-  private originalHeightmaps = new Map<string, Uint16Array>()
-  private missingOriginalTiles = new Set<string>()
+  private state: TerrainHeightState = {
+    heightmaps: new Map(),
+    originalHeightmaps: new Map(),
+    missingOriginalTiles: new Set(),
+    geometries: new Map(),
+    dirtyTiles: new Set(),
+    dirtyOriginalTiles: new Set(),
+  }
   private inflightHeightmaps = new Map<string, Promise<Uint16Array>>()
-  private geometries = new Map<string, THREE.BufferGeometry>()
-  private dirtyTiles = new Set<string>()
-  private dirtyOriginalTiles = new Set<string>()
   private saveTimer: ReturnType<typeof setTimeout> | null = null
   private terrainApiUrl: string
   private heightChangedListeners: HeightChangedCallback[] = []
@@ -62,159 +64,51 @@ export class TerrainHeightManager {
     for (const cb of this.heightChangedListeners) cb(tiles)
   }
 
-  async loadHeightmap(tileX: number, tileZ: number): Promise<Uint16Array> {
-    const key = tileKey(tileX, tileZ)
-    const cached = this.heightmaps.get(key)
-    if (cached) return cached
-
-    // Deduplicate in-flight requests
-    const inflight = this.inflightHeightmaps.get(key)
-    if (inflight) return inflight
-
-    const promise = (async () => {
-      try {
-        const url = `${this.terrainApiUrl}/api/terrain/height/${tileX}/${tileZ}`
-        const response = await fetch(url)
-        if (!response.ok) {
-          throw new Error(
-            `HTTP ${response.status} for heightmap (${tileX}, ${tileZ})`
-          )
-        }
-        const buffer = await response.arrayBuffer()
-        const data = new Uint16Array(buffer)
-        this.heightmaps.set(key, data)
-        // Also try loading the original heightmap (fire-and-forget)
-        this.loadOriginalHeightmap(tileX, tileZ)
-        return data
-      } catch (e) {
-        console.error(`Failed to load heightmap (${tileX}, ${tileZ}):`, e)
-        throw e
-      } finally {
-        this.inflightHeightmaps.delete(key)
-      }
-    })()
-    this.inflightHeightmaps.set(key, promise)
-    return promise
+  private scheduleSave() {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer)
+    }
+    this.saveTimer = setTimeout(() => {
+      saveDirtyTiles(this.state, this.terrainApiUrl)
+      this.saveTimer = null
+    }, 1000)
   }
 
-  /** Sync a cell value to the original heightmap (brush edits become the new "original"). */
-  private syncToOriginal(key: string, idx: number, value: number): void {
-    const origData = this.originalHeightmaps.get(key)
-    if (origData) {
-      origData[idx] = value
-      this.dirtyOriginalTiles.add(key)
-    }
-  }
-
-  /** Load original (pre-housing) heightmap from server. Returns null if none exists. */
-  async loadOriginalHeightmap(
-    tileX: number,
-    tileZ: number
-  ): Promise<Uint16Array | null> {
-    const key = tileKey(tileX, tileZ)
-    if (this.originalHeightmaps.has(key))
-      return this.originalHeightmaps.get(key)!
-    if (this.missingOriginalTiles.has(key)) return null
-    try {
-      const url = `${this.terrainApiUrl}/api/terrain/height-original/${tileX}/${tileZ}`
-      const response = await fetch(url)
-      if (response.status === 404) {
-        this.missingOriginalTiles.add(key)
-        return null
-      }
-      if (!response.ok) return null
-      const buffer = await response.arrayBuffer()
-      const data = new Uint16Array(buffer)
-      this.originalHeightmaps.set(key, data)
-      return data
-    } catch {
-      return null
-    }
-  }
-
-  /** Ensure an original heightmap snapshot exists for the given tile.
-   *  If none exists yet, tells the server to copy the current heightmap as the original,
-   *  and caches a local copy. */
-  ensureOriginalHeightmap(tileX: number, tileZ: number): void {
-    const key = tileKey(tileX, tileZ)
-    if (this.originalHeightmaps.has(key)) return
-    const current = this.heightmaps.get(key)
-    if (!current) return
-    // Cache locally
-    this.originalHeightmaps.set(key, new Uint16Array(current))
-    this.missingOriginalTiles.delete(key)
-    // Tell server to snapshot (fire-and-forget, no data transfer)
-    fetch(
-      `${this.terrainApiUrl}/api/terrain/height-original/${tileX}/${tileZ}/ensure`,
-      { method: 'POST' }
-    ).catch(() => {})
-  }
-
-  /** Restore heightmap cells within a world-space rectangle from original data.
-   *  Returns the list of affected tiles. */
-  restoreFromOriginal(
-    minX: number,
-    minZ: number,
-    maxX: number,
-    maxZ: number
-  ): AffectedTile[] {
-    const affected: AffectedTile[] = []
-    const minTileX = worldToTileCoord(minX)
-    const maxTileX = worldToTileCoord(maxX)
-    const minTileZ = worldToTileCoord(minZ)
-    const maxTileZ = worldToTileCoord(maxZ)
-
-    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
-      for (let tx = minTileX; tx <= maxTileX; tx++) {
-        const key = tileKey(tx, tz)
-        const original = this.originalHeightmaps.get(key)
-        const current = this.heightmaps.get(key)
-        if (!original || !current) continue
-
-        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-
-        const startCX = Math.max(0, Math.floor(minX - tileMinX))
-        const endCX = Math.min(TILE_DIM, Math.floor(maxX - tileMinX))
-        const startCZ = Math.max(0, Math.floor(minZ - tileMinZ))
-        const endCZ = Math.min(TILE_DIM, Math.floor(maxZ - tileMinZ))
-
-        let changed = false
-        for (let cz = startCZ; cz <= endCZ; cz++) {
-          for (let cx = startCX; cx <= endCX; cx++) {
-            const idx = cz * VERTS_PER_SIDE + cx
-            if (current[idx] !== original[idx]) {
-              current[idx] = original[idx]
-              changed = true
-            }
-          }
-        }
-
-        if (changed) {
-          affected.push({ tileX: tx, tileZ: tz })
-          this.dirtyTiles.add(key)
-          const geometry = this.geometries.get(key)
-          if (geometry) {
-            this.applyHeightToGeometry(tx, tz, geometry)
-          }
-        }
-      }
-    }
-
-    for (const { tileX: tx, tileZ: tz } of affected) {
-      this.refreshAdjacentTileEdges(tx, tz)
-    }
-
+  private finalize(affected: AffectedTile[]) {
     if (affected.length > 0) {
       this.scheduleSave()
       this.notifyHeightChanged(affected)
     }
-
-    return affected
   }
 
+  // --- Data loading ---
+
+  async loadHeightmap(tileX: number, tileZ: number): Promise<Uint16Array> {
+    return doLoad(
+      this.state,
+      this.inflightHeightmaps,
+      this.terrainApiUrl,
+      tileX,
+      tileZ,
+      (tx, tz) => this.loadOriginalHeightmap(tx, tz)
+    )
+  }
+
+  async loadOriginalHeightmap(
+    tileX: number,
+    tileZ: number
+  ): Promise<Uint16Array | null> {
+    return doLoadOriginal(this.state, this.terrainApiUrl, tileX, tileZ)
+  }
+
+  ensureOriginalHeightmap(tileX: number, tileZ: number): void {
+    doEnsureOriginal(this.state, this.terrainApiUrl, tileX, tileZ)
+  }
+
+  // --- Height queries ---
+
   getHeightmap(tileX: number, tileZ: number): Uint16Array | undefined {
-    return this.heightmaps.get(tileKey(tileX, tileZ))
+    return this.state.heightmaps.get(tileKey(tileX, tileZ))
   }
 
   getHeightAtCell(
@@ -223,27 +117,11 @@ export class TerrainHeightManager {
     cellX: number,
     cellZ: number
   ): number {
-    // Heightmap stores 65×65 vertices (0-64). Cross-tile only for padding positions.
-    if (cellX >= VERTS_PER_SIDE) {
-      return this.getHeightAtCell(tileX + 1, tileZ, cellX - TILE_DIM, cellZ)
-    }
-    if (cellZ >= VERTS_PER_SIDE) {
-      return this.getHeightAtCell(tileX, tileZ + 1, cellX, cellZ - TILE_DIM)
-    }
-    if (cellX < 0) {
-      return this.getHeightAtCell(tileX - 1, tileZ, cellX + TILE_DIM, cellZ)
-    }
-    if (cellZ < 0) {
-      return this.getHeightAtCell(tileX, tileZ - 1, cellX, cellZ + TILE_DIM)
-    }
-
-    const data = this.heightmaps.get(tileKey(tileX, tileZ))
-    if (!data) return 0
-    return decodeHeight(data[cellZ * VERTS_PER_SIDE + cellX])
+    return getHeightAtCell(this.state, tileX, tileZ, cellX, cellZ)
   }
 
   hasHeightData(worldX: number, worldZ: number): boolean {
-    return this.heightmaps.has(
+    return this.state.heightmaps.has(
       tileKey(worldToTileCoord(worldX), worldToTileCoord(worldZ))
     )
   }
@@ -253,7 +131,7 @@ export class TerrainHeightManager {
     const floorZ = Math.floor(worldZ / TERRAIN_TILE_SIZE)
     for (let dz = 0; dz <= 1; dz++) {
       for (let dx = 0; dx <= 1; dx++) {
-        if (!this.heightmaps.has(tileKey(floorX + dx, floorZ + dz))) {
+        if (!this.state.heightmaps.has(tileKey(floorX + dx, floorZ + dz))) {
           return false
         }
       }
@@ -273,565 +151,18 @@ export class TerrainHeightManager {
     const fracX = localX - cellX
     const fracZ = localZ - cellZ
 
-    const h00 = this.getHeightAtCell(tileX, tileZ, cellX, cellZ)
-    const h10 = this.getHeightAtCell(tileX, tileZ, cellX + 1, cellZ)
-    const h01 = this.getHeightAtCell(tileX, tileZ, cellX, cellZ + 1)
-    const h11 = this.getHeightAtCell(tileX, tileZ, cellX + 1, cellZ + 1)
+    const h00 = getHeightAtCell(this.state, tileX, tileZ, cellX, cellZ)
+    const h10 = getHeightAtCell(this.state, tileX, tileZ, cellX + 1, cellZ)
+    const h01 = getHeightAtCell(this.state, tileX, tileZ, cellX, cellZ + 1)
+    const h11 = getHeightAtCell(this.state, tileX, tileZ, cellX + 1, cellZ + 1)
 
     const h0 = h00 + (h10 - h00) * fracX
     const h1 = h01 + (h11 - h01) * fracX
     return h0 + (h1 - h0) * fracZ
   }
 
-  registerGeometry(
-    tileX: number,
-    tileZ: number,
-    geometry: THREE.BufferGeometry
-  ) {
-    this.geometries.set(tileKey(tileX, tileZ), geometry)
-  }
-
-  unregisterGeometry(tileX: number, tileZ: number) {
-    this.geometries.delete(tileKey(tileX, tileZ))
-  }
-
-  applyHeightToGeometry(
-    tileX: number,
-    tileZ: number,
-    geometry: THREE.BufferGeometry
-  ) {
-    const data = this.heightmaps.get(tileKey(tileX, tileZ))
-    if (!data) return
-
-    const posAttr = geometry.getAttribute('position') as THREE.BufferAttribute
-    const positions = posAttr.array as Float32Array
-    const normalAttr = geometry.getAttribute('normal') as THREE.BufferAttribute
-    const normals = normalAttr.array as Float32Array
-
-    // Reuse padded height grid (67×67) to avoid per-call allocation.
-    // Rows/cols 0 and 66 come from neighbor tiles; 1-65 are this tile's data.
-    const P = PADDED_SIDE
-    const heights = _paddedHeights
-
-    // Fill 65×65 vertices directly from heightmap data (includes edge vertices)
-    for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
-      const srcRow = vz * VERTS_PER_SIDE
-      const dstRow = (vz + 1) * P + 1
-      for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
-        heights[dstRow + vx] = decodeHeight(data[srcRow + vx])
-      }
-    }
-
-    // Padding edges for normal computation at boundaries
-    for (let i = 0; i < VERTS_PER_SIDE; i++) {
-      heights[(i + 1) * P] = this.getHeightAtCell(tileX, tileZ, -1, i) // left padding
-      heights[(i + 1) * P + (P - 1)] = this.getHeightAtCell(
-        tileX,
-        tileZ,
-        VERTS_PER_SIDE,
-        i
-      ) // right padding
-      heights[i + 1] = this.getHeightAtCell(tileX, tileZ, i, -1) // top padding
-      heights[(P - 1) * P + (i + 1)] = this.getHeightAtCell(
-        tileX,
-        tileZ,
-        i,
-        VERTS_PER_SIDE
-      ) // bottom padding
-    }
-    // Four padding corners
-    heights[0] = this.getHeightAtCell(tileX, tileZ, -1, -1)
-    heights[P - 1] = this.getHeightAtCell(tileX, tileZ, VERTS_PER_SIDE, -1)
-    heights[(P - 1) * P] = this.getHeightAtCell(
-      tileX,
-      tileZ,
-      -1,
-      VERTS_PER_SIDE
-    )
-    heights[(P - 1) * P + (P - 1)] = this.getHeightAtCell(
-      tileX,
-      tileZ,
-      VERTS_PER_SIDE,
-      VERTS_PER_SIDE
-    )
-
-    // Set positions and compute analytical normals via central differences
-    for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
-      for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
-        const vertexIndex = vz * VERTS_PER_SIDE + vx
-        const pi = (vz + 1) * P + (vx + 1) // index into padded grid
-
-        const h = heights[pi]
-        positions[vertexIndex * 3 + 1] = h
-
-        // Central differences (cell spacing = 1.0)
-        const dhdx = heights[pi + 1] - heights[pi - 1] // right - left
-        const dhdz = heights[pi + P] - heights[pi - P] // forward - back
-
-        // normal = normalize(-dhdx, 2, -dhdz)
-        const nx = -dhdx
-        const ny = 2.0
-        const nz = -dhdz
-        const invLen = 1.0 / Math.sqrt(nx * nx + ny * ny + nz * nz)
-        normals[vertexIndex * 3] = nx * invLen
-        normals[vertexIndex * 3 + 1] = ny * invLen
-        normals[vertexIndex * 3 + 2] = nz * invLen
-      }
-    }
-
-    posAttr.needsUpdate = true
-    normalAttr.needsUpdate = true
-  }
-
-  /** Sync overlapping edge vertices to neighbor tiles' data, then refresh their geometry.
-   *  This tile's column 0 → neighbor(tileX-1)'s column 64
-   *  This tile's row 0 → neighbor(tileZ-1)'s row 64
-   *  This tile's vertex(0,0) → neighbor(tileX-1, tileZ-1)'s vertex(64,64) */
-  refreshAdjacentTileEdges(tileX: number, tileZ: number) {
-    const data = this.heightmaps.get(tileKey(tileX, tileZ))
-    if (!data) return
-
-    // Sync overlapping edge data to neighbors
-    const leftData = this.heightmaps.get(tileKey(tileX - 1, tileZ))
-    if (leftData) {
-      for (let vz = 0; vz < VERTS_PER_SIDE; vz++) {
-        leftData[vz * VERTS_PER_SIDE + TILE_DIM] = data[vz * VERTS_PER_SIDE + 0]
-      }
-    }
-
-    const topData = this.heightmaps.get(tileKey(tileX, tileZ - 1))
-    if (topData) {
-      for (let vx = 0; vx < VERTS_PER_SIDE; vx++) {
-        topData[TILE_DIM * VERTS_PER_SIDE + vx] = data[0 * VERTS_PER_SIDE + vx]
-      }
-    }
-
-    const diagData = this.heightmaps.get(tileKey(tileX - 1, tileZ - 1))
-    if (diagData) {
-      diagData[TILE_DIM * VERTS_PER_SIDE + TILE_DIM] = data[0]
-    }
-
-    // Re-apply geometry for neighbors whose data was updated
-    const neighbors = [
-      { dx: -1, dz: 0 },
-      { dx: 0, dz: -1 },
-      { dx: -1, dz: -1 },
-    ]
-    for (const { dx, dz } of neighbors) {
-      const nx = tileX + dx
-      const nz = tileZ + dz
-      const key = tileKey(nx, nz)
-      const geo = this.geometries.get(key)
-      if (geo && this.heightmaps.has(key)) {
-        this.applyHeightToGeometry(nx, nz, geo)
-      }
-    }
-  }
-
-  applyBrush(
-    worldX: number,
-    worldZ: number,
-    radius: number,
-    strengthPerSec: number,
-    raise: boolean,
-    deltaTimeSec: number
-  ): AffectedTile[] {
-    const affected: AffectedTile[] = []
-    const delta = strengthPerSec * deltaTimeSec * (raise ? 1 : -1)
-    const sigma = radius / 2.5
-
-    // Determine which cells to iterate (world-space bounding box of brush)
-    const minWorldX = worldX - radius
-    const maxWorldX = worldX + radius
-    const minWorldZ = worldZ - radius
-    const maxWorldZ = worldZ + radius
-
-    // Convert to tile/cell ranges
-    const minTileX = Math.floor(
-      (minWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-    const maxTileX = Math.floor(
-      (maxWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-    const minTileZ = Math.floor(
-      (minWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-    const maxTileZ = Math.floor(
-      (maxWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-
-    const affectedKeys = new Set<string>()
-
-    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
-      for (let tx = minTileX; tx <= maxTileX; tx++) {
-        const key = tileKey(tx, tz)
-        const data = this.heightmaps.get(key)
-        if (!data) continue
-
-        const tileOriginX = tx * TERRAIN_TILE_SIZE
-        const tileOriginZ = tz * TERRAIN_TILE_SIZE
-        const tileMinX = tileOriginX - TERRAIN_TILE_SIZE / 2
-        const tileMinZ = tileOriginZ - TERRAIN_TILE_SIZE / 2
-
-        // Only iterate cells within the brush bounding box
-        const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
-        const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
-        const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
-        const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
-
-        for (let cz = startCZ; cz <= endCZ; cz++) {
-          for (let cx = startCX; cx <= endCX; cx++) {
-            const vertexWorldX = tileMinX + cx
-            const vertexWorldZ = tileMinZ + cz
-
-            const dx = vertexWorldX - worldX
-            const dz = vertexWorldZ - worldZ
-            const dist = Math.sqrt(dx * dx + dz * dz)
-
-            if (dist > radius) continue
-
-            // Gaussian falloff
-            const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
-            const heightDelta = delta * weight
-
-            const idx = cz * VERTS_PER_SIDE + cx
-            const currentHeight = decodeHeight(data[idx])
-            // Quantize delta to 0.05m steps (1 uint16 unit)
-            const steps = Math.trunc(heightDelta / 0.05)
-            if (steps === 0) continue
-            const newHeight = currentHeight + steps * 0.05
-            const newValue = Math.max(
-              0,
-              Math.min(65535, encodeHeight(newHeight))
-            )
-            data[idx] = newValue
-
-            this.syncToOriginal(key, idx, newValue)
-
-            if (!affectedKeys.has(key)) {
-              affectedKeys.add(key)
-              affected.push({ tileX: tx, tileZ: tz })
-              this.dirtyTiles.add(key)
-            }
-          }
-        }
-
-        // Update geometry for this tile
-        const geometry = this.geometries.get(key)
-        if (geometry) {
-          this.applyHeightToGeometry(tx, tz, geometry)
-        }
-      }
-    }
-
-    // Refresh edge vertices of adjacent tiles that reference modified tiles' data
-    for (const { tileX: tx, tileZ: tz } of affected) {
-      this.refreshAdjacentTileEdges(tx, tz)
-    }
-
-    if (affected.length > 0) {
-      this.scheduleSave()
-      this.notifyHeightChanged(affected)
-    }
-
-    return affected
-  }
-
-  applyFlatten(worldX: number, worldZ: number, radius: number): AffectedTile[] {
-    const affected: AffectedTile[] = []
-    const sigma = radius / 2.5
-
-    const minWorldX = worldX - radius
-    const maxWorldX = worldX + radius
-    const minWorldZ = worldZ - radius
-    const maxWorldZ = worldZ + radius
-
-    const minTileX = Math.floor(
-      (minWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-    const maxTileX = Math.floor(
-      (maxWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-    const minTileZ = Math.floor(
-      (minWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-    const maxTileZ = Math.floor(
-      (maxWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
-    )
-
-    // Box filter smooth: each cell blends toward the average of its 3x3 neighbors
-    const affectedKeys = new Set<string>()
-
-    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
-      for (let tx = minTileX; tx <= maxTileX; tx++) {
-        const key = tileKey(tx, tz)
-        const data = this.heightmaps.get(key)
-        if (!data) continue
-
-        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
-        const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
-        const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
-        const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
-
-        for (let cz = startCZ; cz <= endCZ; cz++) {
-          for (let cx = startCX; cx <= endCX; cx++) {
-            const dx = tileMinX + cx - worldX
-            const dz = tileMinZ + cz - worldZ
-            const dist = Math.sqrt(dx * dx + dz * dz)
-            if (dist > radius) continue
-
-            // Average of 8 surrounding neighbors (excluding self)
-            let nSum = 0
-            let nCount = 0
-            for (let nz = -1; nz <= 1; nz++) {
-              for (let nx = -1; nx <= 1; nx++) {
-                if (nx === 0 && nz === 0) continue
-                const ncx = cx + nx
-                const ncz = cz + nz
-                if (ncx >= 0 && ncx < TILE_DIM && ncz >= 0 && ncz < TILE_DIM) {
-                  nSum += decodeHeight(data[ncz * VERTS_PER_SIDE + ncx])
-                  nCount++
-                }
-              }
-            }
-            if (nCount === 0) continue
-            const neighborAvg = nSum / nCount
-
-            const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
-            const idx = cz * VERTS_PER_SIDE + cx
-            const currentHeight = decodeHeight(data[idx])
-            const heightDelta = (neighborAvg - currentHeight) * weight
-
-            const steps = Math.trunc(heightDelta / 0.05)
-            if (steps === 0) continue
-            const newHeight = currentHeight + steps * 0.05
-            const newValue = Math.max(
-              0,
-              Math.min(65535, encodeHeight(newHeight))
-            )
-            data[idx] = newValue
-
-            // Sync to original heightmap so smooth brush edits become the new "original"
-            const origData = this.originalHeightmaps.get(key)
-            if (origData) {
-              origData[idx] = newValue
-              this.dirtyOriginalTiles.add(key)
-            }
-
-            if (!affectedKeys.has(key)) {
-              affectedKeys.add(key)
-              affected.push({ tileX: tx, tileZ: tz })
-              this.dirtyTiles.add(key)
-            }
-          }
-        }
-
-        const geometry = this.geometries.get(key)
-        if (geometry) {
-          this.applyHeightToGeometry(tx, tz, geometry)
-        }
-      }
-    }
-
-    // Refresh edge vertices of adjacent tiles that reference modified tiles' data
-    for (const { tileX: tx, tileZ: tz } of affected) {
-      this.refreshAdjacentTileEdges(tx, tz)
-    }
-
-    if (affected.length > 0) {
-      this.scheduleSave()
-      this.notifyHeightChanged(affected)
-    }
-
-    return affected
-  }
-
-  /**
-   * Flatten a rectangular area to a target height with smooth blending around edges.
-   * Used by housing placement to level terrain under buildings.
-   *
-   * @param minX - West edge of the area (world coords)
-   * @param minZ - North edge of the area (world coords)
-   * @param maxX - East edge of the area (world coords)
-   * @param maxZ - South edge of the area (world coords)
-   * @param targetHeight - Height in meters to flatten to
-   * @param blendRadius - Radius in meters for smooth edge blending
-   */
-  flattenArea(
-    minX: number,
-    minZ: number,
-    maxX: number,
-    maxZ: number,
-    targetHeight: number,
-    blendRadius: number,
-    isProtected?: (worldX: number, worldZ: number) => boolean
-  ): AffectedTile[] {
-    const affected: AffectedTile[] = []
-    const affectedKeys = new Set<string>()
-    const targetEncoded = encodeHeight(targetHeight)
-
-    // Expand bounds by blendRadius for the outer blend zone
-    const expandedMinX = minX - blendRadius
-    const expandedMinZ = minZ - blendRadius
-    const expandedMaxX = maxX + blendRadius
-    const expandedMaxZ = maxZ + blendRadius
-
-    const minTileX = worldToTileCoord(expandedMinX)
-    const maxTileX = worldToTileCoord(expandedMaxX)
-    const minTileZ = worldToTileCoord(expandedMinZ)
-    const maxTileZ = worldToTileCoord(expandedMaxZ)
-
-    // Snapshot original heightmaps before any modification (lazy, first-time only)
-    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
-      for (let tx = minTileX; tx <= maxTileX; tx++) {
-        this.ensureOriginalHeightmap(tx, tz)
-      }
-    }
-
-    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
-      for (let tx = minTileX; tx <= maxTileX; tx++) {
-        const key = tileKey(tx, tz)
-        const data = this.heightmaps.get(key)
-        if (!data) continue
-
-        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-
-        const startCX = Math.max(0, Math.floor(expandedMinX - tileMinX))
-        const endCX = Math.min(
-          TILE_DIM - 1,
-          Math.floor(expandedMaxX - tileMinX)
-        )
-        const startCZ = Math.max(0, Math.floor(expandedMinZ - tileMinZ))
-        const endCZ = Math.min(
-          TILE_DIM - 1,
-          Math.floor(expandedMaxZ - tileMinZ)
-        )
-
-        for (let cz = startCZ; cz <= endCZ; cz++) {
-          for (let cx = startCX; cx <= endCX; cx++) {
-            const worldCX = tileMinX + cx
-            const worldCZ = tileMinZ + cz
-
-            // Distance from the inner rectangle edge (0 = inside, >0 = outside)
-            const dx = Math.max(minX - worldCX, 0, worldCX - maxX)
-            const dz = Math.max(minZ - worldCZ, 0, worldCZ - maxZ)
-            const distFromEdge = Math.sqrt(dx * dx + dz * dz)
-
-            const idx = cz * VERTS_PER_SIDE + cx
-
-            // Skip pixels that belong to another house's footprint
-            if (isProtected && isProtected(worldCX, worldCZ)) continue
-
-            if (distFromEdge <= 0) {
-              // Inside the flat area: force to target height
-              data[idx] = Math.max(0, Math.min(65535, targetEncoded))
-            } else if (distFromEdge < blendRadius) {
-              // Blend zone: smoothstep interpolation
-              const t = distFromEdge / blendRadius
-              // Smoothstep: 3t^2 - 2t^3
-              const blend = 1 - t * t * (3 - 2 * t)
-              const currentHeight = decodeHeight(data[idx])
-              const newHeight =
-                currentHeight + (targetHeight - currentHeight) * blend
-              const newValue = Math.max(
-                0,
-                Math.min(65535, encodeHeight(newHeight))
-              )
-              data[idx] = newValue
-            } else {
-              continue
-            }
-
-            if (!affectedKeys.has(key)) {
-              affectedKeys.add(key)
-              affected.push({ tileX: tx, tileZ: tz })
-              this.dirtyTiles.add(key)
-            }
-          }
-        }
-
-        const geometry = this.geometries.get(key)
-        if (geometry) {
-          this.applyHeightToGeometry(tx, tz, geometry)
-        }
-      }
-    }
-
-    for (const { tileX: tx, tileZ: tz } of affected) {
-      this.refreshAdjacentTileEdges(tx, tz)
-    }
-
-    if (affected.length > 0) {
-      this.scheduleSave()
-      this.notifyHeightChanged(affected)
-    }
-
-    return affected
-  }
-
-  private scheduleSave() {
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer)
-    }
-    this.saveTimer = setTimeout(() => {
-      this.saveDirtyTiles()
-      this.saveTimer = null
-    }, 1000)
-  }
-
-  private async saveTileSet(
-    dirtySet: Set<string>,
-    dataMap: Map<string, Uint16Array>,
-    urlSegment: string
-  ) {
-    const keys = [...dirtySet]
-    for (const key of keys) {
-      const data = dataMap.get(key)
-      if (!data) {
-        dirtySet.delete(key)
-        continue
-      }
-
-      const [txStr, tzStr] = key.split(',')
-      const tx = parseInt(txStr)
-      const tz = parseInt(tzStr)
-
-      const url = `${this.terrainApiUrl}/api/terrain/${urlSegment}/${tx}/${tz}`
-      const body = (data.buffer as ArrayBuffer).slice(
-        data.byteOffset,
-        data.byteOffset + data.byteLength
-      )
-
-      try {
-        await fetch(url, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/octet-stream' },
-          body,
-        })
-        dirtySet.delete(key)
-      } catch (e) {
-        console.error(
-          `Failed to save ${urlSegment} for tile (${tx}, ${tz}):`,
-          e
-        )
-      }
-    }
-  }
-
-  private async saveDirtyTiles() {
-    await this.saveTileSet(this.dirtyTiles, this.heightmaps, 'height')
-    await this.saveTileSet(
-      this.dirtyOriginalTiles,
-      this.originalHeightmaps,
-      'height-original'
-    )
-  }
-
   hasWater(tileX: number, tileZ: number): boolean {
-    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    const data = this.state.heightmaps.get(tileKey(tileX, tileZ))
     if (!data) return false
     for (let i = 0; i < data.length; i++) {
       if (data[i] < SEA_LEVEL_ENCODED) return true
@@ -839,11 +170,44 @@ export class TerrainHeightManager {
     return false
   }
 
+  // --- Geometry ---
+
+  registerGeometry(
+    tileX: number,
+    tileZ: number,
+    geometry: THREE.BufferGeometry
+  ) {
+    this.state.geometries.set(tileKey(tileX, tileZ), geometry)
+  }
+
+  unregisterGeometry(tileX: number, tileZ: number) {
+    this.state.geometries.delete(tileKey(tileX, tileZ))
+  }
+
+  applyHeightToGeometry(
+    tileX: number,
+    tileZ: number,
+    geometry: THREE.BufferGeometry
+  ) {
+    applyHeightToGeo(this.state, tileX, tileZ, geometry)
+  }
+
+  refreshTileGeometry(tileX: number, tileZ: number): void {
+    const key = tileKey(tileX, tileZ)
+    const geo = this.state.geometries.get(key)
+    if (geo && this.state.heightmaps.has(key)) {
+      applyHeightToGeo(this.state, tileX, tileZ, geo)
+    }
+  }
+
+  refreshAdjacentTileEdges(tileX: number, tileZ: number): void {
+    doRefreshAdjacentEdges(this.state, tileX, tileZ)
+  }
+
   getHeightmapTexture(tileX: number, tileZ: number): THREE.DataTexture | null {
-    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    const data = this.state.heightmaps.get(tileKey(tileX, tileZ))
     if (!data) return null
 
-    // Heightmap is already 65×65 — decode directly
     const W = VERTS_PER_SIDE
     const decoded = new Float32Array(W * W)
     for (let i = 0; i < W * W; i++) {
@@ -864,14 +228,12 @@ export class TerrainHeightManager {
     return tex
   }
 
-  /** Update an existing DataTexture in-place with current heightmap data.
-   *  Returns true if the texture was updated, false if no heightmap data exists. */
   updateHeightmapTexture(
     tileX: number,
     tileZ: number,
     tex: THREE.DataTexture
   ): boolean {
-    const data = this.heightmaps.get(tileKey(tileX, tileZ))
+    const data = this.state.heightmaps.get(tileKey(tileX, tileZ))
     if (!data) return false
 
     const W = VERTS_PER_SIDE
@@ -883,49 +245,101 @@ export class TerrainHeightManager {
     return true
   }
 
-  /** Re-apply height to geometry if the tile has a registered geometry. */
-  refreshTileGeometry(tileX: number, tileZ: number): void {
-    const key = tileKey(tileX, tileZ)
-    const geo = this.geometries.get(key)
-    if (geo && this.heightmaps.has(key)) {
-      this.applyHeightToGeometry(tileX, tileZ, geo)
-    }
+  // --- Brush operations ---
+
+  applyBrush(
+    worldX: number,
+    worldZ: number,
+    radius: number,
+    strengthPerSec: number,
+    raise: boolean,
+    deltaTimeSec: number
+  ): AffectedTile[] {
+    const affected = doBrush(
+      this.state,
+      worldX,
+      worldZ,
+      radius,
+      strengthPerSec,
+      raise,
+      deltaTimeSec
+    )
+    this.finalize(affected)
+    return affected
   }
 
-  /** Directly set heightmap data for a tile (used by terrain generator). */
+  applyFlatten(worldX: number, worldZ: number, radius: number): AffectedTile[] {
+    const affected = doFlatten(this.state, worldX, worldZ, radius)
+    this.finalize(affected)
+    return affected
+  }
+
+  flattenArea(
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number,
+    targetHeight: number,
+    blendRadius: number,
+    isProtected?: (worldX: number, worldZ: number) => boolean
+  ): AffectedTile[] {
+    const affected = doFlattenArea(
+      this.state,
+      minX,
+      minZ,
+      maxX,
+      maxZ,
+      targetHeight,
+      blendRadius,
+      (tx, tz) => this.ensureOriginalHeightmap(tx, tz),
+      isProtected
+    )
+    this.finalize(affected)
+    return affected
+  }
+
+  restoreFromOriginal(
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number
+  ): AffectedTile[] {
+    const affected = doRestore(this.state, minX, minZ, maxX, maxZ)
+    this.finalize(affected)
+    return affected
+  }
+
+  // --- Data management ---
+
   setHeightmap(tileX: number, tileZ: number, data: Uint16Array): void {
-    this.heightmaps.set(tileKey(tileX, tileZ), data)
+    this.state.heightmaps.set(tileKey(tileX, tileZ), data)
   }
 
-  /** Mark a tile as dirty so it will be saved on next save cycle. */
   markDirty(tileX: number, tileZ: number): void {
-    this.dirtyTiles.add(tileKey(tileX, tileZ))
+    this.state.dirtyTiles.add(tileKey(tileX, tileZ))
   }
 
-  /** Force-save all dirty tiles immediately (cancels pending debounce). */
   async saveAllDirty(): Promise<void> {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
     }
-    await this.saveDirtyTiles()
+    await saveDirtyTiles(this.state, this.terrainApiUrl)
   }
 
   unloadTile(tileX: number, tileZ: number) {
     const key = tileKey(tileX, tileZ)
-    this.heightmaps.delete(key)
-    this.originalHeightmaps.delete(key)
-    this.geometries.delete(key)
+    this.state.heightmaps.delete(key)
+    this.state.originalHeightmaps.delete(key)
+    this.state.geometries.delete(key)
   }
 
-  /** Remove cached data without touching GPU resources (geometries may still be rendered).
-   *  Refuses to evict if the tile has unsaved changes. */
   evictCachedData(tileX: number, tileZ: number) {
     const key = tileKey(tileX, tileZ)
-    if (this.dirtyTiles.has(key)) return
-    this.heightmaps.delete(key)
-    if (!this.dirtyOriginalTiles.has(key)) {
-      this.originalHeightmaps.delete(key)
+    if (this.state.dirtyTiles.has(key)) return
+    this.state.heightmaps.delete(key)
+    if (!this.state.dirtyOriginalTiles.has(key)) {
+      this.state.originalHeightmaps.delete(key)
     }
   }
 
@@ -934,8 +348,11 @@ export class TerrainHeightManager {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
     }
-    if (this.dirtyTiles.size > 0 || this.dirtyOriginalTiles.size > 0) {
-      await this.saveDirtyTiles()
+    if (
+      this.state.dirtyTiles.size > 0 ||
+      this.state.dirtyOriginalTiles.size > 0
+    ) {
+      await saveDirtyTiles(this.state, this.terrainApiUrl)
     }
   }
 }
