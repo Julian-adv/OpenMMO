@@ -297,6 +297,14 @@
     return housingGroup
   }
 
+  export function getDoorMeshes(): THREE.Object3D[] {
+    const result: THREE.Object3D[] = []
+    for (const h of houses.values()) {
+      for (const door of h.doors) result.push(door.pivot)
+    }
+    return result
+  }
+
   /** Return housing draw call stats for profiling. */
   export function getStats() {
     let mergedMeshes = 0

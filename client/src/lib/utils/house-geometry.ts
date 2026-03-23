@@ -238,6 +238,16 @@ export function buildHouseGroup(
     floorGroups.set(fl, { front, back })
   }
 
+  // Tag door pivots with userData for raycast identification
+  for (const door of allDoors) {
+    door.pivot.userData = {
+      doorHouseId: house.id,
+      doorRoomIndex: door.roomIndex,
+      doorWallDir: door.wallDir,
+      doorSegmentIndex: door.segmentIndex,
+    }
+  }
+
   return {
     houseGroup,
     floorGroups,
@@ -977,7 +987,6 @@ function collectWallSegments(
           getHousingMaterial(DOOR_TEXTURE_IDX >= 0 ? DOOR_TEXTURE_IDX : texIdx)
         )
         panel.castShadow = true
-        panel.raycast = () => {} // Exclude from click-to-move raycasting
 
         // Offset panel so its left edge is at the pivot (hinge on left side)
         panel.position.set(DOOR_WIDTH / 2, DOOR_HEIGHT / 2, 0)

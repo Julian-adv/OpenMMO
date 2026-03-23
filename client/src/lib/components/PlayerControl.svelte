@@ -29,10 +29,11 @@
     heightManager: TerrainHeightManager
     groundMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
+    doorMeshes: THREE.Object3D[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, doorMeshes, attackCooldown }: Props = $props()
 
   function sampleHeight(x: number, z: number): number {
     return heightManager.getHeightAtWorldPosition(x, z) + get(playerFloorOffset)
@@ -577,6 +578,7 @@
     const intent = inputHandler.processCanvasClick(event, {
       camera,
       monsterMeshes,
+      doorMeshes,
       groundMeshes,
       playerPosition: {
         x: currentPlayer.position.x,
@@ -599,6 +601,15 @@
           combatController.beginCombat(intent.monsterId, false)
           handleClickToMove(intent.hitPoint)
         }
+        break
+      }
+      case 'toggle_door': {
+        networkManager.sendToggleDoor(
+          intent.houseId,
+          intent.roomIndex,
+          intent.wallDir,
+          intent.segmentIndex
+        )
         break
       }
       case 'move_to_ground': {

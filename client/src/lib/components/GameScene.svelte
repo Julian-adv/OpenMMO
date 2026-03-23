@@ -1136,6 +1136,7 @@
     {currentPlayerState}
     {terrainMeshes}
     housingGroup={housingLayerRef?.getGroup() ?? null}
+    doorMeshes={housingLayerRef?.getDoorMeshes() ?? []}
     {monsterModels}
     {playerAttackDuration}
     heightManager={terrainHeightManager}
