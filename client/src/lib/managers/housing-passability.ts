@@ -97,7 +97,10 @@ export function buildPassability(house: HouseData): PassabilityGrid[] {
           floorLevel === room.floorLevel ||
           floorLevel === room.floorLevel + 1
         ) {
-          buildStairwellEdges(room, rx, rz, floorLevel, setEdge)
+          const blockExitEnd =
+            floorLevel === room.floorLevel &&
+            !hasOverlappingStairwellBelow(room, house.rooms)
+          buildStairwellEdges(room, rx, rz, floorLevel, setEdge, blockExitEnd)
         }
         continue
       }
@@ -150,7 +153,8 @@ function buildStairwellEdges(
   rx: number,
   rz: number,
   floorLevel: number,
-  setEdge: (cx: number, cz: number, edge: number) => void
+  setEdge: (cx: number, cz: number, edge: number) => void,
+  blockExitEnd: boolean
 ) {
   const alongZ = room.sizeZ >= room.sizeX
   const alongSize = alongZ ? room.sizeZ : room.sizeX
@@ -168,6 +172,13 @@ function buildStairwellEdges(
       setEdge(rx + room.sizeX - 1, rz + i, EDGE_E)
       setEdge(rx + room.sizeX, rz + i, EDGE_W)
     }
+    // Block exit end on entry floor to prevent walking into upper landing
+    if (blockExitEnd) {
+      for (let x = 0; x < room.sizeX; x++) {
+        setEdge(rx + x, rz + room.sizeZ - 1, EDGE_S)
+        setEdge(rx + x, rz + room.sizeZ, EDGE_N)
+      }
+    }
   } else {
     for (let i = sideStart; i < sideEnd; i++) {
       setEdge(rx + i, rz, EDGE_N)
@@ -175,7 +186,62 @@ function buildStairwellEdges(
       setEdge(rx + i, rz + room.sizeZ - 1, EDGE_S)
       setEdge(rx + i, rz + room.sizeZ, EDGE_N)
     }
+    // Block exit end on entry floor to prevent walking into upper landing
+    if (blockExitEnd) {
+      for (let z = 0; z < room.sizeZ; z++) {
+        setEdge(rx + room.sizeX - 1, rz + z, EDGE_E)
+        setEdge(rx + room.sizeX, rz + z, EDGE_W)
+      }
+    }
   }
+}
+
+/**
+ * Check if a stairwell's exit landing overlaps with any stairwell on the floor below.
+ * Used to keep the exit end open when stacked staircases connect.
+ */
+function hasOverlappingStairwellBelow(
+  stairwell: RoomData,
+  rooms: RoomData[]
+): boolean {
+  const alongZ = stairwell.sizeZ >= stairwell.sizeX
+  const rx = stairwell.localX
+  const rz = stairwell.localZ
+
+  // Exit landing bounding box (the last row along the stair axis)
+  let exitMinX: number, exitMaxX: number, exitMinZ: number, exitMaxZ: number
+  if (alongZ) {
+    exitMinX = rx
+    exitMaxX = rx + stairwell.sizeX
+    exitMinZ = rz + stairwell.sizeZ - 1
+    exitMaxZ = rz + stairwell.sizeZ
+  } else {
+    exitMinX = rx + stairwell.sizeX - 1
+    exitMaxX = rx + stairwell.sizeX
+    exitMinZ = rz
+    exitMaxZ = rz + stairwell.sizeZ
+  }
+
+  for (const other of rooms) {
+    if (other === stairwell) continue
+    if (other.roomType !== 'stairwell') continue
+    if (other.floorLevel !== stairwell.floorLevel - 1) continue
+
+    // AABB overlap check
+    const oMinX = other.localX
+    const oMaxX = other.localX + other.sizeX
+    const oMinZ = other.localZ
+    const oMaxZ = other.localZ + other.sizeZ
+    if (
+      exitMinX < oMaxX &&
+      exitMaxX > oMinX &&
+      exitMinZ < oMaxZ &&
+      exitMaxZ > oMinZ
+    ) {
+      return true
+    }
+  }
+  return false
 }
 
 /** Runtime passability grid with Y-range info for floor matching */
