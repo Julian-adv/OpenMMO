@@ -23,9 +23,9 @@ export function collectStairwellGeometries(
   backEntries: GeoEntry[],
   allRooms: RoomData[]
 ) {
-  const { localX, localZ, sizeX, sizeZ, wallHeight } = room
-  const yBase = FLOOR_THICKNESS / 2
-  const totalRise = floorYBase(1, wallHeight)
+  const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
+  const yBase = floorYBase(floorLevel, wallHeight) + FLOOR_THICKNESS / 2
+  const totalRise = wallHeight + FLOOR_THICKNESS
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
 
   const alongZ = sizeZ >= sizeX
@@ -203,10 +203,11 @@ export function getStairwellYOffset(
   wx: number,
   wz: number
 ): number {
-  const { localX, localZ, sizeX, sizeZ, wallHeight } = room
+  const { localX, localZ, sizeX, sizeZ, wallHeight, floorLevel } = room
   const alongZ = sizeZ >= sizeX
   const stairLen = alongZ ? sizeZ : sizeX
-  const totalRise = floorYBase(1, wallHeight)
+  const totalRise = wallHeight + FLOOR_THICKNESS
+  const baseY = floorYBase(floorLevel, wallHeight)
 
   const roomStartX = houseOriginX + localX
   const roomStartZ = houseOriginZ + localZ
@@ -214,9 +215,10 @@ export function getStairwellYOffset(
 
   const t = Math.max(0, Math.min(stairLen, posAlongStair))
 
-  if (t <= LANDING_DEPTH) return FLOOR_THICKNESS / 2
-  if (t >= stairLen - LANDING_DEPTH) return totalRise + FLOOR_THICKNESS / 2
+  if (t <= LANDING_DEPTH) return baseY + FLOOR_THICKNESS / 2
+  if (t >= stairLen - LANDING_DEPTH)
+    return baseY + totalRise + FLOOR_THICKNESS / 2
 
   const stairT = (t - LANDING_DEPTH) / (stairLen - LANDING_DEPTH * 2)
-  return stairT * totalRise + FLOOR_THICKNESS / 2
+  return baseY + stairT * totalRise + FLOOR_THICKNESS / 2
 }

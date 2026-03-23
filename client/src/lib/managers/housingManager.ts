@@ -272,14 +272,14 @@ export class HousingManager {
   }
 
   /**
-   * Check if a 2F room footprint is fully supported by 1F rooms in a given house.
+   * Check if a room footprint is fully supported by rooms on the floor below.
    */
   hasFloorSupport(
     originX: number,
     originZ: number,
     sizeX: number,
     sizeZ: number,
-    houseId?: string
+    opts?: { houseId?: string; floorLevel?: number }
   ): boolean {
     return hasFloorSupport(
       this.housesById,
@@ -287,20 +287,28 @@ export class HousingManager {
       originZ,
       sizeX,
       sizeZ,
-      houseId
+      opts
     )
   }
 
   /**
-   * Find a house that has 1F rooms supporting the given 2F footprint.
+   * Find a house that has rooms on the floor below supporting the given footprint.
    */
   findSupportingHouse(
     originX: number,
     originZ: number,
     sizeX: number,
-    sizeZ: number
+    sizeZ: number,
+    floorLevel: number = 1
   ) {
-    return findSupportingHouse(this.housesById, originX, originZ, sizeX, sizeZ)
+    return findSupportingHouse(
+      this.housesById,
+      originX,
+      originZ,
+      sizeX,
+      sizeZ,
+      floorLevel
+    )
   }
 
   private addToCache(house: HouseData) {

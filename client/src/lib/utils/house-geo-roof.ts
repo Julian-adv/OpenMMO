@@ -20,12 +20,12 @@ const _roofMatrix = new THREE.Matrix4()
 
 export function shouldSuppressRoof(
   room: RoomData,
-  secondFloorFootprints: RoomFootprint[]
+  upperFloorFootprints: RoomFootprint[]
 ): boolean {
-  if (room.floorLevel !== 0 || secondFloorFootprints.length === 0) return false
+  if (upperFloorFootprints.length === 0) return false
   for (let x = room.localX; x < room.localX + room.sizeX; x++) {
     for (let z = room.localZ; z < room.localZ + room.sizeZ; z++) {
-      if (!secondFloorFootprints.some((fp) => cellInFootprint(x, z, fp))) {
+      if (!upperFloorFootprints.some((fp) => cellInFootprint(x, z, fp))) {
         return false
       }
     }

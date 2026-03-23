@@ -9,6 +9,7 @@
     disposeHouseGroup,
     DEFAULT_WALL_HEIGHT,
     FLOOR_THICKNESS,
+    MAX_FLOOR_LEVEL,
     OFFSCREEN_Y,
     floorYBase,
     getStairwellYOffset,
@@ -167,7 +168,7 @@
       // Try all floor levels to find matching rooms
       _allRooms.length = 0
       _seenRooms.clear()
-      for (let fl = 1; fl >= 0; fl--) {
+      for (let fl = MAX_FLOOR_LEVEL; fl >= 0; fl--) {
         const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
         for (const r of housingManager.findAllRoomsAtPoint(
           playerPosition.x,
@@ -182,16 +183,32 @@
         }
       }
 
-      // First pass: find stairwell (always takes priority)
-      // Second pass: find room matching current floor
+      // Pick the stairwell whose Y offset is closest to the player's
+      // current Y (lastFloorOffset). This correctly handles stacked
+      // stairwells at the same XZ — the player smoothly transitions
+      // onto the nearest one rather than jumping to a distant floor.
       const currentFL = Math.max(0, playerInsideFloor)
       let stairResult: typeof _allRooms[0] | null = null
+      let bestStairDist = Infinity
+      let bestStairOffset = 0
       let floorResult: typeof _allRooms[0] | null = null
       for (const roomResult of _allRooms) {
         if (roomResult.house.id !== id) continue
         const room = roomResult.house.rooms[roomResult.roomIndex]
         if (room.roomType === 'stairwell') {
-          stairResult = roomResult
+          const offset = getStairwellYOffset(
+            room,
+            roomResult.house.origin.x,
+            roomResult.house.origin.z,
+            playerPosition.x,
+            playerPosition.z
+          )
+          const dist = Math.abs(offset - lastFloorOffset)
+          if (dist < bestStairDist) {
+            bestStairDist = dist
+            bestStairOffset = offset
+            stairResult = roomResult
+          }
         } else if (!floorResult || room.floorLevel === currentFL) {
           floorResult = roomResult
         }
@@ -200,19 +217,20 @@
       if (stairResult) {
         const room = stairResult.house.rooms[stairResult.roomIndex]
         insideId = id
-        newOffset = getStairwellYOffset(
-          room,
-          stairResult.house.origin.x,
-          stairResult.house.origin.z,
-          playerPosition.x,
-          playerPosition.z
-        )
-        // Transition at 90% of total rise to avoid flickering at exact boundary
-        const floorThreshold = floorYBase(1, room.wallHeight) * 0.9
-        if (playerInsideFloor <= 0) {
-          effectiveFloor = newOffset >= floorThreshold ? 1 : 0
+        newOffset = bestStairOffset
+        // Determine effective floor from stairwell Y offset
+        // Stairwell connects room.floorLevel to room.floorLevel+1
+        const entryFloor = room.floorLevel
+        const exitFloor = room.floorLevel + 1
+        const entryFloorY = floorYBase(entryFloor, room.wallHeight)
+        // Hysteresis: transition at 90% of stairwell rise to avoid flickering
+        const exitThreshold =
+          entryFloorY +
+          (floorYBase(exitFloor, room.wallHeight) - entryFloorY) * 0.9
+        if (playerInsideFloor <= entryFloor) {
+          effectiveFloor = newOffset >= exitThreshold ? exitFloor : entryFloor
         } else {
-          effectiveFloor = newOffset <= floorThreshold ? 0 : 1
+          effectiveFloor = newOffset <= exitThreshold ? entryFloor : exitFloor
         }
       } else if (floorResult) {
         const room = floorResult.house.rooms[floorResult.roomIndex]
@@ -269,8 +287,9 @@
 
   /**
    * Hide front/back groups based on player floor.
-   * On 1F: hide 1F front + all of 2F (front+back)
-   * On 2F: hide 2F front only, 1F stays fully visible
+   * Current floor: hide front (south+west walls, roof)
+   * Higher floors: hide both front and back entirely
+   * Lower floors: fully visible
    */
   function applyFloorVisibility(
     result: HouseGroupResult,

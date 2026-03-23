@@ -49,8 +49,8 @@ export function buildPassability(house: HouseData): PassabilityGrid[] {
     const rx = room.localX
     const rz = room.localZ
     const levels =
-      room.roomType === 'stairwell' && room.floorLevel === 0
-        ? [0, 1] // stairwell on 1F registers on both 1F and 2F grids
+      room.roomType === 'stairwell'
+        ? [room.floorLevel, room.floorLevel + 1] // stairwell registers on both its floor and the floor above
         : [room.floorLevel]
 
     for (const fl of levels) {
@@ -92,36 +92,36 @@ export function buildPassability(house: HouseData): PassabilityGrid[] {
       const rx = room.localX
       const rz = room.localZ
 
-      if (room.roomType === 'stairwell' && room.floorLevel === 0) {
-        // Stairwell: block all outer edges, open only the appropriate landing
-        buildStairwellEdges(room, rx, rz, floorLevel, setEdge)
+      if (room.roomType === 'stairwell') {
+        if (
+          floorLevel === room.floorLevel ||
+          floorLevel === room.floorLevel + 1
+        ) {
+          buildStairwellEdges(room, rx, rz, floorLevel, setEdge)
+        }
         continue
       }
 
       if (room.floorLevel !== floorLevel) continue
 
-      // North wall at rz (sizeX segments)
       for (let i = 0; i < room.sizeX; i++) {
         if (i < room.wallNorth.length && isWallBlocking(room.wallNorth[i])) {
           setEdge(rx + i, rz, EDGE_N)
           setEdge(rx + i, rz - 1, EDGE_S)
         }
       }
-      // South wall at rz + sizeZ (sizeX segments)
       for (let i = 0; i < room.sizeX; i++) {
         if (i < room.wallSouth.length && isWallBlocking(room.wallSouth[i])) {
           setEdge(rx + i, rz + room.sizeZ - 1, EDGE_S)
           setEdge(rx + i, rz + room.sizeZ, EDGE_N)
         }
       }
-      // West wall at rx (sizeZ segments)
       for (let i = 0; i < room.sizeZ; i++) {
         if (i < room.wallWest.length && isWallBlocking(room.wallWest[i])) {
           setEdge(rx, rz + i, EDGE_W)
           setEdge(rx - 1, rz + i, EDGE_E)
         }
       }
-      // East wall at rx + sizeX (sizeZ segments)
       for (let i = 0; i < room.sizeZ; i++) {
         if (i < room.wallEast.length && isWallBlocking(room.wallEast[i])) {
           setEdge(rx + room.sizeX - 1, rz + i, EDGE_E)
@@ -139,17 +139,11 @@ export function buildPassability(house: HouseData): PassabilityGrid[] {
 /**
  * Build passability edges for a stairwell room on a specific floor level.
  *
- * Stairwell orientation:
- * - alongZ (sizeZ >= sizeX): entry(1F)=north, exit(2F)=south
- * - alongX (sizeX > sizeZ):  entry(1F)=west,  exit(2F)=east
- *
- * Landing cells (first/last row along stair axis) have NO edge bits —
- * they are open platforms for entry/exit. Only stair-run cells (middle rows)
- * get side-wall edges blocked.
- *
- * Cross-axis ends (perpendicular to stair direction):
- * - Entry end: open on this floor's grid (1F→north/west, 2F→south/east)
- * - Exit end: blocked on this floor's grid
+ * Both ends along the stair axis are always open (no end walls).
+ * Only side walls on the stair-run rows are blocked, skipping the
+ * landing row for this floor:
+ * - Entry floor: skip row 0 (entry landing)
+ * - Exit floor: skip last row (exit landing)
  */
 function buildStairwellEdges(
   room: RoomData,
@@ -159,61 +153,27 @@ function buildStairwellEdges(
   setEdge: (cx: number, cz: number, edge: number) => void
 ) {
   const alongZ = room.sizeZ >= room.sizeX
-
-  // Side wall range: skip only the open landing row for this floor
-  // 1F: entry (low) landing open → skip row 0, include row sizeN-1
-  // 2F: exit (high) landing open → include row 0, skip row sizeN-1
-  const sideStart = floorLevel === 0 ? 1 : 0
   const alongSize = alongZ ? room.sizeZ : room.sizeX
-  const sideEnd = floorLevel === 1 ? alongSize - 1 : alongSize
+
+  // Skip the landing row for this floor's open end
+  const isEntryFloor = floorLevel === room.floorLevel
+  const isExitFloor = floorLevel === room.floorLevel + 1
+  const sideStart = isEntryFloor ? 1 : 0
+  const sideEnd = isExitFloor ? alongSize - 1 : alongSize
 
   if (alongZ) {
-    // Stair axis = Z. Side walls = east/west. Ends = north/south.
     for (let i = sideStart; i < sideEnd; i++) {
       setEdge(rx, rz + i, EDGE_W)
       setEdge(rx - 1, rz + i, EDGE_E)
       setEdge(rx + room.sizeX - 1, rz + i, EDGE_E)
       setEdge(rx + room.sizeX, rz + i, EDGE_W)
     }
-
-    // North end (entry on 1F, blocked on 2F)
-    if (floorLevel !== 0) {
-      for (let i = 0; i < room.sizeX; i++) {
-        setEdge(rx + i, rz, EDGE_N)
-        setEdge(rx + i, rz - 1, EDGE_S)
-      }
-    }
-
-    // South end (blocked on 1F, exit on 2F)
-    if (floorLevel !== 1) {
-      for (let i = 0; i < room.sizeX; i++) {
-        setEdge(rx + i, rz + room.sizeZ - 1, EDGE_S)
-        setEdge(rx + i, rz + room.sizeZ, EDGE_N)
-      }
-    }
   } else {
-    // Stair axis = X. Side walls = north/south. Ends = west/east.
     for (let i = sideStart; i < sideEnd; i++) {
       setEdge(rx + i, rz, EDGE_N)
       setEdge(rx + i, rz - 1, EDGE_S)
       setEdge(rx + i, rz + room.sizeZ - 1, EDGE_S)
       setEdge(rx + i, rz + room.sizeZ, EDGE_N)
-    }
-
-    // West end (entry on 1F, blocked on 2F)
-    if (floorLevel !== 0) {
-      for (let i = 0; i < room.sizeZ; i++) {
-        setEdge(rx, rz + i, EDGE_W)
-        setEdge(rx - 1, rz + i, EDGE_E)
-      }
-    }
-
-    // East end (blocked on 1F, exit on 2F)
-    if (floorLevel !== 1) {
-      for (let i = 0; i < room.sizeZ; i++) {
-        setEdge(rx + room.sizeX - 1, rz + i, EDGE_E)
-        setEdge(rx + room.sizeX, rz + i, EDGE_W)
-      }
     }
   }
 }
@@ -271,14 +231,13 @@ export function buildRuntimePassability(house: HouseData): RuntimePassability {
         yBase = house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
         break
       }
-      // For 2F stairwell grid derived from a 1F stairwell
+      // For upper-floor grid derived from a stairwell
       if (
         room.roomType === 'stairwell' &&
-        room.floorLevel === 0 &&
-        g.floorLevel === 1
+        g.floorLevel === room.floorLevel + 1
       ) {
         wallHeight = room.wallHeight
-        yBase = house.origin.y + floorYBase(1, room.wallHeight)
+        yBase = house.origin.y + floorYBase(g.floorLevel, room.wallHeight)
         break
       }
     }

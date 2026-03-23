@@ -919,5 +919,5 @@
 {/if}
 
 {#if $housingEditorMode}
-  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} />
+  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />
 {/if}

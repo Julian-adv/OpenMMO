@@ -32,6 +32,7 @@
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
   import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, FLOOR_THICKNESS, floorYBase } from '../../utils/house-geometry'
+  import { MAX_FLOOR_LEVEL } from '../../utils/house-geo-utils'
   import { editorPanOffset } from '../../stores/editorStore'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -44,9 +45,10 @@
     terrainMeshes: (THREE.Mesh | undefined)[]
     heightManager: TerrainHeightManager | null
     grassDataManager: TerrainGrassDataManager | null
+    housingGroup: THREE.Group | null
   }
 
-  let { camera, terrainMeshes, heightManager, grassDataManager }: Props =
+  let { camera, terrainMeshes, heightManager, grassDataManager, housingGroup }: Props =
     $props()
 
   const { renderer } = useThrelte()
@@ -197,20 +199,30 @@
   // Register delete callback for Panel button
   setDeleteSelectedRoom(() => deleteSelectedRoom())
 
-  function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
-    if (!camera) return null
-    const meshes = terrainMeshes.filter(
-      (m): m is THREE.Mesh => m !== undefined
-    )
-    if (meshes.length === 0) return null
-
+  function updateRaycaster(event: MouseEvent) {
+    if (!camera) return false
     const rect = canvas.getBoundingClientRect()
     mouseNDC.set(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.setFromCamera(mouseNDC, camera)
+    return true
+  }
+
+  function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
+    if (!updateRaycaster(event)) return null
+    const meshes = terrainMeshes.filter(
+      (m): m is THREE.Mesh => m !== undefined
+    )
+    if (meshes.length === 0) return null
     const intersects = raycaster.intersectObjects(meshes, false)
+    return intersects.length > 0 ? intersects[0] : null
+  }
+
+  function raycastHousing(event: MouseEvent): THREE.Intersection | null {
+    if (!housingGroup || !updateRaycaster(event)) return null
+    const intersects = raycaster.intersectObjects(housingGroup.children, true)
     return intersects.length > 0 ? intersects[0] : null
   }
 
@@ -255,12 +267,12 @@
     const { sx, sz } = getRotatedSize()
 
     if (currentRoomType === 'stairwell') {
-      // Stairwells must be placed inside an existing 1F room
       return housingManager.hasFloorSupport(
         previewPos.x,
         previewPos.z,
         sx,
-        sz
+        sz,
+        { floorLevel: currentFloorLevel }
       )
     }
 
@@ -272,13 +284,13 @@
       currentFloorLevel
     )
     if (hasOverlap) return false
-    // 2F rooms need full floor support from 1F rooms
     if (currentFloorLevel >= 1) {
       return housingManager.hasFloorSupport(
         previewPos.x,
         previewPos.z,
         sx,
-        sz
+        sz,
+        { floorLevel: currentFloorLevel }
       )
     }
     return true
@@ -374,7 +386,7 @@
     }
   }
 
-  /** Collect all unique rooms at world XZ across both floor levels. */
+  /** Collect all unique rooms at world XZ across all floor levels. */
   function collectRoomsAtXZ(
     wx: number,
     wz: number,
@@ -382,7 +394,7 @@
   ): { house: HouseData; roomIndex: number }[] {
     const results: { house: HouseData; roomIndex: number }[] = []
     const seen = new Set<string>() // eslint-disable-line svelte/prefer-svelte-reactivity
-    for (let fl = 1; fl >= 0; fl--) {
+    for (let fl = MAX_FLOOR_LEVEL; fl >= 0; fl--) {
       const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
       for (const r of housingManager.findAllRoomsAtPoint(wx, testY, wz)) {
         const key = `${r.house.id}:${r.roomIndex}`
@@ -565,16 +577,7 @@
     }
   }
 
-  function selectRoomAtCursor(event: MouseEvent) {
-    const results = findAllAtCursorXZ(event)
-    if (results.length === 0) {
-      selectedHouseId.set(null)
-      selectedRoomIndex.set(null)
-      lastSelectKey = ''
-      return
-    }
-
-    // Cycle through overlapping rooms on repeated clicks
+  function applyRoomSelection(results: { house: HouseData; roomIndex: number }[]) {
     let idx = 0
     if (results.length > 1) {
       const currentIdx = results.findIndex(
@@ -584,12 +587,34 @@
         idx = (currentIdx + 1) % results.length
       }
     }
-
     const result = results[idx]
     lastSelectKey = `${result.house.id}:${result.roomIndex}`
     selectedHouseId.set(result.house.id)
     selectedRoomIndex.set(result.roomIndex)
     populateEditStoresFromRoom(result.house.rooms[result.roomIndex])
+  }
+
+  function selectRoomAtCursor(event: MouseEvent) {
+    // Try housing mesh raycast first for direct floor-level selection
+    const housingHit = raycastHousing(event)
+    if (housingHit) {
+      const p = housingHit.point
+      const direct = housingManager.findAllRoomsAtPoint(p.x, p.y, p.z)
+      if (direct.length > 0) {
+        applyRoomSelection(direct)
+        return
+      }
+    }
+
+    // Fallback: terrain raycast + floor-level sweep
+    const results = findAllAtCursorXZ(event)
+    if (results.length === 0) {
+      selectedHouseId.set(null)
+      selectedRoomIndex.set(null)
+      lastSelectKey = ''
+      return
+    }
+    applyRoomSelection(results)
   }
 
   async function placeHouse() {
@@ -627,7 +652,13 @@
     // 1F rooms check edge adjacency
     let targetHouse: HouseData | null
     if (currentRoomType === 'stairwell' || currentFloorLevel >= 1) {
-      targetHouse = housingManager.findSupportingHouse(pos.x, pos.z, sx, sz)
+      targetHouse = housingManager.findSupportingHouse(
+        pos.x,
+        pos.z,
+        sx,
+        sz,
+        currentFloorLevel
+      )
     } else {
       targetHouse = housingManager.findAdjacentHouse(pos.x, pos.z, sx, sz)
     }
@@ -740,7 +771,7 @@
       localZ: 0,
       sizeX,
       sizeZ,
-      floorLevel: currentRoomType === 'stairwell' ? 0 : currentFloorLevel,
+      floorLevel: currentFloorLevel,
       floorTexture: floorTex,
       roofTexture: roofTex,
       wallHeight: DEFAULT_WALL_HEIGHT,
@@ -762,7 +793,7 @@
       for (let j = i + 1; j < rooms.length; j++) {
         const b = rooms[j]
         // Open walls between rooms on the same floor,
-        // AND between stairwells (floorLevel=0) and 2F rooms (floorLevel=1)
+        // AND between stairwells and rooms on the floor above
         const sameFloor = a.floorLevel === b.floorLevel
         const stairwellCrossFloor =
           (a.roomType === 'stairwell' && b.floorLevel === a.floorLevel + 1) ||

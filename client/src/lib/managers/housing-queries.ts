@@ -203,8 +203,9 @@ export function checkOverlap(
 }
 
 /**
- * Check if a 2F room footprint is fully supported by 1F rooms in a given house.
- * Returns true if the entire XZ rectangle is covered by floor_level=0 rooms.
+ * Check if a room footprint on the given floor is fully supported by rooms
+ * on the floor below. For floorLevel=1 checks floor 0, for floorLevel=2
+ * checks floor 1, etc. Stairwells (floorLevel=0) also use supportFloor=0.
  */
 export function hasFloorSupport(
   housesById: ReadonlyMap<string, HouseData>,
@@ -212,16 +213,17 @@ export function hasFloorSupport(
   originZ: number,
   sizeX: number,
   sizeZ: number,
-  houseId?: string
+  opts?: { houseId?: string; floorLevel?: number }
 ): boolean {
-  // Check each 1m² cell of the proposed 2F footprint
+  const supportFloor = Math.max(0, (opts?.floorLevel ?? 1) - 1)
+  const houseId = opts?.houseId
   for (let x = originX; x < originX + sizeX; x++) {
     for (let z = originZ; z < originZ + sizeZ; z++) {
       let supported = false
       for (const house of housesById.values()) {
         if (houseId && house.id !== houseId) continue
         for (const room of house.rooms) {
-          if (room.floorLevel !== 0) continue
+          if (room.floorLevel !== supportFloor) continue
           const rx = house.origin.x + room.localX
           const rz = house.origin.z + room.localZ
           if (
@@ -243,17 +245,23 @@ export function hasFloorSupport(
 }
 
 /**
- * Find a house that has 1F rooms supporting the given 2F footprint.
+ * Find a house that has rooms on the floor below supporting the given footprint.
  */
 export function findSupportingHouse(
   housesById: ReadonlyMap<string, HouseData>,
   originX: number,
   originZ: number,
   sizeX: number,
-  sizeZ: number
+  sizeZ: number,
+  floorLevel: number = 1
 ): HouseData | null {
   for (const house of housesById.values()) {
-    if (hasFloorSupport(housesById, originX, originZ, sizeX, sizeZ, house.id)) {
+    if (
+      hasFloorSupport(housesById, originX, originZ, sizeX, sizeZ, {
+        houseId: house.id,
+        floorLevel,
+      })
+    ) {
       return house
     }
   }

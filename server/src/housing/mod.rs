@@ -7,6 +7,7 @@ use tracing::{error, info};
 
 const MIN_ROOM_SIZE: u8 = 3;
 const MAX_ROOM_SIZE: u8 = 6;
+const MAX_FLOOR_LEVEL: u8 = 3;
 
 /// Validate a house before saving. Returns Ok(()) or an error message.
 pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), String> {
@@ -39,10 +40,10 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
                 i, room.wall_height
             ));
         }
-        if room.floor_level > 1 {
+        if room.floor_level > MAX_FLOOR_LEVEL {
             return Err(format!(
-                "Room {} floor_level ({}) must be 0 or 1",
-                i, room.floor_level
+                "Room {} floor_level ({}) must be 0-{}",
+                i, room.floor_level, MAX_FLOOR_LEVEL
             ));
         }
         // Wall segment counts must match room dimensions
@@ -95,18 +96,19 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
         }
     }
 
-    // Validate 2F rooms have full floor support from 1F rooms
+    // Validate upper-floor rooms have full floor support from the floor below
     for (i, room) in house.rooms.iter().enumerate() {
         if room.floor_level == 0 {
             continue;
         }
+        let support_level = room.floor_level - 1;
         let rx = room.local_x;
         let rz = room.local_z;
-        // Check each 1m² cell is supported by a 1F room
+        // Check each 1m² cell is supported by a room on the floor below
         for x in rx..(rx + room.size_x as i32) {
             for z in rz..(rz + room.size_z as i32) {
                 let supported = house.rooms.iter().any(|other| {
-                    other.floor_level == 0
+                    other.floor_level == support_level
                         && x >= other.local_x
                         && x < other.local_x + other.size_x as i32
                         && z >= other.local_z
@@ -114,8 +116,12 @@ pub fn validate_house(house: &HouseData, neighbors: &[HouseData]) -> Result<(), 
                 });
                 if !supported {
                     return Err(format!(
-                        "Room {} (2F) at ({},{}) has no floor support from 1F",
-                        i, x, z
+                        "Room {} ({}F) at ({},{}) has no floor support from {}F",
+                        i,
+                        room.floor_level + 1,
+                        x,
+                        z,
+                        support_level + 1
                     ));
                 }
             }

@@ -23,6 +23,9 @@
   import type { HouseData, RoofRidgeDir, RoofType, RoomData, RoomType } from '../../types/housing'
   import { HOUSING_TEXTURES, initHousingTextures, getTexturePreviewUrls } from '../../utils/housing-textures'
   import { housingManager } from '../../managers/housingManager'
+  import { MAX_FLOOR_LEVEL } from '../../utils/house-geo-utils'
+
+  const FLOOR_LEVELS = Array.from({ length: MAX_FLOOR_LEVEL + 1 }, (_, i) => i)
 
   const toCSS = (c: number) => `#${c.toString(16).padStart(6, '0')}`
   const TEX_ENTRIES = HOUSING_TEXTURES.map((t, i) => ({
@@ -253,23 +256,17 @@
       >Stairs</button>
     </div>
 
-    {#if roomType === 'normal'}
-      <div class="section-title">Floor</div>
-      <div class="tool-row">
+    <div class="section-title">Floor</div>
+    <div class="tool-row">
+      {#each FLOOR_LEVELS as fl (fl)}
         <button
           class="tool-btn"
-          class:active={floorLvl === 0}
+          class:active={floorLvl === fl}
           disabled={tool !== 'place'}
-          onclick={() => placementFloorLevel.set(0)}
-        >1F</button>
-        <button
-          class="tool-btn"
-          class:active={floorLvl === 1}
-          disabled={tool !== 'place'}
-          onclick={() => placementFloorLevel.set(1)}
-        >2F</button>
-      </div>
-    {/if}
+          onclick={() => placementFloorLevel.set(fl)}
+        >{fl + 1}F</button>
+      {/each}
+    </div>
 
     <div class="section-title">{roomType === 'stairwell' ? 'Stairs' : 'Room'}</div>
     <div class="room-row">

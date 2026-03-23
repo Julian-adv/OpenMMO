@@ -31,6 +31,7 @@ export {
   FLOOR_THICKNESS,
   DEFAULT_WALL_HEIGHT,
   LANDING_DEPTH,
+  MAX_FLOOR_LEVEL,
   OFFSCREEN_Y,
   floorYBase,
   type WallDirection,
@@ -47,20 +48,27 @@ export function buildHouseGroup(
   houseGroup.position.set(house.origin.x, house.origin.y, house.origin.z)
   houseGroup.name = `house_${house.id}`
 
-  const secondFloorFootprints = collectFootprints(
-    house.rooms,
-    (r) => r.floorLevel >= 1
-  )
   const stairwellFootprints = collectFootprints(
     house.rooms,
     (r) => r.roomType === 'stairwell'
   )
 
+  // Pre-compute footprints per floor level for roof suppression checks
+  const footprintsByFloor = new Map<number, RoomFootprint[]>()
+  for (const room of house.rooms) {
+    if (!footprintsByFloor.has(room.floorLevel)) {
+      footprintsByFloor.set(
+        room.floorLevel,
+        collectFootprints(house.rooms, (r) => r.floorLevel === room.floorLevel)
+      )
+    }
+  }
+
   const perFloor = new Map<number, FloorEntries>()
 
   for (let ri = 0; ri < house.rooms.length; ri++) {
     const room = house.rooms[ri]
-    const fl = room.roomType === 'stairwell' ? 0 : room.floorLevel
+    const fl = room.floorLevel
     const entries = getOrCreateFloorEntries(perFloor, fl)
 
     collectRoomGeometries(
@@ -69,7 +77,7 @@ export function buildHouseGroup(
       entries.front,
       entries.back,
       entries.doors,
-      shouldSuppressRoof(room, secondFloorFootprints),
+      shouldSuppressRoof(room, footprintsByFloor.get(fl + 1) ?? []),
       house.rooms,
       stairwellFootprints
     )

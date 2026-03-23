@@ -240,12 +240,15 @@ Merged geometry per house, draw call 최소화.
 
 문짝 힌지 애니메이션, E키 상호작용, 네트워크 동기화, passability 연동.
 
-### Phase 8: Third Floor+ (Optional)
+### Phase 8: Third Floor+ ✅
 
-1. `floor_level` 최대 4층 (`floor_level` 0~3)
-2. visibility 로직 N층 일반화: 플레이어 층 이상의 앞벽+지붕 숨기기
-3. `hasFloorSupport` 검증 N층 확장
-4. 에디터 층 선택 UI 확장
+1. `floor_level` 최대 4층 (`floor_level` 0~3), `MAX_FLOOR_LEVEL` 상수 (서버+클라이언트)
+2. visibility 로직 N층 일반화 (이미 일반화되어 있었음): 플레이어 층 이상의 앞벽+지붕 숨기기
+3. `hasFloorSupport` 검증 N층 확장: floor N 배치 시 floor N-1 지지 확인
+4. 에디터 층 선택 UI: 동적 1F~4F 버튼 생성
+5. 지붕 억제: floor N 위에 floor N+1 방이 완전 커버 시 지붕 생략
+6. 계단 passability/geometry: N층 일반화 (entry floor ↔ exit floor 상대 비교)
+7. 계단 Y 오프셋: `floorLevel` 기반 절대 Y 위치 계산
 
 ### Phase 9: Roof Connection
 
