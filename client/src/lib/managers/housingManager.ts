@@ -166,13 +166,16 @@ function buildStairwellEdges(
 ) {
   const alongZ = room.sizeZ >= room.sizeX
 
+  // Side wall range: skip only the open landing row for this floor
+  // 1F: entry (low) landing open → skip row 0, include row sizeN-1
+  // 2F: exit (high) landing open → include row 0, skip row sizeN-1
+  const sideStart = floorLevel === 0 ? 1 : 0
+  const alongSize = alongZ ? room.sizeZ : room.sizeX
+  const sideEnd = floorLevel === 1 ? alongSize - 1 : alongSize
+
   if (alongZ) {
     // Stair axis = Z. Side walls = east/west. Ends = north/south.
-    // Landing rows: rz (bottom) and rz + sizeZ - 1 (top)
-    // Stair-run rows: rz + 1 .. rz + sizeZ - 2
-
-    // Side walls (east/west) — only on stair-run rows (skip landings)
-    for (let i = 1; i < room.sizeZ - 1; i++) {
+    for (let i = sideStart; i < sideEnd; i++) {
       setEdge(rx, rz + i, EDGE_W)
       setEdge(rx - 1, rz + i, EDGE_E)
       setEdge(rx + room.sizeX - 1, rz + i, EDGE_E)
@@ -196,11 +199,7 @@ function buildStairwellEdges(
     }
   } else {
     // Stair axis = X. Side walls = north/south. Ends = west/east.
-    // Landing cols: rx (bottom) and rx + sizeX - 1 (top)
-    // Stair-run cols: rx + 1 .. rx + sizeX - 2
-
-    // Side walls (north/south) — only on stair-run cols (skip landings)
-    for (let i = 1; i < room.sizeX - 1; i++) {
+    for (let i = sideStart; i < sideEnd; i++) {
       setEdge(rx + i, rz, EDGE_N)
       setEdge(rx + i, rz - 1, EDGE_S)
       setEdge(rx + i, rz + room.sizeZ - 1, EDGE_S)
@@ -234,7 +233,7 @@ interface RuntimeFloorGrid {
   depth: number
   yBase: number
   wallHeight: number
-  cells: number[] // mutable copy for door overlay
+  cells: number[]
 }
 
 interface RuntimePassability {
@@ -976,9 +975,6 @@ export class HousingManager {
         }
       }
 
-      // Make a mutable copy of cells for door overlay
-      const cells = Array.from(g.cells)
-
       return {
         floorLevel: g.floorLevel,
         originX: g.originX,
@@ -987,7 +983,7 @@ export class HousingManager {
         depth: g.depth,
         yBase,
         wallHeight,
-        cells,
+        cells: g.cells,
       }
     })
 

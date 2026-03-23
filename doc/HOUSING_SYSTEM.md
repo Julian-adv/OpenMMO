@@ -97,16 +97,16 @@ pub struct PassabilityGrid {
 
 1F stairwell을 1F/2F 두 grid에 모두 등록:
 
-- **1F grid**: 계단 양쪽 측면 벽 blocked (stair-run 구간만), 아래쪽 랜딩(entry) open, 위쪽 끝 blocked
-- **2F grid**: 계단 양쪽 측면 벽 blocked (stair-run 구간만), 위쪽 랜딩(exit) open, 아래쪽 끝 blocked
-- 랜딩 셀(첫/마지막 행)은 edge 비트 없음 — open platform
+- **1F grid**: entry(low) 랜딩만 side wall skip, exit(high) 랜딩 포함하여 측면+끝 blocked
+- **2F grid**: exit(high) 랜딩만 side wall skip, entry(low) 랜딩 포함하여 측면+끝 blocked
+- 각 층에서 열리는 랜딩만 side wall 없음, 반대쪽 랜딩은 측면까지 완전 차단
 
 계단 방향: `sizeZ >= sizeX`이면 Z축(entry=north, exit=south), 아니면 X축(entry=west, exit=east)
 
 ### Runtime
 
-- 집 로드 시 저장된 passability에서 런타임 그리드 생성 (없으면 fallback 계산)
-- 열린 문 상태 overlay: door segment의 edge 비트 clear
+- 집 로드 시 저장된 passability 그리드를 직접 사용 (없으면 fallback으로 벽 데이터에서 계산)
+- 열린 문 상태 overlay: passability cells 배열에서 door segment의 edge 비트 직접 clear
 - `toggleDoor`/`handleDoorToggled` 시 해당 edge 비트만 O(1) flip
 
 ### Movement Check
