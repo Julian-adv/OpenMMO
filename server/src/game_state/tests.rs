@@ -2,6 +2,7 @@ use super::*;
 use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterClass, Position, ServerMessage};
+use crate::world_config::world_config;
 use std::path::PathBuf;
 use tokio::sync::broadcast::error::TryRecvError;
 
@@ -65,11 +66,12 @@ async fn respawn_player_revives_dead_player_only() {
     let revived = players
         .get(&player_id)
         .expect("Player should still exist after respawn");
+    let spawn = &world_config().spawn_position;
     assert_eq!(revived.health, revived.max_health);
-    assert_eq!(revived.position.x, 0.0);
-    assert_eq!(revived.position.y, 0.0);
-    assert_eq!(revived.position.z, 0.0);
-    assert_eq!(revived.rotation, 0.0);
+    assert_eq!(revived.position.x, spawn.x);
+    assert_eq!(revived.position.y, spawn.y);
+    assert_eq!(revived.position.z, spawn.z);
+    assert_eq!(revived.rotation, spawn.rotation);
 
     match rx.try_recv() {
         Ok(msg) => {
