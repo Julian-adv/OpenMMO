@@ -11,6 +11,12 @@
     const target = e.target as HTMLInputElement
     bgmVolume.set(parseFloat(target.value))
   }
+
+  function handleVolumeWheel(e: WheelEvent) {
+    e.preventDefault()
+    const delta = e.deltaY < 0 ? 0.01 : -0.01
+    bgmVolume.update((v) => Math.round(Math.max(0, Math.min(1, v + delta)) * 100) / 100)
+  }
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -44,6 +50,7 @@
           step="0.01"
           value={$bgmVolume}
           oninput={handleVolumeChange}
+          onwheel={handleVolumeWheel}
           disabled={$bgmMuted}
         />
         <span class="volume-value">{$bgmMuted ? 'MUTE' : `${Math.round($bgmVolume * 100)}%`}</span>
