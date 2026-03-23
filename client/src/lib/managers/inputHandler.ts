@@ -9,12 +9,20 @@ export type ClickIntent =
       hitPoint: Position
       distance: number
     }
+  | {
+      type: 'toggle_door'
+      houseId: string
+      roomIndex: number
+      wallDir: string
+      segmentIndex: number
+    }
   | { type: 'move_to_ground'; position: Position }
   | { type: 'none' }
 
 export interface RaycastContext {
   camera: THREE.Camera
   monsterMeshes: THREE.Group[]
+  doorMeshes: THREE.Object3D[]
   groundMeshes: THREE.Object3D[]
   playerPosition: Position
   isMonsterDead: (monsterId: string) => boolean
@@ -125,16 +133,37 @@ class InputHandler {
       }
     }
 
-    // Check intersection with ground meshes (only use the center ray)
-    if (context.groundMeshes.length === 0) {
-      return { type: 'none' }
-    }
-
     const centerNDC = new Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     )
     raycaster.setFromCamera(centerNDC, context.camera)
+
+    // Check intersection with door meshes
+    if (context.doorMeshes?.length > 0) {
+      const doorHits = raycaster.intersectObjects(context.doorMeshes, true)
+      if (doorHits.length > 0) {
+        let obj: THREE.Object3D | null = doorHits[0].object
+        while (obj) {
+          const d = obj.userData
+          if (d && d.doorHouseId) {
+            return {
+              type: 'toggle_door',
+              houseId: d.doorHouseId,
+              roomIndex: d.doorRoomIndex,
+              wallDir: d.doorWallDir,
+              segmentIndex: d.doorSegmentIndex,
+            }
+          }
+          obj = obj.parent
+        }
+      }
+    }
+
+    // Check intersection with ground meshes
+    if (context.groundMeshes.length === 0) {
+      return { type: 'none' }
+    }
     const intersects = raycaster.intersectObjects(context.groundMeshes, true)
 
     // Pick the first hit with an upward-facing normal (floor/terrain, not walls)
