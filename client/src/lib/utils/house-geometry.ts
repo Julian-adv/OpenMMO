@@ -33,6 +33,7 @@ export {
   LANDING_DEPTH,
   MAX_FLOOR_LEVEL,
   OFFSCREEN_Y,
+  floorOverhang,
   floorYBase,
   type WallDirection,
   type DoorMeshInfo,
