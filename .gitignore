@@ -54,9 +54,10 @@ data/housing/
 server/data/game_data.db
 agent-client/data/config.toml
 
-# Claude Code (keep agents for sharing)
+# Claude Code (keep agents and commands for sharing)
 .claude/*
 !.claude/agents/
+!.claude/commands/
 
 # Codex
 .codex/*

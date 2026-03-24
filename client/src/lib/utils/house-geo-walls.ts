@@ -86,6 +86,11 @@ export function collectWallSegments(
       }
     }
 
+    // fitSegment: normalize UV to 0→1 per segment instead of world-space tiling
+    const fit = HOUSING_TEXTURES[texIdx].fitSegment
+    const u = (v: number) => (fit ? v / segW : v)
+    const v = (h: number) => (fit ? h / wh : h)
+
     if (seg.variant === 'solid') {
       target.push({
         geo: bakedGeo(
@@ -94,8 +99,8 @@ export function collectWallSegments(
           yBase + wh / 2,
           z,
           rotY,
-          segW,
-          wh
+          u(segW),
+          v(wh)
         ),
         textureIndex: texIdx,
       })
@@ -120,9 +125,9 @@ export function collectWallSegments(
               yBase + wh / 2,
               sz,
               rotY,
-              sideW,
-              wh,
-              uOffX,
+              u(sideW),
+              v(wh),
+              u(uOffX),
               0
             ),
             textureIndex: texIdx,
@@ -139,9 +144,9 @@ export function collectWallSegments(
             yBase + openBot / 2,
             z,
             rotY,
-            openW,
-            openBot,
-            sideW,
+            u(openW),
+            v(openBot),
+            u(sideW),
             0
           ),
           textureIndex: texIdx,
@@ -158,10 +163,10 @@ export function collectWallSegments(
             yBase + openBot + openH + topH / 2,
             z,
             rotY,
-            openW,
-            topH,
-            sideW,
-            openBot + openH
+            u(openW),
+            v(topH),
+            u(sideW),
+            v(openBot + openH)
           ),
           textureIndex: texIdx,
         })

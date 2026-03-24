@@ -15,6 +15,8 @@ export interface HousingTextureEntry {
   uvScale?: number
   /** UI display order — lower values appear first. Defaults to array index. */
   sortOrder?: number
+  /** Map UV 0→1 per wall segment (no tiling). Default false. */
+  fitSegment?: boolean
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -137,6 +139,13 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fallbackColor: 0x7a7060,
     sortOrder: 6,
   },
+  {
+    label: 'Plaster & Wood',
+    glb: 'housing/plaster_wood_wall_1k',
+    fallbackColor: 0x8a7a60,
+    sortOrder: 7,
+    fitSegment: true,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
@@ -181,22 +190,27 @@ export function initHousingTextures(): Promise<void> {
         const mat = getHousingMaterial(idx)
 
         const scale = entry.uvScale ?? 1.0
-        const applyRepeat = (tex: THREE.Texture) => {
+        const applyWrap = (tex: THREE.Texture) => {
           if (scale !== 1.0) tex.repeat.set(scale, scale)
+          if (entry.fitSegment) {
+            tex.wrapS = THREE.ClampToEdgeWrapping
+            tex.wrapT = THREE.ClampToEdgeWrapping
+            tex.needsUpdate = true
+          }
         }
 
         mat.map = layer.map
-        applyRepeat(layer.map)
+        applyWrap(layer.map)
         if (layer.normalMap) {
           mat.normalMap = layer.normalMap
-          applyRepeat(layer.normalMap)
+          applyWrap(layer.normalMap)
         }
         if (layer.orm) {
           // ORM packed: R=AO, G=roughness, B=metallic
           mat.roughnessMap = layer.orm
           mat.metalnessMap = layer.orm
           mat.aoMap = layer.orm
-          applyRepeat(layer.orm)
+          applyWrap(layer.orm)
         }
 
         // Switch from fallback color to texture-driven color
