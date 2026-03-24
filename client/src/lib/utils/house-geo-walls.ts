@@ -20,7 +20,7 @@ import {
 const DOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/wood_shutter_1k'
 )
-const DOOR_WIDTH = 1.0
+const DOOR_WIDTH = 0.8
 const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 0.8
 const WINDOW_HEIGHT = 1.0
@@ -353,15 +353,16 @@ export function collectWallSegments(
     const v = (h: number) => (fit ? h / wh : h)
 
     if (seg.variant === 'solid') {
+      const wallH = fit ? wh - 0.01 : wh
       target.push({
         geo: bakedGeo(
-          new THREE.BoxGeometry(segW, wh, WALL_THICKNESS),
+          new THREE.BoxGeometry(segW, wallH, WALL_THICKNESS),
           x,
-          yBase + wh / 2,
+          yBase + wallH / 2,
           z,
           rotY,
           u(segW),
-          v(wh)
+          v(wallH)
         ),
         textureIndex: texIdx,
       })
@@ -469,6 +470,22 @@ export function collectWallSegments(
         )
       }
 
+      // Door frame: pillars + header beam
+      if (fit && seg.variant === 'door' && DOOR_TEXTURE_IDX >= 0) {
+        const innerW = segW - segW * FRAME_SIDE_FRAC * 2
+        addFramePillars(
+          target, x, yBase, z, rotY, segW, wh,
+          dirInfo.isNS, i === 0, i === segments.length - 1, DOOR_TEXTURE_IDX
+        )
+        target.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(innerW, FRAME_DIAG_THICKNESS, FRAME_DEPTH),
+            x, yBase + DOOR_HEIGHT, z, rotY, innerW, FRAME_DIAG_THICKNESS
+          ),
+          textureIndex: DOOR_TEXTURE_IDX,
+        })
+      }
+
       // Door panel mesh with hinge pivot
       if (seg.variant === 'door') {
         const panelGeo = new THREE.BoxGeometry(
@@ -482,8 +499,8 @@ export function collectWallSegments(
         )
         panel.castShadow = true
 
-        // Offset panel so its left edge is at the pivot (hinge on left side)
-        panel.position.set(DOOR_WIDTH / 2, DOOR_HEIGHT / 2, 0)
+        // Offset panel so its left edge is at the pivot, front face flush with wall exterior
+        panel.position.set(DOOR_WIDTH / 2, DOOR_HEIGHT / 2, WALL_THICKNESS / 4)
 
         // Pivot group at the left edge of the door opening, at floor level
         const pivot = new THREE.Group()

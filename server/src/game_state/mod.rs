@@ -169,7 +169,7 @@ impl GameState {
     }
 }
 
-const MAX_DOOR_DISTANCE: f32 = 1.5;
+const MAX_DOOR_DISTANCE: f32 = 2.0;
 
 /// Check that the player is within range of a door and on the same floor.
 fn is_player_near_door(
@@ -180,8 +180,8 @@ fn is_player_near_door(
     player_pos: &Position,
     player_floor: i8,
 ) -> bool {
-    // Floor check
-    if player_floor != room.floor_level as i8 {
+    // Floor check (-1 means outside, allow interaction with any floor)
+    if player_floor != -1 && player_floor != room.floor_level as i8 {
         warn!(
             "toggle_door: wrong floor — player floor={} door floor={}",
             player_floor, room.floor_level

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import type { Position } from '../utils/movementUtils'
 import type { WallDirection } from '../utils/house-geometry'
 
-const MAX_DOOR_INTERACT_DISTANCE = 1.5
+const MAX_DOOR_INTERACT_DISTANCE = 2.0
 
 export type ClickIntent =
   | {
@@ -143,7 +143,7 @@ class InputHandler {
     )
     raycaster.setFromCamera(centerNDC, context.camera)
 
-    // Check intersection with door meshes (within 1.5m of player)
+    // Check intersection with door meshes
     if (context.doorMeshes?.length > 0) {
       const doorHits = raycaster.intersectObjects(context.doorMeshes, true)
       if (doorHits.length > 0) {
