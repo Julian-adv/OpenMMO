@@ -90,6 +90,9 @@ pub struct RoomData {
     pub roof_type: RoofType,
     #[serde(default)]
     pub roof_ridge_dir: RoofRidgeDir,
+    /// Stairwell ascends in reverse direction (180°/270° rotation)
+    #[serde(default)]
+    pub stair_reversed: bool,
     pub local_x: i32,
     pub local_z: i32,
     pub size_x: u8,

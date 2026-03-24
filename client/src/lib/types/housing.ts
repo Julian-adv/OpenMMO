@@ -15,6 +15,8 @@ export interface RoomData {
   roomType?: RoomType
   roofType?: RoofType
   roofRidgeDir?: RoofRidgeDir
+  /** Stairwell ascends in reverse direction (180°/270° rotation) */
+  stairReversed?: boolean
   localX: number
   localZ: number
   sizeX: number

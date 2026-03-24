@@ -31,7 +31,7 @@
     WallVariant,
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
-  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, FLOOR_THICKNESS, floorYBase } from '../../utils/house-geometry'
+  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, FLOOR_THICKNESS, floorOverhang, floorYBase } from '../../utils/house-geometry'
   import { editorPanOffset } from '../../stores/editorStore'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -151,7 +151,10 @@
     if (!house || roomIdx >= house.rooms.length) return
 
     const room = house.rooms[roomIdx]
-    const geo = new THREE.BoxGeometry(room.sizeX, room.wallHeight, room.sizeZ)
+    const overhang = floorOverhang(room.floorLevel)
+    const highlightW = room.sizeX + overhang * 2
+    const highlightD = room.sizeZ + overhang * 2
+    const geo = new THREE.BoxGeometry(highlightW, room.wallHeight, highlightD)
     const edgesGeo = new THREE.EdgesGeometry(geo)
     geo.dispose()
     highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
@@ -773,6 +776,9 @@
     return {
       roomType: currentRoomType,
       roofType: get(placementRoofType),
+      ...(currentRoomType === 'stairwell' && {
+        stairReversed: currentRotation === 180 || currentRotation === 270,
+      }),
       localX: 0,
       localZ: 0,
       sizeX,

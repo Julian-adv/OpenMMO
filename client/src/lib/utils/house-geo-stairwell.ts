@@ -27,6 +27,7 @@ export function collectStairwellGeometries(
   const yBase = floorYBase(floorLevel, wallHeight) + FLOOR_THICKNESS / 2
   const totalRise = wallHeight + FLOOR_THICKNESS
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
+  const reversed = room.stairReversed ?? false
 
   const alongZ = sizeZ >= sizeX
   const stairLen = alongZ ? sizeZ : sizeX
@@ -149,9 +150,11 @@ export function collectStairwellGeometries(
   const baseCx = localX + sizeX / 2 + (alongZ ? widthOffset : -lenOffset)
   const baseCz = localZ + sizeZ / 2 + (alongZ ? -lenOffset : widthOffset)
 
+  const dir = reversed ? -1 : 1
+
   // Bottom landing
   {
-    const offset = -(effectiveLen / 2) + LANDING_DEPTH / 2
+    const offset = dir * (-(effectiveLen / 2) + LANDING_DEPTH / 2)
     addBox(
       effectiveWidth,
       FLOOR_THICKNESS,
@@ -166,7 +169,8 @@ export function collectStairwellGeometries(
   for (let i = 0; i < stepCount; i++) {
     const stepY = yBase + i * stepHeight + stepHeight / 2
     const offset =
-      -(effectiveLen / 2) + LANDING_DEPTH + i * stepDepth + stepDepth / 2
+      dir *
+      (-(effectiveLen / 2) + LANDING_DEPTH + i * stepDepth + stepDepth / 2)
     addBox(
       effectiveWidth,
       stepHeight,
@@ -179,7 +183,7 @@ export function collectStairwellGeometries(
 
   // Top landing
   {
-    const offset = effectiveLen / 2 - LANDING_DEPTH / 2
+    const offset = dir * (effectiveLen / 2 - LANDING_DEPTH / 2)
     addBox(
       effectiveWidth,
       FLOOR_THICKNESS,
@@ -208,10 +212,12 @@ export function getStairwellYOffset(
   const stairLen = alongZ ? sizeZ : sizeX
   const totalRise = wallHeight + FLOOR_THICKNESS
   const baseY = floorYBase(floorLevel, wallHeight)
+  const reversed = room.stairReversed ?? false
 
   const roomStartX = houseOriginX + localX
   const roomStartZ = houseOriginZ + localZ
-  const posAlongStair = alongZ ? wz - roomStartZ : wx - roomStartX
+  let posAlongStair = alongZ ? wz - roomStartZ : wx - roomStartX
+  if (reversed) posAlongStair = stairLen - posAlongStair
 
   const t = Math.max(0, Math.min(stairLen, posAlongStair))
 
