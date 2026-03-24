@@ -81,6 +81,7 @@ export interface RoomFootprint {
   z: number
   sx: number
   sz: number
+  fl: number
 }
 
 export type FloorEntries = {
@@ -172,6 +173,7 @@ export function collectFootprints(
         z: room.localZ,
         sx: room.sizeX,
         sz: room.sizeZ,
+        fl: room.floorLevel,
       })
     }
   }

@@ -49,9 +49,13 @@ export function collectFloorGeometry(
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
   const oh = floorOverhang(floorLevel)
 
+  // Only punch holes for stairwells on the floor below (fl === floorLevel - 1)
+  const relevantFootprints = stairwellFootprints.filter(
+    (fp) => fp.fl === floorLevel - 1
+  )
   const hasStairwellOverlap =
     floorLevel >= 1 &&
-    stairwellFootprints.some(
+    relevantFootprints.some(
       (fp) =>
         localX < fp.x + fp.sx &&
         localX + sizeX > fp.x &&
@@ -61,17 +65,16 @@ export function collectFloorGeometry(
 
   if (hasStairwellOverlap) {
     const isHole = (cx: number, cz: number) =>
-      stairwellFootprints.some((fp) => cellInFootprint(cx, cz, fp))
+      relevantFootprints.some((fp) => cellInFootprint(cx, cz, fp))
 
     for (let cx = localX; cx < localX + sizeX; cx++) {
       for (let cz = localZ; cz < localZ + sizeZ; cz++) {
         if (isHole(cx, cz)) {
           // Stairwell hole at room edge: add narrow overhang strips
           if (oh > 0) {
-            const sw = oh + WALL_THICKNESS * 2 // overhang + wall + frame
-            const ss = sw + WALL_THICKNESS // strip size covering full edge
+            const strip = oh + WALL_THICKNESS // overhang + wall overlap
             if (cx === localX) {
-              addFloorStrip(target, floorIdx, localX - sw, yBase, cz, ss, 1)
+              addFloorStrip(target, floorIdx, localX - oh, yBase, cz, strip, 1)
             }
             if (cx === localX + sizeX - 1) {
               addFloorStrip(
@@ -80,12 +83,12 @@ export function collectFloorGeometry(
                 localX + sizeX - WALL_THICKNESS,
                 yBase,
                 cz,
-                ss,
+                strip,
                 1
               )
             }
             if (cz === localZ) {
-              addFloorStrip(target, floorIdx, cx, yBase, localZ - sw, 1, ss)
+              addFloorStrip(target, floorIdx, cx, yBase, localZ - oh, 1, strip)
             }
             if (cz === localZ + sizeZ - 1) {
               addFloorStrip(
@@ -95,7 +98,7 @@ export function collectFloorGeometry(
                 yBase,
                 localZ + sizeZ - WALL_THICKNESS,
                 1,
-                ss
+                strip
               )
             }
           }

@@ -170,6 +170,7 @@ function buildStairwellEdges(
 ) {
   const alongZ = room.sizeZ >= room.sizeX
   const alongSize = alongZ ? room.sizeZ : room.sizeX
+  const reversed = room.stairReversed ?? false
 
   // Skip the landing row for this floor's open end
   const isEntryFloor = floorLevel === room.floorLevel
@@ -177,8 +178,15 @@ function buildStairwellEdges(
   // Skip landing row when it connects to an adjacent floor (open end)
   const skipEntryLanding = isEntryFloor || (isExitFloor && !blockEntryEnd)
   const skipExitLanding = isExitFloor || (isEntryFloor && !blockExitEnd)
-  const sideStart = skipEntryLanding ? 1 : 0
-  const sideEnd = skipExitLanding ? alongSize - 1 : alongSize
+
+  // When reversed, entry/exit physical positions swap (first row ↔ last row)
+  const skipFirstRow = reversed ? skipExitLanding : skipEntryLanding
+  const skipLastRow = reversed ? skipEntryLanding : skipExitLanding
+  const blockFirstRow = reversed ? blockExitEnd : blockEntryEnd
+  const blockLastRow = reversed ? blockEntryEnd : blockExitEnd
+
+  const sideStart = skipFirstRow ? 1 : 0
+  const sideEnd = skipLastRow ? alongSize - 1 : alongSize
 
   if (alongZ) {
     for (let i = sideStart; i < sideEnd; i++) {
@@ -187,15 +195,13 @@ function buildStairwellEdges(
       setEdge(rx + room.sizeX - 1, rz + i, EDGE_E)
       setEdge(rx + room.sizeX, rz + i, EDGE_W)
     }
-    // Block exit end on entry floor to prevent walking into upper landing
-    if (blockExitEnd) {
+    if (blockLastRow) {
       for (let x = 0; x < room.sizeX; x++) {
         setEdge(rx + x, rz + room.sizeZ - 1, EDGE_S)
         setEdge(rx + x, rz + room.sizeZ, EDGE_N)
       }
     }
-    // Block entry end on exit floor to prevent falling into stairwell hole
-    if (blockEntryEnd) {
+    if (blockFirstRow) {
       for (let x = 0; x < room.sizeX; x++) {
         setEdge(rx + x, rz, EDGE_N)
         setEdge(rx + x, rz - 1, EDGE_S)
@@ -208,15 +214,13 @@ function buildStairwellEdges(
       setEdge(rx + i, rz + room.sizeZ - 1, EDGE_S)
       setEdge(rx + i, rz + room.sizeZ, EDGE_N)
     }
-    // Block exit end on entry floor to prevent walking into upper landing
-    if (blockExitEnd) {
+    if (blockLastRow) {
       for (let z = 0; z < room.sizeZ; z++) {
         setEdge(rx + room.sizeX - 1, rz + z, EDGE_E)
         setEdge(rx + room.sizeX, rz + z, EDGE_W)
       }
     }
-    // Block entry end on exit floor to prevent falling into stairwell hole
-    if (blockEntryEnd) {
+    if (blockFirstRow) {
       for (let z = 0; z < room.sizeZ; z++) {
         setEdge(rx, rz + z, EDGE_W)
         setEdge(rx - 1, rz + z, EDGE_E)
@@ -235,12 +239,15 @@ function hasOverlappingStairwell(
   end: 'entry' | 'exit'
 ): boolean {
   const alongZ = stairwell.sizeZ >= stairwell.sizeX
+  const reversed = stairwell.stairReversed ?? false
   const rx = stairwell.localX
   const rz = stairwell.localZ
 
   // Landing bounding box: entry = first row, exit = last row along stair axis
+  // When reversed, physical positions swap
+  const physicalEnd = reversed ? (end === 'exit' ? 'entry' : 'exit') : end
   let minX: number, maxX: number, minZ: number, maxZ: number
-  if (end === 'exit') {
+  if (physicalEnd === 'exit') {
     if (alongZ) {
       minX = rx
       maxX = rx + stairwell.sizeX

@@ -76,7 +76,7 @@
     }
 
     const WALL_Y = 0.05 // slightly above floor
-    const WALL_H = 0.2  // line height
+    const WALL_H = 0.1  // line height
 
     for (const [houseId, rp] of housingManager.getPassabilityEntries()) {
       const house = housingManager.getHouseById(houseId)
@@ -280,6 +280,14 @@
         if (roomResult.house.id !== id) continue
         const room = roomResult.house.rooms[roomResult.roomIndex]
         if (room.roomType === 'stairwell') {
+          // Only consider stairwells whose floor range includes the player's
+          // current floor — prevents adjacent/stacked stairwells on other
+          // floors from catching the player
+          if (
+            playerInsideFloor >= 0 &&
+            (playerInsideFloor > room.floorLevel + 1 ||
+              playerInsideFloor < room.floorLevel)
+          ) continue
           const offset = getStairwellYOffset(
             room,
             roomResult.house.origin.x,
