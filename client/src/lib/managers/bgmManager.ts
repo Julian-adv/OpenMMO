@@ -3,22 +3,27 @@ import { get, writable } from 'svelte/store'
 const BGM_FILES = [
   'Lonely Steppe of Ages.mp3',
   'Lonely Steppe of Ages (1).mp3',
-  'Untitled (2).mp3',
-  'Untitled (4).mp3',
-  'Untitled (5).mp3',
-  'Untitled (7).mp3',
-  'Untitled (9).mp3',
+  'Winds of the Open Plain.mp3',
+  'Dawn Over the Kingdom.mp3',
+  'Beyond the Horizon.mp3',
+  'Quiet Longing.mp3',
+  'Twilight Fields.mp3',
   'Hearthside Respite.mp3',
   'Hearthside Respite (1).mp3',
   'Triumphal Procession.mp3',
   'Triumphal Procession (1).mp3',
   'Wanderer of the Old Fields (1).mp3',
+  'Lonely Roads of Eldoria.mp3',
   'Crescendo of Remembering.mp3',
   'Sky of Burning Wings.mp3',
   'Sky of Burning Wings (1).mp3',
 ]
 
-const BATTLE_BGM_FILES = ['Blood and Bronze.mp3', 'Blood and Bronze (1).mp3']
+const BATTLE_BGM_FILES = [
+  'Blood and Bronze.mp3',
+  'Blood and Bronze (1).mp3',
+  'Drums of Valor.mp3',
+]
 const BATTLE_LINGER_MS = 5000
 const BATTLE_FADE_OUT_MS = 3000
 const BATTLE_FADE_STEP_MS = 50

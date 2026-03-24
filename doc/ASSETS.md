@@ -153,59 +153,70 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 
 suno.com에서 다음의 프롬프트로 생성
 
-- Untitled ~ Untitled (3)
+### Field BGM
+
+- Winds of the Open Plain
 
   ```
   game bgm something like "Stones" in Ultima series. Medieval instruments(lute, recorder, harp, strings, percussion, brass), melodic, easy melody to memory. Something like that makes you to want to go adventures, vast open plains, endless oceans, rugged mountain ranges. hopeful and grand.
   ```
 
-- Untitled (4) ~ Untitled (5)
+- Dawn Over the Kingdom, Beyond the Horizon
 
   ```
   A sweeping medieval fantasy RPG overworld theme inspired by "Stones" from the Ultima series. Begin with a gentle, memorable melody on solo lute or recorder over soft harp arpeggios — evoking a peaceful village at dawn. Gradually layer in strings and light percussion as the melody builds, conveying the feeling of stepping out into vast open plains and endless oceans. The music swells with noble brass and full orchestral strings as the adventurer crosses rugged mountain ranges in search of treasure. The mood is hopeful and grand — a sense of the heart expanding, chest opening wide with wonder and possibility. Melodic, singable theme that lingers in memory. Warm, nostalgic, yet epic. No vocals.
   ```
 
-- Untitled (6) ~ Untitled (9)
+- Quiet Longing, Twilight Fields
 
   ```
   game bgm something like "Stones" in Ultima series. Medieval instruments(lute, recorder, harp, strings, percussion), melodic, easy melody to memory. lonely, little bit sad, peaceful, calm
   ```
 
-- Blood and Bronze
+- Wanderer of the Old Fields (1), Lonely Roads of Eldoria
+
   ```
-  High-intensity medieval battle score, 160+ BPM, Explosive percussive stabs into rolling war drums, aggressive lute ostinatos, piercing recorder lead, and bright harp arpeggios weaving countermelodies, Constant layered tension, tight looping eight-bar structure with evolving drum accents and heroic yet desperate harmonic shifts; mix is upfront and dry for maximum impact in combat, piercing, medieval, harp
-  ```
-  
-- Wanderer of the Old Fields
-  ```
-  Medieval fantasy field BGM, Ultima-style, minor key, melancholic and bittersweet, 
-fingerpicked lute, haunting recorder melody, harp shimmer, strings swelling with quiet grandeur, 
+  Medieval fantasy field BGM, Ultima-style, minor key, melancholic and bittersweet,
+fingerpicked lute, haunting recorder melody, harp shimmer, strings swelling with quiet grandeur,
 soft percussion, lonely wanderer, vast open world, seamless loop
   ```
-  
-- Lonely Steppe of Ages
+
+- Lonely Steppe of Ages, Lonely Steppe of Ages (1)
+
   ```
-  Medieval fantasy field BGM, Ultima-style, minor key, melancholic and bittersweet, 
-haunting memorable melody, quiet grandeur, lonely wanderer crossing a vast open world, 
+  Medieval fantasy field BGM, Ultima-style, minor key, melancholic and bittersweet,
+haunting memorable melody, quiet grandeur, lonely wanderer crossing a vast open world,
 seamless loop, game BGM
   ```
 
-- Hearthside Respite
+- Hearthside Respite, Hearthside Respite (1)
+
   ```
   Warm and relaxed medieval tavern music. Gentle lute fingerpicking sets a cozy mood. Soft fiddle plays a slow, sweet melody. Harp adds delicate touches. Feels like resting by the fireplace with a mug of ale after a long journey. Calm and inviting. No vocals.
   ```
 
-- Triumphal Procession
+- Triumphal Procession, Triumphal Procession (1)
+
   ```
   Epic orchestral score with bold brass fanfare, sweeping strings, and thunderous percussion, Opens with brilliant trumpets and French horns over timpani swells, then locks into a ceremonial march guided by snare, Middle section softens into harp arpeggios and warm woodwinds, then surges back into a fuller, more heroic reprise that climbs into a massive, shining crescendo to close, harp, soft, soaring, orchestral
   ```
 
 - Crescendo of Remembering
+
   ```
   Cinematic orchestral build: intimate felt-piano and warm synth pads bloom into nostalgic strings, then widen with harp arpeggios and airy choir aahs before cresting in a full-ensemble, brass-driven climax with heroic choir and cymbal swells, ending in a tender, dissolving echo, nostalgic, orchestral, gentle, soaring, soft, emotional, harp
   ```
 
-- Sky of Burning Wings
+- Sky of Burning Wings, Sky of Burning Wings (1)
+
   ```
   Blazing 80s-style anime score at high tempo: gated drums and a piercing synth lead open in unison, then electric guitar and string stabs carry a heroic melody, Arrangement swells with counter-melodies, modulated key changes, and tom fills that kick into half-time hits before racing back, Final act erupts into full orchestra with soaring brass fanfares, cymbal swells, and a massive choir carrying the main theme in stacked harmonies, ending on a held, radiant chord, orchestral, bright, anime
+  ```
+
+### Battle BGM
+
+- Blood and Bronze, Blood and Bronze (1), Drums of Valor
+
+  ```
+  High-intensity medieval battle score, 160+ BPM, Explosive percussive stabs into rolling war drums, aggressive lute ostinatos, piercing recorder lead, and bright harp arpeggios weaving countermelodies, Constant layered tension, tight looping eight-bar structure with evolving drum accents and heroic yet desperate harmonic shifts; mix is upfront and dry for maximum impact in combat, piercing, medieval, harp
   ```
