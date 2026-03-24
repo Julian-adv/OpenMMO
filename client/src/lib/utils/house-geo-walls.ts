@@ -11,6 +11,7 @@ import {
   WALL_DIR_INFO,
   bakedGeo,
   floorYBase,
+  floorOverhang,
   type WallDirection,
   type GeoEntry,
   type DoorMeshInfo,
@@ -40,6 +41,12 @@ export function collectWallSegments(
   const wh = room.wallHeight
   const yBase = floorYBase(room.floorLevel, wh) + FLOOR_THICKNESS / 2
   const { localX, localZ, sizeX, sizeZ } = room
+  const oh = floorOverhang(room.floorLevel)
+
+  // Wall span expands with overhang; each segment stretches proportionally
+  const numSegs = segments.length
+  const segW =
+    numSegs > 0 ? ((dirInfo.isNS ? sizeX : sizeZ) + oh * 2) / numSegs : 1
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]
@@ -47,33 +54,33 @@ export function collectWallSegments(
 
     const texIdx = seg.texture % HOUSING_TEXTURES.length
 
-    // Position: center of this 1m segment along the wall
-    const segCenter = i + 0.5 // 0.5, 1.5, 2.5, ...
+    // Position: center of this segment along the expanded wall
+    const segCenter = i * segW + segW / 2
     let x: number, z: number, rotY: number
 
     const halfT = WALL_THICKNESS / 2
     switch (dir) {
       case 'north': {
-        x = localX + segCenter
-        z = localZ + halfT
+        x = localX - oh + segCenter
+        z = localZ - oh + halfT
         rotY = 0
         break
       }
       case 'south': {
-        x = localX + segCenter
-        z = localZ + sizeZ - halfT
+        x = localX - oh + segCenter
+        z = localZ + sizeZ + oh - halfT
         rotY = 0
         break
       }
       case 'east': {
-        x = localX + sizeX - halfT
-        z = localZ + segCenter
+        x = localX + sizeX + oh - halfT
+        z = localZ - oh + segCenter
         rotY = Math.PI / 2
         break
       }
       case 'west': {
-        x = localX + halfT
-        z = localZ + segCenter
+        x = localX - oh + halfT
+        z = localZ - oh + segCenter
         rotY = Math.PI / 2
         break
       }
@@ -82,30 +89,30 @@ export function collectWallSegments(
     if (seg.variant === 'solid') {
       target.push({
         geo: bakedGeo(
-          new THREE.BoxGeometry(1, wh, WALL_THICKNESS),
+          new THREE.BoxGeometry(segW, wh, WALL_THICKNESS),
           x,
           yBase + wh / 2,
           z,
           rotY,
-          1,
+          segW,
           wh
         ),
         textureIndex: texIdx,
       })
     } else {
-      // door or window — opening centered in the 1m segment
+      // door or window — opening centered in the segment
       const openW = seg.variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
       const openH = seg.variant === 'door' ? DOOR_HEIGHT : WINDOW_HEIGHT
       const openBot = seg.variant === 'door' ? 0 : WINDOW_BOTTOM
-      const sideW = (1 - openW) / 2
+      const sideW = (segW - openW) / 2
 
       // Left and right solid strips
       if (sideW > 0.01) {
         for (const sign of [-1, 1]) {
-          const offset = sign * (0.5 - sideW / 2)
-          const sx = dir === 'north' || dir === 'south' ? x + offset : x
-          const sz = dir === 'east' || dir === 'west' ? z + offset : z
-          const uOffX = sign === -1 ? 0 : 1 - sideW
+          const offset = sign * (segW / 2 - sideW / 2)
+          const sx = dirInfo.isNS ? x + offset : x
+          const sz = !dirInfo.isNS ? z + offset : z
+          const uOffX = sign === -1 ? 0 : segW - sideW
           target.push({
             geo: bakedGeo(
               new THREE.BoxGeometry(sideW, wh, WALL_THICKNESS),
@@ -182,7 +189,7 @@ export function collectWallSegments(
 
         // Position pivot at the hinge edge (left side of opening in local wall space)
         const hingeOffset = -DOOR_WIDTH / 2
-        if (dir === 'north' || dir === 'south') {
+        if (dirInfo.isNS) {
           pivot.position.set(x + hingeOffset, yBase, z)
         } else {
           pivot.position.set(x, yBase, z + hingeOffset)

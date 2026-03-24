@@ -307,10 +307,10 @@
         const entryFloor = room.floorLevel
         const exitFloor = room.floorLevel + 1
         const entryFloorY = floorYBase(entryFloor, room.wallHeight)
-        // Hysteresis: transition at 90% of stairwell rise to avoid flickering
+        // Hysteresis: transition at 95% of stairwell rise to avoid flickering
         const exitThreshold =
           entryFloorY +
-          (floorYBase(exitFloor, room.wallHeight) - entryFloorY) * 0.9
+          (floorYBase(exitFloor, room.wallHeight) - entryFloorY) * 0.95
         if (playerInsideFloor <= entryFloor) {
           effectiveFloor = newOffset >= exitThreshold ? exitFloor : entryFloor
         } else {

@@ -12,12 +12,18 @@ export const DEFAULT_WALL_HEIGHT = 3
 export const LANDING_DEPTH = 0.5
 export const MAX_FLOOR_LEVEL = 3
 export const ROOF_OVERHANG = 0.3
+export const FLOOR_OVERHANG_PER_LEVEL = 0.15
 export const ROOF_PITCH: Record<string, number> = {
   gabled: 0.8,
   steep: 1.4,
 }
 
 export { HOUSING_TEXTURES }
+
+/** Compute floor overhang for a given floor level (upper floors extend beyond walls). */
+export function floorOverhang(floorLevel: number): number {
+  return floorLevel * FLOOR_OVERHANG_PER_LEVEL
+}
 
 /** Y offset used to hide front walls instead of toggling visible (WebGPU workaround) */
 export const OFFSCREEN_Y = -10000
@@ -202,12 +208,14 @@ export function computeHouseAABB(house: {
     const minX = house.origin.x + room.localX
     const minZ = house.origin.z + room.localZ
     let maxY = room.wallHeight
-    let oh = 0
+    let roofOh = 0
     if (room.roofType && room.roofType !== 'flat') {
       const { ridgeHeight } = gabledRoofDims(room)
       maxY += ridgeHeight
-      oh = ROOF_OVERHANG
+      roofOh = ROOF_OVERHANG
     }
+    const flOh = floorOverhang(room.floorLevel)
+    const oh = Math.max(roofOh, flOh)
     _aabbVec.set(minX - oh, house.origin.y + yBase, minZ - oh)
     aabb.expandByPoint(_aabbVec)
     _aabbVec.set(

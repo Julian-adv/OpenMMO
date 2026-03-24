@@ -5,13 +5,38 @@ import * as THREE from 'three'
 import type { RoomData } from '../types/housing'
 import {
   FLOOR_THICKNESS,
+  WALL_THICKNESS,
   HOUSING_TEXTURES,
   bakedGeo,
   floorYBase,
+  floorOverhang,
   cellInFootprint,
   type GeoEntry,
   type RoomFootprint,
 } from './house-geo-utils'
+
+function addFloorStrip(
+  target: GeoEntry[],
+  textureIndex: number,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  d: number
+) {
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(w, FLOOR_THICKNESS, d),
+      x + w / 2,
+      y,
+      z + d / 2,
+      0,
+      w,
+      d
+    ),
+    textureIndex,
+  })
+}
 
 /** Generate floor geometry for a room, punching stairwell holes on 2F+. */
 export function collectFloorGeometry(
@@ -22,6 +47,7 @@ export function collectFloorGeometry(
   const { localX, localZ, sizeX, sizeZ, floorLevel } = room
   const yBase = floorYBase(floorLevel, room.wallHeight)
   const floorIdx = room.floorTexture % HOUSING_TEXTURES.length
+  const oh = floorOverhang(floorLevel)
 
   const hasStairwellOverlap =
     floorLevel >= 1 &&
@@ -34,20 +60,59 @@ export function collectFloorGeometry(
     )
 
   if (hasStairwellOverlap) {
+    const isHole = (cx: number, cz: number) =>
+      stairwellFootprints.some((fp) => cellInFootprint(cx, cz, fp))
+
     for (let cx = localX; cx < localX + sizeX; cx++) {
       for (let cz = localZ; cz < localZ + sizeZ; cz++) {
-        if (stairwellFootprints.some((fp) => cellInFootprint(cx, cz, fp))) {
+        if (isHole(cx, cz)) {
+          // Stairwell hole at room edge: add narrow overhang strips
+          if (oh > 0) {
+            const sw = oh + WALL_THICKNESS // wide enough to cover wall below
+            if (cx === localX) {
+              addFloorStrip(target, floorIdx, localX - sw, yBase, cz, sw, 1)
+            }
+            if (cx === localX + sizeX - 1) {
+              addFloorStrip(target, floorIdx, localX + sizeX, yBase, cz, sw, 1)
+            }
+            if (cz === localZ) {
+              addFloorStrip(target, floorIdx, cx, yBase, localZ - sw, 1, sw)
+            }
+            if (cz === localZ + sizeZ - 1) {
+              addFloorStrip(target, floorIdx, cx, yBase, localZ + sizeZ, 1, sw)
+            }
+          }
           continue
+        }
+        let cellX = cx
+        let cellZ = cz
+        let cellW = 1
+        let cellD = 1
+        if (oh > 0) {
+          if (cx === localX) {
+            cellX -= oh
+            cellW += oh
+          }
+          if (cx === localX + sizeX - 1) {
+            cellW += oh
+          }
+          if (cz === localZ) {
+            cellZ -= oh
+            cellD += oh
+          }
+          if (cz === localZ + sizeZ - 1) {
+            cellD += oh
+          }
         }
         target.push({
           geo: bakedGeo(
-            new THREE.BoxGeometry(1, FLOOR_THICKNESS, 1),
-            cx + 0.5,
+            new THREE.BoxGeometry(cellW, FLOOR_THICKNESS, cellD),
+            cellX + cellW / 2,
             yBase,
-            cz + 0.5,
+            cellZ + cellD / 2,
             0,
-            1,
-            1,
+            cellW,
+            cellD,
             cx - localX,
             cz - localZ
           ),
@@ -56,15 +121,17 @@ export function collectFloorGeometry(
       }
     }
   } else {
+    const totalW = sizeX + oh * 2
+    const totalD = sizeZ + oh * 2
     target.push({
       geo: bakedGeo(
-        new THREE.BoxGeometry(sizeX, FLOOR_THICKNESS, sizeZ),
+        new THREE.BoxGeometry(totalW, FLOOR_THICKNESS, totalD),
         localX + sizeX / 2,
         yBase,
         localZ + sizeZ / 2,
         0,
-        sizeX,
-        sizeZ
+        totalW,
+        totalD
       ),
       textureIndex: floorIdx,
     })

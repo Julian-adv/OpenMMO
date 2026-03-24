@@ -11,6 +11,7 @@ import {
   bakedGeo,
   cellInFootprint,
   floorYBase,
+  floorOverhang,
   gabledRoofDims,
   type GeoEntry,
   type RoomFootprint,
@@ -50,7 +51,10 @@ function collectFlatRoof(room: RoomData, target: GeoEntry[]) {
   const { localX, localZ, sizeX, sizeZ, wallHeight } = room
   const yBase = floorYBase(room.floorLevel, wallHeight)
   const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
-  const roofPlane = new THREE.PlaneGeometry(sizeX, sizeZ)
+  const oh = floorOverhang(room.floorLevel)
+  const totalW = sizeX + oh * 2
+  const totalD = sizeZ + oh * 2
+  const roofPlane = new THREE.PlaneGeometry(totalW, totalD)
   roofPlane.rotateX(-Math.PI / 2)
   target.push({
     geo: bakedGeo(
@@ -59,8 +63,8 @@ function collectFlatRoof(room: RoomData, target: GeoEntry[]) {
       yBase + FLOOR_THICKNESS / 2 + wallHeight + 0.001,
       localZ + sizeZ / 2,
       0,
-      sizeX,
-      sizeZ
+      totalW,
+      totalD
     ),
     textureIndex: roofIdx,
   })
@@ -82,13 +86,15 @@ function collectGabledRoof(
   const wallTopY = yBase + FLOOR_THICKNESS / 2 + wallHeight
   const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
   const { ridgeAlongX, shortDim, ridgeHeight } = gabledRoofDims(room)
+  const flOh = floorOverhang(room.floorLevel)
 
   const cx = localX + sizeX / 2
   const cz = localZ + sizeZ / 2
   const oh = ROOF_OVERHANG
 
-  const halfShort = shortDim / 2
-  const halfLong = ridgeAlongX ? sizeX / 2 : sizeZ / 2
+  // Expand roof base by floor overhang so it covers the expanded walls
+  const halfShort = shortDim / 2 + flOh
+  const halfLong = (ridgeAlongX ? sizeX / 2 : sizeZ / 2) + flOh
 
   const slopeAngle = Math.atan2(ridgeHeight, halfShort)
   const eaveDropY = (oh * ridgeHeight) / halfShort
@@ -161,8 +167,8 @@ function collectGabledRoof(
     const uvs = new Float32Array(3 * 2)
 
     const endOffset = ridgeAlongX
-      ? (endSign * sizeX) / 2
-      : (endSign * sizeZ) / 2
+      ? (endSign * (sizeX + flOh * 2)) / 2
+      : (endSign * (sizeZ + flOh * 2)) / 2
 
     const gnx = ridgeAlongX ? endSign : 0
     const gnz = ridgeAlongX ? 0 : endSign
@@ -189,10 +195,10 @@ function collectGabledRoof(
       normals[i * 3 + 2] = gnz
 
       if (i === 2) {
-        uvs[i * 2] = shortDim / 2
+        uvs[i * 2] = halfShort
         uvs[i * 2 + 1] = ridgeHeight
       } else {
-        uvs[i * 2] = i === 0 ? 0 : shortDim
+        uvs[i * 2] = i === 0 ? 0 : halfShort * 2
         uvs[i * 2 + 1] = 0
       }
     }
