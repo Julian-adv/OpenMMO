@@ -8,6 +8,8 @@ import {
   WALL_THICKNESS,
   FLOOR_THICKNESS,
   HOUSING_TEXTURES,
+  FRAME_DEPTH,
+  WOOD_TEXTURE_IDX,
   WALL_DIR_INFO,
   bakedGeo,
   floorYBase,
@@ -17,18 +19,12 @@ import {
   type DoorMeshInfo,
 } from './house-geo-utils'
 
-const DOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
-  (e) => e.glb === 'housing/wood_shutter_1k'
-)
+const DOOR_TEXTURE_IDX = WOOD_TEXTURE_IDX
 const DOOR_WIDTH = 0.8
 const DOOR_HEIGHT = 2.2
 const WINDOW_WIDTH = 0.8
 const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
-
-// Half-timber frame constants
-const FRAME_PROTRUSION = 0.04
-const FRAME_DEPTH = WALL_THICKNESS + FRAME_PROTRUSION * 2
 const FRAME_BEAM_FRAC = 0.05 // beam thickness as fraction of wall height
 const FRAME_BEAM_Y_FRAC = 0.4 // beam position from bottom
 const FRAME_SIDE_FRAC = 0.1 // side strip width as fraction of segment width

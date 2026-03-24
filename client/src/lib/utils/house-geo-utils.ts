@@ -20,6 +20,12 @@ export const ROOF_PITCH: Record<string, number> = {
 
 export { HOUSING_TEXTURES }
 
+export const FRAME_PROTRUSION = 0.04
+export const FRAME_DEPTH = WALL_THICKNESS + FRAME_PROTRUSION * 2
+export const WOOD_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
+  (e) => e.glb === 'housing/wood_shutter_1k'
+)
+
 /** Compute floor overhang for a given floor level (upper floors extend beyond walls). */
 export function floorOverhang(floorLevel: number): number {
   return floorLevel * FLOOR_OVERHANG_PER_LEVEL
