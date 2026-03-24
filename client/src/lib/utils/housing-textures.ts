@@ -141,8 +141,8 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   },
   {
     label: 'Plaster & Wood',
-    glb: 'housing/plaster_wood_wall_1k',
-    fallbackColor: 0x8a7a60,
+    glb: 'housing/beige_wall_001_1k',
+    fallbackColor: 0xe0d8cc,
     sortOrder: 7,
     fitSegment: true,
   },
