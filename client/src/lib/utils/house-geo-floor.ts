@@ -68,18 +68,35 @@ export function collectFloorGeometry(
         if (isHole(cx, cz)) {
           // Stairwell hole at room edge: add narrow overhang strips
           if (oh > 0) {
-            const sw = oh + WALL_THICKNESS // wide enough to cover wall below
+            const sw = oh + WALL_THICKNESS * 2 // overhang + wall + frame
+            const ss = sw + WALL_THICKNESS // strip size covering full edge
             if (cx === localX) {
-              addFloorStrip(target, floorIdx, localX - sw, yBase, cz, sw, 1)
+              addFloorStrip(target, floorIdx, localX - sw, yBase, cz, ss, 1)
             }
             if (cx === localX + sizeX - 1) {
-              addFloorStrip(target, floorIdx, localX + sizeX, yBase, cz, sw, 1)
+              addFloorStrip(
+                target,
+                floorIdx,
+                localX + sizeX - WALL_THICKNESS,
+                yBase,
+                cz,
+                ss,
+                1
+              )
             }
             if (cz === localZ) {
-              addFloorStrip(target, floorIdx, cx, yBase, localZ - sw, 1, sw)
+              addFloorStrip(target, floorIdx, cx, yBase, localZ - sw, 1, ss)
             }
             if (cz === localZ + sizeZ - 1) {
-              addFloorStrip(target, floorIdx, cx, yBase, localZ + sizeZ, 1, sw)
+              addFloorStrip(
+                target,
+                floorIdx,
+                cx,
+                yBase,
+                localZ + sizeZ - WALL_THICKNESS,
+                1,
+                ss
+              )
             }
           }
           continue

@@ -474,13 +474,27 @@ export function collectWallSegments(
       if (fit && seg.variant === 'door' && DOOR_TEXTURE_IDX >= 0) {
         const innerW = segW - segW * FRAME_SIDE_FRAC * 2
         addFramePillars(
-          target, x, yBase, z, rotY, segW, wh,
-          dirInfo.isNS, i === 0, i === segments.length - 1, DOOR_TEXTURE_IDX
+          target,
+          x,
+          yBase,
+          z,
+          rotY,
+          segW,
+          wh,
+          dirInfo.isNS,
+          i === 0,
+          i === segments.length - 1,
+          DOOR_TEXTURE_IDX
         )
         target.push({
           geo: bakedGeo(
             new THREE.BoxGeometry(innerW, FRAME_DIAG_THICKNESS, FRAME_DEPTH),
-            x, yBase + DOOR_HEIGHT, z, rotY, innerW, FRAME_DIAG_THICKNESS
+            x,
+            yBase + DOOR_HEIGHT,
+            z,
+            rotY,
+            innerW,
+            FRAME_DIAG_THICKNESS
           ),
           textureIndex: DOOR_TEXTURE_IDX,
         })
