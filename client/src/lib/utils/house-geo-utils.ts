@@ -62,6 +62,10 @@ export interface DoorMeshInfo {
   segmentIndex: number
   floorLevel: number
   isOpen: boolean
+  /** rotation.y when closed */
+  closedAngle: number
+  /** rotation.y when open */
+  openAngle: number
 }
 
 export interface HouseGroupResult {

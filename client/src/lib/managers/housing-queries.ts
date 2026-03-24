@@ -117,7 +117,8 @@ export function findNearestDoor(
                 : rx
 
         for (let si = 0; si < segs.length; si++) {
-          if (segs[si].variant !== 'door') continue
+          if (segs[si].variant !== 'door' && segs[si].variant !== 'window')
+            continue
 
           const segCenter = si + 0.5
           const startB = axis === 0 ? rx : rz

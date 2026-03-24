@@ -496,50 +496,112 @@ export function collectWallSegments(
         })
       }
 
-      // Door panel mesh with hinge pivot
-      if (seg.variant === 'door') {
-        const panelGeo = new THREE.BoxGeometry(
-          DOOR_WIDTH,
-          DOOR_HEIGHT,
-          WALL_THICKNESS
+      // Shared panel setup for door / window hinged panels
+      if (seg.variant === 'door' || seg.variant === 'window') {
+        // Interior-face Z offset (consistent across all wall directions)
+        const panelZ =
+          (dirInfo.isFront === dirInfo.isNS ? -1 : 1) * (WALL_THICKNESS / 4)
+        const closedAngle = dirInfo.isNS ? 0 : Math.PI / 2
+        const panelMat = getHousingMaterial(
+          DOOR_TEXTURE_IDX >= 0 ? DOOR_TEXTURE_IDX : texIdx
         )
-        const panel = new THREE.Mesh(
-          panelGeo,
-          getHousingMaterial(DOOR_TEXTURE_IDX >= 0 ? DOOR_TEXTURE_IDX : texIdx)
-        )
-        panel.castShadow = true
-
-        // Offset panel so its left edge is at the pivot, front face flush with wall exterior
-        panel.position.set(DOOR_WIDTH / 2, DOOR_HEIGHT / 2, WALL_THICKNESS / 4)
-
-        // Pivot group at the left edge of the door opening, at floor level
-        const pivot = new THREE.Group()
-        pivot.name = `door_r${roomIndex}_${dir}_${i}`
-
-        // Position pivot at the hinge edge (left side of opening in local wall space)
-        const hingeOffset = -DOOR_WIDTH / 2
-        if (dirInfo.isNS) {
-          pivot.position.set(x + hingeOffset, yBase, z)
-        } else {
-          pivot.position.set(x, yBase, z + hingeOffset)
-          pivot.rotation.y = Math.PI / 2
-        }
-
-        pivot.add(panel)
-
         const isOpen = seg.isOpen ?? false
-        if (isOpen) {
-          pivot.rotation.y += -Math.PI / 2
-        }
+        const openW = seg.variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
+        // Inset hinge to clear frame pillar
+        const inset = Math.max(0, segW * FRAME_SIDE_FRAC - (segW - openW) / 2)
 
-        doors.push({
-          pivot,
-          roomIndex,
-          wallDir: dir,
-          segmentIndex: i,
-          floorLevel: room.floorLevel,
-          isOpen,
-        })
+        if (seg.variant === 'door') {
+          const doorPanelH = DOOR_HEIGHT - FRAME_DIAG_THICKNESS / 2
+          const panelGeo = new THREE.BoxGeometry(
+            DOOR_WIDTH,
+            doorPanelH,
+            WALL_THICKNESS
+          )
+          const panel = new THREE.Mesh(panelGeo, panelMat)
+          panel.castShadow = true
+          panel.position.set(DOOR_WIDTH / 2 - inset, doorPanelH / 2, panelZ)
+
+          const pivot = new THREE.Group()
+          pivot.name = `door_r${roomIndex}_${dir}_${i}`
+
+          const hingeOffset = -(DOOR_WIDTH / 2 - inset)
+          const openAngle = closedAngle - Math.PI / 2
+          if (dirInfo.isNS) {
+            pivot.position.set(x + hingeOffset, yBase, z)
+          } else {
+            pivot.position.set(x, yBase, z + hingeOffset)
+            pivot.rotation.y = Math.PI / 2
+          }
+
+          pivot.add(panel)
+          if (isOpen) {
+            pivot.rotation.y = openAngle
+          }
+
+          doors.push({
+            pivot,
+            roomIndex,
+            wallDir: dir,
+            segmentIndex: i,
+            floorLevel: room.floorLevel,
+            isOpen,
+            closedAngle,
+            openAngle,
+          })
+        } else {
+          // Two hinged shutters per window
+          const halfW = WINDOW_WIDTH / 2
+          const outwardSign = dirInfo.isFront ? 1 : -1
+
+          // Panel height trimmed to fit between frame beam top and header bottom
+          const beamTop = wh * FRAME_BEAM_Y_FRAC + (wh * FRAME_BEAM_FRAC) / 2
+          const headerBot =
+            WINDOW_BOTTOM + WINDOW_HEIGHT - FRAME_DIAG_THICKNESS / 2
+          const panelH = headerBot - beamTop
+          const panelYOff = beamTop - WINDOW_BOTTOM + panelH / 2
+          const panelGeo = new THREE.BoxGeometry(
+            halfW,
+            panelH,
+            WALL_THICKNESS / 2
+          )
+
+          for (const side of [-1, 1] as const) {
+            const panel = new THREE.Mesh(panelGeo, panelMat)
+            panel.castShadow = true
+
+            const panelX = (dirInfo.isNS ? -side : side) * (halfW / 2 - inset)
+            panel.position.set(panelX, panelYOff, panelZ)
+
+            const pivot = new THREE.Group()
+            pivot.name = `win_r${roomIndex}_${dir}_${i}_${side < 0 ? 'L' : 'R'}`
+
+            const hingeOffset = side * (WINDOW_WIDTH / 2 - inset)
+            const openAngle = closedAngle + outwardSign * side * (Math.PI / 2)
+
+            if (dirInfo.isNS) {
+              pivot.position.set(x + hingeOffset, yBase + WINDOW_BOTTOM, z)
+            } else {
+              pivot.position.set(x, yBase + WINDOW_BOTTOM, z + hingeOffset)
+              pivot.rotation.y = Math.PI / 2
+            }
+
+            pivot.add(panel)
+            if (isOpen) {
+              pivot.rotation.y = openAngle
+            }
+
+            doors.push({
+              pivot,
+              roomIndex,
+              wallDir: dir,
+              segmentIndex: i,
+              floorLevel: room.floorLevel,
+              isOpen,
+              closedAngle,
+              openAngle,
+            })
+          }
+        }
       }
     }
   }

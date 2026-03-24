@@ -363,7 +363,7 @@
     const dt = _deltaTime / 1000
     for (const [, result] of houses) {
       for (const door of result.doors) {
-        const target = door.isOpen ? -Math.PI / 2 : 0
+        const target = door.isOpen ? door.openAngle : door.closedAngle
         const current = door.pivot.rotation.y
         if (Math.abs(current - target) > 0.01) {
           const step = DOOR_SWING_SPEED * dt

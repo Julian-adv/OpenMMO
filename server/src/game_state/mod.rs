@@ -133,7 +133,7 @@ impl GameState {
 
         // Validate door exists
         let seg = room.wall(wall_dir).get(segment_index as usize)?;
-        if seg.variant != WallVariant::WithDoor {
+        if seg.variant != WallVariant::WithDoor && seg.variant != WallVariant::WithWindow {
             return None;
         }
 

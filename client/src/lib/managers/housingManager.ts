@@ -182,14 +182,17 @@ export class HousingManager {
     if (!wall[segmentIndex]) return
 
     wall[segmentIndex].isOpen = isOpen
-    updateDoorEdge(
-      this.passabilityCache,
-      houseId,
-      room,
-      wallDir,
-      segmentIndex,
-      isOpen
-    )
+    // Only update passability for doors (windows remain blocking when open)
+    if (wall[segmentIndex].variant === 'door') {
+      updateDoorEdge(
+        this.passabilityCache,
+        houseId,
+        room,
+        wallDir,
+        segmentIndex,
+        isOpen
+      )
+    }
     this.notifyChanged()
   }
 
