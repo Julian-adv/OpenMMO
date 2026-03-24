@@ -99,7 +99,7 @@
         >봇들필드</textPath>
       </text>
     </svg>
-    <h1 class="title">BottleField</h1>
+    <h1 class="title">BotdleField</h1>
 
   <div class="login-panel">
 
