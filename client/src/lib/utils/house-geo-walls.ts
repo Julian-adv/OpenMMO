@@ -22,9 +22,270 @@ const DOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
 )
 const DOOR_WIDTH = 1.0
 const DOOR_HEIGHT = 2.2
-const WINDOW_WIDTH = 1.0
+const WINDOW_WIDTH = 0.8
 const WINDOW_HEIGHT = 1.0
 const WINDOW_BOTTOM = 1.2
+
+// Half-timber frame constants
+const FRAME_PROTRUSION = 0.04
+const FRAME_DEPTH = WALL_THICKNESS + FRAME_PROTRUSION * 2
+const FRAME_BEAM_FRAC = 0.05 // beam thickness as fraction of wall height
+const FRAME_BEAM_Y_FRAC = 0.4 // beam position from bottom
+const FRAME_SIDE_FRAC = 0.1 // side strip width as fraction of segment width
+const FRAME_BOTTOM_FRAC = 0.05 // bottom strip height fraction
+const FRAME_DIAG_THICKNESS = 0.06 // diagonal beam thickness in meters
+
+// Shared temp matrix for frame diagonal geometry (single-threaded, sync only)
+const _frameMat = new THREE.Matrix4()
+const _frameTmp = new THREE.Matrix4()
+
+/** Add side pillars, skipping corners where a corner pillar replaces them. */
+function addFramePillars(
+  target: GeoEntry[],
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number,
+  segW: number,
+  wh: number,
+  isNS: boolean,
+  skipLeft: boolean,
+  skipRight: boolean,
+  texIdx: number
+) {
+  const sideW = segW * FRAME_SIDE_FRAC
+  for (const sign of [-1, 1]) {
+    if (sign === -1 && skipLeft) continue
+    if (sign === 1 && skipRight) continue
+    const offset = sign * (segW / 2 - sideW / 2)
+    target.push({
+      geo: bakedGeo(
+        new THREE.BoxGeometry(sideW, wh, FRAME_DEPTH),
+        isNS ? x + offset : x,
+        yBase + wh / 2,
+        !isNS ? z + offset : z,
+        rotY,
+        sideW,
+        wh
+      ),
+      textureIndex: texIdx,
+    })
+  }
+}
+
+/** Add X diagonals spanning an area of width×height. */
+function addFrameXDiagonals(
+  target: GeoEntry[],
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number,
+  innerW: number,
+  diagBottom: number,
+  diagTop: number,
+  texIdx: number
+) {
+  const diagH = diagTop - diagBottom
+  if (diagH <= 0 || innerW <= 0) return
+
+  const diagLen = Math.sqrt(innerW * innerW + diagH * diagH)
+  const diagAngle = Math.atan2(diagH, innerW)
+  const diagCenterY = yBase + diagBottom + diagH / 2
+
+  for (const flipSign of [-1, 1]) {
+    const geo = new THREE.BoxGeometry(
+      diagLen,
+      FRAME_DIAG_THICKNESS,
+      FRAME_DEPTH
+    )
+
+    // Combine rotZ (diagonal tilt) + rotY + translate into one matrix
+    _frameMat.makeRotationZ(flipSign * diagAngle)
+    if (rotY !== 0) {
+      _frameTmp.makeRotationY(rotY)
+      _frameTmp.setPosition(x, diagCenterY, z)
+      _frameMat.premultiply(_frameTmp)
+    } else {
+      _frameMat.setPosition(x, diagCenterY, z)
+    }
+    geo.applyMatrix4(_frameMat)
+
+    const uv = geo.getAttribute('uv')
+    if (uv) {
+      for (let j = 0; j < uv.count; j++) {
+        uv.setXY(j, uv.getX(j) * diagLen, uv.getY(j) * FRAME_DIAG_THICKNESS)
+      }
+    }
+
+    target.push({ geo, textureIndex: texIdx })
+  }
+}
+
+/** Add half-timber frame for a window wall. */
+function addWindowFrameGeometry(
+  target: GeoEntry[],
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number,
+  segW: number,
+  wh: number,
+  openH: number,
+  openBot: number,
+  isNS: boolean,
+  skipLeft: boolean,
+  skipRight: boolean,
+  woodTexIdx: number
+) {
+  const sideW = segW * FRAME_SIDE_FRAC
+  const bottomH = wh * FRAME_BOTTOM_FRAC
+  const innerW = segW - sideW * 2
+  const beamH = wh * FRAME_BEAM_FRAC
+  const beamY = wh * FRAME_BEAM_Y_FRAC
+
+  addFramePillars(
+    target,
+    x,
+    yBase,
+    z,
+    rotY,
+    segW,
+    wh,
+    isNS,
+    skipLeft,
+    skipRight,
+    woodTexIdx
+  )
+
+  // Bottom strip
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(segW, bottomH, FRAME_DEPTH),
+      x,
+      yBase + bottomH / 2,
+      z,
+      rotY,
+      segW,
+      bottomH
+    ),
+    textureIndex: woodTexIdx,
+  })
+
+  // Window header
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(innerW, FRAME_DIAG_THICKNESS, FRAME_DEPTH),
+      x,
+      yBase + openBot + openH,
+      z,
+      rotY,
+      innerW,
+      FRAME_DIAG_THICKNESS
+    ),
+    textureIndex: woodTexIdx,
+  })
+
+  // Horizontal beam above X area
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(innerW, beamH, FRAME_DEPTH),
+      x,
+      yBase + beamY,
+      z,
+      rotY,
+      innerW,
+      beamH
+    ),
+    textureIndex: woodTexIdx,
+  })
+
+  addFrameXDiagonals(
+    target,
+    x,
+    yBase,
+    z,
+    rotY,
+    innerW,
+    bottomH,
+    beamY - beamH / 2,
+    woodTexIdx
+  )
+}
+
+/** Add half-timber frame for a solid wall. */
+function addFrameGeometry(
+  target: GeoEntry[],
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number,
+  segW: number,
+  wh: number,
+  isNS: boolean,
+  skipLeft: boolean,
+  skipRight: boolean,
+  woodTexIdx: number
+) {
+  const beamH = wh * FRAME_BEAM_FRAC
+  const beamY = wh * FRAME_BEAM_Y_FRAC
+  const sideW = segW * FRAME_SIDE_FRAC
+  const innerW = segW - sideW * 2
+  const bottomH = wh * FRAME_BOTTOM_FRAC
+
+  // Horizontal beam
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(segW, beamH, FRAME_DEPTH),
+      x,
+      yBase + beamY,
+      z,
+      rotY,
+      segW,
+      beamH
+    ),
+    textureIndex: woodTexIdx,
+  })
+
+  addFramePillars(
+    target,
+    x,
+    yBase,
+    z,
+    rotY,
+    segW,
+    wh,
+    isNS,
+    skipLeft,
+    skipRight,
+    woodTexIdx
+  )
+
+  // Bottom strip
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(segW, bottomH, FRAME_DEPTH),
+      x,
+      yBase + bottomH / 2,
+      z,
+      rotY,
+      segW,
+      bottomH
+    ),
+    textureIndex: woodTexIdx,
+  })
+
+  addFrameXDiagonals(
+    target,
+    x,
+    yBase,
+    z,
+    rotY,
+    innerW,
+    bottomH,
+    beamY - beamH / 2,
+    woodTexIdx
+  )
+}
 
 /** Render 1m wall segments along a wall direction. */
 export function collectWallSegments(
@@ -43,10 +304,11 @@ export function collectWallSegments(
   const { localX, localZ, sizeX, sizeZ } = room
   const oh = floorOverhang(room.floorLevel)
 
-  // Wall span expands with overhang; each segment stretches proportionally
+  // Wall span: shrink by WALL_THICKNESS to avoid overlap at corners
+  const halfT = WALL_THICKNESS / 2
   const numSegs = segments.length
-  const segW =
-    numSegs > 0 ? ((dirInfo.isNS ? sizeX : sizeZ) + oh * 2) / numSegs : 1
+  const wallSpan = (dirInfo.isNS ? sizeX : sizeZ) + oh * 2 - WALL_THICKNESS
+  const segW = numSegs > 0 ? wallSpan / numSegs : 1
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]
@@ -54,33 +316,32 @@ export function collectWallSegments(
 
     const texIdx = seg.texture % HOUSING_TEXTURES.length
 
-    // Position: center of this segment along the expanded wall
+    // Position: offset by halfT to center within the shortened span
     const segCenter = i * segW + segW / 2
     let x: number, z: number, rotY: number
 
-    const halfT = WALL_THICKNESS / 2
     switch (dir) {
       case 'north': {
-        x = localX - oh + segCenter
+        x = localX - oh + halfT + segCenter
         z = localZ - oh + halfT
         rotY = 0
         break
       }
       case 'south': {
-        x = localX - oh + segCenter
+        x = localX - oh + halfT + segCenter
         z = localZ + sizeZ + oh - halfT
         rotY = 0
         break
       }
       case 'east': {
         x = localX + sizeX + oh - halfT
-        z = localZ - oh + segCenter
+        z = localZ - oh + halfT + segCenter
         rotY = Math.PI / 2
         break
       }
       case 'west': {
         x = localX - oh + halfT
-        z = localZ - oh + segCenter
+        z = localZ - oh + halfT + segCenter
         rotY = Math.PI / 2
         break
       }
@@ -104,6 +365,23 @@ export function collectWallSegments(
         ),
         textureIndex: texIdx,
       })
+      if (fit && DOOR_TEXTURE_IDX >= 0) {
+        const skipL = i === 0
+        const skipR = i === segments.length - 1
+        addFrameGeometry(
+          target,
+          x,
+          yBase,
+          z,
+          rotY,
+          segW,
+          wh,
+          dirInfo.isNS,
+          skipL,
+          skipR,
+          DOOR_TEXTURE_IDX
+        )
+      }
     } else {
       // door or window — opening centered in the segment
       const openW = seg.variant === 'door' ? DOOR_WIDTH : WINDOW_WIDTH
@@ -111,8 +389,8 @@ export function collectWallSegments(
       const openBot = seg.variant === 'door' ? 0 : WINDOW_BOTTOM
       const sideW = (segW - openW) / 2
 
-      // Left and right solid strips
-      if (sideW > 0.01) {
+      // Left and right solid strips (skip for fitSegment — frame pillars cover them)
+      if (sideW > 0.01 && !fit) {
         for (const sign of [-1, 1]) {
           const offset = sign * (segW / 2 - sideW / 2)
           const sx = dirInfo.isNS ? x + offset : x
@@ -172,6 +450,25 @@ export function collectWallSegments(
         })
       }
 
+      // Window frame geometry
+      if (fit && seg.variant === 'window' && DOOR_TEXTURE_IDX >= 0) {
+        addWindowFrameGeometry(
+          target,
+          x,
+          yBase,
+          z,
+          rotY,
+          segW,
+          wh,
+          openH,
+          openBot,
+          dirInfo.isNS,
+          i === 0,
+          i === segments.length - 1,
+          DOOR_TEXTURE_IDX
+        )
+      }
+
       // Door panel mesh with hinge pivot
       if (seg.variant === 'door') {
         const panelGeo = new THREE.BoxGeometry(
@@ -217,6 +514,43 @@ export function collectWallSegments(
           isOpen,
         })
       }
+    }
+  }
+
+  // Corner pillars: centered at wall center-line intersection, sized to FRAME_DEPTH
+  // Only NS walls draw them to avoid doubles
+  if (DOOR_TEXTURE_IDX >= 0 && numSegs > 0 && dirInfo.isNS) {
+    const firstFit =
+      HOUSING_TEXTURES[segments[0].texture % HOUSING_TEXTURES.length].fitSegment
+    const lastFit =
+      HOUSING_TEXTURES[segments[numSegs - 1].texture % HOUSING_TEXTURES.length]
+        .fitSegment
+    const cornerSize = FRAME_DEPTH
+
+    for (const end of [0, 1] as const) {
+      const isFit = end === 0 ? firstFit : lastFit
+      if (!isFit) continue
+
+      // Place at the intersection of this wall's center and the perpendicular wall's center
+      const sign = end === 0 ? -1 : 1
+      const alongOffset = (sign * wallSpan) / 2
+
+      const cx = localX - oh + halfT + wallSpan / 2 + alongOffset
+      const cz =
+        dir === 'north' ? localZ - oh + halfT : localZ + sizeZ + oh - halfT
+
+      target.push({
+        geo: bakedGeo(
+          new THREE.BoxGeometry(cornerSize, wh, cornerSize),
+          cx,
+          yBase + wh / 2,
+          cz,
+          0,
+          cornerSize,
+          wh
+        ),
+        textureIndex: DOOR_TEXTURE_IDX,
+      })
     }
   }
 }

@@ -161,7 +161,8 @@ class InputHandler {
             if (
               d &&
               d.doorHouseId &&
-              d.doorFloorLevel === context.playerFloorLevel
+              (context.playerFloorLevel === -1 ||
+                d.doorFloorLevel === context.playerFloorLevel)
             ) {
               return {
                 type: 'toggle_door',
