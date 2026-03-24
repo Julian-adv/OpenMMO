@@ -146,6 +146,13 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     sortOrder: 7,
     fitSegment: true,
   },
+  // Fabric
+  {
+    label: 'Linen',
+    glb: 'housing/rough_linen_1k',
+    fallbackColor: 0xc8b898,
+    sortOrder: 40,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
