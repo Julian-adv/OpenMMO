@@ -23,12 +23,12 @@ import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 const TILE_DIM = 64
 const VERTS_PER_SIDE = 65
 const CHANNELS = 4
-const BLADES_PER_AXIS = 3
+const BLADES_PER_AXIS = 7
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
 
-const SHORT_SCALE_MIN = 0.7
-const SHORT_SCALE_RANGE = 0.6
-const TALL_SCALE_MIN = 0.8
+const SHORT_SCALE_MIN = 0.4
+const SHORT_SCALE_RANGE = 0.3
+const TALL_SCALE_MIN = 1.0
 const TALL_SCALE_RANGE = 0.5
 
 export interface GrassPlacementData {
@@ -382,7 +382,7 @@ export function decodeGrassData(buffer: ArrayBuffer): GrassPlacementData {
  * Global grass density multiplier (0–1). Applied at load time to thin out
  * pre-computed grass instances. Flowers are not affected.
  */
-export const GRASS_DENSITY_SCALE = 0.7
+export const GRASS_DENSITY_SCALE = 1.0
 
 /** Deterministically thin a Float32Array of instances by keeping only a fraction. */
 function thinInstances(src: Float32Array, keep: number): Float32Array {
