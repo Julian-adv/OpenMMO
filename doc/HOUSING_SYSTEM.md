@@ -3,12 +3,12 @@
 ## Overview
 
 유저가 방(Room)을 자유롭게 조합하여 집을 짓는 모듈러 하우징 시스템.
-벽/바닥/지붕 텍스쳐 커스터마이즈, 문/창문 배치, 2층 지원.
+벽/바닥/지붕 텍스쳐 커스터마이즈, 문/창문 배치, 최대 4층 지원.
 집 안에 들어가면 앞벽+지붕이 숨겨져 내부가 보인다.
 
 리퍼런스:
-    - https://www.youtube.com/watch?v=5jvJUPrmS18&t=5s
-    - https://www.youtube.com/watch?v=zBVPcr7VjyQ
+  - https://www.youtube.com/watch?v=5jvJUPrmS18&t=5s
+  - https://www.youtube.com/watch?v=zBVPcr7VjyQ
 
 ## Data Model
 
@@ -31,11 +31,12 @@ pub struct RoomData {
     pub room_type: RoomType,        // Normal | Stairwell
     pub roof_type: RoofType,        // Flat | Gabled | Steep
     pub roof_ridge_dir: RoofRidgeDir, // Auto | X | Z
+    pub stair_reversed: bool,       // 계단 오름 방향 반전
     pub local_x: i32,              // house origin 기준 오프셋 (미터)
     pub local_z: i32,
     pub size_x: u8,                // 3~6m
     pub size_z: u8,                // 3~6m
-    pub floor_level: u8,           // 0 = 1층, 1 = 2층
+    pub floor_level: u8,           // 0~3 (1층~4층)
     pub floor_texture: u8,         // 텍스쳐 카탈로그 인덱스
     pub roof_texture: u8,
     pub wall_height: f32,          // 기본 3m
@@ -53,7 +54,7 @@ pub struct RoomData {
 pub struct WallConfig {
     pub variant: WallVariant,
     pub texture: u8,
-    pub is_open: bool,          // 문 열림 상태 (WithDoor 전용, 기본 false)
+    pub is_open: bool,          // 문/창문 열림 상태 (기본 false)
 }
 
 pub enum WallVariant {
@@ -80,95 +81,283 @@ pub struct PassabilityGrid {
 - 방 크기: 3~6m (정해진 세트), 배치 그리드: 1m 단위 스냅
 - 벽은 1m 세그먼트 단위: 5m 북벽 → `wall_north` 길이 5
 - 인접 방 공유 면: 양쪽 모두 `Open`이어야 함 (서버 검증)
-- 2층 방의 `floor_level: 1`, y 오프셋 = wall_height + FLOOR_THICKNESS
+- N층 y 오프셋 = N × (wall_height + FLOOR_THICKNESS)
+
+## Wall System
+
+### Wall Segment Layout
+
+벽은 1m 세그먼트로 분할. 코너 겹침 방지를 위해 `WALL_THICKNESS` 만큼 축소:
+
+```
+segW = (wallSpan - WALL_THICKNESS) / numSegs
+```
+
+### Solid Wall
+
+- 메인 면: `segW × wallHeight × WALL_THICKNESS`
+- 프레임 geometry (텍스쳐 `fitSegment: true` + 나무 텍스쳐 존재 시):
+  - **가로 빔**: 바닥에서 40% 높이, 벽 높이의 5% 두께
+  - **좌우 기둥**: 세그먼트 폭의 10%, 전체 벽 높이
+  - **하단 스트립**: 벽 높이의 5%
+  - **X자 대각선**: 하단~가로 빔 영역에 교차 대각선 2개
+
+### Door Wall
+
+개구부 `0.8m × 2.2m`, 세그먼트 중앙 배치:
+
+- 좌우 솔리드 스트립: `(segW - 0.8) / 2`
+- 프레임 (fitSegment 시):
+  - 좌우 기둥: `segW × 10%` 폭, 전체 높이
+  - 헤더 빔: 개구부 상단에 `FRAME_DIAG_THICKNESS(0.06m)` 두께
+
+**문짝 패널**:
+
+- 크기: `DOOR_WIDTH × (DOOR_HEIGHT - FRAME_DIAG_THICKNESS/2) × WALL_THICKNESS`
+- 힌지: `THREE.Group` 피벗, 개구부 왼쪽 가장자리에 위치
+- 프레임 기둥 겹침 방지: `inset = max(0, pillarW - (segW - openW) / 2)` 만큼 힌지를 안쪽으로 이동
+- 패널 Z 오프셋: 벽의 **내부 면**에 배치 (`isFront === isNS`에 따라 부호 결정)
+- 회전 각도:
+  - 닫힘: `closedAngle` = 0 (NS벽) 또는 π/2 (EW벽)
+  - 열림: `openAngle = closedAngle - π/2`
+
+### Window Wall
+
+개구부 `0.8m × 1.0m`, 바닥에서 `1.2m` 높이에 배치:
+
+- 하단 스트립: `0.8m × 1.2m`
+- 상단 스트립: 개구부 위 나머지 높이
+- 프레임 (fitSegment 시):
+  - 좌우 기둥, 하단 스트립, 헤더, 가로 빔 + X자 대각선
+
+**창문 셔터 (좌우 2개)**:
+
+- 크기: `(WINDOW_WIDTH/2) × panelH × (WALL_THICKNESS/2)` — 문보다 얇은 두께
+- `panelH`: 프레임 가로빔 상단 ~ 헤더 하단 사이 (겹침 방지)
+- 닫힌 상태: 패널이 개구부를 덮음 (좌반+우반)
+- 열린 상태: 집 바깥쪽으로 90° 회전
+  - `openAngle = closedAngle + outwardSign × side × π/2`
+  - `outwardSign = isFront ? 1 : -1` (벽의 외부 방향)
+- 힌지: 문과 동일한 기둥 겹침 보정 적용, 내부 면에 배치
+
+### Corner Pillars
+
+- NS벽이 담당 (중복 방지)
+- 크기: `FRAME_DEPTH × wallHeight × FRAME_DEPTH`
+- fitSegment 텍스쳐 사용 시에만 생성
+
+## Door & Window Interaction
+
+### 열기/닫기 흐름
+
+1. E키 → 플레이어 근처(2m) 문 또는 창문 탐색 (`findNearestDoor`)
+2. 서버에 `ToggleDoor` 전송 (낙관적 토글 없음)
+3. 서버가 `WithDoor` 또는 `WithWindow` variant 검증 후 토글
+4. **모든 플레이어**에게 `DoorToggled` 브로드캐스트 — 서버 권위적 상태
+5. 클라이언트: `handleDoorToggled`로 서버 상태 적용
+   - **문**: passability edge 비트도 업데이트 (열린 문 = 통과 가능)
+   - **창문**: passability 업데이트 없음 (열려도 통과 불가)
+6. 애니메이션: 게임 루프에서 피벗 rotation.y를 `closedAngle ↔ openAngle` lerp
+   - 속도: `DOOR_SWING_SPEED = π rad/s` (~0.5초에 90°)
+
+### syncDoorStates
+
+geometry hash에서 `isOpen` 제외 비교 → isOpen만 변경된 경우 geometry rebuild 없이 상태만 동기화.
+창문 패널 2개가 같은 segmentIndex를 공유하므로 둘 다 동일 isOpen 값을 받음.
+
+## Stairwell System
+
+### 계단 방향
+
+- 긴 축 방향으로 오름: `sizeZ >= sizeX`이면 Z축, 아니면 X축
+- `stairReversed: true` → 오름 방향 180° 반전 (entry ↔ exit 위치 교환)
+
+### Geometry
+
+```
+totalRise = wallHeight + FLOOR_THICKNESS
+stairRun = max(sizeX, sizeZ) - LANDING_DEPTH × 2
+stepCount = round(totalRise / 0.25)
+stepHeight = totalRise / stepCount
+stepDepth = stairRun / stepCount
+```
+
+- **Entry 랜딩** (하층): `LANDING_DEPTH(0.5m)` 깊이 평탄 영역
+- **Exit 랜딩** (상층): 동일
+- **계단 스텝**: entry~exit 사이 균등 분할
+- 인접 방의 솔리드 벽이 있으면 `WALL_THICKNESS` 만큼 geometry 인셋
+
+### Y 오프셋 계산
+
+플레이어 위치에 따라 계단 위 Y 높이 계산 (`getStairwellYOffset`):
+- entry 랜딩 위 → `baseY + FLOOR_THICKNESS/2`
+- exit 랜딩 위 → `baseY + totalRise + FLOOR_THICKNESS/2`
+- 스텝 위 → 위치 비율에 따라 선형 보간
+
+## Jetty (Floor Overhang)
+
+상층 바닥이 하층 벽보다 바깥으로 돌출되는 중세 건축 기법:
+
+```
+FLOOR_OVERHANG_PER_LEVEL = 0.15m
+floorOverhang(floorLevel) = floorLevel × 0.15
+```
+
+| 층 | 돌출 |
+|----|------|
+| 1F (level 0) | 0m |
+| 2F (level 1) | 0.15m |
+| 3F (level 2) | 0.30m |
+| 4F (level 3) | 0.45m |
+
+### Floor Cell 확장
+
+- **코너 셀**: 두 방향으로 overhang 만큼 확장
+- **가장자리 셀**: 한 방향으로 확장
+- **내부 셀**: 1m×1m 유지
+
+### Stairwell Hole Punching
+
+상층 바닥이 하층 계단실 위에 있으면:
+- 계단실 풋프린트에 1m² 구멍 생성
+- 구멍 주변에 **overhang strip** 추가 (폭 = `overhang + WALL_THICKNESS`)
+  - 코너 부분은 strip 연장으로 간극 방지
+
+## Roof System
+
+### Flat Roof
+
+- 단순 평면: `(sizeX + overhang×2) × (sizeZ + overhang×2)` + `ROOF_OVERHANG(0.3m)` 처마
+
+### Gabled Roof (맞배지붕)
+
+- **두 경사면**: 용마루에서 만남, 두께 `WALL_THICKNESS`
+- **용마루 방향**: `roofRidgeDir` (auto = 긴 축 방향)
+- **박공벽**: 양쪽 끝 삼각형 벽
+- **박공 빔**: 삼각형 하단에 `0.12m` 두께 빔 (나무 텍스쳐 시)
+- **박공 창문**: 용마루 높이 > 1.0m이면 자동 생성 (`0.6m × 0.7m`)
+  - 중심: 용마루 높이의 38%
+  - 마진: 가장자리에서 0.25m 이상
+
+```
+ridgeHeight = halfShort × ROOF_PITCH
+ROOF_PITCH = { gabled: 0.8, steep: 1.4 }
+```
+
+### Roof Suppression
+
+상층 방이 하층 방을 완전 커버 시 하층 지붕 생략 (상층 바닥이 대체).
+
+## Multi-Floor
+
+### 상수
+
+```
+MAX_FLOOR_LEVEL = 3          // 0~3 (4층까지)
+FLOOR_THICKNESS = 0.1m
+DEFAULT_WALL_HEIGHT = 3.0m
+```
+
+### 층별 Y 좌표
+
+```
+floorYBase(level) = level × (wallHeight + FLOOR_THICKNESS)
+```
+
+| 층 | Y |
+|----|---|
+| 1F | 0 |
+| 2F | 3.1 |
+| 3F | 6.2 |
+| 4F | 9.3 |
+
+### Visibility
+
+층별 `front`/`back` 그룹 분리:
+- **front**: 남벽 + 서벽 + 지붕 (플레이어 inside 시 숨김)
+- **back**: 북벽 + 동벽 + 바닥 (항상 표시)
+- 플레이어 층 이상의 front + back 모두 숨김
+- 오쏘그래픽 카메라 (pitch 45°, yaw -45°) 기준 앞벽 = 남+서
 
 ## Wall Collision (Cell-Based Passability)
 
 ### 개요
 
-1m 셀 기반 통행 가능 여부 시스템. 각 셀에 동서남북(N/E/S/W) 4비트로 해당 방향 edge가 막혀있는지 저장.
+1m 셀 기반 통행 가능 여부 시스템. 각 셀에 N(1)/E(2)/S(4)/W(8) 4비트로 edge 차단 저장.
 
-### Passability Build
+### Build
 
-집 건축/편집 시 클라이언트에서 `buildPassability(house)` 호출 → HouseData에 포함하여 서버 저장.
+집 건축/편집 시 `buildPassability(house)` → HouseData에 포함하여 서버 저장.
 
-- 층별(floor level) 별도 그리드
+- 층별 별도 그리드
 - 벽 세그먼트 순회: `variant !== 'open'`이면 해당 셀 edge 비트 set
-- 양쪽 셀 모두 비트 set (안쪽 셀 + 바깥쪽 인접 셀)
+- 양쪽 셀 모두 비트 set (안쪽 + 바깥쪽 인접 셀)
 - 저장 시 정적 구조 기준 (모든 문은 닫힌 상태로 취급)
 
-### Stairwell 처리
+### Stairwell Passability
 
 1F stairwell을 1F/2F 두 grid에 모두 등록:
-
-- **1F grid**: entry(low) 랜딩만 side wall skip, exit(high) 랜딩 포함하여 측면+끝 blocked
-- **2F grid**: exit(high) 랜딩만 side wall skip, entry(low) 랜딩 포함하여 측면+끝 blocked
-- 각 층에서 열리는 랜딩만 side wall 없음, 반대쪽 랜딩은 측면까지 완전 차단
-
-계단 방향: `sizeZ >= sizeX`이면 Z축(entry=north, exit=south), 아니면 X축(entry=west, exit=east)
+- **entry 층**: entry 랜딩만 side wall skip, exit 랜딩 포함 측면+끝 blocked
+- **exit 층**: exit 랜딩만 side wall skip, entry 랜딩 포함 측면+끝 blocked
+- `stairReversed` 시 물리적 위치 반전 반영
 
 ### Runtime
 
-- 집 로드 시 저장된 passability 그리드를 직접 사용 (없으면 fallback으로 벽 데이터에서 계산)
-- 열린 문 상태 overlay: passability cells 배열에서 door segment의 edge 비트 직접 clear
-- `toggleDoor`/`handleDoorToggled` 시 해당 edge 비트만 O(1) flip
+- 집 로드 시 저장된 passability 그리드 사용 (없으면 fallback 계산)
+- 문 상태 overlay: `updateDoorEdge`로 해당 edge 비트 O(1) flip
+- 창문은 passability 변경 없음 (열려도 통과 불가)
 
 ### Movement Check
 
 `isMovementBlocked(fromX, fromZ, toX, toZ, y)`:
-
 1. house AABB fast rejection
 2. Y로 해당 floor grid 매칭
 3. world → house local → grid cell 좌표 변환
 4. X축/Z축 각각 셀 edge 교차 검사
-5. `WALL_HALF_THICKNESS(0.3m)` proximity buffer — 벽에서 0.3m 거리에서 정지
+5. `WALL_HALF_THICKNESS(0.3m)` proximity buffer
+
+## Texture System
+
+### Texture Catalog
+
+17개 텍스쳐, 각각 PBR(albedo, normal, ORM) 맵 로드:
+
+| 그룹 | 텍스쳐 |
+|------|--------|
+| Stone | Stone, Brick |
+| Marble | Marble |
+| Wood | 다수 (판자, 셔터, 통나무 등) |
+| Roof | Clay (2종), Grey, Reed |
+| Other | Red Brick, Medieval, Sandstone, Plaster & Wood |
+
+### fitSegment Flag
+
+- `true`: UV를 세그먼트 단위로 0→1 클램프 (타일링 없음)
+- 프레임 geometry (기둥, 빔, X자 대각선) 활성화
+- 코너 필러 활성화
+- `ClampToEdgeWrapping` 사용
+
+### Material Pool
+
+- 텍스쳐 인덱스별 1개 `MeshStandardMaterial` 캐시
+- WebGPU 제약: 텍스쳐별 개별 material 인스턴스 필요
 
 ## Rendering
 
-### Front Wall / Roof Hiding
+### Mesh Construction
 
-오쏘그래픽 카메라 (pitch 45°, yaw -45°) → 카메라 방향 = (-X, -Y, -Z).
+- 방별 geometry를 집 단위로 merged geometry 생성 (draw call 최소화)
+- 텍스쳐×면방향별 merge → 집 1개당 ~4~5 draw call
+- 문짝/창문 셔터만 별도 Mesh (애니메이션 필요)
 
-- **앞벽** = 남쪽벽(normal -Z) + 서쪽벽(normal -X) — 카메라 각도가 고정이므로 항상 동일
-- **숨길 대상** = 앞벽 + 지붕
-
-집 단위로 두 개의 THREE.Group 분리:
+### Front / Back Separation
 
 | Group | 포함 메쉬 | 플레이어 inside 시 |
 |-------|----------|-------------------|
-| `frontGroup` | 남쪽벽, 서쪽벽, 지붕 | Y를 OFFSCREEN_Y로 이동 |
-| `backGroup` | 북쪽벽, 동쪽벽, 바닥 | `visible = true` (항상) |
+| `front` | 남벽, 서벽, 지붕 | Y를 OFFSCREEN_Y로 이동 |
+| `back` | 북벽, 동벽, 바닥 | 항상 표시 |
 
 멀티패스 렌더링(refraction/reflection) 시에는 모든 벽 visible 유지.
-
-### Mesh Construction
-
-- 벽/바닥/지붕/계단: `house-geometry.ts`에서 프로시저럴 생성
-- 방별 geometry를 집 단위로 merged geometry 생성 (draw call 최소화)
-- 문짝만 별도 Mesh → `THREE.Group` 힌지 피벗으로 Y축 회전 애니메이션
-
-### Materials
-
-기존 material pool 패턴 재활용:
-
-- 텍스쳐 카탈로그: stone, brick, wood, marble 등 → 인덱스로 참조
-- WebGPU 제약: 텍스쳐별 개별 material 인스턴스 필요 (파이프라인은 공유)
-- TSL `MeshStandardNodeMaterial` + `texture()` uniform 노드
-
-### 2층 처리
-
-- `floor_level: 0` = 지상, `floor_level: 1` = 2층 (y = wall_height + FLOOR_THICKNESS)
-- 2층 방 아래 1층 방 존재 시 → 1층 지붕 메쉬 생략 (2층 바닥이 대체)
-- 계단: `room_type: Stairwell` — 별도 geometry, 랜딩+계단 스텝 메쉬
-- 2층 inside 시: 1층+2층 앞벽 모두 숨김
-
-## Door Interaction
-
-1. E키 → 플레이어 근처(2m) 문 탐색 (`findNearestDoor`)
-2. 서버에 `ToggleDoor` 전송 (낙관적 토글 없음)
-3. 서버가 토글 후 **모든 플레이어(요청자 포함)**에게 `DoorToggled` 브로드캐스트 — 서버 권위적 상태
-4. 클라이언트: `handleDoorToggled`로 서버 상태 적용 + passability edge 비트 업데이트
-5. 문짝 애니메이션: 게임 루프에서 힌지 피벗 Y축 회전 lerp (0=닫힘, -π/2=열림)
 
 ## Network Protocol
 
@@ -177,6 +366,8 @@ pub struct PassabilityGrid {
 ```rust
 ToggleDoor { house_id, room_index, wall_dir, segment_index }
 ```
+
+문과 창문 모두 동일 메시지 사용 (서버에서 variant 검증).
 
 ### ServerMessage
 
@@ -196,34 +387,67 @@ DoorToggled { house_id, room_index, wall_dir, segment_index, is_open }
   - `POST /api/housing` — 생성 (ID 서버 할당)
   - `PUT /api/housing/{id}` — 수정
   - `DELETE /api/housing/{id}` — 삭제
-- 서버 검증: 인접 벽 유효성, 겹침 검사, 소유자 권한, 2층 floor support
+- 서버 검증: 인접 벽 유효성, 겹침 검사, 소유자 권한, 상층 floor support
+
+## Constants
+
+```
+WALL_THICKNESS       = 0.1m
+FLOOR_THICKNESS      = 0.1m
+DEFAULT_WALL_HEIGHT  = 3.0m
+MAX_FLOOR_LEVEL      = 3
+LANDING_DEPTH        = 0.5m
+ROOF_OVERHANG        = 0.3m
+FLOOR_OVERHANG_PER_LEVEL = 0.15m
+FRAME_PROTRUSION     = 0.04m
+FRAME_DEPTH          = 0.18m  (WALL_THICKNESS + FRAME_PROTRUSION × 2)
+FRAME_DIAG_THICKNESS = 0.06m
+FRAME_BEAM_FRAC      = 0.05   (벽 높이의 5%)
+FRAME_BEAM_Y_FRAC    = 0.40   (바닥에서 40%)
+FRAME_SIDE_FRAC      = 0.10   (세그먼트 폭의 10%)
+FRAME_BOTTOM_FRAC    = 0.05   (벽 높이의 5%)
+DOOR_WIDTH           = 0.8m
+DOOR_HEIGHT          = 2.2m
+WINDOW_WIDTH         = 0.8m
+WINDOW_HEIGHT        = 1.0m
+WINDOW_BOTTOM        = 1.2m   (창턱 높이)
+ROOF_PITCH_GABLED    = 0.8
+ROOF_PITCH_STEEP     = 1.4
+GABLE_WIN_W          = 0.6m
+GABLE_WIN_H          = 0.7m
+DOOR_SWING_SPEED     = π rad/s
+WALL_HALF_THICKNESS  = 0.3m   (passability proximity)
+```
 
 ## File Structure
-
-### Key Files
 
 | Path | Description |
 |------|-------------|
 | `shared/src/housing.rs` | HouseData, RoomData, WallConfig, PassabilityGrid 등 공유 타입 |
 | `client/src/lib/types/housing.ts` | 클라이언트 타입 미러 |
-| `client/src/lib/managers/housingManager.ts` | 집 로딩/캐싱, passability, 문 토글, 벽 충돌 |
-| `client/src/lib/utils/house-geometry.ts` | 프로시저럴 geometry 생성, merged geometry 조립 |
-| `client/src/lib/components/game-scene/GameSceneHousingLayer.svelte` | 하우징 렌더 레이어 |
-| `client/src/lib/components/map-editor/HousingEditorCursor.svelte` | 건축 에디터 |
+| `client/src/lib/managers/housingManager.ts` | 집 로딩/캐싱, 문 토글, passability 관리 |
+| `client/src/lib/managers/housing-queries.ts` | 문/창문 탐색, 방 감지 |
+| `client/src/lib/managers/housing-passability.ts` | passability grid build/update |
+| `client/src/lib/utils/house-geometry.ts` | 프로시저럴 geometry 생성, merged mesh 조립 |
+| `client/src/lib/utils/house-geo-walls.ts` | 벽, 문짝, 창문 셔터, 프레임 geometry |
+| `client/src/lib/utils/house-geo-floor.ts` | 바닥, overhang, stairwell hole |
+| `client/src/lib/utils/house-geo-roof.ts` | 지붕 (flat, gabled, steep), 박공벽/창문 |
+| `client/src/lib/utils/house-geo-stairwell.ts` | 계단 스텝, 랜딩 geometry |
+| `client/src/lib/utils/house-geo-utils.ts` | 공유 상수, DoorMeshInfo, bakedGeo, mergedMeshes |
+| `client/src/lib/utils/housing-textures.ts` | 텍스쳐 카탈로그, material pool |
+| `client/src/lib/components/game-scene/GameSceneHousingLayer.svelte` | 하우징 렌더/애니메이션 레이어 |
 | `client/src/lib/components/map-editor/HousingEditorPanel.svelte` | 건축 UI 패널 |
+| `client/src/lib/components/map-editor/HousingEditorCursor.svelte` | 건축 에디터 커서 |
+| `server/src/game_state/mod.rs` | 문/창문 토글 처리 |
 | `server/src/housing/mod.rs` | 하우징 게임 로직 + 검증 |
 | `server/src/housing/routes.rs` | REST 엔드포인트 |
 
 ## Implementation Phases
 
 ### Phase 1: Static House Rendering (MVP) ✅
-
 ### Phase 2: Server Integration ✅
-
 ### Phase 3: Building UI ✅
-
 ### Phase 4: Second Floor + Stairs ✅
-
 ### Phase 5: Optimization ✅
 
 Merged geometry per house, draw call 최소화.
@@ -231,24 +455,14 @@ Merged geometry per house, draw call 최소화.
 ### Phase 6: Wall Collision ✅
 
 셀 기반 passability grid로 구현. 이전의 line-segment intersection 방식에서 전환.
-- 각 셀 N/E/S/W 4비트 edge 마스크
-- 집 건축/편집 시 계산 → 서버 저장
-- 런타임에 door overlay + O(1) bit flip
-- 계단 전용 처리 (측면 벽 + 랜딩 open)
 
 ### Phase 7: Doors & Windows Interaction ✅
 
-문짝 힌지 애니메이션, E키 상호작용, 네트워크 동기화, passability 연동.
+문짝 힌지 애니메이션, 창문 셔터 (좌우 2개, 바깥으로 열림), E키 상호작용, 네트워크 동기화, passability 연동.
 
 ### Phase 8: Third Floor+ ✅
 
-1. `floor_level` 최대 4층 (`floor_level` 0~3), `MAX_FLOOR_LEVEL` 상수 (서버+클라이언트)
-2. visibility 로직 N층 일반화 (이미 일반화되어 있었음): 플레이어 층 이상의 앞벽+지붕 숨기기
-3. `hasFloorSupport` 검증 N층 확장: floor N 배치 시 floor N-1 지지 확인
-4. 에디터 층 선택 UI: 동적 1F~4F 버튼 생성
-5. 지붕 억제: floor N 위에 floor N+1 방이 완전 커버 시 지붕 생략
-6. 계단 passability/geometry: N층 일반화 (entry floor ↔ exit floor 상대 비교)
-7. 계단 Y 오프셋: `floorLevel` 기반 절대 Y 위치 계산
+`MAX_FLOOR_LEVEL = 3` (4층까지), visibility N층 일반화, floor support 검증, jetty overhang.
 
 ### Phase 9: Roof Connection
 
