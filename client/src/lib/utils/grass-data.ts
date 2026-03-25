@@ -52,6 +52,7 @@ interface VegParams {
 
 const SHORT_BLADES_PER_AXIS = 14
 const TALL_BLADES_PER_AXIS = 10
+const BOUNDARY_BLEND_RATIO = 0.3
 
 const SHORT_PARAMS: VegParams = {
   rMin: SHORT_GRASS_R_MIN,
@@ -67,6 +68,40 @@ const TALL_PARAMS: VegParams = {
   scaleMin: TALL_SCALE_MIN,
   scaleRange: TALL_SCALE_RANGE,
   bladesPerAxis: TALL_BLADES_PER_AXIS,
+}
+
+const NEIGHBOR_OFFSETS: [number, number][] = [
+  [0, -1],
+  [0, 1],
+  [-1, 0],
+  [1, 0],
+]
+
+/** Check if a cell borders a cell of the other grass type. */
+function isBoundaryCell(
+  splatData: Uint8Array,
+  cx: number,
+  cz: number,
+  otherRMin: number,
+  otherRMax: number
+): boolean {
+  for (const [dx, dz] of NEIGHBOR_OFFSETS) {
+    const nx = cx + dx
+    const nz = cz + dz
+    if (nx < 0 || nx >= TILE_DIM || nz < 0 || nz >= TILE_DIM) continue
+    const r = splatData[(nz * TILE_DIM + nx) * CHANNELS]
+    if (r >= otherRMin && r <= otherRMax) return true
+  }
+  return false
+}
+
+function concatFloat32(a: Float32Array, b: Float32Array): Float32Array {
+  if (b.length === 0) return a
+  if (a.length === 0) return b
+  const out = new Float32Array(a.length + b.length)
+  out.set(a, 0)
+  out.set(b, a.length)
+  return out
 }
 
 /** Inline bilinear height sampling — avoids Map lookups and string allocations. */
@@ -97,11 +132,12 @@ function sampleHeight(
 
 function computeInstances(
   params: VegParams,
+  otherParams: VegParams,
   tileX: number,
   tileZ: number,
   splatData: Uint8Array,
   heightmap: Uint16Array
-): Float32Array {
+): { own: Float32Array; converted: Float32Array } {
   const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
   const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
   const bpa = params.bladesPerAxis
@@ -109,13 +145,21 @@ function computeInstances(
   const densityRange = params.rMax - params.rMin
   const rand = createRng(tileSeed(tileX, tileZ) ^ params.rMin)
 
-  const instances: number[] = []
+  const ownInstances: number[] = []
+  const convertedInstances: number[] = []
 
   for (let cz = 0; cz < TILE_DIM; cz++) {
     for (let cx = 0; cx < TILE_DIM; cx++) {
       const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
       if (rVal < params.rMin || rVal > params.rMax) continue
       const density = densityRange > 0 ? (rVal - params.rMin) / densityRange : 1
+      const boundary = isBoundaryCell(
+        splatData,
+        cx,
+        cz,
+        otherParams.rMin,
+        otherParams.rMax
+      )
 
       for (let dz = 0; dz < bpa; dz++) {
         for (let dx = 0; dx < bpa; dx++) {
@@ -126,9 +170,13 @@ function computeInstances(
           if (worldY < 0.05) continue
 
           const rotation = rand() * Math.PI * 2
-          const scale = params.scaleMin + rand() * params.scaleRange
+          const isConverted = boundary && rand() < BOUNDARY_BLEND_RATIO
+          const scale = isConverted
+            ? otherParams.scaleMin + rand() * otherParams.scaleRange
+            : params.scaleMin + rand() * params.scaleRange
 
-          instances.push(
+          const target = isConverted ? convertedInstances : ownInstances
+          target.push(
             tileMinX + localX,
             worldY,
             tileMinZ + localZ,
@@ -140,7 +188,10 @@ function computeInstances(
     }
   }
 
-  return new Float32Array(instances)
+  return {
+    own: new Float32Array(ownInstances),
+    converted: new Float32Array(convertedInstances),
+  }
 }
 
 const FLOWER_SCALE_MIN = 0.42
@@ -245,20 +296,24 @@ export function computeGrassPlacement(
     )
   }
 
-  const shortInstances = computeInstances(
+  const shortResult = computeInstances(
     SHORT_PARAMS,
-    tileX,
-    tileZ,
-    splatData,
-    heightmap
-  )
-  const tallInstances = computeInstances(
     TALL_PARAMS,
     tileX,
     tileZ,
     splatData,
     heightmap
   )
+  const tallResult = computeInstances(
+    TALL_PARAMS,
+    SHORT_PARAMS,
+    tileX,
+    tileZ,
+    splatData,
+    heightmap
+  )
+  const shortInstances = concatFloat32(shortResult.own, tallResult.converted)
+  const tallInstances = concatFloat32(tallResult.own, shortResult.converted)
   const flowerInstances = computeFlowerInstances(
     tileX,
     tileZ,
