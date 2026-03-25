@@ -5,6 +5,7 @@ import {
   uniform,
   vec2,
   vec3,
+  vec4,
   float,
   sin,
   cos,
@@ -13,17 +14,15 @@ import {
   sqrt,
   select,
   positionLocal,
+  normalLocal,
   instanceIndex,
   hash,
   attribute,
   instancedArray,
   deltaTime,
+  cameraViewMatrix,
 } from 'three/tsl'
-import {
-  GRASS_TRAIL_COUNT,
-  GUST_WAVE_COUNT,
-  type GrassMaterialConfig,
-} from './grass-material'
+import { GUST_WAVE_COUNT, type GrassMaterialConfig } from './grass-material'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any // TSL node -- broad type for shader node expressions
@@ -57,7 +56,9 @@ export interface GrassComputeUniforms {
   uWaveAngles: { value: number }[]
   uWaveAmps: { value: number }[]
   uWaveParams: { value: THREE.Vector4 }[]
-  uTrail: { value: THREE.Vector3 }[]
+  /** Player current position: vec3(worldX, worldZ, strength). Always active.
+   *  Asymmetric lerp (fast push / slow recovery) creates natural trail effect. */
+  uPlayerPos: { value: THREE.Vector3 }
   uInteractionRadius: { value: number }
   uInteractionStrength: { value: number }
 }
@@ -95,9 +96,9 @@ export function createSharedComputeUniforms(
       uniform(new THREE.Vector4(0.31, 0.8, 1.6, 0.87)),
       uniform(new THREE.Vector4(0.39, 1.5, 1.7, 0.95)),
     ] as unknown as { value: THREE.Vector4 }[],
-    uTrail: Array.from({ length: GRASS_TRAIL_COUNT }, () =>
-      uniform(new THREE.Vector3(0, 0, 0))
-    ) as unknown as { value: THREE.Vector3 }[],
+    uPlayerPos: uniform(new THREE.Vector3(99999, 99999, 0)) as unknown as {
+      value: THREE.Vector3
+    },
     uInteractionRadius: uniform(ir) as unknown as { value: number },
     uInteractionStrength: uniform(is_) as unknown as { value: number },
   }
@@ -124,7 +125,8 @@ export function createGrassComputeContext(
   const uWaveAngles = sharedUniforms.uWaveAngles as unknown as N[]
   const uWaveAmps = sharedUniforms.uWaveAmps as unknown as N[]
   const uWaveParams = sharedUniforms.uWaveParams as unknown as N[]
-  const uTrail = sharedUniforms.uTrail as unknown as N[]
+
+  const uPlayerPos = sharedUniforms.uPlayerPos as unknown as N
   const uInteractionRadius = sharedUniforms.uInteractionRadius as unknown as N
   const uInteractionStrength =
     sharedUniforms.uInteractionStrength as unknown as N
@@ -135,13 +137,6 @@ export function createGrassComputeContext(
 
     const bx = blade.x // worldX
     const bz = blade.y // worldZ
-    const rot = blade.w // rotation
-
-    // ── Wind: rotate global wind dir into blade local space ──
-    const cosR = cos(rot)
-    const sinR = sin(rot)
-    const localWindX = uWindDir.x.mul(cosR).sub(uWindDir.y.mul(sinR))
-    const localWindZ = uWindDir.x.mul(sinR).add(uWindDir.y.mul(cosR))
 
     // ── Gerstner wave gusts ──
     let gust: N = float(0)
@@ -169,10 +164,10 @@ export function createGrassComputeContext(
     }
     gust = gust.mul(float(0.15).add(uGustStrength.mul(0.85)))
 
-    // ── Wind bend target ──
+    // ── Wind bend target (world space) ──
     const windBendAngle = uWindStrength.mul(5.0).mul(float(1.0).add(gust))
-    const windTargetX = localWindX.mul(windBendAngle)
-    const windTargetZ = localWindZ.mul(windBendAngle)
+    const windTargetX = uWindDir.x.mul(windBendAngle)
+    const windTargetZ = uWindDir.y.mul(windBendAngle)
 
     // ── Idle sway ──
     const instanceHash = hash(
@@ -201,30 +196,17 @@ export function createGrassComputeContext(
     bend.x.assign(mix(bend.x, totalWindX, lw))
     bend.y.assign(mix(bend.y, totalWindZ, lw))
 
-    // ── Trail interaction ──
-    let totalPushX: N = float(0)
-    let totalPushZ: N = float(0)
-    let totalStr: N = float(0)
+    // ── Player interaction (single push point + asymmetric lerp) ──
+    const pdx = bx.sub(uPlayerPos.x)
+    const pdz = bz.sub(uPlayerPos.y) // .y = worldZ
+    const pd = sqrt(pdx.mul(pdx).add(pdz.mul(pdz))).add(float(0.001))
+    const pProx = float(1.0).sub(smoothstep(float(0), uInteractionRadius, pd))
+    const pStr = pProx.mul(pProx).mul(uPlayerPos.z) // .z = strength
+    const pushDirX = pdx.div(pd).mul(pStr)
+    const pushDirZ = pdz.div(pd).mul(pStr)
 
-    for (const tp of uTrail) {
-      const dx = bx.sub(tp.x)
-      const dz = bz.sub(tp.y) // tp.y = worldZ
-      const d = sqrt(dx.mul(dx).add(dz.mul(dz))).add(float(0.001))
-      const prox = float(1.0).sub(smoothstep(float(0), uInteractionRadius, d))
-      const str = prox.mul(prox).mul(tp.z) // tp.z = strength
-      totalPushX = totalPushX.add(dx.div(d).mul(str))
-      totalPushZ = totalPushZ.add(dz.div(d).mul(str))
-      totalStr = totalStr.add(str)
-    }
-
-    // Normalize push direction, scale by interaction strength
-    const totalLen = sqrt(
-      totalPushX.mul(totalPushX).add(totalPushZ.mul(totalPushZ))
-    ).add(float(0.001))
-    const clampedStr = totalStr.min(float(1.0))
-    const pushScale = clampedStr.mul(uInteractionStrength)
-    const pushTargetX = totalPushX.div(totalLen).mul(pushScale)
-    const pushTargetZ = totalPushZ.div(totalLen).mul(pushScale)
+    const pushTargetX = pushDirX.mul(uInteractionStrength)
+    const pushTargetZ = pushDirZ.mul(uInteractionStrength)
 
     // Asymmetric lerp: fast push (dt*12), slow recovery (dt*1)
     const targetMag = sqrt(
@@ -298,12 +280,12 @@ export function createBladeMaterial(
   const tc = cfg?.tipColor ?? [0.06, 0.14, 0.03]
   const wsMin = cfg?.widthScaleMin ?? 0.7
   const wsExt = cfg?.widthScaleExtent ?? 0.7
-  const hsMin = cfg?.heightScaleMin ?? 0.8
-  const hsExt = cfg?.heightScaleExtent ?? 0.2
+  // Height scale is fully handled by placement data (instanceScale).
+  // No additional shader-side height variation needed.
 
   const mat = new MeshStandardNodeMaterial()
   mat.side = THREE.DoubleSide
-  mat.roughness = 0.8
+  mat.roughness = 0.55
   mat.metalness = 0.0
   // Fade bottom edge to avoid hard cutoff at ground level
   mat.transparent = true
@@ -354,11 +336,8 @@ export function createBladeMaterial(
 
   // ── Per-instance shape variation ───────────────────────
   const shapeHash1 = hash(vec2(instanceIndex.toFloat().mul(0.53), float(2.3)))
-  const shapeHash2 = hash(vec2(instanceIndex.toFloat().mul(0.91), float(4.7)))
   const widthScale = float(wsMin).add(shapeHash1.mul(wsExt))
-  // Combine shader height variation with placement scale
-  const shaderHeight = float(hsMin).add(shapeHash2.mul(hsExt))
-  const heightScale = shaderHeight.mul(instanceScale)
+  const heightScale = instanceScale
 
   // ── Vertex displacement ────────────────────────────────
   const rawPos = positionLocal.toVar()
@@ -386,7 +365,7 @@ export function createBladeMaterial(
   const bendDirZ = totalBendZ.div(bendMag)
 
   // Per-vertex bend angle (quadratic profile: stiff at base, flexible at tip)
-  const maxBend = float(1.22) // ~70°
+  const maxBend = float(0.87) // ~50°
   const vertexAngle = bendMag.mul(heightFactor).min(maxBend)
   const bendSin = sin(vertexAngle)
   const bendCos = cos(vertexAngle)
@@ -404,6 +383,15 @@ export function createBladeMaterial(
   const sinR = sin(instanceRotation)
   const rotX = localPosX.mul(cosR).sub(localPosZ.mul(sinR))
   const rotZ = localPosX.mul(sinR).add(localPosZ.mul(cosR))
+
+  // ── Normal: rotate geometry normal by instance rotation, then to view space ──
+  // Geometry normals are (0, 0, 1). After Y-axis rotation by instanceRotation:
+  const worldNormalX = normalLocal.z.mul(sinR).negate()
+  const worldNormalY = normalLocal.y
+  const worldNormalZ = normalLocal.z.mul(cosR)
+  const worldNormal = vec3(worldNormalX, worldNormalY, worldNormalZ).normalize()
+  // normalNode must return view-space normals (per memory note)
+  mat.normalNode = cameraViewMatrix.mul(vec4(worldNormal, 0.0)).xyz.normalize()
 
   // ── Final: world position + spine bend + push ──────────
   mat.positionNode = vec3(

@@ -27,8 +27,8 @@ const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
 
 const SHORT_SCALE_MIN = 0.4
 const SHORT_SCALE_RANGE = 0.3
-const TALL_SCALE_MIN = 1.0
-const TALL_SCALE_RANGE = 0.5
+const TALL_SCALE_MIN = 0.5
+const TALL_SCALE_RANGE = 1.0
 
 export interface GrassPlacementData {
   shortCount: number
@@ -172,7 +172,7 @@ function computeFlowerInstances(
       // Flower probability: high when grass is sparse, low when dense
       // t=0 (R=230, sparse) → 80%, t=1 (R=239, dense) → 10%
       const t = (rVal - SHORT_GRASS_R_MIN) / densityRange
-      const flowerProb = 0.8 * Math.pow(0.125, t) // 0.80 → 0.10
+      const flowerProb = 0.4 * Math.pow(0.125, t) // 0.40 → 0.05
 
       // One flower chance per cell
       const localX = cx + 0.5 + (rand() - 0.5) * 0.8

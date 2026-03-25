@@ -137,11 +137,9 @@ export interface GrassMaterialConfig {
 export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
   baseColor: [0.012, 0.035, 0.01],
   tipColor: [0.04, 0.09, 0.02],
-  windStrength: 0.12,
+  windStrength: 0.07,
   widthScaleMin: 0.6,
   widthScaleExtent: 0.6,
-  heightScaleMin: 0.8,
-  heightScaleExtent: 0.5,
   interactionRadius: 2.0,
   interactionStrength: 0.35,
 }

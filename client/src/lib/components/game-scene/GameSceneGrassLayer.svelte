@@ -12,7 +12,6 @@
     loadFlowerBillboardGeometry,
     loadFlowerColorTexture,
     createGrassMaterial,
-    GRASS_TRAIL_COUNT,
     GUST_WAVE_COUNT,
     TALL_GRASS_CONFIG,
     FLOWER_CONFIG,
@@ -53,7 +52,8 @@
 
   // ── Geometry & materials ──────────────────────────────
   // Blade geometry is created synchronously; only flower assets are async
-  const _grassGeometry: THREE.BufferGeometry = createBladeGeometry()
+  const _shortGrassGeometry: THREE.BufferGeometry = createBladeGeometry(5)
+  const _tallGrassGeometry: THREE.BufferGeometry = createBladeGeometry(10)
   let _flowerGeometry: THREE.BufferGeometry | null = null
   let _flowerMaterial: THREE.Material | null = null
   // Flower uses the old uniform system
@@ -136,12 +136,13 @@
 
   /** Create a blade slot: compute context + material + InstancedMesh. */
   function createBladeSlot(
+    baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     cfg?: GrassMaterialConfig,
   ): BladeSlot {
     const ctx = createGrassComputeContext(MESH_CAPACITY, uniforms)
     const mat = createBladeMaterial(ctx, cfg)
-    const geom = _grassGeometry.clone()
+    const geom = baseGeometry.clone()
     const mesh = new THREE.InstancedMesh(geom, mat, MESH_CAPACITY)
     // Do NOT set mesh.count = 0 here! WebGPU allocates GPU buffers based on
     // mesh.count at first render. If 0, the buffer can never grow later.
@@ -155,11 +156,12 @@
   function ensureBladeSlot(
     slots: (BladeSlot | null)[],
     index: number,
+    baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     cfg?: GrassMaterialConfig,
   ): BladeSlot {
     if (!slots[index]) {
-      slots[index] = createBladeSlot(uniforms, cfg)
+      slots[index] = createBladeSlot(baseGeometry, uniforms, cfg)
     }
     return slots[index]!
   }
@@ -198,13 +200,6 @@
   )
   windArrow.visible = false
 
-  // ── Player interaction trail with decay ────────────────────
-  const TRAIL_MIN_DIST = 0.5
-  const TRAIL_RISE = 8.0
-  const TRAIL_DECAY = 1.5
-  const trail: { x: number; z: number; strength: number; decaying: boolean }[] = []
-  let lastTrailX = 0
-  let lastTrailZ = 0
   let elapsedTime = 0
 
   // ── Wind parameters ──────────────────────────────────────
@@ -333,29 +328,6 @@
 
     if (needsRebuild) rebuildGrassBuffers()
 
-    // Rise until peak, then decay. Prune dead points.
-    for (let i = trail.length - 1; i >= 0; i--) {
-      if (trail[i].strength < 1.0 && !trail[i].decaying) {
-        trail[i].strength = Math.min(1.0, trail[i].strength + TRAIL_RISE * dt)
-        if (trail[i].strength >= 1.0) trail[i].decaying = true
-      } else {
-        trail[i].decaying = true
-        trail[i].strength -= TRAIL_DECAY * dt
-      }
-      if (trail[i].strength <= 0) trail.splice(i, 1)
-    }
-
-    if (playerPosition) {
-      const dx = playerPosition.x - lastTrailX
-      const dz = playerPosition.z - lastTrailZ
-      if (dx * dx + dz * dz > TRAIL_MIN_DIST * TRAIL_MIN_DIST) {
-        if (trail.length >= GRASS_TRAIL_COUNT) trail.shift()
-        trail.push({ x: playerPosition.x, z: playerPosition.z, strength: 0, decaying: false })
-        lastTrailX = playerPosition.x
-        lastTrailZ = playerPosition.z
-      }
-    }
-
     // ── Per-wave direction (hold → fade-out → snap → fade-in → hold) ──
     for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
       waveTimers[wi] -= dt
@@ -446,7 +418,6 @@
     for (const u of computeUniformSets) {
       u.uTime.value = elapsedTime
       u.uDeltaTime.value = dt
-      u.uWindStrength.value = u.uWindStrength.value // base strength already set at creation
       u.uWindDir.value.set(cachedWindDirX, cachedWindDirZ)
       u.uGustStrength.value = windStrengthMul
       for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
@@ -454,12 +425,11 @@
         u.uWaveAmps[wi].value = waveAmplitudes[wi]
         u.uWaveParams[wi].value.copy(waveParams[wi])
       }
-      for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
-        if (i < trail.length) {
-          u.uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
-        } else {
-          u.uTrail[i].value.set(0, 0, 0)
-        }
+      // Player position: asymmetric lerp creates natural trail effect
+      if (playerPosition) {
+        u.uPlayerPos.value.set(playerPosition.x, playerPosition.z, 1.0)
+      } else {
+        u.uPlayerPos.value.set(99999, 99999, 0)
       }
     }
 
@@ -483,12 +453,11 @@
         fu.uWaveAmps[wi].value = waveAmplitudes[wi]
         fu.uWaveParams[wi].value.copy(waveParams[wi])
       }
-      for (let i = 0; i < GRASS_TRAIL_COUNT; i++) {
-        if (i < trail.length) {
-          fu.uTrail[i].value.set(trail[i].x, trail[i].z, trail[i].strength)
-        } else {
-          fu.uTrail[i].value.set(0, 0, 0)
-        }
+      // Use trail[0] as player current position for flower interaction
+      if (playerPosition) {
+        fu.uTrail[0].value.set(playerPosition.x, playerPosition.z, 1.0)
+      } else {
+        fu.uTrail[0].value.set(0, 0, 0)
       }
     }
 
@@ -546,7 +515,7 @@
   let needsRebuild = false
 
   // ── Partition raw instance data into sub-chunks ──────────
-  function partitionIntoSubChunks(rawData: Float32Array): Map<string, SubChunkData> {
+  function partitionIntoSubChunks(rawData: Float32Array, needMatrices = false): Map<string, SubChunkData> {
     const count = rawData.length / 5
     if (count === 0) return new Map()
 
@@ -568,7 +537,7 @@
     const result = new Map<string, SubChunkData>()
     for (const [key, indices] of groups) {
       const n = indices.length
-      const matrices = new Float32Array(n * 16)
+      const matrices = needMatrices ? new Float32Array(n * 16) : new Float32Array(0)
       const worldXZ = new Float32Array(n * 2)
       const worldY = new Float32Array(n)
       const rotations = new Float32Array(n)
@@ -582,25 +551,27 @@
         const rot = rawData[base + 3]
         const scale = rawData[base + 4]
 
-        const cos = Math.cos(rot) * scale
-        const sin = Math.sin(rot) * scale
-        const mi = j * 16
-        matrices[mi] = cos
-        matrices[mi + 1] = 0
-        matrices[mi + 2] = -sin
-        matrices[mi + 3] = 0
-        matrices[mi + 4] = 0
-        matrices[mi + 5] = scale
-        matrices[mi + 6] = 0
-        matrices[mi + 7] = 0
-        matrices[mi + 8] = sin
-        matrices[mi + 9] = 0
-        matrices[mi + 10] = cos
-        matrices[mi + 11] = 0
-        matrices[mi + 12] = x
-        matrices[mi + 13] = y
-        matrices[mi + 14] = z
-        matrices[mi + 15] = 1
+        if (needMatrices) {
+          const cos = Math.cos(rot) * scale
+          const sin = Math.sin(rot) * scale
+          const mi = j * 16
+          matrices[mi] = cos
+          matrices[mi + 1] = 0
+          matrices[mi + 2] = -sin
+          matrices[mi + 3] = 0
+          matrices[mi + 4] = 0
+          matrices[mi + 5] = scale
+          matrices[mi + 6] = 0
+          matrices[mi + 7] = 0
+          matrices[mi + 8] = sin
+          matrices[mi + 9] = 0
+          matrices[mi + 10] = cos
+          matrices[mi + 11] = 0
+          matrices[mi + 12] = x
+          matrices[mi + 13] = y
+          matrices[mi + 14] = z
+          matrices[mi + 15] = 1
+        }
 
         worldXZ[j * 2] = x
         worldXZ[j * 2 + 1] = z
@@ -636,14 +607,15 @@
 
     const wantedKeys = new Set(getActiveSubChunkKeys())
 
-    rebuildBladeType(shortSlots, shortComputeUniforms!, shortKeyToSlot, wantedKeys, (c) => c?.short)
-    rebuildBladeType(tallSlots, tallComputeUniforms!, tallKeyToSlot, wantedKeys, (c) => c?.tall, TALL_GRASS_CONFIG)
+    rebuildBladeType(shortSlots, _shortGrassGeometry, shortComputeUniforms!, shortKeyToSlot, wantedKeys, (c) => c?.short)
+    rebuildBladeType(tallSlots, _tallGrassGeometry, tallComputeUniforms!, tallKeyToSlot, wantedKeys, (c) => c?.tall, TALL_GRASS_CONFIG)
     rebuildFlowerType(wantedKeys)
   }
 
   /** Rebuild blade grass slots (short or tall) using compute contexts. */
   function rebuildBladeType(
     slots: (BladeSlot | null)[],
+    baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     keyToSlot: Map<string, number>,
     wantedKeys: Set<string>,
@@ -677,7 +649,7 @@
       if (freeSlots.length === 0) continue
       const slot = freeSlots.pop()!
 
-      const bladeSlot = ensureBladeSlot(slots, slot, uniforms, cfg)
+      const bladeSlot = ensureBladeSlot(slots, slot, baseGeometry, uniforms, cfg)
       writeBladeSlotData(bladeSlot, data, key)
       keyToSlot.set(key, slot)
     }
@@ -798,7 +770,7 @@
           if (grassData) {
             const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
             const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
-            const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
+            const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'), true)
 
             const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
             for (const key of allKeys) {
@@ -873,7 +845,7 @@
       // Re-partition updated data
       const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
       const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
-      const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
+      const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'), true)
 
       const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
       for (const key of allKeys) {
