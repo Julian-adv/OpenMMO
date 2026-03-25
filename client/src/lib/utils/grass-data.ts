@@ -23,7 +23,6 @@ import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 const TILE_DIM = 64
 const VERTS_PER_SIDE = 65
 const CHANNELS = 4
-const BLADES_PER_AXIS = 7
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
 
 const SHORT_SCALE_MIN = 0.4
@@ -48,13 +47,18 @@ interface VegParams {
   rMax: number
   scaleMin: number
   scaleRange: number
+  bladesPerAxis: number
 }
+
+const SHORT_BLADES_PER_AXIS = 14
+const TALL_BLADES_PER_AXIS = 10
 
 const SHORT_PARAMS: VegParams = {
   rMin: SHORT_GRASS_R_MIN,
   rMax: SHORT_GRASS_R_MAX,
   scaleMin: SHORT_SCALE_MIN,
   scaleRange: SHORT_SCALE_RANGE,
+  bladesPerAxis: SHORT_BLADES_PER_AXIS,
 }
 
 const TALL_PARAMS: VegParams = {
@@ -62,6 +66,7 @@ const TALL_PARAMS: VegParams = {
   rMax: TALL_GRASS_R_MAX,
   scaleMin: TALL_SCALE_MIN,
   scaleRange: TALL_SCALE_RANGE,
+  bladesPerAxis: TALL_BLADES_PER_AXIS,
 }
 
 /** Inline bilinear height sampling — avoids Map lookups and string allocations. */
@@ -99,7 +104,8 @@ function computeInstances(
 ): Float32Array {
   const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
   const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-  const step = 1.0 / BLADES_PER_AXIS
+  const bpa = params.bladesPerAxis
+  const step = 1.0 / bpa
   const densityRange = params.rMax - params.rMin
   const rand = createRng(tileSeed(tileX, tileZ) ^ params.rMin)
 
@@ -111,8 +117,8 @@ function computeInstances(
       if (rVal < params.rMin || rVal > params.rMax) continue
       const density = densityRange > 0 ? (rVal - params.rMin) / densityRange : 1
 
-      for (let dz = 0; dz < BLADES_PER_AXIS; dz++) {
-        for (let dx = 0; dx < BLADES_PER_AXIS; dx++) {
+      for (let dz = 0; dz < bpa; dz++) {
+        for (let dx = 0; dx < bpa; dx++) {
           const localX = cx + dx * step + rand() * step
           const localZ = cz + dz * step + rand() * step
           if (rand() >= density) continue

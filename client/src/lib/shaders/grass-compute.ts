@@ -272,6 +272,11 @@ export function writeBladeData(
   for (let i = count; i < scaleArr.length; i++) {
     scaleArr[i] = 0
   }
+
+  // Signal GPU re-upload
+  ctx.bladeData.value.needsUpdate = true
+  ctx.bladeScale.value.needsUpdate = true
+
   ctx.count = count
 }
 

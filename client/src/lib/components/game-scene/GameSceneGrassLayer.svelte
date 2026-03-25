@@ -48,7 +48,7 @@
   const SUB_CHUNK_SIZE = 32
   const SUB_CHUNK_GRID_RADIUS = 1 // 1 = 3×3 grid (96m coverage)
   const GRID_COUNT = (SUB_CHUNK_GRID_RADIUS * 2 + 1) ** 2 // 9
-  const MESH_CAPACITY = 65536
+  const MESH_CAPACITY = 131072
   const FLOWER_MESH_CAPACITY = 2048
 
   // ── Geometry & materials ──────────────────────────────
