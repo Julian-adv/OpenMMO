@@ -1,13 +1,17 @@
 /**
  * Grass placement data: binary encode/decode and placement computation.
  *
- * Binary format per tile (v2):
- *   [u32 shortCount] [u32 tallCount] [u32 flowerCount]
- *   [shortCount × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
- *   [tallCount   × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
- *   [flowerCount × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
+ * Binary format v3 (quantized):
+ *   [u32 magic=0x47523033] [u32 shortCount] [u32 tallCount] [u32 flowerCount]
+ *   [N × { u16 localX, u16 localZ, u8 rotation, u8 scale }]
+ *   16-byte header + 6 bytes per instance.
  *
- * 12-byte header + 20 bytes per instance.
+ * In-memory representation (GrassPlacementData.buffer) uses the v2 layout:
+ *   [u32 shortCount] [u32 tallCount] [u32 flowerCount]
+ *   [N × { f32 x, f32 y, f32 z, f32 rotation, f32 scale }]
+ *   12-byte header + 20 bytes per instance.
+ *
+ * v2 data on disk is treated as stale and decoded as empty (needs regeneration).
  */
 
 import {
@@ -17,13 +21,20 @@ import {
   TALL_GRASS_R_MAX,
 } from '../shaders/grass-material'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
+import {
+  TILE_DIM,
+  VERTS_PER_SIDE,
+  decodeHeight,
+} from '../managers/terrain-height-types'
 import { createRng } from './simplex-noise'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 
-const TILE_DIM = 64
-const VERTS_PER_SIDE = 65
 const CHANNELS = 4
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
+
+const V3_MAGIC = 0x47523033 // "GR03"
+const V3_HEADER_BYTES = 16 // magic + 3 × u32
+const V3_BYTES_PER_INSTANCE = 6 // u16 localX, u16 localZ, u8 rotation, u8 scale
 
 const SHORT_SCALE_MIN = 0.4
 const SHORT_SCALE_RANGE = 0.3
@@ -120,10 +131,10 @@ function sampleHeight(
   const ix1 = Math.min(ix + 1, TILE_DIM)
   const iz1 = Math.min(iz + 1, TILE_DIM)
 
-  const h00 = heightmap[iz * VERTS_PER_SIDE + ix] * 0.05 - 500.0
-  const h10 = heightmap[iz * VERTS_PER_SIDE + ix1] * 0.05 - 500.0
-  const h01 = heightmap[iz1 * VERTS_PER_SIDE + ix] * 0.05 - 500.0
-  const h11 = heightmap[iz1 * VERTS_PER_SIDE + ix1] * 0.05 - 500.0
+  const h00 = decodeHeight(heightmap[iz * VERTS_PER_SIDE + ix])
+  const h10 = decodeHeight(heightmap[iz * VERTS_PER_SIDE + ix1])
+  const h01 = decodeHeight(heightmap[iz1 * VERTS_PER_SIDE + ix])
+  const h11 = decodeHeight(heightmap[iz1 * VERTS_PER_SIDE + ix1])
 
   const h0 = h00 + (h10 - h00) * fx
   const h1 = h01 + (h11 - h01) * fx
@@ -196,6 +207,13 @@ function computeInstances(
 
 const FLOWER_SCALE_MIN = 0.42
 const FLOWER_SCALE_RANGE = 0.18
+
+/** Scale ranges per type index: [short=0, tall=1, flower=2] */
+const TYPE_SCALE: [number, number][] = [
+  [SHORT_PARAMS.scaleMin, SHORT_PARAMS.scaleRange],
+  [TALL_PARAMS.scaleMin, TALL_PARAMS.scaleRange],
+  [FLOWER_SCALE_MIN, FLOWER_SCALE_RANGE],
+]
 
 /**
  * Scatter flowers within short grass cells.
@@ -428,15 +446,145 @@ export function removeGrassInRect(
   return packGrassBuffer(shortFiltered, tallFiltered, flowerFiltered)
 }
 
-/** Decode binary grass placement data. */
-export function decodeGrassData(buffer: ArrayBuffer): GrassPlacementData {
-  const header = new Uint32Array(buffer, 0, 3)
-  return {
-    shortCount: header[0],
-    tallCount: header[1],
-    flowerCount: header[2],
-    buffer,
+/**
+ * Encode GrassPlacementData (in-memory v2 layout) to v3 quantized binary for storage.
+ */
+export function encodeGrassBuffer(
+  data: GrassPlacementData,
+  tileX: number,
+  tileZ: number
+): ArrayBuffer {
+  const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const totalInstances = data.shortCount + data.tallCount + data.flowerCount
+  const buf = new ArrayBuffer(
+    V3_HEADER_BYTES + totalInstances * V3_BYTES_PER_INSTANCE
+  )
+
+  const header = new Uint32Array(buf, 0, 4)
+  header[0] = V3_MAGIC
+  header[1] = data.shortCount
+  header[2] = data.tallCount
+  header[3] = data.flowerCount
+
+  const view = new DataView(buf)
+  const types: ('short' | 'tall' | 'flower')[] = ['short', 'tall', 'flower']
+  let writeOffset = V3_HEADER_BYTES
+
+  for (let t = 0; t < 3; t++) {
+    const raw = getInstanceData(data, types[t])
+    const [scaleMin, scaleRange] = TYPE_SCALE[t]
+    const n = raw.length / FLOATS_PER_INSTANCE
+    const posScale = 65535 / TILE_DIM
+    const rotScale = 255 / (Math.PI * 2)
+    const scaleScale = 255 / scaleRange
+
+    for (let i = 0; i < n; i++) {
+      const base = i * FLOATS_PER_INSTANCE
+      const localX = raw[base] - tileMinX
+      const localZ = raw[base + 2] - tileMinZ
+
+      view.setUint16(writeOffset, Math.round(localX * posScale), true)
+      view.setUint16(writeOffset + 2, Math.round(localZ * posScale), true)
+      view.setUint8(
+        writeOffset + 4,
+        Math.round(raw[base + 3] * rotScale) & 0xff
+      )
+      view.setUint8(
+        writeOffset + 5,
+        Math.min(
+          255,
+          Math.max(0, Math.round((raw[base + 4] - scaleMin) * scaleScale))
+        )
+      )
+      writeOffset += V3_BYTES_PER_INSTANCE
+    }
   }
+
+  return buf
+}
+
+function emptyGrass(): GrassPlacementData {
+  return packGrassBuffer(
+    new Float32Array(0),
+    new Float32Array(0),
+    new Float32Array(0)
+  )
+}
+
+/**
+ * Decode binary grass data. v3 (quantized) is expanded to in-memory v2 layout.
+ * v2 (legacy) returns empty data — tile needs regeneration.
+ */
+export function decodeGrassData(
+  buffer: ArrayBuffer,
+  tileX: number,
+  tileZ: number,
+  heightmap: Uint16Array | null
+): GrassPlacementData {
+  if (buffer.byteLength < 4) return emptyGrass()
+
+  const magic = new Uint32Array(buffer, 0, 1)[0]
+  if (magic !== V3_MAGIC) {
+    // v2 legacy format — return empty so tile gets regenerated
+    return emptyGrass()
+  }
+
+  const header = new Uint32Array(buffer, 0, 4)
+  const shortCount = header[1]
+  const tallCount = header[2]
+  const flowerCount = header[3]
+  const totalInstances = shortCount + tallCount + flowerCount
+
+  if (totalInstances === 0) return emptyGrass()
+
+  const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+  const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+
+  // Expand to v2 in-memory layout
+  const outBuf = new ArrayBuffer(
+    HEADER_BYTES + totalInstances * FLOATS_PER_INSTANCE * 4
+  )
+  const outHeader = new Uint32Array(outBuf, 0, 3)
+  outHeader[0] = shortCount
+  outHeader[1] = tallCount
+  outHeader[2] = flowerCount
+
+  const outFloats = new Float32Array(outBuf, HEADER_BYTES)
+  const view = new DataView(buffer)
+  const counts = [shortCount, tallCount, flowerCount]
+  let readOffset = V3_HEADER_BYTES
+  let writeIdx = 0
+
+  for (let t = 0; t < 3; t++) {
+    const [scaleMin, scaleRange] = TYPE_SCALE[t]
+    const n = counts[t]
+
+    const posScale = TILE_DIM / 65535
+    const rotScale = (Math.PI * 2) / 255
+    const scaleScale = scaleRange / 255
+
+    for (let i = 0; i < n; i++) {
+      const localX = view.getUint16(readOffset, true) * posScale
+      const localZ = view.getUint16(readOffset + 2, true) * posScale
+      const rotation = view.getUint8(readOffset + 4) * rotScale
+      const scale = scaleMin + view.getUint8(readOffset + 5) * scaleScale
+
+      const worldX = tileMinX + localX
+      const worldZ = tileMinZ + localZ
+      const worldY = heightmap ? sampleHeight(heightmap, localX, localZ) : 0
+
+      outFloats[writeIdx] = worldX
+      outFloats[writeIdx + 1] = worldY
+      outFloats[writeIdx + 2] = worldZ
+      outFloats[writeIdx + 3] = rotation
+      outFloats[writeIdx + 4] = scale
+      writeIdx += FLOATS_PER_INSTANCE
+      readOffset += V3_BYTES_PER_INSTANCE
+    }
+  }
+
+  return { shortCount, tallCount, flowerCount, buffer: outBuf }
 }
 
 /**

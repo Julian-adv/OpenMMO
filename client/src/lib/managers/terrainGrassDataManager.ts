@@ -1,9 +1,11 @@
 import { getTerrainApiUrl } from '../utils/networkUtils'
-import { decodeGrassData, type GrassPlacementData } from '../utils/grass-data'
-
-function tileKey(tileX: number, tileZ: number): string {
-  return `${tileX},${tileZ}`
-}
+import {
+  decodeGrassData,
+  encodeGrassBuffer,
+  type GrassPlacementData,
+} from '../utils/grass-data'
+import { tileKey } from './terrain-height-types'
+import type { TerrainHeightManager } from './terrainHeightManager'
 
 export class TerrainGrassDataManager {
   private cache = new Map<string, GrassPlacementData>()
@@ -14,9 +16,11 @@ export class TerrainGrassDataManager {
   private terrainApiUrl: string
   private generation = 0
   private tileUpdateListeners: ((tileX: number, tileZ: number) => void)[] = []
+  private heightManager: TerrainHeightManager
 
-  constructor() {
+  constructor(heightManager: TerrainHeightManager) {
     this.terrainApiUrl = getTerrainApiUrl()
+    this.heightManager = heightManager
   }
 
   /** Subscribe to tile data updates. Returns unsubscribe function. */
@@ -65,10 +69,13 @@ export class TerrainGrassDataManager {
         }
         const buffer = await response.arrayBuffer()
         if (gen !== this.generation) return null
-        const data = decodeGrassData(buffer)
+        let heightmap = this.heightManager.getHeightmap(tileX, tileZ)
+        if (!heightmap) {
+          heightmap = await this.heightManager.loadHeightmap(tileX, tileZ)
+          if (gen !== this.generation) return null
+        }
+        const data = decodeGrassData(buffer, tileX, tileZ, heightmap)
         this.cache.set(key, data)
-        // Also try loading the original grass (fire-and-forget)
-        this.loadOriginalGrass(tileX, tileZ)
         return data
       } catch (e) {
         console.error(`Grass data fetch error (${tileX}, ${tileZ}):`, e)
@@ -115,7 +122,10 @@ export class TerrainGrassDataManager {
       const response = await fetch(url)
       if (response.status === 404 || !response.ok) return null
       const buffer = await response.arrayBuffer()
-      const data = decodeGrassData(buffer)
+      const heightmap =
+        this.heightManager.getHeightmap(tileX, tileZ) ??
+        (await this.heightManager.loadHeightmap(tileX, tileZ))
+      const data = decodeGrassData(buffer, tileX, tileZ, heightmap)
       this.originalGrass.set(key, data)
       return data
     } catch {
@@ -157,10 +167,11 @@ export class TerrainGrassDataManager {
 
     try {
       const url = `${this.terrainApiUrl}/api/terrain/grass/${tileX}/${tileZ}`
+      const wireBuffer = encodeGrassBuffer(data, tileX, tileZ)
       const response = await fetch(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/octet-stream' },
-        body: data.buffer,
+        body: wireBuffer,
       })
       if (!response.ok) {
         console.error(

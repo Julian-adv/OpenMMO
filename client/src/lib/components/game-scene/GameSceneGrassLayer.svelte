@@ -600,6 +600,9 @@
   const shortKeyToSlot = new SvelteMap<string, number>()
   const tallKeyToSlot = new SvelteMap<string, number>()
   const flowerKeyToSlot = new SvelteMap<string, number>()
+  // Track sub-chunk keys whose cache entry was updated since last slot write.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const dirtySubChunks = new Set<string>()
 
   function rebuildGrassBuffers() {
     needsRebuild = false
@@ -610,6 +613,7 @@
     rebuildBladeType(shortSlots, _shortGrassGeometry, shortComputeUniforms!, shortKeyToSlot, wantedKeys, (c) => c?.short)
     rebuildBladeType(tallSlots, _tallGrassGeometry, tallComputeUniforms!, tallKeyToSlot, wantedKeys, (c) => c?.tall, TALL_GRASS_CONFIG)
     rebuildFlowerType(wantedKeys)
+    dirtySubChunks.clear()
   }
 
   /** Rebuild blade grass slots (short or tall) using compute contexts. */
@@ -642,7 +646,16 @@
     }
 
     for (const key of wantedKeys) {
-      if (keyToSlot.has(key)) continue
+      if (keyToSlot.has(key)) {
+        // Re-upload data if cache was updated since last write
+        if (dirtySubChunks.has(key)) {
+          const data = getData(subChunkCache.get(key))
+          if (data && data.count > 0) {
+            writeBladeSlotData(slots[keyToSlot.get(key)!]!, data, key)
+          }
+        }
+        continue
+      }
 
       const data = getData(subChunkCache.get(key))
       if (!data || data.count === 0) continue
@@ -675,7 +688,15 @@
     }
 
     for (const key of wantedKeys) {
-      if (flowerKeyToSlot.has(key)) continue
+      if (flowerKeyToSlot.has(key)) {
+        if (dirtySubChunks.has(key)) {
+          const data = subChunkCache.get(key)?.flower
+          if (data && data.count > 0) {
+            writeFlowerMeshData(flowerMeshes[flowerKeyToSlot.get(key)!], data, key)
+          }
+        }
+        continue
+      }
 
       const data = subChunkCache.get(key)?.flower
       if (!data || data.count === 0) continue
@@ -779,6 +800,7 @@
                 tall: tallChunks.get(key) ?? EMPTY_SUB_CHUNK,
                 flower: flowerChunks.get(key) ?? EMPTY_SUB_CHUNK,
               })
+              dirtySubChunks.add(key)
             }
           }
 

@@ -113,7 +113,7 @@
   const terrainHeightManager = new TerrainHeightManager()
   const terrainSplatManager = new TerrainSplatManager()
   const terrainMetaManager = new TerrainMetaManager()
-  const terrainGrassDataManager = new TerrainGrassDataManager()
+  const terrainGrassDataManager = new TerrainGrassDataManager(terrainHeightManager)
   monsterManager.heightManager = terrainHeightManager
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
