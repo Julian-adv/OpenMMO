@@ -80,9 +80,7 @@
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import {
-    loadGrassBillboardGeometry,
     loadFlowerBillboardGeometry,
-    loadGrassAlphaTexture,
     loadFlowerColorTexture,
   } from '../shaders/grass-material'
   import { createCalendarSystem } from './game-scene/calendar-system'
@@ -434,7 +432,7 @@
       // Update grass wind & trail
       {
         const grassStart = performance.now()
-        grassLayerRef?.update(deltaTime)
+        grassLayerRef?.update(deltaTime, renderer)
         loopProfiler.record('grassUpdate', performance.now() - grassStart)
       }
 
@@ -693,11 +691,10 @@
 
     const splatPromise = loadSplatLayers()
 
-    // Also await grass asset loading so grass materials can be compiled
+    // Also await flower asset loading so grass materials can be compiled
+    // (blade geometry is created synchronously, only flower assets need async load)
     const grassAssetsPromise = Promise.all([
-      loadGrassBillboardGeometry(),
       loadFlowerBillboardGeometry(),
-      loadGrassAlphaTexture(),
       loadFlowerColorTexture(),
     ])
 

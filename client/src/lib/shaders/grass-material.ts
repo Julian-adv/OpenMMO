@@ -57,13 +57,6 @@ async function loadLODGeometry(
   return geometry
 }
 
-export function loadGrassBillboardGeometry(
-  url = '/models/grassLODs.glb',
-  scale = 5
-): Promise<THREE.BufferGeometry> {
-  return loadLODGeometry('LOD01', url, scale)
-}
-
 export function loadFlowerBillboardGeometry(
   url = '/models/grassLODs.glb',
   scale: number | [number, number, number] = [3, 5.5, 3]
@@ -77,8 +70,6 @@ export function loadAlphaTexture(url: string): Promise<THREE.Texture> {
   return textureLoader.loadAsync(url)
 }
 
-export const loadGrassAlphaTexture = () =>
-  loadAlphaTexture('/textures/grass1.jpeg')
 export const loadFlowerColorTexture = () =>
   loadAlphaTexture('/textures/flowerx4.png')
 
@@ -149,8 +140,8 @@ export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
   windStrength: 0.12,
   widthScaleMin: 0.6,
   widthScaleExtent: 0.6,
-  heightScaleMin: 0.7,
-  heightScaleExtent: 0.6,
+  heightScaleMin: 0.8,
+  heightScaleExtent: 0.5,
   interactionRadius: 2.0,
   interactionStrength: 0.35,
 }
