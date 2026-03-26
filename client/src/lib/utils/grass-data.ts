@@ -61,7 +61,7 @@ interface VegParams {
   bladesPerAxis: number
 }
 
-const SHORT_BLADES_PER_AXIS = 14
+const SHORT_BLADES_PER_AXIS = 12
 const TALL_BLADES_PER_AXIS = 10
 const BOUNDARY_BLEND_RATIO = 0.3
 
