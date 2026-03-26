@@ -24,14 +24,13 @@
   import { worldMapVisible, debugVisible, teleportLoading } from '../stores/debugStore'
   import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
   import { get } from 'svelte/store'
-  import { regionMinimapServerUrl, generateRegionMinimap } from '../terrain/regionMinimapGenerator'
+  import { regionMinimapServerUrl, generateRegionMinimap, fetchHousesInRegion } from '../terrain/regionMinimapGenerator'
   import { tileToRegion } from '../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
   import { generateAndSaveGrassData, removeGrassInRect, encodeGrassBuffer } from '../utils/grass-data'
   import { worldToTileCoord, tileKey } from '../managers/terrain-height-types'
-  import type { HouseData } from '../types/housing'
   import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
@@ -71,6 +70,7 @@
   let deleting = $state(false)
   let resplatting = $state(false)
   let resplatProgress = $state('')
+  let generatingMinimap = $state(false)
 
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
@@ -353,6 +353,26 @@
     }
   }
 
+  async function handleRegenerateMinimap() {
+    const rx = playerRegionRx
+    const rz = playerRegionRz
+    const metaManager = get(editorMetaManager)
+    if (!metaManager) return
+
+    generatingMinimap = true
+    try {
+      await generateRegionMinimap(rx, rz, metaManager)
+      imageCache.delete(`${rx},${rz}`)
+      pendingLoads.delete(`${rx},${rz}`)
+      minimapVersion.update((v) => v + 1)
+    } catch (e) {
+      console.error('Minimap generation failed:', e)
+      alert(`Minimap generation failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      generatingMinimap = false
+    }
+  }
+
   /** Fetch all houses in a region and remove grass under their ground-floor rooms.
    *  Returns the set of tile keys that have houses on them. */
   async function removeGrassUnderHousesInRegion(
@@ -361,28 +381,8 @@
     grassMgr: TerrainGrassDataManager
   ): Promise<Set<string>> {
     const GRASS_MARGIN = 1
-    const FETCH_BATCH = 16
     const apiUrl = getTerrainApiUrl()
-
-    // Fetch housing data for every chunk in the region (batched)
-    const chunkCoords: [number, number][] = []
-    for (let tz = 0; tz < REGION_SIZE; tz++) {
-      for (let tx = 0; tx < REGION_SIZE; tx++) {
-        chunkCoords.push([rx * REGION_SIZE + tx, rz * REGION_SIZE + tz])
-      }
-    }
-    const houses: HouseData[] = []
-    for (let i = 0; i < chunkCoords.length; i += FETCH_BATCH) {
-      const batch = chunkCoords.slice(i, i + FETCH_BATCH)
-      const results = await Promise.all(
-        batch.map(([cx, cz]) =>
-          fetch(`${apiUrl}/api/housing/area/${cx}/${cz}`)
-            .then((r) => (r.ok ? (r.json() as Promise<HouseData[]>) : []))
-            .catch(() => [] as HouseData[])
-        )
-      )
-      houses.push(...results.flat())
-    }
+    const houses = await fetchHousesInRegion(rx, rz, apiUrl)
 
     // Collect removal rects per tile so each tile is saved at most once
     const tileRects = new SvelteMap<string, { tx: number; tz: number; rects: [number, number, number, number][] }>()
@@ -646,6 +646,7 @@
           <span class="controls-separator"></span>
           <button class="ctrl-btn debug-btn" onclick={handleGenerate} title="Generate terrain for region ({playerRegionRx}, {playerRegionRz})">Gen</button>
           <button class="ctrl-btn debug-btn" onclick={handleResplat} disabled={resplatting} title="Regenerate splatmaps for region ({playerRegionRx}, {playerRegionRz})">{resplatting ? resplatProgress : 'Resplat'}</button>
+          <button class="ctrl-btn debug-btn" onclick={handleRegenerateMinimap} disabled={generatingMinimap} title="Regenerate minimap for region ({playerRegionRx}, {playerRegionRz})">{generatingMinimap ? 'Minimap...' : 'Minimap'}</button>
           <button class="ctrl-btn debug-btn danger" onclick={handleDelete} disabled={deleting} title="Delete terrain for region ({playerRegionRx}, {playerRegionRz})">Del</button>
         {/if}
       </div>
