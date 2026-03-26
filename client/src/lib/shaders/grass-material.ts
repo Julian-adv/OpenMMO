@@ -1,48 +1,4 @@
 import * as THREE from 'three'
-import { loadGLB } from '../utils/gltfCache'
-
-// ── Grass billboard geometry from GLB ─────────────────────
-// Loads grassLODs.glb and extracts the named LOD mesh geometry.
-// UV y is flipped so that y=0 at base, y=1 at tip (matching our shader convention).
-
-async function loadLODGeometry(
-  lodName: string,
-  url = '/models/grassLODs.glb',
-  scale: number | [number, number, number] = 5
-): Promise<THREE.BufferGeometry> {
-  const gltf = await loadGLB(url)
-  let found: THREE.BufferGeometry | null = null
-  gltf.scene.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.name.includes(lodName)) {
-      found = child.geometry
-    }
-  })
-  if (!found) {
-    throw new Error(`${lodName} mesh not found in ${url}`)
-  }
-  // Clone to avoid mutating the cached GLTF geometry
-  const geometry = (found as THREE.BufferGeometry).clone()
-  const [sx, sy, sz] = Array.isArray(scale) ? scale : [scale, scale, scale]
-  geometry.scale(sx, sy, sz)
-
-  // Flip UV y: GLB has y=1 at base, y=0 at tip → our convention y=0 base, y=1 tip
-  const uvAttr = geometry.getAttribute('uv')
-  if (uvAttr) {
-    for (let i = 0; i < uvAttr.count; i++) {
-      uvAttr.setY(i, 1 - uvAttr.getY(i))
-    }
-    uvAttr.needsUpdate = true
-  }
-
-  return geometry
-}
-
-export function loadFlowerBillboardGeometry(
-  url = '/models/grassLODs.glb',
-  scale: number | [number, number, number] = [3, 5.5, 3]
-): Promise<THREE.BufferGeometry> {
-  return loadLODGeometry('LOD02', url, scale)
-}
 
 const textureLoader = new THREE.TextureLoader()
 
@@ -105,11 +61,11 @@ export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
 export const FLOWER_CONFIG: GrassMaterialConfig = {
   baseColor: [0.02, 0.06, 0.015],
   tipColor: [0.06, 0.12, 0.03],
-  windStrength: 0.04,
+  windStrength: 0.015,
   widthScaleMin: 0.8,
-  widthScaleExtent: 0.5,
+  widthScaleExtent: 0.25,
   heightScaleMin: 0.6,
-  heightScaleExtent: 0.5,
+  heightScaleExtent: 0.25,
   interactionRadius: 1.5,
   interactionStrength: 0.12,
   atlasGrid: 2,

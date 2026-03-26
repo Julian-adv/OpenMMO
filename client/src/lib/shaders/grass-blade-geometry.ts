@@ -1,67 +1,76 @@
 import * as THREE from 'three'
 
 /**
- * Create a procedural grass blade strip geometry.
+ * Create a star-billboard geometry: one or more blade strips intersecting at
+ * equal angles around the Y axis.
  *
- * The blade is a flat strip with `segments` quads, tapered from base to tip.
- * UV convention: y=0 at base, y=1 at tip (matching existing grass shader).
+ * Each strip is a tapered quad strip with `segments` quads.
+ * UV convention: y=0 at base, y=1 at tip (matching grass shader).
  *
- * @param segments Number of vertical segments (default 5)
- * @param halfWidth Base half-width in local units (default 0.04)
- * @param height Blade height in local units (default 1.0)
- * @param taper Fraction of width remaining at tip (0 = point, 1 = no taper, default 0.1)
+ * @param strips Number of intersecting strips (1 = single blade, 2 = cross/90°, 3 = star/60°)
  */
-export function createBladeGeometry(
+export function createStarGeometry(
   segments = 5,
-  halfWidth = 0.04,
+  halfWidth = 0.15,
   height = 1.0,
-  taper = 0.1
+  taper = 0.1,
+  strips = 3
 ): THREE.BufferGeometry {
-  const vertCount = (segments + 1) * 2
-  const positions = new Float32Array(vertCount * 3)
-  const normals = new Float32Array(vertCount * 3)
-  const uvs = new Float32Array(vertCount * 2)
+  const stripVertCount = (segments + 1) * 2
+  const stripIndexCount = segments * 6
+  const totalVerts = stripVertCount * strips
+  const totalIndices = stripIndexCount * strips
 
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments // 0 at base, 1 at tip
-    const y = t * height
-    const hw = halfWidth * (1.0 - t * (1.0 - taper))
+  const positions = new Float32Array(totalVerts * 3)
+  const normals = new Float32Array(totalVerts * 3)
+  const uvs = new Float32Array(totalVerts * 2)
+  const indices = new Uint16Array(totalIndices)
 
-    const base = i * 2
+  for (let strip = 0; strip < strips; strip++) {
+    const angle = (strip * Math.PI) / strips
+    const dirX = Math.cos(angle)
+    const dirZ = Math.sin(angle)
+    const nrmX = -dirZ
+    const nrmZ = dirX
 
-    // Left vertex
-    positions[base * 3] = -hw
-    positions[base * 3 + 1] = y
-    positions[base * 3 + 2] = 0
+    const vOff = strip * stripVertCount
+    const iOff = strip * stripIndexCount
 
-    // Right vertex
-    positions[(base + 1) * 3] = hw
-    positions[(base + 1) * 3 + 1] = y
-    positions[(base + 1) * 3 + 2] = 0
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments
+      const y = t * height
+      const hw = halfWidth * (1.0 - t * (1.0 - taper))
 
-    // Normals: all face +Z (DoubleSide handles backface)
-    normals[base * 3 + 2] = 1
-    normals[(base + 1) * 3 + 2] = 1
+      const base = vOff + i * 2
 
-    // UVs
-    uvs[base * 2] = 0
-    uvs[base * 2 + 1] = t
-    uvs[(base + 1) * 2] = 1
-    uvs[(base + 1) * 2 + 1] = t
-  }
+      positions[base * 3] = -hw * dirX
+      positions[base * 3 + 1] = y
+      positions[base * 3 + 2] = -hw * dirZ
+      positions[(base + 1) * 3] = hw * dirX
+      positions[(base + 1) * 3 + 1] = y
+      positions[(base + 1) * 3 + 2] = hw * dirZ
 
-  // Triangle indices
-  const indexCount = segments * 6
-  const indices = new Uint16Array(indexCount)
-  for (let i = 0; i < segments; i++) {
-    const b = i * 2
-    const o = i * 6
-    indices[o] = b
-    indices[o + 1] = b + 1
-    indices[o + 2] = b + 2
-    indices[o + 3] = b + 1
-    indices[o + 4] = b + 3
-    indices[o + 5] = b + 2
+      normals[base * 3] = nrmX
+      normals[base * 3 + 2] = nrmZ
+      normals[(base + 1) * 3] = nrmX
+      normals[(base + 1) * 3 + 2] = nrmZ
+
+      uvs[base * 2] = 0
+      uvs[base * 2 + 1] = t
+      uvs[(base + 1) * 2] = 1
+      uvs[(base + 1) * 2 + 1] = t
+    }
+
+    for (let i = 0; i < segments; i++) {
+      const b = vOff + i * 2
+      const o = iOff + i * 6
+      indices[o] = b
+      indices[o + 1] = b + 1
+      indices[o + 2] = b + 2
+      indices[o + 3] = b + 1
+      indices[o + 4] = b + 3
+      indices[o + 5] = b + 2
+    }
   }
 
   const geometry = new THREE.BufferGeometry()
@@ -71,4 +80,14 @@ export function createBladeGeometry(
   geometry.setIndex(new THREE.BufferAttribute(indices, 1))
 
   return geometry
+}
+
+/** Single blade strip — convenience wrapper for `createStarGeometry` with 1 strip. */
+export function createBladeGeometry(
+  segments = 5,
+  halfWidth = 0.04,
+  height = 1.0,
+  taper = 0.1
+): THREE.BufferGeometry {
+  return createStarGeometry(segments, halfWidth, height, taper, 1)
 }

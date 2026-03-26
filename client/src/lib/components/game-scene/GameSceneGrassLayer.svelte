@@ -15,7 +15,6 @@
     partitionKeysFromRawData,
   } from '../../utils/grass-sub-chunks'
   import {
-    loadFlowerBillboardGeometry,
     loadFlowerColorTexture,
     TALL_GRASS_CONFIG,
     FLOWER_CONFIG,
@@ -23,7 +22,7 @@
     type WindState,
   } from '../../shaders/grass-material'
   import { GUST_WAVE_COUNT } from '../../shaders/grass-shared'
-  import { createBladeGeometry } from '../../shaders/grass-blade-geometry'
+  import { createBladeGeometry, createStarGeometry } from '../../shaders/grass-blade-geometry'
   import {
     createBladeMaterial,
     createSharedComputeUniforms,
@@ -52,10 +51,10 @@
   const FLOWER_MESH_CAPACITY = 2048
 
   // ── Geometry & materials ──────────────────────────────
-  // Blade geometry is created synchronously; only flower assets are async
+  // All geometry is created synchronously; only flower texture is async
   const _shortGrassGeometry: THREE.BufferGeometry = createBladeGeometry(5)
   const _tallGrassGeometry: THREE.BufferGeometry = createBladeGeometry(10)
-  let _flowerGeometry: THREE.BufferGeometry | null = null
+  const _flowerGeometry: THREE.BufferGeometry = createStarGeometry(3, 0.35, 0.7, 1.0)
   let _flowerCfg: GrassMaterialConfig | null = null
   // Shared compute uniforms (one set per grass type)
   let shortComputeUniforms: GrassComputeUniforms | null = null
@@ -91,7 +90,7 @@
   /** Eagerly create grass materials + one mesh per type so compileAsync can
    *  pre-compile the grass shader pipelines. Returns true when done. */
   export function ensureMaterialsForCompile(): boolean {
-    if (!ensureMaterials() || !_flowerGeometry) return false
+    if (!ensureMaterials()) return false
     // Create at least one slot per type for pipeline compilation.
     ensureBladeSlot(flowerSlots, 0, _flowerGeometry, flowerComputeUniforms!,
       _flowerCfg!, FLOWER_MESH_CAPACITY)
@@ -107,22 +106,18 @@
   let tallSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
   let flowerSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
 
-  // Load flower assets asynchronously (blade geometry is already created above)
+  // Load flower texture asynchronously (geometry is now procedural)
   let _flowerColorMap: THREE.Texture | null = null
 
-  Promise.all([
-    loadFlowerBillboardGeometry(),
-    loadFlowerColorTexture(),
-  ]).then(([flowerGeometry, flowerColorMap]) => {
-    _flowerGeometry = flowerGeometry
-    _flowerColorMap = flowerColorMap
+  loadFlowerColorTexture().then((tex) => {
+    _flowerColorMap = tex
     assetsReady = true
   })
 
   /** Create shared compute uniforms for all grass types on first use. */
   function ensureMaterials(): boolean {
     if (shortComputeUniforms && tallComputeUniforms && flowerComputeUniforms) return true
-    if (!_flowerGeometry || !_flowerColorMap) return false
+    if (!_flowerColorMap) return false
 
     shortComputeUniforms = createSharedComputeUniforms()
     tallComputeUniforms = createSharedComputeUniforms(TALL_GRASS_CONFIG)
