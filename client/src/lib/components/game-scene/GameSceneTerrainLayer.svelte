@@ -77,6 +77,10 @@
   // Shared brush/grid uniforms
   const brushUniforms: SplatBrushUniforms = createSplatBrushUniforms()
 
+  // Track whether editor overlay is compiled into materials.
+  // Starts false for faster initial pipeline compilation; upgraded on first editor use.
+  let editorOverlayCompiled = false
+
   // ── Material + Geometry pools (created on demand, reused across tile lifecycles) ──
   const materialPool: MeshStandardNodeMaterial[] = []
   const geometryPool: THREE.BufferGeometry[] = []
@@ -99,8 +103,44 @@
       splatMap: defaultSplat,
       splatScale: 1.0,
       sharedBrushUniforms: brushUniforms,
+      includeEditorOverlay: editorOverlayCompiled,
     })
     return mat
+  }
+
+  /** Upgrade all existing materials to include editor overlay.
+   *  Called once when the map editor is first activated. */
+  function upgradeToEditorMaterials() {
+    if (editorOverlayCompiled) return
+    editorOverlayCompiled = true
+    // Dispose and flush pool — pooled materials lack editor overlay
+    for (const m of materialPool) m.dispose()
+    materialPool.length = 0
+    // Recreate materials for all active tiles
+    for (const [key, oldMat] of materialMap) {
+      const newMat = createDefaultMaterial()
+      // Transfer all per-tile uniform values from old material
+      const oldU = oldMat.userData.uniforms
+      const newU = newMat.userData.uniforms
+      if (oldU && newU) {
+        for (const k of Object.keys(oldU)) {
+          if (k in newU && oldU[k]?.value !== undefined) {
+            newU[k].value = oldU[k].value
+          }
+        }
+      }
+      materialMap.set(key, newMat)
+      // Update the mesh reference
+      const geo = geoMap.get(key)
+      if (geo && terrainGroup) {
+        terrainGroup.children.forEach((child) => {
+          if (child instanceof THREE.Mesh && child.geometry === geo) {
+            child.material = newMat
+          }
+        })
+      }
+      oldMat.dispose()
+    }
   }
 
   /** Take a material from the pool, or create one on demand. */
@@ -213,10 +253,12 @@
     brushUnsubs.push(
       mapEditorMode.subscribe((v) => {
         editorActive = v
+        if (v) upgradeToEditorMaterials()
         sync()
       }),
       gridVisible.subscribe((v) => {
         gridOn = v
+        if (v) upgradeToEditorMaterials()
         sync()
       }),
       brushWorldPos.subscribe((v) => {

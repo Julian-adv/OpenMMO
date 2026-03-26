@@ -71,7 +71,7 @@ export function createMultiPassRenderer(): MultiPassRenderer {
         ?.uniforms
       let savedBrushActive: number | undefined
       let savedGridVisible: number | undefined
-      if (brushUniforms) {
+      if (brushUniforms?.brushActive) {
         savedBrushActive = brushUniforms.brushActive.value
         savedGridVisible = brushUniforms.gridVisible.value
         brushUniforms.brushActive.value = 0.0
@@ -88,7 +88,7 @@ export function createMultiPassRenderer(): MultiPassRenderer {
         () => deps.refractionManager!.render()
       )
 
-      if (brushUniforms) {
+      if (brushUniforms?.brushActive) {
         brushUniforms.brushActive.value = savedBrushActive
         brushUniforms.gridVisible.value = savedGridVisible
       }

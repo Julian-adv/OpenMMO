@@ -205,7 +205,6 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
 
   const mat = new MeshStandardNodeMaterial()
   mat.side = THREE.DoubleSide
-  mat.roughness = 0.8
   mat.metalness = 0.0
 
   // ── Atlas UV: pick a random sub-tile per instance for atlas textures ──
@@ -264,6 +263,13 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
     finalColor = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
   }
   mat.colorNode = finalColor
+
+  // ── Roughness gradient: smooth at tip for specular glint, rough at base ──
+  const tipR = cfg?.tipRoughness ?? 0.08
+  // Per-instance variation: some blades are waxier than others
+  const roughnessVariation = iHash(0.53, 3.1).mul(0.15)
+  const tipRoughness = float(tipR).add(roughnessVariation)
+  mat.roughnessNode = float(0.8).mix(tipRoughness, uvY)
 
   // Do NOT set normalNode — the geometry normals (0,1,0) will be
   // automatically transformed to view-space by the default pipeline.

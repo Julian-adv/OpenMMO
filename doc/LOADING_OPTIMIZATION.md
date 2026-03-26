@@ -91,6 +91,26 @@ When entering the game, the player experienced ~40 seconds of unresponsive waiti
 
 **Files**: `GameSceneGrassLayer.svelte`
 
+### 8. Shared Atlas UV Pre-computation
+
+**Problem**: The terrain splat material samples 3 atlas textures (diffuse, normal, ORM) per layer. Each `sampleAtlas` call independently computed `atlasUv`, `gx`, `gy` — but these values are identical across all three atlases for the same layer. 4 layers × 3 duplicated UV computations = 8 redundant fract/mul/add + gradient chains in the generated WGSL.
+
+**Fix**: Pre-compute per-layer `atlasUv`, `gx`, `gy` as shared TSL nodes. Each layer's UV+gradient is computed once and reused by diffuse, normal, and ORM sampling. The `sampleAtlasLayer(atlasTex, layerIdx)` helper references these shared nodes instead of recomputing them.
+
+**Result**: ~24 fewer ALU instructions in the fragment shader WGSL.
+
+**Files**: `makeSplatStandardMaterial.ts`
+
+### 9. Deferred Editor Overlay Compilation
+
+**Problem**: The terrain `colorNode` included ~50 lines of grid/brush editor overlay code (3 grid scales, brush ring, tool color mixing). This code was compiled into the WGSL pipeline even during normal gameplay where `gridVisible=0` and `brushActive=0`. The uniform gates prevented visual output but the GPU compiler still had to compile all the code.
+
+**Fix**: Added `includeEditorOverlay` flag (default `false`) to `makeSplatStandardMaterial`. When false, the entire grid/brush code path is excluded from the TSL node graph → not present in the generated WGSL at all. On first editor/grid activation, `upgradeToEditorMaterials()` recreates all terrain materials with the overlay included (one-time recompilation).
+
+**Result**: Terrain colorNode WGSL ~40% smaller during initial load. Editor recompilation happens only once, on demand, and is cached by the browser for subsequent sessions.
+
+**Files**: `makeSplatStandardMaterial.ts`, `GameSceneTerrainLayer.svelte`, `multi-pass-rendering.ts`
+
 ## Architecture Notes
 
 ### Why WebGPU Pipeline Compilation Is Slow
@@ -127,4 +147,6 @@ The remaining loading time is dominated by GPU-side pipeline compilation for uni
 - Player model material (forward + shadow variants)
 - Wetness capture (reuses water material pipeline)
 
-Further reduction would require simplifying these materials (fewer texture samples, simpler node graphs) or waiting for Three.js/browser improvements in pipeline compilation speed.
+Further reduction could come from:
+- Unifying the flower billboard material into the blade grass compute pipeline (eliminates 1 unique pipeline)
+- Waiting for Three.js/browser improvements in pipeline compilation speed
