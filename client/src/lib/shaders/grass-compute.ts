@@ -157,9 +157,17 @@ export function createGrassComputeContext(
     const windTargetX = uWindDir.x.mul(windBendAngle)
     const windTargetZ = uWindDir.y.mul(windBendAngle)
 
-    // ── Static lean ──
-    const staticLeanX = iHash(0.31, 5.5).sub(0.5).mul(0.15)
-    const staticLeanZ = iHash(0.67, 6.1).sub(0.5).mul(0.15)
+    // ── Rest curvature: natural droop (local -Z → world space via rotation) ──
+    const rot = blade.w // instanceRotation
+    const restMag = float(0.1).add(iHash(0.82, 8.3).mul(0.2))
+    // Local -Z in world XZ = (-sin(rot), -cos(rot))
+    const restWorldX = sin(rot).mul(restMag).negate()
+    const restWorldZ = cos(rot).mul(restMag).negate()
+    // Small random perturbation for variety (±0.04)
+    const leanPerturbX = iHash(0.31, 5.5).sub(0.5).mul(0.08)
+    const leanPerturbZ = iHash(0.67, 6.1).sub(0.5).mul(0.08)
+    const staticLeanX = restWorldX.add(leanPerturbX)
+    const staticLeanZ = restWorldZ.add(leanPerturbZ)
 
     // ── Idle sway (gentle, low-frequency) ──
     const idlePhase = iHash(0.1, 0.5).mul(TAU)
