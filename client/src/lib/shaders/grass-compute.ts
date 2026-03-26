@@ -169,45 +169,48 @@ export function createGrassComputeContext(
     const windTargetX = uWindDir.x.mul(windBendAngle)
     const windTargetZ = uWindDir.y.mul(windBendAngle)
 
-    // ── Idle sway ──
-    const instanceHash = hash(
-      vec2(instanceIndex.toFloat().mul(0.1), float(0.5))
-    )
-    const phaseOffset = instanceHash.mul(6.283)
-    const idleSwayAngle = sin(uTime.mul(uWindFrequency).add(phaseOffset)).mul(
-      uWindStrength
-    )
-    const idleDirAngle = phaseOffset
-    const idleX = cos(idleDirAngle).mul(idleSwayAngle)
-    const idleZ = sin(idleDirAngle).mul(idleSwayAngle)
-
     // ── Static lean ──
     const leanHash1 = hash(vec2(instanceIndex.toFloat().mul(0.31), float(5.5)))
     const leanHash2 = hash(vec2(instanceIndex.toFloat().mul(0.67), float(6.1)))
     const staticLeanX = leanHash1.sub(0.5).mul(0.15)
     const staticLeanZ = leanHash2.sub(0.5).mul(0.15)
 
-    // ── High-frequency turbulence (flutter in strong wind) ──
+    // ── Idle sway (gentle, low-frequency) ──
+    const idlePhase = hash(
+      vec2(instanceIndex.toFloat().mul(0.1), float(0.5))
+    ).mul(6.283)
+    const idleDir = hash(
+      vec2(instanceIndex.toFloat().mul(0.37), float(1.9))
+    ).mul(6.283)
+    const idleSwayAngle = sin(uTime.mul(uWindFrequency).add(idlePhase)).mul(
+      uWindStrength
+    )
+    const idleX = cos(idleDir).mul(idleSwayAngle)
+    const idleZ = sin(idleDir).mul(idleSwayAngle)
+
+    // ── High-frequency turbulence (strong wind only) ──
     const turbHash1 = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.7)))
     const turbHash2 = hash(vec2(instanceIndex.toFloat().mul(0.43), float(9.3)))
     const turbHash3 = turbHash1.add(turbHash2).mul(43758.5453).fract()
-    // Three layered frequencies to avoid visible beating patterns
     const turbOsc1 = sin(uTime.mul(18.0).add(turbHash1.mul(6.283)))
     const turbOsc2 = sin(uTime.mul(25.0).add(turbHash2.mul(6.283))).mul(0.6)
     const turbOsc3 = sin(uTime.mul(31.7).add(turbHash3.mul(6.283))).mul(0.35)
-    // Ramp in only above a minimum wind bend to keep idle sway clean
-    const turbRamp = smoothstep(float(0.05), float(0.25), windBendAngle)
-    const turbAmp = windBendAngle.mul(0.12).mul(turbRamp)
+    const turbOsc = turbOsc1.add(turbOsc2).add(turbOsc3)
+    const turbAmp = windBendAngle.mul(0.12)
     const turbDirAngle = turbHash1
       .mul(3.1416)
       .add(uTime.mul(1.3).mul(turbHash2))
-    const turbOsc = turbOsc1.add(turbOsc2).add(turbOsc3)
     const turbX = cos(turbDirAngle).mul(turbOsc).mul(turbAmp)
     const turbZ = sin(turbDirAngle).mul(turbOsc).mul(turbAmp)
 
-    // Combined wind target (with idle + static lean + turbulence)
-    const totalWindX = windTargetX.add(idleX).add(staticLeanX).add(turbX)
-    const totalWindZ = windTargetZ.add(idleZ).add(staticLeanZ).add(turbZ)
+    // Crossfade: idle below mid-wind, turbulence above
+    const turbMix = smoothstep(float(0.1), float(0.25), windBendAngle)
+    const swayX = mix(idleX, turbX, turbMix)
+    const swayZ = mix(idleZ, turbZ, turbMix)
+
+    // Combined wind target
+    const totalWindX = windTargetX.add(staticLeanX).add(swayX)
+    const totalWindZ = windTargetZ.add(staticLeanZ).add(swayZ)
 
     // Lerp wind bend state — faster tracking when wind is strong so
     // high-frequency turbulence comes through instead of being smoothed away
