@@ -31,7 +31,12 @@ export function tileSubChunkRange(tileX: number, tileZ: number): SubChunkRange {
 /** Check if a sub-chunk key falls within a tile's sub-chunk range. */
 export function isKeyInTileRange(key: string, range: SubChunkRange): boolean {
   const [sx, sz] = key.split(',').map(Number)
-  return sx >= range.scMinX && sx <= range.scMaxX && sz >= range.scMinZ && sz <= range.scMaxZ
+  return (
+    sx >= range.scMinX &&
+    sx <= range.scMaxX &&
+    sz >= range.scMinZ &&
+    sz <= range.scMaxZ
+  )
 }
 
 /**
@@ -41,7 +46,7 @@ export function isKeyInTileRange(key: string, range: SubChunkRange): boolean {
  */
 export function partitionKeysFromRawData(
   rawData: Float32Array,
-  subChunkSize = SUB_CHUNK_SIZE,
+  subChunkSize = SUB_CHUNK_SIZE
 ): Map<string, number[]> {
   const count = rawData.length / 5
   const groups = new Map<string, number[]>()
@@ -66,7 +71,7 @@ export function partitionKeysFromRawData(
 export function filterKeysToTileRange<T>(
   chunks: Map<string, T>,
   tileX: number,
-  tileZ: number,
+  tileZ: number
 ): Map<string, T> {
   const range = tileSubChunkRange(tileX, tileZ)
   const filtered = new Map<string, T>()

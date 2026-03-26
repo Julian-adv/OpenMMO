@@ -29,7 +29,10 @@
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
-  import { generateAndSaveGrassData } from '../utils/grass-data'
+  import { generateAndSaveGrassData, removeGrassInRect, encodeGrassBuffer } from '../utils/grass-data'
+  import { worldToTileCoord, tileKey } from '../managers/terrain-height-types'
+  import type { HouseData } from '../types/housing'
+  import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
     const key = `${rx},${rz}`
@@ -350,6 +353,79 @@
     }
   }
 
+  /** Fetch all houses in a region and remove grass under their ground-floor rooms.
+   *  Returns the set of tile keys that have houses on them. */
+  async function removeGrassUnderHousesInRegion(
+    rx: number,
+    rz: number,
+    grassMgr: TerrainGrassDataManager
+  ): Promise<Set<string>> {
+    const GRASS_MARGIN = 1
+    const FETCH_BATCH = 16
+    const apiUrl = getTerrainApiUrl()
+
+    // Fetch housing data for every chunk in the region (batched)
+    const chunkCoords: [number, number][] = []
+    for (let tz = 0; tz < REGION_SIZE; tz++) {
+      for (let tx = 0; tx < REGION_SIZE; tx++) {
+        chunkCoords.push([rx * REGION_SIZE + tx, rz * REGION_SIZE + tz])
+      }
+    }
+    const houses: HouseData[] = []
+    for (let i = 0; i < chunkCoords.length; i += FETCH_BATCH) {
+      const batch = chunkCoords.slice(i, i + FETCH_BATCH)
+      const results = await Promise.all(
+        batch.map(([cx, cz]) =>
+          fetch(`${apiUrl}/api/housing/area/${cx}/${cz}`)
+            .then((r) => (r.ok ? (r.json() as Promise<HouseData[]>) : []))
+            .catch(() => [] as HouseData[])
+        )
+      )
+      houses.push(...results.flat())
+    }
+
+    // Collect removal rects per tile so each tile is saved at most once
+    const tileRects = new SvelteMap<string, { tx: number; tz: number; rects: [number, number, number, number][] }>()
+    for (const house of houses) {
+      for (const room of house.rooms) {
+        if (room.floorLevel !== 0 || room.roomType === 'stairwell') continue
+        const minX = house.origin.x + room.localX - GRASS_MARGIN
+        const minZ = house.origin.z + room.localZ - GRASS_MARGIN
+        const maxX = house.origin.x + room.localX + room.sizeX + GRASS_MARGIN
+        const maxZ = house.origin.z + room.localZ + room.sizeZ + GRASS_MARGIN
+
+        for (let tz = worldToTileCoord(minZ); tz <= worldToTileCoord(maxZ); tz++) {
+          for (let tx = worldToTileCoord(minX); tx <= worldToTileCoord(maxX); tx++) {
+            const key = tileKey(tx, tz)
+            let entry = tileRects.get(key)
+            if (!entry) {
+              entry = { tx, tz, rects: [] }
+              tileRects.set(key, entry)
+            }
+            entry.rects.push([minX, minZ, maxX, maxZ])
+          }
+        }
+      }
+    }
+
+    // Apply all rects per tile, then batch-save
+    const saves: Promise<void>[] = []
+    for (const { tx, tz, rects } of tileRects.values()) {
+      let data = grassMgr.getCachedGrassData(tx, tz)
+      if (!data) continue
+      for (const [minX, minZ, maxX, maxZ] of rects) {
+        const filtered = removeGrassInRect(data, minX, minZ, maxX, maxZ)
+        if (filtered) data = filtered
+      }
+      saves.push(grassMgr.saveGrassData(tx, tz, data))
+      if (saves.length >= 8) {
+        await Promise.all(saves.splice(0))
+      }
+    }
+    if (saves.length > 0) await Promise.all(saves)
+    return new Set(tileRects.keys())
+  }
+
   async function handleResplat() {
     const rx = playerRegionRx
     const rz = playerRegionRz
@@ -434,12 +510,39 @@
         )
       }
 
-      // Generate and save grass placement data
+      // Generate and save grass placement data, then suppress under houses
       const grassMgr = get(editorGrassDataManager)
       if (grassMgr) {
         await generateAndSaveGrassData(results, heightManager, grassMgr, (label) => {
           resplatProgress = label
         })
+
+        resplatProgress = 'Removing grass under houses...'
+        const houseTiles = await removeGrassUnderHousesInRegion(rx, rz, grassMgr)
+
+        // Update grass-original for tiles WITHOUT houses so demolition
+        // restores post-resplat grass. Skip tiles with houses — their
+        // original snapshot must keep pre-flatten Y values.
+        resplatProgress = 'Updating grass snapshots...'
+        const SAVE_BATCH = 8
+        const tilesToUpdate = results.filter(
+          (t) => !houseTiles.has(tileKey(t.tileX, t.tileZ))
+        )
+        for (let i = 0; i < tilesToUpdate.length; i += SAVE_BATCH) {
+          const batch = tilesToUpdate.slice(i, i + SAVE_BATCH)
+          await Promise.all(
+            batch.map((tile) => {
+              const cached = grassMgr.getCachedGrassData(tile.tileX, tile.tileZ)
+              if (!cached) return
+              const buf = encodeGrassBuffer(cached, tile.tileX, tile.tileZ)
+              return fetch(`${apiUrl}/api/terrain/grass-original/${tile.tileX}/${tile.tileZ}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/octet-stream' },
+                body: buf,
+              }).catch(() => {})
+            })
+          )
+        }
       }
 
       // Regenerate minimap

@@ -4,7 +4,6 @@ import {
   isKeyInTileRange,
   partitionKeysFromRawData,
   filterKeysToTileRange,
-  SUB_CHUNK_SIZE,
 } from './grass-sub-chunks'
 
 // TERRAIN_TILE_SIZE = 64, SUB_CHUNK_SIZE = 32
@@ -51,8 +50,16 @@ describe('partitionKeysFromRawData', () => {
     // Instance at world (10, 0, 5) → sub-chunk floor(10/32),floor(5/32) = "0,0"
     // Instance at world (-20, 0, -10) → sub-chunk "-1,-1"
     const rawData = new Float32Array([
-      10, 0, 5, 0, 1,     // → "0,0"
-      -20, 0, -10, 0, 1,  // → "-1,-1"
+      10,
+      0,
+      5,
+      0,
+      1, // → "0,0"
+      -20,
+      0,
+      -10,
+      0,
+      1, // → "-1,-1"
     ])
     const groups = partitionKeysFromRawData(rawData)
     expect(groups.get('0,0')).toEqual([0])
@@ -64,7 +71,11 @@ describe('partitionKeysFromRawData', () => {
     // An instance at exactly x=32.0 (boundary) falls into sub-chunk 1,
     // which belongs to tile (1,0), not tile (0,0).
     const rawData = new Float32Array([
-      32.0, 0, 0, 0, 1,  // → floor(32/32) = "1,0" (spillover!)
+      32.0,
+      0,
+      0,
+      0,
+      1, // → floor(32/32) = "1,0" (spillover!)
     ])
     const groups = partitionKeysFromRawData(rawData)
     expect(groups.has('1,0')).toBe(true)
@@ -76,20 +87,20 @@ describe('filterKeysToTileRange', () => {
   it('keeps keys within tile range and discards spillover', () => {
     // Simulate tile (0,0) data with one spillover key
     const chunks = new Map<string, number>([
-      ['-1,-1', 5000],  // valid: within tile (0,0)
-      ['-1,0', 3000],   // valid
-      ['0,-1', 4000],   // valid
-      ['0,0', 6000],    // valid
-      ['1,0', 2],       // spillover: belongs to tile (1,0)
-      ['0,1', 1],       // spillover: belongs to tile (0,1)
+      ['-1,-1', 5000], // valid: within tile (0,0)
+      ['-1,0', 3000], // valid
+      ['0,-1', 4000], // valid
+      ['0,0', 6000], // valid
+      ['1,0', 2], // spillover: belongs to tile (1,0)
+      ['0,1', 1], // spillover: belongs to tile (0,1)
     ])
 
     const filtered = filterKeysToTileRange(chunks, 0, 0)
     expect(filtered.size).toBe(4)
     expect(filtered.has('-1,-1')).toBe(true)
     expect(filtered.has('0,0')).toBe(true)
-    expect(filtered.has('1,0')).toBe(false)  // spillover removed
-    expect(filtered.has('0,1')).toBe(false)  // spillover removed
+    expect(filtered.has('1,0')).toBe(false) // spillover removed
+    expect(filtered.has('0,1')).toBe(false) // spillover removed
   })
 })
 
@@ -118,8 +129,8 @@ describe('tile boundary overwrite prevention', () => {
       ['1,0', 45000],
       ['2,-1', 30000],
       ['2,0', 41000],
-      ['0,0', 2],       // spillover from boundary jitter!
-      ['0,-1', 1],      // another spillover
+      ['0,0', 2], // spillover from boundary jitter!
+      ['0,-1', 1], // another spillover
     ])
     const tile10filtered = filterKeysToTileRange(tile10data, 1, 0)
     for (const [k, v] of tile10filtered) cache.set(k, v)
