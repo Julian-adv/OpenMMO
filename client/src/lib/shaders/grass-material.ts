@@ -314,8 +314,12 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const idleBendX = cos(phaseOffset).mul(idleSwayAngle)
   const idleBendZ = sin(phaseOffset).mul(idleSwayAngle)
 
+  // ── Rest curvature: natural droop in blade's local -Z ──
+  const restCurveMag = float(0.08).add(iHash(0.82, 8.3).mul(0.22))
+  const restBendZ = restCurveMag.negate()
+
   const totalBendX = bendFromWindX.add(idleBendX)
-  const totalBendZ = bendFromWindZ.add(idleBendZ)
+  const totalBendZ = bendFromWindZ.add(idleBendZ).add(restBendZ)
 
   // Bend magnitude and normalized direction
   const bendMag = totalBendX
