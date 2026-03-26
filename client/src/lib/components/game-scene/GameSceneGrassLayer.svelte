@@ -9,6 +9,12 @@
   import { windDebugVisible } from '../../stores/debugStore'
   import { getThinnedInstanceData } from '../../utils/grass-data'
   import {
+    SUB_CHUNK_SIZE,
+    tileSubChunkRange,
+    isKeyInTileRange,
+    partitionKeysFromRawData,
+  } from '../../utils/grass-sub-chunks'
+  import {
     loadFlowerBillboardGeometry,
     loadFlowerColorTexture,
     createGrassMaterial,
@@ -44,7 +50,6 @@
   }: Props = $props()
 
   // ── Sub-chunk grass rendering ──────────────────────────
-  const SUB_CHUNK_SIZE = 32
   const SUB_CHUNK_GRID_RADIUS = 1 // 1 = 3×3 grid (96m coverage)
   const GRID_COUNT = (SUB_CHUNK_GRID_RADIUS * 2 + 1) ** 2 // 9
   const MESH_CAPACITY = 131072
@@ -519,19 +524,7 @@
     const count = rawData.length / 5
     if (count === 0) return new Map()
 
-    // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const groups = new Map<string, number[]>()
-    for (let i = 0; i < count; i++) {
-      const x = rawData[i * 5]
-      const z = rawData[i * 5 + 2]
-      const key = `${Math.floor(x / SUB_CHUNK_SIZE)},${Math.floor(z / SUB_CHUNK_SIZE)}`
-      let list = groups.get(key)
-      if (!list) {
-        list = []
-        groups.set(key, list)
-      }
-      list.push(i)
-    }
+    const groups = partitionKeysFromRawData(rawData)
 
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const result = new Map<string, SubChunkData>()
@@ -797,11 +790,10 @@
             // Grass placement jitter can push instances across tile boundaries;
             // those spillover instances must be ignored so a later-loading tile
             // doesn't overwrite a neighbor's dense data with a handful of strays.
-            const { scMinX, scMaxX, scMinZ, scMaxZ } = tileSubChunkRange(tileX, tileZ)
+            const tileRange = tileSubChunkRange(tileX, tileZ)
             const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
             for (const key of allKeys) {
-              const [sx, sz] = key.split(',').map(Number)
-              if (sx < scMinX || sx > scMaxX || sz < scMinZ || sz > scMaxZ) continue
+              if (!isKeyInTileRange(key, tileRange)) continue
               subChunkCache.set(key, {
                 short: shortChunks.get(key) ?? EMPTY_SUB_CHUNK,
                 tall: tallChunks.get(key) ?? EMPTY_SUB_CHUNK,
@@ -844,19 +836,6 @@
         tallKeyToSlot.delete(key)
         flowerKeyToSlot.delete(key)
       }
-    }
-  }
-
-  function tileSubChunkRange(tileX: number, tileZ: number) {
-    const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-    const tileMaxX = tileX * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2
-    const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-    const tileMaxZ = tileZ * TERRAIN_TILE_SIZE + TERRAIN_TILE_SIZE / 2
-    return {
-      scMinX: Math.floor(tileMinX / SUB_CHUNK_SIZE),
-      scMaxX: Math.floor((tileMaxX - 1) / SUB_CHUNK_SIZE),
-      scMinZ: Math.floor(tileMinZ / SUB_CHUNK_SIZE),
-      scMaxZ: Math.floor((tileMaxZ - 1) / SUB_CHUNK_SIZE),
     }
   }
 
