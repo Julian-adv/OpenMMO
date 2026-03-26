@@ -17,13 +17,9 @@
   import {
     loadFlowerBillboardGeometry,
     loadFlowerColorTexture,
-    createGrassMaterial,
     TALL_GRASS_CONFIG,
     FLOWER_CONFIG,
-    GRASS_INSTANCE_POS_ATTR,
-    GRASS_INSTANCE_ROT_ATTR,
     type GrassMaterialConfig,
-    type GrassMaterialUniforms,
     type WindState,
   } from '../../shaders/grass-material'
   import { GUST_WAVE_COUNT } from '../../shaders/grass-shared'
@@ -60,13 +56,11 @@
   const _shortGrassGeometry: THREE.BufferGeometry = createBladeGeometry(5)
   const _tallGrassGeometry: THREE.BufferGeometry = createBladeGeometry(10)
   let _flowerGeometry: THREE.BufferGeometry | null = null
-  let _flowerMaterial: THREE.Material | null = null
-  // Flower uses the old uniform system
-  let flowerUniforms: GrassMaterialUniforms | null = null
-  let flowerBaseWindStrength = 0
-  // Blade grass uses shared compute uniforms (one set per type)
+  let _flowerCfg: GrassMaterialConfig | null = null
+  // Shared compute uniforms (one set per grass type)
   let shortComputeUniforms: GrassComputeUniforms | null = null
   let tallComputeUniforms: GrassComputeUniforms | null = null
+  let flowerComputeUniforms: GrassComputeUniforms | null = null
   let assetsReady = $state(false)
 
   // ── Mesh management via THREE.Group (no Svelte proxy) ──
@@ -97,21 +91,21 @@
   /** Eagerly create grass materials + one mesh per type so compileAsync can
    *  pre-compile the grass shader pipelines. Returns true when done. */
   export function ensureMaterialsForCompile(): boolean {
-    if (!ensureMaterials() || !_flowerGeometry || !_flowerMaterial) return false
+    if (!ensureMaterials() || !_flowerGeometry) return false
     // Create at least one slot per type for pipeline compilation.
-    // Short/tall slots get compute contexts + blade materials lazily in rebuildType.
-    // Flower just needs a slot mesh.
-    ensureFlowerSlotMesh(0)
+    ensureBladeSlot(flowerSlots, 0, _flowerGeometry, flowerComputeUniforms!,
+      _flowerCfg!, FLOWER_MESH_CAPACITY)
     return true
   }
   // Per-sub-chunk slot arrays. Short/tall now have paired compute contexts.
   interface BladeSlot {
     mesh: THREE.InstancedMesh
     ctx: GrassComputeContext
+    capacity: number
   }
   let shortSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
   let tallSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
-  let flowerMeshes: THREE.InstancedMesh[] = []
+  let flowerSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
 
   // Load flower assets asynchronously (blade geometry is already created above)
   let _flowerColorMap: THREE.Texture | null = null
@@ -125,17 +119,15 @@
     assetsReady = true
   })
 
-  /** Create shared compute uniforms and flower material on first use. */
+  /** Create shared compute uniforms for all grass types on first use. */
   function ensureMaterials(): boolean {
-    if (shortComputeUniforms && tallComputeUniforms && _flowerMaterial) return true
+    if (shortComputeUniforms && tallComputeUniforms && flowerComputeUniforms) return true
     if (!_flowerGeometry || !_flowerColorMap) return false
 
     shortComputeUniforms = createSharedComputeUniforms()
     tallComputeUniforms = createSharedComputeUniforms(TALL_GRASS_CONFIG)
-    const flowerResult = createGrassMaterial({ ...FLOWER_CONFIG, colorMap: _flowerColorMap })
-    _flowerMaterial = flowerResult.material
-    flowerUniforms = flowerResult.uniforms
-    flowerBaseWindStrength = flowerResult.uniforms.uWindStrength.value
+    flowerComputeUniforms = createSharedComputeUniforms(FLOWER_CONFIG)
+    _flowerCfg = { ...FLOWER_CONFIG, colorMap: _flowerColorMap! }
     return true
   }
 
@@ -144,17 +136,18 @@
     baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     cfg?: GrassMaterialConfig,
+    capacity = MESH_CAPACITY,
   ): BladeSlot {
-    const ctx = createGrassComputeContext(MESH_CAPACITY, uniforms)
+    const ctx = createGrassComputeContext(capacity, uniforms)
     const mat = createBladeMaterial(ctx, cfg)
     const geom = baseGeometry.clone()
-    const mesh = new THREE.InstancedMesh(geom, mat, MESH_CAPACITY)
+    const mesh = new THREE.InstancedMesh(geom, mat, capacity)
     // Do NOT set mesh.count = 0 here! WebGPU allocates GPU buffers based on
     // mesh.count at first render. If 0, the buffer can never grow later.
     mesh.castShadow = false
     mesh.receiveShadow = true
     mesh.frustumCulled = true
-    return { mesh, ctx }
+    return { mesh, ctx, capacity }
   }
 
   /** Ensure a blade slot exists at the given index. */
@@ -164,32 +157,12 @@
     baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     cfg?: GrassMaterialConfig,
+    capacity = MESH_CAPACITY,
   ): BladeSlot {
     if (!slots[index]) {
-      slots[index] = createBladeSlot(baseGeometry, uniforms, cfg)
+      slots[index] = createBladeSlot(baseGeometry, uniforms, cfg, capacity)
     }
     return slots[index]!
-  }
-
-  /** Ensure a flower mesh exists at the given index. */
-  function ensureFlowerSlotMesh(index: number): THREE.InstancedMesh {
-    if (!flowerMeshes[index]) {
-      const geom = _flowerGeometry!.clone()
-      geom.setAttribute(
-        GRASS_INSTANCE_POS_ATTR,
-        new THREE.InstancedBufferAttribute(new Float32Array(FLOWER_MESH_CAPACITY * 2), 2),
-      )
-      geom.setAttribute(
-        GRASS_INSTANCE_ROT_ATTR,
-        new THREE.InstancedBufferAttribute(new Float32Array(FLOWER_MESH_CAPACITY), 1),
-      )
-      const mesh = new THREE.InstancedMesh(geom, _flowerMaterial!, FLOWER_MESH_CAPACITY)
-      mesh.castShadow = false
-      mesh.receiveShadow = true
-      mesh.frustumCulled = true
-      flowerMeshes[index] = mesh
-    }
-    return flowerMeshes[index]
   }
 
   // ── Wind debug arrow ──────────────────────────────────────
@@ -415,10 +388,11 @@
     cachedWindDirX = Math.cos(windAngle)
     cachedWindDirZ = Math.sin(windAngle)
 
-    // Update shared compute uniforms (blade grass: short + tall)
+    // Update shared compute uniforms (all grass types)
     const computeUniformSets: GrassComputeUniforms[] = []
     if (shortComputeUniforms) computeUniformSets.push(shortComputeUniforms)
     if (tallComputeUniforms) computeUniformSets.push(tallComputeUniforms)
+    if (flowerComputeUniforms) computeUniformSets.push(flowerComputeUniforms)
 
     for (const u of computeUniformSets) {
       u.uTime.value = elapsedTime
@@ -445,37 +419,15 @@
     if (tallComputeUniforms) {
       tallComputeUniforms.uWindStrength.value = (TALL_GRASS_CONFIG.windStrength ?? 0.12) * windStrengthMul
     }
-
-    // Update flower uniforms (old system)
-    if (flowerUniforms) {
-      const fu = flowerUniforms
-      fu.uTime.value = elapsedTime
-      fu.uWindStrength.value = flowerBaseWindStrength * windStrengthMul
-      fu.uWindDir.value.set(cachedWindDirX, cachedWindDirZ)
-      fu.uGustStrength.value = windStrengthMul
-      for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
-        fu.uWaveAngles[wi].value = waveAngles[wi]
-        fu.uWaveAmps[wi].value = waveAmplitudes[wi]
-        fu.uWaveParams[wi].value.copy(waveParams[wi])
-      }
-      // Use trail[0] as player current position for flower interaction
-      if (playerPosition) {
-        fu.uTrail[0].value.set(playerPosition.x, playerPosition.z, 1.0)
-      } else {
-        fu.uTrail[0].value.set(0, 0, 0)
-      }
+    if (flowerComputeUniforms) {
+      flowerComputeUniforms.uWindStrength.value = (FLOWER_CONFIG.windStrength ?? 0.04) * windStrengthMul
     }
 
     // ── Dispatch compute shaders for active blade slots ──
     if (renderer) {
-      for (const slot of shortSlots) {
-        if (slot && slot.ctx.count > 0) {
-          renderer.compute(slot.ctx.computeUpdate)
-        }
-      }
-      for (const slot of tallSlots) {
-        if (slot && slot.ctx.count > 0) {
-          renderer.compute(slot.ctx.computeUpdate)
+      for (const slots of [shortSlots, tallSlots, flowerSlots]) {
+        for (const slot of slots) {
+          if (slot && slot.ctx.count > 0) renderer.compute(slot.ctx.computeUpdate)
         }
       }
     }
@@ -494,7 +446,6 @@
 
   // ── Sub-chunk data cache ──────────────────────────────
   interface SubChunkData {
-    matrices: Float32Array
     worldXZ: Float32Array
     worldY: Float32Array
     rotations: Float32Array
@@ -508,7 +459,7 @@
     flower: SubChunkData
   }
 
-  const EMPTY_SUB_CHUNK: SubChunkData = { matrices: new Float32Array(0), worldXZ: new Float32Array(0), worldY: new Float32Array(0), rotations: new Float32Array(0), scales: new Float32Array(0), count: 0 }
+  const EMPTY_SUB_CHUNK: SubChunkData = { worldXZ: new Float32Array(0), worldY: new Float32Array(0), rotations: new Float32Array(0), scales: new Float32Array(0), count: 0 }
 
   // Non-reactive internal caches — intentionally plain Map/Set for performance
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -520,7 +471,7 @@
   let needsRebuild = false
 
   // ── Partition raw instance data into sub-chunks ──────────
-  function partitionIntoSubChunks(rawData: Float32Array, needMatrices = false): Map<string, SubChunkData> {
+  function partitionIntoSubChunks(rawData: Float32Array): Map<string, SubChunkData> {
     const count = rawData.length / 5
     if (count === 0) return new Map()
 
@@ -530,7 +481,6 @@
     const result = new Map<string, SubChunkData>()
     for (const [key, indices] of groups) {
       const n = indices.length
-      const matrices = needMatrices ? new Float32Array(n * 16) : new Float32Array(0)
       const worldXZ = new Float32Array(n * 2)
       const worldY = new Float32Array(n)
       const rotations = new Float32Array(n)
@@ -544,28 +494,6 @@
         const rot = rawData[base + 3]
         const scale = rawData[base + 4]
 
-        if (needMatrices) {
-          const cos = Math.cos(rot) * scale
-          const sin = Math.sin(rot) * scale
-          const mi = j * 16
-          matrices[mi] = cos
-          matrices[mi + 1] = 0
-          matrices[mi + 2] = -sin
-          matrices[mi + 3] = 0
-          matrices[mi + 4] = 0
-          matrices[mi + 5] = scale
-          matrices[mi + 6] = 0
-          matrices[mi + 7] = 0
-          matrices[mi + 8] = sin
-          matrices[mi + 9] = 0
-          matrices[mi + 10] = cos
-          matrices[mi + 11] = 0
-          matrices[mi + 12] = x
-          matrices[mi + 13] = y
-          matrices[mi + 14] = z
-          matrices[mi + 15] = 1
-        }
-
         worldXZ[j * 2] = x
         worldXZ[j * 2 + 1] = z
         worldY[j] = y
@@ -573,7 +501,7 @@
         scales[j] = scale
       }
 
-      result.set(key, { matrices, worldXZ, worldY, rotations, scales, count: n })
+      result.set(key, { worldXZ, worldY, rotations, scales, count: n })
     }
     return result
   }
@@ -605,11 +533,12 @@
 
     rebuildBladeType(shortSlots, _shortGrassGeometry, shortComputeUniforms!, shortKeyToSlot, wantedKeys, (c) => c?.short)
     rebuildBladeType(tallSlots, _tallGrassGeometry, tallComputeUniforms!, tallKeyToSlot, wantedKeys, (c) => c?.tall, TALL_GRASS_CONFIG)
-    rebuildFlowerType(wantedKeys)
+    rebuildBladeType(flowerSlots, _flowerGeometry!, flowerComputeUniforms!, flowerKeyToSlot, wantedKeys, (c) => c?.flower,
+      _flowerCfg!, FLOWER_MESH_CAPACITY)
     dirtySubChunks.clear()
   }
 
-  /** Rebuild blade grass slots (short or tall) using compute contexts. */
+  /** Rebuild blade grass slots (short, tall, or flower) using compute contexts. */
   function rebuildBladeType(
     slots: (BladeSlot | null)[],
     baseGeometry: THREE.BufferGeometry,
@@ -618,6 +547,7 @@
     wantedKeys: Set<string>,
     getData: (cached: SubChunkBundle | undefined) => SubChunkData | undefined,
     cfg?: GrassMaterialConfig,
+    capacity = MESH_CAPACITY,
   ) {
     const freeSlots: number[] = []
     for (const [key, slot] of keyToSlot) {
@@ -655,50 +585,9 @@
       if (freeSlots.length === 0) continue
       const slot = freeSlots.pop()!
 
-      const bladeSlot = ensureBladeSlot(slots, slot, baseGeometry, uniforms, cfg)
+      const bladeSlot = ensureBladeSlot(slots, slot, baseGeometry, uniforms, cfg, capacity)
       writeBladeSlotData(bladeSlot, data, key)
       keyToSlot.set(key, slot)
-    }
-  }
-
-  /** Rebuild flower slots (still uses old InstancedMesh + attribute pattern). */
-  function rebuildFlowerType(wantedKeys: Set<string>) {
-    const freeSlots: number[] = []
-    for (const [key, slot] of flowerKeyToSlot) {
-      if (!wantedKeys.has(key)) {
-        if (flowerMeshes[slot]) {
-          flowerMeshes[slot].count = 0
-          if (flowerMeshes[slot].parent) flowerMeshes[slot].parent.remove(flowerMeshes[slot])
-        }
-        flowerKeyToSlot.delete(key)
-        freeSlots.push(slot)
-      }
-    }
-
-    const usedSlots = new Set(flowerKeyToSlot.values())
-    for (let i = 0; i < GRID_COUNT; i++) {
-      if (!usedSlots.has(i)) freeSlots.push(i)
-    }
-
-    for (const key of wantedKeys) {
-      if (flowerKeyToSlot.has(key)) {
-        if (dirtySubChunks.has(key)) {
-          const data = subChunkCache.get(key)?.flower
-          if (data && data.count > 0) {
-            writeFlowerMeshData(flowerMeshes[flowerKeyToSlot.get(key)!], data, key)
-          }
-        }
-        continue
-      }
-
-      const data = subChunkCache.get(key)?.flower
-      if (!data || data.count === 0) continue
-      if (freeSlots.length === 0) continue
-      const slot = freeSlots.pop()!
-
-      const mesh = ensureFlowerSlotMesh(slot)
-      writeFlowerMeshData(mesh, data, key)
-      flowerKeyToSlot.set(key, slot)
     }
   }
 
@@ -715,7 +604,7 @@
 
   /** Write blade data to a compute slot's buffers + set up the mesh. */
   function writeBladeSlotData(slot: BladeSlot, data: SubChunkData, subChunkKey: string) {
-    const count = Math.min(data.count, MESH_CAPACITY)
+    const count = Math.min(data.count, slot.capacity)
 
     // Write placement data into compute bladeData + bladeScale buffers
     writeBladeData(slot.ctx, data.worldXZ, data.worldY, data.rotations, data.scales, count)
@@ -730,34 +619,6 @@
     grassGroup.add(slot.mesh)
   }
 
-  /** Write flower data (old attribute-based pattern). */
-  function writeFlowerMeshData(mesh: THREE.InstancedMesh, data: SubChunkData, subChunkKey: string) {
-    if (data.count === 0) {
-      mesh.count = 0
-      if (mesh.parent) mesh.parent.remove(mesh)
-      return
-    }
-
-    const count = Math.min(data.count, FLOWER_MESH_CAPACITY)
-
-    const matArr = mesh.instanceMatrix.array as Float32Array
-    matArr.set(data.matrices.subarray(0, count * 16))
-    mesh.instanceMatrix.needsUpdate = true
-
-    const xzAttr = mesh.geometry.getAttribute(GRASS_INSTANCE_POS_ATTR) as THREE.InstancedBufferAttribute
-    ;(xzAttr.array as Float32Array).set(data.worldXZ.subarray(0, count * 2))
-    xzAttr.needsUpdate = true
-
-    const rotAttr = mesh.geometry.getAttribute(GRASS_INSTANCE_ROT_ATTR) as THREE.InstancedBufferAttribute
-    ;(rotAttr.array as Float32Array).set(data.rotations.subarray(0, count))
-    rotAttr.needsUpdate = true
-
-    mesh.count = count
-    setBoundingSphere(mesh, subChunkKey)
-
-    if (mesh.parent) mesh.parent.remove(mesh)
-    grassGroup.add(mesh)
-  }
 
   // ── Tile data lifecycle ─────────────────────────────────
   $effect(() => {
@@ -784,7 +645,7 @@
           if (grassData) {
             const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
             const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
-            const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'), true)
+            const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
 
             // Only cache sub-chunks within this tile's spatial range.
             // Grass placement jitter can push instances across tile boundaries;
@@ -853,7 +714,7 @@
       // Re-partition updated data
       const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
       const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
-      const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'), true)
+      const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
 
       const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
       for (const key of allKeys) {

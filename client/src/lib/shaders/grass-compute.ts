@@ -3,6 +3,8 @@ import { MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   Fn,
   uniform,
+  texture,
+  vec2,
   vec3,
   vec4,
   float,
@@ -11,6 +13,7 @@ import {
   mix,
   smoothstep,
   sqrt,
+  floor,
   select,
   positionLocal,
   normalLocal,
@@ -30,9 +33,22 @@ import {
   computeWidthScale,
 } from './grass-shared'
 
-// ── Per-instance attribute names (used by both blade & flower) ───
-export const BLADE_INSTANCE_POS_ATTR = 'aInstanceWorldXZ'
-export const BLADE_INSTANCE_ROT_ATTR = 'aInstanceRotation'
+// ── 1×1 white fallback texture (singleton) ──────────────────
+// Used by blade grass so the shader graph always includes texture sampling,
+// enabling Three.js to deduplicate the pipeline with flower materials.
+let _whiteTex: THREE.DataTexture | null = null
+function getWhiteTexture(): THREE.DataTexture {
+  if (!_whiteTex) {
+    _whiteTex = new THREE.DataTexture(
+      new Uint8Array([255, 255, 255, 255]),
+      1,
+      1,
+      THREE.RGBAFormat
+    )
+    _whiteTex.needsUpdate = true
+  }
+  return _whiteTex
+}
 
 // ── Compute context: per-sub-chunk GPU storage + dispatch ────────
 
@@ -299,12 +315,37 @@ export function createBladeMaterial(
   mat.side = THREE.DoubleSide
   mat.metalness = 0.0
   mat.transparent = true
-  const uvY = attribute('uv').y
-  mat.opacityNode = smoothstep(float(0.0), float(0.08), uvY)
-  // Lower roughness at blade tips for directional light glint
+  mat.alphaTest = 0.1
+  mat.envMapIntensity = 0.1
+
+  const origUV = attribute('uv')
+  const uvY = origUV.y
+
+  // ── Texture sampling (always present for pipeline dedup) ──
+  // Blade uses 1×1 white fallback; flower uses actual atlas texture.
+  const colorMap = cfg?.colorMap ?? getWhiteTexture()
+  const uUseTexture = uniform(cfg?.colorMap ? 1.0 : 0.0)
+  const uAtlasGrid = uniform(cfg?.atlasGrid ?? 1)
+
+  // Atlas UV: pick a random sub-tile per instance.
+  // Always computed (with uniforms, not constants) so the WGSL node graph is
+  // identical across blade/flower materials → pipeline dedup.
+  // When atlasGrid=1, invGrid=1 so UV passes through unchanged.
+  const totalCells = uAtlasGrid.mul(uAtlasGrid)
+  const atlasHash = iHash(0.19, 7.3)
+  const idx = floor(atlasHash.mul(totalCells).min(totalCells.sub(0.001)))
+  const invGrid = float(1.0).div(uAtlasGrid)
+  const col = idx.sub(floor(idx.mul(invGrid)).mul(uAtlasGrid))
+  const row = floor(idx.mul(invGrid))
+  const texUV = vec2(
+    origUV.x.mul(invGrid).add(col.mul(invGrid)),
+    origUV.y.mul(invGrid).add(row.mul(invGrid))
+  )
+  const texSample = texture(colorMap, texUV)
+
+  // ── Roughness ──
   const tipSheen = smoothstep(float(0.65), float(1.0), uvY)
   mat.roughnessNode = mix(float(0.55), float(tipRough), tipSheen)
-  mat.envMapIntensity = 0.1
 
   // ── Read from compute buffers ──────────────────────────
   const blade = ctx.bladeData.element(instanceIndex)
@@ -316,7 +357,7 @@ export function createBladeMaterial(
   const instanceWorldY = blade.z
   const instanceRotation = blade.w
 
-  // ── Color: base → tip gradient ─────────────────────────
+  // ── Color: unified gradient/texture ─────────────────────
   const baseColor = vec3(bc[0], bc[1], bc[2])
   const tipColor = vec3(tc[0], tc[1], tc[2])
 
@@ -325,7 +366,17 @@ export function createBladeMaterial(
     tipColor,
     uvY
   )
-  mat.colorNode = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
+  // Blade (useTexture=0): gradient * hueShift; Flower (useTexture=1): texture color
+  const blendedColor = mix(
+    gradientColor.mul(hueShift),
+    texSample.rgb,
+    uUseTexture
+  )
+  mat.colorNode = blendedColor.mul(brightness).mul(rootAO)
+
+  // ── Opacity: unified base-fade / texture-alpha ──────────
+  const baseFade = smoothstep(float(0.0), float(0.08), uvY)
+  mat.opacityNode = mix(baseFade, texSample.a, uUseTexture)
 
   // ── Per-instance shape variation ───────────────────────
   const widthScale = computeWidthScale(wsMin, wsExt)
