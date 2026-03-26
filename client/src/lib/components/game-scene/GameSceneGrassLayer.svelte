@@ -310,6 +310,25 @@
   let curScx = 0
   let curScz = 0
 
+  // Diagnostic: 30 frames after last rebuild, verify all wanted sub-chunks
+  // have assigned slots. Only logs when a problem is detected.
+  let diagCountdown = -1
+
+  function checkBladeSlot(
+    issues: string[], key: string, label: string,
+    count: number, slot: number | undefined, slots: (BladeSlot | null)[],
+  ) {
+    if (count > 0 && slot === undefined) {
+      issues.push(`${key}: ${label} has ${count} instances but NO SLOT`)
+      return
+    }
+    const entry = slot !== undefined ? slots[slot] : null
+    if (!entry) return
+    if (entry.ctx.count === 0) issues.push(`${key}: ${label} slot ${slot} ctx.count=0`)
+    if (entry.mesh.count === 0) issues.push(`${key}: ${label} slot ${slot} mesh.count=0`)
+    if (!entry.mesh.parent) issues.push(`${key}: ${label} slot ${slot} NOT IN SCENE`)
+  }
+
   export function update(deltaTime: number, renderer?: WebGPURenderer) {
     if (!assetsReady) return
     const dt = Math.min(deltaTime / 1000, 0.1)
@@ -326,7 +345,31 @@
       }
     }
 
-    if (needsRebuild) rebuildGrassBuffers()
+    if (needsRebuild) {
+      rebuildGrassBuffers()
+      diagCountdown = 30
+    }
+
+    if (diagCountdown > 0) {
+      diagCountdown--
+    } else if (diagCountdown === 0) {
+      diagCountdown = -1
+      const issues: string[] = []
+      for (const key of getActiveSubChunkKeys()) {
+        const cached = subChunkCache.get(key)
+        if (!cached) {
+          issues.push(`${key}: NO CACHE DATA`)
+          continue
+        }
+        checkBladeSlot(issues, key, 'short', cached.short?.count ?? 0, shortKeyToSlot.get(key), shortSlots)
+        checkBladeSlot(issues, key, 'tall', cached.tall?.count ?? 0, tallKeyToSlot.get(key), tallSlots)
+      }
+      if (issues.length > 0) {
+        console.error(`[GrassDiag] Issues detected:\n  ${issues.join('\n  ')}`)
+        console.error(`[GrassDiag] fetchedTiles=${[...fetchedTiles].join(',')} pendingTiles=${[...pendingTiles].join(',')}`)
+        console.error(`[GrassDiag] subChunkCache keys: ${[...subChunkCache.keys()].join(' ')}`)
+      }
+    }
 
     // ── Per-wave direction (hold → fade-out → snap → fade-in → hold) ──
     for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
