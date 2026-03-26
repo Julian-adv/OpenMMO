@@ -6,6 +6,7 @@ import {
   VERTS_PER_SIDE,
 } from './terrain-constants'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
+import type { HouseData } from '../types/housing'
 
 /** Height above which shore holes in water shader reveal sand underneath (~0.2-0.25m depth) */
 const VISIBLE_SAND_THRESHOLD = -0.25
@@ -25,6 +26,7 @@ const TEXTURE_COLORS: Record<string, [number, number, number]> = {
 const COLOR_SHALLOW_WATER: [number, number, number] = [100, 160, 220]
 const COLOR_DEEP_WATER: [number, number, number] = [30, 60, 150]
 const COLOR_FALLBACK: [number, number, number] = [120, 120, 100]
+const COLOR_BUILDING: [number, number, number] = [220, 140, 40]
 
 function decodeHeight(value: number): number {
   return value * 0.05 - 500.0
@@ -142,6 +144,34 @@ export async function generateRegionMinimap(
     }
   }
 
+  // Overlay building footprints
+  // Terrain tiles are centered: tile tx covers [tx*64-32, tx*64+32).
+  // The first tile in the region (lx=0, tx=rx*16) starts at rx*1024-32.
+  const houses = await fetchHousesInRegion(rx, rz, apiUrl)
+  const regionWorldX = rx * REGION_SIZE * TILE_DIM - TILE_DIM / 2
+  const regionWorldZ = rz * REGION_SIZE * TILE_DIM - TILE_DIM / 2
+
+  for (const house of houses) {
+    for (const room of house.rooms) {
+      if (room.floorLevel !== 0) continue
+      const roomWorldX = house.origin.x + room.localX - regionWorldX
+      const roomWorldZ = house.origin.z + room.localZ - regionWorldZ
+      const minPx = Math.max(0, Math.floor(roomWorldX))
+      const minPz = Math.max(0, Math.floor(roomWorldZ))
+      const maxPx = Math.min(MAP_PX, Math.ceil(roomWorldX + room.sizeX))
+      const maxPz = Math.min(MAP_PX, Math.ceil(roomWorldZ + room.sizeZ))
+
+      for (let pz = minPz; pz < maxPz; pz++) {
+        for (let px = minPx; px < maxPx; px++) {
+          const idx = (pz * MAP_PX + px) * 4
+          pixels[idx] = COLOR_BUILDING[0]
+          pixels[idx + 1] = COLOR_BUILDING[1]
+          pixels[idx + 2] = COLOR_BUILDING[2]
+        }
+      }
+    }
+  }
+
   ctx.putImageData(imageData, 0, 0)
 
   onProgress?.(90, 'Encoding PNG...')
@@ -162,6 +192,42 @@ export async function generateRegionMinimap(
   })
 
   return blob
+}
+
+/** Fetch all houses in a region, batched and deduplicated. */
+export async function fetchHousesInRegion(
+  rx: number,
+  rz: number,
+  apiUrl: string
+): Promise<HouseData[]> {
+  const BATCH_SIZE = 16
+  const chunkCoords: [number, number][] = []
+  for (let tz = 0; tz < REGION_SIZE; tz++) {
+    for (let tx = 0; tx < REGION_SIZE; tx++) {
+      chunkCoords.push([rx * REGION_SIZE + tx, rz * REGION_SIZE + tz])
+    }
+  }
+
+  const houses: HouseData[] = []
+  for (let i = 0; i < chunkCoords.length; i += BATCH_SIZE) {
+    const batch = chunkCoords.slice(i, i + BATCH_SIZE)
+    const results = await Promise.all(
+      batch.map(([cx, cz]) =>
+        fetch(`${apiUrl}/api/housing/area/${cx}/${cz}`)
+          .then((r) => (r.ok ? (r.json() as Promise<HouseData[]>) : []))
+          .catch(() => [] as HouseData[])
+      )
+    )
+    houses.push(...results.flat())
+  }
+
+  // A house may span multiple chunks
+  const seen = new Set<string>()
+  return houses.filter((h) => {
+    if (seen.has(h.id)) return false
+    seen.add(h.id)
+    return true
+  })
 }
 
 /** Build the server URL for a region minimap (HTTP-cacheable). */
