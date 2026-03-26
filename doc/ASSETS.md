@@ -148,6 +148,8 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 - reed_roof_03_1k.glb -> https://polyhaven.com/a/reed_roof_03
 - sandstone_blocks_04_1k.glb -> https://polyhaven.com/a/sandstone_blocks_04
 - worn_mossy_plasterwall_1k.glb -> https://polyhaven.com/a/worn_mossy_plasterwall
+- beige_wall_001.glb -> https://polyhaven.com/a/beige_wall_001
+- rough_linen.glb -> https://polyhaven.com/a/rough_linen
 
 ## BGM
 

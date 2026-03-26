@@ -187,12 +187,32 @@ export function createGrassComputeContext(
     const staticLeanX = leanHash1.sub(0.5).mul(0.15)
     const staticLeanZ = leanHash2.sub(0.5).mul(0.15)
 
-    // Combined wind target (with idle + static lean)
-    const totalWindX = windTargetX.add(idleX).add(staticLeanX)
-    const totalWindZ = windTargetZ.add(idleZ).add(staticLeanZ)
+    // ── High-frequency turbulence (flutter in strong wind) ──
+    const turbHash1 = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.7)))
+    const turbHash2 = hash(vec2(instanceIndex.toFloat().mul(0.43), float(9.3)))
+    const turbHash3 = turbHash1.add(turbHash2).mul(43758.5453).fract()
+    // Three layered frequencies to avoid visible beating patterns
+    const turbOsc1 = sin(uTime.mul(18.0).add(turbHash1.mul(6.283)))
+    const turbOsc2 = sin(uTime.mul(25.0).add(turbHash2.mul(6.283))).mul(0.6)
+    const turbOsc3 = sin(uTime.mul(31.7).add(turbHash3.mul(6.283))).mul(0.35)
+    // Ramp in only above a minimum wind bend to keep idle sway clean
+    const turbRamp = smoothstep(float(0.05), float(0.25), windBendAngle)
+    const turbAmp = windBendAngle.mul(0.12).mul(turbRamp)
+    const turbDirAngle = turbHash1
+      .mul(3.1416)
+      .add(uTime.mul(1.3).mul(turbHash2))
+    const turbOsc = turbOsc1.add(turbOsc2).add(turbOsc3)
+    const turbX = cos(turbDirAngle).mul(turbOsc).mul(turbAmp)
+    const turbZ = sin(turbDirAngle).mul(turbOsc).mul(turbAmp)
 
-    // Lerp wind bend state (smooth following)
-    const lw = deltaTime.mul(4.0).saturate()
+    // Combined wind target (with idle + static lean + turbulence)
+    const totalWindX = windTargetX.add(idleX).add(staticLeanX).add(turbX)
+    const totalWindZ = windTargetZ.add(idleZ).add(staticLeanZ).add(turbZ)
+
+    // Lerp wind bend state — faster tracking when wind is strong so
+    // high-frequency turbulence comes through instead of being smoothed away
+    const lerpSpeed = float(4.0).add(uWindStrength.mul(80.0))
+    const lw = deltaTime.mul(lerpSpeed).saturate()
     bend.x.assign(mix(bend.x, totalWindX, lw))
     bend.y.assign(mix(bend.y, totalWindZ, lw))
 
@@ -280,16 +300,20 @@ export function createBladeMaterial(
   const tc = cfg?.tipColor ?? [0.06, 0.14, 0.03]
   const wsMin = cfg?.widthScaleMin ?? 0.7
   const wsExt = cfg?.widthScaleExtent ?? 0.7
+  const tipRough = cfg?.tipRoughness ?? 0.18
   // Height scale is fully handled by placement data (instanceScale).
   // No additional shader-side height variation needed.
 
   const mat = new MeshStandardNodeMaterial()
   mat.side = THREE.DoubleSide
-  mat.roughness = 0.55
   mat.metalness = 0.0
-  // Fade bottom edge to avoid hard cutoff at ground level
   mat.transparent = true
-  mat.opacityNode = smoothstep(float(0.0), float(0.08), attribute('uv').y)
+  const uvY = attribute('uv').y
+  mat.opacityNode = smoothstep(float(0.0), float(0.08), uvY)
+  // Lower roughness at blade tips for directional light glint
+  const tipSheen = smoothstep(float(0.65), float(1.0), uvY)
+  mat.roughnessNode = mix(float(0.55), float(tipRough), tipSheen)
+  mat.envMapIntensity = 0.1
 
   // ── Read from compute buffers ──────────────────────────
   const blade = ctx.bladeData.element(instanceIndex)
@@ -304,7 +328,6 @@ export function createBladeMaterial(
   // ── Color: base → tip gradient ─────────────────────────
   const baseColor = vec3(bc[0], bc[1], bc[2])
   const tipColor = vec3(tc[0], tc[1], tc[2])
-  const uvY = attribute('uv').y
 
   const gradientColor = mix(
     baseColor,
@@ -345,7 +368,9 @@ export function createBladeMaterial(
   const localPosY = rawPos.y.mul(heightScale)
   const localPosZ = rawPos.z.mul(widthScale).mul(instanceScale)
 
-  const heightFactor = uvY.mul(uvY)
+  // Bend profile: pow(uvY, 1.3) — gentler than quadratic, so the lower
+  // stem bends noticeably while the tip doesn't flop excessively.
+  const heightFactor = uvY.pow(float(1.3))
 
   // ── Read bend state from compute shader ────────────────
   // bend.xy = wind bend, bend.zw = interaction push
@@ -364,14 +389,14 @@ export function createBladeMaterial(
   const bendDirX = totalBendX.div(bendMag)
   const bendDirZ = totalBendZ.div(bendMag)
 
-  // Per-vertex bend angle (quadratic profile: stiff at base, flexible at tip)
+  // Per-vertex bend angle
   const maxBend = float(0.87) // ~50°
   const vertexAngle = bendMag.mul(heightFactor).min(maxBend)
   const bendSin = sin(vertexAngle)
   const bendCos = cos(vertexAngle)
 
   // Push also adds per-vertex displacement for tip deflection
-  const pushProfile = uvY.mul(uvY).mul(float(1.2))
+  const pushProfile = heightFactor.mul(float(1.2))
   const pushX = pushBendX.mul(pushProfile)
   const pushZ = pushBendZ.mul(pushProfile)
   const pushY = sqrt(

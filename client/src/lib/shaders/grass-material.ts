@@ -132,6 +132,8 @@ export interface GrassMaterialConfig {
   /** Atlas grid size (e.g. 2 for a 2×2 atlas). Each instance randomly picks
    *  one sub-tile by offsetting UVs. Only used with colorMap. */
   atlasGrid?: number
+  /** Roughness at blade tip (default 0.18). Lower = sharper specular glint. */
+  tipRoughness?: number
 }
 
 export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
@@ -142,6 +144,7 @@ export const TALL_GRASS_CONFIG: GrassMaterialConfig = {
   widthScaleExtent: 0.6,
   interactionRadius: 2.0,
   interactionStrength: 0.35,
+  tipRoughness: 0.32,
 }
 
 export const FLOWER_CONFIG: GrassMaterialConfig = {
