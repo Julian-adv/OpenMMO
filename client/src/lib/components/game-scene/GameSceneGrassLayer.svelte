@@ -12,7 +12,6 @@
     loadFlowerBillboardGeometry,
     loadFlowerColorTexture,
     createGrassMaterial,
-    GUST_WAVE_COUNT,
     TALL_GRASS_CONFIG,
     FLOWER_CONFIG,
     GRASS_INSTANCE_POS_ATTR,
@@ -21,6 +20,7 @@
     type GrassMaterialUniforms,
     type WindState,
   } from '../../shaders/grass-material'
+  import { GUST_WAVE_COUNT } from '../../shaders/grass-shared'
   import { createBladeGeometry } from '../../shaders/grass-blade-geometry'
   import {
     createBladeMaterial,

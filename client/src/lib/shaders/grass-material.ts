@@ -7,19 +7,21 @@ import {
   float,
   sin,
   cos,
-  mix,
   smoothstep,
   positionLocal,
-  instanceIndex,
-  hash,
   attribute,
   texture,
   floor,
 } from 'three/tsl'
+import { TAU } from './gerstner'
 import { loadGLB } from '../utils/gltfCache'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type N = any // TSL node -- broad type for shader node expressions
+import {
+  type N,
+  iHash,
+  computeGerstnerGust,
+  computeGrassColor,
+  computeWidthScale,
+} from './grass-shared'
 
 // ── Grass billboard geometry from GLB ─────────────────────
 // Loads grassLODs.glb and extracts the named LOD mesh geometry.
@@ -91,8 +93,6 @@ export interface WindState {
 // ── TSL grass material ───────────────────────────────────
 
 export const GRASS_TRAIL_COUNT = 5
-
-export const GUST_WAVE_COUNT = 3
 
 export interface GrassMaterialUniforms {
   uTime: { value: number }
@@ -213,7 +213,7 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   if (cfg?.colorMap && cfg.atlasGrid && cfg.atlasGrid > 1) {
     const grid = cfg.atlasGrid
     const totalCells = float(grid * grid)
-    const atlasHash = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.3)))
+    const atlasHash = iHash(0.19, 7.3)
     const idx = floor(atlasHash.mul(totalCells).min(totalCells.sub(0.001)))
     const invGrid = float(1 / grid)
     const col = idx.sub(floor(idx.mul(invGrid)).mul(float(grid)))
@@ -251,37 +251,16 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const baseColor = vec3(bc[0], bc[1], bc[2])
   const tipColor = vec3(tc[0], tc[1], tc[2])
   const uvY = attribute('uv').y
-  const gradientColor = mix(
+  const { gradientColor, rootAO, brightness, hueShift } = computeGrassColor(
     baseColor,
     tipColor,
-    smoothstep(float(0), float(0.8), uvY)
+    uvY
   )
-
-  // Root darkening (AO): darken the bottom of each blade
-  const rootAO = mix(
-    float(0.45),
-    float(1.0),
-    smoothstep(float(0), float(0.35), uvY)
-  )
-
-  // Per-instance hue/brightness variation via hashes of instanceIndex
-  const brightnessHash = hash(
-    vec2(instanceIndex.toFloat().mul(0.37), float(1.7))
-  )
-  const brightness = float(0.85).add(brightnessHash.mul(0.3)) // 0.85 ~ 1.15
 
   let finalColor: N
   if (colorTexNode) {
-    // Use color texture directly, with per-instance brightness variation
     finalColor = colorTexNode.rgb.mul(brightness).mul(rootAO)
   } else {
-    // Slight yellow-green ↔ blue-green hue shift per instance
-    const hueHash = hash(vec2(instanceIndex.toFloat().mul(0.73), float(3.1)))
-    const hueShift = vec3(
-      float(1.0).add(hueHash.sub(0.5).mul(0.15)),
-      float(1.0),
-      float(1.0).add(hueHash.sub(0.5).mul(-0.1))
-    )
     finalColor = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
   }
   mat.colorNode = finalColor
@@ -291,10 +270,8 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   // Setting normalNode directly treats it as view-space which breaks lighting.
 
   // ── Per-instance shape variation: width & height ──
-  const shapeHash1 = hash(vec2(instanceIndex.toFloat().mul(0.53), float(2.3)))
-  const shapeHash2 = hash(vec2(instanceIndex.toFloat().mul(0.91), float(4.7)))
-  const widthScale = float(wsMin).add(shapeHash1.mul(wsExt))
-  const heightScale = float(hsMin).add(shapeHash2.mul(hsExt))
+  const widthScale = computeWidthScale(wsMin, wsExt)
+  const heightScale = float(hsMin).add(iHash(0.91, 4.7).mul(hsExt))
 
   // ── Vertex displacement ──
   const rawPos = positionLocal.toVar()
@@ -303,8 +280,7 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const localPosY = rawPos.y.mul(heightScale)
   const localPosZ = rawPos.z.mul(widthScale)
 
-  const instanceHash = hash(vec2(instanceIndex.toFloat().mul(0.1), float(0.5)))
-  const phaseOffset = instanceHash.mul(6.283)
+  const phaseOffset = iHash(0.1, 0.5).mul(TAU)
 
   const heightFactor = uvY.mul(uvY)
 
@@ -314,51 +290,19 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const localWindX = uWindDir.x.mul(cosR).sub(uWindDir.y.mul(sinR))
   const localWindZ = uWindDir.x.mul(sinR).add(uWindDir.y.mul(cosR))
 
-  // ── Gerstner wave gusts ──────────────────────────────────
-  // Per-wave params (freq, speed, amp, Q) and direction are all uniform-driven.
-  // Gerstner phase distortion (phase + Q*sin(phase)) creates sharp crests (fast gust onset)
-  // and broad troughs (slow recovery) — naturally asymmetric.
-  let gust: N = float(0)
-  for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
-    const wp = uWaveParams[wi] // vec4(freq, speed, amp, Q)
-    const wFreq = wp.x
-    const wSpeed = wp.y
-    const wAmp = wp.z
-    const wQ = wp.w
-
-    // Per-wave direction from uniform angle
-    const wAngle = uWaveAngles[wi]
-    const cOff = cos(wAngle)
-    const sOff = sin(wAngle)
-    const wDirX = uWindDir.x.mul(cOff).sub(uWindDir.y.mul(sOff))
-    const wDirZ = uWindDir.x.mul(sOff).add(uWindDir.y.mul(cOff))
-
-    // Spatial phase along wave direction
-    const spatial = instanceWorldXZ.x
-      .mul(wDirX)
-      .add(instanceWorldXZ.y.mul(wDirZ))
-
-    // Perpendicular coordinate for wavefront warping
-    const perp = instanceWorldXZ.x
-      .mul(wDirZ.negate())
-      .add(instanceWorldXZ.y.mul(wDirX))
-    const warp = sin(perp.mul(0.15)).mul(2.5)
-
-    const phase = spatial.mul(wFreq).add(warp).sub(uTime.mul(wSpeed))
-
-    // Gerstner phase distortion: bunches crests, spreads troughs
-    const gerstnerPhase = phase.add(wQ.mul(sin(phase)))
-
-    // Wave value mapped to [0, 1], scaled by per-wave amplitude envelope
-    const waveVal = cos(gerstnerPhase).add(1).mul(0.5)
-    gust = gust.add(waveVal.mul(wAmp).mul(uWaveAmps[wi]))
-  }
-
-  // Always-active baseline ripple + JS-controlled gust boost
-  gust = gust.mul(float(0.15).add(uGustStrength.mul(0.85)))
+  // ── Gerstner wave gusts ──
+  const gust = computeGerstnerGust(
+    instanceWorldXZ.x,
+    instanceWorldXZ.y,
+    uTime,
+    uWindDir,
+    uWaveAngles,
+    uWaveAmps,
+    uWaveParams,
+    uGustStrength
+  )
 
   // ── Circular bending: combine wind + idle sway into a bend angle ──
-  // Wind bend angle (base lean + gust modulation)
   const windBendAngle = uWindStrength.mul(5.0).mul(float(1.0).add(gust))
   const bendFromWindX = localWindX.mul(windBendAngle)
   const bendFromWindZ = localWindZ.mul(windBendAngle)
@@ -367,11 +311,9 @@ export function createGrassMaterial(cfg?: GrassMaterialConfig): {
   const idleSwayAngle = sin(uTime.mul(uWindFrequency).add(phaseOffset)).mul(
     uWindStrength
   )
-  const idleDirAngle = phaseOffset // random direction per instance
-  const idleBendX = cos(idleDirAngle).mul(idleSwayAngle)
-  const idleBendZ = sin(idleDirAngle).mul(idleSwayAngle)
+  const idleBendX = cos(phaseOffset).mul(idleSwayAngle)
+  const idleBendZ = sin(phaseOffset).mul(idleSwayAngle)
 
-  // Combined bend angle (local-space X and Z components)
   const totalBendX = bendFromWindX.add(idleBendX)
   const totalBendZ = bendFromWindZ.add(idleBendZ)
 

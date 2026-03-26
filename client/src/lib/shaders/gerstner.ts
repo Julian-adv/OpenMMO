@@ -11,6 +11,7 @@ import {
 } from 'three/tsl'
 
 export const PI = float(Math.PI)
+export const TAU = float(Math.PI * 2)
 
 // ─── Gerstner Wave Displacement ─────────────────────────
 // wave = vec4(dirX, dirY, steepness, wavelength)

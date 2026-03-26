@@ -3,7 +3,6 @@ import { MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   Fn,
   uniform,
-  vec2,
   vec3,
   vec4,
   float,
@@ -16,16 +15,20 @@ import {
   positionLocal,
   normalLocal,
   instanceIndex,
-  hash,
   attribute,
   instancedArray,
   deltaTime,
   cameraViewMatrix,
 } from 'three/tsl'
-import { GUST_WAVE_COUNT, type GrassMaterialConfig } from './grass-material'
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type N = any // TSL node -- broad type for shader node expressions
+import { PI, TAU } from './gerstner'
+import type { GrassMaterialConfig } from './grass-material'
+import {
+  type N,
+  iHash,
+  computeGerstnerGust,
+  computeGrassColor,
+  computeWidthScale,
+} from './grass-shared'
 
 // ── Per-instance attribute names (used by both blade & flower) ───
 export const BLADE_INSTANCE_POS_ATTR = 'aInstanceWorldXZ'
@@ -138,31 +141,16 @@ export function createGrassComputeContext(
     const bx = blade.x // worldX
     const bz = blade.y // worldZ
 
-    // ── Gerstner wave gusts ──
-    let gust: N = float(0)
-    for (let wi = 0; wi < GUST_WAVE_COUNT; wi++) {
-      const wp = uWaveParams[wi]
-      const wFreq = wp.x
-      const wSpeed = wp.y
-      const wAmp = wp.z
-      const wQ = wp.w
-
-      const wAngle = uWaveAngles[wi]
-      const cOff = cos(wAngle)
-      const sOff = sin(wAngle)
-      const wDirX = uWindDir.x.mul(cOff).sub(uWindDir.y.mul(sOff))
-      const wDirZ = uWindDir.x.mul(sOff).add(uWindDir.y.mul(cOff))
-
-      const spatial = bx.mul(wDirX).add(bz.mul(wDirZ))
-      const perp = bx.mul(wDirZ.negate()).add(bz.mul(wDirX))
-      const warp = sin(perp.mul(0.15)).mul(2.5)
-
-      const phase = spatial.mul(wFreq).add(warp).sub(uTime.mul(wSpeed))
-      const gerstnerPhase = phase.add(wQ.mul(sin(phase)))
-      const waveVal = cos(gerstnerPhase).add(1).mul(0.5)
-      gust = gust.add(waveVal.mul(wAmp).mul(uWaveAmps[wi]))
-    }
-    gust = gust.mul(float(0.15).add(uGustStrength.mul(0.85)))
+    const gust = computeGerstnerGust(
+      bx,
+      bz,
+      uTime,
+      uWindDir,
+      uWaveAngles,
+      uWaveAmps,
+      uWaveParams,
+      uGustStrength
+    )
 
     // ── Wind bend target (world space) ──
     const windBendAngle = uWindStrength.mul(5.0).mul(float(1.0).add(gust))
@@ -170,18 +158,12 @@ export function createGrassComputeContext(
     const windTargetZ = uWindDir.y.mul(windBendAngle)
 
     // ── Static lean ──
-    const leanHash1 = hash(vec2(instanceIndex.toFloat().mul(0.31), float(5.5)))
-    const leanHash2 = hash(vec2(instanceIndex.toFloat().mul(0.67), float(6.1)))
-    const staticLeanX = leanHash1.sub(0.5).mul(0.15)
-    const staticLeanZ = leanHash2.sub(0.5).mul(0.15)
+    const staticLeanX = iHash(0.31, 5.5).sub(0.5).mul(0.15)
+    const staticLeanZ = iHash(0.67, 6.1).sub(0.5).mul(0.15)
 
     // ── Idle sway (gentle, low-frequency) ──
-    const idlePhase = hash(
-      vec2(instanceIndex.toFloat().mul(0.1), float(0.5))
-    ).mul(6.283)
-    const idleDir = hash(
-      vec2(instanceIndex.toFloat().mul(0.37), float(1.9))
-    ).mul(6.283)
+    const idlePhase = iHash(0.1, 0.5).mul(TAU)
+    const idleDir = iHash(0.37, 1.9).mul(TAU)
     const idleSwayAngle = sin(uTime.mul(uWindFrequency).add(idlePhase)).mul(
       uWindStrength
     )
@@ -189,17 +171,15 @@ export function createGrassComputeContext(
     const idleZ = sin(idleDir).mul(idleSwayAngle)
 
     // ── High-frequency turbulence (strong wind only) ──
-    const turbHash1 = hash(vec2(instanceIndex.toFloat().mul(0.19), float(7.7)))
-    const turbHash2 = hash(vec2(instanceIndex.toFloat().mul(0.43), float(9.3)))
+    const turbHash1 = iHash(0.19, 7.7)
+    const turbHash2 = iHash(0.43, 9.3)
     const turbHash3 = turbHash1.add(turbHash2).mul(43758.5453).fract()
-    const turbOsc1 = sin(uTime.mul(18.0).add(turbHash1.mul(6.283)))
-    const turbOsc2 = sin(uTime.mul(25.0).add(turbHash2.mul(6.283))).mul(0.6)
-    const turbOsc3 = sin(uTime.mul(31.7).add(turbHash3.mul(6.283))).mul(0.35)
+    const turbOsc1 = sin(uTime.mul(18.0).add(turbHash1.mul(TAU)))
+    const turbOsc2 = sin(uTime.mul(25.0).add(turbHash2.mul(TAU))).mul(0.6)
+    const turbOsc3 = sin(uTime.mul(31.7).add(turbHash3.mul(TAU))).mul(0.35)
     const turbOsc = turbOsc1.add(turbOsc2).add(turbOsc3)
     const turbAmp = windBendAngle.mul(0.12)
-    const turbDirAngle = turbHash1
-      .mul(3.1416)
-      .add(uTime.mul(1.3).mul(turbHash2))
+    const turbDirAngle = turbHash1.mul(PI).add(uTime.mul(1.3).mul(turbHash2))
     const turbX = cos(turbDirAngle).mul(turbOsc).mul(turbAmp)
     const turbZ = sin(turbDirAngle).mul(turbOsc).mul(turbAmp)
 
@@ -332,37 +312,15 @@ export function createBladeMaterial(
   const baseColor = vec3(bc[0], bc[1], bc[2])
   const tipColor = vec3(tc[0], tc[1], tc[2])
 
-  const gradientColor = mix(
+  const { gradientColor, rootAO, brightness, hueShift } = computeGrassColor(
     baseColor,
     tipColor,
-    smoothstep(float(0), float(0.8), uvY)
+    uvY
   )
-
-  // Root darkening (AO)
-  const rootAO = mix(
-    float(0.45),
-    float(1.0),
-    smoothstep(float(0), float(0.35), uvY)
-  )
-
-  // Per-instance brightness + hue variation
-  const brightnessHash = hash(
-    vec2(instanceIndex.toFloat().mul(0.37), float(1.7))
-  )
-  const brightness = float(0.85).add(brightnessHash.mul(0.3))
-
-  const hueHash = hash(vec2(instanceIndex.toFloat().mul(0.73), float(3.1)))
-  const hueShift = vec3(
-    float(1.0).add(hueHash.sub(0.5).mul(0.15)),
-    float(1.0),
-    float(1.0).add(hueHash.sub(0.5).mul(-0.1))
-  )
-
   mat.colorNode = gradientColor.mul(brightness).mul(hueShift).mul(rootAO)
 
   // ── Per-instance shape variation ───────────────────────
-  const shapeHash1 = hash(vec2(instanceIndex.toFloat().mul(0.53), float(2.3)))
-  const widthScale = float(wsMin).add(shapeHash1.mul(wsExt))
+  const widthScale = computeWidthScale(wsMin, wsExt)
   const heightScale = instanceScale
 
   // ── Vertex displacement ────────────────────────────────
