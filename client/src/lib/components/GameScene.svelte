@@ -80,7 +80,6 @@
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import {
-    loadFlowerBillboardGeometry,
     loadFlowerColorTexture,
   } from '../shaders/grass-material'
   import { createCalendarSystem } from './game-scene/calendar-system'
@@ -691,12 +690,9 @@
 
     const splatPromise = loadSplatLayers()
 
-    // Also await flower asset loading so grass materials can be compiled
-    // (blade geometry is created synchronously, only flower assets need async load)
-    const grassAssetsPromise = Promise.all([
-      loadFlowerBillboardGeometry(),
-      loadFlowerColorTexture(),
-    ])
+    // Await flower texture loading so grass materials can be compiled
+    // (all geometry is now created synchronously)
+    const grassAssetsPromise = loadFlowerColorTexture()
 
     // Wait for terrain data + grass assets, let the TerrainLayer $effect run
     // and enqueue work, eagerly create grass materials, then let the renderer
