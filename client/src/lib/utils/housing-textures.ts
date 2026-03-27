@@ -19,8 +19,8 @@ export interface HousingTextureEntry {
   fitSegment?: boolean
   /** Internal texture — hidden from the user-facing texture picker. */
   internal?: boolean
-  /** Enable alphaHash transparency using the diffuse texture's alpha channel. */
-  alphaHash?: boolean
+  /** Enable standard alpha-blend transparency (transparent + depthWrite off). */
+  transparent?: boolean
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -164,14 +164,14 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fallbackColor: 0x8a7050,
     fitSegment: true,
     internal: true,
-    alphaHash: true,
+    transparent: true,
   },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
 const materialCache = new Map<number, THREE.MeshStandardMaterial>()
 
-/** Ghost (alphaHash dithered) material cache — created on demand, synced with opaque materials. */
+/** Semi-transparent ghost material cache — created on demand, synced with base materials. */
 const ghostMaterialCache = new Map<number, THREE.MeshStandardMaterial>()
 
 /**
@@ -191,7 +191,7 @@ export function getHousingMaterial(
       side: THREE.FrontSide,
       roughness: 0.85,
       metalness: 0.0,
-      ...(entry.alphaHash && { alphaHash: true }),
+      ...(entry.transparent && { transparent: true, depthWrite: false }),
     })
     materialCache.set(idx, mat)
   }
@@ -199,7 +199,7 @@ export function getHousingMaterial(
 }
 
 /**
- * Get or create an alphaHash-dithered ghost material for the given texture index.
+ * Get or create a semi-transparent ghost material for the given texture index.
  * Used when doors/windows should appear semi-transparent inside a house.
  */
 export function getGhostHousingMaterial(
@@ -210,8 +210,9 @@ export function getGhostHousingMaterial(
   if (!ghost) {
     const base = getHousingMaterial(idx)
     ghost = base.clone()
-    if (!ghost.alphaHash) ghost.alphaHash = true
-    ghost.opacity = base.alphaHash ? 0.8 : 0.5
+    ghost.transparent = true
+    ghost.depthWrite = false
+    ghost.opacity = base.transparent ? 0.4 : 0.5
     ghostMaterialCache.set(idx, ghost)
   }
   return ghost
