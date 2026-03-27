@@ -19,6 +19,8 @@ export interface HousingTextureEntry {
   fitSegment?: boolean
   /** Internal texture — hidden from the user-facing texture picker. */
   internal?: boolean
+  /** Enable alphaHash transparency using the diffuse texture's alpha channel. */
+  alphaHash?: boolean
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -162,6 +164,7 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fallbackColor: 0x8a7050,
     fitSegment: true,
     internal: true,
+    alphaHash: true,
   },
 ]
 
@@ -188,6 +191,7 @@ export function getHousingMaterial(
       side: THREE.FrontSide,
       roughness: 0.85,
       metalness: 0.0,
+      ...(entry.alphaHash && { alphaHash: true }),
     })
     materialCache.set(idx, mat)
   }
@@ -204,9 +208,10 @@ export function getGhostHousingMaterial(
   const idx = textureIndex % HOUSING_TEXTURES.length
   let ghost = ghostMaterialCache.get(idx)
   if (!ghost) {
-    ghost = getHousingMaterial(idx).clone()
-    ghost.alphaHash = true
-    ghost.opacity = 0.3
+    const base = getHousingMaterial(idx)
+    ghost = base.clone()
+    if (!ghost.alphaHash) ghost.alphaHash = true
+    ghost.opacity = base.alphaHash ? 0.8 : 0.5
     ghostMaterialCache.set(idx, ghost)
   }
   return ghost

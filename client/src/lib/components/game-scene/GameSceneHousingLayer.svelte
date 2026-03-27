@@ -131,7 +131,16 @@
   }
 
   // Load housing textures (materials update in-place via needsUpdate)
-  initHousingTextures()
+  initHousingTextures().then(() => {
+    // Re-apply ghost materials now that textures are loaded
+    if (playerInsideHouseId) {
+      const curr = houses.get(playerInsideHouseId)
+      if (curr) {
+        resetDoorGhostMaterials(curr)
+        applyDoorGhostMaterials(curr, playerInsideFloor)
+      }
+    }
+  })
 
   // Listen for housing data changes from the manager
   const unsubHouses = housingManager.onHousesChanged((allHouses) => {
@@ -382,7 +391,7 @@
   /**
    * Hide front/back groups based on player floor.
    * Current floor: hide front (south+west walls, roof)
-   * Higher floors: hide both front and back entirely
+   * Higher floors: hide front and back, keep stair visible
    * Lower floors: fully visible
    */
   function applyFloorVisibility(
@@ -405,6 +414,7 @@
     for (const [, groups] of result.floorGroups) {
       groups.front.position.y = 0
       groups.back.position.y = 0
+      groups.stair.position.y = 0
     }
     resetDoorGhostMaterials(result)
   }

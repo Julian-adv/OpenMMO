@@ -14,6 +14,7 @@ import {
   collectFootprints,
   computeHouseAABB,
   getOrCreateFloorEntries,
+  OFFSCREEN_Y,
   WALL_DIR_INFO,
   WOOD_TEXTURE_IDX,
   SHUTTER_PANEL_TEXTURE_IDX,
@@ -81,6 +82,7 @@ export function buildHouseGroup(
       ri,
       entries.front,
       entries.back,
+      entries.stair,
       entries.doors,
       shouldSuppressRoof(room, footprintsByFloor.get(fl + 1) ?? []),
       house.rooms,
@@ -90,7 +92,7 @@ export function buildHouseGroup(
 
   const floorGroups = new Map<
     number,
-    { front: THREE.Group; back: THREE.Group }
+    { front: THREE.Group; back: THREE.Group; stair: THREE.Group }
   >()
 
   let mergedMeshCount = 0
@@ -101,8 +103,11 @@ export function buildHouseGroup(
     front.name = `front_f${fl}`
     const back = new THREE.Group()
     back.name = `back_f${fl}`
+    const stair = new THREE.Group()
+    stair.name = `stair_f${fl}`
     mergedMeshCount += addMergedMeshes(front, entries.front)
     mergedMeshCount += addMergedMeshes(back, entries.back)
+    mergedMeshCount += addMergedMeshes(stair, entries.stair)
 
     for (const door of entries.doors) {
       allDoors.push(door)
@@ -110,7 +115,8 @@ export function buildHouseGroup(
 
     houseGroup.add(front)
     houseGroup.add(back)
-    floorGroups.set(fl, { front, back })
+    houseGroup.add(stair)
+    floorGroups.set(fl, { front, back, stair })
   }
 
   for (const door of allDoors) {
@@ -139,13 +145,14 @@ function collectRoomGeometries(
   roomIndex: number,
   frontEntries: GeoEntry[],
   backEntries: GeoEntry[],
+  stairEntries: GeoEntry[],
   doors: DoorMeshInfo[],
   suppressRoof: boolean,
   allRooms: RoomData[],
   stairwellFootprints: RoomFootprint[]
 ) {
   if (room.roomType === 'stairwell') {
-    collectStairwellGeometries(room, backEntries, allRooms)
+    collectStairwellGeometries(room, stairEntries, allRooms)
     return
   }
 
@@ -200,7 +207,13 @@ export function applyDoorGhostMaterials(
 
   for (const door of result.doors) {
     const isFront = WALL_DIR_INFO[door.wallDir].isFront
-    if ((door.floorLevel === floor && isFront) || door.floorLevel > floor) {
+    if (door.floorLevel > floor) {
+      // Hide upper floor doors/windows entirely
+      if (door.pivot.userData.originalPosY === undefined) {
+        door.pivot.userData.originalPosY = door.pivot.position.y
+      }
+      door.pivot.position.y = OFFSCREEN_Y
+    } else if (door.floorLevel === floor && isFront) {
       const mesh = door.pivot.children[0] as THREE.Mesh
       if (mesh.userData.originalMaterial) continue
       mesh.userData.originalMaterial = mesh.material
@@ -216,6 +229,10 @@ export function applyDoorGhostMaterials(
 /** Restore door/window materials from ghost back to opaque. */
 export function resetDoorGhostMaterials(result: HouseGroupResult) {
   for (const door of result.doors) {
+    if (door.pivot.userData.originalPosY !== undefined) {
+      door.pivot.position.y = door.pivot.userData.originalPosY
+      delete door.pivot.userData.originalPosY
+    }
     const mesh = door.pivot.children[0] as THREE.Mesh
     if (mesh.userData.originalMaterial) {
       mesh.material = mesh.userData.originalMaterial

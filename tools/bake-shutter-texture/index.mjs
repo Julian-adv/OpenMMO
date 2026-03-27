@@ -208,6 +208,49 @@ function addBarEdgeNormals(canvas) {
   }
 }
 
+/** Set alpha: wood bar/border regions = 255 (opaque), linen panels = semi-transparent */
+function addLinenAlpha(canvas) {
+  const ctx = canvas.getContext('2d')
+  const bdU = Math.round(BORDER_FRAC_U * SIZE)
+  const bdV = Math.round(BORDER_FRAC_V * SIZE)
+  const crU = Math.round(CROSS_FRAC_U * SIZE)
+  const crV = Math.round(CROSS_FRAC_V * SIZE)
+
+  const imgData = ctx.getImageData(0, 0, SIZE, SIZE)
+  const data = imgData.data
+
+  const LINEN_ALPHA = 153 // ~60% opacity for linen panels
+
+  // Mark all pixels as linen first, then overwrite bar regions as opaque
+  for (let i = 3; i < data.length; i += 4) {
+    data[i] = LINEN_ALPHA
+  }
+
+  // Helper: set alpha=255 for a rectangular region
+  const opaqueRect = (x0, y0, w, h) => {
+    const x1 = Math.min(x0 + w, SIZE)
+    const y1 = Math.min(y0 + h, SIZE)
+    for (let y = Math.max(y0, 0); y < y1; y++) {
+      for (let x = Math.max(x0, 0); x < x1; x++) {
+        data[(y * SIZE + x) * 4 + 3] = 255
+      }
+    }
+  }
+
+  // Border regions (opaque)
+  opaqueRect(0, 0, bdU, SIZE)             // left border
+  opaqueRect(SIZE - bdU, 0, bdU, SIZE)    // right border
+  opaqueRect(0, 0, SIZE, bdV)             // bottom border
+  opaqueRect(0, SIZE - bdV, SIZE, bdV)    // top border
+  // Cross bars (opaque, inside borders) — round positions and pad 1px to cover anti-aliased edges
+  const hcY = Math.round((SIZE - crV) / 2) - 1
+  const vcX = Math.round((SIZE - crU) / 2) - 1
+  opaqueRect(bdU, hcY, SIZE - bdU * 2, crV + 2) // h-cross
+  opaqueRect(vcX, bdV, crU + 2, SIZE - bdV * 2) // v-cross
+
+  ctx.putImageData(imgData, 0, 0)
+}
+
 function packORM(aoImg, mrImg) {
   const canvas = createCanvas(SIZE, SIZE)
   const ctx = canvas.getContext('2d')
@@ -284,6 +327,8 @@ async function writeGLB(diffuseCanvas, normalCanvas, ormCanvas) {
     .setOcclusionTexture(ormTex)
     .setRoughnessFactor(0.85)
     .setMetallicFactor(0.0)
+    .setAlphaMode('BLEND')
+    .setAlpha(1.0)
 
   // GLB requires at least one mesh with vertex data; create a minimal triangle
   const posAccessor = doc
@@ -337,6 +382,9 @@ async function main() {
     '#c8b898'
   )
   addEdgeAO(diffuseCanvas)
+
+  // Alpha: linen panels are semi-transparent, wood bars/border are opaque
+  addLinenAlpha(diffuseCanvas)
 
   // Normal
   console.log('Compositing normal...')
