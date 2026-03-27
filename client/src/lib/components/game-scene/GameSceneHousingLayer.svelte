@@ -7,6 +7,8 @@
   import {
     buildHouseGroup,
     disposeHouseGroup,
+    applyDoorGhostMaterials,
+    resetDoorGhostMaterials,
     DEFAULT_WALL_HEIGHT,
     FLOOR_THICKNESS,
     MAX_FLOOR_LEVEL,
@@ -395,6 +397,7 @@
         groups.back.position.y = OFFSCREEN_Y
       }
     }
+    applyDoorGhostMaterials(result, floor)
   }
 
   /** Restore merged groups to normal position */
@@ -403,6 +406,7 @@
       groups.front.position.y = 0
       groups.back.position.y = 0
     }
+    resetDoorGhostMaterials(result)
   }
 
   export function getGroup(): THREE.Group {

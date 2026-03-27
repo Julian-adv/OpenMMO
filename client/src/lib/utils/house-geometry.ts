@@ -14,12 +14,16 @@ import {
   collectFootprints,
   computeHouseAABB,
   getOrCreateFloorEntries,
+  WALL_DIR_INFO,
+  WOOD_TEXTURE_IDX,
+  SHUTTER_PANEL_TEXTURE_IDX,
   type DoorMeshInfo,
   type FloorEntries,
   type GeoEntry,
   type HouseGroupResult,
   type RoomFootprint,
 } from './house-geo-utils'
+import { getHousingMaterial, getGhostHousingMaterial } from './housing-textures'
 import { collectFloorGeometry } from './house-geo-floor'
 import { collectRoofGeometry, shouldSuppressRoof } from './house-geo-roof'
 import { collectStairwellGeometries } from './house-geo-stairwell'
@@ -184,6 +188,40 @@ function collectRoomGeometries(
     backEntries,
     doors
   )
+}
+
+/** Swap door/window materials to alphaHash ghost versions for interior view. */
+export function applyDoorGhostMaterials(
+  result: HouseGroupResult,
+  floor: number
+) {
+  const doorMat = getHousingMaterial(WOOD_TEXTURE_IDX)
+  const shutterMat = getHousingMaterial(SHUTTER_PANEL_TEXTURE_IDX)
+
+  for (const door of result.doors) {
+    const isFront = WALL_DIR_INFO[door.wallDir].isFront
+    if ((door.floorLevel === floor && isFront) || door.floorLevel > floor) {
+      const mesh = door.pivot.children[0] as THREE.Mesh
+      if (mesh.userData.originalMaterial) continue
+      mesh.userData.originalMaterial = mesh.material
+      if (mesh.material === doorMat) {
+        mesh.material = getGhostHousingMaterial(WOOD_TEXTURE_IDX)
+      } else if (mesh.material === shutterMat) {
+        mesh.material = getGhostHousingMaterial(SHUTTER_PANEL_TEXTURE_IDX)
+      }
+    }
+  }
+}
+
+/** Restore door/window materials from ghost back to opaque. */
+export function resetDoorGhostMaterials(result: HouseGroupResult) {
+  for (const door of result.doors) {
+    const mesh = door.pivot.children[0] as THREE.Mesh
+    if (mesh.userData.originalMaterial) {
+      mesh.material = mesh.userData.originalMaterial
+      delete mesh.userData.originalMaterial
+    }
+  }
 }
 
 /** Dispose merged geometries in a house group */

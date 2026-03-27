@@ -168,6 +168,9 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
 /** Per-texture-index material cache (module-level singleton). */
 const materialCache = new Map<number, THREE.MeshStandardMaterial>()
 
+/** Ghost (alphaHash dithered) material cache — created on demand, synced with opaque materials. */
+const ghostMaterialCache = new Map<number, THREE.MeshStandardMaterial>()
+
 /**
  * Get or create a MeshStandardMaterial for the given texture index.
  * Before textures are loaded, uses fallback color. After loading,
@@ -189,6 +192,24 @@ export function getHousingMaterial(
     materialCache.set(idx, mat)
   }
   return mat
+}
+
+/**
+ * Get or create an alphaHash-dithered ghost material for the given texture index.
+ * Used when doors/windows should appear semi-transparent inside a house.
+ */
+export function getGhostHousingMaterial(
+  textureIndex: number
+): THREE.MeshStandardMaterial {
+  const idx = textureIndex % HOUSING_TEXTURES.length
+  let ghost = ghostMaterialCache.get(idx)
+  if (!ghost) {
+    ghost = getHousingMaterial(idx).clone()
+    ghost.alphaHash = true
+    ghost.opacity = 0.3
+    ghostMaterialCache.set(idx, ghost)
+  }
+  return ghost
 }
 
 let _initPromise: Promise<void> | null = null
@@ -233,6 +254,13 @@ export function initHousingTextures(): Promise<void> {
         // Switch from fallback color to texture-driven color
         mat.color.set(0xffffff)
         mat.needsUpdate = true
+
+        // Invalidate ghost material so it gets re-cloned on next access
+        const oldGhost = ghostMaterialCache.get(idx)
+        if (oldGhost) {
+          oldGhost.dispose()
+          ghostMaterialCache.delete(idx)
+        }
       } catch (e) {
         console.warn(`[housing] Failed to load texture "${entry.glb}":`, e)
         // Material keeps its fallback color
@@ -270,5 +298,9 @@ export function disposeHousingMaterials() {
     mat.dispose()
   }
   materialCache.clear()
+  for (const mat of ghostMaterialCache.values()) {
+    mat.dispose()
+  }
+  ghostMaterialCache.clear()
   _initPromise = null
 }
