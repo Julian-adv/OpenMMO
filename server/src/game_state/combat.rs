@@ -94,7 +94,7 @@ impl super::GameState {
                             let map = self.player_characters.read().await;
                             map.get(player_id).cloned()
                         };
-                        if let Some((character_id, old_xp, attributes)) = player_char {
+                        if let Some((_, old_xp, attributes)) = player_char {
                             let new_xp = old_xp + xp_amount as u64;
                             let old_level = xp::level_from_xp(old_xp);
                             let new_level = xp::level_from_xp(new_xp);
@@ -147,20 +147,8 @@ impl super::GameState {
                                 }
                             }
 
-                            // Persist to DB
-                            let auth = self.auth_service.clone();
-                            let new_max_hp_for_db = new_max_hp;
-                            tokio::task::spawn_blocking(move || {
-                                let result = auth.update_character_xp_and_level(
-                                    character_id,
-                                    new_xp,
-                                    new_level,
-                                    new_max_hp_for_db,
-                                );
-                                if let Err(e) = result {
-                                    tracing::warn!("Failed to persist XP: {}", e);
-                                }
-                            });
+                            // Mark dirty for periodic batch save
+                            self.mark_dirty(player_id).await;
 
                             // Notify the player directly
                             let max_hp_for_msg = if let Some(max_hp) = new_max_hp {
@@ -315,6 +303,10 @@ impl super::GameState {
             }
         }
 
+        if result.hit {
+            self.mark_dirty(&target_player_id.to_string()).await;
+        }
+
         // Send attack result after server-side HP update.
         self.broadcast(
             ServerMessage::MonsterAttackedPlayer {
@@ -373,30 +365,37 @@ impl super::GameState {
             return;
         }
 
-        let mut players = self.players.write().await;
-        for (player_id, amount) in updates {
-            if let Some(player) = players.get_mut(&player_id) {
-                if player.health > 0 && player.health < player.max_health {
-                    let old_health = player.health;
-                    player.health = (player.health + amount).min(player.max_health);
+        let mut regen_dirty: Vec<PlayerId> = Vec::new();
+        {
+            let mut players = self.players.write().await;
+            for (player_id, amount) in updates {
+                if let Some(player) = players.get_mut(&player_id) {
+                    if player.health > 0 && player.health < player.max_health {
+                        let old_health = player.health;
+                        player.health = (player.health + amount).min(player.max_health);
 
-                    if player.health != old_health {
-                        self.broadcast(
-                            ServerMessage::PlayerHealthUpdate {
-                                player_id: player_id.clone(),
-                                health: player.health,
-                                max_health: player.max_health,
-                            },
-                            None,
-                        );
+                        if player.health != old_health {
+                            regen_dirty.push(player_id.clone());
+                            self.broadcast(
+                                ServerMessage::PlayerHealthUpdate {
+                                    player_id: player_id.clone(),
+                                    health: player.health,
+                                    max_health: player.max_health,
+                                },
+                                None,
+                            );
+                        }
                     }
                 }
             }
         }
+        for pid in regen_dirty {
+            self.mark_dirty(&pid).await;
+        }
     }
 
     async fn apply_player_death_penalty(&self, player_id: &PlayerId) {
-        let (character_id, old_xp, attributes) = {
+        let (_, old_xp, attributes) = {
             let map = self.player_characters.read().await;
             match map.get(player_id).cloned() {
                 Some(entry) => entry,
@@ -426,7 +425,6 @@ impl super::GameState {
             }
         }
 
-        let mut max_hp_for_db = None;
         let mut current_hp_for_msg = 0;
         let mut max_hp_for_msg = 0;
         let mut level_for_msg = penalty.new_level;
@@ -462,7 +460,6 @@ impl super::GameState {
 
                             if bounded != player.max_health {
                                 player.max_health = bounded;
-                                max_hp_for_db = Some(bounded);
                             }
                         }
                         Err(err) => {
@@ -484,16 +481,8 @@ impl super::GameState {
             }
         }
 
-        let auth = self.auth_service.clone();
-        let new_xp = penalty.new_xp;
-        let new_level = level_for_msg;
-        tokio::task::spawn_blocking(move || {
-            let result =
-                auth.update_character_xp_and_level(character_id, new_xp, new_level, max_hp_for_db);
-            if let Err(e) = result {
-                tracing::warn!("Failed to persist death penalty: {}", e);
-            }
-        });
+        // Mark dirty for periodic batch save
+        self.mark_dirty(player_id).await;
 
         self.send_direct_message(
             player_id,

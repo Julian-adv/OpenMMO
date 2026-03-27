@@ -26,10 +26,25 @@ pub struct CharacterRecord {
     pub last_y: f32,
     pub last_z: f32,
     pub last_rotation: f32,
+    pub health: Option<u32>,
+    pub floor_level: i8,
+}
+
+pub struct CharacterSaveData {
+    pub character_id: i64,
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+    pub rotation: f32,
+    pub xp: u64,
+    pub level: u32,
+    pub max_hp: u32,
+    pub health: u32,
+    pub floor_level: i8,
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -56,6 +71,12 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
         last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
         last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,
         last_rotation: row.get::<_, f64>(17).unwrap_or(0.0) as f32,
+        health: row
+            .get::<_, Option<i64>>(18)
+            .ok()
+            .flatten()
+            .map(|v| v as u32),
+        floor_level: row.get::<_, i64>(19).unwrap_or(0) as i8,
     })
 }
 
@@ -217,6 +238,8 @@ impl AuthService {
                 "last_rotation",
                 format!("REAL NOT NULL DEFAULT {}", spawn.rotation),
             ),
+            ("health", "INTEGER".into()),
+            ("floor_level", "INTEGER NOT NULL DEFAULT 0".into()),
         ];
 
         for (column_name, column_def) in &expected_columns {
@@ -444,6 +467,8 @@ impl AuthService {
             last_y: world_config().spawn_position.y,
             last_z: world_config().spawn_position.z,
             last_rotation: world_config().spawn_position.rotation,
+            health: None,
+            floor_level: 0,
         })
     }
 
@@ -499,47 +524,33 @@ impl AuthService {
         character.ok_or(AuthError::CharacterNotFound)
     }
 
-    pub fn update_character_xp_and_level(
-        &self,
-        character_id: i64,
-        xp: u64,
-        level: u32,
-        max_hp: Option<u32>,
-    ) -> Result<(), AuthError> {
-        let conn = self.open_connection()?;
-        if let Some(hp) = max_hp {
-            conn.execute(
-                "UPDATE characters SET xp = ?1, level = ?2, max_hp = ?3 WHERE id = ?4",
-                params![xp as i64, i64::from(level), i64::from(hp), character_id],
-            )?;
-        } else {
-            conn.execute(
-                "UPDATE characters SET xp = ?1, level = ?2 WHERE id = ?3",
-                params![xp as i64, i64::from(level), character_id],
-            )?;
+    pub fn save_characters_batch(&self, data: &[CharacterSaveData]) -> Result<(), AuthError> {
+        if data.is_empty() {
+            return Ok(());
         }
-        Ok(())
-    }
-
-    pub fn save_character_position(
-        &self,
-        character_id: i64,
-        x: f32,
-        y: f32,
-        z: f32,
-        rotation: f32,
-    ) -> Result<(), AuthError> {
         let conn = self.open_connection()?;
-        conn.execute(
-            "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4 WHERE id = ?5",
-            params![
-                f64::from(x),
-                f64::from(y),
-                f64::from(z),
-                f64::from(rotation),
-                character_id,
-            ],
-        )?;
+        let tx = conn.unchecked_transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4, \
+                 xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9 WHERE id = ?10",
+            )?;
+            for d in data {
+                stmt.execute(params![
+                    f64::from(d.x),
+                    f64::from(d.y),
+                    f64::from(d.z),
+                    f64::from(d.rotation),
+                    d.xp as i64,
+                    i64::from(d.level),
+                    i64::from(d.max_hp),
+                    i64::from(d.health),
+                    i64::from(d.floor_level),
+                    d.character_id,
+                ])?;
+            }
+        }
+        tx.commit()?;
         Ok(())
     }
 

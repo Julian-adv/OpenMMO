@@ -198,22 +198,20 @@ pub async fn handle_connection(
         }
     }
 
-    // Save player position to DB before cleanup
+    // Save full character state to DB before cleanup
     if let Some(ref id) = state.player_id {
-        if let (Some(character_id), Some((pos, rot))) = (
-            game_state.get_player_character_id(id).await,
-            game_state.get_player_position(id).await,
-        ) {
+        if let Some(save_data) = game_state.get_player_save_data(id).await {
+            game_state.remove_dirty(id).await;
             let auth = auth_service.clone();
-            if let Err(e) = tokio::task::spawn_blocking(move || {
-                auth.save_character_position(character_id, pos.x, pos.y, pos.z, rot)
-            })
-            .await
-            .unwrap_or_else(|e| {
-                error!("spawn_blocking panicked: {}", e);
-                Ok(())
-            }) {
-                error!("Failed to save player position on disconnect: {}", e);
+            if let Err(e) =
+                tokio::task::spawn_blocking(move || auth.save_characters_batch(&[save_data]))
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("spawn_blocking panicked: {}", e);
+                        Ok(())
+                    })
+            {
+                error!("Failed to save character state on disconnect: {}", e);
             }
         }
 
@@ -422,7 +420,7 @@ async fn handle_client_message(
             let max_hp = selected_character.max_hp;
             let character_xp = selected_character.xp;
 
-            let player = new_player(
+            let mut player = new_player(
                 selected_character.name.clone(),
                 selected_character.level,
                 max_hp,
@@ -434,6 +432,12 @@ async fn handle_client_message(
                 },
                 selected_character.last_rotation,
             );
+
+            // Restore saved health (if available) and floor_level from DB
+            if let Some(saved_health) = selected_character.health {
+                player.health = saved_health.min(max_hp);
+            }
+            player.floor_level = selected_character.floor_level;
             let id = player.id.clone();
 
             state.direct_rx = Some(game_state.register_direct_channel(&id).await);

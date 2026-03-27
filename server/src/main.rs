@@ -85,7 +85,6 @@ async fn main() {
     let game_state = Arc::new(GameState::new(
         monster_defs,
         initial_game_time,
-        Arc::clone(&auth_service),
         Arc::clone(&housing_io),
     ));
     let game_state_for_time_sync = Arc::clone(&game_state);
@@ -100,6 +99,29 @@ async fn main() {
             // Regenerate player health every 2 ticks (16 seconds)
             if tick_count % 2 == 0 {
                 game_state_for_time_sync.tick_regeneration().await;
+            }
+
+            // Batch-save dirty character states every 4 ticks (32 seconds)
+            if tick_count % 4 == 0 {
+                let dirty_states = game_state_for_time_sync
+                    .collect_dirty_character_states()
+                    .await;
+                if !dirty_states.is_empty() {
+                    let count = dirty_states.len();
+                    let auth = Arc::clone(&auth_service_for_time_sync);
+                    let handle = tokio::task::spawn_blocking(move || {
+                        if let Err(e) = auth.save_characters_batch(&dirty_states) {
+                            warn!("Failed to batch-save character states: {}", e);
+                        } else {
+                            info!("Batch-saved {} character state(s)", count);
+                        }
+                    });
+                    tokio::spawn(async move {
+                        if let Err(e) = handle.await {
+                            error!("Batch save task panicked: {}", e);
+                        }
+                    });
+                }
             }
 
             let datetime = game_state_for_time_sync.broadcast_game_time();

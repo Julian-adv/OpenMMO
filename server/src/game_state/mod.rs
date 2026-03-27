@@ -1,4 +1,3 @@
-use crate::auth::AuthService;
 use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
@@ -56,10 +55,11 @@ pub struct GameState {
     monster_defs: MonsterDefs,
     id_state: Arc<RwLock<IdState>>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
-    auth_service: Arc<AuthService>,
     // player_id → (character_id, current_xp, attributes)
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
     housing_io: Arc<HousingIO>,
+    /// Players whose state has changed since the last periodic save.
+    dirty_players: Arc<RwLock<HashSet<PlayerId>>>,
     /// In-memory set of currently open doors.
     open_doors: Arc<RwLock<HashSet<DoorKey>>>,
 }
@@ -68,7 +68,6 @@ impl GameState {
     pub fn new(
         monster_defs: MonsterDefs,
         initial_datetime: crate::types::GameDateTime,
-        auth_service: Arc<AuthService>,
         housing_io: Arc<HousingIO>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
@@ -82,9 +81,9 @@ impl GameState {
             monster_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
-            auth_service,
             player_characters: Arc::new(RwLock::new(HashMap::new())),
             housing_io,
+            dirty_players: Arc::new(RwLock::new(HashSet::new())),
             open_doors: Arc::new(RwLock::new(HashSet::new())),
         }
     }

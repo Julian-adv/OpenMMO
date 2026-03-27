@@ -1,8 +1,24 @@
+use crate::auth::CharacterSaveData;
 use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
 use crate::world_config::world_config;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{info, warn};
+
+fn build_save_data(player: &Player, character_id: i64, xp: u64) -> CharacterSaveData {
+    CharacterSaveData {
+        character_id,
+        x: player.position.x,
+        y: player.position.y,
+        z: player.position.z,
+        rotation: player.rotation,
+        xp,
+        level: player.level,
+        max_hp: player.max_health,
+        health: player.health,
+        floor_level: player.floor_level,
+    }
+}
 
 impl super::GameState {
     pub async fn get_or_assign_player_number(&self, player_id: &str) -> u32 {
@@ -168,6 +184,8 @@ impl super::GameState {
             player.position = new_position.clone();
             player.rotation = new_rotation;
             player.floor_level = floor_level;
+            drop(players);
+            self.mark_dirty(player_id).await;
             self.broadcast(
                 ServerMessage::PlayerMoved {
                     player_id: player_id.clone(),
@@ -191,6 +209,8 @@ impl super::GameState {
         if let Some(player) = players.get_mut(player_id) {
             player.position = new_position.clone();
             player.rotation = new_rotation;
+            drop(players);
+            self.mark_dirty(player_id).await;
             self.broadcast(
                 ServerMessage::PlayerTeleported {
                     player_id: player_id.clone(),
@@ -229,6 +249,7 @@ impl super::GameState {
 
         if let Some(player) = respawned_player {
             info!("Player {} ({}) respawned", player.name, player.id);
+            self.mark_dirty(player_id).await;
             self.broadcast(ServerMessage::PlayerRespawned { player }, None);
         } else {
             warn!("Attempted to respawn non-existent player: {}", player_id);
@@ -240,11 +261,6 @@ impl super::GameState {
         players
             .get(player_id)
             .map(|p| (p.position.clone(), p.rotation))
-    }
-
-    pub async fn get_player_character_id(&self, player_id: &PlayerId) -> Option<i64> {
-        let map = self.player_characters.read().await;
-        map.get(player_id).map(|(char_id, _, _)| *char_id)
     }
 
     pub async fn toggle_player_torch(&self, player_id: &PlayerId, enabled: bool) {
@@ -259,6 +275,51 @@ impl super::GameState {
                 None,
             );
         }
+    }
+
+    pub async fn mark_dirty(&self, player_id: &PlayerId) {
+        let mut dirty = self.dirty_players.write().await;
+        dirty.insert(player_id.clone());
+    }
+
+    pub async fn remove_dirty(&self, player_id: &PlayerId) {
+        let mut dirty = self.dirty_players.write().await;
+        dirty.remove(player_id);
+    }
+
+    pub async fn collect_dirty_character_states(&self) -> Vec<CharacterSaveData> {
+        let dirty_ids: Vec<PlayerId> = {
+            let mut dirty = self.dirty_players.write().await;
+            dirty.drain().collect()
+        };
+
+        if dirty_ids.is_empty() {
+            return Vec::new();
+        }
+
+        let players = self.players.read().await;
+        let player_chars = self.player_characters.read().await;
+
+        let mut result = Vec::with_capacity(dirty_ids.len());
+        for pid in &dirty_ids {
+            if let (Some(player), Some((char_id, xp, _))) =
+                (players.get(pid), player_chars.get(pid))
+            {
+                result.push(build_save_data(player, *char_id, *xp));
+            }
+        }
+
+        result
+    }
+
+    pub async fn get_player_save_data(&self, player_id: &PlayerId) -> Option<CharacterSaveData> {
+        let players = self.players.read().await;
+        let player_chars = self.player_characters.read().await;
+
+        let player = players.get(player_id)?;
+        let (char_id, xp, _) = player_chars.get(player_id)?;
+
+        Some(build_save_data(player, *char_id, *xp))
     }
 
     #[allow(dead_code)]
