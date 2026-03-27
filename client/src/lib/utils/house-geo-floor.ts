@@ -7,6 +7,7 @@ import {
   FLOOR_THICKNESS,
   WALL_THICKNESS,
   HOUSING_TEXTURES,
+  WOOD_TEXTURE_IDX,
   bakedGeo,
   floorYBase,
   floorOverhang,
@@ -14,6 +15,52 @@ import {
   type GeoEntry,
   type RoomFootprint,
 } from './house-geo-utils'
+
+/** Add wood-textured side panels on the camera-facing (south + west) floor slab edges. */
+function addFloorSidePanels(
+  target: GeoEntry[],
+  localX: number,
+  yBase: number,
+  localZ: number,
+  sizeX: number,
+  sizeZ: number,
+  oh: number
+) {
+  const totalW = sizeX + oh * 2
+  const totalD = sizeZ + oh * 2
+  const x0 = localX - oh
+  const z0 = localZ - oh
+  const cx = localX + sizeX / 2
+  const cz = localZ + sizeZ / 2
+  const EPS = 0.001
+
+  // South side (+Z)
+  target.push({
+    geo: bakedGeo(
+      new THREE.PlaneGeometry(totalW, FLOOR_THICKNESS),
+      cx,
+      yBase,
+      z0 + totalD + EPS,
+      0,
+      totalW,
+      FLOOR_THICKNESS
+    ),
+    textureIndex: WOOD_TEXTURE_IDX,
+  })
+  // West side (-X)
+  target.push({
+    geo: bakedGeo(
+      new THREE.PlaneGeometry(totalD, FLOOR_THICKNESS),
+      x0 - EPS,
+      yBase,
+      cz,
+      -Math.PI / 2,
+      totalD,
+      FLOOR_THICKNESS
+    ),
+    textureIndex: WOOD_TEXTURE_IDX,
+  })
+}
 
 function addFloorStrip(
   target: GeoEntry[],
@@ -161,4 +208,7 @@ export function collectFloorGeometry(
       textureIndex: floorIdx,
     })
   }
+
+  // Wood side panels on floor slab edges (visible from outside)
+  addFloorSidePanels(target, localX, yBase, localZ, sizeX, sizeZ, oh)
 }
