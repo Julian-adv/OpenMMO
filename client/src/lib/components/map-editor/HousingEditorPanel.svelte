@@ -28,12 +28,16 @@
   const FLOOR_LEVELS = Array.from({ length: MAX_FLOOR_LEVEL + 1 }, (_, i) => i)
 
   const toCSS = (c: number) => `#${c.toString(16).padStart(6, '0')}`
-  const TEX_ENTRIES = HOUSING_TEXTURES.map((t, i) => ({
-    idx: i,
-    label: t.label,
-    color: toCSS(t.fallbackColor),
-    sortOrder: t.sortOrder ?? i,
-  })).sort((a, b) => a.sortOrder - b.sortOrder)
+  const TEX_ENTRIES = HOUSING_TEXTURES
+    .map((t, i) => ({
+      idx: i,
+      label: t.label,
+      color: toCSS(t.fallbackColor),
+      sortOrder: t.sortOrder ?? i,
+      internal: t.internal ?? false,
+    }))
+    .filter((t) => !t.internal)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
 
   let texPreviews = $state<(string | null)[]>(HOUSING_TEXTURES.map(() => null))
   let openDropdown = $state<string | null>(null)

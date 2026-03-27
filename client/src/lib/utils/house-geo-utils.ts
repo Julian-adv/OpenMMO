@@ -25,8 +25,8 @@ export const FRAME_DEPTH = WALL_THICKNESS + FRAME_PROTRUSION * 2
 export const WOOD_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/wood_shutter_1k'
 )
-export const LINEN_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
-  (e) => e.glb === 'housing/rough_linen_1k'
+export const SHUTTER_PANEL_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
+  (e) => e.glb === 'housing/shutter_panel_1k'
 )
 
 /** Compute floor overhang for a given floor level (upper floors extend beyond walls). */

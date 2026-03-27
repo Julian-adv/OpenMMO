@@ -17,6 +17,8 @@ export interface HousingTextureEntry {
   sortOrder?: number
   /** Map UV 0→1 per wall segment (no tiling). Default false. */
   fitSegment?: boolean
+  /** Internal texture — hidden from the user-facing texture picker. */
+  internal?: boolean
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -152,6 +154,14 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     glb: 'housing/rough_linen_1k',
     fallbackColor: 0xc8b898,
     sortOrder: 40,
+  },
+  // Internal (not user-selectable)
+  {
+    label: 'Shutter Panel',
+    glb: 'housing/shutter_panel_1k',
+    fallbackColor: 0x8a7050,
+    fitSegment: true,
+    internal: true,
   },
 ]
 

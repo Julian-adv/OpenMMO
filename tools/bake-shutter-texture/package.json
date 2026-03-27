@@ -1,0 +1,13 @@
+{
+  "name": "bake-shutter-texture",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "bake": "node index.mjs"
+  },
+  "dependencies": {
+    "@gltf-transform/core": "^4.1.1",
+    "@gltf-transform/extensions": "^4.3.0",
+    "canvas": "^3.1.0"
+  }
+}

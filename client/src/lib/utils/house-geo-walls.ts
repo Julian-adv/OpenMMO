@@ -2,7 +2,6 @@
  * house-geo-walls.ts — Wall segment generation with door/window openings.
  */
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { RoomData, WallConfig } from '../types/housing'
 import { getHousingMaterial } from './housing-textures'
 import {
@@ -11,7 +10,7 @@ import {
   HOUSING_TEXTURES,
   FRAME_DEPTH,
   WOOD_TEXTURE_IDX,
-  LINEN_TEXTURE_IDX,
+  SHUTTER_PANEL_TEXTURE_IDX,
   WALL_DIR_INFO,
   bakedGeo,
   floorYBase,
@@ -32,7 +31,7 @@ const FRAME_BEAM_Y_FRAC = 0.4 // beam position from bottom
 const FRAME_SIDE_FRAC = 0.1 // side strip width as fraction of segment width
 const FRAME_BOTTOM_FRAC = 0.05 // bottom strip height fraction
 const FRAME_DIAG_THICKNESS = 0.06 // diagonal beam thickness in meters
-const SHUTTER_BAR = 0.03 // shutter frame/cross bar thickness in meters
+const SHUTTER_BORDER = 0.045 // shutter border frame thickness (used for side-face UV)
 
 // Shared temp matrix for frame diagonal geometry (single-threaded, sync only)
 const _frameMat = new THREE.Matrix4()
@@ -552,7 +551,7 @@ export function collectWallSegments(
             openAngle,
           })
         } else {
-          // Two hinged shutters per window: cloth panel + wood border + cross bars
+          // Two hinged shutters per window: single box with composite texture
           const halfW = WINDOW_WIDTH / 2
           const outwardSign = dirInfo.isFront ? 1 : -1
 
@@ -563,64 +562,29 @@ export function collectWallSegments(
           const panelH = headerBot - beamTop
           const panelYOff = beamTop - WINDOW_BOTTOM + panelH / 2
 
-          const clothInset = 0.01
-          const clothGeo = new THREE.BoxGeometry(
-            halfW - clothInset,
-            panelH - clothInset,
-            WALL_THICKNESS / 4 - clothInset
+          const shutterGeo = new THREE.BoxGeometry(
+            halfW,
+            panelH,
+            WALL_THICKNESS / 4
           )
-          const linenMat =
-            LINEN_TEXTURE_IDX >= 0
-              ? getHousingMaterial(LINEN_TEXTURE_IDX)
-              : panelMat
-
-          // Merge 6 wood bars (border + cross) into one geometry per shutter
-          const barDepth = WALL_THICKNESS / 2
-          const barParts: THREE.BoxGeometry[] = []
-          const barPositions: [number, number][] = [
-            // border: top, bottom, left, right
-            [0, panelH / 2 - SHUTTER_BAR / 2],
-            [0, -(panelH / 2 - SHUTTER_BAR / 2)],
-          ]
-          for (const [bx, by] of barPositions) {
-            const g = new THREE.BoxGeometry(halfW, SHUTTER_BAR, barDepth)
-            g.translate(bx, by, 0)
-            barParts.push(g)
+          // Remap side face UVs to wood border region of composite texture
+          {
+            const uv = shutterGeo.getAttribute('uv')
+            const woodU = SHUTTER_BORDER / halfW / 2
+            const woodV = 0.5
+            // Vertices 0–15 are the 4 side faces (+X, -X, +Y, -Y)
+            for (let vi = 0; vi < 16; vi++) {
+              uv.setXY(vi, woodU, woodV)
+            }
           }
-          const vBarPositions: [number, number][] = [
-            [-(halfW / 2 - SHUTTER_BAR / 2), 0],
-            [halfW / 2 - SHUTTER_BAR / 2, 0],
-          ]
-          for (const [bx, by] of vBarPositions) {
-            const g = new THREE.BoxGeometry(SHUTTER_BAR, panelH, barDepth)
-            g.translate(bx, by, 0)
-            barParts.push(g)
-          }
-          // Cross: horizontal + vertical (inner area between border bars)
-          const crossH = new THREE.BoxGeometry(
-            halfW - SHUTTER_BAR * 2,
-            SHUTTER_BAR,
-            barDepth
-          )
-          barParts.push(crossH)
-          const crossV = new THREE.BoxGeometry(
-            SHUTTER_BAR,
-            panelH - SHUTTER_BAR * 2,
-            barDepth
-          )
-          barParts.push(crossV)
-          const mergedBarGeo = mergeGeometries(barParts)!
-          for (const g of barParts) g.dispose()
+          const shutterMat = getHousingMaterial(SHUTTER_PANEL_TEXTURE_IDX)
 
           for (const side of [-1, 1] as const) {
             const panelX = (dirInfo.isNS ? -side : side) * (halfW / 2 - inset)
 
-            const cloth = new THREE.Mesh(clothGeo, linenMat)
-            cloth.position.set(panelX, panelYOff, panelZ)
-
-            const frame = new THREE.Mesh(mergedBarGeo, panelMat)
-            frame.castShadow = true
-            frame.position.set(panelX, panelYOff, panelZ)
+            const shutter = new THREE.Mesh(shutterGeo, shutterMat)
+            shutter.castShadow = true
+            shutter.position.set(panelX, panelYOff, panelZ)
 
             const pivot = new THREE.Group()
             pivot.name = `win_r${roomIndex}_${dir}_${i}_${side < 0 ? 'L' : 'R'}`
@@ -635,8 +599,7 @@ export function collectWallSegments(
               pivot.rotation.y = Math.PI / 2
             }
 
-            pivot.add(cloth)
-            pivot.add(frame)
+            pivot.add(shutter)
             if (isOpen) {
               pivot.rotation.y = openAngle
             }
