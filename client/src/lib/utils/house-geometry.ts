@@ -197,7 +197,7 @@ function collectRoomGeometries(
   )
 }
 
-/** Swap door/window materials to alphaHash ghost versions for interior view. */
+/** Swap door/window materials to semi-transparent ghost versions for interior view. */
 export function applyDoorGhostMaterials(
   result: HouseGroupResult,
   floor: number

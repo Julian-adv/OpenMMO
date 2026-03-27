@@ -1,8 +1,8 @@
 /**
- * bake-shutter-texture — Pre-bake composite shutter texture (wood frame + linen center)
+ * bake-shutter-texture — Pre-bake composite shutter texture (wood frame + glass center)
  *
- * Reads wood_shutter_1k.glb and rough_linen_1k.glb, composites them into a
- * shutter panel texture (diffuse, normal, ORM), and writes shutter_panel_1k.glb.
+ * Reads wood_shutter_1k.glb, composites wood bars/borders with a flat glass
+ * tint center, and writes shutter_panel_1k.glb.
  *
  * Usage:
  *   cd tools/bake-shutter-texture && npm install && npm run bake
@@ -208,8 +208,8 @@ function addBarEdgeNormals(canvas) {
   }
 }
 
-/** Set alpha: wood bar/border regions = 255 (opaque), linen panels = semi-transparent */
-function addLinenAlpha(canvas) {
+/** Set alpha: wood bar/border regions = 255 (opaque), glass panels = semi-transparent */
+function addGlassAlpha(canvas) {
   const ctx = canvas.getContext('2d')
   const bdU = Math.round(BORDER_FRAC_U * SIZE)
   const bdV = Math.round(BORDER_FRAC_V * SIZE)
@@ -219,11 +219,11 @@ function addLinenAlpha(canvas) {
   const imgData = ctx.getImageData(0, 0, SIZE, SIZE)
   const data = imgData.data
 
-  const LINEN_ALPHA = 153 // ~60% opacity for linen panels
+  const GLASS_ALPHA = 60 // ~24% opacity for glass panels
 
-  // Mark all pixels as linen first, then overwrite bar regions as opaque
+  // Mark all pixels as glass first, then overwrite bar regions as opaque
   for (let i = 3; i < data.length; i += 4) {
-    data[i] = LINEN_ALPHA
+    data[i] = GLASS_ALPHA
   }
 
   // Helper: set alpha=255 for a rectangular region
@@ -356,15 +356,9 @@ async function main() {
   const woodTextures = await extractTexturesFromGLB(
     path.join(TEXTURES_DIR, 'wood_shutter_1k.glb')
   )
-  const linenTextures = await extractTexturesFromGLB(
-    path.join(TEXTURES_DIR, 'rough_linen_1k.glb')
-  )
 
   console.log(
     `  wood: diffuse=${!!woodTextures.diffuse} normal=${!!woodTextures.normal} mr=${!!woodTextures.mr} ao=${!!woodTextures.ao}`
-  )
-  console.log(
-    `  linen: diffuse=${!!linenTextures.diffuse} normal=${!!linenTextures.normal} mr=${!!linenTextures.mr} ao=${!!linenTextures.ao}`
   )
   console.log(
     `  border frac: U=${BORDER_FRAC_U.toFixed(4)} V=${BORDER_FRAC_V.toFixed(4)}`
@@ -373,34 +367,33 @@ async function main() {
     `  cross frac:  U=${CROSS_FRAC_U.toFixed(4)} V=${CROSS_FRAC_V.toFixed(4)}`
   )
 
-  // Diffuse
+  // Diffuse: wood bars/borders + flat glass tint center
   console.log('Compositing diffuse...')
   const diffuseCanvas = compositeBarCanvas(
     woodTextures.diffuse,
-    linenTextures.diffuse,
+    null,
     '#6b5a3e',
-    '#c8b898'
+    '#c8d8e8'
   )
   addEdgeAO(diffuseCanvas)
 
-  // Alpha: linen panels are semi-transparent, wood bars/border are opaque
-  addLinenAlpha(diffuseCanvas)
+  // Alpha: glass panels are semi-transparent, wood bars/border are opaque
+  addGlassAlpha(diffuseCanvas)
 
-  // Normal
+  // Normal: flat normal for glass center, wood normals for bars/borders
   console.log('Compositing normal...')
   const normalCanvas = compositeBarCanvas(
     woodTextures.normal,
-    linenTextures.normal,
+    null,
     'rgb(128,128,255)',
     'rgb(128,128,255)'
   )
   addBarEdgeNormals(normalCanvas)
 
-  // ORM: composite AO and MR channels separately, then pack
+  // ORM: wood bars keep their ORM, glass center gets smooth roughness
   console.log('Compositing ORM...')
   const woodORM = packORM(woodTextures.ao, woodTextures.mr)
-  const linenORM = packORM(linenTextures.ao, linenTextures.mr)
-  const ormCanvas = compositeBarCanvas(woodORM, linenORM, 'rgb(255,220,0)', 'rgb(255,220,0)')
+  const ormCanvas = compositeBarCanvas(woodORM, null, 'rgb(255,220,0)', 'rgb(255,80,0)')
 
   // Write GLB
   console.log('Writing GLB...')
