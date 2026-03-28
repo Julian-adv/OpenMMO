@@ -73,10 +73,15 @@ export interface DoorMeshInfo {
 
 export interface HouseGroupResult {
   houseGroup: THREE.Group
-  /** Per-floor groups: key = floorLevel, value = { front, back, stair } */
+  /** Per-floor groups: key = floorLevel, value = { front, back, floor, stair } */
   floorGroups: Map<
     number,
-    { front: THREE.Group; back: THREE.Group; stair: THREE.Group }
+    {
+      front: THREE.Group
+      back: THREE.Group
+      floor: THREE.Group
+      stair: THREE.Group
+    }
   >
   aabb: THREE.Box3
   /** JSON hash of rooms for change detection */
@@ -103,6 +108,7 @@ export interface RoomFootprint {
 export type FloorEntries = {
   front: GeoEntry[]
   back: GeoEntry[]
+  floor: GeoEntry[]
   stair: GeoEntry[]
   doors: DoorMeshInfo[]
 }
@@ -211,7 +217,7 @@ export function getOrCreateFloorEntries(
 ): FloorEntries {
   let entries = perFloor.get(fl)
   if (!entries) {
-    entries = { front: [], back: [], stair: [], doors: [] }
+    entries = { front: [], back: [], floor: [], stair: [], doors: [] }
     perFloor.set(fl, entries)
   }
   return entries

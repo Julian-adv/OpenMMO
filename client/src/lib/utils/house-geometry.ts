@@ -82,6 +82,7 @@ export function buildHouseGroup(
       ri,
       entries.front,
       entries.back,
+      entries.floor,
       entries.stair,
       entries.doors,
       shouldSuppressRoof(room, footprintsByFloor.get(fl + 1) ?? []),
@@ -92,7 +93,12 @@ export function buildHouseGroup(
 
   const floorGroups = new Map<
     number,
-    { front: THREE.Group; back: THREE.Group; stair: THREE.Group }
+    {
+      front: THREE.Group
+      back: THREE.Group
+      floor: THREE.Group
+      stair: THREE.Group
+    }
   >()
 
   let mergedMeshCount = 0
@@ -103,10 +109,13 @@ export function buildHouseGroup(
     front.name = `front_f${fl}`
     const back = new THREE.Group()
     back.name = `back_f${fl}`
+    const floor = new THREE.Group()
+    floor.name = `floor_f${fl}`
     const stair = new THREE.Group()
     stair.name = `stair_f${fl}`
     mergedMeshCount += addMergedMeshes(front, entries.front)
     mergedMeshCount += addMergedMeshes(back, entries.back)
+    mergedMeshCount += addMergedMeshes(floor, entries.floor)
     mergedMeshCount += addMergedMeshes(stair, entries.stair)
 
     for (const door of entries.doors) {
@@ -115,8 +124,9 @@ export function buildHouseGroup(
 
     houseGroup.add(front)
     houseGroup.add(back)
+    houseGroup.add(floor)
     houseGroup.add(stair)
-    floorGroups.set(fl, { front, back, stair })
+    floorGroups.set(fl, { front, back, floor, stair })
   }
 
   for (const door of allDoors) {
@@ -145,6 +155,7 @@ function collectRoomGeometries(
   roomIndex: number,
   frontEntries: GeoEntry[],
   backEntries: GeoEntry[],
+  floorEntries: GeoEntry[],
   stairEntries: GeoEntry[],
   doors: DoorMeshInfo[],
   suppressRoof: boolean,
@@ -156,7 +167,7 @@ function collectRoomGeometries(
     return
   }
 
-  collectFloorGeometry(room, backEntries, stairwellFootprints)
+  collectFloorGeometry(room, floorEntries, stairwellFootprints)
   if (!suppressRoof) collectRoofGeometry(room, frontEntries, backEntries)
 
   collectWallSegments(
