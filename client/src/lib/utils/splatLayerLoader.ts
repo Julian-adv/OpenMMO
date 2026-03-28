@@ -96,7 +96,7 @@ function packORM(
   const canvas = document.createElement('canvas')
   canvas.width = w
   canvas.height = h
-  const ctx = canvas.getContext('2d')!
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
   ctx.fillStyle = 'rgb(255,255,0)'
   ctx.fillRect(0, 0, w, h)
 
@@ -104,7 +104,7 @@ function packORM(
     const mrc = document.createElement('canvas')
     mrc.width = w
     mrc.height = h
-    const mctx = mrc.getContext('2d')!
+    const mctx = mrc.getContext('2d', { willReadFrequently: true })!
     mctx.drawImage(mrImg, 0, 0, w, h)
     const mrData = mctx.getImageData(0, 0, w, h).data
 
@@ -121,7 +121,7 @@ function packORM(
     const aoc = document.createElement('canvas')
     aoc.width = w
     aoc.height = h
-    const actx = aoc.getContext('2d')!
+    const actx = aoc.getContext('2d', { willReadFrequently: true })!
     actx.drawImage(aoImg, 0, 0, w, h)
     const aoData = actx.getImageData(0, 0, w, h).data
 

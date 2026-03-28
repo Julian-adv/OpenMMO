@@ -28,7 +28,7 @@ export async function loadReferenceImage(
 ): Promise<ReferenceImageData> {
   const bitmap = await createImageBitmap(file)
   const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
-  const ctx = canvas.getContext('2d')!
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })!
   ctx.drawImage(bitmap, 0, 0)
   const imageData = ctx.getImageData(0, 0, bitmap.width, bitmap.height)
   bitmap.close()
