@@ -310,6 +310,8 @@ export interface StairwellInfo {
   localMaxZ: number
   lowerFloor: number
   upperFloor: number
+  alongZ: boolean
+  reversed: boolean
 }
 
 export interface RuntimePassability {
@@ -387,6 +389,8 @@ export function buildRuntimePassability(house: HouseData): RuntimePassability {
         localMaxZ: room.localZ + room.sizeZ,
         lowerFloor: room.floorLevel,
         upperFloor: room.floorLevel + 1,
+        alongZ: room.sizeZ >= room.sizeX,
+        reversed: room.stairReversed ?? false,
       })
     }
   }

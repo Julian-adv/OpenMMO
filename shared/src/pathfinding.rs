@@ -1,5 +1,5 @@
 use std::cmp::{Ordering, Reverse};
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use crate::housing::{HouseData, RoomData, RoomType, WallDirection, WallVariant};
 
@@ -35,6 +35,8 @@ pub struct StairwellInfo {
     pub local_max_z: i32,
     pub lower_floor: u8,
     pub upper_floor: u8,
+    pub along_z: bool,
+    pub reversed: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -132,6 +134,8 @@ pub fn build_runtime_passability(house: &HouseData) -> RuntimePassability {
                 local_max_z: room.local_z + room.size_z as i32,
                 lower_floor: room.floor_level,
                 upper_floor: room.floor_level + 1,
+                along_z: room.size_z as i32 >= room.size_x as i32,
+                reversed: room.stair_reversed,
             });
         }
     }
@@ -379,25 +383,41 @@ fn edge_blocks_axis(
 
 /// Get the floor level at a world position based on Y height.
 /// Returns 0 if outside any house.
+/// Picks the floor whose y_base is closest to y among all floors whose
+/// grid contains the cell — handles mid-stairwell clicks and overlapping
+/// floor ranges at stairwell landings.
 pub fn get_floor_at_position(cache: &PassabilityCache, x: f32, z: f32, y: f32) -> u8 {
     let cx = x.floor() as i32;
     let cz = z.floor() as i32;
+    let mut best_floor: u8 = 0;
+    let mut best_dist = f32::INFINITY;
+    let mut found = false;
+
     for rp in cache.values() {
         if x < rp.min_x || x > rp.max_x || z < rp.min_z || z > rp.max_z {
             continue;
         }
         for floor in &rp.floors {
-            if y < floor.y_base - 0.5 || y >= floor.y_base + floor.wall_height {
-                continue;
-            }
             let gx = cx - rp.house_origin_x.floor() as i32 - floor.origin_x;
             let gz = cz - rp.house_origin_z.floor() as i32 - floor.origin_z;
-            if gx >= 0 && gx < floor.width as i32 && gz >= 0 && gz < floor.depth as i32 {
-                return floor.floor_level;
+            if gx < 0 || gx >= floor.width as i32 || gz < 0 || gz >= floor.depth as i32 {
+                continue;
+            }
+            // Cell is inside this floor's grid — pick the closest y_base
+            let dist = (y - floor.y_base).abs();
+            if dist < best_dist {
+                best_dist = dist;
+                best_floor = floor.floor_level;
+                found = true;
             }
         }
     }
-    0
+
+    if found {
+        best_floor
+    } else {
+        0
+    }
 }
 
 /// Get the yBase for a given floor level at a world position.
@@ -496,7 +516,9 @@ const DIRS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 struct AStarNode {
     x: i32,
     z: i32,
-    floor: u8,
+    /// Floor key: regular floors are multiples of FLOOR_SCALE,
+    /// intermediate stairwell cells use values in between.
+    fk: u16,
     g: u32,
     f: u32,
 }
@@ -518,11 +540,127 @@ impl PartialOrd for AStarNode {
     }
 }
 
+type AStarKey = (i32, i32, u16);
+
 struct ClosedEntry {
     g: u32,
-    parent_x: i32,
-    parent_z: i32,
-    parent_floor: u8,
+    parent: AStarKey,
+}
+
+/// Multiplier: regular floor N has key N * FLOOR_SCALE.
+/// Stairwell intermediate cells use keys between adjacent regular floors.
+const FLOOR_SCALE: u16 = 16;
+
+fn floor_to_key(f: u8) -> u16 {
+    f as u16 * FLOOR_SCALE
+}
+
+fn key_to_floor(k: u16) -> u8 {
+    (k / FLOOR_SCALE) as u8
+}
+
+fn is_regular_key(k: u16) -> bool {
+    k % FLOOR_SCALE == 0
+}
+
+/// Precomputed stairwell cell neighbor info for the A* expansion.
+struct StairNeighbor {
+    x: i32,
+    z: i32,
+    fk: u16,
+}
+struct StairCellExpansion {
+    prev: Option<StairNeighbor>,
+    next: Option<StairNeighbor>,
+}
+
+/// Build the stairwell cell map for A* pathfinding.
+/// Maps (x, z, floor_key) → expansion neighbors along the stair axis.
+fn build_stair_cells(cache: &PassabilityCache) -> HashMap<AStarKey, StairCellExpansion> {
+    let mut map = HashMap::new();
+
+    for rp in cache.values() {
+        let ox = rp.house_origin_x.floor() as i32;
+        let oz = rp.house_origin_z.floor() as i32;
+
+        for stair in &rp.stairwells {
+            let lower_key = floor_to_key(stair.lower_floor);
+            let upper_key = floor_to_key(stair.upper_floor);
+            let n = if stair.along_z {
+                stair.local_max_z - stair.local_min_z
+            } else {
+                stair.local_max_x - stair.local_min_x
+            };
+            let width = if stair.along_z {
+                stair.local_max_x - stair.local_min_x
+            } else {
+                stair.local_max_z - stair.local_min_z
+            };
+
+            // Compute the floor key for step i
+            let step_key = |i: i32| -> u16 {
+                if i == 0 {
+                    lower_key
+                } else if i == n - 1 {
+                    upper_key
+                } else {
+                    lower_key + i as u16
+                }
+            };
+
+            // Compute world (x, z) for step i and lateral offset w
+            let step_pos = |i: i32, w: i32| -> (i32, i32) {
+                if stair.along_z {
+                    let z = if stair.reversed {
+                        stair.local_max_z - 1 - i
+                    } else {
+                        stair.local_min_z + i
+                    };
+                    (ox + stair.local_min_x + w, oz + z)
+                } else {
+                    let x = if stair.reversed {
+                        stair.local_max_x - 1 - i
+                    } else {
+                        stair.local_min_x + i
+                    };
+                    (ox + x, oz + stair.local_min_z + w)
+                }
+            };
+
+            for i in 0..n {
+                let fk = step_key(i);
+                let prev_fk = if i > 0 { Some(step_key(i - 1)) } else { None };
+                let next_fk = if i < n - 1 {
+                    Some(step_key(i + 1))
+                } else {
+                    None
+                };
+
+                for w in 0..width {
+                    let (cx, cz) = step_pos(i, w);
+                    let prev = prev_fk.map(|pk| {
+                        let (px, pz) = step_pos(i - 1, w);
+                        StairNeighbor {
+                            x: px,
+                            z: pz,
+                            fk: pk,
+                        }
+                    });
+                    let next = next_fk.map(|nk| {
+                        let (nx, nz) = step_pos(i + 1, w);
+                        StairNeighbor {
+                            x: nx,
+                            z: nz,
+                            fk: nk,
+                        }
+                    });
+                    map.insert((cx, cz, fk), StairCellExpansion { prev, next });
+                }
+            }
+        }
+    }
+
+    map
 }
 
 /// Find a path on a virtual 1m world grid with floor-level awareness.
@@ -552,37 +690,71 @@ pub fn find_path(
         };
     }
 
-    let h = |x: i32, z: i32, floor: u8| -> u32 {
-        ((x - gx).unsigned_abs()
-            + (z - gz).unsigned_abs()
-            + (floor as i32 - goal_floor as i32).unsigned_abs() * 2) as u32
-    };
+    let stair_cells = build_stair_cells(cache);
+
+    // Build set of all (x, z) positions that belong to any stairwell.
+    // Used to block regular-floor cardinal moves into stairwell interior cells.
+    let mut stair_positions: HashSet<(i32, i32)> = HashSet::new();
+    for &(x, z, _) in stair_cells.keys() {
+        stair_positions.insert((x, z));
+    }
+
+    let start_fk = floor_to_key(start_floor);
+    let goal_fk = floor_to_key(goal_floor);
 
     let mut open = BinaryHeap::new();
-    let mut closed: HashMap<(i32, i32, u8), ClosedEntry> = HashMap::new();
+    let mut closed: HashMap<AStarKey, ClosedEntry> = HashMap::new();
 
-    let start_h = h(sx, sz, start_floor);
+    let h = |x: i32, z: i32, fk: u16| -> u32 {
+        let real_f = (fk / FLOOR_SCALE) as i32;
+        let goal_f = goal_floor as i32;
+        (x - gx).unsigned_abs()
+            + (z - gz).unsigned_abs()
+            + (real_f - goal_f).unsigned_abs() as u32 * 2
+    };
+
+    let start_h = h(sx, sz, start_fk);
+    let start_key: AStarKey = (sx, sz, start_fk);
     open.push(Reverse(AStarNode {
         x: sx,
         z: sz,
-        floor: start_floor,
+        fk: start_fk,
         g: 0,
         f: start_h,
     }));
     closed.insert(
-        (sx, sz, start_floor),
+        start_key,
         ClosedEntry {
             g: 0,
-            parent_x: sx,
-            parent_z: sz,
-            parent_floor: start_floor,
+            parent: start_key,
         },
     );
 
+    // If start is on a stairwell intermediate cell, also seed that key
+    // so the player doesn't have to walk back to entry landing first.
+    for (&key, _) in &stair_cells {
+        let (kx, kz, kfk) = key;
+        if kx == sx && kz == sz && key_to_floor(kfk) == start_floor && kfk != start_fk {
+            let sh = h(sx, sz, kfk);
+            open.push(Reverse(AStarNode {
+                x: sx,
+                z: sz,
+                fk: kfk,
+                g: 0,
+                f: sh,
+            }));
+            closed.insert(
+                key,
+                ClosedEntry {
+                    g: 0,
+                    parent: start_key,
+                },
+            );
+        }
+    }
+
     let mut best_h = start_h;
-    let mut best_x = sx;
-    let mut best_z = sz;
-    let mut best_floor = start_floor;
+    let mut best_key = start_key;
     let mut expanded = 0;
 
     while let Some(Reverse(cur)) = open.pop() {
@@ -591,149 +763,120 @@ pub fn find_path(
         }
         expanded += 1;
 
-        if cur.x == gx && cur.z == gz && cur.floor == goal_floor {
+        let cur_key: AStarKey = (cur.x, cur.z, cur.fk);
+
+        if cur.x == gx && cur.z == gz && cur.fk == goal_fk {
             return PathResult {
-                waypoints: reconstruct_path(
-                    &closed,
-                    sx,
-                    sz,
-                    start_floor,
-                    gx,
-                    gz,
-                    goal_floor,
-                    goal_x,
-                    goal_z,
-                ),
+                waypoints: reconstruct_path_vf(&closed, start_key, cur_key, goal_x, goal_z),
                 found: true,
             };
         }
 
-        if let Some(entry) = closed.get(&(cur.x, cur.z, cur.floor)) {
+        if let Some(entry) = closed.get(&cur_key) {
             if cur.g > entry.g {
                 continue;
             }
         }
 
-        // Cardinal neighbors
-        for &(dx, dz) in &DIRS {
-            let nx = cur.x + dx;
-            let nz = cur.z + dz;
-            let new_g = cur.g + 1;
+        let on_regular = is_regular_key(cur.fk);
+        let cur_floor = key_to_floor(cur.fk);
 
-            if let Some(existing) = closed.get(&(nx, nz, cur.floor)) {
-                if existing.g <= new_g {
+        // --- Regular floor expansion (cardinal neighbors) ---
+        // Skip stairwell interior cells that aren't landings on this regular floor
+        let is_stair_interior =
+            stair_positions.contains(&(cur.x, cur.z)) && !stair_cells.contains_key(&cur_key);
+        if on_regular && !is_stair_interior {
+            for &(dx, dz) in &DIRS {
+                let nx = cur.x + dx;
+                let nz = cur.z + dz;
+                let new_g = cur.g + 1;
+
+                if is_cardinal_move_blocked(cache, cur.x, cur.z, dx, dz, cur_floor) {
                     continue;
                 }
-            }
 
-            if is_cardinal_move_blocked(cache, cur.x, cur.z, dx, dz, cur.floor) {
-                continue;
-            }
-
-            closed.insert(
-                (nx, nz, cur.floor),
-                ClosedEntry {
-                    g: new_g,
-                    parent_x: cur.x,
-                    parent_z: cur.z,
-                    parent_floor: cur.floor,
-                },
-            );
-            let nh = h(nx, nz, cur.floor);
-            open.push(Reverse(AStarNode {
-                x: nx,
-                z: nz,
-                floor: cur.floor,
-                g: new_g,
-                f: new_g + nh,
-            }));
-
-            if nh < best_h {
-                best_h = nh;
-                best_x = nx;
-                best_z = nz;
-                best_floor = cur.floor;
-            }
-        }
-
-        // Stairwell transitions
-        for rp in cache.values() {
-            let cx_f = cur.x as f32;
-            let cz_f = cur.z as f32;
-            if cx_f < rp.min_x || cx_f >= rp.max_x || cz_f < rp.min_z || cz_f >= rp.max_z {
-                continue;
-            }
-            for stair in &rp.stairwells {
-                let local_x = cur.x - rp.house_origin_x.floor() as i32;
-                let local_z = cur.z - rp.house_origin_z.floor() as i32;
-                if local_x < stair.local_min_x
-                    || local_x >= stair.local_max_x
-                    || local_z < stair.local_min_z
-                    || local_z >= stair.local_max_z
+                // Block moves into stairwell interior cells on regular floor.
+                // A cell (nx, nz) is a stairwell interior if it belongs to a
+                // stairwell but has no stair_cells entry at the current fk
+                // (only landings match regular floor keys).
+                if stair_positions.contains(&(nx, nz))
+                    && !stair_cells.contains_key(&(nx, nz, cur.fk))
                 {
                     continue;
                 }
 
-                let target_floor = if cur.floor == stair.lower_floor {
-                    Some(stair.upper_floor)
-                } else if cur.floor == stair.upper_floor {
-                    Some(stair.lower_floor)
-                } else {
-                    None
-                };
-
-                let Some(target_floor) = target_floor else {
-                    continue;
-                };
-
-                let new_g = cur.g + 2;
-                if let Some(existing) = closed.get(&(cur.x, cur.z, target_floor)) {
+                let nkey: AStarKey = (nx, nz, cur.fk);
+                if let Some(existing) = closed.get(&nkey) {
                     if existing.g <= new_g {
                         continue;
                     }
                 }
 
                 closed.insert(
-                    (cur.x, cur.z, target_floor),
+                    nkey,
                     ClosedEntry {
                         g: new_g,
-                        parent_x: cur.x,
-                        parent_z: cur.z,
-                        parent_floor: cur.floor,
+                        parent: cur_key,
                     },
                 );
-                let nh = h(cur.x, cur.z, target_floor);
+                let nh = h(nx, nz, cur.fk);
                 open.push(Reverse(AStarNode {
-                    x: cur.x,
-                    z: cur.z,
-                    floor: target_floor,
+                    x: nx,
+                    z: nz,
+                    fk: cur.fk,
                     g: new_g,
                     f: new_g + nh,
                 }));
-
                 if nh < best_h {
                     best_h = nh;
-                    best_x = cur.x;
-                    best_z = cur.z;
-                    best_floor = target_floor;
+                    best_key = nkey;
+                }
+            }
+        }
+
+        // --- Stairwell axis expansion (prev/next along stairwell) ---
+        if let Some(sc) = stair_cells.get(&cur_key) {
+            for neighbor in [&sc.prev, &sc.next].into_iter().flatten() {
+                let new_g = cur.g + 1;
+                let nkey: AStarKey = (neighbor.x, neighbor.z, neighbor.fk);
+                if let Some(existing) = closed.get(&nkey) {
+                    if existing.g <= new_g {
+                        continue;
+                    }
+                }
+                closed.insert(
+                    nkey,
+                    ClosedEntry {
+                        g: new_g,
+                        parent: cur_key,
+                    },
+                );
+                let nh = h(neighbor.x, neighbor.z, neighbor.fk);
+                open.push(Reverse(AStarNode {
+                    x: neighbor.x,
+                    z: neighbor.z,
+                    fk: neighbor.fk,
+                    g: new_g,
+                    f: new_g + nh,
+                }));
+                if nh < best_h {
+                    best_h = nh;
+                    best_key = nkey;
                 }
             }
         }
     }
 
     // Partial path to closest node
-    if best_x != sx || best_z != sz || best_floor != start_floor {
+    let (bx, bz, _) = best_key;
+    if best_key != start_key {
         return PathResult {
-            waypoints: reconstruct_path(
+            waypoints: reconstruct_path_vf(
                 &closed,
-                sx,
-                sz,
-                start_floor,
-                best_x,
-                best_z,
-                best_floor,
-                best_x as f32 + 0.5,
-                best_z as f32 + 0.5,
+                start_key,
+                best_key,
+                bx as f32 + 0.5,
+                bz as f32 + 0.5,
             ),
             found: false,
         };
@@ -745,35 +888,34 @@ pub fn find_path(
     }
 }
 
-fn reconstruct_path(
-    closed: &HashMap<(i32, i32, u8), ClosedEntry>,
-    sx: i32,
-    sz: i32,
-    s_floor: u8,
-    ex: i32,
-    ez: i32,
-    e_floor: u8,
+fn reconstruct_path_vf(
+    closed: &HashMap<AStarKey, ClosedEntry>,
+    start: AStarKey,
+    end: AStarKey,
     final_x: f32,
     final_z: f32,
 ) -> Vec<PathWaypoint> {
     let mut path = Vec::new();
-    let mut cx = ex;
-    let mut cz = ez;
-    let mut cf = e_floor;
+    let mut key = end;
 
-    while cx != sx || cz != sz || cf != s_floor {
-        path.push(PathWaypoint {
-            x: cx as f32 + 0.5,
-            z: cz as f32 + 0.5,
-            floor: cf,
-        });
-        let entry = match closed.get(&(cx, cz, cf)) {
+    while key != start {
+        let (cx, cz, fk) = key;
+        // Only emit waypoints at regular floor levels (entry/exit landings).
+        // Intermediate stairwell cells are skipped — the client interpolates
+        // between the entry and exit landings, and GameSceneHousingLayer
+        // handles the Y offset based on stairwell position.
+        if is_regular_key(fk) {
+            path.push(PathWaypoint {
+                x: cx as f32 + 0.5,
+                z: cz as f32 + 0.5,
+                floor: key_to_floor(fk),
+            });
+        }
+        let entry = match closed.get(&key) {
             Some(e) => e,
             None => break,
         };
-        cx = entry.parent_x;
-        cz = entry.parent_z;
-        cf = entry.parent_floor;
+        key = entry.parent;
     }
 
     path.reverse();
@@ -904,10 +1046,8 @@ pub fn find_and_smooth_path(
     if result.waypoints.is_empty() {
         return result;
     }
-    PathResult {
-        waypoints: smooth_path(&result.waypoints, cache),
-        found: result.found,
-    }
+    // TODO: re-enable smooth_path once wall collision is fixed for diagonals
+    result
 }
 
 #[cfg(test)]
