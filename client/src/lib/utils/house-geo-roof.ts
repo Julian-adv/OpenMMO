@@ -9,6 +9,7 @@ import {
   ROOF_OVERHANG,
   FRAME_DEPTH,
   WOOD_TEXTURE_IDX,
+  SHUTTER_PANEL_TEXTURE_IDX,
   HOUSING_TEXTURES,
   bakedGeo,
   cellInFootprint,
@@ -297,6 +298,24 @@ function collectGabledRoof(
             pillarH
           ),
           textureIndex: WOOD_TEXTURE_IDX,
+        })
+      }
+
+      // Glass pane filling the window opening
+      if (SHUTTER_PANEL_TEXTURE_IDX >= 0) {
+        const glassGeo = new THREE.PlaneGeometry(GABLE_WIN_W, GABLE_WIN_H)
+        if (flipWinding) glassGeo.scale(1, 1, -1)
+        target.push({
+          geo: bakedGeo(
+            glassGeo,
+            faceX,
+            wallTopY + winCenterH,
+            faceZ,
+            beamRotY,
+            1,
+            1
+          ),
+          textureIndex: SHUTTER_PANEL_TEXTURE_IDX,
         })
       }
     }
