@@ -16,7 +16,7 @@ import {
   type RoomFootprint,
 } from './house-geo-utils'
 
-/** Add wood-textured side panels on the camera-facing (south + west) floor slab edges. */
+/** Add side panels on the camera-facing (south + west) floor slab edges, using that wall's texture. */
 function addFloorSidePanels(
   target: GeoEntry[],
   localX: number,
@@ -24,7 +24,9 @@ function addFloorSidePanels(
   localZ: number,
   sizeX: number,
   sizeZ: number,
-  oh: number
+  oh: number,
+  southTexIdx: number,
+  westTexIdx: number
 ) {
   const totalW = sizeX + oh * 2
   const totalD = sizeZ + oh * 2
@@ -45,7 +47,7 @@ function addFloorSidePanels(
       totalW,
       FLOOR_THICKNESS
     ),
-    textureIndex: WOOD_TEXTURE_IDX,
+    textureIndex: southTexIdx,
   })
   // West side (-X)
   target.push({
@@ -58,7 +60,7 @@ function addFloorSidePanels(
       totalD,
       FLOOR_THICKNESS
     ),
-    textureIndex: WOOD_TEXTURE_IDX,
+    textureIndex: westTexIdx,
   })
 }
 
@@ -209,6 +211,24 @@ export function collectFloorGeometry(
     })
   }
 
-  // Wood side panels on floor slab edges (visible from outside)
-  addFloorSidePanels(target, localX, yBase, localZ, sizeX, sizeZ, oh)
+  // Side panels on floor slab edges (visible from outside), using wall texture
+  // fitSegment textures (e.g. Plaster & Wood) don't tile on thin edges — use wood instead
+  const resolveEdgeTex = (wallTex: number | undefined) => {
+    if (wallTex == null) return floorIdx
+    const idx = wallTex % HOUSING_TEXTURES.length
+    return HOUSING_TEXTURES[idx].fitSegment ? WOOD_TEXTURE_IDX : idx
+  }
+  const southTexIdx = resolveEdgeTex(room.wallSouth[0]?.texture)
+  const westTexIdx = resolveEdgeTex(room.wallWest[0]?.texture)
+  addFloorSidePanels(
+    target,
+    localX,
+    yBase,
+    localZ,
+    sizeX,
+    sizeZ,
+    oh,
+    southTexIdx,
+    westTexIdx
+  )
 }

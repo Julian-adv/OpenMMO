@@ -247,7 +247,7 @@ function collectGabledRoof(
     const target = isFront ? frontTarget : backTarget
     target.push({ geo, textureIndex: gableTexIdx })
 
-    if (WOOD_TEXTURE_IDX >= 0) {
+    if (WOOD_TEXTURE_IDX >= 0 && hasWindow) {
       const faceX = cx + (ridgeAlongX ? endOffset : 0)
       const faceZ = cz + (ridgeAlongX ? 0 : endOffset)
       const beamRotY = ridgeAlongX ? Math.PI / 2 : 0
@@ -267,39 +267,37 @@ function collectGabledRoof(
         textureIndex: WOOD_TEXTURE_IDX,
       })
 
-      if (hasWindow) {
-        const frameW = GABLE_WIN_W + GABLE_WIN_FRAME * 2
-        for (const edgeH of [winBot, winTop]) {
-          target.push({
-            geo: bakedGeo(
-              new THREE.BoxGeometry(frameW, GABLE_WIN_FRAME, FRAME_DEPTH),
-              faceX,
-              wallTopY + edgeH,
-              faceZ,
-              beamRotY,
-              frameW,
-              GABLE_WIN_FRAME
-            ),
-            textureIndex: WOOD_TEXTURE_IDX,
-          })
-        }
-        const pillarH = GABLE_WIN_H + GABLE_WIN_FRAME * 2
-        const winCenterY = wallTopY + winCenterH
-        for (const sign of [-1, 1]) {
-          const perpOff = sign * winHalfW
-          target.push({
-            geo: bakedGeo(
-              new THREE.BoxGeometry(GABLE_WIN_FRAME, pillarH, FRAME_DEPTH),
-              cx + (ridgeAlongX ? endOffset : perpOff),
-              winCenterY,
-              cz + (ridgeAlongX ? perpOff : endOffset),
-              beamRotY,
-              GABLE_WIN_FRAME,
-              pillarH
-            ),
-            textureIndex: WOOD_TEXTURE_IDX,
-          })
-        }
+      const frameW = GABLE_WIN_W + GABLE_WIN_FRAME * 2
+      for (const edgeH of [winBot, winTop]) {
+        target.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(frameW, GABLE_WIN_FRAME, FRAME_DEPTH),
+            faceX,
+            wallTopY + edgeH,
+            faceZ,
+            beamRotY,
+            frameW,
+            GABLE_WIN_FRAME
+          ),
+          textureIndex: WOOD_TEXTURE_IDX,
+        })
+      }
+      const pillarH = GABLE_WIN_H + GABLE_WIN_FRAME * 2
+      const winCenterY = wallTopY + winCenterH
+      for (const sign of [-1, 1]) {
+        const perpOff = sign * winHalfW
+        target.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(GABLE_WIN_FRAME, pillarH, FRAME_DEPTH),
+            cx + (ridgeAlongX ? endOffset : perpOff),
+            winCenterY,
+            cz + (ridgeAlongX ? perpOff : endOffset),
+            beamRotY,
+            GABLE_WIN_FRAME,
+            pillarH
+          ),
+          textureIndex: WOOD_TEXTURE_IDX,
+        })
       }
     }
   }
