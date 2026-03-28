@@ -17,6 +17,7 @@ const BGM_FILES = [
   'Crescendo of Remembering.mp3',
   'Sky of Burning Wings.mp3',
   'Sky of Burning Wings (1).mp3',
+  'Crown of the Dawning Sky.mp3',
 ]
 
 const BATTLE_BGM_FILES = [

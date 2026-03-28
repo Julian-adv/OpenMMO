@@ -52,6 +52,8 @@
   const _seenRooms = new Set<string>()
   let lastChunkX = NaN
   let lastChunkZ = NaN
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const occludedHouseIds = new Set<string>()
 
   // Debug passability wireframe
   const debugPassGroup = new THREE.Group()
@@ -165,6 +167,7 @@
     // Remove houses no longer present
     for (const [id, result] of houses) {
       if (!incomingById.has(id)) {
+        occludedHouseIds.delete(id)
         housingGroup.remove(result.houseGroup)
         disposeHouseGroup(result.houseGroup)
         houses.delete(id)
@@ -355,6 +358,12 @@
         const prev = houses.get(playerInsideHouseId)
         if (prev) resetFloorVisibility(prev)
       }
+      // Clear occlusion if entering a previously-occluded house
+      if (insideId && occludedHouseIds.has(insideId)) {
+        const curr = houses.get(insideId)
+        if (curr) resetOcclusionVisibility(curr)
+        occludedHouseIds.delete(insideId)
+      }
       // Apply new visibility
       if (insideId) {
         const curr = houses.get(insideId)
@@ -386,12 +395,27 @@
         }
       }
     }
+
+    // Occlusion pass: hide houses that block the camera view of the player
+    // Mark-and-sweep to avoid per-frame Set allocation
+    for (const [id, result] of houses) {
+      if (id === playerInsideHouseId) continue
+      if (houseOccludesPlayer(result.aabb, playerPosition.x, playerPosition.y, playerPosition.z)) {
+        if (!occludedHouseIds.has(id)) {
+          occludedHouseIds.add(id)
+          applyOcclusionVisibility(result)
+        }
+      } else if (occludedHouseIds.has(id)) {
+        occludedHouseIds.delete(id)
+        resetOcclusionVisibility(result)
+      }
+    }
   }
 
   /**
    * Hide front/back groups based on player floor.
    * Current floor: hide front (south+west walls, roof)
-   * Higher floors: hide front and back, keep stair visible
+   * Higher floors: hide front, back, and floor; keep stair visible
    * Lower floors: fully visible
    */
   function applyFloorVisibility(
@@ -404,19 +428,102 @@
       } else if (fl > floor) {
         groups.front.position.y = OFFSCREEN_Y
         groups.back.position.y = OFFSCREEN_Y
+        groups.floor.position.y = OFFSCREEN_Y
       }
     }
     applyDoorGhostMaterials(result, floor)
   }
 
-  /** Restore merged groups to normal position */
-  function resetFloorVisibility(result: HouseGroupResult) {
+  function resetAllFloorGroupPositions(result: HouseGroupResult) {
     for (const [, groups] of result.floorGroups) {
       groups.front.position.y = 0
       groups.back.position.y = 0
+      groups.floor.position.y = 0
       groups.stair.position.y = 0
     }
+  }
+
+  function resetFloorVisibility(result: HouseGroupResult) {
+    resetAllFloorGroupPositions(result)
     resetDoorGhostMaterials(result)
+  }
+
+  /**
+   * Check if a house occludes the player from the isometric SW camera.
+   *
+   * Camera pitch = atan(1/√2), forward in XZ = (1,0,−1)/√2.
+   * A camera ray from (px, py, pz) toward the camera hits the house volume
+   * iff there exists s ∈ [sLow, sHigh] such that the house footprint shifted
+   * by (s, −s) in XZ contains (px, pz).
+   *
+   *   sHigh = aabb.max.y − py  (top of house vs player height)
+   *   sLow  = max(aabb.min.y − py, 0)
+   *
+   * Player on higher ground → sHigh shrinks → occlusion zone shrinks.
+   * Player above house top  → sHigh ≤ 0    → no occlusion.
+   */
+  function houseOccludesPlayer(
+    aabb: THREE.Box3,
+    px: number,
+    py: number,
+    pz: number
+  ): boolean {
+    const sHigh = aabb.max.y - py
+    if (sHigh <= 0) return false
+    const sLow = Math.max(aabb.min.y - py, 0)
+    const sMin = Math.max(px - aabb.max.x, aabb.min.z - pz, sLow)
+    const sMax = Math.min(px - aabb.min.x, aabb.max.z - pz, sHigh)
+    return sMin <= sMax
+  }
+
+  const _noop = () => {}
+
+  /** Disable/enable raycasting on all meshes inside a group. */
+  function setGroupRaycast(group: THREE.Group, enabled: boolean) {
+    group.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return
+      if (enabled) {
+        if (obj.userData._origRaycast) {
+          obj.raycast = obj.userData._origRaycast
+          delete obj.userData._origRaycast
+        }
+      } else {
+        if (!obj.userData._origRaycast) {
+          obj.userData._origRaycast = obj.raycast
+        }
+        obj.raycast = _noop
+      }
+    })
+  }
+
+  function applyOcclusionVisibility(result: HouseGroupResult) {
+    for (const [fl, groups] of result.floorGroups) {
+      groups.front.position.y = OFFSCREEN_Y
+      groups.back.position.y = OFFSCREEN_Y
+      groups.stair.position.y = OFFSCREEN_Y
+      if (fl !== 0) {
+        groups.floor.position.y = OFFSCREEN_Y
+      }
+    }
+    for (const door of result.doors) {
+      if (door.pivot.userData.occlusionOrigY === undefined) {
+        door.pivot.userData.occlusionOrigY = door.pivot.position.y
+      }
+      door.pivot.position.y = OFFSCREEN_Y
+    }
+    // Exclude all meshes from raycasting (including visible 1F floor)
+    setGroupRaycast(result.houseGroup, false)
+  }
+
+  function resetOcclusionVisibility(result: HouseGroupResult) {
+    resetAllFloorGroupPositions(result)
+    for (const door of result.doors) {
+      if (door.pivot.userData.occlusionOrigY !== undefined) {
+        door.pivot.position.y = door.pivot.userData.occlusionOrigY
+        delete door.pivot.userData.occlusionOrigY
+      }
+    }
+    setGroupRaycast(result.houseGroup, true)
   }
 
   export function getGroup(): THREE.Group {
