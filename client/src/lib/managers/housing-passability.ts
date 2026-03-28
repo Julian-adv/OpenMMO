@@ -305,7 +305,17 @@ interface RuntimeFloorGrid {
   cells: number[]
 }
 
-interface RuntimePassability {
+export interface StairwellInfo {
+  /** House-local cell bounds (integers, max exclusive) */
+  localMinX: number
+  localMinZ: number
+  localMaxX: number
+  localMaxZ: number
+  lowerFloor: number
+  upperFloor: number
+}
+
+export interface RuntimePassability {
   houseOriginX: number
   houseOriginZ: number
   minX: number
@@ -313,6 +323,7 @@ interface RuntimePassability {
   minZ: number
   maxZ: number
   floors: RuntimeFloorGrid[]
+  stairwells: StairwellInfo[]
 }
 
 /** Build runtime passability from stored grids (or compute if missing). */
@@ -369,6 +380,20 @@ export function buildRuntimePassability(house: HouseData): RuntimePassability {
     }
   })
 
+  const stairwells: StairwellInfo[] = []
+  for (const room of house.rooms) {
+    if (room.roomType === 'stairwell') {
+      stairwells.push({
+        localMinX: room.localX,
+        localMinZ: room.localZ,
+        localMaxX: room.localX + room.sizeX,
+        localMaxZ: room.localZ + room.sizeZ,
+        lowerFloor: room.floorLevel,
+        upperFloor: room.floorLevel + 1,
+      })
+    }
+  }
+
   return {
     houseOriginX: house.origin.x,
     houseOriginZ: house.origin.z,
@@ -377,6 +402,7 @@ export function buildRuntimePassability(house: HouseData): RuntimePassability {
     minZ,
     maxZ,
     floors,
+    stairwells,
   }
 }
 
@@ -493,6 +519,112 @@ function edgeBlocksAxis(
   }
 
   return false
+}
+
+/**
+ * Check if a cardinal (1-cell) move is blocked on a specific floor level.
+ * Unlike isMovementBlocked, this matches by floorLevel directly (no Y range check)
+ * and has no proximity buffer — designed for A* cell-to-cell expansion.
+ */
+export function isCardinalMoveBlocked(
+  passabilityCache: ReadonlyMap<string, RuntimePassability>,
+  cellX: number,
+  cellZ: number,
+  dx: number,
+  dz: number,
+  floorLevel: number
+): boolean {
+  const nx = cellX + dx
+  const nz = cellZ + dz
+  let leaveBit: number, enterBit: number
+  if (dx === 1) {
+    leaveBit = EDGE_E
+    enterBit = EDGE_W
+  } else if (dx === -1) {
+    leaveBit = EDGE_W
+    enterBit = EDGE_E
+  } else if (dz === 1) {
+    leaveBit = EDGE_S
+    enterBit = EDGE_N
+  } else {
+    leaveBit = EDGE_N
+    enterBit = EDGE_S
+  }
+
+  for (const rp of passabilityCache.values()) {
+    if (cellX < rp.minX || nx > rp.maxX || cellZ < rp.minZ || nz > rp.maxZ)
+      continue
+    const oX = rp.houseOriginX
+    const oZ = rp.houseOriginZ
+    for (const floor of rp.floors) {
+      if (floor.floorLevel !== floorLevel) continue
+      const fX = oX + floor.originX
+      const fZ = oZ + floor.originZ
+
+      const gx = cellX - fX
+      const gz = cellZ - fZ
+      if (gx >= 0 && gx < floor.width && gz >= 0 && gz < floor.depth) {
+        if (floor.cells[gx + gz * floor.width] & leaveBit) return true
+      }
+
+      const ngx = nx - fX
+      const ngz = nz - fZ
+      if (ngx >= 0 && ngx < floor.width && ngz >= 0 && ngz < floor.depth) {
+        if (floor.cells[ngx + ngz * floor.width] & enterBit) return true
+      }
+    }
+  }
+  return false
+}
+
+/**
+ * Get the floor level at a world position based on Y height.
+ * Returns 0 (ground) if outside any house.
+ */
+export function getFloorAtPosition(
+  passabilityCache: ReadonlyMap<string, RuntimePassability>,
+  x: number,
+  z: number,
+  y: number
+): number {
+  const cx = Math.floor(x)
+  const cz = Math.floor(z)
+  for (const rp of passabilityCache.values()) {
+    if (x < rp.minX || x > rp.maxX || z < rp.minZ || z > rp.maxZ) continue
+    for (const floor of rp.floors) {
+      if (y < floor.yBase - 0.5 || y >= floor.yBase + floor.wallHeight) continue
+      const gx = cx - rp.houseOriginX - floor.originX
+      const gz = cz - rp.houseOriginZ - floor.originZ
+      if (gx >= 0 && gx < floor.width && gz >= 0 && gz < floor.depth) {
+        return floor.floorLevel
+      }
+    }
+  }
+  return 0
+}
+
+/**
+ * Get the yBase for a given floor level at a world position.
+ * Returns undefined if no house floor matches.
+ */
+export function getFloorYBase(
+  passabilityCache: ReadonlyMap<string, RuntimePassability>,
+  x: number,
+  z: number,
+  floorLevel: number
+): number | undefined {
+  for (const rp of passabilityCache.values()) {
+    if (x < rp.minX || x > rp.maxX || z < rp.minZ || z > rp.maxZ) continue
+    for (const floor of rp.floors) {
+      if (floor.floorLevel !== floorLevel) continue
+      const gx = Math.floor(x) - rp.houseOriginX - floor.originX
+      const gz = Math.floor(z) - rp.houseOriginZ - floor.originZ
+      if (gx >= 0 && gx < floor.width && gz >= 0 && gz < floor.depth) {
+        return floor.yBase
+      }
+    }
+  }
+  return undefined
 }
 
 /** Update passability edge bits when a door is opened or closed. */

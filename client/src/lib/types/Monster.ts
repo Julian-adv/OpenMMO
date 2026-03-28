@@ -21,4 +21,12 @@ export interface MonsterData {
   pendingDamage?: number // Temporary storage for impact sync
   health: number
   maxHealth: number
+  currentFloor?: number
+  pathState?: {
+    waypoints: Array<{ x: number; z: number; floor: number }>
+    currentWaypointIndex: number
+    lastPathTime: number
+    lastTargetX: number
+    lastTargetZ: number
+  }
 }

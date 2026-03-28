@@ -8,6 +8,9 @@ import type { MonsterData } from '../types/Monster'
 import { getMonsterDef } from '../data/monsterDefs'
 import type { Position } from '../utils/movementUtils'
 import type { TerrainHeightManager } from './terrainHeightManager'
+import { housingManager } from './housingManager'
+import { findPath, smoothPath } from './monster-pathfinding'
+import { getFloorAtPosition, getFloorYBase } from './housing-passability'
 
 const MIN_MOVE_DIST = 2.0
 const MAX_MOVE_DIST = 10.0
@@ -82,6 +85,7 @@ class MonsterManager {
   handleMonsterDead(id: string) {
     const monster = this.monsters.get(id)
     if (monster) {
+      monster.pathState = undefined
       // If we are waiting for an impact, delay the visual death
       if (monster.impactDelay && monster.impactDelay > 0) {
         monster.isDeadPending = true
@@ -281,11 +285,7 @@ class MonsterManager {
       case 'walk':
       case 'run':
         if (monster.targetPosition) {
-          const reached = this.moveTowards(
-            monster,
-            monster.targetPosition,
-            deltaTime
-          )
+          const reached = this.followPath(monster, deltaTime)
 
           if (reached) {
             // 50% Idle, 50% Move again
@@ -412,39 +412,61 @@ class MonsterManager {
                 )
               }
             } else {
-              // Out of range - move towards player
+              // Out of range - move towards player using A* pathfinding
               monster.moveSpeed = def?.runSpeed ?? 8
-              const dist = Math.sqrt(distSq)
-              const moveStep = (monster.moveSpeed * deltaTime) / 1000
 
-              const newX = monster.position.x + (dx / dist) * moveStep
-              const newZ = monster.position.z + (dz / dist) * moveStep
-              const newY = this.sampleHeight(newX, newZ)
+              // Recompute path if needed
+              const now = performance.now()
+              const ps = monster.pathState
+              const needsRepath =
+                !ps ||
+                ps.currentWaypointIndex >= ps.waypoints.length ||
+                now - ps.lastPathTime > 500 ||
+                Math.abs(targetPlayer.position.x - (ps?.lastTargetX ?? 0)) +
+                  Math.abs(targetPlayer.position.z - (ps?.lastTargetZ ?? 0)) >
+                  3
 
-              // Don't chase into water — give up pursuit
-              if (newY < 0) {
-                monster.state = 'idle'
-                monster.targetPlayerId = undefined
-                monster.stateTimer = 0
-                networkManager.sendMonsterMove(
-                  monster.id,
-                  monster.position,
-                  monster.rotation,
-                  'idle',
-                  monster.position
+              if (needsRepath) {
+                const cache = housingManager.getPassabilityEntries()
+                const targetFloor = getFloorAtPosition(
+                  cache,
+                  targetPlayer.position.x,
+                  targetPlayer.position.z,
+                  targetPlayer.position.y
                 )
-                return
+                this.computePath(
+                  monster,
+                  targetPlayer.position.x,
+                  targetPlayer.position.z,
+                  targetFloor
+                )
               }
 
-              monster.position = {
-                x: newX,
-                y: newY,
-                z: newZ,
+              const reached = this.followPath(monster, deltaTime)
+
+              if (reached && !monster.pathState) {
+                // Path exhausted but still not in attack range — give up if stuck
+                const recheckDx = targetPlayer.position.x - monster.position.x
+                const recheckDz = targetPlayer.position.z - monster.position.z
+                if (
+                  recheckDx * recheckDx + recheckDz * recheckDz >
+                  CHASE_RANGE_SQ
+                ) {
+                  monster.state = 'idle'
+                  monster.targetPlayerId = undefined
+                  monster.stateTimer = 0
+                  networkManager.sendMonsterMove(
+                    monster.id,
+                    monster.position,
+                    monster.rotation,
+                    'idle',
+                    monster.position
+                  )
+                  return
+                }
               }
 
               // Update network to sync movement
-              // Throttle network updates for performance if needed,
-              // but for now let's send it to keep it responsive.
               networkManager.sendMonsterMove(
                 monster.id,
                 monster.position,
@@ -500,10 +522,20 @@ class MonsterManager {
       z: targetZ,
     }
 
-    // Look at target
+    // Compute A* path to target
+    this.computePath(monster, targetX, targetZ)
+
+    // If pathfinding found no path, stay idle
+    if (!monster.pathState) {
+      monster.state = 'idle'
+      return
+    }
+
+    // Look at first waypoint
+    const firstWp = monster.pathState.waypoints[0]
     monster.rotation = Math.atan2(
-      monster.targetPosition.x - monster.position.x,
-      monster.targetPosition.z - monster.position.z
+      firstWp.x - monster.position.x,
+      firstWp.z - monster.position.z
     )
 
     networkManager.sendMonsterMove(
@@ -513,6 +545,79 @@ class MonsterManager {
       monster.state,
       monster.targetPosition
     )
+  }
+
+  private computePath(
+    monster: MonsterData,
+    goalX: number,
+    goalZ: number,
+    goalFloor?: number
+  ) {
+    const cache = housingManager.getPassabilityEntries()
+    const sampler = (x: number, z: number) => this.sampleHeight(x, z)
+    const startFloor = monster.currentFloor ?? 0
+    const gFloor = goalFloor ?? 0
+    const result = findPath(
+      monster.position.x,
+      monster.position.z,
+      startFloor,
+      goalX,
+      goalZ,
+      gFloor,
+      cache,
+      sampler
+    )
+    if (result.waypoints.length > 0) {
+      const smoothed = smoothPath(result.waypoints, cache, sampler)
+      monster.pathState = {
+        waypoints: smoothed,
+        currentWaypointIndex: 0,
+        lastPathTime: performance.now(),
+        lastTargetX: goalX,
+        lastTargetZ: goalZ,
+      }
+    } else {
+      monster.pathState = undefined
+    }
+  }
+
+  /**
+   * Follow the stored waypoint path. Returns true when the final waypoint is reached.
+   */
+  private followPath(monster: MonsterData, deltaTime: number): boolean {
+    const ps = monster.pathState
+    if (!ps || ps.waypoints.length === 0) return true
+
+    const wp = ps.waypoints[ps.currentWaypointIndex]
+
+    // Determine Y: use floor yBase for upper floors, terrain height for ground
+    const waypointY = this.getYForFloor(wp.x, wp.z, wp.floor)
+    const target = { x: wp.x, y: waypointY, z: wp.z }
+
+    // Look at current waypoint
+    const dx = wp.x - monster.position.x
+    const dz = wp.z - monster.position.z
+    monster.rotation = Math.atan2(dx, dz)
+
+    if (!this.moveTowards(monster, target, deltaTime)) return false
+
+    // Waypoint reached — update floor and advance
+    monster.currentFloor = wp.floor
+    ps.currentWaypointIndex++
+    if (ps.currentWaypointIndex >= ps.waypoints.length) {
+      monster.pathState = undefined
+      return true
+    }
+    return false
+  }
+
+  private getYForFloor(x: number, z: number, floor: number): number {
+    if (floor > 0) {
+      const cache = housingManager.getPassabilityEntries()
+      const yBase = getFloorYBase(cache, x, z, floor)
+      if (yBase !== undefined) return yBase
+    }
+    return this.sampleHeight(x, z)
   }
 
   private moveTowards(
@@ -525,21 +630,26 @@ class MonsterManager {
     const distance = Math.sqrt(dx * dx + dz * dz)
 
     const moveStep = (monster.moveSpeed * deltaTime) / 1000
+    const onUpperFloor = (monster.currentFloor ?? 0) > 0
 
     if (distance <= moveStep) {
-      const y = this.sampleHeight(target.x, target.z)
-      if (y < 0) return true // Stop — treat as arrived to prevent entering water
-      monster.position = { ...target, y }
+      if (!onUpperFloor) {
+        const y = this.sampleHeight(target.x, target.z)
+        if (y < 0) return true
+        monster.position = { ...target, y }
+      } else {
+        monster.position = { ...target }
+      }
       return true
     } else {
       const newX = monster.position.x + (dx / distance) * moveStep
       const newZ = monster.position.z + (dz / distance) * moveStep
-      const newY = this.sampleHeight(newX, newZ)
-      if (newY < 0) return true // Stop — prevent entering water
-      monster.position = {
-        x: newX,
-        y: newY,
-        z: newZ,
+      if (!onUpperFloor) {
+        const newY = this.sampleHeight(newX, newZ)
+        if (newY < 0) return true
+        monster.position = { x: newX, y: newY, z: newZ }
+      } else {
+        monster.position = { x: newX, y: target.y, z: newZ }
       }
       return false
     }
