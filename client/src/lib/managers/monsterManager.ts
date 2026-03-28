@@ -8,9 +8,11 @@ import type { MonsterData } from '../types/Monster'
 import { getMonsterDef } from '../data/monsterDefs'
 import type { Position } from '../utils/movementUtils'
 import type { TerrainHeightManager } from './terrainHeightManager'
-import { housingManager } from './housingManager'
-import { findPath, smoothPath } from './monster-pathfinding'
-import { getFloorAtPosition, getFloorYBase } from './housing-passability'
+import { findPath } from './monster-pathfinding'
+import {
+  passability_get_floor_at,
+  passability_get_floor_y_base,
+} from '../wasm/onlinerpg_shared'
 
 const MIN_MOVE_DIST = 2.0
 const MAX_MOVE_DIST = 10.0
@@ -427,9 +429,7 @@ class MonsterManager {
                   3
 
               if (needsRepath) {
-                const cache = housingManager.getPassabilityEntries()
-                const targetFloor = getFloorAtPosition(
-                  cache,
+                const targetFloor = passability_get_floor_at(
                   targetPlayer.position.x,
                   targetPlayer.position.z,
                   targetPlayer.position.y
@@ -553,8 +553,6 @@ class MonsterManager {
     goalZ: number,
     goalFloor?: number
   ) {
-    const cache = housingManager.getPassabilityEntries()
-    const sampler = (x: number, z: number) => this.sampleHeight(x, z)
     const startFloor = monster.currentFloor ?? 0
     const gFloor = goalFloor ?? 0
     const result = findPath(
@@ -563,14 +561,11 @@ class MonsterManager {
       startFloor,
       goalX,
       goalZ,
-      gFloor,
-      cache,
-      sampler
+      gFloor
     )
     if (result.waypoints.length > 0) {
-      const smoothed = smoothPath(result.waypoints, cache, sampler)
       monster.pathState = {
-        waypoints: smoothed,
+        waypoints: result.waypoints,
         currentWaypointIndex: 0,
         lastPathTime: performance.now(),
         lastTargetX: goalX,
@@ -613,9 +608,8 @@ class MonsterManager {
 
   private getYForFloor(x: number, z: number, floor: number): number {
     if (floor > 0) {
-      const cache = housingManager.getPassabilityEntries()
-      const yBase = getFloorYBase(cache, x, z, floor)
-      if (yBase !== undefined) return yBase
+      const yBase = passability_get_floor_y_base(x, z, floor)
+      if (!isNaN(yBase)) return yBase
     }
     return this.sampleHeight(x, z)
   }

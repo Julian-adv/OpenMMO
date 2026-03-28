@@ -10,11 +10,15 @@ import {
   buildPassability,
   buildRuntimePassability,
   getWallByDir,
-  isMovementBlocked,
   updateDoorEdge,
+  type RuntimePassability,
 } from './housing-passability'
-
-type RuntimePassability = ReturnType<typeof buildRuntimePassability>
+import {
+  passability_add_house,
+  passability_remove_house,
+  passability_update_door,
+  passability_is_movement_blocked,
+} from '../wasm/onlinerpg_shared'
 import {
   checkOverlap,
   findAdjacentHouse,
@@ -38,7 +42,6 @@ export class HousingManager {
   private chunkCache = new Map<string, HouseData[]>()
   private housesById = new Map<string, HouseData>()
   private inflight = new Set<string>()
-  private passabilityCache = new Map<string, RuntimePassability>()
 
   private housesChangedListeners: ((houses: HouseData[]) => void)[] = []
 
@@ -184,14 +187,7 @@ export class HousingManager {
     wall[segmentIndex].isOpen = isOpen
     // Only update passability for doors (windows remain blocking when open)
     if (wall[segmentIndex].variant === 'door') {
-      updateDoorEdge(
-        this.passabilityCache,
-        houseId,
-        room,
-        wallDir,
-        segmentIndex,
-        isOpen
-      )
+      passability_update_door(houseId, room, wallDir, segmentIndex, isOpen)
     }
     this.notifyChanged()
   }
@@ -237,13 +233,32 @@ export class HousingManager {
     toZ: number,
     y: number
   ): boolean {
-    return isMovementBlocked(this.passabilityCache, fromX, fromZ, toX, toZ, y)
+    return passability_is_movement_blocked(fromX, fromZ, toX, toZ, y)
   }
 
   /** Update local cache without server call (triggers geometry rebuild). */
   updateLocalCache(house: HouseData) {
     this.addToCache(house)
     this.notifyChanged()
+  }
+
+  /** Build passability entries on the fly for debug visualization. */
+  getPassabilityEntries(): Map<string, RuntimePassability> {
+    const map = new Map<string, RuntimePassability>()
+    for (const house of this.housesById.values()) {
+      map.set(house.id, buildRuntimePassability(house))
+      for (const room of house.rooms) {
+        for (const dir of ALL_WALL_DIRS) {
+          const segs = getWallByDir(room, dir)
+          for (let i = 0; i < segs.length; i++) {
+            if (segs[i].variant === 'door' && segs[i].isOpen) {
+              updateDoorEdge(map, house.id, room, dir, i, true)
+            }
+          }
+        }
+      }
+    }
+    return map
   }
 
   /** Find an existing house that shares an edge with the given room footprint. */
@@ -314,11 +329,6 @@ export class HousingManager {
     )
   }
 
-  /** Expose passability cache for debug visualization. */
-  getPassabilityEntries(): ReadonlyMap<string, RuntimePassability> {
-    return this.passabilityCache
-  }
-
   private addToCache(house: HouseData) {
     this.housesById.set(house.id, house)
     const { x: cx, z: cz } = getTerrainChunkFromPosition(
@@ -338,27 +348,18 @@ export class HousingManager {
       this.chunkCache.set(key, [house])
     }
 
-    // Build runtime passability and apply door overlays
-    const rp = buildRuntimePassability(house)
-    this.passabilityCache.set(house.id, rp)
-
-    for (const room of house.rooms) {
-      for (const dir of ALL_WALL_DIRS) {
-        const segs = getWallByDir(room, dir)
-        for (let i = 0; i < segs.length; i++) {
-          if (segs[i].variant === 'door' && segs[i].isOpen) {
-            updateDoorEdge(this.passabilityCache, house.id, room, dir, i, true)
-          }
-        }
-      }
+    // Ensure passability grids exist (compute from room data if missing)
+    if (!house.passability?.length) {
+      house.passability = buildPassability(house)
     }
+    passability_add_house(house)
   }
 
   private removeFromCache(houseId: string) {
     const house = this.housesById.get(houseId)
     if (!house) return
     this.housesById.delete(houseId)
-    this.passabilityCache.delete(houseId)
+    passability_remove_house(houseId)
     const { x: cx, z: cz } = getTerrainChunkFromPosition(
       house.origin,
       TERRAIN_TILE_SIZE

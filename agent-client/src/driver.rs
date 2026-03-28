@@ -250,6 +250,24 @@ fn extract_json(text: &str) -> &str {
 
 /// Convert an AgentAction into a ClientMessage for the game server.
 /// `player_pos` is needed to resolve relative move directions and to compute rotation.
+/// Resolve move goal coordinates from an AgentAction::Move.
+fn resolve_move_goal(
+    x: &Option<f32>,
+    z: &Option<f32>,
+    direction: &Option<String>,
+    distance: &Option<f32>,
+    player_pos: Option<&onlinerpg_shared::Position>,
+) -> Option<(f32, f32)> {
+    if let (Some(x), Some(z)) = (x, z) {
+        Some((*x, *z))
+    } else if let (Some(dir), Some(dist), Some(pp)) = (direction.as_deref(), distance, player_pos) {
+        let (dx, dz) = direction_to_offset(dir);
+        Some((pp.x + dx * dist, pp.z + dz * dist))
+    } else {
+        None
+    }
+}
+
 pub fn action_to_command(
     action: &AgentAction,
     player_pos: Option<&onlinerpg_shared::Position>,
@@ -263,39 +281,23 @@ pub fn action_to_command(
         }),
         AgentAction::Move {
             x,
-            y,
+            y: _,
             z,
             direction,
             distance,
         } => {
-            let pos = if let (Some(x), Some(z)) = (x, z) {
-                // Absolute coordinates
-                let y = y.unwrap_or_else(|| player_pos.map(|p| p.y).unwrap_or(0.0));
-                onlinerpg_shared::Position { x: *x, y, z: *z }
-            } else if let (Some(dir), Some(dist), Some(pp)) =
-                (direction.as_deref(), distance, player_pos)
-            {
-                // Direction + distance relative to current position
-                let (dx, dz) = direction_to_offset(dir);
-                onlinerpg_shared::Position {
-                    x: pp.x + dx * dist,
-                    y: pp.y,
-                    z: pp.z + dz * dist,
-                }
-            } else {
-                warn!("Move action missing coordinates and direction/distance, skipping");
-                return None;
-            };
-            // Compute rotation toward target
+            let (gx, gz) = resolve_move_goal(x, z, direction, distance, player_pos)?;
             let rotation = if let Some(pp) = player_pos {
-                let dx = pos.x - pp.x;
-                let dz = pos.z - pp.z;
-                dx.atan2(dz)
+                (gx - pp.x).atan2(gz - pp.z)
             } else {
                 0.0
             };
             Some(ClientMessage::PlayerMove {
-                position: pos,
+                position: onlinerpg_shared::Position {
+                    x: gx,
+                    y: player_pos.map(|p| p.y).unwrap_or(0.0),
+                    z: gz,
+                },
                 rotation,
                 floor_level: 0,
             })
@@ -558,57 +560,106 @@ const MAX_CHASE_SECS: f32 = 15.0;
 /// How far the monster must move from our last target before we re-route.
 const REROUTE_THRESHOLD: f32 = 1.5;
 
-/// Chase the monster until we're in attack range, re-routing if it moves.
-/// Polls monster position every CHASE_TICK_MS and sends new move commands
-/// when the monster has moved significantly from our current destination.
+/// Chase the monster until we're in attack range, using A* pathfinding.
+/// Polls monster position every CHASE_TICK_MS and follows waypoints.
 async fn chase_monster(state: &Arc<Mutex<SharedState>>, monster_id: &str) -> ChaseResult {
     let chase_start = Instant::now();
-    let mut last_target = onlinerpg_shared::Position {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
-    };
+    let mut path_waypoints: Vec<onlinerpg_shared::pathfinding::PathWaypoint> = Vec::new();
+    let mut path_index = 0usize;
+    let mut last_monster_x = 0.0f32;
+    let mut last_monster_z = 0.0f32;
 
     loop {
-        // Timeout guard
         if chase_start.elapsed().as_secs_f32() > MAX_CHASE_SECS {
             warn!("Chase timeout for monster {monster_id}");
             return ChaseResult::Lost;
         }
 
-        let move_info = {
+        let (in_range, needs_repath, monster_pos) = {
             let s = state.lock().await;
             let monster_alive = s.nearby_monsters.contains_key(monster_id);
             let player_alive = s.self_player.as_ref().is_some_and(|p| p.health > 0);
             if !monster_alive || !player_alive {
                 return ChaseResult::Lost;
             }
-            compute_move_to_monster(&s, monster_id)
+
+            let monster = &s.nearby_monsters[monster_id];
+            let player = s.self_player.as_ref().unwrap();
+            let dx = monster.position.x - player.position.x;
+            let dz = monster.position.z - player.position.z;
+            let dist_sq = dx * dx + dz * dz;
+            let in_range = dist_sq <= ATTACK_RANGE * ATTACK_RANGE;
+
+            let monster_shift = ((monster.position.x - last_monster_x).powi(2)
+                + (monster.position.z - last_monster_z).powi(2))
+            .sqrt();
+            let needs_repath = path_waypoints.is_empty()
+                || path_index >= path_waypoints.len()
+                || monster_shift > REROUTE_THRESHOLD;
+
+            (in_range, needs_repath, monster.position.clone())
         };
 
-        let Some((cmd, _travel_secs)) = move_info else {
-            // Already in attack range
+        if in_range {
             return ChaseResult::InRange;
-        };
+        }
 
-        // Check if monster moved enough to warrant a new move command
-        let new_target = match &cmd {
-            ClientMessage::PlayerMove { position, .. } => position.clone(),
-            _ => unreachable!(),
-        };
-
-        let dx = new_target.x - last_target.x;
-        let dz = new_target.z - last_target.z;
-        let shift = (dx * dx + dz * dz).sqrt();
-
-        if shift > REROUTE_THRESHOLD || last_target.x == 0.0 && last_target.z == 0.0 {
-            debug!("Chase {monster_id}: sending move (monster shifted {shift:.1} units)");
-            last_target = new_target;
-            let mut s = state.lock().await;
-            if let Err(e) = s.send_command(cmd).await {
-                error!("Failed to send chase move: {e}");
-                return ChaseResult::Error;
+        if needs_repath {
+            let result = {
+                let s = state.lock().await;
+                s.find_path_to(monster_pos.x, monster_pos.z, 0)
+            };
+            if result.waypoints.is_empty() {
+                // No path — fall back to direct move
+                let cmd = {
+                    let s = state.lock().await;
+                    compute_move_to_monster(&s, monster_id).map(|(cmd, _)| cmd)
+                };
+                if let Some(cmd) = cmd {
+                    let mut s = state.lock().await;
+                    if let Err(e) = s.send_command(cmd).await {
+                        error!("Failed to send chase move: {e}");
+                        return ChaseResult::Error;
+                    }
+                }
+            } else {
+                path_waypoints = result.waypoints;
+                path_index = 0;
             }
+            last_monster_x = monster_pos.x;
+            last_monster_z = monster_pos.z;
+        }
+
+        // Follow next waypoint
+        if path_index < path_waypoints.len() {
+            let wp = &path_waypoints[path_index];
+            let cmd = {
+                let s = state.lock().await;
+                let player = match &s.self_player {
+                    Some(p) => p,
+                    None => return ChaseResult::Lost,
+                };
+                let dx = wp.x - player.position.x;
+                let dz = wp.z - player.position.z;
+                ClientMessage::PlayerMove {
+                    position: onlinerpg_shared::Position {
+                        x: wp.x,
+                        y: player.position.y,
+                        z: wp.z,
+                    },
+                    rotation: dx.atan2(dz),
+                    floor_level: wp.floor as i8,
+                }
+            };
+            {
+                let mut s = state.lock().await;
+                s.self_floor_level = wp.floor;
+                if let Err(e) = s.send_command(cmd).await {
+                    error!("Failed to send chase move: {e}");
+                    return ChaseResult::Error;
+                }
+            }
+            path_index += 1;
         }
 
         tokio::time::sleep(Duration::from_millis(CHASE_TICK_MS)).await;
@@ -686,6 +737,40 @@ async fn handle_response(state: &Arc<Mutex<SharedState>>, response: &str) -> Opt
             last_attack_target = Some(monster_id.clone());
         }
 
+        // Handle move actions with pathfinding
+        if let AgentAction::Move {
+            x,
+            y: _,
+            z,
+            direction,
+            distance,
+        } = action
+        {
+            let goal = {
+                let s = state.lock().await;
+                let pp = s.self_player.as_ref().map(|p| &p.position);
+                resolve_move_goal(x, z, direction, distance, pp)
+            };
+            if let Some((gx, gz)) = goal {
+                match execute_move(state, gx, gz).await {
+                    MoveResult::Arrived => {
+                        info!("Agent arrived at ({gx:.1}, {gz:.1})");
+                    }
+                    MoveResult::Blocked => {
+                        warn!("Path blocked to ({gx:.1}, {gz:.1})");
+                        let mut s = state.lock().await;
+                        s.push_agent_event(format!(
+                            "[MoveFailed] 이동 실패: ({gx:.1}, {gz:.1})까지의 경로가 건물에 의해 막혀있습니다. 다른 목표를 선택하세요."
+                        ));
+                    }
+                    MoveResult::Error => {
+                        error!("Move error to ({gx:.1}, {gz:.1})");
+                    }
+                }
+            }
+            continue;
+        }
+
         {
             let mut s = state.lock().await;
             let player_pos = s.self_player.as_ref().map(|p| &p.position).cloned();
@@ -714,8 +799,69 @@ fn compute_face_monster(state: &SharedState, monster_id: &str) -> Option<ClientM
     Some(ClientMessage::PlayerMove {
         position: self_player.position.clone(),
         rotation,
-        floor_level: 0,
+        floor_level: state.self_floor_level as i8,
     })
+}
+
+/// Move result for path-following
+enum MoveResult {
+    Arrived,
+    Blocked,
+    Error,
+}
+
+/// Execute a move to the target position using A* pathfinding.
+/// Follows waypoints sequentially with appropriate timing.
+async fn execute_move(state: &Arc<Mutex<SharedState>>, goal_x: f32, goal_z: f32) -> MoveResult {
+    let path_result = {
+        let s = state.lock().await;
+        s.find_path_to(goal_x, goal_z, 0)
+    };
+
+    if path_result.waypoints.is_empty() {
+        if !path_result.found {
+            return MoveResult::Blocked;
+        }
+        return MoveResult::Arrived;
+    }
+
+    for (i, wp) in path_result.waypoints.iter().enumerate() {
+        let travel_ms = {
+            let mut s = state.lock().await;
+            let player = match &s.self_player {
+                Some(p) => p,
+                None => return MoveResult::Error,
+            };
+
+            let dx = wp.x - player.position.x;
+            let dz = wp.z - player.position.z;
+            let dist = (dx * dx + dz * dz).sqrt();
+            let rotation = dx.atan2(dz);
+            let travel_ms = ((dist / MOVE_SPEED) * 1000.0) as u64;
+
+            let cmd = ClientMessage::PlayerMove {
+                position: onlinerpg_shared::Position {
+                    x: wp.x,
+                    y: player.position.y,
+                    z: wp.z,
+                },
+                rotation,
+                floor_level: wp.floor as i8,
+            };
+            s.self_floor_level = wp.floor;
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send move waypoint: {e}");
+                return MoveResult::Error;
+            }
+            travel_ms.max(50)
+        };
+
+        if i < path_result.waypoints.len() - 1 {
+            tokio::time::sleep(Duration::from_millis(travel_ms)).await;
+        }
+    }
+
+    MoveResult::Arrived
 }
 
 /// If the agent is too far from the target monster, return a PlayerMove command

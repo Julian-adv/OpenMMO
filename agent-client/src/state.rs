@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use onlinerpg_shared::housing::HouseData;
+use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
 use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
 use onlinerpg_terrain::height::HeightSampler;
 use std::sync::Arc;
@@ -45,6 +47,11 @@ pub struct SharedState {
     agent_events: Vec<String>,
     /// Terrain height sampler for correcting Y coordinates
     pub height_sampler: HeightSampler,
+    /// Cached houses and their passability data
+    houses: HashMap<String, HouseData>,
+    pub passability_cache: PassabilityCache,
+    /// Current floor level for the agent
+    pub self_floor_level: u8,
     cmd_tx: mpsc::Sender<ClientMessage>,
     /// Notified when an urgent event arrives
     pub urgent_notify: Arc<Notify>,
@@ -70,6 +77,9 @@ impl SharedState {
             seen_nearby_players: HashSet::new(),
             agent_events: Vec::new(),
             height_sampler,
+            houses: HashMap::new(),
+            passability_cache: PassabilityCache::new(),
+            self_floor_level: 0,
             cmd_tx,
             urgent_notify: Arc::new(Notify::new()),
         }
@@ -153,7 +163,7 @@ impl SharedState {
             ClientMessage::PlayerMove {
                 position,
                 rotation,
-                floor_level: 0,
+                floor_level: self.self_floor_level as i8,
             }
         } else {
             msg
@@ -232,11 +242,16 @@ impl SharedState {
             | ServerMessage::PlayerHealthUpdate { .. }
             | ServerMessage::PlayerTorchToggled { .. } => EventUrgency::Routine,
 
-            // Noise: high-frequency or irrelevant
+            // Noise: high-frequency, irrelevant, or housing updates
             ServerMessage::PlayerMoved { .. }
             | ServerMessage::PlayerTeleported { .. }
             | ServerMessage::MonsterMoved { .. }
-            | ServerMessage::GameTimeSync { .. } => EventUrgency::Noise,
+            | ServerMessage::GameTimeSync { .. }
+            | ServerMessage::HouseSpawned { .. }
+            | ServerMessage::HousesInArea { .. }
+            | ServerMessage::HouseUpdated { .. }
+            | ServerMessage::HouseRemoved { .. }
+            | ServerMessage::DoorToggled { .. } => EventUrgency::Noise,
 
             // Auth/character events: routine (handled before game entry)
             _ => EventUrgency::Routine,
@@ -317,6 +332,41 @@ impl SharedState {
                     m.position = position.clone();
                 }
             }
+            ServerMessage::HouseSpawned { ref house } => {
+                self.add_house(house.clone());
+            }
+            ServerMessage::HousesInArea { ref houses } => {
+                for house in houses {
+                    self.add_house(house.clone());
+                }
+            }
+            ServerMessage::HouseUpdated { ref house } => {
+                self.add_house(house.clone());
+            }
+            ServerMessage::HouseRemoved { ref house_id } => {
+                self.houses.remove(house_id);
+                self.passability_cache.remove(house_id);
+            }
+            ServerMessage::DoorToggled {
+                ref house_id,
+                room_index,
+                ref wall_dir,
+                segment_index,
+                is_open,
+            } => {
+                if let Some(house) = self.houses.get(house_id) {
+                    if let Some(room) = house.rooms.get(*room_index as usize) {
+                        pathfinding::update_door_edge(
+                            &mut self.passability_cache,
+                            house_id,
+                            room,
+                            *wall_dir,
+                            *segment_index as usize,
+                            *is_open,
+                        );
+                    }
+                }
+            }
             _ => {}
         }
 
@@ -381,6 +431,41 @@ impl SharedState {
     /// Drain synthetic agent-side events (e.g. player proximity alerts).
     pub fn drain_agent_events(&mut self) -> Vec<String> {
         std::mem::take(&mut self.agent_events)
+    }
+
+    fn add_house(&mut self, house: HouseData) {
+        let rp = pathfinding::build_runtime_passability(&house);
+        self.passability_cache.insert(house.id.clone(), rp);
+        pathfinding::apply_door_overlays(&mut self.passability_cache, &house);
+        self.houses.insert(house.id.clone(), house);
+    }
+
+    /// Find a smoothed path from current position to the goal.
+    pub fn find_path_to(&self, goal_x: f32, goal_z: f32, goal_floor: u8) -> PathResult {
+        let (start_x, start_z) = match &self.self_player {
+            Some(p) => (p.position.x, p.position.z),
+            None => {
+                return PathResult {
+                    waypoints: Vec::new(),
+                    found: false,
+                }
+            }
+        };
+        pathfinding::find_and_smooth_path(
+            start_x,
+            start_z,
+            self.self_floor_level,
+            goal_x,
+            goal_z,
+            goal_floor,
+            &self.passability_cache,
+            200,
+        )
+    }
+
+    /// Push a synthetic agent event visible to the LLM.
+    pub fn push_agent_event(&mut self, event: String) {
+        self.agent_events.push(event);
     }
 
     /// Build a text summary of current world state for the LLM prompt.

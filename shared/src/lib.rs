@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod housing;
+pub mod pathfinding;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CharacterClass {
@@ -431,7 +432,11 @@ pub fn deserialize_server_msg(bytes: &[u8]) -> Result<ServerMessage, rmp_serde::
 mod wasm_api {
     use super::*;
     use serde::Serialize;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
     use wasm_bindgen::prelude::*;
+
+    use crate::pathfinding::{self, PassabilityCache};
 
     fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsError> {
         let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
@@ -452,6 +457,166 @@ mod wasm_api {
         let msg: ServerMessage = rmp_serde::from_slice(bytes)
             .map_err(|e| JsError::new(&format!("Deserialization failed: {e}")))?;
         to_js(&msg)
+    }
+
+    // --- Passability cache (WASM global state) ---
+
+    thread_local! {
+        static PASSABILITY_CACHE: RefCell<PassabilityCache> = RefCell::new(HashMap::new());
+    }
+
+    fn with_cache<R>(f: impl FnOnce(&PassabilityCache) -> R) -> R {
+        PASSABILITY_CACHE.with(|c| f(&c.borrow()))
+    }
+
+    fn with_cache_mut<R>(f: impl FnOnce(&mut PassabilityCache) -> R) -> R {
+        PASSABILITY_CACHE.with(|c| f(&mut c.borrow_mut()))
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_add_house(val: JsValue) -> Result<(), JsError> {
+        let house: housing::HouseData = serde_wasm_bindgen::from_value(val)
+            .map_err(|e| JsError::new(&format!("Invalid HouseData: {e}")))?;
+        let rp = pathfinding::build_runtime_passability(&house);
+        with_cache_mut(|c| {
+            c.insert(house.id.clone(), rp);
+            pathfinding::apply_door_overlays(c, &house);
+        });
+        Ok(())
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_remove_house(house_id: &str) {
+        with_cache_mut(|c| c.remove(house_id));
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_update_door(
+        house_id: &str,
+        room_val: JsValue,
+        wall_dir_val: JsValue,
+        segment_index: u32,
+        is_open: bool,
+    ) -> Result<(), JsError> {
+        let room: housing::RoomData = serde_wasm_bindgen::from_value(room_val)
+            .map_err(|e| JsError::new(&format!("Invalid RoomData: {e}")))?;
+        let wall_dir: housing::WallDirection = serde_wasm_bindgen::from_value(wall_dir_val)
+            .map_err(|e| JsError::new(&format!("Invalid WallDirection: {e}")))?;
+        with_cache_mut(|c| {
+            pathfinding::update_door_edge(
+                c,
+                house_id,
+                &room,
+                wall_dir,
+                segment_index as usize,
+                is_open,
+            );
+        });
+        Ok(())
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_find_path(
+        start_x: f32,
+        start_z: f32,
+        start_floor: u8,
+        goal_x: f32,
+        goal_z: f32,
+        goal_floor: u8,
+    ) -> Result<JsValue, JsError> {
+        let result = with_cache(|c| {
+            pathfinding::find_and_smooth_path(
+                start_x,
+                start_z,
+                start_floor,
+                goal_x,
+                goal_z,
+                goal_floor,
+                c,
+                200,
+            )
+        });
+        to_js(&PathResultJs {
+            waypoints: result
+                .waypoints
+                .iter()
+                .map(|w| WaypointJs {
+                    x: w.x,
+                    z: w.z,
+                    floor: w.floor,
+                })
+                .collect(),
+            found: result.found,
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_is_movement_blocked(
+        from_x: f32,
+        from_z: f32,
+        to_x: f32,
+        to_z: f32,
+        y: f32,
+    ) -> bool {
+        with_cache(|c| pathfinding::is_movement_blocked(c, from_x, from_z, to_x, to_z, y))
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_is_cardinal_move_blocked(
+        cell_x: i32,
+        cell_z: i32,
+        dx: i32,
+        dz: i32,
+        floor_level: u8,
+    ) -> bool {
+        with_cache(|c| {
+            pathfinding::is_cardinal_move_blocked(c, cell_x, cell_z, dx, dz, floor_level)
+        })
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_get_floor_at(x: f32, z: f32, y: f32) -> u8 {
+        with_cache(|c| pathfinding::get_floor_at_position(c, x, z, y))
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_get_floor_y_base(x: f32, z: f32, floor_level: u8) -> f32 {
+        with_cache(|c| pathfinding::get_floor_y_base(c, x, z, floor_level).unwrap_or(f32::NAN))
+    }
+
+    #[wasm_bindgen]
+    pub fn passability_debug_info() -> Result<JsValue, JsError> {
+        with_cache(|c| {
+            let entries: Vec<String> = c.iter().map(|(id, rp)| {
+                let total_cells: usize = rp.floors.iter().map(|f| f.cells.len()).sum();
+                let non_zero: usize = rp.floors.iter()
+                    .flat_map(|f| f.cells.iter())
+                    .filter(|&&b| b != 0)
+                    .count();
+                format!(
+                    "{}: origin=({:.1},{:.1}) aabb=({:.1},{:.1})→({:.1},{:.1}) floors={} stairwells={} cells={} non_zero={}",
+                    id, rp.house_origin_x, rp.house_origin_z,
+                    rp.min_x, rp.min_z, rp.max_x, rp.max_z,
+                    rp.floors.len(), rp.stairwells.len(),
+                    total_cells, non_zero
+                )
+            }).collect();
+            to_js(&entries)
+        })
+    }
+
+    // Serializable types for WASM return values
+    #[derive(Serialize)]
+    struct WaypointJs {
+        x: f32,
+        z: f32,
+        floor: u8,
+    }
+
+    #[derive(Serialize)]
+    struct PathResultJs {
+        waypoints: Vec<WaypointJs>,
+        found: bool,
     }
 }
 
