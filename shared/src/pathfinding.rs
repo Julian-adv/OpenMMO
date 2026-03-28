@@ -512,6 +512,9 @@ pub fn update_door_edge(
 
 const DIRS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 
+/// Default max nodes for A* expansion. Sized for multi-floor house traversal.
+pub const DEFAULT_MAX_NODES: usize = 2000;
+
 #[derive(Clone)]
 struct AStarNode {
     x: i32,
@@ -597,7 +600,10 @@ fn build_stair_cells(cache: &PassabilityCache) -> HashMap<AStarKey, StairCellExp
                 stair.local_max_z - stair.local_min_z
             };
 
-            // Compute the floor key for step i
+            // Compute the floor key for step i.
+            // step_pos already flips physical positions for reversed stairs,
+            // so i=0 is always the entry (lower floor) end and i=n-1 is the
+            // exit (upper floor) end regardless of reversed.
             let step_key = |i: i32| -> u16 {
                 if i == 0 {
                     lower_key
@@ -692,15 +698,15 @@ pub fn find_path(
 
     let stair_cells = build_stair_cells(cache);
 
-    // Build set of all (x, z) positions that belong to any stairwell.
-    // Used to block regular-floor cardinal moves into stairwell interior cells.
-    let mut stair_positions: HashSet<(i32, i32)> = HashSet::new();
-    for &(x, z, _) in stair_cells.keys() {
-        stair_positions.insert((x, z));
+    // Build set of (x, z, real_floor) for stairwell cells.
+    // Used to block regular-floor cardinal moves into stairwell interior cells,
+    // but only for floors that the stairwell actually connects.
+    let mut stair_positions: HashSet<(i32, i32, u8)> = HashSet::new();
+    for &(x, z, fk) in stair_cells.keys() {
+        stair_positions.insert((x, z, key_to_floor(fk)));
     }
 
     let start_fk = floor_to_key(start_floor);
-    let goal_fk = floor_to_key(goal_floor);
 
     let mut open = BinaryHeap::new();
     let mut closed: HashMap<AStarKey, ClosedEntry> = HashMap::new();
@@ -765,7 +771,10 @@ pub fn find_path(
 
         let cur_key: AStarKey = (cur.x, cur.z, cur.fk);
 
-        if cur.x == gx && cur.z == gz && cur.fk == goal_fk {
+        // Accept goal at exact fk or any intermediate stair fk on the same floor.
+        // This handles clicking mid-stairwell where the cell is only reachable
+        // via stair expansion with an intermediate fk, not the regular floor fk.
+        if cur.x == gx && cur.z == gz && key_to_floor(cur.fk) == goal_floor {
             return PathResult {
                 waypoints: reconstruct_path_vf(&closed, start_key, cur_key, goal_x, goal_z),
                 found: true,
@@ -783,8 +792,8 @@ pub fn find_path(
 
         // --- Regular floor expansion (cardinal neighbors) ---
         // Skip stairwell interior cells that aren't landings on this regular floor
-        let is_stair_interior =
-            stair_positions.contains(&(cur.x, cur.z)) && !stair_cells.contains_key(&cur_key);
+        let is_stair_interior = stair_positions.contains(&(cur.x, cur.z, cur_floor))
+            && !stair_cells.contains_key(&cur_key);
         if on_regular && !is_stair_interior {
             for &(dx, dz) in &DIRS {
                 let nx = cur.x + dx;
@@ -799,7 +808,7 @@ pub fn find_path(
                 // A cell (nx, nz) is a stairwell interior if it belongs to a
                 // stairwell but has no stair_cells entry at the current fk
                 // (only landings match regular floor keys).
-                if stair_positions.contains(&(nx, nz))
+                if stair_positions.contains(&(nx, nz, cur_floor))
                     && !stair_cells.contains_key(&(nx, nz, cur.fk))
                 {
                     continue;
