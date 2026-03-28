@@ -22,6 +22,7 @@
   import { playerFloorOffset, playerFloorLevel } from '../stores/housingStore'
   import { housingManager } from '../managers/housingManager'
   import { findPath } from '../managers/pathfinding'
+  import { passability_get_floor_at } from '../wasm/onlinerpg_shared'
   import { get } from 'svelte/store'
 
   interface Props {
@@ -425,6 +426,15 @@
         return
       }
 
+      // Apply arrived waypoint's floor before updating position so that
+      // GameSceneHousingLayer filters stairwells correctly on the next frame.
+      // This is critical for stacked stairwells at the same XZ where the
+      // player transitions floors without physical XZ movement.
+      const arrivedWp = pathWaypoints[currentWaypointIndex]
+      if (arrivedWp && arrivedWp.floor !== get(playerFloorLevel)) {
+        playerFloorLevel.set(arrivedWp.floor)
+      }
+
       gameStore.update((state) => {
         if (state.currentPlayer && movementTarget) {
           const y = sampleHeight(movementTarget.x, movementTarget.z)
@@ -436,14 +446,15 @@
       currentWaypointIndex++
       if (currentWaypointIndex < pathWaypoints.length) {
         const nextWp = pathWaypoints[currentWaypointIndex]
+
+        if (nextWp.floor !== get(playerFloorLevel)) {
+          playerFloorLevel.set(nextWp.floor)
+        }
+
         const wpPos: Position = {
           x: nextWp.x,
           y: sampleHeight(nextWp.x, nextWp.z),
           z: nextWp.z,
-        }
-
-        if (nextWp.floor !== get(playerFloorLevel)) {
-          playerFloorLevel.set(nextWp.floor)
         }
 
         const ndx = wpPos.x - movementTarget!.x
@@ -582,20 +593,24 @@
     }
 
     const startFloor = Math.max(0, get(playerFloorLevel))
+    const goalFloor = passability_get_floor_at(
+      clickPosition.x,
+      clickPosition.z,
+      clickPosition.y
+    )
     const result = findPath(
       currentPos.x,
       currentPos.z,
       startFloor,
       clickPosition.x,
       clickPosition.z,
-      startFloor
+      goalFloor
     )
-
     if (result.waypoints.length > 0) {
       pathWaypoints = result.waypoints
     } else {
       // No path (open terrain or unreachable) — direct move fallback
-      pathWaypoints = [{ x: clickPosition.x, z: clickPosition.z, floor: startFloor }]
+      pathWaypoints = [{ x: clickPosition.x, z: clickPosition.z, floor: goalFloor }]
     }
     currentWaypointIndex = 0
 
