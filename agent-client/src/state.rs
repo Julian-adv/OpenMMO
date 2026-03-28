@@ -459,7 +459,7 @@ impl SharedState {
             goal_z,
             goal_floor,
             &self.passability_cache,
-            200,
+            pathfinding::DEFAULT_MAX_NODES,
         )
     }
 

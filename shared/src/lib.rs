@@ -533,7 +533,7 @@ mod wasm_api {
                 goal_z,
                 goal_floor,
                 c,
-                200,
+                pathfinding::DEFAULT_MAX_NODES,
             )
         });
         to_js(&PathResultJs {
