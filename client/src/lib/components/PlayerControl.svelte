@@ -21,6 +21,7 @@
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { playerFloorOffset, playerFloorLevel } from '../stores/housingStore'
   import { housingManager } from '../managers/housingManager'
+  import { findPath } from '../managers/pathfinding'
   import { get } from 'svelte/store'
 
   interface Props {
@@ -47,6 +48,10 @@
   let movementState = $state<MovementState | null>(null)
   let lastSentPosition = $state<Position | null>(null)
 
+  // A* pathfinding waypoints
+  let pathWaypoints: Array<{ x: number; z: number; floor: number }> = []
+  let currentWaypointIndex = 0
+
   // Use the same movement config as remote players, with debug speed multiplier
   let MOVEMENT_CONFIG = $derived<MovementConfig>({
     ...DEFAULT_MOVEMENT_CONFIG,
@@ -64,13 +69,15 @@
     movementTarget = null
     movementState = null
     currentSpeed = 0
+    pathWaypoints = []
+    currentWaypointIndex = 0
     updatePlayerState()
   }
 
   // Wrapper for sending move packets to track last sent position
   function sendPlayerMove(position: Position, rotation: number) {
     lastSentPosition = { ...position }
-    networkManager.sendPlayerMove(position, rotation, get(playerFloorLevel))
+    networkManager.sendPlayerMove(position, rotation, Math.max(0, get(playerFloorLevel)))
   }
 
   // Current player state
@@ -418,7 +425,6 @@
         return
       }
 
-      // Movement complete
       gameStore.update((state) => {
         if (state.currentPlayer && movementTarget) {
           const y = sampleHeight(movementTarget.x, movementTarget.z)
@@ -427,12 +433,34 @@
         return state
       })
 
-      // Send final position to server
-      sendPlayerMove(movementTarget, playerRotation)
+      currentWaypointIndex++
+      if (currentWaypointIndex < pathWaypoints.length) {
+        const nextWp = pathWaypoints[currentWaypointIndex]
+        const wpPos: Position = {
+          x: nextWp.x,
+          y: sampleHeight(nextWp.x, nextWp.z),
+          z: nextWp.z,
+        }
 
+        if (nextWp.floor !== get(playerFloorLevel)) {
+          playerFloorLevel.set(nextWp.floor)
+        }
+
+        const ndx = wpPos.x - movementTarget!.x
+        const ndz = wpPos.z - movementTarget!.z
+        playerRotation = Math.atan2(ndx, ndz)
+
+        const prevSpeed = movementState?.currentSpeed ?? 0
+        movementState = initMovementState(movementTarget!, wpPos, prevSpeed)
+        movementTarget = wpPos
+
+        sendPlayerMove(wpPos, playerRotation)
+        return
+      }
+
+      sendPlayerMove(movementTarget, playerRotation)
       stopMovement()
 
-      // If we were chasing a target, attack it now
       if (combatController.isInCombat) {
         initiateAttack(combatController.targetMonsterId!)
       }
@@ -534,7 +562,6 @@
     updatePlayerState(isMoving ? 100 : undefined)
   }
 
-  // Handle click-to-move
   export function handleClickToMove(clickPosition: Position) {
     if (currentPlayer && currentPlayer.health <= 0) return
     if (!currentPlayer || isMoving || inputHandler.hasKeysPressed) {
@@ -554,18 +581,40 @@
       z: currentPlayer.position.z,
     }
 
-    // Calculate rotation to face target direction
-    const dx = clickPosition.x - currentPos.x
-    const dz = clickPosition.z - currentPos.z
+    const startFloor = Math.max(0, get(playerFloorLevel))
+    const result = findPath(
+      currentPos.x,
+      currentPos.z,
+      startFloor,
+      clickPosition.x,
+      clickPosition.z,
+      startFloor
+    )
+
+    if (result.waypoints.length > 0) {
+      pathWaypoints = result.waypoints
+    } else {
+      // No path (open terrain or unreachable) — direct move fallback
+      pathWaypoints = [{ x: clickPosition.x, z: clickPosition.z, floor: startFloor }]
+    }
+    currentWaypointIndex = 0
+
+    const firstWp = pathWaypoints[0]
+    const wpPos: Position = {
+      x: firstWp.x,
+      y: sampleHeight(firstWp.x, firstWp.z),
+      z: firstWp.z,
+    }
+
+    const dx = wpPos.x - currentPos.x
+    const dz = wpPos.z - currentPos.z
     playerRotation = Math.atan2(dx, dz)
 
-    // Initialize movement state using shared utility
-    movementState = initMovementState(currentPos, clickPosition, 0)
-    movementTarget = clickPosition
+    movementState = initMovementState(currentPos, wpPos, 0)
+    movementTarget = wpPos
     isMoving = true
 
-    // Send target position to server when movement starts
-    sendPlayerMove(clickPosition, playerRotation)
+    sendPlayerMove(wpPos, playerRotation)
 
     updatePlayerState(movementState.totalDistance)
   }
