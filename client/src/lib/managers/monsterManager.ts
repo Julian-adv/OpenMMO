@@ -8,7 +8,7 @@ import type { MonsterData } from '../types/Monster'
 import { getMonsterDef } from '../data/monsterDefs'
 import type { Position } from '../utils/movementUtils'
 import type { TerrainHeightManager } from './terrainHeightManager'
-import { findPath } from './monster-pathfinding'
+import { findPath } from './pathfinding'
 import {
   passability_get_floor_at,
   passability_get_floor_y_base,
