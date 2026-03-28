@@ -43,6 +43,7 @@ pub enum AgentAction {
     Move {
         // Absolute coordinates (preferred)
         x: Option<f32>,
+        #[allow(dead_code)]
         y: Option<f32>,
         z: Option<f32>,
         // Direction + distance fallback (LLMs sometimes use this)
