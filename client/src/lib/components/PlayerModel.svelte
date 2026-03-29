@@ -121,6 +121,8 @@
   let modelGroup = $state<THREE.Group | undefined>(undefined)
   // Clock removed, using passed deltaTime
 
+  let clonedScene: THREE.Object3D | null = null
+  let footOffsetApplied = false
   let validAnimations = $state<THREE.AnimationClip[]>([])
   let lastPlayerState = $state<
     'idle' | 'moving' | 'attack' | 'dead' | undefined
@@ -407,6 +409,7 @@
         }
       }
 
+      clonedScene = cloned
       modelRoot = newModelRoot
     }
   }
@@ -435,6 +438,8 @@
       if (modelRoot) {
         modelRoot = null
       }
+      clonedScene = null
+      footOffsetApplied = false
       swordAttached = false
     }
   })
@@ -537,6 +542,36 @@
     // Update mixer with provided deltaTime
     if (currentAction) {
       mixer.update(deltaTime)
+
+      // After first animation frame, measure foot bone positions and
+      // shift the model up so the lowest foot bone sits just above origin.
+      // This accounts for animation-time root offsets that the bind-pose
+      // bounding box cannot capture.
+      if (!footOffsetApplied && clonedScene && modelRoot) {
+        footOffsetApplied = true
+        const _boneVec = new THREE.Vector3()
+        const groupWorldY = modelGroup
+          ? modelGroup.getWorldPosition(_boneVec).y
+          : position.y
+        let lowestFootY = Infinity
+        modelRoot.traverse((child) => {
+          if (
+            child instanceof THREE.Bone &&
+            /foot|toe/i.test(child.name)
+          ) {
+            child.getWorldPosition(_boneVec)
+            const localY = _boneVec.y - groupWorldY
+            if (localY < lowestFootY) lowestFootY = localY
+          }
+        })
+        if (lowestFootY < Infinity) {
+          // Place lowest foot bone ~1cm above origin (shoe sole margin)
+          const correction = -lowestFootY + 0.01
+          if (correction > 0.001) {
+            clonedScene.position.y += correction
+          }
+        }
+      }
 
       const clip = currentAction.getClip()
       if (clip && clip.duration > 0) {

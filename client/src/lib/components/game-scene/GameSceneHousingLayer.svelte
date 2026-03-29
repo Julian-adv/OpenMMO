@@ -320,19 +320,24 @@
         }
       }
 
+      // Compensate for terrain height difference under the house.
+      // The floor mesh is fixed at house.origin.y, but player Y uses
+      // terrainHeight(playerPos) + offset. When terrain varies within
+      // the house footprint, (origin.y - groundY) corrects the offset.
+      const matchedHouse = (stairResult ?? floorResult)?.house
+      const terrainComp = matchedHouse ? matchedHouse.origin.y - groundY : 0
+
       if (stairResult) {
         const room = stairResult.house.rooms[stairResult.roomIndex]
         insideId = id
-        newOffset = bestStairOffset
-        // Determine effective floor from stairwell Y offset
-        // Stairwell connects room.floorLevel to room.floorLevel+1
+        newOffset = terrainComp + bestStairOffset
         const entryFloor = room.floorLevel
         const exitFloor = room.floorLevel + 1
-        const entryFloorY = floorYBase(entryFloor, room.wallHeight)
+        const entryFloorY = terrainComp + floorYBase(entryFloor, room.wallHeight)
         // Hysteresis: transition at 95% of stairwell rise to avoid flickering
         const exitThreshold =
           entryFloorY +
-          (floorYBase(exitFloor, room.wallHeight) - entryFloorY) * 0.95
+          (terrainComp + floorYBase(exitFloor, room.wallHeight) - entryFloorY) * 0.95
         if (playerInsideFloor <= entryFloor) {
           effectiveFloor = newOffset >= exitThreshold ? exitFloor : entryFloor
         } else {
@@ -342,7 +347,9 @@
         const room = floorResult.house.rooms[floorResult.roomIndex]
         insideId = id
         newOffset =
-          floorYBase(room.floorLevel, room.wallHeight) + FLOOR_THICKNESS / 2
+          terrainComp +
+          floorYBase(room.floorLevel, room.wallHeight) +
+          FLOOR_THICKNESS / 2
         effectiveFloor = room.floorLevel
       }
       if (insideId) break
