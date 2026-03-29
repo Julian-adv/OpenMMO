@@ -18,6 +18,11 @@ const BGM_FILES = [
   'Sky of Burning Wings.mp3',
   'Sky of Burning Wings (1).mp3',
   'Crown of the Dawning Sky.mp3',
+  'Creekside Air.mp3',
+  'Echoes of a Distant Summer.mp3',
+  'Grief in the Green Vale.mp3',
+  'Lonely Banner on the Wind.mp3',
+  'Triumphal Procession 2.mp3',
 ]
 
 const BATTLE_BGM_FILES = [
