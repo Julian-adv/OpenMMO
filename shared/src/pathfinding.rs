@@ -940,7 +940,7 @@ fn reconstruct_path_vf(
 // --- Path smoothing ---
 
 /// Greedy line-of-sight path smoothing. Only smooths within the same floor level.
-pub fn smooth_path(waypoints: &[PathWaypoint], cache: &PassabilityCache) -> Vec<PathWaypoint> {
+fn smooth_path(waypoints: &[PathWaypoint], cache: &PassabilityCache) -> Vec<PathWaypoint> {
     if waypoints.len() <= 2 {
         return waypoints.to_vec();
     }
@@ -981,6 +981,8 @@ fn is_line_passable(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityC
 
     let mut prev_cx = from.x.floor() as i32;
     let mut prev_cz = from.z.floor() as i32;
+    let mut prev_mx = from.x;
+    let mut prev_mz = from.z;
 
     for i in 1..=steps {
         let t = i as f32 / steps as f32;
@@ -990,23 +992,63 @@ fn is_line_passable(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityC
         let cz = mz.floor() as i32;
 
         if cx != prev_cx || cz != prev_cz {
-            // Check each axis crossing separately
-            if cx != prev_cx {
-                let step_x = if cx > prev_cx { 1 } else { -1 };
+            let step_x = cx - prev_cx;
+            let step_z = cz - prev_cz;
+
+            if step_x != 0 && step_z != 0 {
+                // Diagonal cell crossing: block only if both L-shaped paths are impassable.
+                let a_blocked = is_cardinal_move_blocked(cache, prev_cx, prev_cz, step_x, 0, floor)
+                    || is_cardinal_move_blocked(cache, cx, prev_cz, 0, step_z, floor);
+                if a_blocked {
+                    let b_blocked =
+                        is_cardinal_move_blocked(cache, prev_cx, prev_cz, 0, step_z, floor)
+                            || is_cardinal_move_blocked(cache, prev_cx, cz, step_x, 0, floor);
+                    if b_blocked {
+                        return false;
+                    }
+                }
+            } else if step_x != 0 {
                 if is_cardinal_move_blocked(cache, prev_cx, prev_cz, step_x, 0, floor) {
                     return false;
                 }
-            }
-            if cz != prev_cz {
-                let check_x = if cx != prev_cx { cx } else { prev_cx };
-                let step_z = if cz > prev_cz { 1 } else { -1 };
-                if is_cardinal_move_blocked(cache, check_x, prev_cz, 0, step_z, floor) {
+            } else {
+                if is_cardinal_move_blocked(cache, prev_cx, prev_cz, 0, step_z, floor) {
                     return false;
                 }
             }
+
             prev_cx = cx;
             prev_cz = cz;
         }
+
+        // Proximity check matching is_movement_blocked's directional buffer.
+        // Skip at the endpoint — it's the same destination for smoothed and
+        // unsmoothed paths, so blocking here only prevents smoothing without
+        // changing where the player actually stops.
+        if i < steps {
+            let nearest_x = mx.round() as i32;
+            let to_dist_x = (mx - nearest_x as f32).abs();
+            let from_dist_x = (prev_mx - nearest_x as f32).abs();
+            if to_dist_x < WALL_HALF_THICKNESS && to_dist_x < from_dist_x {
+                let bz = mz.floor() as i32;
+                if is_cardinal_move_blocked(cache, nearest_x - 1, bz, 1, 0, floor) {
+                    return false;
+                }
+            }
+
+            let nearest_z = mz.round() as i32;
+            let to_dist_z = (mz - nearest_z as f32).abs();
+            let from_dist_z = (prev_mz - nearest_z as f32).abs();
+            if to_dist_z < WALL_HALF_THICKNESS && to_dist_z < from_dist_z {
+                let bx = mx.floor() as i32;
+                if is_cardinal_move_blocked(cache, bx, nearest_z - 1, 0, 1, floor) {
+                    return false;
+                }
+            }
+        }
+
+        prev_mx = mx;
+        prev_mz = mz;
     }
 
     true
@@ -1055,54 +1097,68 @@ pub fn find_and_smooth_path(
     if result.waypoints.is_empty() {
         return result;
     }
-    // TODO: re-enable smooth_path once wall collision is fixed for diagonals
-    result
+    // Prepend the player's actual position so smoothing can optimize the
+    // entire trajectory (start → goal), not just (first A* cell → goal).
+    let mut full_path = Vec::with_capacity(result.waypoints.len() + 1);
+    full_path.push(PathWaypoint {
+        x: start_x,
+        z: start_z,
+        floor: start_floor,
+    });
+    full_path.extend(result.waypoints);
+    let smoothed = smooth_path(&full_path, cache);
+    PathResult {
+        // Remove the start position — the client already knows where the player is
+        // and uses the first waypoint as the movement target.
+        waypoints: if smoothed.len() > 1 {
+            smoothed[1..].to_vec()
+        } else {
+            smoothed
+        },
+        found: result.found,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn make_simple_house() -> (String, RuntimePassability) {
-        // 3x3 house with all walls: a fully enclosed room
-        let mut cells = vec![0u8; 9];
-        // North wall (row 0, all 3 cells)
-        cells[0] |= EDGE_N;
-        cells[1] |= EDGE_N;
-        cells[2] |= EDGE_N;
-        // South wall (row 2, all 3 cells)
-        cells[6] |= EDGE_S;
-        cells[7] |= EDGE_S;
-        cells[8] |= EDGE_S;
-        // West wall (col 0, all 3 rows)
-        cells[0] |= EDGE_W;
-        cells[3] |= EDGE_W;
-        cells[6] |= EDGE_W;
-        // East wall (col 2, all 3 rows)
-        cells[2] |= EDGE_E;
-        cells[5] |= EDGE_E;
-        cells[8] |= EDGE_E;
-
+    fn make_rect_room(width: u8, depth: u8) -> (String, RuntimePassability) {
+        let w = width as usize;
+        let d = depth as usize;
+        let mut cells = vec![0u8; w * d];
+        for x in 0..w {
+            cells[x] |= EDGE_N;
+            cells[x + (d - 1) * w] |= EDGE_S;
+        }
+        for z in 0..d {
+            cells[z * w] |= EDGE_W;
+            cells[z * w + w - 1] |= EDGE_E;
+        }
         let rp = RuntimePassability {
             house_origin_x: 10.0,
             house_origin_z: 10.0,
             min_x: 10.0,
-            max_x: 13.0,
+            max_x: 10.0 + width as f32,
             min_z: 10.0,
-            max_z: 13.0,
+            max_z: 10.0 + depth as f32,
             floors: vec![RuntimeFloorGrid {
                 floor_level: 0,
                 origin_x: 0,
                 origin_z: 0,
-                width: 3,
-                depth: 3,
+                width,
+                depth,
                 y_base: 0.0,
                 wall_height: 3.0,
                 cells,
             }],
             stairwells: vec![],
         };
-        ("house1".to_string(), rp)
+        ("house".to_string(), rp)
+    }
+
+    fn make_simple_house() -> (String, RuntimePassability) {
+        make_rect_room(3, 3)
     }
 
     #[test]
@@ -1138,5 +1194,150 @@ mod tests {
         let cache = PassabilityCache::new(); // No houses
         let result = find_path(0.0, 0.0, 0, 5.0, 5.0, 0, &cache, 200);
         assert!(result.found);
+    }
+
+    #[test]
+    fn smooth_path_does_not_cross_walls() {
+        let (id, rp) = make_simple_house();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Diagonal line from NW corner to SE corner of house would cross walls
+        let from = PathWaypoint {
+            x: 9.5,
+            z: 9.5,
+            floor: 0,
+        };
+        let to = PathWaypoint {
+            x: 13.5,
+            z: 13.5,
+            floor: 0,
+        };
+        assert!(!is_line_passable(&from, &to, &cache));
+
+        // Line along the north side outside the house — should be passable
+        let from2 = PathWaypoint {
+            x: 9.5,
+            z: 9.5,
+            floor: 0,
+        };
+        let to2 = PathWaypoint {
+            x: 13.5,
+            z: 9.5,
+            floor: 0,
+        };
+        assert!(is_line_passable(&from2, &to2, &cache));
+    }
+
+    #[test]
+    fn smooth_path_preserves_endpoints() {
+        let (id, rp) = make_simple_house();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Path around the house should be smoothed but still start and end correctly
+        let result = find_and_smooth_path(9.5, 11.5, 0, 13.5, 11.5, 0, &cache, 200);
+        assert!(result.found);
+        assert!(!result.waypoints.is_empty());
+        let first = &result.waypoints[0];
+        let last = result.waypoints.last().unwrap();
+        // First waypoint should be near start, last near goal
+        assert!((first.x - 9.5).abs() < 1.0 || (first.x - 10.5).abs() < 1.0);
+        assert!((last.x - 13.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn smooth_diagonal_inside_room() {
+        let (id, rp) = make_rect_room(5, 5);
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Diagonal across the room interior (cell centers) — must be passable
+        let from = PathWaypoint {
+            x: 10.5,
+            z: 10.5,
+            floor: 0,
+        };
+        let to = PathWaypoint {
+            x: 14.5,
+            z: 14.5,
+            floor: 0,
+        };
+        assert!(is_line_passable(&from, &to, &cache));
+
+        // Walk parallel to north wall at z=10.2 — should be passable
+        // (directional check: not approaching, just moving parallel)
+        let from2 = PathWaypoint {
+            x: 10.5,
+            z: 10.2,
+            floor: 0,
+        };
+        let to2 = PathWaypoint {
+            x: 14.5,
+            z: 10.2,
+            floor: 0,
+        };
+        assert!(is_line_passable(&from2, &to2, &cache));
+
+        // Goal near a wall corner — endpoint proximity shouldn't block smoothing
+        let from3 = PathWaypoint {
+            x: 10.5,
+            z: 10.5,
+            floor: 0,
+        };
+        let to3 = PathWaypoint {
+            x: 14.8,
+            z: 14.8,
+            floor: 0,
+        };
+        assert!(is_line_passable(&from3, &to3, &cache));
+
+        // Full find_and_smooth: diagonal should produce ≤2 waypoints (direct line)
+        let result = find_and_smooth_path(10.5, 10.5, 0, 14.5, 14.5, 0, &cache, 500);
+        assert!(result.found);
+        assert!(
+            result.waypoints.len() <= 2,
+            "Expected smooth diagonal (≤2 waypoints), got {}",
+            result.waypoints.len()
+        );
+    }
+
+    #[test]
+    fn smooth_diagonal_inside_rectangular_room() {
+        // Wide rectangle: 8x3
+        let (id, rp) = make_rect_room(8, 3);
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        let result = find_and_smooth_path(10.5, 10.5, 0, 17.5, 12.5, 0, &cache, 500);
+        assert!(result.found);
+        assert!(
+            result.waypoints.len() == 1,
+            "8x3 room: expected single goal waypoint (direct diagonal), got {} waypoints: {:?}",
+            result.waypoints.len(),
+            result
+                .waypoints
+                .iter()
+                .map(|w| (w.x, w.z))
+                .collect::<Vec<_>>()
+        );
+
+        // Tall rectangle: 3x8
+        let (id2, rp2) = make_rect_room(3, 8);
+        let mut cache2 = PassabilityCache::new();
+        cache2.insert(id2, rp2);
+
+        let result2 = find_and_smooth_path(10.5, 10.5, 0, 12.5, 17.5, 0, &cache2, 500);
+        assert!(result2.found);
+        assert!(
+            result2.waypoints.len() == 1,
+            "3x8 room: expected single goal waypoint (direct diagonal), got {} waypoints: {:?}",
+            result2.waypoints.len(),
+            result2
+                .waypoints
+                .iter()
+                .map(|w| (w.x, w.z))
+                .collect::<Vec<_>>()
+        );
     }
 }
