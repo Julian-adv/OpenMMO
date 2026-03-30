@@ -500,9 +500,20 @@ async fn handle_client_message(
             rotation,
         } => {
             if let Some(id) = &state.player_id {
-                game_state
+                // Validate position is within allowed spawn area
+                if !game_state.validate_spawn_position(&monster_type, &position) {
+                    warn!(
+                        "Spawn request rejected: position ({:.1}, {:.1}) outside allowed area for {}",
+                        position.x, position.z, monster_type
+                    );
+                } else if let Some(monster) = game_state
                     .spawn_monster(monster_type, position, rotation, Some(id.clone()))
-                    .await;
+                    .await
+                {
+                    game_state
+                        .send_direct_message(id, ServerMessage::MonsterAssigned { monster })
+                        .await;
+                }
             } else {
                 warn!("Received spawn request from client that is not in game");
             }

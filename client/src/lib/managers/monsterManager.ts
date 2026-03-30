@@ -699,6 +699,13 @@ class MonsterManager {
       Math.random() * Math.PI * 2
     )
   }
+  requestSpawnFromServer(
+    monsterType: string,
+    position: { x: number; y: number; z: number },
+    rotation: number
+  ) {
+    networkManager.requestSpawnMonster(monsterType, position, rotation)
+  }
 }
 
 export const monsterManager = new MonsterManager()

@@ -2,13 +2,14 @@ use crate::types::{MonsterState, Position, ServerMessage};
 use tracing::{info, warn};
 
 impl super::GameState {
+    /// Create a monster, broadcast to all, and return it (or None if limit reached).
     pub async fn spawn_monster(
         &self,
         monster_type: String,
         position: Position,
         rotation: f32,
         owner_id: Option<String>,
-    ) {
+    ) -> Option<crate::types::Monster> {
         let owner_number = match owner_id.as_deref() {
             Some(owner_id) => self.get_or_assign_player_number(owner_id).await,
             None => 0,
@@ -22,9 +23,10 @@ impl super::GameState {
         let id = format!("m{}_{}", owner_number, spawn_count);
 
         let mut monsters = self.monsters.write().await;
-        if monsters.len() >= 10 {
+        let max_total = crate::world_config::world_config().max_monsters_total as usize;
+        if monsters.len() >= max_total {
             warn!("Monster spawn rejected: limit reached ({})", monsters.len());
-            return;
+            return None;
         }
 
         let def = self.monster_defs.get(&monster_type);
@@ -50,7 +52,13 @@ impl super::GameState {
             monsters.len()
         );
 
-        self.broadcast(ServerMessage::MonsterSpawned { monster }, None);
+        self.broadcast(
+            ServerMessage::MonsterSpawned {
+                monster: monster.clone(),
+            },
+            None,
+        );
+        Some(monster)
     }
 
     pub async fn update_monster_position(
@@ -107,5 +115,92 @@ impl super::GameState {
                 None,
             );
         }
+    }
+
+    /// Server-driven monster spawn tick. For each player, checks if they need
+    /// more monsters per spawn rules and sends SpawnMonsterRequest so the client
+    /// can pick a valid position (avoiding water, interiors, cliffs).
+    pub async fn tick_monster_spawns(&self) {
+        if self.spawn_rules.is_empty() {
+            return;
+        }
+
+        let max_total = crate::world_config::world_config().max_monsters_total as usize;
+
+        let player_ids: Vec<String> = {
+            let players = self.players.read().await;
+            players.keys().cloned().collect()
+        };
+        if player_ids.is_empty() {
+            return;
+        }
+
+        // Single lock: count alive monsters per (owner, type) and total
+        let (owner_type_counts, total_alive) = {
+            let monsters = self.monsters.read().await;
+            let mut counts = std::collections::HashMap::new();
+            let mut alive = 0usize;
+            for m in monsters.values() {
+                if m.state != MonsterState::Dead {
+                    alive += 1;
+                    if let Some(ref owner) = m.owner_id {
+                        *counts
+                            .entry((owner.clone(), m.monster_type.clone()))
+                            .or_insert(0) += 1;
+                    }
+                }
+            }
+            (counts, alive)
+        };
+
+        let mut requested_this_tick = 0usize;
+
+        for rule in &self.spawn_rules {
+            for player_id in &player_ids {
+                if total_alive + requested_this_tick >= max_total {
+                    return;
+                }
+
+                let owned = owner_type_counts
+                    .get(&(player_id.clone(), rule.monster_type.clone()))
+                    .copied()
+                    .unwrap_or(0);
+
+                if owned >= rule.max_per_player {
+                    continue;
+                }
+
+                // Ask the client to find a valid position and spawn
+                self.send_direct_message(
+                    player_id,
+                    ServerMessage::SpawnMonsterRequest {
+                        monster_type: rule.monster_type.clone(),
+                        center_x: rule.spawn_center.x,
+                        center_z: rule.spawn_center.z,
+                        radius: rule.spawn_radius,
+                    },
+                )
+                .await;
+
+                requested_this_tick += 1;
+            }
+        }
+    }
+
+    /// Validate that a spawn position is within the allowed radius for this monster type.
+    pub fn validate_spawn_position(&self, monster_type: &str, position: &Position) -> bool {
+        for rule in &self.spawn_rules {
+            if rule.monster_type == monster_type {
+                let dx = position.x - rule.spawn_center.x;
+                let dz = position.z - rule.spawn_center.z;
+                let dist_sq = dx * dx + dz * dz;
+                // 10% tolerance for floating-point imprecision
+                let max_dist = rule.spawn_radius * 1.1;
+                if dist_sq <= max_dist * max_dist {
+                    return true;
+                }
+            }
+        }
+        false
     }
 }

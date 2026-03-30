@@ -330,6 +330,19 @@ pub enum ServerMessage {
     MonsterSpawned {
         monster: Monster,
     },
+    /// Server assigns a monster to this client for AI control.
+    MonsterAssigned {
+        monster: Monster,
+    },
+    /// Server requests this client to spawn a monster within the given area.
+    /// Client should find a valid position (avoiding water, interiors, cliffs)
+    /// and reply with RequestSpawnMonster.
+    SpawnMonsterRequest {
+        monster_type: String,
+        center_x: f32,
+        center_z: f32,
+        radius: f32,
+    },
     MonsterMoved {
         monster_id: String,
         position: Position,

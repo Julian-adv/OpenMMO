@@ -1,6 +1,7 @@
 use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
+use crate::world_config::MonsterSpawnRule;
 use bytes::Bytes;
 use onlinerpg_shared::housing::{RoomData, WallDirection, WallVariant};
 use onlinerpg_shared::serialize_server_msg;
@@ -62,6 +63,8 @@ pub struct GameState {
     dirty_players: Arc<RwLock<HashSet<PlayerId>>>,
     /// In-memory set of currently open doors.
     open_doors: Arc<RwLock<HashSet<DoorKey>>>,
+    /// Monster spawn rules from world config.
+    spawn_rules: Vec<MonsterSpawnRule>,
 }
 
 impl GameState {
@@ -71,6 +74,7 @@ impl GameState {
         housing_io: Arc<HousingIO>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
+        let spawn_rules = crate::world_config::world_config().monster_spawns.clone();
 
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
@@ -85,6 +89,7 @@ impl GameState {
             housing_io,
             dirty_players: Arc::new(RwLock::new(HashSet::new())),
             open_doors: Arc::new(RwLock::new(HashSet::new())),
+            spawn_rules,
         }
     }
 
