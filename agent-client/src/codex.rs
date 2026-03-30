@@ -7,7 +7,7 @@ use tracing::{debug, info, warn};
 use crate::driver::LlmBackend;
 
 /// Configuration for the Codex CLI integration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct CodexConfig {
     /// Model to use (default: "o4-mini")
     #[serde(default = "default_model")]

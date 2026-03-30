@@ -61,8 +61,9 @@ system_prompt_file = "data/system_prompt.txt"
 # [[npcs]]
 # account = "npc_guard"
 # password = "..."
-# character_name = "경비병 카렌"
-# character_id = 1
+# character_name = "경비병 카렌"                          # Auto-creates character if account has none
+# character_class = "knight"                              # Class for auto-creation (default: knight)
+# # character_id = 1                                      # Optional: use specific character (skip auto-create)
 # llm = "openrouter"
 #
 # # 3-tier prompt system (overrides backend system_prompt_file when set):
@@ -79,9 +80,9 @@ system_prompt_file = "data/system_prompt.txt"
 # [[npcs]]
 # account = "npc_merchant"
 # password = "..."
-# character_name = "상인 리코"
-# character_id = 2
+# character_name = "상인 리카"
+# character_class = "merchant"
 # llm = "openrouter"
 # template_prompt = "data/prompts/templates/merchant.txt"
-# instance_prompt = "data/prompts/instances/rico.txt"
-# memory_file = "data/prompts/memory/rico.txt"
+# instance_prompt = "data/prompts/instances/rica.txt"
+# memory_file = "data/prompts/memory/rica.txt"

@@ -53,6 +53,7 @@ data/terrain/
 data/housing/
 server/data/game_data.db
 agent-client/data/config.toml
+agent-client/data/prompts/memory/
 
 # Claude Code (keep agents and commands for sharing)
 .claude/*

@@ -38,6 +38,9 @@
 - npc 상점
 - 아이템 enchant 시스템
 - 장비한 갑옷에 따른 외형 변화
+- chatting tab for combat log
+- change name of scp939
+
 
 # 폐지
 

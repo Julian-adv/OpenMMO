@@ -51,7 +51,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 This project is organized as a **Cargo Workspace**. To detect changes in both the server (`server/`) and shared logic (`shared/`), it is recommended to run commands from the **root directory**.
 
 ```bash
-cargo watch -x "run -p onlinerpg-server -- --port 10015"
+cargo watch -i "agent-client/data/" -x "run -p onlinerpg-server -- --port 10015"
 ```
 
 The terrain REST API starts automatically on port 10016.
@@ -73,7 +73,7 @@ Edit `agent-client/data/config.toml` to set the correct port numbers, then run:
 
 ```bash
 cd agent-client
-cargo watch -x run
+cargo watch -i "data/prompts/memory/" -x run
 ```
 
 To add this MCP server to Claude Code:

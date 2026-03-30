@@ -72,6 +72,25 @@ pub async fn wait_for_auth(
     }
 }
 
+/// Wait for a specific server message, skipping irrelevant ones.
+pub async fn wait_for_msg(
+    ws_rx: &mut WsRx,
+    label: &str,
+    expected: &str,
+    matches: impl Fn(&ServerMessage) -> bool,
+) -> anyhow::Result<ServerMessage> {
+    loop {
+        let msg = recv(ws_rx).await?;
+        if matches(&msg) {
+            return Ok(msg);
+        }
+        warn!(
+            "[{label}] Waiting for {expected}, got {:?} — skipping",
+            crate::msg_name(&msg)
+        );
+    }
+}
+
 pub async fn send(tx: &mut WsTx, msg: &ClientMessage) -> anyhow::Result<()> {
     let bytes = serialize_client_msg(msg)?;
     tx.send(Message::Binary(bytes.into())).await?;

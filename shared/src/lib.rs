@@ -38,6 +38,8 @@ pub enum CharacterClass {
     Wizard,
     #[serde(rename = "tourist")]
     Tourist,
+    #[serde(rename = "merchant")]
+    Merchant,
 }
 
 impl CharacterClass {
@@ -58,6 +60,7 @@ impl CharacterClass {
             CharacterClass::Rogue => "rogue",
             CharacterClass::Wizard => "wizard",
             CharacterClass::Tourist => "tourist",
+            CharacterClass::Merchant => "merchant",
         }
     }
 
@@ -77,7 +80,7 @@ impl CharacterClass {
             | CharacterClass::Healer
             | CharacterClass::Rogue
             | CharacterClass::Wizard => 6,
-            CharacterClass::Tourist => 4,
+            CharacterClass::Tourist | CharacterClass::Merchant => 4,
         }
     }
 
@@ -97,6 +100,7 @@ impl CharacterClass {
             "rogue" => CharacterClass::Rogue,
             "wizard" => CharacterClass::Wizard,
             "tourist" => CharacterClass::Tourist,
+            "merchant" => CharacterClass::Merchant,
             _ => CharacterClass::Knight,
         }
     }

@@ -7,7 +7,7 @@ export type Position = {
   z: number
 }
 
-export type CharacterClass = 'warrior' | 'knight' | 'thief'
+export type CharacterClass = 'warrior' | 'knight' | 'thief' | 'merchant'
 
 export type ServerPlayer = {
   id: string
