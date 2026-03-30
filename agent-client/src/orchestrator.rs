@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use futures_util::StreamExt;
 use onlinerpg_shared::monster_ai::AiTemplate;
-use onlinerpg_shared::ClientMessage;
+use onlinerpg_shared::{ClientMessage, ServerMessage};
 use onlinerpg_terrain::height::HeightSampler;
 use serde::Deserialize;
 use tokio::sync::{mpsc, Mutex};
@@ -50,6 +50,12 @@ pub struct NpcConfig {
     pub openrouter: OpenRouterConfig,
     #[serde(default)]
     pub codex: CodexConfig,
+
+    // --- Auto-provisioning ---
+    /// Character name to create if no characters exist on this account.
+    pub character_name: Option<String>,
+    /// Character class for auto-creation (e.g. "merchant"). Defaults to "knight".
+    pub character_class: Option<String>,
 
     // --- 3-tier prompt system ---
     /// Path to template prompt file (role-specific behavior rules).
@@ -133,17 +139,95 @@ async fn run_npc_session(
     let ws_stream = ws::connect_ws(server_url, &npc.account).await;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
+    // --- Authentication (auto-create account if needed) ---
     ws::send(
         &mut ws_tx,
         &ClientMessage::Authenticate {
             account_name: npc.account.clone(),
-            password_hash,
+            password_hash: password_hash.clone(),
             create_account: npc.create_account,
         },
     )
     .await?;
 
-    let characters = ws::wait_for_auth(&mut ws_rx, &npc.account).await?;
+    let auth_result = ws::wait_for_auth(&mut ws_rx, &npc.account).await;
+    let mut characters = match auth_result {
+        Ok(chars) => chars,
+        Err(e) => {
+            let err_msg = e.to_string();
+            if !npc.create_account && err_msg.contains("Account not found") {
+                info!("[{}] Account not found, creating account...", npc.account);
+                // Reconnect since the server may have closed the connection
+                drop(ws_rx);
+                let ws_stream = ws::connect_ws(server_url, &npc.account).await;
+                let (new_tx, new_rx) = ws_stream.split();
+                ws_tx = new_tx;
+                ws_rx = new_rx;
+                ws::send(
+                    &mut ws_tx,
+                    &ClientMessage::Authenticate {
+                        account_name: npc.account.clone(),
+                        password_hash: password_hash.clone(),
+                        create_account: true,
+                    },
+                )
+                .await?;
+                ws::wait_for_auth(&mut ws_rx, &npc.account).await?
+            } else {
+                return Err(e);
+            }
+        }
+    };
+
+    // --- Auto-create character if needed ---
+    if characters.is_empty() {
+        if let Some(ref char_name) = npc.character_name {
+            let class_str = npc.character_class.as_deref().unwrap_or("knight");
+            let class = onlinerpg_shared::CharacterClass::from_str_or_default(class_str);
+
+            info!(
+                "[{}] No characters found. Creating '{}' ({:?})...",
+                npc.account, char_name, class
+            );
+
+            // Roll stats
+            ws::send(&mut ws_tx, &ClientMessage::RollCharacterStats).await?;
+            ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterStatsRolled", |msg| {
+                matches!(msg, ServerMessage::CharacterStatsRolled { .. })
+            })
+            .await?;
+
+            // Create character
+            ws::send(
+                &mut ws_tx,
+                &ClientMessage::CreateCharacter {
+                    character_name: char_name.clone(),
+                    character_class: class,
+                },
+            )
+            .await?;
+            let created = ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterCreated", |msg| {
+                matches!(
+                    msg,
+                    ServerMessage::CharacterCreated { .. } | ServerMessage::CharacterError { .. }
+                )
+            })
+            .await?;
+            match created {
+                ServerMessage::CharacterCreated { character } => {
+                    info!(
+                        "[{}] Created character '{}' (id={}, {:?})",
+                        npc.account, character.name, character.id, character.class
+                    );
+                    characters.push(character);
+                }
+                ServerMessage::CharacterError { message } => {
+                    anyhow::bail!("[{}] Failed to create character: {message}", npc.account);
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
 
     let llm_enabled = npc.llm != LlmType::None;
     let enter_char_id = if let Some(char_id) = npc.character_id {

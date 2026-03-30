@@ -89,10 +89,10 @@ llm = "openrouter"
 [[npcs]]
 account = "npc_merchant"
 password = "..."
-character_name = "상인 리코"
+character_name = "상인 리카"
 template_prompt = "data/prompts/templates/merchant.txt"
-instance_prompt = "data/prompts/instances/rico.txt"
-memory_file = "data/prompts/memory/rico.txt"
+instance_prompt = "data/prompts/instances/rica.txt"
+memory_file = "data/prompts/memory/rica.txt"
 llm = "openrouter"
 
 # 몬스터 스폰은 서버가 결정 — 클라이언트 config에서 제거

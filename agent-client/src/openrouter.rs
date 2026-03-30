@@ -7,7 +7,7 @@ use tracing::{info, warn};
 use crate::driver::LlmBackend;
 
 /// Configuration for OpenRouter API integration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct OpenRouterConfig {
     /// OpenRouter API key (can also be set via OPENROUTER_API_KEY env var)
     #[serde(default)]

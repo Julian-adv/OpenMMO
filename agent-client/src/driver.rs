@@ -896,8 +896,13 @@ enum MoveResult {
     Error,
 }
 
+/// Maximum distance per move step (units). Longer segments are subdivided
+/// so the NPC walks at MOVE_SPEED instead of teleporting.
+const MAX_STEP_DIST: f32 = 3.0;
+
 /// Execute a move to the target position using A* pathfinding.
-/// Follows waypoints sequentially with appropriate timing.
+/// Follows waypoints sequentially with appropriate timing, subdividing
+/// long segments so the NPC never teleports.
 async fn execute_move(state: &Arc<Mutex<SharedState>>, goal_x: f32, goal_z: f32) -> MoveResult {
     let path_result = {
         let s = state.lock().await;
@@ -911,39 +916,52 @@ async fn execute_move(state: &Arc<Mutex<SharedState>>, goal_x: f32, goal_z: f32)
         return MoveResult::Arrived;
     }
 
-    for (i, wp) in path_result.waypoints.iter().enumerate() {
-        let travel_ms = {
-            let mut s = state.lock().await;
-            let player = match &s.self_player {
-                Some(p) => p,
-                None => return MoveResult::Error,
+    for wp in &path_result.waypoints {
+        // Subdivide long segments into small steps
+        loop {
+            let travel_ms = {
+                let mut s = state.lock().await;
+                let player = match &s.self_player {
+                    Some(p) => p,
+                    None => return MoveResult::Error,
+                };
+
+                let dx = wp.x - player.position.x;
+                let dz = wp.z - player.position.z;
+                let dist = (dx * dx + dz * dz).sqrt();
+                if dist < 0.1 {
+                    break;
+                }
+
+                let (step_x, step_z, step_dist) = if dist <= MAX_STEP_DIST {
+                    (wp.x, wp.z, dist)
+                } else {
+                    let ratio = MAX_STEP_DIST / dist;
+                    (
+                        player.position.x + dx * ratio,
+                        player.position.z + dz * ratio,
+                        MAX_STEP_DIST,
+                    )
+                };
+
+                let cmd = ClientMessage::PlayerMove {
+                    position: onlinerpg_shared::Position {
+                        x: step_x,
+                        y: player.position.y,
+                        z: step_z,
+                    },
+                    rotation: dx.atan2(dz),
+                    floor_level: wp.floor as i8,
+                };
+                s.self_floor_level = wp.floor;
+                if let Err(e) = s.send_command(cmd).await {
+                    error!("Failed to send move waypoint: {e}");
+                    return MoveResult::Error;
+                }
+                ((step_dist / MOVE_SPEED) * 1000.0) as u64
             };
 
-            let dx = wp.x - player.position.x;
-            let dz = wp.z - player.position.z;
-            let dist = (dx * dx + dz * dz).sqrt();
-            let rotation = dx.atan2(dz);
-            let travel_ms = ((dist / MOVE_SPEED) * 1000.0) as u64;
-
-            let cmd = ClientMessage::PlayerMove {
-                position: onlinerpg_shared::Position {
-                    x: wp.x,
-                    y: player.position.y,
-                    z: wp.z,
-                },
-                rotation,
-                floor_level: wp.floor as i8,
-            };
-            s.self_floor_level = wp.floor;
-            if let Err(e) = s.send_command(cmd).await {
-                error!("Failed to send move waypoint: {e}");
-                return MoveResult::Error;
-            }
-            travel_ms.max(50)
-        };
-
-        if i < path_result.waypoints.len() - 1 {
-            tokio::time::sleep(Duration::from_millis(travel_ms)).await;
+            tokio::time::sleep(Duration::from_millis(travel_ms.max(50))).await;
         }
     }
 

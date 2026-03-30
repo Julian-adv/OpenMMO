@@ -9,7 +9,7 @@ use tracing::{debug, info, warn};
 use crate::driver::LlmBackend;
 
 /// Configuration for the Claude CLI integration.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct ClaudeConfig {
     /// Model to use (default: "sonnet")
     #[serde(default = "default_model")]
