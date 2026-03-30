@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::monster_ai::MonsterAiManager;
-use onlinerpg_shared::housing::HouseData;
+use onlinerpg_shared::housing::{HouseData, WallDirection};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
 use onlinerpg_shared::Position;
 use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
@@ -25,6 +25,60 @@ pub enum EventUrgency {
     Noise,
 }
 
+/// Shared world data: passability cache and house state.
+/// Wrapped in `Arc<RwLock<WorldCache>>` so multiple NPC connections can share it.
+pub struct WorldCache {
+    passability_cache: PassabilityCache,
+    houses: HashMap<String, HouseData>,
+}
+
+impl WorldCache {
+    pub fn new() -> Self {
+        Self {
+            passability_cache: PassabilityCache::new(),
+            houses: HashMap::new(),
+        }
+    }
+
+    pub fn passability_cache(&self) -> &PassabilityCache {
+        &self.passability_cache
+    }
+
+    pub fn add_house(&mut self, house: HouseData) {
+        let rp = pathfinding::build_runtime_passability(&house);
+        self.passability_cache.insert(house.id.clone(), rp);
+        pathfinding::apply_door_overlays(&mut self.passability_cache, &house);
+        self.houses.insert(house.id.clone(), house);
+    }
+
+    pub fn remove_house(&mut self, house_id: &str) {
+        self.houses.remove(house_id);
+        self.passability_cache.remove(house_id);
+    }
+
+    pub fn update_door(
+        &mut self,
+        house_id: &str,
+        room_index: u32,
+        wall_dir: WallDirection,
+        segment_index: usize,
+        is_open: bool,
+    ) {
+        if let Some(house) = self.houses.get(house_id) {
+            if let Some(room) = house.rooms.get(room_index as usize) {
+                pathfinding::update_door_edge(
+                    &mut self.passability_cache,
+                    house_id,
+                    room,
+                    wall_dir,
+                    segment_index,
+                    is_open,
+                );
+            }
+        }
+    }
+}
+
 /// Shared state between WebSocket reader and Claude driver tasks.
 pub struct SharedState {
     pub characters: Vec<Character>,
@@ -38,21 +92,20 @@ pub struct SharedState {
     /// Known nearby monsters
     pub nearby_monsters: HashMap<String, Monster>,
     events: Vec<ServerMessage>,
-    /// Latest position per monster — deduplicates high-frequency MonsterMoved events
+    /// Latest position per monster -- deduplicates high-frequency MonsterMoved events
     latest_monster_moves: HashMap<String, ServerMessage>,
-    /// Latest position per player — deduplicates high-frequency PlayerMoved events
+    /// Latest position per player -- deduplicates high-frequency PlayerMoved events
     latest_player_moves: HashMap<String, ServerMessage>,
-    /// Latest game time — only the most recent matters
+    /// Latest game time -- only the most recent matters
     latest_time: Option<ServerMessage>,
-    /// Players we've already seen within NEARBY_PLAYER_RADIUS — prevents duplicate events
+    /// Players we've already seen within NEARBY_PLAYER_RADIUS -- prevents duplicate events
     seen_nearby_players: HashSet<String>,
     /// Synthetic agent-side events (e.g. "player appeared nearby")
     agent_events: Vec<String>,
-    /// Terrain height sampler for correcting Y coordinates
-    pub height_sampler: HeightSampler,
-    /// Cached houses and their passability data
-    houses: HashMap<String, HouseData>,
-    pub passability_cache: PassabilityCache,
+    /// Terrain height sampler (shared across NPC connections)
+    pub height_sampler: Arc<tokio::sync::Mutex<HeightSampler>>,
+    /// Shared world cache: passability + houses (shared across NPC connections)
+    pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
     /// Current floor level for the agent
     pub self_floor_level: u8,
     cmd_tx: mpsc::Sender<ClientMessage>,
@@ -68,7 +121,8 @@ impl SharedState {
     pub fn new(
         characters: Vec<Character>,
         cmd_tx: mpsc::Sender<ClientMessage>,
-        height_sampler: HeightSampler,
+        height_sampler: Arc<tokio::sync::Mutex<HeightSampler>>,
+        world_cache: Arc<std::sync::RwLock<WorldCache>>,
     ) -> Self {
         Self {
             characters,
@@ -84,8 +138,7 @@ impl SharedState {
             seen_nearby_players: HashSet::new(),
             agent_events: Vec::new(),
             height_sampler,
-            houses: HashMap::new(),
-            passability_cache: PassabilityCache::new(),
+            world_cache,
             self_floor_level: 0,
             cmd_tx,
             urgent_notify: Arc::new(Notify::new()),
@@ -143,6 +196,8 @@ impl SharedState {
             let original_y = position.y;
             match self
                 .height_sampler
+                .lock()
+                .await
                 .sample_height(position.x, position.z)
                 .await
             {
@@ -370,19 +425,19 @@ impl SharedState {
                 }
             }
             ServerMessage::HouseSpawned { ref house } => {
-                self.add_house(house.clone());
+                self.world_cache.write().unwrap().add_house(house.clone());
             }
             ServerMessage::HousesInArea { ref houses } => {
+                let mut world = self.world_cache.write().unwrap();
                 for house in houses {
-                    self.add_house(house.clone());
+                    world.add_house(house.clone());
                 }
             }
             ServerMessage::HouseUpdated { ref house } => {
-                self.add_house(house.clone());
+                self.world_cache.write().unwrap().add_house(house.clone());
             }
             ServerMessage::HouseRemoved { ref house_id } => {
-                self.houses.remove(house_id);
-                self.passability_cache.remove(house_id);
+                self.world_cache.write().unwrap().remove_house(house_id);
             }
             ServerMessage::DoorToggled {
                 ref house_id,
@@ -391,18 +446,13 @@ impl SharedState {
                 segment_index,
                 is_open,
             } => {
-                if let Some(house) = self.houses.get(house_id) {
-                    if let Some(room) = house.rooms.get(*room_index as usize) {
-                        pathfinding::update_door_edge(
-                            &mut self.passability_cache,
-                            house_id,
-                            room,
-                            *wall_dir,
-                            *segment_index as usize,
-                            *is_open,
-                        );
-                    }
-                }
+                self.world_cache.write().unwrap().update_door(
+                    house_id,
+                    *room_index,
+                    *wall_dir,
+                    *segment_index as usize,
+                    *is_open,
+                );
             }
             // Notify monster AI when a managed monster is attacked
             ServerMessage::PlayerAttacked {
@@ -413,13 +463,15 @@ impl SharedState {
                 ..
             } => {
                 if self.monster_ai.manages(monster_id) {
+                    let world = self.world_cache.read().unwrap();
                     let cmds = self.monster_ai.handle_monster_hit(
                         monster_id,
                         player_id,
                         *hit,
                         *damage,
-                        &self.passability_cache,
+                        world.passability_cache(),
                     );
+                    drop(world);
                     self.pending_commands.extend(cmds);
                 }
             }
@@ -494,13 +546,6 @@ impl SharedState {
         std::mem::take(&mut self.agent_events)
     }
 
-    fn add_house(&mut self, house: HouseData) {
-        let rp = pathfinding::build_runtime_passability(&house);
-        self.passability_cache.insert(house.id.clone(), rp);
-        pathfinding::apply_door_overlays(&mut self.passability_cache, &house);
-        self.houses.insert(house.id.clone(), house);
-    }
-
     /// Find a smoothed path from current position to the goal.
     pub fn find_path_to(&self, goal_x: f32, goal_z: f32, goal_floor: u8) -> PathResult {
         let (start_x, start_z) = match &self.self_player {
@@ -512,6 +557,7 @@ impl SharedState {
                 }
             }
         };
+        let world = self.world_cache.read().unwrap();
         pathfinding::find_and_smooth_path(
             start_x,
             start_z,
@@ -519,7 +565,7 @@ impl SharedState {
             goal_x,
             goal_z,
             goal_floor,
-            &self.passability_cache,
+            world.passability_cache(),
             pathfinding::DEFAULT_MAX_NODES,
         )
     }
@@ -533,6 +579,7 @@ impl SharedState {
         center_z: f32,
         radius: f32,
     ) -> Option<Position> {
+        let world = self.world_cache.read().unwrap();
         let mut rng = rand::thread_rng();
         for _ in 0..10 {
             let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
@@ -541,7 +588,7 @@ impl SharedState {
             let z = center_z + angle.sin() * dist;
 
             // Reject if inside a house
-            if pathfinding::is_movement_blocked(&self.passability_cache, x, z, x, z, 0.0) {
+            if pathfinding::is_movement_blocked(world.passability_cache(), x, z, x, z, 0.0) {
                 continue;
             }
             return Some(Position { x, y: 0.0, z });
