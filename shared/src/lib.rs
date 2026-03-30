@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod housing;
+pub mod monster_ai;
 pub mod pathfinding;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -101,7 +102,7 @@ impl CharacterClass {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
     pub y: f32,
@@ -630,6 +631,154 @@ mod wasm_api {
     struct PathResultJs {
         waypoints: Vec<WaypointJs>,
         found: bool,
+    }
+
+    // --- Monster AI WASM bindings ---
+
+    use crate::monster_ai::{self, AiTemplate, MonsterBrain, NearbyPlayer};
+
+    thread_local! {
+        static MONSTER_BRAINS: RefCell<HashMap<String, MonsterBrain>> = RefCell::new(HashMap::new());
+        static AI_TEMPLATES: RefCell<HashMap<String, AiTemplate>> = RefCell::new(HashMap::new());
+    }
+
+    fn get_template(monster_type: &str) -> AiTemplate {
+        AI_TEMPLATES.with(|t| t.borrow().get(monster_type).cloned().unwrap_or_default())
+    }
+
+    struct WasmPathProvider;
+    impl monster_ai::PathProvider for WasmPathProvider {
+        fn find_path(
+            &self,
+            start_x: f32,
+            start_z: f32,
+            start_floor: u8,
+            goal_x: f32,
+            goal_z: f32,
+            goal_floor: u8,
+        ) -> pathfinding::PathResult {
+            with_cache(|c| {
+                pathfinding::find_and_smooth_path(
+                    start_x,
+                    start_z,
+                    start_floor,
+                    goal_x,
+                    goal_z,
+                    goal_floor,
+                    c,
+                    pathfinding::DEFAULT_MAX_NODES,
+                )
+            })
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn ai_load_templates(json: &str) -> Result<(), JsError> {
+        let templates = monster_ai::load_templates(json)
+            .map_err(|e| JsError::new(&format!("Failed to parse AI templates: {e}")))?;
+        AI_TEMPLATES.with(|t| *t.borrow_mut() = templates);
+        Ok(())
+    }
+
+    #[wasm_bindgen]
+    pub fn ai_create_brain(val: JsValue) -> Result<(), JsError> {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct CreateBrainArgs {
+            monster_id: String,
+            monster_type: String,
+            position: Position,
+            health: u32,
+            max_health: u32,
+            template_name: String,
+        }
+
+        let args: CreateBrainArgs = serde_wasm_bindgen::from_value(val)
+            .map_err(|e| JsError::new(&format!("Invalid brain args: {e}")))?;
+
+        let template = get_template(&args.template_name);
+
+        let brain = MonsterBrain::new(
+            args.monster_id.clone(),
+            args.monster_type,
+            args.position,
+            args.health,
+            args.max_health,
+            &template,
+        );
+
+        MONSTER_BRAINS.with(|b| b.borrow_mut().insert(args.monster_id, brain));
+        Ok(())
+    }
+
+    #[wasm_bindgen]
+    pub fn ai_remove_brain(monster_id: &str) {
+        MONSTER_BRAINS.with(|b| b.borrow_mut().remove(monster_id));
+    }
+
+    #[wasm_bindgen]
+    pub fn ai_tick_brain(
+        monster_id: &str,
+        delta_ms: f32,
+        nearby_players: JsValue,
+    ) -> Result<JsValue, JsError> {
+        let players: Vec<NearbyPlayer> = serde_wasm_bindgen::from_value(nearby_players)
+            .map_err(|e| JsError::new(&format!("Invalid nearby_players: {e}")))?;
+
+        let result = MONSTER_BRAINS.with(|brains| {
+            let mut brains = brains.borrow_mut();
+            let brain = match brains.get_mut(monster_id) {
+                Some(b) => b,
+                None => return None,
+            };
+
+            let template = get_template(&brain.monster_type);
+            let mut rng = rand::thread_rng();
+            Some(brain.tick(delta_ms, &players, &template, &WasmPathProvider, &mut rng))
+        });
+
+        match result {
+            Some(r) => to_js(&r),
+            None => to_js(&serde_json::Value::Null),
+        }
+    }
+
+    #[wasm_bindgen]
+    pub fn ai_handle_hit(
+        monster_id: &str,
+        attacker_id: &str,
+        hit: bool,
+        damage: u32,
+    ) -> Result<JsValue, JsError> {
+        let commands = MONSTER_BRAINS.with(|brains| {
+            let mut brains = brains.borrow_mut();
+            let brain = match brains.get_mut(monster_id) {
+                Some(b) => b,
+                None => return vec![],
+            };
+
+            let template = get_template(&brain.monster_type);
+            let mut rng = rand::thread_rng();
+            brain.handle_hit(
+                attacker_id,
+                hit,
+                damage,
+                &template,
+                &WasmPathProvider,
+                &mut rng,
+            )
+        });
+
+        to_js(&commands)
+    }
+
+    #[wasm_bindgen]
+    pub fn ai_handle_death(monster_id: &str) {
+        MONSTER_BRAINS.with(|brains| {
+            if let Some(brain) = brains.borrow_mut().get_mut(monster_id) {
+                brain.handle_death();
+            }
+        });
     }
 }
 

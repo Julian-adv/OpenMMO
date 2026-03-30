@@ -9,7 +9,6 @@ export interface MonsterData {
   targetPlayerId?: string // Who the monster is attacking
   moveSpeed: number
   stateTimer: number
-  hitTrigger?: number // Keep for backward compat or remove if not needed
   impactDelay?: number // Delay until hit state starts
   isLastHitSuccess?: boolean // Whether the last attack was a hit
   isDeadPending?: boolean // Death packet received, waiting for impact delay
@@ -22,14 +21,5 @@ export interface MonsterData {
   health: number
   maxHealth: number
   spawnPosition?: { x: number; y: number; z: number }
-  movementIntent?: 'normal' | 'flee' | 'return'
-  fleeTimer?: number
   currentFloor?: number
-  pathState?: {
-    waypoints: Array<{ x: number; z: number; floor: number }>
-    currentWaypointIndex: number
-    lastPathTime: number
-    lastTargetX: number
-    lastTargetZ: number
-  }
 }

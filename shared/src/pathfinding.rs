@@ -51,14 +51,14 @@ pub struct RuntimePassability {
     pub stairwells: Vec<StairwellInfo>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PathWaypoint {
     pub x: f32,
     pub z: f32,
     pub floor: u8,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PathResult {
     pub waypoints: Vec<PathWaypoint>,
     pub found: bool,

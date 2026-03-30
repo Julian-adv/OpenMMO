@@ -139,12 +139,15 @@ async fn main() -> anyhow::Result<()> {
         return run_mcp_mode(&config).await;
     }
 
-    let monster_defs =
-        monster_ai::MonsterAiManager::load_defs_from_json(include_str!("../../data/monsters.json"));
+    let ai_templates = monster_ai::MonsterAiManager::load_templates_from_json(include_str!(
+        "../../data/ai_templates.json"
+    ));
+    let type_mapping =
+        monster_ai::MonsterAiManager::load_type_mapping(include_str!("../../data/monsters.json"));
 
     // Reconnect loop for game sessions
     loop {
-        match run_session(&config, &monster_defs).await {
+        match run_session(&config, &ai_templates, &type_mapping).await {
             Ok(()) => {
                 info!(
                     "Session ended cleanly. Reconnecting in {}s...",
@@ -199,7 +202,8 @@ async fn run_mcp_mode(config: &Config) -> anyhow::Result<()> {
 /// Run a single game session: connect, authenticate, enter game, run until disconnected.
 async fn run_session(
     config: &Config,
-    monster_defs: &HashMap<String, monster_ai::MonsterDef>,
+    ai_templates: &HashMap<String, onlinerpg_shared::monster_ai::AiTemplate>,
+    type_mapping: &HashMap<String, String>,
 ) -> anyhow::Result<()> {
     let password_hash = fnv1a_hash(&config.password);
 
@@ -386,7 +390,8 @@ async fn run_session(
 
     // Monster AI tick task (1Hz)
     let state_for_ai = Arc::clone(&state);
-    let defs_for_ai = monster_defs.clone();
+    let templates_for_ai = ai_templates.clone();
+    let mapping_for_ai = type_mapping.clone();
     let ai_task = tokio::spawn(async move {
         let tick_interval = Duration::from_secs(1);
         let mut interval = tokio::time::interval(tick_interval);
@@ -394,7 +399,8 @@ async fn run_session(
 
         {
             let mut s = state_for_ai.lock().await;
-            s.monster_ai.set_defs(defs_for_ai);
+            s.monster_ai.set_templates(templates_for_ai);
+            s.monster_ai.set_type_mapping(mapping_for_ai);
         }
 
         loop {
