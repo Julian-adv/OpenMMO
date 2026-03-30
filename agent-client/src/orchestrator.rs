@@ -18,6 +18,7 @@ use tracing::{error, info, warn};
 use crate::claude::{self, ClaudeConfig};
 use crate::codex::{self, CodexConfig};
 use crate::driver;
+use crate::llm_scheduler::LlmScheduler;
 use crate::openrouter::{self, OpenRouterConfig};
 use crate::state::{SharedState, WorldCache};
 use crate::ws;
@@ -49,6 +50,15 @@ pub struct NpcConfig {
     pub openrouter: OpenRouterConfig,
     #[serde(default)]
     pub codex: CodexConfig,
+
+    // --- 3-tier prompt system ---
+    /// Path to template prompt file (role-specific behavior rules).
+    /// When set, overrides backend-specific system_prompt_file.
+    pub template_prompt: Option<String>,
+    /// Path to instance prompt file (individual NPC personality).
+    pub instance_prompt: Option<String>,
+    /// Path to memory file (accumulated experiences, auto-updated by LLM).
+    pub memory_file: Option<String>,
 }
 
 /// Resources shared across all NPC connections.
@@ -57,6 +67,7 @@ pub struct SharedResources {
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
     pub ai_templates: Arc<HashMap<String, AiTemplate>>,
     pub type_mapping: Arc<HashMap<String, String>>,
+    pub scheduler: LlmScheduler,
 }
 
 /// Run the orchestrator: spawn all NPC sessions in parallel.
@@ -214,7 +225,7 @@ async fn run_npc_session(
         }
     });
 
-    let llm_task = spawn_llm_task(npc, &state);
+    let llm_task = spawn_llm_task(npc, &state, &shared.scheduler);
 
     // Monster AI tick task (1Hz)
     let state_for_ai = Arc::clone(&state);
@@ -281,38 +292,90 @@ async fn run_npc_session(
     Ok(())
 }
 
+impl NpcConfig {
+    /// Get the backend-specific system_prompt_file path.
+    fn system_prompt_file(&self) -> Option<&str> {
+        match &self.llm {
+            LlmType::Claude => Some(&self.claude.system_prompt_file),
+            LlmType::Openrouter => Some(&self.openrouter.system_prompt_file),
+            LlmType::Codex => Some(&self.codex.system_prompt_file),
+            LlmType::None => None,
+        }
+    }
+}
+
+/// Build the system prompt for an NPC.
+///
+/// If `template_prompt` is set, uses the 3-tier system (template + instance + memory).
+/// Otherwise falls back to the backend-specific `system_prompt_file`.
+fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
+    if let Some(ref template_path) = npc.template_prompt {
+        let mut parts = vec![driver::load_system_prompt(template_path)?];
+        if let Some(ref instance_path) = npc.instance_prompt {
+            parts.push(driver::load_system_prompt(instance_path)?);
+        }
+        if let Some(ref memory_path) = npc.memory_file {
+            match std::fs::read_to_string(memory_path) {
+                Ok(content) if !content.trim().is_empty() => {
+                    parts.push(format!("=== YOUR MEMORIES ===\n{content}"));
+                }
+                Ok(_) => {}
+                Err(_) => {
+                    let _ = std::fs::write(memory_path, "");
+                }
+            }
+        }
+        info!(
+            "[{}] Using 3-tier prompt: template={template_path}{}{}",
+            npc.account,
+            npc.instance_prompt
+                .as_deref()
+                .map(|p| format!(", instance={p}"))
+                .unwrap_or_default(),
+            npc.memory_file
+                .as_deref()
+                .map(|p| format!(", memory={p}"))
+                .unwrap_or_default(),
+        );
+        Ok(parts.join("\n\n"))
+    } else {
+        match npc.system_prompt_file() {
+            Some(path) => driver::load_system_prompt(path),
+            None => Ok(String::new()),
+        }
+    }
+}
+
 /// Spawn the appropriate LLM driver task based on NPC config.
 fn spawn_llm_task(
     npc: &NpcConfig,
     state: &Arc<Mutex<SharedState>>,
+    scheduler: &LlmScheduler,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let min_interval = Duration::from_secs(npc.min_interval_secs);
     let debounce = Duration::from_secs(npc.debounce_secs);
     let idle_interval = Duration::from_secs(npc.idle_interval_secs);
     let activity_window = Duration::from_secs(npc.activity_window_secs);
 
-    match npc.llm {
+    let system_prompt = match build_system_prompt(npc) {
+        Ok(p) => p,
+        Err(e) => {
+            error!("[{}] Failed to build system prompt: {e}", npc.account);
+            return None;
+        }
+    };
+
+    let invoker: Arc<dyn driver::LlmBackend> = match npc.llm {
         LlmType::Claude => {
             info!(
                 "[{}] Claude CLI integration enabled (model={})",
                 npc.account, npc.claude.model
             );
-            let state = Arc::clone(state);
-            match claude::ClaudeInvoker::new(&npc.claude) {
-                Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(
-                        state,
-                        Arc::new(invoker),
-                        min_interval,
-                        debounce,
-                        idle_interval,
-                        activity_window,
-                    )
-                    .await;
-                })),
+            match claude::ClaudeInvoker::new(&npc.claude, system_prompt) {
+                Ok(inv) => Arc::new(inv),
                 Err(e) => {
                     error!("[{}] Failed to create Claude invoker: {e}", npc.account);
-                    None
+                    return None;
                 }
             }
         }
@@ -321,22 +384,11 @@ fn spawn_llm_task(
                 "[{}] OpenRouter API integration enabled (model={})",
                 npc.account, npc.openrouter.model
             );
-            let state = Arc::clone(state);
-            match openrouter::OpenRouterInvoker::new(&npc.openrouter) {
-                Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(
-                        state,
-                        Arc::new(invoker),
-                        min_interval,
-                        debounce,
-                        idle_interval,
-                        activity_window,
-                    )
-                    .await;
-                })),
+            match openrouter::OpenRouterInvoker::new(&npc.openrouter, system_prompt) {
+                Ok(inv) => Arc::new(inv),
                 Err(e) => {
                     error!("[{}] Failed to create OpenRouter invoker: {e}", npc.account);
-                    None
+                    return None;
                 }
             }
         }
@@ -345,25 +397,28 @@ fn spawn_llm_task(
                 "[{}] Codex CLI integration enabled (model={})",
                 npc.account, npc.codex.model
             );
-            let state = Arc::clone(state);
-            match codex::CodexInvoker::new(&npc.codex) {
-                Ok(invoker) => Some(tokio::spawn(async move {
-                    driver::llm_driver(
-                        state,
-                        Arc::new(invoker),
-                        min_interval,
-                        debounce,
-                        idle_interval,
-                        activity_window,
-                    )
-                    .await;
-                })),
+            match codex::CodexInvoker::new(&npc.codex, system_prompt) {
+                Ok(inv) => Arc::new(inv),
                 Err(e) => {
                     error!("[{}] Failed to create Codex invoker: {e}", npc.account);
-                    None
+                    return None;
                 }
             }
         }
-        LlmType::None => None,
-    }
+        LlmType::None => return None,
+    };
+
+    let state = Arc::clone(state);
+    let scheduler = scheduler.clone();
+    let driver_config = driver::DriverConfig {
+        label: npc.account.clone(),
+        memory_file: npc.memory_file.clone(),
+        min_interval,
+        debounce,
+        idle_interval,
+        activity_window,
+    };
+    Some(tokio::spawn(async move {
+        driver::llm_driver(state, invoker, scheduler, driver_config).await;
+    }))
 }

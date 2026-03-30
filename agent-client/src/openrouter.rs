@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
 use tracing::{info, warn};
 
-use crate::driver::{load_system_prompt, LlmBackend};
+use crate::driver::LlmBackend;
 
 /// Configuration for OpenRouter API integration.
 #[derive(Debug, Clone, Deserialize)]
@@ -95,9 +95,7 @@ pub struct OpenRouterInvoker {
 }
 
 impl OpenRouterInvoker {
-    pub fn new(config: &OpenRouterConfig) -> anyhow::Result<Self> {
-        let system_prompt = load_system_prompt(&config.system_prompt_file)?;
-
+    pub fn new(config: &OpenRouterConfig, system_prompt: String) -> anyhow::Result<Self> {
         // Resolve API key: config value takes precedence, then env var
         let api_key = if !config.api_key.is_empty() {
             config.api_key.clone()
@@ -108,10 +106,7 @@ impl OpenRouterInvoker {
                 ))?
         };
 
-        info!(
-            "OpenRouter invoker ready (model={}, prompt_file={})",
-            config.model, config.system_prompt_file
-        );
+        info!("OpenRouter invoker ready (model={})", config.model);
 
         Ok(Self {
             client: Client::new(),

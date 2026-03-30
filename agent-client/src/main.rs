@@ -1,6 +1,7 @@
 mod claude;
 mod codex;
 mod driver;
+mod llm_scheduler;
 mod mcp;
 mod monster_ai;
 mod openrouter;
@@ -90,6 +91,11 @@ struct Config {
     /// Array of NPC configurations. When present, overrides legacy single-NPC fields.
     #[serde(default)]
     npcs: Vec<NpcConfig>,
+
+    // --- LLM Scheduler ---
+    /// Maximum number of concurrent LLM calls across all NPCs (default: 2)
+    #[serde(default = "default_max_concurrent")]
+    max_concurrent: usize,
 }
 
 fn default_terrain_dir() -> String {
@@ -114,6 +120,10 @@ pub fn default_idle_interval_secs() -> u64 {
 
 pub fn default_activity_window_secs() -> u64 {
     30
+}
+
+fn default_max_concurrent() -> usize {
+    2
 }
 
 const CONFIG_PATH: &str = "data/config.toml";
@@ -173,19 +183,35 @@ async fn main() -> anyhow::Result<()> {
         claude: config.claude.clone(),
         openrouter: config.openrouter.clone(),
         codex: config.codex.clone(),
+        template_prompt: None,
+        instance_prompt: None,
+        memory_file: None,
     };
 
-    run_orchestrator_mode_with_npcs(config.server, config.terrain_dir, vec![npc]).await
+    run_orchestrator_mode_with_npcs(
+        config.server,
+        config.terrain_dir,
+        vec![npc],
+        config.max_concurrent,
+    )
+    .await
 }
 
 async fn run_orchestrator_mode(config: Config) -> anyhow::Result<()> {
-    run_orchestrator_mode_with_npcs(config.server, config.terrain_dir, config.npcs).await
+    run_orchestrator_mode_with_npcs(
+        config.server,
+        config.terrain_dir,
+        config.npcs,
+        config.max_concurrent,
+    )
+    .await
 }
 
 async fn run_orchestrator_mode_with_npcs(
     server_url: String,
     terrain_dir: String,
     npcs: Vec<NpcConfig>,
+    max_concurrent: usize,
 ) -> anyhow::Result<()> {
     let ai_templates = monster_ai::MonsterAiManager::load_templates_from_json(include_str!(
         "../../data/ai_templates.json"
@@ -198,6 +224,7 @@ async fn run_orchestrator_mode_with_npcs(
         world_cache: Arc::new(std::sync::RwLock::new(WorldCache::new())),
         ai_templates: Arc::new(ai_templates),
         type_mapping: Arc::new(type_mapping),
+        scheduler: llm_scheduler::LlmScheduler::new(max_concurrent),
     });
 
     orchestrator::run_orchestrator(server_url, npcs, shared).await

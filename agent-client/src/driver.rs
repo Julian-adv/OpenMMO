@@ -8,6 +8,7 @@ use serde::Deserialize;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
+use crate::llm_scheduler::{LlmPriority, LlmScheduler};
 use crate::state::SharedState;
 
 /// Trait for LLM backends that can send a prompt and return a text response.
@@ -22,6 +23,8 @@ pub struct AgentResponse {
     #[allow(dead_code)]
     pub thought: Option<String>,
     pub actions: Vec<AgentAction>,
+    /// Optional memory update: appended to the NPC's memory file for future sessions.
+    pub memory_update: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -357,18 +360,35 @@ pub fn build_prompt(
     prompt
 }
 
+/// Configuration for the LLM driver loop.
+pub struct DriverConfig {
+    pub label: String,
+    pub memory_file: Option<String>,
+    pub min_interval: Duration,
+    pub debounce: Duration,
+    pub idle_interval: Duration,
+    pub activity_window: Duration,
+}
+
 /// The main LLM agent driver loop. Runs as a tokio task.
 ///
 /// Ticks every ATTACK_COOLDOWN to send attack packets when there's an active
-/// target. LLM calls are spawned as background tasks so they don't block combat.
+/// target. LLM calls are submitted to the shared scheduler so they don't block
+/// combat and respect the global concurrency limit.
 pub async fn llm_driver(
     state: Arc<Mutex<SharedState>>,
     invoker: Arc<dyn LlmBackend>,
-    min_interval: Duration,
-    debounce: Duration,
-    idle_interval: Duration,
-    activity_window: Duration,
+    scheduler: LlmScheduler,
+    config: DriverConfig,
 ) {
+    let DriverConfig {
+        label,
+        memory_file,
+        min_interval,
+        debounce,
+        idle_interval,
+        activity_window,
+    } = config;
     let urgent_notify = {
         let s = state.lock().await;
         Arc::clone(&s.urgent_notify)
@@ -385,32 +405,48 @@ pub async fn llm_driver(
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
 
-    info!("LLM driver: in game, ready.");
+    info!("[{label}] LLM driver: in game, ready.");
 
     let attack_cooldown = load_attack_cooldown();
 
-    let mut last_prompt_at = Instant::now() - min_interval;
+    // Stagger idle polls: random offset so NPCs don't all poll at the same time
+    let idle_stagger = {
+        use rand::Rng;
+        let secs = idle_interval.as_secs().max(1);
+        Duration::from_secs(rand::thread_rng().gen_range(0..secs))
+    };
+    let mut last_prompt_at = Instant::now() - idle_stagger;
     let mut attack_target: Option<String> = None;
     let mut last_attack_at = Instant::now() - attack_cooldown;
     let mut llm_in_flight: Option<tokio::task::JoinHandle<anyhow::Result<String>>> = None;
     let mut prompt_pending_since: Option<Instant> = None;
     // Track last chat/combat activity to decide polling interval
     let mut last_activity_at = Instant::now() - idle_interval;
+    // Track the highest urgency since the last prompt
+    let mut pending_urgency = LlmPriority::Idle;
 
-    // Send initial world state (blocking is fine here, no combat yet)
+    // Send initial world state via scheduler (blocking is fine here, no combat yet)
     let initial_prompt = {
         let mut s = state.lock().await;
         let agent_events = s.drain_agent_events();
         build_prompt(&*s, &[], &agent_events)
     };
-    info!("LLM driver: sending initial world state");
-    match invoker.send_message(&initial_prompt).await {
+    info!("[{label}] LLM driver: sending initial world state");
+    match scheduler
+        .submit(
+            &label,
+            LlmPriority::Routine,
+            initial_prompt,
+            Arc::clone(&invoker),
+        )
+        .await
+    {
         Ok(response) => {
-            attack_target = handle_response(&state, &response).await;
+            attack_target = handle_response(&state, &response, &memory_file).await;
             last_prompt_at = Instant::now();
         }
         Err(e) => {
-            error!("LLM initial prompt failed: {e}");
+            error!("[{label}] LLM initial prompt failed: {e}");
         }
     }
 
@@ -424,8 +460,9 @@ pub async fn llm_driver(
 
         tokio::select! {
             _ = urgent_notify.notified() => {
-                debug!("LLM driver: urgent event received");
+                debug!("[{label}] LLM driver: urgent event received");
                 last_activity_at = Instant::now();
+                pending_urgency = LlmPriority::Urgent;
                 // Mark that we want to prompt soon (start debounce window)
                 if prompt_pending_since.is_none() && llm_in_flight.is_none() {
                     prompt_pending_since = Some(Instant::now());
@@ -446,18 +483,18 @@ pub async fn llm_driver(
                 let handle = llm_in_flight.take().unwrap();
                 match handle.await {
                     Ok(Ok(response)) => {
-                        let new_target = handle_response(&state, &response).await;
+                        let new_target = handle_response(&state, &response, &memory_file).await;
                         if new_target.is_some() {
                             attack_target = new_target;
                         }
                         last_prompt_at = Instant::now();
                     }
                     Ok(Err(e)) => {
-                        error!("LLM prompt failed: {e}");
+                        error!("[{label}] LLM prompt failed: {e}");
                         last_prompt_at = Instant::now();
                     }
                     Err(e) => {
-                        error!("LLM task panicked: {e}");
+                        error!("[{label}] LLM task panicked: {e}");
                         last_prompt_at = Instant::now();
                     }
                 }
@@ -474,6 +511,9 @@ pub async fn llm_driver(
         let effective_interval = if active { min_interval } else { idle_interval };
         if prompt_pending_since.is_none() && last_prompt_at.elapsed() >= effective_interval {
             prompt_pending_since = Some(Instant::now());
+            if pending_urgency == LlmPriority::Idle && active {
+                pending_urgency = LlmPriority::Routine;
+            }
         }
 
         // Debounce: wait at least `debounce` after the trigger before actually prompting
@@ -482,31 +522,47 @@ pub async fn llm_driver(
         if !ready_to_prompt {
             continue;
         }
-        prompt_pending_since = None;
 
-        // Also ensure min_interval since last prompt
+        // Also ensure min_interval since last prompt (keep pending state so we retry next tick)
         if last_prompt_at.elapsed() < min_interval {
             continue;
         }
+        prompt_pending_since = None;
 
-        // Drain events and build prompt
-        let (prompt, has_events) = {
+        // Drain events and build prompt, determine priority from events
+        let (prompt, has_events, priority) = {
             let mut s = state.lock().await;
             let events = s.drain_events();
             let agent_events = s.drain_agent_events();
             let has_events = !events.is_empty() || !agent_events.is_empty();
+
+            // Determine priority from the most urgent event (lower = more urgent)
+            let max_urgency = events
+                .iter()
+                .map(|e| LlmPriority::from(s.classify_event(e)))
+                .fold(pending_urgency, std::cmp::min);
+
             let prompt = build_prompt(&*s, &events, &agent_events);
-            (prompt, has_events)
+            (prompt, has_events, max_urgency)
         };
+        pending_urgency = LlmPriority::Idle; // reset for next cycle
 
         if !has_events {
             continue;
         }
 
-        // Spawn LLM call as background task (doesn't block combat ticks)
-        info!("LLM driver: sending prompt ({} chars)", prompt.len());
+        // Submit to scheduler as background task (doesn't block combat ticks)
+        info!(
+            "[{label}] LLM driver: submitting {:?} prompt ({} chars)",
+            priority,
+            prompt.len()
+        );
+        let sched = scheduler.clone();
         let inv = Arc::clone(&invoker);
-        llm_in_flight = Some(tokio::spawn(async move { inv.send_message(&prompt).await }));
+        let lbl = label.clone();
+        llm_in_flight = Some(tokio::spawn(async move {
+            sched.submit(&lbl, priority, prompt, inv).await
+        }));
     }
 }
 
@@ -704,7 +760,12 @@ fn load_attack_cooldown() -> Duration {
 
 /// Parse and execute the agent's response.
 /// Returns the monster_id if the last action was an attack (for combat loop).
-async fn handle_response(state: &Arc<Mutex<SharedState>>, response: &str) -> Option<String> {
+/// If `memory_file` is set and the response contains `memory_update`, appends to file.
+async fn handle_response(
+    state: &Arc<Mutex<SharedState>>,
+    response: &str,
+    memory_file: &Option<String>,
+) -> Option<String> {
     let agent_resp = match parse_agent_response(response) {
         Ok(r) => r,
         Err(e) => {
@@ -713,6 +774,30 @@ async fn handle_response(state: &Arc<Mutex<SharedState>>, response: &str) -> Opt
             return None;
         }
     };
+
+    // Process memory update if present
+    if let (Some(ref update), Some(ref path)) = (&agent_resp.memory_update, memory_file) {
+        let update = update.trim();
+        if !update.is_empty() {
+            use std::io::Write;
+            match std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+            {
+                Ok(mut f) => {
+                    if let Err(e) = writeln!(f, "\n{update}") {
+                        warn!("Failed to write memory update to {path}: {e}");
+                    } else {
+                        info!("Memory updated: {path} (+{} bytes)", update.len());
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to open memory file {path}: {e}");
+                }
+            }
+        }
+    }
 
     let mut last_attack_target = None;
 

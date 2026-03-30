@@ -6,7 +6,7 @@ use tokio::process::Command;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
-use crate::driver::{load_system_prompt, LlmBackend};
+use crate::driver::LlmBackend;
 
 /// Configuration for the Claude CLI integration.
 #[derive(Debug, Clone, Deserialize)]
@@ -51,12 +51,8 @@ pub struct ClaudeInvoker {
 }
 
 impl ClaudeInvoker {
-    pub fn new(config: &ClaudeConfig) -> anyhow::Result<Self> {
-        let system_prompt = load_system_prompt(&config.system_prompt_file)?;
-        info!(
-            "Claude invoker ready (model={}, prompt_file={})",
-            config.model, config.system_prompt_file
-        );
+    pub fn new(config: &ClaudeConfig, system_prompt: String) -> anyhow::Result<Self> {
+        info!("Claude invoker ready (model={})", config.model);
         Ok(Self {
             config: config.clone(),
             system_prompt,

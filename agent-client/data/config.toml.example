@@ -31,6 +31,9 @@ debounce_secs = 2                           # Extra wait to batch events after t
 idle_interval_secs = 3600                   # Interval when no chat/combat activity (idle mode)
 activity_window_secs = 30                   # How long after last activity to stay in active mode
 
+# LLM Scheduler: controls concurrent LLM calls across all NPCs
+max_concurrent = 2                          # Max simultaneous LLM calls (default: 2)
+
 # Claude CLI settings (used when llm = "claude")
 [claude]
 model = "sonnet"                            # "sonnet", "opus", "haiku", or full model ID
@@ -50,3 +53,35 @@ temperature = 0.7
 [codex]
 model = "o4-mini"                                # Any OpenAI model ID
 system_prompt_file = "data/system_prompt.txt"
+
+# --- Multi-NPC Orchestrator Mode ---
+# When [[npcs]] is present, legacy single-NPC fields above are ignored.
+# Each NPC gets its own WebSocket connection and LLM session.
+
+# [[npcs]]
+# account = "npc_guard"
+# password = "..."
+# character_name = "경비병 카렌"
+# character_id = 1
+# llm = "openrouter"
+#
+# # 3-tier prompt system (overrides backend system_prompt_file when set):
+# template_prompt = "data/prompts/templates/guard.txt"    # Role-specific behavior rules
+# instance_prompt = "data/prompts/instances/karen.txt"    # Individual NPC personality
+# memory_file = "data/prompts/memory/karen.txt"           # Accumulated experiences (auto-updated)
+#
+# # Per-NPC timing overrides (optional, defaults shown above)
+# min_interval_secs = 5
+# debounce_secs = 2
+# idle_interval_secs = 3600
+# activity_window_secs = 30
+
+# [[npcs]]
+# account = "npc_merchant"
+# password = "..."
+# character_name = "상인 리코"
+# character_id = 2
+# llm = "openrouter"
+# template_prompt = "data/prompts/templates/merchant.txt"
+# instance_prompt = "data/prompts/instances/rico.txt"
+# memory_file = "data/prompts/memory/rico.txt"

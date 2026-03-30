@@ -4,7 +4,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command;
 use tracing::{debug, info, warn};
 
-use crate::driver::{load_system_prompt, LlmBackend};
+use crate::driver::LlmBackend;
 
 /// Configuration for the Codex CLI integration.
 #[derive(Debug, Clone, Deserialize)]
@@ -59,12 +59,8 @@ pub struct CodexInvoker {
 }
 
 impl CodexInvoker {
-    pub fn new(config: &CodexConfig) -> anyhow::Result<Self> {
-        let system_prompt = load_system_prompt(&config.system_prompt_file)?;
-        info!(
-            "Codex invoker ready (model={}, prompt_file={})",
-            config.model, config.system_prompt_file
-        );
+    pub fn new(config: &CodexConfig, system_prompt: String) -> anyhow::Result<Self> {
+        info!("Codex invoker ready (model={})", config.model);
         Ok(Self {
             config: config.clone(),
             system_prompt,
