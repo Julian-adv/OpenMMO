@@ -76,6 +76,7 @@ export function handleServerMessage(
       const player: LocalPlayer = {
         ...serverPlayer,
         position: playerPosition,
+        rotation: serverPlayer.rotation ?? 0,
         maxHealth: serverPlayer.max_health,
         characterClass: serverPlayer.class,
       }
@@ -122,6 +123,7 @@ export function handleServerMessage(
       const player: LocalPlayer = {
         ...serverPlayer,
         position: playerPosition,
+        rotation: serverPlayer.rotation ?? 0,
         maxHealth: serverPlayer.max_health,
         characterClass: serverPlayer.class,
       }

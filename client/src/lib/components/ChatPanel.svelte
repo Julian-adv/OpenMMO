@@ -1,6 +1,7 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
+  import { handleCommand } from '../chat-commands'
 
   let chatMessages = $derived($gameStore.chatMessages)
   let isConnected = $derived($gameStore.isConnected)
@@ -15,8 +16,14 @@
   })
 
   function sendMessage() {
-    if (messageInput.trim() && isConnected) {
-      networkManager.sendChatMessage(messageInput.trim())
+    const trimmed = messageInput.trim()
+    if (!trimmed) return
+    if (handleCommand(trimmed)) {
+      messageInput = ''
+      return
+    }
+    if (isConnected) {
+      networkManager.sendChatMessage(trimmed)
       messageInput = ''
     }
   }

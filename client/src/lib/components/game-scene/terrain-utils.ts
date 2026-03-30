@@ -22,6 +22,15 @@ export const SEA_LEVEL_ENCODED = 10000
 export const TERRAIN_TILE_SIZE = 64
 export const TERRAIN_TILE_SEGMENTS = 64
 
+export function worldToTileCell(wx: number, wz: number) {
+  const S = TERRAIN_TILE_SIZE
+  const tileX = Math.round(wx / S)
+  const tileZ = Math.round(wz / S)
+  const cellX = Math.max(0, Math.min(S - 1, Math.floor(wx - tileX * S + S / 2)))
+  const cellZ = Math.max(0, Math.min(S - 1, Math.floor(wz - tileZ * S + S / 2)))
+  return { tileX, tileZ, cellX, cellZ }
+}
+
 /**
  * Create a 2×2 tile grid based on the player's floor-rounded chunk position.
  * The 4 tiles always cover the player: (fx,fz), (fx+1,fz), (fx,fz+1), (fx+1,fz+1).

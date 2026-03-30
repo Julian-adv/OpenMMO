@@ -439,6 +439,7 @@
         if (state.currentPlayer && movementTarget) {
           const y = sampleHeight(movementTarget.x, movementTarget.z)
           state.currentPlayer.position.set(movementTarget.x, y, movementTarget.z)
+          state.currentPlayer.rotation = playerRotation
         }
         return state
       })
@@ -494,6 +495,7 @@
         if (state.currentPlayer) {
           const y = sampleHeight(result.newPos.x, result.newPos.z)
           state.currentPlayer.position.set(result.newPos.x, y, result.newPos.z)
+          state.currentPlayer.rotation = playerRotation
         }
         return state
       })
@@ -550,6 +552,7 @@
       gameStore.update((state) => {
         if (state.currentPlayer) {
           state.currentPlayer.position.set(newX, groundY, newZ)
+          state.currentPlayer.rotation = playerRotation
           isMoving = true
         }
         return state

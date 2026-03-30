@@ -24,6 +24,7 @@ interface PlayerBase {
 
 export interface LocalPlayer extends PlayerBase {
   position: Vector3
+  rotation: number
 }
 
 export type RemotePlayer = PlayerBase

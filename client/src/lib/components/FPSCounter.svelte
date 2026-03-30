@@ -21,7 +21,7 @@
   import { currentBgmTrack } from '../managers/bgmManager'
   import { networkManager } from '../network/socket'
   import { cameraDistance } from '../stores/cameraStore'
-  import { TERRAIN_TILE_SIZE } from './game-scene/terrain-utils'
+  import { worldToTileCell } from './game-scene/terrain-utils'
   import { tileToRegion } from '../managers/terrainMetaManager'
   import { timeScale, sunTimeScale } from '../stores/timeStore'
   import {
@@ -46,14 +46,6 @@
     return ((degrees % 360) + 360) % 360
   }
 
-  function worldToTileCell(wx: number, wz: number) {
-    const S = TERRAIN_TILE_SIZE
-    const tileX = Math.round(wx / S)
-    const tileZ = Math.round(wz / S)
-    const cellX = Math.max(0, Math.min(S - 1, Math.floor(wx - tileX * S + S / 2)))
-    const cellZ = Math.max(0, Math.min(S - 1, Math.floor(wz - tileZ * S + S / 2)))
-    return { tileX, tileZ, cellX, cellZ }
-  }
 
   function handleKeydown(event: KeyboardEvent) {
     if (event.ctrlKey && event.key === 'd') {
