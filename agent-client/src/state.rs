@@ -103,7 +103,7 @@ pub struct SharedState {
     /// Synthetic agent-side events (e.g. "player appeared nearby")
     agent_events: Vec<String>,
     /// Terrain height sampler (shared across NPC connections)
-    pub height_sampler: Arc<tokio::sync::Mutex<HeightSampler>>,
+    pub height_sampler: Arc<HeightSampler>,
     /// Shared world cache: passability + houses (shared across NPC connections)
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
     /// Current floor level for the agent
@@ -121,7 +121,7 @@ impl SharedState {
     pub fn new(
         characters: Vec<Character>,
         cmd_tx: mpsc::Sender<ClientMessage>,
-        height_sampler: Arc<tokio::sync::Mutex<HeightSampler>>,
+        height_sampler: Arc<HeightSampler>,
         world_cache: Arc<std::sync::RwLock<WorldCache>>,
     ) -> Self {
         Self {
@@ -196,8 +196,6 @@ impl SharedState {
             let original_y = position.y;
             match self
                 .height_sampler
-                .lock()
-                .await
                 .sample_height(position.x, position.z)
                 .await
             {

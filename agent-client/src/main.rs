@@ -194,7 +194,7 @@ async fn run_orchestrator_mode_with_npcs(
         monster_ai::MonsterAiManager::load_type_mapping(include_str!("../../data/monsters.json"));
 
     let shared = Arc::new(SharedResources {
-        height_sampler: Arc::new(tokio::sync::Mutex::new(create_height_sampler(&terrain_dir))),
+        height_sampler: Arc::new(create_height_sampler(&terrain_dir)),
         world_cache: Arc::new(std::sync::RwLock::new(WorldCache::new())),
         ai_templates: Arc::new(ai_templates),
         type_mapping: Arc::new(type_mapping),
@@ -223,9 +223,7 @@ async fn run_mcp_mode(config: &Config, account: &str, password: &str) -> anyhow:
     let characters = ws::wait_for_auth(&mut ws_rx, account).await?;
 
     let (cmd_tx, _cmd_rx) = mpsc::channel::<ClientMessage>(32);
-    let height_sampler = Arc::new(tokio::sync::Mutex::new(create_height_sampler(
-        &config.terrain_dir,
-    )));
+    let height_sampler = Arc::new(create_height_sampler(&config.terrain_dir));
     let world_cache = Arc::new(std::sync::RwLock::new(WorldCache::new()));
     let state = Arc::new(Mutex::new(SharedState::new(
         characters,

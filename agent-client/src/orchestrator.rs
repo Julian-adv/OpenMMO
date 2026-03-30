@@ -53,7 +53,7 @@ pub struct NpcConfig {
 
 /// Resources shared across all NPC connections.
 pub struct SharedResources {
-    pub height_sampler: Arc<tokio::sync::Mutex<HeightSampler>>,
+    pub height_sampler: Arc<HeightSampler>,
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
     pub ai_templates: Arc<HashMap<String, AiTemplate>>,
     pub type_mapping: Arc<HashMap<String, String>>,

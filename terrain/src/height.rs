@@ -22,70 +22,83 @@ fn tile_key(tx: i32, tz: i32) -> (i32, i32) {
     (tx, tz)
 }
 
+/// Get height at a specific cell vertex from a cache snapshot. Handles cross-tile lookups.
+fn get_height_at_cell(
+    cache: &HashMap<(i32, i32), Vec<u16>>,
+    tx: i32,
+    tz: i32,
+    cell_x: i32,
+    cell_z: i32,
+) -> f32 {
+    let (mut tx, mut tz, mut cx, mut cz) = (tx, tz, cell_x, cell_z);
+
+    // Handle cross-tile boundary
+    if cx >= VERTS_PER_SIDE as i32 {
+        tx += 1;
+        cx -= defaults::TILE_DIM as i32;
+    } else if cx < 0 {
+        tx -= 1;
+        cx += defaults::TILE_DIM as i32;
+    }
+    if cz >= VERTS_PER_SIDE as i32 {
+        tz += 1;
+        cz -= defaults::TILE_DIM as i32;
+    } else if cz < 0 {
+        tz -= 1;
+        cz += defaults::TILE_DIM as i32;
+    }
+
+    let Some(heights) = cache.get(&tile_key(tx, tz)) else {
+        return 0.0;
+    };
+    let idx = cz as usize * VERTS_PER_SIDE + cx as usize;
+    if idx < heights.len() {
+        decode_height(heights[idx])
+    } else {
+        0.0
+    }
+}
+
 /// Provides terrain height sampling with an in-memory tile cache.
 /// Loads heightmap tiles on demand via `TerrainIO` and caches them.
+///
+/// Uses interior mutability (`tokio::sync::RwLock`) so callers only need `&self`,
+/// avoiding external mutex contention when multiple NPC connections share one sampler.
 pub struct HeightSampler {
-    cache: HashMap<(i32, i32), Vec<u16>>,
+    cache: tokio::sync::RwLock<HashMap<(i32, i32), Vec<u16>>>,
     terrain_io: TerrainIO,
 }
 
 impl HeightSampler {
     pub fn new(terrain_io: TerrainIO) -> Self {
         Self {
-            cache: HashMap::new(),
+            cache: tokio::sync::RwLock::new(HashMap::new()),
             terrain_io,
         }
     }
 
     /// Ensure a tile's heightmap is loaded into the cache.
-    async fn ensure_tile(&mut self, tx: i32, tz: i32) -> std::io::Result<()> {
-        if self.cache.contains_key(&tile_key(tx, tz)) {
+    /// No lock held during I/O; re-checks after write lock to avoid duplicate inserts.
+    async fn ensure_tile(&self, tx: i32, tz: i32) -> std::io::Result<()> {
+        if self.cache.read().await.contains_key(&tile_key(tx, tz)) {
             return Ok(());
         }
         let raw = self.terrain_io.read_heightmap(tx, tz).await?;
-        // Convert raw bytes to u16 array
+        let mut cache = self.cache.write().await;
+        if cache.contains_key(&tile_key(tx, tz)) {
+            return Ok(());
+        }
         let heights: Vec<u16> = raw
             .chunks_exact(2)
             .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
             .collect();
-        self.cache.insert(tile_key(tx, tz), heights);
+        cache.insert(tile_key(tx, tz), heights);
         Ok(())
-    }
-
-    /// Get height at a specific cell vertex. Handles cross-tile lookups.
-    fn get_height_at_cell(&self, tx: i32, tz: i32, cell_x: i32, cell_z: i32) -> f32 {
-        let (mut tx, mut tz, mut cx, mut cz) = (tx, tz, cell_x, cell_z);
-
-        // Handle cross-tile boundary
-        if cx >= VERTS_PER_SIDE as i32 {
-            tx += 1;
-            cx -= defaults::TILE_DIM as i32;
-        } else if cx < 0 {
-            tx -= 1;
-            cx += defaults::TILE_DIM as i32;
-        }
-        if cz >= VERTS_PER_SIDE as i32 {
-            tz += 1;
-            cz -= defaults::TILE_DIM as i32;
-        } else if cz < 0 {
-            tz -= 1;
-            cz += defaults::TILE_DIM as i32;
-        }
-
-        let Some(heights) = self.cache.get(&tile_key(tx, tz)) else {
-            return 0.0;
-        };
-        let idx = cz as usize * VERTS_PER_SIDE + cx as usize;
-        if idx < heights.len() {
-            decode_height(heights[idx])
-        } else {
-            0.0
-        }
     }
 
     /// Sample terrain height at an arbitrary world position using bilinear interpolation.
     /// Loads required tiles on demand.
-    pub async fn sample_height(&mut self, world_x: f32, world_z: f32) -> std::io::Result<f32> {
+    pub async fn sample_height(&self, world_x: f32, world_z: f32) -> std::io::Result<f32> {
         let tx = world_to_tile(world_x);
         let tz = world_to_tile(world_z);
 
@@ -99,8 +112,6 @@ impl HeightSampler {
 
         let cell_x = local_x.floor() as i32;
         let cell_z = local_z.floor() as i32;
-        let frac_x = local_x - local_x.floor();
-        let frac_z = local_z - local_z.floor();
 
         // Load neighbor tiles if we're at the edge and need cross-tile samples
         if cell_x + 1 >= VERTS_PER_SIDE as i32 {
@@ -110,11 +121,14 @@ impl HeightSampler {
             let _ = self.ensure_tile(tx, tz + 1).await;
         }
 
-        // Bilinear interpolation
-        let h00 = self.get_height_at_cell(tx, tz, cell_x, cell_z);
-        let h10 = self.get_height_at_cell(tx, tz, cell_x + 1, cell_z);
-        let h01 = self.get_height_at_cell(tx, tz, cell_x, cell_z + 1);
-        let h11 = self.get_height_at_cell(tx, tz, cell_x + 1, cell_z + 1);
+        let frac_x = local_x - local_x.floor();
+        let frac_z = local_z - local_z.floor();
+
+        let cache = self.cache.read().await;
+        let h00 = get_height_at_cell(&cache, tx, tz, cell_x, cell_z);
+        let h10 = get_height_at_cell(&cache, tx, tz, cell_x + 1, cell_z);
+        let h01 = get_height_at_cell(&cache, tx, tz, cell_x, cell_z + 1);
+        let h11 = get_height_at_cell(&cache, tx, tz, cell_x + 1, cell_z + 1);
 
         let h0 = h00 + (h10 - h00) * frac_x;
         let h1 = h01 + (h11 - h01) * frac_x;
@@ -122,13 +136,13 @@ impl HeightSampler {
     }
 
     /// Evict a tile from the cache (e.g. when moving far away).
-    pub fn evict_tile(&mut self, tx: i32, tz: i32) {
-        self.cache.remove(&tile_key(tx, tz));
+    pub async fn evict_tile(&self, tx: i32, tz: i32) {
+        self.cache.write().await.remove(&tile_key(tx, tz));
     }
 
     /// Number of tiles currently cached.
-    pub fn cached_tile_count(&self) -> usize {
-        self.cache.len()
+    pub async fn cached_tile_count(&self) -> usize {
+        self.cache.read().await.len()
     }
 }
 
