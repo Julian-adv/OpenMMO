@@ -24,6 +24,18 @@ const HIT_STAGGER_MS: f32 = 800.0;
 const PATH_RECALC_MS: f32 = 3000.0;
 /// Target movement threshold for repath (units)
 const TARGET_MOVE_THRESHOLD: f32 = 3.0;
+/// Flee when health ratio drops below this
+const FLEE_HEALTH_RATIO: f32 = 0.3;
+/// Probability of fleeing when health is below threshold (per hit check)
+const DEFAULT_FLEE_CHANCE: f32 = 0.5;
+/// Probability of returning to spawn when disengaging
+const DEFAULT_RETURN_CHANCE: f32 = 0.7;
+/// How long to flee before transitioning to return (ms)
+const FLEE_DURATION_MS: f32 = 3000.0;
+/// How close to spawn point before considered "returned"
+const RETURN_ARRIVE_DIST: f32 = 5.0;
+/// Max distance from spawn before leash kicks in
+const DEFAULT_LEASH_RANGE: f32 = 50.0;
 /// Default values when monster_defs not available
 const DEFAULT_WALK_SPEED: f32 = 1.0;
 const DEFAULT_RUN_SPEED: f32 = 8.0;
@@ -39,6 +51,9 @@ pub struct MonsterDef {
     pub attack_range: f32,
     pub chase_range: f32,
     pub attack_cooldown_ms: f32,
+    pub flee_health_ratio: f32,
+    pub flee_chance: f32,
+    pub return_chance: f32,
 }
 
 impl Default for MonsterDef {
@@ -49,6 +64,9 @@ impl Default for MonsterDef {
             attack_range: DEFAULT_ATTACK_RANGE,
             chase_range: DEFAULT_CHASE_RANGE,
             attack_cooldown_ms: DEFAULT_ATTACK_COOLDOWN_MS,
+            flee_health_ratio: FLEE_HEALTH_RATIO,
+            flee_chance: DEFAULT_FLEE_CHANCE,
+            return_chance: DEFAULT_RETURN_CHANCE,
         }
     }
 }
@@ -68,6 +86,8 @@ pub struct MonsterBrain {
     current_waypoint_idx: usize,
     last_path_time: Instant,
     last_known_target_pos: Option<Position>,
+    spawn_position: Position,
+    flee_health_threshold: u32,
     def: MonsterDef,
 }
 
@@ -79,6 +99,8 @@ enum AiState {
     Attack,
     Hit,
     Dead,
+    Flee,
+    Return,
 }
 
 impl AiState {
@@ -90,6 +112,8 @@ impl AiState {
             AiState::Attack => MonsterState::Attack,
             AiState::Hit => MonsterState::Hit,
             AiState::Dead => MonsterState::Dead,
+            AiState::Flee => MonsterState::Run,
+            AiState::Return => MonsterState::Walk,
         }
     }
 }
@@ -111,6 +135,8 @@ impl MonsterBrain {
             current_waypoint_idx: 0,
             last_path_time: Instant::now(),
             last_known_target_pos: None,
+            spawn_position: monster.position.clone(),
+            flee_health_threshold: (monster.max_health as f32 * def.flee_health_ratio) as u32,
             def,
         }
     }
@@ -137,10 +163,16 @@ impl MonsterBrain {
                 self.tick_patrol(delta_ms, &mut commands, passability_cache);
             }
             AiState::Hit => {
-                self.tick_hit(&mut commands);
+                self.tick_hit(&mut commands, passability_cache);
             }
             AiState::Attack => {
                 self.tick_attack(delta_ms, nearby_players, &mut commands, passability_cache);
+            }
+            AiState::Flee => {
+                self.tick_flee(delta_ms, &mut commands, passability_cache);
+            }
+            AiState::Return => {
+                self.tick_return(delta_ms, &mut commands, passability_cache);
             }
             AiState::Dead => {}
         }
@@ -186,11 +218,21 @@ impl MonsterBrain {
         }
     }
 
-    fn tick_hit(&mut self, commands: &mut Vec<ClientMessage>) {
+    fn tick_hit(
+        &mut self,
+        commands: &mut Vec<ClientMessage>,
+        passability_cache: &PassabilityCache,
+    ) {
         if self.state_timer_ms >= HIT_STAGGER_MS {
-            self.state = AiState::Attack;
-            self.state_timer_ms = 0.0;
-            commands.push(self.make_move_msg());
+            let flee_threshold = self.flee_health_threshold;
+            let mut rng = rand::thread_rng();
+            if self.health <= flee_threshold && rng.gen::<f32>() < self.def.flee_chance {
+                self.transition_to_flee(commands, passability_cache);
+            } else {
+                self.state = AiState::Attack;
+                self.state_timer_ms = 0.0;
+                commands.push(self.make_move_msg());
+            }
         }
     }
 
@@ -225,10 +267,20 @@ impl MonsterBrain {
         let dist_sq = dx * dx + dz * dz;
         let chase_range_sq = self.def.chase_range * self.def.chase_range;
 
-        // Give up if too far
+        // Leash: return to spawn if too far from home
+        let spawn_dx = self.position.x - self.spawn_position.x;
+        let spawn_dz = self.position.z - self.spawn_position.z;
+        let dist_from_spawn_sq = spawn_dx * spawn_dx + spawn_dz * spawn_dz;
+        if dist_from_spawn_sq > DEFAULT_LEASH_RANGE * DEFAULT_LEASH_RANGE {
+            self.target_player_id = None;
+            self.transition_to_return(commands, passability_cache);
+            return;
+        }
+
+        // Give up if target too far
         if dist_sq > chase_range_sq {
             self.target_player_id = None;
-            self.transition_to_idle(commands);
+            self.transition_to_return(commands, passability_cache);
             return;
         }
 
@@ -280,7 +332,13 @@ impl MonsterBrain {
     }
 
     /// Called when this monster is hit by a player attack.
-    pub fn handle_hit(&mut self, attacker_id: &str, hit: bool, damage: u32) -> Vec<ClientMessage> {
+    pub fn handle_hit(
+        &mut self,
+        attacker_id: &str,
+        hit: bool,
+        damage: u32,
+        passability_cache: &PassabilityCache,
+    ) -> Vec<ClientMessage> {
         if self.state == AiState::Dead {
             return vec![];
         }
@@ -292,6 +350,22 @@ impl MonsterBrain {
         if self.health == 0 {
             self.state = AiState::Dead;
             return vec![];
+        }
+
+        // Flee if health is low (probabilistic)
+        let flee_threshold = self.flee_health_threshold;
+        let mut rng = rand::thread_rng();
+        if self.health <= flee_threshold && rng.gen::<f32>() < self.def.flee_chance {
+            let mut commands = Vec::new();
+            if hit {
+                // Stagger first, then flee after stagger
+                self.state = AiState::Hit;
+                self.state_timer_ms = 0.0;
+                commands.push(self.make_move_msg());
+            } else {
+                self.transition_to_flee(&mut commands, passability_cache);
+            }
+            return commands;
         }
 
         let mut commands = Vec::new();
@@ -315,6 +389,130 @@ impl MonsterBrain {
     }
 
     // --- Private helpers ---
+
+    fn tick_flee(
+        &mut self,
+        delta_ms: f32,
+        commands: &mut Vec<ClientMessage>,
+        passability_cache: &PassabilityCache,
+    ) {
+        if self.state_timer_ms >= FLEE_DURATION_MS {
+            self.target_player_id = None;
+            self.transition_to_return(commands, passability_cache);
+            return;
+        }
+
+        let reached = self.follow_path(delta_ms);
+        if reached {
+            // Flee path exhausted, start returning
+            self.target_player_id = None;
+            self.transition_to_return(commands, passability_cache);
+            return;
+        }
+
+        commands.push(self.make_move_msg());
+    }
+
+    fn tick_return(
+        &mut self,
+        delta_ms: f32,
+        commands: &mut Vec<ClientMessage>,
+        passability_cache: &PassabilityCache,
+    ) {
+        let dx = self.spawn_position.x - self.position.x;
+        let dz = self.spawn_position.z - self.position.z;
+        let dist_sq = dx * dx + dz * dz;
+
+        if dist_sq <= RETURN_ARRIVE_DIST * RETURN_ARRIVE_DIST {
+            self.transition_to_idle(commands);
+            return;
+        }
+
+        // Repath if needed
+        if self.waypoints.is_empty() || self.current_waypoint_idx >= self.waypoints.len() {
+            self.compute_path(
+                self.spawn_position.x,
+                self.spawn_position.z,
+                passability_cache,
+            );
+            if self.waypoints.is_empty() {
+                // Can't path home, just idle here
+                self.transition_to_idle(commands);
+                return;
+            }
+        }
+
+        self.follow_path(delta_ms);
+        commands.push(self.make_move_msg());
+    }
+
+    fn transition_to_flee(
+        &mut self,
+        commands: &mut Vec<ClientMessage>,
+        passability_cache: &PassabilityCache,
+    ) {
+        self.state = AiState::Flee;
+        self.state_timer_ms = 0.0;
+        self.move_speed = self.def.run_speed;
+
+        self.compute_path(
+            self.spawn_position.x,
+            self.spawn_position.z,
+            passability_cache,
+        );
+
+        if self.waypoints.is_empty() {
+            // Can't path, just idle
+            self.state = AiState::Idle;
+            self.state_timer_ms = 0.0;
+            return;
+        }
+
+        if let Some(wp) = self.waypoints.first() {
+            let dx = wp.x - self.position.x;
+            let dz = wp.z - self.position.z;
+            self.rotation = dz.atan2(dx);
+        }
+
+        commands.push(self.make_move_msg());
+    }
+
+    fn transition_to_return(
+        &mut self,
+        commands: &mut Vec<ClientMessage>,
+        passability_cache: &PassabilityCache,
+    ) {
+        let mut rng = rand::thread_rng();
+        if rng.gen::<f32>() >= self.def.return_chance {
+            self.transition_to_idle(commands);
+            return;
+        }
+
+        self.state = AiState::Return;
+        self.state_timer_ms = 0.0;
+        self.move_speed = self.def.walk_speed;
+        self.target_position = Some(self.spawn_position.clone());
+
+        self.compute_path(
+            self.spawn_position.x,
+            self.spawn_position.z,
+            passability_cache,
+        );
+
+        if self.waypoints.is_empty() {
+            // Can't path home, just idle
+            self.transition_to_idle(commands);
+            return;
+        }
+
+        if let Some(wp) = self.waypoints.first() {
+            let dx = wp.x - self.position.x;
+            let dz = wp.z - self.position.z;
+            self.rotation = dz.atan2(dx);
+        }
+
+        commands.push(self.make_move_msg());
+    }
 
     fn transition_to_idle(&mut self, commands: &mut Vec<ClientMessage>) {
         self.state = AiState::Idle;
@@ -493,6 +691,12 @@ impl MonsterAiManager {
             chase_range: f32,
             #[serde(rename = "attackCooldown", default = "default_cooldown")]
             attack_cooldown: u32,
+            #[serde(rename = "fleeHealthRatio", default = "default_flee_ratio")]
+            flee_health_ratio: f32,
+            #[serde(rename = "fleeChance", default = "default_flee_chance")]
+            flee_chance: f32,
+            #[serde(rename = "returnChance", default = "default_return_chance")]
+            return_chance: f32,
         }
 
         fn default_walk() -> f32 {
@@ -510,6 +714,15 @@ impl MonsterAiManager {
         fn default_cooldown() -> u32 {
             DEFAULT_ATTACK_COOLDOWN_MS as u32
         }
+        fn default_flee_ratio() -> f32 {
+            FLEE_HEALTH_RATIO
+        }
+        fn default_flee_chance() -> f32 {
+            DEFAULT_FLEE_CHANCE
+        }
+        fn default_return_chance() -> f32 {
+            DEFAULT_RETURN_CHANCE
+        }
 
         let raw: HashMap<String, RawDef> = serde_json::from_str(json_str).unwrap_or_default();
         raw.into_iter()
@@ -522,6 +735,9 @@ impl MonsterAiManager {
                         attack_range: r.attack_range,
                         chase_range: r.chase_range,
                         attack_cooldown_ms: r.attack_cooldown as f32,
+                        flee_health_ratio: r.flee_health_ratio,
+                        flee_chance: r.flee_chance,
+                        return_chance: r.return_chance,
                     },
                 )
             })
@@ -556,9 +772,10 @@ impl MonsterAiManager {
         attacker_id: &str,
         hit: bool,
         damage: u32,
+        passability_cache: &PassabilityCache,
     ) -> Vec<ClientMessage> {
         if let Some(brain) = self.brains.get_mut(monster_id) {
-            brain.handle_hit(attacker_id, hit, damage)
+            brain.handle_hit(attacker_id, hit, damage, passability_cache)
         } else {
             vec![]
         }

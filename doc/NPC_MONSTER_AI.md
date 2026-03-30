@@ -19,8 +19,8 @@ Orchestrator Process
   ├── WS Connection 2 (NPC "상인")    → SharedState_2 → 소유 몬스터
   ├── WS Connection 3 (NPC "의뢰인")  → SharedState_3 → 소유 몬스터
   │
-  ├── Monster AI Engine (60Hz tick, 각 연결의 소유 몬스터를 독립 구동)
-  │     └── 상태머신: Idle → Patrol → Chase → Attack → Hit → Flee → Dead
+  ├── Monster AI Engine (game loop tick, 각 연결의 소유 몬스터를 독립 구동)
+  │     └── 상태머신: Idle → Walk/Run → Attack (chase) → Hit → Flee → Return → Idle
   │     └── 몬스터 소유는 WS 연결(=player) 단위, 서버 전체 상한 공유
   │
   └── LLM Scheduler
@@ -33,11 +33,15 @@ Orchestrator Process
 
 서버가 몬스터 스폰을 결정하고 소유자를 지정한다 (치팅 방지). 클라이언트는 할당받은 몬스터의 AI(이동/공격)만 담당한다.
 
-**서버→클라이언트 흐름**:
-1. 서버가 스폰 규칙에 따라 몬스터를 생성하고 owner_id를 특정 연결에 배정
-2. `ServerMessage::MonsterAssigned { monster }` → 해당 클라이언트에 전달
-3. 클라이언트는 할당된 몬스터에 대해 `MonsterMove`/`MonsterAttack` 전송
-4. `RequestSpawnMonster`는 제거하거나 서버 승인 방식으로 변경
+**서버→클라이언트 스폰 흐름**:
+1. 서버가 스폰 규칙에 따라 스폰 필요성 판단 (10초 주기 tick)
+2. `ServerMessage::SpawnMonsterRequest { monster_type, center_x, center_z, radius }` → 소유자 클라이언트에 전달
+3. 클라이언트가 반경 내 유효한 위치를 선정 (물/절벽/실내 회피)
+4. `ClientMessage::RequestSpawnMonster { monster_type, position, rotation }` → 서버에 전송
+5. 서버가 위치를 검증하고 몬스터 생성
+6. `ServerMessage::MonsterAssigned { monster }` → 소유자에게 직접 전송
+7. `ServerMessage::MonsterSpawned { monster }` → 전체 브로드캐스트
+8. 클라이언트는 할당된 몬스터에 대해 `MonsterMove`/`MonsterAttack` 전송
 
 이 규칙은 웹 클라이언트와 agent-client 모두 동일하게 적용.
 
@@ -101,21 +105,34 @@ min_interval_secs = 5
 
 ## 구현 Phase
 
-### Phase 1: Monster AI Module
+### Phase 1: Monster AI Module ✅ 구현 완료
 
 **서버 측:**
-- 스폰 규칙 시스템: 어떤 몬스터를 몇 마리, 어디에 스폰할지 서버가 결정
-- `ServerMessage::MonsterAssigned { monster }` 추가 — 소유자에게 직접 전송
-- 서버가 연결된 클라이언트에 몬스터 소유권 배분
-- `RequestSpawnMonster` 제거 또는 서버 승인 방식으로 변경
+- 스폰 규칙 시스템: `world.json`의 `monsterSpawns` 배열로 규칙 정의 (타입, 플레이어당 상한, 스폰 반경 등)
+- `tick_monster_spawns()`: 10초 주기로 스폰 필요성 판단, `SpawnMonsterRequest`를 클라이언트에 전송
+- 클라이언트가 위치를 선정하여 `RequestSpawnMonster`로 응답하면, 서버가 위치 검증 후 생성
+- `MonsterAssigned` → 소유자에게 직접 전송, `MonsterSpawned` → 전체 브로드캐스트
+- 전투 검증: 서버가 공격 판정(hit/miss, 데미지 roll), 쿨다운 체크, HP 관리, 사망 처리
+- 사망 몬스터 30초 후 자동 제거 (`MonsterRemoved`)
+- 몬스터 ID 형식: `m{owner_number}_{spawn_count}`
 
-**클라이언트 측 (agent-client + web client 동일):**
-- `agent-client/src/monster_ai.rs` 생성
-- `monsterManager.ts`의 `updateMonsterAI` FSM을 Rust로 포팅
-- `SharedState`에 `MonsterBrain` 저장소 추가
-- 60Hz tick task에서 `MonsterMove`/`MonsterAttack` 메시지 전송
-- `MonsterAssigned` 메시지 수신 시 해당 몬스터 AI 시작
-- `data/monsters.json`에서 몬스터 정의 로드
+**클라이언트 측 (web client + agent-client 동일 로직):**
+- `monsterManager.ts` (TS) / `monster_ai.rs` (Rust) 양쪽 모두 동일한 FSM 구현
+- FSM 상태: `idle` → `walk`/`run` → `attack` (chase) → `hit` → `flee` → `return` → `idle` / `dead`
+  - **idle**: 1초 간격 체크, 30% 확률로 이동 전환
+  - **walk/run**: A* 경로 탐색 + waypoint 추적, 도착 시 50% idle / 50% 새 이동
+  - **attack**: `chaseRange` 내 타겟 추적, 500ms 간격 경로 재계산, `attackRange` 도달 시 공격
+  - **hit**: ~800ms 스태거 후 → HP 30% 이하면 flee, 아니면 attack 복귀
+  - **flee**: 스폰 지점 방향으로 runSpeed 도주, 3초 후 return 전환. 네트워크 상태: `run`
+  - **return**: 스폰 지점으로 walkSpeed 복귀, 도착(5m 이내) 시 idle. 네트워크 상태: `walk`
+  - **dead**: AI 중단, 서버가 30초 후 제거
+- **리쉬(leash)**: attack 중 스폰 지점에서 50m 초과 시 → return 전환
+- chase 범위 초과 / 타겟 사망·소실 시에도 idle 대신 return (스폰 지점 복귀)
+- 이동 거리 2~10, 거리 비례 walk/run 확률 (가까울수록 walk)
+- WASM 기반 A* 경로 탐색, 물/절벽 회피
+- `SpawnMonsterRequest` 수신 시 반경 내 유효 위치 선정하여 `RequestSpawnMonster` 응답
+- `MonsterMove`/`MonsterAttack` 메시지로 서버에 동기화
+- 원격 몬스터는 `targetPosition` 기반 보간 이동
 
 ### Phase 2: Orchestrator Refactor
 
@@ -140,12 +157,21 @@ min_interval_secs = 5
 
 ## 핵심 파일
 
-- `agent-client/src/driver.rs` — LLM driver loop, combat tick (스케줄러가 대체)
-- `agent-client/src/state.rs` — SharedState 확장 (MonsterBrain 추가)
-- `client/src/lib/managers/monsterManager.ts` — 몬스터 AI 참조 구현
-- `agent-client/src/main.rs` — 세션 라이프사이클 (orchestrator 확장)
-- `shared/src/lib.rs` — 프로토콜 타입 정의
-- `server/src/game_state/monster.rs` — 서버 몬스터 스폰/소유 로직
+- `shared/src/lib.rs` — 프로토콜 타입 정의 (Monster, MonsterState, 메시지 variants)
+- `server/src/game_state/monster.rs` — 서버 몬스터 스폰/소유/위치 동기화
+- `server/src/game_state/combat.rs` — 서버 전투 판정 (플레이어↔몬스터)
+- `server/src/monster_defs.rs` — 몬스터 정의 로드 (`data/monsters.json`)
+- `server/src/world_config.rs` — 월드 설정 로드 (`data/world.json` 스폰 규칙)
+- `server/src/connection.rs` — 메시지 라우팅 (RequestSpawnMonster, MonsterMove 등)
+- `client/src/lib/managers/monsterManager.ts` — 클라이언트 몬스터 AI FSM (Phase 1 구현체)
+- `client/src/lib/network/messageHandlers.ts` — 클라이언트 메시지 핸들러
+- `client/src/lib/network/socket.ts` — 클라이언트 네트워크 전송 메서드
+- `client/src/lib/types/Monster.ts` — 클라이언트 MonsterData 타입
+- `data/monsters.json` — 몬스터 정의 데이터
+- `data/world.json` — 월드/스폰 설정
+- `agent-client/src/driver.rs` — LLM driver loop, combat tick (스케줄러가 대체 예정)
+- `agent-client/src/state.rs` — SharedState 확장 (MonsterBrain 추가 예정)
+- `agent-client/src/main.rs` — 세션 라이프사이클 (orchestrator 확장 예정)
 
 ## Option 비교 (참고)
 

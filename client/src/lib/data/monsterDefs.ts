@@ -10,6 +10,9 @@ export interface MonsterDefinition {
   attackRange: number
   chaseRange: number
   attackCooldown: number
+  fleeHealthRatio: number
+  fleeChance: number
+  returnChance: number
   damageRoll: string
   hitThreshold: number
   animIdle: string

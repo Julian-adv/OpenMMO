@@ -413,9 +413,13 @@ impl SharedState {
                 ..
             } => {
                 if self.monster_ai.manages(monster_id) {
-                    let cmds = self
-                        .monster_ai
-                        .handle_monster_hit(monster_id, player_id, *hit, *damage);
+                    let cmds = self.monster_ai.handle_monster_hit(
+                        monster_id,
+                        player_id,
+                        *hit,
+                        *damage,
+                        &self.passability_cache,
+                    );
                     self.pending_commands.extend(cmds);
                 }
             }

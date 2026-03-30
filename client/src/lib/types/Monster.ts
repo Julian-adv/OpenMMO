@@ -21,6 +21,9 @@ export interface MonsterData {
   pendingDamage?: number // Temporary storage for impact sync
   health: number
   maxHealth: number
+  spawnPosition?: { x: number; y: number; z: number }
+  movementIntent?: 'normal' | 'flee' | 'return'
+  fleeTimer?: number
   currentFloor?: number
   pathState?: {
     waypoints: Array<{ x: number; z: number; floor: number }>

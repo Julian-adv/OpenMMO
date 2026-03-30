@@ -16,6 +16,12 @@ import {
 
 const MIN_MOVE_DIST = 2.0
 const MAX_MOVE_DIST = 10.0
+const FLEE_HEALTH_RATIO = 0.3
+const DEFAULT_FLEE_CHANCE = 0.5
+const DEFAULT_RETURN_CHANCE = 0.7
+const FLEE_DURATION_MS = 3000
+const RETURN_ARRIVE_DIST = 5.0
+const LEASH_RANGE = 50.0
 
 class MonsterManager {
   monsters = new SvelteMap<string, MonsterData>()
@@ -77,6 +83,7 @@ class MonsterManager {
       stateTimer: 0,
       health: hp,
       maxHealth: maxHp,
+      spawnPosition: { ...position },
     })
   }
 
@@ -184,9 +191,10 @@ class MonsterManager {
             monster.stateTimer = 0
             monster.isDeadPending = false
           } else if (monster.isLastHitSuccess) {
-            // Normal hit impact - stagger then retaliate
+            // Normal hit impact - stagger then retaliate (or flee)
             monster.state = 'hit'
             monster.stateTimer = 0
+            monster.movementIntent = undefined
             // Force immediate update to network if owner
             if (monster.ownerId === myPlayerId) {
               networkManager.sendMonsterMove(
@@ -198,17 +206,27 @@ class MonsterManager {
               )
             }
           } else if (monster.targetPlayerId && monster.state !== 'attack') {
-            // Miss - skip stagger but still retaliate
-            monster.state = 'attack'
-            monster.stateTimer = 0
-            if (monster.ownerId === myPlayerId) {
-              networkManager.sendMonsterMove(
-                monster.id,
-                monster.position,
-                monster.rotation,
-                'attack',
-                monster.position
-              )
+            // Miss - skip stagger; flee if low health (probabilistic), else retaliate
+            const def = getMonsterDef(monster.type)
+            const fleeRatio = def?.fleeHealthRatio ?? FLEE_HEALTH_RATIO
+            const fleeChance = def?.fleeChance ?? DEFAULT_FLEE_CHANCE
+            const shouldFlee =
+              monster.health <= monster.maxHealth * fleeRatio &&
+              Math.random() < fleeChance
+            if (shouldFlee && monster.ownerId === myPlayerId) {
+              this.transitionToFlee(monster)
+            } else {
+              monster.state = 'attack'
+              monster.stateTimer = 0
+              if (monster.ownerId === myPlayerId) {
+                networkManager.sendMonsterMove(
+                  monster.id,
+                  monster.position,
+                  monster.rotation,
+                  'attack',
+                  monster.position
+                )
+              }
             }
           }
         }
@@ -257,21 +275,31 @@ class MonsterManager {
         // No AI for dead monsters, just wait for removal
         break
 
-      case 'hit':
+      case 'hit': {
         // Wait for stagger animation to finish (approx 800ms)
         if (monster.stateTimer >= 800) {
-          monster.state = 'attack'
-          monster.stateTimer = 0
-          // Notify network of state change
-          networkManager.sendMonsterMove(
-            monster.id,
-            monster.position,
-            monster.rotation,
-            'attack',
-            monster.position
-          )
+          const def = getMonsterDef(monster.type)
+          const fleeRatio = def?.fleeHealthRatio ?? FLEE_HEALTH_RATIO
+          const fleeChance = def?.fleeChance ?? DEFAULT_FLEE_CHANCE
+          const shouldFlee =
+            monster.health <= monster.maxHealth * fleeRatio &&
+            Math.random() < fleeChance
+          if (shouldFlee) {
+            this.transitionToFlee(monster)
+          } else {
+            monster.state = 'attack'
+            monster.stateTimer = 0
+            networkManager.sendMonsterMove(
+              monster.id,
+              monster.position,
+              monster.rotation,
+              'attack',
+              monster.position
+            )
+          }
         }
         break
+      }
 
       case 'idle':
         // 1 second interval check
@@ -285,30 +313,31 @@ class MonsterManager {
         break
 
       case 'walk':
-      case 'run':
+      case 'run': {
+        if (monster.movementIntent === 'flee') {
+          this.tickFlee(monster, deltaTime)
+          break
+        }
+        if (monster.movementIntent === 'return') {
+          this.tickReturn(monster, deltaTime)
+          break
+        }
         if (monster.targetPosition) {
           const reached = this.followPath(monster, deltaTime)
 
           if (reached) {
             // 50% Idle, 50% Move again
             if (Math.random() < 0.5) {
-              monster.state = 'idle'
-              monster.stateTimer = 0
-              networkManager.sendMonsterMove(
-                monster.id,
-                monster.position,
-                monster.rotation,
-                'idle',
-                monster.position
-              )
+              this.transitionToIdle(monster)
             } else {
               this.transitionToMove(monster)
             }
           }
         } else {
-          monster.state = 'idle'
+          this.transitionToIdle(monster)
         }
         break
+      }
 
       case 'attack':
         if (monster.targetPlayerId) {
@@ -348,16 +377,8 @@ class MonsterManager {
             targetPlayer.health !== undefined &&
             targetPlayer.health <= 0
           ) {
-            monster.state = 'idle'
             monster.targetPlayerId = undefined
-            monster.stateTimer = 0
-            networkManager.sendMonsterMove(
-              monster.id,
-              monster.position,
-              monster.rotation,
-              'idle',
-              monster.position
-            )
+            this.transitionToReturn(monster)
             return
           }
 
@@ -371,18 +392,24 @@ class MonsterManager {
             const chaseRange = def?.chaseRange ?? 25
             const CHASE_RANGE_SQ = chaseRange * chaseRange
 
+            // Leash: return to spawn if too far from home
+            if (monster.spawnPosition) {
+              const spawnDx = monster.position.x - monster.spawnPosition.x
+              const spawnDz = monster.position.z - monster.spawnPosition.z
+              if (
+                spawnDx * spawnDx + spawnDz * spawnDz >
+                LEASH_RANGE * LEASH_RANGE
+              ) {
+                monster.targetPlayerId = undefined
+                this.transitionToReturn(monster)
+                return
+              }
+            }
+
             if (distSq > CHASE_RANGE_SQ) {
-              // Target too far, stop chasing
-              monster.state = 'idle'
+              // Target too far, return to spawn
               monster.targetPlayerId = undefined
-              monster.stateTimer = 0
-              networkManager.sendMonsterMove(
-                monster.id,
-                monster.position,
-                monster.rotation,
-                'idle',
-                monster.position
-              )
+              this.transitionToReturn(monster)
               return
             }
 
@@ -452,16 +479,8 @@ class MonsterManager {
                   recheckDx * recheckDx + recheckDz * recheckDz >
                   CHASE_RANGE_SQ
                 ) {
-                  monster.state = 'idle'
                   monster.targetPlayerId = undefined
-                  monster.stateTimer = 0
-                  networkManager.sendMonsterMove(
-                    monster.id,
-                    monster.position,
-                    monster.rotation,
-                    'idle',
-                    monster.position
-                  )
+                  this.transitionToReturn(monster)
                   return
                 }
               }
@@ -477,14 +496,165 @@ class MonsterManager {
             }
           } else {
             // Target lost
-            monster.state = 'idle'
             monster.targetPlayerId = undefined
+            this.transitionToReturn(monster)
           }
         } else {
-          monster.state = 'idle'
+          monster.targetPlayerId = undefined
+          this.transitionToReturn(monster)
         }
         break
     }
+  }
+
+  private transitionToIdle(monster: MonsterData) {
+    monster.state = 'idle'
+    monster.stateTimer = 0
+    monster.movementIntent = undefined
+    monster.pathState = undefined
+    monster.targetPosition = undefined
+    networkManager.sendMonsterMove(
+      monster.id,
+      monster.position,
+      monster.rotation,
+      'idle',
+      monster.position
+    )
+  }
+
+  private transitionToFlee(monster: MonsterData) {
+    monster.state = 'run'
+    monster.movementIntent = 'flee'
+    monster.fleeTimer = 0
+    monster.stateTimer = 0
+
+    const def = getMonsterDef(monster.type)
+    monster.moveSpeed = def?.runSpeed ?? 8
+
+    if (monster.spawnPosition) {
+      this.computePath(
+        monster,
+        monster.spawnPosition.x,
+        monster.spawnPosition.z
+      )
+    }
+
+    if (!monster.pathState) {
+      this.transitionToIdle(monster)
+      return
+    }
+
+    const firstWp = monster.pathState.waypoints[0]
+    monster.rotation = Math.atan2(
+      firstWp.x - monster.position.x,
+      firstWp.z - monster.position.z
+    )
+
+    networkManager.sendMonsterMove(
+      monster.id,
+      monster.position,
+      monster.rotation,
+      'run',
+      monster.spawnPosition ?? monster.position
+    )
+  }
+
+  private transitionToReturn(monster: MonsterData) {
+    const def = getMonsterDef(monster.type)
+    const returnChance = def?.returnChance ?? DEFAULT_RETURN_CHANCE
+    if (Math.random() >= returnChance) {
+      this.transitionToIdle(monster)
+      return
+    }
+
+    if (monster.spawnPosition) {
+      const dx = monster.position.x - monster.spawnPosition.x
+      const dz = monster.position.z - monster.spawnPosition.z
+      if (dx * dx + dz * dz <= RETURN_ARRIVE_DIST * RETURN_ARRIVE_DIST) {
+        this.transitionToIdle(monster)
+        return
+      }
+    }
+
+    monster.state = 'walk'
+    monster.movementIntent = 'return'
+    monster.stateTimer = 0
+    monster.moveSpeed = def?.walkSpeed ?? 1
+
+    if (monster.spawnPosition) {
+      monster.targetPosition = { ...monster.spawnPosition }
+      this.computePath(
+        monster,
+        monster.spawnPosition.x,
+        monster.spawnPosition.z
+      )
+    }
+
+    if (!monster.pathState) {
+      this.transitionToIdle(monster)
+      return
+    }
+
+    const firstWp = monster.pathState.waypoints[0]
+    monster.rotation = Math.atan2(
+      firstWp.x - monster.position.x,
+      firstWp.z - monster.position.z
+    )
+
+    networkManager.sendMonsterMove(
+      monster.id,
+      monster.position,
+      monster.rotation,
+      'walk',
+      monster.spawnPosition ?? monster.position
+    )
+  }
+
+  private tickFlee(monster: MonsterData, deltaTime: number) {
+    monster.fleeTimer = (monster.fleeTimer ?? 0) + deltaTime
+
+    if (monster.fleeTimer >= FLEE_DURATION_MS) {
+      monster.targetPlayerId = undefined
+      this.transitionToReturn(monster)
+      return
+    }
+
+    const reached = this.followPath(monster, deltaTime)
+    if (reached) {
+      monster.targetPlayerId = undefined
+      this.transitionToReturn(monster)
+    }
+  }
+
+  private tickReturn(monster: MonsterData, deltaTime: number) {
+    if (monster.spawnPosition) {
+      const dx = monster.spawnPosition.x - monster.position.x
+      const dz = monster.spawnPosition.z - monster.position.z
+      if (dx * dx + dz * dz <= RETURN_ARRIVE_DIST * RETURN_ARRIVE_DIST) {
+        this.transitionToIdle(monster)
+        return
+      }
+    }
+
+    if (
+      !monster.pathState ||
+      monster.pathState.currentWaypointIndex >=
+        monster.pathState.waypoints.length
+    ) {
+      if (monster.spawnPosition) {
+        this.computePath(
+          monster,
+          monster.spawnPosition.x,
+          monster.spawnPosition.z
+        )
+      }
+      if (!monster.pathState) {
+        this.transitionToIdle(monster)
+        return
+      }
+    }
+
+    this.followPath(monster, deltaTime)
   }
 
   private transitionToMove(monster: MonsterData) {
