@@ -281,6 +281,36 @@ export function handleServerMessage(
       break
     }
 
+    case 'SpawnMonsterRequest': {
+      // Server asks us to spawn a monster within the given area.
+      // For now, web client picks a random position (no terrain validation).
+      const angle = Math.random() * Math.PI * 2
+      const dist = Math.random() * data.radius
+      const x = data.center_x + Math.cos(angle) * dist
+      const z = data.center_z + Math.sin(angle) * dist
+      const rotation = Math.random() * Math.PI * 2
+      // Import sendMonsterSpawn if available via monsterManager
+      monsterManager.requestSpawnFromServer(
+        data.monster_type,
+        { x, y: 0, z },
+        rotation
+      )
+      break
+    }
+
+    case 'MonsterAssigned': {
+      const assigned: ServerMonster = data.monster
+      monsterManager.spawnWithId(
+        assigned.id,
+        assigned.monster_type as MonsterData['type'],
+        assigned.position,
+        assigned.owner_id,
+        assigned.health,
+        assigned.max_health
+      )
+      break
+    }
+
     case 'MonsterMoved':
       monsterManager.updateMonsterFromNetwork(
         data.monster_id,

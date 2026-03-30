@@ -87,6 +87,17 @@ async fn main() {
         initial_game_time,
         Arc::clone(&housing_io),
     ));
+    // Monster spawn tick task
+    let game_state_for_spawns = Arc::clone(&game_state);
+    tokio::spawn(async move {
+        // Use a 10-second base interval; tick_monster_spawns checks per-rule timing
+        let mut interval = tokio::time::interval(Duration::from_secs(10));
+        loop {
+            interval.tick().await;
+            game_state_for_spawns.tick_monster_spawns().await;
+        }
+    });
+
     let game_state_for_time_sync = Arc::clone(&game_state);
     let auth_service_for_time_sync = Arc::clone(&auth_service);
     tokio::spawn(async move {

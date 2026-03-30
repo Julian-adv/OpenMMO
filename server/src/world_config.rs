@@ -6,6 +6,14 @@ use tracing::info;
 pub struct WorldConfig {
     #[serde(rename = "spawnPosition")]
     pub spawn_position: SpawnPosition,
+    #[serde(rename = "maxMonstersTotal", default = "default_max_monsters_total")]
+    pub max_monsters_total: u32,
+    #[serde(rename = "monsterSpawns", default)]
+    pub monster_spawns: Vec<MonsterSpawnRule>,
+}
+
+fn default_max_monsters_total() -> u32 {
+    1000
 }
 
 #[derive(Debug, Deserialize)]
@@ -14,6 +22,27 @@ pub struct SpawnPosition {
     pub y: f32,
     pub z: f32,
     pub rotation: f32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MonsterSpawnRule {
+    #[serde(rename = "monsterType")]
+    pub monster_type: String,
+    #[serde(rename = "maxPerPlayer")]
+    pub max_per_player: u32,
+    #[allow(dead_code)]
+    #[serde(rename = "spawnIntervalSecs")]
+    pub spawn_interval_secs: u64,
+    #[serde(rename = "spawnCenter")]
+    pub spawn_center: SpawnCenter,
+    #[serde(rename = "spawnRadius")]
+    pub spawn_radius: f32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SpawnCenter {
+    pub x: f32,
+    pub z: f32,
 }
 
 static WORLD_CONFIG: LazyLock<WorldConfig> = LazyLock::new(|| {

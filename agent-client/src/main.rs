@@ -2,11 +2,12 @@ mod claude;
 mod codex;
 mod driver;
 mod mcp;
+mod monster_ai;
 mod openrouter;
 mod state;
 
+use std::collections::HashMap;
 use std::sync::Arc;
-
 use std::time::Duration;
 
 use claude::ClaudeConfig;
@@ -138,9 +139,12 @@ async fn main() -> anyhow::Result<()> {
         return run_mcp_mode(&config).await;
     }
 
+    let monster_defs =
+        monster_ai::MonsterAiManager::load_defs_from_json(include_str!("../../data/monsters.json"));
+
     // Reconnect loop for game sessions
     loop {
-        match run_session(&config).await {
+        match run_session(&config, &monster_defs).await {
             Ok(()) => {
                 info!(
                     "Session ended cleanly. Reconnecting in {}s...",
@@ -193,7 +197,10 @@ async fn run_mcp_mode(config: &Config) -> anyhow::Result<()> {
 }
 
 /// Run a single game session: connect, authenticate, enter game, run until disconnected.
-async fn run_session(config: &Config) -> anyhow::Result<()> {
+async fn run_session(
+    config: &Config,
+    monster_defs: &HashMap<String, monster_ai::MonsterDef>,
+) -> anyhow::Result<()> {
     let password_hash = fnv1a_hash(&config.password);
 
     // Connect with retry
@@ -377,6 +384,46 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
         LlmType::None => None,
     };
 
+    // Monster AI tick task (1Hz)
+    let state_for_ai = Arc::clone(&state);
+    let defs_for_ai = monster_defs.clone();
+    let ai_task = tokio::spawn(async move {
+        let tick_interval = Duration::from_secs(1);
+        let mut interval = tokio::time::interval(tick_interval);
+        let delta_ms = 1000.0_f32;
+
+        {
+            let mut s = state_for_ai.lock().await;
+            s.monster_ai.set_defs(defs_for_ai);
+        }
+
+        loop {
+            interval.tick().await;
+            let mut s = state_for_ai.lock().await;
+            if !s.in_game {
+                continue;
+            }
+
+            // Split borrow: monster_ai (mut) + nearby_players/passability_cache (shared)
+            let state::SharedState {
+                ref nearby_players,
+                ref passability_cache,
+                ref mut monster_ai,
+                ..
+            } = *s;
+            let commands = monster_ai.tick_all(delta_ms, nearby_players, passability_cache);
+
+            let pending = s.drain_pending_commands();
+
+            for cmd in commands.into_iter().chain(pending) {
+                if let Err(e) = s.send_command(cmd).await {
+                    tracing::warn!("Monster AI command failed: {e}");
+                    break;
+                }
+            }
+        }
+    });
+
     if llm_enabled {
         info!("Running in LLM-driven mode");
     } else {
@@ -388,6 +435,7 @@ async fn run_session(config: &Config) -> anyhow::Result<()> {
 
     // Clean up
     tx_task.abort();
+    ai_task.abort();
     if let Some(t) = llm_task {
         t.abort();
     }
@@ -505,5 +553,7 @@ fn msg_name(msg: &ServerMessage) -> &'static str {
         ServerMessage::HouseRemoved { .. } => "HouseRemoved",
         ServerMessage::HousesInArea { .. } => "HousesInArea",
         ServerMessage::DoorToggled { .. } => "DoorToggled",
+        ServerMessage::MonsterAssigned { .. } => "MonsterAssigned",
+        ServerMessage::SpawnMonsterRequest { .. } => "SpawnMonsterRequest",
     }
 }

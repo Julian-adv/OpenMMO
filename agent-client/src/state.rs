@@ -1,9 +1,12 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::monster_ai::MonsterAiManager;
 use onlinerpg_shared::housing::HouseData;
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
+use onlinerpg_shared::Position;
 use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
 use onlinerpg_terrain::height::HeightSampler;
+use rand::Rng;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
 
@@ -55,6 +58,10 @@ pub struct SharedState {
     cmd_tx: mpsc::Sender<ClientMessage>,
     /// Notified when an urgent event arrives
     pub urgent_notify: Arc<Notify>,
+    /// Monster AI manager for server-assigned monsters
+    pub monster_ai: MonsterAiManager,
+    /// Pending commands from monster AI and spawn requests
+    pending_commands: Vec<ClientMessage>,
 }
 
 impl SharedState {
@@ -82,6 +89,8 @@ impl SharedState {
             self_floor_level: 0,
             cmd_tx,
             urgent_notify: Arc::new(Notify::new()),
+            monster_ai: MonsterAiManager::new(),
+            pending_commands: Vec::new(),
         }
     }
 
@@ -235,6 +244,8 @@ impl SharedState {
             | ServerMessage::PlayerJoined { .. }
             | ServerMessage::PlayerLeft { .. }
             | ServerMessage::MonsterSpawned { .. }
+            | ServerMessage::MonsterAssigned { .. }
+            | ServerMessage::SpawnMonsterRequest { .. }
             | ServerMessage::MonsterDead { .. }
             | ServerMessage::MonsterRemoved { .. }
             | ServerMessage::XpGained { .. }
@@ -301,9 +312,35 @@ impl SharedState {
                 self.nearby_monsters
                     .insert(monster.id.clone(), monster.clone());
             }
-            ServerMessage::MonsterDead { monster_id }
-            | ServerMessage::MonsterRemoved { monster_id } => {
+            ServerMessage::SpawnMonsterRequest {
+                monster_type,
+                center_x,
+                center_z,
+                radius,
+            } => {
+                if let Some(pos) = self.find_valid_spawn_position(*center_x, *center_z, *radius) {
+                    let mut rng = rand::thread_rng();
+                    let rotation = rng.gen_range(0.0..std::f32::consts::TAU);
+                    self.pending_commands
+                        .push(ClientMessage::RequestSpawnMonster {
+                            monster_type: monster_type.clone(),
+                            position: pos,
+                            rotation,
+                        });
+                }
+            }
+            ServerMessage::MonsterAssigned { monster } => {
+                self.nearby_monsters
+                    .insert(monster.id.clone(), monster.clone());
+                self.monster_ai.add_monster(monster);
+            }
+            ServerMessage::MonsterDead { monster_id } => {
                 self.nearby_monsters.remove(monster_id);
+                self.monster_ai.handle_monster_dead(monster_id);
+            }
+            ServerMessage::MonsterRemoved { monster_id } => {
+                self.nearby_monsters.remove(monster_id);
+                self.monster_ai.remove_monster(monster_id);
             }
             ServerMessage::CharacterCreated { ref character } => {
                 self.characters.push(character.clone());
@@ -367,6 +404,21 @@ impl SharedState {
                     }
                 }
             }
+            // Notify monster AI when a managed monster is attacked
+            ServerMessage::PlayerAttacked {
+                player_id,
+                monster_id,
+                hit,
+                damage,
+                ..
+            } => {
+                if self.monster_ai.manages(monster_id) {
+                    let cmds = self
+                        .monster_ai
+                        .handle_monster_hit(monster_id, player_id, *hit, *damage);
+                    self.pending_commands.extend(cmds);
+                }
+            }
             _ => {}
         }
 
@@ -428,6 +480,11 @@ impl SharedState {
         events
     }
 
+    /// Drain pending commands (from monster AI reactions, spawn requests, etc.)
+    pub fn drain_pending_commands(&mut self) -> Vec<ClientMessage> {
+        std::mem::take(&mut self.pending_commands)
+    }
+
     /// Drain synthetic agent-side events (e.g. player proximity alerts).
     pub fn drain_agent_events(&mut self) -> Vec<String> {
         std::mem::take(&mut self.agent_events)
@@ -461,6 +518,31 @@ impl SharedState {
             &self.passability_cache,
             pathfinding::DEFAULT_MAX_NODES,
         )
+    }
+
+    /// Find a valid spawn position within the given area.
+    /// Tries random positions, rejecting blocked locations (inside houses).
+    /// Y coordinate is set to 0; the monster AI will correct via terrain height on first move.
+    fn find_valid_spawn_position(
+        &self,
+        center_x: f32,
+        center_z: f32,
+        radius: f32,
+    ) -> Option<Position> {
+        let mut rng = rand::thread_rng();
+        for _ in 0..10 {
+            let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
+            let dist: f32 = rng.gen_range(0.0..radius);
+            let x = center_x + angle.cos() * dist;
+            let z = center_z + angle.sin() * dist;
+
+            // Reject if inside a house
+            if pathfinding::is_movement_blocked(&self.passability_cache, x, z, x, z, 0.0) {
+                continue;
+            }
+            return Some(Position { x, y: 0.0, z });
+        }
+        None
     }
 
     /// Push a synthetic agent event visible to the LLM.
