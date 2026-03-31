@@ -179,8 +179,7 @@
     color: #e2e8f0;
     font-size: 12px;
     line-height: 1.4;
-    word-wrap: break-word;
-    word-break: break-all;
+    overflow-wrap: break-word;
     text-align: left;
     max-width: 100%;
   }

@@ -15,6 +15,8 @@
     overflowWrap?: 'normal' | 'break-word'
     whiteSpace?: 'normal' | 'nowrap'
     depthOffset?: number
+    depthTest?: boolean
+    renderOrder?: number
     onsync?: () => void
     position?: [number, number, number]
     'position.y'?: number
@@ -31,6 +33,8 @@
     overflowWrap = 'normal',
     whiteSpace = 'normal',
     depthOffset,
+    depthTest = true,
+    renderOrder,
     onsync,
     position = [0, 0, 0],
     'position.y': positionY,
@@ -65,6 +69,7 @@
   material.map = texture
   material.transparent = true
   material.depthWrite = false
+  material.depthTest = depthTest
   material.side = THREE.DoubleSide
 
   function wrapText(
@@ -229,6 +234,7 @@
 
 <T.Mesh
   bind:ref={meshRef}
+  renderOrder={renderOrder}
   position={[
     (position[0] ?? 0) + anchorOffsetX,
     (positionY ?? position[1] ?? 0) + anchorOffsetY,

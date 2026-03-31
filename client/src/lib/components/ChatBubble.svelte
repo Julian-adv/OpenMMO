@@ -12,6 +12,9 @@
 
   let { position, camera, message }: Props = $props()
 
+  const _scratchVec = new THREE.Vector3()
+  const OVERLAY_RENDER_ORDER = 9999
+
   const PADDING_X = 0.4
   const PADDING_Y = 0.2
 
@@ -33,15 +36,9 @@
   export function update() {
     if (!bubbleGroup || !camera) return
 
-    // Update Scale and Position
-    // Calculate distance from camera to bubble center
-    // Use a fixed approximate height for distance calculation to avoid circular dependency
-    const bubblePos = new THREE.Vector3(
-      position.x,
-      position.y + 2.0,
-      position.z
-    )
-    const dist = camera.position.distanceTo(bubblePos)
+    // Use a fixed approximate height to avoid circular dependency
+    _scratchVec.set(position.x, position.y + 2.0, position.z)
+    const dist = camera.position.distanceTo(_scratchVec)
 
     // Min distance (zoom in) = 5
     // Max distance (zoom out) = 20
@@ -120,6 +117,7 @@
   const bubbleShape = $derived(
     createRoundedRectShape(bubbleWidth, bubbleHeight, cornerRadius)
   )
+  const bubbleBorderGeometry = $derived(createBorderGeometry(bubbleShape))
   const bubbleCenterY = $derived(cornerRadius + bubbleHeight / 2)
   const displayText = $derived(
     message.length > 100 ? message.slice(0, 100) + '...' : message
@@ -128,15 +126,15 @@
 
 <!-- Chat bubble background -->
 <T.Group bind:ref={bubbleGroup}>
-  <T.Mesh position={[0, cornerRadius, 0]}>
+  <T.Mesh position={[0, cornerRadius, 0]} renderOrder={OVERLAY_RENDER_ORDER}>
     <T.ShapeGeometry args={[bubbleShape]} />
-    <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} />
+    <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} depthTest={false} />
   </T.Mesh>
 
   <!-- Chat bubble border (white line) -->
-  <T.Line position={[0, cornerRadius, 0.001]}>
-    <T is={createBorderGeometry(bubbleShape)} />
-    <T.LineBasicMaterial color="#ffffff" />
+  <T.Line position={[0, cornerRadius, 0.001]} renderOrder={OVERLAY_RENDER_ORDER}>
+    <T is={bubbleBorderGeometry} />
+    <T.LineBasicMaterial color="#ffffff" depthTest={false} />
   </T.Line>
 
   <!-- Chat bubble text -->
@@ -150,7 +148,9 @@
     anchorY="middle"
     maxWidth={3.5}
     onsync={handleTextSync}
-    overflowWrap="break-word"
+    overflowWrap="normal"
     whiteSpace="normal"
+    depthTest={false}
+    renderOrder={OVERLAY_RENDER_ORDER}
   />
 </T.Group>
