@@ -3,14 +3,19 @@
   import { networkManager } from '../network/socket'
   import { handleCommand } from '../chat-commands'
 
+  type Tab = 'say' | 'combat'
+
+  let activeTab = $state<Tab>('say')
   let chatMessages = $derived($gameStore.chatMessages)
+  let combatMessages = $derived($gameStore.combatMessages)
   let isConnected = $derived($gameStore.isConnected)
   let messageInput = $state('')
-  let chatContainer: HTMLDivElement
+  let chatContainer = $state<HTMLDivElement>()
 
   $effect(() => {
-    // Auto-scroll to bottom when new messages arrive
-    if (chatContainer && chatMessages.length) {
+    const len =
+      activeTab === 'say' ? chatMessages.length : combatMessages.length
+    if (chatContainer && len) {
       chatContainer.scrollTop = chatContainer.scrollHeight
     }
   })
@@ -38,40 +43,78 @@
   function handleGlobalKeydown(event: KeyboardEvent) {
     if (event.key === 'Enter' && document.activeElement !== chatInput) {
       event.preventDefault()
+      activeTab = 'say'
       chatInput?.focus()
     }
   }
 
-  let chatInput: HTMLInputElement
+  let chatInput = $state<HTMLInputElement>()
 </script>
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
 <div class="chat-panel">
-  <div class="chat-messages" bind:this={chatContainer}>
-    {#each chatMessages as message, index (index)}
-      <div class="message">
-        {message}
-      </div>
-    {/each}
-  </div>
-
-  <div class="chat-input" class:disconnected={!isConnected}>
-    <input
-      type="text"
-      bind:this={chatInput}
-      bind:value={messageInput}
-      onkeydown={handleKeyDown}
-      placeholder="Type a message..."
-      disabled={!isConnected}
-    />
+  <div class="tabs">
     <button
-      onclick={sendMessage}
-      disabled={!isConnected || !messageInput.trim()}
+      class="tab"
+      class:active={activeTab === 'say'}
+      onclick={() => (activeTab = 'say')}
     >
-      Send
+      Say
+    </button>
+    <button
+      class="tab"
+      class:active={activeTab === 'combat'}
+      onclick={() => (activeTab = 'combat')}
+    >
+      Combat
     </button>
   </div>
+
+  <div class="chat-messages" bind:this={chatContainer}>
+    {#if activeTab === 'say'}
+      {#each chatMessages as entry, index (index)}
+        <div class="message">
+          {#if entry.name}
+            <span class="name" class:local={entry.sender === 'local'} class:remote={entry.sender === 'remote'}>{entry.name}:</span>
+            {entry.text}
+          {:else}
+            <span class="system">{entry.text}</span>
+          {/if}
+        </div>
+      {/each}
+    {:else}
+      {#each combatMessages as entry, index (index)}
+        <div class="message combat">
+          {#if entry.name}
+            <span class="name" class:local={entry.sender === 'local'} class:remote={entry.sender === 'remote'}>{entry.name}:</span>
+            <span class:hit={entry.hit === true} class:miss={entry.hit === false}>{entry.text}</span>
+          {:else}
+            {entry.text}
+          {/if}
+        </div>
+      {/each}
+    {/if}
+  </div>
+
+  {#if activeTab === 'say'}
+    <div class="chat-input" class:disconnected={!isConnected}>
+      <input
+        type="text"
+        bind:this={chatInput}
+        bind:value={messageInput}
+        onkeydown={handleKeyDown}
+        placeholder="Type a message..."
+        disabled={!isConnected}
+      />
+      <button
+        onclick={sendMessage}
+        disabled={!isConnected || !messageInput.trim()}
+      >
+        Send
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -88,6 +131,35 @@
     flex-direction: column;
     font-family:
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid #4a5568;
+    flex-shrink: 0;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 6px 0;
+    border: none;
+    background: transparent;
+    color: #718096;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    border-radius: 8px 8px 0 0;
+  }
+
+  .tab:hover {
+    color: #e2e8f0;
+  }
+
+  .tab.active {
+    color: #e2e8f0;
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom: 2px solid #4299e1;
   }
 
   .chat-messages {
@@ -111,6 +183,33 @@
     word-break: break-all;
     text-align: left;
     max-width: 100%;
+  }
+
+  .name.local {
+    color: #68d391;
+    font-weight: 600;
+  }
+
+  .name.remote {
+    color: #f6e05e;
+    font-weight: 600;
+  }
+
+  .system {
+    color: #a0aec0;
+    font-style: italic;
+  }
+
+  .message.combat {
+    color: #f6ad55;
+  }
+
+  .hit {
+    color: #68d391;
+  }
+
+  .miss {
+    color: #fc8181;
   }
 
   .chat-input {

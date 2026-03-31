@@ -3,6 +3,7 @@ import {
   gameStore,
   updatePlayer,
   addChatMessage,
+  addCombatMessage,
   addChatBubble,
   resetGameStore,
 } from '../stores/gameStore'
@@ -136,6 +137,7 @@ export function handleServerMessage(
         characterClass: serverPlayer.class,
         torchOn: serverPlayer.torch_on,
       }
+      let joinedName: string | null = null
       gameStore.update((state) => {
         if (!state.currentPlayer) {
           console.log('Setting current player from PlayerJoined:', player)
@@ -147,24 +149,35 @@ export function handleServerMessage(
             serverPlayer.rotation
           )
           state.otherPlayers.set(serverPlayer.id, remotePlayer)
-          addChatMessage(`${serverPlayer.name} joined the game`)
+          joinedName = serverPlayer.name
         }
         return state
       })
+      if (joinedName) {
+        addChatMessage({
+          text: `${joinedName} joined the game`,
+          sender: 'system',
+        })
+      }
       break
     }
 
-    case 'PlayerLeft':
+    case 'PlayerLeft': {
+      let leftName: string | null = null
       gameStore.update((state) => {
         const player = state.otherPlayers.get(data.player_id)
         remotePlayerManager.removePlayer(data.player_id)
         if (player) {
           state.otherPlayers.delete(data.player_id)
-          addChatMessage(`${player.name} left the game`)
+          leftName = player.name
         }
         return state
       })
+      if (leftName) {
+        addChatMessage({ text: `${leftName} left the game`, sender: 'system' })
+      }
       break
+    }
 
     case 'PlayerMoved': {
       const state = get(gameStore)
@@ -204,11 +217,15 @@ export function handleServerMessage(
 
     case 'ChatMessage': {
       const state = get(gameStore)
-      const playerName =
-        state.currentPlayer?.id === data.player_id
-          ? state.currentPlayer?.name
-          : (state.otherPlayers.get(data.player_id)?.name ?? 'Unknown')
-      addChatMessage(`${playerName}: ${data.message}`)
+      const isLocal = state.currentPlayer?.id === data.player_id
+      const playerName = isLocal
+        ? state.currentPlayer?.name
+        : (state.otherPlayers.get(data.player_id)?.name ?? 'Unknown')
+      addChatMessage({
+        text: data.message,
+        sender: isLocal ? 'local' : 'remote',
+        name: playerName,
+      })
       addChatBubble(data.player_id, data.message)
       break
     }
@@ -335,18 +352,19 @@ export function handleServerMessage(
       remotePlayerManager.handleAttack(data.player_id)
 
       const gameState = get(gameStore)
-      const attackerName =
-        gameState.currentPlayer?.id === data.player_id
-          ? 'You'
-          : gameState.otherPlayers.get(data.player_id)?.name || 'Unknown'
+      const isLocalAttacker = gameState.currentPlayer?.id === data.player_id
+      const attackerName = isLocalAttacker
+        ? 'You'
+        : gameState.otherPlayers.get(data.player_id)?.name || 'Unknown'
 
-      if (data.hit) {
-        addChatMessage(
-          `${attackerName} rolled ${data.roll}: HIT for ${data.damage} damage!`
-        )
-      } else {
-        addChatMessage(`${attackerName} rolled ${data.roll}: MISSED!`)
-      }
+      addCombatMessage({
+        text: data.hit
+          ? `rolled ${data.roll}: HIT for ${data.damage} damage!`
+          : `rolled ${data.roll}: MISSED!`,
+        sender: isLocalAttacker ? 'local' : 'remote',
+        name: attackerName,
+        hit: data.hit,
+      })
 
       monsterManager.handleMonsterAttacked(
         data.monster_id,
@@ -377,16 +395,17 @@ export function handleServerMessage(
         ...(isCurrentPlayer ? { lastDamageInfo: damageInfo } : {}),
       })
 
-      if (data.hit) {
-        const targetName = isCurrentPlayer
-          ? 'You'
-          : (gameState.otherPlayers.get(data.player_id)?.name ?? 'Unknown')
-        addChatMessage(
-          `Monster rolled ${data.roll}: HIT ${targetName} for ${data.damage} damage!`
-        )
-      } else {
-        addChatMessage(`Monster rolled ${data.roll}: MISSED!`)
-      }
+      const monsterTargetName = isCurrentPlayer
+        ? 'You'
+        : (gameState.otherPlayers.get(data.player_id)?.name ?? 'Unknown')
+      addCombatMessage({
+        text: data.hit
+          ? `rolled ${data.roll}: HIT ${monsterTargetName} for ${data.damage} damage!`
+          : `rolled ${data.roll}: MISSED!`,
+        sender: 'system',
+        name: 'Monster',
+        hit: data.hit,
+      })
       break
     }
 
@@ -397,9 +416,10 @@ export function handleServerMessage(
       const deadPlayerName = isDeadCurrentPlayer
         ? 'You'
         : (gameState.otherPlayers.get(data.player_id)?.name ?? 'Unknown')
-      addChatMessage(
-        `${deadPlayerName === 'You' ? 'You have' : deadPlayerName + ' has'} been slain!`
-      )
+      addCombatMessage({
+        text: `${deadPlayerName === 'You' ? 'You have' : deadPlayerName + ' has'} been slain!`,
+        sender: 'system',
+      })
 
       if (!isDeadCurrentPlayer) {
         remotePlayerManager.handleDead(data.player_id)
@@ -436,13 +456,16 @@ export function handleServerMessage(
           maxHealth: serverPlayer.max_health,
         })
         requestCameraReset()
-        addChatMessage('You have respawned.')
+        addChatMessage({ text: 'You have respawned.', sender: 'system' })
       } else {
         updatePlayer(serverPlayer.id, {
           health: serverPlayer.health,
           maxHealth: serverPlayer.max_health,
         })
-        addChatMessage(`${serverPlayer.name} has respawned.`)
+        addChatMessage({
+          text: `${serverPlayer.name} has respawned.`,
+          sender: 'system',
+        })
         remotePlayerManager.handleRespawn(
           serverPlayer.id,
           serverPlayer.position,
@@ -546,18 +569,30 @@ export function handleServerMessage(
         ...(isCurrentPlayer ? { lastRegenInfo: regenInfo } : {}),
       })
       if (data.xp_amount > 0) {
-        addChatMessage(`You gained ${data.xp_amount} XP.`)
+        addCombatMessage({
+          text: `You gained ${data.xp_amount} XP.`,
+          sender: 'local',
+        })
       } else if (previousLevel !== null) {
         if (xpLost > 0) {
-          addChatMessage(`Death penalty: You lost ${xpLost} XP.`)
+          addCombatMessage({
+            text: `Death penalty: You lost ${xpLost} XP.`,
+            sender: 'local',
+          })
         } else {
-          addChatMessage('Death penalty applied.')
+          addCombatMessage({ text: 'Death penalty applied.', sender: 'local' })
         }
       }
       if (data.leveled_up) {
-        addChatMessage(`Level up! You are now level ${data.new_level}.`)
+        addCombatMessage({
+          text: `Level up! You are now level ${data.new_level}.`,
+          sender: 'local',
+        })
       } else if (previousLevel !== null && data.new_level < previousLevel) {
-        addChatMessage(`Level down. You are now level ${data.new_level}.`)
+        addCombatMessage({
+          text: `Level down. You are now level ${data.new_level}.`,
+          sender: 'local',
+        })
       }
       break
     }

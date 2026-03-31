@@ -12,11 +12,12 @@ const commands: Record<string, CommandHandler> = {
       const pos = player.position
       const { tileX, tileZ, cellX, cellZ } = worldToTileCell(pos.x, pos.z)
       const deg = MathUtils.radToDeg(player.rotation).toFixed(1)
-      addChatMessage(
-        `Position: world(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) tile(${tileX}, ${tileZ}) cell(${cellX}, ${cellZ}) rot(${deg}°)`
-      )
+      addChatMessage({
+        text: `Position: world(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) tile(${tileX}, ${tileZ}) cell(${cellX}, ${cellZ}) rot(${deg}°)`,
+        sender: 'system',
+      })
     } else {
-      addChatMessage('Position: unknown')
+      addChatMessage({ text: 'Position: unknown', sender: 'system' })
     }
   },
 }

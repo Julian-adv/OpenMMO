@@ -36,11 +36,21 @@ export interface ChatBubble {
   duration: number
 }
 
+export type ChatSender = 'local' | 'remote' | 'system'
+
+export interface ChatEntry {
+  text: string
+  sender: ChatSender
+  name?: string
+  hit?: boolean
+}
+
 export interface GameState {
   isConnected: boolean
   currentPlayer: LocalPlayer | null
   otherPlayers: Map<string, RemotePlayer>
-  chatMessages: string[]
+  chatMessages: ChatEntry[]
+  combatMessages: ChatEntry[]
   chatBubbles: Map<string, ChatBubble> // playerId -> ChatBubble
 }
 
@@ -49,6 +59,7 @@ const initialGameState: GameState = {
   currentPlayer: null,
   otherPlayers: new SvelteMap(),
   chatMessages: [],
+  combatMessages: [],
   chatBubbles: new Map(),
 }
 
@@ -61,6 +72,8 @@ export const resetGameStore = () => {
     chatBubbles: new Map(),
   })
 }
+
+const MAX_MESSAGES = 100
 
 export const updatePlayer = (
   playerId: string,
@@ -82,16 +95,27 @@ export const updatePlayer = (
   })
 }
 
-export const addChatMessage = (message: string) => {
+const addMessageTo = (
+  field: 'chatMessages' | 'combatMessages',
+  entry: ChatEntry
+) => {
   gameStore.update((state) => {
-    const newMessages = [...state.chatMessages, message]
+    const newMessages = [...state[field], entry]
     return {
       ...state,
-      chatMessages:
-        newMessages.length > 100 ? newMessages.slice(-100) : newMessages,
+      [field]:
+        newMessages.length > MAX_MESSAGES
+          ? newMessages.slice(-MAX_MESSAGES)
+          : newMessages,
     }
   })
 }
+
+export const addChatMessage = (entry: ChatEntry) =>
+  addMessageTo('chatMessages', entry)
+
+export const addCombatMessage = (entry: ChatEntry) =>
+  addMessageTo('combatMessages', entry)
 
 const MIN_BUBBLE_DURATION = 5000
 const MAX_BUBBLE_DURATION = 10000
