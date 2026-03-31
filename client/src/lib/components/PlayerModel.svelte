@@ -5,7 +5,6 @@
   import * as THREE from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onMount } from 'svelte'
-  import { SvelteSet } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import { timeScale } from '../stores/timeStore'
   import { AnimationIndex, AnimationName } from '../types/animations'
@@ -108,11 +107,15 @@
   let combatMeleeGltfData = $state<GLTF | null>(null)
   let swordGltfData = $state<GLTF | null>(null)
 
+  const hasSword = characterClass !== 'merchant'
   const modelPath = getCharacterModelPath(characterClass)
-  loadGLB(modelPath).then((g) => { activeGltfData = g })
-  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
-  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
-  loadGLB('/models/sword.glb').then((g) => { swordGltfData = g })
+  const modelPromise = loadGLB(modelPath).then((g) => { activeGltfData = g })
+  const locomotionPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
+  const combatMeleePromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
+  if (hasSword) {
+    loadGLB('/models/sword.glb').then((g) => { swordGltfData = g })
+  }
+  const glbReady = Promise.all([modelPromise, locomotionPromise, combatMeleePromise])
 
   // Animation system - following gpt-all-in-one.html approach
   let mixer = $state<THREE.AnimationMixer | null>(null)
@@ -132,7 +135,7 @@
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   let swordAttached = $state(false)
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
-  const ENABLE_SWORD_ATTACHMENT = true
+  const _nametagPos = new THREE.Vector3()
 
   function isMainRightHandBone(bone: THREE.Bone): boolean {
     const boneName = bone.name.toLowerCase()
@@ -203,7 +206,7 @@
   }
 
   function tryAttachSword(characterRoot: THREE.Object3D): boolean {
-    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !swordGltfData) return false
+    if (!hasSword || swordAttached || !swordGltfData) return false
 
     const rightHandBone = findMainRightHandBone(characterRoot)
     if (!rightHandBone) {
@@ -305,7 +308,7 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      if (ENABLE_SWORD_ATTACHMENT && !swordGltfData) {
+      if (hasSword && !swordGltfData) {
         console.log('Sword GLB not ready yet; will attach when loaded')
       }
       tryAttachSword(cloned)
@@ -321,7 +324,8 @@
       )
 
       // Collect all node names in the cloned model
-      const modelNodeNames = new SvelteSet()
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity
+      const modelNodeNames = new Set()
       cloned.traverse((obj) => {
         if (obj.name) modelNodeNames.add(obj.name)
       })
@@ -417,17 +421,9 @@
   onMount(() => {
     // Wait for all GLTFs (character model + animation packs) to load
     isLoading = true
-    const checkGltf = () => {
-      const activeGltf = activeGltfData
-      if (activeGltf && locomotionGltfData && combatMeleeGltfData) {
-        setupRealAnimation().then(() => {
-          isLoading = false
-        })
-      } else {
-        setTimeout(checkGltf, 100)
-      }
-    }
-    checkGltf()
+    glbReady.then(() => setupRealAnimation()).then(() => {
+      isLoading = false
+    })
 
     // Cleanup on unmount
     return () => {
@@ -445,7 +441,7 @@
   })
 
   $effect(() => {
-    if (!ENABLE_SWORD_ATTACHMENT || swordAttached || !modelRoot || !swordGltfData) {
+    if (!hasSword || swordAttached || !modelRoot || !swordGltfData) {
       return
     }
     tryAttachSword(modelRoot)
@@ -469,12 +465,8 @@
 
     // Update nametag logic (formerly in useTask)
     if (camera && nametagGroup) {
-      const nametagPos = new THREE.Vector3(
-        position.x,
-        position.y + 2.2,
-        position.z
-      )
-      const dist = camera.position.distanceTo(nametagPos)
+      _nametagPos.set(position.x, position.y + 2.2, position.z)
+      const dist = camera.position.distanceTo(_nametagPos)
 
       // Min distance (zoom in) = 5
       // Max distance (zoom out) = 20

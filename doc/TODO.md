@@ -14,6 +14,7 @@
   - 모듈형 애셋을 만든다
   - 미로를 생성하는 시스템을 만든다
 - map editor를 만든다 -> 작업중
+  - mark monster spawn area
 - [x] height map -> terrain 생성 시스템을 만든다
 - [x] 해안선 생성할 때 단층이 지는 현상을 개선한다
 - [x] splat map을 painting하는 기능을 만든다
