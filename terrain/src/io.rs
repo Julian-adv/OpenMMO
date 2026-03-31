@@ -275,6 +275,61 @@ impl TerrainIO {
         Ok(())
     }
 
+    /// List all region coordinates that have zone files.
+    pub async fn list_zone_regions(&self) -> std::io::Result<Vec<(i32, i32)>> {
+        let zones_dir = self.base_dir.join("zones");
+        let mut entries = match fs::read_dir(&zones_dir).await {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),
+            Err(e) => return Err(e),
+        };
+        let mut regions = Vec::new();
+        while let Some(entry) = entries.next_entry().await? {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            // Parse "r+00_+00.json" pattern
+            if let Some(stem) = name.strip_suffix(".json") {
+                if let Some(rest) = stem.strip_prefix('r') {
+                    if let Some((rx_str, rz_str)) = rest.split_once('_') {
+                        if let (Ok(rx), Ok(rz)) = (rx_str.parse::<i32>(), rz_str.parse::<i32>()) {
+                            regions.push((rx, rz));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(regions)
+    }
+
+    /// Read zone data for a region. Returns empty JSON object if file not found.
+    pub async fn read_zone(&self, rx: i32, rz: i32) -> std::io::Result<serde_json::Value> {
+        let path = coords::zone_path(&self.base_dir, rx, rz);
+        match fs::read_to_string(&path).await {
+            Ok(json_str) => serde_json::from_str(&json_str)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                Ok(serde_json::Value::Object(Default::default()))
+            }
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Write zone data for a region.
+    pub async fn write_zone(
+        &self,
+        rx: i32,
+        rz: i32,
+        json: &serde_json::Value,
+    ) -> std::io::Result<()> {
+        let path = coords::zone_path(&self.base_dir, rx, rz);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        let json_str = serde_json::to_string_pretty(json)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        fs::write(&path, json_str).await
+    }
+
     pub async fn write_meta(
         &self,
         rx: i32,

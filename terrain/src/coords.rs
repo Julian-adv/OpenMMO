@@ -72,6 +72,12 @@ pub fn original_grass_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("grass-original").join(region_dir_name(rx, rz))
 }
 
+/// Build filesystem path for a region zone JSON file.
+pub fn zone_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("zones")
+        .join(format!("r{:+03}_{:+03}.json", rx, rz))
+}
+
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("minimap")

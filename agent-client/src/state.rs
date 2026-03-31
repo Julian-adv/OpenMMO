@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use crate::monster_ai::MonsterAiManager;
 use onlinerpg_shared::housing::{HouseData, WallDirection};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
-use onlinerpg_shared::Position;
+use onlinerpg_shared::{NoSpawnZone, Position};
 use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
 use onlinerpg_terrain::height::HeightSampler;
 use rand::Rng;
@@ -121,6 +121,8 @@ pub struct SharedState {
     pub monster_ai: MonsterAiManager,
     /// Pending commands from monster AI and spawn requests
     pending_commands: Vec<ClientMessage>,
+    /// No-spawn zones received from server on join
+    no_spawn_zones: Vec<NoSpawnZone>,
 }
 
 impl SharedState {
@@ -153,6 +155,7 @@ impl SharedState {
             urgent_notify: Arc::new(Notify::new()),
             monster_ai: MonsterAiManager::new(),
             pending_commands: Vec::new(),
+            no_spawn_zones: Vec::new(),
         }
     }
 
@@ -376,11 +379,14 @@ impl SharedState {
             }
             ServerMessage::SpawnMonsterRequest {
                 monster_type,
-                center_x,
-                center_z,
-                radius,
+                min_x,
+                min_z,
+                max_x,
+                max_z,
             } => {
-                if let Some(pos) = self.find_valid_spawn_position(*center_x, *center_z, *radius) {
+                if let Some(pos) =
+                    self.find_valid_spawn_position(*min_x, *min_z, *max_x, *max_z)
+                {
                     let mut rng = rand::thread_rng();
                     let rotation = rng.gen_range(0.0..std::f32::consts::TAU);
                     self.pending_commands
@@ -390,6 +396,9 @@ impl SharedState {
                             rotation,
                         });
                 }
+            }
+            ServerMessage::NoSpawnZones { zones } => {
+                self.no_spawn_zones = zones.clone();
             }
             ServerMessage::MonsterAssigned { monster } => {
                 self.nearby_monsters
@@ -600,22 +609,27 @@ impl SharedState {
     /// Y coordinate is set to 0; the monster AI will correct via terrain height on first move.
     fn find_valid_spawn_position(
         &self,
-        center_x: f32,
-        center_z: f32,
-        radius: f32,
+        min_x: f32,
+        min_z: f32,
+        max_x: f32,
+        max_z: f32,
     ) -> Option<Position> {
         let world = self.world_cache.read().unwrap();
         let mut rng = rand::thread_rng();
         for _ in 0..10 {
-            let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
-            let dist: f32 = rng.gen_range(0.0..radius);
-            let x = center_x + angle.cos() * dist;
-            let z = center_z + angle.sin() * dist;
+            let x: f32 = rng.gen_range(min_x..max_x);
+            let z: f32 = rng.gen_range(min_z..max_z);
 
             // Reject if inside a house
             if pathfinding::is_movement_blocked(world.passability_cache(), x, z, x, z, 0.0) {
                 continue;
             }
+
+            // Reject if inside a no-spawn zone
+            if self.no_spawn_zones.iter().any(|zone| zone.contains(x, z)) {
+                continue;
+            }
+
             return Some(Position { x, y: 0.0, z });
         }
         None

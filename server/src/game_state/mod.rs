@@ -2,6 +2,7 @@ use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use crate::world_config::MonsterSpawnRule;
+use onlinerpg_shared::NoSpawnZone;
 use bytes::Bytes;
 use onlinerpg_shared::housing::{RoomData, WallDirection, WallVariant};
 use onlinerpg_shared::serialize_server_msg;
@@ -63,8 +64,10 @@ pub struct GameState {
     dirty_players: Arc<RwLock<HashSet<PlayerId>>>,
     /// In-memory set of currently open doors.
     open_doors: Arc<RwLock<HashSet<DoorKey>>>,
-    /// Monster spawn rules from world config.
+    /// Monster spawn rules from region zone files.
     spawn_rules: Vec<MonsterSpawnRule>,
+    /// No-spawn zones (towns, safe areas) from region zone files.
+    no_spawn_zones: Vec<NoSpawnZone>,
 }
 
 impl GameState {
@@ -72,9 +75,10 @@ impl GameState {
         monster_defs: MonsterDefs,
         initial_datetime: crate::types::GameDateTime,
         housing_io: Arc<HousingIO>,
+        spawn_rules: Vec<MonsterSpawnRule>,
+        no_spawn_zones: Vec<NoSpawnZone>,
     ) -> Self {
         let (broadcast_tx, _) = broadcast::channel(1000);
-        let spawn_rules = crate::world_config::world_config().monster_spawns.clone();
 
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
@@ -90,7 +94,13 @@ impl GameState {
             dirty_players: Arc::new(RwLock::new(HashSet::new())),
             open_doors: Arc::new(RwLock::new(HashSet::new())),
             spawn_rules,
+            no_spawn_zones,
         }
+    }
+
+    /// Get the no-spawn zones (for sending to clients on join).
+    pub fn no_spawn_zones(&self) -> &[NoSpawnZone] {
+        &self.no_spawn_zones
     }
 
     pub fn subscribe(&self) -> GameStateReceiver {

@@ -216,9 +216,10 @@ impl super::GameState {
                     player_id,
                     ServerMessage::SpawnMonsterRequest {
                         monster_type: rule.monster_type.clone(),
-                        center_x: rule.spawn_center.x,
-                        center_z: rule.spawn_center.z,
-                        radius: rule.spawn_radius,
+                        min_x: rule.min_x,
+                        min_z: rule.min_z,
+                        max_x: rule.max_x,
+                        max_z: rule.max_z,
                     },
                 )
                 .await;
@@ -228,17 +229,31 @@ impl super::GameState {
         }
     }
 
-    /// Validate that a spawn position is within the allowed radius for this monster type.
+    /// Validate that a spawn position is within the spawn zone rectangle
+    /// and not inside any no-spawn zone.
     pub fn validate_spawn_position(&self, monster_type: &str, position: &Position) -> bool {
-        if let Some(rule) = self.find_spawn_rule(monster_type) {
-            let dx = position.x - rule.spawn_center.x;
-            let dz = position.z - rule.spawn_center.z;
-            let dist_sq = dx * dx + dz * dz;
-            // 10% tolerance for floating-point imprecision
-            let max_dist = rule.spawn_radius * 1.1;
-            dist_sq <= max_dist * max_dist
-        } else {
-            false
+        let rule = match self.find_spawn_rule(monster_type) {
+            Some(r) => r,
+            None => return false,
+        };
+
+        // Check position is within the spawn zone rectangle (with small tolerance)
+        let tol = 1.0;
+        if position.x < rule.min_x - tol
+            || position.x > rule.max_x + tol
+            || position.z < rule.min_z - tol
+            || position.z > rule.max_z + tol
+        {
+            return false;
         }
+
+        // Reject if inside any no-spawn zone
+        for zone in &self.no_spawn_zones {
+            if zone.contains(position.x, position.z) {
+                return false;
+            }
+        }
+
+        true
     }
 }

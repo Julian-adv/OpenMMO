@@ -1,0 +1,32 @@
+{
+  "monsterSpawns": [
+    {
+      "maxPerPlayer": 3,
+      "maxTotal": 10,
+      "maxX": -1562.1882770060083,
+      "maxZ": 456.8281033154121,
+      "minX": -1630.609166975313,
+      "minZ": 353.2957067185669,
+      "monsterType": "scp939",
+      "spawnIntervalSecs": 30
+    },
+    {
+      "maxPerPlayer": 3,
+      "maxTotal": 10,
+      "maxX": -1504.1749738772032,
+      "maxZ": 456.2343158097462,
+      "minX": -1561.076942811732,
+      "minZ": 353.9565106493429,
+      "monsterType": "scp939",
+      "spawnIntervalSecs": 30
+    }
+  ],
+  "noSpawnZones": [
+    {
+      "maxX": -1511.5037463832027,
+      "maxZ": 521.8107211728934,
+      "minX": -1556.9759236659245,
+      "minZ": 461.2564723281807
+    }
+  ]
+}

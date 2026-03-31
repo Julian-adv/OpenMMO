@@ -1,8 +1,8 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager } from '../../stores/editorStore'
-  import type { EditorTool } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel } from '../../stores/editorStore'
+  import type { EditorTool, ZoneSubTool } from '../../stores/editorStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import { get } from 'svelte/store'
@@ -38,6 +38,8 @@
   let currentBrushRaise = $state(true)
   let currentTool = $state<EditorTool>('height')
   let currentSplatLayer = $state(0)
+  let currentZoneSubTool = $state<ZoneSubTool>('noSpawn')
+  let currentZoneDrawStart = $state<{ x: number; z: number } | null>(null)
 
   brushSize.subscribe((v) => (currentBrushSize = v))
   brushStrength.subscribe((v) => (currentBrushStrength = v))
@@ -45,8 +47,16 @@
     currentBrushRaise = v
     syncBrushMode()
   })
-  editorTool.subscribe((v) => (currentTool = v))
+  editorTool.subscribe((v) => {
+    currentTool = v
+    // Clear zone draw state when switching away from zone tool
+    if (v !== 'zone') {
+      zoneDrawStart.set(null)
+    }
+  })
   splatLayer.subscribe((v) => (currentSplatLayer = v))
+  zoneSubTool.subscribe((v) => (currentZoneSubTool = v))
+  zoneDrawStart.subscribe((v) => (currentZoneDrawStart = v))
 
   function syncBrushMode() {
     if (ctrlHeld) {
@@ -216,6 +226,46 @@
     }
   }
 
+  async function handleZoneClick(worldX: number, worldZ: number) {
+    if (currentZoneDrawStart) {
+      // Second click: finish the rectangle
+      const minX = Math.min(currentZoneDrawStart.x, worldX)
+      const minZ = Math.min(currentZoneDrawStart.z, worldZ)
+      const maxX = Math.max(currentZoneDrawStart.x, worldX)
+      const maxZ = Math.max(currentZoneDrawStart.z, worldZ)
+
+      const mgr = get(editorZoneManager)
+      const region = get(currentEditorRegion)
+      if (mgr && region) {
+        const zoneData = get(currentZoneData)
+        let updated
+        if (currentZoneSubTool === 'noSpawn') {
+          const label = get(noSpawnFormLabel).trim()
+          const zone = { minX, minZ, maxX, maxZ, ...(label ? { label } : {}) }
+          const zones = [...(zoneData.noSpawnZones ?? []), zone]
+          updated = { ...zoneData, noSpawnZones: zones }
+        } else {
+          const spawns = [...(zoneData.monsterSpawns ?? []), {
+            monsterType: get(spawnFormMonsterType),
+            maxPerPlayer: get(spawnFormMaxPerPlayer),
+            maxTotal: get(spawnFormMaxTotal),
+            spawnIntervalSecs: get(spawnFormIntervalSecs),
+            minX, minZ, maxX, maxZ,
+          }]
+          updated = { ...zoneData, monsterSpawns: spawns }
+        }
+        await mgr.saveZone(region.rx, region.rz, updated)
+        currentZoneData.set(updated)
+        if (currentZoneSubTool === 'noSpawn') noSpawnFormLabel.set('')
+      }
+
+      zoneDrawStart.set(null)
+    } else {
+      // First click: store the start corner
+      zoneDrawStart.set({ x: worldX, z: worldZ })
+    }
+  }
+
   function handleMouseDown(event: MouseEvent) {
     if (event.button === 1) {
       event.preventDefault()
@@ -228,6 +278,12 @@
     event.preventDefault()
     const hit = raycastTerrain(event)
     if (!hit) return
+
+    if (currentTool === 'zone') {
+      updateCursorFromHit(hit)
+      handleZoneClick(hit.point.x, hit.point.z)
+      return
+    }
 
     isPainting = true
     lastPaintTime = 0

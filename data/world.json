@@ -5,14 +5,5 @@
     "z": 469.06,
     "rotation": 158.8
   },
-  "maxMonstersTotal": 1000,
-  "monsterSpawns": [
-    {
-      "monsterType": "scp939",
-      "maxPerPlayer": 3,
-      "spawnIntervalSecs": 30,
-      "spawnCenter": { "x": -1520.0, "z": 450.0 },
-      "spawnRadius": 40.0
-    }
-  ]
+  "maxMonstersTotal": 1000
 }

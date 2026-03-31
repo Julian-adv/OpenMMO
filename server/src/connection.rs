@@ -459,6 +459,11 @@ async fn handle_client_message(
                 datetime,
             });
 
+            // Send no-spawn zones so client can validate spawn positions
+            responses.push(ServerMessage::NoSpawnZones {
+                zones: game_state.no_spawn_zones().to_vec(),
+            });
+
             if let Some(game_state_msg) = game_state.add_player(player).await {
                 responses.push(game_state_msg);
             }

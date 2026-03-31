@@ -31,6 +31,7 @@
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
+  import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
@@ -54,7 +55,8 @@
     reflectionEnabled,
     housingEditorMode,
   } from '../stores/debugStore'
-  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, terrainForceRebuild } from '../stores/editorStore'
+  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, editorZoneManager, terrainForceRebuild } from '../stores/editorStore'
+  import { ZoneManager } from '../managers/zoneManager'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
   import {
@@ -117,6 +119,7 @@
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
   editorMetaManager.set(terrainMetaManager)
+  editorZoneManager.set(new ZoneManager())
   editorGrassDataManager.set(terrainGrassDataManager)
   let waterNormalMap = $state<THREE.Texture | null>(null)
   let waterFoamMap = $state<THREE.Texture | null>(null)
@@ -909,6 +912,7 @@
 
 {#if $mapEditorMode}
   <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />
+  <ZoneOverlay />
 {/if}
 
 {#if $housingEditorMode}

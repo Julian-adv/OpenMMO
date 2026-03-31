@@ -266,7 +266,9 @@
   <!-- UI overlays (outside Canvas) -->
   {#if screen === 'game'}
     <div class="game-hud">
-      <ChatPanel />
+      {#if !$mapEditorMode}
+        <ChatPanel />
+      {/if}
       <FPSCounter />
       <GameTimeWidget />
       <CelestialDebugDialog />
@@ -279,7 +281,7 @@
       {#if $showGenerateDialog}
         <GenerateTerrainDialog />
       {/if}
-      {#if selectedCharacter}
+      {#if selectedCharacter && !$mapEditorMode}
         <CharacterAttributesHud
           level={currentPlayerLevel ?? selectedCharacter.level}
           currentXp={currentPlayerTotalXp ?? selectedCharacter.xp}

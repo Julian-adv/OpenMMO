@@ -4,6 +4,7 @@ import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import type { TerrainSplatManager } from '../managers/terrainSplatManager'
 import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
+import type { ZoneManager, ZoneData } from '../managers/zoneManager'
 
 export interface HoveredCell {
   tileX: number
@@ -30,7 +31,7 @@ export type BrushMode = 'raise' | 'lower' | 'flatten'
 export const brushMode = writable<BrushMode>('raise')
 
 // Editor tool selection
-export type EditorTool = 'height' | 'splat'
+export type EditorTool = 'height' | 'splat' | 'zone'
 export const editorTool = writable<EditorTool>('height')
 
 // Splat layer: 0=R, 1=G, 2=B, 3=A (texture depends on region)
@@ -105,3 +106,28 @@ export const editorSplatManager = writable<TerrainSplatManager | null>(null)
 export const editorGrassDataManager = writable<TerrainGrassDataManager | null>(
   null
 )
+
+// Zone editor stores
+export type ZoneSubTool = 'noSpawn' | 'spawn'
+export const zoneSubTool = writable<ZoneSubTool>('noSpawn')
+export const zoneDrawStart = writable<{ x: number; z: number } | null>(null)
+export const editorZoneManager = writable<ZoneManager | null>(null)
+
+// Current region's zone data — shared between ZoneBrushPanel and ZoneOverlay
+export const currentZoneData = writable<ZoneData>({
+  monsterSpawns: [],
+  noSpawnZones: [],
+})
+
+// Spawn zone form values (shared between panel and cursor)
+export const spawnFormMonsterType = writable('scp939')
+export const spawnFormMaxPerPlayer = writable(3)
+export const spawnFormMaxTotal = writable(10)
+export const spawnFormIntervalSecs = writable(30)
+export const noSpawnFormLabel = writable('')
+
+// Hovered zone in panel list: { type: 'noSpawn' | 'spawn', index: number } or null
+export const hoveredZoneIndex = writable<{
+  type: 'noSpawn' | 'spawn'
+  index: number
+} | null>(null)

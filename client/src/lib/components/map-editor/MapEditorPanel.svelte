@@ -6,6 +6,7 @@
   import { tileToRegion } from '../../managers/terrainMetaManager'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
+  import ZoneBrushPanel from './ZoneBrushPanel.svelte'
 
   function getPlayerRegion(): { rx: number; rz: number } | null {
     const info = get(playerDebugInfo)
@@ -45,14 +46,21 @@
       onclick={() => editorTool.set('splat')}
     >Splat</button>
     <button
+      class="tool-tab"
+      class:active={$editorTool === 'zone'}
+      onclick={() => editorTool.set('zone')}
+    >Zone</button>
+    <button
       class="tool-tab generate-btn"
       onclick={openGenerateDialog}
     >Generate</button>
   </div>
   {#if $editorTool === 'height'}
     <HeightBrushPanel />
-  {:else}
+  {:else if $editorTool === 'splat'}
     <SplatBrushPanel />
+  {:else if $editorTool === 'zone'}
+    <ZoneBrushPanel />
   {/if}
 </div>
 
