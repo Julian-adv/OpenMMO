@@ -9,6 +9,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use crate::llm_scheduler::{LlmPriority, LlmScheduler};
+use crate::orchestrator::ScheduleEntry;
 use crate::state::SharedState;
 
 /// Trait for LLM backends that can send a prompt and return a text response.
@@ -334,12 +335,19 @@ pub fn build_prompt(
     state: &SharedState,
     events: &[ServerMessage],
     agent_events: &[String],
+    schedule: &[ScheduleEntry],
+    active_schedule_idx: Option<usize>,
 ) -> String {
     let mut prompt = String::new();
 
     prompt.push_str("=== CURRENT STATE ===\n");
     prompt.push_str(&state.format_world_state());
     prompt.push('\n');
+
+    if let Some(ctx) = format_schedule_context(schedule, active_schedule_idx) {
+        prompt.push_str(&ctx);
+        prompt.push('\n');
+    }
 
     let has_server_events = events.iter().any(|e| format_event(state, e).is_some());
     if has_server_events || !agent_events.is_empty() {
@@ -368,6 +376,60 @@ pub struct DriverConfig {
     pub debounce: Duration,
     pub idle_interval: Duration,
     pub activity_window: Duration,
+    pub schedule: Vec<ScheduleEntry>,
+}
+
+/// Resolve which schedule entry is currently active based on game time.
+/// Returns the index of the matching entry, or None if no entry matches.
+/// Conditions are pre-validated at load time via `ScheduleEntry::parse_condition`.
+fn resolve_active_schedule(
+    schedule: &[ScheduleEntry],
+    is_night: Option<bool>,
+    game_hour: Option<u32>,
+    game_minute: Option<u32>,
+) -> Option<usize> {
+    use crate::orchestrator::ScheduleCondition;
+
+    let mut best: Option<usize> = None;
+
+    for (i, entry) in schedule.iter().enumerate() {
+        let condition = match entry.condition.as_ref() {
+            Some(c) => c,
+            None => continue,
+        };
+        let matched = match condition {
+            ScheduleCondition::Day => is_night == Some(false),
+            ScheduleCondition::Night => is_night == Some(true),
+            ScheduleCondition::Time {
+                hour: eh,
+                minute: em,
+            } => match (game_hour, game_minute) {
+                (Some(gh), Some(gm)) => gh * 60 + gm >= eh * 60 + em,
+                _ => false,
+            },
+        };
+
+        if matched {
+            best = Some(i);
+        }
+    }
+
+    best
+}
+
+/// Format current schedule context for inclusion in LLM prompts.
+fn format_schedule_context(
+    schedule: &[ScheduleEntry],
+    active_idx: Option<usize>,
+) -> Option<String> {
+    let entry = &schedule[active_idx?];
+    Some(format!(
+        "Schedule: go to {} at ({:.1}, {:.1}, {:.1})",
+        entry.display_label(),
+        entry.pos[0],
+        entry.pos[1],
+        entry.pos[2]
+    ))
 }
 
 /// The main LLM agent driver loop. Runs as a tokio task.
@@ -388,6 +450,7 @@ pub async fn llm_driver(
         debounce,
         idle_interval,
         activity_window,
+        schedule,
     } = config;
     let urgent_notify = {
         let s = state.lock().await;
@@ -424,12 +487,27 @@ pub async fn llm_driver(
     let mut last_activity_at = Instant::now() - idle_interval;
     // Track the highest urgency since the last prompt
     let mut pending_urgency = LlmPriority::Idle;
+    let mut active_schedule_idx: Option<usize> = None;
+
+    // Execute initial schedule move (go to correct position for current time)
+    if !schedule.is_empty() {
+        // Wait for first GameTimeSync to arrive (up to 10s)
+        for _ in 0..20 {
+            let has_time = { state.lock().await.is_night.is_some() };
+            if has_time {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+        active_schedule_idx =
+            check_schedule_transition(&state, &schedule, active_schedule_idx, &label).await;
+    }
 
     // Send initial world state via scheduler (blocking is fine here, no combat yet)
     let initial_prompt = {
         let mut s = state.lock().await;
         let agent_events = s.drain_agent_events();
-        build_prompt(&*s, &[], &agent_events)
+        build_prompt(&*s, &[], &agent_events, &schedule, active_schedule_idx)
     };
     info!("[{label}] LLM driver: sending initial world state");
     match scheduler
@@ -475,6 +553,12 @@ pub async fn llm_driver(
         if attack_target.is_some() && last_attack_at.elapsed() >= attack_cooldown {
             attack_target = tick_combat(&state, attack_target.unwrap()).await;
             last_attack_at = Instant::now();
+        }
+
+        // === Check schedule transitions ===
+        if !schedule.is_empty() && attack_target.is_none() {
+            active_schedule_idx =
+                check_schedule_transition(&state, &schedule, active_schedule_idx, &label).await;
         }
 
         // === Check if LLM response arrived ===
@@ -542,7 +626,7 @@ pub async fn llm_driver(
                 .map(|e| LlmPriority::from(s.classify_event(e)))
                 .fold(pending_urgency, std::cmp::min);
 
-            let prompt = build_prompt(&*s, &events, &agent_events);
+            let prompt = build_prompt(&*s, &events, &agent_events, &schedule, active_schedule_idx);
             (prompt, has_events, max_urgency)
         };
         pending_urgency = LlmPriority::Idle; // reset for next cycle
@@ -838,7 +922,7 @@ async fn handle_response(
                 resolve_move_goal(x, z, direction, distance, pp)
             };
             if let Some((gx, gz)) = goal {
-                match execute_move(state, gx, gz).await {
+                match execute_move(state, gx, gz, 0).await {
                     MoveResult::Arrived => {
                         info!("Agent arrived at ({gx:.1}, {gz:.1})");
                     }
@@ -899,14 +983,83 @@ enum MoveResult {
 /// Maximum distance per move step (units). Longer segments are subdivided
 /// so the NPC walks at MOVE_SPEED instead of teleporting.
 const MAX_STEP_DIST: f32 = 3.0;
+const SCHEDULE_ARRIVAL_RADIUS: f32 = 2.0;
+
+/// Check if the active schedule entry changed and execute a move if needed.
+/// Returns the new active schedule index.
+async fn check_schedule_transition(
+    state: &Arc<Mutex<SharedState>>,
+    schedule: &[ScheduleEntry],
+    current_idx: Option<usize>,
+    label: &str,
+) -> Option<usize> {
+    let (is_night, game_hour, game_minute) = { state.lock().await.time_context() };
+    let new_idx = resolve_active_schedule(schedule, is_night, game_hour, game_minute);
+    if new_idx != current_idx {
+        if let Some(i) = new_idx {
+            let entry = &schedule[i];
+            info!(
+                "[{label}] Schedule transition: moving to {}",
+                entry.display_label()
+            );
+            execute_schedule_move(state, entry).await;
+        }
+    }
+    new_idx
+}
+
+/// Walk to a schedule entry's position and set the final rotation.
+async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
+    let (x, y, z) = (entry.pos[0], entry.pos[1], entry.pos[2]);
+
+    // Check if we're already near the target
+    {
+        let s = state.lock().await;
+        if let Some(ref p) = s.self_player {
+            let dx = x - p.position.x;
+            let dz = z - p.position.z;
+            if (dx * dx + dz * dz).sqrt() < SCHEDULE_ARRIVAL_RADIUS {
+                return;
+            }
+        }
+    }
+
+    match execute_move(state, x, z, entry.floor_level).await {
+        MoveResult::Arrived => {
+            // Send final position with exact rotation
+            let rot_rad = entry.rotation.to_radians();
+            let mut s = state.lock().await;
+            s.self_floor_level = entry.floor_level;
+            let cmd = ClientMessage::PlayerMove {
+                position: onlinerpg_shared::Position { x, y, z },
+                rotation: rot_rad,
+                floor_level: entry.floor_level as i8,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send schedule rotation: {e}");
+            }
+        }
+        MoveResult::Blocked => {
+            warn!("Schedule move blocked — cannot reach ({x:.1}, {z:.1})");
+        }
+        MoveResult::Error => {
+            error!("Schedule move error");
+        }
+    }
+}
 
 /// Execute a move to the target position using A* pathfinding.
 /// Follows waypoints sequentially with appropriate timing, subdividing
 /// long segments so the NPC never teleports.
-async fn execute_move(state: &Arc<Mutex<SharedState>>, goal_x: f32, goal_z: f32) -> MoveResult {
+async fn execute_move(
+    state: &Arc<Mutex<SharedState>>,
+    goal_x: f32,
+    goal_z: f32,
+    goal_floor: u8,
+) -> MoveResult {
     let path_result = {
         let s = state.lock().await;
-        s.find_path_to(goal_x, goal_z, 0)
+        s.find_path_to(goal_x, goal_z, goal_floor)
     };
 
     if path_result.waypoints.is_empty() {

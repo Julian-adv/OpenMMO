@@ -2,6 +2,15 @@ use crate::types::{MonsterState, Position, ServerMessage};
 use tracing::{info, warn};
 
 impl super::GameState {
+    fn find_spawn_rule(
+        &self,
+        monster_type: &str,
+    ) -> Option<&crate::world_config::MonsterSpawnRule> {
+        self.spawn_rules
+            .iter()
+            .find(|r| r.monster_type == monster_type)
+    }
+
     /// Create a monster, broadcast to all, and return it (or None if limit reached).
     pub async fn spawn_monster(
         &self,
@@ -10,6 +19,43 @@ impl super::GameState {
         rotation: f32,
         owner_id: Option<String>,
     ) -> Option<crate::types::Monster> {
+        let max_total = crate::world_config::world_config().max_monsters_total as usize;
+        let max_per_player = self
+            .find_spawn_rule(&monster_type)
+            .map(|r| r.max_per_player as usize);
+
+        // Read lock: single-pass check of both global and per-player limits
+        {
+            let monsters = self.monsters.read().await;
+            let mut alive_count = 0usize;
+            let mut owned_alive = 0usize;
+            for m in monsters.values() {
+                if m.state != MonsterState::Dead {
+                    alive_count += 1;
+                    if let Some(ref owner) = owner_id {
+                        if m.owner_id.as_deref() == Some(owner.as_str())
+                            && m.monster_type == monster_type
+                        {
+                            owned_alive += 1;
+                        }
+                    }
+                }
+            }
+            if alive_count >= max_total {
+                warn!("Monster spawn rejected: limit reached ({})", alive_count);
+                return None;
+            }
+            if let Some(max) = max_per_player {
+                if owned_alive >= max {
+                    warn!(
+                        "Monster spawn rejected: player {:?} already owns {} alive {}",
+                        owner_id, owned_alive, monster_type
+                    );
+                    return None;
+                }
+            }
+        }
+
         let owner_number = match owner_id.as_deref() {
             Some(owner_id) => self.get_or_assign_player_number(owner_id).await,
             None => 0,
@@ -21,13 +67,6 @@ impl super::GameState {
             *counter
         };
         let id = format!("m{}_{}", owner_number, spawn_count);
-
-        let mut monsters = self.monsters.write().await;
-        let max_total = crate::world_config::world_config().max_monsters_total as usize;
-        if monsters.len() >= max_total {
-            warn!("Monster spawn rejected: limit reached ({})", monsters.len());
-            return None;
-        }
 
         let def = self.monster_defs.get(&monster_type);
         let health = def.map(|d| d.health).unwrap_or(10);
@@ -43,13 +82,15 @@ impl super::GameState {
             last_attack_at: 0,
         };
 
+        let mut monsters = self.monsters.write().await;
         monsters.insert(id.clone(), monster.clone());
+        let alive = monsters
+            .values()
+            .filter(|m| m.state != MonsterState::Dead)
+            .count();
         info!(
-            "Spawned monster {} [owner #{}, spawn #{}] (Total: {})",
-            id,
-            owner_number,
-            spawn_count,
-            monsters.len()
+            "Spawned monster {} [owner #{}, spawn #{}] (Alive: {})",
+            id, owner_number, spawn_count, alive
         );
 
         self.broadcast(
@@ -189,18 +230,15 @@ impl super::GameState {
 
     /// Validate that a spawn position is within the allowed radius for this monster type.
     pub fn validate_spawn_position(&self, monster_type: &str, position: &Position) -> bool {
-        for rule in &self.spawn_rules {
-            if rule.monster_type == monster_type {
-                let dx = position.x - rule.spawn_center.x;
-                let dz = position.z - rule.spawn_center.z;
-                let dist_sq = dx * dx + dz * dz;
-                // 10% tolerance for floating-point imprecision
-                let max_dist = rule.spawn_radius * 1.1;
-                if dist_sq <= max_dist * max_dist {
-                    return true;
-                }
-            }
+        if let Some(rule) = self.find_spawn_rule(monster_type) {
+            let dx = position.x - rule.spawn_center.x;
+            let dz = position.z - rule.spawn_center.z;
+            let dist_sq = dx * dx + dz * dz;
+            // 10% tolerance for floating-point imprecision
+            let max_dist = rule.spawn_radius * 1.1;
+            dist_sq <= max_dist * max_dist
+        } else {
+            false
         }
-        false
     }
 }

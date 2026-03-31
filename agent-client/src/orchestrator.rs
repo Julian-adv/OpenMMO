@@ -26,6 +26,69 @@ use crate::{fnv1a_hash, LlmType};
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 
+/// Parsed schedule condition (validated at load time).
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScheduleCondition {
+    Day,
+    Night,
+    Time { hour: u32, minute: u32 },
+}
+
+/// A single schedule entry: go to a position at a specific time condition.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ScheduleEntry {
+    /// When to activate: "day", "night", or "H:MM" / "HH:MM" (game time).
+    pub at: String,
+    /// Target position [x, y, z].
+    pub pos: [f32; 3],
+    /// Facing rotation in degrees.
+    #[serde(default)]
+    pub rotation: f32,
+    /// Floor level (0 = ground, 1 = 2nd floor, etc.).
+    #[serde(default)]
+    pub floor_level: u8,
+    /// Human-readable label for LLM prompt context.
+    pub label: Option<String>,
+    /// Parsed condition (set after deserialization).
+    #[serde(skip)]
+    pub condition: Option<ScheduleCondition>,
+}
+
+impl ScheduleEntry {
+    pub fn display_label(&self) -> &str {
+        self.label.as_deref().unwrap_or("schedule position")
+    }
+
+    /// Parse the `at` field into a `ScheduleCondition`. Returns error for invalid formats.
+    pub fn parse_condition(&mut self) -> Result<(), String> {
+        self.condition = Some(match self.at.as_str() {
+            "day" => ScheduleCondition::Day,
+            "night" => ScheduleCondition::Night,
+            time_str => {
+                let (h, m) = time_str
+                    .split_once(':')
+                    .ok_or_else(|| format!("invalid schedule condition: {time_str}"))?;
+                let hour = h
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| format!("invalid hour in: {time_str}"))?;
+                let minute = m
+                    .trim()
+                    .parse::<u32>()
+                    .map_err(|_| format!("invalid minute in: {time_str}"))?;
+                ScheduleCondition::Time { hour, minute }
+            }
+        });
+        Ok(())
+    }
+}
+
+/// Wrapper for deserializing a schedule file.
+#[derive(Debug, Deserialize)]
+struct ScheduleFile {
+    schedule: Vec<ScheduleEntry>,
+}
+
 /// Per-NPC configuration.
 #[derive(Debug, Clone, Deserialize)]
 pub struct NpcConfig {
@@ -33,7 +96,6 @@ pub struct NpcConfig {
     pub password: String,
     #[serde(default)]
     pub create_account: bool,
-    pub character_id: Option<i64>,
     #[serde(default)]
     pub llm: LlmType,
     #[serde(default = "super::default_min_interval_secs")]
@@ -65,6 +127,8 @@ pub struct NpcConfig {
     pub instance_prompt: Option<String>,
     /// Path to memory file (accumulated experiences, auto-updated by LLM).
     pub memory_file: Option<String>,
+    /// Path to schedule file (time-based positioning).
+    pub schedule_file: Option<String>,
 }
 
 /// Resources shared across all NPC connections.
@@ -230,9 +294,7 @@ async fn run_npc_session(
     }
 
     let llm_enabled = npc.llm != LlmType::None;
-    let enter_char_id = if let Some(char_id) = npc.character_id {
-        Some(char_id)
-    } else if llm_enabled {
+    let enter_char_id = if llm_enabled {
         characters.first().map(|c| c.id)
     } else {
         None
@@ -494,6 +556,46 @@ fn spawn_llm_task(
 
     let state = Arc::clone(state);
     let scheduler = scheduler.clone();
+    let schedule = if let Some(ref path) = npc.schedule_file {
+        match std::fs::read_to_string(path) {
+            Ok(content) => match toml::from_str::<ScheduleFile>(&content) {
+                Ok(mut f) => {
+                    // Validate all conditions at load time
+                    let mut valid = true;
+                    for entry in &mut f.schedule {
+                        if let Err(e) = entry.parse_condition() {
+                            error!("[{}] Schedule entry error: {e}", npc.account);
+                            valid = false;
+                        }
+                    }
+                    if valid {
+                        info!(
+                            "[{}] Loaded {} schedule entries from {path}",
+                            npc.account,
+                            f.schedule.len()
+                        );
+                        f.schedule
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Err(e) => {
+                    error!(
+                        "[{}] Failed to parse schedule file {path}: {e}",
+                        npc.account
+                    );
+                    Vec::new()
+                }
+            },
+            Err(e) => {
+                error!("[{}] Failed to read schedule file {path}: {e}", npc.account);
+                Vec::new()
+            }
+        }
+    } else {
+        Vec::new()
+    };
+
     let driver_config = driver::DriverConfig {
         label: npc.account.clone(),
         memory_file: npc.memory_file.clone(),
@@ -501,6 +603,7 @@ fn spawn_llm_task(
         debounce,
         idle_interval,
         activity_window,
+        schedule,
     };
     Some(tokio::spawn(async move {
         driver::llm_driver(state, invoker, scheduler, driver_config).await;

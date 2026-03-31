@@ -106,6 +106,12 @@ pub struct SharedState {
     pub height_sampler: Arc<HeightSampler>,
     /// Shared world cache: passability + houses (shared across NPC connections)
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
+    /// Current game time: is_night flag from server
+    pub is_night: Option<bool>,
+    /// Current game hour (0-23)
+    pub game_hour: Option<u32>,
+    /// Current game minute (0-59)
+    pub game_minute: Option<u32>,
     /// Current floor level for the agent
     pub self_floor_level: u8,
     cmd_tx: mpsc::Sender<ClientMessage>,
@@ -139,6 +145,9 @@ impl SharedState {
             agent_events: Vec::new(),
             height_sampler,
             world_cache,
+            is_night: None,
+            game_hour: None,
+            game_minute: None,
             self_floor_level: 0,
             cmd_tx,
             urgent_notify: Arc::new(Notify::new()),
@@ -498,8 +507,26 @@ impl SharedState {
                 self.latest_player_moves.insert(player_id.clone(), msg);
                 return urgency;
             }
-            ServerMessage::GameTimeSync { .. } => {
+            ServerMessage::GameTimeSync { datetime, is_night } => {
+                let prev_night = self.is_night;
+                let prev_hour = self.game_hour;
+                let hour = datetime.hour as u32;
+                let minute = datetime.minute as u32;
+                let night = *is_night;
+                self.is_night = Some(night);
+                self.game_hour = Some(hour);
+                self.game_minute = Some(minute);
                 self.latest_time = Some(msg);
+                // Detect day/night transition or hour change → wake driver
+                if (prev_night.is_some() && prev_night != self.is_night)
+                    || (prev_hour.is_some() && prev_hour != self.game_hour)
+                {
+                    self.agent_events.push(format!(
+                        "[TimeChange] It is now {hour:02}:{minute:02} ({}).",
+                        if night { "night" } else { "day" }
+                    ));
+                    self.urgent_notify.notify_one();
+                }
                 return urgency;
             }
             _ => {}
@@ -597,6 +624,11 @@ impl SharedState {
     /// Push a synthetic agent event visible to the LLM.
     pub fn push_agent_event(&mut self, event: String) {
         self.agent_events.push(event);
+    }
+
+    /// Current game time snapshot for schedule resolution.
+    pub fn time_context(&self) -> (Option<bool>, Option<u32>, Option<u32>) {
+        (self.is_night, self.game_hour, self.game_minute)
     }
 
     /// Build a text summary of current world state for the LLM prompt.

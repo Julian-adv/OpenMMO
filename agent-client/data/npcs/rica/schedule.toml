@@ -1,0 +1,13 @@
+[[schedule]]
+at = "day"
+pos = [-1536.3, 9.8, 476.5]
+rotation = 21.6
+floor_level = 0
+label = "market stall on ground floor"
+
+[[schedule]]
+at = "night"
+pos = [-1534.5, 13.0, 473.0]
+rotation = -70.0
+floor_level = 1
+label = "bedroom on 2nd floor"

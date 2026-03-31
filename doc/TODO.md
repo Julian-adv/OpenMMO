@@ -40,7 +40,8 @@
 - 장비한 갑옷에 따른 외형 변화
 - chatting tab for combat log
 - change name of scp939
-
+- go straight if there is no obstacle
+- don't equip sword if she is a merchant
 
 # 폐지
 

@@ -54,6 +54,7 @@ data/housing/
 server/data/game_data.db
 agent-client/data/config.toml
 agent-client/data/prompts/memory/
+agent-client/data/npcs/**/memory.txt
 
 # Claude Code (keep agents and commands for sharing)
 .claude/*
