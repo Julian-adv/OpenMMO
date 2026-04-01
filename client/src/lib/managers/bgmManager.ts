@@ -23,6 +23,11 @@ const BGM_FILES = [
   'Grief in the Green Vale.mp3',
   'Lonely Banner on the Wind.mp3',
   'Triumphal Procession 2.mp3',
+  'Festival in the Lantern Square.mp3',
+  'Ruins Beneath the Black Moon.mp3',
+  'Dawn Watch at the Gate.mp3',
+  'Shadow Over the Village.mp3',
+  'Sunlit Shopfront Waltz.mp3',
 ]
 
 const BATTLE_BGM_FILES = [

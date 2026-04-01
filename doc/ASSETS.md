@@ -92,6 +92,8 @@
 - https://tangrams.github.io/heightmapper/#11.16667/34.4293/126.4164
 - export PATH="$HOME/.local/bin:$PATH" && rm -rf data/terrain/height/r*/h_*.bin && find data/terrain/height/ -type d -empty -delete 2>/dev/null; uv run --with Pillow --with numpy tools/import_heightmap.py     client/public/textures/height_map.png     --min-height -7 --max-height 60     --origin-tile -29 -31     --terrain-dir data/terrain
 
+- https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html
+
 # Blender
 
 - Use version 5.1.0
@@ -213,6 +215,31 @@ seamless loop, game BGM
 
   ```
   Blazing 80s-style anime score at high tempo: gated drums and a piercing synth lead open in unison, then electric guitar and string stabs carry a heroic melody, Arrangement swells with counter-melodies, modulated key changes, and tom fills that kick into half-time hits before racing back, Final act erupts into full orchestra with soaring brass fanfares, cymbal swells, and a massive choir carrying the main theme in stacked harmonies, ending on a held, radiant chord, orchestral, bright, anime
+  ```
+  
+- Festival in the Lantern Square
+  ```
+  dance, Bright medieval jig for game BGM; nimble lute carries the main melody with sprightly recorder answering in call-and-response phrases, Fiddle adds soaring embellishments, harp fills arpeggiated warmth under a steady hand-drum pulse and accented tambourine shakes, Arrangement cycles through two main themes with a lifted middle section; energy builds as more instruments join, then eases into a cozy reprise for looping in a lively town hub, warm, joyful, theme, medieval, harp
+  ```
+
+- Ruins Beneath the Black Moon
+  ```
+  Slow-burning orchestral score in a minor key: low strings and dark cello lead with a narrow, tense motif, joined by hushed, clustered choir harmonies that swell and recede, Subtle metallic percussion taps and distant hits mark the creeping advance, with eerie aleatoric whispers in the upper strings, Arrangement gradually thickens, then drops to a hushed, torchlit pulse before a final, ominous ascent, slow, theme, low, medieval, cello
+  ```
+
+- Dawn Watch at the Gate
+  ```
+  Bright orchestral march in a major key with bold trumpet fanfare, proud fife carrying the main melody, and warm arpeggiated lute underneath, Steady, moderate snare and field drum cadence keeps a heroic march feel, with occasional cymbal swells for sunrise moments, Secondary brass and horn countermelodies swell in the B section, then fall back to a simple, earnest reprise, Perfect loop point where the final cadence lands softly on strings and lute before the fanfare returns, bright, theme, warm, medieval, uplifting, simple
+  ```
+
+- Shadow Over the Village
+  ```
+  Dark orchestral score built around heavy war drums and thunderous timpani, dissonant low brass clusters, and tremolo strings rising in waves, Slow, stalking tempo that ramps aggressively, with chromatic descents in the orchestra under ominous bell motifs, Guttural low choirs blend into growling basses as ground-shaking footsteps enter, torches suggested by flickering high strings and eerie metallic hits, Final section swells into a crushing wall of sound that cuts abruptly, leaving a lingering low drone, theme, orchestral, medieval, deep, low
+  ```
+
+- Sunlit Shopfront Waltz
+  ```
+  folk, Warm acoustic lute-led fantasy waltz with gentle harp arpeggios, soft breathy recorder, and light pizzicato strings; tempo sways in a tender 3/4, Verses feel like shy, halting steps, with small pauses and rubato; main theme blossoms into a hopeful, singable hook that returns with subtle variations, Recorder carries the crush-melody in the upper register while lute and harp trade countermelodies; strings add playful, bouncing heartbeats and a nostalgic swell in the final refrain, Ideal for a cozy RPG town scene focused on innocent first love, wistful yet quietly joyful, medieval, playful, romantic, soft, acoustic, theme, nostalgic, light, beautiful, gentle, harp, heartfelt, warm
   ```
 
 ### Battle BGM
