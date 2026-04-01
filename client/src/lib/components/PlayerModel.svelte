@@ -16,7 +16,9 @@
   } from '../utils/characterAnimationUtils'
   import {
     CHARACTER_ANIMATION_PACK_PATHS,
+    WEAPON_MODEL_PATHS,
     getCharacterModelPath,
+    getWeaponType,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
   import type { CharacterClass } from '../network/networkTypes'
@@ -105,17 +107,17 @@
   let activeGltfData = $state<GLTF | null>(null)
   let locomotionGltfData = $state<GLTF | null>(null)
   let combatMeleeGltfData = $state<GLTF | null>(null)
-  let swordGltfData = $state<GLTF | null>(null)
+  let weaponGltfData = $state<GLTF | null>(null)
 
-  const hasSword = characterClass !== 'merchant' && characterClass !== 'guard'
+  const weaponType = getWeaponType(characterClass)
   const modelPath = getCharacterModelPath(characterClass)
   const modelPromise = loadGLB(modelPath).then((g) => { activeGltfData = g })
   const locomotionPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
   const combatMeleePromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
-  if (hasSword) {
-    loadGLB('/models/sword.glb').then((g) => { swordGltfData = g })
-  }
-  const glbReady = Promise.all([modelPromise, locomotionPromise, combatMeleePromise])
+  const weaponPromise = weaponType
+    ? loadGLB(WEAPON_MODEL_PATHS[weaponType]).then((g) => { weaponGltfData = g })
+    : Promise.resolve()
+  const glbReady = Promise.all([modelPromise, locomotionPromise, combatMeleePromise, weaponPromise])
 
   // Animation system - following gpt-all-in-one.html approach
   let mixer = $state<THREE.AnimationMixer | null>(null)
@@ -133,7 +135,7 @@
   let lastAttackCounter = $state(0)
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
-  let swordAttached = $state(false)
+  let weaponAttached = $state(false)
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
 
@@ -205,19 +207,19 @@
     return fallbackBone
   }
 
-  function tryAttachSword(characterRoot: THREE.Object3D): boolean {
-    if (!hasSword || swordAttached || !swordGltfData) return false
+  function tryAttachWeapon(characterRoot: THREE.Object3D): boolean {
+    if (!weaponType || weaponAttached || !weaponGltfData) return false
 
     const rightHandBone = findMainRightHandBone(characterRoot)
     if (!rightHandBone) {
-      console.warn('Could not find right hand bone for sword attachment')
+      console.warn('Could not find right hand bone for weapon attachment')
       return false
     }
 
-    const swordClone = swordGltfData.scene.clone()
-    rightHandBone.add(swordClone)
-    swordAttached = true
-    console.log('Sword attached successfully to', rightHandBone.name)
+    const weaponClone = weaponGltfData.scene.clone()
+    rightHandBone.add(weaponClone)
+    weaponAttached = true
+    console.log(`${weaponType} attached successfully to`, rightHandBone.name)
     return true
   }
 
@@ -308,10 +310,7 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      if (hasSword && !swordGltfData) {
-        console.log('Sword GLB not ready yet; will attach when loaded')
-      }
-      tryAttachSword(cloned)
+      tryAttachWeapon(cloned)
 
       const baseAnimations = getGltfAnimations(activeGltf)
       const locomotionAnimations = getGltfAnimations(locomotionGltfData)
@@ -436,15 +435,8 @@
       }
       clonedScene = null
       footOffsetApplied = false
-      swordAttached = false
+      weaponAttached = false
     }
-  })
-
-  $effect(() => {
-    if (!hasSword || swordAttached || !modelRoot || !swordGltfData) {
-      return
-    }
-    tryAttachSword(modelRoot)
   })
 
   export function getNametagGroup() {
