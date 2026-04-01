@@ -13,6 +13,8 @@ use tokio::sync::{mpsc, Notify};
 const MAX_EVENTS: usize = 200;
 /// Distance threshold for "player appeared nearby" agent events (in game units).
 const NEARBY_PLAYER_RADIUS: f32 = 10.0;
+/// Don't notify LLM about monster movement beyond 30 game units.
+const MONSTER_MOVE_NOTIFY_RADIUS_SQ: f32 = 30.0 * 30.0;
 
 /// How urgently an event needs LLM attention.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -506,8 +508,20 @@ impl SharedState {
 
         // Deduplicate high-frequency movement events: keep only latest per entity
         match &msg {
-            ServerMessage::MonsterMoved { monster_id, .. } => {
-                self.latest_monster_moves.insert(monster_id.clone(), msg);
+            ServerMessage::MonsterMoved {
+                monster_id,
+                position,
+                ..
+            } => {
+                // Only forward to LLM if monster is within notification radius
+                let dominated_by_distance = self.self_player.as_ref().is_some_and(|sp| {
+                    let dx = position.x - sp.position.x;
+                    let dz = position.z - sp.position.z;
+                    dx * dx + dz * dz > MONSTER_MOVE_NOTIFY_RADIUS_SQ
+                });
+                if !dominated_by_distance {
+                    self.latest_monster_moves.insert(monster_id.clone(), msg);
+                }
                 return urgency;
             }
             ServerMessage::PlayerMoved { player_id, .. } => {
