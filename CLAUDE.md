@@ -3,6 +3,7 @@
 - **Commit Workflow**: Always use the `commit-agent` skill when committing changes to ensure code quality checks.
 
 ## Engineering Principles
+- No fallbacks. Make it fail. So we can notice and fix it.
 - **Root Cause Analysis**: When fixing bugs, do not just fix the symptoms; find and address the root cause.
 - **Simplicity**: Favor simple, readable solutions over complex abstractions.
 

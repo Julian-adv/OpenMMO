@@ -417,7 +417,7 @@ async fn run_npc_session(
         }
     });
 
-    let llm_task = spawn_llm_task(npc, &state, &shared.scheduler);
+    let llm_task = spawn_llm_task(npc, &state, &shared.scheduler, server_url);
 
     // Monster AI tick task (1Hz)
     let state_for_ai = Arc::clone(&state);
@@ -543,6 +543,7 @@ fn spawn_llm_task(
     npc: &NpcConfig,
     state: &Arc<Mutex<SharedState>>,
     scheduler: &LlmScheduler,
+    server_url: &str,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let min_interval = Duration::from_secs(npc.min_interval_secs);
     let debounce = Duration::from_secs(npc.debounce_secs);
@@ -642,6 +643,24 @@ fn spawn_llm_task(
         Vec::new()
     };
 
+    // Derive HTTP API base URL from WebSocket URL.
+    // The terrain/housing REST API runs on game port + 1.
+    let api_base_url = {
+        let http_url = server_url
+            .replace("wss://", "https://")
+            .replace("ws://", "http://");
+        // Bump the port by 1 (e.g. ws://host:10015 → http://host:10016)
+        if let Some(colon_pos) = http_url.rfind(':') {
+            if let Ok(port) = http_url[colon_pos + 1..].parse::<u16>() {
+                format!("{}{}", &http_url[..colon_pos + 1], port + 1)
+            } else {
+                http_url
+            }
+        } else {
+            http_url
+        }
+    };
+
     let driver_config = driver::DriverConfig {
         label: npc.account.clone(),
         memory_file: npc.memory_file.clone(),
@@ -650,6 +669,7 @@ fn spawn_llm_task(
         idle_interval,
         activity_window,
         schedule,
+        api_base_url,
     };
     Some(tokio::spawn(async move {
         driver::llm_driver(state, invoker, scheduler, driver_config).await;

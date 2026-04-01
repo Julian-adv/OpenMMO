@@ -1,8 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
+use onlinerpg_shared::housing::HouseData;
 use onlinerpg_shared::{ClientMessage, ServerMessage};
 use serde::Deserialize;
 use tokio::sync::Mutex;
@@ -11,6 +12,9 @@ use tracing::{debug, error, info, warn};
 use crate::llm_scheduler::{LlmPriority, LlmScheduler};
 use crate::orchestrator::ScheduleEntry;
 use crate::state::SharedState;
+
+/// Housing chunk size in world units (must match server's CHUNK_SIZE).
+const HOUSING_CHUNK_SIZE: f32 = 64.0;
 
 /// Trait for LLM backends that can send a prompt and return a text response.
 #[async_trait]
@@ -377,6 +381,8 @@ pub struct DriverConfig {
     pub idle_interval: Duration,
     pub activity_window: Duration,
     pub schedule: Vec<ScheduleEntry>,
+    /// HTTP base URL for the game server API (e.g. "http://127.0.0.1:10015").
+    pub api_base_url: String,
 }
 
 /// Resolve which schedule entry is currently active based on game time.
@@ -466,6 +472,7 @@ pub async fn llm_driver(
         idle_interval,
         activity_window,
         schedule,
+        api_base_url,
     } = config;
     let urgent_notify = {
         let s = state.lock().await;
@@ -514,6 +521,11 @@ pub async fn llm_driver(
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
+
+        // Fetch housing data so pathfinding avoids buildings
+        let world_cache = { Arc::clone(&state.lock().await.world_cache) };
+        fetch_houses_for_schedule(&world_cache, &schedule, &api_base_url, &label).await;
+
         active_schedule =
             check_schedule_transition(&state, &schedule, active_schedule, &label).await;
     }
@@ -1157,6 +1169,76 @@ async fn execute_move(
     }
 
     MoveResult::Arrived
+}
+
+/// Insert a position's chunk and its 8 neighbors into the set.
+fn insert_chunk_neighbors(chunks: &mut HashSet<(i32, i32)>, x: f32, z: f32) {
+    let cx = (x / HOUSING_CHUNK_SIZE).floor() as i32;
+    let cz = (z / HOUSING_CHUNK_SIZE).floor() as i32;
+    for dx in -1..=1i32 {
+        for dz in -1..=1i32 {
+            chunks.insert((cx + dx, cz + dz));
+        }
+    }
+}
+
+/// Fetch houses from the HTTP API for all chunks that the schedule positions
+/// and waypoints pass through, so pathfinding can avoid buildings.
+async fn fetch_houses_for_schedule(
+    world_cache: &Arc<std::sync::RwLock<crate::state::WorldCache>>,
+    schedule: &[ScheduleEntry],
+    api_base_url: &str,
+    label: &str,
+) {
+    let mut chunks = HashSet::new();
+    for entry in schedule {
+        insert_chunk_neighbors(&mut chunks, entry.pos[0], entry.pos[2]);
+        for wp in &entry.waypoints {
+            insert_chunk_neighbors(&mut chunks, wp[0], wp[2]);
+        }
+    }
+
+    debug!(
+        "[{label}] Fetching houses for {} chunk(s): {:?}",
+        chunks.len(),
+        chunks
+    );
+    let client = reqwest::Client::new();
+    let fetches = chunks.iter().map(|&(cx, cz)| {
+        let client = &client;
+        let url = format!("{api_base_url}/api/housing/area/{cx}/{cz}");
+        async move {
+            match client.get(&url).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    resp.json::<Vec<HouseData>>().await.unwrap_or_default()
+                }
+                Ok(resp) => {
+                    warn!(
+                        "[{label}] Housing API returned {} for chunk ({cx},{cz})",
+                        resp.status()
+                    );
+                    Vec::new()
+                }
+                Err(e) => {
+                    warn!("[{label}] Failed to fetch houses for chunk ({cx},{cz}): {e}");
+                    Vec::new()
+                }
+            }
+        }
+    });
+    let results = futures_util::future::join_all(fetches).await;
+
+    let all_houses: Vec<HouseData> = results.into_iter().flatten().collect();
+    if all_houses.is_empty() {
+        info!("[{label}] No houses found in any chunk");
+    } else {
+        let count = all_houses.len();
+        let mut world = world_cache.write().unwrap();
+        for house in all_houses {
+            world.add_house(house);
+        }
+        info!("[{label}] Loaded {count} house(s) for pathfinding");
+    }
 }
 
 /// If the agent is too far from the target monster, return a PlayerMove command

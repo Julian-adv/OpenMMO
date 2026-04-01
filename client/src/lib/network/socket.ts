@@ -166,6 +166,8 @@ class NetworkManager {
       )
       this.reconnectTimer = setTimeout(async () => {
         this.reconnectTimer = null
+        monsterManager.reset()
+        remotePlayerManager.reset()
         this.connect()
         if (
           this.lastAccountName &&
