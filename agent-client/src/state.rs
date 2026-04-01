@@ -3,8 +3,8 @@ use std::collections::{HashMap, HashSet};
 use crate::monster_ai::MonsterAiManager;
 use onlinerpg_shared::housing::{HouseData, WallDirection};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
-use onlinerpg_shared::{NoSpawnZone, Position};
 use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
+use onlinerpg_shared::{NoSpawnZone, Position};
 use onlinerpg_terrain::height::HeightSampler;
 use rand::Rng;
 use std::sync::Arc;
@@ -384,9 +384,7 @@ impl SharedState {
                 max_x,
                 max_z,
             } => {
-                if let Some(pos) =
-                    self.find_valid_spawn_position(*min_x, *min_z, *max_x, *max_z)
-                {
+                if let Some(pos) = self.find_valid_spawn_position(*min_x, *min_z, *max_x, *max_z) {
                     let mut rng = rand::thread_rng();
                     let rotation = rng.gen_range(0.0..std::f32::consts::TAU);
                     self.pending_commands

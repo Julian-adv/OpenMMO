@@ -4,6 +4,7 @@ export const WARRIOR_CHARACTER_MODEL_PATH = '/models/female_knight.glb'
 export const KNIGHT_CHARACTER_MODEL_PATH = '/models/knight.glb'
 export const THIEF_CHARACTER_MODEL_PATH = '/models/female_thief.glb'
 export const MERCHANT_CHARACTER_MODEL_PATH = '/models/npc_woman.glb'
+export const GUARD_CHARACTER_MODEL_PATH = '/models/guard.glb'
 
 export const CHARACTER_ANIMATION_PACK_PATHS = {
   locomotion: '/models/animations/locomotion.glb',
@@ -18,6 +19,8 @@ export function getCharacterModelPath(characterClass: CharacterClass): string {
       return THIEF_CHARACTER_MODEL_PATH
     case 'merchant':
       return MERCHANT_CHARACTER_MODEL_PATH
+    case 'guard':
+      return GUARD_CHARACTER_MODEL_PATH
     default:
       return KNIGHT_CHARACTER_MODEL_PATH
   }

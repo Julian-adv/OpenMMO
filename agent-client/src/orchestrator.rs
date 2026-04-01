@@ -243,6 +243,30 @@ async fn run_npc_session(
         }
     };
 
+    // --- Delete characters whose class doesn't match the configured class ---
+    if let Some(ref class_cfg) = npc.character_class {
+        let desired = onlinerpg_shared::CharacterClass::from_str_or_default(class_cfg);
+        for c in characters.iter().filter(|c| c.class != desired) {
+            info!(
+                "[{}] Deleting character '{}' (id={}, {:?}) — class mismatch (want {:?})",
+                npc.account, c.name, c.id, c.class, desired
+            );
+            ws::send(
+                &mut ws_tx,
+                &ClientMessage::DeleteCharacter { character_id: c.id },
+            )
+            .await?;
+            ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterDeleted", |msg| {
+                matches!(
+                    msg,
+                    ServerMessage::CharacterDeleted { .. } | ServerMessage::CharacterError { .. }
+                )
+            })
+            .await?;
+        }
+        characters.retain(|c| c.class == desired);
+    }
+
     // --- Auto-create character if needed ---
     if characters.is_empty() {
         if let Some(ref char_name) = npc.character_name {

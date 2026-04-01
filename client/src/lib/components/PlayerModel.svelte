@@ -107,7 +107,7 @@
   let combatMeleeGltfData = $state<GLTF | null>(null)
   let swordGltfData = $state<GLTF | null>(null)
 
-  const hasSword = characterClass !== 'merchant'
+  const hasSword = characterClass !== 'merchant' && characterClass !== 'guard'
   const modelPath = getCharacterModelPath(characterClass)
   const modelPromise = loadGLB(modelPath).then((g) => { activeGltfData = g })
   const locomotionPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
