@@ -43,6 +43,7 @@
 - change name of scp939
 - go straight if there is no obstacle
 - don't equip sword if she is a merchant
+- house has no shadow
 
 # 폐지
 

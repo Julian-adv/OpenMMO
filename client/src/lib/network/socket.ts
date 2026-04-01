@@ -1,4 +1,5 @@
 import type { Position } from './networkTypes'
+import { hmrSingleton } from '../utils/hmr'
 import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
 import { gameStore, resetGameStore } from '../stores/gameStore'
@@ -715,11 +716,7 @@ class NetworkManager {
   }
 }
 
-export const networkManager: NetworkManager =
-  import.meta.hot?.data?.networkManager ?? new NetworkManager()
-
-if (import.meta.hot) {
-  import.meta.hot.dispose((data) => {
-    data.networkManager = networkManager
-  })
-}
+export const networkManager = hmrSingleton(
+  'networkManager',
+  () => new NetworkManager()
+)

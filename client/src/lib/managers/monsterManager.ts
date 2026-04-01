@@ -1,4 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity'
+import { hmrSingleton } from '../utils/hmr'
 import * as THREE from 'three'
 import { networkManager } from '../network/socket'
 import { get } from 'svelte/store'
@@ -468,4 +469,7 @@ class MonsterManager {
   }
 }
 
-export const monsterManager = new MonsterManager()
+export const monsterManager = hmrSingleton(
+  'monsterManager',
+  () => new MonsterManager()
+)

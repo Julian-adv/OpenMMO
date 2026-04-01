@@ -1,4 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity'
+import { hmrSingleton } from '../utils/hmr'
 import {
   calculateMovementStep,
   initMovementState,
@@ -292,4 +293,7 @@ class PlayerStateManager {
   }
 }
 
-export const remotePlayerManager = new PlayerStateManager()
+export const remotePlayerManager = hmrSingleton(
+  'remotePlayerManager',
+  () => new PlayerStateManager()
+)
