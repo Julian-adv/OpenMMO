@@ -60,7 +60,7 @@
       class:active={activeTab === 'say'}
       onclick={() => (activeTab = 'say')}
     >
-      Say
+      Chat
     </button>
     <button
       class="tab"
