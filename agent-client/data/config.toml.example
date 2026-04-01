@@ -56,14 +56,14 @@ system_prompt_file = "data/system_prompt.txt"
 [[npcs]]
 account = "npc_guard"
 password = ""
-character_name = "Karen"                          # Auto-creates character if account has none
+character_name = "Karl"                           # Auto-creates character if account has none
 character_class = "knight"                              # Class for auto-creation (default: knight)
 llm = "openrouter"
 
 # 3-tier prompt system (overrides backend system_prompt_file when set):
 template_prompt = "data/templates/guard.txt"             # Role-specific behavior rules (shared)
-instance_prompt = "data/npcs/karen/instance.txt"        # Individual NPC personality
-memory_file = "data/npcs/karen/memory.txt"              # Accumulated experiences (auto-updated)
+instance_prompt = "data/npcs/karl/instance.txt"         # Individual NPC personality
+memory_file = "data/npcs/karl/memory.txt"               # Accumulated experiences (auto-updated)
 
 # Per-NPC timing overrides (optional, defaults shown above)
 # min_interval_secs = 5

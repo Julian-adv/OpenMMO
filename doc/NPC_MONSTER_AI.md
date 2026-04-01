@@ -58,8 +58,8 @@ Orchestrator Process
 | 계층 | 파일 | 내용 | 갱신 |
 |------|------|------|------|
 | Template | `templates/guard.txt` | 역할 공통 프롬프트 (경비병의 일반 행동 규칙) | 개발자가 수동 |
-| Instance | `instances/karen.txt` | 개체 고유 정보 (이름, 나이, 성격, 말투, 배경) | 개발자가 수동 |
-| Memory | `memory/karen.txt` | 게임 내 경험 기억 (만난 사람, 사건, 감정) | LLM이 자동 갱신 |
+| Instance | `instances/karl.txt` | 개체 고유 정보 (이름, 나이, 성격, 말투, 배경) | 개발자가 수동 |
+| Memory | `memory/karl.txt` | 게임 내 경험 기억 (만난 사람, 사건, 감정) | LLM이 자동 갱신 |
 
 LLM 호출 시 system prompt = `template + instance + memory` 순서로 결합.
 Memory는 LLM 응답에 `memory_update` 필드를 추가하여 자동 갱신 (append 또는 요약 교체).
@@ -82,8 +82,8 @@ account = "npc_guard"
 password = "..."
 character_name = "경비병 카렌"
 template_prompt = "data/prompts/templates/guard.txt"
-instance_prompt = "data/prompts/instances/karen.txt"
-memory_file = "data/prompts/memory/karen.txt"
+instance_prompt = "data/prompts/instances/karl.txt"
+memory_file = "data/prompts/memory/karl.txt"
 llm = "openrouter"
 
 [[npcs]]

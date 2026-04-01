@@ -31,7 +31,14 @@ const RECONNECT_DELAY: Duration = Duration::from_secs(5);
 pub enum ScheduleCondition {
     Day,
     Night,
-    Time { hour: u32, minute: u32 },
+    Time {
+        hour: u32,
+        minute: u32,
+    },
+    /// Recurring: fires every hour at the given minute (e.g. `"*:00"`).
+    Recurring {
+        minute: u32,
+    },
 }
 
 /// A single schedule entry: go to a position at a specific time condition.
@@ -39,7 +46,7 @@ pub enum ScheduleCondition {
 pub struct ScheduleEntry {
     /// When to activate: "day", "night", or "H:MM" / "HH:MM" (game time).
     pub at: String,
-    /// Target position [x, y, z].
+    /// Target position [x, y, z] (final/rest position).
     pub pos: [f32; 3],
     /// Facing rotation in degrees.
     #[serde(default)]
@@ -49,6 +56,9 @@ pub struct ScheduleEntry {
     pub floor_level: u8,
     /// Human-readable label for LLM prompt context.
     pub label: Option<String>,
+    /// Optional patrol route: list of [x, y, z] waypoints to visit before going to `pos`.
+    #[serde(default)]
+    pub waypoints: Vec<[f32; 3]>,
     /// Parsed condition (set after deserialization).
     #[serde(skip)]
     pub condition: Option<ScheduleCondition>,
@@ -60,6 +70,7 @@ impl ScheduleEntry {
     }
 
     /// Parse the `at` field into a `ScheduleCondition`. Returns error for invalid formats.
+    /// Supports: `"day"`, `"night"`, `"H:MM"` / `"HH:MM"`, or `"*:MM"` (recurring every hour).
     pub fn parse_condition(&mut self) -> Result<(), String> {
         self.condition = Some(match self.at.as_str() {
             "day" => ScheduleCondition::Day,
@@ -68,15 +79,19 @@ impl ScheduleEntry {
                 let (h, m) = time_str
                     .split_once(':')
                     .ok_or_else(|| format!("invalid schedule condition: {time_str}"))?;
-                let hour = h
-                    .trim()
-                    .parse::<u32>()
-                    .map_err(|_| format!("invalid hour in: {time_str}"))?;
                 let minute = m
                     .trim()
                     .parse::<u32>()
                     .map_err(|_| format!("invalid minute in: {time_str}"))?;
-                ScheduleCondition::Time { hour, minute }
+                if h.trim() == "*" {
+                    ScheduleCondition::Recurring { minute }
+                } else {
+                    let hour = h
+                        .trim()
+                        .parse::<u32>()
+                        .map_err(|_| format!("invalid hour in: {time_str}"))?;
+                    ScheduleCondition::Time { hour, minute }
+                }
             }
         });
         Ok(())

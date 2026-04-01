@@ -380,14 +380,15 @@ pub struct DriverConfig {
 }
 
 /// Resolve which schedule entry is currently active based on game time.
-/// Returns the index of the matching entry, or None if no entry matches.
+/// Returns `(entry_index, game_hour)` — the hour component ensures recurring
+/// entries re-trigger each hour even though the index stays the same.
 /// Conditions are pre-validated at load time via `ScheduleEntry::parse_condition`.
 fn resolve_active_schedule(
     schedule: &[ScheduleEntry],
     is_night: Option<bool>,
     game_hour: Option<u32>,
     game_minute: Option<u32>,
-) -> Option<usize> {
+) -> (Option<usize>, Option<u32>) {
     use crate::orchestrator::ScheduleCondition;
 
     let mut best: Option<usize> = None;
@@ -407,6 +408,10 @@ fn resolve_active_schedule(
                 (Some(gh), Some(gm)) => gh * 60 + gm >= eh * 60 + em,
                 _ => false,
             },
+            ScheduleCondition::Recurring { minute: em } => match (game_hour, game_minute) {
+                (Some(_), Some(gm)) => gm >= *em,
+                _ => false,
+            },
         };
 
         if matched {
@@ -414,7 +419,17 @@ fn resolve_active_schedule(
         }
     }
 
-    best
+    let hour_for_recurring = best.map_or(None, |i| {
+        if matches!(
+            schedule[i].condition,
+            Some(ScheduleCondition::Recurring { .. })
+        ) {
+            game_hour
+        } else {
+            None
+        }
+    });
+    (best, hour_for_recurring)
 }
 
 /// Format current schedule context for inclusion in LLM prompts.
@@ -487,7 +502,7 @@ pub async fn llm_driver(
     let mut last_activity_at = Instant::now() - idle_interval;
     // Track the highest urgency since the last prompt
     let mut pending_urgency = LlmPriority::Idle;
-    let mut active_schedule_idx: Option<usize> = None;
+    let mut active_schedule: (Option<usize>, Option<u32>) = (None, None);
 
     // Execute initial schedule move (go to correct position for current time)
     if !schedule.is_empty() {
@@ -499,15 +514,15 @@ pub async fn llm_driver(
             }
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
-        active_schedule_idx =
-            check_schedule_transition(&state, &schedule, active_schedule_idx, &label).await;
+        active_schedule =
+            check_schedule_transition(&state, &schedule, active_schedule, &label).await;
     }
 
     // Send initial world state via scheduler (blocking is fine here, no combat yet)
     let initial_prompt = {
         let mut s = state.lock().await;
         let agent_events = s.drain_agent_events();
-        build_prompt(&*s, &[], &agent_events, &schedule, active_schedule_idx)
+        build_prompt(&*s, &[], &agent_events, &schedule, active_schedule.0)
     };
     info!("[{label}] LLM driver: sending initial world state");
     match scheduler
@@ -557,8 +572,8 @@ pub async fn llm_driver(
 
         // === Check schedule transitions ===
         if !schedule.is_empty() && attack_target.is_none() {
-            active_schedule_idx =
-                check_schedule_transition(&state, &schedule, active_schedule_idx, &label).await;
+            active_schedule =
+                check_schedule_transition(&state, &schedule, active_schedule, &label).await;
         }
 
         // === Check if LLM response arrived ===
@@ -626,7 +641,7 @@ pub async fn llm_driver(
                 .map(|e| LlmPriority::from(s.classify_event(e)))
                 .fold(pending_urgency, std::cmp::min);
 
-            let prompt = build_prompt(&*s, &events, &agent_events, &schedule, active_schedule_idx);
+            let prompt = build_prompt(&*s, &events, &agent_events, &schedule, active_schedule.0);
             (prompt, has_events, max_urgency)
         };
         pending_urgency = LlmPriority::Idle; // reset for next cycle
@@ -990,13 +1005,13 @@ const SCHEDULE_ARRIVAL_RADIUS: f32 = 2.0;
 async fn check_schedule_transition(
     state: &Arc<Mutex<SharedState>>,
     schedule: &[ScheduleEntry],
-    current_idx: Option<usize>,
+    current: (Option<usize>, Option<u32>),
     label: &str,
-) -> Option<usize> {
+) -> (Option<usize>, Option<u32>) {
     let (is_night, game_hour, game_minute) = { state.lock().await.time_context() };
-    let new_idx = resolve_active_schedule(schedule, is_night, game_hour, game_minute);
-    if new_idx != current_idx {
-        if let Some(i) = new_idx {
+    let new = resolve_active_schedule(schedule, is_night, game_hour, game_minute);
+    if new != current {
+        if let Some(i) = new.0 {
             let entry = &schedule[i];
             info!(
                 "[{label}] Schedule transition: moving to {}",
@@ -1005,11 +1020,34 @@ async fn check_schedule_transition(
             execute_schedule_move(state, entry).await;
         }
     }
-    new_idx
+    new
 }
 
 /// Walk to a schedule entry's position and set the final rotation.
+/// If the entry has waypoints, visits each one in order before going to `pos`.
 async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
+    // Walk through patrol waypoints first (if any)
+    for (i, wp) in entry.waypoints.iter().enumerate() {
+        let (wx, wz) = (wp[0], wp[2]);
+        debug!(
+            "Patrol waypoint {}/{}: ({:.1}, {:.1})",
+            i + 1,
+            entry.waypoints.len(),
+            wx,
+            wz
+        );
+        match execute_move(state, wx, wz, entry.floor_level).await {
+            MoveResult::Arrived => {}
+            MoveResult::Blocked => {
+                warn!("Patrol waypoint {i} blocked — skipping ({wx:.1}, {wz:.1})");
+            }
+            MoveResult::Error => {
+                error!("Patrol waypoint {i} error");
+            }
+        }
+    }
+
+    // Go to final position
     let (x, y, z) = (entry.pos[0], entry.pos[1], entry.pos[2]);
 
     // Check if we're already near the target
