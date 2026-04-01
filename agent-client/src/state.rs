@@ -686,8 +686,16 @@ impl SharedState {
             ));
         }
 
-        // Nearby monsters
+        // Exclude monsters beyond LLM notification radius
+        let sp = self.self_player.as_ref();
         for m in self.nearby_monsters.values() {
+            if let Some(sp) = sp {
+                let dx = m.position.x - sp.position.x;
+                let dz = m.position.z - sp.position.z;
+                if dx * dx + dz * dz > MONSTER_MOVE_NOTIFY_RADIUS_SQ {
+                    continue;
+                }
+            }
             lines.push(format!(
                 "Monster: {} [{}] HP {}/{} state={} at ({:.1}, {:.1}, {:.1})",
                 m.monster_type,

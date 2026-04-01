@@ -5,16 +5,18 @@
 - [x] locomotion.glb, 등에 스킨드 메쉬를 넣어서 애니메이션을 눈으로 확인할 수 있게 한다
 - [x] 죽으면 경험치 드랍을 구현한다
 - AI NPC를 구현한다
-  - 애셋을 구한다
+  - [x] 애셋을 구한다
   - 세계관을 작성한다
   - [x] LLM에 넘긴다
   - [x] 오픈 라우터의 api 콜을 하는 타입을 구현한다
-  - 과거를 기억하는 시스템을 만든다
+  - [x] 과거를 기억하는 시스템을 만든다
 - 생성형 던전 시스템을 만든다
   - 모듈형 애셋을 만든다
   - 미로를 생성하는 시스템을 만든다
-- map editor를 만든다 -> 작업중
-  - mark monster spawn area
+- map editor를 만든다
+  - [x] mark monster spawn area
+  - edit waypoints of npcs
+  - edit spawn zones
 - [x] height map -> terrain 생성 시스템을 만든다
 - [x] 해안선 생성할 때 단층이 지는 현상을 개선한다
 - [x] splat map을 painting하는 기능을 만든다
@@ -35,15 +37,16 @@
 - 인벤토리 시스템
 - [x] 몬스터 벽 뚫고 가지 못하게
   - [x] A* 길찾기
-- npc 출퇴근
+- [x] npc 출퇴근
 - npc 상점
 - 아이템 enchant 시스템
 - 장비한 갑옷에 따른 외형 변화
-- chatting tab for combat log
+- [x] chatting tab for combat log
 - change name of scp939
 - go straight if there is no obstacle
-- don't equip sword if she is a merchant
-- house has no shadow
+- [x] don't equip sword if she is a merchant
+- equip spear if he is a guard
+- place furnitures in house
 
 # 폐지
 
