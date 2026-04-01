@@ -258,35 +258,42 @@ async fn run_npc_session(
         }
     };
 
-    // --- Delete characters whose class doesn't match the configured class ---
-    if let Some(ref class_cfg) = npc.character_class {
-        let desired = onlinerpg_shared::CharacterClass::from_str_or_default(class_cfg);
-        for c in characters.iter().filter(|c| c.class != desired) {
-            info!(
-                "[{}] Deleting character '{}' (id={}, {:?}) — class mismatch (want {:?})",
-                npc.account, c.name, c.id, c.class, desired
-            );
-            ws::send(
-                &mut ws_tx,
-                &ClientMessage::DeleteCharacter { character_id: c.id },
+    // --- Delete characters whose class or name doesn't match config ---
+    let desired_class = npc
+        .character_class
+        .as_ref()
+        .map(|c| onlinerpg_shared::CharacterClass::from_str_or_default(c));
+    let desired_name = npc.character_name.as_deref();
+
+    let should_delete = |c: &onlinerpg_shared::Character| {
+        desired_class.as_ref().is_some_and(|d| c.class != *d)
+            || desired_name.is_some_and(|n| c.name != n)
+    };
+
+    for c in characters.iter().filter(|c| should_delete(c)) {
+        info!(
+            "[{}] Deleting character '{}' (id={}, {:?}) — mismatch (want name={:?}, class={:?})",
+            npc.account, c.name, c.id, c.class, desired_name, desired_class
+        );
+        ws::send(
+            &mut ws_tx,
+            &ClientMessage::DeleteCharacter { character_id: c.id },
+        )
+        .await?;
+        ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterDeleted", |msg| {
+            matches!(
+                msg,
+                ServerMessage::CharacterDeleted { .. } | ServerMessage::CharacterError { .. }
             )
-            .await?;
-            ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterDeleted", |msg| {
-                matches!(
-                    msg,
-                    ServerMessage::CharacterDeleted { .. } | ServerMessage::CharacterError { .. }
-                )
-            })
-            .await?;
-        }
-        characters.retain(|c| c.class == desired);
+        })
+        .await?;
     }
+    characters.retain(|c| !should_delete(c));
 
     // --- Auto-create character if needed ---
     if characters.is_empty() {
         if let Some(ref char_name) = npc.character_name {
-            let class_str = npc.character_class.as_deref().unwrap_or("knight");
-            let class = onlinerpg_shared::CharacterClass::from_str_or_default(class_str);
+            let class = desired_class.unwrap_or(onlinerpg_shared::CharacterClass::Knight);
 
             info!(
                 "[{}] No characters found. Creating '{}' ({:?})...",
