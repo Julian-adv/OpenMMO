@@ -136,6 +136,7 @@
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
+  let furnitureOverlayRef = $state<FurnitureOverlay | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
   const entityClipGroupObj = (() => {
@@ -894,6 +895,7 @@
     {terrainMeshes}
     housingGroup={housingLayerRef?.getGroup() ?? null}
     doorMeshes={housingLayerRef?.getDoorMeshes() ?? []}
+    furnitureMeshes={furnitureOverlayRef ? [furnitureOverlayRef.getGroup()] : []}
     {monsterModels}
     {playerAttackDuration}
     heightManager={terrainHeightManager}
@@ -917,7 +919,7 @@
   <ZoneOverlay />
   <NpcWaypointOverlay />
 {/if}
-<FurnitureOverlay />
+<FurnitureOverlay bind:this={furnitureOverlayRef} />
 
 {#if $housingEditorMode}
   <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />

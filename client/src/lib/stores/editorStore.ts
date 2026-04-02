@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store'
+import type { Position } from '../utils/movementUtils'
 import type { LayerConfig } from '../utils/splatLayerLoader'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
@@ -139,6 +140,7 @@ export interface FurnitureDef {
   name: string
   model: string
   interaction: string
+  interactOffset?: Position
 }
 
 export interface FurniturePlacement {

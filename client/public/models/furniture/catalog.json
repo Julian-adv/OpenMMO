@@ -3,6 +3,7 @@
     "id": "bed",
     "name": "Bed",
     "model": "bed.glb",
-    "interaction": "sleep"
+    "interaction": "sleep",
+    "interactOffset": { "x": 0, "y": 0.7, "z": 0 }
   }
 ]

@@ -5,6 +5,7 @@
   import * as THREE from 'three'
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onMount } from 'svelte'
+  import { SvelteMap } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import { timeScale } from '../stores/timeStore'
   import { AnimationIndex, AnimationName } from '../types/animations'
@@ -35,7 +36,9 @@
     position: Vector3
     name: string
     isCurrentPlayer: boolean
-    playerState: 'idle' | 'moving' | 'attack' | 'dead'
+    playerState: 'idle' | 'moving' | 'attack' | 'dead' | 'interact'
+    interactionAnim?: string
+    interactOffsetY?: number
     attackCounter?: number
     speed: number
     rotation: number
@@ -58,6 +61,8 @@
     name,
     isCurrentPlayer,
     playerState,
+    interactionAnim,
+    interactOffsetY = 0,
     attackCounter,
     speed: _speed,
     rotation,
@@ -129,13 +134,16 @@
   let clonedScene: THREE.Object3D | null = null
   let footOffsetApplied = false
   let validAnimations = $state<THREE.AnimationClip[]>([])
+  let socialClipsByName = new SvelteMap<string, THREE.AnimationClip>()
+  let socialLoading = false
   let lastPlayerState = $state<
-    'idle' | 'moving' | 'attack' | 'dead' | undefined
+    'idle' | 'moving' | 'attack' | 'dead' | 'interact' | undefined
   >(undefined)
   let lastAttackCounter = $state(0)
   let dyingFinishedNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   let weaponAttached = $state(false)
+  let weaponObject: THREE.Object3D | null = null
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
 
@@ -216,10 +224,10 @@
       return false
     }
 
-    const weaponClone = weaponGltfData.scene.clone()
+    weaponObject = weaponGltfData.scene.clone()
     // Offset from wrist bone toward palm so weapon looks gripped
-    weaponClone.position.set(0, 0.08, 0)
-    rightHandBone.add(weaponClone)
+    weaponObject.position.set(0, 0.08, 0)
+    rightHandBone.add(weaponObject)
     weaponAttached = true
     console.log(`${weaponType} attached successfully to`, rightHandBone.name)
     return true
@@ -233,9 +241,29 @@
     return AnimationIndex.JOG // Default fallback
   }
 
+  async function loadSocialAnimations() {
+    if (socialLoading || socialClipsByName.size > 0) return
+    socialLoading = true
+    try {
+      const socialGltf = await loadGLB(CHARACTER_ANIMATION_PACK_PATHS.social)
+      const socialRawClips = getGltfAnimations(socialGltf)
+      for (const clip of socialRawClips) {
+        socialClipsByName.set(clip.name, clip)
+      }
+    } finally {
+      socialLoading = false
+    }
+    if (mixer && playerState === 'interact') playAnimationForState()
+  }
+
   function playAnimationForState() {
     // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
+
+    // Hide weapon during interact animations
+    if (weaponObject) {
+      weaponObject.visible = playerState !== 'interact'
+    }
 
     // Select animation based on player state and mode
     let clip: THREE.AnimationClip | undefined
@@ -269,6 +297,15 @@
       currentMovementAnimationIndex = undefined
       dyingFinishedNotified = false
       clip = validAnimations[AnimationIndex.DYING]
+    } else if (playerState === 'interact') {
+      currentMovementAnimationIndex = undefined
+      clip = interactionAnim
+        ? socialClipsByName.get(interactionAnim)
+        : undefined
+      if (!clip) {
+        loadSocialAnimations()
+        return
+      }
     } else {
       return // Unknown state
     }
@@ -277,18 +314,10 @@
 
     const newAction = mixer.clipAction(clip)
 
-    // Setup new action
+    const playOnce = playerState !== 'moving'
     newAction.reset()
-    newAction.loop =
-      playerState === 'idle' ||
-      playerState === 'attack' ||
-      playerState === 'dead'
-        ? THREE.LoopOnce
-        : THREE.LoopRepeat
-    newAction.clampWhenFinished =
-      playerState === 'idle' ||
-      playerState === 'attack' ||
-      playerState === 'dead'
+    newAction.loop = playOnce ? THREE.LoopOnce : THREE.LoopRepeat
+    newAction.clampWhenFinished = playOnce
     newAction.paused = false
 
     // If there's a current action and it's different, crossfade to the new one
@@ -454,7 +483,8 @@
     // Sync Three.js group position directly from the Vector3 prop
     // (Svelte cannot track mutations on THREE.Vector3 objects)
     if (modelGroup) {
-      modelGroup.position.set(position.x, position.y, position.z)
+      const yOffset = playerState === 'interact' ? interactOffsetY : 0
+      modelGroup.position.set(position.x, position.y + yOffset, position.z)
     }
 
     // Update nametag logic (formerly in useTask)

@@ -33,6 +33,7 @@
     terrainMeshes: (THREE.Mesh | undefined)[]
     housingGroup: THREE.Group | null
     doorMeshes: THREE.Object3D[]
+    furnitureMeshes: THREE.Object3D[]
     monsterModels: (Monster | undefined)[]
     playerAttackDuration: number
     heightManager: TerrainHeightManager
@@ -56,6 +57,7 @@
     terrainMeshes,
     housingGroup,
     doorMeshes,
+    furnitureMeshes,
     monsterModels,
     playerAttackDuration,
     heightManager,
@@ -170,6 +172,7 @@
       .map((model) => model?.getMeshGroup())
       .filter((group) => group !== undefined) as THREE.Group[]}
     {doorMeshes}
+    {furnitureMeshes}
     attackCooldown={playerAttackDuration}
   />
 {/if}
@@ -181,6 +184,8 @@
     name={currentPlayer.name}
     isCurrentPlayer={true}
     playerState={currentPlayerState.state}
+    interactionAnim={currentPlayerState.interactionAnim}
+    interactOffsetY={currentPlayerState.interactOffsetY}
     attackCounter={currentPlayerState.attackCounter}
     speed={currentPlayerState.speed}
     rotation={currentPlayerState.rotation}

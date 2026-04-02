@@ -32,10 +32,11 @@
     groundMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
     doorMeshes: THREE.Object3D[]
+    furnitureMeshes: THREE.Object3D[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, doorMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, doorMeshes, furnitureMeshes, attackCooldown }: Props = $props()
 
   function sampleHeight(x: number, z: number): number {
     return heightManager.getHeightAtWorldPosition(x, z) + get(playerFloorOffset)
@@ -268,7 +269,8 @@
     }
 
     // Keep player Y aligned with terrain height (handles spawn and terrain edits)
-    if (currentPlayer && heightManager.hasHeightData(currentPlayer.position.x, currentPlayer.position.z)) {
+    // Skip during furniture interaction — character is positioned on the furniture
+    if (playerState.state !== 'interact' && currentPlayer && heightManager.hasHeightData(currentPlayer.position.x, currentPlayer.position.z)) {
       const terrainY = sampleHeight(currentPlayer.position.x, currentPlayer.position.z)
       if (Math.abs(currentPlayer.position.y - terrainY) > 0.001) {
         currentPlayer.position.y = terrainY
@@ -646,6 +648,7 @@
       camera,
       monsterMeshes,
       doorMeshes,
+      furnitureMeshes,
       groundMeshes,
       playerPosition: {
         x: currentPlayer.position.x,
@@ -678,6 +681,37 @@
           intent.wallDir,
           intent.segmentIndex
         )
+        break
+      }
+      case 'interact_furniture': {
+        combatController.cancelCombat()
+        isMoving = false
+        movementTarget = null
+
+        // Align character with furniture rotation (face +Z / south)
+        playerRotation = intent.rotation
+
+        const interactState: PlayerState = {
+          ...playerState,
+          state: 'interact',
+          speed: 0,
+          rotation: playerRotation,
+          position: intent.position,
+          interactionAnim: intent.interaction,
+          interactOffsetY: intent.interactOffset?.y ?? 0,
+        }
+        playerState = interactState
+        onStateChange(interactState)
+
+        if (currentPlayer) {
+          const fx = intent.position.x + (intent.interactOffset?.x ?? 0)
+          const fz = intent.position.z + (intent.interactOffset?.z ?? 0)
+          currentPlayer.position.x = fx
+          currentPlayer.position.z = fz
+          if (heightManager.hasHeightData(fx, fz)) {
+            currentPlayer.position.y = sampleHeight(fx, fz)
+          }
+        }
         break
       }
       case 'move_to_ground': {

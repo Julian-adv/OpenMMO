@@ -13,6 +13,7 @@
   } from '../../stores/editorStore'
   import type {
     EditorTool,
+    FurnitureDef,
     FurniturePlacement,
   } from '../../stores/editorStore'
   import { playerDebugInfo } from '../../stores/debugStore'
@@ -21,7 +22,6 @@
   import { tileToRegion } from '../../managers/terrainMetaManager'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { furnitureManager } from '../../managers/furnitureManager'
-  import { get } from 'svelte/store'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { loadGLB } from '../../utils/gltfCache'
   import type { Unsubscriber } from 'svelte/store'
@@ -64,6 +64,7 @@
     if (catalogLength === 0) {
       const cat = await furnitureManager.fetchCatalog()
       furnitureCatalog.set(cat)
+      catalogById = new Map(cat.map((d) => [d.id, d]))
     }
 
     const data = await furnitureManager.fetchFurniture(rx, rz)
@@ -81,19 +82,24 @@
 
   const modelCache = new SvelteMap<string, THREE.Group>()
   const loadingModels = new SvelteSet<string>()
+  let catalogById = new Map<string, FurnitureDef>()
 
   async function getModel(furnitureId: string): Promise<THREE.Group | null> {
     if (modelCache.has(furnitureId)) return modelCache.get(furnitureId)!
     if (loadingModels.has(furnitureId)) return null
 
-    const cat = get(furnitureCatalog)
-    const def = cat.find((d) => d.id === furnitureId)
+    const def = catalogById.get(furnitureId)
     if (!def) return null
 
     loadingModels.add(furnitureId)
     try {
       const gltf = await loadGLB(`/models/furniture/${def.model}`)
       const model = gltf.scene.clone()
+      model.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true
+        }
+      })
       modelCache.set(furnitureId, model)
       lastBuildKey = ''
       rebuild()
@@ -174,6 +180,12 @@
         applyHighlight(clone)
       }
       clone.userData.furnitureId = p.id
+      clone.userData.furnitureType = p.type
+      const catDef = catalogById.get(p.type)
+      if (catDef?.interaction) {
+        clone.userData.furnitureInteraction = catDef.interaction
+        clone.userData.furnitureInteractOffset = catDef.interactOffset
+      }
       group.add(clone)
     }
   }
@@ -233,6 +245,10 @@
     void isEditorMode
     updatePreview()
   })
+
+  export function getGroup(): THREE.Group {
+    return group
+  }
 
   onDestroy(() => {
     for (const child of [...group.children]) {

@@ -4,6 +4,7 @@ import type { Position } from '../utils/movementUtils'
 import type { WallDirection } from '../utils/house-geometry'
 
 const MAX_DOOR_INTERACT_DISTANCE = 2.0
+const MAX_FURNITURE_INTERACT_DISTANCE = 3.0
 
 export type ClickIntent =
   | {
@@ -19,6 +20,14 @@ export type ClickIntent =
       wallDir: WallDirection
       segmentIndex: number
     }
+  | {
+      type: 'interact_furniture'
+      furnitureType: string
+      interaction: string
+      position: Position
+      rotation: number
+      interactOffset?: Position
+    }
   | { type: 'move_to_ground'; position: Position }
   | { type: 'none' }
 
@@ -26,6 +35,7 @@ export interface RaycastContext {
   camera: THREE.Camera
   monsterMeshes: THREE.Group[]
   doorMeshes: THREE.Object3D[]
+  furnitureMeshes: THREE.Object3D[]
   groundMeshes: THREE.Object3D[]
   playerPosition: Position
   playerFloorLevel: number
@@ -170,6 +180,44 @@ class InputHandler {
                 roomIndex: d.doorRoomIndex,
                 wallDir: d.doorWallDir,
                 segmentIndex: d.doorSegmentIndex,
+              }
+            }
+            obj = obj.parent
+          }
+        }
+      }
+    }
+
+    // Check intersection with furniture meshes
+    if (context.furnitureMeshes.length > 0) {
+      const furnitureHits = raycaster.intersectObjects(
+        context.furnitureMeshes,
+        true
+      )
+      if (furnitureHits.length > 0) {
+        const hitPoint = furnitureHits[0].point
+        const pp = context.playerPosition
+        const dx = hitPoint.x - pp.x
+        const dz = hitPoint.z - pp.z
+        if (
+          dx * dx + dz * dz <=
+          MAX_FURNITURE_INTERACT_DISTANCE * MAX_FURNITURE_INTERACT_DISTANCE
+        ) {
+          let obj: THREE.Object3D | null = furnitureHits[0].object
+          while (obj) {
+            const d = obj.userData
+            if (d && d.furnitureType && d.furnitureInteraction) {
+              return {
+                type: 'interact_furniture',
+                furnitureType: d.furnitureType,
+                interaction: d.furnitureInteraction,
+                position: {
+                  x: obj.position.x,
+                  y: obj.position.y,
+                  z: obj.position.z,
+                },
+                rotation: obj.rotation.y,
+                interactOffset: d.furnitureInteractOffset,
               }
             }
             obj = obj.parent

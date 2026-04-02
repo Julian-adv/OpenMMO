@@ -31,11 +31,13 @@ export interface MovementResult {
 
 export interface PlayerState {
   position: Position
-  state: 'idle' | 'moving' | 'attack' | 'dead'
+  state: 'idle' | 'moving' | 'attack' | 'dead' | 'interact'
   speed: number
   rotation: number
   movementMode?: MovementMode
   attackCounter?: number
+  interactionAnim?: string
+  interactOffsetY?: number
 }
 
 /**
