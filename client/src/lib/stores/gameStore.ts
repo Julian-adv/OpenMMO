@@ -27,7 +27,9 @@ export interface LocalPlayer extends PlayerBase {
   rotation: number
 }
 
-export type RemotePlayer = PlayerBase
+export interface RemotePlayer extends PlayerBase {
+  floorLevel: number
+}
 
 export interface ChatBubble {
   playerId: string

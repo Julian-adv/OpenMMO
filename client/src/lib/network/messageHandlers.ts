@@ -161,6 +161,7 @@ export function handleServerMessage(
         maxHealth: serverPlayer.max_health,
         characterClass: serverPlayer.class,
         torchOn: serverPlayer.torch_on,
+        floorLevel: serverPlayer.floor_level ?? 0,
       }
       let joinedName: string | null = null
       gameStore.update((state) => {
@@ -226,6 +227,12 @@ export function handleServerMessage(
         },
         data.rotation
       )
+      if (data.floor_level !== undefined) {
+        const existing = state.otherPlayers.get(data.player_id)
+        if (existing && existing.floorLevel !== data.floor_level) {
+          updatePlayer(data.player_id, { floorLevel: data.floor_level })
+        }
+      }
       break
     }
 
@@ -278,6 +285,7 @@ export function handleServerMessage(
                 maxHealth: serverPlayer.max_health,
                 characterClass: serverPlayer.class,
                 torchOn: serverPlayer.torch_on,
+                floorLevel: serverPlayer.floor_level ?? 0,
               }
               remotePlayerManager.initPlayer(
                 serverPlayer.id,
