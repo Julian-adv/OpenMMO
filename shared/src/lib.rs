@@ -145,6 +145,8 @@ pub struct Player {
     pub max_health: u32,
     pub class: CharacterClass,
     #[serde(default)]
+    pub is_npc: bool,
+    #[serde(default)]
     pub torch_on: bool,
     #[serde(default)]
     pub floor_level: i8,
@@ -237,6 +239,8 @@ pub enum ClientMessage {
         account_name: String,
         password_hash: String,
         create_account: bool,
+        #[serde(default)]
+        is_npc: bool,
     },
     CreateCharacter {
         character_name: String,

@@ -161,6 +161,14 @@ impl SharedState {
         }
     }
 
+    /// Returns true if any non-NPC (human) player is in `nearby_players`.
+    pub fn has_nearby_human_players(&self) -> bool {
+        let self_id = self.self_player_id.as_deref();
+        self.nearby_players
+            .iter()
+            .any(|(id, p)| self_id != Some(id.as_str()) && !p.is_npc)
+    }
+
     /// Check all nearby players and emit an agent event for any player
     /// that just entered NEARBY_PLAYER_RADIUS for the first time.
     fn check_nearby_player_proximity(&mut self) {

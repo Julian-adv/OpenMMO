@@ -26,6 +26,7 @@ struct ConnectionState {
     direct_rx: Option<mpsc::UnboundedReceiver<ServerMessage>>,
     pending_character_attributes: Option<CharacterAttributes>,
     last_heartbeat: std::time::Instant,
+    is_npc: bool,
 }
 
 impl ConnectionState {
@@ -36,6 +37,7 @@ impl ConnectionState {
             direct_rx: None,
             pending_character_attributes: None,
             last_heartbeat: std::time::Instant::now(),
+            is_npc: false,
         }
     }
 
@@ -236,6 +238,7 @@ async fn handle_client_message(
             account_name: requested_account_name,
             password_hash,
             create_account,
+            is_npc,
         } => {
             if state.account_name.is_some() {
                 warn!("Client is already authenticated");
@@ -275,6 +278,7 @@ async fn handle_client_message(
                 .collect::<Vec<Character>>();
 
             state.account_name = Some(requested_account_name.clone());
+            state.is_npc = is_npc;
             state.pending_character_attributes = None;
 
             info!(
@@ -431,6 +435,7 @@ async fn handle_client_message(
                     z: selected_character.last_z,
                 },
                 selected_character.last_rotation,
+                state.is_npc,
             );
 
             // Restore saved health (if available) and floor_level from DB

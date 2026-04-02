@@ -23,6 +23,7 @@ export type ServerPlayer = {
   health: number
   max_health: number
   class: CharacterClass
+  is_npc: boolean
   torch_on: boolean
   furniture_type?: string
 }

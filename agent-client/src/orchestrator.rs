@@ -229,6 +229,7 @@ async fn run_npc_session(
             account_name: npc.account.clone(),
             password_hash: password_hash.clone(),
             create_account: npc.create_account,
+            is_npc: true,
         },
     )
     .await?;
@@ -252,6 +253,7 @@ async fn run_npc_session(
                         account_name: npc.account.clone(),
                         password_hash: password_hash.clone(),
                         create_account: true,
+                        is_npc: true,
                     },
                 )
                 .await?;

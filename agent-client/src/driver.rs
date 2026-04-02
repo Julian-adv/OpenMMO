@@ -534,31 +534,40 @@ pub async fn llm_driver(
             check_schedule_transition(&state, &schedule, active_schedule, &label).await;
     }
 
-    // Send initial world state via scheduler (blocking is fine here, no combat yet)
-    let initial_prompt = {
-        let mut s = state.lock().await;
-        let agent_events = s.drain_agent_events();
-        build_prompt(&*s, &[], &agent_events, &schedule, active_schedule.0)
-    };
-    info!("[{label}] LLM driver: sending initial world state");
-    match scheduler
-        .submit(
-            &label,
-            LlmPriority::Routine,
-            initial_prompt,
-            Arc::clone(&invoker),
-        )
-        .await
+    // Send initial world state only if human players are nearby
     {
-        Ok(response) => {
-            let skip_move = active_schedule
-                .0
-                .map_or(false, |i| schedule[i].action.is_some());
-            attack_target = handle_response(&state, &response, &memory_file, skip_move).await;
-            last_prompt_at = Instant::now();
-        }
-        Err(e) => {
-            error!("[{label}] LLM initial prompt failed: {e}");
+        let mut s = state.lock().await;
+        if s.has_nearby_human_players() {
+            let agent_events = s.drain_agent_events();
+            let initial_prompt =
+                build_prompt(&*s, &[], &agent_events, &schedule, active_schedule.0);
+            drop(s);
+            info!("[{label}] LLM driver: sending initial world state");
+            match scheduler
+                .submit(
+                    &label,
+                    LlmPriority::Routine,
+                    initial_prompt,
+                    Arc::clone(&invoker),
+                )
+                .await
+            {
+                Ok(response) => {
+                    let skip_move = active_schedule
+                        .0
+                        .map_or(false, |i| schedule[i].action.is_some());
+                    attack_target =
+                        handle_response(&state, &response, &memory_file, skip_move).await;
+                    last_prompt_at = Instant::now();
+                }
+                Err(e) => {
+                    error!("[{label}] LLM initial prompt failed: {e}");
+                }
+            }
+        } else {
+            s.drain_events();
+            s.drain_agent_events();
+            info!("[{label}] LLM driver: no human players nearby, skipping initial prompt");
         }
     }
 
@@ -654,6 +663,16 @@ pub async fn llm_driver(
         // Drain events and build prompt, determine priority from events
         let (prompt, has_events, priority) = {
             let mut s = state.lock().await;
+
+            // Skip LLM when no human players are nearby — drain events to avoid
+            // unbounded accumulation but don't build a prompt.
+            if !s.has_nearby_human_players() {
+                s.drain_events();
+                s.drain_agent_events();
+                pending_urgency = LlmPriority::Idle;
+                continue;
+            }
+
             let events = s.drain_events();
             let agent_events = s.drain_agent_events();
             let has_events = !events.is_empty() || !agent_events.is_empty();
