@@ -23,6 +23,8 @@ pub struct ScheduleFile {
     pub schedule: Vec<ScheduleEntry>,
 }
 
+const SCHEDULE_FILENAME: &str = "schedule.json";
+
 pub struct NpcIO {
     base_dir: PathBuf,
 }
@@ -32,13 +34,13 @@ impl NpcIO {
         Self { base_dir }
     }
 
-    /// List NPC names (subdirectories that contain a schedule.toml).
+    /// List NPC names (subdirectories that contain a schedule.json).
     pub async fn list_npcs(&self) -> std::io::Result<Vec<String>> {
         let mut names = Vec::new();
         let mut entries = fs::read_dir(&self.base_dir).await?;
         while let Some(entry) = entries.next_entry().await? {
             if entry.file_type().await?.is_dir() {
-                let schedule_path = entry.path().join("schedule.toml");
+                let schedule_path = entry.path().join(SCHEDULE_FILENAME);
                 if fs::try_exists(&schedule_path).await.unwrap_or(false) {
                     if let Some(name) = entry.file_name().to_str() {
                         names.push(name.to_string());
@@ -60,21 +62,21 @@ impl NpcIO {
         Ok(())
     }
 
-    /// Read and parse a schedule.toml for the given NPC.
+    /// Read and parse a schedule.json for the given NPC.
     pub async fn read_schedule(&self, name: &str) -> std::io::Result<ScheduleFile> {
         Self::validate_name(name)?;
-        let path = self.base_dir.join(name).join("schedule.toml");
+        let path = self.base_dir.join(name).join(SCHEDULE_FILENAME);
         let content = fs::read_to_string(&path).await?;
-        let schedule: ScheduleFile = toml::from_str(&content)
+        let schedule: ScheduleFile = serde_json::from_str(&content)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         Ok(schedule)
     }
 
-    /// Write schedule data back as TOML.
+    /// Write schedule data back as JSON.
     pub async fn write_schedule(&self, name: &str, data: &ScheduleFile) -> std::io::Result<()> {
         Self::validate_name(name)?;
-        let path = self.base_dir.join(name).join("schedule.toml");
-        let content = toml::to_string_pretty(data)
+        let path = self.base_dir.join(name).join(SCHEDULE_FILENAME);
+        let content = serde_json::to_string_pretty(data)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         fs::write(&path, content).await
     }
