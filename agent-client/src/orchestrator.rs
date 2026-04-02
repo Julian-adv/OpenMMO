@@ -69,6 +69,10 @@ pub struct ScheduleEntry {
 }
 
 impl ScheduleEntry {
+    pub fn is_sleeping(&self) -> bool {
+        self.action.as_deref() == Some("bed")
+    }
+
     pub fn display_label(&self) -> &str {
         self.label.as_deref().unwrap_or("schedule position")
     }

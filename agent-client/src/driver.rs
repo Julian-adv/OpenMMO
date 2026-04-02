@@ -534,10 +534,17 @@ pub async fn llm_driver(
             check_schedule_transition(&state, &schedule, active_schedule, &label).await;
     }
 
-    // Send initial world state only if human players are nearby
+    // Send initial world state only if human players are nearby and NPC is not sleeping
+    let is_sleeping = active_schedule
+        .0
+        .map_or(false, |i| schedule[i].is_sleeping());
     {
         let mut s = state.lock().await;
-        if s.has_nearby_human_players() {
+        if is_sleeping {
+            s.drain_events();
+            s.drain_agent_events();
+            info!("[{label}] LLM driver: NPC is sleeping, skipping initial prompt");
+        } else if s.has_nearby_human_players() {
             let agent_events = s.drain_agent_events();
             let initial_prompt =
                 build_prompt(&*s, &[], &agent_events, &schedule, active_schedule.0);
@@ -553,11 +560,11 @@ pub async fn llm_driver(
                 .await
             {
                 Ok(response) => {
-                    let skip_move = active_schedule
+                    let has_action = active_schedule
                         .0
                         .map_or(false, |i| schedule[i].action.is_some());
                     attack_target =
-                        handle_response(&state, &response, &memory_file, skip_move).await;
+                        handle_response(&state, &response, &memory_file, has_action).await;
                     last_prompt_at = Instant::now();
                 }
                 Err(e) => {
@@ -603,6 +610,12 @@ pub async fn llm_driver(
             active_schedule =
                 check_schedule_transition(&state, &schedule, active_schedule, &label).await;
         }
+        let is_sleeping = active_schedule
+            .0
+            .map_or(false, |i| schedule[i].is_sleeping());
+        let has_scheduled_action = active_schedule
+            .0
+            .map_or(false, |i| schedule[i].action.is_some());
 
         // === Check if LLM response arrived ===
         if let Some(ref handle) = llm_in_flight {
@@ -610,11 +623,9 @@ pub async fn llm_driver(
                 let handle = llm_in_flight.take().unwrap();
                 match handle.await {
                     Ok(Ok(response)) => {
-                        let skip = active_schedule
-                            .0
-                            .map_or(false, |i| schedule[i].action.is_some());
                         let new_target =
-                            handle_response(&state, &response, &memory_file, skip).await;
+                            handle_response(&state, &response, &memory_file, has_scheduled_action)
+                                .await;
                         if new_target.is_some() {
                             attack_target = new_target;
                         }
@@ -664,9 +675,9 @@ pub async fn llm_driver(
         let (prompt, has_events, priority) = {
             let mut s = state.lock().await;
 
-            // Skip LLM when no human players are nearby — drain events to avoid
-            // unbounded accumulation but don't build a prompt.
-            if !s.has_nearby_human_players() {
+            // Skip LLM when NPC is sleeping or no human players are nearby —
+            // drain events to avoid unbounded accumulation but don't build a prompt.
+            if is_sleeping || !s.has_nearby_human_players() {
                 s.drain_events();
                 s.drain_agent_events();
                 pending_urgency = LlmPriority::Idle;
