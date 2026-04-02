@@ -25,6 +25,7 @@ export type ServerPlayer = {
   class: CharacterClass
   is_npc: boolean
   torch_on: boolean
+  floor_level: number
   furniture_type?: string
 }
 
