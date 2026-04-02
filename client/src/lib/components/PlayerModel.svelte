@@ -217,6 +217,8 @@
     }
 
     const weaponClone = weaponGltfData.scene.clone()
+    // Offset from wrist bone toward palm so weapon looks gripped
+    weaponClone.position.set(0, 0.08, 0)
     rightHandBone.add(weaponClone)
     weaponAttached = true
     console.log(`${weaponType} attached successfully to`, rightHandBone.name)
