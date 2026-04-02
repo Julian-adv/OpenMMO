@@ -15,6 +15,8 @@
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
 
   import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
+  import { playerFloorLevel } from '../../stores/housingStore'
+  import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
   // crashes when castShadow is toggled dynamically, so remote torches are light-only).
@@ -75,6 +77,8 @@
     remotePlayerManager.attackAnimationDuration = playerAttackDuration
   })
 
+  let localFloorLevel = $derived(Math.max(0, $playerFloorLevel))
+
   // Compute torch mode for each remote player:
   // - Closest N torch-bearing players get 'light-only'
   // - Rest get 'off'
@@ -86,7 +90,7 @@
     const torchPlayers: { id: string; dist: number }[] = []
 
     for (const [id, player] of otherPlayers) {
-      if (!player.torchOn) {
+      if (!player.torchOn || player.floorLevel !== localFloorLevel) {
         modes.set(id, 'off')
         continue
       }
@@ -126,7 +130,7 @@
     const torchPlayers: { id: string; dist: number }[] = []
 
     for (const [id, player] of otherPlayers) {
-      if (!player.torchOn) continue
+      if (!player.torchOn || player.floorLevel !== localFloorLevel) continue
       const rp = remotePlayers.get(id)
       if (!rp) continue
       const dx = rp.position.x - playerPos.x
@@ -208,12 +212,14 @@
   {#each [...otherPlayers.values()] as player, index (player.id)}
     {@const remotePlayer = remotePlayers.get(player.id)}
     {#if remotePlayer}
+      {@const sameFloor = player.floorLevel === localFloorLevel}
       {@const terrainY = heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z)}
+      {@const baseY = (terrainY != null && remotePlayer.position.y > terrainY + 1.0) ? remotePlayer.position.y : (terrainY ?? remotePlayer.position.y)}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
           remotePlayer.position.x,
-          (terrainY != null && remotePlayer.position.y > terrainY + 1.0) ? remotePlayer.position.y : (terrainY ?? remotePlayer.position.y),
+          sameFloor ? baseY : OFFSCREEN_Y,
           remotePlayer.position.z
         )}
         name={player.name}

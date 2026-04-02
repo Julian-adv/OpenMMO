@@ -348,6 +348,8 @@ pub enum ServerMessage {
         player_id: String,
         position: Position,
         rotation: f32,
+        #[serde(default)]
+        floor_level: i8,
     },
     PlayerTeleported {
         player_id: String,

@@ -191,6 +191,7 @@ impl super::GameState {
                     player_id: player_id.clone(),
                     position: new_position,
                     rotation: new_rotation,
+                    floor_level,
                 },
                 None,
             );
