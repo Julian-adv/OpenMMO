@@ -56,6 +56,8 @@ pub struct ScheduleEntry {
     pub floor_level: u8,
     /// Human-readable label for LLM prompt context.
     pub label: Option<String>,
+    /// Furniture type to interact with after arriving (e.g. "bed").
+    pub action: Option<String>,
     /// Optional patrol route: list of [x, y, z] waypoints to visit before going to `pos`.
     #[serde(default)]
     pub waypoints: Vec<[f32; 3]>,
@@ -605,7 +607,7 @@ fn spawn_llm_task(
     let scheduler = scheduler.clone();
     let schedule = if let Some(ref path) = npc.schedule_file {
         match std::fs::read_to_string(path) {
-            Ok(content) => match toml::from_str::<ScheduleFile>(&content) {
+            Ok(content) => match serde_json::from_str::<ScheduleFile>(&content) {
                 Ok(mut f) => {
                     // Validate all conditions at load time
                     let mut valid = true;

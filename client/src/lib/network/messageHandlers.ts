@@ -12,6 +12,7 @@ import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
 import { housingManager } from '../managers/housingManager'
+import { furnitureManager } from '../managers/furnitureManager'
 import type { MonsterData } from '../types/Monster'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
@@ -24,6 +25,29 @@ import type {
   ServerMonster,
   ServerPlayer,
 } from './networkTypes'
+
+/** Resolve furniture interaction for a remote player: find nearest placement, snap position/rotation. */
+async function applyFurnitureInteraction(
+  playerId: string,
+  furnitureType: string,
+  wx: number,
+  wz: number
+) {
+  await furnitureManager.fetchCatalog()
+  const def = furnitureManager.getCatalogEntry(furnitureType)
+  const anim = def?.interaction ?? furnitureType
+  const offsetY = def?.interactOffset?.y ?? 0
+  const placement = await furnitureManager.findNearestPlacementAsync(
+    furnitureType,
+    wx,
+    wz
+  )
+  const pos = placement
+    ? { x: placement.x, y: placement.y, z: placement.z }
+    : undefined
+  const rot = placement ? placement.rotation : undefined
+  remotePlayerManager.handleInteraction(playerId, anim, offsetY, pos, rot)
+}
 
 export type MessageEvents = {
   authSuccess: NetworkEvent<(payload: AuthSuccessPayload) => void>
@@ -148,6 +172,14 @@ export function handleServerMessage(
             serverPlayer.position,
             serverPlayer.rotation
           )
+          if (serverPlayer.furniture_type) {
+            applyFurnitureInteraction(
+              serverPlayer.id,
+              serverPlayer.furniture_type,
+              serverPlayer.position.x,
+              serverPlayer.position.z
+            )
+          }
           state.otherPlayers.set(serverPlayer.id, remotePlayer)
           joinedName = serverPlayer.name
         }
@@ -251,6 +283,14 @@ export function handleServerMessage(
                 serverPlayer.position,
                 serverPlayer.rotation
               )
+              if (serverPlayer.furniture_type) {
+                applyFurnitureInteraction(
+                  serverPlayer.id,
+                  serverPlayer.furniture_type,
+                  serverPlayer.position.x,
+                  serverPlayer.position.z
+                )
+              }
               state.otherPlayers.set(serverPlayer.id, player)
             }
           }
@@ -507,6 +547,23 @@ export function handleServerMessage(
         break
       }
       updatePlayer(data.player_id, { torchOn: data.enabled })
+      break
+    }
+
+    case 'PlayerInteractionChanged': {
+      const state = get(gameStore)
+      if (state.currentPlayer?.id === data.player_id) {
+        break
+      }
+      const ft: string | null = data.furniture_type ?? null
+      if (ft) {
+        const rp = remotePlayerManager.players.get(data.player_id)
+        const wx = rp?.position.x ?? 0
+        const wz = rp?.position.z ?? 0
+        applyFurnitureInteraction(data.player_id, ft, wx, wz)
+      } else {
+        remotePlayerManager.handleStopInteraction(data.player_id)
+      }
       break
     }
 

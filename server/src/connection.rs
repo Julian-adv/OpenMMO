@@ -596,6 +596,24 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::InteractFurniture { furniture_type } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .set_player_interaction(id, Some(furniture_type))
+                    .await;
+            } else {
+                warn!("Received interact furniture from client that is not in game");
+            }
+        }
+
+        ClientMessage::StopInteraction => {
+            if let Some(id) = &state.player_id {
+                game_state.set_player_interaction(id, None).await;
+            } else {
+                warn!("Received stop interaction from client that is not in game");
+            }
+        }
+
         ClientMessage::Heartbeat => {
             state.last_heartbeat = std::time::Instant::now();
         }

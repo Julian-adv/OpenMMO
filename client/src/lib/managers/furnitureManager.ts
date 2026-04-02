@@ -1,5 +1,11 @@
 import { getTerrainApiUrl } from '../utils/networkUtils'
-import type { FurnitureDef, FurnitureRegionData } from '../stores/editorStore'
+import type {
+  FurnitureDef,
+  FurniturePlacement,
+  FurnitureRegionData,
+} from '../stores/editorStore'
+import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
+import { tileToRegion } from './terrainMetaManager'
 
 function regionKey(rx: number, rz: number): string {
   return `${rx},${rz}`
@@ -63,6 +69,50 @@ export class FurnitureManager {
 
   invalidate(rx: number, rz: number): void {
     this.cache.delete(regionKey(rx, rz))
+  }
+
+  /** Look up a furniture definition by type id (e.g. "bed"). Returns null if catalog not loaded or not found. */
+  getCatalogEntry(furnitureType: string): FurnitureDef | null {
+    if (!this.catalogCache) return null
+    return this.catalogCache.find((d) => d.id === furnitureType) ?? null
+  }
+
+  /** Find the nearest furniture placement of the given type to a world position, searching all cached regions. */
+  findNearestPlacement(
+    furnitureType: string,
+    wx: number,
+    wz: number
+  ): FurniturePlacement | null {
+    let best: FurniturePlacement | null = null
+    let bestDist = Infinity
+    for (const region of this.cache.values()) {
+      for (const p of region.placements) {
+        if (p.type !== furnitureType) continue
+        const dx = p.x - wx
+        const dz = p.z - wz
+        const dist = dx * dx + dz * dz
+        if (dist < bestDist) {
+          bestDist = dist
+          best = p
+        }
+      }
+    }
+    return best
+  }
+
+  /** Like findNearestPlacement but fetches the region first if not cached. */
+  async findNearestPlacementAsync(
+    furnitureType: string,
+    wx: number,
+    wz: number
+  ): Promise<FurniturePlacement | null> {
+    // Ensure the region containing this position is loaded
+    const tileX = Math.floor(wx / TERRAIN_TILE_SIZE)
+    const tileZ = Math.floor(wz / TERRAIN_TILE_SIZE)
+    const rx = tileToRegion(tileX)
+    const rz = tileToRegion(tileZ)
+    await this.fetchFurniture(rx, rz)
+    return this.findNearestPlacement(furnitureType, wx, wz)
   }
 }
 

@@ -23,6 +23,7 @@ pub fn new_player(
         class,
         torch_on: false,
         floor_level: 0,
+        furniture_type: None,
         last_combat_at: 0,
     }
 }

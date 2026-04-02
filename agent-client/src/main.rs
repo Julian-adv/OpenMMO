@@ -179,5 +179,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::MonsterAssigned { .. } => "MonsterAssigned",
         ServerMessage::SpawnMonsterRequest { .. } => "SpawnMonsterRequest",
         ServerMessage::NoSpawnZones { .. } => "NoSpawnZones",
+        ServerMessage::PlayerInteractionChanged { .. } => "PlayerInteractionChanged",
     }
 }

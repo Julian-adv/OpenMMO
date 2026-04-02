@@ -4,6 +4,6 @@
     "name": "Bed",
     "model": "bed.glb",
     "interaction": "sleep",
-    "interactOffset": { "x": 0, "y": 0.7, "z": 0 }
+    "interactOffset": { "x": 0, "y": 0.78, "z": 0 }
   }
 ]

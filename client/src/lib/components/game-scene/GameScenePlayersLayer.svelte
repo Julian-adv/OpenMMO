@@ -208,16 +208,19 @@
   {#each [...otherPlayers.values()] as player, index (player.id)}
     {@const remotePlayer = remotePlayers.get(player.id)}
     {#if remotePlayer}
+      {@const terrainY = heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z)}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
           remotePlayer.position.x,
-          heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) || remotePlayer.position.y,
+          (terrainY != null && remotePlayer.position.y > terrainY + 1.0) ? remotePlayer.position.y : (terrainY ?? remotePlayer.position.y),
           remotePlayer.position.z
         )}
         name={player.name}
         isCurrentPlayer={false}
         playerState={remotePlayer.state}
+        interactionAnim={remotePlayer.interactionAnim}
+        interactOffsetY={remotePlayer.interactOffsetY}
         attackCounter={remotePlayer.attackCounter}
         speed={remotePlayer.speed}
         rotation={remotePlayer.rotation}

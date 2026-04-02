@@ -86,10 +86,11 @@ class PlayerStateManager {
       const currentPlayer = this.players.get(playerId)
       if (!currentPlayer) return
 
-      // Skip movement update if player is attacking or dead
+      // Skip movement update if player is attacking, dead, or interacting
       if (
         currentPlayer?.state === 'attack' ||
-        currentPlayer?.state === 'dead'
+        currentPlayer?.state === 'dead' ||
+        currentPlayer?.state === 'interact'
       ) {
         return
       }
@@ -237,6 +238,46 @@ class PlayerStateManager {
       state: 'idle',
       speed: 0,
       rotation,
+    })
+  }
+
+  handleInteraction(
+    playerId: string,
+    anim: string,
+    offsetY: number,
+    position?: Position,
+    rotation?: number
+  ) {
+    const player = this.players.get(playerId)
+    if (!player) return
+
+    const newState: PlayerState = {
+      ...player,
+      state: 'interact',
+      speed: 0,
+      interactionAnim: anim,
+      interactOffsetY: offsetY,
+    }
+    if (position) {
+      newState.position = { ...position }
+      this.targetPositions.set(playerId, { ...position })
+    }
+    if (rotation !== undefined) {
+      newState.rotation = rotation
+      this.targetRotations.set(playerId, rotation)
+    }
+    this.players.set(playerId, newState)
+  }
+
+  handleStopInteraction(playerId: string) {
+    const player = this.players.get(playerId)
+    if (!player || player.state !== 'interact') return
+
+    this.players.set(playerId, {
+      ...player,
+      state: 'idle',
+      interactionAnim: undefined,
+      interactOffsetY: undefined,
     })
   }
 

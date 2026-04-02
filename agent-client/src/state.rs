@@ -207,28 +207,31 @@ impl SharedState {
             ..
         } = msg
         {
-            let original_y = position.y;
-            match self
-                .height_sampler
-                .sample_height(position.x, position.z)
-                .await
-            {
-                Ok(terrain_y) => {
-                    tracing::debug!(
-                        "Height correction: ({:.1}, {:.1}) y: {:.2} -> {:.2}",
-                        position.x,
-                        position.z,
-                        original_y,
-                        terrain_y
-                    );
-                    position.y = terrain_y;
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        "Failed to sample terrain height at ({:.1}, {:.1}): {e}",
-                        position.x,
-                        position.z
-                    );
+            // Only correct height on ground floor; upper floors use the Y from the caller
+            if self.self_floor_level == 0 {
+                let original_y = position.y;
+                match self
+                    .height_sampler
+                    .sample_height(position.x, position.z)
+                    .await
+                {
+                    Ok(terrain_y) => {
+                        tracing::debug!(
+                            "Height correction: ({:.1}, {:.1}) y: {:.2} -> {:.2}",
+                            position.x,
+                            position.z,
+                            original_y,
+                            terrain_y
+                        );
+                        position.y = terrain_y;
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to sample terrain height at ({:.1}, {:.1}): {e}",
+                            position.x,
+                            position.z
+                        );
+                    }
                 }
             }
             // Update local position immediately so subsequent reads don't use stale data

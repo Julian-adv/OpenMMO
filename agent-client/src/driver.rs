@@ -444,13 +444,17 @@ fn format_schedule_context(
     active_idx: Option<usize>,
 ) -> Option<String> {
     let entry = &schedule[active_idx?];
-    Some(format!(
+    let mut line = format!(
         "Schedule: go to {} at ({:.1}, {:.1}, {:.1})",
         entry.display_label(),
         entry.pos[0],
         entry.pos[1],
         entry.pos[2]
-    ))
+    );
+    if let Some(ref action) = entry.action {
+        line.push_str(&format!(" — using {action} (DO NOT move, you are resting)"));
+    }
+    Some(line)
 }
 
 /// The main LLM agent driver loop. Runs as a tokio task.
@@ -547,7 +551,10 @@ pub async fn llm_driver(
         .await
     {
         Ok(response) => {
-            attack_target = handle_response(&state, &response, &memory_file).await;
+            let skip_move = active_schedule
+                .0
+                .map_or(false, |i| schedule[i].action.is_some());
+            attack_target = handle_response(&state, &response, &memory_file, skip_move).await;
             last_prompt_at = Instant::now();
         }
         Err(e) => {
@@ -594,7 +601,11 @@ pub async fn llm_driver(
                 let handle = llm_in_flight.take().unwrap();
                 match handle.await {
                     Ok(Ok(response)) => {
-                        let new_target = handle_response(&state, &response, &memory_file).await;
+                        let skip = active_schedule
+                            .0
+                            .map_or(false, |i| schedule[i].action.is_some());
+                        let new_target =
+                            handle_response(&state, &response, &memory_file, skip).await;
                         if new_target.is_some() {
                             attack_target = new_target;
                         }
@@ -876,6 +887,7 @@ async fn handle_response(
     state: &Arc<Mutex<SharedState>>,
     response: &str,
     memory_file: &Option<String>,
+    skip_movement: bool,
 ) -> Option<String> {
     let agent_resp = match parse_agent_response(response) {
         Ok(r) => r,
@@ -913,6 +925,20 @@ async fn handle_response(
     let mut last_attack_target = None;
 
     for action in &agent_resp.actions {
+        // Skip movement/attack when resting on furniture (schedule action active)
+        if skip_movement
+            && matches!(
+                action,
+                AgentAction::Move { .. } | AgentAction::Attack { .. }
+            )
+        {
+            debug!(
+                "Skipping {:?} action — schedule furniture interaction active",
+                action
+            );
+            continue;
+        }
+
         // For attack actions, chase the monster and attack
         if let AgentAction::Attack { monster_id } = action {
             info!("Agent attacking monster {monster_id}, chasing...");
@@ -1023,6 +1049,16 @@ async fn check_schedule_transition(
     let (is_night, game_hour, game_minute) = { state.lock().await.time_context() };
     let new = resolve_active_schedule(schedule, is_night, game_hour, game_minute);
     if new != current {
+        // Stop interaction from previous schedule entry if it had an action
+        if let Some(prev_i) = current.0 {
+            if schedule[prev_i].action.is_some() {
+                let mut s = state.lock().await;
+                if let Err(e) = s.send_command(ClientMessage::StopInteraction).await {
+                    error!("[{label}] Failed to send StopInteraction: {e}");
+                }
+            }
+        }
+
         if let Some(i) = new.0 {
             let entry = &schedule[i];
             info!(
@@ -1037,6 +1073,19 @@ async fn check_schedule_transition(
 
 /// Walk to a schedule entry's position and set the final rotation.
 /// If the entry has waypoints, visits each one in order before going to `pos`.
+/// Send InteractFurniture if the schedule entry has an action.
+async fn send_interact_if_needed(s: &mut SharedState, action: &Option<String>) {
+    if let Some(ref furniture_type) = action {
+        debug!("Sending InteractFurniture: {furniture_type}");
+        let cmd = ClientMessage::InteractFurniture {
+            furniture_type: furniture_type.clone(),
+        };
+        if let Err(e) = s.send_command(cmd).await {
+            error!("Failed to send InteractFurniture: {e}");
+        }
+    }
+}
+
 async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
     // Walk through patrol waypoints first (if any)
     for (i, wp) in entry.waypoints.iter().enumerate() {
@@ -1062,39 +1111,53 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
     // Go to final position
     let (x, y, z) = (entry.pos[0], entry.pos[1], entry.pos[2]);
 
-    // Check if we're already near the target
+    // Check if we're already near the target (including floor level)
     {
-        let s = state.lock().await;
+        let mut s = state.lock().await;
         if let Some(ref p) = s.self_player {
             let dx = x - p.position.x;
             let dz = z - p.position.z;
-            if (dx * dx + dz * dz).sqrt() < SCHEDULE_ARRIVAL_RADIUS {
+            let same_floor = s.self_floor_level == entry.floor_level;
+            if same_floor && (dx * dx + dz * dz).sqrt() < SCHEDULE_ARRIVAL_RADIUS {
+                debug!("Already near schedule target — skipping movement");
+                send_interact_if_needed(&mut s, &entry.action).await;
                 return;
             }
         }
     }
 
-    match execute_move(state, x, z, entry.floor_level).await {
-        MoveResult::Arrived => {
-            // Send final position with exact rotation
-            let rot_rad = entry.rotation.to_radians();
-            let mut s = state.lock().await;
-            s.self_floor_level = entry.floor_level;
-            let cmd = ClientMessage::PlayerMove {
-                position: onlinerpg_shared::Position { x, y, z },
-                rotation: rot_rad,
-                floor_level: entry.floor_level as i8,
-            };
-            if let Err(e) = s.send_command(cmd).await {
-                error!("Failed to send schedule rotation: {e}");
-            }
-        }
+    let arrived = match execute_move(state, x, z, entry.floor_level).await {
+        MoveResult::Arrived => true,
         MoveResult::Blocked => {
-            warn!("Schedule move blocked — cannot reach ({x:.1}, {z:.1})");
+            // Force-move to schedule position (e.g. cross-floor moves through
+            // closed doors). NPCs must follow their schedules.
+            warn!(
+                "Schedule move blocked — force-moving to ({x:.1}, {z:.1}) floor {}",
+                entry.floor_level
+            );
+            true
         }
         MoveResult::Error => {
             error!("Schedule move error");
+            false
         }
+    };
+
+    if arrived {
+        // Send final position with exact rotation
+        let rot_rad = entry.rotation.to_radians();
+        let mut s = state.lock().await;
+        s.self_floor_level = entry.floor_level;
+        let cmd = ClientMessage::PlayerMove {
+            position: onlinerpg_shared::Position { x, y, z },
+            rotation: rot_rad,
+            floor_level: entry.floor_level as i8,
+        };
+        if let Err(e) = s.send_command(cmd).await {
+            error!("Failed to send schedule move: {e}");
+        }
+
+        send_interact_if_needed(&mut s, &entry.action).await;
     }
 }
 

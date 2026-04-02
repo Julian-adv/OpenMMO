@@ -148,6 +148,8 @@ pub struct Player {
     pub torch_on: bool,
     #[serde(default)]
     pub floor_level: i8,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub furniture_type: Option<String>,
     #[serde(skip)]
     pub last_combat_at: u64,
 }
@@ -280,6 +282,10 @@ pub enum ClientMessage {
     TorchToggle {
         enabled: bool,
     },
+    InteractFurniture {
+        furniture_type: String,
+    },
+    StopInteraction,
     Heartbeat,
     PlaceHouse {
         house: housing::HouseData,
@@ -427,6 +433,10 @@ pub enum ServerMessage {
     PlayerTorchToggled {
         player_id: String,
         enabled: bool,
+    },
+    PlayerInteractionChanged {
+        player_id: String,
+        furniture_type: Option<String>,
     },
     HouseSpawned {
         house: housing::HouseData,

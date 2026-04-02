@@ -277,6 +277,24 @@ impl super::GameState {
         }
     }
 
+    pub async fn set_player_interaction(
+        &self,
+        player_id: &PlayerId,
+        furniture_type: Option<String>,
+    ) {
+        let mut players = self.players.write().await;
+        if let Some(player) = players.get_mut(player_id) {
+            player.furniture_type = furniture_type.clone();
+            self.broadcast(
+                ServerMessage::PlayerInteractionChanged {
+                    player_id: player_id.clone(),
+                    furniture_type,
+                },
+                None,
+            );
+        }
+    }
+
     pub async fn mark_dirty(&self, player_id: &PlayerId) {
         let mut dirty = self.dirty_players.write().await;
         dirty.insert(player_id.clone());

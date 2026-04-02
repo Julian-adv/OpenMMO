@@ -12,7 +12,8 @@
       "pos": [-1534.5, 13.0, 473.0],
       "rotation": -70.0,
       "floor_level": 1,
-      "label": "bedroom on 2nd floor"
+      "label": "bedroom on 2nd floor",
+      "action": "bed"
     }
   ]
 }

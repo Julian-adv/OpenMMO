@@ -14,6 +14,8 @@ pub struct ScheduleEntry {
     pub floor_level: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
     #[serde(default)]
     pub waypoints: Vec<[f32; 3]>,
 }
