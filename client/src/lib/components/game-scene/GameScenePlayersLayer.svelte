@@ -15,7 +15,8 @@
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
 
   import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
-  import { playerFloorLevel } from '../../stores/housingStore'
+  import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
+  import { housingManager } from '../../managers/housingManager'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
 
   // Max remote players that get torch point lights (no shadows — WebGPU PointShadowNode
@@ -78,6 +79,24 @@
   })
 
   let localFloorLevel = $derived(Math.max(0, $playerFloorLevel))
+  let localHouseId = $derived($playerInsideHouseId)
+
+  function isRemotePlayerVisible(remoteFloorLevel: number, pos: { x: number; y: number; z: number }): boolean {
+    const remoteHouse = housingManager.findHouseAtPoint(pos.x, pos.y, pos.z)
+    if (localHouseId) {
+      return remoteFloorLevel === localFloorLevel && remoteHouse?.id === localHouseId
+    }
+    return remoteHouse == null
+  }
+
+  let remoteVisibility = $derived.by(() => {
+    const map = new SvelteMap<string, boolean>()
+    for (const [id, player] of otherPlayers) {
+      const rp = remotePlayers.get(id)
+      map.set(id, rp ? isRemotePlayerVisible(player.floorLevel, rp.position) : false)
+    }
+    return map
+  })
 
   // Compute torch mode for each remote player:
   // - Closest N torch-bearing players get 'light-only'
@@ -90,12 +109,8 @@
     const torchPlayers: { id: string; dist: number }[] = []
 
     for (const [id, player] of otherPlayers) {
-      if (!player.torchOn || player.floorLevel !== localFloorLevel) {
-        modes.set(id, 'off')
-        continue
-      }
       const rp = remotePlayers.get(id)
-      if (!rp) {
+      if (!player.torchOn || !rp || !remoteVisibility.get(id)) {
         modes.set(id, 'off')
         continue
       }
@@ -130,9 +145,8 @@
     const torchPlayers: { id: string; dist: number }[] = []
 
     for (const [id, player] of otherPlayers) {
-      if (!player.torchOn || player.floorLevel !== localFloorLevel) continue
       const rp = remotePlayers.get(id)
-      if (!rp) continue
+      if (!player.torchOn || !rp || !remoteVisibility.get(id)) continue
       const dx = rp.position.x - playerPos.x
       const dz = rp.position.z - playerPos.z
       torchPlayers.push({ id, dist: dx * dx + dz * dz })
@@ -212,14 +226,14 @@
   {#each [...otherPlayers.values()] as player, index (player.id)}
     {@const remotePlayer = remotePlayers.get(player.id)}
     {#if remotePlayer}
-      {@const sameFloor = player.floorLevel === localFloorLevel}
+      {@const visible = remoteVisibility.get(player.id) ?? false}
       {@const terrainY = heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z)}
       {@const baseY = (terrainY != null && remotePlayer.position.y > terrainY + 1.0) ? remotePlayer.position.y : (terrainY ?? remotePlayer.position.y)}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
           remotePlayer.position.x,
-          sameFloor ? baseY : OFFSCREEN_Y,
+          visible ? baseY : OFFSCREEN_Y,
           remotePlayer.position.z
         )}
         name={player.name}

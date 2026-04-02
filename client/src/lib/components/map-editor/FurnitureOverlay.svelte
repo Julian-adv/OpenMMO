@@ -22,7 +22,8 @@
   import { tileToRegion } from '../../managers/terrainMetaManager'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { furnitureManager } from '../../managers/furnitureManager'
-  import { playerFloorLevel } from '../../stores/housingStore'
+  import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
+  import { housingManager } from '../../managers/housingManager'
   import { loadGLB } from '../../utils/gltfCache'
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
@@ -40,6 +41,7 @@
   let debugInfo = $state<PlayerDebugInfo | null>(null)
   let isEditorMode = $state(false)
   let currentFloor = $state(-1)
+  let currentHouseId = $state<string | null>(null)
 
   const unsubs: Unsubscriber[] = [
     editorTool.subscribe((v) => (tool = v)),
@@ -52,6 +54,7 @@
     playerDebugInfo.subscribe((v) => (debugInfo = v)),
     mapEditorMode.subscribe((v) => (isEditorMode = v)),
     playerFloorLevel.subscribe((v) => (currentFloor = v)),
+    playerInsideHouseId.subscribe((v) => (currentHouseId = v)),
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
@@ -154,7 +157,7 @@
 
   function rebuild() {
     const visibleFloor = Math.max(0, currentFloor)
-    const key = buildKey(placements) + `|sel:${isEditing() ? selectedId : ''}|fl:${visibleFloor}`
+    const key = buildKey(placements) + `|sel:${isEditing() ? selectedId : ''}|fl:${visibleFloor}|h:${currentHouseId ?? ''}`
     if (key === lastBuildKey) return
     lastBuildKey = key
 
@@ -168,6 +171,12 @@
 
     for (const p of placements) {
       if (p.floorLevel !== visibleFloor) continue
+      const pHouse = housingManager.findHouseAtPoint(p.x, p.y, p.z)
+      if (currentHouseId) {
+        if (pHouse?.id !== currentHouseId) continue
+      } else {
+        if (pHouse != null) continue
+      }
       const template = modelCache.get(p.type)
       if (!template) {
         getModel(p.type)

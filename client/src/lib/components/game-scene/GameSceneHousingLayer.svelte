@@ -27,7 +27,7 @@
     TERRAIN_TILE_SIZE,
     getTerrainChunkFromPosition,
   } from './terrain-utils'
-  import { playerFloorOffset, playerFloorLevel } from '../../stores/housingStore'
+  import { playerFloorOffset, playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
   import { debugVisible, passabilityDebugVisible } from '../../stores/debugStore'
   import { EDGE_N, EDGE_E, EDGE_S, EDGE_W } from '../../managers/housing-passability'
   import { get } from 'svelte/store'
@@ -42,7 +42,7 @@
   housingGroup.name = 'housingLayer'
 
   const houses = new SvelteMap<string, HouseGroupResult>()
-  let playerInsideHouseId: string | null = null
+  let currentInsideHouseId: string | null = null
   let playerInsideFloor = -1
   let lastFloorOffset = 0
   const _tmpVec = new THREE.Vector3()
@@ -135,8 +135,8 @@
   // Load housing textures (materials update in-place via needsUpdate)
   initHousingTextures().then(() => {
     // Re-apply ghost materials now that textures are loaded
-    if (playerInsideHouseId) {
-      const curr = houses.get(playerInsideHouseId)
+    if (currentInsideHouseId) {
+      const curr = houses.get(currentInsideHouseId)
       if (curr) {
         resetDoorGhostMaterials(curr)
         applyDoorGhostMaterials(curr, playerInsideFloor)
@@ -192,7 +192,7 @@
       housingGroup.add(result.houseGroup)
 
       // Re-apply visibility if player is inside this house
-      if (data.id === playerInsideHouseId) {
+      if (data.id === currentInsideHouseId) {
         applyFloorVisibility(result, playerInsideFloor)
       }
     }
@@ -357,12 +357,12 @@
 
     // Update visibility when house or floor changes
     if (
-      insideId !== playerInsideHouseId ||
+      insideId !== currentInsideHouseId ||
       effectiveFloor !== playerInsideFloor
     ) {
       // Restore previous house
-      if (playerInsideHouseId) {
-        const prev = houses.get(playerInsideHouseId)
+      if (currentInsideHouseId) {
+        const prev = houses.get(currentInsideHouseId)
         if (prev) resetFloorVisibility(prev)
       }
       // Clear occlusion if entering a previously-occluded house
@@ -376,9 +376,10 @@
         const curr = houses.get(insideId)
         if (curr) applyFloorVisibility(curr, effectiveFloor)
       }
-      playerInsideHouseId = insideId
+      currentInsideHouseId = insideId
       playerInsideFloor = effectiveFloor
       playerFloorLevel.set(effectiveFloor)
+      playerInsideHouseId.set(insideId)
     }
 
     if (newOffset !== lastFloorOffset) {
@@ -406,7 +407,7 @@
     // Occlusion pass: hide houses that block the camera view of the player
     // Mark-and-sweep to avoid per-frame Set allocation
     for (const [id, result] of houses) {
-      if (id === playerInsideHouseId) continue
+      if (id === currentInsideHouseId) continue
       if (houseOccludesPlayer(result.aabb, playerPosition.x, playerPosition.y, playerPosition.z)) {
         if (!occludedHouseIds.has(id)) {
           occludedHouseIds.add(id)
