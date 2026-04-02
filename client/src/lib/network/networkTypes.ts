@@ -126,6 +126,8 @@ export type ClientMessage =
         segment_index: number
       }
     }
+  | { InteractFurniture: { furniture_type: string; furniture_id: number } }
+  | 'StopInteraction'
   | 'Heartbeat'
 
 export type AuthSuccessPayload = {

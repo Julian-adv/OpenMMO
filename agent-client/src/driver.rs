@@ -1073,12 +1073,13 @@ async fn check_schedule_transition(
 
 /// Walk to a schedule entry's position and set the final rotation.
 /// If the entry has waypoints, visits each one in order before going to `pos`.
-/// Send InteractFurniture if the schedule entry has an action.
-async fn send_interact_if_needed(s: &mut SharedState, action: &Option<String>) {
-    if let Some(ref furniture_type) = action {
-        debug!("Sending InteractFurniture: {furniture_type}");
+/// Send InteractFurniture if the schedule entry has an action and furniture_id.
+async fn send_interact_if_needed(s: &mut SharedState, entry: &ScheduleEntry) {
+    if let (Some(ref furniture_type), Some(furniture_id)) = (&entry.action, entry.furniture_id) {
+        debug!("Sending InteractFurniture: {furniture_type} (id={furniture_id})");
         let cmd = ClientMessage::InteractFurniture {
             furniture_type: furniture_type.clone(),
+            furniture_id,
         };
         if let Err(e) = s.send_command(cmd).await {
             error!("Failed to send InteractFurniture: {e}");
@@ -1120,7 +1121,7 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
             let same_floor = s.self_floor_level == entry.floor_level;
             if same_floor && (dx * dx + dz * dz).sqrt() < SCHEDULE_ARRIVAL_RADIUS {
                 debug!("Already near schedule target — skipping movement");
-                send_interact_if_needed(&mut s, &entry.action).await;
+                send_interact_if_needed(&mut s, entry).await;
                 return;
             }
         }
@@ -1157,7 +1158,7 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
             error!("Failed to send schedule move: {e}");
         }
 
-        send_interact_if_needed(&mut s, &entry.action).await;
+        send_interact_if_needed(&mut s, entry).await;
     }
 }
 

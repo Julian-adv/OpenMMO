@@ -151,6 +151,8 @@ pub struct Player {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub furniture_type: Option<String>,
     #[serde(skip)]
+    pub furniture_id: Option<u32>,
+    #[serde(skip)]
     pub last_combat_at: u64,
 }
 
@@ -284,6 +286,7 @@ pub enum ClientMessage {
     },
     InteractFurniture {
         furniture_type: String,
+        furniture_id: u32,
     },
     StopInteraction,
     Heartbeat,
@@ -437,6 +440,9 @@ pub enum ServerMessage {
     PlayerInteractionChanged {
         player_id: String,
         furniture_type: Option<String>,
+    },
+    InteractionRejected {
+        reason: String,
     },
     HouseSpawned {
         house: housing::HouseData,

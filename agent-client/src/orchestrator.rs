@@ -58,6 +58,8 @@ pub struct ScheduleEntry {
     pub label: Option<String>,
     /// Furniture type to interact with after arriving (e.g. "bed").
     pub action: Option<String>,
+    /// Furniture placement ID to interact with.
+    pub furniture_id: Option<u32>,
     /// Optional patrol route: list of [x, y, z] waypoints to visit before going to `pos`.
     #[serde(default)]
     pub waypoints: Vec<[f32; 3]>,

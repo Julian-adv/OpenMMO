@@ -13,7 +13,8 @@
       "rotation": -70.0,
       "floor_level": 1,
       "label": "bedroom on 2nd floor",
-      "action": "bed"
+      "action": "bed",
+      "furniture_id": 1
     }
   ]
 }

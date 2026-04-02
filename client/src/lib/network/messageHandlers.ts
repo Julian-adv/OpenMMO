@@ -59,6 +59,7 @@ export type MessageEvents = {
   characterError: NetworkEvent<(message: string) => void>
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: string) => void>
+  interactionRejected: NetworkEvent<(reason: string) => void>
 }
 
 export function handleServerMessage(
@@ -566,6 +567,10 @@ export function handleServerMessage(
       }
       break
     }
+
+    case 'InteractionRejected':
+      events.interactionRejected.emit(data.reason)
+      break
 
     case 'HouseSpawned':
       housingManager.handleRemoteHouseSpawned(data.house)

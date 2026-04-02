@@ -69,8 +69,7 @@
   const STAND_UP_DURATION = 300 // ms, matches animation crossfade duration
   let standUpTimer: ReturnType<typeof setTimeout> | null = null
 
-  function exitFurnitureInteraction() {
-    // Move character toward the foot side of the furniture before standing up
+  function exitFurnitureInteraction(notify = true) {
     if (currentPlayer) {
       const footDist = 0.7
       const fx = currentPlayer.position.x + Math.sin(playerRotation) * footDist
@@ -82,7 +81,6 @@
       }
     }
 
-    // Transition to idle keeping current rotation (stand-up animation plays)
     const idleState: PlayerState = {
       ...playerState,
       state: 'idle',
@@ -92,6 +90,10 @@
     }
     playerState = idleState
     onStateChange(idleState)
+
+    if (notify) {
+      networkManager.sendStopInteraction()
+    }
   }
 
   function stopMovement() {
@@ -762,6 +764,8 @@
             currentPlayer.position.y = sampleHeight(fx, fz)
           }
         }
+
+        networkManager.sendInteractFurniture(intent.furnitureType, intent.furnitureId)
         break
       }
       case 'move_to_ground': {
@@ -792,10 +796,19 @@
       }
     )
 
+    const unsubscribeInteractionRejected = networkManager.interactionRejected.on(
+      () => {
+        if (playerState.state === 'interact') {
+          exitFurnitureInteraction(false)
+        }
+      }
+    )
+
     return () => {
       removeInputListeners()
       unsubscribeRespawnRequested()
       unsubscribePlayerRespawned()
+      unsubscribeInteractionRejected()
       if (standUpTimer) clearTimeout(standUpTimer)
     }
   })

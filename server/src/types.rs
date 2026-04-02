@@ -24,6 +24,7 @@ pub fn new_player(
         torch_on: false,
         floor_level: 0,
         furniture_type: None,
+        furniture_id: None,
         last_combat_at: 0,
     }
 }

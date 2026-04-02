@@ -332,7 +332,8 @@ impl SharedState {
             | ServerMessage::HousesInArea { .. }
             | ServerMessage::HouseUpdated { .. }
             | ServerMessage::HouseRemoved { .. }
-            | ServerMessage::DoorToggled { .. } => EventUrgency::Noise,
+            | ServerMessage::DoorToggled { .. }
+            | ServerMessage::InteractionRejected { .. } => EventUrgency::Noise,
 
             // Auth/character events: routine (handled before game entry)
             _ => EventUrgency::Routine,

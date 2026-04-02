@@ -22,6 +22,7 @@ export type ClickIntent =
     }
   | {
       type: 'interact_furniture'
+      furnitureId: number
       furnitureType: string
       interaction: string
       position: Position
@@ -206,9 +207,15 @@ class InputHandler {
           let obj: THREE.Object3D | null = furnitureHits[0].object
           while (obj) {
             const d = obj.userData
-            if (d && d.furnitureType && d.furnitureInteraction) {
+            if (
+              d &&
+              d.furnitureId != null &&
+              d.furnitureType &&
+              d.furnitureInteraction
+            ) {
               return {
                 type: 'interact_furniture',
+                furnitureId: d.furnitureId as number,
                 furnitureType: d.furnitureType,
                 interaction: d.furnitureInteraction,
                 position: {

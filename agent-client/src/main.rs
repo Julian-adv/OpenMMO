@@ -180,5 +180,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::SpawnMonsterRequest { .. } => "SpawnMonsterRequest",
         ServerMessage::NoSpawnZones { .. } => "NoSpawnZones",
         ServerMessage::PlayerInteractionChanged { .. } => "PlayerInteractionChanged",
+        ServerMessage::InteractionRejected { .. } => "InteractionRejected",
     }
 }

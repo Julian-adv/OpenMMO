@@ -58,6 +58,7 @@ class NetworkManager {
   readonly characterDeleted = createEvent<(characterId: number) => void>()
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
+  readonly interactionRejected = createEvent<(reason: string) => void>()
 
   constructor() {
     this.joinSuccess.on(() => {
@@ -76,6 +77,7 @@ class NetworkManager {
       characterError: this.characterError,
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
+      interactionRejected: this.interactionRejected,
     }
   }
 
@@ -336,6 +338,19 @@ class NetworkManager {
 
   sendTorchToggle(enabled: boolean) {
     this.sendMessage({ TorchToggle: { enabled } })
+  }
+
+  sendInteractFurniture(furnitureType: string, furnitureId: number) {
+    this.sendMessage({
+      InteractFurniture: {
+        furniture_type: furnitureType,
+        furniture_id: furnitureId,
+      },
+    })
+  }
+
+  sendStopInteraction() {
+    this.sendMessage('StopInteraction')
   }
 
   sendChatMessage(message: string) {
