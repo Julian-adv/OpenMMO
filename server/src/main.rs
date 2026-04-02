@@ -5,6 +5,7 @@ mod game;
 mod game_state;
 mod housing;
 mod monster_defs;
+mod npc_schedule;
 mod terrain;
 mod types;
 mod world_config;
@@ -15,6 +16,8 @@ use connection::handle_connection;
 use game_state::GameState;
 use housing::routes::housing_router;
 use housing::HousingIO;
+use npc_schedule::routes::npc_router;
+use npc_schedule::NpcIO;
 use std::sync::Arc;
 use terrain::io::TerrainIO;
 use terrain::routes::terrain_router;
@@ -82,6 +85,9 @@ async fn main() {
     };
 
     let housing_io = Arc::new(HousingIO::new(std::path::PathBuf::from("./data/housing")));
+    let npc_io = Arc::new(NpcIO::new(std::path::PathBuf::from(
+        "./agent-client/data/npcs",
+    )));
     let terrain_io = Arc::new(TerrainIO::new(std::path::PathBuf::from(&args.terrain_dir)));
 
     // Load spawn rules and no-spawn zones from per-region zone files
@@ -170,6 +176,7 @@ async fn main() {
         .allow_headers(Any);
     let terrain_app = terrain_router(terrain_io)
         .merge(housing_router(housing_io))
+        .merge(npc_router(npc_io))
         .layer(cors)
         .layer(CompressionLayer::new());
     let terrain_addr = format!("0.0.0.0:{}", terrain_port);

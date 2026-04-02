@@ -32,6 +32,7 @@
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
   import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
+  import NpcWaypointOverlay from './map-editor/NpcWaypointOverlay.svelte'
   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
@@ -913,6 +914,7 @@
 {#if $mapEditorMode}
   <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />
   <ZoneOverlay />
+  <NpcWaypointOverlay />
 {/if}
 
 {#if $housingEditorMode}

@@ -5,6 +5,7 @@ import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import type { TerrainSplatManager } from '../managers/terrainSplatManager'
 import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
 import type { ZoneManager, ZoneData } from '../managers/zoneManager'
+import type { NpcScheduleData } from '../managers/npcScheduleManager'
 
 export interface HoveredCell {
   tileX: number
@@ -31,7 +32,7 @@ export type BrushMode = 'raise' | 'lower' | 'flatten'
 export const brushMode = writable<BrushMode>('raise')
 
 // Editor tool selection
-export type EditorTool = 'height' | 'splat' | 'zone'
+export type EditorTool = 'height' | 'splat' | 'zone' | 'npc'
 export const editorTool = writable<EditorTool>('height')
 
 // Splat layer: 0=R, 1=G, 2=B, 3=A (texture depends on region)
@@ -131,3 +132,11 @@ export const hoveredZoneIndex = writable<{
   type: 'noSpawn' | 'spawn'
   index: number
 } | null>(null)
+
+// NPC editor stores
+export const npcNames = writable<string[]>([])
+export const selectedNpc = writable<string | null>(null)
+export const selectedNpcSchedule = writable<NpcScheduleData | null>(null)
+export const selectedScheduleIndex = writable<number>(0)
+// -1 = dragging home pos, 0..n = dragging waypoint index, null = not dragging
+export const draggingWaypointIndex = writable<number | null>(null)

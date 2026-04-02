@@ -26,6 +26,10 @@ export default defineConfig({
         target: 'http://localhost:10016',
         changeOrigin: true,
       },
+      '/api/npcs': {
+        target: 'http://localhost:10016',
+        changeOrigin: true,
+      },
       '/ws': {
         target: 'ws://localhost:10015',
         ws: true,

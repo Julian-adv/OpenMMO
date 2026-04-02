@@ -1,8 +1,10 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex } from '../../stores/editorStore'
   import type { EditorTool, ZoneSubTool } from '../../stores/editorStore'
+  import { NpcScheduleManager } from '../../managers/npcScheduleManager'
+  import type { NpcScheduleData } from '../../managers/npcScheduleManager'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import { get } from 'svelte/store'
@@ -11,6 +13,8 @@
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
   import { tileToRegion } from '../../managers/terrainMetaManager'
+  import { gameStore } from '../../stores/gameStore'
+  import { remotePlayerManager } from '../../managers/remotePlayerManager'
 
   const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
 
@@ -41,6 +45,13 @@
   let currentZoneSubTool = $state<ZoneSubTool>('noSpawn')
   let currentZoneDrawStart = $state<{ x: number; z: number } | null>(null)
 
+  // NPC editor state
+  let currentNpcNames = $state<string[]>([])
+  let currentNpcSchedule = $state<NpcScheduleData | null>(null)
+  let currentSchedIdx = $state(0)
+  let currentDragWaypoint = $state<number | null>(null)
+  let npcManager: NpcScheduleManager | null = null
+
   brushSize.subscribe((v) => (currentBrushSize = v))
   brushStrength.subscribe((v) => (currentBrushStrength = v))
   brushRaiseMode.subscribe((v) => {
@@ -57,6 +68,10 @@
   splatLayer.subscribe((v) => (currentSplatLayer = v))
   zoneSubTool.subscribe((v) => (currentZoneSubTool = v))
   zoneDrawStart.subscribe((v) => (currentZoneDrawStart = v))
+  npcNames.subscribe((v) => (currentNpcNames = v))
+  selectedNpcSchedule.subscribe((v) => (currentNpcSchedule = v))
+  selectedScheduleIndex.subscribe((v) => (currentSchedIdx = v))
+  draggingWaypointIndex.subscribe((v) => (currentDragWaypoint = v))
 
   function syncBrushMode() {
     if (ctrlHeld) {
@@ -111,7 +126,12 @@
 
     hoveredCell.set({ tileX, tileZ, cellX, cellZ, worldX, worldZ })
     lastWorldPos = { x: hit.point.x, z: hit.point.z }
-    brushWorldPos.set({ x: hit.point.x, z: hit.point.z })
+    // Only show brush overlay for height/splat tools
+    if (currentTool === 'height' || currentTool === 'splat') {
+      brushWorldPos.set({ x: hit.point.x, z: hit.point.z })
+    } else {
+      brushWorldPos.set(null)
+    }
 
     if (heightManager) {
       cursorHeight.set(heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ))
@@ -221,9 +241,133 @@
 
     updateCursorFromHit(hit)
 
+    if (currentTool === 'npc' && currentDragWaypoint !== null) {
+      handleNpcDrag(hit.point.x, hit.point.z)
+      return
+    }
+
     if (isPainting) {
       applyBrushAtCursor()
     }
+  }
+
+  // --- NPC waypoint interaction ---
+
+  function findClosestWaypoint(worldX: number, worldZ: number): number | null {
+    if (!currentNpcSchedule) return null
+    const entry = currentNpcSchedule.schedule[currentSchedIdx]
+    if (!entry) return null
+
+    const threshold = 4
+    let bestDist = threshold * threshold
+    let bestIdx: number | null = null
+
+    // Check home position (index -1)
+    const hdx = worldX - entry.pos[0]
+    const hdz = worldZ - entry.pos[2]
+    const homeDist = hdx * hdx + hdz * hdz
+    if (homeDist < bestDist) {
+      bestDist = homeDist
+      bestIdx = -1
+    }
+
+    // Check waypoints
+    const waypoints = entry.waypoints
+    for (let i = 0; i < waypoints.length; i++) {
+      const wp = waypoints[i]
+      const dx = worldX - wp[0]
+      const dz = worldZ - wp[2]
+      const dist = dx * dx + dz * dz
+      if (dist < bestDist) {
+        bestDist = dist
+        bestIdx = i
+      }
+    }
+
+    return bestIdx
+  }
+
+  function findClosestNpc(worldX: number, worldZ: number, threshold: number): string | null {
+    const state = get(gameStore)
+    const names = currentNpcNames
+    if (names.length === 0) return null
+
+    let bestDist = threshold * threshold
+    let bestName: string | null = null
+
+    for (const [id, player] of state.otherPlayers) {
+      const nameLower = player.name.toLowerCase()
+      if (!names.includes(nameLower)) continue
+      const rp = remotePlayerManager.players.get(id)
+      if (!rp) continue
+      const dx = worldX - rp.position.x
+      const dz = worldZ - rp.position.z
+      const dist = dx * dx + dz * dz
+      if (dist < bestDist) {
+        bestDist = dist
+        bestName = nameLower
+      }
+    }
+    return bestName
+  }
+
+  async function loadNpcSchedule(name: string) {
+    selectedNpcSchedule.set(null)
+    selectedScheduleIndex.set(0)
+    selectedNpc.set(name)
+    try {
+      if (!npcManager) npcManager = new NpcScheduleManager()
+      const data = await npcManager.fetchSchedule(name)
+      if (get(selectedNpc) === name) {
+        selectedNpcSchedule.set(data)
+      }
+    } catch (e) {
+      console.error(`[NPC] Failed to fetch schedule for '${name}':`, e)
+    }
+  }
+
+  function handleNpcMouseDown(worldX: number, worldZ: number) {
+    // NPC selection takes priority over waypoint dragging (tight 3-unit radius)
+    const clickedNpc = findClosestNpc(worldX, worldZ, 3)
+    if (clickedNpc) {
+      loadNpcSchedule(clickedNpc)
+      return
+    }
+    // Then try to grab a waypoint
+    const wpIdx = findClosestWaypoint(worldX, worldZ)
+    if (wpIdx !== null) {
+      draggingWaypointIndex.set(wpIdx)
+      return
+    }
+    // Fall back to wider NPC search (5-unit radius)
+    const nearbyNpc = findClosestNpc(worldX, worldZ, 5)
+    if (nearbyNpc) loadNpcSchedule(nearbyNpc)
+  }
+
+  function handleNpcDrag(worldX: number, worldZ: number) {
+    if (currentDragWaypoint === null || !currentNpcSchedule) return
+    const entry = currentNpcSchedule.schedule[currentSchedIdx]
+    if (!entry) return
+
+    const y = heightManager
+      ? heightManager.getHeightAtWorldPosition(worldX, worldZ)
+      : 0
+
+    // Clone schedule to trigger Svelte reactivity (new object reference)
+    const updated: NpcScheduleData = {
+      schedule: currentNpcSchedule.schedule.map((s, i) => {
+        if (i !== currentSchedIdx) return s
+        const newEntry = { ...s }
+        if (currentDragWaypoint === -1) {
+          newEntry.pos = [worldX, y, worldZ]
+        } else {
+          newEntry.waypoints = [...(s.waypoints)]
+          newEntry.waypoints[currentDragWaypoint!] = [worldX, y, worldZ]
+        }
+        return newEntry
+      }),
+    }
+    selectedNpcSchedule.set(updated)
   }
 
   async function handleZoneClick(worldX: number, worldZ: number) {
@@ -285,6 +429,12 @@
       return
     }
 
+    if (currentTool === 'npc') {
+      updateCursorFromHit(hit)
+      handleNpcMouseDown(hit.point.x, hit.point.z)
+      return
+    }
+
     isPainting = true
     lastPaintTime = 0
     updateCursorFromHit(hit)
@@ -296,6 +446,9 @@
       return
     }
     if (event.button !== 0) return
+    if (currentDragWaypoint !== null) {
+      draggingWaypointIndex.set(null)
+    }
     isPainting = false
     lastPaintTime = 0
   }

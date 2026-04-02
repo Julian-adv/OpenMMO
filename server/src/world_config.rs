@@ -1,7 +1,7 @@
+use crate::terrain::io::TerrainIO;
 use onlinerpg_shared::NoSpawnZone;
 use serde::Deserialize;
 use std::sync::LazyLock;
-use crate::terrain::io::TerrainIO;
 use tracing::{info, warn};
 
 #[derive(Debug, Deserialize)]

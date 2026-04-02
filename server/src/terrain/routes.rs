@@ -53,10 +53,7 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
             "/api/terrain/minimap/{rx}/{rz}",
             get(get_minimap).put(put_minimap),
         )
-        .route(
-            "/api/terrain/zones/{rx}/{rz}",
-            get(get_zone).put(put_zone),
-        )
+        .route("/api/terrain/zones/{rx}/{rz}", get(get_zone).put(put_zone))
         .route(
             "/api/terrain/region/{rx}/{rz}",
             delete(delete_region_handler),
@@ -375,16 +372,13 @@ async fn put_zone(
     State(terrain): State<Arc<TerrainIO>>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    terrain
-        .write_zone(rx, rz, &body)
-        .await
-        .map_err(|e| {
-            error!("Failed to write zone ({}, {}): {}", rx, rz, e);
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "Internal server error".to_string(),
-            )
-        })?;
+    terrain.write_zone(rx, rz, &body).await.map_err(|e| {
+        error!("Failed to write zone ({}, {}): {}", rx, rz, e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
     Ok(StatusCode::NO_CONTENT)
 }
 
