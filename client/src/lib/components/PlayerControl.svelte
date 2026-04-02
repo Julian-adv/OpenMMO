@@ -66,6 +66,34 @@
   let playerRotation = $state(0)
   let currentSpeed = $state(0)
 
+  const STAND_UP_DURATION = 300 // ms, matches animation crossfade duration
+  let standUpTimer: ReturnType<typeof setTimeout> | null = null
+
+  function exitFurnitureInteraction() {
+    // Move character toward the foot side of the furniture before standing up
+    if (currentPlayer) {
+      const footDist = 0.7
+      const fx = currentPlayer.position.x + Math.sin(playerRotation) * footDist
+      const fz = currentPlayer.position.z + Math.cos(playerRotation) * footDist
+      currentPlayer.position.x = fx
+      currentPlayer.position.z = fz
+      if (heightManager.hasHeightData(fx, fz)) {
+        currentPlayer.position.y = sampleHeight(fx, fz)
+      }
+    }
+
+    // Transition to idle keeping current rotation (stand-up animation plays)
+    const idleState: PlayerState = {
+      ...playerState,
+      state: 'idle',
+      speed: 0,
+      interactionAnim: undefined,
+      interactOffsetY: undefined,
+    }
+    playerState = idleState
+    onStateChange(idleState)
+  }
+
   function stopMovement() {
     isMoving = false
     movementTarget = null
@@ -73,6 +101,10 @@
     currentSpeed = 0
     pathWaypoints = []
     currentWaypointIndex = 0
+    if (standUpTimer) {
+      clearTimeout(standUpTimer)
+      standUpTimer = null
+    }
     updatePlayerState()
   }
 
@@ -511,6 +543,11 @@
       return
     }
 
+    // Stand up first when leaving furniture interaction
+    if (playerState.state === 'interact') {
+      exitFurnitureInteraction()
+    }
+
     // Cancel click-to-move if keyboard input detected
     if (inputHandler.hasKeysPressed && movementTarget) {
       movementTarget = null
@@ -580,6 +617,19 @@
 
   export function handleClickToMove(clickPosition: Position) {
     if (currentPlayer && currentPlayer.health <= 0) return
+
+    // Stand up first when leaving furniture interaction
+    if (playerState.state === 'interact') {
+      exitFurnitureInteraction()
+
+      if (standUpTimer) clearTimeout(standUpTimer)
+      standUpTimer = setTimeout(() => {
+        standUpTimer = null
+        handleClickToMove(clickPosition)
+      }, STAND_UP_DURATION)
+      return
+    }
+
     if (!currentPlayer || isMoving || inputHandler.hasKeysPressed) {
       // Allow overriding current movement with new click
       if (currentPlayer && isMoving && !inputHandler.hasKeysPressed) {
@@ -746,6 +796,7 @@
       removeInputListeners()
       unsubscribeRespawnRequested()
       unsubscribePlayerRespawned()
+      if (standUpTimer) clearTimeout(standUpTimer)
     }
   })
 </script>
