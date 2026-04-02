@@ -227,11 +227,9 @@ export function handleServerMessage(
         },
         data.rotation
       )
-      if (data.floor_level !== undefined) {
-        const existing = state.otherPlayers.get(data.player_id)
-        if (existing && existing.floorLevel !== data.floor_level) {
-          updatePlayer(data.player_id, { floorLevel: data.floor_level })
-        }
+      const existing = state.otherPlayers.get(data.player_id)
+      if (existing && existing.floorLevel !== data.floor_level) {
+        updatePlayer(data.player_id, { floorLevel: data.floor_level })
       }
       break
     }
