@@ -1,10 +1,13 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex } from '../../stores/editorStore'
-  import type { EditorTool, ZoneSubTool } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedFurnitureType, furnitureRotation, currentFurnitureData, selectedFurniturePlacementId, furniturePreviewPos, furnitureSubTool } from '../../stores/editorStore'
+  import type { EditorTool, ZoneSubTool, FurnitureSubTool, FurnitureRegionData } from '../../stores/editorStore'
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
+  import { furnitureManager } from '../../managers/furnitureManager'
+  import { playerFloorLevel } from '../../stores/housingStore'
+  import { floorYBase, DEFAULT_WALL_HEIGHT } from '../../utils/house-geo-utils'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import { get } from 'svelte/store'
@@ -52,6 +55,12 @@
   let currentDragWaypoint = $state<number | null>(null)
   let npcManager: NpcScheduleManager | null = null
 
+  // Furniture editor state
+  let currentFurnitureType = $state<string | null>(null)
+  let currentFurnitureRot = $state(0)
+  let currentFurnitureSubTool = $state<FurnitureSubTool>('place')
+  let currentPlayerFloor = $state(-1)
+
   brushSize.subscribe((v) => (currentBrushSize = v))
   brushStrength.subscribe((v) => (currentBrushStrength = v))
   brushRaiseMode.subscribe((v) => {
@@ -72,6 +81,10 @@
   selectedNpcSchedule.subscribe((v) => (currentNpcSchedule = v))
   selectedScheduleIndex.subscribe((v) => (currentSchedIdx = v))
   draggingWaypointIndex.subscribe((v) => (currentDragWaypoint = v))
+  selectedFurnitureType.subscribe((v) => (currentFurnitureType = v))
+  furnitureRotation.subscribe((v) => (currentFurnitureRot = v))
+  furnitureSubTool.subscribe((v) => (currentFurnitureSubTool = v))
+  playerFloorLevel.subscribe((v) => (currentPlayerFloor = v))
 
   function syncBrushMode() {
     if (ctrlHeld) {
@@ -145,6 +158,8 @@
         lastRegionX = rx
         lastRegionZ = rz
         currentEditorRegion.set({ rx, rz })
+        // Fetch furniture data for the new region
+        loadFurnitureForRegion(rx, rz)
         const meta = metaManager.getMetaForTile(tileX, tileZ)
         if (meta) {
           currentRegionConfigs.set([...meta.layers])
@@ -240,6 +255,17 @@
     }
 
     updateCursorFromHit(hit)
+
+    if (currentTool === 'furniture' && currentFurnitureSubTool === 'place' && currentFurnitureType) {
+      const terrainY = heightManager
+        ? heightManager.getHeightAtWorldPosition(hit.point.x, hit.point.z)
+        : 0
+      const floor = Math.max(0, currentPlayerFloor)
+      const y = terrainY + floorYBase(floor, DEFAULT_WALL_HEIGHT)
+      furniturePreviewPos.set({ x: hit.point.x, y, z: hit.point.z })
+    } else if (currentTool !== 'furniture') {
+      furniturePreviewPos.set(null)
+    }
 
     if (currentTool === 'npc' && currentDragWaypoint !== null) {
       handleNpcDrag(hit.point.x, hit.point.z)
@@ -370,6 +396,64 @@
     selectedNpcSchedule.set(updated)
   }
 
+  // --- Furniture interaction ---
+
+  async function loadFurnitureForRegion(rx: number, rz: number) {
+
+    const data = await furnitureManager.fetchFurniture(rx, rz)
+    currentFurnitureData.set(data)
+    selectedFurniturePlacementId.set(null)
+  }
+
+  async function handleFurnitureMouseDown(worldX: number, worldZ: number) {
+    if (currentFurnitureSubTool === 'place') {
+      if (!currentFurnitureType) return
+      const terrainY = heightManager
+        ? heightManager.getHeightAtWorldPosition(worldX, worldZ)
+        : 0
+      const floor = Math.max(0, currentPlayerFloor)
+      const y = terrainY + floorYBase(floor, DEFAULT_WALL_HEIGHT)
+      const data = get(currentFurnitureData)
+      const maxId = data.placements.reduce((max, p) => Math.max(max, p.id), 0)
+      const placement = {
+        id: maxId + 1,
+        type: currentFurnitureType,
+        x: worldX,
+        y,
+        z: worldZ,
+        rotation: currentFurnitureRot,
+        floorLevel: floor,
+      }
+      const updated: FurnitureRegionData = {
+        placements: [...data.placements, placement],
+      }
+      currentFurnitureData.set(updated)
+
+      // Auto-save
+      const region = get(currentEditorRegion)
+      if (region) {
+    
+        await furnitureManager.saveFurniture(region.rx, region.rz, updated)
+      }
+    } else {
+      // Select mode: find closest placement
+      const data = get(currentFurnitureData)
+      const threshold = 4
+      let bestDist = threshold * threshold
+      let bestId: number | null = null
+      for (const p of data.placements) {
+        const dx = worldX - p.x
+        const dz = worldZ - p.z
+        const dist = dx * dx + dz * dz
+        if (dist < bestDist) {
+          bestDist = dist
+          bestId = p.id
+        }
+      }
+      selectedFurniturePlacementId.set(bestId)
+    }
+  }
+
   async function handleZoneClick(worldX: number, worldZ: number) {
     if (currentZoneDrawStart) {
       // Second click: finish the rectangle
@@ -435,6 +519,12 @@
       return
     }
 
+    if (currentTool === 'furniture') {
+      updateCursorFromHit(hit)
+      handleFurnitureMouseDown(hit.point.x, hit.point.z)
+      return
+    }
+
     isPainting = true
     lastPaintTime = 0
     updateCursorFromHit(hit)
@@ -453,6 +543,22 @@
     lastPaintTime = 0
   }
 
+  async function handleFurnitureDelete() {
+    const placementId = get(selectedFurniturePlacementId)
+    if (placementId === null) return
+    const data = get(currentFurnitureData)
+    const updated: FurnitureRegionData = {
+      placements: data.placements.filter((p) => p.id !== placementId),
+    }
+    currentFurnitureData.set(updated)
+    selectedFurniturePlacementId.set(null)
+
+    const region = get(currentEditorRegion)
+    if (region) {
+      await furnitureManager.saveFurniture(region.rx, region.rz, updated)
+    }
+  }
+
   function handleKeyDown(event: KeyboardEvent) {
     if (event.key === 'Shift') {
       shiftHeld = true
@@ -461,6 +567,14 @@
     if (event.key === 'Control') {
       ctrlHeld = true
       syncBrushMode()
+    }
+    if (currentTool === 'furniture') {
+      if (event.key === 'r' || event.key === 'R') {
+        furnitureRotation.update((r) => (r + 90) % 360)
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        handleFurnitureDelete()
+      }
     }
   }
 

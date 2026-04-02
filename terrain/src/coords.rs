@@ -78,6 +78,12 @@ pub fn zone_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
 
+/// Build filesystem path for a region furniture JSON file.
+pub fn furniture_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("furniture")
+        .join(format!("r{:+03}_{:+03}.json", rx, rz))
+}
+
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("minimap")

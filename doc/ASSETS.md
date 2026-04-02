@@ -88,6 +88,10 @@
 - sword.glb https://www.fab.com/listings/5fe82d66-eaac-48e0-899d-1fedacdf409a
 - spear.glb https://sketchfab.com/3d-models/spear-f13ddd24e2fe47aa8aca23487afd893e
 
+## Furniture
+
+- bed.glb https://sketchfab.com/3d-models/old-wooden-bed-frame-and-dirty-sheets-79c856755e6a44a3bcf19671e5c70d2d
+
 ## Terrain
 
 - https://tangrams.github.io/heightmapper/#11.16667/34.4293/126.4164

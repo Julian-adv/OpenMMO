@@ -33,6 +33,7 @@
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
   import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
   import NpcWaypointOverlay from './map-editor/NpcWaypointOverlay.svelte'
+  import FurnitureOverlay from './map-editor/FurnitureOverlay.svelte'
   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
@@ -916,6 +917,7 @@
   <ZoneOverlay />
   <NpcWaypointOverlay />
 {/if}
+<FurnitureOverlay />
 
 {#if $housingEditorMode}
   <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />

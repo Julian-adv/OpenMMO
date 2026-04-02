@@ -1,0 +1,8 @@
+[
+  {
+    "id": "bed",
+    "name": "Bed",
+    "model": "bed.glb",
+    "interaction": "sleep"
+  }
+]

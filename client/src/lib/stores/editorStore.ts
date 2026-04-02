@@ -32,7 +32,7 @@ export type BrushMode = 'raise' | 'lower' | 'flatten'
 export const brushMode = writable<BrushMode>('raise')
 
 // Editor tool selection
-export type EditorTool = 'height' | 'splat' | 'zone' | 'npc'
+export type EditorTool = 'height' | 'splat' | 'zone' | 'npc' | 'furniture'
 export const editorTool = writable<EditorTool>('height')
 
 // Splat layer: 0=R, 1=G, 2=B, 3=A (texture depends on region)
@@ -131,6 +131,43 @@ export const noSpawnFormLabel = writable('')
 export const hoveredZoneIndex = writable<{
   type: 'noSpawn' | 'spawn'
   index: number
+} | null>(null)
+
+// Furniture editor stores
+export interface FurnitureDef {
+  id: string
+  name: string
+  model: string
+  interaction: string
+}
+
+export interface FurniturePlacement {
+  id: number
+  type: string
+  x: number
+  y: number
+  z: number
+  rotation: number
+  floorLevel: number
+}
+
+export interface FurnitureRegionData {
+  placements: FurniturePlacement[]
+}
+
+export type FurnitureSubTool = 'place' | 'select'
+export const furnitureSubTool = writable<FurnitureSubTool>('place')
+export const furnitureCatalog = writable<FurnitureDef[]>([])
+export const selectedFurnitureType = writable<string | null>(null)
+export const furnitureRotation = writable<number>(0)
+export const currentFurnitureData = writable<FurnitureRegionData>({
+  placements: [],
+})
+export const selectedFurniturePlacementId = writable<number | null>(null)
+export const furniturePreviewPos = writable<{
+  x: number
+  y: number
+  z: number
 } | null>(null)
 
 // NPC editor stores
