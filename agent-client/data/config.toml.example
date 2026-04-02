@@ -80,4 +80,4 @@ llm = "openrouter"
 template_prompt = "data/templates/merchant.txt"
 instance_prompt = "data/npcs/rica/instance.txt"
 memory_file = "data/npcs/rica/memory.txt"
-# schedule_file = "data/npcs/rica/schedule.toml"          # Daily schedule (time-based positioning)
+# schedule_file = "data/npcs/rica/schedule.json"          # Daily schedule (time-based positioning)
