@@ -15,8 +15,8 @@
   - 미로를 생성하는 시스템을 만든다
 - map editor를 만든다
   - [x] mark monster spawn area
-  - edit waypoints of npcs
-  - edit spawn zones
+  - [x] edit waypoints of npcs
+  - [x] edit spawn zones
 - [x] height map -> terrain 생성 시스템을 만든다
 - [x] 해안선 생성할 때 단층이 지는 현상을 개선한다
 - [x] splat map을 painting하는 기능을 만든다
@@ -45,8 +45,10 @@
 - change name of scp939
 - go straight if there is no obstacle
 - [x] don't equip sword if she is a merchant
-- equip spear if he is a guard
-- place furnitures in house
+- [x] equip spear if he is a guard
+- [x] place furnitures in house
+- animation for spear
+- sign of shops
 
 # 폐지
 
