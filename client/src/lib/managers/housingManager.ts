@@ -223,8 +223,7 @@ export class HousingManager {
   }
 
   /**
-   * Check if movement from→to is blocked by any cell edge.
-   * Uses precomputed passability grids with WALL_HALF_THICKNESS proximity buffer.
+   * Check if movement from→to crosses any blocked cell edge.
    */
   isMovementBlocked(
     fromX: number,
