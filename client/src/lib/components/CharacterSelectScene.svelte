@@ -79,8 +79,6 @@
     undefined,
     undefined,
   ])
-  let nextSetupIndex = 0
-
   // Single pair of spotlights — created once via Three.js, moved in useTask.
   // Avoids WebGPU pipeline recompilation on selection changes.
   const spotlightTarget = new THREE.Object3D()
@@ -132,7 +130,6 @@
       scene.environment?.dispose()
       scene.environment = null
       unsubscribe()
-      nextSetupIndex = 0
       // Clean up spotlights
       if (spotlightsAdded) {
         scene.remove(keyLight, fillLight, spotlightTarget)
@@ -167,20 +164,15 @@
 
   // Central game loop — staggered setup + per-frame update + spotlight positioning
   useTask((delta) => {
-    // Phase 1: Staggered setup — one character per frame, in order (0→1→2)
-    if (nextSetupIndex < characterPreviews.length) {
-      const preview = characterPreviews[nextSetupIndex]
-      if (preview) {
-        if (preview.isGltfReady()) {
-          preview.setup()
-          nextSetupIndex++
-
-          // Add spotlights to scene on first setup (pipeline compiles once)
-          if (!spotlightsAdded) {
-            scene.add(spotlightTarget, keyLight, fillLight)
-            spotlightsAdded = true
-          }
+    // Phase 1: Staggered setup — one character per frame
+    for (const preview of characterPreviews) {
+      if (preview && preview.isGltfReady() && !preview.isSetUp()) {
+        preview.setup()
+        if (!spotlightsAdded) {
+          scene.add(spotlightTarget, keyLight, fillLight)
+          spotlightsAdded = true
         }
+        break // one per frame
       }
     }
 
@@ -259,15 +251,17 @@
   </T.Mesh>
 
   {#if character}
-    <CharacterPreview
-      bind:this={characterPreviews[slotIndex]}
-      positionX={SLOT_POSITIONS[slotIndex]}
-      positionY={CHARACTER_Y_OFFSET}
-      positionZ={SLOT_DEPTH}
-      selected={character.id === selectedCharacterId}
-      characterClass={character.class}
-      gender={character.gender}
-    />
+    {#key character.id}
+      <CharacterPreview
+        bind:this={characterPreviews[slotIndex]}
+        positionX={SLOT_POSITIONS[slotIndex]}
+        positionY={CHARACTER_Y_OFFSET}
+        positionZ={SLOT_DEPTH}
+        selected={character.id === selectedCharacterId}
+        characterClass={character.class}
+        gender={character.gender}
+      />
+    {/key}
   {/if}
 
   <CharacterSlotLabel

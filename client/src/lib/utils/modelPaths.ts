@@ -10,6 +10,7 @@ export const MERCHANT_CHARACTER_MODEL_PATH = '/models/characters/npc_woman.glb'
 export const FEMALE_BARBARIAN_CHARACTER_MODEL_PATH =
   '/models/characters/female_barbarian.glb'
 export const GUARD_CHARACTER_MODEL_PATH = '/models/characters/guard.glb'
+export const CAVEMAN_CHARACTER_MODEL_PATH = '/models/characters/caveman.glb'
 export const CAVEWOMAN_CHARACTER_MODEL_PATH = '/models/characters/cavewoman.glb'
 export const VALKYRIE_CHARACTER_MODEL_PATH = '/models/characters/valkyrie.glb'
 
@@ -33,7 +34,10 @@ const CLASS_GENDER_MODELS: Partial<
   },
   barbarian: { female: FEMALE_BARBARIAN_CHARACTER_MODEL_PATH },
   rogue: { female: ROGUE_CHARACTER_MODEL_PATH },
-  caveman: { female: CAVEWOMAN_CHARACTER_MODEL_PATH },
+  caveman: {
+    male: CAVEMAN_CHARACTER_MODEL_PATH,
+    female: CAVEWOMAN_CHARACTER_MODEL_PATH,
+  },
   valkyrie: { female: VALKYRIE_CHARACTER_MODEL_PATH },
 }
 

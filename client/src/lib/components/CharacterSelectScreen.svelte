@@ -72,36 +72,34 @@
     <p class="account-name">Account: {accountName}</p>
   </div>
 
-  <div class="bottom-bar">
+  <div class="bottom-row">
+    <button
+      type="button"
+      class="secondary"
+      onclick={onLogout}
+      disabled={isBusy()}
+    >
+      Back
+    </button>
+    <button
+      type="button"
+      class="primary"
+      onclick={() => handleStart()}
+      disabled={!selectedCharacterId || isBusy()}
+    >
+      {isStarting ? 'Starting...' : 'Start'}
+    </button>
+    <button
+      type="button"
+      class="danger"
+      onclick={handleDelete}
+      disabled={!selectedCharacterId || isBusy()}
+    >
+      {isDeleting ? 'Deleting...' : 'Delete'}
+    </button>
     {#if errorMessage}
       <div class="error-message">{errorMessage}</div>
     {/if}
-    <div class="actions">
-      <button
-        type="button"
-        class="secondary"
-        onclick={onLogout}
-        disabled={isBusy()}
-      >
-        Back
-      </button>
-      <button
-        type="button"
-        class="primary"
-        onclick={() => handleStart()}
-        disabled={!selectedCharacterId || isBusy()}
-      >
-        {isStarting ? 'Starting...' : 'Start'}
-      </button>
-      <button
-        type="button"
-        class="danger"
-        onclick={handleDelete}
-        disabled={!selectedCharacterId || isBusy()}
-      >
-        {isDeleting ? 'Deleting...' : 'Delete'}
-      </button>
-    </div>
   </div>
 </div>
 
@@ -136,30 +134,25 @@
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   }
 
-  .bottom-bar {
+  .bottom-row {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    right: 60px;
     display: flex;
-    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    gap: 10px;
-    padding: 0 16px 32px;
     pointer-events: auto;
   }
 
-  .actions {
-    display: flex;
-    justify-content: space-between;
-    width: 100%;
-  }
-
-  .actions button {
-    min-width: 100px;
+  .bottom-row button {
     border-radius: 7px;
-    padding: 10px 20px;
+    padding: 8px 16px;
     font-size: 14px;
     cursor: pointer;
   }
 
-  .actions button:disabled {
+  .bottom-row button:disabled {
     opacity: 0.5;
     cursor: default;
   }
@@ -184,6 +177,11 @@
   }
 
   .error-message {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 10px;
     border: 1px solid #f28b8b;
     border-radius: 7px;
     padding: 10px 12px;
@@ -192,5 +190,6 @@
     font-size: 13px;
     max-width: 400px;
     text-align: center;
+    white-space: nowrap;
   }
 </style>
