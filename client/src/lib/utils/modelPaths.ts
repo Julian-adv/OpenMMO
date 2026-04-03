@@ -2,13 +2,16 @@ import type { CharacterClass, Gender } from '../network/networkTypes'
 
 export type WeaponType = 'sword' | 'spear'
 
-export const KNIGHT_CHARACTER_MODEL_PATH = '/models/knight.glb'
-export const FEMALE_KNIGHT_CHARACTER_MODEL_PATH = '/models/female_knight.glb'
-export const ROGUE_CHARACTER_MODEL_PATH = '/models/female_thief.glb'
-export const MERCHANT_CHARACTER_MODEL_PATH = '/models/npc_woman.glb'
+export const KNIGHT_CHARACTER_MODEL_PATH = '/models/characters/knight.glb'
+export const FEMALE_KNIGHT_CHARACTER_MODEL_PATH =
+  '/models/characters/female_knight.glb'
+export const ROGUE_CHARACTER_MODEL_PATH = '/models/characters/female_rogue.glb'
+export const MERCHANT_CHARACTER_MODEL_PATH = '/models/characters/npc_woman.glb'
 export const FEMALE_BARBARIAN_CHARACTER_MODEL_PATH =
-  '/models/female_barbarian.glb'
-export const GUARD_CHARACTER_MODEL_PATH = '/models/guard.glb'
+  '/models/characters/female_barbarian.glb'
+export const GUARD_CHARACTER_MODEL_PATH = '/models/characters/guard.glb'
+export const CAVEWOMAN_CHARACTER_MODEL_PATH = '/models/characters/cavewoman.glb'
+export const VALKYRIE_CHARACTER_MODEL_PATH = '/models/characters/valkyrie.glb'
 
 export const CHARACTER_ANIMATION_PACK_PATHS = {
   locomotion: '/models/animations/locomotion.glb',
@@ -30,6 +33,8 @@ const CLASS_GENDER_MODELS: Partial<
   },
   barbarian: { female: FEMALE_BARBARIAN_CHARACTER_MODEL_PATH },
   rogue: { female: ROGUE_CHARACTER_MODEL_PATH },
+  caveman: { female: CAVEWOMAN_CHARACTER_MODEL_PATH },
+  valkyrie: { female: VALKYRIE_CHARACTER_MODEL_PATH },
 }
 
 export function getAvailableGenders(characterClass: CharacterClass): Gender[] {
@@ -48,22 +53,6 @@ export function getCharacterModelPath(
     return Object.values(genders)[0]
   }
   return KNIGHT_CHARACTER_MODEL_PATH
-}
-
-const MODEL_Y_OFFSETS: Partial<
-  Record<CharacterClass, Partial<Record<Gender, number>>>
-> = {
-  knight: { female: 0.13 },
-  barbarian: { female: 0.06 },
-  rogue: { female: 0.06 },
-}
-
-export function getCharacterModelYOffset(
-  characterClass: CharacterClass,
-  gender?: Gender
-): number {
-  if (!gender) return 0
-  return MODEL_Y_OFFSETS[characterClass]?.[gender] ?? 0
 }
 
 export function getWeaponType(

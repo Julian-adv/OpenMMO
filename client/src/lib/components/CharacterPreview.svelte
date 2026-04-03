@@ -41,6 +41,8 @@
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
+  let clonedScene: THREE.Object3D | null = null
+  let footBones: THREE.Bone[] = []
   let validAnimations = $state<THREE.AnimationClip[]>([])
   let setupDone = $state(false)
 
@@ -91,7 +93,7 @@
     setupDone = true
 
     const sourceScene = characterGltfData.scene
-    const { modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
+    const { clonedScene: newClonedScene, modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
 
     const orderedAnims = selectOrderedCharacterAnimations(
       getGltfAnimations(characterGltfData),
@@ -126,14 +128,39 @@
       }
 
       // Set modelRoot only after animation is playing to avoid T-pose flash
+      clonedScene = newClonedScene
+      footBones = []
+      newModelRoot.traverse((child) => {
+        if (child instanceof THREE.Bone && /foot|toe/i.test(child.name)) {
+          footBones.push(child)
+        }
+      })
       modelRoot = newModelRoot
     })
   }
+
+  const _footVec = new THREE.Vector3()
 
   export function update(delta: number): void {
     if (!selected || !mixer || !currentAction) return
 
     mixer.update(delta)
+
+    if (clonedScene && modelRoot && footBones.length > 0) {
+      clonedScene.position.y = 0
+      modelRoot.updateMatrixWorld(true)
+
+      const groupWorldY = modelRoot.parent
+        ? modelRoot.parent.getWorldPosition(_footVec).y
+        : positionY
+      let lowestFootY = Infinity
+      for (const bone of footBones) {
+        bone.getWorldPosition(_footVec)
+        const localY = _footVec.y - groupWorldY
+        if (localY < lowestFootY) lowestFootY = localY
+      }
+      clonedScene.position.y = -lowestFootY
+    }
 
     const clip = currentAction.getClip()
     if (clip && clip.duration > 0) {
@@ -150,6 +177,8 @@
       mixer = null
     }
     currentAction = null
+    clonedScene = null
+    footBones = []
     modelRoot = null
     validAnimations = []
     setupDone = false
