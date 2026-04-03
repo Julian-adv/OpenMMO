@@ -9,7 +9,6 @@ const EDGE_E: u8 = 2; // +X edge
 const EDGE_S: u8 = 4; // +Z edge
 const EDGE_W: u8 = 8; // -X edge
 
-const WALL_HALF_THICKNESS: f32 = 0.3;
 const FLOOR_THICKNESS: f32 = 0.1;
 const DEFAULT_WALL_HEIGHT: f32 = 3.0;
 
@@ -221,10 +220,9 @@ pub fn is_cardinal_move_blocked(
     false
 }
 
-// --- Continuous movement blocking (for path smoothing and player movement) ---
+// --- Continuous movement blocking (for player movement) ---
 
-/// Check if movement from→to is blocked by any cell edge.
-/// Uses WALL_HALF_THICKNESS proximity buffer.
+/// Check if movement from→to crosses any blocked cell edge.
 pub fn is_movement_blocked(
     cache: &PassabilityCache,
     from_x: f32,
@@ -233,10 +231,10 @@ pub fn is_movement_blocked(
     to_z: f32,
     y: f32,
 ) -> bool {
-    let min_x = from_x.min(to_x) - WALL_HALF_THICKNESS;
-    let max_x = from_x.max(to_x) + WALL_HALF_THICKNESS;
-    let min_z = from_z.min(to_z) - WALL_HALF_THICKNESS;
-    let max_z = from_z.max(to_z) + WALL_HALF_THICKNESS;
+    let min_x = from_x.min(to_x);
+    let max_x = from_x.max(to_x);
+    let min_z = from_z.min(to_z);
+    let max_z = from_z.max(to_z);
 
     for rp in cache.values() {
         if max_x < rp.min_x || min_x > rp.max_x || max_z < rp.min_z || min_z > rp.max_z {
@@ -276,6 +274,7 @@ pub fn is_movement_blocked(
     false
 }
 
+/// Check if any cell boundary crossing along one axis is blocked.
 fn edge_blocks_axis(
     from_a: f32,
     to_a: f32,
@@ -284,6 +283,12 @@ fn edge_blocks_axis(
     floor: &RuntimeFloorGrid,
     x_axis: bool,
 ) -> bool {
+    let from_cell = from_a.floor() as i32;
+    let to_cell = to_a.floor() as i32;
+    if from_cell == to_cell {
+        return false;
+    }
+
     let size_a = if x_axis { floor.width } else { floor.depth } as i32;
     let size_b = if x_axis { floor.depth } else { floor.width } as i32;
     let w = floor.width as i32;
@@ -295,87 +300,56 @@ fn edge_blocks_axis(
         }
     };
 
-    let from_cell = from_a.floor() as i32;
-    let to_cell = to_a.floor() as i32;
-
-    if from_cell != to_cell {
-        let step: i32 = if to_cell > from_cell { 1 } else { -1 };
-        let leave_bit = if step > 0 {
-            if x_axis {
-                EDGE_E
-            } else {
-                EDGE_S
-            }
+    let step: i32 = if to_cell > from_cell { 1 } else { -1 };
+    let leave_bit = if step > 0 {
+        if x_axis {
+            EDGE_E
         } else {
-            if x_axis {
-                EDGE_W
-            } else {
-                EDGE_N
-            }
-        };
-        let enter_bit = if step > 0 {
-            if x_axis {
-                EDGE_W
-            } else {
-                EDGE_N
-            }
+            EDGE_S
+        }
+    } else {
+        if x_axis {
+            EDGE_W
         } else {
-            if x_axis {
-                EDGE_E
-            } else {
-                EDGE_S
-            }
-        };
+            EDGE_N
+        }
+    };
+    let enter_bit = if step > 0 {
+        if x_axis {
+            EDGE_W
+        } else {
+            EDGE_N
+        }
+    } else {
+        if x_axis {
+            EDGE_E
+        } else {
+            EDGE_S
+        }
+    };
 
-        let mut cell = from_cell;
-        while cell != to_cell {
-            let edge_coord = if step > 0 { cell + 1 } else { cell };
-            let next_cell = cell + step;
-            let denom = to_a - from_a;
-            if denom.abs() > f32::EPSILON {
-                let t = (edge_coord as f32 - from_a) / denom;
-                let cell_b = (from_b + t * (to_b - from_b)).floor() as i32;
-                if cell_b >= 0 && cell_b < size_b {
-                    if cell >= 0 && cell < size_a {
-                        if floor.cells[idx(cell, cell_b)] & leave_bit != 0 {
-                            return true;
-                        }
-                    }
-                    if next_cell >= 0 && next_cell < size_a {
-                        if floor.cells[idx(next_cell, cell_b)] & enter_bit != 0 {
-                            return true;
-                        }
-                    }
+    let denom = to_a - from_a;
+    let mut cell = from_cell;
+    while cell != to_cell {
+        let edge_coord = if step > 0 { cell + 1 } else { cell };
+        let next_cell = cell + step;
+        if denom.abs() > f32::EPSILON {
+            let t = (edge_coord as f32 - from_a) / denom;
+            let cell_b = (from_b + t * (to_b - from_b)).floor() as i32;
+            if cell_b >= 0 && cell_b < size_b {
+                if cell >= 0 && cell < size_a && floor.cells[idx(cell, cell_b)] & leave_bit != 0 {
+                    return true;
+                }
+                if next_cell >= 0
+                    && next_cell < size_a
+                    && floor.cells[idx(next_cell, cell_b)] & enter_bit != 0
+                {
+                    return true;
                 }
             }
-            cell += step;
         }
+        cell += step;
     }
-
-    // Proximity check
-    let nearest_edge = to_a.round() as i32;
-    let to_dist = (to_a - nearest_edge as f32).abs();
-    if to_dist < WALL_HALF_THICKNESS && to_dist < (from_a - nearest_edge as f32).abs() {
-        let cell_b = to_b.floor() as i32;
-        if cell_b < 0 || cell_b >= size_b {
-            return false;
-        }
-        let cell_before = nearest_edge - 1;
-        let cell_after = nearest_edge;
-        if cell_before >= 0 && cell_before < size_a {
-            let bit = if x_axis { EDGE_E } else { EDGE_S };
-            if floor.cells[idx(cell_before, cell_b)] & bit != 0 {
-                return true;
-            }
-        }
-        if cell_after >= 0 && cell_after < size_a {
-            let bit = if x_axis { EDGE_W } else { EDGE_N };
-            if floor.cells[idx(cell_after, cell_b)] & bit != 0 {
-                return true;
-            }
-        }
-    }
-
     false
 }
 
@@ -951,14 +925,22 @@ fn smooth_path(waypoints: &[PathWaypoint], cache: &PassabilityCache) -> Vec<Path
     while anchor < waypoints.len() - 1 {
         let mut farthest = anchor + 1;
 
-        for probe in anchor + 2..waypoints.len() {
-            if waypoints[probe].floor != waypoints[anchor].floor {
-                break;
-            }
-            if is_line_passable(&waypoints[anchor], &waypoints[probe], cache) {
-                farthest = probe;
-            } else {
-                break;
+        // Don't smooth from floor-transition points (stairwell exit/entry).
+        // The first step after a floor change must stay cardinal to avoid
+        // diagonal paths that clip stairwell side-walls.
+        let is_floor_transition =
+            anchor > 0 && waypoints[anchor].floor != waypoints[anchor - 1].floor;
+
+        if !is_floor_transition {
+            for probe in anchor + 2..waypoints.len() {
+                if waypoints[probe].floor != waypoints[anchor].floor {
+                    break;
+                }
+                if is_line_passable(&waypoints[anchor], &waypoints[probe], cache) {
+                    farthest = probe;
+                } else {
+                    break;
+                }
             }
         }
 
@@ -969,89 +951,68 @@ fn smooth_path(waypoints: &[PathWaypoint], cache: &PassabilityCache) -> Vec<Path
     result
 }
 
+/// Cell-based line-of-sight check using Bresenham grid traversal.
+/// For diagonal cell transitions, BOTH L-shaped paths must be clear
+/// (the player has thickness and can't squeeze through a corner gap).
+/// Uses floor_level directly — no Y-based floor filtering.
 fn is_line_passable(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityCache) -> bool {
     let floor = from.floor;
-    let dx = to.x - from.x;
-    let dz = to.z - from.z;
-    let dist = (dx * dx + dz * dz).sqrt();
-    let steps = (dist / 0.5).ceil() as usize;
-    if steps == 0 {
+    let x0 = from.x.floor() as i32;
+    let z0 = from.z.floor() as i32;
+    let x1 = to.x.floor() as i32;
+    let z1 = to.z.floor() as i32;
+
+    if x0 == x1 && z0 == z1 {
         return true;
     }
 
-    let mut prev_cx = from.x.floor() as i32;
-    let mut prev_cz = from.z.floor() as i32;
-    let mut prev_mx = from.x;
-    let mut prev_mz = from.z;
+    let dx = (x1 - x0).abs();
+    let dz = (z1 - z0).abs();
+    let sx = (x1 - x0).signum();
+    let sz = (z1 - z0).signum();
 
-    for i in 1..=steps {
-        let t = i as f32 / steps as f32;
-        let mx = from.x + dx * t;
-        let mz = from.z + dz * t;
-        let cx = mx.floor() as i32;
-        let cz = mz.floor() as i32;
+    let mut x = x0;
+    let mut z = z0;
+    let mut err = dx - dz;
 
-        if cx != prev_cx || cz != prev_cz {
-            let step_x = cx - prev_cx;
-            let step_z = cz - prev_cz;
-
-            if step_x != 0 && step_z != 0 {
-                // Diagonal cell crossing: block only if both L-shaped paths are impassable.
-                let a_blocked = is_cardinal_move_blocked(cache, prev_cx, prev_cz, step_x, 0, floor)
-                    || is_cardinal_move_blocked(cache, cx, prev_cz, 0, step_z, floor);
-                if a_blocked {
-                    let b_blocked =
-                        is_cardinal_move_blocked(cache, prev_cx, prev_cz, 0, step_z, floor)
-                            || is_cardinal_move_blocked(cache, prev_cx, cz, step_x, 0, floor);
-                    if b_blocked {
-                        return false;
-                    }
-                }
-            } else if step_x != 0 {
-                if is_cardinal_move_blocked(cache, prev_cx, prev_cz, step_x, 0, floor) {
-                    return false;
-                }
-            } else {
-                if is_cardinal_move_blocked(cache, prev_cx, prev_cz, 0, step_z, floor) {
-                    return false;
-                }
-            }
-
-            prev_cx = cx;
-            prev_cz = cz;
+    loop {
+        if x == x1 && z == z1 {
+            return true;
         }
 
-        // Proximity check matching is_movement_blocked's directional buffer.
-        // Skip at the endpoint — it's the same destination for smoothed and
-        // unsmoothed paths, so blocking here only prevents smoothing without
-        // changing where the player actually stops.
-        if i < steps {
-            let nearest_x = mx.round() as i32;
-            let to_dist_x = (mx - nearest_x as f32).abs();
-            let from_dist_x = (prev_mx - nearest_x as f32).abs();
-            if to_dist_x < WALL_HALF_THICKNESS && to_dist_x < from_dist_x {
-                let bz = mz.floor() as i32;
-                if is_cardinal_move_blocked(cache, nearest_x - 1, bz, 1, 0, floor) {
-                    return false;
-                }
-            }
+        let e2 = 2 * err;
+        let step_x = e2 > -dz;
+        let step_z = e2 < dx;
 
-            let nearest_z = mz.round() as i32;
-            let to_dist_z = (mz - nearest_z as f32).abs();
-            let from_dist_z = (prev_mz - nearest_z as f32).abs();
-            if to_dist_z < WALL_HALF_THICKNESS && to_dist_z < from_dist_z {
-                let bx = mx.floor() as i32;
-                if is_cardinal_move_blocked(cache, bx, nearest_z - 1, 0, 1, floor) {
-                    return false;
-                }
+        if step_x && step_z {
+            // Diagonal: both L-paths must be clear
+            if is_cardinal_move_blocked(cache, x, z, sx, 0, floor)
+                || is_cardinal_move_blocked(cache, x + sx, z, 0, sz, floor)
+            {
+                return false;
             }
+            if is_cardinal_move_blocked(cache, x, z, 0, sz, floor)
+                || is_cardinal_move_blocked(cache, x, z + sz, sx, 0, floor)
+            {
+                return false;
+            }
+            x += sx;
+            z += sz;
+            err += dx - dz;
+        } else if step_x {
+            if is_cardinal_move_blocked(cache, x, z, sx, 0, floor) {
+                return false;
+            }
+            x += sx;
+            err -= dz;
+        } else {
+            if is_cardinal_move_blocked(cache, x, z, 0, sz, floor) {
+                return false;
+            }
+            z += sz;
+            err += dx;
         }
-
-        prev_mx = mx;
-        prev_mz = mz;
     }
-
-    true
 }
 
 /// Apply open-door overlays from a HouseData to its runtime passability cache entry.
