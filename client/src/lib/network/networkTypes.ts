@@ -11,6 +11,8 @@ export type CharacterClass =
   | 'knight'
   | 'barbarian'
   | 'rogue'
+  | 'caveman'
+  | 'valkyrie'
   | 'merchant'
   | 'guard'
 

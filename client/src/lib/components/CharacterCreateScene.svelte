@@ -3,7 +3,6 @@
   import * as THREE from 'three'
   import { onMount } from 'svelte'
   import type { CharacterClass, Gender } from '../network/networkTypes'
-  import { getCharacterModelYOffset } from '../utils/modelPaths'
   import CharacterPreview from './CharacterPreview.svelte'
 
   interface Props {
@@ -177,7 +176,7 @@
   <CharacterPreview
     bind:this={characterPreview}
     positionX={0}
-    positionY={CHARACTER_Y_OFFSET + getCharacterModelYOffset(characterClass, gender)}
+    positionY={CHARACTER_Y_OFFSET}
     positionZ={CHARACTER_Z}
     selected={true}
     {characterClass}

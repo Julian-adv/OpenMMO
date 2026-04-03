@@ -166,6 +166,24 @@
       >
         Rogue
       </button>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'caveman'}
+        disabled={isBusy()}
+        onclick={() => selectClass('caveman')}
+      >
+        Caveman
+      </button>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'valkyrie'}
+        disabled={isBusy()}
+        onclick={() => selectClass('valkyrie')}
+      >
+        Valkyrie
+      </button>
     </div>
 
     <div class="bottom-bar">
