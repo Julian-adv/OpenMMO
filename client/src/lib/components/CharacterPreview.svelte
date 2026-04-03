@@ -15,24 +15,26 @@
     getCharacterModelPath,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
-  import type { CharacterClass } from '../network/networkTypes'
+  import type { CharacterClass, Gender } from '../network/networkTypes'
 
   interface Props {
     positionX: number
     positionY: number
     positionZ: number
+    rotationY?: number
     selected: boolean
     characterClass: CharacterClass
+    gender?: Gender
   }
 
-  let { positionX, positionY, positionZ, selected, characterClass }: Props = $props()
+  let { positionX, positionY, positionZ, rotationY = 0, selected, characterClass, gender }: Props = $props()
 
   // Load via shared cache so GLBs persist across Canvas lifecycles
   let characterGltfData = $state<GLTF | null>(null)
   let locomotionGltfData = $state<GLTF | null>(null)
   let combatMeleeGltfData = $state<GLTF | null>(null)
 
-  loadGLB(getCharacterModelPath(characterClass)).then((g) => { characterGltfData = g })
+  loadGLB(getCharacterModelPath(characterClass, gender)).then((g) => { characterGltfData = g })
   loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
   loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
 
@@ -173,7 +175,7 @@
 </script>
 
 {#if modelRoot}
-  <T.Group position={[positionX, positionY, positionZ]}>
+  <T.Group position={[positionX, positionY, positionZ]} rotation.y={rotationY}>
     <T is={modelRoot} />
   </T.Group>
 {/if}

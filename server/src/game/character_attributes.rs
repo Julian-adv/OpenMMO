@@ -1,4 +1,5 @@
 use crate::types::CharacterAttributes;
+use onlinerpg_shared::{CharacterClass, Gender};
 use rand::Rng;
 
 const TARGET_ATTRIBUTE_TOTAL: i16 = 72;
@@ -7,13 +8,14 @@ const MAX_ATTRIBUTE: u8 = 18;
 const MIN_GUARD: i16 = 1;
 const MAX_GUARD: i16 = 20;
 
-pub fn roll_character_attributes() -> CharacterAttributes {
+pub fn roll_character_attributes(class: &CharacterClass, gender: Gender) -> CharacterAttributes {
     let mut rng = rand::thread_rng();
     let mut values = [0_u8; 6];
     for value in &mut values {
         *value = roll_4d6_drop_lowest(&mut rng);
     }
 
+    apply_class_adjustments(&mut values, class, gender);
     rebalance_attributes_to_target(&mut values, TARGET_ATTRIBUTE_TOTAL);
     let guard = calculate_guard(values[1]);
 
@@ -25,6 +27,15 @@ pub fn roll_character_attributes() -> CharacterAttributes {
         wis: values[4],
         cha: values[5],
         guard,
+    }
+}
+
+fn apply_class_adjustments(values: &mut [u8; 6], class: &CharacterClass, gender: Gender) {
+    let adjustments = class.stat_adjustments(gender);
+    for (value, adj) in values.iter_mut().zip(adjustments.iter()) {
+        let adjusted = (i16::from(*value) + i16::from(*adj))
+            .clamp(i16::from(MIN_ATTRIBUTE), i16::from(MAX_ATTRIBUTE));
+        *value = adjusted as u8;
     }
 }
 

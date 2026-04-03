@@ -3,8 +3,10 @@
     AccountCharacter,
     CharacterClass,
     CharacterRollResult,
+    Gender,
     RollCharacterStatsResult,
   } from '../network/socket'
+  import { getAvailableGenders } from '../utils/modelPaths'
 
   const MAX_CHARACTER_SLOTS = 3
 
@@ -12,11 +14,14 @@
     accountName: string
     characters: AccountCharacter[]
     selectedClass: CharacterClass
+    selectedGender: Gender
     onClassChange: (cls: CharacterClass) => void
-    onRollCharacterStats: () => Promise<RollCharacterStatsResult>
+    onGenderChange: (gender: Gender) => void
+    onRollCharacterStats: (cls: CharacterClass, gender: Gender) => Promise<RollCharacterStatsResult>
     onCreateCharacter: (
       characterName: string,
-      characterClass: CharacterClass
+      characterClass: CharacterClass,
+      gender: Gender
     ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
     onCharacterCreated: (characterId: number) => void
     onCancel: () => void
@@ -26,13 +31,16 @@
     accountName,
     characters,
     selectedClass,
+    selectedGender,
     onClassChange,
+    onGenderChange,
     onRollCharacterStats,
     onCreateCharacter,
     onCharacterCreated,
     onCancel,
   }: Props = $props()
 
+  let availableGenders = $derived(getAvailableGenders(selectedClass))
   let createCharacterName = $state('')
   let rolledStats = $state<CharacterRollResult | null>(null)
   let isCreating = $state(false)
@@ -49,6 +57,15 @@
 
   function selectClass(cls: CharacterClass) {
     onClassChange(cls)
+    const genders = getAvailableGenders(cls)
+    if (!genders.includes(selectedGender)) {
+      onGenderChange(genders[0])
+    }
+    rolledStats = null
+  }
+
+  function selectGender(g: Gender) {
+    onGenderChange(g)
     rolledStats = null
   }
 
@@ -61,7 +78,7 @@
 
     isRolling = true
     errorMessage = ''
-    const result = await onRollCharacterStats()
+    const result = await onRollCharacterStats(selectedClass, selectedGender)
     isRolling = false
 
     if (!result.ok) {
@@ -93,7 +110,7 @@
 
     isCreating = true
     errorMessage = ''
-    const result = await onCreateCharacter(characterName, selectedClass)
+    const result = await onCreateCharacter(characterName, selectedClass, selectedGender)
     isCreating = false
 
     if (!result.ok) {
@@ -119,93 +136,117 @@
     <p class="account-name">Account: {accountName}</p>
   </div>
 
-  <div class="bottom-bar">
-    {#if errorMessage}
-      <div class="error-message">{errorMessage}</div>
-    {/if}
+  <form class="create-form" onsubmit={submitCreateCharacter}>
+    <div class="class-column">
+      <span class="field-label">Class</span>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'knight'}
+        disabled={isBusy()}
+        onclick={() => selectClass('knight')}
+      >
+        Knight
+      </button>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'barbarian'}
+        disabled={isBusy()}
+        onclick={() => selectClass('barbarian')}
+      >
+        Barbarian
+      </button>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'rogue'}
+        disabled={isBusy()}
+        onclick={() => selectClass('rogue')}
+      >
+        Rogue
+      </button>
+    </div>
 
-    <form class="create-form" onsubmit={submitCreateCharacter}>
-      <div class="class-field">
-        <span>Class</span>
-        <div class="class-buttons">
-          <button
-            type="button"
-            class="class-btn"
-            class:class-selected={selectedClass === 'warrior'}
+    <div class="bottom-bar">
+      {#if errorMessage}
+        <div class="error-message">{errorMessage}</div>
+      {/if}
+
+      <div class="bottom-row">
+        <div class="gender-field">
+          <span class="field-label">Gender</span>
+          <div class="gender-buttons">
+            <button
+              type="button"
+              class="class-btn"
+              class:class-selected={selectedGender === 'male'}
+              disabled={isBusy() || !availableGenders.includes('male')}
+              onclick={() => selectGender('male')}
+            >
+              Male
+            </button>
+            <button
+              type="button"
+              class="class-btn"
+              class:class-selected={selectedGender === 'female'}
+              disabled={isBusy() || !availableGenders.includes('female')}
+              onclick={() => selectGender('female')}
+            >
+              Female
+            </button>
+          </div>
+        </div>
+
+        <label class="name-field" for="characterName">
+          <span class="field-label">Name</span>
+          <input
+            id="characterName"
+            type="text"
+            bind:value={createCharacterName}
+            maxlength={24}
+            placeholder="Enter character name"
             disabled={isBusy()}
-            onclick={() => selectClass('warrior')}
+          />
+        </label>
+
+        <div class="rolled-attributes" role="button" tabindex="0" onclick={handleRoll} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRoll() }}>
+          {#if rolledStats}
+            <div class="attr">STR {rolledStats.attributes.str}</div>
+            <div class="attr">DEX {rolledStats.attributes.dex}</div>
+            <div class="attr">CON {rolledStats.attributes.con}</div>
+            <div class="attr">INT {rolledStats.attributes.int}</div>
+            <div class="attr">WIS {rolledStats.attributes.wis}</div>
+            <div class="attr">CHA {rolledStats.attributes.cha}</div>
+            <div class="attr">HP {rolledStats.maxHp}</div>
+          {:else}
+            <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
+          {/if}
+        </div>
+
+        <div class="create-actions">
+          <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
+            {isRolling ? 'Rolling...' : 'Roll'}
+          </button>
+          <button
+            type="submit"
+            class="primary"
+            disabled={isBusy() || !rolledStats || atSlotLimit()}
           >
-            Warrior
+            {isCreating ? 'Creating...' : 'Create'}
           </button>
           <button
             type="button"
-            class="class-btn"
-            class:class-selected={selectedClass === 'knight'}
+            class="secondary"
             disabled={isBusy()}
-            onclick={() => selectClass('knight')}
+            onclick={onCancel}
           >
-            Knight
-          </button>
-          <button
-            type="button"
-            class="class-btn"
-            class:class-selected={selectedClass === 'thief'}
-            disabled={isBusy()}
-            onclick={() => selectClass('thief')}
-          >
-            Thief
+            Cancel
           </button>
         </div>
       </div>
-
-      <label class="name-field" for="characterName">
-        <span>Name</span>
-        <input
-          id="characterName"
-          type="text"
-          bind:value={createCharacterName}
-          maxlength={24}
-          placeholder="Enter character name"
-          disabled={isBusy()}
-        />
-      </label>
-
-      <div class="rolled-attributes">
-        {#if rolledStats}
-          <div class="attr">STR {rolledStats.attributes.str}</div>
-          <div class="attr">DEX {rolledStats.attributes.dex}</div>
-          <div class="attr">CON {rolledStats.attributes.con}</div>
-          <div class="attr">INT {rolledStats.attributes.int}</div>
-          <div class="attr">WIS {rolledStats.attributes.wis}</div>
-          <div class="attr">CHA {rolledStats.attributes.cha}</div>
-          <div class="attr">HP {rolledStats.maxHp}</div>
-        {:else}
-          <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
-        {/if}
-      </div>
-
-      <div class="create-actions">
-        <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
-          {isRolling ? 'Rolling...' : 'Roll'}
-        </button>
-        <button
-          type="submit"
-          class="primary"
-          disabled={isBusy() || !rolledStats || atSlotLimit()}
-        >
-          {isCreating ? 'Creating...' : 'Create'}
-        </button>
-        <button
-          type="button"
-          class="secondary"
-          disabled={isBusy()}
-          onclick={onCancel}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
-  </div>
+    </div>
+  </form>
 </div>
 
 <style>
@@ -239,39 +280,54 @@
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   }
 
+  .create-form {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    pointer-events: auto;
+  }
+
+  .field-label {
+    font-size: 13px;
+    color: #b8c6d9;
+  }
+
+  .class-column {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 120px;
+  }
+
   .bottom-bar {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    padding: 0 16px 24px;
-    pointer-events: auto;
   }
 
-  .create-form {
+  .bottom-row {
     display: flex;
-    align-items: stretch;
+    align-items: end;
     gap: 10px;
-    padding: 12px;
-    border-radius: 12px;
-    border: 1px solid #45556b;
-    background: rgba(6, 10, 16, 0.9);
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
   }
 
-  .class-field {
+  .gender-field {
     display: grid;
     gap: 6px;
     min-width: 160px;
   }
 
-  .class-field span {
-    font-size: 13px;
-    color: #b8c6d9;
-  }
-
-  .class-buttons {
+  .gender-buttons {
     display: flex;
     gap: 6px;
+  }
+
+  .gender-buttons .class-btn {
+    height: 34px;
+    padding: 6px 12px;
   }
 
   .class-btn {
@@ -299,30 +355,24 @@
   }
 
   .name-field {
-    min-width: 220px;
-    max-width: 320px;
     flex: 1;
     display: grid;
     gap: 6px;
   }
 
-  .name-field span {
-    font-size: 13px;
-    color: #b8c6d9;
-  }
-
   .name-field input {
     border: 1px solid #526276;
     border-radius: 7px;
-    padding: 10px 12px;
+    height: 34px;
+    padding: 6px 12px;
     background: #111923;
     color: #f7fafc;
     font-size: 14px;
+    box-sizing: border-box;
   }
 
   .rolled-attributes {
-    width: 320px;
-    max-width: 100%;
+    width: 220px;
     border: 1px solid #45556b;
     border-radius: 8px;
     background: rgba(16, 24, 35, 0.9);
@@ -330,8 +380,9 @@
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 6px;
-    min-height: 54px;
+    height: 90px;
     align-items: center;
+    cursor: pointer;
   }
 
   .attr {
@@ -349,8 +400,6 @@
   }
 
   .create-actions {
-    width: 330px;
-    max-width: 100%;
     display: flex;
     align-items: end;
     gap: 10px;
@@ -396,16 +445,8 @@
   }
 
   @media (max-width: 1100px) {
-    .create-form {
+    .bottom-row {
       flex-direction: column;
-    }
-
-    .class-field,
-    .name-field,
-    .rolled-attributes,
-    .create-actions {
-      width: 100%;
-      max-width: none;
     }
 
     .create-actions {

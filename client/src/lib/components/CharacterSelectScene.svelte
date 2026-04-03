@@ -266,6 +266,7 @@
       positionZ={SLOT_DEPTH}
       selected={character.id === selectedCharacterId}
       characterClass={character.class}
+      gender={character.gender}
     />
   {/if}
 

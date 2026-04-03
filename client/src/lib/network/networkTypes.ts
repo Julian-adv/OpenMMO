@@ -8,11 +8,13 @@ export type Position = {
 }
 
 export type CharacterClass =
-  | 'warrior'
   | 'knight'
-  | 'thief'
+  | 'barbarian'
+  | 'rogue'
   | 'merchant'
   | 'guard'
+
+export type Gender = 'male' | 'female'
 
 export type ServerPlayer = {
   id: string
@@ -49,6 +51,7 @@ export type AccountCharacter = {
   max_hp: number
   attributes: CharacterAttributes
   class: CharacterClass
+  gender: Gender
 }
 
 export type CharacterAttributes = {
@@ -90,10 +93,11 @@ export type ClientMessage =
       CreateCharacter: {
         character_name: string
         character_class: CharacterClass
+        gender: Gender
       }
     }
   | { DeleteCharacter: { character_id: number } }
-  | 'RollCharacterStats'
+  | { RollCharacterStats: { character_class: CharacterClass; gender: Gender } }
   | { EnterGame: { character_id: number } }
   | {
       PlayerMove: { position: Position; rotation: number; floor_level: number }

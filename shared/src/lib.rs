@@ -6,10 +6,22 @@ pub mod housing;
 pub mod monster_ai;
 pub mod pathfinding;
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub enum Gender {
+    #[serde(rename = "male")]
+    Male,
+    #[serde(rename = "female")]
+    Female,
+}
+
+impl Default for Gender {
+    fn default() -> Self {
+        Gender::Male
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CharacterClass {
-    #[serde(rename = "warrior")]
-    Warrior,
     #[serde(rename = "knight")]
     Knight,
     #[serde(rename = "barbarian")]
@@ -26,8 +38,6 @@ pub enum CharacterClass {
     Monk,
     #[serde(rename = "priest")]
     Priest,
-    #[serde(rename = "thief")]
-    Thief,
     #[serde(rename = "archaeologist")]
     Archaeologist,
     #[serde(rename = "healer")]
@@ -47,7 +57,6 @@ pub enum CharacterClass {
 impl CharacterClass {
     pub fn as_str(&self) -> &'static str {
         match self {
-            CharacterClass::Warrior => "warrior",
             CharacterClass::Knight => "knight",
             CharacterClass::Barbarian => "barbarian",
             CharacterClass::Caveman => "caveman",
@@ -56,7 +65,6 @@ impl CharacterClass {
             CharacterClass::Samurai => "samurai",
             CharacterClass::Monk => "monk",
             CharacterClass::Priest => "priest",
-            CharacterClass::Thief => "thief",
             CharacterClass::Archaeologist => "archaeologist",
             CharacterClass::Healer => "healer",
             CharacterClass::Rogue => "rogue",
@@ -69,16 +77,14 @@ impl CharacterClass {
 
     pub fn hit_die(&self) -> u8 {
         match self {
-            CharacterClass::Warrior
-            | CharacterClass::Knight
+            CharacterClass::Knight
             | CharacterClass::Barbarian
             | CharacterClass::Caveman
             | CharacterClass::Valkyrie => 10,
             CharacterClass::Ranger
             | CharacterClass::Samurai
             | CharacterClass::Monk
-            | CharacterClass::Priest
-            | CharacterClass::Thief => 8,
+            | CharacterClass::Priest => 8,
             CharacterClass::Archaeologist
             | CharacterClass::Healer
             | CharacterClass::Rogue
@@ -88,9 +94,33 @@ impl CharacterClass {
         }
     }
 
+    /// Class-specific stat adjustments [STR, DEX, CON, INT, WIS, CHA].
+    /// Applied after 4d6 roll, before 72 rebalancing.
+    pub fn stat_adjustments(&self, gender: Gender) -> [i8; 6] {
+        match (self, gender) {
+            //                                          STR  DEX  CON  INT  WIS  CHA
+            (CharacterClass::Barbarian, Gender::Male) => [3,   0,   2,  -2,  -2,  -1],
+            (CharacterClass::Barbarian, Gender::Female) => [2,  1,   1,  -2,  -1,  -1],
+            (CharacterClass::Caveman, _)   => [2,   0,   2,  -2,   0,  -2],
+            (CharacterClass::Knight, Gender::Male) => [1,  -1,   1,  -1,   0,   0],
+            (CharacterClass::Knight, Gender::Female) => [0,   0,   0,  -1,   1,   0],
+            (CharacterClass::Valkyrie, _)  => [2,   1,   1,  -1,  -2,  -1],
+            (CharacterClass::Ranger, _)    => [1,   2,   0,  -1,   0,  -2],
+            (CharacterClass::Samurai, _)   => [1,   0,   2,  -1,   0,  -2],
+            (CharacterClass::Monk, _)      => [-1,  2,   0,  -1,   2,  -2],
+            (CharacterClass::Priest, _)    => [-1, -1,   1,  -1,   3,  -1],
+            (CharacterClass::Rogue, _)     => [-1,  3,   0,   1,  -1,  -2],
+            (CharacterClass::Archaeologist, _) => [-1, 1, 0,  2,   1,  -3],
+            (CharacterClass::Healer, _)    => [-2, -1,   1,   1,   2,  -1],
+            (CharacterClass::Wizard, _)    => [-2,  0,  -1,   3,   2,  -2],
+            (CharacterClass::Tourist, _)   => [-1,  0,  -1,   1,  -1,   2],
+            (CharacterClass::Merchant, _)  => [-2,  0,  -1,   1,  -1,   3],
+            (CharacterClass::Guard, _)     => [2,   0,   2,  -2,  -1,  -1],
+        }
+    }
+
     pub fn from_str_or_default(s: &str) -> Self {
         match s {
-            "warrior" => CharacterClass::Warrior,
             "barbarian" => CharacterClass::Barbarian,
             "caveman" => CharacterClass::Caveman,
             "valkyrie" => CharacterClass::Valkyrie,
@@ -98,7 +128,6 @@ impl CharacterClass {
             "samurai" => CharacterClass::Samurai,
             "monk" => CharacterClass::Monk,
             "priest" => CharacterClass::Priest,
-            "thief" => CharacterClass::Thief,
             "archaeologist" => CharacterClass::Archaeologist,
             "healer" => CharacterClass::Healer,
             "rogue" => CharacterClass::Rogue,
@@ -211,6 +240,8 @@ pub struct Character {
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
     pub class: CharacterClass,
+    #[serde(default)]
+    pub gender: Gender,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -245,8 +276,12 @@ pub enum ClientMessage {
     CreateCharacter {
         character_name: String,
         character_class: CharacterClass,
+        gender: Gender,
     },
-    RollCharacterStats,
+    RollCharacterStats {
+        character_class: CharacterClass,
+        gender: Gender,
+    },
     DeleteCharacter {
         character_id: i64,
     },

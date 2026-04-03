@@ -21,7 +21,7 @@
   import HousingEditorPanel from './lib/components/map-editor/HousingEditorPanel.svelte'
   import GenerateTerrainDialog from './lib/components/map-editor/GenerateTerrainDialog.svelte'
   import { showGenerateDialog } from './lib/stores/editorStore'
-  import { networkManager, type AccountCharacter, type CharacterClass } from './lib/network/socket'
+  import { networkManager, type AccountCharacter, type CharacterClass, type Gender } from './lib/network/socket'
   import { startBgm } from './lib/managers/bgmManager'
   import SettingsPanel from './lib/components/SettingsPanel.svelte'
 
@@ -53,7 +53,8 @@
   let kickedMessage = $state('')
 
   // Character create screen state
-  let createSelectedClass = $state<CharacterClass>('warrior')
+  let createSelectedClass = $state<CharacterClass>('knight')
+  let createSelectedGender = $state<Gender>('male')
 
   // Whether the shared Canvas should be mounted (all screens except login)
   let showCanvas = $derived(screen !== 'login')
@@ -101,8 +102,8 @@
     return result
   }
 
-  async function handleCreateCharacter(characterName: string, characterClass: CharacterClass) {
-    const result = await networkManager.requestCreateCharacter(characterName, characterClass)
+  async function handleCreateCharacter(characterName: string, characterClass: CharacterClass, gender: Gender) {
+    const result = await networkManager.requestCreateCharacter(characterName, characterClass, gender)
     if (result.ok && result.character) {
       accountCharacters = [...accountCharacters, result.character]
     }
@@ -117,8 +118,8 @@
     return result
   }
 
-  async function handleRollCharacterStats() {
-    return networkManager.requestRollCharacterStats()
+  async function handleRollCharacterStats(cls: CharacterClass, gender: Gender) {
+    return networkManager.requestRollCharacterStats(cls, gender)
   }
 
   async function handleStartGame(
@@ -250,7 +251,7 @@
             }}
           />
         {:else if screen === 'character-create'}
-          <CharacterCreateScene characterClass={createSelectedClass} />
+          <CharacterCreateScene characterClass={createSelectedClass} gender={createSelectedGender} />
         {:else if screen === 'game'}
           <GameScene
             {serverUrl}
@@ -334,7 +335,9 @@
       {accountName}
       characters={accountCharacters}
       selectedClass={createSelectedClass}
+      selectedGender={createSelectedGender}
       onClassChange={(cls) => { createSelectedClass = cls }}
+      onGenderChange={(g) => { createSelectedGender = g }}
       onRollCharacterStats={handleRollCharacterStats}
       onCreateCharacter={handleCreateCharacter}
       onCharacterCreated={handleCharacterCreated}

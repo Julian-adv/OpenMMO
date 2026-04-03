@@ -2,14 +2,16 @@
   import { T, useThrelte, useTask } from '@threlte/core'
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import type { CharacterClass } from '../network/networkTypes'
+  import type { CharacterClass, Gender } from '../network/networkTypes'
+  import { getCharacterModelYOffset } from '../utils/modelPaths'
   import CharacterPreview from './CharacterPreview.svelte'
 
   interface Props {
     characterClass: CharacterClass
+    gender: Gender
   }
 
-  let { characterClass }: Props = $props()
+  let { characterClass, gender }: Props = $props()
 
   const CAMERA_FOV = 42
   const CAMERA_POSITION_Y = 1.4
@@ -26,8 +28,14 @@
   const KEY_LIGHT_INTENSITY = 0.05
   const FILL_LIGHT_INTENSITY = 0.48
 
-  const { scene } = useThrelte()
+  const { scene, renderer } = useThrelte()
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
+
+  // Drag-to-rotate
+  let modelRotationY = $state(0)
+  let dragging = false
+  let lastPointerX = 0
+  const DRAG_SENSITIVITY = 0.01
 
   interface CharacterPreviewInstance {
     isGltfReady(): boolean
@@ -65,11 +73,35 @@
     cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, CHARACTER_Z)
   })
 
+  function onPointerDown(e: PointerEvent) {
+    dragging = true
+    lastPointerX = e.clientX
+  }
+
+  function onPointerMove(e: PointerEvent) {
+    if (!dragging) return
+    const dx = e.clientX - lastPointerX
+    lastPointerX = e.clientX
+    modelRotationY += dx * DRAG_SENSITIVITY
+  }
+
+  function onPointerUp() {
+    dragging = false
+  }
+
   onMount(() => {
     scene.background = new THREE.Color('#1a2a40')
 
+    const canvas = renderer.domElement
+    canvas.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+
     return () => {
       scene.background = null
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
       if (spotlightsAdded) {
         scene.remove(keyLight, fillLight, spotlightTarget)
         spotlightsAdded = false
@@ -141,13 +173,15 @@
   <T.MeshStandardMaterial color="#2f3f52" opacity={1.0} transparent />
 </T.Mesh>
 
-{#key characterClass}
+{#key `${characterClass}-${gender}`}
   <CharacterPreview
     bind:this={characterPreview}
     positionX={0}
-    positionY={CHARACTER_Y_OFFSET}
+    positionY={CHARACTER_Y_OFFSET + getCharacterModelYOffset(characterClass, gender)}
     positionZ={CHARACTER_Z}
     selected={true}
     {characterClass}
+    {gender}
+    rotationY={modelRotationY}
   />
 {/key}

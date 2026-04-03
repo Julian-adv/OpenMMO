@@ -295,6 +295,7 @@ async fn handle_client_message(
         ClientMessage::CreateCharacter {
             character_name,
             character_class,
+            gender,
         } => {
             if let Err(responses) = state.require_not_in_game("CreateCharacter") {
                 return Ok(responses);
@@ -321,6 +322,7 @@ async fn handle_client_message(
                 &rolled_attributes,
                 max_hp,
                 character_class.clone(),
+                gender,
             ) {
                 Ok(character) => {
                     state.pending_character_attributes = None;
@@ -373,7 +375,10 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::RollCharacterStats => {
+        ClientMessage::RollCharacterStats {
+            character_class,
+            gender,
+        } => {
             if let Err(responses) = state.require_not_in_game("RollCharacterStats") {
                 return Ok(responses);
             }
@@ -381,9 +386,8 @@ async fn handle_client_message(
                 return Ok(responses);
             }
 
-            let attributes = roll_character_attributes();
-            // Class is not yet chosen at roll time; use knight as preview (warrior and knight share the same hit die)
-            let max_hp = default_character_max_hp(&attributes, &CharacterClass::Knight);
+            let attributes = roll_character_attributes(&character_class, gender);
+            let max_hp = default_character_max_hp(&attributes, &character_class);
             state.pending_character_attributes = Some(attributes.clone());
             return Ok(vec![ServerMessage::CharacterStatsRolled {
                 attributes,
@@ -686,6 +690,7 @@ fn character_record_to_shared(record: crate::auth::CharacterRecord) -> Character
         max_hp: record.max_hp,
         attributes: record.attributes,
         class: record.class,
+        gender: record.gender,
     }
 }
 

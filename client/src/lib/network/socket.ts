@@ -19,6 +19,7 @@ import type {
   CharacterClass,
   CharacterRollResult,
   ClientMessage,
+  Gender,
   RollCharacterStatsResult,
 } from './networkTypes'
 
@@ -27,6 +28,7 @@ export type {
   CharacterAttributes,
   CharacterClass,
   CharacterRollResult,
+  Gender,
   RollCharacterStatsResult,
 } from './networkTypes'
 
@@ -454,7 +456,8 @@ class NetworkManager {
 
   async requestCreateCharacter(
     characterName: string,
-    characterClass: CharacterClass
+    characterClass: CharacterClass,
+    gender: Gender
   ): Promise<{ ok: boolean; message?: string; character?: AccountCharacter }> {
     await this.ensureWasm()
     if (!this.isConnected()) {
@@ -486,6 +489,7 @@ class NetworkManager {
               CreateCharacter: {
                 character_name: characterName,
                 character_class: characterClass,
+                gender,
               },
             }),
           notSentResult: { ok: false, message: 'Socket is not connected' },
@@ -532,7 +536,10 @@ class NetworkManager {
     )
   }
 
-  async requestRollCharacterStats(): Promise<RollCharacterStatsResult> {
+  async requestRollCharacterStats(
+    characterClass: CharacterClass,
+    gender: Gender
+  ): Promise<RollCharacterStatsResult> {
     await this.ensureWasm()
     if (!this.isConnected()) {
       return { ok: false, message: 'Socket is not connected' }
@@ -562,7 +569,10 @@ class NetworkManager {
           })
         )
         return {
-          send: () => this.sendAndSerialize('RollCharacterStats'),
+          send: () =>
+            this.sendAndSerialize({
+              RollCharacterStats: { character_class: characterClass, gender },
+            }),
           notSentResult: { ok: false, message: 'Socket is not connected' },
         }
       }

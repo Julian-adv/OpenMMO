@@ -1,6 +1,6 @@
 use crate::types::{CharacterAttributes, GameDateTime};
 use crate::world_config::world_config;
-use onlinerpg_shared::CharacterClass;
+use onlinerpg_shared::{CharacterClass, Gender};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
@@ -22,6 +22,7 @@ pub struct CharacterRecord {
     pub max_hp: u32,
     pub attributes: CharacterAttributes,
     pub class: CharacterClass,
+    pub gender: Gender,
     pub last_x: f32,
     pub last_y: f32,
     pub last_z: f32,
@@ -44,7 +45,7 @@ pub struct CharacterSaveData {
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -77,6 +78,14 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             .flatten()
             .map(|v| v as u32),
         floor_level: row.get::<_, i64>(19).unwrap_or(0) as i8,
+        gender: match row
+            .get::<_, String>(20)
+            .unwrap_or_else(|_| "male".to_string())
+            .as_str()
+        {
+            "female" => Gender::Female,
+            _ => Gender::Male,
+        },
     })
 }
 
@@ -240,6 +249,7 @@ impl AuthService {
             ),
             ("health", "INTEGER".into()),
             ("floor_level", "INTEGER NOT NULL DEFAULT 0".into()),
+            ("gender", "TEXT NOT NULL DEFAULT 'male'".into()),
         ];
 
         for (column_name, column_def) in &expected_columns {
@@ -363,6 +373,7 @@ impl AuthService {
         attributes: &CharacterAttributes,
         max_hp: u32,
         class: CharacterClass,
+        gender: Gender,
     ) -> Result<CharacterRecord, AuthError> {
         let account_name = account_name.trim();
         let character_name = character_name.trim();
@@ -408,6 +419,11 @@ impl AuthService {
             return Err(AuthError::CharacterNameAlreadyExists);
         }
 
+        let gender_str = match gender {
+            Gender::Male => "male",
+            Gender::Female => "female",
+        };
+
         conn.execute(
             "INSERT INTO characters (
                 account_name,
@@ -422,11 +438,12 @@ impl AuthService {
                 attr_cha,
                 attr_guard,
                 class,
+                gender,
                 last_x,
                 last_y,
                 last_z,
                 last_rotation
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
             params![
                 account_name,
                 character_name,
@@ -440,6 +457,7 @@ impl AuthService {
                 i64::from(attributes.cha),
                 i64::from(attributes.guard),
                 class.as_str(),
+                gender_str,
                 f64::from(world_config().spawn_position.x),
                 f64::from(world_config().spawn_position.y),
                 f64::from(world_config().spawn_position.z),
@@ -463,6 +481,7 @@ impl AuthService {
             max_hp,
             attributes: attributes.clone(),
             class,
+            gender,
             last_x: world_config().spawn_position.x,
             last_y: world_config().spawn_position.y,
             last_z: world_config().spawn_position.z,
