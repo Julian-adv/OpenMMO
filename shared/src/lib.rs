@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 pub mod housing;
+pub mod inventory;
 pub mod monster_ai;
 pub mod pathfinding;
 
@@ -349,6 +350,18 @@ pub enum ClientMessage {
         wall_dir: housing::WallDirection,
         segment_index: u32,
     },
+    EquipItem {
+        instance_id: u64,
+    },
+    UnequipItem {
+        slot: inventory::EquipSlot,
+    },
+    DropItem {
+        instance_id: u64,
+    },
+    PickupItem {
+        instance_id: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -401,6 +414,8 @@ pub enum ServerMessage {
     GameState {
         players: HashMap<String, Player>,
         monsters: HashMap<String, Monster>,
+        #[serde(default)]
+        ground_items: Vec<inventory::GroundItem>,
     },
     GameTimeSync {
         datetime: GameDateTime,
@@ -510,6 +525,26 @@ pub enum ServerMessage {
     /// Sent once on join: all no-spawn zones so the client can validate spawn positions.
     NoSpawnZones {
         zones: Vec<NoSpawnZone>,
+    },
+    /// Sent once on join: full inventory state.
+    InventoryState {
+        inventory: inventory::PlayerInventory,
+    },
+    /// Sent after any inventory mutation.
+    InventoryUpdated {
+        inventory: inventory::PlayerInventory,
+    },
+    /// A new item appeared on the ground.
+    GroundItemSpawned {
+        item: inventory::GroundItem,
+    },
+    /// A ground item was picked up or despawned.
+    GroundItemRemoved {
+        instance_id: u64,
+    },
+    /// Inventory action failed.
+    InventoryError {
+        message: String,
     },
 }
 
@@ -943,6 +978,7 @@ mod tests {
         let msg = ServerMessage::GameState {
             players,
             monsters: HashMap::new(),
+            ground_items: Vec::new(),
         };
         let bytes = serialize_server_msg(&msg).unwrap();
         let decoded = deserialize_server_msg(&bytes).unwrap();

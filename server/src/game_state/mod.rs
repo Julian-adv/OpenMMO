@@ -1,9 +1,11 @@
 use crate::housing::HousingIO;
+use crate::item_defs::ItemDefs;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use crate::world_config::MonsterSpawnRule;
 use bytes::Bytes;
 use onlinerpg_shared::housing::{RoomData, WallDirection, WallVariant};
+use onlinerpg_shared::inventory::PlayerInventory;
 use onlinerpg_shared::serialize_server_msg;
 use onlinerpg_shared::NoSpawnZone;
 use onlinerpg_shared::Position;
@@ -33,6 +35,7 @@ pub type GameStateReceiver = broadcast::Receiver<BroadcastMessage>;
 
 mod chat;
 mod combat;
+mod inventory;
 mod monster;
 mod player;
 mod time;
@@ -47,6 +50,12 @@ struct IdState {
     owner_spawn_counts: HashMap<u32, u32>,
 }
 
+/// Server-side ground item with despawn timestamp.
+pub(crate) struct ServerGroundItem {
+    pub item: onlinerpg_shared::inventory::GroundItem,
+    pub dropped_at_ms: u64,
+}
+
 #[derive(Clone)]
 pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
@@ -55,6 +64,7 @@ pub struct GameState {
     game_clock_start_real: Instant,
     game_clock_start_game_seconds: i64,
     monster_defs: MonsterDefs,
+    item_defs: ItemDefs,
     id_state: Arc<RwLock<IdState>>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
     // player_id → (character_id, current_xp, attributes)
@@ -62,17 +72,26 @@ pub struct GameState {
     housing_io: Arc<HousingIO>,
     /// Players whose state has changed since the last periodic save.
     dirty_players: Arc<RwLock<HashSet<PlayerId>>>,
+    /// Players whose inventory has changed since the last periodic save.
+    dirty_inventories: Arc<RwLock<HashSet<PlayerId>>>,
     /// In-memory set of currently open doors.
     open_doors: Arc<RwLock<HashSet<DoorKey>>>,
     /// Monster spawn rules from region zone files.
     spawn_rules: Vec<MonsterSpawnRule>,
     /// No-spawn zones (towns, safe areas) from region zone files.
     no_spawn_zones: Vec<NoSpawnZone>,
+    /// Player inventories (bag + equipment), keyed by player_id.
+    inventories: Arc<RwLock<HashMap<PlayerId, PlayerInventory>>>,
+    /// Items dropped on the ground, keyed by instance_id.
+    ground_items: Arc<RwLock<HashMap<u64, ServerGroundItem>>>,
+    /// Monotonically increasing counter for item instance IDs.
+    next_item_instance_id: Arc<RwLock<u64>>,
 }
 
 impl GameState {
     pub fn new(
         monster_defs: MonsterDefs,
+        item_defs: ItemDefs,
         initial_datetime: crate::types::GameDateTime,
         housing_io: Arc<HousingIO>,
         spawn_rules: Vec<MonsterSpawnRule>,
@@ -87,14 +106,19 @@ impl GameState {
             game_clock_start_real: Instant::now(),
             game_clock_start_game_seconds: Self::datetime_to_total_game_seconds(&initial_datetime),
             monster_defs,
+            item_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
             player_characters: Arc::new(RwLock::new(HashMap::new())),
             housing_io,
             dirty_players: Arc::new(RwLock::new(HashSet::new())),
+            dirty_inventories: Arc::new(RwLock::new(HashSet::new())),
             open_doors: Arc::new(RwLock::new(HashSet::new())),
             spawn_rules,
             no_spawn_zones,
+            inventories: Arc::new(RwLock::new(HashMap::new())),
+            ground_items: Arc::new(RwLock::new(HashMap::new())),
+            next_item_instance_id: Arc::new(RwLock::new(1)),
         }
     }
 

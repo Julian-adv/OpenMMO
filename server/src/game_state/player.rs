@@ -126,11 +126,19 @@ impl super::GameState {
             .collect();
 
         let monsters = self.monsters.read().await.clone();
+        let ground_items: Vec<_> = self
+            .ground_items
+            .read()
+            .await
+            .values()
+            .map(|sgi| sgi.item.clone())
+            .collect();
 
-        if !other_players.is_empty() || !monsters.is_empty() {
+        if !other_players.is_empty() || !monsters.is_empty() || !ground_items.is_empty() {
             return Some(ServerMessage::GameState {
                 players: other_players,
                 monsters,
+                ground_items,
             });
         }
 

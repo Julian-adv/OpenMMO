@@ -13,6 +13,8 @@ import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
 import { housingManager } from '../managers/housingManager'
 import { furnitureManager } from '../managers/furnitureManager'
+import { groundItemManager } from '../managers/groundItemManager'
+import { setInventory } from '../stores/inventoryStore'
 import type { MonsterData } from '../types/Monster'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
@@ -22,6 +24,7 @@ import type {
   AuthSuccessPayload,
   CharacterAttributes,
   CharacterRollResult,
+  ServerGroundItem,
   ServerMonster,
   ServerPlayer,
 } from './networkTypes'
@@ -305,6 +308,13 @@ export function handleServerMessage(
           }
         )
       }
+
+      groundItemManager.reset()
+      if (data.ground_items) {
+        ;(data.ground_items as ServerGroundItem[]).forEach((item) => {
+          groundItemManager.spawn(item)
+        })
+      }
       break
 
     case 'GameTimeSync': {
@@ -587,6 +597,23 @@ export function handleServerMessage(
         data.segment_index,
         data.is_open
       )
+      break
+
+    case 'InventoryState':
+    case 'InventoryUpdated':
+      setInventory(data.inventory)
+      break
+
+    case 'GroundItemSpawned':
+      groundItemManager.spawn(data.item as ServerGroundItem)
+      break
+
+    case 'GroundItemRemoved':
+      groundItemManager.remove(data.instance_id)
+      break
+
+    case 'InventoryError':
+      addChatMessage({ text: data.message, sender: 'system' })
       break
 
     case 'XpGained': {

@@ -37,6 +37,7 @@
     housingGroup: THREE.Group | null
     doorMeshes: THREE.Object3D[]
     furnitureMeshes: THREE.Object3D[]
+    groundItemMeshes: THREE.Object3D[]
     monsterModels: (Monster | undefined)[]
     playerAttackDuration: number
     heightManager: TerrainHeightManager
@@ -61,6 +62,7 @@
     housingGroup,
     doorMeshes,
     furnitureMeshes,
+    groundItemMeshes,
     monsterModels,
     playerAttackDuration,
     heightManager,
@@ -191,6 +193,7 @@
       .filter((group) => group !== undefined) as THREE.Group[]}
     {doorMeshes}
     {furnitureMeshes}
+    {groundItemMeshes}
     attackCooldown={playerAttackDuration}
   />
 {/if}

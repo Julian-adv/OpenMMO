@@ -140,6 +140,40 @@ export type ClientMessage =
   | { InteractFurniture: { furniture_type: string; furniture_id: number } }
   | 'StopInteraction'
   | 'Heartbeat'
+  | { EquipItem: { instance_id: number } }
+  | { UnequipItem: { slot: EquipSlot } }
+  | { DropItem: { instance_id: number } }
+  | { PickupItem: { instance_id: number } }
+
+export type EquipSlot =
+  | 'head'
+  | 'main_hand'
+  | 'off_hand'
+  | 'chest'
+  | 'ear'
+  | 'neck'
+  | 'belt'
+  | 'pants'
+  | 'boots'
+  | 'ring'
+
+export type ItemInstance = {
+  instance_id: number
+  item_def_id: string
+  quantity: number
+}
+
+export type PlayerInventory = {
+  bag: ItemInstance[]
+  equipped: Partial<Record<EquipSlot, ItemInstance>>
+}
+
+export type ServerGroundItem = {
+  instance_id: number
+  item_def_id: string
+  position: Position
+  floor_level: number
+}
 
 export type AuthSuccessPayload = {
   accountName: string

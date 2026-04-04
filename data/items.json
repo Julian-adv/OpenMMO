@@ -1,0 +1,98 @@
+{
+  "iron_sword": {
+    "id": "iron_sword",
+    "name": "Iron Sword",
+    "description": "A sturdy iron longsword.",
+    "weight": 3,
+    "equipSlot": "main_hand",
+    "stackable": false
+  },
+  "wooden_shield": {
+    "id": "wooden_shield",
+    "name": "Wooden Shield",
+    "description": "A round wooden shield.",
+    "weight": 6,
+    "equipSlot": "off_hand",
+    "stackable": false
+  },
+  "leather_cap": {
+    "id": "leather_cap",
+    "name": "Leather Cap",
+    "description": "A simple leather cap.",
+    "weight": 1,
+    "equipSlot": "head",
+    "stackable": false
+  },
+  "iron_chestplate": {
+    "id": "iron_chestplate",
+    "name": "Iron Chestplate",
+    "description": "Heavy iron chest armor.",
+    "weight": 55,
+    "equipSlot": "chest",
+    "stackable": false
+  },
+  "leather_pants": {
+    "id": "leather_pants",
+    "name": "Leather Pants",
+    "description": "Durable leather leggings.",
+    "weight": 4,
+    "equipSlot": "pants",
+    "stackable": false
+  },
+  "iron_boots": {
+    "id": "iron_boots",
+    "name": "Iron Boots",
+    "description": "Heavy iron boots.",
+    "weight": 3,
+    "equipSlot": "boots",
+    "stackable": false
+  },
+  "gold_ring": {
+    "id": "gold_ring",
+    "name": "Gold Ring",
+    "description": "A plain gold ring.",
+    "weight": 0.1,
+    "equipSlot": "ring",
+    "stackable": false
+  },
+  "silver_necklace": {
+    "id": "silver_necklace",
+    "name": "Silver Necklace",
+    "description": "A delicate silver chain.",
+    "weight": 0.3,
+    "equipSlot": "neck",
+    "stackable": false
+  },
+  "copper_earring": {
+    "id": "copper_earring",
+    "name": "Copper Earring",
+    "description": "A small copper earring.",
+    "weight": 0.1,
+    "equipSlot": "ear",
+    "stackable": false
+  },
+  "leather_belt": {
+    "id": "leather_belt",
+    "name": "Leather Belt",
+    "description": "A wide leather belt.",
+    "weight": 1,
+    "equipSlot": "belt",
+    "stackable": false
+  },
+  "dagger": {
+    "id": "dagger",
+    "name": "Dagger",
+    "description": "A small but sharp dagger.",
+    "weight": 1,
+    "equipSlot": "main_hand",
+    "stackable": false
+  },
+  "chain_mail": {
+    "id": "chain_mail",
+    "name": "Chain Mail",
+    "description": "Interlocking metal rings forming armor.",
+    "weight": 55,
+    "equipSlot": "chest",
+    "stackable": false
+  }
+}

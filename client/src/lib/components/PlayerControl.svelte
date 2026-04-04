@@ -30,13 +30,14 @@
     camera: THREE.Camera
     heightManager: TerrainHeightManager
     groundMeshes: THREE.Object3D[]
+    groundItemMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
     doorMeshes: THREE.Object3D[]
     furnitureMeshes: THREE.Object3D[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, monsterMeshes, doorMeshes, furnitureMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, doorMeshes, furnitureMeshes, attackCooldown }: Props = $props()
 
   function sampleHeight(x: number, z: number): number {
     return heightManager.getHeightAtWorldPosition(x, z) + get(playerFloorOffset)
@@ -701,6 +702,7 @@
       monsterMeshes,
       doorMeshes,
       furnitureMeshes,
+      groundItemMeshes,
       groundMeshes,
       playerPosition: {
         x: currentPlayer.position.x,
@@ -766,6 +768,10 @@
         }
 
         networkManager.sendInteractFurniture(intent.furnitureType, intent.furnitureId)
+        break
+      }
+      case 'pickup_ground_item': {
+        networkManager.sendPickupItem(intent.instanceId)
         break
       }
       case 'move_to_ground': {

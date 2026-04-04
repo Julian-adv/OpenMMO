@@ -2,6 +2,8 @@ import { writable } from 'svelte/store'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
 import type { CharacterClass, Gender } from '../network/networkTypes'
+import { resetInventoryStore } from './inventoryStore'
+import { groundItemManager } from '../managers/groundItemManager'
 
 export interface PlayerDamageInfo {
   damage: number
@@ -74,6 +76,8 @@ export const resetGameStore = () => {
     otherPlayers: new SvelteMap(),
     chatBubbles: new Map(),
   })
+  resetInventoryStore()
+  groundItemManager.reset()
 }
 
 const MAX_MESSAGES = 100

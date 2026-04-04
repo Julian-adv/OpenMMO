@@ -29,6 +29,12 @@ export type ClickIntent =
       rotation: number
       interactOffset?: Position
     }
+  | {
+      type: 'pickup_ground_item'
+      instanceId: number
+      position: Position
+      distance: number
+    }
   | { type: 'move_to_ground'; position: Position }
   | { type: 'none' }
 
@@ -37,6 +43,7 @@ export interface RaycastContext {
   monsterMeshes: THREE.Group[]
   doorMeshes: THREE.Object3D[]
   furnitureMeshes: THREE.Object3D[]
+  groundItemMeshes: THREE.Object3D[]
   groundMeshes: THREE.Object3D[]
   playerPosition: Position
   playerFloorLevel: number
@@ -229,6 +236,33 @@ class InputHandler {
             }
             obj = obj.parent
           }
+        }
+      }
+    }
+
+    // Check intersection with ground items
+    if (context.groundItemMeshes.length > 0) {
+      const itemHits = raycaster.intersectObjects(
+        context.groundItemMeshes,
+        true
+      )
+      if (itemHits.length > 0) {
+        const hitPoint = itemHits[0].point
+        const pp = context.playerPosition
+        const dx = hitPoint.x - pp.x
+        const dz = hitPoint.z - pp.z
+        const distSq = dx * dx + dz * dz
+        let obj: THREE.Object3D | null = itemHits[0].object
+        while (obj) {
+          if (obj.userData && obj.userData.groundItemId != null) {
+            return {
+              type: 'pickup_ground_item',
+              instanceId: obj.userData.groundItemId as number,
+              position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+              distance: Math.sqrt(distSq),
+            }
+          }
+          obj = obj.parent
         }
       }
     }

@@ -4,6 +4,7 @@ mod connection;
 mod game;
 mod game_state;
 mod housing;
+mod item_defs;
 mod monster_defs;
 mod npc_schedule;
 mod terrain;
@@ -52,6 +53,7 @@ async fn main() {
     let args = Args::parse();
     world_config::log_world_config();
     let monster_defs = monster_defs::MonsterDefs::load();
+    let item_defs = item_defs::ItemDefs::load();
     let auth_service = match AuthService::new(AuthService::default_db_path()) {
         Ok(service) => Arc::new(service),
         Err(e) => {
@@ -96,6 +98,7 @@ async fn main() {
 
     let game_state = Arc::new(GameState::new(
         monster_defs,
+        item_defs,
         initial_game_time,
         Arc::clone(&housing_io),
         spawn_rules,
@@ -109,6 +112,16 @@ async fn main() {
         loop {
             interval.tick().await;
             game_state_for_spawns.tick_monster_spawns().await;
+        }
+    });
+
+    // Ground item despawn tick (every 30 seconds)
+    let game_state_for_ground = Arc::clone(&game_state);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            game_state_for_ground.tick_ground_item_despawn().await;
         }
     });
 
@@ -144,6 +157,28 @@ async fn main() {
                     tokio::spawn(async move {
                         if let Err(e) = handle.await {
                             error!("Batch save task panicked: {}", e);
+                        }
+                    });
+                }
+
+                // Batch-save dirty inventories
+                let dirty_inventories = game_state_for_time_sync
+                    .collect_dirty_inventory_states()
+                    .await;
+                if !dirty_inventories.is_empty() {
+                    let count = dirty_inventories.len();
+                    let auth = Arc::clone(&auth_service_for_time_sync);
+                    let handle = tokio::task::spawn_blocking(move || {
+                        for (char_id, items) in &dirty_inventories {
+                            if let Err(e) = auth.save_inventory(*char_id, items) {
+                                warn!("Failed to save inventory for character {}: {}", char_id, e);
+                            }
+                        }
+                        info!("Batch-saved {} inventory/inventories", count);
+                    });
+                    tokio::spawn(async move {
+                        if let Err(e) = handle.await {
+                            error!("Inventory batch save task panicked: {}", e);
                         }
                     });
                 }

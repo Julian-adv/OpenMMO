@@ -1,5 +1,6 @@
 use super::*;
 use crate::housing::HousingIO;
+use crate::item_defs::ItemDefs;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterClass, Gender, Position, ServerMessage};
 use crate::world_config::world_config;
@@ -13,6 +14,7 @@ fn make_test_game_state(test_name: &str) -> GameState {
     let housing_io = Arc::new(HousingIO::new(housing_dir));
     GameState::new(
         MonsterDefs::load(),
+        ItemDefs::load(),
         GameState::default_start_datetime(),
         housing_io,
         vec![],

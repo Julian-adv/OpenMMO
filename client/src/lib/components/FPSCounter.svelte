@@ -34,6 +34,7 @@
     housingEditorMode,
     gridVisible,
     worldMapVisible,
+    inventoryVisible,
     debugSpeedMode,
     refractionEnabled,
     reflectionEnabled,
@@ -62,6 +63,15 @@
         if (tag !== 'input' && tag !== 'textarea') {
           event.preventDefault()
           worldMapVisible.update((v) => !v)
+        }
+      }
+    }
+    if (event.key === 'i' || event.key === 'I') {
+      if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+        const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+        if (tag !== 'input' && tag !== 'textarea') {
+          event.preventDefault()
+          inventoryVisible.update((v) => !v)
         }
       }
     }

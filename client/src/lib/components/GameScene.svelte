@@ -30,6 +30,7 @@
   import { drainTileWork } from '../utils/tileWorkQueue'
   import GameScenePlayersLayer from './game-scene/GameScenePlayersLayer.svelte'
   import GameSceneMonstersLayer from './game-scene/GameSceneMonstersLayer.svelte'
+  import GameSceneGroundItemsLayer from './game-scene/GameSceneGroundItemsLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
   import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
   import NpcWaypointOverlay from './map-editor/NpcWaypointOverlay.svelte'
@@ -136,6 +137,7 @@
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
+  let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(undefined)
   let furnitureOverlayRef = $state<FurnitureOverlay | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
@@ -433,6 +435,9 @@
         housingLayerRef?.update(deltaTime)
         loopProfiler.record('housingUpdate', performance.now() - housingStart)
       }
+
+      // Update ground items (spin animation)
+      groundItemsLayerRef?.update(deltaTime)
 
       // Update grass wind & trail
       {
@@ -896,6 +901,7 @@
     housingGroup={housingLayerRef?.getGroup() ?? null}
     doorMeshes={housingLayerRef?.getDoorMeshes() ?? []}
     furnitureMeshes={furnitureOverlayRef ? [furnitureOverlayRef.getGroup()] : []}
+    groundItemMeshes={groundItemsLayerRef?.getGroup() ? [groundItemsLayerRef.getGroup()!] : []}
     {monsterModels}
     {playerAttackDuration}
     heightManager={terrainHeightManager}
@@ -912,6 +918,8 @@
     monsters={monsterManager.monsters}
     bind:monsterModels={monsterModels}
   />
+
+  <GameSceneGroundItemsLayer bind:this={groundItemsLayerRef} />
 </T>
 
 {#if $mapEditorMode}

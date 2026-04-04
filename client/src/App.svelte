@@ -14,8 +14,9 @@
   import LoadingDialog from './lib/components/LoadingDialog.svelte'
   import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
   import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
+  import InventoryPanel from './lib/components/InventoryPanel.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { mapEditorMode, worldMapVisible, teleportLoading, housingEditorMode } from './lib/stores/debugStore'
+  import { mapEditorMode, worldMapVisible, inventoryVisible, teleportLoading, housingEditorMode } from './lib/stores/debugStore'
   import { createWebGPURenderer } from './lib/utils/renderer'
   import MapEditorPanel from './lib/components/map-editor/MapEditorPanel.svelte'
   import HousingEditorPanel from './lib/components/map-editor/HousingEditorPanel.svelte'
@@ -288,6 +289,10 @@
           currentXp={currentPlayerTotalXp ?? selectedCharacter.xp}
           currentHp={currentPlayerHp ?? selectedCharacter.max_hp}
           maxHp={currentPlayerMaxHp ?? selectedCharacter.max_hp}
+          attributes={selectedCharacter.attributes}
+        />
+        <InventoryPanel
+          visible={$inventoryVisible}
           attributes={selectedCharacter.attributes}
         />
       {/if}

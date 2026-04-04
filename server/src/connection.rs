@@ -200,7 +200,7 @@ pub async fn handle_connection(
         }
     }
 
-    // Save full character state to DB before cleanup
+    // Save full character state and inventory to DB before cleanup
     if let Some(ref id) = state.player_id {
         if let Some(save_data) = game_state.get_player_save_data(id).await {
             game_state.remove_dirty(id).await;
@@ -216,6 +216,22 @@ pub async fn handle_connection(
                 error!("Failed to save character state on disconnect: {}", e);
             }
         }
+
+        // Save inventory
+        if let Some((char_id, items)) = game_state.get_inventory_save_data(id).await {
+            let auth = auth_service.clone();
+            if let Err(e) =
+                tokio::task::spawn_blocking(move || auth.save_inventory(char_id, &items))
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("spawn_blocking panicked: {}", e);
+                        Ok(())
+                    })
+            {
+                error!("Failed to save inventory on disconnect: {}", e);
+            }
+        }
+        game_state.unload_player_inventory(id).await;
 
         game_state.unregister_direct_channel(id).await;
         game_state.unregister_player_character(id).await;
@@ -474,6 +490,16 @@ async fn handle_client_message(
                 zones: game_state.no_spawn_zones().to_vec(),
             });
 
+            // Load inventory from DB
+            game_state
+                .load_player_inventory(&id, character_id, auth_service)
+                .await;
+
+            // Send inventory state
+            if let Some(inv) = game_state.get_player_inventory(&id).await {
+                responses.push(ServerMessage::InventoryState { inventory: inv });
+            }
+
             if let Some(game_state_msg) = game_state.add_player(player).await {
                 responses.push(game_state_msg);
             }
@@ -674,6 +700,30 @@ async fn handle_client_message(
                         None,
                     );
                 }
+            }
+        }
+
+        ClientMessage::EquipItem { instance_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.equip_item(id, instance_id).await;
+            }
+        }
+
+        ClientMessage::UnequipItem { slot } => {
+            if let Some(id) = &state.player_id {
+                game_state.unequip_item(id, slot).await;
+            }
+        }
+
+        ClientMessage::DropItem { instance_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.drop_item(id, instance_id).await;
+            }
+        }
+
+        ClientMessage::PickupItem { instance_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.pickup_item(id, instance_id).await;
             }
         }
     }

@@ -19,6 +19,7 @@ import type {
   CharacterClass,
   CharacterRollResult,
   ClientMessage,
+  EquipSlot,
   Gender,
   RollCharacterStatsResult,
 } from './networkTypes'
@@ -383,6 +384,22 @@ class NetworkManager {
         segment_index: segmentIndex,
       },
     })
+  }
+
+  sendEquipItem(instanceId: number) {
+    this.sendMessage({ EquipItem: { instance_id: instanceId } })
+  }
+
+  sendUnequipItem(slot: EquipSlot) {
+    this.sendMessage({ UnequipItem: { slot } })
+  }
+
+  sendDropItem(instanceId: number) {
+    this.sendMessage({ DropItem: { instance_id: instanceId } })
+  }
+
+  sendPickupItem(instanceId: number) {
+    this.sendMessage({ PickupItem: { instance_id: instanceId } })
   }
 
   // --- Auth & character request methods ---

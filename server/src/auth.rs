@@ -202,6 +202,18 @@ impl AuthService {
             [],
         )?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_items (
+                id INTEGER PRIMARY KEY,
+                character_id INTEGER NOT NULL,
+                item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL DEFAULT 1,
+                equip_slot TEXT,
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+
         Ok(())
     }
 
@@ -612,6 +624,55 @@ impl AuthService {
                 i64::from(datetime.minute),
             ],
         )?;
+        Ok(())
+    }
+
+    /// Load all items for a character: (item_def_id, quantity, equip_slot or None).
+    pub fn load_inventory(
+        &self,
+        character_id: i64,
+    ) -> Result<Vec<(String, u32, Option<String>)>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT item_def_id, quantity, equip_slot FROM character_items WHERE character_id = ?1",
+        )?;
+        let rows = stmt
+            .query_map(params![character_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, u32>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Save all items for a character, replacing existing data.
+    pub fn save_inventory(
+        &self,
+        character_id: i64,
+        items: &[(String, u32, Option<String>)],
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        let tx = conn.unchecked_transaction()?;
+
+        tx.execute(
+            "DELETE FROM character_items WHERE character_id = ?1",
+            params![character_id],
+        )?;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (item_def_id, quantity, equip_slot) in items {
+                stmt.execute(params![character_id, item_def_id, quantity, equip_slot])?;
+            }
+        }
+
+        tx.commit()?;
         Ok(())
     }
 }

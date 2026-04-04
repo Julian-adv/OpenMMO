@@ -4,15 +4,21 @@ import { fileURLToPath } from 'url'
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url))
 const dataDir = path.join(toolsDir, '..', 'data')
-export const csvPath = path.join(dataDir, 'monsters.csv')
-export const jsonPath = path.join(dataDir, 'monsters.json')
 
-export function convertCsvToJson() {
+/**
+ * Convert a single CSV file to a JSON file keyed by the `id` column.
+ * Returns the number of entries converted.
+ */
+export function convertCsvFile(csvFileName) {
+  const csvPath = path.join(dataDir, csvFileName)
+  const jsonFileName = csvFileName.replace(/\.csv$/, '.json')
+  const jsonPath = path.join(dataDir, jsonFileName)
+
   const csv = fs.readFileSync(csvPath, 'utf-8').trim()
   const lines = csv.split('\n')
   const headers = lines[0].split(',')
 
-  const monsters = {}
+  const entries = {}
 
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -25,24 +31,33 @@ export function convertCsvToJson() {
       const key = headers[j].trim()
       const raw = values[j].trim()
 
+      // Parse booleans
+      if (raw === 'true' || raw === 'false') {
+        entry[key] = raw === 'true'
+        continue
+      }
+
       // Try to parse as number, keep as string otherwise
       const num = Number(raw)
       entry[key] = Number.isNaN(num) ? raw : num
     }
 
-    monsters[entry.id] = entry
+    entries[entry.id] = entry
   }
 
-  fs.writeFileSync(jsonPath, JSON.stringify(monsters, null, 2) + '\n')
-  return Object.keys(monsters).length
+  fs.writeFileSync(jsonPath, JSON.stringify(entries, null, 2) + '\n')
+  return { count: Object.keys(entries).length, jsonPath }
 }
 
-// Run directly from CLI (skip when imported by another module)
+// Run directly from CLI
 const isDirectRun =
   process.argv[1] &&
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
 
 if (isDirectRun) {
-  const count = convertCsvToJson()
-  console.log(`Converted ${count} monster(s) -> ${jsonPath}`)
+  const csvFiles = fs.readdirSync(dataDir).filter((f) => f.endsWith('.csv'))
+  for (const csvFile of csvFiles) {
+    const { count, jsonPath } = convertCsvFile(csvFile)
+    console.log(`Converted ${count} entry/entries from ${csvFile} -> ${jsonPath}`)
+  }
 }
