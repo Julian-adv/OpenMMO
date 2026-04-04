@@ -26,6 +26,31 @@ import type {
   ServerPlayer,
 } from './networkTypes'
 
+function toLocalPlayer(sp: ServerPlayer): LocalPlayer {
+  return {
+    ...sp,
+    position: new Vector3(sp.position.x, sp.position.y, sp.position.z),
+    rotation: sp.rotation ?? 0,
+    maxHealth: sp.max_health,
+    characterClass: sp.class,
+    gender: sp.gender,
+  }
+}
+
+function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
+  return {
+    id: sp.id,
+    name: sp.name,
+    level: sp.level,
+    health: sp.health,
+    maxHealth: sp.max_health,
+    characterClass: sp.class,
+    gender: sp.gender,
+    torchOn: sp.torch_on,
+    floorLevel: sp.floor_level ?? 0,
+  }
+}
+
 /** Resolve furniture interaction for a remote player: find nearest placement, snap position/rotation. */
 async function applyFurnitureInteraction(
   playerId: string,
@@ -94,18 +119,7 @@ export function handleServerMessage(
     case 'JoinSuccess': {
       const serverPlayer: ServerPlayer = data.player
       console.log('Join successful, received player data:', serverPlayer)
-      const playerPosition = new Vector3(
-        serverPlayer.position.x,
-        serverPlayer.position.y,
-        serverPlayer.position.z
-      )
-      const player: LocalPlayer = {
-        ...serverPlayer,
-        position: playerPosition,
-        rotation: serverPlayer.rotation ?? 0,
-        maxHealth: serverPlayer.max_health,
-        characterClass: serverPlayer.class,
-      }
+      const player = toLocalPlayer(serverPlayer)
       gameStore.update((state) => ({
         ...state,
         currentPlayer: player,
@@ -141,28 +155,8 @@ export function handleServerMessage(
 
     case 'PlayerJoined': {
       const serverPlayer: ServerPlayer = data.player
-      const playerPosition = new Vector3(
-        serverPlayer.position.x,
-        serverPlayer.position.y,
-        serverPlayer.position.z
-      )
-      const player: LocalPlayer = {
-        ...serverPlayer,
-        position: playerPosition,
-        rotation: serverPlayer.rotation ?? 0,
-        maxHealth: serverPlayer.max_health,
-        characterClass: serverPlayer.class,
-      }
-      const remotePlayer: RemotePlayer = {
-        id: serverPlayer.id,
-        name: serverPlayer.name,
-        level: serverPlayer.level,
-        health: serverPlayer.health,
-        maxHealth: serverPlayer.max_health,
-        characterClass: serverPlayer.class,
-        torchOn: serverPlayer.torch_on,
-        floorLevel: serverPlayer.floor_level ?? 0,
-      }
+      const player = toLocalPlayer(serverPlayer)
+      const remotePlayer = toRemotePlayer(serverPlayer)
       let joinedName: string | null = null
       gameStore.update((state) => {
         if (!state.currentPlayer) {
@@ -275,16 +269,7 @@ export function handleServerMessage(
         Object.values(data.players as Record<string, ServerPlayer>).forEach(
           (serverPlayer) => {
             if (serverPlayer.id !== state.currentPlayer?.id) {
-              const player: RemotePlayer = {
-                id: serverPlayer.id,
-                name: serverPlayer.name,
-                level: serverPlayer.level,
-                health: serverPlayer.health,
-                maxHealth: serverPlayer.max_health,
-                characterClass: serverPlayer.class,
-                torchOn: serverPlayer.torch_on,
-                floorLevel: serverPlayer.floor_level ?? 0,
-              }
+              const player = toRemotePlayer(serverPlayer)
               remotePlayerManager.initPlayer(
                 serverPlayer.id,
                 serverPlayer.position,

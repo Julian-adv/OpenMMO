@@ -175,6 +175,8 @@ pub struct Player {
     pub max_health: u32,
     pub class: CharacterClass,
     #[serde(default)]
+    pub gender: Gender,
+    #[serde(default)]
     pub is_npc: bool,
     #[serde(default)]
     pub torch_on: bool,
@@ -929,8 +931,12 @@ mod tests {
                 health: 10,
                 max_health: 10,
                 class: CharacterClass::Knight,
+                gender: Gender::default(),
+                is_npc: false,
                 torch_on: false,
                 floor_level: 0,
+                furniture_type: None,
+                furniture_id: None,
                 last_combat_at: 0,
             },
         );

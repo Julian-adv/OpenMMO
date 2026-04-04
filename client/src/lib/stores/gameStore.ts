@@ -1,7 +1,7 @@
 import { writable } from 'svelte/store'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
-import type { CharacterClass } from '../network/networkTypes'
+import type { CharacterClass, Gender } from '../network/networkTypes'
 
 export interface PlayerDamageInfo {
   damage: number
@@ -17,6 +17,7 @@ interface PlayerBase {
   health: number
   maxHealth: number
   characterClass: CharacterClass
+  gender: Gender
   torchOn?: boolean
   lastDamageInfo?: PlayerDamageInfo
   lastRegenInfo?: PlayerDamageInfo

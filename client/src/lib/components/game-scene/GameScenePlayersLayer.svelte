@@ -211,6 +211,7 @@
     {camera}
     chatBubble={chatBubbles.get(currentPlayer.id)?.message}
     characterClass={currentPlayer.characterClass}
+    gender={currentPlayer.gender}
     health={currentPlayer.health}
     maxHealth={currentPlayer.maxHealth}
     onAttackDuration={onAttackDuration}
@@ -248,6 +249,7 @@
         {camera}
         chatBubble={chatBubbles.get(player.id)?.message}
         characterClass={player.characterClass}
+        gender={player.gender}
         health={player.health}
         maxHealth={player.maxHealth}
         torchMode={remoteTorchModes.get(player.id) ?? 'off'}

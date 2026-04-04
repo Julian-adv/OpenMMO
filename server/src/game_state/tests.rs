@@ -1,7 +1,7 @@
 use super::*;
 use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
-use crate::types::{CharacterClass, Position, ServerMessage};
+use crate::types::{CharacterClass, Gender, Position, ServerMessage};
 use crate::world_config::world_config;
 use std::path::PathBuf;
 use tokio::sync::broadcast::error::TryRecvError;
@@ -52,6 +52,7 @@ async fn respawn_player_revives_dead_player_only() {
         health: 0,
         max_health: 30,
         class: CharacterClass::Knight,
+        gender: Gender::default(),
         is_npc: false,
         torch_on: false,
         floor_level: 0,
@@ -109,6 +110,7 @@ async fn respawn_player_ignores_alive_player() {
         health: 18,
         max_health: 20,
         class: CharacterClass::Knight,
+        gender: Gender::default(),
         is_npc: false,
         torch_on: false,
         floor_level: 0,

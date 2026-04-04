@@ -29,6 +29,7 @@ export type ServerPlayer = {
   health: number
   max_health: number
   class: CharacterClass
+  gender: Gender
   is_npc: boolean
   torch_on: boolean
   floor_level: number

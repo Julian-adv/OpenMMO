@@ -433,6 +433,7 @@ async fn handle_client_message(
                 selected_character.level,
                 max_hp,
                 selected_character.class.clone(),
+                selected_character.gender,
                 Position {
                     x: selected_character.last_x,
                     y: selected_character.last_y,

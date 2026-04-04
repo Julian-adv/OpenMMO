@@ -311,7 +311,14 @@ async fn run_npc_session(
             );
 
             // Roll stats
-            ws::send(&mut ws_tx, &ClientMessage::RollCharacterStats).await?;
+            ws::send(
+                &mut ws_tx,
+                &ClientMessage::RollCharacterStats {
+                    character_class: class.clone(),
+                    gender: onlinerpg_shared::Gender::default(),
+                },
+            )
+            .await?;
             ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterStatsRolled", |msg| {
                 matches!(msg, ServerMessage::CharacterStatsRolled { .. })
             })
@@ -323,6 +330,7 @@ async fn run_npc_session(
                 &ClientMessage::CreateCharacter {
                     character_name: char_name.clone(),
                     character_class: class,
+                    gender: onlinerpg_shared::Gender::default(),
                 },
             )
             .await?;

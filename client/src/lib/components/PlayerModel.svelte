@@ -22,7 +22,7 @@
     getWeaponType,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
-  import type { CharacterClass } from '../network/networkTypes'
+  import type { CharacterClass, Gender } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
@@ -46,6 +46,7 @@
     camera: THREE.Camera | undefined
     chatBubble?: string
     characterClass: CharacterClass
+    gender: Gender
     health: number
     maxHealth: number
     onAttackDuration?: (duration: number) => void
@@ -70,6 +71,7 @@
     camera,
     chatBubble,
     characterClass,
+    gender,
     health,
     maxHealth,
     onAttackDuration,
@@ -115,7 +117,7 @@
   let weaponGltfData = $state<GLTF | null>(null)
 
   const weaponType = getWeaponType(characterClass)
-  const modelPath = getCharacterModelPath(characterClass)
+  const modelPath = getCharacterModelPath(characterClass, gender)
   const modelPromise = loadGLB(modelPath).then((g) => { activeGltfData = g })
   const locomotionPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
   const combatMeleePromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })

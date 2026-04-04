@@ -57,6 +57,8 @@ const CLASS_GENDER_MODELS: Partial<
     male: PRIEST_CHARACTER_MODEL_PATH,
     female: FEMALE_PRIEST_CHARACTER_MODEL_PATH,
   },
+  merchant: { female: MERCHANT_CHARACTER_MODEL_PATH },
+  guard: { male: GUARD_CHARACTER_MODEL_PATH },
 }
 
 export function getAvailableGenders(characterClass: CharacterClass): Gender[] {
