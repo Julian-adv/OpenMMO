@@ -8,6 +8,7 @@ export interface ItemDefinition {
   weight: number
   equipSlot: EquipSlot | null
   stackable: boolean
+  icon: string
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>

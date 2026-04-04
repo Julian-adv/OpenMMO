@@ -5,7 +5,8 @@
     "description": "A sturdy iron longsword.",
     "weight": 3,
     "equipSlot": "main_hand",
-    "stackable": false
+    "stackable": false,
+    "icon": "iron_sword.png"
   },
   "wooden_shield": {
     "id": "wooden_shield",
@@ -13,7 +14,8 @@
     "description": "A round wooden shield.",
     "weight": 6,
     "equipSlot": "off_hand",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "leather_cap": {
     "id": "leather_cap",
@@ -21,7 +23,8 @@
     "description": "A simple leather cap.",
     "weight": 1,
     "equipSlot": "head",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "iron_chestplate": {
     "id": "iron_chestplate",
@@ -29,7 +32,8 @@
     "description": "Heavy iron chest armor.",
     "weight": 55,
     "equipSlot": "chest",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "leather_pants": {
     "id": "leather_pants",
@@ -37,7 +41,8 @@
     "description": "Durable leather leggings.",
     "weight": 4,
     "equipSlot": "pants",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "iron_boots": {
     "id": "iron_boots",
@@ -45,7 +50,8 @@
     "description": "Heavy iron boots.",
     "weight": 3,
     "equipSlot": "boots",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "gold_ring": {
     "id": "gold_ring",
@@ -53,7 +59,8 @@
     "description": "A plain gold ring.",
     "weight": 0.1,
     "equipSlot": "ring",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "silver_necklace": {
     "id": "silver_necklace",
@@ -61,7 +68,8 @@
     "description": "A delicate silver chain.",
     "weight": 0.3,
     "equipSlot": "neck",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "copper_earring": {
     "id": "copper_earring",
@@ -69,7 +77,8 @@
     "description": "A small copper earring.",
     "weight": 0.1,
     "equipSlot": "ear",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "leather_belt": {
     "id": "leather_belt",
@@ -77,7 +86,8 @@
     "description": "A wide leather belt.",
     "weight": 1,
     "equipSlot": "belt",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "dagger": {
     "id": "dagger",
@@ -85,7 +95,8 @@
     "description": "A small but sharp dagger.",
     "weight": 1,
     "equipSlot": "main_hand",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   },
   "chain_mail": {
     "id": "chain_mail",
@@ -93,6 +104,7 @@
     "description": "Interlocking metal rings forming armor.",
     "weight": 55,
     "equipSlot": "chest",
-    "stackable": false
+    "stackable": false,
+    "icon": "sword.png"
   }
 }

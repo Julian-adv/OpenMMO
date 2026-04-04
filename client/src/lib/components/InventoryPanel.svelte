@@ -1,7 +1,7 @@
 <script lang="ts">
   import { inventoryStore } from '../stores/inventoryStore'
   import type { ItemInstance } from '../stores/inventoryStore'
-  import { getItemDef, getItemName } from '../data/itemDefs'
+  import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes } from '../network/networkTypes'
 
@@ -29,17 +29,82 @@
     return total
   })
 
-  function equip(instanceId: number) {
-    networkManager.sendEquipItem(instanceId)
+  const COLS = 5
+  const ROWS = 10
+  const TOTAL_SLOTS = COLS * ROWS
+
+  const slots = $derived.by(() => {
+    const bag = $inventoryStore.bag
+    const result: (ItemInstance | null)[] = new Array(TOTAL_SLOTS).fill(null)
+    for (let i = 0; i < bag.length && i < TOTAL_SLOTS; i++) {
+      result[i] = bag[i]
+    }
+    return result
+  })
+
+  let hoveredSlot = $state<number | null>(null)
+  let panelEl = $state<HTMLDivElement | null>(null)
+
+  function onDblClick(slot: ItemInstance | null) {
+    if (!slot) return
+    const def = getItemDef(slot.item_def_id)
+    if (def?.equipSlot) {
+      networkManager.sendEquipItem(slot.instance_id)
+    }
   }
 
-  function drop(instanceId: number) {
-    networkManager.sendDropItem(instanceId)
+  let dragging = $state<{ icon: string; x: number; y: number } | null>(null)
+
+  function onPointerDown(e: PointerEvent, slot: ItemInstance) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const target = e.currentTarget as HTMLElement
+    target.setPointerCapture(e.pointerId)
+    const def = getItemDef(slot.item_def_id)
+    const icon = def?.icon ?? 'icon_frame.png'
+    const startX = e.clientX
+    const startY = e.clientY
+    let started = false
+
+    function onMove(me: PointerEvent) {
+      me.preventDefault()
+      const dx = me.clientX - startX
+      const dy = me.clientY - startY
+      if (!started && dx * dx + dy * dy < 64) return
+      started = true
+      hoveredSlot = null
+      dragging = { icon, x: me.clientX, y: me.clientY }
+    }
+
+    function onUp(ue: PointerEvent) {
+      if (target.hasPointerCapture(ue.pointerId)) {
+        target.releasePointerCapture(ue.pointerId)
+      }
+      target.removeEventListener('pointermove', onMove)
+      target.removeEventListener('pointerup', onUp)
+      if (!started || !panelEl) {
+        dragging = null
+        return
+      }
+      const rect = panelEl.getBoundingClientRect()
+      const outside =
+        ue.clientX < rect.left ||
+        ue.clientX > rect.right ||
+        ue.clientY < rect.top ||
+        ue.clientY > rect.bottom
+      if (outside) {
+        networkManager.sendDropItem(slot.instance_id)
+      }
+      dragging = null
+    }
+
+    target.addEventListener('pointermove', onMove)
+    target.addEventListener('pointerup', onUp)
   }
 </script>
 
 {#if visible}
-  <div class="inventory-panel" role="dialog" aria-label="Inventory">
+  <div class="inventory-panel" role="dialog" aria-label="Inventory" bind:this={panelEl}>
     <div class="panel-header">
       <span class="panel-title">Inventory</span>
       <span class="weight-display">
@@ -47,27 +112,49 @@
       </span>
     </div>
 
-    <div class="panel-section bag-section">
-      <div class="section-label">Bag ({$inventoryStore.bag.length})</div>
-      <div class="bag-list">
-        {#each $inventoryStore.bag as item (item.instance_id)}
-          {@const def = getItemDef(item.item_def_id)}
-          <div class="bag-item">
-            <span class="item-name">{getItemName(item.item_def_id)}</span>
-            <span class="item-weight">{(def?.weight ?? 1).toFixed(1)}</span>
-            <div class="item-actions">
-              {#if def?.equipSlot}
-                <button class="btn-action" onclick={() => equip(item.instance_id)}>Equip</button>
-              {/if}
-              <button class="btn-action btn-drop" onclick={() => drop(item.instance_id)}>Drop</button>
+    <div class="bag-grid">
+      {#each slots as slot, i (slot?.instance_id ?? `empty-${i}`)}
+        {@const def = slot ? getItemDef(slot.item_def_id) : null}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="grid-cell"
+          onmouseenter={() => { if (slot) hoveredSlot = i }}
+          onmouseleave={() => hoveredSlot = null}
+          ondblclick={() => onDblClick(slot)}
+          onpointerdown={(e: PointerEvent) => { if (slot) onPointerDown(e, slot) }}
+        >
+          <img class="icon-frame" src="/items/icon_frame.png" alt="" draggable="false" />
+          {#if def}
+            <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+          {/if}
+          {#if slot && slot.quantity > 1}
+            <span class="item-qty">{slot.quantity}</span>
+          {/if}
+          {#if slot && def && hoveredSlot === i}
+            <div class="tooltip">
+              <div class="tooltip-name">{def.name}</div>
+              <div class="tooltip-desc">{def.description}</div>
+              <div class="tooltip-stats">
+                <span>Weight: {def.weight}</span>
+                {#if def.equipSlot}
+                  <span>Slot: {def.equipSlot.replace('_', ' ')}</span>
+                {/if}
+              </div>
             </div>
-          </div>
-        {:else}
-          <div class="bag-empty">Empty</div>
-        {/each}
-      </div>
+          {/if}
+        </div>
+      {/each}
     </div>
   </div>
+{/if}
+
+{#if dragging}
+  <img
+    class="drag-ghost"
+    src="/items/{dragging.icon}"
+    alt=""
+    style="left:{dragging.x}px;top:{dragging.y}px"
+  />
 {/if}
 
 <style>
@@ -77,8 +164,6 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 40;
-    width: 280px;
-    max-height: 80vh;
     display: flex;
     flex-direction: column;
     backdrop-filter: blur(4px);
@@ -90,7 +175,6 @@
     font-family: 'Courier New', monospace;
     font-size: 12px;
     pointer-events: auto;
-    overflow: hidden;
   }
 
   .panel-header {
@@ -113,94 +197,88 @@
     color: #9fb2c3;
   }
 
-  .panel-section {
-    margin-bottom: 8px;
-  }
-
-  .section-label {
-    font-size: 11px;
-    color: #9fc5ff;
-    margin-bottom: 4px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  .bag-section {
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .bag-list {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
+  .bag-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 64px);
+    grid-template-rows: repeat(10, 64px);
     gap: 2px;
-    max-height: 240px;
   }
 
-  .bag-item {
+  .grid-cell {
+    position: relative;
+    width: 64px;
+    height: 64px;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.04);
+    justify-content: center;
   }
 
-  .bag-item:hover {
-    background: rgba(255, 255, 255, 0.08);
+  .icon-frame {
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
   }
 
-  .item-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .item-icon {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    image-rendering: pixelated;
   }
 
-  .item-weight {
-    font-size: 10px;
-    color: #9fb2c3;
-    min-width: 32px;
-    text-align: right;
+  .item-qty {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
   }
 
-  .item-actions {
-    display: flex;
-    gap: 2px;
+  .drag-ghost {
+    position: fixed;
+    width: 48px;
+    height: 48px;
+    transform: translate(-50%, -50%);
+    image-rendering: pixelated;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.85;
+    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
   }
 
-  .btn-action {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 3px;
-    color: #e6edf3;
-    font-size: 10px;
-    padding: 1px 6px;
-    cursor: pointer;
-    font-family: inherit;
-  }
-
-  .btn-action:hover {
-    background: rgba(255, 255, 255, 0.2);
-  }
-
-  .btn-drop {
-    color: #ef4444;
-    border-color: rgba(239, 68, 68, 0.3);
-  }
-
-  .btn-drop:hover {
-    background: rgba(239, 68, 68, 0.2);
-  }
-
-  .bag-empty {
-    color: rgba(255, 255, 255, 0.3);
+  .tooltip {
+    position: absolute;
+    left: -170px;
+    top: 0;
+    width: 160px;
     padding: 8px;
-    text-align: center;
-    font-style: italic;
+    background: rgba(6, 10, 14, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 50;
+  }
+
+  .tooltip-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f0c040;
+    margin-bottom: 4px;
+  }
+
+  .tooltip-desc {
+    font-size: 13px;
+    color: #9fb2c3;
+    margin-bottom: 6px;
+  }
+
+  .tooltip-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 13px;
+    color: #c8d6e0;
   }
 </style>
