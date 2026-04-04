@@ -3,41 +3,26 @@ use crate::housing::HousingIO;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterClass, Gender, Position, ServerMessage};
 use crate::world_config::world_config;
-use std::path::PathBuf;
 use tokio::sync::broadcast::error::TryRecvError;
 
-fn make_test_db_path(test_name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("onlinerpg_{test_name}_{}.db", uuid::Uuid::new_v4()))
-}
-
-fn make_test_game_state(test_name: &str) -> (GameState, PathBuf) {
-    let db_path = make_test_db_path(test_name);
-    let auth_service = Arc::new(
-        AuthService::new(db_path.clone()).expect("Failed to initialize test auth service"),
-    );
+fn make_test_game_state(test_name: &str) -> GameState {
     let housing_dir = std::env::temp_dir().join(format!(
         "onlinerpg_{test_name}_housing_{}",
         uuid::Uuid::new_v4()
     ));
     let housing_io = Arc::new(HousingIO::new(housing_dir));
-    let game_state = GameState::new(
+    GameState::new(
         MonsterDefs::load(),
         GameState::default_start_datetime(),
-        auth_service,
         housing_io,
-    );
-    (game_state, db_path)
-}
-
-fn cleanup_test_db(db_path: &PathBuf) {
-    let _ = std::fs::remove_file(db_path);
-    let _ = std::fs::remove_file(format!("{}-wal", db_path.display()));
-    let _ = std::fs::remove_file(format!("{}-shm", db_path.display()));
+        vec![],
+        vec![],
+    )
 }
 
 #[tokio::test]
 async fn respawn_player_revives_dead_player_only() {
-    let (game_state, db_path) = make_test_game_state("respawn_dead");
+    let game_state = make_test_game_state("respawn_dead");
 
     let player = Player {
         id: "player_dead".to_string(),
@@ -56,6 +41,8 @@ async fn respawn_player_revives_dead_player_only() {
         is_npc: false,
         torch_on: false,
         floor_level: 0,
+        furniture_type: None,
+        furniture_id: None,
         last_combat_at: 0,
     };
     let player_id = player.id.clone();
@@ -89,13 +76,11 @@ async fn respawn_player_revives_dead_player_only() {
         }
         Err(err) => panic!("Expected PlayerRespawned broadcast, got {:?}", err),
     }
-
-    cleanup_test_db(&db_path);
 }
 
 #[tokio::test]
 async fn respawn_player_ignores_alive_player() {
-    let (game_state, db_path) = make_test_game_state("respawn_alive");
+    let game_state = make_test_game_state("respawn_alive");
 
     let player = Player {
         id: "player_alive".to_string(),
@@ -114,6 +99,8 @@ async fn respawn_player_ignores_alive_player() {
         is_npc: false,
         torch_on: false,
         floor_level: 0,
+        furniture_type: None,
+        furniture_id: None,
         last_combat_at: 0,
     };
     let player_id = player.id.clone();
@@ -144,6 +131,4 @@ async fn respawn_player_ignores_alive_player() {
         }
         Err(err) => panic!("Expected empty channel, got {:?}", err),
     }
-
-    cleanup_test_db(&db_path);
 }
