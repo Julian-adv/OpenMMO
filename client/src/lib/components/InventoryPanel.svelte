@@ -1,7 +1,7 @@
 <script lang="ts">
   import { inventoryStore } from '../stores/inventoryStore'
-  import type { EquipSlot, ItemInstance } from '../stores/inventoryStore'
-  import { getItemDef } from '../data/itemDefs'
+  import type { ItemInstance } from '../stores/inventoryStore'
+  import { getItemDef, getItemName } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes } from '../network/networkTypes'
 
@@ -12,41 +12,11 @@
 
   let { visible, attributes }: Props = $props()
 
-  const EQUIP_SLOT_LABELS: Record<EquipSlot, string> = {
-    head: 'Head',
-    main_hand: 'Main Hand',
-    off_hand: 'Off Hand',
-    chest: 'Chest',
-    ear: 'Ear',
-    neck: 'Neck',
-    belt: 'Belt',
-    pants: 'Pants',
-    boots: 'Boots',
-    ring: 'Ring',
-  }
-
-  const EQUIP_SLOTS: EquipSlot[] = [
-    'head',
-    'neck',
-    'ear',
-    'chest',
-    'main_hand',
-    'off_hand',
-    'belt',
-    'pants',
-    'boots',
-    'ring',
-  ]
-
   const maxWeight = $derived(attributes ? attributes.str * 15 : 150)
 
   function itemWeight(item: ItemInstance): number {
     const def = getItemDef(item.item_def_id)
     return (def?.weight ?? 1) * item.quantity
-  }
-
-  function itemName(item: ItemInstance): string {
-    return getItemDef(item.item_def_id)?.name ?? item.item_def_id
   }
 
   const currentWeight = $derived.by(() => {
@@ -63,10 +33,6 @@
     networkManager.sendEquipItem(instanceId)
   }
 
-  function unequip(slot: EquipSlot) {
-    networkManager.sendUnequipItem(slot)
-  }
-
   function drop(instanceId: number) {
     networkManager.sendDropItem(instanceId)
   }
@@ -81,31 +47,13 @@
       </span>
     </div>
 
-    <div class="panel-section">
-      <div class="section-label">Equipment</div>
-      <div class="equip-grid">
-        {#each EQUIP_SLOTS as slot (slot)}
-          {@const item = $inventoryStore.equipped[slot]}
-          <div class="equip-slot">
-            <span class="slot-label">{EQUIP_SLOT_LABELS[slot]}</span>
-            {#if item}
-              <span class="slot-item">{itemName(item)}</span>
-              <button class="btn-unequip" onclick={() => unequip(slot)}>X</button>
-            {:else}
-              <span class="slot-empty">-</span>
-            {/if}
-          </div>
-        {/each}
-      </div>
-    </div>
-
     <div class="panel-section bag-section">
       <div class="section-label">Bag ({$inventoryStore.bag.length})</div>
       <div class="bag-list">
         {#each $inventoryStore.bag as item (item.instance_id)}
           {@const def = getItemDef(item.item_def_id)}
           <div class="bag-item">
-            <span class="item-name">{itemName(item)}</span>
+            <span class="item-name">{getItemName(item.item_def_id)}</span>
             <span class="item-weight">{(def?.weight ?? 1).toFixed(1)}</span>
             <div class="item-actions">
               {#if def?.equipSlot}
@@ -175,56 +123,6 @@
     margin-bottom: 4px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-  }
-
-  .equip-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .equip-slot {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 3px 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.04);
-  }
-
-  .slot-label {
-    min-width: 70px;
-    font-size: 10px;
-    color: #9fb2c3;
-  }
-
-  .slot-item {
-    flex: 1;
-    font-size: 11px;
-    color: #6ee7b7;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .slot-empty {
-    flex: 1;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.2);
-  }
-
-  .btn-unequip {
-    background: none;
-    border: none;
-    color: #ef4444;
-    font-size: 10px;
-    cursor: pointer;
-    padding: 0 4px;
-    font-family: inherit;
-  }
-
-  .btn-unequip:hover {
-    color: #f87171;
   }
 
   .bag-section {

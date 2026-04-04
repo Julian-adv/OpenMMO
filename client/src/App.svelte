@@ -13,10 +13,10 @@
   import RespawnDialog from './lib/components/RespawnDialog.svelte'
   import LoadingDialog from './lib/components/LoadingDialog.svelte'
   import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
-  import CharacterAttributesHud from './lib/components/CharacterAttributesHud.svelte'
+  import CharacterPanel from './lib/components/CharacterPanel.svelte'
   import InventoryPanel from './lib/components/InventoryPanel.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { mapEditorMode, worldMapVisible, inventoryVisible, teleportLoading, housingEditorMode } from './lib/stores/debugStore'
+  import { mapEditorMode, worldMapVisible, inventoryVisible, characterPanelVisible, teleportLoading, housingEditorMode } from './lib/stores/debugStore'
   import { createWebGPURenderer } from './lib/utils/renderer'
   import MapEditorPanel from './lib/components/map-editor/MapEditorPanel.svelte'
   import HousingEditorPanel from './lib/components/map-editor/HousingEditorPanel.svelte'
@@ -284,7 +284,8 @@
         <GenerateTerrainDialog />
       {/if}
       {#if selectedCharacter && !$mapEditorMode}
-        <CharacterAttributesHud
+        <CharacterPanel
+          visible={$characterPanelVisible}
           level={currentPlayerLevel ?? selectedCharacter.level}
           currentXp={currentPlayerTotalXp ?? selectedCharacter.xp}
           currentHp={currentPlayerHp ?? selectedCharacter.max_hp}

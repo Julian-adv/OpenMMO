@@ -35,6 +35,7 @@
     gridVisible,
     worldMapVisible,
     inventoryVisible,
+    characterPanelVisible,
     debugSpeedMode,
     refractionEnabled,
     reflectionEnabled,
@@ -48,6 +49,12 @@
   }
 
 
+  function isGameKey(event: KeyboardEvent): boolean {
+    if (event.ctrlKey || event.altKey || event.metaKey) return false
+    const tag = (document.activeElement?.tagName ?? '').toLowerCase()
+    return tag !== 'input' && tag !== 'textarea'
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (event.ctrlKey && event.key === 'd') {
       event.preventDefault()
@@ -57,23 +64,17 @@
       event.preventDefault()
       mapEditorMode.update((v) => !v)
     }
-    if (event.key === 'm' || event.key === 'M') {
-      if (!event.ctrlKey && !event.altKey && !event.metaKey) {
-        const tag = (document.activeElement?.tagName ?? '').toLowerCase()
-        if (tag !== 'input' && tag !== 'textarea') {
-          event.preventDefault()
-          worldMapVisible.update((v) => !v)
-        }
-      }
+    if ((event.key === 'm' || event.key === 'M') && isGameKey(event)) {
+      event.preventDefault()
+      worldMapVisible.update((v) => !v)
     }
-    if (event.key === 'i' || event.key === 'I') {
-      if (!event.ctrlKey && !event.altKey && !event.metaKey) {
-        const tag = (document.activeElement?.tagName ?? '').toLowerCase()
-        if (tag !== 'input' && tag !== 'textarea') {
-          event.preventDefault()
-          inventoryVisible.update((v) => !v)
-        }
-      }
+    if ((event.key === 'i' || event.key === 'I') && isGameKey(event)) {
+      event.preventDefault()
+      inventoryVisible.update((v) => !v)
+    }
+    if ((event.key === 'c' || event.key === 'C') && isGameKey(event)) {
+      event.preventDefault()
+      characterPanelVisible.update((v) => !v)
     }
   }
 
