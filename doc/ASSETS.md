@@ -158,6 +158,13 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 - beige_wall_001.glb -> https://polyhaven.com/a/beige_wall_001
 - rough_linen.glb -> https://polyhaven.com/a/rough_linen
 
+## Research
+
+Not used right now, but for future reference.
+
+  - Procedural Northern European French Town in Geometry nodes Blender 5.0
+  https://github.com/IRCSS/Blender-Geometry-Node-French-Houses
+
 ## BGM
 
 suno.com에서 다음의 프롬프트로 생성

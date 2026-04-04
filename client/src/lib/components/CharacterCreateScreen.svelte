@@ -193,6 +193,15 @@
       >
         Ranger
       </button>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'priest'}
+        disabled={isBusy()}
+        onclick={() => selectClass('priest')}
+      >
+        Priest
+      </button>
     </div>
 
     <div class="bottom-bar">

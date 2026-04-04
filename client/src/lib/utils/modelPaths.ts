@@ -17,6 +17,9 @@ export const CAVEMAN_CHARACTER_MODEL_PATH = '/models/characters/caveman.glb'
 export const CAVEWOMAN_CHARACTER_MODEL_PATH = '/models/characters/cavewoman.glb'
 export const VALKYRIE_CHARACTER_MODEL_PATH = '/models/characters/valkyrie.glb'
 export const RANGER_CHARACTER_MODEL_PATH = '/models/characters/ranger.glb'
+export const PRIEST_CHARACTER_MODEL_PATH = '/models/characters/priest.glb'
+export const FEMALE_PRIEST_CHARACTER_MODEL_PATH =
+  '/models/characters/female_priest.glb'
 
 export const CHARACTER_ANIMATION_PACK_PATHS = {
   locomotion: '/models/animations/locomotion.glb',
@@ -50,6 +53,10 @@ const CLASS_GENDER_MODELS: Partial<
   },
   valkyrie: { female: VALKYRIE_CHARACTER_MODEL_PATH },
   ranger: { male: RANGER_CHARACTER_MODEL_PATH },
+  priest: {
+    male: PRIEST_CHARACTER_MODEL_PATH,
+    female: FEMALE_PRIEST_CHARACTER_MODEL_PATH,
+  },
 }
 
 export function getAvailableGenders(characterClass: CharacterClass): Gender[] {
