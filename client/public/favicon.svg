@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a90d9"/>
+      <stop offset="100%" stop-color="#1a3a6a"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f0c040"/>
+      <stop offset="100%" stop-color="#c89020"/>
+    </linearGradient>
+    <linearGradient id="blade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f0f0f0"/>
+      <stop offset="100%" stop-color="#a0a8b8"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield body -->
+  <path d="M32 6 L54 16 L54 34 Q54 52 32 60 Q10 52 10 34 L10 16 Z" fill="url(#shield)" stroke="url(#rim)" stroke-width="2.5"/>
+  <!-- Shield inner decoration -->
+  <path d="M32 14 L46 21 L46 33 Q46 47 32 53 Q18 47 18 33 L18 21 Z" fill="none" stroke="#f0c040" stroke-width="1" opacity="0.6"/>
+  <!-- Sword blade -->
+  <rect x="30" y="2" width="4" height="38" rx="1" fill="url(#blade)" stroke="#707880" stroke-width="0.5"/>
+  <!-- Sword guard -->
+  <rect x="22" y="38" width="20" height="4" rx="2" fill="#f0c040" stroke="#c89020" stroke-width="0.5"/>
+  <!-- Sword grip -->
+  <rect x="29.5" y="42" width="5" height="10" rx="1" fill="#8b4513"/>
+  <!-- Grip wrap -->
+  <line x1="29.5" y1="44" x2="34.5" y2="44" stroke="#a0622a" stroke-width="0.8"/>
+  <line x1="29.5" y1="46.5" x2="34.5" y2="46.5" stroke="#a0622a" stroke-width="0.8"/>
+  <line x1="29.5" y1="49" x2="34.5" y2="49" stroke="#a0622a" stroke-width="0.8"/>
+  <!-- Sword pommel -->
+  <circle cx="32" cy="54" r="3" fill="#f0c040" stroke="#c89020" stroke-width="0.5"/>
+  <!-- Shield emblem - B letter -->
+  <text x="32" y="34" text-anchor="middle" font-family="serif" font-weight="bold" font-size="18" fill="#f0c040" opacity="0.9">B</text>
+</svg>
