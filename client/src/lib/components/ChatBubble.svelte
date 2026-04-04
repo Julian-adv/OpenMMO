@@ -15,8 +15,11 @@
   const _scratchVec = new THREE.Vector3()
   const OVERLAY_RENDER_ORDER = 9999
 
-  const PADDING_X = 0.4
-  const PADDING_Y = 0.2
+  const PADDING_X = 0.6
+  const PADDING_Y = 0.3
+  const MAX_TEXT_WIDTH = 5
+  const MAX_BUBBLE_WIDTH = MAX_TEXT_WIDTH + PADDING_X
+  const MAX_DISPLAY_CHARS = 300
 
   let textBounds = $state({ width: 1, height: 0.3 })
 
@@ -111,7 +114,7 @@
     return geometry
   }
 
-  const bubbleWidth = $derived(Math.min(textBounds.width + PADDING_X, 4))
+  const bubbleWidth = $derived(Math.min(textBounds.width + PADDING_X, MAX_BUBBLE_WIDTH))
   const bubbleHeight = $derived(textBounds.height + PADDING_Y)
   const cornerRadius = 0.1
   const bubbleShape = $derived(
@@ -120,7 +123,7 @@
   const bubbleBorderGeometry = $derived(createBorderGeometry(bubbleShape))
   const bubbleCenterY = $derived(cornerRadius + bubbleHeight / 2)
   const displayText = $derived(
-    message.length > 100 ? message.slice(0, 100) + '...' : message
+    message.length > MAX_DISPLAY_CHARS ? message.slice(0, MAX_DISPLAY_CHARS) + '...' : message
   )
 </script>
 
@@ -146,7 +149,7 @@
     color="#ffffff"
     anchorX="center"
     anchorY="middle"
-    maxWidth={3.5}
+    maxWidth={MAX_TEXT_WIDTH}
     onsync={handleTextSync}
     overflowWrap="normal"
     whiteSpace="normal"
