@@ -5,14 +5,18 @@ export type WeaponType = 'sword' | 'spear'
 export const KNIGHT_CHARACTER_MODEL_PATH = '/models/characters/knight.glb'
 export const FEMALE_KNIGHT_CHARACTER_MODEL_PATH =
   '/models/characters/female_knight.glb'
-export const ROGUE_CHARACTER_MODEL_PATH = '/models/characters/female_rogue.glb'
+export const ROGUE_CHARACTER_MODEL_PATH = '/models/characters/rogue.glb'
+export const FEMALE_ROGUE_CHARACTER_MODEL_PATH =
+  '/models/characters/female_rogue.glb'
 export const MERCHANT_CHARACTER_MODEL_PATH = '/models/characters/npc_woman.glb'
+export const BARBARIAN_CHARACTER_MODEL_PATH = '/models/characters/barbarian.glb'
 export const FEMALE_BARBARIAN_CHARACTER_MODEL_PATH =
   '/models/characters/female_barbarian.glb'
 export const GUARD_CHARACTER_MODEL_PATH = '/models/characters/guard.glb'
 export const CAVEMAN_CHARACTER_MODEL_PATH = '/models/characters/caveman.glb'
 export const CAVEWOMAN_CHARACTER_MODEL_PATH = '/models/characters/cavewoman.glb'
 export const VALKYRIE_CHARACTER_MODEL_PATH = '/models/characters/valkyrie.glb'
+export const RANGER_CHARACTER_MODEL_PATH = '/models/characters/ranger.glb'
 
 export const CHARACTER_ANIMATION_PACK_PATHS = {
   locomotion: '/models/animations/locomotion.glb',
@@ -32,13 +36,20 @@ const CLASS_GENDER_MODELS: Partial<
     male: KNIGHT_CHARACTER_MODEL_PATH,
     female: FEMALE_KNIGHT_CHARACTER_MODEL_PATH,
   },
-  barbarian: { female: FEMALE_BARBARIAN_CHARACTER_MODEL_PATH },
-  rogue: { female: ROGUE_CHARACTER_MODEL_PATH },
+  barbarian: {
+    male: BARBARIAN_CHARACTER_MODEL_PATH,
+    female: FEMALE_BARBARIAN_CHARACTER_MODEL_PATH,
+  },
+  rogue: {
+    male: ROGUE_CHARACTER_MODEL_PATH,
+    female: FEMALE_ROGUE_CHARACTER_MODEL_PATH,
+  },
   caveman: {
     male: CAVEMAN_CHARACTER_MODEL_PATH,
     female: CAVEWOMAN_CHARACTER_MODEL_PATH,
   },
   valkyrie: { female: VALKYRIE_CHARACTER_MODEL_PATH },
+  ranger: { male: RANGER_CHARACTER_MODEL_PATH },
 }
 
 export function getAvailableGenders(characterClass: CharacterClass): Gender[] {

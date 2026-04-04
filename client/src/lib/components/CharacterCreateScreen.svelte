@@ -184,6 +184,15 @@
       >
         Valkyrie
       </button>
+      <button
+        type="button"
+        class="class-btn"
+        class:class-selected={selectedClass === 'ranger'}
+        disabled={isBusy()}
+        onclick={() => selectClass('ranger')}
+      >
+        Ranger
+      </button>
     </div>
 
     <div class="bottom-bar">

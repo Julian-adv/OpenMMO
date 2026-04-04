@@ -13,6 +13,7 @@ export type CharacterClass =
   | 'rogue'
   | 'caveman'
   | 'valkyrie'
+  | 'ranger'
   | 'merchant'
   | 'guard'
 
