@@ -17,8 +17,4 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
   return itemDefs[itemDefId]
 }
 
-export function getItemName(itemDefId: string): string {
-  return itemDefs[itemDefId]?.name ?? itemDefId
-}
-
 export default itemDefs

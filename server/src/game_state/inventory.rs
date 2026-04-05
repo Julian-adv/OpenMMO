@@ -220,8 +220,17 @@ impl super::GameState {
                 }
             };
 
+            let target_slot = if inv.equipped.contains_key(&equip_slot) {
+                equip_slot
+                    .alternate()
+                    .filter(|alt| !inv.equipped.contains_key(alt))
+                    .unwrap_or(equip_slot)
+            } else {
+                equip_slot
+            };
+
             let item = inv.bag.remove(bag_idx);
-            if let Some(old_item) = inv.equipped.insert(equip_slot, item) {
+            if let Some(old_item) = inv.equipped.insert(target_slot, item) {
                 inv.bag.push(old_item);
             }
             inv.clone()

@@ -108,7 +108,7 @@
     <div class="panel-header">
       <span class="panel-title">Inventory</span>
       <span class="weight-display">
-        {currentWeight.toFixed(1)} / {maxWeight} lbs
+        {(currentWeight / 10).toFixed(1)} / {(maxWeight / 10).toFixed(1)} kg
       </span>
     </div>
 

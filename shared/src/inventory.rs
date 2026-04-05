@@ -25,6 +25,8 @@ pub enum EquipSlot {
     Boots,
     #[serde(rename = "ring")]
     Ring,
+    #[serde(rename = "ring_left")]
+    RingLeft,
 }
 
 impl EquipSlot {
@@ -40,6 +42,7 @@ impl EquipSlot {
             EquipSlot::Pants => "pants",
             EquipSlot::Boots => "boots",
             EquipSlot::Ring => "ring",
+            EquipSlot::RingLeft => "ring_left",
         }
     }
 
@@ -55,6 +58,17 @@ impl EquipSlot {
             "pants" => Some(EquipSlot::Pants),
             "boots" => Some(EquipSlot::Boots),
             "ring" => Some(EquipSlot::Ring),
+            "ring_left" => Some(EquipSlot::RingLeft),
+            _ => None,
+        }
+    }
+
+    /// For slots that have an alternate (e.g. ring/ring_left),
+    /// returns the alternate slot. Used when the primary is occupied.
+    pub fn alternate(&self) -> Option<Self> {
+        match self {
+            EquipSlot::Ring => Some(EquipSlot::RingLeft),
+            EquipSlot::RingLeft => Some(EquipSlot::Ring),
             _ => None,
         }
     }

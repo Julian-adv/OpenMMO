@@ -1,7 +1,7 @@
 <script lang="ts">
   import { inventoryStore } from '../stores/inventoryStore'
   import type { EquipSlot } from '../stores/inventoryStore'
-  import { getItemName } from '../data/itemDefs'
+  import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes } from '../network/networkTypes'
   import { xpForLevel, clamp } from '../utils/xp'
@@ -27,20 +27,22 @@
     belt: 'Belt',
     pants: 'Pants',
     boots: 'Boots',
-    ring: 'Ring',
+    ring: 'Ring R',
+    ring_left: 'Ring L',
   }
 
-  const EQUIP_SLOTS: EquipSlot[] = [
-    'head',
-    'neck',
-    'ear',
-    'chest',
-    'main_hand',
-    'off_hand',
-    'belt',
-    'pants',
-    'boots',
-    'ring',
+  const SLOT_POSITIONS: { slot: EquipSlot; top: number; left: number }[] = [
+    { slot: 'head', top: 9, left: 50 },
+    { slot: 'ear', top: 20, left: 70 },
+    { slot: 'neck', top: 20, left: 30 },
+    { slot: 'chest', top: 30, left: 50 },
+    { slot: 'main_hand', top: 45, left: 10 },
+    { slot: 'off_hand', top: 45, left: 90 },
+    { slot: 'ring', top: 59, left: 10 },
+    { slot: 'ring_left', top: 59, left: 90 },
+    { slot: 'belt', top: 45, left: 50 },
+    { slot: 'pants', top: 60, left: 50 },
+    { slot: 'boots', top: 88, left: 50 },
   ]
 
   const levelStartXp = $derived(xpForLevel(level))
@@ -112,22 +114,24 @@
       </div>
     </div>
 
-    <div class="panel-section">
-      <div class="section-label">Equipment</div>
-      <div class="equip-grid">
-        {#each EQUIP_SLOTS as slot (slot)}
-          {@const item = $inventoryStore.equipped[slot]}
-          <div class="equip-slot">
-            <span class="slot-label">{EQUIP_SLOT_LABELS[slot]}</span>
-            {#if item}
-              <span class="slot-item">{getItemName(item.item_def_id)}</span>
-              <button class="btn-unequip" onclick={() => unequip(slot)}>X</button>
-            {:else}
-              <span class="slot-empty">-</span>
-            {/if}
-          </div>
-        {/each}
-      </div>
+    <div class="panel-section equip-section">
+      <img class="equip-bg" src="/character_concepts/female_priest.png" alt="" draggable="false" />
+      {#each SLOT_POSITIONS as { slot, top, left } (slot)}
+        {@const item = $inventoryStore.equipped[slot]}
+        {@const def = item ? getItemDef(item.item_def_id) : null}
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div
+          class="equip-slot"
+          style="top:{top}%;left:{left}%"
+          title={EQUIP_SLOT_LABELS[slot]}
+          ondblclick={() => { if (item) unequip(slot) }}
+        >
+          {#if def}
+            <img class="equip-icon" src="/items/{def.icon}" alt={def.name} draggable="false" />
+          {/if}
+          <span class="slot-label">{EQUIP_SLOT_LABELS[slot]}</span>
+        </div>
+      {/each}
     </div>
   </div>
 {/if}
@@ -260,53 +264,58 @@
     box-shadow: 0 0 10px rgba(88, 166, 255, 0.4);
   }
 
-  .equip-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+  .equip-section {
+    position: relative;
+    overflow: hidden;
+    border-radius: 6px;
+    min-height: 414px;
+  }
+
+  .equip-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+    opacity: 0.18;
+    pointer-events: none;
   }
 
   .equip-slot {
+    position: absolute;
+    width: 44px;
+    height: 44px;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 6px;
+    background: transparent;
     display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 3px 4px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.04);
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .equip-slot:hover {
+    border-color: rgba(240, 192, 64, 0.6);
+    background: rgba(240, 192, 64, 0.08);
+  }
+
+  .equip-icon {
+    width: 36px;
+    height: 36px;
+    image-rendering: pixelated;
+    pointer-events: none;
   }
 
   .slot-label {
-    min-width: 70px;
-    font-size: 10px;
+    position: absolute;
+    bottom: -14px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 8px;
     color: #9fb2c3;
-  }
-
-  .slot-item {
-    flex: 1;
-    font-size: 11px;
-    color: #6ee7b7;
-    overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .slot-empty {
-    flex: 1;
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.2);
-  }
-
-  .btn-unequip {
-    background: none;
-    border: none;
-    color: #ef4444;
-    font-size: 10px;
-    cursor: pointer;
-    padding: 0 4px;
-    font-family: inherit;
-  }
-
-  .btn-unequip:hover {
-    color: #f87171;
+    pointer-events: none;
   }
 </style>
