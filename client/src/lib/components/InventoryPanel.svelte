@@ -8,9 +8,10 @@
   interface Props {
     visible: boolean
     attributes: CharacterAttributes | null
+    onClose: () => void
   }
 
-  let { visible, attributes }: Props = $props()
+  let { visible, attributes, onClose }: Props = $props()
 
   const maxWeight = $derived(attributes ? attributes.str * 15 : 150)
 
@@ -110,6 +111,7 @@
       <span class="weight-display">
         {(currentWeight / 10).toFixed(1)} / {(maxWeight / 10).toFixed(1)} kg
       </span>
+      <button class="close-btn" onclick={onClose}>&times;</button>
     </div>
 
     <div class="bag-grid">
@@ -123,7 +125,6 @@
           ondblclick={() => onDblClick(slot)}
           onpointerdown={(e: PointerEvent) => { if (slot) onPointerDown(e, slot) }}
         >
-          <img class="icon-frame" src="/items/icon_frame.png" alt="" draggable="false" />
           {#if def}
             <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
           {/if}
@@ -161,7 +162,7 @@
   .inventory-panel {
     position: fixed;
     right: 16px;
-    top: 50%;
+    top: 45%;
     transform: translateY(-50%);
     z-index: 40;
     display: flex;
@@ -192,6 +193,20 @@
     color: #f0c040;
   }
 
+  .close-btn {
+    background: none;
+    border: none;
+    color: #9fb2c3;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .close-btn:hover {
+    color: #fff;
+  }
+
   .weight-display {
     font-size: 11px;
     color: #9fb2c3;
@@ -201,7 +216,7 @@
     display: grid;
     grid-template-columns: repeat(5, 64px);
     grid-template-rows: repeat(10, 64px);
-    gap: 2px;
+    gap: 6px;
   }
 
   .grid-cell {
@@ -211,12 +226,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-
-  .icon-frame {
-    width: 64px;
-    height: 64px;
-    image-rendering: pixelated;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
   }
 
   .item-icon {

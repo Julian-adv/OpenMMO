@@ -3,19 +3,41 @@
   import type { EquipSlot } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
-  import type { CharacterAttributes } from '../network/networkTypes'
+  import type { CharacterAttributes, CharacterClass, Gender } from '../network/networkTypes'
   import { xpForLevel, clamp } from '../utils/xp'
 
   interface Props {
     visible: boolean
+    name: string
+    characterClass: CharacterClass
     level: number
     currentXp: number
     currentHp: number
     maxHp: number
+    gender: Gender
     attributes: CharacterAttributes
+    onClose: () => void
   }
 
-  let { visible, level, currentXp, currentHp, maxHp, attributes }: Props = $props()
+  let { visible, name, characterClass, gender, level, currentXp, currentHp, maxHp, attributes, onClose }: Props = $props()
+
+  const equipBg = $derived(
+    characterClass === 'rogue' && gender === 'female'
+      ? '/character_concepts/female_rogue.png'
+      : '/character_concepts/female_priest.png'
+  )
+
+  const CLASS_LABELS: Record<CharacterClass, string> = {
+    knight: 'Knight',
+    barbarian: 'Barbarian',
+    rogue: 'Rogue',
+    caveman: 'Caveman',
+    valkyrie: 'Valkyrie',
+    ranger: 'Ranger',
+    priest: 'Priest',
+    merchant: 'Merchant',
+    guard: 'Guard',
+  }
 
   const EQUIP_SLOT_LABELS: Record<EquipSlot, string> = {
     head: 'Head',
@@ -60,7 +82,9 @@
 {#if visible}
   <div class="character-panel" role="dialog" aria-label="Character">
     <div class="panel-header">
-      <span class="panel-title">Character</span>
+      <span class="panel-title">{name}</span>
+      <span class="panel-class">{CLASS_LABELS[characterClass]}</span>
+      <button class="close-btn" onclick={onClose}>&times;</button>
     </div>
 
     <div class="panel-section">
@@ -115,7 +139,7 @@
     </div>
 
     <div class="panel-section equip-section">
-      <img class="equip-bg" src="/character_concepts/female_priest.png" alt="" draggable="false" />
+      <img class="equip-bg" src={equipBg} alt="" draggable="false" />
       {#each SLOT_POSITIONS as { slot, top, left } (slot)}
         {@const item = $inventoryStore.equipped[slot]}
         {@const def = item ? getItemDef(item.item_def_id) : null}
@@ -129,7 +153,6 @@
           {#if def}
             <img class="equip-icon" src="/items/{def.icon}" alt={def.name} draggable="false" />
           {/if}
-          <span class="slot-label">{EQUIP_SLOT_LABELS[slot]}</span>
         </div>
       {/each}
     </div>
@@ -140,10 +163,10 @@
   .character-panel {
     position: fixed;
     left: 16px;
-    top: 50%;
+    top: 45%;
     transform: translateY(-50%);
     z-index: 40;
-    width: 280px;
+    width: 364px;
     max-height: 80vh;
     display: flex;
     flex-direction: column;
@@ -172,6 +195,25 @@
     font-size: 14px;
     font-weight: 700;
     color: #f0c040;
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: #9fb2c3;
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 2px;
+    line-height: 1;
+  }
+
+  .close-btn:hover {
+    color: #fff;
+  }
+
+  .panel-class {
+    font-size: 11px;
+    color: #9fb2c3;
   }
 
   .panel-section {
@@ -268,7 +310,7 @@
     position: relative;
     overflow: hidden;
     border-radius: 6px;
-    min-height: 414px;
+    min-height: 540px;
   }
 
   .equip-bg {
@@ -278,14 +320,14 @@
     height: 100%;
     object-fit: contain;
     object-position: center bottom;
-    opacity: 0.18;
+    opacity: 0.4;
     pointer-events: none;
   }
 
   .equip-slot {
     position: absolute;
-    width: 44px;
-    height: 44px;
+    width: 64px;
+    height: 64px;
     transform: translate(-50%, -50%);
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
@@ -302,20 +344,10 @@
   }
 
   .equip-icon {
-    width: 36px;
-    height: 36px;
+    width: 56px;
+    height: 56px;
     image-rendering: pixelated;
     pointer-events: none;
   }
 
-  .slot-label {
-    position: absolute;
-    bottom: -14px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 8px;
-    color: #9fb2c3;
-    white-space: nowrap;
-    pointer-events: none;
-  }
 </style>

@@ -1,27 +1,14 @@
 <script lang="ts">
   import { Canvas } from '@threlte/core'
   import GameScene from './lib/components/GameScene.svelte'
-  import ChatPanel from './lib/components/ChatPanel.svelte'
-  import FPSCounter from './lib/components/FPSCounter.svelte'
-  import GameTimeWidget from './lib/components/GameTimeWidget.svelte'
-  import CelestialDebugDialog from './lib/components/CelestialDebugDialog.svelte'
+  import GameHud from './lib/components/GameHud.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterSelectScene from './lib/components/CharacterSelectScene.svelte'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
-  import RespawnDialog from './lib/components/RespawnDialog.svelte'
-  import LoadingDialog from './lib/components/LoadingDialog.svelte'
-  import WorldMapDialog from './lib/components/WorldMapDialog.svelte'
-  import CharacterPanel from './lib/components/CharacterPanel.svelte'
-  import InventoryPanel from './lib/components/InventoryPanel.svelte'
   import { gameStore } from './lib/stores/gameStore'
-  import { mapEditorMode, worldMapVisible, inventoryVisible, characterPanelVisible, teleportLoading, housingEditorMode } from './lib/stores/debugStore'
   import { createWebGPURenderer } from './lib/utils/renderer'
-  import MapEditorPanel from './lib/components/map-editor/MapEditorPanel.svelte'
-  import HousingEditorPanel from './lib/components/map-editor/HousingEditorPanel.svelte'
-  import GenerateTerrainDialog from './lib/components/map-editor/GenerateTerrainDialog.svelte'
-  import { showGenerateDialog } from './lib/stores/editorStore'
   import { networkManager, type AccountCharacter, type CharacterClass, type Gender } from './lib/network/socket'
   import { startBgm } from './lib/managers/bgmManager'
   import SettingsPanel from './lib/components/SettingsPanel.svelte'
@@ -267,66 +254,22 @@
 
   <!-- UI overlays (outside Canvas) -->
   {#if screen === 'game'}
-    <div class="game-hud">
-      {#if !$mapEditorMode}
-        <ChatPanel />
-      {/if}
-      <FPSCounter />
-      <GameTimeWidget />
-      <CelestialDebugDialog />
-      {#if $mapEditorMode}
-        <MapEditorPanel />
-      {/if}
-      {#if $housingEditorMode}
-        <HousingEditorPanel />
-      {/if}
-      {#if $showGenerateDialog}
-        <GenerateTerrainDialog />
-      {/if}
-      {#if selectedCharacter && !$mapEditorMode}
-        <CharacterPanel
-          visible={$characterPanelVisible}
-          level={currentPlayerLevel ?? selectedCharacter.level}
-          currentXp={currentPlayerTotalXp ?? selectedCharacter.xp}
-          currentHp={currentPlayerHp ?? selectedCharacter.max_hp}
-          maxHp={currentPlayerMaxHp ?? selectedCharacter.max_hp}
-          attributes={selectedCharacter.attributes}
-        />
-        <InventoryPanel
-          visible={$inventoryVisible}
-          attributes={selectedCharacter.attributes}
-        />
-      {/if}
-
-      <div class="corner-actions">
-        {#if canReopenRespawnDialog}
-          <button class="respawn-reopen" onclick={reopenRespawnDialog}>
-            Respawn
-          </button>
-        {/if}
-        <button class="back-to-select" onclick={handleBackToCharacterSelect} title="Character Select">
-          <svg xmlns="http://www.w3.org/2000/svg" width="640" height="512" viewBox="0 0 640 512"><path fill="currentColor" d="M72 88a56 56 0 1 1 112 0a56 56 0 1 1-112 0m-8 157.7c-10 11.2-16 26.1-16 42.3s6 31.1 16 42.3v-84.7zm144.4-49.3C178.7 222.7 160 261.2 160 304c0 34.3 12 65.8 32 90.5V416c0 17.7-14.3 32-32 32H96c-17.7 0-32-14.3-32-32v-26.8C26.2 371.2 0 332.7 0 288c0-61.9 50.1-112 112-112h32c24 0 46.2 7.5 64.4 20.3zM448 416v-21.5c20-24.7 32-56.2 32-90.5c0-42.8-18.7-81.3-48.4-107.7C449.8 183.5 472 176 496 176h32c61.9 0 112 50.1 112 112c0 44.7-26.2 83.2-64 101.2V416c0 17.7-14.3 32-32 32h-64c-17.7 0-32-14.3-32-32m8-328a56 56 0 1 1 112 0a56 56 0 1 1-112 0m120 157.7v84.7c10-11.3 16-26.1 16-42.3s-6-31.1-16-42.3zM320 32a64 64 0 1 1 0 128a64 64 0 1 1 0-128m-80 272c0 16.2 6 31 16 42.3v-84.7c-10 11.3-16 26.1-16 42.3zm144-42.3v84.7c10-11.3 16-26.1 16-42.3s-6-31.1-16-42.3zm64 42.3c0 44.7-26.2 83.2-64 101.2V448c0 17.7-14.3 32-32 32h-64c-17.7 0-32-14.3-32-32v-42.8c-37.8-18-64-56.5-64-101.2c0-61.9 50.1-112 112-112h32c61.9 0 112 50.1 112 112"/></svg>
-        </button>
-        <button class="back-to-select" onclick={() => worldMapVisible.update(v => !v)} title="World Map (M)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="576" height="512" viewBox="0 0 576 512"><path fill="currentColor" d="M384 476.1L192 421.2V35.9L384 90.8zM416 88.4V456l138.5-69.3c11.9-5.9 21.5-17.4 21.5-30.7V32c0-22-21.5-37.5-42.7-30.7L416 88.4zM160 421.2l-25.5-8.5C94 400.3 64 363.6 64 321.4V280h32c17.7 0 32-14.3 32-32s-14.3-32-32-32H64V192c0-17.7-14.3-32-32-32S0 174.3 0 192v129.4C0 383.5 38.3 439 91.3 457.2l68.7 22.9V88.4L21.2 33.7C9.3 39.6 0 51.1 0 64.4v1.6h32c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v24h64c17.7 0 32 14.3 32 32s-14.3 32-32 32H0v105.4c0 62.1 38.3 117.6 91.3 135.8l68.7 22.9z"/></svg>
-        </button>
-        <button class="back-to-select" onclick={() => (showSettings = true)} title="Settings">
-          <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512"><path fill="currentColor" d="M495.9 166.6c3.2 8.7 .5 18.4-6.4 24.6l-43.3 39.4c1.1 8.3 1.7 16.8 1.7 25.4s-.6 17.1-1.7 25.4l43.3 39.4c6.9 6.2 9.6 15.9 6.4 24.6c-4.4 11.9-9.7 23.3-15.8 34.3l-4.7 8.1c-6.6 11-14 21.4-22.1 31.2c-5.9 7.2-15.7 9.6-24.5 6.8l-55.7-17.7c-13.4 10.3-28.2 18.9-44 25.4l-12.5 57.1c-2 9.1-9 16.3-18.2 17.8c-13.8 2.3-28 3.5-42.5 3.5s-28.7-1.2-42.5-3.5c-9.2-1.5-16.2-8.7-18.2-17.8l-12.5-57.1c-15.8-6.5-30.6-15.1-44-25.4l-55.7 17.7c-8.8 2.8-18.6 .3-24.5-6.8c-8.1-9.8-15.5-20.2-22.1-31.2l-4.7-8.1c-6.1-11-11.4-22.4-15.8-34.3c-3.2-8.7-.5-18.4 6.4-24.6l43.3-39.4c-1.1-8.4-1.7-16.9-1.7-25.5s.6-17.1 1.7-25.4l-43.3-39.4c-6.9-6.2-9.6-15.9-6.4-24.6c4.4-11.9 9.7-23.3 15.8-34.3l4.7-8.1c6.6-11 14-21.4 22.1-31.2c5.9-7.2 15.7-9.6 24.5-6.8l55.7 17.7c13.4-10.3 28.2-18.9 44-25.4l12.5-57.1c2-9.1 9-16.3 18.2-17.8C227.3 1.2 241.5 0 256 0s28.7 1.2 42.5 3.5c9.2 1.5 16.2 8.7 18.2 17.8l12.5 57.1c15.8 6.5 30.6 15.1 44 25.4l55.7-17.7c8.8-2.8 18.6-.3 24.5 6.8c8.1 9.8 15.5 20.2 22.1 31.2l4.7 8.1c6.1 11 11.4 22.4 15.8 34.3zM256 336a80 80 0 1 0 0-160a80 80 0 1 0 0 160z"/></svg>
-        </button>
-      </div>
-    </div>
-
-    {#if isSceneCompiling || isCurrentPlayerLoading || $teleportLoading}
-      <LoadingDialog message={isSceneCompiling ? 'Preparing world...' : 'Loading...'} />
-    {/if}
-
-    {#if showRespawnDialog}
-      <RespawnDialog onRespawn={requestRespawn} onLater={closeRespawnDialog} />
-    {/if}
-
-    {#if $worldMapVisible}
-      <WorldMapDialog />
-    {/if}
+    <GameHud
+      {selectedCharacter}
+      {currentPlayerLevel}
+      {currentPlayerTotalXp}
+      {currentPlayerHp}
+      {currentPlayerMaxHp}
+      {canReopenRespawnDialog}
+      {showRespawnDialog}
+      {isSceneCompiling}
+      {isCurrentPlayerLoading}
+      onReopenRespawnDialog={reopenRespawnDialog}
+      onBackToCharacterSelect={handleBackToCharacterSelect}
+      onRespawn={requestRespawn}
+      onCloseRespawnDialog={closeRespawnDialog}
+      onOpenSettings={() => (showSettings = true)}
+    />
   {:else if screen === 'character-select'}
     <CharacterSelectScreen
       {accountName}
@@ -387,63 +330,6 @@
 
   .canvas-layer.dead {
     filter: grayscale(100%);
-  }
-
-  .game-hud {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    pointer-events: none;
-  }
-
-  /* Allow pointer events on interactive HUD children */
-  .game-hud :global(*) {
-    pointer-events: auto;
-  }
-
-  .corner-actions {
-    position: absolute;
-    right: 16px;
-    bottom: 16px;
-    z-index: 30;
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
-  }
-
-  .respawn-reopen,
-  .back-to-select {
-    border: none;
-    border-radius: 8px;
-    padding: 8px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .back-to-select svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  .respawn-reopen {
-    background: #e2b93b;
-    color: #1a1a1a;
-    font-weight: 700;
-  }
-
-  .back-to-select {
-    background: rgba(60, 60, 60, 0.85);
-    color: #ccc;
-    font-weight: 600;
-    transition: background 150ms ease, color 150ms ease;
-  }
-
-  .back-to-select:hover {
-    background: rgba(80, 80, 80, 0.95);
-    color: #fff;
   }
 
   .settings-btn-corner {
