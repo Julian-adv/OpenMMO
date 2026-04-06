@@ -1,7 +1,5 @@
 import type { CharacterClass, Gender } from '../network/networkTypes'
 
-export type WeaponType = 'sword' | 'spear'
-
 export const KNIGHT_CHARACTER_MODEL_PATH = '/models/characters/knight.glb'
 export const FEMALE_KNIGHT_CHARACTER_MODEL_PATH =
   '/models/characters/female_knight.glb'
@@ -27,10 +25,9 @@ export const CHARACTER_ANIMATION_PACK_PATHS = {
   social: '/models/animations/social.glb',
 } as const
 
-export const WEAPON_MODEL_PATHS: Record<WeaponType, string> = {
-  sword: '/models/sword.glb',
-  spear: '/models/spear.glb',
-} as const
+export function getWeaponModelPath(worldModel: string): string {
+  return `/models/${worldModel}`
+}
 
 const CLASS_GENDER_MODELS: Partial<
   Record<CharacterClass, Partial<Record<Gender, string>>>
@@ -79,15 +76,15 @@ export function getCharacterModelPath(
   return KNIGHT_CHARACTER_MODEL_PATH
 }
 
-export function getWeaponType(
+export function getDefaultWeaponModel(
   characterClass: CharacterClass
-): WeaponType | null {
+): string | null {
   switch (characterClass) {
     case 'merchant':
       return null
     case 'guard':
-      return 'spear'
+      return 'spear.glb'
     default:
-      return 'sword'
+      return 'sword.glb'
   }
 }

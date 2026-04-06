@@ -17,11 +17,13 @@
   } from '../utils/characterAnimationUtils'
   import {
     CHARACTER_ANIMATION_PACK_PATHS,
-    WEAPON_MODEL_PATHS,
     getCharacterModelPath,
-    getWeaponType,
+    getDefaultWeaponModel,
+    getWeaponModelPath,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { inventoryStore } from '../stores/inventoryStore'
+  import { getItemDef } from '../data/itemDefs'
   import type { CharacterClass, Gender } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
@@ -116,13 +118,15 @@
   let combatMeleeGltfData = $state<GLTF | null>(null)
   let weaponGltfData = $state<GLTF | null>(null)
 
-  const weaponType = getWeaponType(characterClass)
+  // svelte-ignore state_referenced_locally
+  const defaultWeaponModel = getDefaultWeaponModel(characterClass)
+  // svelte-ignore state_referenced_locally
   const modelPath = getCharacterModelPath(characterClass, gender)
   const modelPromise = loadGLB(modelPath).then((g) => { activeGltfData = g })
   const locomotionPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
   const combatMeleePromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
-  const weaponPromise = weaponType
-    ? loadGLB(WEAPON_MODEL_PATHS[weaponType]).then((g) => { weaponGltfData = g })
+  const weaponPromise = defaultWeaponModel
+    ? loadGLB(getWeaponModelPath(defaultWeaponModel)).then((g) => { weaponGltfData = g })
     : Promise.resolve()
   const glbReady = Promise.all([modelPromise, locomotionPromise, combatMeleePromise, weaponPromise])
 
@@ -217,23 +221,68 @@
     return fallbackBone
   }
 
-  function tryAttachWeapon(characterRoot: THREE.Object3D): boolean {
-    if (!weaponType || weaponAttached || !weaponGltfData) return false
-
+  function attachWeaponModel(gltfScene: THREE.Object3D, characterRoot: THREE.Object3D): boolean {
     const rightHandBone = findMainRightHandBone(characterRoot)
     if (!rightHandBone) {
       console.warn('Could not find right hand bone for weapon attachment')
       return false
     }
 
-    weaponObject = weaponGltfData.scene.clone()
+    weaponObject = gltfScene.clone()
     // Offset from wrist bone toward palm so weapon looks gripped
     weaponObject.position.set(0, 0.08, 0)
     rightHandBone.add(weaponObject)
     weaponAttached = true
-    console.log(`${weaponType} attached successfully to`, rightHandBone.name)
     return true
   }
+
+  function tryAttachWeapon(characterRoot: THREE.Object3D): boolean {
+    if (!defaultWeaponModel || weaponAttached || !weaponGltfData) return false
+    return attachWeaponModel(weaponGltfData.scene, characterRoot)
+  }
+
+  function detachWeapon() {
+    if (weaponObject && weaponObject.parent) {
+      weaponObject.parent.remove(weaponObject)
+    }
+    weaponObject = null
+    weaponAttached = false
+  }
+
+  const equippedMainHandItemId = $derived(
+    isCurrentPlayer
+      ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
+      : null
+  )
+
+  let attachedWeaponItemId: string | null = null
+  let weaponAttachGeneration = 0
+
+  $effect(() => {
+    const itemDefId = equippedMainHandItemId
+    // Read modelRoot so effect re-runs when model finishes loading
+    const root = modelRoot
+    if (!root || !clonedScene) return
+
+    if (itemDefId === attachedWeaponItemId) return
+
+    detachWeapon()
+    attachedWeaponItemId = null
+
+    if (!itemDefId) return
+
+    const itemDef = getItemDef(itemDefId)
+    if (!itemDef?.worldModel) return
+
+    const gen = ++weaponAttachGeneration
+    const weaponModelPath = getWeaponModelPath(itemDef.worldModel)
+    loadGLB(weaponModelPath).then((gltf) => {
+      if (gen !== weaponAttachGeneration || !clonedScene) return
+
+      attachWeaponModel(gltf.scene, clonedScene)
+      attachedWeaponItemId = itemDefId
+    })
+  })
 
   // Select movement animation based on movement mode
   function selectMovementAnimation(mode: MovementMode | undefined): number {
@@ -343,7 +392,9 @@
       const { clonedScene: cloned, modelRoot: newModelRoot } =
         createCharacterModelRoot(activeGltf.scene)
 
-      tryAttachWeapon(cloned)
+      // For current player, weapon is reactively managed by $effect watching inventory.
+      // For other players, attach based on character class.
+      if (!isCurrentPlayer) tryAttachWeapon(cloned)
 
       const baseAnimations = getGltfAnimations(activeGltf)
       const locomotionAnimations = getGltfAnimations(locomotionGltfData)
@@ -469,6 +520,7 @@
       clonedScene = null
       footOffsetApplied = false
       weaponAttached = false
+      attachedWeaponItemId = null
     }
   })
 

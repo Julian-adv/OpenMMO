@@ -37,6 +37,9 @@ export function convertCsvFile(csvFileName) {
         continue
       }
 
+      // Skip empty values
+      if (raw === '') continue
+
       // Try to parse as number, keep as string otherwise
       const num = Number(raw)
       entry[key] = Number.isNaN(num) ? raw : num

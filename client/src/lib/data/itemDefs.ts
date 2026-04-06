@@ -9,6 +9,7 @@ export interface ItemDefinition {
   equipSlot: EquipSlot | null
   stackable: boolean
   icon: string
+  worldModel?: string
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>

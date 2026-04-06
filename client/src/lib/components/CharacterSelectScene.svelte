@@ -10,14 +10,14 @@
   import CharacterSlotLabel from './CharacterSlotLabel.svelte'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import { loadGLB } from '../utils/gltfCache'
-  import { WEAPON_MODEL_PATHS } from '../utils/modelPaths'
+  import { getWeaponModelPath } from '../utils/modelPaths'
 
   interactivity()
 
   // Preload assets needed by game scene so they're cached when it mounts
   loadSplatLayers()
-  for (const path of Object.values(WEAPON_MODEL_PATHS)) {
-    loadGLB(path)
+  for (const model of ['sword.glb', 'spear.glb']) {
+    loadGLB(getWeaponModelPath(model))
   }
 
   interface Props {
