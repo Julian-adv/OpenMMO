@@ -8,6 +8,7 @@
   import GenerateTerrainDialog from './map-editor/GenerateTerrainDialog.svelte'
   import CharacterPanel from './CharacterPanel.svelte'
   import InventoryPanel from './InventoryPanel.svelte'
+  import DragGhost from './DragGhost.svelte'
   import LoadingDialog from './LoadingDialog.svelte'
   import RespawnDialog from './RespawnDialog.svelte'
   import WorldMapDialog from './WorldMapDialog.svelte'
@@ -56,6 +57,7 @@
   {/if}
   <FPSCounter />
   <GameTimeWidget />
+  <DragGhost />
   <CelestialDebugDialog />
   {#if $mapEditorMode}
     <MapEditorPanel />

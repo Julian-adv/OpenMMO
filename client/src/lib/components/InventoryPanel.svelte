@@ -3,7 +3,8 @@
   import type { ItemInstance } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
-  import type { CharacterAttributes } from '../network/networkTypes'
+  import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
+  import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
 
   interface Props {
     visible: boolean
@@ -54,58 +55,47 @@
     }
   }
 
-  let dragging = $state<{ icon: string; x: number; y: number } | null>(null)
-
   function onPointerDown(e: PointerEvent, slot: ItemInstance) {
     if (e.button !== 0) return
     e.preventDefault()
-    const target = e.currentTarget as HTMLElement
-    target.setPointerCapture(e.pointerId)
+    hoveredSlot = null
     const def = getItemDef(slot.item_def_id)
-    const icon = def?.icon ?? 'icon_frame.png'
-    const startX = e.clientX
-    const startY = e.clientY
-    let started = false
 
-    function onMove(me: PointerEvent) {
-      me.preventDefault()
-      const dx = me.clientX - startX
-      const dy = me.clientY - startY
-      if (!started && dx * dx + dy * dy < 64) return
-      started = true
-      hoveredSlot = null
-      dragging = { icon, x: me.clientX, y: me.clientY }
-    }
-
-    function onUp(ue: PointerEvent) {
-      if (target.hasPointerCapture(ue.pointerId)) {
-        target.releasePointerCapture(ue.pointerId)
-      }
-      target.removeEventListener('pointermove', onMove)
-      target.removeEventListener('pointerup', onUp)
-      if (!started || !panelEl) {
-        dragging = null
-        return
-      }
-      const rect = panelEl.getBoundingClientRect()
-      const outside =
-        ue.clientX < rect.left ||
-        ue.clientX > rect.right ||
-        ue.clientY < rect.top ||
-        ue.clientY > rect.bottom
-      if (outside) {
-        networkManager.sendDropItem(slot.instance_id)
-      }
-      dragging = null
-    }
-
-    target.addEventListener('pointermove', onMove)
-    target.addEventListener('pointerup', onUp)
+    startDrag(
+      e,
+      {
+        instanceId: slot.instance_id,
+        equipSlot: def?.equipSlot ?? null,
+        source: { type: 'bag' },
+        icon: def?.icon ?? FALLBACK_ICON,
+      },
+      (x, y) => {
+        for (const slotEl of document.querySelectorAll<HTMLElement>('[data-equip-slot]')) {
+          if (pointInRect(x, y, slotEl.getBoundingClientRect())) {
+            const targetSlot = slotEl.dataset.equipSlot as EquipSlot
+            if (isSlotCompatible(def?.equipSlot ?? null, targetSlot)) {
+              networkManager.sendEquipItem(slot.instance_id)
+              return
+            }
+          }
+        }
+        if (panelEl && !pointInRect(x, y, panelEl.getBoundingClientRect()) && !isOverAnyDialog(x, y)) {
+          networkManager.sendDropItem(slot.instance_id)
+        }
+      },
+    )
   }
 </script>
 
 {#if visible}
-  <div class="inventory-panel" role="dialog" aria-label="Inventory" bind:this={panelEl}>
+  <div
+    class="inventory-panel"
+    class:drop-target={$dragMeta?.source.type === 'equipped'}
+    role="dialog"
+    aria-label="Inventory"
+    data-panel="inventory"
+    bind:this={panelEl}
+  >
     <div class="panel-header">
       <span class="panel-title">Inventory</span>
       <span class="weight-display">
@@ -149,15 +139,6 @@
   </div>
 {/if}
 
-{#if dragging}
-  <img
-    class="drag-ghost"
-    src="/items/{dragging.icon}"
-    alt=""
-    style="left:{dragging.x}px;top:{dragging.y}px"
-  />
-{/if}
-
 <style>
   .inventory-panel {
     position: fixed;
@@ -176,6 +157,11 @@
     font-family: 'Courier New', monospace;
     font-size: 12px;
     pointer-events: auto;
+  }
+
+  .inventory-panel.drop-target {
+    border-color: rgba(88, 255, 88, 0.5);
+    box-shadow: inset 0 0 12px rgba(88, 255, 88, 0.15);
   }
 
   .panel-header {
@@ -245,18 +231,6 @@
     font-weight: 700;
     color: #fff;
     text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
-  }
-
-  .drag-ghost {
-    position: fixed;
-    width: 48px;
-    height: 48px;
-    transform: translate(-50%, -50%);
-    image-rendering: pixelated;
-    pointer-events: none;
-    z-index: 100;
-    opacity: 0.85;
-    filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
   }
 
   .tooltip {
