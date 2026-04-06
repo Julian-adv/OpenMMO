@@ -5,6 +5,7 @@
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, CharacterClass, Gender } from '../network/networkTypes'
   import { xpForLevel, clamp } from '../utils/xp'
+  import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
 
   interface Props {
     visible: boolean
@@ -77,6 +78,32 @@
   function unequip(slot: EquipSlot) {
     networkManager.sendUnequipItem(slot)
   }
+
+  function onEquipPointerDown(e: PointerEvent, slot: EquipSlot, item: { instance_id: number; item_def_id: string }) {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const def = getItemDef(item.item_def_id)
+
+    startDrag(
+      e,
+      {
+        instanceId: item.instance_id,
+        equipSlot: def?.equipSlot ?? null,
+        source: { type: 'equipped', slot },
+        icon: def?.icon ?? FALLBACK_ICON,
+      },
+      (x, y) => {
+        const invPanel = document.querySelector('[data-panel="inventory"]')
+        if (invPanel && pointInRect(x, y, invPanel.getBoundingClientRect())) {
+          networkManager.sendUnequipItem(slot)
+          return
+        }
+        if (!isOverAnyDialog(x, y)) {
+          networkManager.sendDropItem(item.instance_id)
+        }
+      },
+    )
+  }
 </script>
 
 {#if visible}
@@ -143,12 +170,16 @@
       {#each SLOT_POSITIONS as { slot, top, left } (slot)}
         {@const item = $inventoryStore.equipped[slot]}
         {@const def = item ? getItemDef(item.item_def_id) : null}
+        {@const isDropTarget = $dragMeta && isSlotCompatible($dragMeta.equipSlot, slot)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="equip-slot"
+          class:drop-target={isDropTarget}
           style="top:{top}%;left:{left}%"
           title={EQUIP_SLOT_LABELS[slot]}
+          data-equip-slot={slot}
           ondblclick={() => { if (item) unequip(slot) }}
+          onpointerdown={(e: PointerEvent) => { if (item) onEquipPointerDown(e, slot, item) }}
         >
           {#if def}
             <img class="equip-icon" src="/items/{def.icon}" alt={def.name} draggable="false" />
@@ -341,6 +372,12 @@
   .equip-slot:hover {
     border-color: rgba(240, 192, 64, 0.6);
     background: rgba(240, 192, 64, 0.08);
+  }
+
+  .equip-slot.drop-target {
+    border-color: rgba(88, 255, 88, 0.8);
+    background: rgba(88, 255, 88, 0.15);
+    box-shadow: 0 0 8px rgba(88, 255, 88, 0.4);
   }
 
   .equip-icon {
