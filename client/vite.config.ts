@@ -11,8 +11,9 @@ export default defineConfig({
     host: true,
     port: 10004,
     https: {
-      key: './node_modules/.vite-ssl/key.pem',
-      cert: './node_modules/.vite-ssl/cert.pem',
+      key: './.certs/key.pem',
+      cert: './.certs/cert.pem',
+      ca: './.certs/ca.pem',
     },
     headers: {
       'Cache-Control': 'public, max-age=3600',
