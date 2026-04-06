@@ -22,7 +22,7 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
   import { worldMapVisible, debugVisible, teleportLoading } from '../stores/debugStore'
-  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
+  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, editorTreeDataManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
   import { get } from 'svelte/store'
   import { regionMinimapServerUrl, generateRegionMinimap, fetchHousesInRegion } from '../terrain/regionMinimapGenerator'
   import { tileToRegion } from '../managers/terrainMetaManager'
@@ -30,6 +30,7 @@
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
   import { generateAndSaveGrassData, removeGrassInRect, encodeGrassBuffer } from '../utils/grass-data'
+  import { generateAndSaveTreeData } from '../utils/tree-data'
   import { worldToTileCoord, tileKey } from '../managers/terrain-height-types'
   import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
 
@@ -543,6 +544,14 @@
             })
           )
         }
+      }
+
+      // Generate and save tree placement data
+      const treeMgr = get(editorTreeDataManager)
+      if (treeMgr) {
+        await generateAndSaveTreeData(results, heightManager, treeMgr, (label) => {
+          resplatProgress = label
+        })
       }
 
       // Regenerate minimap

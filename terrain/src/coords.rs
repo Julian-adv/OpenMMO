@@ -84,6 +84,17 @@ pub fn furniture_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
 
+/// Build filesystem path for a tree placement data file.
+pub fn tree_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
+    let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
+    tree_region_dir(base, rx, rz).join(format!("t_{:+05}_{:+05}.bin", tx, tz))
+}
+
+/// Build filesystem path for a region's tree tile directory.
+pub fn tree_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("trees").join(region_dir_name(rx, rz))
+}
+
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("minimap")

@@ -193,6 +193,26 @@ impl TerrainIO {
         fs::write(&path, data).await
     }
 
+    /// Read pre-computed tree placement data (variable-length binary).
+    /// Returns None if the file does not exist.
+    pub async fn read_trees(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
+        let path = coords::tree_path(&self.base_dir, tx, tz);
+        match fs::read(&path).await {
+            Ok(data) => Ok(Some(data)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Write pre-computed tree placement data (variable-length binary).
+    pub async fn write_trees(&self, tx: i32, tz: i32, data: &[u8]) -> std::io::Result<()> {
+        let path = coords::tree_path(&self.base_dir, tx, tz);
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).await?;
+        }
+        fs::write(&path, data).await
+    }
+
     /// Read original (pre-housing) grass placement data. Returns None if not found.
     pub async fn read_original_grass(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::original_grass_path(&self.base_dir, tx, tz);
@@ -247,6 +267,7 @@ impl TerrainIO {
         let height_dir = coords::height_region_dir(&self.base_dir, rx, rz);
         let splat_dir = coords::splat_region_dir(&self.base_dir, rx, rz);
         let grass_dir = coords::grass_region_dir(&self.base_dir, rx, rz);
+        let tree_dir = coords::tree_region_dir(&self.base_dir, rx, rz);
         let orig_height_dir = coords::original_height_region_dir(&self.base_dir, rx, rz);
         let orig_grass_dir = coords::original_grass_region_dir(&self.base_dir, rx, rz);
         let meta_file = coords::meta_path(&self.base_dir, rx, rz);
@@ -256,6 +277,7 @@ impl TerrainIO {
             &height_dir,
             &splat_dir,
             &grass_dir,
+            &tree_dir,
             &orig_height_dir,
             &orig_grass_dir,
         ] {

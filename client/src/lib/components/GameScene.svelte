@@ -25,6 +25,7 @@
   import GameSceneTerrainLayer from './game-scene/GameSceneTerrainLayer.svelte'
   import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
+  import GameSceneTreeLayer from './game-scene/GameSceneTreeLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
   import GameSceneHousingLayer from './game-scene/GameSceneHousingLayer.svelte'
   import { drainTileWork } from '../utils/tileWorkQueue'
@@ -58,7 +59,7 @@
     reflectionEnabled,
     housingEditorMode,
   } from '../stores/debugStore'
-  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, editorZoneManager, terrainForceRebuild } from '../stores/editorStore'
+  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, editorTreeDataManager, editorZoneManager, terrainForceRebuild } from '../stores/editorStore'
   import { ZoneManager } from '../managers/zoneManager'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
@@ -83,6 +84,7 @@
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { TerrainMetaManager } from '../managers/terrainMetaManager'
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
+  import { TerrainTreeDataManager } from '../managers/terrainTreeDataManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import {
     loadFlowerColorTexture,
@@ -118,12 +120,14 @@
   const terrainSplatManager = new TerrainSplatManager()
   const terrainMetaManager = new TerrainMetaManager()
   const terrainGrassDataManager = new TerrainGrassDataManager(terrainHeightManager)
+  const terrainTreeDataManager = new TerrainTreeDataManager(terrainHeightManager)
   monsterManager.heightManager = terrainHeightManager
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
   editorMetaManager.set(terrainMetaManager)
   editorZoneManager.set(new ZoneManager())
   editorGrassDataManager.set(terrainGrassDataManager)
+  editorTreeDataManager.set(terrainTreeDataManager)
   let waterNormalMap = $state<THREE.Texture | null>(null)
   let waterFoamMap = $state<THREE.Texture | null>(null)
   let waterCausticsMap = $state<THREE.Texture | null>(null)
@@ -135,6 +139,7 @@
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
+  let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(undefined)
@@ -303,6 +308,7 @@
     if (v > lastRebuildVersion) {
       lastRebuildVersion = v
       tileManager.resetForForceRebuild()
+      terrainTreeDataManager.invalidateAll()
     }
   })
 
@@ -861,6 +867,12 @@
   playerPosition={currentPlayer?.position ?? null}
 />
 
+<GameSceneTreeLayer
+  bind:this={treeLayerRef}
+  {terrainTiles}
+  treeDataManager={terrainTreeDataManager}
+/>
+
 <GameSceneWindParticles
   bind:this={windParticlesRef}
   playerPosition={currentPlayer?.position ?? null}
@@ -883,9 +895,6 @@
   reflectionMap={reflectionTexture}
   bind:waterGroup={waterGroup}
 />
-
-<!-- Terrain Field - 3x3 grid of field inspection models (commented out) -->
-<!-- <TerrainField /> -->
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>
   <GameScenePlayersLayer
