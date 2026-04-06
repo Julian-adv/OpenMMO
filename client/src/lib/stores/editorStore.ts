@@ -5,6 +5,7 @@ import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import type { TerrainSplatManager } from '../managers/terrainSplatManager'
 import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
+import type { TerrainTreeDataManager } from '../managers/terrainTreeDataManager'
 import type { ZoneManager, ZoneData } from '../managers/zoneManager'
 import type { NpcScheduleData } from '../managers/npcScheduleManager'
 
@@ -106,6 +107,9 @@ export const terrainForceRebuild = writable<number>(0)
 export const editorHeightManager = writable<TerrainHeightManager | null>(null)
 export const editorSplatManager = writable<TerrainSplatManager | null>(null)
 export const editorGrassDataManager = writable<TerrainGrassDataManager | null>(
+  null
+)
+export const editorTreeDataManager = writable<TerrainTreeDataManager | null>(
   null
 )
 

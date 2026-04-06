@@ -21,11 +21,7 @@ import {
   TALL_GRASS_R_MAX,
 } from '../shaders/grass-material'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
-import {
-  TILE_DIM,
-  VERTS_PER_SIDE,
-  decodeHeight,
-} from '../managers/terrain-height-types'
+import { TILE_DIM, sampleHeight } from '../managers/terrain-height-types'
 import { createRng } from './simplex-noise'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 
@@ -113,32 +109,6 @@ function concatFloat32(a: Float32Array, b: Float32Array): Float32Array {
   out.set(a, 0)
   out.set(b, a.length)
   return out
-}
-
-/** Inline bilinear height sampling — avoids Map lookups and string allocations. */
-function sampleHeight(
-  heightmap: Uint16Array,
-  localX: number,
-  localZ: number
-): number {
-  const cx = Math.min(Math.max(localX, 0), TILE_DIM - 1)
-  const cz = Math.min(Math.max(localZ, 0), TILE_DIM - 1)
-  const ix = cx | 0
-  const iz = cz | 0
-  const fx = cx - ix
-  const fz = cz - iz
-
-  const ix1 = Math.min(ix + 1, TILE_DIM)
-  const iz1 = Math.min(iz + 1, TILE_DIM)
-
-  const h00 = decodeHeight(heightmap[iz * VERTS_PER_SIDE + ix])
-  const h10 = decodeHeight(heightmap[iz * VERTS_PER_SIDE + ix1])
-  const h01 = decodeHeight(heightmap[iz1 * VERTS_PER_SIDE + ix])
-  const h11 = decodeHeight(heightmap[iz1 * VERTS_PER_SIDE + ix1])
-
-  const h0 = h00 + (h10 - h00) * fx
-  const h1 = h01 + (h11 - h01) * fx
-  return h0 + (h1 - h0) * fz
 }
 
 function computeInstances(
