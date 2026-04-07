@@ -17,10 +17,17 @@ export class TerrainGrassDataManager {
   private generation = 0
   private tileUpdateListeners: ((tileX: number, tileZ: number) => void)[] = []
   private heightManager: TerrainHeightManager
+  private _suppressListeners = false
 
   constructor(heightManager: TerrainHeightManager) {
     this.terrainApiUrl = getTerrainApiUrl()
     this.heightManager = heightManager
+  }
+
+  /** Suppress tile-update listeners during bulk operations.
+   *  Call with `true` before batch saves, `false` when done. */
+  set suppressListeners(v: boolean) {
+    this._suppressListeners = v
   }
 
   /** Subscribe to tile data updates. Returns unsubscribe function. */
@@ -163,7 +170,9 @@ export class TerrainGrassDataManager {
     this.cache.set(key, data)
     this.missingTiles.delete(key)
 
-    for (const cb of this.tileUpdateListeners) cb(tileX, tileZ)
+    if (!this._suppressListeners) {
+      for (const cb of this.tileUpdateListeners) cb(tileX, tileZ)
+    }
 
     try {
       const url = `${this.terrainApiUrl}/api/terrain/grass/${tileX}/${tileZ}`

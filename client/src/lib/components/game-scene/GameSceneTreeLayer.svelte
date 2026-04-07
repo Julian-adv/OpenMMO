@@ -93,12 +93,10 @@
     if (objs) {
       for (const obj of objs) {
         treeGroup.remove(obj)
-        obj.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.geometry.dispose()
-          }
-        })
       }
+      // Do NOT dispose geometry here — clones share geometry with the template
+      // scene, so disposing would destroy GPU buffers still used by other clones
+      // and future instances.
       tileObjects.delete(tileId)
     }
   }

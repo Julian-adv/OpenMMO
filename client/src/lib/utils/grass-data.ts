@@ -20,6 +20,7 @@ import {
   TALL_GRASS_R_MIN,
   TALL_GRASS_R_MAX,
 } from '../shaders/grass-material'
+import { getTreeInstanceData, type TreePlacementData } from './tree-data'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { TILE_DIM, sampleHeight } from '../managers/terrain-height-types'
 import { createRng } from './simplex-noise'
@@ -359,37 +360,30 @@ export async function generateAndSaveGrassData(
   }
 }
 
+/** Radius around each tree center in which grass/flowers are removed. */
+export const TREE_CLEAR_RADIUS = 0.7
+
 /**
- * Remove grass instances that fall within a world-space rectangle.
+ * Filter all grass/flower types by a removal predicate.
  * Returns null if no instances were removed (caller can skip saving).
  */
-export function removeGrassInRect(
+function filterGrassData(
   data: GrassPlacementData,
-  minX: number,
-  minZ: number,
-  maxX: number,
-  maxZ: number
+  shouldRemove: (x: number, z: number) => boolean
 ): GrassPlacementData | null {
-  /** Two-pass filter: count survivors, then copy into a typed array. */
   function filterInstances(raw: Float32Array): Float32Array {
     const count = raw.length / FLOATS_PER_INSTANCE
-    // Pass 1: count survivors
     let kept = 0
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_INSTANCE
-      const x = raw[base]
-      const z = raw[base + 2]
-      if (!(x >= minX && x <= maxX && z >= minZ && z <= maxZ)) kept++
+      if (!shouldRemove(raw[base], raw[base + 2])) kept++
     }
-    if (kept === count) return raw // nothing removed
-    // Pass 2: copy survivors
+    if (kept === count) return raw
     const out = new Float32Array(kept * FLOATS_PER_INSTANCE)
     let offset = 0
     for (let i = 0; i < count; i++) {
       const base = i * FLOATS_PER_INSTANCE
-      const x = raw[base]
-      const z = raw[base + 2]
-      if (x >= minX && x <= maxX && z >= minZ && z <= maxZ) continue
+      if (shouldRemove(raw[base], raw[base + 2])) continue
       out.set(raw.subarray(base, base + FLOATS_PER_INSTANCE), offset)
       offset += FLOATS_PER_INSTANCE
     }
@@ -404,7 +398,6 @@ export function removeGrassInRect(
   const tallFiltered = filterInstances(tallRaw)
   const flowerFiltered = filterInstances(flowerRaw)
 
-  // Early-out: nothing was removed
   if (
     shortFiltered === shortRaw &&
     tallFiltered === tallRaw &&
@@ -414,6 +407,56 @@ export function removeGrassInRect(
   }
 
   return packGrassBuffer(shortFiltered, tallFiltered, flowerFiltered)
+}
+
+/**
+ * Remove grass/flower instances that overlap with tree trunks.
+ * Returns null if no instances were removed (caller can skip saving).
+ */
+export function removeGrassNearTrees(
+  grassData: GrassPlacementData,
+  treeData: TreePlacementData
+): GrassPlacementData | null {
+  const totalTrees = treeData.tree1Count + treeData.tree2Count
+  if (totalTrees === 0) return null
+
+  const treeCenters = new Float64Array(totalTrees * 2)
+  let idx = 0
+  for (const type of ['tree1', 'tree2'] as const) {
+    const raw = getTreeInstanceData(treeData, type)
+    const count = raw.length / 5
+    for (let i = 0; i < count; i++) {
+      treeCenters[idx++] = raw[i * 5] // x
+      treeCenters[idx++] = raw[i * 5 + 2] // z
+    }
+  }
+
+  const r2 = TREE_CLEAR_RADIUS * TREE_CLEAR_RADIUS
+  return filterGrassData(grassData, (x, z) => {
+    for (let i = 0; i < totalTrees; i++) {
+      const dx = x - treeCenters[i * 2]
+      const dz = z - treeCenters[i * 2 + 1]
+      if (dx * dx + dz * dz <= r2) return true
+    }
+    return false
+  })
+}
+
+/**
+ * Remove grass instances that fall within a world-space rectangle.
+ * Returns null if no instances were removed (caller can skip saving).
+ */
+export function removeGrassInRect(
+  data: GrassPlacementData,
+  minX: number,
+  minZ: number,
+  maxX: number,
+  maxZ: number
+): GrassPlacementData | null {
+  return filterGrassData(
+    data,
+    (x, z) => x >= minX && x <= maxX && z >= minZ && z <= maxZ
+  )
 }
 
 /**

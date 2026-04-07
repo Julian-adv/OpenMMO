@@ -29,7 +29,7 @@
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
-  import { generateAndSaveGrassData, removeGrassInRect, encodeGrassBuffer } from '../utils/grass-data'
+  import { generateAndSaveGrassData, removeGrassInRect, removeGrassNearTrees, encodeGrassBuffer, type GrassPlacementData } from '../utils/grass-data'
   import { generateAndSaveTreeData } from '../utils/tree-data'
   import { worldToTileCoord, tileKey } from '../managers/terrain-height-types'
   import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
@@ -513,7 +513,9 @@
 
       // Generate and save grass placement data, then suppress under houses
       const grassMgr = get(editorGrassDataManager)
+      try {
       if (grassMgr) {
+        grassMgr.suppressListeners = true
         await generateAndSaveGrassData(results, heightManager, grassMgr, (label) => {
           resplatProgress = label
         })
@@ -546,12 +548,35 @@
         }
       }
 
-      // Generate and save tree placement data
+      // Generate and save tree placement data, then remove grass overlapping tree trunks
       const treeMgr = get(editorTreeDataManager)
       if (treeMgr) {
         await generateAndSaveTreeData(results, heightManager, treeMgr, (label) => {
           resplatProgress = label
         })
+
+        if (grassMgr) {
+          resplatProgress = 'Removing grass near trees...'
+          const dirtyTiles: { tileX: number; tileZ: number; data: GrassPlacementData }[] = []
+          for (const tile of results) {
+            const treeData = treeMgr.getCachedTreeData(tile.tileX, tile.tileZ)
+            const grassData = grassMgr.getCachedGrassData(tile.tileX, tile.tileZ)
+            if (!treeData || !grassData) continue
+            const filtered = removeGrassNearTrees(grassData, treeData)
+            if (!filtered) continue
+            dirtyTiles.push({ tileX: tile.tileX, tileZ: tile.tileZ, data: filtered })
+          }
+          const TREE_SAVE_BATCH = 8
+          for (let i = 0; i < dirtyTiles.length; i += TREE_SAVE_BATCH) {
+            const batch = dirtyTiles.slice(i, i + TREE_SAVE_BATCH)
+            await Promise.all(
+              batch.map((t) => grassMgr.saveGrassData(t.tileX, t.tileZ, t.data))
+            )
+          }
+        }
+      }
+      } finally {
+        if (grassMgr) grassMgr.suppressListeners = false
       }
 
       // Regenerate minimap
