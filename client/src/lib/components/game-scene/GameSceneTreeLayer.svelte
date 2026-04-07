@@ -40,6 +40,11 @@
       ])
       tree1Scene = gltf1.scene
       tree2Scene = gltf2.scene
+      for (const scene of [tree1Scene, tree2Scene]) {
+        scene.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) child.castShadow = true
+        })
+      }
       modelsReady = true
       return true
     } catch (e) {
