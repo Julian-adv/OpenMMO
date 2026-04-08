@@ -6,12 +6,7 @@
   import type { TerrainTreeDataManager } from '../../managers/terrainTreeDataManager'
   import { getTreeInstanceData, type TreePlacementData } from '../../utils/tree-data'
   import { loadGLB } from '../../utils/gltfCache'
-  import {
-    createTreeInstanceContext,
-    createTreeMaterial,
-    writeTreeInstanceData,
-    type TreeInstanceContext,
-  } from '../../shaders/tree-material'
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
   interface Props {
     terrainTiles: TerrainTile[]
@@ -33,18 +28,21 @@
   const MAX_INSTANCES = 1024
 
   // ── Global meshes: one InstancedMesh per tree-type × sub-mesh ──
-  // Reuse same mesh UUIDs across tile changes to avoid WebGPU pipeline
-  // recompilation. Instance data lives in instancedArray buffers, NOT
-  // in the instanceMatrix (which stays zeroed — positionNode overrides).
   interface GlobalSlot {
     mesh: THREE.InstancedMesh
-    ctx: TreeInstanceContext
     typeIdx: number
   }
-   
+
   const globalSlots: GlobalSlot[] = []
   let modelsReady = false
   let modelsLoadPromise: Promise<boolean> | null = null
+
+  // Reusable temp objects for matrix composition
+  const _mat4 = new THREE.Matrix4()
+  const _pos = new THREE.Vector3()
+  const _quat = new THREE.Quaternion()
+  const _scale = new THREE.Vector3()
+  const _up = new THREE.Vector3(0, 1, 0)
 
   function ensureModelsLoaded(): Promise<boolean> {
     if (modelsReady) return Promise.resolve(true)
@@ -73,7 +71,7 @@
                 : mesh.material
             ) as THREE.MeshStandardMaterial
 
-            // Bake sub-mesh local transform into geometry so shader
+            // Bake sub-mesh local transform into geometry so instanceMatrix
             // only needs instance position/rotation/scale
             const localMatrix = new THREE.Matrix4()
               .copy(mesh.matrixWorld)
@@ -81,12 +79,8 @@
             const geo = mesh.geometry.clone()
             geo.applyMatrix4(localMatrix)
 
-            // Instance buffers (like grass bladeData / bladeScale)
-            const ctx = createTreeInstanceContext(MAX_INSTANCES)
-
-            // TSL material reads from instancedArray via positionNode
-            const mat = createTreeMaterial(ctx, srcMat)
-
+            // Use GLB material directly (clone for independence)
+            const mat = srcMat.clone()
             // GLB meshes: "Tw"/"Tw.001" = trunk, "Fronds"/"Fronds.001" = leaves
             const isTrunk = mesh.name.startsWith('Tw')
             if (isTrunk) mat.side = THREE.FrontSide
@@ -97,7 +91,7 @@
             im.count = 0
             treeGroup.add(im)
 
-            globalSlots.push({ mesh: im, ctx, typeIdx: t })
+            globalSlots.push({ mesh: im, typeIdx: t })
           })
         }
 
@@ -113,36 +107,55 @@
   }
 
   // ── Tile data cache ────────────────────────────────────
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const tileTreeDataCache = new Map<string, TreePlacementData>()
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const fetchedTiles = new Set<string>()
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const pendingTiles = new Set<string>()
+  const tileTreeDataCache = new SvelteMap<string, TreePlacementData>()
+  const fetchedTiles = new SvelteSet<string>()
+  const pendingTiles = new SvelteSet<string>()
 
-  /** Compute bounding sphere from instance position data. */
-  function computeBoundingSphere(ctx: TreeInstanceContext): THREE.Sphere {
-    const posArr = ctx.posData.value.array as Float32Array
-    if (ctx.count === 0) {
-      return new THREE.Sphere(new THREE.Vector3(), 0)
+  /** Write instance transforms into the mesh's instanceMatrix. */
+  function writeInstanceMatrices(
+    mesh: THREE.InstancedMesh,
+    instances: Float32Array[],
+  ): number {
+    let idx = 0
+    for (const raw of instances) {
+      const count = raw.length / 5
+      for (let i = 0; i < count && idx < MAX_INSTANCES; i++) {
+        const base = i * 5
+        _pos.set(raw[base], raw[base + 1], raw[base + 2])
+        _quat.setFromAxisAngle(_up, raw[base + 3])
+        const s = raw[base + 4]
+        _scale.set(s, s, s)
+        _mat4.compose(_pos, _quat, _scale)
+        mesh.setMatrixAt(idx, _mat4)
+        idx++
+      }
     }
+    mesh.count = idx
+    mesh.instanceMatrix.needsUpdate = true
+    return idx
+  }
+
+  /** Compute bounding sphere from raw instance arrays. */
+  function computeBoundingSphere(instances: Float32Array[]): THREE.Sphere {
+    let total = 0
+    for (const raw of instances) total += raw.length / 5
+    if (total === 0) return new THREE.Sphere(new THREE.Vector3(), 0)
 
     let minX = Infinity, maxX = -Infinity
     let minY = Infinity, maxY = -Infinity
     let minZ = Infinity, maxZ = -Infinity
 
-    // posData layout: vec4(worldX, worldZ, worldY, rotation)
-    for (let i = 0; i < ctx.count; i++) {
-      const p = i * 4
-      const x = posArr[p]
-      const z = posArr[p + 1]
-      const y = posArr[p + 2]
-      if (x < minX) minX = x; if (x > maxX) maxX = x
-      if (y < minY) minY = y; if (y > maxY) maxY = y
-      if (z < minZ) minZ = z; if (z > maxZ) maxZ = z
+    for (const raw of instances) {
+      const count = raw.length / 5
+      for (let i = 0; i < count; i++) {
+        const base = i * 5
+        const x = raw[base], y = raw[base + 1], z = raw[base + 2]
+        if (x < minX) minX = x; if (x > maxX) maxX = x
+        if (y < minY) minY = y; if (y > maxY) maxY = y
+        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z
+      }
     }
 
-    // Add margin for tree crown/trunk extent
     const TREE_MARGIN = 10
     const center = new THREE.Vector3(
       (minX + maxX) / 2,
@@ -181,10 +194,9 @@
     }
 
     for (const slot of globalSlots) {
-      const { mesh, ctx, typeIdx } = slot
-      writeTreeInstanceData(ctx, allData[typeIdx], MAX_INSTANCES)
-      mesh.count = ctx.count
-      mesh.boundingSphere = computeBoundingSphere(ctx)
+      const { mesh, typeIdx } = slot
+      writeInstanceMatrices(mesh, allData[typeIdx])
+      mesh.boundingSphere = computeBoundingSphere(allData[typeIdx])
 
       // Remove + re-add to force WebGPU buffer re-upload
       if (mesh.parent) mesh.parent.remove(mesh)
