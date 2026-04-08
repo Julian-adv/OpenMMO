@@ -30,9 +30,10 @@
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
   import { generateAndSaveGrassData, removeGrassInRect, removeGrassNearTrees, encodeGrassBuffer, type GrassPlacementData } from '../utils/grass-data'
-  import { generateAndSaveTreeData } from '../utils/tree-data'
+  import { generateAndSaveTreeData, type ExclusionRect } from '../utils/tree-data'
   import { worldToTileCoord, tileKey } from '../managers/terrain-height-types'
   import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
+  import type { HouseData } from '../types/housing'
 
   function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
     const key = `${rx},${rz}`
@@ -374,16 +375,13 @@
     }
   }
 
-  /** Fetch all houses in a region and remove grass under their ground-floor rooms.
+  /** Remove grass under ground-floor rooms of the given houses.
    *  Returns the set of tile keys that have houses on them. */
-  async function removeGrassUnderHousesInRegion(
-    rx: number,
-    rz: number,
+  async function removeGrassUnderHouses(
+    houses: HouseData[],
     grassMgr: TerrainGrassDataManager
   ): Promise<Set<string>> {
     const GRASS_MARGIN = 1
-    const apiUrl = getTerrainApiUrl()
-    const houses = await fetchHousesInRegion(rx, rz, apiUrl)
 
     // Collect removal rects per tile so each tile is saved at most once
     const tileRects = new SvelteMap<string, { tx: number; tz: number; rects: [number, number, number, number][] }>()
@@ -511,6 +509,10 @@
         )
       }
 
+      // Fetch houses once for grass removal and tree exclusion
+      resplatProgress = 'Fetching house data...'
+      const houses = await fetchHousesInRegion(rx, rz, apiUrl)
+
       // Generate and save grass placement data, then suppress under houses
       const grassMgr = get(editorGrassDataManager)
       try {
@@ -521,7 +523,7 @@
         })
 
         resplatProgress = 'Removing grass under houses...'
-        const houseTiles = await removeGrassUnderHousesInRegion(rx, rz, grassMgr)
+        const houseTiles = await removeGrassUnderHouses(houses, grassMgr)
 
         // Update grass-original for tiles WITHOUT houses so demolition
         // restores post-resplat grass. Skip tiles with houses — their
@@ -551,9 +553,22 @@
       // Generate and save tree placement data, then remove grass overlapping tree trunks
       const treeMgr = get(editorTreeDataManager)
       if (treeMgr) {
+        // Build house exclusion rects so trees don't overlap houses
+        const HOUSE_MARGIN = 1
+        const houseExclusionRects: ExclusionRect[] = []
+        for (const house of houses) {
+          for (const room of house.rooms) {
+            const minX = house.origin.x + room.localX - HOUSE_MARGIN
+            const minZ = house.origin.z + room.localZ - HOUSE_MARGIN
+            const maxX = house.origin.x + room.localX + room.sizeX + HOUSE_MARGIN
+            const maxZ = house.origin.z + room.localZ + room.sizeZ + HOUSE_MARGIN
+            houseExclusionRects.push([minX, minZ, maxX, maxZ])
+          }
+        }
+
         await generateAndSaveTreeData(results, heightManager, treeMgr, (label) => {
           resplatProgress = label
-        })
+        }, houseExclusionRects)
 
         if (grassMgr) {
           resplatProgress = 'Removing grass near trees...'

@@ -36,6 +36,12 @@ export const TREE_SCALE: [[number, number], [number, number]] = [
   [0.6, 0.8], // tree2: 0.6 ~ 1.4
 ]
 
+/** Base exclusion radius at scale 1.0: [tree1, tree2]. Actual radius = base × scale. */
+export const TREE_EXCLUSION_RADIUS: [number, number] = [2.0, 1.5]
+
+/** Axis-aligned exclusion rect [minX, minZ, maxX, maxZ] in world coords */
+export type ExclusionRect = readonly [number, number, number, number]
+
 const TREE_PROBABILITY = 0.08
 
 const HEADER_BYTES = 8 // 2 × u32
@@ -88,7 +94,8 @@ export function computeTreePlacement(
   tileX: number,
   tileZ: number,
   splatData: Uint8Array,
-  hMgr: TerrainHeightManager
+  hMgr: TerrainHeightManager,
+  exclusionRects?: readonly ExclusionRect[]
 ): TreePlacementData {
   const heightmap = hMgr.getHeightmap(tileX, tileZ)
   if (!heightmap) {
@@ -122,6 +129,26 @@ export function computeTreePlacement(
       const [scaleMin, scaleRange] = TREE_SCALE[isTree1 ? 0 : 1]
       const scale = scaleMin + rand() * scaleRange
 
+      // Check exclusion zones (house footprints expanded by tree radius)
+      if (exclusionRects && exclusionRects.length > 0) {
+        const worldX = tileMinX + localX
+        const worldZ = tileMinZ + localZ
+        const r = TREE_EXCLUSION_RADIUS[isTree1 ? 0 : 1] * scale
+        let blocked = false
+        for (const [rMinX, rMinZ, rMaxX, rMaxZ] of exclusionRects) {
+          if (
+            worldX > rMinX - r &&
+            worldX < rMaxX + r &&
+            worldZ > rMinZ - r &&
+            worldZ < rMaxZ + r
+          ) {
+            blocked = true
+            break
+          }
+        }
+        if (blocked) continue
+      }
+
       const target = isTree1 ? tree1Instances : tree2Instances
       target.push(tileMinX + localX, worldY, tileMinZ + localZ, rotation, scale)
     }
@@ -143,7 +170,8 @@ export async function generateAndSaveTreeData(
       data: TreePlacementData
     ): Promise<void>
   },
-  onProgress?: (label: string) => void
+  onProgress?: (label: string) => void,
+  exclusionRects?: readonly ExclusionRect[]
 ): Promise<void> {
   const BATCH_SIZE = 8
   const treeResults: {
@@ -157,7 +185,8 @@ export async function generateAndSaveTreeData(
       tile.tileX,
       tile.tileZ,
       tile.splatmap,
-      hMgr
+      hMgr,
+      exclusionRects
     )
     treeResults.push({ tileX: tile.tileX, tileZ: tile.tileZ, data })
     if (i % 4 === 3) {
