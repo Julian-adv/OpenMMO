@@ -367,7 +367,7 @@ export const TREE_CLEAR_RADIUS_BASE = 0.7
  * Filter all grass/flower types by a removal predicate.
  * Returns null if no instances were removed (caller can skip saving).
  */
-function filterGrassData(
+export function filterGrassData(
   data: GrassPlacementData,
   shouldRemove: (x: number, z: number) => boolean
 ): GrassPlacementData | null {

@@ -936,7 +936,7 @@
 </T>
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} />
   <ZoneOverlay />
   <NpcWaypointOverlay />
 {/if}

@@ -206,6 +206,23 @@
 
   export function update() {}
 
+  // ── Tile update listener (e.g. vegetation removal from splat painting) ──
+  $effect(() => {
+    const tMgr = treeDataManager
+    if (!tMgr) return
+
+    return tMgr.onTileUpdated((tileX, tileZ) => {
+      const treeData = tMgr.getCachedTreeData(tileX, tileZ)
+      const tk = `${tileX}_${tileZ}`
+      if (treeData && (treeData.tree1Count > 0 || treeData.tree2Count > 0)) {
+        tileTreeDataCache.set(tk, treeData)
+      } else {
+        tileTreeDataCache.delete(tk)
+      }
+      scheduleRebuild()
+    })
+  })
+
   // ── Invalidation listener ─────────────────────────────
   $effect(() => {
     const tMgr = treeDataManager

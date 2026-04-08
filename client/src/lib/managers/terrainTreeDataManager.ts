@@ -15,6 +15,7 @@ export class TerrainTreeDataManager {
   private generation = 0
   private heightManager: TerrainHeightManager
   private invalidateListeners: (() => void)[] = []
+  private tileUpdateListeners: ((tileX: number, tileZ: number) => void)[] = []
 
   constructor(heightManager: TerrainHeightManager) {
     this.terrainApiUrl = getTerrainApiUrl()
@@ -81,6 +82,8 @@ export class TerrainTreeDataManager {
     this.cache.set(key, data)
     this.missingTiles.delete(key)
 
+    for (const cb of this.tileUpdateListeners) cb(tileX, tileZ)
+
     try {
       const url = `${this.terrainApiUrl}/api/terrain/trees/${tileX}/${tileZ}`
       const wireBuffer = encodeTreeBuffer(data, tileX, tileZ)
@@ -107,6 +110,16 @@ export class TerrainTreeDataManager {
     const key = tileKey(tileX, tileZ)
     this.cache.delete(key)
     this.missingTiles.delete(key)
+  }
+
+  /** Subscribe to per-tile data updates. Returns unsubscribe function. */
+  onTileUpdated(cb: (tileX: number, tileZ: number) => void): () => void {
+    this.tileUpdateListeners.push(cb)
+    return () => {
+      this.tileUpdateListeners = this.tileUpdateListeners.filter(
+        (l) => l !== cb
+      )
+    }
   }
 
   onInvalidateAll(cb: () => void): () => void {

@@ -95,13 +95,14 @@ export class TerrainSplatManager {
     return this.splatmaps.get(tileKey(tileX, tileZ)) ?? null
   }
 
+  /** Apply splat brush and return the list of tiles that were modified. */
   applySplatBrush(
     worldX: number,
     worldZ: number,
     radius: number,
     layerIndex: number,
     strength: number
-  ) {
+  ): { tileX: number; tileZ: number }[] {
     const sigma = radius / 2.5
 
     const minWorldX = worldX - radius
@@ -121,6 +122,8 @@ export class TerrainSplatManager {
     const maxTileZ = Math.floor(
       (maxWorldZ + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
     )
+
+    const affectedTiles: { tileX: number; tileZ: number }[] = []
 
     for (let tz = minTileZ; tz <= maxTileZ; tz++) {
       for (let tx = minTileX; tx <= maxTileX; tx++) {
@@ -185,6 +188,7 @@ export class TerrainSplatManager {
             texture.needsUpdate = true
           }
           this.dirtyTiles.add(key)
+          affectedTiles.push({ tileX: tx, tileZ: tz })
         }
       }
     }
@@ -192,6 +196,8 @@ export class TerrainSplatManager {
     if (this.dirtyTiles.size > 0) {
       this.scheduleSave()
     }
+
+    return affectedTiles
   }
 
   private scheduleSave() {
