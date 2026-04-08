@@ -30,10 +30,13 @@ const V1_MAGIC = 0x54523031 // "TR01"
 const V1_HEADER_BYTES = 12 // magic + 2 × u32
 const V1_BYTES_PER_INSTANCE = 6 // u16 localX, u16 localZ, u8 rotation, u8 scale
 
-const TREE_SCALE_MIN = 0.6
-const TREE_SCALE_RANGE = 0.8 // 0.6 ~ 1.4
+/** Scale [min, range] per type: index 0 = tree.glb, index 1 = tree2.glb */
+export const TREE_SCALE: [[number, number], [number, number]] = [
+  [0.7, 2.3], // tree1: 0.7 ~ 3.0
+  [0.6, 0.8], // tree2: 0.6 ~ 1.4
+]
 
-const TREE_PROBABILITY = 0.004
+const TREE_PROBABILITY = 0.08
 
 const HEADER_BYTES = 8 // 2 × u32
 
@@ -115,9 +118,11 @@ export function computeTreePlacement(
       if (worldY < 0.5) continue
 
       const rotation = rand() * Math.PI * 2
-      const scale = TREE_SCALE_MIN + rand() * TREE_SCALE_RANGE
+      const isTree1 = rand() < 0.5
+      const [scaleMin, scaleRange] = TREE_SCALE[isTree1 ? 0 : 1]
+      const scale = scaleMin + rand() * scaleRange
 
-      const target = rand() < 0.5 ? tree1Instances : tree2Instances
+      const target = isTree1 ? tree1Instances : tree2Instances
       target.push(tileMinX + localX, worldY, tileMinZ + localZ, rotation, scale)
     }
   }
@@ -212,9 +217,10 @@ export function encodeTreeBuffer(
 
   const posScale = 65535 / TILE_DIM
   const rotScale = 255 / (Math.PI * 2)
-  const scaleScale = 255 / TREE_SCALE_RANGE
 
   for (let t = 0; t < 2; t++) {
+    const [scaleMin, scaleRange] = TREE_SCALE[t]
+    const scaleScale = 255 / scaleRange
     const raw = getTreeInstanceData(data, types[t])
     const n = raw.length / FLOATS_PER_INSTANCE
 
@@ -233,7 +239,7 @@ export function encodeTreeBuffer(
         writeOffset + 5,
         Math.min(
           255,
-          Math.max(0, Math.round((raw[base + 4] - TREE_SCALE_MIN) * scaleScale))
+          Math.max(0, Math.round((raw[base + 4] - scaleMin) * scaleScale))
         )
       )
       writeOffset += V1_BYTES_PER_INSTANCE
@@ -283,16 +289,17 @@ export function decodeTreeData(
 
   const posScale = TILE_DIM / 65535
   const rotScale = (Math.PI * 2) / 255
-  const scaleScale = TREE_SCALE_RANGE / 255
 
   for (let t = 0; t < 2; t++) {
+    const [scaleMin, scaleRange] = TREE_SCALE[t]
+    const scaleScale = scaleRange / 255
     const n = counts[t]
 
     for (let i = 0; i < n; i++) {
       const localX = view.getUint16(readOffset, true) * posScale
       const localZ = view.getUint16(readOffset + 2, true) * posScale
       const rotation = view.getUint8(readOffset + 4) * rotScale
-      const scale = TREE_SCALE_MIN + view.getUint8(readOffset + 5) * scaleScale
+      const scale = scaleMin + view.getUint8(readOffset + 5) * scaleScale
 
       const worldX = tileMinX + localX
       const worldZ = tileMinZ + localZ

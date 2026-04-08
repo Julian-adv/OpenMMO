@@ -360,8 +360,8 @@ export async function generateAndSaveGrassData(
   }
 }
 
-/** Radius around each tree center in which grass/flowers are removed. */
-export const TREE_CLEAR_RADIUS = 0.7
+/** Base radius around each tree center in which grass/flowers are removed, scaled by tree scale. */
+export const TREE_CLEAR_RADIUS_BASE = 0.7
 
 /**
  * Filter all grass/flower types by a removal predicate.
@@ -420,23 +420,27 @@ export function removeGrassNearTrees(
   const totalTrees = treeData.tree1Count + treeData.tree2Count
   if (totalTrees === 0) return null
 
-  const treeCenters = new Float64Array(totalTrees * 2)
+  // Store x, z, r² per tree (radius proportional to tree scale)
+  const treeInfo = new Float64Array(totalTrees * 3)
   let idx = 0
   for (const type of ['tree1', 'tree2'] as const) {
     const raw = getTreeInstanceData(treeData, type)
     const count = raw.length / 5
     for (let i = 0; i < count; i++) {
-      treeCenters[idx++] = raw[i * 5] // x
-      treeCenters[idx++] = raw[i * 5 + 2] // z
+      const scale = raw[i * 5 + 4]
+      const r = TREE_CLEAR_RADIUS_BASE * scale
+      treeInfo[idx++] = raw[i * 5] // x
+      treeInfo[idx++] = raw[i * 5 + 2] // z
+      treeInfo[idx++] = r * r // r²
     }
   }
 
-  const r2 = TREE_CLEAR_RADIUS * TREE_CLEAR_RADIUS
   return filterGrassData(grassData, (x, z) => {
     for (let i = 0; i < totalTrees; i++) {
-      const dx = x - treeCenters[i * 2]
-      const dz = z - treeCenters[i * 2 + 1]
-      if (dx * dx + dz * dz <= r2) return true
+      const base = i * 3
+      const dx = x - treeInfo[base]
+      const dz = z - treeInfo[base + 1]
+      if (dx * dx + dz * dz <= treeInfo[base + 2]) return true
     }
     return false
   })

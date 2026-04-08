@@ -12,6 +12,7 @@ export interface MultiPassRefractionDeps {
   terrainMeshes: (THREE.Mesh | undefined)[]
   entityClipGroup: ClippingGroup | undefined
   grassGroup: THREE.Group | undefined
+  treeGroup: THREE.Group | undefined
   windParticlesGroup: THREE.Group | undefined
 }
 
@@ -24,6 +25,7 @@ export interface MultiPassReflectionDeps {
   housingGroup: THREE.Group | undefined
   entityClipGroup: ClippingGroup | undefined
   grassGroup: THREE.Group | undefined
+  treeGroup: THREE.Group | undefined
   windParticlesGroup: THREE.Group | undefined
   getNametagGroups: () => THREE.Group[]
 }
@@ -78,11 +80,12 @@ export function createMultiPassRenderer(): MultiPassRenderer {
         brushUniforms.gridVisible.value = 0.0
       }
 
-      // Hide entities, grass, and particles during refraction
+      // Hide entities, grass, trees, and particles during refraction
       renderWithHiddenGroups(
         [
           deps.entityClipGroup as THREE.Group | undefined,
           deps.grassGroup,
+          deps.treeGroup,
           deps.windParticlesGroup,
         ],
         () => deps.refractionManager!.render()
@@ -117,9 +120,10 @@ export function createMultiPassRenderer(): MultiPassRenderer {
       const nametagGroups = deps.getNametagGroups()
       for (const nt of nametagGroups) nt.visible = false
 
-      // Hide grass + particles during reflection
-      renderWithHiddenGroups([deps.grassGroup, deps.windParticlesGroup], () =>
-        deps.reflectionManager!.render()
+      // Hide grass, trees + particles during reflection
+      renderWithHiddenGroups(
+        [deps.grassGroup, deps.treeGroup, deps.windParticlesGroup],
+        () => deps.reflectionManager!.render()
       )
 
       for (const nt of nametagGroups) nt.visible = true

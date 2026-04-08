@@ -506,6 +506,7 @@
         camera, refractionManager, refractionEnabled: $refractionEnabled,
         waterGroup, terrainMeshes, entityClipGroup,
         grassGroup: grassLayerRef?.getGroup(),
+        treeGroup: treeLayerRef?.getGroup(),
         windParticlesGroup: windParticlesRef?.getGroup(),
       }, loopProfiler)
 
@@ -514,6 +515,7 @@
         waterGroup, terrainGroup, housingGroup: housingLayerRef?.getGroup(),
         entityClipGroup,
         grassGroup: grassLayerRef?.getGroup(),
+        treeGroup: treeLayerRef?.getGroup(),
         windParticlesGroup: windParticlesRef?.getGroup(),
         getNametagGroups: () => {
           const groups: THREE.Group[] = []
