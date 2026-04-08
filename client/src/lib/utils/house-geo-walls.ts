@@ -520,7 +520,6 @@ export function collectWallSegments(
             WALL_THICKNESS
           )
           const panel = new THREE.Mesh(panelGeo, panelMat)
-          panel.castShadow = true
           panel.position.set(DOOR_WIDTH / 2 - inset, doorPanelH / 2, panelZ)
 
           const pivot = new THREE.Group()
@@ -583,7 +582,6 @@ export function collectWallSegments(
             const panelX = (dirInfo.isNS ? -side : side) * (halfW / 2 - inset)
 
             const shutter = new THREE.Mesh(shutterGeo, shutterMat)
-            shutter.castShadow = true
             shutter.position.set(panelX, panelYOff, panelZ)
 
             const pivot = new THREE.Group()

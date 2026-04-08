@@ -422,7 +422,11 @@
     if (renderer) {
       for (const slots of [shortSlots, tallSlots, flowerSlots]) {
         for (const slot of slots) {
-          if (slot && slot.ctx.count > 0) renderer.compute(slot.ctx.computeUpdate)
+          if (slot && slot.ctx.count > 0) {
+            // Dispatch only for actual blade count, not full capacity (131K)
+            ;(slot.ctx.computeUpdate as { count: number }).count = slot.ctx.count
+            renderer.compute(slot.ctx.computeUpdate)
+          }
         }
       }
     }
