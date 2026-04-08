@@ -32,7 +32,6 @@
   {geometry}
   {material}
   {position}
-  castShadow
   receiveShadow
   frustumCulled={false}
   dispose={false}
