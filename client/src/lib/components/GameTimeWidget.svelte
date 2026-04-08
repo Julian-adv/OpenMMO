@@ -1,13 +1,15 @@
 <script lang="ts" module>
   export const gameTimeState = $state({
     hour: 12,
+    serverHour: 12,
     date: { year: 217, month: 1, day: 1 },
   })
 
   export const eclipseState = $state({ factor: 0 })
 
-  export function setGameHour(hour: number) {
-    gameTimeState.hour = ((hour % 24) + 24) % 24
+  export function setGameHour(displayHour: number, serverHour: number) {
+    gameTimeState.hour = ((displayHour % 24) + 24) % 24
+    gameTimeState.serverHour = ((serverHour % 24) + 24) % 24
   }
 
   export function setGameDate(year: number, month: number, day: number) {
@@ -28,6 +30,7 @@
     SWIFT_MOON_DEFINITION,
     SUN_AXIAL_TILT_DEG,
     SUN_LATITUDE_DEG,
+    getDayFactor,
     getGameCalendarDayIndex,
     getMoonDirection,
     getMoonPhaseLabel,
@@ -36,7 +39,7 @@
     getSunDirection,
     getSunElevation,
     getSunTrackState,
-    isTwilightElevation,
+    getTwilightBlendFactor,
     moonPhaseCanvasAction,
   } from '../utils/celestialSimulation'
 
@@ -255,7 +258,8 @@
       day: gameTimeState.date.day,
     })
   )
-  const isTwilight = $derived(isTwilightElevation(sunElevation))
+  const twilightBlend = $derived(getTwilightBlendFactor(sunElevation))
+  const dayFactor = $derived(getDayFactor(sunElevation))
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
   const nightSkyOffsetPx = $derived(() => {
     const { month, day } = gameTimeState.date
@@ -291,19 +295,22 @@
     </div>
   {/if}
   <div class="sky-track">
-    {#if !sunVisual.isDaylight && !isTwilight}
-      <div
-        class="night-sky"
-        style="background-position-x: {nightSkyOffsetPx()}px;"
-      ></div>
-    {/if}
-    {#if sunVisual.isDaylight || isTwilight}
-      <img
-        class="horizon"
-        src={isTwilight ? '/icons/horizon-sunset.png' : '/icons/horizon.png'}
-        alt=""
-      />
-    {/if}
+    <div
+      class="night-sky"
+      style="background-position-x: {nightSkyOffsetPx()}px; opacity: {1 - dayFactor}"
+    ></div>
+    <img
+      class="horizon"
+      src="/icons/horizon.png"
+      alt=""
+      style="opacity: {dayFactor * (1 - twilightBlend)}"
+    />
+    <img
+      class="horizon"
+      src="/icons/horizon-sunset.png"
+      alt=""
+      style="opacity: {twilightBlend}"
+    />
     {#if sunVisual.isDaylight}
       <img
         class="sun"
@@ -328,14 +335,21 @@
     {/each}
     <img
       class="horizon-front"
-      src={
-        isTwilight
-          ? '/icons/horizon-sunset-front.png'
-          : sunVisual.isDaylight
-          ? '/icons/horizon-front.png'
-          : '/icons/horizon-night-front.png'
-      }
+      src="/icons/horizon-night-front.png"
       alt=""
+      style="opacity: {1 - dayFactor}"
+    />
+    <img
+      class="horizon-front"
+      src="/icons/horizon-sunset-front.png"
+      alt=""
+      style="opacity: {twilightBlend}"
+    />
+    <img
+      class="horizon-front"
+      src="/icons/horizon-front.png"
+      alt=""
+      style="opacity: {dayFactor * (1 - twilightBlend)}"
     />
   </div>
 </div>

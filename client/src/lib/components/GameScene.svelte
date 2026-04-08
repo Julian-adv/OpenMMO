@@ -46,6 +46,7 @@
   import {
     timeScale,
     sunTimeScale,
+    sunDebugOffset,
     serverGameTime,
   } from '../stores/timeStore'
   import {
@@ -256,7 +257,6 @@
 
   const calendarSystem = createCalendarSystem({
     onDateChanged: setGameDate,
-    onHourChanged: setGameHour,
   })
 
   let latestServerGameTime: import('../stores/timeStore').ServerGameTime | null = null
@@ -347,7 +347,9 @@
       const deltaTime = fixedDeltaTime * $timeScale
       const sunDeltaSeconds = realDeltaSeconds * $sunTimeScale
       calendarSystem.advance(sunDeltaSeconds)
-      setGameHour(calendarSystem.getGameHour())
+      const serverHour = calendarSystem.getGameHour()
+      const displayHour = serverHour + $sunDebugOffset
+      setGameHour(displayHour, serverHour)
 
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
@@ -474,7 +476,7 @@
       // Update water uniforms — always use real sun direction (not moon)
       waterTime += realDeltaSeconds
       {
-        const sunSnapshot = computeSunLightSnapshot(calendarSystem.getGameHour(), calendarSystem.getDate())
+        const sunSnapshot = computeSunLightSnapshot(displayHour, calendarSystem.getDate())
         waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
         waterSunDir = waterSunDirTmp.clone()
       }
@@ -623,10 +625,7 @@
       ambientLight,
       directionalLight,
       scene,
-      sunLightSnapshot: computeSunLightSnapshot(
-        calendarSystem.getGameHour(),
-        calDate,
-      ),
+      sunLightSnapshot: computeSunLightSnapshot(calendarSystem.getGameHour() + $sunDebugOffset, calDate),
       eclipseFactor: eclipseState.factor,
     })
   }
@@ -655,7 +654,10 @@
       refractionEnabled,
       reflectionEnabled,
     }))
-    setGameHour(calendarSystem.getGameHour())
+    {
+      const initHour = calendarSystem.getGameHour()
+      setGameHour(initHour + $sunDebugOffset, initHour)
+    }
 
     const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
       latestServerGameTime = gameTime

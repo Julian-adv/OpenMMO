@@ -19,6 +19,13 @@
 - 흙: https://polyhaven.com/a/red_laterite_soil_stones
 - 모래: https://polyhaven.com/a/sandy_gravel_02
 - 해안 모래: https://sketchfab.com/3d-models/fine-sand-material-6e54464d405a4c1e8bdb0f81e8d74db2
+- https://polyhaven.com/a/cobblestone_color
+- https://polyhaven.com/a/grey_stone_path
+- https://polyhaven.com/a/stone_pathway
+- https://polyhaven.com/a/pavement_02
+- https://polyhaven.com/a/patterned_paving_02
+- https://polyhaven.com/a/japanese_stone_wall
+- https://polyhaven.com/a/rock_embedded_concrete
 
 ## sea
 

@@ -18,15 +18,15 @@ export const SUN_START_HOUR = 12
 export const SUN_MAX_INTENSITY = 5.0
 export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.07 // upper bound (~4° above horizon)
 export const SUN_TWILIGHT_LOWER_THRESHOLD = -0.04 // lower bound (~-2.3° below horizon)
-export const SUN_TWILIGHT_COLOR_BLEND = 0.65
+export const SUN_TWILIGHT_COLOR_BLEND = 0.85
 export const MOON_AXIAL_TILT_DEG = 19
 
 export const GAME_START_YEAR = 217
 export const GAME_MONTHS_PER_YEAR = 12
 export const GAME_DAYS_PER_MONTH = 30
 
-export const SUN_DAY_COLOR_HEX = '#ffffff'
-export const SUN_TWILIGHT_COLOR_HEX = '#ff9b86'
+export const SUN_DAY_COLOR_HEX = '#fff8f0'
+export const SUN_TWILIGHT_COLOR_HEX = '#ff6b35'
 export const MOON_LIGHT_COLOR_HEX = '#d6e2ff'
 export const MOON_VISIBILITY_THRESHOLD = 0.02
 export const ELDER_MOON_MAX_INTENSITY = 0.8
@@ -181,6 +181,62 @@ export function getSunPeriodFromElevation(elevation: number): SunPeriod {
 
 export function isTwilightElevation(elevation: number) {
   return getSunPeriodFromElevation(elevation) === 'twilight'
+}
+
+/** Find the hour where the sky transitions into twilight for a given date. */
+export function findTwilightOnsetHour(
+  type: 'sunrise' | 'sunset',
+  month: number,
+  day: number
+): number {
+  const dw = getSolarDaylightWindow({
+    latitudeDeg: SUN_LATITUDE_DEG,
+    month,
+    day,
+    axialTiltDeg: SUN_AXIAL_TILT_DEG,
+  })
+  const step = 0.005
+  if (type === 'sunrise') {
+    for (let h = dw.sunriseHour; h > dw.sunriseHour - 3; h -= step) {
+      if (
+        getSunElevation({ hour: h, month, day }) <= SUN_TWILIGHT_LOWER_THRESHOLD
+      )
+        return h
+    }
+    return dw.sunriseHour - 1
+  } else {
+    for (let h = dw.sunsetHour; h > dw.sunsetHour - 3; h -= step) {
+      if (
+        getSunElevation({ hour: h, month, day }) >=
+        SUN_TWILIGHT_ELEVATION_THRESHOLD
+      )
+        return h
+    }
+    return dw.sunsetHour - 1
+  }
+}
+
+/** 0 (night) → 1 (day), linear across the twilight elevation range. */
+export function getDayFactor(elevation: number): number {
+  return Math.min(
+    1,
+    Math.max(
+      0,
+      (elevation - SUN_TWILIGHT_LOWER_THRESHOLD) /
+        (SUN_TWILIGHT_ELEVATION_THRESHOLD - SUN_TWILIGHT_LOWER_THRESHOLD)
+    )
+  )
+}
+
+/** 0→1→0 eased curve across the twilight elevation range. Peak at midpoint. */
+export function getTwilightBlendFactor(elevation: number): number {
+  const range = SUN_TWILIGHT_ELEVATION_THRESHOLD - SUN_TWILIGHT_LOWER_THRESHOLD
+  const linear = Math.min(
+    1,
+    Math.max(0, (SUN_TWILIGHT_ELEVATION_THRESHOLD - elevation) / range)
+  )
+  const triangle = 1 - Math.abs(2 * linear - 1)
+  return 1 - Math.pow(1 - triangle, 4)
 }
 
 export function getAbsoluteDayIndex(date: CalendarDate) {
@@ -434,9 +490,16 @@ export function computeSunLightSnapshot(
     baseDaylightFactor,
     SUN_DAYLIGHT_SOFTENING_EXPONENT
   )
+  // Fade out smoothly below horizon: full at y=0, zero at y=SUN_TWILIGHT_LOWER_THRESHOLD
+  const horizonFade =
+    direction.y >= 0
+      ? 1
+      : Math.max(0, 1 - direction.y / SUN_TWILIGHT_LOWER_THRESHOLD)
   const daylightFactor =
-    direction.y > 0
-      ? SUN_DAYLIGHT_FLOOR + (1 - SUN_DAYLIGHT_FLOOR) * softenedDaylightFactor
+    horizonFade > 0
+      ? (SUN_DAYLIGHT_FLOOR +
+          (1 - SUN_DAYLIGHT_FLOOR) * softenedDaylightFactor) *
+        horizonFade
       : 0
 
   return {
@@ -536,9 +599,9 @@ export function computeCelestialDirectionalLightState(
   sunLightState: SunLightSnapshot,
   dayIndex: number
 ): CelestialDirectionalLightState {
-  const sunPeriod = getSunPeriodFromElevation(sunLightState.direction.y)
   const sunAboveHorizon =
-    sunLightState.direction.y > 0 && sunLightState.intensity > 0
+    sunLightState.direction.y > SUN_TWILIGHT_LOWER_THRESHOLD &&
+    sunLightState.intensity > 0
   // Smooth transition: fully day above 0.1, fully night below -0.05
   const ambientNightFactor = Math.min(
     1,
@@ -573,17 +636,7 @@ export function computeCelestialDirectionalLightState(
     }
   }
 
-  const twilightFactor =
-    sunPeriod === 'twilight'
-      ? Math.min(
-          1,
-          Math.max(
-            0,
-            (SUN_TWILIGHT_ELEVATION_THRESHOLD - sunLightState.direction.y) /
-              SUN_TWILIGHT_ELEVATION_THRESHOLD
-          )
-        )
-      : 0
+  const twilightFactor = getTwilightBlendFactor(sunLightState.direction.y)
 
   return {
     useMoonLight: false,
