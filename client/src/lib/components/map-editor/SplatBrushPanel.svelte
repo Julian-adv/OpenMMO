@@ -20,7 +20,7 @@
   const THUMB_SIZE = 64
 
   let size = $state(3)
-  let strength = $state(5)
+  let strength = $state(8)
   let layer = $state(0)
   let layers = $state<SplatLayerInfo[]>([])
   let configs = $state<LayerConfig[]>([])
@@ -77,6 +77,9 @@
 
   function selectLayer(index: number) {
     splatLayer.set(index)
+    if (openDropdown !== null && openDropdown !== index) {
+      openDropdown = null
+    }
   }
 
   function toggleDropdown(index: number) {
@@ -121,14 +124,15 @@
 <div class="splat-brush-panel">
   <div class="panel-title">Splat Brush</div>
 
-  <div class="section-label">Region Textures</div>
+  <div class="section-label">Brush <span class="hint">(right-click to change texture)</span></div>
   <div class="texture-slots-grid">
     {#each layers as l, i (i)}
       <div class="texture-slot">
         <button
           class="grid-item"
           class:selected={layer === i}
-          onclick={() => { selectLayer(i); toggleDropdown(i) }}
+          onclick={() => selectLayer(i)}
+          oncontextmenu={(e) => { e.preventDefault(); selectLayer(i); toggleDropdown(i) }}
           title={l.label}
         >
           {#if configs[i] && thumbnails[configs[i].texture]}
@@ -161,25 +165,6 @@
           </div>
         {/if}
       </div>
-    {/each}
-  </div>
-
-  <div class="section-label">Brush</div>
-  <div class="texture-slots-grid">
-    {#each layers as l, i (i)}
-      <button
-        class="grid-item"
-        class:selected={layer === i}
-        onclick={() => selectLayer(i)}
-        title={l.label}
-      >
-        {#if configs[i] && thumbnails[configs[i].texture]}
-          <img class="grid-thumb" src={thumbnails[configs[i].texture]} alt="" />
-        {:else}
-          <span class="grid-placeholder" style="color: {l.color}">?</span>
-        {/if}
-        <span class="grid-label">{l.label}</span>
-      </button>
     {/each}
   </div>
 
@@ -245,6 +230,13 @@
 
   .section-label:first-of-type {
     margin-top: 0;
+  }
+
+  .hint {
+    color: #666;
+    font-size: 9px;
+    text-transform: none;
+    letter-spacing: 0;
   }
 
   .texture-slots-grid {
