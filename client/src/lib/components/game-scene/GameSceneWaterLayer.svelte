@@ -56,12 +56,15 @@
   }: Props = $props()
 
   /** Called from the game loop to render all wetness pre-passes */
+  let wetnessFrameCount = 0
   export function renderWetness(renderer: WebGPURenderer) {
+    wetnessFrameCount++
+    const doCapture = wetnessFrameCount % 2 === 0
     for (const [id, wetness] of wetnessMap) {
       const waterResult = waterMatMap.get(id)
       if (!waterResult) continue
 
-      // Set water material uniforms for this frame (needed for capture pass)
+      // Always update water material uniforms (needed for main render)
       const u = waterResult.uniforms
       const heightTex = heightTexMap.get(id)
       if (heightTex) u.uHeightmapTexture.value = heightTex
@@ -74,29 +77,34 @@
       if (refractionMap) u.uRefractionMap.value = refractionMap
       if (reflectionMap) u.uReflectionMap.value = reflectionMap
 
-      // Disable wetness for capture (avoid feedback loop: wetness → alpha → more wetness)
-      u.uWetnessMap.value = waterWetnessFallbackTex
-      // Output only holeAlpha in alpha channel for accurate shore edge capture
-      u.uCaptureMode.value = 1
+      // Capture + decay only every other frame (wetness changes slowly;
+      // the decay formula uses actual dt so skipping frames is safe)
+      if (doCapture) {
+        // Disable wetness for capture (avoid feedback loop: wetness → alpha → more wetness)
+        u.uWetnessMap.value = waterWetnessFallbackTex
+        // Output only holeAlpha in alpha channel for accurate shore edge capture
+        u.uCaptureMode.value = 1
 
-      // Zero out Gerstner wave steepness so capture mesh has no vertex displacement
-      // (ensures UV↔screen pixel mapping stays exact in the ortho capture camera)
-      const savedA = u.uWaveA.value.z
-      const savedB = u.uWaveB.value.z
-      const savedC = u.uWaveC.value.z
-      u.uWaveA.value.z = 0
-      u.uWaveB.value.z = 0
-      u.uWaveC.value.z = 0
+        // Zero out Gerstner wave steepness so capture mesh has no vertex displacement
+        // (ensures UV↔screen pixel mapping stays exact in the ortho capture camera)
+        const savedA = u.uWaveA.value.z
+        const savedB = u.uWaveB.value.z
+        const savedC = u.uWaveC.value.z
+        u.uWaveA.value.z = 0
+        u.uWaveB.value.z = 0
+        u.uWaveC.value.z = 0
 
-      // Capture water alpha + decay
-      wetness.update(renderer, waterResult.material, time)
+        // Capture water alpha + decay
+        wetness.update(renderer, waterResult.material, time)
 
-      // Restore wave steepness and normal rendering mode
-      u.uWaveA.value.z = savedA
-      u.uWaveB.value.z = savedB
-      u.uWaveC.value.z = savedC
-      u.uCaptureMode.value = 0
-      // Set result for main render
+        // Restore wave steepness and normal rendering mode
+        u.uWaveA.value.z = savedA
+        u.uWaveB.value.z = savedB
+        u.uWaveC.value.z = savedC
+        u.uCaptureMode.value = 0
+      }
+
+      // Always set wetness map from latest result
       u.uWetnessMap.value = wetness.readTexture
     }
   }

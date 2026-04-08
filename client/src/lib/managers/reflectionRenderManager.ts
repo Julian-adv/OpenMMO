@@ -57,6 +57,9 @@ export class ReflectionRenderManager {
   /** A dedicated camera that receives the mirrored transform each frame. */
   private reflCam: THREE.OrthographicCamera
 
+  /** Pre-allocated color to avoid per-frame allocation when saving/restoring clear color. */
+  private _savedClearColor = new THREE.Color()
+
   constructor(
     renderer: {
       _initialized: boolean
@@ -151,8 +154,7 @@ export class ReflectionRenderManager {
     if (this.entityClipGroup) this.entityClipGroup.enabled = true
 
     // --- render with transparent background ---
-    const savedClearColor = new THREE.Color()
-    this.renderer.getClearColor(savedClearColor)
+    this.renderer.getClearColor(this._savedClearColor)
     const savedClearAlpha = this.renderer.getClearAlpha()
 
     this.renderer.setClearColor(0x000000, 0)
@@ -162,7 +164,7 @@ export class ReflectionRenderManager {
     this.renderer.render(this.scene, this.reflCam)
     this.renderer.setRenderTarget(prev)
 
-    this.renderer.setClearColor(savedClearColor, savedClearAlpha)
+    this.renderer.setClearColor(this._savedClearColor, savedClearAlpha)
 
     // --- restore ---
     if (this.entityClipGroup) this.entityClipGroup.enabled = false
@@ -174,8 +176,7 @@ export class ReflectionRenderManager {
   /** Clear the reflection target to transparent black. */
   clear() {
     if (!this.renderer._initialized) return
-    const savedClearColor = new THREE.Color()
-    this.renderer.getClearColor(savedClearColor)
+    this.renderer.getClearColor(this._savedClearColor)
     const savedClearAlpha = this.renderer.getClearAlpha()
     this.renderer.setClearColor(0x000000, 0)
     const prev = this.renderer.getRenderTarget()
@@ -186,7 +187,7 @@ export class ReflectionRenderManager {
     this.renderer.render(this.scene, this.reflCam)
     this.scene.visible = savedVisible
     this.renderer.setRenderTarget(prev)
-    this.renderer.setClearColor(savedClearColor, savedClearAlpha)
+    this.renderer.setClearColor(this._savedClearColor, savedClearAlpha)
   }
 
   resize(width: number, height: number) {

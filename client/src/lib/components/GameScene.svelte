@@ -41,6 +41,8 @@
   import {
     SUN_MAX_INTENSITY,
     computeSunLightSnapshot,
+    type SunLightSnapshot,
+    type CalendarDate,
   } from '../utils/celestialSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import {
@@ -95,6 +97,7 @@
   import { registerDebugConsole } from './game-scene/debug-console'
   import { initScene } from './game-scene/scene-init'
   import { createMultiPassRenderer } from './game-scene/multi-pass-rendering'
+  import { OFFSCREEN_Y } from '../utils/house-geo-utils'
 
   interface Props {
     serverUrl: string
@@ -468,18 +471,19 @@
       updateCameraWithOffset(cameraOffset)
       loopProfiler.record('cameraUpdate', performance.now() - cameraUpdateStart)
 
+      // Compute sun snapshot once per frame (reused by lighting + water)
+      const calDate = calendarSystem.getDate()
+      const sunSnapshot = computeSunLightSnapshot(displayHour, calDate)
+
       // Update directional light to follow player
       const lightUpdateStart = performance.now()
-      updateLightPosition()
+      updateLightPosition(sunSnapshot, calDate)
       loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
       // Update water uniforms — always use real sun direction (not moon)
       waterTime += realDeltaSeconds
-      {
-        const sunSnapshot = computeSunLightSnapshot(displayHour, calendarSystem.getDate())
-        waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
-        waterSunDir = waterSunDirTmp.clone()
-      }
+      waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
+      waterSunDir = waterSunDirTmp.clone()
       if (directionalLight) {
         waterSunColor = directionalLight.color.clone()
         // Moon brightness: use directional light intensity when sun is below horizon
@@ -617,15 +621,14 @@
     cameraDistance.set(camera.zoom)
   }
 
-  function updateLightPosition() {
-    const calDate = calendarSystem.getDate()
+  function updateLightPosition(sunLightSnapshot: SunLightSnapshot, calDate: CalendarDate) {
     sceneLighting.update({
       currentPlayerPosition: currentPlayer?.position ?? null,
       localCalendarDate: calDate,
       ambientLight,
       directionalLight,
       scene,
-      sunLightSnapshot: computeSunLightSnapshot(calendarSystem.getGameHour() + $sunDebugOffset, calDate),
+      sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
     })
   }
@@ -835,9 +838,10 @@
      pipelines with point-light shadow support from the start. Without this,
      adding the player's torch later triggers a cascade recompilation of every
      existing material (~12s stall). Intensity 0 = invisible but pipelines
-     are compiled with shadow support. -->
+     are compiled with shadow support. After compilation, move offscreen so
+     the shadow frustum captures nothing (avoids 6× cube-face renders/frame). -->
 <T.PointLight
-  position={[0, 0, 0]}
+  position={isSceneCompiling ? [0, 0, 0] : [0, OFFSCREEN_Y, 0]}
   intensity={0}
   distance={50}
   decay={1.2}

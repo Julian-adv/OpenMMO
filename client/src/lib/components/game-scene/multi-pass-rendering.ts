@@ -48,9 +48,14 @@ const MULTI_PASS_WARMUP_FRAMES = 5
 export function createMultiPassRenderer(): MultiPassRenderer {
   let ready = false
   let warmupFrames = 0
+  let frameCount = 0
 
   function tickWarmup(isSceneCompiling: boolean) {
-    if (ready || isSceneCompiling) return
+    if (ready) {
+      frameCount++
+      return
+    }
+    if (isSceneCompiling) return
     warmupFrames++
     if (warmupFrames >= MULTI_PASS_WARMUP_FRAMES) {
       ready = true
@@ -64,37 +69,43 @@ export function createMultiPassRenderer(): MultiPassRenderer {
     const start = performance.now()
 
     if (deps.refractionManager && deps.refractionEnabled && ready) {
-      if (deps.camera) deps.refractionManager.setCamera(deps.camera)
-      if (deps.waterGroup) deps.refractionManager.setWaterGroup(deps.waterGroup)
+      // Alternate-frame: render refraction on even frames.
+      // First frame (frameCount <= 1) always renders to initialize the texture.
+      if (frameCount <= 1 || frameCount % 2 === 0) {
+        if (deps.camera) deps.refractionManager.setCamera(deps.camera)
+        if (deps.waterGroup)
+          deps.refractionManager.setWaterGroup(deps.waterGroup)
 
-      // Hide brush/grid overlay during refraction so it doesn't show through water
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const brushUniforms = (deps.terrainMeshes[0]?.material as any)?.userData
-        ?.uniforms
-      let savedBrushActive: number | undefined
-      let savedGridVisible: number | undefined
-      if (brushUniforms?.brushActive) {
-        savedBrushActive = brushUniforms.brushActive.value
-        savedGridVisible = brushUniforms.gridVisible.value
-        brushUniforms.brushActive.value = 0.0
-        brushUniforms.gridVisible.value = 0.0
+        // Hide brush/grid overlay during refraction so it doesn't show through water
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const brushUniforms = (deps.terrainMeshes[0]?.material as any)?.userData
+          ?.uniforms
+        let savedBrushActive: number | undefined
+        let savedGridVisible: number | undefined
+        if (brushUniforms?.brushActive) {
+          savedBrushActive = brushUniforms.brushActive.value
+          savedGridVisible = brushUniforms.gridVisible.value
+          brushUniforms.brushActive.value = 0.0
+          brushUniforms.gridVisible.value = 0.0
+        }
+
+        // Hide entities, grass, trees, and particles during refraction
+        renderWithHiddenGroups(
+          [
+            deps.entityClipGroup as THREE.Group | undefined,
+            deps.grassGroup,
+            deps.treeGroup,
+            deps.windParticlesGroup,
+          ],
+          () => deps.refractionManager!.render()
+        )
+
+        if (brushUniforms?.brushActive) {
+          brushUniforms.brushActive.value = savedBrushActive
+          brushUniforms.gridVisible.value = savedGridVisible
+        }
       }
-
-      // Hide entities, grass, trees, and particles during refraction
-      renderWithHiddenGroups(
-        [
-          deps.entityClipGroup as THREE.Group | undefined,
-          deps.grassGroup,
-          deps.treeGroup,
-          deps.windParticlesGroup,
-        ],
-        () => deps.refractionManager!.render()
-      )
-
-      if (brushUniforms?.brushActive) {
-        brushUniforms.brushActive.value = savedBrushActive
-        brushUniforms.gridVisible.value = savedGridVisible
-      }
+      // else: skip this frame, keep previous refraction texture
     } else if (deps.refractionManager) {
       deps.refractionManager.clear()
     }
@@ -109,24 +120,30 @@ export function createMultiPassRenderer(): MultiPassRenderer {
     const start = performance.now()
 
     if (deps.reflectionManager && deps.reflectionEnabled && ready) {
-      if (deps.camera) deps.reflectionManager.setCamera(deps.camera)
-      deps.reflectionManager.setTerrainGroup(deps.terrainGroup ?? null)
-      if (deps.waterGroup) deps.reflectionManager.setWaterGroup(deps.waterGroup)
-      deps.reflectionManager.setHousingGroup(deps.housingGroup ?? null)
-      if (deps.entityClipGroup)
-        deps.reflectionManager.setEntityClipGroup(deps.entityClipGroup)
+      // Alternate-frame: render reflection on odd frames.
+      // First frame (frameCount <= 1) always renders to initialize the texture.
+      if (frameCount <= 1 || frameCount % 2 === 1) {
+        if (deps.camera) deps.reflectionManager.setCamera(deps.camera)
+        deps.reflectionManager.setTerrainGroup(deps.terrainGroup ?? null)
+        if (deps.waterGroup)
+          deps.reflectionManager.setWaterGroup(deps.waterGroup)
+        deps.reflectionManager.setHousingGroup(deps.housingGroup ?? null)
+        if (deps.entityClipGroup)
+          deps.reflectionManager.setEntityClipGroup(deps.entityClipGroup)
 
-      // Hide nametags/HP bars during reflection render
-      const nametagGroups = deps.getNametagGroups()
-      for (const nt of nametagGroups) nt.visible = false
+        // Hide nametags/HP bars during reflection render
+        const nametagGroups = deps.getNametagGroups()
+        for (const nt of nametagGroups) nt.visible = false
 
-      // Hide grass, trees + particles during reflection
-      renderWithHiddenGroups(
-        [deps.grassGroup, deps.treeGroup, deps.windParticlesGroup],
-        () => deps.reflectionManager!.render()
-      )
+        // Hide grass, trees + particles during reflection
+        renderWithHiddenGroups(
+          [deps.grassGroup, deps.treeGroup, deps.windParticlesGroup],
+          () => deps.reflectionManager!.render()
+        )
 
-      for (const nt of nametagGroups) nt.visible = true
+        for (const nt of nametagGroups) nt.visible = true
+      }
+      // else: skip this frame, keep previous reflection texture
     } else if (deps.reflectionManager) {
       deps.reflectionManager.clear()
     }

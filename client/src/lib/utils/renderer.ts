@@ -15,7 +15,10 @@ THREE.Material.prototype.dispose = function () {
 }
 
 export function createWebGPURenderer(canvas: HTMLCanvasElement) {
-  const renderer = new WebGPURenderer({ canvas, antialias: true })
+  // MSAA disabled: native DPR (capped at 1.5) provides sufficient edge quality
+  // through higher pixel density, avoiding the ~0.7ms/frame MSAA resolve cost.
+  const renderer = new WebGPURenderer({ canvas, antialias: false })
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   // Guard renderer.dispose() — Threlte calls it on Canvas unmount,
