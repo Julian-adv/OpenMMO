@@ -98,6 +98,7 @@
   import { initScene } from './game-scene/scene-init'
   import { createMultiPassRenderer } from './game-scene/multi-pass-rendering'
   import { OFFSCREEN_Y } from '../utils/house-geo-utils'
+  import { graphicsQuality, getPreset } from '../stores/graphicsSettings'
 
   interface Props {
     serverUrl: string
@@ -256,6 +257,29 @@
     })
     csm.fade = true
     directionalLight.shadow.shadowNode = csm
+  })
+
+  const _tmpVec2 = new THREE.Vector2()
+  $effect(() => {
+    const preset = getPreset($graphicsQuality)
+
+    const newRatio = Math.min(window.devicePixelRatio, preset.pixelRatioCap)
+    if (renderer.getPixelRatio() !== newRatio) {
+      renderer.setPixelRatio(newRatio)
+      const sz = renderer.getSize(_tmpVec2)
+      renderer.setSize(sz.width, sz.height)
+    }
+
+    if (directionalLight?.shadow) {
+      const cur = directionalLight.shadow.mapSize
+      if (cur.x !== preset.shadowMapSize) {
+        cur.set(preset.shadowMapSize, preset.shadowMapSize)
+        if (directionalLight.shadow.map) {
+          directionalLight.shadow.map.dispose()
+          directionalLight.shadow.map = null
+        }
+      }
+    }
   })
 
   const calendarSystem = createCalendarSystem({

@@ -25,6 +25,7 @@ import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { TILE_DIM, sampleHeight } from '../managers/terrain-height-types'
 import { createRng } from './simplex-noise'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+import { getCurrentPreset } from '../stores/graphicsSettings'
 
 const CHANNELS = 4
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
@@ -604,12 +605,6 @@ export function decodeGrassData(
   return { shortCount, tallCount, flowerCount, buffer: outBuf }
 }
 
-/**
- * Global grass density multiplier (0–1). Applied at load time to thin out
- * pre-computed grass instances. Flowers are not affected.
- */
-export const GRASS_DENSITY_SCALE = 1.0
-
 /** Deterministically thin a Float32Array of instances by keeping only a fraction. */
 function thinInstances(src: Float32Array, keep: number): Float32Array {
   if (keep >= 1) return src
@@ -686,5 +681,5 @@ export function getThinnedInstanceData(
 ): Float32Array {
   const raw = getInstanceData(data, type)
   if (type === 'flower') return raw
-  return thinInstances(raw, GRASS_DENSITY_SCALE)
+  return thinInstances(raw, getCurrentPreset().grassDensity)
 }
