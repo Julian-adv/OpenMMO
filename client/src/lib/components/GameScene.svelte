@@ -435,8 +435,8 @@
         performance.now() - otherPlayerAnimationStart
       )
 
-      // Update remote shadow light flickering
-      playersLayer?.updateRemoteShadowFlicker(deltaTime / 1000)
+      // Update remote torch light flickering (shadow + pool)
+      playersLayer?.updateRemoteTorchFlicker(deltaTime / 1000)
 
       // Update monster animations
       const monsterAnimationStart = performance.now()

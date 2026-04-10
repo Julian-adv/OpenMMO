@@ -32,8 +32,6 @@
   import { torchLightEnabled } from '../stores/debugStore'
   import { applyTorchFlicker, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../utils/torchFlicker'
 
-  export type TorchMode = 'local' | 'shadow' | 'light-only' | 'off'
-
   interface Props {
     position: Vector3
     name: string
@@ -56,7 +54,6 @@
     isLoading?: boolean
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
-    torchMode?: TorchMode
   }
 
   let {
@@ -81,7 +78,6 @@
     isLoading = $bindable(false),
     lastDamageInfo,
     lastRegenInfo,
-    torchMode = 'off',
   }: Props = $props()
 
   let nametagScale = $state(1)
@@ -92,19 +88,6 @@
 
   // Floating damage text
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
-
-  // Blob shadow for remote torch (shared across instances)
-  const BLOB_SHADOW_RADIUS = 0.45
-  const blobShadowGeometry = new THREE.CircleGeometry(BLOB_SHADOW_RADIUS, 16)
-  const blobShadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    transparent: true,
-    opacity: 0.35,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-  })
 
   // Torch light flickering
   let torchLight = $state<THREE.PointLight | undefined>(undefined)
@@ -504,9 +487,11 @@
   onMount(() => {
     // Wait for all GLTFs (character model + animation packs) to load
     isLoading = true
-    glbReady.then(() => setupRealAnimation()).then(() => {
-      isLoading = false
-    })
+    glbReady
+      .then(() => setupRealAnimation())
+      .then(() => {
+        isLoading = false
+      })
 
     // Cleanup on unmount
     return () => {
@@ -590,9 +575,11 @@
       chatBubbleInstance.update()
     }
 
-    // Torch light flickering (works for both local and remote torches)
-    const torchActive = isCurrentPlayer ? get(torchLightEnabled) : torchMode === 'light-only'
-    if (torchLight && torchActive) {
+    // Local player torch light flickering. Remote player torch lights are
+    // driven by the shared pool in GameScenePlayersLayer to keep the number
+    // of PointLights in the scene constant (avoids WebGPU pipeline recompile
+    // when players join/leave).
+    if (torchLight && isCurrentPlayer && get(torchLightEnabled)) {
       torchFlickerTime = applyTorchFlicker(torchLight, torchFlickerTime, deltaTime)
     }
 
@@ -700,35 +687,28 @@
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />
 
-    <!-- Torch point light (always mounted, controlled via intensity to avoid WebGPU shader recompilation) -->
-    <!-- castShadow is static: true for local player only. WebGPU PointShadowNode crashes
-         if castShadow is toggled dynamically (depthTexture null on shadow map resources). -->
-    <T.PointLight
-      bind:ref={torchLight}
-      position={[TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z]}
-      color="#ffcc66"
-      intensity={isCurrentPlayer
-        ? ($torchLightEnabled ? TORCH_BASE_INTENSITY : 0)
-        : (torchMode === 'light-only' ? TORCH_BASE_INTENSITY : 0)}
-      distance={TORCH_BASE_DISTANCE}
-      decay={TORCH_BASE_DECAY}
-      castShadow={isCurrentPlayer}
-      shadow.mapSize.width={512}
-      shadow.mapSize.height={512}
-      shadow.camera.near={0.5}
-      shadow.camera.far={TORCH_BASE_DISTANCE}
-      shadow.bias={-0.005}
-      shadow.normalBias={0.05}
-      shadow.radius={5}
-    />
-
-    <!-- Blob shadow circle for remote torches (no real shadow casting) -->
-    {#if !isCurrentPlayer && torchMode === 'light-only'}
-      <T.Mesh
-        geometry={blobShadowGeometry}
-        material={blobShadowMaterial}
-        position.y={0.05}
-        rotation.x={-Math.PI / 2}
+    <!-- Torch point light for the local player only. Remote player torch
+         lights are handled by a shared pool in GameScenePlayersLayer so that
+         the number of PointLights in the scene never changes when players
+         join or leave (avoids WebGPU pipeline recompile stalls). Intensity
+         is toggled instead of unmounting to keep the scene graph constant
+         across torch on/off. -->
+    {#if isCurrentPlayer}
+      <T.PointLight
+        bind:ref={torchLight}
+        position={[TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z]}
+        color="#ffcc66"
+        intensity={$torchLightEnabled ? TORCH_BASE_INTENSITY : 0}
+        distance={TORCH_BASE_DISTANCE}
+        decay={TORCH_BASE_DECAY}
+        castShadow
+        shadow.mapSize.width={512}
+        shadow.mapSize.height={512}
+        shadow.camera.near={0.5}
+        shadow.camera.far={TORCH_BASE_DISTANCE}
+        shadow.bias={-0.005}
+        shadow.normalBias={0.05}
+        shadow.radius={5}
       />
     {/if}
   </T.Group>
