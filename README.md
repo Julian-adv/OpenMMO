@@ -48,10 +48,10 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 ### 3. Running the Server
 
-This project is organized as a **Cargo Workspace**. To detect changes in both the server (`server/`) and shared logic (`shared/`), it is recommended to run commands from the **root directory**.
+This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. To rebuild the server only when the server crate (`server/`) or that shared crate changes, run the watch command from the **root directory**.
 
 ```bash
-cargo watch -i "agent-client/data/" -x "run -p onlinerpg-server -- --port 10015"
+cargo watch -w server -w shared -x "run -p onlinerpg-server -- --port 10015"
 ```
 
 The terrain REST API starts automatically on port 10016.
