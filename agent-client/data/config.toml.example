@@ -1,7 +1,7 @@
 # Agent client configuration
 
 # Server WebSocket URL
-server = "ws://127.0.0.1:10015"
+server = "ws://127.0.0.1:10006"
 
 # Account credentials
 account = ""
