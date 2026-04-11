@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import { get } from 'svelte/store'
   import { SvelteMap } from 'svelte/reactivity'
   import PlayerModel from '../PlayerModel.svelte'
   import PlayerControl from '../PlayerControl.svelte'
@@ -14,18 +15,12 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
 
-  import { applyTorchFlickerWorld, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
+  import { applyTorchFlickerWorld, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../../utils/torchFlicker'
   import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
   import { housingManager } from '../../managers/housingManager'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
+  import { torchLightEnabled } from '../../stores/debugStore'
 
-  // Pre-mounted pool of non-shadow torch lights for visible (but not closest)
-  // torch-bearing remote players. The closest torch player is handled by the
-  // shared `remoteShadowLight` below. Keeping this pool size constant means
-  // the number of PointLights in the scene never changes when players join
-  // or leave, so WebGPU does not recompile pipelines (which would stall the
-  // main thread for several seconds per join).
-  const REMOTE_TORCH_POOL_SIZE = 3
   const TORCH_OFFSET = new THREE.Vector3(TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z)
   const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
@@ -104,74 +99,60 @@
     return map
   })
 
-  // Sort visible, torch-on remote players by squared distance from local
-  // player. Slot 0 (closest) → shadow light; slots 1..N → pool lights.
-  let remoteTorchTargets = $derived.by(() => {
-    const targets: THREE.Vector3[] = []
-    if (!currentPlayer) return targets
+  // Unified torch: exactly one shadow-casting PointLight for the entire scene.
+  // Priority: local player's torch (if ON) > closest visible remote player
+  // with torchOn. When no candidate, intensity drops to 0. Keeping the
+  // PointLight count at a constant 1 avoids WebGPU pipeline recompile stalls.
+  //
+  // Position/intensity are driven imperatively from the game loop (not a
+  // $derived) because currentPlayer.position is a mutated plain object that
+  // Svelte reactivity cannot track. The game loop runs every frame anyway,
+  // so recomputing the target here has no extra cost.
+  let unifiedTorchLight = $state<THREE.PointLight | undefined>(undefined)
+  let unifiedTorchFlickerTime = 0
+  const _unifiedTorchTmp = new THREE.Vector3()
+  const _torchOffsetTmp = new THREE.Vector3()
 
+  function setTorchTargetFromPose(x: number, z: number, fallbackY: number, rotation: number): THREE.Vector3 {
+    const y = heightManager.getHeightAtWorldPosition(x, z) ?? fallbackY
+    _torchOffsetTmp.copy(TORCH_OFFSET).applyAxisAngle(Y_AXIS, rotation)
+    return _unifiedTorchTmp.set(x + _torchOffsetTmp.x, y + _torchOffsetTmp.y, z + _torchOffsetTmp.z)
+  }
+
+  function computeUnifiedTorchTarget(): THREE.Vector3 | null {
+    if (!currentPlayer) return null
+    if (get(torchLightEnabled)) {
+      const p = currentPlayer.position
+      return setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation)
+    }
     const playerPos = currentPlayer.position
-    const candidates: { rp: PlayerState; dist: number }[] = []
+    let bestRp: PlayerState | null = null
+    let bestDist = Infinity
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
       if (!player.torchOn || !rp || !remoteVisibility.get(id)) continue
       const dx = rp.position.x - playerPos.x
       const dz = rp.position.z - playerPos.z
-      candidates.push({ rp, dist: dx * dx + dz * dz })
+      const dist = dx * dx + dz * dz
+      if (dist < bestDist) {
+        bestDist = dist
+        bestRp = rp
+      }
     }
-    candidates.sort((a, b) => a.dist - b.dist)
+    if (!bestRp) return null
+    return setTorchTargetFromPose(bestRp.position.x, bestRp.position.z, bestRp.position.y, bestRp.rotation)
+  }
 
-    for (const { rp } of candidates) {
-      const y = heightManager.getHeightAtWorldPosition(rp.position.x, rp.position.z) ?? rp.position.y
-      const base = new THREE.Vector3(rp.position.x, y, rp.position.z)
-      const offset = TORCH_OFFSET.clone().applyAxisAngle(Y_AXIS, rp.rotation)
-      targets.push(base.add(offset))
-      if (targets.length >= 1 + REMOTE_TORCH_POOL_SIZE) break
-    }
-    return targets
-  })
-
-  // Closest torch target (or null) — the shared shadow-casting PointLight
-  // tracks this position; intensity drops to 0 when no torch is lit.
-  let remoteShadowLightPos = $derived(remoteTorchTargets[0] ?? null)
-
-  let remoteShadowLight = $state<THREE.PointLight | undefined>(undefined)
-
-  // Pre-mounted non-shadow torch light pool for the next N closest torch
-  // players. These are always in the scene; their position + intensity are
-  // updated each frame from the game loop.
-  let remoteTorchPoolLights = $state<(THREE.PointLight | undefined)[]>(
-    new Array(REMOTE_TORCH_POOL_SIZE).fill(undefined)
-  )
-  // Flicker phase per slot: index 0 = shadow light, 1..N = pool lights.
-  const remoteTorchFlickerTimes = new Array(1 + REMOTE_TORCH_POOL_SIZE).fill(0)
-
-  function flickerTorchSlot(
-    light: THREE.PointLight | undefined,
-    slot: number,
-    target: THREE.Vector3 | undefined,
-    deltaTime: number,
-  ) {
-    if (!light) return
+  export function updateUnifiedTorchFlicker(deltaTime: number) {
+    if (!unifiedTorchLight) return
+    const target = computeUnifiedTorchTarget()
     if (target) {
-      remoteTorchFlickerTimes[slot] = applyTorchFlickerWorld(
-        light, remoteTorchFlickerTimes[slot], deltaTime,
+      unifiedTorchFlickerTime = applyTorchFlickerWorld(
+        unifiedTorchLight, unifiedTorchFlickerTime, deltaTime,
         target.x, target.y, target.z,
       )
     } else {
-      light.intensity = 0
-    }
-  }
-
-  export function updateRemoteTorchFlicker(deltaTime: number) {
-    flickerTorchSlot(remoteShadowLight, 0, remoteTorchTargets[0], deltaTime)
-    for (let i = 0; i < REMOTE_TORCH_POOL_SIZE; i++) {
-      flickerTorchSlot(
-        remoteTorchPoolLights[i],
-        i + 1,
-        remoteTorchTargets[i + 1],
-        deltaTime,
-      )
+      unifiedTorchLight.intensity = 0
     }
   }
 </script>
@@ -256,15 +237,15 @@
     {/if}
   {/each}
 
-  <!-- Standalone shadow-casting point light for closest remote torch player.
-       castShadow is always true (never toggled). Intensity=0 when no target. -->
+  <!-- Unified shadow-casting point light. Mounted exactly once, priority:
+       local torch > closest visible remote torch. castShadow is always true
+       (never toggled — toggling triggers WebGPU pipeline recompile stall).
+       Position/intensity are driven from the game loop. -->
   <T.PointLight
-    bind:ref={remoteShadowLight}
-    position={remoteShadowLightPos
-      ? [remoteShadowLightPos.x, remoteShadowLightPos.y, remoteShadowLightPos.z]
-      : [0, 0, 0]}
+    bind:ref={unifiedTorchLight}
+    position={[0, 0, 0]}
     color="#ffcc66"
-    intensity={remoteShadowLightPos ? TORCH_BASE_INTENSITY : 0}
+    intensity={0}
     distance={TORCH_BASE_DISTANCE}
     decay={TORCH_BASE_DECAY}
     castShadow
@@ -276,18 +257,4 @@
     shadow.normalBias={0.05}
     shadow.radius={5}
   />
-
-  <!-- Pre-mounted non-shadow torch light pool. See comment on
-       REMOTE_TORCH_POOL_SIZE above for why these are static. -->
-  {#each remoteTorchPoolLights as _light, i (i)}
-    {@const target = remoteTorchTargets[i + 1]}
-    <T.PointLight
-      bind:ref={remoteTorchPoolLights[i]}
-      position={target ? [target.x, target.y, target.z] : [0, 0, 0]}
-      color="#ffcc66"
-      intensity={target ? TORCH_BASE_INTENSITY : 0}
-      distance={TORCH_BASE_DISTANCE}
-      decay={TORCH_BASE_DECAY}
-    />
-  {/each}
 {/if}

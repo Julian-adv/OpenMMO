@@ -115,6 +115,7 @@
   let camera = $state<THREE.OrthographicCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let ambientLight = $state<THREE.AmbientLight | undefined>(undefined)
+  let placeholderShadowLight = $state<THREE.PointLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
   let terrainGroup = $state<THREE.Group | undefined>(undefined)
   let syncTileMeshes = $state<() => void>(() => {})
@@ -203,6 +204,18 @@
       resetCameraToInitialState()
       cameraInitialized = true
     }
+  })
+
+  // Once pipeline compilation is done, freeze the placeholder point light's
+  // shadow. It is positioned offscreen with intensity 0, so its shadow map
+  // never needs to update — but three.js WebGPU still runs all 6 cube-face
+  // shadow render passes every frame unless shadow.autoUpdate is disabled.
+  $effect(() => {
+    if (isSceneCompiling) return
+    const light = placeholderShadowLight
+    if (!light) return
+    light.shadow.autoUpdate = false
+    light.shadow.needsUpdate = false
   })
 
   // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
@@ -299,6 +312,62 @@
 
   let loopProfileEnabled = false
   const loopProfiler = createLoopProfiler(() => loopProfileEnabled)
+
+  type RenderTag = 'main' | 'refraction' | 'reflection' | 'wetness'
+  let currentRenderTag: RenderTag = 'main'
+  const perFrameRenderMs: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  const perFrameDrawCalls: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  const perFrameTriangles: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  const perFrameRenderCalls: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  function resetPerFrameRenderStats() {
+    perFrameRenderMs.main = 0; perFrameRenderMs.refraction = 0
+    perFrameRenderMs.reflection = 0; perFrameRenderMs.wetness = 0
+    perFrameDrawCalls.main = 0; perFrameDrawCalls.refraction = 0
+    perFrameDrawCalls.reflection = 0; perFrameDrawCalls.wetness = 0
+    perFrameTriangles.main = 0; perFrameTriangles.refraction = 0
+    perFrameTriangles.reflection = 0; perFrameTriangles.wetness = 0
+    perFrameRenderCalls.main = 0; perFrameRenderCalls.refraction = 0
+    perFrameRenderCalls.reflection = 0; perFrameRenderCalls.wetness = 0
+  }
+  let rendererWrapped = false
+  function wrapRendererForProfiling() {
+    if (rendererWrapped) return
+    rendererWrapped = true
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = renderer as any
+    const origRender = r.render.bind(r)
+    r.render = (scene: THREE.Scene, cam: THREE.Camera) => {
+      if (!loopProfileEnabled) {
+        origRender(scene, cam)
+        return
+      }
+      // `info.render.drawCalls` accumulates per rAF frame (reset by Animation
+      // auto-reset), so take a delta around this single render() call to get
+      // the per-call draw count. `info.render.calls` is cumulative since app
+      // start and is NOT reset per render — don't use it.
+      const infoRender = r.info?.render
+      const drawsBefore = infoRender?.drawCalls ?? 0
+      const trisBefore = infoRender?.triangles ?? 0
+      const start = performance.now()
+      origRender(scene, cam)
+      const elapsed = performance.now() - start
+      const drawsAfter = infoRender?.drawCalls ?? 0
+      const trisAfter = infoRender?.triangles ?? 0
+      const tag = currentRenderTag
+      perFrameRenderMs[tag] += elapsed
+      perFrameRenderCalls[tag] += 1
+      perFrameDrawCalls[tag] += drawsAfter - drawsBefore
+      perFrameTriangles[tag] += trisAfter - trisBefore
+    }
+  }
 
   // Player state from PlayerControl
   let currentPlayerState = $state<PlayerState>({
@@ -435,8 +504,8 @@
         performance.now() - otherPlayerAnimationStart
       )
 
-      // Update remote torch light flickering (shadow + pool)
-      playersLayer?.updateRemoteTorchFlicker(deltaTime / 1000)
+      // Update unified torch light flickering (single shadow-casting light)
+      playersLayer?.updateUnifiedTorchFlicker(deltaTime / 1000)
 
       // Update monster animations
       const monsterAnimationStart = performance.now()
@@ -525,13 +594,16 @@
       // pipeline overhead, and deferring it causes blocky wet sand.
       {
         const wetnessStart = performance.now()
+        currentRenderTag = 'wetness'
         waterLayerRef?.renderWetness(renderer)
+        currentRenderTag = 'main'
         loopProfiler.record('wetnessPass', performance.now() - wetnessStart)
       }
 
       // Multi-pass warmup + refraction/reflection
       multiPassRenderer.tickWarmup(isSceneCompiling)
 
+      currentRenderTag = 'refraction'
       multiPassRenderer.renderRefraction({
         camera, refractionManager, refractionEnabled: $refractionEnabled,
         waterGroup, terrainMeshes, entityClipGroup,
@@ -539,7 +611,9 @@
         treeGroup: treeLayerRef?.getGroup(),
         windParticlesGroup: windParticlesRef?.getGroup(),
       }, loopProfiler)
+      currentRenderTag = 'main'
 
+      currentRenderTag = 'reflection'
       multiPassRenderer.renderReflection({
         camera, reflectionManager, reflectionEnabled: $reflectionEnabled,
         waterGroup, terrainGroup, housingGroup: housingLayerRef?.getGroup(),
@@ -562,9 +636,27 @@
           return groups
         },
       }, loopProfiler)
+      currentRenderTag = 'main'
 
       const frameWorkMs = performance.now() - frameWorkStart
       loopProfiler.record('frameWork', frameWorkMs)
+
+      // Record wrapped renderer.render() stats accumulated since previous game
+      // loop frame. `main` captures Threlte's automatic main scene render which
+      // runs on its own rAF. `refraction`/`reflection`/`wetness` capture the
+      // passes we drive manually (tags are set around each call).
+      if (loopProfileEnabled) {
+        loopProfiler.record('mainRenderCpu', perFrameRenderMs.main)
+        loopProfiler.recordCount('mainRenderCalls', perFrameRenderCalls.main)
+        loopProfiler.recordCount('mainDraws', perFrameDrawCalls.main)
+        loopProfiler.recordCount('mainTrisK', perFrameTriangles.main / 1000)
+        loopProfiler.recordCount('refractionDraws', perFrameDrawCalls.refraction)
+        loopProfiler.recordCount('refractionTrisK', perFrameTriangles.refraction / 1000)
+        loopProfiler.recordCount('reflectionDraws', perFrameDrawCalls.reflection)
+        loopProfiler.recordCount('reflectionTrisK', perFrameTriangles.reflection / 1000)
+        loopProfiler.recordCount('wetnessDraws', perFrameDrawCalls.wetness)
+      }
+      resetPerFrameRenderStats()
 
       // Detect when pipeline compilation is done: once data is ready,
       // wait for a few consecutive smooth frames before hiding the loading dialog.
@@ -668,6 +760,7 @@
   onMount(() => {
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
+    wrapRendererForProfiling()
 
     const cleanupDebugConsole = registerDebugConsole(() => ({
       loopProfiler,
@@ -865,6 +958,7 @@
      are compiled with shadow support. After compilation, move offscreen so
      the shadow frustum captures nothing (avoids 6× cube-face renders/frame). -->
 <T.PointLight
+  bind:ref={placeholderShadowLight}
   position={isSceneCompiling ? [0, 0, 0] : [0, OFFSCREEN_Y, 0]}
   intensity={0}
   distance={50}
