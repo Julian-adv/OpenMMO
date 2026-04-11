@@ -45,6 +45,7 @@ logs/
 *.tmp
 *.temp
 *.skill
+.playwright-mcp/
 
 # Generated data files
 data/*.db
