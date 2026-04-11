@@ -21,6 +21,7 @@ import {
 } from '../wasm/onlinerpg_shared'
 import {
   checkOverlap,
+  collectRoomAABBsInRegion,
   findAdjacentHouse,
   findAllRoomsAtPoint,
   findHouseAtPoint,
@@ -28,6 +29,8 @@ import {
   findRoomAtPoint,
   findSupportingHouse,
   hasFloorSupport,
+  isPointUnderHouseXZ,
+  type RoomAABB,
 } from './housing-queries'
 
 // Re-export for external consumers
@@ -215,6 +218,21 @@ export class HousingManager {
   /** Find the first room containing a world point (fast, no allocation). */
   findRoomAtPoint(x: number, y: number, z: number) {
     return findRoomAtPoint(this.housesById, x, y, z)
+  }
+
+  /** Check if (x, z) falls inside any house room footprint, ignoring Y. */
+  isPointUnderHouseXZ(x: number, z: number): boolean {
+    return isPointUnderHouseXZ(this.housesById, x, z)
+  }
+
+  /** Collect XZ AABBs of all rooms whose footprint intersects the given region. */
+  collectRoomAABBsInRegion(
+    minX: number,
+    maxX: number,
+    minZ: number,
+    maxZ: number
+  ): RoomAABB[] {
+    return collectRoomAABBsInRegion(this.housesById, minX, maxX, minZ, maxZ)
   }
 
   /** Find ALL rooms containing a world point (for overlapping stairwells etc). */

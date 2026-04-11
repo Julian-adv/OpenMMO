@@ -21,6 +21,7 @@ import {
 import {
   applyBrush as doBrush,
   applyFlatten as doFlatten,
+  applyFlattenLine as doFlattenLine,
   flattenArea as doFlattenArea,
   restoreFromOriginal as doRestore,
 } from './terrain-height-brushes'
@@ -253,7 +254,8 @@ export class TerrainHeightManager {
     radius: number,
     strengthPerSec: number,
     raise: boolean,
-    deltaTimeSec: number
+    deltaTimeSec: number,
+    isProtected?: (worldX: number, worldZ: number) => boolean
   ): AffectedTile[] {
     const affected = doBrush(
       this.state,
@@ -262,14 +264,41 @@ export class TerrainHeightManager {
       radius,
       strengthPerSec,
       raise,
-      deltaTimeSec
+      deltaTimeSec,
+      isProtected
     )
     this.finalize(affected)
     return affected
   }
 
-  applyFlatten(worldX: number, worldZ: number, radius: number): AffectedTile[] {
-    const affected = doFlatten(this.state, worldX, worldZ, radius)
+  applyFlatten(
+    worldX: number,
+    worldZ: number,
+    radius: number,
+    isProtected?: (worldX: number, worldZ: number) => boolean
+  ): AffectedTile[] {
+    const affected = doFlatten(this.state, worldX, worldZ, radius, isProtected)
+    this.finalize(affected)
+    return affected
+  }
+
+  applyFlattenLine(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    radius: number,
+    isProtected?: (worldX: number, worldZ: number) => boolean
+  ): AffectedTile[] {
+    const affected = doFlattenLine(
+      this.state,
+      x1,
+      z1,
+      x2,
+      z2,
+      radius,
+      isProtected
+    )
     this.finalize(affected)
     return affected
   }

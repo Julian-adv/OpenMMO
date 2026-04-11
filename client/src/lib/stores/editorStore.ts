@@ -34,8 +34,17 @@ export type BrushMode = 'raise' | 'lower' | 'flatten'
 export const brushMode = writable<BrushMode>('raise')
 
 // Editor tool selection
-export type EditorTool = 'height' | 'splat' | 'zone' | 'npc' | 'furniture'
+export type EditorTool =
+  | 'height'
+  | 'splat'
+  | 'road'
+  | 'zone'
+  | 'npc'
+  | 'furniture'
 export const editorTool = writable<EditorTool>('height')
+
+// Road tool: first-click start point (null = awaiting first click)
+export const roadDrawStart = writable<{ x: number; z: number } | null>(null)
 
 // Splat layer: 0=R, 1=G, 2=B, 3=A (texture depends on region)
 export const splatLayer = writable<number>(0)

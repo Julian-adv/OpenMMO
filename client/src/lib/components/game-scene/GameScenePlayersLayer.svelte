@@ -209,8 +209,9 @@
     {@const remotePlayer = remotePlayers.get(player.id)}
     {#if remotePlayer}
       {@const visible = remoteVisibility.get(player.id) ?? false}
-      {@const terrainY = heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z)}
-      {@const baseY = (terrainY != null && remotePlayer.position.y > terrainY + 1.0) ? remotePlayer.position.y : (terrainY ?? remotePlayer.position.y)}
+      {@const baseY = player.floorLevel > 0
+        ? remotePlayer.position.y
+        : (heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z) ?? remotePlayer.position.y)}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(

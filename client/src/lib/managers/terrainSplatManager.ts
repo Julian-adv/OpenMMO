@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { getTerrainApiUrl } from '../utils/networkUtils'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
+import { worldToTileCoord } from './terrain-height-types'
+import { smoothstep } from '../terrain/terrain-constants'
 
 const TILE_DIM = 64
 const CHANNELS = 4 // RGBA
@@ -163,6 +165,115 @@ export class TerrainSplatManager {
             data[pixelIdx + layerIndex] = target
 
             // Redistribute other channels so sum = 255
+            let otherSum = 0
+            for (let c = 0; c < CHANNELS; c++) {
+              if (c !== layerIndex) otherSum += data[pixelIdx + c]
+            }
+
+            const total = data[pixelIdx + layerIndex] + otherSum
+            if (total > 255 && otherSum > 0) {
+              const scale = (255 - data[pixelIdx + layerIndex]) / otherSum
+              for (let c = 0; c < CHANNELS; c++) {
+                if (c !== layerIndex) {
+                  data[pixelIdx + c] = Math.round(data[pixelIdx + c] * scale)
+                }
+              }
+            }
+
+            changed = true
+          }
+        }
+
+        if (changed) {
+          const texture = this.textures.get(key)
+          if (texture) {
+            texture.needsUpdate = true
+          }
+          this.dirtyTiles.add(key)
+          affectedTiles.push({ tileX: tx, tileZ: tz })
+        }
+      }
+    }
+
+    if (this.dirtyTiles.size > 0) {
+      this.scheduleSave()
+    }
+
+    return affectedTiles
+  }
+
+  /** Apply splat brush along a line segment (used by the road tool). */
+  applySplatLine(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number,
+    radius: number,
+    layerIndex: number,
+    strength: number
+  ): { tileX: number; tileZ: number }[] {
+    const lineDx = x2 - x1
+    const lineDz = z2 - z1
+    const lenSq = lineDx * lineDx + lineDz * lineDz
+    if (lenSq < 1e-6) return []
+
+    // Flat-core falloff: fully saturate within innerR, smoothstep to 0 at radius.
+    // Gaussian was too narrow for a single-pass road application and left edges
+    // looking weak, especially at tile seams.
+    const innerR = radius * 0.6
+
+    const minWorldX = Math.min(x1, x2) - radius
+    const maxWorldX = Math.max(x1, x2) + radius
+    const minWorldZ = Math.min(z1, z2) - radius
+    const maxWorldZ = Math.max(z1, z2) + radius
+
+    const minTileX = worldToTileCoord(minWorldX)
+    const maxTileX = worldToTileCoord(maxWorldX)
+    const minTileZ = worldToTileCoord(minWorldZ)
+    const maxTileZ = worldToTileCoord(maxWorldZ)
+
+    const affectedTiles: { tileX: number; tileZ: number }[] = []
+
+    for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+      for (let tx = minTileX; tx <= maxTileX; tx++) {
+        const key = tileKey(tx, tz)
+        const data = this.splatmaps.get(key)
+        if (!data) continue
+
+        const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+
+        const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
+        const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
+        const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
+        const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
+
+        let changed = false
+
+        for (let cz = startCZ; cz <= endCZ; cz++) {
+          for (let cx = startCX; cx <= endCX; cx++) {
+            const wx = tileMinX + cx
+            const wz = tileMinZ + cz
+
+            const vx = wx - x1
+            const vz = wz - z1
+            let t = (vx * lineDx + vz * lineDz) / lenSq
+            if (t < 0) t = 0
+            else if (t > 1) t = 1
+            const ddx = wx - (x1 + t * lineDx)
+            const ddz = wz - (z1 + t * lineDz)
+            const dist = Math.sqrt(ddx * ddx + ddz * ddz)
+            if (dist > radius) continue
+
+            const weight = 1 - smoothstep(innerR, radius, dist)
+            const addAmount = weight * strength * 255
+
+            const pixelIdx = (cz * TILE_DIM + cx) * CHANNELS
+
+            const current = data[pixelIdx + layerIndex]
+            const target = Math.min(255, current + addAmount)
+            data[pixelIdx + layerIndex] = target
+
             let otherSum = 0
             for (let c = 0; c < CHANNELS; c++) {
               if (c !== layerIndex) otherSum += data[pixelIdx + c]

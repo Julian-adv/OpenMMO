@@ -34,6 +34,7 @@
   import GameSceneGroundItemsLayer from './game-scene/GameSceneGroundItemsLayer.svelte'
   import MapEditorCursor from './map-editor/MapEditorCursor.svelte'
   import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
+  import RoadOverlay from './map-editor/RoadOverlay.svelte'
   import NpcWaypointOverlay from './map-editor/NpcWaypointOverlay.svelte'
   import FurnitureOverlay from './map-editor/FurnitureOverlay.svelte'
   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
@@ -1060,6 +1061,7 @@
 {#if $mapEditorMode}
   <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} />
   <ZoneOverlay />
+  <RoadOverlay />
   <NpcWaypointOverlay />
 {/if}
 <FurnitureOverlay bind:this={furnitureOverlayRef} />

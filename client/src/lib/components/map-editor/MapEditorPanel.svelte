@@ -49,6 +49,11 @@
     >Splat</button>
     <button
       class="tool-tab"
+      class:active={$editorTool === 'road'}
+      onclick={() => editorTool.set('road')}
+    >Road</button>
+    <button
+      class="tool-tab"
       class:active={$editorTool === 'zone'}
       onclick={() => editorTool.set('zone')}
     >Zone</button>
@@ -71,6 +76,8 @@
     <HeightBrushPanel />
   {:else if $editorTool === 'splat'}
     <SplatBrushPanel />
+  {:else if $editorTool === 'road'}
+    <SplatBrushPanel title="Road Tool" hint="(click two points)" />
   {:else if $editorTool === 'zone'}
     <ZoneBrushPanel />
   {:else if $editorTool === 'npc'}

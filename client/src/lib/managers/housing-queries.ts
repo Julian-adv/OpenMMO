@@ -31,6 +31,53 @@ export function findRoomAtPoint(
   return null
 }
 
+/** Check if (x, z) falls inside any house room footprint, ignoring Y / floor. */
+export function isPointUnderHouseXZ(
+  housesById: ReadonlyMap<string, HouseData>,
+  x: number,
+  z: number
+): boolean {
+  for (const house of housesById.values()) {
+    for (const room of house.rooms) {
+      const rx = house.origin.x + room.localX
+      const rz = house.origin.z + room.localZ
+      if (x >= rx && x <= rx + room.sizeX && z >= rz && z <= rz + room.sizeZ) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+export interface RoomAABB {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+}
+
+/** Collect XZ AABBs of all rooms whose footprint intersects the given region. */
+export function collectRoomAABBsInRegion(
+  housesById: ReadonlyMap<string, HouseData>,
+  minX: number,
+  maxX: number,
+  minZ: number,
+  maxZ: number
+): RoomAABB[] {
+  const result: RoomAABB[] = []
+  for (const house of housesById.values()) {
+    for (const room of house.rooms) {
+      const rx = house.origin.x + room.localX
+      const rz = house.origin.z + room.localZ
+      const rMaxX = rx + room.sizeX
+      const rMaxZ = rz + room.sizeZ
+      if (rx > maxX || rMaxX < minX || rz > maxZ || rMaxZ < minZ) continue
+      result.push({ minX: rx, maxX: rMaxX, minZ: rz, maxZ: rMaxZ })
+    }
+  }
+  return result
+}
+
 /** Find ALL rooms containing a world point (for overlapping stairwells etc). */
 export function findAllRoomsAtPoint(
   housesById: ReadonlyMap<string, HouseData>,

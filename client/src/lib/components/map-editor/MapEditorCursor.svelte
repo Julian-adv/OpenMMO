@@ -1,11 +1,12 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedFurnitureType, furnitureRotation, currentFurnitureData, selectedFurniturePlacementId, furniturePreviewPos, furnitureSubTool } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedFurnitureType, furnitureRotation, currentFurnitureData, selectedFurniturePlacementId, furniturePreviewPos, furnitureSubTool, roadDrawStart } from '../../stores/editorStore'
   import type { EditorTool, ZoneSubTool, FurnitureSubTool, FurnitureRegionData } from '../../stores/editorStore'
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
   import { furnitureManager } from '../../managers/furnitureManager'
+  import { housingManager } from '../../managers/housingManager'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { floorYBase, DEFAULT_WALL_HEIGHT } from '../../utils/house-geo-utils'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
@@ -56,6 +57,7 @@
   let currentSplatLayer = $state(0)
   let currentZoneSubTool = $state<ZoneSubTool>('noSpawn')
   let currentZoneDrawStart = $state<{ x: number; z: number } | null>(null)
+  let currentRoadDrawStart = $state<{ x: number; z: number } | null>(null)
 
   // NPC editor state
   let currentNpcNames = $state<string[]>([])
@@ -78,14 +80,18 @@
   })
   editorTool.subscribe((v) => {
     currentTool = v
-    // Clear zone draw state when switching away from zone tool
+    // Clear draw state when switching away from the owning tool
     if (v !== 'zone') {
       zoneDrawStart.set(null)
+    }
+    if (v !== 'road') {
+      roadDrawStart.set(null)
     }
   })
   splatLayer.subscribe((v) => (currentSplatLayer = v))
   zoneSubTool.subscribe((v) => (currentZoneSubTool = v))
   zoneDrawStart.subscribe((v) => (currentZoneDrawStart = v))
+  roadDrawStart.subscribe((v) => (currentRoadDrawStart = v))
   npcNames.subscribe((v) => (currentNpcNames = v))
   selectedNpcSchedule.subscribe((v) => (currentNpcSchedule = v))
   selectedScheduleIndex.subscribe((v) => (currentSchedIdx = v))
@@ -149,7 +155,11 @@
     hoveredCell.set({ tileX, tileZ, cellX, cellZ, worldX, worldZ })
     lastWorldPos = { x: hit.point.x, z: hit.point.z }
     // Only show brush overlay for height/splat tools
-    if (currentTool === 'height' || currentTool === 'splat') {
+    if (
+      currentTool === 'height' ||
+      currentTool === 'splat' ||
+      currentTool === 'road'
+    ) {
       brushWorldPos.set({ x: hit.point.x, z: hit.point.z })
     } else {
       brushWorldPos.set(null)
@@ -185,6 +195,29 @@
 
   function getPaintIntervalMs(): number {
     return (11 - currentBrushStrength) * 100
+  }
+
+  /**
+   * Build an `isProtected` callback that rejects vertices under houses.
+   * Pre-filters to rooms intersecting the given region so the hot-path check
+   * is O(nearby rooms) rather than O(all rooms in world).
+   */
+  function makeHouseProtector(
+    minX: number,
+    maxX: number,
+    minZ: number,
+    maxZ: number
+  ): ((wx: number, wz: number) => boolean) | undefined {
+    const aabbs = housingManager.collectRoomAABBsInRegion(minX, maxX, minZ, maxZ)
+    if (aabbs.length === 0) return undefined
+    return (wx, wz) => {
+      for (const a of aabbs) {
+        if (wx >= a.minX && wx <= a.maxX && wz >= a.minZ && wz <= a.maxZ) {
+          return true
+        }
+      }
+      return false
+    }
   }
 
   const SPLAT_CHANNELS = 4
@@ -261,11 +294,19 @@
       }
     } else {
       if (!heightManager) return
+      const r = currentBrushSize
+      const protectHouses = makeHouseProtector(
+        lastWorldPos.x - r,
+        lastWorldPos.x + r,
+        lastWorldPos.z - r,
+        lastWorldPos.z + r
+      )
       if (ctrlHeld) {
         heightManager.applyFlatten(
           lastWorldPos.x,
           lastWorldPos.z,
-          currentBrushSize
+          currentBrushSize,
+          protectHouses
         )
       } else {
         const raise = shiftHeld ? !currentBrushRaise : currentBrushRaise
@@ -275,7 +316,8 @@
           currentBrushSize,
           0.1,
           raise,
-          1
+          1,
+          protectHouses
         )
       }
     }
@@ -516,6 +558,50 @@
     }
   }
 
+  function handleRoadClick(worldX: number, worldZ: number) {
+    if (!currentRoadDrawStart) {
+      roadDrawStart.set({ x: worldX, z: worldZ })
+      return
+    }
+
+    const x1 = currentRoadDrawStart.x
+    const z1 = currentRoadDrawStart.z
+    const x2 = worldX
+    const z2 = worldZ
+
+    const dx = x2 - x1
+    const dz = z2 - z1
+    if (dx * dx + dz * dz < 0.01) return // ignore duplicate click, keep start
+
+    if (heightManager) {
+      const margin = currentBrushSize * 2 // matches applyFlattenLine's blendRadius
+      const protectHouses = makeHouseProtector(
+        Math.min(x1, x2) - margin,
+        Math.max(x1, x2) + margin,
+        Math.min(z1, z2) - margin,
+        Math.max(z1, z2) + margin
+      )
+      heightManager.applyFlattenLine(x1, z1, x2, z2, currentBrushSize, protectHouses)
+    }
+    if (splatManager) {
+      const strength = Math.max(0.1, currentBrushStrength / 10)
+      const affectedTiles = splatManager.applySplatLine(
+        x1,
+        z1,
+        x2,
+        z2,
+        currentBrushSize,
+        currentSplatLayer,
+        strength
+      )
+      if (currentSplatLayer !== 0 && affectedTiles.length > 0) {
+        markVegetationDirty(affectedTiles)
+      }
+    }
+
+    roadDrawStart.set(null)
+  }
+
   async function handleZoneClick(worldX: number, worldZ: number) {
     if (currentZoneDrawStart) {
       // Second click: finish the rectangle
@@ -572,6 +658,12 @@
     if (currentTool === 'zone') {
       updateCursorFromHit(hit)
       handleZoneClick(hit.point.x, hit.point.z)
+      return
+    }
+
+    if (currentTool === 'road') {
+      updateCursorFromHit(hit)
+      handleRoadClick(hit.point.x, hit.point.z)
       return
     }
 

@@ -16,6 +16,15 @@
   import type { RegionMeta } from '../../managers/terrainMetaManager'
   import { get } from 'svelte/store'
 
+  interface Props {
+    title?: string
+    hint?: string
+  }
+  let {
+    title = 'Splat Brush',
+    hint = '(right-click to change texture)',
+  }: Props = $props()
+
   const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
   const THUMB_SIZE = 64
 
@@ -122,9 +131,9 @@
 </script>
 
 <div class="splat-brush-panel">
-  <div class="panel-title">Splat Brush</div>
+  <div class="panel-title">{title}</div>
 
-  <div class="section-label">Brush <span class="hint">(right-click to change texture)</span></div>
+  <div class="section-label">Brush <span class="hint">{hint}</span></div>
   <div class="texture-slots-grid">
     {#each layers as l, i (i)}
       <div class="texture-slot">
