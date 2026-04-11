@@ -357,7 +357,9 @@ impl SharedState {
                 self.self_player_id = Some(player.id.clone());
                 self.self_player = Some(player.clone());
             }
-            ServerMessage::GameState { players, monsters, .. } => {
+            ServerMessage::GameState {
+                players, monsters, ..
+            } => {
                 self.nearby_players = players.clone();
                 self.nearby_monsters = monsters.clone();
                 // Update self_player from game state
