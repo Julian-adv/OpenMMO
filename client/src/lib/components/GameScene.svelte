@@ -602,7 +602,7 @@
       }
 
       // Multi-pass warmup + refraction/reflection
-      multiPassRenderer.tickWarmup(isSceneCompiling)
+      multiPassRenderer.tickWarmup()
 
       currentRenderTag = 'refraction'
       multiPassRenderer.renderRefraction({
@@ -846,9 +846,10 @@
         requestAnimationFrame(() => {
           drainTileWork(Infinity)
 
-          // Eagerly create grass materials + meshes so Threlte's render loop
-          // compiles their pipelines while the loading dialog is still visible.
-          grassLayerRef?.ensureMaterialsForCompile()
+          // Preallocate all grass slots + seed dummy blades below world so
+          // every compute/render pipeline compiles under the loading dialog
+          // instead of stalling mid-movement when a new sub-chunk activates.
+          grassLayerRef?.warmupGrassPipelines(renderer)
           // Wind particles: lazy init on first spawn (MeshBasicNodeMaterial
           // compiles fast, not worth blocking the loading screen for)
 
@@ -980,6 +981,10 @@
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
   metaManager={terrainMetaManager}
+  {renderer}
+  {camera}
+  {refractionManager}
+  {reflectionManager}
 />
 
 <GameSceneHousingLayer

@@ -88,7 +88,14 @@
             const im = new THREE.InstancedMesh(geo, mat, MAX_INSTANCES)
             im.castShadow = true
             im.receiveShadow = true
-            im.count = 0
+            // Seed a dummy instance far below the world so the WebGPU pipeline
+            // compiles during the initial load phase. Without this, the first
+            // render happens when a tile actually places a real tree — which
+            // stalls the main thread for ~100-800ms mid-movement.
+            im.count = 1
+            _mat4.makeTranslation(0, -100000, 0)
+            im.setMatrixAt(0, _mat4)
+            im.instanceMatrix.needsUpdate = true
             treeGroup.add(im)
 
             globalSlots.push({ mesh: im, typeIdx: t })

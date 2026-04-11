@@ -39,7 +39,7 @@ export interface MultiPassRenderer {
     deps: MultiPassReflectionDeps,
     loopProfiler: LoopProfiler
   ): void
-  tickWarmup(isSceneCompiling: boolean): void
+  tickWarmup(): void
   isReady(): boolean
 }
 
@@ -50,12 +50,15 @@ export function createMultiPassRenderer(): MultiPassRenderer {
   let warmupFrames = 0
   let frameCount = 0
 
-  function tickWarmup(isSceneCompiling: boolean) {
+  // Render refraction/reflection from the first frame so their WebGPU
+  // pipelines compile while the loading dialog is still visible. Otherwise
+  // the first refraction/reflection render happens after the dialog is gone
+  // and stalls the main thread for hundreds of ms when the player moves.
+  function tickWarmup() {
     if (ready) {
       frameCount++
       return
     }
-    if (isSceneCompiling) return
     warmupFrames++
     if (warmupFrames >= MULTI_PASS_WARMUP_FRAMES) {
       ready = true

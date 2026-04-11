@@ -87,13 +87,58 @@
     }
   }
 
-  /** Eagerly create grass materials + one mesh per type so compileAsync can
-   *  pre-compile the grass shader pipelines. Returns true when done. */
-  export function ensureMaterialsForCompile(): boolean {
+  /** Warm up WebGPU compute + render pipelines for every grass slot by
+   *  preallocating all GRID_COUNT slots per grass type with a single dummy
+   *  blade far below the world. Without this, each new slot that activates
+   *  mid-movement stalls the main thread for 100–800ms compiling pipelines
+   *  (each slot has its own TSL-generated compute + render pipeline). */
+  export function warmupGrassPipelines(r: WebGPURenderer): boolean {
     if (!ensureMaterials()) return false
-    // Create at least one slot per type for pipeline compilation.
-    ensureBladeSlot(flowerSlots, 0, _flowerGeometry, flowerComputeUniforms!,
-      _flowerCfg!, FLOWER_MESH_CAPACITY)
+    const dummyXZ = new Float32Array([0, 0])
+    const dummyY = new Float32Array([-100000])
+    const dummyRot = new Float32Array([0])
+    const dummyScale = new Float32Array([1])
+    const warmupSlots: BladeSlot[] = []
+    const warmupAllSlots = (slots: (BladeSlot | null)[], geom: THREE.BufferGeometry,
+      uniforms: GrassComputeUniforms, cfg?: GrassMaterialConfig, capacity = MESH_CAPACITY) => {
+      for (let i = 0; i < GRID_COUNT; i++) {
+        const slot = ensureBladeSlot(slots, i, geom, uniforms, cfg, capacity)
+        writeBladeData(slot.ctx, dummyXZ, dummyY, dummyRot, dummyScale, 1)
+        ;(slot.ctx.computeUpdate as { count: number }).count = 1
+        r.compute(slot.ctx.computeUpdate)
+        slot.mesh.count = 1
+        slot.ctx.count = 1
+        // Frustum culling disabled during warmup so the dummy blade is
+        // guaranteed to be included in the compile traversal (a below-world
+        // bounding sphere would get culled). Reset below after Threlte has
+        // rendered the mesh once.
+        slot.mesh.frustumCulled = false
+        if (!slot.mesh.parent) grassGroup.add(slot.mesh)
+        warmupSlots.push(slot)
+      }
+    }
+    warmupAllSlots(shortSlots, _shortGrassGeometry, shortComputeUniforms!)
+    warmupAllSlots(tallSlots, _tallGrassGeometry, tallComputeUniforms!, TALL_GRASS_CONFIG)
+    warmupAllSlots(flowerSlots, _flowerGeometry, flowerComputeUniforms!, _flowerCfg!, FLOWER_MESH_CAPACITY)
+
+    // After a few frames, cull/silence the dummy slots. They stay allocated so
+    // writeBladeSlotData() can reassign them to real sub-chunks instantly, but
+    // they no longer cost a compute dispatch or a draw call every frame.
+    let framesLeft = 3
+    const tick = () => {
+      if (--framesLeft > 0) {
+        requestAnimationFrame(tick)
+        return
+      }
+      for (const slot of warmupSlots) {
+        slot.mesh.count = 0
+        slot.ctx.count = 0
+        slot.mesh.frustumCulled = true
+        slot.mesh.boundingSphere = new THREE.Sphere(
+          new THREE.Vector3(0, -100000, 0), 1)
+      }
+    }
+    requestAnimationFrame(tick)
     return true
   }
   // Per-sub-chunk slot arrays. Short/tall now have paired compute contexts.

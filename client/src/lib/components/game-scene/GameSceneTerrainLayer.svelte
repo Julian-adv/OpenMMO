@@ -1,7 +1,9 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import * as THREE from 'three'
-  import type { MeshStandardNodeMaterial } from 'three/webgpu'
+  import type { MeshStandardNodeMaterial, WebGPURenderer } from 'three/webgpu'
+  import type { RefractionRenderManager } from '../../managers/refractionRenderManager'
+  import type { ReflectionRenderManager } from '../../managers/reflectionRenderManager'
   import { SvelteMap } from 'svelte/reactivity'
   import { onDestroy } from 'svelte'
   import { get } from 'svelte/store'
@@ -41,6 +43,10 @@
     splatManager?: TerrainSplatManager | null
     metaManager?: TerrainMetaManager | null
     syncTileMeshes?: () => void
+    renderer?: WebGPURenderer | null
+    camera?: THREE.Camera | null
+    refractionManager?: RefractionRenderManager | null
+    reflectionManager?: ReflectionRenderManager | null
   }
 
   let {
@@ -52,6 +58,10 @@
     splatManager = null,
     metaManager = null,
     syncTileMeshes = $bindable<() => void>(() => {}),
+    renderer = null,
+    camera = null,
+    refractionManager = null,
+    reflectionManager = null,
   }: Props = $props()
 
   // ── Default resources (created once) ──────────────────
@@ -93,6 +103,66 @@
     defaultAtlas = buildSplatAtlas(layers)
     materialsReady = true
     setupBrushSync()
+  })
+
+  // ── Pipeline precompile (avoids stutters when new tiles enter the scene) ──
+  // Every new MeshStandardNodeMaterial produces a distinct WebGPU pipeline that
+  // gets compiled lazily on its first render. When the player moves and new
+  // tiles appear, this lazy compile stalls the main thread for 100–1000ms per
+  // hitch. We preseed the pool with enough materials+geometries to cover tile
+  // cycling, then precompile them for every render target (main, refraction,
+  // reflection) before they're ever needed.
+  const PRECOMPILE_POOL_SIZE = 8
+  const precompileScene = new THREE.Scene()
+  let poolPrecompiled = false
+
+  async function preseedAndPrecompilePool() {
+    if (poolPrecompiled) return
+    if (!renderer || !camera || !terrainGeometry || !defaultAtlas || !_defaultLayers) return
+    poolPrecompiled = true
+
+    // Preseed pool with N ready-to-use material+geometry pairs.
+    const twins: THREE.Mesh[] = []
+    for (let i = 0; i < PRECOMPILE_POOL_SIZE; i++) {
+      const mat = createDefaultMaterial()
+      const geo = terrainGeometry.clone()
+      materialPool.push(mat)
+      geometryPool.push(geo)
+      const twin = new THREE.Mesh(geo, mat)
+      twin.frustumCulled = false
+      // Spread twins apart so they remain individually visible to the compiler's
+      // traversal (some three.js paths merge identical transforms).
+      twin.position.set(i * 1000, -10000, 0)
+      precompileScene.add(twin)
+      twins.push(twin)
+    }
+
+    const compileForTarget = async (target: THREE.RenderTarget | null) => {
+      const saved = renderer!.getRenderTarget()
+      renderer!.setRenderTarget(target)
+      try {
+        await renderer!.compileAsync(precompileScene, camera!)
+      } finally {
+        renderer!.setRenderTarget(saved)
+      }
+    }
+
+    try {
+      await compileForTarget(null)
+      if (refractionManager) await compileForTarget(refractionManager.target)
+      if (reflectionManager) await compileForTarget(reflectionManager.target)
+    } catch (e) {
+      console.warn('[TerrainLayer] pipeline precompile failed', e)
+    }
+
+    // Remove twins but keep the materials/geometries in their pools for reuse.
+    for (const twin of twins) precompileScene.remove(twin)
+  }
+
+  $effect(() => {
+    if (materialsReady && renderer && camera && terrainGeometry && !poolPrecompiled) {
+      preseedAndPrecompilePool()
+    }
   })
 
   /** Create a new terrain material using the default atlas. */
