@@ -282,6 +282,7 @@
   let hasPlayer = $state(false)
   let curScx = 0
   let curScz = 0
+  let computeFrameCount = 0
 
   export function update(deltaTime: number, renderer?: WebGPURenderer) {
     if (!assetsReady) return
@@ -418,11 +419,16 @@
       flowerComputeUniforms.uWindStrength.value = (FLOWER_CONFIG.windStrength ?? 0.04) * windStrengthMul
     }
 
-    // ── Dispatch compute shaders for active blade slots ──
-    if (renderer) {
+    // ── Dispatch compute shaders for active blade slots (every other frame) ──
+    computeFrameCount++
+    if (renderer && computeFrameCount % 2 === 0) {
       for (const slots of [shortSlots, tallSlots, flowerSlots]) {
         for (const slot of slots) {
-          if (slot && slot.ctx.count > 0) renderer.compute(slot.ctx.computeUpdate)
+          if (slot && slot.ctx.count > 0) {
+            // Dispatch only for actual blade count, not full capacity (131K)
+            ;(slot.ctx.computeUpdate as { count: number }).count = slot.ctx.count
+            renderer.compute(slot.ctx.computeUpdate)
+          }
         }
       }
     }

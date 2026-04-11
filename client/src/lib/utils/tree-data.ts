@@ -30,10 +30,19 @@ const V1_MAGIC = 0x54523031 // "TR01"
 const V1_HEADER_BYTES = 12 // magic + 2 × u32
 const V1_BYTES_PER_INSTANCE = 6 // u16 localX, u16 localZ, u8 rotation, u8 scale
 
-const TREE_SCALE_MIN = 0.6
-const TREE_SCALE_RANGE = 0.8 // 0.6 ~ 1.4
+/** Scale [min, range] per type: index 0 = tree.glb, index 1 = tree2.glb */
+export const TREE_SCALE: [[number, number], [number, number]] = [
+  [0.7, 2.3], // tree1: 0.7 ~ 3.0
+  [0.6, 0.8], // tree2: 0.6 ~ 1.4
+]
 
-const TREE_PROBABILITY = 0.004
+/** Base exclusion radius at scale 1.0: [tree1, tree2]. Actual radius = base × scale. */
+export const TREE_EXCLUSION_RADIUS: [number, number] = [2.0, 1.5]
+
+/** Axis-aligned exclusion rect [minX, minZ, maxX, maxZ] in world coords */
+export type ExclusionRect = readonly [number, number, number, number]
+
+const TREE_PROBABILITY = 0.08
 
 const HEADER_BYTES = 8 // 2 × u32
 
@@ -85,7 +94,8 @@ export function computeTreePlacement(
   tileX: number,
   tileZ: number,
   splatData: Uint8Array,
-  hMgr: TerrainHeightManager
+  hMgr: TerrainHeightManager,
+  exclusionRects?: readonly ExclusionRect[]
 ): TreePlacementData {
   const heightmap = hMgr.getHeightmap(tileX, tileZ)
   if (!heightmap) {
@@ -115,9 +125,31 @@ export function computeTreePlacement(
       if (worldY < 0.5) continue
 
       const rotation = rand() * Math.PI * 2
-      const scale = TREE_SCALE_MIN + rand() * TREE_SCALE_RANGE
+      const isTree1 = rand() < 0.5
+      const [scaleMin, scaleRange] = TREE_SCALE[isTree1 ? 0 : 1]
+      const scale = scaleMin + rand() * scaleRange
 
-      const target = rand() < 0.5 ? tree1Instances : tree2Instances
+      // Check exclusion zones (house footprints expanded by tree radius)
+      if (exclusionRects && exclusionRects.length > 0) {
+        const worldX = tileMinX + localX
+        const worldZ = tileMinZ + localZ
+        const r = TREE_EXCLUSION_RADIUS[isTree1 ? 0 : 1] * scale
+        let blocked = false
+        for (const [rMinX, rMinZ, rMaxX, rMaxZ] of exclusionRects) {
+          if (
+            worldX > rMinX - r &&
+            worldX < rMaxX + r &&
+            worldZ > rMinZ - r &&
+            worldZ < rMaxZ + r
+          ) {
+            blocked = true
+            break
+          }
+        }
+        if (blocked) continue
+      }
+
+      const target = isTree1 ? tree1Instances : tree2Instances
       target.push(tileMinX + localX, worldY, tileMinZ + localZ, rotation, scale)
     }
   }
@@ -138,7 +170,8 @@ export async function generateAndSaveTreeData(
       data: TreePlacementData
     ): Promise<void>
   },
-  onProgress?: (label: string) => void
+  onProgress?: (label: string) => void,
+  exclusionRects?: readonly ExclusionRect[]
 ): Promise<void> {
   const BATCH_SIZE = 8
   const treeResults: {
@@ -152,7 +185,8 @@ export async function generateAndSaveTreeData(
       tile.tileX,
       tile.tileZ,
       tile.splatmap,
-      hMgr
+      hMgr,
+      exclusionRects
     )
     treeResults.push({ tileX: tile.tileX, tileZ: tile.tileZ, data })
     if (i % 4 === 3) {
@@ -169,6 +203,46 @@ export async function generateAndSaveTreeData(
       batch.map((t) => treeMgr.saveTreeData(t.tileX, t.tileZ, t.data))
     )
   }
+}
+
+/**
+ * Filter all tree types by a removal predicate.
+ * Returns null if no instances were removed (caller can skip saving).
+ */
+export function filterTreeData(
+  data: TreePlacementData,
+  shouldRemove: (x: number, z: number) => boolean
+): TreePlacementData | null {
+  function filterInstances(raw: Float32Array): Float32Array {
+    const count = raw.length / FLOATS_PER_INSTANCE
+    let kept = 0
+    for (let i = 0; i < count; i++) {
+      const base = i * FLOATS_PER_INSTANCE
+      if (!shouldRemove(raw[base], raw[base + 2])) kept++
+    }
+    if (kept === count) return raw
+    const out = new Float32Array(kept * FLOATS_PER_INSTANCE)
+    let offset = 0
+    for (let i = 0; i < count; i++) {
+      const base = i * FLOATS_PER_INSTANCE
+      if (shouldRemove(raw[base], raw[base + 2])) continue
+      out.set(raw.subarray(base, base + FLOATS_PER_INSTANCE), offset)
+      offset += FLOATS_PER_INSTANCE
+    }
+    return out
+  }
+
+  const tree1Raw = getTreeInstanceData(data, 'tree1')
+  const tree2Raw = getTreeInstanceData(data, 'tree2')
+
+  const tree1Filtered = filterInstances(tree1Raw)
+  const tree2Filtered = filterInstances(tree2Raw)
+
+  if (tree1Filtered === tree1Raw && tree2Filtered === tree2Raw) {
+    return null
+  }
+
+  return packTreeBuffer(tree1Filtered, tree2Filtered)
 }
 
 export function getTreeInstanceData(
@@ -212,9 +286,10 @@ export function encodeTreeBuffer(
 
   const posScale = 65535 / TILE_DIM
   const rotScale = 255 / (Math.PI * 2)
-  const scaleScale = 255 / TREE_SCALE_RANGE
 
   for (let t = 0; t < 2; t++) {
+    const [scaleMin, scaleRange] = TREE_SCALE[t]
+    const scaleScale = 255 / scaleRange
     const raw = getTreeInstanceData(data, types[t])
     const n = raw.length / FLOATS_PER_INSTANCE
 
@@ -233,7 +308,7 @@ export function encodeTreeBuffer(
         writeOffset + 5,
         Math.min(
           255,
-          Math.max(0, Math.round((raw[base + 4] - TREE_SCALE_MIN) * scaleScale))
+          Math.max(0, Math.round((raw[base + 4] - scaleMin) * scaleScale))
         )
       )
       writeOffset += V1_BYTES_PER_INSTANCE
@@ -283,16 +358,17 @@ export function decodeTreeData(
 
   const posScale = TILE_DIM / 65535
   const rotScale = (Math.PI * 2) / 255
-  const scaleScale = TREE_SCALE_RANGE / 255
 
   for (let t = 0; t < 2; t++) {
+    const [scaleMin, scaleRange] = TREE_SCALE[t]
+    const scaleScale = scaleRange / 255
     const n = counts[t]
 
     for (let i = 0; i < n; i++) {
       const localX = view.getUint16(readOffset, true) * posScale
       const localZ = view.getUint16(readOffset + 2, true) * posScale
       const rotation = view.getUint8(readOffset + 4) * rotScale
-      const scale = TREE_SCALE_MIN + view.getUint8(readOffset + 5) * scaleScale
+      const scale = scaleMin + view.getUint8(readOffset + 5) * scaleScale
 
       const worldX = tileMinX + localX
       const worldZ = tileMinZ + localZ

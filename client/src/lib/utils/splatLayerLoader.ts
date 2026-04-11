@@ -30,6 +30,13 @@ export const ALL_SPLAT_TEXTURES: { name: string; defaultTileScale: number }[] =
     { name: 'gravel_road_1k', defaultTileScale: 8.0 },
     { name: 'sandy_gravel_02_1k', defaultTileScale: 8.0 },
     { name: 'fine_sand_material', defaultTileScale: 8.0 },
+    { name: 'cobblestone_color_1k', defaultTileScale: 40.0 },
+    { name: 'grey_stone_path_1k', defaultTileScale: 30.0 },
+    { name: 'stone_pathway_1k', defaultTileScale: 30.0 },
+    { name: 'pavement_02_1k', defaultTileScale: 40.0 },
+    { name: 'japanese_stone_wall_1k', defaultTileScale: 40.0 },
+    { name: 'rock_embedded_concrete_1k', defaultTileScale: 30.0 },
+    { name: 'patterned_paving_02_1k', defaultTileScale: 30.0 },
   ]
 
 /** Atlas set: 2×2 packed textures for diffuse, normal, ORM */

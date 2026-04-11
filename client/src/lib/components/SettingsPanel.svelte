@@ -1,11 +1,18 @@
 <script lang="ts">
   import { bgmVolume, bgmMuted } from '../managers/bgmManager'
+  import { graphicsQuality, reloadNeeded, type QualityLevel } from '../stores/graphicsSettings'
 
   interface Props {
     onClose: () => void
   }
 
   let { onClose }: Props = $props()
+
+  const qualityOptions: { value: QualityLevel; label: string }[] = [
+    { value: 'high', label: 'High' },
+    { value: 'medium', label: 'Medium' },
+    { value: 'low', label: 'Low' },
+  ]
 
   function handleVolumeChange(e: Event) {
     const target = e.target as HTMLInputElement
@@ -27,6 +34,30 @@
       <h2>Settings</h2>
       <button class="close-btn" onclick={onClose}>&times;</button>
     </div>
+
+    <div class="setting-row">
+      <span class="setting-label">Graphics Quality</span>
+      <div class="quality-row">
+        {#each qualityOptions as opt (opt.value)}
+          <button
+            class="quality-btn"
+            class:active={$graphicsQuality === opt.value}
+            onclick={() => graphicsQuality.set(opt.value)}
+          >
+            {opt.label}
+          </button>
+        {/each}
+      </div>
+      {#if $reloadNeeded}
+        <div class="reload-notice">
+          <span>Antialiasing changes require restart</span>
+          <button class="reload-btn" onclick={() => location.reload()}>Restart</button>
+        </div>
+      {/if}
+    </div>
+
+    <div class="divider"></div>
+
     <div class="setting-row">
       <label for="bgm-volume">BGM Volume</label>
       <div class="slider-row">
@@ -113,11 +144,84 @@
     gap: 8px;
   }
 
-  label {
+  .divider {
+    height: 1px;
+    background: #2d3748;
+    margin: 16px 0;
+  }
+
+  label,
+  .setting-label {
     color: #a0aec0;
     font-size: 13px;
     font-weight: 500;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .quality-row {
+    display: flex;
+    gap: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #4a5568;
+  }
+
+  .quality-btn {
+    flex: 1;
+    padding: 7px 0;
+    background: #2d3748;
+    color: #a0aec0;
+    border: none;
+    font-size: 13px;
+    font-weight: 500;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    cursor: pointer;
+    transition: background 150ms ease, color 150ms ease;
+  }
+
+  .quality-btn:not(:last-child) {
+    border-right: 1px solid #4a5568;
+  }
+
+  .quality-btn:hover {
+    background: #374151;
+    color: #edf2f7;
+  }
+
+  .quality-btn.active {
+    background: #4299e1;
+    color: #fff;
+  }
+
+  .reload-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 4px;
+    padding: 6px 10px;
+    background: #2d3748;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #ecc94b;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  .reload-btn {
+    background: #4a5568;
+    color: #edf2f7;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    cursor: pointer;
+    transition: background 150ms ease;
+    flex-shrink: 0;
+  }
+
+  .reload-btn:hover {
+    background: #718096;
   }
 
   .slider-row {

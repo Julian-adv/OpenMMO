@@ -22,7 +22,7 @@ export const hoveredCell = writable<HoveredCell | null>(null)
 
 // Height brush settings
 export const brushSize = writable<number>(3)
-export const brushStrength = writable<number>(5)
+export const brushStrength = writable<number>(8)
 export const brushRaiseMode = writable<boolean>(true)
 export const cursorHeight = writable<number | null>(null)
 
@@ -57,8 +57,14 @@ export const currentRegionLayers = writable<SplatLayerInfo[]>(
   DEFAULT_SPLAT_LAYER_INFO
 )
 
-/** Derive human-readable label from texture name, e.g. "rocky_terrain_02_1k" → "Rocky Terrain" */
+/** Display-name overrides for texture assets whose filenames don't match their appearance */
+const TEXTURE_LABEL_OVERRIDES: Record<string, string> = {
+  rocky_terrain_02_1k: 'Meadow Grass',
+}
+
+/** Derive human-readable label from texture name, e.g. "rocky_terrain_02_1k" → "Meadow Grass" */
 export function textureNameToLabel(name: string): string {
+  if (TEXTURE_LABEL_OVERRIDES[name]) return TEXTURE_LABEL_OVERRIDES[name]
   return name
     .replace(/_\d+k$/, '') // remove resolution suffix
     .replace(/_\d+$/, '') // remove trailing numbers

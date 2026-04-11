@@ -10,7 +10,6 @@ import type { ServerGameTime } from '../../stores/timeStore'
 
 export interface CalendarSystemCallbacks {
   onDateChanged(year: number, month: number, day: number): void
-  onHourChanged(hour: number): void
 }
 
 export interface CalendarSystem {
@@ -44,7 +43,6 @@ export function createCalendarSystem(
       calendarDate.month,
       calendarDate.day
     )
-    callbacks.onHourChanged(getGameHour())
   }
 
   function syncToServer(gameTime: ServerGameTime) {

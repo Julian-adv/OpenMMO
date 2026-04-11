@@ -2,7 +2,6 @@
   import * as THREE from 'three'
   import { T } from '@threlte/core'
   import { onDestroy } from 'svelte'
-  import { SvelteMap } from 'svelte/reactivity'
   import {
     editorTool,
     editorHeightManager,
@@ -52,8 +51,10 @@
   const dragMat = new THREE.MeshBasicMaterial({ color: DRAG_COLOR, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
   const lineMat = new THREE.LineBasicMaterial({ color: LINE_COLOR, linewidth: 2, depthWrite: false })
 
-  // Label sprite cache
-  const labelTextures = new SvelteMap<string, THREE.SpriteMaterial>()
+  // Label sprite cache — plain Map because getLabelMaterial is called from
+  // template expressions, and SvelteMap.set() triggers state_unsafe_mutation.
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const labelTextures = new Map<string, THREE.SpriteMaterial>()
 
   function getLabelMaterial(text: string): THREE.SpriteMaterial {
     let mat = labelTextures.get(text)

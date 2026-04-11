@@ -11,20 +11,22 @@
     textureNameToLabel,
     type SplatLayerInfo,
   } from '../../stores/editorStore'
-  import { ALL_SPLAT_TEXTURES } from '../../utils/splatLayerLoader'
+  import { ALL_SPLAT_TEXTURES, loadSplatLayer } from '../../utils/splatLayerLoader'
   import type { LayerConfig } from '../../utils/splatLayerLoader'
   import type { RegionMeta } from '../../managers/terrainMetaManager'
   import { get } from 'svelte/store'
 
   const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
+  const THUMB_SIZE = 64
 
   let size = $state(3)
-  let strength = $state(5)
+  let strength = $state(8)
   let layer = $state(0)
   let layers = $state<SplatLayerInfo[]>([])
   let configs = $state<LayerConfig[]>([])
   let region = $state<{ rx: number; rz: number } | null>(null)
   let openDropdown = $state<number | null>(null)
+  let thumbnails = $state<Record<string, string>>({})
 
   brushSize.subscribe((v) => (size = v))
   brushStrength.subscribe((v) => (strength = v))
@@ -35,6 +37,33 @@
     region = v
     openDropdown = null
   })
+
+  /** Load thumbnails for all splat textures in parallel, single state update */
+  async function loadThumbnails() {
+    const canvas = document.createElement('canvas')
+    canvas.width = THUMB_SIZE
+    canvas.height = THUMB_SIZE
+    const ctx = canvas.getContext('2d')!
+
+    const layers = await Promise.all(
+      ALL_SPLAT_TEXTURES.map((tex) =>
+        loadSplatLayer(tex.name, 1).catch(() => null)
+      )
+    )
+
+    const result: Record<string, string> = {}
+    for (let i = 0; i < ALL_SPLAT_TEXTURES.length; i++) {
+      const layer = layers[i]
+      const img = layer?.map.image as HTMLImageElement | undefined
+      if (!img) continue
+      ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
+      ctx.drawImage(img as HTMLImageElement, 0, 0, THUMB_SIZE, THUMB_SIZE)
+      result[ALL_SPLAT_TEXTURES[i].name] = canvas.toDataURL('image/jpeg', 0.7)
+    }
+    thumbnails = result
+  }
+
+  loadThumbnails()
 
   function onSizeChange(event: Event) {
     const value = parseInt((event.target as HTMLInputElement).value)
@@ -48,6 +77,9 @@
 
   function selectLayer(index: number) {
     splatLayer.set(index)
+    if (openDropdown !== null && openDropdown !== index) {
+      openDropdown = null
+    }
   }
 
   function toggleDropdown(index: number) {
@@ -92,51 +124,47 @@
 <div class="splat-brush-panel">
   <div class="panel-title">Splat Brush</div>
 
-  <div class="section-label">Region Textures</div>
-  <div class="texture-slots">
+  <div class="section-label">Brush <span class="hint">(right-click to change texture)</span></div>
+  <div class="texture-slots-grid">
     {#each layers as l, i (i)}
       <div class="texture-slot">
         <button
-          class="texture-slot-btn"
-          class:active={layer === i}
-          onclick={() => { selectLayer(i); toggleDropdown(i) }}
+          class="grid-item"
+          class:selected={layer === i}
+          onclick={() => selectLayer(i)}
+          oncontextmenu={(e) => { e.preventDefault(); selectLayer(i); toggleDropdown(i) }}
+          title={l.label}
         >
-          <span class="color-dot" style="background: {l.color}"></span>
-          <span class="slot-label">{l.label}</span>
-          <span class="dropdown-arrow">{openDropdown === i ? '▲' : '▼'}</span>
+          {#if configs[i] && thumbnails[configs[i].texture]}
+            <img class="grid-thumb" src={thumbnails[configs[i].texture]} alt="" />
+          {:else}
+            <span class="grid-placeholder" style="color: {l.color}">?</span>
+          {/if}
+          <span class="grid-label">{l.label}</span>
         </button>
 
         {#if openDropdown === i}
-          <div class="dropdown">
+          <div class="dropdown-grid">
             {#each ALL_SPLAT_TEXTURES as tex (tex.name)}
               {@const isActive = configs[i]?.texture === tex.name}
               <button
-                class="dropdown-item"
+                class="grid-item"
                 class:selected={isActive}
                 onclick={() => changeTexture(i, tex.name)}
+                title={textureNameToLabel(tex.name)}
               >
-                {textureNameToLabel(tex.name)}
-                {#if isActive}<span class="check">✓</span>{/if}
+                {#if thumbnails[tex.name]}
+                  <img class="grid-thumb" src={thumbnails[tex.name]} alt="" />
+                {:else}
+                  <span class="grid-placeholder">?</span>
+                {/if}
+                <span class="grid-label">{textureNameToLabel(tex.name)}</span>
+                {#if isActive}<span class="grid-check">✓</span>{/if}
               </button>
             {/each}
           </div>
         {/if}
       </div>
-    {/each}
-  </div>
-
-  <div class="section-label">Brush</div>
-  <div class="layer-buttons">
-    {#each layers as l, i (i)}
-      <button
-        class="layer-btn"
-        class:active={layer === i}
-        style="--layer-color: {l.color}"
-        onclick={() => selectLayer(i)}
-      >
-        <span class="color-dot" style="background: {l.color}"></span>
-        {l.label}
-      </button>
     {/each}
   </div>
 
@@ -204,10 +232,16 @@
     margin-top: 0;
   }
 
-  .texture-slots {
+  .hint {
+    color: #666;
+    font-size: 9px;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+
+  .texture-slots-grid {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     margin-bottom: 8px;
   }
 
@@ -215,127 +249,83 @@
     position: relative;
   }
 
-  .texture-slot-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 4px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.03);
-    color: #ccc;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 11px;
-    transition: background 150ms ease, border-color 150ms ease;
-    text-align: left;
-  }
-
-  .texture-slot-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .texture-slot-btn.active {
-    background: rgba(226, 185, 59, 0.15);
-    border-color: rgba(226, 185, 59, 0.4);
-  }
-
-  .slot-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .dropdown-arrow {
-    font-size: 8px;
-    color: #666;
-    flex-shrink: 0;
-  }
-
-  .dropdown {
+  .dropdown-grid {
     position: absolute;
     left: 0;
-    right: 0;
-    top: 100%;
+    bottom: 100%;
     z-index: 10;
     background: rgba(20, 20, 20, 0.95);
     border: 1px solid rgba(226, 185, 59, 0.3);
     border-radius: 4px;
-    overflow: hidden;
-    margin-top: 2px;
-  }
-
-  .dropdown-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    width: 100%;
-    padding: 5px 8px;
-    border: none;
-    background: transparent;
-    color: #bbb;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 11px;
-    text-align: left;
-    transition: background 100ms ease;
-  }
-
-  .dropdown-item:hover {
-    background: rgba(226, 185, 59, 0.15);
-    color: #fff;
-  }
-
-  .dropdown-item.selected {
-    color: #e2b93b;
-  }
-
-  .check {
-    margin-left: auto;
-    font-size: 10px;
-    color: #e2b93b;
-  }
-
-  .layer-buttons {
-    display: flex;
+    margin-bottom: 2px;
+    padding: 4px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 4px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
+    width: 240px;
   }
 
-  .layer-btn {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 4px 8px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+  .grid-item {
+    position: relative;
+    width: 64px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.05);
-    color: #ccc;
     cursor: pointer;
+    padding: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: border-color 150ms ease;
+  }
+
+  .grid-item:hover {
+    border-color: rgba(226, 185, 59, 0.5);
+  }
+
+  .grid-item.selected {
+    border-color: #e2b93b;
+  }
+
+  .grid-thumb {
+    display: block;
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+  }
+
+  .grid-placeholder {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-size: 18px;
+  }
+
+  .grid-label {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    padding: 2px 3px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #ddd;
     font-family: inherit;
+    font-size: 9px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .grid-check {
+    position: absolute;
+    top: 2px;
+    right: 3px;
+    color: #e2b93b;
     font-size: 11px;
-    transition: background 150ms ease, border-color 150ms ease;
-  }
-
-  .layer-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-
-  .layer-btn.active {
-    background: rgba(226, 185, 59, 0.2);
-    border-color: rgba(226, 185, 59, 0.6);
-    color: #fff;
-    font-weight: bold;
-  }
-
-  .color-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
+    text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
   }
 
   .control-row {

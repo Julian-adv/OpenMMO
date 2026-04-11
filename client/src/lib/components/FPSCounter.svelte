@@ -23,7 +23,9 @@
   import { cameraDistance } from '../stores/cameraStore'
   import { worldToTileCell } from './game-scene/terrain-utils'
   import { tileToRegion } from '../managers/terrainMetaManager'
-  import { timeScale, sunTimeScale } from '../stores/timeStore'
+  import { timeScale, sunTimeScale, sunDebugOffset } from '../stores/timeStore'
+  import { findTwilightOnsetHour, SUN_DAY_DURATION_SECONDS } from '../utils/celestialSimulation'
+  import { gameTimeState } from './GameTimeWidget.svelte'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -82,8 +84,23 @@
     timeScale.update((scale) => (scale === 1.0 ? 0.1 : 1.0))
   }
 
-  function setSunSpeed(scale: number) {
-    sunTimeScale.set(scale)
+  let sunMode = $state('1')
+
+  function setSunMode(value: string) {
+    sunMode = value
+    if (value === 'noon' || value === 'midnight') {
+      const targetHour = value === 'noon' ? 12 : 0
+      sunTimeScale.set(1.0)
+      sunDebugOffset.set(targetHour - gameTimeState.serverHour)
+    } else if (value === 'sunrise' || value === 'sunset') {
+      const twilightOnset = findTwilightOnsetHour(value, gameTimeState.date.month, gameTimeState.date.day)
+      const prerollHours = (10 / SUN_DAY_DURATION_SECONDS) * 24
+      sunTimeScale.set(1.0)
+      sunDebugOffset.set(twilightOnset - prerollHours - gameTimeState.serverHour)
+    } else {
+      sunDebugOffset.set(0)
+      sunTimeScale.set(Number(value))
+    }
   }
 
   function toggleCameraRotation() {
@@ -179,23 +196,21 @@
           SLOW TIME
         </button>
 
-        <div class="seg-group" title="Sun Speed">
-          <span class="seg-label">FAST DAY</span>
-          <button
-            class="seg-btn"
-            class:seg-active={$sunTimeScale === 1.0}
-            onclick={() => setSunSpeed(1.0)}
-          >OFF</button>
-          <button
-            class="seg-btn"
-            class:seg-active={$sunTimeScale === 60.0}
-            onclick={() => setSunSpeed(60.0)}
-          >3m</button>
-          <button
-            class="seg-btn"
-            class:seg-active={$sunTimeScale === 600.0}
-            onclick={() => setSunSpeed(600.0)}
-          >18s</button>
+        <div class="seg-group" title="Sun Control">
+          <span class="seg-label">SUN</span>
+          <select
+            class="sun-select"
+            value={sunMode}
+            onchange={(e) => setSunMode(e.currentTarget.value)}
+          >
+            <option value="1">Normal</option>
+            <option value="60">Fast 3m</option>
+            <option value="600">Fast 18s</option>
+            <option value="sunrise">Sunrise</option>
+            <option value="noon">Noon</option>
+            <option value="sunset">Sunset</option>
+            <option value="midnight">Midnight</option>
+          </select>
         </div>
 
         <button
@@ -436,31 +451,20 @@
     white-space: nowrap;
   }
 
-  .seg-btn {
+  .sun-select {
     background: #333;
     color: #fff;
     border: none;
-    border-right: 1px solid #555;
     padding: 4px 8px;
     font-size: 11px;
     cursor: pointer;
     font-family: inherit;
     font-weight: bold;
-    transition: background 0.15s;
-    white-space: nowrap;
+    outline: none;
   }
 
-  .seg-btn:last-child {
-    border-right: none;
-  }
-
-  .seg-btn:hover {
+  .sun-select:hover {
     background: #555;
-  }
-
-  .seg-btn.seg-active {
-    background: #b7791f;
-    color: #fff;
   }
 
   .action-btn.cal-btn.active {

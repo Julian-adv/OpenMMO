@@ -5,12 +5,11 @@
 ## grass
 
 - grass: https://github.com/thebenezer/FluffyGrass
-- The followings are not used anymore.
-  - https://sketchfab.com/3d-models/realistic-grass-pack-for-games-free-9b958d613e9a44dbba580748e7a1789c
-  - "Grass Bursh Displacement A EO 001" (https://skfb.ly/ptwqv) by osoedwin is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
-  - "Grass Bursh Displacement B EO 001" (https://skfb.ly/ptwQN) by osoedwin is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
-  - "Yard Grass" (https://skfb.ly/6VxNM) by ebmclachlan is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
-  - "Animated_grass\_-_vegetation" (https://skfb.ly/pyEME) by Savatar illusions is licensed under Creative Commons Attribution (http://creativecommons.org/licenses/by/4.0/).
+
+## tree
+
+- tree.glb & tree2.glb
+  - https://sketchfab.com/3d-models/low-poly-tree-scene-free-89daa5e21f0d4f08a59dba0d566e88bd
 
 ## terrain
 
@@ -20,6 +19,13 @@
 - 흙: https://polyhaven.com/a/red_laterite_soil_stones
 - 모래: https://polyhaven.com/a/sandy_gravel_02
 - 해안 모래: https://sketchfab.com/3d-models/fine-sand-material-6e54464d405a4c1e8bdb0f81e8d74db2
+- https://polyhaven.com/a/cobblestone_color
+- https://polyhaven.com/a/grey_stone_path
+- https://polyhaven.com/a/stone_pathway
+- https://polyhaven.com/a/pavement_02
+- https://polyhaven.com/a/patterned_paving_02
+- https://polyhaven.com/a/japanese_stone_wall
+- https://polyhaven.com/a/rock_embedded_concrete
 
 ## sea
 

@@ -10,6 +10,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 10004,
+    hmr: {
+      host: 'botdlefield.to.nexus',
+      protocol: 'wss',
+    },
     https: {
       key: './.certs/key.pem',
       cert: './.certs/cert.pem',

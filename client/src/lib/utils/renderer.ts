@@ -1,5 +1,9 @@
 import * as THREE from 'three'
 import { WebGPURenderer } from 'three/webgpu'
+import {
+  applyInitialAntialias,
+  getCurrentPreset,
+} from '../stores/graphicsSettings'
 
 // Patch Material.dispose to catch WebGPU backend race conditions.
 // When Threlte disposes materials before the WebGPU backend finishes
@@ -15,7 +19,12 @@ THREE.Material.prototype.dispose = function () {
 }
 
 export function createWebGPURenderer(canvas: HTMLCanvasElement) {
-  const renderer = new WebGPURenderer({ canvas, antialias: true })
+  const preset = getCurrentPreset()
+  const antialias = applyInitialAntialias()
+  const renderer = new WebGPURenderer({ canvas, antialias })
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, preset.pixelRatioCap)
+  )
   renderer.shadowMap.type = THREE.PCFSoftShadowMap
 
   // Guard renderer.dispose() — Threlte calls it on Canvas unmount,

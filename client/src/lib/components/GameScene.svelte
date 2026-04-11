@@ -41,11 +41,14 @@
   import {
     SUN_MAX_INTENSITY,
     computeSunLightSnapshot,
+    type SunLightSnapshot,
+    type CalendarDate,
   } from '../utils/celestialSimulation'
   import { cameraDistance, cameraResetNonce } from '../stores/cameraStore'
   import {
     timeScale,
     sunTimeScale,
+    sunDebugOffset,
     serverGameTime,
   } from '../stores/timeStore'
   import {
@@ -94,6 +97,8 @@
   import { registerDebugConsole } from './game-scene/debug-console'
   import { initScene } from './game-scene/scene-init'
   import { createMultiPassRenderer } from './game-scene/multi-pass-rendering'
+  import { OFFSCREEN_Y } from '../utils/house-geo-utils'
+  import { graphicsQuality, getPreset } from '../stores/graphicsSettings'
 
   interface Props {
     serverUrl: string
@@ -110,6 +115,7 @@
   let camera = $state<THREE.OrthographicCamera | undefined>(undefined)
   let directionalLight = $state<THREE.DirectionalLight | undefined>(undefined)
   let ambientLight = $state<THREE.AmbientLight | undefined>(undefined)
+  let placeholderShadowLight = $state<THREE.PointLight | undefined>(undefined)
   let terrainMeshes = $state<(THREE.Mesh | undefined)[]>([])
   let terrainGroup = $state<THREE.Group | undefined>(undefined)
   let syncTileMeshes = $state<() => void>(() => {})
@@ -200,6 +206,18 @@
     }
   })
 
+  // Once pipeline compilation is done, freeze the placeholder point light's
+  // shadow. It is positioned offscreen with intensity 0, so its shadow map
+  // never needs to update — but three.js WebGPU still runs all 6 cube-face
+  // shadow render passes every frame unless shadow.autoUpdate is disabled.
+  $effect(() => {
+    if (isSceneCompiling) return
+    const light = placeholderShadowLight
+    if (!light) return
+    light.shadow.autoUpdate = false
+    light.shadow.needsUpdate = false
+  })
+
   // Reset camera rotation to default angle when debug mode is turned off or rotation is disabled
   let prevDebugVisible = $state(false)
   let prevRotationEnabled = $state(false)
@@ -254,9 +272,31 @@
     directionalLight.shadow.shadowNode = csm
   })
 
+  const _tmpVec2 = new THREE.Vector2()
+  $effect(() => {
+    const preset = getPreset($graphicsQuality)
+
+    const newRatio = Math.min(window.devicePixelRatio, preset.pixelRatioCap)
+    if (renderer.getPixelRatio() !== newRatio) {
+      renderer.setPixelRatio(newRatio)
+      const sz = renderer.getSize(_tmpVec2)
+      renderer.setSize(sz.width, sz.height)
+    }
+
+    if (directionalLight?.shadow) {
+      const cur = directionalLight.shadow.mapSize
+      if (cur.x !== preset.shadowMapSize) {
+        cur.set(preset.shadowMapSize, preset.shadowMapSize)
+        if (directionalLight.shadow.map) {
+          directionalLight.shadow.map.dispose()
+          directionalLight.shadow.map = null
+        }
+      }
+    }
+  })
+
   const calendarSystem = createCalendarSystem({
     onDateChanged: setGameDate,
-    onHourChanged: setGameHour,
   })
 
   let latestServerGameTime: import('../stores/timeStore').ServerGameTime | null = null
@@ -272,6 +312,62 @@
 
   let loopProfileEnabled = false
   const loopProfiler = createLoopProfiler(() => loopProfileEnabled)
+
+  type RenderTag = 'main' | 'refraction' | 'reflection' | 'wetness'
+  let currentRenderTag: RenderTag = 'main'
+  const perFrameRenderMs: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  const perFrameDrawCalls: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  const perFrameTriangles: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  const perFrameRenderCalls: Record<RenderTag, number> = {
+    main: 0, refraction: 0, reflection: 0, wetness: 0,
+  }
+  function resetPerFrameRenderStats() {
+    perFrameRenderMs.main = 0; perFrameRenderMs.refraction = 0
+    perFrameRenderMs.reflection = 0; perFrameRenderMs.wetness = 0
+    perFrameDrawCalls.main = 0; perFrameDrawCalls.refraction = 0
+    perFrameDrawCalls.reflection = 0; perFrameDrawCalls.wetness = 0
+    perFrameTriangles.main = 0; perFrameTriangles.refraction = 0
+    perFrameTriangles.reflection = 0; perFrameTriangles.wetness = 0
+    perFrameRenderCalls.main = 0; perFrameRenderCalls.refraction = 0
+    perFrameRenderCalls.reflection = 0; perFrameRenderCalls.wetness = 0
+  }
+  let rendererWrapped = false
+  function wrapRendererForProfiling() {
+    if (rendererWrapped) return
+    rendererWrapped = true
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = renderer as any
+    const origRender = r.render.bind(r)
+    r.render = (scene: THREE.Scene, cam: THREE.Camera) => {
+      if (!loopProfileEnabled) {
+        origRender(scene, cam)
+        return
+      }
+      // `info.render.drawCalls` accumulates per rAF frame (reset by Animation
+      // auto-reset), so take a delta around this single render() call to get
+      // the per-call draw count. `info.render.calls` is cumulative since app
+      // start and is NOT reset per render — don't use it.
+      const infoRender = r.info?.render
+      const drawsBefore = infoRender?.drawCalls ?? 0
+      const trisBefore = infoRender?.triangles ?? 0
+      const start = performance.now()
+      origRender(scene, cam)
+      const elapsed = performance.now() - start
+      const drawsAfter = infoRender?.drawCalls ?? 0
+      const trisAfter = infoRender?.triangles ?? 0
+      const tag = currentRenderTag
+      perFrameRenderMs[tag] += elapsed
+      perFrameRenderCalls[tag] += 1
+      perFrameDrawCalls[tag] += drawsAfter - drawsBefore
+      perFrameTriangles[tag] += trisAfter - trisBefore
+    }
+  }
 
   // Player state from PlayerControl
   let currentPlayerState = $state<PlayerState>({
@@ -347,7 +443,9 @@
       const deltaTime = fixedDeltaTime * $timeScale
       const sunDeltaSeconds = realDeltaSeconds * $sunTimeScale
       calendarSystem.advance(sunDeltaSeconds)
-      setGameHour(calendarSystem.getGameHour())
+      const serverHour = calendarSystem.getGameHour()
+      const displayHour = serverHour + $sunDebugOffset
+      setGameHour(displayHour, serverHour)
 
       // Calculate camera offset before player movement
       const cameraOffsetStart = performance.now()
@@ -406,8 +504,8 @@
         performance.now() - otherPlayerAnimationStart
       )
 
-      // Update remote shadow light flickering
-      playersLayer?.updateRemoteShadowFlicker(deltaTime / 1000)
+      // Update unified torch light flickering (single shadow-casting light)
+      playersLayer?.updateUnifiedTorchFlicker(deltaTime / 1000)
 
       // Update monster animations
       const monsterAnimationStart = performance.now()
@@ -466,18 +564,19 @@
       updateCameraWithOffset(cameraOffset)
       loopProfiler.record('cameraUpdate', performance.now() - cameraUpdateStart)
 
+      // Compute sun snapshot once per frame (reused by lighting + water)
+      const calDate = calendarSystem.getDate()
+      const sunSnapshot = computeSunLightSnapshot(displayHour, calDate)
+
       // Update directional light to follow player
       const lightUpdateStart = performance.now()
-      updateLightPosition()
+      updateLightPosition(sunSnapshot, calDate)
       loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
       // Update water uniforms — always use real sun direction (not moon)
       waterTime += realDeltaSeconds
-      {
-        const sunSnapshot = computeSunLightSnapshot(calendarSystem.getGameHour(), calendarSystem.getDate())
-        waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
-        waterSunDir = waterSunDirTmp.clone()
-      }
+      waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
+      waterSunDir = waterSunDirTmp.clone()
       if (directionalLight) {
         waterSunColor = directionalLight.color.clone()
         // Moon brightness: use directional light intensity when sun is below horizon
@@ -495,25 +594,32 @@
       // pipeline overhead, and deferring it causes blocky wet sand.
       {
         const wetnessStart = performance.now()
+        currentRenderTag = 'wetness'
         waterLayerRef?.renderWetness(renderer)
+        currentRenderTag = 'main'
         loopProfiler.record('wetnessPass', performance.now() - wetnessStart)
       }
 
       // Multi-pass warmup + refraction/reflection
       multiPassRenderer.tickWarmup(isSceneCompiling)
 
+      currentRenderTag = 'refraction'
       multiPassRenderer.renderRefraction({
         camera, refractionManager, refractionEnabled: $refractionEnabled,
         waterGroup, terrainMeshes, entityClipGroup,
         grassGroup: grassLayerRef?.getGroup(),
+        treeGroup: treeLayerRef?.getGroup(),
         windParticlesGroup: windParticlesRef?.getGroup(),
       }, loopProfiler)
+      currentRenderTag = 'main'
 
+      currentRenderTag = 'reflection'
       multiPassRenderer.renderReflection({
         camera, reflectionManager, reflectionEnabled: $reflectionEnabled,
         waterGroup, terrainGroup, housingGroup: housingLayerRef?.getGroup(),
         entityClipGroup,
         grassGroup: grassLayerRef?.getGroup(),
+        treeGroup: treeLayerRef?.getGroup(),
         windParticlesGroup: windParticlesRef?.getGroup(),
         getNametagGroups: () => {
           const groups: THREE.Group[] = []
@@ -530,9 +636,27 @@
           return groups
         },
       }, loopProfiler)
+      currentRenderTag = 'main'
 
       const frameWorkMs = performance.now() - frameWorkStart
       loopProfiler.record('frameWork', frameWorkMs)
+
+      // Record wrapped renderer.render() stats accumulated since previous game
+      // loop frame. `main` captures Threlte's automatic main scene render which
+      // runs on its own rAF. `refraction`/`reflection`/`wetness` capture the
+      // passes we drive manually (tags are set around each call).
+      if (loopProfileEnabled) {
+        loopProfiler.record('mainRenderCpu', perFrameRenderMs.main)
+        loopProfiler.recordCount('mainRenderCalls', perFrameRenderCalls.main)
+        loopProfiler.recordCount('mainDraws', perFrameDrawCalls.main)
+        loopProfiler.recordCount('mainTrisK', perFrameTriangles.main / 1000)
+        loopProfiler.recordCount('refractionDraws', perFrameDrawCalls.refraction)
+        loopProfiler.recordCount('refractionTrisK', perFrameTriangles.refraction / 1000)
+        loopProfiler.recordCount('reflectionDraws', perFrameDrawCalls.reflection)
+        loopProfiler.recordCount('reflectionTrisK', perFrameTriangles.reflection / 1000)
+        loopProfiler.recordCount('wetnessDraws', perFrameDrawCalls.wetness)
+      }
+      resetPerFrameRenderStats()
 
       // Detect when pipeline compilation is done: once data is ready,
       // wait for a few consecutive smooth frames before hiding the loading dialog.
@@ -613,18 +737,14 @@
     cameraDistance.set(camera.zoom)
   }
 
-  function updateLightPosition() {
-    const calDate = calendarSystem.getDate()
+  function updateLightPosition(sunLightSnapshot: SunLightSnapshot, calDate: CalendarDate) {
     sceneLighting.update({
       currentPlayerPosition: currentPlayer?.position ?? null,
       localCalendarDate: calDate,
       ambientLight,
       directionalLight,
       scene,
-      sunLightSnapshot: computeSunLightSnapshot(
-        calendarSystem.getGameHour(),
-        calDate,
-      ),
+      sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
     })
   }
@@ -640,6 +760,7 @@
   onMount(() => {
     loopProfileEnabled = false
     loopProfiler.resetWindow(performance.now())
+    wrapRendererForProfiling()
 
     const cleanupDebugConsole = registerDebugConsole(() => ({
       loopProfiler,
@@ -653,7 +774,10 @@
       refractionEnabled,
       reflectionEnabled,
     }))
-    setGameHour(calendarSystem.getGameHour())
+    {
+      const initHour = calendarSystem.getGameHour()
+      setGameHour(initHour + $sunDebugOffset, initHour)
+    }
 
     const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
       latestServerGameTime = gameTime
@@ -831,9 +955,11 @@
      pipelines with point-light shadow support from the start. Without this,
      adding the player's torch later triggers a cascade recompilation of every
      existing material (~12s stall). Intensity 0 = invisible but pipelines
-     are compiled with shadow support. -->
+     are compiled with shadow support. After compilation, move offscreen so
+     the shadow frustum captures nothing (avoids 6× cube-face renders/frame). -->
 <T.PointLight
-  position={[0, 0, 0]}
+  bind:ref={placeholderShadowLight}
+  position={isSceneCompiling ? [0, 0, 0] : [0, OFFSCREEN_Y, 0]}
   intensity={0}
   distance={50}
   decay={1.2}
@@ -932,7 +1058,7 @@
 </T>
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} />
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} />
   <ZoneOverlay />
   <NpcWaypointOverlay />
 {/if}

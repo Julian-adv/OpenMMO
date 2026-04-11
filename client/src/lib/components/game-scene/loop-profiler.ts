@@ -15,6 +15,7 @@ export type LoopProfileSection =
   | 'wetnessPass'
   | 'refractionPass'
   | 'reflectionPass'
+  | 'mainRenderCpu'
 
 export const LOOP_PROFILE_SECTIONS: readonly LoopProfileSection[] = [
   'frameWork',
@@ -33,6 +34,7 @@ export const LOOP_PROFILE_SECTIONS: readonly LoopProfileSection[] = [
   'wetnessPass',
   'refractionPass',
   'reflectionPass',
+  'mainRenderCpu',
 ] as const
 
 interface LoopProfileStats {
@@ -48,6 +50,7 @@ export interface LoopProfiler {
   resetWindow: (windowStart: number) => void
   onFrame: (fixedDeltaMs: number, frameTimeMs: number) => void
   record: (section: LoopProfileSection, durationMs: number) => void
+  recordCount: (name: string, value: number) => void
   flush: (now: number) => void
 }
 
@@ -58,6 +61,7 @@ export function createLoopProfiler(isEnabled: () => boolean): LoopProfiler {
       { totalMs: 0, maxMs: 0, count: 0 },
     ])
   )
+  const counterStats = new Map<string, LoopProfileStats>()
 
   let windowStart = 0
   let frameCount = 0
@@ -79,6 +83,23 @@ export function createLoopProfiler(isEnabled: () => boolean): LoopProfiler {
       stats.maxMs = 0
       stats.count = 0
     }
+    for (const stats of counterStats.values()) {
+      stats.totalMs = 0
+      stats.maxMs = 0
+      stats.count = 0
+    }
+  }
+
+  function recordCount(name: string, value: number) {
+    if (!isEnabled()) return
+    let stats = counterStats.get(name)
+    if (!stats) {
+      stats = { totalMs: 0, maxMs: 0, count: 0 }
+      counterStats.set(name, stats)
+    }
+    stats.totalMs += value
+    stats.maxMs = Math.max(stats.maxMs, value)
+    stats.count += 1
   }
 
   function onFrame(fixedDeltaMs: number, frameTimeMs: number) {
@@ -124,10 +145,26 @@ export function createLoopProfiler(isEnabled: () => boolean): LoopProfiler {
     })
 
     const avgRawDelta = rawDeltaTotal / frameCount
+    const fps = frameCount > 0 ? 1000 / avgRawDelta : 0
     console.groupCollapsed(
-      `[LoopProfile] frames=${frameCount} dropped=${frameDropCount} avgDelta=${avgRawDelta.toFixed(2)}ms maxDelta=${rawDeltaMax.toFixed(2)}ms`
+      `[LoopProfile] fps=${fps.toFixed(1)} frames=${frameCount} dropped=${frameDropCount} avgDelta=${avgRawDelta.toFixed(2)}ms maxDelta=${rawDeltaMax.toFixed(2)}ms`
     )
     console.table(rows)
+
+    if (counterStats.size > 0) {
+      const counterRows = Array.from(counterStats.entries()).map(
+        ([name, stats]) => ({
+          counter: name,
+          avg_per_frame:
+            stats.count > 0
+              ? Number((stats.totalMs / stats.count).toFixed(1))
+              : 0,
+          max: Number(stats.maxMs.toFixed(1)),
+          samples: stats.count,
+        })
+      )
+      console.table(counterRows)
+    }
     console.groupEnd()
 
     resetWindow(now)
@@ -137,6 +174,7 @@ export function createLoopProfiler(isEnabled: () => boolean): LoopProfiler {
     resetWindow,
     onFrame,
     record,
+    recordCount,
     flush,
   }
 }

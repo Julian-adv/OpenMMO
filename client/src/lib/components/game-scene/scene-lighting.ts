@@ -8,7 +8,7 @@ import {
   computeCelestialLightState,
 } from '../../utils/celestialSimulation'
 
-export const AMBIENT_DAY_INTENSITY = 0.95
+export const AMBIENT_DAY_INTENSITY = 0.35
 export const AMBIENT_NIGHT_INTENSITY = 0.3
 
 export interface Vector3Like {
@@ -37,7 +37,8 @@ export function createSceneLightingController(): SceneLightingController {
   const sunTwilightColor = new THREE.Color(SUN_TWILIGHT_COLOR_HEX)
   const sunDirectionalColor = new THREE.Color()
   const moonLightColor = new THREE.Color(MOON_LIGHT_COLOR_HEX)
-  const ambientDayColor = new THREE.Color('#ffffff')
+  const ambientDayColor = new THREE.Color('#fff8f0')
+  const ambientTwilightColor = new THREE.Color('#ffb080')
   const ambientNightColor = new THREE.Color('#8ea8ff')
   const ambientColor = new THREE.Color()
 
@@ -84,8 +85,10 @@ export function createSceneLightingController(): SceneLightingController {
     const eclipse = params.eclipseFactor
 
     if (params.ambientLight) {
+      const twilightBlend = celestialLightState.directional.sunColorBlendFactor
       ambientColor
         .copy(ambientDayColor)
+        .lerp(ambientTwilightColor, twilightBlend)
         .lerp(ambientNightColor, celestialLightState.ambientNightFactor)
 
       params.ambientLight.color.copy(ambientColor)
@@ -94,7 +97,7 @@ export function createSceneLightingController(): SceneLightingController {
     }
 
     // Scale IBL environment intensity with day/night cycle
-    const envDayIntensity = 0.5
+    const envDayIntensity = 0.2
     const envNightIntensity = 0.03
     params.scene.environmentIntensity =
       envDayIntensity +

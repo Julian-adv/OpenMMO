@@ -15,9 +15,16 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
+  import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
+  import type { TerrainTreeDataManager } from '../../managers/terrainTreeDataManager'
+  import { TILE_DIM } from '../../managers/terrain-height-types'
   import { tileToRegion } from '../../managers/terrainMetaManager'
   import { gameStore } from '../../stores/gameStore'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
+  import { SvelteSet } from 'svelte/reactivity'
+  import { filterGrassData } from '../../utils/grass-data'
+  import { filterTreeData } from '../../utils/tree-data'
+  import { SHORT_GRASS_R_MIN } from '../../shaders/grass-material'
 
   const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
 
@@ -28,9 +35,11 @@
     heightManager: TerrainHeightManager | null
     splatManager: TerrainSplatManager | null
     metaManager: TerrainMetaManager | null
+    grassDataManager: TerrainGrassDataManager | null
+    treeDataManager: TerrainTreeDataManager | null
   }
 
-  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, metaManager = null }: Props = $props()
+  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, metaManager = null, grassDataManager = null, treeDataManager = null }: Props = $props()
 
   let isPainting = $state(false)
   let isPanning = $state(false)
@@ -178,6 +187,56 @@
     return (11 - currentBrushStrength) * 100
   }
 
+  const SPLAT_CHANNELS = 4
+  const vegetationDirtyTiles = new SvelteSet<string>()
+  let vegetationTimer: ReturnType<typeof setTimeout> | null = null
+
+  function markVegetationDirty(tiles: { tileX: number; tileZ: number }[]) {
+    for (const { tileX, tileZ } of tiles) {
+      vegetationDirtyTiles.add(`${tileX},${tileZ}`)
+    }
+    if (vegetationTimer !== null) clearTimeout(vegetationTimer)
+    vegetationTimer = setTimeout(flushVegetationRemoval, 500)
+  }
+
+  function flushVegetationRemoval() {
+    vegetationTimer = null
+    if (!splatManager || vegetationDirtyTiles.size === 0) return
+
+    for (const key of vegetationDirtyTiles) {
+      const [tileX, tileZ] = key.split(',').map(Number)
+      const splatData = splatManager.getSplatData(tileX, tileZ)
+      if (!splatData) continue
+
+      const tileMinX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+      const tileMinZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+
+      const shouldRemove = (x: number, z: number) => {
+        const cx = Math.floor(x - tileMinX)
+        const cz = Math.floor(z - tileMinZ)
+        if (cx < 0 || cx >= TILE_DIM || cz < 0 || cz >= TILE_DIM) return false
+        return splatData[(cz * TILE_DIM + cx) * SPLAT_CHANNELS] < SHORT_GRASS_R_MIN
+      }
+
+      if (grassDataManager) {
+        const grassData = grassDataManager.getCachedGrassData(tileX, tileZ)
+        if (grassData) {
+          const filtered = filterGrassData(grassData, shouldRemove)
+          if (filtered) grassDataManager.saveGrassData(tileX, tileZ, filtered)
+        }
+      }
+
+      if (treeDataManager) {
+        const treeData = treeDataManager.getCachedTreeData(tileX, tileZ)
+        if (treeData) {
+          const filtered = filterTreeData(treeData, shouldRemove)
+          if (filtered) treeDataManager.saveTreeData(tileX, tileZ, filtered)
+        }
+      }
+    }
+    vegetationDirtyTiles.clear()
+  }
+
   function applyBrushAtCursor() {
     const now = performance.now()
     if (lastPaintTime === 0) {
@@ -190,13 +249,16 @@
 
     if (currentTool === 'splat') {
       if (!splatManager) return
-      splatManager.applySplatBrush(
+      const affectedTiles = splatManager.applySplatBrush(
         lastWorldPos.x,
         lastWorldPos.z,
         currentBrushSize,
         currentSplatLayer,
         currentBrushStrength / 50
       )
+      if (currentSplatLayer !== 0 && affectedTiles.length > 0) {
+        markVegetationDirty(affectedTiles)
+      }
     } else {
       if (!heightManager) return
       if (ctrlHeld) {
@@ -541,6 +603,7 @@
     }
     isPainting = false
     lastPaintTime = 0
+    flushVegetationRemoval()
   }
 
   async function handleFurnitureDelete() {

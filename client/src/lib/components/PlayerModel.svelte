@@ -29,10 +29,6 @@
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
   import type { PlayerDamageInfo } from '../stores/gameStore'
-  import { torchLightEnabled } from '../stores/debugStore'
-  import { applyTorchFlicker, TORCH_BASE_INTENSITY, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION } from '../utils/torchFlicker'
-
-  export type TorchMode = 'local' | 'shadow' | 'light-only' | 'off'
 
   interface Props {
     position: Vector3
@@ -56,7 +52,6 @@
     isLoading?: boolean
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
-    torchMode?: TorchMode
   }
 
   let {
@@ -81,7 +76,6 @@
     isLoading = $bindable(false),
     lastDamageInfo,
     lastRegenInfo,
-    torchMode = 'off',
   }: Props = $props()
 
   let nametagScale = $state(1)
@@ -92,23 +86,6 @@
 
   // Floating damage text
   let damageTextRef = $state<ReturnType<typeof DamageText>>()
-
-  // Blob shadow for remote torch (shared across instances)
-  const BLOB_SHADOW_RADIUS = 0.45
-  const blobShadowGeometry = new THREE.CircleGeometry(BLOB_SHADOW_RADIUS, 16)
-  const blobShadowMaterial = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    transparent: true,
-    opacity: 0.35,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -1,
-    polygonOffsetUnits: -1,
-  })
-
-  // Torch light flickering
-  let torchLight = $state<THREE.PointLight | undefined>(undefined)
-  let torchFlickerTime = 0
 
   // Load only the active character model + shared animation packs via shared cache.
   // This cache persists across Threlte Canvas lifecycles, so GLBs loaded in
@@ -504,9 +481,11 @@
   onMount(() => {
     // Wait for all GLTFs (character model + animation packs) to load
     isLoading = true
-    glbReady.then(() => setupRealAnimation()).then(() => {
-      isLoading = false
-    })
+    glbReady
+      .then(() => setupRealAnimation())
+      .then(() => {
+        isLoading = false
+      })
 
     // Cleanup on unmount
     return () => {
@@ -526,10 +505,6 @@
 
   export function getNametagGroup() {
     return nametagGroup
-  }
-
-  export function getTorchLight() {
-    return torchLight
   }
 
   // Function to update mixer and animation state and nametag - called from GameScene gameLoop
@@ -588,12 +563,6 @@
 
     if (chatBubbleInstance) {
       chatBubbleInstance.update()
-    }
-
-    // Torch light flickering (works for both local and remote torches)
-    const torchActive = isCurrentPlayer ? get(torchLightEnabled) : torchMode === 'light-only'
-    if (torchLight && torchActive) {
-      torchFlickerTime = applyTorchFlicker(torchLight, torchFlickerTime, deltaTime)
     }
 
     if (!mixer) return
@@ -699,38 +668,6 @@
   >
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />
-
-    <!-- Torch point light (always mounted, controlled via intensity to avoid WebGPU shader recompilation) -->
-    <!-- castShadow is static: true for local player only. WebGPU PointShadowNode crashes
-         if castShadow is toggled dynamically (depthTexture null on shadow map resources). -->
-    <T.PointLight
-      bind:ref={torchLight}
-      position={[TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z]}
-      color="#ffcc66"
-      intensity={isCurrentPlayer
-        ? ($torchLightEnabled ? TORCH_BASE_INTENSITY : 0)
-        : (torchMode === 'light-only' ? TORCH_BASE_INTENSITY : 0)}
-      distance={TORCH_BASE_DISTANCE}
-      decay={TORCH_BASE_DECAY}
-      castShadow={isCurrentPlayer}
-      shadow.mapSize.width={512}
-      shadow.mapSize.height={512}
-      shadow.camera.near={0.5}
-      shadow.camera.far={TORCH_BASE_DISTANCE}
-      shadow.bias={-0.005}
-      shadow.normalBias={0.05}
-      shadow.radius={5}
-    />
-
-    <!-- Blob shadow circle for remote torches (no real shadow casting) -->
-    {#if !isCurrentPlayer && torchMode === 'light-only'}
-      <T.Mesh
-        geometry={blobShadowGeometry}
-        material={blobShadowMaterial}
-        position.y={0.05}
-        rotation.x={-Math.PI / 2}
-      />
-    {/if}
   </T.Group>
 {/if}
 
