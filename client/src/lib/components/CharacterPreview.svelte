@@ -34,7 +34,9 @@
   let locomotionGltfData = $state<GLTF | null>(null)
   let combatMeleeGltfData = $state<GLTF | null>(null)
 
-  loadGLB(getCharacterModelPath(characterClass, gender)).then((g) => { characterGltfData = g })
+  $effect(() => {
+    loadGLB(getCharacterModelPath(characterClass, gender)).then((g) => { characterGltfData = g })
+  })
   loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
   loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
 

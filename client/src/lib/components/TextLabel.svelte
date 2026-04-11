@@ -69,7 +69,9 @@
   material.map = texture
   material.transparent = true
   material.depthWrite = false
-  material.depthTest = depthTest
+  $effect(() => {
+    material.depthTest = depthTest
+  })
   material.side = THREE.DoubleSide
 
   function wrapText(
