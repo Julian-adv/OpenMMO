@@ -40,6 +40,9 @@ EXPORT_PACKS = {
         "attack4",
         "dying",
     ],
+    "social": [
+        "sleep",
+    ],
 }
 
 # The primary armature name whose mesh and skeleton should be exported.
