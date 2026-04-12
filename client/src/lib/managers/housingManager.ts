@@ -44,7 +44,7 @@ export class HousingManager {
   private apiUrl: string
   private chunkCache = new Map<string, HouseData[]>()
   private housesById = new Map<string, HouseData>()
-  private inflight = new Set<string>()
+  private inflight = new Map<string, Promise<void>>()
 
   private housesChangedListeners: ((houses: HouseData[]) => void)[] = []
 
@@ -79,8 +79,13 @@ export class HousingManager {
     const key = chunkKey(cx, cz)
     if (this.chunkCache.has(key) || this.inflight.has(key)) return
 
-    this.inflight.add(key)
-    this.fetchChunk(cx, cz, key)
+    this.inflight.set(key, this.fetchChunk(cx, cz, key))
+  }
+
+  /** Wait for all currently in-flight chunk fetches to complete. */
+  async waitForPending(): Promise<void> {
+    if (this.inflight.size === 0) return
+    await Promise.all(this.inflight.values())
   }
 
   private async fetchChunk(cx: number, cz: number, key: string) {

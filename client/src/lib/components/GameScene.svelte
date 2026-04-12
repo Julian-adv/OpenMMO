@@ -842,10 +842,16 @@
 
     const housingTexturesPromise = initHousingTextures()
 
+    // Pre-load housing chunks around the player in parallel with other assets
+    // so house geometry is built before the loading screen is dismissed.
+    const housingChunksPromise = currentPlayer
+      ? housingLayerRef?.preloadChunks(currentPlayer.position.x, currentPlayer.position.z)
+      : Promise.resolve()
+
     // Wait for terrain data + grass assets, let the TerrainLayer $effect run
     // and enqueue work, eagerly create grass materials, then let the renderer
     // compile pipelines while the loading dialog is still visible.
-    Promise.all([splatPromise, grassAssetsPromise, housingTexturesPromise, ...heightPromises]).then(() => {
+    Promise.all([splatPromise, grassAssetsPromise, housingTexturesPromise, housingChunksPromise, ...heightPromises]).then(() => {
       // Wait two frames: one for Svelte to flush the $effect that enqueues
       // tile work, and another to ensure all microtask .then() chains complete.
       requestAnimationFrame(() => {

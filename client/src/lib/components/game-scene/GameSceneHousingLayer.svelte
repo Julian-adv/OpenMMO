@@ -508,34 +508,41 @@
     })
   }
 
+  // Toggling .visible avoids matrixWorld recalculations on occlusion changes.
   function applyOcclusionVisibility(result: HouseGroupResult) {
     for (const [fl, groups] of result.floorGroups) {
-      groups.front.position.y = OFFSCREEN_Y
-      groups.back.position.y = OFFSCREEN_Y
-      groups.stair.position.y = OFFSCREEN_Y
+      groups.front.visible = false
+      groups.back.visible = false
+      groups.stair.visible = false
       if (fl !== 0) {
-        groups.floor.position.y = OFFSCREEN_Y
+        groups.floor.visible = false
       }
     }
     for (const door of result.doors) {
-      if (door.pivot.userData.occlusionOrigY === undefined) {
-        door.pivot.userData.occlusionOrigY = door.pivot.position.y
-      }
-      door.pivot.position.y = OFFSCREEN_Y
+      door.pivot.visible = false
     }
-    // Exclude all meshes from raycasting (including visible 1F floor)
     setGroupRaycast(result.houseGroup, false)
   }
 
   function resetOcclusionVisibility(result: HouseGroupResult) {
-    resetAllFloorGroupPositions(result)
+    for (const [, groups] of result.floorGroups) {
+      groups.front.visible = true
+      groups.back.visible = true
+      groups.floor.visible = true
+      groups.stair.visible = true
+    }
     for (const door of result.doors) {
-      if (door.pivot.userData.occlusionOrigY !== undefined) {
-        door.pivot.position.y = door.pivot.userData.occlusionOrigY
-        delete door.pivot.userData.occlusionOrigY
-      }
+      door.pivot.visible = true
     }
     setGroupRaycast(result.houseGroup, true)
+  }
+
+  /** Pre-load housing chunks around the player so geometry is ready before
+   *  the loading screen is dismissed. Without this, chunk data arrives during
+   *  gameplay and the first render of each house stalls WebGPU. */
+  export async function preloadChunks(px: number, pz: number) {
+    housingManager.loadChunksAround(px, pz)
+    await housingManager.waitForPending()
   }
 
   export function warmupHousingPipelines() {
@@ -557,8 +564,13 @@
 
     housingGroup.add(warmupGroup)
 
-    // Drop dummies after pipelines are compiled (materials are shared, don't dispose them).
-    let framesLeft = 3
+    // Keep dummies alive long enough for ALL render passes to compile their
+    // pipelines — main, shadow, AND refraction (which starts after
+    // MULTI_PASS_WARMUP_FRAMES and only renders every other frame).
+    // 3 frames was too few: the refraction pass hadn't started yet, so housing
+    // materials were never compiled for the refraction render target, causing
+    // synchronous pipeline stalls when houses first entered the refraction camera.
+    let framesLeft = 12
     const tick = () => {
       if (--framesLeft > 0) {
         requestAnimationFrame(tick)
