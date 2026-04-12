@@ -20,7 +20,11 @@
   import {
     initHousingTextures,
     disposeHousingMaterials,
+    getHousingMaterial,
+    getGhostHousingMaterial,
+    HOUSING_TEXTURES,
   } from '../../utils/housing-textures'
+  import { WOOD_TEXTURE_IDX, SHUTTER_PANEL_TEXTURE_IDX } from '../../utils/house-geo-utils'
   import { getWallByDir } from '../../managers/housingManager'
   import { housingManager } from '../../managers/housingManager'
   import {
@@ -532,6 +536,38 @@
       }
     }
     setGroupRaycast(result.houseGroup, true)
+  }
+
+  export function warmupHousingPipelines() {
+    const boxGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1)
+    const warmupGroup = new THREE.Group()
+    warmupGroup.name = 'housingWarmup'
+    warmupGroup.position.y = OFFSCREEN_Y
+
+    const addDummy = (mat: THREE.Material) => {
+      const mesh = new THREE.Mesh(boxGeo, mat)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      mesh.frustumCulled = false
+      warmupGroup.add(mesh)
+    }
+
+    for (let i = 0; i < HOUSING_TEXTURES.length; i++) addDummy(getHousingMaterial(i))
+    for (const idx of [WOOD_TEXTURE_IDX, SHUTTER_PANEL_TEXTURE_IDX]) addDummy(getGhostHousingMaterial(idx))
+
+    housingGroup.add(warmupGroup)
+
+    // Drop dummies after pipelines are compiled (materials are shared, don't dispose them).
+    let framesLeft = 3
+    const tick = () => {
+      if (--framesLeft > 0) {
+        requestAnimationFrame(tick)
+        return
+      }
+      housingGroup.remove(warmupGroup)
+      boxGeo.dispose()
+    }
+    requestAnimationFrame(tick)
   }
 
   export function getGroup(): THREE.Group {

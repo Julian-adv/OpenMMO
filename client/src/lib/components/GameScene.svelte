@@ -90,6 +90,7 @@
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { TerrainTreeDataManager } from '../managers/terrainTreeDataManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
+  import { initHousingTextures } from '../utils/housing-textures'
   import {
     loadFlowerColorTexture,
   } from '../shaders/grass-material'
@@ -618,10 +619,13 @@
       multiPassRenderer.renderReflection({
         camera, reflectionManager, reflectionEnabled: $reflectionEnabled,
         waterGroup, terrainGroup, housingGroup: housingLayerRef?.getGroup(),
-        entityClipGroup,
-        grassGroup: grassLayerRef?.getGroup(),
-        treeGroup: treeLayerRef?.getGroup(),
-        windParticlesGroup: windParticlesRef?.getGroup(),
+        hiddenGroups: [
+          grassLayerRef?.getGroup(),
+          treeLayerRef?.getGroup(),
+          windParticlesRef?.getGroup(),
+          furnitureOverlayRef?.getGroup(),
+          entityClipGroup as THREE.Group | undefined,
+        ],
         getNametagGroups: () => {
           const groups: THREE.Group[] = []
           const ntCurrent = currentPlayerModel?.getNametagGroup()
@@ -836,10 +840,12 @@
     // (all geometry is now created synchronously)
     const grassAssetsPromise = loadFlowerColorTexture()
 
+    const housingTexturesPromise = initHousingTextures()
+
     // Wait for terrain data + grass assets, let the TerrainLayer $effect run
     // and enqueue work, eagerly create grass materials, then let the renderer
     // compile pipelines while the loading dialog is still visible.
-    Promise.all([splatPromise, grassAssetsPromise, ...heightPromises]).then(() => {
+    Promise.all([splatPromise, grassAssetsPromise, housingTexturesPromise, ...heightPromises]).then(() => {
       // Wait two frames: one for Svelte to flush the $effect that enqueues
       // tile work, and another to ensure all microtask .then() chains complete.
       requestAnimationFrame(() => {
@@ -850,6 +856,7 @@
           // every compute/render pipeline compiles under the loading dialog
           // instead of stalling mid-movement when a new sub-chunk activates.
           grassLayerRef?.warmupGrassPipelines(renderer)
+          housingLayerRef?.warmupHousingPipelines()
           // Wind particles: lazy init on first spawn (MeshBasicNodeMaterial
           // compiles fast, not worth blocking the loading screen for)
 

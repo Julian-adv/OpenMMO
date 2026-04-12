@@ -17,6 +17,64 @@ const WETNESS_SIZE = 256
 /** Wetness decays to this fraction per second */
 const DECAY_RATE = 0.92
 
+// ── Shared decay pass resources ──
+// The decay NodeMaterial + its fullscreen quad are shared across every
+// wetness system so its WebGPU pipeline compiles exactly once instead of
+// once per tile. Creating a NodeMaterial per tile made each new water tile
+// pay a ~100ms pipeline compile on first use, stalling the main thread
+// whenever the player walked into a new region with fresh water tiles.
+let sharedDecayScene: THREE.Scene | undefined
+let sharedDecayCamera: THREE.OrthographicCamera | undefined
+let sharedCaptureTexNode: ReturnType<typeof texture> | undefined
+let sharedPrevWetnessNode: ReturnType<typeof texture> | undefined
+const sharedUDeltaTime = uniform(0.016)
+
+function ensureSharedDecayPass() {
+  if (sharedDecayScene) return
+
+  // Placeholder 1x1 textures — actual tile RTs are swapped in per-update via
+  // `.value = ...`. The node only needs a non-null reference at build time.
+  const placeholder = new THREE.DataTexture(
+    new Uint8Array([0, 0, 0, 255]),
+    1,
+    1,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType
+  )
+  placeholder.needsUpdate = true
+
+  sharedCaptureTexNode = texture(placeholder)
+  sharedPrevWetnessNode = texture(placeholder)
+
+  const sharedDecayMat = new NodeMaterial()
+  sharedDecayMat.depthTest = false
+  sharedDecayMat.depthWrite = false
+  sharedDecayMat.blending = THREE.NoBlending
+  sharedDecayMat.lights = false
+
+  sharedDecayMat.fragmentNode = Fn(() => {
+    const vUv = uv()
+    const waterAlpha = sharedCaptureTexNode!.sample(vUv).a
+    // Y-flip: capture camera flips V once; fullscreen quad flips again —
+    // captureRT double-flip cancels, but prevWetness needs manual flip.
+    const prevUV = vec2(vUv.x, float(1.0).sub(vUv.y))
+    const prev = sharedPrevWetnessNode!.sample(prevUV).r
+    const decay = pow(float(DECAY_RATE), sharedUDeltaTime)
+    const decayed = prev.mul(decay)
+    const cleaned = decayed.mul(step(float(0.01), decayed))
+    const newVal = max(waterAlpha, cleaned)
+    return vec4(newVal, 0, 0, 1)
+  })()
+
+  sharedDecayScene = new THREE.Scene()
+  sharedDecayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+  const decayMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 2),
+    sharedDecayMat
+  )
+  sharedDecayScene.add(decayMesh)
+}
+
 export interface WetnessResult {
   /**
    * Render the wetness pre-pass:
@@ -57,6 +115,8 @@ export function createWetnessSystem(
   tileZ: number,
   tileSize: number
 ): WetnessResult {
+  ensureSharedDecayPass()
+
   const px = tileX * tileSize
   const pz = tileZ * tileSize
 
@@ -86,6 +146,7 @@ export function createWetnessSystem(
   captureCamera.lookAt(px, 0, pz)
 
   // ── Decay pass: fullscreen quad combining captured alpha + previous wetness ──
+  // NodeMaterial + scene are shared across all tiles (see ensureSharedDecayPass).
   const rtOpts: THREE.RenderTargetOptions = {
     format: THREE.RGBAFormat,
     type: THREE.HalfFloatType,
@@ -95,44 +156,6 @@ export function createWetnessSystem(
   }
   const rtA = new THREE.RenderTarget(WETNESS_SIZE, WETNESS_SIZE, rtOpts)
   const rtB = new THREE.RenderTarget(WETNESS_SIZE, WETNESS_SIZE, rtOpts)
-
-  const captureTexNode = texture(captureRT.texture)
-  const prevWetnessNode = texture(rtA.texture)
-  const uDeltaTime = uniform(0.016)
-
-  const decayMat = new NodeMaterial()
-  decayMat.depthTest = false
-  decayMat.depthWrite = false
-  decayMat.blending = THREE.NoBlending
-  decayMat.lights = false
-
-  decayMat.fragmentNode = Fn(() => {
-    const vUv = uv()
-    // The capture pass renders with the water material (transparent: true),
-    // so alpha blending squares the alpha (alpha_out = src_alpha²). This
-    // naturally suppresses bilinear interpolation bleed at the water
-    // boundary — do NOT compensate with sqrt, as it amplifies the bleed.
-    const waterAlpha = captureTexNode.sample(vUv).a
-    // Y-flip for WebGPU RT coordinate convention: the capture camera's
-    // render introduces a V-flip (clip Y=+1 → texture V=0), and the
-    // fullscreen quad introduces another — so captureRT's double-flip
-    // cancels out for waterAlpha. But prevWetness was already correctly
-    // mapped (texture V = mesh UV v), so reading it at the fullscreen
-    // quad's flipped UV gives the wrong row. Flip V to compensate.
-    const prevUV = vec2(vUv.x, float(1.0).sub(vUv.y))
-    const prev = prevWetnessNode.sample(prevUV).r
-    const decay = pow(float(DECAY_RATE), uDeltaTime)
-    const decayed = prev.mul(decay)
-    // Cut off near-zero values so they don't linger indefinitely
-    const cleaned = decayed.mul(step(float(0.01), decayed))
-    const newVal = max(waterAlpha, cleaned)
-    return vec4(newVal, 0, 0, 1)
-  })()
-
-  const decayScene = new THREE.Scene()
-  const decayCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
-  const decayMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), decayMat)
-  decayScene.add(decayMesh)
 
   let phase = 0
   let prevTime = -1
@@ -154,7 +177,7 @@ export function createWetnessSystem(
         return
       const dt = prevTime >= 0 ? Math.min(time - prevTime, 0.1) : 0
       prevTime = time
-      uDeltaTime.value = dt
+      sharedUDeltaTime.value = dt
 
       const prevRT = renderer.getRenderTarget()
 
@@ -163,11 +186,13 @@ export function createWetnessSystem(
       renderer.setRenderTarget(captureRT)
       renderer.render(captureScene, captureCamera)
 
-      // 2. Decay: combine captured alpha with previous wetness
+      // 2. Decay: combine captured alpha with previous wetness using the
+      // shared decay material (swap texture inputs per tile).
       const [readRT, writeRT] = phase === 0 ? [rtA, rtB] : [rtB, rtA]
-      prevWetnessNode.value = readRT.texture
+      sharedCaptureTexNode!.value = captureRT.texture
+      sharedPrevWetnessNode!.value = readRT.texture
       renderer.setRenderTarget(writeRT)
-      renderer.render(decayScene, decayCamera)
+      renderer.render(sharedDecayScene!, sharedDecayCamera!)
 
       renderer.setRenderTarget(prevRT)
 
