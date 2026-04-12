@@ -23,10 +23,7 @@ export interface MultiPassReflectionDeps {
   waterGroup: THREE.Group | undefined
   terrainGroup: THREE.Group | undefined
   housingGroup: THREE.Group | undefined
-  entityClipGroup: ClippingGroup | undefined
-  grassGroup: THREE.Group | undefined
-  treeGroup: THREE.Group | undefined
-  windParticlesGroup: THREE.Group | undefined
+  hiddenGroups: (THREE.Group | undefined)[]
   getNametagGroups: () => THREE.Group[]
 }
 
@@ -131,17 +128,14 @@ export function createMultiPassRenderer(): MultiPassRenderer {
         if (deps.waterGroup)
           deps.reflectionManager.setWaterGroup(deps.waterGroup)
         deps.reflectionManager.setHousingGroup(deps.housingGroup ?? null)
-        if (deps.entityClipGroup)
-          deps.reflectionManager.setEntityClipGroup(deps.entityClipGroup)
-
         // Hide nametags/HP bars during reflection render
         const nametagGroups = deps.getNametagGroups()
         for (const nt of nametagGroups) nt.visible = false
 
-        // Hide grass, trees + particles during reflection
-        renderWithHiddenGroups(
-          [deps.grassGroup, deps.treeGroup, deps.windParticlesGroup],
-          () => deps.reflectionManager!.render()
+        // Hide groups that would trigger first-use pipeline compiles
+        // (~100–150ms stall per new material).
+        renderWithHiddenGroups(deps.hiddenGroups, () =>
+          deps.reflectionManager!.render()
         )
 
         for (const nt of nametagGroups) nt.visible = true

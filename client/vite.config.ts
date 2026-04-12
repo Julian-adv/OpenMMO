@@ -9,7 +9,10 @@ import { monsterCsvPlugin } from '../tools/vitePlugin.mjs'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
-  const backendHost = env.VITE_BACKEND_HOST ?? 'localhost'
+  // Default to IPv4 explicitly: Node 18+ resolves 'localhost' to ::1 first,
+  // which fails because the Rust server only listens on 127.0.0.1, causing
+  // the proxy to reset every /ws and /api request.
+  const backendHost = env.VITE_BACKEND_HOST ?? '127.0.0.1'
   const apiTarget = `http://${backendHost}:10007`
   const wsTarget = `ws://${backendHost}:10006`
 
