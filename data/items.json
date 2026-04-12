@@ -108,5 +108,15 @@
     "equipSlot": "chest",
     "stackable": false,
     "icon": "sword.png"
+  },
+  "torch": {
+    "id": "torch",
+    "name": "Torch",
+    "description": "A flickering wooden torch.",
+    "weight": 1,
+    "equipSlot": "off_hand",
+    "stackable": false,
+    "icon": "torch.png",
+    "worldModel": "torch.glb"
   }
 }

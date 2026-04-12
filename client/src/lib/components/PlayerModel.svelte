@@ -24,6 +24,8 @@
   import { loadGLB } from '../utils/gltfCache'
   import { inventoryStore } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
+  import { torchLightEnabled } from '../stores/debugStore'
+  import { networkManager } from '../network/socket'
   import type { CharacterClass, Gender } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
   import ChatBubble from './ChatBubble.svelte'
@@ -130,21 +132,6 @@
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
 
-  function isMainRightHandBone(bone: THREE.Bone): boolean {
-    const boneName = bone.name.toLowerCase()
-    return (
-      (boneName.includes('righthand') ||
-        boneName.includes('right_hand') ||
-        boneName.includes('hand_r') ||
-        boneName.includes('hand.r')) &&
-      !boneName.includes('thumb') &&
-      !boneName.includes('index') &&
-      !boneName.includes('middle') &&
-      !boneName.includes('ring') &&
-      !boneName.includes('pinky')
-    )
-  }
-
   function findPrimarySkinnedMesh(
     root: THREE.Object3D
   ): THREE.SkinnedMesh | undefined {
@@ -161,45 +148,16 @@
     return primarySkinnedMesh
   }
 
-  function findMainRightHandBone(root: THREE.Object3D): THREE.Bone | undefined {
+  function findBoneByName(root: THREE.Object3D, name: string): THREE.Bone | undefined {
     const primarySkinnedMesh = findPrimarySkinnedMesh(root)
-    if (primarySkinnedMesh) {
-      const skeletonBones = primarySkinnedMesh.skeleton.bones
-      const byName = new Map(
-        skeletonBones.map((bone) => [bone.name.toLowerCase(), bone])
-      )
-      const preferredBoneNames = [
-        'righthand',
-        'right_hand',
-        'hand_r',
-        'hand.r',
-        'mixamorig:righthand',
-        'mixamorigrighthand',
-      ]
-
-      for (const preferredName of preferredBoneNames) {
-        const preferredBone = byName.get(preferredName)
-        if (preferredBone) return preferredBone
-      }
-
-      const matchedSkeletonBone = skeletonBones.find((bone) =>
-        isMainRightHandBone(bone)
-      )
-      if (matchedSkeletonBone) return matchedSkeletonBone
-    }
-
-    // Fallback: search entire hierarchy if skeleton lookup was unavailable.
-    let fallbackBone: THREE.Bone | undefined
-    root.traverse((obj) => {
-      if (!(obj instanceof THREE.Bone)) return
-      if (!isMainRightHandBone(obj)) return
-      fallbackBone = obj
-    })
-    return fallbackBone
+    if (!primarySkinnedMesh) return undefined
+    return primarySkinnedMesh.skeleton.bones.find(
+      (bone) => bone.name === name
+    )
   }
 
   function attachWeaponModel(gltfScene: THREE.Object3D, characterRoot: THREE.Object3D): boolean {
-    const rightHandBone = findMainRightHandBone(characterRoot)
+    const rightHandBone = findBoneByName(characterRoot, 'RightHand')
     if (!rightHandBone) {
       console.warn('Could not find right hand bone for weapon attachment')
       return false
@@ -224,6 +182,28 @@
     }
     weaponObject = null
     weaponAttached = false
+  }
+
+  let offhandObject: THREE.Object3D | null = null
+
+  function attachOffhandModel(gltfScene: THREE.Object3D, characterRoot: THREE.Object3D): boolean {
+    const leftHandBone = findBoneByName(characterRoot, 'LeftHand')
+    if (!leftHandBone) {
+      console.warn('Could not find left hand bone for off-hand attachment')
+      return false
+    }
+
+    offhandObject = gltfScene.clone()
+    offhandObject.position.set(0, 0.08, 0)
+    leftHandBone.add(offhandObject)
+    return true
+  }
+
+  function detachOffhand() {
+    if (offhandObject && offhandObject.parent) {
+      offhandObject.parent.remove(offhandObject)
+    }
+    offhandObject = null
   }
 
   const equippedMainHandItemId = $derived(
@@ -261,6 +241,52 @@
     })
   })
 
+  // Off-hand equip tracking
+  const equippedOffHandItemId = $derived(
+    isCurrentPlayer
+      ? ($inventoryStore.equipped.off_hand?.item_def_id ?? null)
+      : null
+  )
+
+  let attachedOffhandItemId: string | null = null
+  let offhandAttachGeneration = 0
+
+  $effect(() => {
+    const itemDefId = equippedOffHandItemId
+    const root = modelRoot
+    if (!root || !clonedScene) return
+
+    if (itemDefId === attachedOffhandItemId) return
+
+    detachOffhand()
+    attachedOffhandItemId = null
+
+    if (!itemDefId) return
+
+    const itemDef = getItemDef(itemDefId)
+    if (!itemDef?.worldModel) return
+
+    const gen = ++offhandAttachGeneration
+    const offhandModelPath = getWeaponModelPath(itemDef.worldModel)
+    loadGLB(offhandModelPath).then((gltf) => {
+      if (gen !== offhandAttachGeneration || !clonedScene) return
+
+      attachOffhandModel(gltf.scene, clonedScene)
+      attachedOffhandItemId = itemDefId
+    })
+  })
+
+  let prevTorchEquipped: boolean | null = null
+
+  $effect(() => {
+    if (!isCurrentPlayer) return
+    const hasTorch = equippedOffHandItemId === 'torch'
+    if (hasTorch === prevTorchEquipped) return
+    prevTorchEquipped = hasTorch
+    torchLightEnabled.set(hasTorch)
+    networkManager.sendTorchToggle(hasTorch)
+  })
+
   // Select movement animation based on movement mode
   function selectMovementAnimation(mode: MovementMode | undefined): number {
     if (mode === 'walk') return AnimationIndex.WALK
@@ -288,9 +314,12 @@
     // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
 
-    // Hide weapon during interact animations
+    // Hide weapons during interact animations
     if (weaponObject) {
       weaponObject.visible = playerState !== 'interact'
+    }
+    if (offhandObject) {
+      offhandObject.visible = playerState !== 'interact'
     }
 
     // Select animation based on player state and mode
@@ -500,6 +529,7 @@
       footOffsetApplied = false
       weaponAttached = false
       attachedWeaponItemId = null
+      attachedOffhandItemId = null
     }
   })
 

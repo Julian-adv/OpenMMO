@@ -11,3 +11,4 @@ copper_earring,Copper Earring,A small copper earring.,0.1,ear,false,sword.png,
 leather_belt,Leather Belt,A wide leather belt.,1,belt,false,sword.png,
 dagger,Dagger,A small but sharp dagger.,1,main_hand,false,sword.png,sword.glb
 chain_mail,Chain Mail,Interlocking metal rings forming armor.,55,chest,false,sword.png,
+torch,Torch,A flickering wooden torch.,1,off_hand,false,torch.png,torch.glb
