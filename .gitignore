@@ -45,6 +45,9 @@ logs/
 *.tmp
 *.temp
 *.skill
+
+# Blender backup files
+*.blend1
 .playwright-mcp/
 
 # Generated data files

@@ -28,6 +28,7 @@
   import { networkManager } from '../network/socket'
   import type { CharacterClass, Gender } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
+  import { TorchFireParticles } from '../effects/torch-fire-particles'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
   import type { PlayerDamageInfo } from '../stores/gameStore'
@@ -114,7 +115,7 @@
   let currentAction = $state<THREE.AnimationAction | null>(null)
   let modelRoot = $state<THREE.Group | null>(null)
   let modelGroup = $state<THREE.Group | undefined>(undefined)
-  // Clock removed, using passed deltaTime
+
 
   let clonedScene: THREE.Object3D | null = null
   let footOffsetApplied = false
@@ -185,6 +186,8 @@
   }
 
   let offhandObject: THREE.Object3D | null = null
+  let torchTipNode: THREE.Object3D | null = null
+  const FALLBACK_TORCH_TIP_LOCAL_OFFSET = new THREE.Vector3(0.6, 0, 0)
 
   function attachOffhandModel(gltfScene: THREE.Object3D, characterRoot: THREE.Object3D): boolean {
     const leftHandBone = findBoneByName(characterRoot, 'LeftHand')
@@ -195,7 +198,9 @@
 
     offhandObject = gltfScene.clone()
     offhandObject.position.set(0, 0.08, 0)
+    offhandObject.rotation.y = Math.PI
     leftHandBone.add(offhandObject)
+    torchTipNode = offhandObject.getObjectByName('torch_tip') ?? null
     return true
   }
 
@@ -204,6 +209,7 @@
       offhandObject.parent.remove(offhandObject)
     }
     offhandObject = null
+    torchTipNode = null
   }
 
   const equippedMainHandItemId = $derived(
@@ -259,6 +265,7 @@
     if (itemDefId === attachedOffhandItemId) return
 
     detachOffhand()
+    detachTorchFire()
     attachedOffhandItemId = null
 
     if (!itemDefId) return
@@ -273,6 +280,7 @@
 
       attachOffhandModel(gltf.scene, clonedScene)
       attachedOffhandItemId = itemDefId
+      if (itemDefId === 'torch') attachTorchFire()
     })
   })
 
@@ -286,6 +294,26 @@
     torchLightEnabled.set(hasTorch)
     networkManager.sendTorchToggle(hasTorch)
   })
+
+  // ── Torch fire particles ────────────────────────────────
+  let torchFire: TorchFireParticles | null = null
+  let torchFireGroup = $state<THREE.Group | null>(null)
+  const _torchTipWorld = new THREE.Vector3()
+
+  function attachTorchFire() {
+    if (!torchFire) {
+      torchFire = new TorchFireParticles()
+      torchFireGroup = torchFire.group
+    }
+  }
+
+  function detachTorchFire() {
+    if (torchFire) {
+      torchFire.dispose()
+      torchFire = null
+      torchFireGroup = null
+    }
+  }
 
   // Select movement animation based on movement mode
   function selectMovementAnimation(mode: MovementMode | undefined): number {
@@ -320,6 +348,9 @@
     }
     if (offhandObject) {
       offhandObject.visible = playerState !== 'interact'
+    }
+    if (torchFireGroup) {
+      torchFireGroup.visible = playerState !== 'interact'
     }
 
     // Select animation based on player state and mode
@@ -530,6 +561,7 @@
       weaponAttached = false
       attachedWeaponItemId = null
       attachedOffhandItemId = null
+      detachTorchFire()
     }
   })
 
@@ -686,6 +718,19 @@
         playAnimationForState()
       }
     }
+
+    // Update torch fire particles
+    if (torchFire && offhandObject) {
+      if (torchTipNode) {
+        torchTipNode.getWorldPosition(_torchTipWorld)
+      } else {
+        offhandObject.updateWorldMatrix(true, false)
+        _torchTipWorld.copy(FALLBACK_TORCH_TIP_LOCAL_OFFSET)
+        offhandObject.localToWorld(_torchTipWorld)
+      }
+      torchFire.setTipPosition(_torchTipWorld)
+      torchFire.update(deltaTime, camera)
+    }
   }
 </script>
 
@@ -699,6 +744,11 @@
     <!-- 3D Character Model with real animations -->
     <T is={modelRoot} />
   </T.Group>
+{/if}
+
+<!-- Torch fire particles (world space) -->
+{#if torchFireGroup}
+  <T is={torchFireGroup} />
 {/if}
 
 <!-- Name tag (separate from character to avoid rotation inheritance) -->
