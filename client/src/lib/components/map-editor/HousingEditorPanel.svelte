@@ -16,6 +16,7 @@
     selectedHouseId,
     selectedRoomIndex,
     deleteSelectedRoom,
+    flattenSelectedRoomTerrain,
     WALL_VARIANT_OPTIONS,
     type RoomTemplate,
     type HousingEditorTool,
@@ -200,6 +201,12 @@
         Select
       </button>
       {#if tool === 'select' && editHouseId != null && editRoomIdx != null}
+        {#if editRoom && editRoom.floorLevel === 0 && editRoom.roomType !== 'stairwell'}
+          <button
+            class="tool-btn tool-flatten"
+            onclick={() => flattenSelectedRoomTerrain?.()}
+          >Flatten</button>
+        {/if}
         <button
           class="tool-btn tool-delete"
           onclick={() => deleteSelectedRoom?.()}
@@ -445,6 +452,16 @@
     background: rgba(68, 170, 255, 0.2);
     border-color: rgba(68, 170, 255, 0.5);
     color: #44aaff;
+  }
+
+  .tool-flatten {
+    background: rgba(255, 200, 60, 0.15);
+    border-color: rgba(255, 200, 60, 0.5);
+    color: #ffc844;
+  }
+
+  .tool-flatten:hover {
+    background: rgba(255, 200, 60, 0.3);
   }
 
   .tool-delete {

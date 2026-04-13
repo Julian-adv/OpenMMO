@@ -17,6 +17,7 @@
     selectedHouseId,
     selectedRoomIndex,
     setDeleteSelectedRoom,
+    setFlattenSelectedRoomTerrain,
     populateEditStoresFromRoom,
     wallVariants,
     type RoomTemplate,
@@ -94,6 +95,31 @@
   let highlightEdges: THREE.LineSegments | null = null
 
   const BLEND_RADIUS = 4
+
+  type Rect = { minX: number; minZ: number; maxX: number; maxZ: number }
+
+  /** Collect world-space footprint rects for all ground-floor (1F, non-stairwell) rooms,
+   *  optionally excluding one specific room. */
+  function buildGroundFloorRects(
+    excludeRoom?: RoomData,
+    excludeHouseId?: string
+  ): Rect[] {
+    const rects: Rect[] = []
+    for (const h of housingManager.getAllHouses()) {
+      for (const r of h.rooms) {
+        if (r === excludeRoom && h.id === excludeHouseId) continue
+        if (r.floorLevel !== 0 || r.roomType === 'stairwell') continue
+        const rx = h.origin.x + r.localX
+        const rz = h.origin.z + r.localZ
+        rects.push({ minX: rx, minZ: rz, maxX: rx + r.sizeX, maxZ: rz + r.sizeZ })
+      }
+    }
+    return rects
+  }
+
+  function isInAnyRect(rects: Rect[], wx: number, wz: number): boolean {
+    return rects.some((r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ)
+  }
 
   // Middle-button camera panning
   let isPanning = false
@@ -198,8 +224,9 @@
     }),
   ]
 
-  // Register delete callback for Panel button
+  // Register callbacks for Panel buttons
   setDeleteSelectedRoom(() => deleteSelectedRoom())
+  setFlattenSelectedRoomTerrain(() => flattenSelectedRoomTerrain())
 
   function updateRaycaster(event: MouseEvent) {
     if (!camera) return false
@@ -435,8 +462,7 @@
       )
 
       // 2. Re-flatten for all remaining nearby 1F rooms
-      const allHouses = housingManager.getAllHouses()
-      for (const h of allHouses) {
+      for (const h of housingManager.getAllHouses()) {
         for (const room of h.rooms) {
           if (room.floorLevel !== 0 || room.roomType === 'stairwell') continue
           const rx = h.origin.x + room.localX
@@ -451,32 +477,10 @@
             rmz + BLEND_RADIUS < restoreMinZ
           )
             continue
-          // Build protected rects from other 1F rooms
-          const protectedRects: {
-            minX: number
-            minZ: number
-            maxX: number
-            maxZ: number
-          }[] = []
-          for (const h2 of allHouses) {
-            for (const r2 of h2.rooms) {
-              if (r2 === room) continue
-              if (r2.floorLevel !== 0 || r2.roomType === 'stairwell') continue
-              const r2x = h2.origin.x + r2.localX
-              const r2z = h2.origin.z + r2.localZ
-              protectedRects.push({
-                minX: r2x,
-                minZ: r2z,
-                maxX: r2x + r2.sizeX,
-                maxZ: r2z + r2.sizeZ,
-              })
-            }
-          }
-          const targetHeight = h.origin.y
-          heightManager.flattenArea(rx, rz, rmx, rmz, targetHeight, BLEND_RADIUS, (wx, wz) =>
-            protectedRects.some(
-              (r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ
-            )
+          const protectedRects = buildGroundFloorRects(room, h.id)
+          heightManager.flattenArea(
+            rx, rz, rmx, rmz, h.origin.y, BLEND_RADIUS,
+            (wx, wz) => isInAnyRect(protectedRects, wx, wz)
           )
         }
       }
@@ -513,7 +517,7 @@
         await Promise.all(restorePromises)
 
         // Re-remove grass under remaining 1F rooms
-        for (const h of allHouses) {
+        for (const h of housingManager.getAllHouses()) {
           for (const room of h.rooms) {
             if (room.floorLevel !== 0 || room.roomType === 'stairwell') continue
             const rx = h.origin.x + room.localX
@@ -548,6 +552,30 @@
         }
       }
     }
+  }
+
+  function flattenSelectedRoomTerrain() {
+    const houseId = get(selectedHouseId)
+    const roomIdx = get(selectedRoomIndex)
+    if (houseId == null || roomIdx == null || !heightManager) return
+
+    const house = housingManager.getHouseById(houseId)
+    if (!house || roomIdx >= house.rooms.length) return
+
+    const room = house.rooms[roomIdx]
+    if (room.floorLevel !== 0 || room.roomType === 'stairwell') return
+
+    const roomWorldX = house.origin.x + room.localX
+    const roomWorldZ = house.origin.z + room.localZ
+    const protectedRects = buildGroundFloorRects(room, house.id)
+
+    heightManager.flattenArea(
+      roomWorldX, roomWorldZ,
+      roomWorldX + room.sizeX, roomWorldZ + room.sizeZ,
+      house.origin.y, BLEND_RADIUS,
+      (wx, wz) => isInAnyRect(protectedRects, wx, wz)
+    )
+    heightManager.saveAllDirty()
   }
 
   function applyRoomSelection(results: { house: HouseData; roomIndex: number }[]) {
@@ -639,23 +667,7 @@
     const shouldFlattenTerrain = currentFloorLevel === 0 && currentRoomType !== 'stairwell'
 
     // Build protected rects BEFORE saving (so the new room isn't included)
-    const protectedRects: { minX: number; minZ: number; maxX: number; maxZ: number }[] = []
-    if (shouldFlattenTerrain) {
-      for (const house of housingManager.getAllHouses()) {
-        for (const room of house.rooms) {
-          if (room.floorLevel === 0 && room.roomType !== 'stairwell') {
-            const rx = house.origin.x + room.localX
-            const rz = house.origin.z + room.localZ
-            protectedRects.push({
-              minX: rx,
-              minZ: rz,
-              maxX: rx + room.sizeX,
-              maxZ: rz + room.sizeZ,
-            })
-          }
-        }
-      }
-    }
+    const protectedRects = shouldFlattenTerrain ? buildGroundFloorRects() : []
 
     // Stairwells and 2F rooms attach to the house with supporting 1F rooms
     // 1F rooms check edge adjacency
@@ -705,16 +717,9 @@
     // Skip terrain flatten and grass removal for 2F rooms and stairwells
     if (shouldFlattenTerrain) {
       heightManager.flattenArea(
-        pos.x,
-        pos.z,
-        pos.x + sx,
-        pos.z + sz,
-        targetHeight,
-        BLEND_RADIUS,
-        (wx, wz) =>
-          protectedRects.some(
-            (r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ
-          )
+        pos.x, pos.z, pos.x + sx, pos.z + sz,
+        targetHeight, BLEND_RADIUS,
+        (wx, wz) => isInAnyRect(protectedRects, wx, wz)
       )
       heightManager.saveAllDirty()
 
@@ -887,6 +892,7 @@
     window.removeEventListener('keydown', handleKeyDown)
     canvas.style.cursor = ''
     setDeleteSelectedRoom(null)
+    setFlattenSelectedRoomTerrain(null)
     placementPreview.set(null)
     previewMatValid.dispose()
     previewMatInvalid.dispose()

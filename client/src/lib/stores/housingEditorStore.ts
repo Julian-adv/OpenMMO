@@ -135,6 +135,12 @@ export function setDeleteSelectedRoom(fn: (() => void) | null) {
   deleteSelectedRoom = fn
 }
 
+// Callback for flattening terrain under the selected room (set by HousingEditorCursor)
+export let flattenSelectedRoomTerrain: (() => void) | null = null
+export function setFlattenSelectedRoomTerrain(fn: (() => void) | null) {
+  flattenSelectedRoomTerrain = fn
+}
+
 // Selection state for edit mode
 export const selectedHouseId = writable<string | null>(null)
 export const selectedRoomIndex = writable<number | null>(null)
