@@ -31,6 +31,7 @@
   import { inventoryStore } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { torchLightEnabled } from '../stores/debugStore'
+  import { localPlayerRightHand } from '../stores/playerHandRegistry'
 
   import type { CharacterClass, Gender } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
@@ -58,6 +59,8 @@
     maxHealth: number
     onAttackDuration?: (duration: number) => void
     onDyingFinished?: () => void
+    onInteractionFinished?: () => void
+    onPickupGrab?: () => void
     isLoading?: boolean
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
@@ -83,6 +86,8 @@
     maxHealth,
     onAttackDuration,
     onDyingFinished,
+    onInteractionFinished,
+    onPickupGrab,
     isLoading = $bindable(false),
     lastDamageInfo,
     lastRegenInfo,
@@ -144,6 +149,8 @@
   >(undefined)
   let lastAttackCounter = $state(0)
   let dyingFinishedNotified = $state(false)
+  let interactionFinishedNotified = $state(false)
+  let pickupGrabNotified = $state(false)
   let currentMovementAnimationIndex = $state<number | undefined>(undefined) // Locked animation for current movement
   let weaponAttached = $state(false)
   let weaponObject: THREE.Object3D | null = null
@@ -411,6 +418,7 @@
       clip = validAnimations[AnimationIndex.DYING]
     } else if (playerState === 'interact') {
       currentMovementAnimationIndex = undefined
+      interactionFinishedNotified = false
       clip = interactionAnim
         ? socialClipsByName.get(interactionAnim)
         : undefined
@@ -559,6 +567,11 @@
 
       clonedScene = cloned
       modelRoot = newModelRoot
+
+      if (isCurrentPlayer) {
+        const rightHand = findBoneByName(cloned, 'RightHand')
+        if (rightHand) localPlayerRightHand.set(rightHand)
+      }
     }
   }
 
@@ -586,6 +599,7 @@
       attachedWeaponItemId = null
       attachedOffhandItemId = null
       detachTorchFire()
+      if (isCurrentPlayer) localPlayerRightHand.set(null)
     }
   })
 
@@ -726,6 +740,36 @@
       ) {
         dyingFinishedNotified = true
         onDyingFinished()
+      }
+    }
+
+    if (playerState !== 'interact') {
+      interactionFinishedNotified = false
+      pickupGrabNotified = false
+    } else if (
+      isCurrentPlayer &&
+      currentAction &&
+      interactionAnim
+    ) {
+      const clip = currentAction.getClip()
+      if (clip.name === interactionAnim) {
+        if (
+          onPickupGrab &&
+          !pickupGrabNotified &&
+          interactionAnim === 'pickup' &&
+          currentAction.time >= clip.duration * 0.35
+        ) {
+          pickupGrabNotified = true
+          onPickupGrab()
+        }
+        if (
+          onInteractionFinished &&
+          !interactionFinishedNotified &&
+          currentAction.time >= clip.duration - 0.001
+        ) {
+          interactionFinishedNotified = true
+          onInteractionFinished()
+        }
       }
     }
 

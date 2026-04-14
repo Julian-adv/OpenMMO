@@ -4,6 +4,7 @@
   import { getItemDef } from '../data/itemDefs'
   import { getWeaponModelPath } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { localPlayerRightHand } from '../stores/playerHandRegistry'
   import type { GroundItemData } from '../managers/groundItemManager'
 
   interface Props {
@@ -17,6 +18,7 @@
   const label = $derived(def?.name ?? data.itemDefId)
 
   let worldModelScene: THREE.Object3D | undefined = $state()
+  let groundParentRef: THREE.Group | undefined = $state()
 
   function disposeObject3D(obj: THREE.Object3D) {
     obj.traverse((child) => {
@@ -45,10 +47,24 @@
     })
     return () => {
       cancelled = true
-      if (worldModelScene) {
-        disposeObject3D(worldModelScene)
+      const scene = worldModelScene
+      if (scene) {
+        if (scene.parent) scene.parent.remove(scene)
+        disposeObject3D(scene)
       }
     }
+  })
+
+  $effect(() => {
+    const scene = worldModelScene
+    const ground = groundParentRef
+    if (!scene || !ground) return
+    const hand = data.inHand ? $localPlayerRightHand : null
+    const targetParent = hand ?? ground
+    if (scene.parent === targetParent) return
+    scene.position.set(0, hand ? 0.08 : 0, 0)
+    scene.rotation.set(0, 0, 0)
+    targetParent.add(scene)
   })
 
   function makeNameTexture(text: string): THREE.CanvasTexture {
@@ -76,9 +92,9 @@
   rotation.y={worldModelScene ? 0 : rotation}
   userData={{ groundItemId: data.instanceId }}
 >
-  {#if worldModelScene}
-    <T is={worldModelScene} />
-  {:else}
+  <T.Group bind:ref={groundParentRef} />
+
+  {#if !worldModelScene}
     <T.Mesh>
       <T.BoxGeometry args={[0.3, 0.3, 0.3]} />
       <T.MeshStandardMaterial color="#f0c040" emissive="#f0c040" emissiveIntensity={0.3} />

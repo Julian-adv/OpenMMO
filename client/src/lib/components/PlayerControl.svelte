@@ -4,6 +4,7 @@
   import { gameStore, type LocalPlayer } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { monsterManager } from '../managers/monsterManager'
+  import { groundItemManager } from '../managers/groundItemManager'
   import { combatController } from '../managers/combatController'
   import { inputHandler } from '../managers/inputHandler'
   import { mapEditorMode, housingEditorMode, debugSpeedMode, torchLightEnabled } from '../stores/debugStore'
@@ -70,6 +71,47 @@
 
   const STAND_UP_DURATION = 300 // ms, matches animation crossfade duration
   let standUpTimer: ReturnType<typeof setTimeout> | null = null
+
+  let pendingPickupInstanceId = $state<number | null>(null)
+
+  function exitPickupInteraction() {
+    if (
+      playerState.state !== 'interact' ||
+      playerState.interactionAnim !== 'pickup'
+    ) {
+      return
+    }
+    const idleState: PlayerState = {
+      ...playerState,
+      state: 'idle',
+      speed: 0,
+      interactionAnim: undefined,
+      interactOffsetY: undefined,
+    }
+    playerState = idleState
+    onStateChange(idleState)
+  }
+
+  export function onInteractionFinished() {
+    exitPickupInteraction()
+  }
+
+  export function onPickupGrab() {
+    if (pendingPickupInstanceId !== null) {
+      networkManager.sendPickupItem(pendingPickupInstanceId)
+      groundItemManager.setInHand(pendingPickupInstanceId)
+    }
+  }
+
+  $effect(() => {
+    const id = pendingPickupInstanceId
+    if (id === null) return
+    const s = playerState
+    if (s.state !== 'interact' || s.interactionAnim !== 'pickup') {
+      groundItemManager.finishPickup(id)
+      pendingPickupInstanceId = null
+    }
+  })
 
   function exitFurnitureInteraction(notify = true) {
     if (currentPlayer) {
@@ -551,7 +593,11 @@
 
     // Stand up first when leaving furniture interaction
     if (playerState.state === 'interact') {
-      exitFurnitureInteraction()
+      if (playerState.interactionAnim === 'pickup') {
+        exitPickupInteraction()
+      } else {
+        exitFurnitureInteraction()
+      }
     }
 
     // Cancel click-to-move if keyboard input detected
@@ -626,6 +672,12 @@
 
     // Stand up first when leaving furniture interaction
     if (playerState.state === 'interact') {
+      if (playerState.interactionAnim === 'pickup') {
+        exitPickupInteraction()
+        handleClickToMove(clickPosition)
+        return
+      }
+
       exitFurnitureInteraction()
 
       if (standUpTimer) clearTimeout(standUpTimer)
@@ -774,7 +826,25 @@
         break
       }
       case 'pickup_ground_item': {
-        networkManager.sendPickupItem(intent.instanceId)
+        if (playerState.state === 'dead') break
+
+        groundItemManager.beginPickup(intent.instanceId)
+        pendingPickupInstanceId = intent.instanceId
+
+        combatController.cancelCombat()
+        isMoving = false
+        movementTarget = null
+        movementState = null
+        currentSpeed = 0
+
+        const pickupState: PlayerState = {
+          ...playerState,
+          state: 'interact',
+          speed: 0,
+          interactionAnim: 'pickup',
+        }
+        playerState = pickupState
+        onStateChange(pickupState)
         break
       }
       case 'move_to_ground': {

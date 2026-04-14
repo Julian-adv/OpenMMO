@@ -199,6 +199,8 @@
     maxHealth={currentPlayer.maxHealth}
     onAttackDuration={onAttackDuration}
     onDyingFinished={onCurrentPlayerDyingFinished}
+    onInteractionFinished={() => playerControl?.onInteractionFinished()}
+    onPickupGrab={() => playerControl?.onPickupGrab()}
     bind:isLoading={isCurrentPlayerLoading}
     lastDamageInfo={currentPlayer.lastDamageInfo}
     lastRegenInfo={currentPlayer.lastRegenInfo}
