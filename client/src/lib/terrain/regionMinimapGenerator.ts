@@ -5,6 +5,7 @@ import {
   TILE_DIM,
   VERTS_PER_SIDE,
 } from './terrain-constants'
+import { MAX_PALETTE, unpackPrimary, unpackSecondary } from './splat-encoding'
 import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 import type { HouseData } from '../types/housing'
 
@@ -15,12 +16,13 @@ const MAP_PX = REGION_SIZE * TILE_DIM // 1024
 
 /** Texture name → minimap RGB color */
 const TEXTURE_COLORS: Record<string, [number, number, number]> = {
-  rocky_terrain_02_1k: [80, 140, 50], // green
-  sandy_gravel_02_1k: [194, 178, 128], // sand
+  rocky_terrain_02_1k: [80, 140, 50], // green (grass)
+  sandy_gravel_02_1k: [210, 185, 110], // sand
   snow_02_1k: [240, 240, 245], // white
   gravel_floor_1k: [160, 150, 130], // gray-brown
   red_laterite_soil_stones_1k: [180, 100, 60], // reddish-brown
   gravel_road_1k: [140, 135, 125], // gray
+  patterned_paving_02_1k: [235, 225, 205], // pale beige (road)
 }
 
 const COLOR_SHALLOW_WATER: [number, number, number] = [100, 160, 220]
@@ -41,10 +43,13 @@ export async function generateRegionMinimap(
   const apiUrl = getTerrainApiUrl()
   const meta = await metaManager.fetchMeta(rx, rz)
 
-  // Build per-channel color from region meta
-  const channelColors: [number, number, number][] = meta.layers.map(
-    (layer) => TEXTURE_COLORS[layer.texture] ?? COLOR_FALLBACK
-  )
+  // Pre-pad to MAX_PALETTE so the hot pixel loop can skip bounds / fallback checks.
+  const channelColors: [number, number, number][] = new Array(MAX_PALETTE)
+    .fill(null)
+    .map(() => COLOR_FALLBACK)
+  meta.layers.forEach((layer, i) => {
+    channelColors[i] = TEXTURE_COLORS[layer.texture] ?? COLOR_FALLBACK
+  })
 
   // Fetch all tiles' height + splat data
   const heightmaps = new Map<string, Uint16Array>()
@@ -120,17 +125,14 @@ export async function generateRegionMinimap(
           } else if (height < VISIBLE_SAND_THRESHOLD) {
             ;[r, g, b] = COLOR_SHALLOW_WATER
           } else if (splatData) {
-            // Find dominant splat channel
             const splatIdx = (cz * TILE_DIM + cx) * 4
-            let maxVal = -1
-            let maxCh = 0
-            for (let ch = 0; ch < 4; ch++) {
-              if (splatData[splatIdx + ch] > maxVal) {
-                maxVal = splatData[splatIdx + ch]
-                maxCh = ch
-              }
-            }
-            ;[r, g, b] = channelColors[maxCh]
+            const packed = splatData[splatIdx]
+            const blend = splatData[splatIdx + 2] / 255
+            const cP = channelColors[unpackPrimary(packed)]
+            const cS = channelColors[unpackSecondary(packed)]
+            r = Math.round(cP[0] * (1 - blend) + cS[0] * blend)
+            g = Math.round(cP[1] * (1 - blend) + cS[1] * blend)
+            b = Math.round(cP[2] * (1 - blend) + cS[2] * blend)
           } else {
             ;[r, g, b] = COLOR_FALLBACK
           }

@@ -14,6 +14,7 @@
   import { ALL_SPLAT_TEXTURES, loadSplatLayer } from '../../utils/splatLayerLoader'
   import type { LayerConfig } from '../../utils/splatLayerLoader'
   import type { RegionMeta } from '../../managers/terrainMetaManager'
+  import { MAX_PALETTE } from '../../terrain/splat-encoding'
   import { get } from 'svelte/store'
 
   interface Props {
@@ -95,38 +96,49 @@
     openDropdown = openDropdown === index ? null : index
   }
 
-  async function changeTexture(slotIndex: number, textureName: string) {
+  async function persistPalette(newConfigs: LayerConfig[]) {
     const metaManager = get(editorMetaManager)
     if (!metaManager || !region) return
-
-    const tex = ALL_SPLAT_TEXTURES.find((t) => t.name === textureName)
-    if (!tex) return
-
-    // Keep existing tileScale if the texture was already in this slot, otherwise use default
-    const newConfig: LayerConfig = {
-      texture: textureName,
-      tileScale: configs[slotIndex]?.texture === textureName
-        ? configs[slotIndex].tileScale
-        : tex.defaultTileScale,
-    }
-
-    const newConfigs = [...configs] as [LayerConfig, LayerConfig, LayerConfig, LayerConfig]
-    newConfigs[slotIndex] = newConfig
-
     const meta: RegionMeta = { layers: newConfigs }
     await metaManager.saveMeta(region.rx, region.rz, meta)
-
-    // Update stores
     currentRegionConfigs.set([...newConfigs])
     currentRegionLayers.set(
       newConfigs.map((l, i) => ({
         label: textureNameToLabel(l.texture),
-        color: LAYER_COLORS[i] ?? '#ffffff',
+        color: LAYER_COLORS[i % LAYER_COLORS.length] ?? '#ffffff',
       }))
     )
     regionMetaVersion.update((v) => v + 1)
+  }
 
+  async function changeTexture(slotIndex: number, textureName: string) {
+    const tex = ALL_SPLAT_TEXTURES.find((t) => t.name === textureName)
+    if (!tex) return
+
+    const newConfig: LayerConfig = {
+      texture: textureName,
+      tileScale:
+        configs[slotIndex]?.texture === textureName
+          ? configs[slotIndex].tileScale
+          : tex.defaultTileScale,
+    }
+
+    const newConfigs = [...configs]
+    newConfigs[slotIndex] = newConfig
+    await persistPalette(newConfigs)
     openDropdown = null
+  }
+
+  async function addSlot() {
+    if (configs.length >= MAX_PALETTE) return
+    const fallback = ALL_SPLAT_TEXTURES[0]
+    if (!fallback) return
+    const newConfigs = [
+      ...configs,
+      { texture: fallback.name, tileScale: fallback.defaultTileScale },
+    ]
+    await persistPalette(newConfigs)
+    openDropdown = newConfigs.length - 1
   }
 </script>
 
@@ -175,6 +187,9 @@
         {/if}
       </div>
     {/each}
+    {#if configs.length < MAX_PALETTE}
+      <button class="add-slot-btn" onclick={addSlot} title="Add palette slot">+</button>
+    {/if}
   </div>
 
   <div class="control-row">
@@ -250,8 +265,29 @@
 
   .texture-slots-grid {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 8px;
+    max-width: 280px;
+  }
+
+  .add-slot-btn {
+    width: 64px;
+    height: 64px;
+    border: 2px dashed rgba(226, 185, 59, 0.4);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    color: #e2b93b;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .add-slot-btn:hover {
+    border-color: #e2b93b;
+    background: rgba(226, 185, 59, 0.08);
   }
 
   .texture-slot {

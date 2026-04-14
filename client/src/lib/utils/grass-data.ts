@@ -98,7 +98,7 @@ function isBoundaryCell(
     const nx = cx + dx
     const nz = cz + dz
     if (nx < 0 || nx >= TILE_DIM || nz < 0 || nz >= TILE_DIM) continue
-    const r = splatData[(nz * TILE_DIM + nx) * CHANNELS]
+    const r = splatData[(nz * TILE_DIM + nx) * CHANNELS + 3]
     if (r >= otherRMin && r <= otherRMax) return true
   }
   return false
@@ -133,7 +133,7 @@ function computeInstances(
 
   for (let cz = 0; cz < TILE_DIM; cz++) {
     for (let cx = 0; cx < TILE_DIM; cx++) {
-      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
+      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS + 3]
       if (rVal < params.rMin || rVal > params.rMax) continue
       const density = densityRange > 0 ? (rVal - params.rMin) / densityRange : 1
       const boundary = isBoundaryCell(
@@ -207,11 +207,11 @@ function computeFlowerInstances(
 
   for (let cz = 0; cz < TILE_DIM; cz++) {
     for (let cx = 0; cx < TILE_DIM; cx++) {
-      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
+      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS + 3]
       if (rVal < SHORT_GRASS_R_MIN || rVal > SHORT_GRASS_R_MAX) continue
 
-      // Flower probability: high when grass is sparse, low when dense
-      // t=0 (R=230, sparse) → 80%, t=1 (R=239, dense) → 10%
+      // Flower probability: high when grass is sparse, low when dense.
+      // t=0 (low vegMeta, sparse) → 80%, t=1 (high, dense) → 10%
       const t = (rVal - SHORT_GRASS_R_MIN) / densityRange
       const flowerProb = 0.4 * Math.pow(0.125, t) // 0.40 → 0.05
 

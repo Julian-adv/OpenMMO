@@ -1,10 +1,31 @@
 import { createRng } from '../utils/simplex-noise'
-import { SHORT_GRASS_R_MIN, TALL_GRASS_R_MIN } from '../shaders/grass-material'
 import {
   REGION_CELLS,
   smoothstep,
   type TerrainGenConfig,
 } from './terrain-constants'
+import {
+  BYTES_PER_CELL,
+  GRASS_DENSITY_LEVELS,
+  SHORT_GRASS_MIN,
+  TALL_GRASS_MIN,
+  packIndices,
+  unpackPrimary,
+} from './splat-encoding'
+
+/**
+ * Palette slot assignments used by procedural generation. Must match the palette
+ * seeded into RegionMeta in GenerateTerrainDialog.
+ */
+export const GEN_SLOT = {
+  GRASS: 0,
+  SAND: 1,
+  LATERITE: 2,
+  SNOW: 3,
+} as const
+
+/** Grass is placed only where the cell is ≥90% grass (mirrors legacy R>=230 rule). */
+const GRASS_BLEND_MAX = 26
 
 export function computeCoastDistance(heightField: Float32Array): Float32Array {
   const N = REGION_CELLS
@@ -62,88 +83,64 @@ export function generateSplatMap(
   regionZ: number
 ): Uint8Array {
   const N = REGION_CELLS
-  const CHANNELS = 4
-  const splatField = new Uint8Array(N * N * CHANNELS)
+  const splatField = new Uint8Array(N * N * BYTES_PER_CELL)
   const SAND_BAND = 12
   const SAND_HEIGHT_MAX = 0.9
   const snowStart = config.maxHeight * 0.7
   const snowFull = config.maxHeight * 0.85
 
-  const SUBTYPE_DENSITY_RANGE = TALL_GRASS_R_MIN - SHORT_GRASS_R_MIN - 1
   const TALL_GRASS_PROB = 0.3
 
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
       const i = cz * N + cx
-      const pi = i * CHANNELS
+      const pi = i * BYTES_PER_CELL
       const h = heightField[i]
       const dist = coastDist[i]
 
-      // Compute slope (central differences)
       const hL = cx > 0 ? heightField[i - 1] : h
       const hR = cx < N - 1 ? heightField[i + 1] : h
       const hU = cz > 0 ? heightField[i - N] : h
       const hD = cz < N - 1 ? heightField[i + N] : h
       const slope = Math.sqrt((hR - hL) * (hR - hL) + (hD - hU) * (hD - hU)) / 2
 
-      let grass = 0,
-        rock = 0,
-        sand = 0,
-        snow = 0
+      let primary: number = GEN_SLOT.GRASS
+      let secondary: number = GEN_SLOT.GRASS
+      let blend = 0
 
       if (h < 0) {
-        sand = 1.0
+        primary = GEN_SLOT.SAND
+        secondary = GEN_SLOT.SAND
       } else if (dist < SAND_BAND && h < SAND_HEIGHT_MAX) {
         const distFactor = 1.0 - dist / SAND_BAND
         const heightFactor = 1.0 - smoothstep(0, SAND_HEIGHT_MAX, h)
         const sandFactor = distFactor * heightFactor
-        sand = sandFactor
-        grass = 1.0 - sandFactor
+        secondary = GEN_SLOT.SAND
+        blend = Math.round(sandFactor * 255)
       } else if (slope > 1.5) {
-        const rockFactor = smoothstep(1.5, 3.0, slope)
-        rock = rockFactor
-        grass = 1.0 - rockFactor
+        secondary = GEN_SLOT.LATERITE
+        blend = Math.round(smoothstep(1.5, 3.0, slope) * 255)
       } else if (h > snowStart && config.maxHeight > 20) {
-        const snowFactor = smoothstep(snowStart, snowFull, h)
-        snow = snowFactor
-        grass = 1.0 - snowFactor
-      } else {
-        grass = 1.0
+        secondary = GEN_SLOT.SNOW
+        blend = Math.round(smoothstep(snowStart, snowFull, h) * 255)
       }
 
-      // Normalize to sum = 255
-      const total = grass + rock + sand + snow
-      if (total > 0) {
-        splatField[pi + 0] = Math.round((grass / total) * 255)
-        splatField[pi + 1] = Math.round((rock / total) * 255)
-        splatField[pi + 2] = Math.round((sand / total) * 255)
-        splatField[pi + 3] = Math.round((snow / total) * 255)
-      } else {
-        splatField[pi + 0] = 255
-      }
-
-      // Fix rounding: ensure sum == 255
-      const sum =
-        splatField[pi] +
-        splatField[pi + 1] +
-        splatField[pi + 2] +
-        splatField[pi + 3]
-      if (sum !== 255) {
-        let maxCh = 0
-        for (let c = 1; c < 4; c++) {
-          if (splatField[pi + c] > splatField[pi + maxCh]) maxCh = c
-        }
-        splatField[pi + maxCh] += 255 - sum
-      }
+      splatField[pi + 0] = packIndices(primary, secondary)
+      splatField[pi + 1] = 0
+      splatField[pi + 2] = blend
+      splatField[pi + 3] = 0
     }
   }
 
-  // --- Grass circle scatter (world-space deterministic) ---
+  // ── Grass circle scatter (world-space deterministic) ──
+  // A cell is grass-eligible if primary is grass and secondary weight is low.
   const grassMask = new Uint8Array(N * N)
   for (let i = 0; i < N * N; i++) {
-    if (splatField[i * CHANNELS] >= SHORT_GRASS_R_MIN) {
+    const pi = i * BYTES_PER_CELL
+    const primary = unpackPrimary(splatField[pi])
+    const blend = splatField[pi + 2]
+    if (primary === GEN_SLOT.GRASS && blend <= GRASS_BLEND_MAX) {
       grassMask[i] = 1
-      splatField[i * CHANNELS] = SHORT_GRASS_R_MIN - 1
     }
   }
 
@@ -153,6 +150,7 @@ export function generateSplatMap(
   const MAX_RADIUS = 15
   const SCATTER_CELL = 64
   const CIRCLES_PER_SCATTER = 20
+  const DENSITY_MAX = GRASS_DENSITY_LEVELS - 1
 
   const regionOX = regionX * N
   const regionOZ = regionZ * N
@@ -177,9 +175,7 @@ export function generateSplatMap(
         const wcz = cellOZ + rng() * SCATTER_CELL
         const radius = CIRCLE_RADII[Math.floor(rng() * CIRCLE_RADII.length)]
         const isTall = rng() < TALL_GRASS_PROB
-        const circleDensity = Math.round(
-          SUBTYPE_DENSITY_RANGE * (0.6 + rng() * 0.4)
-        )
+        const circleDensity = Math.round(DENSITY_MAX * (0.6 + rng() * 0.4))
 
         const lcx = Math.floor(wcx) - regionOX
         const lcz = Math.floor(wcz) - regionOZ
@@ -216,12 +212,12 @@ export function generateSplatMap(
     }
   }
 
-  // Write density + subtype back to splatField R channel
+  // Write density + subtype into vegMeta byte
   for (let i = 0; i < N * N; i++) {
     if (densityGrid[i] > 0) {
-      const base = typeGrid[i] === 1 ? TALL_GRASS_R_MIN : SHORT_GRASS_R_MIN
-      splatField[i * CHANNELS] =
-        base + Math.min(densityGrid[i], SUBTYPE_DENSITY_RANGE)
+      const base = typeGrid[i] === 1 ? TALL_GRASS_MIN : SHORT_GRASS_MIN
+      splatField[i * BYTES_PER_CELL + 3] =
+        base + Math.min(densityGrid[i], DENSITY_MAX)
     }
   }
 

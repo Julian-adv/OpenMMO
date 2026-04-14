@@ -39,30 +39,32 @@
 
 ## 3. 지형 표현 및 렌더링 (Terrain Rendering)
 
-*   **4-Layer PBR Splatting:**
-    *   하나의 RGBA Splat Map을 사용하여 4개의 텍스처 레이어를 혼합한다.
-    *   각 채널(R/G/B/A)의 값(0~255)은 해당 레이어 텍스처의 가중치를 나타내며, 픽셀별로 4개 레이어를 가중합하여 최종 색상을 결정한다.
-    *   구체적으로 어떤 텍스처를 각 채널에 할당할지는 리전 메타데이터에서 정의한다 (아래 참조).
+*   **V2 Palette Splatting (인덱스 기반 2-텍스처 블렌드):** 상세는 [SPLATMAP_V2.md](SPLATMAP_V2.md).
+    *   리전당 **최대 16개** 텍스처 팔레트를 구성하고, 각 셀은 팔레트에서 **2개**를 골라 블렌드한다.
+    *   셀당 4바이트: `byte 0` = `(primaryIdx << 4) | secondaryIdx`, `byte 1` = reserved, `byte 2` = blend(0=primary, 255=secondary), `byte 3` = vegMeta(풀 밀도/subtype).
     *   **스플랫맵 데이터 사양:**
-        *   **데이터 타입:** uint8 × 4채널 (RGBA)
+        *   **데이터 타입:** uint8 × 4바이트/셀 (V2 인코딩)
         *   **해상도:** 64 x 64 (셀 기반, 하이트맵의 버텍스 기반과 다름)
         *   **타일당 저장 크기:** 64 x 64 x 4 = 16,384바이트
+        *   **필터링:** NEAREST (인덱스 바이트는 보간 불가)
         *   **파일:** `data/terrain/splat/r{±xx}_{±zz}/s_{±xxxxx}_{±zzzzz}.bin`
-*   **리전 메타데이터:** 리전(16x16 타일 = 1km x 1km) 단위로 텍스처 구성과 tile scale을 JSON으로 관리한다.
-    *   각 리전은 RGBA 채널에 서로 다른 텍스처를 할당할 수 있다 (예: 눈 리전, 사막 리전, 숲 리전).
-    *   같은 리전 내 타일들은 동일한 4개 텍스처를 공유하고, 스플랫맵 가중치만 다르다.
+*   **리전 메타데이터:** 리전(16x16 타일 = 1km x 1km) 단위로 팔레트를 JSON으로 관리한다.
+    *   `layers` 배열은 **1..16개** 항목. 각 항목은 `texture`와 `tileScale`.
     *   파일: `data/terrain/meta/r{±xx}_{±zz}.json`
-    *   예시:
+    *   예시 (해안+산악 리전):
         ```json
         {
           "layers": [
             { "texture": "rocky_terrain_02_1k", "tileScale": 8.0 },
-            { "texture": "gravel_floor_1k", "tileScale": 6.0 },
+            { "texture": "sandy_gravel_02_1k",  "tileScale": 8.0 },
             { "texture": "red_laterite_soil_stones_1k", "tileScale": 10.0 },
-            { "texture": "snow_02_1k", "tileScale": 4.0 }
+            { "texture": "snow_02_1k", "tileScale": 4.0 },
+            { "texture": "patterned_paving_02_1k", "tileScale": 30.0 },
+            { "texture": "gravel_road_1k", "tileScale": 8.0 }
           ]
         }
         ```
+    *   **Atlas**: 각 리전의 팔레트는 클라이언트에서 4×4 atlas (512px 슬롯)로 패킹되어 GPU에 업로드된다.
     *   *(TODO)* 리전 경계에서 텍스처 전환이 발생할 수 있다. 경계 블렌딩은 향후 확장으로 처리한다.
 *   **PBR 데이터:** 각 레이어는 Albedo, Normal, ORM(AO, Roughness, Metallic) 데이터를 포함하여 실시간 조명에 반응한다.
     *   텍스처 데이터는 `.glb` 형식으로 `client/public/textures/` 폴더에 저장되어 있다.

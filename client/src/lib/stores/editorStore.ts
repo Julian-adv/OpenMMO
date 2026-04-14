@@ -57,9 +57,11 @@ export interface SplatLayerInfo {
 
 const DEFAULT_SPLAT_LAYER_INFO: SplatLayerInfo[] = [
   { label: 'Grass', color: '#66cc66' },
-  { label: 'Rock', color: '#999999' },
-  { label: 'Dirt', color: '#bb7744' },
+  { label: 'Sand', color: '#d9ba6e' },
+  { label: 'Laterite', color: '#b06438' },
   { label: 'Snow', color: '#ddeeff' },
+  { label: 'Paving', color: '#ebe1cd' },
+  { label: 'Road', color: '#8c877d' },
 ]
 
 export const currentRegionLayers = writable<SplatLayerInfo[]>(

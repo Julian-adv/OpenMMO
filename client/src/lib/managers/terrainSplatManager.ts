@@ -3,12 +3,37 @@ import { getTerrainApiUrl } from '../utils/networkUtils'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { worldToTileCoord } from './terrain-height-types'
 import { smoothstep } from '../terrain/terrain-constants'
+import {
+  BYTES_PER_CELL,
+  applyBrush,
+  readCell,
+  writeCell,
+} from '../terrain/splat-encoding'
 
 const TILE_DIM = 64
-const CHANNELS = 4 // RGBA
 
 function tileKey(tileX: number, tileZ: number): string {
   return `${tileX},${tileZ}`
+}
+
+function paintCell(
+  data: Uint8Array,
+  cellIdx: number,
+  paintIdx: number,
+  strength: number
+): boolean {
+  if (strength <= 0) return false
+  const before = readCell(data, cellIdx)
+  const after = applyBrush(before, paintIdx, strength)
+  if (
+    before.primaryIdx === after.primaryIdx &&
+    before.secondaryIdx === after.secondaryIdx &&
+    before.blend === after.blend
+  ) {
+    return false
+  }
+  writeCell(data, cellIdx, after)
+  return true
 }
 
 export class TerrainSplatManager {
@@ -32,8 +57,10 @@ export class TerrainSplatManager {
       THREE.UnsignedByteType
     )
     texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping
-    texture.minFilter = THREE.LinearFilter
-    texture.magFilter = THREE.LinearFilter
+    // V2 bytes 0/1/3 are integer fields — must not be bilinearly interpolated.
+    texture.minFilter = THREE.NearestFilter
+    texture.magFilter = THREE.NearestFilter
+    texture.generateMipmaps = false
     // PlaneGeometry UV v=0 is maxZ, v=1 is minZ (v decreases with Z).
     // flipY=true so data row 0 maps to v=1 (minZ), matching cz=0 = minZ.
     texture.flipY = true
@@ -46,15 +73,12 @@ export class TerrainSplatManager {
     const cached = this.textures.get(key)
     if (cached) return cached
 
-    // Deduplicate in-flight requests
     const inflight = this.inflightSplatmaps.get(key)
     if (inflight) return inflight
 
     const defaultFallback = (): THREE.DataTexture => {
-      const data = new Uint8Array(TILE_DIM * TILE_DIM * CHANNELS)
-      for (let i = 0; i < TILE_DIM * TILE_DIM; i++) {
-        data[i * CHANNELS] = 255 // R = grass
-      }
+      // V2 default: all zeros → every cell is 100% palette slot 0.
+      const data = new Uint8Array(TILE_DIM * TILE_DIM * BYTES_PER_CELL)
       this.splatmaps.set(key, data)
       const texture = this.createTexture(data)
       this.textures.set(key, texture)
@@ -92,7 +116,7 @@ export class TerrainSplatManager {
     return this.textures.get(tileKey(tileX, tileZ)) ?? null
   }
 
-  /** Get raw splatmap RGBA data for a tile (64×64×4 Uint8Array), or null if not loaded. */
+  /** Get raw splatmap bytes for a tile (64×64×4 Uint8Array, V2 encoding), or null if not loaded. */
   getSplatData(tileX: number, tileZ: number): Uint8Array | null {
     return this.splatmaps.get(tileKey(tileX, tileZ)) ?? null
   }
@@ -102,7 +126,7 @@ export class TerrainSplatManager {
     worldX: number,
     worldZ: number,
     radius: number,
-    layerIndex: number,
+    paintIdx: number,
     strength: number
   ): { tileX: number; tileZ: number }[] {
     const sigma = radius / 2.5
@@ -145,60 +169,30 @@ export class TerrainSplatManager {
 
         for (let cz = startCZ; cz <= endCZ; cz++) {
           for (let cx = startCX; cx <= endCX; cx++) {
-            const vertexWorldX = tileMinX + cx
-            const vertexWorldZ = tileMinZ + cz
-
-            const dx = vertexWorldX - worldX
-            const dz = vertexWorldZ - worldZ
+            const dx = tileMinX + cx - worldX
+            const dz = tileMinZ + cz - worldZ
             const dist = Math.sqrt(dx * dx + dz * dz)
-
             if (dist > radius) continue
 
             const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
-            const addAmount = weight * strength * 255
-
-            const pixelIdx = (cz * TILE_DIM + cx) * CHANNELS
-
-            // Increase target channel
-            const current = data[pixelIdx + layerIndex]
-            const target = Math.min(255, current + addAmount)
-            data[pixelIdx + layerIndex] = target
-
-            // Redistribute other channels so sum = 255
-            let otherSum = 0
-            for (let c = 0; c < CHANNELS; c++) {
-              if (c !== layerIndex) otherSum += data[pixelIdx + c]
+            if (
+              paintCell(data, cz * TILE_DIM + cx, paintIdx, weight * strength)
+            ) {
+              changed = true
             }
-
-            const total = data[pixelIdx + layerIndex] + otherSum
-            if (total > 255 && otherSum > 0) {
-              const scale = (255 - data[pixelIdx + layerIndex]) / otherSum
-              for (let c = 0; c < CHANNELS; c++) {
-                if (c !== layerIndex) {
-                  data[pixelIdx + c] = Math.round(data[pixelIdx + c] * scale)
-                }
-              }
-            }
-
-            changed = true
           }
         }
 
         if (changed) {
           const texture = this.textures.get(key)
-          if (texture) {
-            texture.needsUpdate = true
-          }
+          if (texture) texture.needsUpdate = true
           this.dirtyTiles.add(key)
           affectedTiles.push({ tileX: tx, tileZ: tz })
         }
       }
     }
 
-    if (this.dirtyTiles.size > 0) {
-      this.scheduleSave()
-    }
-
+    if (this.dirtyTiles.size > 0) this.scheduleSave()
     return affectedTiles
   }
 
@@ -209,7 +203,7 @@ export class TerrainSplatManager {
     x2: number,
     z2: number,
     radius: number,
-    layerIndex: number,
+    paintIdx: number,
     strength: number
   ): { tileX: number; tileZ: number }[] {
     const lineDx = x2 - x1
@@ -218,8 +212,6 @@ export class TerrainSplatManager {
     if (lenSq < 1e-6) return []
 
     // Flat-core falloff: fully saturate within innerR, smoothstep to 0 at radius.
-    // Gaussian was too narrow for a single-pass road application and left edges
-    // looking weak, especially at tile seams.
     const innerR = radius * 0.6
 
     const minWorldX = Math.min(x1, x2) - radius
@@ -266,48 +258,24 @@ export class TerrainSplatManager {
             if (dist > radius) continue
 
             const weight = 1 - smoothstep(innerR, radius, dist)
-            const addAmount = weight * strength * 255
-
-            const pixelIdx = (cz * TILE_DIM + cx) * CHANNELS
-
-            const current = data[pixelIdx + layerIndex]
-            const target = Math.min(255, current + addAmount)
-            data[pixelIdx + layerIndex] = target
-
-            let otherSum = 0
-            for (let c = 0; c < CHANNELS; c++) {
-              if (c !== layerIndex) otherSum += data[pixelIdx + c]
+            if (
+              paintCell(data, cz * TILE_DIM + cx, paintIdx, weight * strength)
+            ) {
+              changed = true
             }
-
-            const total = data[pixelIdx + layerIndex] + otherSum
-            if (total > 255 && otherSum > 0) {
-              const scale = (255 - data[pixelIdx + layerIndex]) / otherSum
-              for (let c = 0; c < CHANNELS; c++) {
-                if (c !== layerIndex) {
-                  data[pixelIdx + c] = Math.round(data[pixelIdx + c] * scale)
-                }
-              }
-            }
-
-            changed = true
           }
         }
 
         if (changed) {
           const texture = this.textures.get(key)
-          if (texture) {
-            texture.needsUpdate = true
-          }
+          if (texture) texture.needsUpdate = true
           this.dirtyTiles.add(key)
           affectedTiles.push({ tileX: tx, tileZ: tz })
         }
       }
     }
 
-    if (this.dirtyTiles.size > 0) {
-      this.scheduleSave()
-    }
-
+    if (this.dirtyTiles.size > 0) this.scheduleSave()
     return affectedTiles
   }
 

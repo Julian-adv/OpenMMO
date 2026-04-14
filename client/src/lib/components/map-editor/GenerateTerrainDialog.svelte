@@ -215,13 +215,16 @@
       progress = 30
       progressLabel = 'Saving region meta...'
 
-      // Set region meta for generation textures
+      // V2 palette — slot order must match GEN_SLOT in terrain-splat-gen.ts.
+      // Additional slots (paving/road) are reserved for manual paint.
       const genMeta: RegionMeta = {
         layers: [
-          { texture: 'rocky_terrain_02_1k', tileScale: 8.0 },
-          { texture: 'gravel_floor_1k', tileScale: 6.0 },
-          { texture: 'sandy_gravel_02_1k', tileScale: 8.0 },
-          { texture: 'snow_02_1k', tileScale: 4.0 },
+          { texture: 'rocky_terrain_02_1k', tileScale: 8.0 }, // 0: grass
+          { texture: 'sandy_gravel_02_1k', tileScale: 8.0 }, // 1: sand
+          { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 }, // 2: laterite
+          { texture: 'snow_02_1k', tileScale: 4.0 }, // 3: snow
+          { texture: 'patterned_paving_02_1k', tileScale: 30.0 }, // 4: paving
+          { texture: 'gravel_road_1k', tileScale: 8.0 }, // 5: road
         ],
       }
       await metaManager.saveMeta(region.rx, region.rz, genMeta)

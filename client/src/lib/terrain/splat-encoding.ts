@@ -18,6 +18,9 @@ import {
 export const MAX_PALETTE = 16
 export const BYTES_PER_CELL = 4
 
+/** Byte offset of vegMeta within a cell. */
+export const VEGMETA_OFFSET = 3
+
 /** vegMeta ranges are the same numeric values historically used in the R channel. */
 export const SHORT_GRASS_MIN = SHORT_GRASS_R_MIN
 export const SHORT_GRASS_MAX = SHORT_GRASS_R_MAX

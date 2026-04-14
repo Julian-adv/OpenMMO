@@ -11,6 +11,7 @@
   import {
     makeSplatStandardMaterial,
     createSplatBrushUniforms,
+    padTileScales,
     type SplatBrushUniforms,
   } from '../makeSplatStandardMaterial'
   import type { SplatLayer } from '../makeSplatStandardMaterial'
@@ -168,7 +169,7 @@
   function createDefaultMaterial(): MeshStandardNodeMaterial {
     const mat = makeSplatStandardMaterial({
       atlas: defaultAtlas!,
-      tileScales: [_defaultLayers![0].tile, _defaultLayers![1].tile, _defaultLayers![2].tile, _defaultLayers![3].tile],
+      tileScales: _defaultLayers!.map((l) => l.tile),
       splatMap: defaultSplat,
       splatScale: 1.0,
       sharedBrushUniforms: brushUniforms,
@@ -260,10 +261,7 @@
     if (u.ormAtlas && defaultAtlas.ormAtlas) {
       u.ormAtlas.value = defaultAtlas.ormAtlas
     }
-    u.uTile0.value = _defaultLayers[0].tile
-    u.uTile1.value = _defaultLayers[1].tile
-    u.uTile2.value = _defaultLayers[2].tile
-    u.uTile3.value = _defaultLayers[3].tile
+    u.uTileScales.array = padTileScales(_defaultLayers.map((l) => l.tile))
   }
 
   /** Update a per-tile material's atlas/tileScales from resolved region layers. */
@@ -281,10 +279,7 @@
     if (u.ormAtlas && atlas.ormAtlas) {
       u.ormAtlas.value = atlas.ormAtlas
     }
-    u.uTile0.value = resolved.layers[0].tile
-    u.uTile1.value = resolved.layers[1].tile
-    u.uTile2.value = resolved.layers[2].tile
-    u.uTile3.value = resolved.layers[3].tile
+    u.uTileScales.array = padTileScales(resolved.layers.map((l) => l.tile))
   }
 
   // ── Brush sync (updates shared uniform nodes → affects all materials) ──

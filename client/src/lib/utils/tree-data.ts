@@ -111,7 +111,7 @@ export function computeTreePlacement(
 
   for (let cz = 0; cz < TILE_DIM; cz++) {
     for (let cx = 0; cx < TILE_DIM; cx++) {
-      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS]
+      const rVal = splatData[(cz * TILE_DIM + cx) * CHANNELS + 3]
       if (rVal < SHORT_GRASS_R_MIN || rVal > TALL_GRASS_R_MAX) continue
 
       if (rand() >= TREE_PROBABILITY) continue

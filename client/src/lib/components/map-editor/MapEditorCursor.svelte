@@ -248,7 +248,7 @@
         const cx = Math.floor(x - tileMinX)
         const cz = Math.floor(z - tileMinZ)
         if (cx < 0 || cx >= TILE_DIM || cz < 0 || cz >= TILE_DIM) return false
-        return splatData[(cz * TILE_DIM + cx) * SPLAT_CHANNELS] < SHORT_GRASS_R_MIN
+        return splatData[(cz * TILE_DIM + cx) * SPLAT_CHANNELS + 3] < SHORT_GRASS_R_MIN
       }
 
       if (grassDataManager) {
