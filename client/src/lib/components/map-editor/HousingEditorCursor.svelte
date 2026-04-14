@@ -90,8 +90,11 @@
   let previewMesh: THREE.Group | null = null
   let placementValid = false
 
-  // Highlight outline for selected room (blue)
-  const highlightEdgeMat = new THREE.LineBasicMaterial({ color: 0x44aaff })
+  // depthTest off + high renderOrder so the outline isn't occluded by corner pillars
+  const highlightEdgeMat = new THREE.LineBasicMaterial({
+    color: 0x44aaff,
+    depthTest: false,
+  })
   let highlightEdges: THREE.LineSegments | null = null
 
   const BLEND_RADIUS = 4
@@ -184,6 +187,7 @@
     const edgesGeo = new THREE.EdgesGeometry(geo)
     geo.dispose()
     highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
+    highlightEdges.renderOrder = 999
     const yBase = floorYBase(room.floorLevel, room.wallHeight) + FLOOR_THICKNESS / 2
     highlightEdges.position.set(
       house.origin.x + room.localX + room.sizeX / 2,
@@ -416,6 +420,63 @@
 
   let lastSelectKey = ''
 
+  /** Rooms orphaned by removing seedIdx: upper floors without support, and
+   *  stairwells missing a regular room on either their entry or exit floor.
+   *  Fixpoint loop handles chain reactions (F1 falls → F2 falls → stair orphaned). */
+  function computeCascadeDelete(house: HouseData, seedIdx: number): Set<number> {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
+    const toDelete = new Set<number>([seedIdx])
+    let changed = true
+    while (changed) {
+      changed = false
+
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity
+      const regularByFloor = new Map<number, true>()
+      for (let j = 0; j < house.rooms.length; j++) {
+        if (toDelete.has(j)) continue
+        const r = house.rooms[j]
+        if (r.roomType === 'stairwell') continue
+        regularByFloor.set(r.floorLevel, true)
+      }
+
+      for (let i = 0; i < house.rooms.length; i++) {
+        if (toDelete.has(i)) continue
+        const room = house.rooms[i]
+
+        if (room.roomType === 'stairwell') {
+          if (!regularByFloor.has(room.floorLevel) || !regularByFloor.has(room.floorLevel + 1)) {
+            toDelete.add(i); changed = true
+          }
+          continue
+        }
+
+        if (room.floorLevel === 0) continue
+        const supportLevel = room.floorLevel - 1
+        let allCellsSupported = true
+        outer: for (let x = room.localX; x < room.localX + room.sizeX; x++) {
+          for (let z = room.localZ; z < room.localZ + room.sizeZ; z++) {
+            let supported = false
+            for (let j = 0; j < house.rooms.length; j++) {
+              if (toDelete.has(j)) continue
+              const other = house.rooms[j]
+              if (other.floorLevel !== supportLevel) continue
+              if (
+                x >= other.localX && x < other.localX + other.sizeX &&
+                z >= other.localZ && z < other.localZ + other.sizeZ
+              ) {
+                supported = true
+                break
+              }
+            }
+            if (!supported) { allCellsSupported = false; break outer }
+          }
+        }
+        if (!allCellsSupported) { toDelete.add(i); changed = true }
+      }
+    }
+    return toDelete
+  }
+
   async function deleteSelectedRoom() {
     const houseId = get(selectedHouseId)
     const roomIdx = get(selectedRoomIndex)
@@ -426,14 +487,21 @@
 
     const deletedRoom = house.rooms[roomIdx]
 
-    // Clear selection before deletion
+    const toDelete = computeCascadeDelete(house, roomIdx)
+    if (toDelete.size > 1) {
+      const extra = toDelete.size - 1
+      if (!confirm(`이 방을 지우면 연관된 방 ${extra}개도 함께 삭제됩니다. 계속하시겠습니까?`)) {
+        return
+      }
+    }
+
     selectedHouseId.set(null)
     selectedRoomIndex.set(null)
 
-    if (house.rooms.length <= 1) {
+    if (toDelete.size >= house.rooms.length) {
       await housingManager.deleteHouse(house.id)
     } else {
-      const updatedRooms = house.rooms.filter((_, i) => i !== roomIdx)
+      const updatedRooms = house.rooms.filter((_, i) => !toDelete.has(i))
       const updatedHouse: HouseData = { ...house, rooms: updatedRooms }
       await housingManager.updateHouse(updatedHouse)
     }
