@@ -36,6 +36,35 @@ function paintCell(
   return true
 }
 
+// Untouched cells (primary==secondary) adjacent to a painted cell would make
+// the shader's nearest-cell P/S pair jump across the boundary, producing a
+// hard edge. Stamp secondary=paintIdx with blend=0 so the cell still renders
+// as 100% primary but gives the bilerp a matching P/S pair.
+function paintCellFringe(
+  data: Uint8Array,
+  cellIdx: number,
+  paintIdx: number
+): boolean {
+  // Fast-path on the packed indices byte to skip object allocation when the
+  // cell is already mixed (p!=s) or already has the matching secondary.
+  const indices = data[cellIdx * BYTES_PER_CELL]
+  const primary = (indices >> 4) & 0x0f
+  const secondary = indices & 0x0f
+  if (primary !== secondary) return false
+  if (secondary === paintIdx) return false
+  const before = readCell(data, cellIdx)
+  writeCell(data, cellIdx, {
+    primaryIdx: before.primaryIdx,
+    secondaryIdx: paintIdx,
+    blend: 0,
+    vegMeta: before.vegMeta,
+  })
+  return true
+}
+
+// Covers 8-connected neighbors (max diagonal distance √2, rounded up).
+const FRINGE_PAD = 1.5
+
 export class TerrainSplatManager {
   private splatmaps = new Map<string, Uint8Array>()
   private inflightSplatmaps = new Map<string, Promise<THREE.DataTexture>>()
@@ -130,11 +159,12 @@ export class TerrainSplatManager {
     strength: number
   ): { tileX: number; tileZ: number }[] {
     const sigma = radius / 2.5
+    const outerR = radius + FRINGE_PAD
 
-    const minWorldX = worldX - radius
-    const maxWorldX = worldX + radius
-    const minWorldZ = worldZ - radius
-    const maxWorldZ = worldZ + radius
+    const minWorldX = worldX - outerR
+    const maxWorldX = worldX + outerR
+    const minWorldZ = worldZ - outerR
+    const maxWorldZ = worldZ + outerR
 
     const minTileX = Math.floor(
       (minWorldX + TERRAIN_TILE_SIZE / 2) / TERRAIN_TILE_SIZE
@@ -172,13 +202,16 @@ export class TerrainSplatManager {
             const dx = tileMinX + cx - worldX
             const dz = tileMinZ + cz - worldZ
             const dist = Math.sqrt(dx * dx + dz * dz)
-            if (dist > radius) continue
+            if (dist > outerR) continue
 
-            const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
-            if (
-              paintCell(data, cz * TILE_DIM + cx, paintIdx, weight * strength)
-            ) {
-              changed = true
+            const cellIdx = cz * TILE_DIM + cx
+            if (dist > radius) {
+              if (paintCellFringe(data, cellIdx, paintIdx)) changed = true
+            } else {
+              const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
+              if (paintCell(data, cellIdx, paintIdx, weight * strength)) {
+                changed = true
+              }
             }
           }
         }
@@ -213,11 +246,12 @@ export class TerrainSplatManager {
 
     // Flat-core falloff: fully saturate within innerR, smoothstep to 0 at radius.
     const innerR = radius * 0.6
+    const outerR = radius + FRINGE_PAD
 
-    const minWorldX = Math.min(x1, x2) - radius
-    const maxWorldX = Math.max(x1, x2) + radius
-    const minWorldZ = Math.min(z1, z2) - radius
-    const maxWorldZ = Math.max(z1, z2) + radius
+    const minWorldX = Math.min(x1, x2) - outerR
+    const maxWorldX = Math.max(x1, x2) + outerR
+    const minWorldZ = Math.min(z1, z2) - outerR
+    const maxWorldZ = Math.max(z1, z2) + outerR
 
     const minTileX = worldToTileCoord(minWorldX)
     const maxTileX = worldToTileCoord(maxWorldX)
@@ -255,13 +289,16 @@ export class TerrainSplatManager {
             const ddx = wx - (x1 + t * lineDx)
             const ddz = wz - (z1 + t * lineDz)
             const dist = Math.sqrt(ddx * ddx + ddz * ddz)
-            if (dist > radius) continue
+            if (dist > outerR) continue
 
-            const weight = 1 - smoothstep(innerR, radius, dist)
-            if (
-              paintCell(data, cz * TILE_DIM + cx, paintIdx, weight * strength)
-            ) {
-              changed = true
+            const cellIdx = cz * TILE_DIM + cx
+            if (dist > radius) {
+              if (paintCellFringe(data, cellIdx, paintIdx)) changed = true
+            } else {
+              const weight = 1 - smoothstep(innerR, radius, dist)
+              if (paintCell(data, cellIdx, paintIdx, weight * strength)) {
+                changed = true
+              }
             }
           }
         }

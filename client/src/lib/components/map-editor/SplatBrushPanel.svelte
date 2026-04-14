@@ -48,14 +48,13 @@
     openDropdown = null
   })
 
-  /** Load thumbnails for all splat textures in parallel, single state update */
   async function loadThumbnails() {
     const canvas = document.createElement('canvas')
     canvas.width = THUMB_SIZE
     canvas.height = THUMB_SIZE
     const ctx = canvas.getContext('2d')!
 
-    const layers = await Promise.all(
+    const loaded = await Promise.all(
       ALL_SPLAT_TEXTURES.map((tex) =>
         loadSplatLayer(tex.name, 1).catch(() => null)
       )
@@ -63,8 +62,8 @@
 
     const result: Record<string, string> = {}
     for (let i = 0; i < ALL_SPLAT_TEXTURES.length; i++) {
-      const layer = layers[i]
-      const img = layer?.map.image as HTMLImageElement | undefined
+      const l = loaded[i]
+      const img = l?.map.image as HTMLImageElement | undefined
       if (!img) continue
       ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
       ctx.drawImage(img as HTMLImageElement, 0, 0, THUMB_SIZE, THUMB_SIZE)
@@ -146,7 +145,7 @@
   <div class="panel-title">{title}</div>
 
   <div class="section-label">Brush <span class="hint">{hint}</span></div>
-  <div class="texture-slots-grid">
+  <div class="palette-grid">
     {#each layers as l, i (i)}
       <div class="texture-slot">
         <button
@@ -263,12 +262,11 @@
     letter-spacing: 0;
   }
 
-  .texture-slots-grid {
-    display: flex;
-    flex-wrap: wrap;
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 64px);
     gap: 4px;
     margin-bottom: 8px;
-    max-width: 280px;
   }
 
   .add-slot-btn {
