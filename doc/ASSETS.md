@@ -93,6 +93,7 @@
 
 - sword.glb https://www.fab.com/listings/5fe82d66-eaac-48e0-899d-1fedacdf409a
 - spear.glb https://sketchfab.com/3d-models/spear-f13ddd24e2fe47aa8aca23487afd893e
+- torch.glb https://sketchfab.com/3d-models/torch-stick-d8eadee1a5c14483aade99b1fe5bc150
 
 ## Furniture
 
@@ -116,6 +117,70 @@
   - add_action_to_nla.py
     
     mixamo에서 import한 메쉬없는 애니메이션을 최초의 armature에 붙여준다
+
+  - import_mixamo_animation.py
+
+    Mixamo FBX 하나를 `Armature`(T-pose 타겟)에 맞는 액션으로 변환까지 자동화한다.
+    내부에서 FBX import → `fix_mixamo_transforms` 실행 → A-pose→T-pose
+    리타게팅 bake (본별 `target_basis = target_rest.inv() × source_rest × source_basis`) →
+    슬롯 식별자를 `OBArmature`로 설정 → 임시 Armature/액션 정리 → `.blend` 저장을
+    한 번에 수행한다.
+
+## Mixamo 애니메이션 Export 워크플로우
+
+새 Mixamo 애니메이션을 offhand/locomotion 등의 pack에 추가할 때:
+
+1. **Mixamo에서 FBX 다운로드**
+   - Format: **FBX Binary**
+   - Skin: **Without Skin**
+   - FPS: **30**
+   - Keyframe Reduction: **none**
+   - 이동 동작은 반드시 **In Place** 체크 (현재 export는 Hips location을 bake하지 않음)
+
+2. **Blender에서 import + retarget bake** (Text Editor/Python Console)
+
+   ```python
+   import sys
+   sys.path.insert(0, r"C:\Users\jake\work\OnlineRPG\tools\blender-scripts")
+   from import_mixamo_animation import import_mixamo_animation
+
+   import_mixamo_animation(
+       fbx_path=r"Y:\public\web_downloads\Standing Torch Walk.fbx",
+       action_name="torch_walk",
+   )
+   ```
+
+3. **`export_animations.py`의 `EXPORT_PACKS`에 액션 이름 추가** (예: `offhand` pack에 `"torch_walk"`)
+
+4. **Export 실행**
+
+   ```bash
+   blender assets/all_animation.blend --background --python tools/blender-scripts/export_animations.py
+   ```
+
+   또는 Blender 내부에서:
+
+   ```python
+   exec(open(r"C:\Users\jake\work\OnlineRPG\tools\blender-scripts\export_animations.py").read())
+   ```
+
+   Export script는 매 실행마다 `mixamorig:` 프리픽스를 fcurve에서 strip하고, 모든
+   layered action의 슬롯 식별자를 대상 armature (`OBArmature`)에 맞게 재-바인딩한다.
+
+5. **클라이언트 코드 연결** (새 애니메이션 타입인 경우)
+   - `client/src/lib/types/animations.ts`의 `OffhandAnimationName`에 상수 추가
+   - `client/src/lib/components/PlayerModel.svelte`에서 해당 상태에 클립 선택 로직 추가
+
+### 알려진 함정
+
+- **A-pose vs T-pose rest**: Mixamo 원본은 A-pose, 프로젝트 Armature는 T-pose. 리타게팅
+  bake 없이 그대로 export하면 팔 등에 identity에 가까운 키프레임이 적용되어 T-pose로
+  서 있는 자세가 나온다 (`import_mixamo_animation.py`가 이를 자동 처리).
+- **Armature.001 바인딩**: FBX import는 항상 새 Armature.001에 연결된다. `Armature`에
+  바인딩된 액션으로 만들려면 retarget bake 단계가 필수.
+- **Hips location 스케일**: Mixamo는 센티미터 단위라 Hips pose location을 그대로 쓰면
+  캐릭터가 수 km 밖으로 날아간다. `import_mixamo_animation.py`는 location 채널을
+  bake하지 않으므로 in-place 애니메이션만 지원한다.
 
 ## Import tips
 

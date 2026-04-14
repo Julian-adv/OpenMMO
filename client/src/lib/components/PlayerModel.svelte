@@ -8,7 +8,12 @@
   import { SvelteMap } from 'svelte/reactivity'
   import { get } from 'svelte/store'
   import { timeScale } from '../stores/timeStore'
-  import { AnimationIndex, AnimationName } from '../types/animations'
+  import {
+    AnimationIndex,
+    AnimationName,
+    OffhandAnimationName,
+    TORCH_IDLE_CLIP_NAMES,
+  } from '../types/animations'
   import {
     createCharacterModelRoot,
     getGltfAnimations,
@@ -22,10 +27,11 @@
     getWeaponModelPath,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { pickRandom } from '../utils/randomUtils'
   import { inventoryStore } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { torchLightEnabled } from '../stores/debugStore'
-  import { networkManager } from '../network/socket'
+
   import type { CharacterClass, Gender } from '../network/networkTypes'
   import { type MovementMode } from '../utils/movementUtils'
   import { TorchFireParticles } from '../effects/torch-fire-particles'
@@ -55,6 +61,7 @@
     isLoading?: boolean
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
+    torchOn?: boolean
   }
 
   let {
@@ -79,7 +86,16 @@
     isLoading = $bindable(false),
     lastDamageInfo,
     lastRegenInfo,
+    torchOn = false,
   }: Props = $props()
+
+  const DEFAULT_IDLE_INDICES = [
+    AnimationIndex.IDLE1,
+    AnimationIndex.IDLE2,
+    AnimationIndex.IDLE3,
+    AnimationIndex.IDLE4,
+    AnimationIndex.IDLE5,
+  ]
 
   let nametagScale = $state(1)
   let nametagHeight = $state(2.7)
@@ -120,6 +136,7 @@
   let clonedScene: THREE.Object3D | null = null
   let footOffsetApplied = false
   let validAnimations = $state<THREE.AnimationClip[]>([])
+  let offhandClips = new SvelteMap<string, THREE.AnimationClip>()
   let socialClipsByName = new SvelteMap<string, THREE.AnimationClip>()
   let socialLoading = false
   let lastPlayerState = $state<
@@ -247,11 +264,12 @@
     })
   })
 
-  // Off-hand equip tracking
+  // Off-hand equip tracking. Local player uses inventory with a debug-toggle
+  // fallback; remote players receive `torchOn` broadcast from the server.
   const equippedOffHandItemId = $derived(
     isCurrentPlayer
-      ? ($inventoryStore.equipped.off_hand?.item_def_id ?? null)
-      : null
+      ? ($inventoryStore.equipped.off_hand?.item_def_id ?? ($torchLightEnabled ? 'torch' : null))
+      : (torchOn ? 'torch' : null)
   )
 
   let attachedOffhandItemId: string | null = null
@@ -267,6 +285,7 @@
     detachOffhand()
     detachTorchFire()
     attachedOffhandItemId = null
+    if (mixer) playAnimationForState()
 
     if (!itemDefId) return
 
@@ -275,24 +294,18 @@
 
     const gen = ++offhandAttachGeneration
     const offhandModelPath = getWeaponModelPath(itemDef.worldModel)
-    loadGLB(offhandModelPath).then((gltf) => {
+    loadGLB(offhandModelPath).then(async (gltf) => {
       if (gen !== offhandAttachGeneration || !clonedScene) return
 
       attachOffhandModel(gltf.scene, clonedScene)
       attachedOffhandItemId = itemDefId
-      if (itemDefId === 'torch') attachTorchFire()
+      if (itemDefId === 'torch') {
+        attachTorchFire()
+        await loadOffhandAnimations()
+        if (gen !== offhandAttachGeneration) return
+        if (mixer) playAnimationForState()
+      }
     })
-  })
-
-  let prevTorchEquipped: boolean | null = null
-
-  $effect(() => {
-    if (!isCurrentPlayer) return
-    const hasTorch = equippedOffHandItemId === 'torch'
-    if (hasTorch === prevTorchEquipped) return
-    prevTorchEquipped = hasTorch
-    torchLightEnabled.set(hasTorch)
-    networkManager.sendTorchToggle(hasTorch)
   })
 
   // ── Torch fire particles ────────────────────────────────
@@ -338,6 +351,19 @@
     if (mixer && playerState === 'interact') playAnimationForState()
   }
 
+  let offhandLoadPromise: Promise<void> | null = null
+
+  function loadOffhandAnimations(): Promise<void> {
+    if (offhandLoadPromise) return offhandLoadPromise
+    offhandLoadPromise = (async () => {
+      const offhandGltf = await loadGLB(CHARACTER_ANIMATION_PACK_PATHS.offhand)
+      const rawClips = getGltfAnimations(offhandGltf)
+      offhandClips.clear()
+      for (const clip of rawClips) offhandClips.set(clip.name, clip)
+    })()
+    return offhandLoadPromise
+  }
+
   function playAnimationForState() {
     // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
@@ -353,28 +379,26 @@
       torchFireGroup.visible = playerState !== 'interact'
     }
 
-    // Select animation based on player state and mode
+    const hasTorch = attachedOffhandItemId === 'torch'
+    const torchIdle = hasTorch
+      ? pickRandom(
+          TORCH_IDLE_CLIP_NAMES.map((name) => offhandClips.get(name)).filter(
+            (c): c is THREE.AnimationClip => c !== undefined
+          )
+        )
+      : undefined
+    const torchWalk = hasTorch ? offhandClips.get(OffhandAnimationName.TORCH_WALK) : undefined
+    const torchRun = hasTorch ? offhandClips.get(OffhandAnimationName.TORCH_RUN) : undefined
     let clip: THREE.AnimationClip | undefined
     if (playerState === 'idle') {
-      // Reset movement animation lock when idle
       currentMovementAnimationIndex = undefined
-      // Randomly select between idle animations
-      const idleIndices = [
-        AnimationIndex.IDLE1,
-        AnimationIndex.IDLE2,
-        AnimationIndex.IDLE3,
-        AnimationIndex.IDLE4,
-        AnimationIndex.IDLE5,
-      ]
-      const idleIndex =
-        idleIndices[Math.floor(Math.random() * idleIndices.length)]
-      clip = validAnimations[idleIndex]
+      clip = torchIdle ?? pickRandom(DEFAULT_IDLE_INDICES.map((i) => validAnimations[i]))
     } else if (playerState === 'moving') {
-      // Lock animation at the start of movement based on movement mode
       if (currentMovementAnimationIndex === undefined) {
         currentMovementAnimationIndex = selectMovementAnimation(movementMode)
       }
-      clip = validAnimations[currentMovementAnimationIndex]
+      const torchMoveClip = movementMode === 'walk' ? torchWalk : torchRun
+      clip = torchMoveClip ?? validAnimations[currentMovementAnimationIndex]
     } else if (playerState === 'attack') {
       // Use slash1 animation
       currentMovementAnimationIndex = undefined

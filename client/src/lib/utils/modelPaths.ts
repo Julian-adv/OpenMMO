@@ -23,6 +23,7 @@ export const CHARACTER_ANIMATION_PACK_PATHS = {
   locomotion: '/models/animations/locomotion.glb',
   combatMelee: '/models/animations/combat_melee.glb',
   social: '/models/animations/social.glb',
+  offhand: '/models/animations/offhand.glb',
 } as const
 
 export function getWeaponModelPath(worldModel: string): string {

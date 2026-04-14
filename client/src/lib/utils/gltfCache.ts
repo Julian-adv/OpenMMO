@@ -18,11 +18,17 @@ export function loadGLB(url: string): Promise<GLTF> {
   const existing = inflight.get(url)
   if (existing) return existing
 
-  const promise = loader.loadAsync(url).then((gltf) => {
-    cache.set(url, gltf)
-    inflight.delete(url)
-    return gltf
-  })
+  const promise = loader
+    .loadAsync(url)
+    .then((gltf) => {
+      cache.set(url, gltf)
+      inflight.delete(url)
+      return gltf
+    })
+    .catch((err) => {
+      inflight.delete(url)
+      throw err
+    })
   inflight.set(url, promise)
   return promise
 }

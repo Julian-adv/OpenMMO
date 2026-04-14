@@ -20,6 +20,7 @@
   import { housingManager } from '../../managers/housingManager'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import { torchLightEnabled } from '../../stores/debugStore'
+  import { localTorchEquipped } from '../../stores/inventoryStore'
 
   const TORCH_OFFSET = new THREE.Vector3(TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z)
   const Y_AXIS = new THREE.Vector3(0, 1, 0)
@@ -121,7 +122,7 @@
 
   function computeUnifiedTorchTarget(): THREE.Vector3 | null {
     if (!currentPlayer) return null
-    if (get(torchLightEnabled)) {
+    if (get(localTorchEquipped) || get(torchLightEnabled)) {
       const p = currentPlayer.position
       return setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation)
     }
@@ -234,6 +235,7 @@
         gender={player.gender}
         health={player.health}
         maxHealth={player.maxHealth}
+        torchOn={player.torchOn}
       />
     {/if}
   {/each}

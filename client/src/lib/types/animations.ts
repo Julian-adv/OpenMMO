@@ -38,3 +38,19 @@ export enum AnimationIndex {
   ATTACK4 = 15,
   DYING = 16,
 }
+
+/** Offhand animation clip names — loaded separately, not part of the core ordered array. */
+export const OffhandAnimationName = {
+  TORCH_IDLE1: 'torch_idle1',
+  TORCH_IDLE2: 'torch_idle2',
+  TORCH_WALK: 'torch_walk',
+  TORCH_RUN: 'torch_run',
+} as const
+
+/** All torch idle clip names — picked randomly when the player is idle with a torch. */
+export const TORCH_IDLE_CLIP_NAMES = [
+  OffhandAnimationName.TORCH_IDLE1,
+  OffhandAnimationName.TORCH_IDLE2,
+] as const
+
+export type OffhandAnimationKey = keyof typeof OffhandAnimationName

@@ -50,6 +50,10 @@ logs/
 *.blend1
 .playwright-mcp/
 
+# Python bytecode
+*.pyc
+__pycache__/
+
 # Generated data files
 data/*.db
 data/monsters.json

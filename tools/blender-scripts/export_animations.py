@@ -43,6 +43,12 @@ EXPORT_PACKS = {
     "social": [
         "sleep",
     ],
+    "offhand": [
+        "torch_idle1",
+        "torch_idle2",
+        "torch_walk",
+        "torch_run",
+    ],
 }
 
 # The primary armature name whose mesh and skeleton should be exported.
@@ -108,9 +114,14 @@ def strip_bone_name_prefixes(armature):
     """Remove Mixamo prefixes (e.g. 'mixamorig:') from bone names.
 
     Also updates animation F-curve data_paths that reference bone names.
+    This runs unconditionally on ALL actions' fcurves — an action authored
+    on a different armature (e.g. Armature.001 with prefixed bones) can
+    still carry prefixed `pose.bones["mixamorig:Hips"]` paths even when the
+    target armature's own bones are already clean. Stripping the prefix
+    from both bones and fcurves keeps them in sync.
     Changes persist in the .blend file if saved afterwards.
     """
-    prefix_pattern = re.compile(r'^mixamorig\d*:')
+    prefix_pattern = re.compile(r'mixamorig\d*:')
     original_to_new = {}
 
     for bone in armature.data.bones:
@@ -119,27 +130,59 @@ def strip_bone_name_prefixes(armature):
             original_to_new[bone.name] = new_name
             bone.name = new_name
 
-    if not original_to_new:
-        print("  No bone prefixes to strip")
-        return
+    if original_to_new:
+        # Update vertex group names on child meshes so glTF can match them to bones
+        for obj in bpy.data.objects:
+            if obj.type == "MESH" and obj.parent == armature:
+                for vg in obj.vertex_groups:
+                    if vg.name in original_to_new:
+                        vg.name = original_to_new[vg.name]
+        print(f"  Stripped prefixes from {len(original_to_new)} bones")
+    else:
+        print("  Armature bones already have no prefix")
 
-    # Update vertex group names on child meshes so glTF can match them to bones
-    for obj in bpy.data.objects:
-        if obj.type == "MESH" and obj.parent == armature:
-            for vg in obj.vertex_groups:
-                if vg.name in original_to_new:
-                    vg.name = original_to_new[vg.name]
-
-    # Update F-curve data_paths to match renamed bones
+    # Always scan every action's fcurves and strip any lingering mixamorig: prefix
+    # from data_paths — actions imported from other armatures may reference
+    # prefixed bone names even if this armature's bones are clean.
+    fcurves_rewritten = 0
     for action in bpy.data.actions:
         for fc in iter_fcurves(action):
-            for orig, new in original_to_new.items():
-                if orig in fc.data_path:
-                    fc.data_path = fc.data_path.replace(
-                        f'["{orig}"]', f'["{new}"]'
-                    )
+            new_path = prefix_pattern.sub("", fc.data_path)
+            if new_path != fc.data_path:
+                fc.data_path = new_path
+                fcurves_rewritten += 1
+    if fcurves_rewritten:
+        print(f"  Rewrote {fcurves_rewritten} fcurve data_paths to strip prefixes")
 
-    print(f"  Stripped prefixes from {len(original_to_new)} bones")
+
+def rebind_action_slots_to_target(armature):
+    """Rebind layered-action slots to the target armature.
+
+    When an action was authored on a different armature (e.g. Armature.001),
+    its slot identifier remains `OBArmature.001` even if we push it onto
+    `Armature`. Blender's NLA binding looks up the slot by identifier match,
+    so the fcurves silently fail to drive any bones → bones stay at rest
+    pose (T-pose) in the export.
+
+    Rewrite every layered action's single slot identifier to match the
+    target armature object, so NLA strips bind correctly on export.
+    """
+    target_identifier = f"OB{armature.name}"
+    rebound = 0
+    for action in bpy.data.actions:
+        if not action.is_action_layered:
+            continue
+        for slot in action.slots:
+            if slot.target_id_type != "OBJECT":
+                continue
+            if slot.identifier != target_identifier:
+                try:
+                    slot.identifier = target_identifier
+                    rebound += 1
+                except Exception as e:
+                    print(f"  WARNING: failed to rebind slot on '{action.name}': {e}")
+    if rebound:
+        print(f"  Rebound {rebound} action slots to '{target_identifier}'")
 
 
 def select_export_objects(armature):
@@ -181,6 +224,10 @@ def main():
 
     # Standardize bone names before export
     strip_bone_name_prefixes(armature)
+    # Ensure every layered-action slot targets the export armature; actions
+    # authored on sibling armatures (e.g. Armature.001) would otherwise bind
+    # to nothing and export as T-pose.
+    rebind_action_slots_to_target(armature)
 
     all_actions = collect_all_actions()
     print(f"Found {len(all_actions)} actions: {list(all_actions.keys())}")
