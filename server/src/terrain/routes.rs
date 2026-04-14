@@ -427,11 +427,9 @@ async fn get_trees(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     match data {
-        Some(bytes) => Ok((
-            [(header::CONTENT_TYPE, "application/octet-stream")],
-            bytes,
-        )
-            .into_response()),
+        Some(bytes) => {
+            Ok(([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response())
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }

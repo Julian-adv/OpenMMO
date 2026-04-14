@@ -15,6 +15,8 @@ pub struct ItemDefinition {
     pub equip_slot: Option<EquipSlot>,
     #[serde(default)]
     pub stackable: bool,
+    #[serde(rename = "damageDice")]
+    pub damage_dice: Option<String>,
 }
 
 #[derive(Debug, Clone)]

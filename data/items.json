@@ -7,7 +7,8 @@
     "equipSlot": "main_hand",
     "stackable": false,
     "icon": "iron_sword.png",
-    "worldModel": "sword.glb"
+    "worldModel": "sword.glb",
+    "damageDice": "1d8"
   },
   "wooden_shield": {
     "id": "wooden_shield",
@@ -98,7 +99,8 @@
     "equipSlot": "main_hand",
     "stackable": false,
     "icon": "sword.png",
-    "worldModel": "sword.glb"
+    "worldModel": "sword.glb",
+    "damageDice": "1d4"
   },
   "chain_mail": {
     "id": "chain_mail",
@@ -117,7 +119,8 @@
     "equipSlot": "off_hand",
     "stackable": false,
     "icon": "torch.png",
-    "worldModel": "torch.glb"
+    "worldModel": "torch.glb",
+    "damageDice": "1d4"
   },
   "spear": {
     "id": "spear",
@@ -127,6 +130,7 @@
     "equipSlot": "main_hand",
     "stackable": false,
     "icon": "spear_icon.png",
-    "worldModel": "spear.glb"
+    "worldModel": "spear.glb",
+    "damageDice": "1d6"
   }
 }

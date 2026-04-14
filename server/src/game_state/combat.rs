@@ -1,5 +1,6 @@
 use crate::game::{character_hp, combat, xp};
 use crate::types::{MonsterState, PlayerId, ServerMessage};
+use onlinerpg_shared::inventory::EquipSlot;
 use tracing::{info, warn};
 
 impl super::GameState {
@@ -22,12 +23,29 @@ impl super::GameState {
         if let Some(player_name) = player_name {
             info!("Player {} attacking monster {}", player_name, monster_id);
 
-            // Calculate attack result
+            // Unarmed falls back to D&D 5e improvised 1d2.
+            let weapon_dice: String = {
+                let inventories = self.inventories.read().await;
+                inventories
+                    .get(player_id)
+                    .and_then(|inv| inv.equipped.get(&EquipSlot::MainHand))
+                    .and_then(|item| self.item_defs.get(&item.item_def_id))
+                    .and_then(|def| def.damage_dice.clone())
+                    .unwrap_or_else(|| "1d2".to_string())
+            };
+
+            let str_mod = {
+                let chars = self.player_characters.read().await;
+                chars
+                    .get(player_id)
+                    .map(|(_, _, attrs)| combat::ability_modifier(attrs.r#str))
+                    .unwrap_or(0)
+            };
+
             let (result_hit, result_roll, result_damage) = {
                 let def = self.monster_defs.get(&monster_type);
                 let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
-                let damage_roll = def.map(|d| d.damage_roll.as_str()).unwrap_or("1d6");
-                let result = combat::roll_attack(hit_threshold, damage_roll);
+                let result = combat::roll_attack(hit_threshold, &weapon_dice, str_mod);
                 (result.hit, result.roll, result.damage)
             };
 
@@ -273,7 +291,7 @@ impl super::GameState {
             }
         }
 
-        let result = combat::roll_attack(hit_threshold, damage_roll);
+        let result = combat::roll_attack(hit_threshold, damage_roll, 0);
 
         info!(
             "Monster {} attacks player {}: Roll {}, Hit: {}, Damage: {}",
