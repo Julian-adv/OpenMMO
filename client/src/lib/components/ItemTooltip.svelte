@@ -17,6 +17,9 @@
     {#if def.equipSlot}
       <span>Slot: {def.equipSlot.replace(/_/g, ' ')}</span>
     {/if}
+    {#if def.damageDice}
+      <span>Damage: {def.damageDice}</span>
+    {/if}
   </div>
 </div>
 

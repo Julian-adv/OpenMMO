@@ -18,19 +18,25 @@ fn parse_damage_roll(damage_roll: &str) -> (u32, u32) {
     }
 }
 
-pub fn roll_attack(hit_threshold: u8, damage_roll: &str) -> AttackResult {
+pub fn ability_modifier(score: u8) -> i32 {
+    (i32::from(score) - 10).div_euclid(2)
+}
+
+pub fn roll_attack(hit_threshold: u8, damage_roll: &str, damage_bonus: i32) -> AttackResult {
     let mut rng = rand::thread_rng();
 
-    // Roll d20: 1-20
     let roll = rng.gen_range(1..=20);
     let hit = roll > hit_threshold;
     let mut damage = 0;
 
     if hit {
         let (count, sides) = parse_damage_roll(damage_roll);
+        let mut total: i64 = i64::from(damage_bonus);
         for _ in 0..count {
-            damage += rng.gen_range(1..=sides);
+            total += i64::from(rng.gen_range(1..=sides));
         }
+        // Hit always deals at least 1, even if bonus drives the roll non-positive.
+        damage = total.max(1) as u32;
     }
 
     AttackResult { hit, roll, damage }

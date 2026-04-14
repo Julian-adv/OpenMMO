@@ -10,6 +10,7 @@ export interface ItemDefinition {
   stackable: boolean
   icon: string
   worldModel?: string
+  damageDice?: string
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>
