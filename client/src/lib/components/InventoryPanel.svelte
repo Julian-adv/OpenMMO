@@ -59,7 +59,6 @@
   function onPointerDown(e: PointerEvent, slot: ItemInstance) {
     if (e.button !== 0) return
     e.preventDefault()
-    hoveredSlot = null
     const def = getItemDef(slot.item_def_id)
 
     startDrag(
@@ -122,7 +121,7 @@
           {#if slot && slot.quantity > 1}
             <span class="item-qty">{slot.quantity}</span>
           {/if}
-          {#if slot && def && hoveredSlot === i}
+          {#if slot && def && hoveredSlot === i && !$dragMeta}
             <ItemTooltip {def} side="left" />
           {/if}
         </div>
