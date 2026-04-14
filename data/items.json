@@ -118,5 +118,15 @@
     "stackable": false,
     "icon": "torch.png",
     "worldModel": "torch.glb"
+  },
+  "spear": {
+    "id": "spear",
+    "name": "Spear",
+    "description": "A long wooden-shafted spear tipped with iron.",
+    "weight": 4,
+    "equipSlot": "main_hand",
+    "stackable": false,
+    "icon": "spear_icon.png",
+    "worldModel": "spear.glb"
   }
 }
