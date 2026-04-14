@@ -42,6 +42,7 @@ EXPORT_PACKS = {
     ],
     "social": [
         "sleep",
+        "pickup",
     ],
     "offhand": [
         "torch_idle1",
