@@ -70,19 +70,20 @@ fn default_splatmap_size() {
 }
 
 #[test]
-fn default_splatmap_first_pixel() {
+fn default_splatmap_first_cell_is_slot0() {
     let data = defaults::default_splatmap();
-    assert_eq!(data[0], 255); // R = 100%
-    assert_eq!(data[1], 0); // G
-    assert_eq!(data[2], 0); // B
-    assert_eq!(data[3], 0); // A
+    // V2: primaryIdx=0, secondaryIdx=0, blend=0, grassMeta=0 → 100% palette slot 0.
+    assert_eq!(data[0], 0);
+    assert_eq!(data[1], 0);
+    assert_eq!(data[2], 0);
+    assert_eq!(data[3], 0);
 }
 
 #[test]
-fn default_meta_has_4_layers() {
+fn default_meta_palette_within_bounds() {
     let meta = defaults::default_meta_json();
     let layers = meta["layers"].as_array().unwrap();
-    assert_eq!(layers.len(), 4);
+    assert!(!layers.is_empty() && layers.len() <= 16);
 }
 
 #[tokio::test]
@@ -101,7 +102,7 @@ async fn read_missing_splatmap_returns_default() {
         crate::io::TerrainIO::new(std::path::PathBuf::from("/tmp/_onlinerpg_test_nonexistent"));
     let data = io.read_splatmap(999, 999).await.unwrap();
     assert_eq!(data.len(), defaults::SPLATMAP_SIZE);
-    assert_eq!(data[0], 255);
+    assert_eq!(data[0], 0);
 }
 
 #[tokio::test]

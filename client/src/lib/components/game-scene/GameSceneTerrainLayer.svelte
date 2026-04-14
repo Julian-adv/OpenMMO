@@ -65,8 +65,7 @@
   }: Props = $props()
 
   // ── Default resources (created once) ──────────────────
-  let _defaultLayers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] | null =
-    null
+  let _defaultLayers: SplatLayer[] | null = null
   let defaultAtlas: SplatAtlasSet | null = null
   let materialsReady = $state(false)
   let brushUnsubs: (() => void)[] = []
@@ -270,7 +269,7 @@
   /** Update a per-tile material's atlas/tileScales from resolved region layers. */
   function applyLayersToMaterial(
     mat: MeshStandardNodeMaterial,
-    resolved: { layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer] },
+    resolved: { layers: SplatLayer[] },
   ) {
     const atlas = buildSplatAtlas(resolved.layers)
     const u = mat.userData?.uniforms

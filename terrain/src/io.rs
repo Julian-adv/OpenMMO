@@ -396,10 +396,10 @@ impl TerrainIO {
                     "meta must contain \"layers\" array",
                 )
             })?;
-        if layers.len() != 4 {
+        if layers.is_empty() || layers.len() > 16 {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("layers must have exactly 4 entries, got {}", layers.len()),
+                format!("layers must have 1..=16 entries, got {}", layers.len()),
             ));
         }
         let path = coords::meta_path(&self.base_dir, rx, rz);

@@ -4,7 +4,8 @@ pub const VERTS_PER_SIDE: usize = TILE_DIM + 1; // 65
 /// Heightmap: 65x65 uint16 = 8,450 bytes (vertex-based, adjacent tiles overlap by 1)
 pub const HEIGHTMAP_SIZE: usize = VERTS_PER_SIDE * VERTS_PER_SIDE * 2;
 
-/// Splatmap: 64x64 RGBA uint8 = 16,384 bytes (cell-based)
+/// Splatmap V2: 64x64 × 4 bytes = 16,384 bytes (cell-based).
+/// Per cell: [primaryIdx, secondaryIdx, blend, grassMeta]. See doc/SPLATMAP_V2.md.
 pub const SPLATMAP_SIZE: usize = TILE_DIM * TILE_DIM * 4;
 
 /// uint16 value for sea level (0.0m): 10000 * 0.05 - 500.0 = 0.0
@@ -20,23 +21,17 @@ pub fn default_heightmap() -> Vec<u8> {
     buf
 }
 
-/// Generate a default splatmap (100% first layer: R=255, G=B=A=0).
+/// Generate a default splatmap: every cell = palette slot 0, no blend, no grass.
+/// All bytes are already 0, so this is just a zero buffer.
 pub fn default_splatmap() -> Vec<u8> {
-    let mut buf = vec![0u8; SPLATMAP_SIZE];
-    for i in 0..(TILE_DIM * TILE_DIM) {
-        buf[i * 4] = 255; // R channel
-    }
-    buf
+    vec![0u8; SPLATMAP_SIZE]
 }
 
-/// Default region metadata matching MAP_DESIGN.md specification.
+/// Default region metadata — single-layer palette. Regions grow this as needed (up to 16).
 pub fn default_meta_json() -> serde_json::Value {
     serde_json::json!({
       "layers": [
-        { "texture": "rocky_terrain_02_1k", "tileScale": 8.0 },
-        { "texture": "gravel_floor_1k", "tileScale": 6.0 },
-        { "texture": "red_laterite_soil_stones_1k", "tileScale": 10.0 },
-        { "texture": "snow_02_1k", "tileScale": 4.0 }
+        { "texture": "rocky_terrain_02_1k", "tileScale": 8.0 }
       ]
     })
 }

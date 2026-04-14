@@ -18,11 +18,11 @@ function regionKey(rx: number, rz: number): string {
 }
 
 export interface RegionMeta {
-  layers: [LayerConfig, LayerConfig, LayerConfig, LayerConfig]
+  layers: LayerConfig[]
 }
 
 export interface ResolvedRegionLayers {
-  layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer]
+  layers: SplatLayer[]
 }
 
 export class TerrainMetaManager {
@@ -50,14 +50,7 @@ export class TerrainMetaManager {
           `${this.terrainApiUrl}/api/terrain/meta/${rx}/${rz}`
         )
         const json = await resp.json()
-        const meta: RegionMeta = {
-          layers: json.layers as [
-            LayerConfig,
-            LayerConfig,
-            LayerConfig,
-            LayerConfig,
-          ],
-        }
+        const meta: RegionMeta = { layers: json.layers as LayerConfig[] }
         this.metaCache.set(key, meta)
         return meta
       } catch {

@@ -8,16 +8,14 @@ export interface LayerConfig {
   tileScale: number
 }
 
-export const DEFAULT_LAYER_CONFIGS: [
-  LayerConfig,
-  LayerConfig,
-  LayerConfig,
-  LayerConfig,
-] = [
-  { texture: 'rocky_terrain_02_1k', tileScale: 8.0 }, // R = grass
-  { texture: 'gravel_floor_1k', tileScale: 6.0 }, // G = rock
-  { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 }, // B = dirt
-  { texture: 'snow_02_1k', tileScale: 4.0 }, // A = snow
+/** Default palette for newly created regions. Up to MAX_PALETTE entries (see splat-encoding.ts). */
+export const DEFAULT_LAYER_CONFIGS: LayerConfig[] = [
+  { texture: 'rocky_terrain_02_1k', tileScale: 8.0 },
+  { texture: 'sandy_gravel_02_1k', tileScale: 8.0 },
+  { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 },
+  { texture: 'snow_02_1k', tileScale: 4.0 },
+  { texture: 'patterned_paving_02_1k', tileScale: 30.0 },
+  { texture: 'gravel_road_1k', tileScale: 8.0 },
 ]
 
 /** All available splat textures that can be assigned to region layers. */
@@ -185,18 +183,11 @@ export function loadSplatLayer(
   return promise.then((t) => ({ ...t, tile: tileScale }))
 }
 
-/** Load 4 splat layers from config. Shared textures are loaded only once. */
+/** Load 1–MAX_PALETTE splat layers from config. Shared textures are loaded only once. */
 export function loadSplatLayers(
-  configs: [
-    LayerConfig,
-    LayerConfig,
-    LayerConfig,
-    LayerConfig,
-  ] = DEFAULT_LAYER_CONFIGS
-): Promise<[SplatLayer, SplatLayer, SplatLayer, SplatLayer]> {
-  return Promise.all(
-    configs.map((c) => loadSplatLayer(c.texture, c.tileScale))
-  ) as Promise<[SplatLayer, SplatLayer, SplatLayer, SplatLayer]>
+  configs: LayerConfig[] = DEFAULT_LAYER_CONFIGS
+): Promise<SplatLayer[]> {
+  return Promise.all(configs.map((c) => loadSplatLayer(c.texture, c.tileScale)))
 }
 
 // ── Atlas building ──────────────────────────────────────────────
@@ -241,11 +232,42 @@ function drawWithWrapBorder(
   ctx.drawImage(img, 0, 0, B, B, slotX + B + S, slotY + B + S, B, B) // BR ← TL of src
 }
 
+/** Atlas grid size per axis (4 → 16 slots). Must match shader indexing. */
+export const ATLAS_GRID = 4
+
 /**
- * Pack 4 textures into a 2×2 atlas with wrapping border padding.
- * Each slot is (srcSize + 2*ATLAS_BORDER) px. Atlas total = slot*2 per axis.
- * Layout: [0]=TL, [1]=TR, [2]=BL, [3]=BR
+ * Atlas slot resolution. Source .glb textures are downsampled to this size
+ * when packed into the atlas. See doc/SPLATMAP_V2.md §4 for Nyquist reasoning.
  */
+export const ATLAS_SLOT_SIZE = 512
+
+/**
+ * Pack up to ATLAS_GRID×ATLAS_GRID textures into an atlas with wrapping border padding.
+ * Each slot is (srcSize + 2*ATLAS_BORDER) px. Atlas total = slot*GRID per axis.
+ * Slot index i → (slotX = (i % GRID) * slotSize, slotY = floor(i / GRID) * slotSize).
+ */
+/** Cache of downscaled canvases keyed by source texture UUID + target size. */
+const downscaleCache = new Map<string, HTMLCanvasElement>()
+
+function downscaleToCanvas(
+  tex: THREE.Texture,
+  targetSize: number
+): HTMLCanvasElement {
+  const key = `${tex.uuid}:${targetSize}`
+  const hit = downscaleCache.get(key)
+  if (hit) return hit
+
+  const c = document.createElement('canvas')
+  c.width = targetSize
+  c.height = targetSize
+  const cctx = c.getContext('2d')!
+  cctx.imageSmoothingEnabled = true
+  cctx.imageSmoothingQuality = 'high'
+  cctx.drawImage(tex.image as CanvasImageSource, 0, 0, targetSize, targetSize)
+  downscaleCache.set(key, c)
+  return c
+}
+
 function buildAtlasTexture(
   textures: (THREE.Texture | null | undefined)[],
   fallbackFill: string,
@@ -254,20 +276,8 @@ function buildAtlasTexture(
   const hasAny = textures.some((t) => t?.image)
   if (!hasAny) return null
 
-  const firstImg = textures.find((t) => t?.image)?.image as
-    | HTMLImageElement
-    | HTMLCanvasElement
-    | ImageBitmap
-    | undefined
-  const srcSize =
-    (firstImg &&
-      ('naturalWidth' in firstImg
-        ? firstImg.naturalWidth || firstImg.width
-        : firstImg.width)) ||
-    1024
-
-  const slotSize = srcSize + ATLAS_BORDER * 2
-  const atlasSize = slotSize * 2
+  const slotSize = ATLAS_SLOT_SIZE + ATLAS_BORDER * 2
+  const atlasSize = slotSize * ATLAS_GRID
 
   const canvas = document.createElement('canvas')
   canvas.width = atlasSize
@@ -277,17 +287,20 @@ function buildAtlasTexture(
   ctx.fillStyle = fallbackFill
   ctx.fillRect(0, 0, atlasSize, atlasSize)
 
-  for (let i = 0; i < 4; i++) {
+  const slotCount = ATLAS_GRID * ATLAS_GRID
+  const n = Math.min(textures.length, slotCount)
+  for (let i = 0; i < n; i++) {
     const tex = textures[i]
     if (tex?.image) {
-      const slotX = (i % 2) * slotSize
-      const slotY = Math.floor(i / 2) * slotSize
+      const scaled = downscaleToCanvas(tex, ATLAS_SLOT_SIZE)
+      const slotX = (i % ATLAS_GRID) * slotSize
+      const slotY = Math.floor(i / ATLAS_GRID) * slotSize
       drawWithWrapBorder(
         ctx,
-        tex.image as CanvasImageSource,
+        scaled,
         slotX,
         slotY,
-        srcSize,
+        ATLAS_SLOT_SIZE,
         ATLAS_BORDER
       )
     }
@@ -302,10 +315,8 @@ function buildAtlasTexture(
   return atlasTex
 }
 
-/** Build a 2×2 atlas set from 4 splat layers. Results are cached by texture UUIDs. */
-export function buildSplatAtlas(
-  layers: [SplatLayer, SplatLayer, SplatLayer, SplatLayer]
-): SplatAtlasSet {
+/** Build a 4×4 atlas set from up to 16 splat layers. Results are cached by texture UUIDs. */
+export function buildSplatAtlas(layers: SplatLayer[]): SplatAtlasSet {
   const key = layers.map((l) => l.map.uuid).join(',')
   const cached = atlasCache.get(key)
   if (cached) return cached
