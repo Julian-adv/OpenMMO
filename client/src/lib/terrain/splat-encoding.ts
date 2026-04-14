@@ -18,6 +18,9 @@ import {
 export const MAX_PALETTE = 16
 export const BYTES_PER_CELL = 4
 
+/** Palette slot reserved for the vegetation-supporting base texture (typically grass). */
+export const VEGETATION_BASE_SLOT = 0
+
 /** Byte offset of vegMeta within a cell. */
 export const VEGMETA_OFFSET = 3
 
@@ -87,8 +90,7 @@ export function applyBrush(
   const clamped = Math.max(0, Math.min(1, s))
   if (clamped <= 0) return cell
 
-  let { primaryIdx, secondaryIdx, blend } = cell
-  const { vegMeta } = cell
+  let { primaryIdx, secondaryIdx, blend, vegMeta } = cell
 
   if (primaryIdx === paintIdx) {
     blend = Math.round(blend * (1 - clamped))
@@ -103,6 +105,11 @@ export function applyBrush(
     primaryIdx = paintIdx
     blend = Math.round(255 - clamped * 255)
   }
+
+  // When the cell becomes dominated by a non-base slot (e.g. road), strip
+  // grass/trees so MapEditorCursor.flushVegetationRemoval drops their instances.
+  const dominantIdx = blend >= 128 ? secondaryIdx : primaryIdx
+  if (dominantIdx !== VEGETATION_BASE_SLOT) vegMeta = 0
 
   return { primaryIdx, secondaryIdx, blend, vegMeta }
 }
