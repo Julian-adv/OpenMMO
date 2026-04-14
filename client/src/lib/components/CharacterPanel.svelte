@@ -6,6 +6,7 @@
   import type { CharacterAttributes, CharacterClass, Gender } from '../network/networkTypes'
   import { xpForLevel, clamp } from '../utils/xp'
   import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
+  import ItemTooltip from './ItemTooltip.svelte'
 
   interface Props {
     visible: boolean
@@ -68,6 +69,8 @@
     { slot: 'boots', top: 88, left: 50 },
   ]
 
+  let hoveredSlot = $state<EquipSlot | null>(null)
+
   const levelStartXp = $derived(xpForLevel(level))
   const nextLevelXp = $derived(xpForLevel(level + 1))
   const neededXp = $derived(Math.max(1, nextLevelXp - levelStartXp))
@@ -82,6 +85,7 @@
   function onEquipPointerDown(e: PointerEvent, slot: EquipSlot, item: { instance_id: number; item_def_id: string }) {
     if (e.button !== 0) return
     e.preventDefault()
+    hoveredSlot = null
     const def = getItemDef(item.item_def_id)
 
     startDrag(
@@ -176,13 +180,18 @@
           class="equip-slot"
           class:drop-target={isDropTarget}
           style="top:{top}%;left:{left}%"
-          title={EQUIP_SLOT_LABELS[slot]}
+          title={item ? undefined : EQUIP_SLOT_LABELS[slot]}
           data-equip-slot={slot}
+          onmouseenter={() => { if (item) hoveredSlot = slot }}
+          onmouseleave={() => hoveredSlot = null}
           ondblclick={() => { if (item) unequip(slot) }}
           onpointerdown={(e: PointerEvent) => { if (item) onEquipPointerDown(e, slot, item) }}
         >
           {#if def}
             <img class="equip-icon" src="/items/{def.icon}" alt={def.name} draggable="false" />
+          {/if}
+          {#if item && def && hoveredSlot === slot}
+            <ItemTooltip {def} side={left > 50 ? 'left' : 'right'} />
           {/if}
         </div>
       {/each}
@@ -210,7 +219,6 @@
     font-family: 'Courier New', monospace;
     font-size: 12px;
     pointer-events: auto;
-    overflow: hidden;
   }
 
   .panel-header {
@@ -339,7 +347,6 @@
 
   .equip-section {
     position: relative;
-    overflow: hidden;
     border-radius: 6px;
     min-height: 540px;
   }
@@ -372,6 +379,7 @@
   .equip-slot:hover {
     border-color: rgba(240, 192, 64, 0.6);
     background: rgba(240, 192, 64, 0.08);
+    z-index: 10;
   }
 
   .equip-slot.drop-target {

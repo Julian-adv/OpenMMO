@@ -5,6 +5,7 @@
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
   import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
+  import ItemTooltip from './ItemTooltip.svelte'
 
   interface Props {
     visible: boolean
@@ -122,16 +123,7 @@
             <span class="item-qty">{slot.quantity}</span>
           {/if}
           {#if slot && def && hoveredSlot === i}
-            <div class="tooltip">
-              <div class="tooltip-name">{def.name}</div>
-              <div class="tooltip-desc">{def.description}</div>
-              <div class="tooltip-stats">
-                <span>Weight: {def.weight}</span>
-                {#if def.equipSlot}
-                  <span>Slot: {def.equipSlot.replace('_', ' ')}</span>
-                {/if}
-              </div>
-            </div>
+            <ItemTooltip {def} side="left" />
           {/if}
         </div>
       {/each}
@@ -233,37 +225,4 @@
     text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
   }
 
-  .tooltip {
-    position: absolute;
-    left: -170px;
-    top: 0;
-    width: 160px;
-    padding: 8px;
-    background: rgba(6, 10, 14, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-    pointer-events: none;
-    z-index: 50;
-  }
-
-  .tooltip-name {
-    font-size: 15px;
-    font-weight: 700;
-    color: #f0c040;
-    margin-bottom: 4px;
-  }
-
-  .tooltip-desc {
-    font-size: 13px;
-    color: #9fb2c3;
-    margin-bottom: 6px;
-  }
-
-  .tooltip-stats {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    font-size: 13px;
-    color: #c8d6e0;
-  }
 </style>
