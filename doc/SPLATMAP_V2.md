@@ -97,15 +97,58 @@ Normal / ORM 동일 방식.
 - 가중치 정규화 불필요 (`mix` 한 번)
 
 ### 단점
-- 인덱스가 integer라 보간 불가 → 셀 경계에서 splat 텍스처를 **NEAREST 필터**로 샘플링해야 함 (현재 Linear). 경계 smoothing은 `blend` 값이 담당 (셀 간 보간은 자연스럽게 없어지나, 셀 해상도 1m이므로 시각적 영향 제한).
+- 인덱스가 integer라 bilinear 보간 불가 → splat 텍스처는 **NEAREST 필터**로 샘플링. 경계 smoothing은 섹션 6의 weight-space bilinear로 처리.
 
-## 6. 셀 보간 전략
+## 6. 셀 보간 전략 (Weight-space Bilinear Blend)
 
-기존은 splat 텍스처를 bilinear로 샘플링해 셀 경계를 부드럽게 함. V2에서는 인덱스 바이트를 보간할 수 없으므로:
+splat 텍스처를 NEAREST로 샘플링하되, `blend` 값은 4 인접 셀의 가중치를 weight space에서 bilinear로 섞어 셀 격자가 보이지 않도록 한다. 인덱스는 그대로 현재 셀 기준, blend만 스무스하게.
 
-- **splat 텍스처는 NEAREST 필터로 변경**
-- 부드러운 경계 효과는 **셀 단위 blend 값**이 담당
-- 추가로 필요 시 `dFdx/dFdy` 기반 micro-dither를 픽셀 셰이더에서 적용 (향후 확장)
+### 핵심 아이디어
+각 셀은 자신의 (primary, secondary) 쌍에 대해 가중치 `(1-blend, blend)`를 갖는다. 현재 픽셀이 쓸 텍스처 `P`, `S`는 nearest 셀에서 확정되므로, 각 이웃 셀이 텍스처 `P`·`S`에 얼마나 기여하는지만 구해서 bilinear로 섞으면 된다.
+
+```glsl
+// 1. 현재 셀 (nearest) — 인덱스 P, S 확정
+vec4 cur = texture(splat, vUv);
+int pIdx = decodePrimary(cur);
+int sIdx = decodeSecondary(cur);
+
+// 2. 4 이웃 셀 샘플 (sub-cell 위치로 오프셋)
+vec2 cellPos = vUv * SPLAT_SIZE - 0.5;
+vec2 baseUv  = (floor(cellPos) + 0.5) / SPLAT_SIZE;
+vec2 frac    = fract(cellPos);
+vec4 s00 = texture(splat, baseUv);
+vec4 s10 = texture(splat, baseUv + vec2(1.0/SPLAT_SIZE, 0));
+vec4 s01 = texture(splat, baseUv + vec2(0, 1.0/SPLAT_SIZE));
+vec4 s11 = texture(splat, baseUv + vec2(1.0/SPLAT_SIZE, 1.0/SPLAT_SIZE));
+
+// 3. 각 셀의 texture-i 가중치: primary==i → (1-blend), secondary==i → blend, else 0
+float idxWeight(vec4 s, int i) {
+  return (s.primary == i ? 1.0 - s.blend : 0.0)
+       + (s.secondary == i ? s.blend : 0.0);
+}
+
+// 4. Bilinear 가중치
+float w00 = (1-frac.x)*(1-frac.y), w10 = frac.x*(1-frac.y);
+float w01 = (1-frac.x)*frac.y,     w11 = frac.x*frac.y;
+
+// 5. 텍스처 P, S의 픽셀 가중치
+float pW = idxWeight(s00,pIdx)*w00 + idxWeight(s10,pIdx)*w10
+        + idxWeight(s01,pIdx)*w01 + idxWeight(s11,pIdx)*w11;
+float sW = /* same for sIdx */ ;
+
+// 6. 최종 blend
+float blend = (pW + sW > 0.01) ? sW / (pW + sW) : cur.blend;
+```
+
+### 커버하는 케이스
+- **같은 쌍 (grass,sand) ↔ (grass,sand)**: `pW`, `sW` 모두 부드럽게 변화 → 부드러운 blend.
+- **primary 공유 (grass,sand) ↔ (grass,laterite)**: 공유된 grass의 `pW`는 부드럽고, 현재 셀의 secondary(sand)의 `sW`는 반대편 셀에서 0으로 fade → 격자 없음.
+- **완전 다른 쌍 (grass,sand) ↔ (snow,rock)**: `pW + sW ≈ 0` → nearest 셀 blend로 fallback. 경계가 선명하게 보이지만 이 케이스는 절차 생성에선 거의 발생하지 않음.
+
+### 비용
+- splat 샘플 1회 → **4회** (캐시 친화적, 64×64 텍스처라 미미)
+- atlas 샘플은 그대로 2회
+- 부가 연산 (곱셈·덧셈 몇 개) 무시 가능
 
 ## 7. 페인트 로직
 

@@ -17,6 +17,7 @@ import {
   vec4,
   float,
   int,
+  step,
   smoothstep,
   mix,
   min,
@@ -41,6 +42,7 @@ import {
   type SplatAtlasSet,
 } from '../utils/splatLayerLoader'
 import { MAX_PALETTE } from '../terrain/splat-encoding'
+import { TILE_DIM } from '../terrain/terrain-constants'
 
 export type SplatLayer = {
   map: THREE.Texture // Albedo (sRGB)
@@ -142,13 +144,86 @@ export function makeSplatStandardMaterial({
     return positionLocal
   })()
 
-  // ─── Decode splat cell ──────────────────────────────────
-  // packed byte 0 = (pIdx << 4) | sIdx. Reconstruct as floats for slot math.
-  const splatSample = splatTex.sample(vUvSplat).toVar()
-  const packedF = splatSample.r.mul(255.0).add(0.5).floor()
-  const pIdxF = packedF.div(16.0).floor().toVar()
-  const sIdxF = packedF.sub(pIdxF.mul(16.0)).toVar()
-  const blend = splatSample.b
+  // ─── Decode splat cells + weight-space bilinear blend ────────────
+  //
+  // P/S indices come from the nearest cell (whichever of the 4 taps the pixel
+  // sits in). The `blend` factor is interpolated across the 4 cells in weight
+  // space: each neighbor contributes its fraction of texture P and texture S.
+  // This smooths transitions across cells that share at least one slot
+  // (e.g. (grass,sand) ↔ (grass,laterite)). When neighbors share no slot,
+  // pW+sW collapses to ~0 and we fall back to the nearest cell's blend.
+  const SPLAT_TEXEL = 1.0 / TILE_DIM
+
+  const cellPos = vUvSplat.mul(float(TILE_DIM)).sub(0.5)
+  const baseUv = cellPos.floor().add(0.5).mul(SPLAT_TEXEL)
+  const fracUv = fract(cellPos)
+  const s00 = splatTex.sample(baseUv).toVar()
+  const s10 = splatTex.sample(baseUv.add(vec2(SPLAT_TEXEL, 0))).toVar()
+  const s01 = splatTex.sample(baseUv.add(vec2(0, SPLAT_TEXEL))).toVar()
+  const s11 = splatTex
+    .sample(baseUv.add(vec2(SPLAT_TEXEL, SPLAT_TEXEL)))
+    .toVar()
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function decodeCell(sample: any) {
+    const pk = sample.r.mul(255.0).add(0.5).floor()
+    const p = pk.div(16.0).floor().toVar()
+    const s = pk.sub(p.mul(16.0)).toVar()
+    return { p, s, blend: sample.b }
+  }
+
+  const d00 = decodeCell(s00)
+  const d10 = decodeCell(s10)
+  const d01 = decodeCell(s01)
+  const d11 = decodeCell(s11)
+
+  // Weight of a decoded cell toward the given palette index.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function cellWeight(d: any, targetIdx: any) {
+    const pMatch = step(abs(d.p.sub(targetIdx)), float(0.5))
+    const sMatch = step(abs(d.s.sub(targetIdx)), float(0.5))
+    return pMatch.mul(d.blend.oneMinus()).add(sMatch.mul(d.blend))
+  }
+
+  // Nearest cell (pixel's actual cell): select one of the 4 taps by fracUv.
+  const selX = step(float(0.5), fracUv.x)
+  const selY = step(float(0.5), fracUv.y)
+  const pIdxF = mix(
+    mix(d00.p, d10.p, selX),
+    mix(d01.p, d11.p, selX),
+    selY
+  ).toVar()
+  const sIdxF = mix(
+    mix(d00.s, d10.s, selX),
+    mix(d01.s, d11.s, selX),
+    selY
+  ).toVar()
+  const nearestBlend = mix(
+    mix(d00.blend, d10.blend, selX),
+    mix(d01.blend, d11.blend, selX),
+    selY
+  )
+
+  const w00 = fracUv.x.oneMinus().mul(fracUv.y.oneMinus())
+  const w10 = fracUv.x.mul(fracUv.y.oneMinus())
+  const w01 = fracUv.x.oneMinus().mul(fracUv.y)
+  const w11 = fracUv.x.mul(fracUv.y)
+
+  const pW = cellWeight(d00, pIdxF)
+    .mul(w00)
+    .add(cellWeight(d10, pIdxF).mul(w10))
+    .add(cellWeight(d01, pIdxF).mul(w01))
+    .add(cellWeight(d11, pIdxF).mul(w11))
+  const sW = cellWeight(d00, sIdxF)
+    .mul(w00)
+    .add(cellWeight(d10, sIdxF).mul(w10))
+    .add(cellWeight(d01, sIdxF).mul(w01))
+    .add(cellWeight(d11, sIdxF).mul(w11))
+
+  const totalW = pW.add(sW)
+  const hasWeight = step(float(0.01), totalW)
+  const interpBlend = sW.div(max(totalW, float(1e-4)))
+  const blend = mix(nearestBlend, interpBlend, hasWeight).toVar()
 
   const fLocalUv = uv()
   const fUvDx = dFdx(fLocalUv)
