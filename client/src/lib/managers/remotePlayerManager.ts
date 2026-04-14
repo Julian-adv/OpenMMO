@@ -1,5 +1,7 @@
 import { SvelteMap } from 'svelte/reactivity'
+import { get } from 'svelte/store'
 import { hmrSingleton } from '../utils/hmr'
+import { gameStore } from '../stores/gameStore'
 import {
   calculateMovementStep,
   initMovementState,
@@ -80,6 +82,9 @@ class PlayerStateManager {
       }
     })
 
+    // Snapshot other-player store state once for the frame (torch lookup below).
+    const otherPlayers = get(gameStore).otherPlayers
+
     // Update players
     this.targetPositions.forEach((targetPos, playerId) => {
       // Get current interpolated position or initialize from player position
@@ -158,8 +163,9 @@ class PlayerStateManager {
           this.executeAttack(playerId)
         }
       } else {
-        // Determine movement mode based on distance
-        const movementMode = getMovementMode(movement.totalDistance)
+        // Torch has no jog animation, so skip the jog tier for torch-holders.
+        const hasTorch = otherPlayers.get(playerId)?.torchOn ?? false
+        const movementMode = getMovementMode(movement.totalDistance, hasTorch)
 
         this.players.set(playerId, {
           position: result.newPos,

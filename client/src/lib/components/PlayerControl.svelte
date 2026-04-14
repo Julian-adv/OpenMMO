@@ -6,7 +6,8 @@
   import { monsterManager } from '../managers/monsterManager'
   import { combatController } from '../managers/combatController'
   import { inputHandler } from '../managers/inputHandler'
-  import { mapEditorMode, housingEditorMode, debugSpeedMode } from '../stores/debugStore'
+  import { mapEditorMode, housingEditorMode, debugSpeedMode, torchLightEnabled } from '../stores/debugStore'
+  import { localTorchEquipped } from '../stores/inventoryStore'
   import {
     calculateMovementStep,
     initMovementState,
@@ -146,15 +147,17 @@
         }
       : playerState.position
 
-    // Determine movement mode based on distance or if chasing a monster
+    // Determine movement mode based on distance or if chasing a monster.
+    // Torch has no jog animation, so fall back to walk when no distance is known.
+    const hasTorch = $localTorchEquipped || $torchLightEnabled
     let movementMode: MovementMode | undefined
     if (isMoving) {
       if (combatController.isInCombat) {
         movementMode = 'run'
       } else if (totalDistance !== undefined) {
-        movementMode = getMovementMode(totalDistance)
+        movementMode = getMovementMode(totalDistance, hasTorch)
       } else {
-        movementMode = 'jog'
+        movementMode = hasTorch ? 'walk' : 'jog'
       }
     }
 

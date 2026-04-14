@@ -41,9 +41,17 @@ export interface PlayerState {
 }
 
 /**
- * Determine movement mode based on distance
+ * Determine movement mode based on distance.
+ * When `hasTorch` is true, jog is skipped (no torch_jog animation exists);
+ * short distances use walk and longer distances use run.
  */
-export function getMovementMode(distance: number): MovementMode {
+export function getMovementMode(
+  distance: number,
+  hasTorch = false
+): MovementMode {
+  if (hasTorch) {
+    return distance <= 3 ? 'walk' : 'run'
+  }
   if (distance <= 3) {
     return 'walk'
   } else if (distance <= 8) {
