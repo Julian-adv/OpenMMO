@@ -85,7 +85,6 @@
   function onEquipPointerDown(e: PointerEvent, slot: EquipSlot, item: { instance_id: number; item_def_id: string }) {
     if (e.button !== 0) return
     e.preventDefault()
-    hoveredSlot = null
     const def = getItemDef(item.item_def_id)
 
     startDrag(
@@ -190,7 +189,7 @@
           {#if def}
             <img class="equip-icon" src="/items/{def.icon}" alt={def.name} draggable="false" />
           {/if}
-          {#if item && def && hoveredSlot === slot}
+          {#if item && def && hoveredSlot === slot && !$dragMeta}
             <ItemTooltip {def} side={left > 50 ? 'left' : 'right'} />
           {/if}
         </div>
