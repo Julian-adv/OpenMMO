@@ -454,11 +454,13 @@
       let cameraOffset = calculateCameraOffset()
       loopProfiler.record('cameraOffset', performance.now() - cameraOffsetStart)
 
-      // Update player controls (skip in map editor mode)
+      // Movement runs in map editor so right-click-to-move works.
       const playerControlStart = performance.now()
-      if (playerControl && !$mapEditorMode && !$housingEditorMode) {
-        playerControl.checkInteraction()
-        playerControl.updateKeyboardMovement()
+      if (playerControl && !$housingEditorMode) {
+        if (!$mapEditorMode) {
+          playerControl.checkInteraction()
+          playerControl.updateKeyboardMovement()
+        }
         playerControl.updatePlayerMovement(deltaTime)
       }
       tileManager.updateFromPlayerPosition(currentPlayer?.position ?? null)

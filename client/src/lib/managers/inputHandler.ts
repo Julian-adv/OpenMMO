@@ -331,10 +331,12 @@ class InputHandler {
 
     // Add click event listener to canvas - wait until canvas exists
     let canvas: HTMLCanvasElement | null = null
+    const onContextMenu = (event: MouseEvent) => event.preventDefault()
     const findCanvas = () => {
       canvas = document.querySelector('canvas')
       if (canvas) {
         canvas.addEventListener('mousedown', onCanvasClick)
+        canvas.addEventListener('contextmenu', onContextMenu)
       } else {
         setTimeout(findCanvas, 100)
       }
@@ -346,6 +348,7 @@ class InputHandler {
       document.removeEventListener('keyup', onKeyUp)
       if (canvas) {
         canvas.removeEventListener('mousedown', onCanvasClick)
+        canvas.removeEventListener('contextmenu', onContextMenu)
       }
     }
   }

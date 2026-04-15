@@ -749,7 +749,9 @@
 
   // Handle canvas click intent from input handler
   function handleCanvasClickIntent(event: MouseEvent) {
-    if ($mapEditorMode || $housingEditorMode) return
+    if ($housingEditorMode) return
+    const expectedButton = $mapEditorMode ? 2 : 0
+    if (event.button !== expectedButton) return
     if (!currentPlayer || currentPlayer.health <= 0) return
 
     const intent = inputHandler.processCanvasClick(event, {
@@ -770,6 +772,8 @@
         return m?.state === 'dead' || false
       },
     })
+
+    if ($mapEditorMode && intent.type !== 'move_to_ground') return
 
     switch (intent.type) {
       case 'attack_monster': {
