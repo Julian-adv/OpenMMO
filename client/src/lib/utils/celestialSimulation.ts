@@ -15,7 +15,9 @@ export const SHADOW_CAMERA_EXTENT = 80
 export const SHADOW_CAMERA_FAR = SUN_LIGHT_DISTANCE * 3
 export const SUN_DAY_DURATION_SECONDS = 3 * 60 * 60
 export const SUN_START_HOUR = 12
-export const SUN_MAX_INTENSITY = 5.0
+export const SUN_MAX_INTENSITY = 10.0
+export const SUN_DAYLIGHT_PLATEAU_LEVEL = 0.9
+export const SUN_DAYLIGHT_RAMP_HOURS = 1
 export const SUN_TWILIGHT_ELEVATION_THRESHOLD = 0.07 // upper bound (~4° above horizon)
 export const SUN_TWILIGHT_LOWER_THRESHOLD = -0.04 // lower bound (~-2.3° below horizon)
 export const SUN_TWILIGHT_COLOR_BLEND = 0.85
@@ -405,9 +407,6 @@ export function getSunTrackState(config: SunTrackConfig): SunTrackState {
   }
 }
 
-const SUN_DAYLIGHT_SOFTENING_EXPONENT = 0.7
-export const SUN_DAYLIGHT_FLOOR = 0.4
-
 function dayOfYearFromCalendar(month: number, day: number) {
   const clampedMonth = Math.min(MONTHS_PER_YEAR, Math.max(1, Math.floor(month)))
   const clampedDay = Math.min(DAYS_PER_MONTH, Math.max(1, Math.floor(day)))
@@ -434,15 +433,27 @@ export function getSunElevation(config: SunDirectionConfig) {
   return getSunDirection(config).y
 }
 
+const solarDaylightWindowCache = new Map<string, SolarDaylightWindow>()
+
 export function getSolarDaylightWindow(
   config: SolarDaylightWindowConfig
 ): SolarDaylightWindow {
+  const axialTiltDeg = config.axialTiltDeg ?? SUN_AXIAL_TILT_DEG
+  const cacheKey = `${config.latitudeDeg}|${config.month}|${config.day}|${axialTiltDeg}`
+  const cached = solarDaylightWindowCache.get(cacheKey)
+  if (cached) return cached
+
   const dayOfYear = dayOfYearFromCalendar(config.month, config.day)
   const latitudeRad = (config.latitudeDeg * Math.PI) / 180
-  const axialTiltDeg = config.axialTiltDeg ?? SUN_AXIAL_TILT_DEG
   const declination = getDeclinationRadFromDayIndex(dayOfYear, axialTiltDeg)
   const cosHourAngle = -Math.tan(latitudeRad) * Math.tan(declination)
 
+  const result = computeSolarDaylightWindow(cosHourAngle)
+  solarDaylightWindowCache.set(cacheKey, result)
+  return result
+}
+
+function computeSolarDaylightWindow(cosHourAngle: number): SolarDaylightWindow {
   if (cosHourAngle <= -1) {
     return {
       sunriseHour: 0,
@@ -474,33 +485,45 @@ export function computeSunLightSnapshot(
   calendarDate: CalendarDate
 ): SunLightSnapshot {
   const normalizedGameHour = normalizeHour(gameHour)
-  const latitudeRad = (SUN_LATITUDE_DEG * Math.PI) / 180
-  const latitudeCos = Math.cos(latitudeRad)
   const direction = getSunDirection({
     hour: normalizedGameHour,
     month: calendarDate.month,
     day: calendarDate.day,
   })
 
-  const baseDaylightFactor = Math.min(
-    1,
-    Math.max(0, direction.y / Math.max(latitudeCos, 1e-6))
+  const daylightWindow = getSolarDaylightWindow({
+    latitudeDeg: SUN_LATITUDE_DEG,
+    month: calendarDate.month,
+    day: calendarDate.day,
+  })
+  const halfDay = daylightWindow.dayLengthHours / 2
+  const rampHours = Math.min(SUN_DAYLIGHT_RAMP_HOURS, halfDay)
+  const noonHour = (daylightWindow.sunriseHour + daylightWindow.sunsetHour) / 2
+  const hoursFromNearestEdge = Math.min(
+    normalizedGameHour - daylightWindow.sunriseHour,
+    daylightWindow.sunsetHour - normalizedGameHour
   )
-  const softenedDaylightFactor = Math.pow(
-    baseDaylightFactor,
-    SUN_DAYLIGHT_SOFTENING_EXPONENT
-  )
-  // Fade out smoothly below horizon: full at y=0, zero at y=SUN_TWILIGHT_LOWER_THRESHOLD
+
+  let plateauFactor = 0
+  if (hoursFromNearestEdge >= 0 && halfDay > 0) {
+    if (hoursFromNearestEdge < rampHours) {
+      plateauFactor =
+        SUN_DAYLIGHT_PLATEAU_LEVEL * (hoursFromNearestEdge / rampHours)
+    } else {
+      const plateauHalfSpan = Math.max(1e-6, halfDay - rampHours)
+      const distanceFromNoon = Math.abs(normalizedGameHour - noonHour)
+      const t = Math.min(1, distanceFromNoon / plateauHalfSpan)
+      plateauFactor = 1 - (1 - SUN_DAYLIGHT_PLATEAU_LEVEL) * t
+    }
+  }
+
+  // Smooth fade across twilight so directional light does not snap to zero
+  // exactly at geometric sunrise/sunset.
   const horizonFade =
     direction.y >= 0
       ? 1
       : Math.max(0, 1 - direction.y / SUN_TWILIGHT_LOWER_THRESHOLD)
-  const daylightFactor =
-    horizonFade > 0
-      ? (SUN_DAYLIGHT_FLOOR +
-          (1 - SUN_DAYLIGHT_FLOOR) * softenedDaylightFactor) *
-        horizonFade
-      : 0
+  const daylightFactor = plateauFactor * horizonFade
 
   return {
     gameHour: normalizedGameHour,
