@@ -294,11 +294,31 @@ export function applyFlattenLine(
   const lineDz = z2 - z1
   const lenSq = lineDx * lineDx + lineDz * lineDz
   if (lenSq < 1e-6) return affected
+  const lineLen = Math.sqrt(lenSq)
 
-  // Sample endpoint heights from current heightmap
-  const h1 = sampleHeightAtWorld(state, x1, z1)
-  const h2 = sampleHeightAtWorld(state, x2, z2)
-  if (h1 === null || h2 === null) return affected
+  const perpX = -lineDz / lineLen
+  const perpZ = lineDx / lineLen
+
+  // Per-t target is the mean of the cross-section, so length-wise variation
+  // is preserved while the left/right edges converge to the local mean.
+  const numSamples = Math.max(2, Math.ceil(lineLen) + 1)
+  const targets = new Float32Array(numSamples)
+  for (let i = 0; i < numSamples; i++) {
+    const tt = i / (numSamples - 1)
+    const sx = x1 + lineDx * tt
+    const sz = z1 + lineDz * tt
+    let sum = 0
+    let cnt = 0
+    for (let d = -radius; d <= radius + 1e-6; d += 1) {
+      const h = sampleHeightAtWorld(state, sx + perpX * d, sz + perpZ * d)
+      if (h !== null) {
+        sum += h
+        cnt++
+      }
+    }
+    if (cnt === 0) return affected
+    targets[i] = sum / cnt
+  }
 
   // Road core flattens mostly (not fully) toward the target so subtle
   // original terrain variation remains, then eases out over a blend skirt.
@@ -352,7 +372,8 @@ export function applyFlattenLine(
           if (dist > blendRadius) continue
           if (isProtected && isProtected(wx, wz)) continue
 
-          const target = h1 + (h2 - h1) * t
+          const ti = Math.round(t * (numSamples - 1))
+          const target = targets[ti]
           const blend = coreBlend * (1 - smoothstep(radius, blendRadius, dist))
 
           const idx = cz * VERTS_PER_SIDE + cx
