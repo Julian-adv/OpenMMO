@@ -36,30 +36,38 @@ function paintCell(
   return true
 }
 
-// Untouched cells (primary==secondary) adjacent to a painted cell would make
-// the shader's nearest-cell P/S pair jump across the boundary, producing a
-// hard edge. Stamp secondary=paintIdx with blend=0 so the cell still renders
-// as 100% primary but gives the bilerp a matching P/S pair.
+// Cells adjacent to a painted cell need paintIdx in one of their palette slots
+// so the shader's weight-space bilerp has a matching P/S pair across the
+// boundary. Without this, `cellWeight` collapses for cells that have no
+// matching slot, and when `nearestBlend` flips between cells with disjoint
+// palettes the rendered mix jumps — a hard edge.
+//
+// A slot is considered "free" when its bilerp contribution is small enough
+// (≤10%) that overwriting it with paintIdx produces at most a subtle tint
+// shift but unlocks smooth blending across the road boundary. Genuinely
+// mixed cells (both slots contributing >10%) are preserved and may still
+// show a hard edge — the tradeoff favors user-painted mixes.
+const FRINGE_REMAP_THRESHOLD = 25 // ≈10% of 255
 function paintCellFringe(
   data: Uint8Array,
   cellIdx: number,
   paintIdx: number
 ): boolean {
-  // Fast-path on the packed indices byte to skip object allocation when the
-  // cell is already mixed (p!=s) or already has the matching secondary.
-  const indices = data[cellIdx * BYTES_PER_CELL]
+  const base = cellIdx * BYTES_PER_CELL
+  const indices = data[base]
   const primary = (indices >> 4) & 0x0f
   const secondary = indices & 0x0f
-  if (primary !== secondary) return false
-  if (secondary === paintIdx) return false
-  const before = readCell(data, cellIdx)
-  writeCell(data, cellIdx, {
-    primaryIdx: before.primaryIdx,
-    secondaryIdx: paintIdx,
-    blend: 0,
-    vegMeta: before.vegMeta,
-  })
-  return true
+  if (primary === paintIdx || secondary === paintIdx) return false
+  const blend = data[base + 2]
+  if (primary === secondary || blend <= FRINGE_REMAP_THRESHOLD) {
+    data[base] = (primary << 4) | (paintIdx & 0x0f)
+    return true
+  }
+  if (blend >= 255 - FRINGE_REMAP_THRESHOLD) {
+    data[base] = ((paintIdx & 0x0f) << 4) | secondary
+    return true
+  }
+  return false
 }
 
 // Covers 8-connected neighbors (max diagonal distance √2, rounded up).

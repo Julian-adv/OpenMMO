@@ -780,6 +780,8 @@
       getTerrainGroup: () => terrainGroup,
       refractionEnabled,
       reflectionEnabled,
+      splatManager: terrainSplatManager,
+      getPlayerPos: () => currentPlayer ? { x: currentPlayer.position.x, z: currentPlayer.position.z } : null,
     }))
     {
       const initHour = calendarSystem.getGameHour()
