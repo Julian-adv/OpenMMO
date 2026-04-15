@@ -38,10 +38,16 @@ function sampleNeighborHeight(
   if (ncx < 0) {
     ntx -= 1
     ncx += TILE_DIM
+  } else if (ncx >= VERTS_PER_SIDE) {
+    ntx += 1
+    ncx -= TILE_DIM
   }
   if (ncz < 0) {
     ntz -= 1
     ncz += TILE_DIM
+  } else if (ncz >= VERTS_PER_SIDE) {
+    ntz += 1
+    ncz -= TILE_DIM
   }
   const data = state.heightmaps.get(tileKey(ntx, ntz))
   if (!data) return null
@@ -92,9 +98,15 @@ export function applyBrush(
       const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
 
       const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
-      const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
+      const endCX = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(maxWorldX - tileMinX)
+      )
       const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
-      const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
+      const endCZ = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(maxWorldZ - tileMinZ)
+      )
 
       for (let cz = startCZ; cz <= endCZ; cz++) {
         for (let cx = startCX; cx <= endCX; cx++) {
@@ -184,9 +196,15 @@ export function applyFlatten(
       const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
       const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
       const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
-      const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
+      const endCX = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(maxWorldX - tileMinX)
+      )
       const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
-      const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
+      const endCZ = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(maxWorldZ - tileMinZ)
+      )
 
       for (let cz = startCZ; cz <= endCZ; cz++) {
         for (let cx = startCX; cx <= endCX; cx++) {
@@ -205,7 +223,12 @@ export function applyFlatten(
               if (nx === 0 && nz === 0) continue
               const ncx = cx + nx
               const ncz = cz + nz
-              if (ncx >= 0 && ncz >= 0) {
+              const inBounds =
+                ncx >= 0 &&
+                ncz >= 0 &&
+                ncx < VERTS_PER_SIDE &&
+                ncz < VERTS_PER_SIDE
+              if (inBounds) {
                 nSum += decodeHeight(data[ncz * VERTS_PER_SIDE + ncx])
                 nCount++
               } else {
@@ -302,9 +325,15 @@ export function applyFlattenLine(
       const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
       const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
       const startCX = Math.max(0, Math.floor(minWorldX - tileMinX))
-      const endCX = Math.min(TILE_DIM - 1, Math.floor(maxWorldX - tileMinX))
+      const endCX = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(maxWorldX - tileMinX)
+      )
       const startCZ = Math.max(0, Math.floor(minWorldZ - tileMinZ))
-      const endCZ = Math.min(TILE_DIM - 1, Math.floor(maxWorldZ - tileMinZ))
+      const endCZ = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(maxWorldZ - tileMinZ)
+      )
 
       for (let cz = startCZ; cz <= endCZ; cz++) {
         for (let cx = startCX; cx <= endCX; cx++) {
@@ -416,9 +445,15 @@ export function flattenArea(
       const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
 
       const startCX = Math.max(0, Math.floor(expandedMinX - tileMinX))
-      const endCX = Math.min(TILE_DIM - 1, Math.floor(expandedMaxX - tileMinX))
+      const endCX = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(expandedMaxX - tileMinX)
+      )
       const startCZ = Math.max(0, Math.floor(expandedMinZ - tileMinZ))
-      const endCZ = Math.min(TILE_DIM - 1, Math.floor(expandedMaxZ - tileMinZ))
+      const endCZ = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(expandedMaxZ - tileMinZ)
+      )
 
       for (let cz = startCZ; cz <= endCZ; cz++) {
         for (let cx = startCX; cx <= endCX; cx++) {
