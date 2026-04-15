@@ -23,10 +23,13 @@
 
   let { visible, name, characterClass, gender, level, currentXp, currentHp, maxHp, attributes, onClose }: Props = $props()
 
+  const FEMALE_EQUIP_BG: Partial<Record<CharacterClass, string>> = {
+    caveman: '/character_concepts/cavewoman.png',
+    rogue: '/character_concepts/female_rogue.png',
+  }
   const equipBg = $derived(
-    characterClass === 'rogue' && gender === 'female'
-      ? '/character_concepts/female_rogue.png'
-      : '/character_concepts/female_priest.png'
+    (gender === 'female' && FEMALE_EQUIP_BG[characterClass]) ||
+      '/character_concepts/female_priest.png'
   )
 
   const CLASS_LABELS: Record<CharacterClass, string> = {
