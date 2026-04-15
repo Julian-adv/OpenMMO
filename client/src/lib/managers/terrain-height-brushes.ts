@@ -24,6 +24,30 @@ function finalizeBrush(
   }
 }
 
+function sampleNeighborHeight(
+  state: TerrainHeightState,
+  tx: number,
+  tz: number,
+  cx: number,
+  cz: number
+): number | null {
+  let ntx = tx
+  let ntz = tz
+  let ncx = cx
+  let ncz = cz
+  if (ncx < 0) {
+    ntx -= 1
+    ncx += TILE_DIM
+  }
+  if (ncz < 0) {
+    ntz -= 1
+    ncz += TILE_DIM
+  }
+  const data = state.heightmaps.get(tileKey(ntx, ntz))
+  if (!data) return null
+  return decodeHeight(data[ncz * VERTS_PER_SIDE + ncx])
+}
+
 export function applyBrush(
   state: TerrainHeightState,
   worldX: number,
@@ -36,7 +60,7 @@ export function applyBrush(
 ): AffectedTile[] {
   const affected: AffectedTile[] = []
   const delta = strengthPerSec * deltaTimeSec * (raise ? 1 : -1)
-  const sigma = radius / 2.5
+  const plateauR = radius * 0.4
 
   const minWorldX = worldX - radius
   const maxWorldX = worldX + radius
@@ -84,7 +108,7 @@ export function applyBrush(
           if (dist > radius) continue
           if (isProtected && isProtected(vertexWorldX, vertexWorldZ)) continue
 
-          const weight = Math.exp(-(dist * dist) / (2 * sigma * sigma))
+          const weight = 1 - smoothstep(plateauR, radius, dist)
           const heightDelta = delta * weight
 
           const idx = cz * VERTS_PER_SIDE + cx
@@ -181,9 +205,15 @@ export function applyFlatten(
               if (nx === 0 && nz === 0) continue
               const ncx = cx + nx
               const ncz = cz + nz
-              if (ncx >= 0 && ncx < TILE_DIM && ncz >= 0 && ncz < TILE_DIM) {
+              if (ncx >= 0 && ncz >= 0) {
                 nSum += decodeHeight(data[ncz * VERTS_PER_SIDE + ncx])
                 nCount++
+              } else {
+                const h = sampleNeighborHeight(state, tx, tz, ncx, ncz)
+                if (h !== null) {
+                  nSum += h
+                  nCount++
+                }
               }
             }
           }
