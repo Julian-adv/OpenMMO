@@ -173,7 +173,7 @@
         disabled={isBusy()}
         onclick={() => selectClass('caveman')}
       >
-        Caveman
+        {selectedGender === 'female' ? 'Cavewoman' : 'Caveman'}
       </button>
       <button
         type="button"

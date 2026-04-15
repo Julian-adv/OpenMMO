@@ -41,6 +41,12 @@
     guard: 'Guard',
   }
 
+  const classLabel = $derived(
+    characterClass === 'caveman' && gender === 'female'
+      ? 'Cavewoman'
+      : CLASS_LABELS[characterClass]
+  )
+
   const EQUIP_SLOT_LABELS: Record<EquipSlot, string> = {
     head: 'Head',
     main_hand: 'Main Hand',
@@ -113,7 +119,7 @@
   <div class="character-panel" role="dialog" aria-label="Character">
     <div class="panel-header">
       <span class="panel-title">{name}</span>
-      <span class="panel-class">{CLASS_LABELS[characterClass]}</span>
+      <span class="panel-class">{classLabel}</span>
       <button class="close-btn" onclick={onClose}>&times;</button>
     </div>
 
