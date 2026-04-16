@@ -37,7 +37,7 @@
     typeIdx: number
   }
 
-  const GHOST_OPACITY = 0.3
+  const GHOST_OPACITY = 0.15
 
   const globalSlots: GlobalSlot[] = []
   let modelsReady = false
