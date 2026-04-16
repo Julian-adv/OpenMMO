@@ -137,6 +137,12 @@
         slot.mesh.boundingSphere = new THREE.Sphere(
           new THREE.Vector3(0, -100000, 0), 1)
       }
+      // Warmup overwrites any real data that was already loaded into slots.
+      // Clear slot assignments so the next rebuild re-writes real data.
+      shortKeyToSlot.clear()
+      tallKeyToSlot.clear()
+      flowerKeyToSlot.clear()
+      needsRebuild = true
     }
     requestAnimationFrame(tick)
     return true
@@ -324,7 +330,6 @@
   let windStrengthDuration = 0
 
   // ── Player sub-chunk tracking ─────────────────────────
-  let hasPlayer = $state(false)
   let curScx = 0
   let curScz = 0
   let computeFrameCount = 0
@@ -334,7 +339,6 @@
     const dt = Math.min(deltaTime / 1000, 0.1)
     elapsedTime += dt
 
-    hasPlayer = !!playerPosition
     if (playerPosition) {
       const scx = Math.floor(playerPosition.x / SUB_CHUNK_SIZE)
       const scz = Math.floor(playerPosition.z / SUB_CHUNK_SIZE)
@@ -668,8 +672,6 @@
 
   // ── Tile data lifecycle ─────────────────────────────────
   $effect(() => {
-    if (!hasPlayer || !assetsReady) return
-
     const gMgr = grassDataManager
     if (!gMgr) return
 
