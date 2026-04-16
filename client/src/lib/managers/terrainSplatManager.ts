@@ -253,7 +253,7 @@ export class TerrainSplatManager {
     if (lenSq < 1e-6) return []
 
     // Flat-core falloff: fully saturate within innerR, smoothstep to 0 at radius.
-    const innerR = radius * 0.6
+    const innerR = radius * 0.3
     const outerR = radius + FRINGE_PAD
 
     const minWorldX = Math.min(x1, x2) - outerR
