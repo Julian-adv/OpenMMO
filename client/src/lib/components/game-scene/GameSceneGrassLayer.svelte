@@ -190,8 +190,8 @@
     const mesh = new THREE.InstancedMesh(geom, mat, capacity)
     // Do NOT set mesh.count = 0 here! WebGPU allocates GPU buffers based on
     // mesh.count at first render. If 0, the buffer can never grow later.
-    mesh.castShadow = false
-    mesh.receiveShadow = true
+    mesh.castShadow = true
+    mesh.receiveShadow = false
     mesh.frustumCulled = true
     return { mesh, ctx, capacity }
   }
