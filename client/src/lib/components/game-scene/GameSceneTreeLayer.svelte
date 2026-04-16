@@ -32,8 +32,12 @@
   // ── Global meshes: one InstancedMesh per tree-type × sub-mesh ──
   interface GlobalSlot {
     mesh: THREE.InstancedMesh
+    /** Semi-transparent mesh shown when tree occludes the player. */
+    ghostMesh: THREE.InstancedMesh
     typeIdx: number
   }
+
+  const GHOST_OPACITY = 0.3
 
   const globalSlots: GlobalSlot[] = []
   let modelsReady = false
@@ -90,17 +94,27 @@
             const im = new THREE.InstancedMesh(geo, mat, MAX_INSTANCES)
             im.castShadow = true
             im.receiveShadow = true
-            // Seed a dummy instance far below the world so the WebGPU pipeline
-            // compiles during the initial load phase. Without this, the first
-            // render happens when a tile actually places a real tree — which
-            // stalls the main thread for ~100-800ms mid-movement.
-            im.count = 1
-            _mat4.makeTranslation(0, -100000, 0)
-            im.setMatrixAt(0, _mat4)
-            im.instanceMatrix.needsUpdate = true
-            treeGroup.add(im)
 
-            globalSlots.push({ mesh: im, typeIdx: t })
+            // Ghost mesh: same geometry, semi-transparent material
+            const ghostMat = mat.clone()
+            ghostMat.transparent = true
+            ghostMat.depthWrite = false
+            ghostMat.opacity = GHOST_OPACITY
+            ghostMat.alphaTest = 0
+            const ghostIm = new THREE.InstancedMesh(geo, ghostMat, MAX_INSTANCES)
+            ghostIm.castShadow = false
+            ghostIm.receiveShadow = true
+
+            // Seed dummy instances so WebGPU pipelines compile during load
+            for (const m of [im, ghostIm]) {
+              m.count = 1
+              _mat4.makeTranslation(0, -100000, 0)
+              m.setMatrixAt(0, _mat4)
+              m.instanceMatrix.needsUpdate = true
+              treeGroup.add(m)
+            }
+
+            globalSlots.push({ mesh: im, ghostMesh: ghostIm, typeIdx: t })
           })
         }
 
@@ -200,7 +214,7 @@
     })
   }
 
-  /** Rebuild all global slots from cached tile data, skipping occluded trees. */
+  /** Rebuild all global slots from cached tile data, routing occluded trees to ghost meshes. */
   function rebuildGlobalMeshes() {
     if (!modelsReady) return
 
@@ -214,44 +228,59 @@
       }
     }
 
+    if (!cachedBoundingSpheres) {
+      cachedBoundingSpheres = [
+        computeBoundingSphere(allData[0]),
+        computeBoundingSphere(allData[1]),
+      ]
+    }
+
     const doOcc = playerPosition !== null
     const px = playerPosition?.x ?? 0
     const py = playerPosition?.y ?? 0
     const pz = playerPosition?.z ?? 0
 
     for (const slot of globalSlots) {
-      const { mesh, typeIdx } = slot
+      const { mesh, ghostMesh, typeIdx } = slot
       let idx = 0
+      let ghostIdx = 0
+
       for (const raw of allData[typeIdx]) {
         const count = raw.length / 5
-        for (let i = 0; i < count && idx < MAX_INSTANCES; i++) {
+        for (let i = 0; i < count; i++) {
+          if (idx >= MAX_INSTANCES && ghostIdx >= MAX_INSTANCES) break
           const base = i * 5
-          if (doOcc && treeOccludesPlayer(raw[base], raw[base + 1], raw[base + 2], raw[base + 4], typeIdx, px, py, pz)) {
-            continue
-          }
           _pos.set(raw[base], raw[base + 1], raw[base + 2])
           _quat.setFromAxisAngle(_up, raw[base + 3])
           const s = raw[base + 4]
           _scale.set(s, s, s)
           _mat4.compose(_pos, _quat, _scale)
-          mesh.setMatrixAt(idx, _mat4)
-          idx++
+
+          if (doOcc && treeOccludesPlayer(raw[base], raw[base + 1], raw[base + 2], s, typeIdx, px, py, pz)) {
+            if (ghostIdx < MAX_INSTANCES) ghostMesh.setMatrixAt(ghostIdx++, _mat4)
+          } else {
+            if (idx < MAX_INSTANCES) mesh.setMatrixAt(idx++, _mat4)
+          }
         }
       }
+
+      const sphere = cachedBoundingSpheres[typeIdx]
+
+      // Force WebGPU buffer re-upload via remove+re-add
       mesh.count = idx
       mesh.instanceMatrix.needsUpdate = true
-
-      if (!cachedBoundingSpheres) {
-        cachedBoundingSpheres = [
-          computeBoundingSphere(allData[0]),
-          computeBoundingSphere(allData[1]),
-        ]
-      }
-      mesh.boundingSphere = cachedBoundingSpheres[typeIdx]
-
-      // Remove + re-add to force WebGPU buffer re-upload
+      mesh.boundingSphere = sphere
       if (mesh.parent) mesh.parent.remove(mesh)
       treeGroup.add(mesh)
+
+      // Ghost: skip re-upload when empty (count=0 stops rendering, pipeline stays warm)
+      ghostMesh.count = ghostIdx
+      ghostMesh.boundingSphere = sphere
+      if (ghostIdx > 0) {
+        ghostMesh.instanceMatrix.needsUpdate = true
+        if (ghostMesh.parent) ghostMesh.parent.remove(ghostMesh)
+        treeGroup.add(ghostMesh)
+      }
     }
   }
 
