@@ -544,6 +544,9 @@
         loopProfiler.record('housingUpdate', performance.now() - housingStart)
       }
 
+      // Update tree occlusion (hide trees that block camera view of player)
+      treeLayerRef?.update()
+
       // Update ground items (spin animation)
       groundItemsLayerRef?.update(deltaTime)
 
@@ -1020,6 +1023,7 @@
   bind:this={treeLayerRef}
   {terrainTiles}
   treeDataManager={terrainTreeDataManager}
+  playerPosition={currentPlayer?.position ?? null}
 />
 
 <GameSceneWindParticles

@@ -11,11 +11,13 @@
   interface Props {
     terrainTiles: TerrainTile[]
     treeDataManager: TerrainTreeDataManager | null
+    playerPosition: { x: number; y: number; z: number } | null
   }
 
   let {
     terrainTiles,
     treeDataManager = null,
+    playerPosition = null,
   }: Props = $props()
 
   const treeGroup = new THREE.Group()
@@ -113,34 +115,41 @@
     return modelsLoadPromise
   }
 
+  // ── Tree occlusion ─────────────────────────────────────
+  // Approximate bounds at scale 1.0 per tree type [tree1, tree2]
+  const TREE_OCCLUDE_HEIGHT: [number, number] = [2.9, 3.4]
+  const TREE_OCCLUDE_HALF_W: [number, number] = [0.8, 1.1]
+
+  /** Per-tree occlusion bits for frame-to-frame change detection. */
+  let occBits = new Uint8Array(256)
+  let occBitsLen = 0
+  let lastOccPx = NaN
+  let lastOccPy = NaN
+  let lastOccPz = NaN
+
+  /**
+   * Same isometric ray-AABB test as houseOccludesPlayer.
+   * Ray from player toward camera: R(s) = (px − s, py + s, pz + s), s >= 0.
+   */
+  function treeOccludesPlayer(
+    tx: number, ty: number, tz: number,
+    scale: number, typeIdx: number,
+    px: number, py: number, pz: number,
+  ): boolean {
+    const h = TREE_OCCLUDE_HEIGHT[typeIdx] * scale
+    const hw = TREE_OCCLUDE_HALF_W[typeIdx] * scale
+    const sHigh = ty + h - py
+    if (sHigh <= 0) return false
+    const sLow = Math.max(ty - py, 0)
+    const sMin = Math.max(px - tx - hw, tz - hw - pz, sLow)
+    const sMax = Math.min(px - tx + hw, tz + hw - pz, sHigh)
+    return sMin <= sMax
+  }
+
   // ── Tile data cache ────────────────────────────────────
   const tileTreeDataCache = new SvelteMap<string, TreePlacementData>()
   const fetchedTiles = new SvelteSet<string>()
   const pendingTiles = new SvelteSet<string>()
-
-  /** Write instance transforms into the mesh's instanceMatrix. */
-  function writeInstanceMatrices(
-    mesh: THREE.InstancedMesh,
-    instances: Float32Array[],
-  ): number {
-    let idx = 0
-    for (const raw of instances) {
-      const count = raw.length / 5
-      for (let i = 0; i < count && idx < MAX_INSTANCES; i++) {
-        const base = i * 5
-        _pos.set(raw[base], raw[base + 1], raw[base + 2])
-        _quat.setFromAxisAngle(_up, raw[base + 3])
-        const s = raw[base + 4]
-        _scale.set(s, s, s)
-        _mat4.compose(_pos, _quat, _scale)
-        mesh.setMatrixAt(idx, _mat4)
-        idx++
-      }
-    }
-    mesh.count = idx
-    mesh.instanceMatrix.needsUpdate = true
-    return idx
-  }
 
   /** Compute bounding sphere from raw instance arrays. */
   function computeBoundingSphere(instances: Float32Array[]): THREE.Sphere {
@@ -177,16 +186,21 @@
 
   // Coalesce multiple rebuild requests into a single microtask
   let rebuildScheduled = false
+  /** Cached bounding spheres per tree type — invalidated on tile data changes. */
+  let cachedBoundingSpheres: [THREE.Sphere, THREE.Sphere] | null = null
+
   function scheduleRebuild() {
     if (rebuildScheduled) return
     rebuildScheduled = true
+    occBitsLen = 0 // Reset occlusion tracking (tile set changed)
+    cachedBoundingSpheres = null
     queueMicrotask(() => {
       rebuildScheduled = false
       rebuildGlobalMeshes()
     })
   }
 
-  /** Rebuild all global slots from cached tile data. */
+  /** Rebuild all global slots from cached tile data, skipping occluded trees. */
   function rebuildGlobalMeshes() {
     if (!modelsReady) return
 
@@ -200,10 +214,40 @@
       }
     }
 
+    const doOcc = playerPosition !== null
+    const px = playerPosition?.x ?? 0
+    const py = playerPosition?.y ?? 0
+    const pz = playerPosition?.z ?? 0
+
     for (const slot of globalSlots) {
       const { mesh, typeIdx } = slot
-      writeInstanceMatrices(mesh, allData[typeIdx])
-      mesh.boundingSphere = computeBoundingSphere(allData[typeIdx])
+      let idx = 0
+      for (const raw of allData[typeIdx]) {
+        const count = raw.length / 5
+        for (let i = 0; i < count && idx < MAX_INSTANCES; i++) {
+          const base = i * 5
+          if (doOcc && treeOccludesPlayer(raw[base], raw[base + 1], raw[base + 2], raw[base + 4], typeIdx, px, py, pz)) {
+            continue
+          }
+          _pos.set(raw[base], raw[base + 1], raw[base + 2])
+          _quat.setFromAxisAngle(_up, raw[base + 3])
+          const s = raw[base + 4]
+          _scale.set(s, s, s)
+          _mat4.compose(_pos, _quat, _scale)
+          mesh.setMatrixAt(idx, _mat4)
+          idx++
+        }
+      }
+      mesh.count = idx
+      mesh.instanceMatrix.needsUpdate = true
+
+      if (!cachedBoundingSpheres) {
+        cachedBoundingSpheres = [
+          computeBoundingSphere(allData[0]),
+          computeBoundingSphere(allData[1]),
+        ]
+      }
+      mesh.boundingSphere = cachedBoundingSpheres[typeIdx]
 
       // Remove + re-add to force WebGPU buffer re-upload
       if (mesh.parent) mesh.parent.remove(mesh)
@@ -211,7 +255,54 @@
     }
   }
 
-  export function update() {}
+  export function update() {
+    if (!playerPosition || !modelsReady || tileTreeDataCache.size === 0) return
+
+    const { x: px, y: py, z: pz } = playerPosition
+    const dx = px - lastOccPx
+    const dy = py - lastOccPy
+    const dz = pz - lastOccPz
+    if (dx * dx + dy * dy + dz * dz < 0.01) return
+    lastOccPx = px
+    lastOccPy = py
+    lastOccPz = pz
+
+    // Check if any tree's occlusion state changed
+    let total = 0
+    for (const data of tileTreeDataCache.values()) {
+      total += data.tree1Count + data.tree2Count
+    }
+    if (occBits.length < total) {
+      const newBits = new Uint8Array(Math.max(total, 256))
+      newBits.set(occBits)
+      occBits = newBits
+    }
+
+    let changed = total !== occBitsLen
+    let idx = 0
+    for (const data of tileTreeDataCache.values()) {
+      for (let t = 0; t < 2; t++) {
+        const type = t === 0 ? 'tree1' : ('tree2' as const)
+        const raw = getTreeInstanceData(data, type)
+        const count = raw.length / 5
+        for (let i = 0; i < count; i++) {
+          const base = i * 5
+          const occ: number = treeOccludesPlayer(
+            raw[base], raw[base + 1], raw[base + 2], raw[base + 4],
+            t, px, py, pz,
+          ) ? 1 : 0
+          if (occBits[idx] !== occ) {
+            occBits[idx] = occ
+            changed = true
+          }
+          idx++
+        }
+      }
+    }
+    occBitsLen = total
+
+    if (changed) rebuildGlobalMeshes()
+  }
 
   // ── Tile update listener (e.g. vegetation removal from splat painting) ──
   $effect(() => {
