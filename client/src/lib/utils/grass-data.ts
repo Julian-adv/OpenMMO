@@ -26,6 +26,15 @@ import { TILE_DIM, sampleHeight } from '../managers/terrain-height-types'
 import { createRng } from './simplex-noise'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import { getCurrentPreset } from '../stores/graphicsSettings'
+import {
+  BYTES_PER_CELL,
+  VEGMETA_OFFSET,
+  writeGrass,
+} from '../terrain/splat-encoding'
+import {
+  buildGrassMask,
+  scatterGrassCircles,
+} from '../terrain/terrain-splat-gen'
 
 const CHANNELS = 4
 const FLOATS_PER_INSTANCE = 5 // x, y, z, rotation, scale
@@ -682,4 +691,39 @@ export function getThinnedInstanceData(
   const raw = getInstanceData(data, type)
   if (type === 'flower') return raw
   return thinInstances(raw, getCurrentPreset().grassDensity)
+}
+
+/**
+ * Regenerate vegMeta (byte 3) for a tile's splatmap in-place. Uses the same
+ * scatter helper and seed as the region generator, so the resulting pattern
+ * matches what `generateSplatMap` would have produced for this tile — grass
+ * circles continue naturally across tile borders without seams.
+ */
+export function regenerateVegMeta(
+  splatData: Uint8Array,
+  tileX: number,
+  tileZ: number
+): void {
+  const D = TILE_DIM
+  const grassMask = buildGrassMask(splatData, D * D)
+  const densityGrid = new Uint8Array(D * D)
+  const typeGrid = new Uint8Array(D * D)
+  // Seed 0 matches the resplat pipeline (see WorldMapDialog handleResplat).
+  scatterGrassCircles(
+    D,
+    D,
+    tileX * D,
+    tileZ * D,
+    grassMask,
+    densityGrid,
+    typeGrid,
+    0
+  )
+
+  for (let i = 0; i < D * D; i++) {
+    splatData[i * BYTES_PER_CELL + VEGMETA_OFFSET] = writeGrass(
+      densityGrid[i],
+      typeGrid[i] === 1
+    )
+  }
 }

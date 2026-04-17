@@ -472,16 +472,6 @@
         riverCount: 0,
       }
 
-      // Estimate maxHeight from actual heightmap data
-      let actualMax = 0
-      for (const tile of tileHeightmaps) {
-        for (let i = 0; i < tile.heightmap.length; i++) {
-          const h = tile.heightmap[i] * 0.05 - 500.0
-          if (h > actualMax) actualMax = h
-        }
-      }
-      config.maxHeight = Math.max(actualMax, 1)
-
       // Regenerate splatmaps
       resplatProgress = 'Generating splatmaps...'
       await new Promise((r) => setTimeout(r, 0))

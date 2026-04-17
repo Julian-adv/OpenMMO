@@ -13,6 +13,11 @@ export const SHALLOW_WATER_THRESHOLD = -0.1
 /** Height threshold below which water is considered deep sea */
 export const DEEP_WATER_THRESHOLD = -1.5
 
+/** Absolute height (meters) at which snow begins to blend in */
+export const SNOW_START_HEIGHT = 300
+/** Absolute height (meters) at which terrain is fully snow */
+export const SNOW_FULL_HEIGHT = 350
+
 // --- Types ---
 
 export interface TerrainGenConfig {

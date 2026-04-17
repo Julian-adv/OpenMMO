@@ -2,6 +2,12 @@ import { MathUtils } from 'three'
 import { get } from 'svelte/store'
 import { gameStore, addChatMessage } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
+import {
+  editorHeightManager,
+  editorSplatManager,
+  editorGrassDataManager,
+} from './stores/editorStore'
+import { computeGrassPlacement, regenerateVegMeta } from './utils/grass-data'
 
 type CommandHandler = (args: string) => void
 
@@ -19,6 +25,73 @@ const commands: Record<string, CommandHandler> = {
     } else {
       addChatMessage({ text: 'Position: unknown', sender: 'system' })
     }
+  },
+
+  '/regrow': () => {
+    const player = get(gameStore).currentPlayer
+    if (!player) {
+      addChatMessage({
+        text: 'Regrow: player position unknown',
+        sender: 'system',
+      })
+      return
+    }
+
+    const hMgr = get(editorHeightManager)
+    const sMgr = get(editorSplatManager)
+    const gMgr = get(editorGrassDataManager)
+    if (!hMgr || !sMgr || !gMgr) {
+      addChatMessage({
+        text: 'Regrow: terrain managers not ready',
+        sender: 'system',
+      })
+      return
+    }
+
+    const { tileX, tileZ } = worldToTileCell(
+      player.position.x,
+      player.position.z
+    )
+    const splatData = sMgr.getSplatData(tileX, tileZ)
+    if (!splatData) {
+      addChatMessage({
+        text: `Regrow: no splatmap for tile(${tileX}, ${tileZ})`,
+        sender: 'system',
+      })
+      return
+    }
+
+    addChatMessage({
+      text: `Regrow: regenerating grass for tile(${tileX}, ${tileZ})...`,
+      sender: 'system',
+    })
+
+    regenerateVegMeta(splatData, tileX, tileZ)
+    // Refresh GPU texture + mark tile dirty for the debounced save.
+    sMgr.setSplatmap(tileX, tileZ, splatData)
+    sMgr.markDirty(tileX, tileZ)
+    sMgr.saveAllDirty().catch((err) => {
+      addChatMessage({
+        text: `Regrow: splatmap save failed — ${err}`,
+        sender: 'system',
+      })
+    })
+
+    const data = computeGrassPlacement(tileX, tileZ, splatData, hMgr)
+    gMgr.saveGrassData(tileX, tileZ, data).then(
+      () => {
+        addChatMessage({
+          text: `Regrow: done — short=${data.shortCount} tall=${data.tallCount} flower=${data.flowerCount}`,
+          sender: 'system',
+        })
+      },
+      (err) => {
+        addChatMessage({
+          text: `Regrow: grass save failed — ${err}`,
+          sender: 'system',
+        })
+      }
+    )
   },
 }
 

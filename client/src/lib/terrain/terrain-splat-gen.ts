@@ -1,16 +1,18 @@
 import { createRng } from '../utils/simplex-noise'
 import {
   REGION_CELLS,
+  SNOW_FULL_HEIGHT,
+  SNOW_START_HEIGHT,
   smoothstep,
   type TerrainGenConfig,
 } from './terrain-constants'
 import {
   BYTES_PER_CELL,
   GRASS_DENSITY_LEVELS,
-  SHORT_GRASS_MIN,
-  TALL_GRASS_MIN,
+  VEGMETA_OFFSET,
   packIndices,
   unpackPrimary,
+  writeGrass,
 } from './splat-encoding'
 
 /**
@@ -25,7 +27,97 @@ export const GEN_SLOT = {
 } as const
 
 /** Grass is placed only where the cell is ≥90% grass (mirrors legacy R>=230 rule). */
-const GRASS_BLEND_MAX = 26
+export const GRASS_BLEND_MAX = 26
+
+/** Circle scatter parameters shared by initial generation and per-tile regrow. */
+const CIRCLE_RADII = [4, 5, 7, 8, 10, 12]
+const MAX_RADIUS = 12
+const SCATTER_CELL = 64
+const CIRCLES_PER_SCATTER = 16
+const TALL_GRASS_PROB = 0.3
+
+/**
+ * Stamp grass circles onto `densityOut`/`typeOut` for a rectangular region of
+ * the world defined by `gridW × gridH` cells starting at world-cell origin
+ * `(gridOX, gridOZ)`. Scatter cells are keyed by world coordinates + `seed`,
+ * so two overlapping regions with the same seed produce identical output on
+ * the overlap. Writes nothing where `grassMask` is 0.
+ */
+export function scatterGrassCircles(
+  gridW: number,
+  gridH: number,
+  gridOX: number,
+  gridOZ: number,
+  grassMask: Uint8Array,
+  densityOut: Uint8Array,
+  typeOut: Uint8Array,
+  seed: number
+): void {
+  const DENSITY_MAX = GRASS_DENSITY_LEVELS - 1
+
+  const scMinX = Math.floor((gridOX - MAX_RADIUS) / SCATTER_CELL)
+  const scMaxX = Math.floor((gridOX + gridW - 1 + MAX_RADIUS) / SCATTER_CELL)
+  const scMinZ = Math.floor((gridOZ - MAX_RADIUS) / SCATTER_CELL)
+  const scMaxZ = Math.floor((gridOZ + gridH - 1 + MAX_RADIUS) / SCATTER_CELL)
+
+  for (let scz = scMinZ; scz <= scMaxZ; scz++) {
+    for (let scx = scMinX; scx <= scMaxX; scx++) {
+      const cellSeed =
+        (seed ^ 0x47524153) +
+        Math.imul(scx, 73856093) +
+        Math.imul(scz, 19349663)
+      const rng = createRng(cellSeed)
+      const cellOX = scx * SCATTER_CELL
+      const cellOZ = scz * SCATTER_CELL
+
+      for (let c = 0; c < CIRCLES_PER_SCATTER; c++) {
+        const wcx = cellOX + rng() * SCATTER_CELL
+        const wcz = cellOZ + rng() * SCATTER_CELL
+        const radius = CIRCLE_RADII[Math.floor(rng() * CIRCLE_RADII.length)]
+        const isTall = rng() < TALL_GRASS_PROB
+        const circleDensity = Math.round(DENSITY_MAX * (0.6 + rng() * 0.4))
+
+        const rawMinX = Math.floor(wcx - radius) - gridOX
+        const rawMaxX = Math.ceil(wcx + radius) - gridOX
+        const rawMinZ = Math.floor(wcz - radius) - gridOZ
+        const rawMaxZ = Math.ceil(wcz + radius) - gridOZ
+        if (rawMaxX < 0 || rawMinX > gridW - 1) continue
+        if (rawMaxZ < 0 || rawMinZ > gridH - 1) continue
+
+        const lcx = Math.floor(wcx) - gridOX
+        const lcz = Math.floor(wcz) - gridOZ
+        const centerInGrid = lcx >= 0 && lcx < gridW && lcz >= 0 && lcz < gridH
+        if (centerInGrid && !grassMask[lcz * gridW + lcx]) continue
+
+        const lMinX = Math.max(0, rawMinX)
+        const lMaxX = Math.min(gridW - 1, rawMaxX)
+        const lMinZ = Math.max(0, rawMinZ)
+        const lMaxZ = Math.min(gridH - 1, rawMaxZ)
+
+        const r2 = radius * radius
+        for (let z = lMinZ; z <= lMaxZ; z++) {
+          for (let x = lMinX; x <= lMaxX; x++) {
+            const wx = gridOX + x
+            const wz = gridOZ + z
+            const dx = wx - wcx
+            const dz = wz - wcz
+            if (dx * dx + dz * dz > r2) continue
+            const idx = z * gridW + x
+            if (!grassMask[idx]) continue
+
+            const ddist = Math.sqrt(dx * dx + dz * dz)
+            const falloff = 1.0 - smoothstep(radius * 0.3, radius, ddist)
+            const d = Math.round(circleDensity * falloff)
+            if (d > densityOut[idx]) {
+              densityOut[idx] = d
+              typeOut[idx] = isTall ? 1 : 0
+            }
+          }
+        }
+      }
+    }
+  }
+}
 
 export function computeCoastDistance(heightField: Float32Array): Float32Array {
   const N = REGION_CELLS
@@ -86,10 +178,6 @@ export function generateSplatMap(
   const splatField = new Uint8Array(N * N * BYTES_PER_CELL)
   const SAND_BAND = 12
   const SAND_HEIGHT_MAX = 0.9
-  const snowStart = config.maxHeight * 0.7
-  const snowFull = config.maxHeight * 0.85
-
-  const TALL_GRASS_PROB = 0.3
 
   for (let cz = 0; cz < N; cz++) {
     for (let cx = 0; cx < N; cx++) {
@@ -120,9 +208,11 @@ export function generateSplatMap(
       } else if (slope > 1.5) {
         secondary = GEN_SLOT.LATERITE
         blend = Math.round(smoothstep(1.5, 3.0, slope) * 255)
-      } else if (h > snowStart && config.maxHeight > 20) {
+      } else if (h > SNOW_START_HEIGHT) {
         secondary = GEN_SLOT.SNOW
-        blend = Math.round(smoothstep(snowStart, snowFull, h) * 255)
+        blend = Math.round(
+          smoothstep(SNOW_START_HEIGHT, SNOW_FULL_HEIGHT, h) * 255
+        )
       }
 
       splatField[pi + 0] = packIndices(primary, secondary)
@@ -132,94 +222,44 @@ export function generateSplatMap(
     }
   }
 
-  // ── Grass circle scatter (world-space deterministic) ──
-  // A cell is grass-eligible if primary is grass and secondary weight is low.
-  const grassMask = new Uint8Array(N * N)
-  for (let i = 0; i < N * N; i++) {
-    const pi = i * BYTES_PER_CELL
-    const primary = unpackPrimary(splatField[pi])
-    const blend = splatField[pi + 2]
-    if (primary === GEN_SLOT.GRASS && blend <= GRASS_BLEND_MAX) {
-      grassMask[i] = 1
-    }
-  }
-
+  const grassMask = buildGrassMask(splatField, N * N)
   const densityGrid = new Uint8Array(N * N)
   const typeGrid = new Uint8Array(N * N)
-  const CIRCLE_RADII = [5, 7, 8, 10, 12, 15]
-  const MAX_RADIUS = 15
-  const SCATTER_CELL = 64
-  const CIRCLES_PER_SCATTER = 20
-  const DENSITY_MAX = GRASS_DENSITY_LEVELS - 1
+  scatterGrassCircles(
+    N,
+    N,
+    regionX * N,
+    regionZ * N,
+    grassMask,
+    densityGrid,
+    typeGrid,
+    config.seed
+  )
 
-  const regionOX = regionX * N
-  const regionOZ = regionZ * N
-
-  const scMinX = Math.floor((regionOX - MAX_RADIUS) / SCATTER_CELL)
-  const scMaxX = Math.floor((regionOX + N - 1 + MAX_RADIUS) / SCATTER_CELL)
-  const scMinZ = Math.floor((regionOZ - MAX_RADIUS) / SCATTER_CELL)
-  const scMaxZ = Math.floor((regionOZ + N - 1 + MAX_RADIUS) / SCATTER_CELL)
-
-  for (let scz = scMinZ; scz <= scMaxZ; scz++) {
-    for (let scx = scMinX; scx <= scMaxX; scx++) {
-      const cellSeed =
-        (config.seed ^ 0x47524153) +
-        Math.imul(scx, 73856093) +
-        Math.imul(scz, 19349663)
-      const rng = createRng(cellSeed)
-      const cellOX = scx * SCATTER_CELL
-      const cellOZ = scz * SCATTER_CELL
-
-      for (let c = 0; c < CIRCLES_PER_SCATTER; c++) {
-        const wcx = cellOX + rng() * SCATTER_CELL
-        const wcz = cellOZ + rng() * SCATTER_CELL
-        const radius = CIRCLE_RADII[Math.floor(rng() * CIRCLE_RADII.length)]
-        const isTall = rng() < TALL_GRASS_PROB
-        const circleDensity = Math.round(DENSITY_MAX * (0.6 + rng() * 0.4))
-
-        const lcx = Math.floor(wcx) - regionOX
-        const lcz = Math.floor(wcz) - regionOZ
-        const centerInRegion = lcx >= 0 && lcx < N && lcz >= 0 && lcz < N
-        if (centerInRegion && !grassMask[lcz * N + lcx]) continue
-
-        const lMinX = Math.max(0, Math.floor(wcx - radius) - regionOX)
-        const lMaxX = Math.min(N - 1, Math.ceil(wcx + radius) - regionOX)
-        const lMinZ = Math.max(0, Math.floor(wcz - radius) - regionOZ)
-        const lMaxZ = Math.min(N - 1, Math.ceil(wcz + radius) - regionOZ)
-        if (lMinX > N - 1 || lMaxX < 0 || lMinZ > N - 1 || lMaxZ < 0) continue
-
-        const r2 = radius * radius
-        for (let z = lMinZ; z <= lMaxZ; z++) {
-          for (let x = lMinX; x <= lMaxX; x++) {
-            const wx = regionOX + x
-            const wz = regionOZ + z
-            const dx = wx - wcx
-            const dz = wz - wcz
-            if (dx * dx + dz * dz > r2) continue
-            const idx = z * N + x
-            if (!grassMask[idx]) continue
-
-            const ddist = Math.sqrt(dx * dx + dz * dz)
-            const falloff = 1.0 - smoothstep(radius * 0.3, radius, ddist)
-            const d = Math.round(circleDensity * falloff)
-            if (d > densityGrid[idx]) {
-              densityGrid[idx] = d
-              typeGrid[idx] = isTall ? 1 : 0
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // Write density + subtype into vegMeta byte
   for (let i = 0; i < N * N; i++) {
-    if (densityGrid[i] > 0) {
-      const base = typeGrid[i] === 1 ? TALL_GRASS_MIN : SHORT_GRASS_MIN
-      splatField[i * BYTES_PER_CELL + 3] =
-        base + Math.min(densityGrid[i], DENSITY_MAX)
-    }
+    splatField[i * BYTES_PER_CELL + VEGMETA_OFFSET] = writeGrass(
+      densityGrid[i],
+      typeGrid[i] === 1
+    )
   }
 
   return splatField
+}
+
+/** Build a grass-eligibility mask: cells that are ≥90% vegetation-base primary. */
+export function buildGrassMask(
+  splatField: Uint8Array,
+  cellCount: number
+): Uint8Array {
+  const mask = new Uint8Array(cellCount)
+  for (let i = 0; i < cellCount; i++) {
+    const pi = i * BYTES_PER_CELL
+    if (
+      unpackPrimary(splatField[pi]) === GEN_SLOT.GRASS &&
+      splatField[pi + 2] <= GRASS_BLEND_MAX
+    ) {
+      mask[i] = 1
+    }
+  }
+  return mask
 }
