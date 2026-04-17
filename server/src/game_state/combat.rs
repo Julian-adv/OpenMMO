@@ -1,6 +1,7 @@
-use crate::game::{character_hp, combat, xp};
+use crate::game::{character_hp, combat};
 use crate::types::{MonsterState, PlayerId, ServerMessage};
 use onlinerpg_shared::inventory::EquipSlot;
+use onlinerpg_shared::xp;
 use tracing::{info, warn};
 
 impl super::GameState {

@@ -4,7 +4,7 @@
   import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, CharacterClass, Gender } from '../network/networkTypes'
-  import { xpForLevel, clamp } from '../utils/xp'
+  import { xp_for_level } from '../wasm/onlinerpg_shared'
   import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
   import ItemTooltip from './ItemTooltip.svelte'
 
@@ -80,10 +80,12 @@
 
   let hoveredSlot = $state<EquipSlot | null>(null)
 
-  const levelStartXp = $derived(xpForLevel(level))
-  const nextLevelXp = $derived(xpForLevel(level + 1))
+  const levelStartXp = $derived(xp_for_level(level))
+  const nextLevelXp = $derived(xp_for_level(level + 1))
   const neededXp = $derived(Math.max(1, nextLevelXp - levelStartXp))
-  const gainedXp = $derived(clamp(currentXp - levelStartXp, 0, neededXp))
+  const gainedXp = $derived(
+    Math.min(neededXp, Math.max(0, currentXp - levelStartXp))
+  )
   const expProgress = $derived(gainedXp / neededXp)
   const expPercent = $derived(Math.round(expProgress * 100))
 

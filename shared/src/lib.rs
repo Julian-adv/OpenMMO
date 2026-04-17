@@ -6,6 +6,7 @@ pub mod housing;
 pub mod inventory;
 pub mod monster_ai;
 pub mod pathfinding;
+pub mod xp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Gender {
@@ -596,6 +597,15 @@ mod wasm_api {
         let msg: ServerMessage = rmp_serde::from_slice(bytes)
             .map_err(|e| JsError::new(&format!("Deserialization failed: {e}")))?;
         to_js(&msg)
+    }
+
+    /// XP threshold for a given level, as an f64 for JS interop.
+    /// Saturates at Number.MAX_SAFE_INTEGER for levels beyond safe integer range.
+    #[wasm_bindgen]
+    pub fn xp_for_level(level: u32) -> f64 {
+        const MAX_SAFE: u64 = (1u64 << 53) - 1;
+        let xp = crate::xp::xp_for_level(level);
+        xp.min(MAX_SAFE) as f64
     }
 
     // --- Passability cache (WASM global state) ---
