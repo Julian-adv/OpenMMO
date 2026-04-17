@@ -121,24 +121,29 @@ impl CharacterClass {
             (CharacterClass::Guard, _) => [2, 0, 2, -2, -1, -1],
         }
     }
+}
 
-    pub fn from_str_or_default(s: &str) -> Self {
+impl std::str::FromStr for CharacterClass {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "barbarian" => CharacterClass::Barbarian,
-            "caveman" => CharacterClass::Caveman,
-            "valkyrie" => CharacterClass::Valkyrie,
-            "ranger" => CharacterClass::Ranger,
-            "samurai" => CharacterClass::Samurai,
-            "monk" => CharacterClass::Monk,
-            "priest" => CharacterClass::Priest,
-            "archaeologist" => CharacterClass::Archaeologist,
-            "healer" => CharacterClass::Healer,
-            "rogue" => CharacterClass::Rogue,
-            "wizard" => CharacterClass::Wizard,
-            "tourist" => CharacterClass::Tourist,
-            "merchant" => CharacterClass::Merchant,
-            "guard" => CharacterClass::Guard,
-            _ => CharacterClass::Knight,
+            "knight" => Ok(CharacterClass::Knight),
+            "barbarian" => Ok(CharacterClass::Barbarian),
+            "caveman" => Ok(CharacterClass::Caveman),
+            "valkyrie" => Ok(CharacterClass::Valkyrie),
+            "ranger" => Ok(CharacterClass::Ranger),
+            "samurai" => Ok(CharacterClass::Samurai),
+            "monk" => Ok(CharacterClass::Monk),
+            "priest" => Ok(CharacterClass::Priest),
+            "archaeologist" => Ok(CharacterClass::Archaeologist),
+            "healer" => Ok(CharacterClass::Healer),
+            "rogue" => Ok(CharacterClass::Rogue),
+            "wizard" => Ok(CharacterClass::Wizard),
+            "tourist" => Ok(CharacterClass::Tourist),
+            "merchant" => Ok(CharacterClass::Merchant),
+            "guard" => Ok(CharacterClass::Guard),
+            _ => Err(()),
         }
     }
 }
@@ -1001,6 +1006,129 @@ mod tests {
             }
             _ => panic!("Wrong variant"),
         }
+    }
+
+    const ALL_CLASSES: &[CharacterClass] = &[
+        CharacterClass::Knight,
+        CharacterClass::Barbarian,
+        CharacterClass::Caveman,
+        CharacterClass::Valkyrie,
+        CharacterClass::Ranger,
+        CharacterClass::Samurai,
+        CharacterClass::Monk,
+        CharacterClass::Priest,
+        CharacterClass::Archaeologist,
+        CharacterClass::Healer,
+        CharacterClass::Rogue,
+        CharacterClass::Wizard,
+        CharacterClass::Tourist,
+        CharacterClass::Merchant,
+        CharacterClass::Guard,
+    ];
+
+    #[test]
+    fn character_class_str_roundtrip() {
+        for class in ALL_CLASSES {
+            let s = class.as_str();
+            let back: CharacterClass = s.parse().expect("parse should accept as_str output");
+            assert_eq!(&back, class, "roundtrip failed for {s}");
+        }
+    }
+
+    #[test]
+    fn character_class_from_str_rejects_unknown() {
+        assert!("".parse::<CharacterClass>().is_err());
+        assert!("nonexistent".parse::<CharacterClass>().is_err());
+        assert!("Knight".parse::<CharacterClass>().is_err());
+    }
+
+    #[test]
+    fn character_class_hit_die_is_valid_polyhedron() {
+        for class in ALL_CLASSES {
+            let d = class.hit_die();
+            assert!(
+                matches!(d, 4 | 6 | 8 | 10 | 12 | 20),
+                "class {:?} has non-standard hit die d{}",
+                class,
+                d
+            );
+        }
+    }
+
+    #[test]
+    fn stat_adjustments_sum_to_zero() {
+        // Balanced classes: the six adjustments must net to zero so no class
+        // gains or loses total stat points before the 72-rebalance step.
+        for class in ALL_CLASSES {
+            for gender in [Gender::Male, Gender::Female] {
+                let adj = class.stat_adjustments(gender);
+                let sum: i32 = adj.iter().map(|v| *v as i32).sum();
+                assert_eq!(
+                    sum, 0,
+                    "class {:?} gender {:?} adjustments sum to {} (expected 0): {:?}",
+                    class, gender, sum, adj
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn stat_adjustments_gender_variants_differ_only_where_expected() {
+        // Knight, Barbarian, and Caveman have gendered splits; all others ignore gender.
+        let gendered = [
+            CharacterClass::Knight,
+            CharacterClass::Barbarian,
+            CharacterClass::Caveman,
+        ];
+        for class in ALL_CLASSES {
+            let male = class.stat_adjustments(Gender::Male);
+            let female = class.stat_adjustments(Gender::Female);
+            if gendered.contains(class) {
+                assert_ne!(
+                    male, female,
+                    "class {:?} expected gendered adjustments",
+                    class
+                );
+            } else {
+                assert_eq!(
+                    male, female,
+                    "class {:?} should have identical adjustments for both genders",
+                    class
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn no_spawn_zone_contains_inside_and_boundary() {
+        let zone = NoSpawnZone {
+            min_x: -10.0,
+            min_z: -5.0,
+            max_x: 10.0,
+            max_z: 5.0,
+        };
+        assert!(zone.contains(0.0, 0.0));
+        assert!(zone.contains(-10.0, -5.0));
+        assert!(zone.contains(10.0, 5.0));
+        assert!(zone.contains(-10.0, 5.0));
+        assert!(zone.contains(10.0, -5.0));
+        assert!(!zone.contains(-10.1, 0.0));
+        assert!(!zone.contains(10.1, 0.0));
+        assert!(!zone.contains(0.0, -5.1));
+        assert!(!zone.contains(0.0, 5.1));
+    }
+
+    #[test]
+    fn no_spawn_zone_degenerate_point_zone() {
+        // A zero-area zone still matches its single point.
+        let zone = NoSpawnZone {
+            min_x: 3.0,
+            min_z: 7.0,
+            max_x: 3.0,
+            max_z: 7.0,
+        };
+        assert!(zone.contains(3.0, 7.0));
+        assert!(!zone.contains(3.0001, 7.0));
     }
 
     #[test]

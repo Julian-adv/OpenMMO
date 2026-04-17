@@ -46,23 +46,6 @@ impl EquipSlot {
         }
     }
 
-    pub fn from_str(s: &str) -> Option<Self> {
-        match s {
-            "head" => Some(EquipSlot::Head),
-            "main_hand" => Some(EquipSlot::MainHand),
-            "off_hand" => Some(EquipSlot::OffHand),
-            "chest" => Some(EquipSlot::Chest),
-            "ear" => Some(EquipSlot::Ear),
-            "neck" => Some(EquipSlot::Neck),
-            "belt" => Some(EquipSlot::Belt),
-            "pants" => Some(EquipSlot::Pants),
-            "boots" => Some(EquipSlot::Boots),
-            "ring" => Some(EquipSlot::Ring),
-            "ring_left" => Some(EquipSlot::RingLeft),
-            _ => None,
-        }
-    }
-
     /// For slots that have an alternate (e.g. ring/ring_left),
     /// returns the alternate slot. Used when the primary is occupied.
     pub fn alternate(&self) -> Option<Self> {
@@ -70,6 +53,27 @@ impl EquipSlot {
             EquipSlot::Ring => Some(EquipSlot::RingLeft),
             EquipSlot::RingLeft => Some(EquipSlot::Ring),
             _ => None,
+        }
+    }
+}
+
+impl std::str::FromStr for EquipSlot {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "head" => Ok(EquipSlot::Head),
+            "main_hand" => Ok(EquipSlot::MainHand),
+            "off_hand" => Ok(EquipSlot::OffHand),
+            "chest" => Ok(EquipSlot::Chest),
+            "ear" => Ok(EquipSlot::Ear),
+            "neck" => Ok(EquipSlot::Neck),
+            "belt" => Ok(EquipSlot::Belt),
+            "pants" => Ok(EquipSlot::Pants),
+            "boots" => Ok(EquipSlot::Boots),
+            "ring" => Ok(EquipSlot::Ring),
+            "ring_left" => Ok(EquipSlot::RingLeft),
+            _ => Err(()),
         }
     }
 }
@@ -102,4 +106,67 @@ pub struct GroundItem {
     pub item_def_id: String,
     pub position: Position,
     pub floor_level: i8,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const ALL_SLOTS: &[EquipSlot] = &[
+        EquipSlot::Head,
+        EquipSlot::MainHand,
+        EquipSlot::OffHand,
+        EquipSlot::Chest,
+        EquipSlot::Ear,
+        EquipSlot::Neck,
+        EquipSlot::Belt,
+        EquipSlot::Pants,
+        EquipSlot::Boots,
+        EquipSlot::Ring,
+        EquipSlot::RingLeft,
+    ];
+
+    #[test]
+    fn equip_slot_str_roundtrip() {
+        for slot in ALL_SLOTS {
+            let s = slot.as_str();
+            let back: EquipSlot = s.parse().expect("parse should accept as_str output");
+            assert_eq!(&back, slot, "roundtrip failed for {s}");
+        }
+    }
+
+    #[test]
+    fn equip_slot_from_str_rejects_unknown() {
+        assert!("".parse::<EquipSlot>().is_err());
+        assert!("shoulder".parse::<EquipSlot>().is_err());
+        assert!("Head".parse::<EquipSlot>().is_err());
+    }
+
+    #[test]
+    fn equip_slot_alternate_is_symmetric_for_rings() {
+        assert_eq!(EquipSlot::Ring.alternate(), Some(EquipSlot::RingLeft));
+        assert_eq!(EquipSlot::RingLeft.alternate(), Some(EquipSlot::Ring));
+    }
+
+    #[test]
+    fn equip_slot_alternate_none_for_unique_slots() {
+        for slot in ALL_SLOTS {
+            if matches!(slot, EquipSlot::Ring | EquipSlot::RingLeft) {
+                continue;
+            }
+            assert_eq!(
+                slot.alternate(),
+                None,
+                "slot {:?} should not have an alternate",
+                slot
+            );
+        }
+    }
+
+    #[test]
+    fn player_inventory_default_is_empty() {
+        let inv = PlayerInventory::default();
+        assert!(inv.bag.is_empty());
+        assert!(inv.equipped.is_empty());
+    }
 }

@@ -64,10 +64,16 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             cha: row.get(11)?,
             guard: row.get(12)?,
         },
-        class: CharacterClass::from_str_or_default(
-            &row.get::<_, String>(13)
-                .unwrap_or_else(|_| "knight".to_string()),
-        ),
+        class: {
+            let class_str: String = row.get(13)?;
+            class_str.parse::<CharacterClass>().map_err(|_| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    13,
+                    rusqlite::types::Type::Text,
+                    format!("unknown character class: {class_str}").into(),
+                )
+            })?
+        },
         last_x: row.get::<_, f64>(14).unwrap_or(0.0) as f32,
         last_y: row.get::<_, f64>(15).unwrap_or(0.0) as f32,
         last_z: row.get::<_, f64>(16).unwrap_or(0.0) as f32,

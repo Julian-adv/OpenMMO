@@ -115,7 +115,7 @@ impl super::GameState {
 
                 match equip_slot {
                     Some(slot_str) => {
-                        if let Some(slot) = EquipSlot::from_str(&slot_str) {
+                        if let Ok(slot) = slot_str.parse::<EquipSlot>() {
                             inventory.equipped.insert(
                                 slot,
                                 ItemInstance {

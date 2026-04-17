@@ -271,8 +271,16 @@ async fn run_npc_session(
     // --- Delete characters whose class or name doesn't match config ---
     let desired_class = npc
         .character_class
-        .as_ref()
-        .map(|c| onlinerpg_shared::CharacterClass::from_str_or_default(c));
+        .as_deref()
+        .map(|c| {
+            c.parse::<onlinerpg_shared::CharacterClass>().map_err(|_| {
+                anyhow::anyhow!(
+                    "invalid character_class {c:?} in config for [{}]",
+                    npc.account
+                )
+            })
+        })
+        .transpose()?;
     let desired_name = npc.character_name.as_deref();
 
     let should_delete = |c: &onlinerpg_shared::Character| {
