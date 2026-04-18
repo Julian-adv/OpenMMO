@@ -228,12 +228,12 @@ export function createGrassComputeContext(
     const pdz = bz.sub(uPlayerPos.y) // .y = worldZ
     const pd = sqrt(pdx.mul(pdx).add(pdz.mul(pdz))).add(float(0.001))
     const pProx = float(1.0).sub(smoothstep(float(0), uInteractionRadius, pd))
-    const pStr = pProx.mul(pProx).mul(uPlayerPos.z) // .z = strength
+    const pStr = pProx.mul(pProx).mul(float(uPlayerPos.z)) // .z = strength
     const pushDirX = pdx.div(pd).mul(pStr)
     const pushDirZ = pdz.div(pd).mul(pStr)
 
-    const pushTargetX = pushDirX.mul(uInteractionStrength)
-    const pushTargetZ = pushDirZ.mul(uInteractionStrength)
+    const pushTargetX = pushDirX.mul(float(uInteractionStrength))
+    const pushTargetZ = pushDirZ.mul(float(uInteractionStrength))
 
     // Asymmetric lerp: fast push (dt*12), slow recovery (dt*1)
     const targetMag = sqrt(
@@ -318,7 +318,7 @@ export function createBladeMaterial(
   mat.alphaTest = 0.1
   mat.envMapIntensity = 0.1
 
-  const origUV = attribute('uv')
+  const origUV = attribute<'vec2'>('uv')
   const uvY = origUV.y
 
   // ── Texture sampling (always present for pipeline dedup) ──

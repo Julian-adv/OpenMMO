@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { RenderTarget } from 'three/webgpu'
+import { RenderTarget, type WebGPURenderer } from 'three/webgpu'
 
 /**
  * Renders the scene (without water) to a half-resolution render target
@@ -7,23 +7,13 @@ import { RenderTarget } from 'three/webgpu'
  */
 export class RefractionRenderManager {
   readonly target: RenderTarget
-  private renderer: {
-    _initialized: boolean
-    getRenderTarget(): THREE.RenderTarget | null
-    setRenderTarget(target: THREE.RenderTarget | null): void
-    render(scene: THREE.Scene, camera: THREE.Camera): void
-  }
+  private renderer: WebGPURenderer
   private scene: THREE.Scene
   private camera: THREE.Camera | null = null
   private waterGroup: THREE.Group | null = null
 
   constructor(
-    renderer: {
-      _initialized: boolean
-      getRenderTarget(): THREE.RenderTarget | null
-      setRenderTarget(target: THREE.RenderTarget | null): void
-      render(scene: THREE.Scene, camera: THREE.Camera): void
-    },
+    renderer: WebGPURenderer,
     scene: THREE.Scene,
     width: number,
     height: number
@@ -56,7 +46,7 @@ export class RefractionRenderManager {
 
   /** Render scene without water to the refraction target. */
   render() {
-    if (!this.camera || !this.renderer._initialized) return
+    if (!this.camera || !this.renderer.hasInitialized()) return
 
     // Hide water meshes
     if (this.waterGroup) this.waterGroup.visible = false
@@ -72,7 +62,7 @@ export class RefractionRenderManager {
 
   /** Clear the refraction target to black. */
   clear() {
-    if (!this.renderer._initialized || !this.camera) return
+    if (!this.renderer.hasInitialized() || !this.camera) return
     const currentRenderTarget = this.renderer.getRenderTarget()
     this.renderer.setRenderTarget(this.target)
     const savedVisible = this.scene.visible

@@ -289,7 +289,7 @@ export function getTexturePreviewUrls(): (string | null)[] {
     const mat = materialCache.get(idx)
     if (!mat?.map?.image) return null
     ctx.clearRect(0, 0, 32, 32)
-    const img = mat.map.image
+    const img = mat.map.image as HTMLImageElement
     const entry = HOUSING_TEXTURES[idx]
     const cropSize =
       (Math.min(img.width, img.height) / 2) * (entry.uvScale ?? 1.0)

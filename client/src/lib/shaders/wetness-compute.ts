@@ -173,8 +173,7 @@ export function createWetnessSystem(
     },
 
     update(renderer: WebGPURenderer, material: THREE.Material, time: number) {
-      if (!(renderer as unknown as { _initialized: boolean })._initialized)
-        return
+      if (!renderer.hasInitialized()) return
       const dt = prevTime >= 0 ? Math.min(time - prevTime, 0.1) : 0
       prevTime = time
       sharedUDeltaTime.value = dt

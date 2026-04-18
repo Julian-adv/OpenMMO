@@ -33,8 +33,7 @@ import {
   dFdy,
   TBNViewMatrix,
 } from 'three/tsl'
-import type TextureNode from 'three/src/nodes/accessors/TextureNode.js'
-import type { ShaderNodeObject } from 'three/src/nodes/tsl/TSLCore.js'
+import type { Node, TextureNode, UniformNode } from 'three/webgpu'
 import {
   ATLAS_BORDER,
   ATLAS_GRID,
@@ -63,12 +62,12 @@ export type SplatParams = {
 }
 
 export interface SplatBrushUniforms {
-  brushCenter: ReturnType<typeof uniform<THREE.Vector2>>
-  brushRadius: ReturnType<typeof uniform<number>>
-  brushActive: ReturnType<typeof uniform<number>>
-  brushRaise: ReturnType<typeof uniform<number>>
-  brushToolMode: ReturnType<typeof uniform<number>>
-  gridVisible: ReturnType<typeof uniform<number>>
+  brushCenter: UniformNode<'vec2', THREE.Vector2>
+  brushRadius: UniformNode<'float', number>
+  brushActive: UniformNode<'float', number>
+  brushRaise: UniformNode<'float', number>
+  brushToolMode: UniformNode<'float', number>
+  gridVisible: UniformNode<'float', number>
 }
 
 export function createSplatBrushUniforms(): SplatBrushUniforms {
@@ -183,7 +182,7 @@ export function makeSplatStandardMaterial({
   function cellWeight(d: any, targetIdx: any) {
     const pMatch = step(abs(d.p.sub(targetIdx)), float(0.5))
     const sMatch = step(abs(d.s.sub(targetIdx)), float(0.5))
-    return pMatch.mul(d.blend.oneMinus()).add(sMatch.mul(d.blend))
+    return pMatch.mul(float(d.blend).oneMinus()).add(sMatch.mul(float(d.blend)))
   }
 
   // Nearest cell (pixel's actual cell): select one of the 4 taps by fracUv.
@@ -253,12 +252,13 @@ export function makeSplatStandardMaterial({
   const sSlot = slotUv(sIdxF, tileS)
 
   function sampleAtlasAt(
-    atlasTex: ShaderNodeObject<TextureNode>,
+    atlasTex: TextureNode,
     slot: ReturnType<typeof slotUv>
   ) {
-    return (
-      atlasTex.sample(slot.atlasUv) as unknown as ShaderNodeObject<TextureNode>
-    ).grad(slot.gx, slot.gy)
+    return (atlasTex.sample(slot.atlasUv) as unknown as TextureNode).grad(
+      slot.gx,
+      slot.gy
+    )
   }
 
   // ─── Color node ─────────────────────────────────────────
@@ -322,12 +322,13 @@ export function makeSplatStandardMaterial({
   })()
 
   // ─── Normal node ────────────────────────────────────────
+  const tbn = TBNViewMatrix as unknown as Node<'mat3'>
   const normalNode = normAtlasTex
     ? Fn(() => {
         const nP = sampleAtlasAt(normAtlasTex, pSlot).xyz.mul(2.0).sub(1.0)
         const nS = sampleAtlasAt(normAtlasTex, sSlot).xyz.mul(2.0).sub(1.0)
         const tangentNormal = mix(nP, nS, blend).normalize()
-        return TBNViewMatrix.mul(tangentNormal).normalize()
+        return tbn.mul(tangentNormal).normalize()
       })()
     : undefined
 

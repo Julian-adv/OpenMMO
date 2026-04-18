@@ -207,7 +207,7 @@ export function createWaterMaterial(
     )
 
     const nightFactor = smoothstep(float(-0.05), float(0.1), sunY)
-    const lightColor = mix(vec3(0.08, 0.1, 0.15), vec3(uSunColor), nightFactor)
+    const lightColor = mix(vec3(0.08, 0.1, 0.15), uSunColor.rgb, nightFactor)
     const depthGate = smoothstep(float(0.05), float(0.25), depthFactor)
     return lightColor
       .mul(causticsShimmer.mul(1.2))
@@ -219,9 +219,7 @@ export function createWaterMaterial(
     const specNormal = normalize(mix(vec3(0, 1, 0), surfaceNormal, 0.3))
     const halfDir = normalize(vec3(uSunDirection).add(viewDir))
     const NdotH = max(dot(specNormal, halfDir), 0.0)
-    const specular = vec3(uSunColor)
-      .mul(pow(NdotH, float(128)).mul(0.3))
-      .toVar()
+    const specular = uSunColor.rgb.mul(pow(NdotH, float(128)).mul(0.3)).toVar()
 
     // Sun sparkles — ride the displaced wave surface
     const spT = uTime.mul(0.04)
@@ -247,7 +245,7 @@ export function createWaterMaterial(
       .mul(8.0)
       .mul(waveCrestFactor)
       .mul(max(sunSparkleStrength, moonSparkleStrength))
-    specular.addAssign(vec3(uSunColor).mul(sparkle))
+    specular.addAssign(uSunColor.rgb.mul(sparkle))
 
     return { specular, sparkle }
   }
@@ -287,7 +285,7 @@ export function createWaterMaterial(
     )
     const hazeColor = mix(
       hazeColorBase,
-      vec3(uSunColor).mul(0.6),
+      uSunColor.rgb.mul(0.6),
       sunsetFactor.mul(0.5)
     )
 
@@ -299,9 +297,7 @@ export function createWaterMaterial(
 
     // Sun highlight on water
     const sunDot = max(dot(reflectDir, vec3(uSunDirection)), 0.0)
-    skyReflection.addAssign(
-      vec3(uSunColor).mul(pow(sunDot, float(8)).mul(0.25))
-    )
+    skyReflection.addAssign(uSunColor.rgb.mul(pow(sunDot, float(8)).mul(0.25)))
 
     // Entity reflection (planar reflection pass)
     const reflUV = vec2(screenUV.x, float(1.0).sub(screenUV.y))
@@ -374,8 +370,8 @@ export function createWaterMaterial(
     // Wave bands move from deeper water toward shore
     const spawnDepth = float(1.5)
     const shoreDepth = float(0.15)
-    const center1 = mix(spawnDepth, shoreDepth, move1)
-    const center2 = mix(spawnDepth, shoreDepth, move2)
+    const center1 = mix(spawnDepth, shoreDepth, float(move1))
+    const center2 = mix(spawnDepth, shoreDepth, float(move2))
 
     const fade1 = smoothstep(float(0), float(0.1), cycle1).mul(
       float(1).sub(smoothstep(float(0.9), float(1), cycle1))
@@ -385,8 +381,8 @@ export function createWaterMaterial(
     )
 
     // Bands widen near shore (wave shoaling)
-    const bw1 = float(0.04).add(float(0.1).mul(move1))
-    const bw2 = float(0.04).add(float(0.1).mul(move2))
+    const bw1 = float(0.04).add(float(0.1).mul(float(move1)))
+    const bw2 = float(0.04).add(float(0.1).mul(float(move2)))
 
     const band1 = smoothstep(center1.sub(bw1), center1, noisyD)
       .mul(float(1).sub(smoothstep(center1, center1.add(bw1), noisyD)))
@@ -598,7 +594,7 @@ export function createWaterMaterial(
     // Tinted sky reflection + Fresnel composition
     const tintedSkyReflection = mix(
       skyReflection,
-      vec3(uMidColor).mul(1.3),
+      uMidColor.rgb.mul(1.3),
       float(0.7)
     )
     const shallowDamp = smoothstep(float(0.1), float(0.4), depthFactor)

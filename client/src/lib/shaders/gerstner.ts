@@ -1,3 +1,4 @@
+import type { Node } from 'three/webgpu'
 import {
   Fn,
   vec3,
@@ -18,9 +19,9 @@ export const TAU = float(Math.PI * 2)
 // Returns vertical-only displacement to avoid tile boundary tearing.
 export const gerstnerWave = /* #__PURE__ */ Fn(
   ([wave_immutable, p_immutable, time_immutable]: [
-    ReturnType<typeof vec4>,
-    ReturnType<typeof vec3>,
-    ReturnType<typeof float>,
+    Node<'vec4'>,
+    Node<'vec3'>,
+    Node<'float'>,
   ]) => {
     const wave = vec4(wave_immutable)
     const p = vec3(p_immutable)
@@ -39,9 +40,9 @@ export const gerstnerWave = /* #__PURE__ */ Fn(
 // Reconstruct normal: normalize(vec3(-ty, tx*bz, -by))
 export const gerstnerNormal = /* #__PURE__ */ Fn(
   ([wave_immutable, p_immutable, time_immutable]: [
-    ReturnType<typeof vec4>,
-    ReturnType<typeof vec3>,
-    ReturnType<typeof float>,
+    Node<'vec4'>,
+    Node<'vec3'>,
+    Node<'float'>,
   ]) => {
     const wave = vec4(wave_immutable)
     const p = vec3(p_immutable)

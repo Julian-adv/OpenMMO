@@ -1,5 +1,7 @@
 import * as THREE from 'three'
-import { RenderTarget } from 'three/webgpu'
+import { RenderTarget, type WebGPURenderer } from 'three/webgpu'
+
+type Color4 = THREE.Color & { a: number }
 
 /**
  * Renders the scene (entities only) with the camera mirrored across the water
@@ -35,16 +37,7 @@ const _reflectionMatrix = /* @__PURE__ */ new THREE.Matrix4().set(
 
 export class ReflectionRenderManager {
   readonly target: RenderTarget
-  private renderer: {
-    _initialized: boolean
-    getRenderTarget(): THREE.RenderTarget | null
-    setRenderTarget(target: THREE.RenderTarget | null): void
-    render(scene: THREE.Scene, camera: THREE.Camera): void
-    getClearColor(target: THREE.Color): THREE.Color
-    setClearColor(color: THREE.ColorRepresentation, alpha?: number): void
-    getClearAlpha(): number
-    setClearAlpha(alpha: number): void
-  }
+  private renderer: WebGPURenderer
   private scene: THREE.Scene
   private camera: THREE.Camera | null = null
   private terrainGroup: THREE.Group | null = null
@@ -57,20 +50,10 @@ export class ReflectionRenderManager {
   /** A dedicated camera that receives the mirrored transform each frame. */
   private reflCam: THREE.OrthographicCamera
 
-  /** Pre-allocated color to avoid per-frame allocation when saving/restoring clear color. */
-  private _savedClearColor = new THREE.Color()
+  private _savedClearColor = new THREE.Color() as Color4
 
   constructor(
-    renderer: {
-      _initialized: boolean
-      getRenderTarget(): THREE.RenderTarget | null
-      setRenderTarget(target: THREE.RenderTarget | null): void
-      render(scene: THREE.Scene, camera: THREE.Camera): void
-      getClearColor(target: THREE.Color): THREE.Color
-      setClearColor(color: THREE.ColorRepresentation, alpha?: number): void
-      getClearAlpha(): number
-      setClearAlpha(alpha: number): void
-    },
+    renderer: WebGPURenderer,
     scene: THREE.Scene,
     width: number,
     height: number
@@ -118,7 +101,7 @@ export class ReflectionRenderManager {
 
   /** Render reflected entities to the reflection target. */
   render() {
-    if (!this.camera || !this.renderer._initialized) return
+    if (!this.camera || !this.renderer.hasInitialized()) return
 
     // --- build reflected camera (avoid copy() which resets auto-update flags) ---
     const cam = this.camera as THREE.OrthographicCamera
@@ -175,7 +158,7 @@ export class ReflectionRenderManager {
 
   /** Clear the reflection target to transparent black. */
   clear() {
-    if (!this.renderer._initialized) return
+    if (!this.renderer.hasInitialized()) return
     this.renderer.getClearColor(this._savedClearColor)
     const savedClearAlpha = this.renderer.getClearAlpha()
     this.renderer.setClearColor(0x000000, 0)

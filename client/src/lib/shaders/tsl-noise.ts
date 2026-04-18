@@ -1,3 +1,4 @@
+import type { Node, TextureNode } from 'three/webgpu'
 import {
   Fn,
   vec2,
@@ -10,22 +11,19 @@ import {
   normalize,
   floor,
   mix,
-  texture,
 } from 'three/tsl'
 
 import { PI } from './gerstner'
 
 // ─── Hash-based value noise (shared by water material + wetness compute) ─────
 
-export const hash = /* #__PURE__ */ Fn(
-  ([p_immutable]: [ReturnType<typeof vec2>]) => {
-    const p = vec2(p_immutable)
-    return fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453))
-  }
-)
+export const hash = /* #__PURE__ */ Fn(([p_immutable]: [Node<'vec2'>]) => {
+  const p = vec2(p_immutable)
+  return fract(sin(dot(p, vec2(127.1, 311.7))).mul(43758.5453))
+})
 
 export const valueNoise = /* #__PURE__ */ Fn(
-  ([p_immutable]: [ReturnType<typeof vec2>]) => {
+  ([p_immutable]: [Node<'vec2'>]) => {
     const p = vec2(p_immutable)
     const i = floor(p)
     const fv = fract(p)
@@ -51,12 +49,12 @@ export const sampleNormalNoise = /* #__PURE__ */ Fn(
     waveB_immutable,
     waveC_immutable,
   ]: [
-    ReturnType<typeof vec2>,
-    ReturnType<typeof texture>,
-    ReturnType<typeof float>,
-    ReturnType<typeof vec4>,
-    ReturnType<typeof vec4>,
-    ReturnType<typeof vec4>,
+    Node<'vec2'>,
+    TextureNode,
+    Node<'float'>,
+    Node<'vec4'>,
+    Node<'vec4'>,
+    Node<'vec4'>,
   ]) => {
     const worldXZ = vec2(worldXZ_immutable)
     const time = float(time_immutable)
