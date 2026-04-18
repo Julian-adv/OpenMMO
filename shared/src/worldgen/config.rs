@@ -13,6 +13,16 @@ pub struct WorldGenConfig {
     /// One global cell covers `world_size_m / global_res` meters.
     pub global_res: u32,
 
+    /// Reference resolution for interpreting all `*_cells` and
+    /// `*_wavelength*` fields. Each such field is measured in *reference
+    /// cells*; at runtime it is scaled to actual cells via
+    /// `res_scale = global_res / reference_res`. This lets the same config
+    /// produce the same macro world shape at any `global_res` — tuning at
+    /// low res then baking at high res is lossless. Typical: 4096 (matches
+    /// the default `global_res`). Tests often set this equal to `global_res`
+    /// so the literal field values apply without scaling.
+    pub reference_res: u32,
+
     /// Target fraction of the world covered by sea (0..1).
     pub sea_ratio: f32,
 
@@ -171,14 +181,36 @@ pub struct WorldGenConfig {
     /// Erosion brush radius in cells. Erosion and deposition distribute over
     /// a disk of this radius so gullies are smooth, not single-cell deep.
     pub erosion_radius_cells: u32,
+
+    // --- Phase 5: settlements ---------------------------------------------
+    /// Target number of settlements to place across the world. Greedy
+    /// min-spacing selection may end up with fewer if candidates run out.
+    pub settlement_target_count: u32,
+
+    /// Minimum spacing (in global cells, X-wrapped) between any two
+    /// settlements. Controls density; at 8m/cell, 80 ≈ 640m.
+    pub settlement_min_spacing_cells: u32,
+
+    /// Settlements are rejected on land above this elevation (meters).
+    /// Keeps cities out of alpine peaks.
+    pub settlement_max_elevation_m: f32,
+
+    /// Settlements are rejected on land steeper than this normalized
+    /// gradient (rise over run, meters per meter). 0.3 ≈ 17°, 0.5 ≈ 27°.
+    pub settlement_max_slope: f32,
+
+    /// Flow-accumulation threshold above which a cell is considered on a
+    /// river, granting a score bonus that biases placement toward riverbanks.
+    pub settlement_river_flow_threshold: f32,
 }
 
 impl Default for WorldGenConfig {
     fn default() -> Self {
         Self {
-            seed: 0xC0FFEE,
+            seed: 12345,
             world_size_m: 32768,
             global_res: 4096,
+            reference_res: 4096,
             sea_ratio: 0.50,
             mountain_ratio: 0.20,
             continent_frequency: 1.0 / 700.0,
@@ -213,6 +245,11 @@ impl Default for WorldGenConfig {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
+            settlement_target_count: 40,
+            settlement_min_spacing_cells: 80,
+            settlement_max_elevation_m: 1200.0,
+            settlement_max_slope: 0.35,
+            settlement_river_flow_threshold: 500.0,
         }
     }
 }
@@ -226,5 +263,36 @@ impl WorldGenConfig {
     /// Total number of global-map cells.
     pub fn cell_count(&self) -> usize {
         (self.global_res as usize) * (self.global_res as usize)
+    }
+
+    /// `global_res / reference_res`. Equals 1.0 when running at the
+    /// reference resolution.
+    pub fn res_scale(&self) -> f32 {
+        self.global_res as f32 / self.reference_res.max(1) as f32
+    }
+
+    /// Convert a frequency declared in cycles-per-reference-cell to the
+    /// per-actual-cell frequency consumed by `fbm_wrap_x` etc.
+    pub fn scaled_freq(&self, ref_freq: f32) -> f32 {
+        ref_freq / self.res_scale()
+    }
+
+    /// Convert a linear length from reference cells to actual cells.
+    pub fn scaled_cells(&self, ref_cells: f32) -> f32 {
+        ref_cells * self.res_scale()
+    }
+
+    /// Same as `scaled_cells` but returns a rounded, non-negative `usize`
+    /// for use as an index or loop bound. Always ≥ 0 even if the input
+    /// rounds below zero from an unsigned domain.
+    pub fn scaled_cells_usize(&self, ref_cells: u32) -> usize {
+        (ref_cells as f32 * self.res_scale()).round().max(0.0) as usize
+    }
+
+    /// Convert a 2D-area cell count from reference cells to actual cells.
+    /// Rounds up to 1 so tiny reference counts don't degenerate to zero.
+    pub fn scaled_area_cells(&self, ref_area: u32) -> u32 {
+        let s = self.res_scale();
+        ((ref_area as f32) * s * s).round().max(1.0) as u32
     }
 }

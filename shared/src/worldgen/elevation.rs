@@ -31,9 +31,10 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     let world_width = res as f32;
 
     // --- Distance from coast: normalized to 0..1 using a saturation depth.
-    // Deeper than `coast_depth_cells` reads as "fully inland".
+    // Deeper than `coast_depth_cells` reads as "fully inland". 400 reference
+    // cells ≈ 3.2km at the 8m/cell reference scale.
     let dist_land = bfs_distance_from(&map.land_mask, res, 0);
-    let coast_depth_cells = 400.0f32; // ~3.2km at 8m/cell — interior plateau
+    let coast_depth_cells = map.config.scaled_cells(400.0);
     let mut coast_norm = vec![0.0f32; total];
     for i in 0..total {
         if map.land_mask[i] == 1 {
@@ -46,8 +47,12 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     let seed = map.config.seed;
     let detail_noise = PerlinNoise3D::new(seed ^ 0xE1_E_E1_E_E1_E_E1_E_u64);
     let mountain_noise = PerlinNoise3D::new(seed ^ 0xA1_A_A1_A_A1_A_A1_A_u64);
-    let detail_freq = 1.0 / map.config.detail_wavelength_cells.max(1.0);
-    let mountain_freq = 1.0 / map.config.mountain_selector_wavelength_cells.max(1.0);
+    let detail_freq = map
+        .config
+        .scaled_freq(1.0 / map.config.detail_wavelength_cells.max(1.0));
+    let mountain_freq = map
+        .config
+        .scaled_freq(1.0 / map.config.mountain_selector_wavelength_cells.max(1.0));
 
     // --- Mountain selector: sample noise, then threshold at quantile so
     // exactly `mountain_ratio` fraction of land cells becomes mountain.
@@ -81,7 +86,9 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     let mtn_amp = map.config.mountain_amplitude_m;
     let pln_amp = map.config.plain_amplitude_m;
     let max_h = map.config.max_elevation_m;
-    let wall_cells = map.config.y_border_wall_cells as usize;
+    let wall_cells = map
+        .config
+        .scaled_cells_usize(map.config.y_border_wall_cells);
     let wall_h = map.config.y_border_wall_height_m;
 
     let mut elevation = vec![0.0f32; total];
@@ -176,6 +183,7 @@ mod tests {
             seed: 0xBEEF,
             world_size_m: 4096,
             global_res: res,
+            reference_res: res,
             sea_ratio: 0.3,
             mountain_ratio: 0.2,
             continent_frequency: 1.0 / 64.0,
@@ -210,6 +218,11 @@ mod tests {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
+            settlement_target_count: 5,
+            settlement_min_spacing_cells: 10,
+            settlement_max_elevation_m: 1200.0,
+            settlement_max_slope: 0.35,
+            settlement_river_flow_threshold: 20.0,
         }
     }
 

@@ -25,7 +25,7 @@ enum Cmd {
     /// Generate the low-res global map and dump PNGs for visual inspection.
     Preview {
         /// Master seed.
-        #[arg(long, default_value_t = 0xC0FFEE)]
+        #[arg(long, default_value_t = 12345)]
         seed: u64,
 
         /// Global map resolution (cells per side). 4096 is the design default.
@@ -109,6 +109,16 @@ enum Cmd {
         #[arg(long, default_value_t = 300_000)]
         droplets: u32,
 
+        /// Target settlement count (Phase 5). Greedy min-spacing may yield
+        /// fewer if habitable land is scarce. 0 = skip settlement placement.
+        #[arg(long, default_value_t = 40)]
+        settlements: u32,
+
+        /// Minimum spacing between settlements in global cells (X-wrapped).
+        /// 80 ≈ 640m at 8m/cell.
+        #[arg(long, default_value_t = 80)]
+        settlement_spacing: u32,
+
         /// Mean radius of each small island in global cells. Actual radius
         /// is randomized 0.5× to 1.5× of this.
         #[arg(long, default_value_t = 50)]
@@ -148,6 +158,8 @@ fn main() -> Result<()> {
             island_radius,
             island_clearance,
             droplets,
+            settlements,
+            settlement_spacing,
             out,
         } => {
             let cfg = WorldGenConfig {
@@ -170,6 +182,8 @@ fn main() -> Result<()> {
                 small_island_radius_cells: island_radius,
                 small_island_min_clearance_cells: island_clearance,
                 erosion_droplet_count: droplets,
+                settlement_target_count: settlements,
+                settlement_min_spacing_cells: settlement_spacing.max(1),
                 ..WorldGenConfig::default()
             };
             preview::run(&cfg, &out)

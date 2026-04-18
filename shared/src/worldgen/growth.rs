@@ -26,7 +26,8 @@ use super::grid::bfs_distance_from;
 use super::noise::{fbm_wrap_x, PerlinNoise3D};
 
 /// Warp noise parameters — tuned so the warped-Voronoi boundaries look
-/// organic without being chaotic.
+/// organic without being chaotic. Both values are in *reference cells*;
+/// they get scaled to actual cells per `WorldGenConfig::res_scale`.
 const WARP_WAVELENGTH: f32 = 500.0;
 const WARP_STRENGTH: f32 = 350.0;
 const WARP_OCTAVES: u32 = 4;
@@ -42,7 +43,7 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
         &mut rng,
         res,
         config.continent_seed_count.max(1) as usize,
-        config.continent_seed_min_distance_cells as usize,
+        config.scaled_cells_usize(config.continent_seed_min_distance_cells),
     );
     if seeds.is_empty() {
         return vec![0; total];
@@ -55,14 +56,15 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
 
     let noise_x = PerlinNoise3D::new(config.seed ^ 0x7A_A_7A_A_7A_A_7A_A_u64);
     let noise_y = PerlinNoise3D::new(config.seed ^ 0x7B_B_7B_B_7B_B_7B_B_u64);
-    let warp_freq = 1.0 / WARP_WAVELENGTH;
+    let warp_freq = config.scaled_freq(1.0 / WARP_WAVELENGTH);
+    let warp_strength = config.scaled_cells(WARP_STRENGTH);
 
     // For each cell: warp coords, compute best distance to each group.
     // `dist_sq[i]` = distance² to nearest seed (any group).
     // `gap_margin[i]` = sqrt(2nd-best-group) − sqrt(best-group), used to
     //                  enforce the inter-group sea gap. Only allocated when
     //                  a gap is configured — it's the largest buffer here.
-    let gap = config.continent_gap_cells as f32;
+    let gap = config.scaled_cells(config.continent_gap_cells as f32);
     let needs_gap = n_groups > 1 && gap > 0.0;
     let mut dist_sq = vec![0.0f32; total];
     let mut gap_margin: Vec<f32> = if needs_gap {
@@ -83,7 +85,7 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
                 WARP_OCTAVES,
                 2.0,
                 0.5,
-            ) * WARP_STRENGTH;
+            ) * warp_strength;
             let wy_off = fbm_wrap_x(
                 &noise_y,
                 x as f32,
@@ -93,7 +95,7 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
                 WARP_OCTAVES,
                 2.0,
                 0.5,
-            ) * WARP_STRENGTH;
+            ) * warp_strength;
             let wx = x as f32 + wx_off;
             let wy = y as f32 + wy_off;
 
@@ -166,8 +168,8 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
         &mut mask,
         res,
         config.small_island_count as usize,
-        config.small_island_radius_cells as f32,
-        config.small_island_min_clearance_cells as usize,
+        config.scaled_cells(config.small_island_radius_cells as f32),
+        config.scaled_cells_usize(config.small_island_min_clearance_cells),
         &noise_x,
         world_width,
         &mut rng,
@@ -209,8 +211,7 @@ fn scatter_small_islands(
 
     while placed_count < count && attempts < max_attempts {
         attempts += 1;
-        let cx = rng.gen_range(0..res);
-        let cy = rng.gen_range(0..res);
+        let (cx, cy) = sample_cell(rng, res);
         let center_idx = cy * res + cx;
         if mask[center_idx] != 0 {
             continue;
@@ -421,11 +422,10 @@ fn place_seeds(
     for _ in 0..count {
         let mut placed = false;
         for _ in 0..attempts_per_seed {
-            let sx = rng.gen_range(0..res);
-            let sy = rng.gen_range(0..res);
+            let (sx, sy) = sample_cell(rng, res);
             let ok = seeds.iter().all(|&(px, py)| {
                 let dx = (sx as i64 - px as i64).abs();
-                let dx = dx.min(res_i - dx); // X-wrap
+                let dx = dx.min(res_i - dx);
                 let dy = sy as i64 - py as i64;
                 dx * dx + dy * dy >= min_dist_sq
             });
@@ -442,6 +442,20 @@ fn place_seeds(
     seeds
 }
 
+/// Pick a random cell position in `[0, res) × [0, res)` via normalized f32
+/// sampling. Using [0,1) → cells means the same RNG stream lands on the
+/// same *physical* position regardless of actual resolution — essential for
+/// res-invariance of macro structure.
+fn sample_cell(rng: &mut SmallRng, res: usize) -> (usize, usize) {
+    let res_f = res as f32;
+    let fx: f32 = rng.gen();
+    let fy: f32 = rng.gen();
+    (
+        ((fx * res_f) as usize).min(res - 1),
+        ((fy * res_f) as usize).min(res - 1),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -451,6 +465,7 @@ mod tests {
             seed: 0xBEEF,
             world_size_m: 4096,
             global_res: res,
+            reference_res: res,
             sea_ratio,
             mountain_ratio: 0.2,
             continent_frequency: 1.0 / 64.0,
@@ -485,6 +500,11 @@ mod tests {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
+            settlement_target_count: 5,
+            settlement_min_spacing_cells: 10,
+            settlement_max_elevation_m: 1200.0,
+            settlement_max_slope: 0.35,
+            settlement_river_flow_threshold: 20.0,
         }
     }
 

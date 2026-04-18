@@ -201,11 +201,13 @@ preview는 수 초 안에 끝나야 반복 튜닝이 실용적임. 그래서 Pha
 - [x] Phase 4: Flow accumulation + 하천 추출 (`rivers.rs`).
       Barnes 2014 priority-queue pit-fill → D8 flow → peak에서 mouth까지
       trace.
+- [x] Phase 5: 정착지 배치 (`settlements.rs`). 해안/강변/평야 fitness
+      스코어 + greedy min-spacing으로 habitable 셀에서 top-N 배치.
+      habitability는 elevation + slope 하드 컷오프.
 - [x] `tools/terrain-gen` 스캐폴딩 및 `preview` 명령. 출력:
       `01_potential.png`, `01_land_sea.png`, `01_land_sea_shifted.png`
       (wrap 검증용), `02_elevation.png`, `02_elevation_hypso.png`,
-      `03_rivers.png`, `meta.json`.
-- [ ] Phase 5: 정착지 배치 (Poisson-disk + 지형 적합도 스코어).
+      `03_rivers.png`, `04_settlements.png`, `meta.json` (정착지 목록 포함).
 - [ ] Phase 6: 도로 망 (정착지 간 A*).
 - [ ] Phase 7: 타일 베이크 (고해상도 hmap/splat, 기존 `TerrainIO` 포맷).
 - [ ] Phase 8: 초목/나무 배치.

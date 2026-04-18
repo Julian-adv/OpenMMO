@@ -24,8 +24,8 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
     let noise = PerlinNoise3D::new(config.seed ^ 0xC0_0_C0_0_C0_0_C0_0_u64);
     let channel_noise = PerlinNoise3D::new(config.seed ^ 0x5EA_C_5EA_C_5EA_C_u64);
     let world_width = config.global_res as f32;
-    let base_freq = config.continent_frequency;
-    let channel_freq = 1.0 / config.sea_channel_wavelength.max(1.0);
+    let base_freq = config.scaled_freq(config.continent_frequency);
+    let channel_freq = config.scaled_freq(1.0 / config.sea_channel_wavelength.max(1.0));
     let channel_strength = config.sea_channel_strength.max(0.0);
 
     let mut potential = vec![0.0f32; total];
@@ -73,19 +73,20 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
     // visualization. See `growth.rs` for the growth algorithm.
     let mut land_mask = growth::growth_mask(config);
 
+    let min_island_actual = config.scaled_area_cells(config.min_island_cells) as usize;
     if config.min_island_cells > 0 {
-        remove_small_islands(&mut land_mask, res, config.min_island_cells as usize);
+        remove_small_islands(&mut land_mask, res, min_island_actual);
     }
 
     // Optional post-processing (off by default): narrow-strait opening and
     // isthmus cuts. With the growth approach these are rarely needed since
     // the top-N filter already enforces a clean component count.
     if config.min_strait_width_cells > 0 {
-        let radius = (config.min_strait_width_cells as usize) / 2;
+        let radius = config.scaled_cells_usize(config.min_strait_width_cells) / 2;
         if radius > 0 {
             binary_open(&mut land_mask, res, radius);
             if config.min_island_cells > 0 {
-                remove_small_islands(&mut land_mask, res, config.min_island_cells as usize);
+                remove_small_islands(&mut land_mask, res, min_island_actual);
             }
         }
     }
@@ -93,10 +94,10 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
         cut_isthmuses(
             &mut land_mask,
             res,
-            (config.max_isthmus_width_cells as usize) / 2,
+            config.scaled_cells_usize(config.max_isthmus_width_cells) / 2,
         );
         if config.min_island_cells > 0 {
-            remove_small_islands(&mut land_mask, res, config.min_island_cells as usize);
+            remove_small_islands(&mut land_mask, res, min_island_actual);
         }
     }
 
@@ -430,6 +431,7 @@ mod tests {
             seed: 0xBEEF,
             world_size_m: 4096,
             global_res: res,
+            reference_res: res,
             sea_ratio,
             mountain_ratio: 0.2,
             continent_frequency: 1.0 / 64.0,
@@ -464,6 +466,11 @@ mod tests {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
+            settlement_target_count: 5,
+            settlement_min_spacing_cells: 10,
+            settlement_max_elevation_m: 1200.0,
+            settlement_max_slope: 0.35,
+            settlement_river_flow_threshold: 20.0,
         }
     }
 

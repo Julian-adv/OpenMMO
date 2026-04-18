@@ -24,20 +24,24 @@ use super::global_map::GlobalMap;
 /// Run Phase 3. Mutates `map.elevation_m` in place.
 pub fn erode_hydraulic(map: &mut GlobalMap) {
     let cfg = map.config.clone();
-    let droplet_count = cfg.erosion_droplet_count as usize;
-    if droplet_count == 0 {
+    if cfg.erosion_droplet_count == 0 {
         return;
     }
     let res = cfg.global_res as usize;
     let res_f = res as f32;
-    let max_steps = cfg.erosion_max_steps as usize;
+    // Droplet budget scales with map area so per-cell erosion intensity stays
+    // constant across resolutions.
+    let droplet_count = cfg.scaled_area_cells(cfg.erosion_droplet_count) as usize;
+    // Max steps scales linearly so a droplet traverses the same physical
+    // distance before giving up. Floor at 5 to keep short droplets viable.
+    let max_steps = cfg.scaled_cells(cfg.erosion_max_steps as f32).max(5.0) as usize;
     let inertia = cfg.erosion_inertia.clamp(0.0, 1.0);
     let capacity_factor = cfg.erosion_capacity_factor.max(0.0);
     let min_slope = cfg.erosion_min_slope.max(0.0);
     let erode_rate = cfg.erosion_rate.clamp(0.0, 1.0);
     let deposit_rate = cfg.erosion_deposition_rate.clamp(0.0, 1.0);
     let evap_rate = cfg.erosion_evaporation_rate.clamp(0.0, 1.0);
-    let radius = cfg.erosion_radius_cells.max(1) as i32;
+    let radius = cfg.scaled_cells(cfg.erosion_radius_cells as f32).max(1.0) as i32;
 
     // Precompute the erosion brush: (dx, dy, weight) entries within `radius`
     // cells, weighted by a linear falloff that sums to 1. Applied with the
@@ -287,6 +291,7 @@ mod tests {
             seed: 0xBEEF,
             world_size_m: 4096,
             global_res: res,
+            reference_res: res,
             sea_ratio: 0.3,
             mountain_ratio: 0.3,
             continent_frequency: 1.0 / 64.0,
@@ -321,6 +326,11 @@ mod tests {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
+            settlement_target_count: 5,
+            settlement_min_spacing_cells: 10,
+            settlement_max_elevation_m: 1200.0,
+            settlement_max_slope: 0.35,
+            settlement_river_flow_threshold: 20.0,
         }
     }
 
