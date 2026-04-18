@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgb};
 use onlinerpg_shared::worldgen::{
-    continent, elevation, erosion, rivers, settlements, GlobalMap, WorldGenConfig,
+    continent, elevation, erosion, rivers, roads, settlements, GlobalMap, WorldGenConfig,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -75,12 +75,42 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         max_flow
     );
 
-    // --- Phase 5: settlements ----------------------------------------------
+    // Habitability fields are shared by Phase 5a and 5b — building once
+    // avoids recomputing coast BFS, slope, and river-distance BFS.
+    let fields = settlements::compute_habitability_fields(&map, &river_map);
+
     let t_ph5 = Instant::now();
-    let settlements_list = settlements::place_settlements(&map, &river_map);
+    let mut settlements_list =
+        settlements::place_settlements_with_fields(&map, &river_map, &fields);
+    let cities_count = settlements_list.len();
     eprintln!(
-        "Phase 5 (settlements):    {:.2}s  {} settlements",
+        "Phase 5a (cities):        {:.2}s  {} cities",
         t_ph5.elapsed().as_secs_f32(),
+        cities_count
+    );
+
+    let t_ph6 = Instant::now();
+    let road_net = roads::compute_roads(&map, &settlements_list);
+    eprintln!(
+        "Phase 6 (roads):          {:.2}s  {} roads",
+        t_ph6.elapsed().as_secs_f32(),
+        road_net.roads.len()
+    );
+
+    let t_ph5b = Instant::now();
+    let extra = settlements::place_settlements_along_roads_with_fields(
+        &map,
+        &road_net,
+        &settlements_list,
+        config.settlement_along_road_count as usize,
+        &fields,
+    );
+    let added = extra.len();
+    settlements_list.extend(extra);
+    eprintln!(
+        "Phase 5b (villages):      {:.2}s  +{} along-road villages (total {})",
+        t_ph5b.elapsed().as_secs_f32(),
+        added,
         settlements_list.len()
     );
 
@@ -100,6 +130,13 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         &river_map,
         &settlements_list,
         &seed_dir.join("04_settlements.png"),
+    )?;
+    write_roads_png(
+        &map,
+        &river_map,
+        &road_net,
+        &settlements_list,
+        &seed_dir.join("05_roads.png"),
     )?;
     eprintln!("  wrote PNGs: {:.2}s", t1.elapsed().as_secs_f32());
 
@@ -161,6 +198,59 @@ fn paint_hypso_bg<F: Fn(Rgb<u8>) -> Rgb<u8>>(
             img.put_pixel(x as u32, y as u32, px);
         }
     }
+}
+
+fn write_roads_png(
+    map: &GlobalMap,
+    river_map: &rivers::RiverMap,
+    road_net: &roads::RoadNetwork,
+    settlements_list: &[settlements::Settlement],
+    path: &Path,
+) -> anyhow::Result<()> {
+    let n = map.config.global_res as usize;
+    let mut img = ImageBuffer::<Rgb<u8>, Vec<u8>>::new(n as u32, n as u32);
+    paint_hypso_bg(&mut img, map, Rgb([28, 65, 115]), |c| {
+        Rgb([
+            (c.0[0] as u16 * 2 / 3) as u8,
+            (c.0[1] as u16 * 2 / 3) as u8,
+            (c.0[2] as u16 * 2 / 3) as u8,
+        ])
+    });
+    for poly in &river_map.rivers {
+        for &(x, y) in &poly.points {
+            stamp_disk(&mut img, n, x as i32, y as i32, 1, Rgb([70, 140, 210]));
+        }
+    }
+    for road in &road_net.roads {
+        for &(x, y) in &road.points {
+            stamp_disk(&mut img, n, x as i32, y as i32, 1, Rgb([220, 210, 150]));
+        }
+    }
+    // Dot size scales with map resolution so the dots remain visible when
+    // the PNG is downscaled in a viewer (e.g. IDE preview).
+    let outer = (map.config.global_res as i32 / 200).max(5);
+    let inner = outer - 2;
+    for s in settlements_list {
+        stamp_disk(
+            &mut img,
+            n,
+            s.cell_x as i32,
+            s.cell_y as i32,
+            outer,
+            Rgb([25, 20, 10]),
+        );
+        stamp_disk(
+            &mut img,
+            n,
+            s.cell_x as i32,
+            s.cell_y as i32,
+            inner,
+            Rgb([240, 200, 60]),
+        );
+    }
+    img.save(path)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
 }
 
 fn write_settlements_png(

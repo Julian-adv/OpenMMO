@@ -25,7 +25,7 @@ enum Cmd {
     /// Generate the low-res global map and dump PNGs for visual inspection.
     Preview {
         /// Master seed.
-        #[arg(long, default_value_t = 12345)]
+        #[arg(long, default_value_t = 7)]
         seed: u64,
 
         /// Global map resolution (cells per side). 4096 is the design default.
@@ -101,7 +101,7 @@ enum Cmd {
 
         /// Number of small scattered islands to add in open sea after the
         /// main continents are placed.
-        #[arg(long, default_value_t = 5)]
+        #[arg(long, default_value_t = 15)]
         islands: u32,
 
         /// Hydraulic-erosion droplet count (Phase 3). 0 = disabled.
@@ -109,19 +109,19 @@ enum Cmd {
         #[arg(long, default_value_t = 300_000)]
         droplets: u32,
 
-        /// Target settlement count (Phase 5). Greedy min-spacing may yield
+        /// Target city count for Phase 5a. Greedy min-spacing may yield
         /// fewer if habitable land is scarce. 0 = skip settlement placement.
-        #[arg(long, default_value_t = 40)]
+        #[arg(long, default_value_t = 60)]
         settlements: u32,
 
         /// Minimum spacing between settlements in global cells (X-wrapped).
-        /// 80 ≈ 640m at 8m/cell.
-        #[arg(long, default_value_t = 80)]
+        /// 70 reference cells ≈ 560m at the 8m/cell reference scale.
+        #[arg(long, default_value_t = 70)]
         settlement_spacing: u32,
 
         /// Mean radius of each small island in global cells. Actual radius
         /// is randomized 0.5× to 1.5× of this.
-        #[arg(long, default_value_t = 50)]
+        #[arg(long, default_value_t = 90)]
         island_radius: u32,
 
         /// Minimum clearance in global cells between a small island and any

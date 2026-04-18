@@ -202,12 +202,36 @@ pub struct WorldGenConfig {
     /// Flow-accumulation threshold above which a cell is considered on a
     /// river, granting a score bonus that biases placement toward riverbanks.
     pub settlement_river_flow_threshold: f32,
+
+    /// Additional settlements (villages) seeded along the road network in
+    /// Phase 6, on top of the initial `settlement_target_count` cities. The
+    /// roads themselves come from Prim MST + A* over the initial cities.
+    pub settlement_along_road_count: u32,
+
+    /// Minimum distance from coast (in cells) for Phase A city placement.
+    /// Without this, per-river selection always lands at the river mouth
+    /// because coast+river+lowland+flat all peak together at the mouth —
+    /// pushing the inland buffer past the coastal band forces cities into
+    /// the middle reaches of each river. 0 = disabled.
+    pub settlement_inland_buffer_cells: u32,
+
+    /// Multiplier applied to `settlement_min_spacing_cells` when at least
+    /// one of the two candidates is within `settlement_inland_buffer_cells`
+    /// of the coast. Pushes coastal settlements further apart so they don't
+    /// line up in a regular fence along the shore.
+    pub settlement_coastal_spacing_mult: f32,
+
+    // --- Phase 6: roads ---------------------------------------------------
+    /// K in the K-nearest-neighbor graph added on top of the MST when
+    /// computing the road network. 0 = MST only; higher = denser graph
+    /// with more cross-links → more hubs and inland routes. Typical: 2-3.
+    pub road_extra_neighbors: u32,
 }
 
 impl Default for WorldGenConfig {
     fn default() -> Self {
         Self {
-            seed: 12345,
+            seed: 7,
             world_size_m: 32768,
             global_res: 4096,
             reference_res: 4096,
@@ -225,8 +249,8 @@ impl Default for WorldGenConfig {
             continent_seed_min_distance_cells: 450,
             target_continent_count: 3,
             continent_gap_cells: 120,
-            small_island_count: 5,
-            small_island_radius_cells: 50,
+            small_island_count: 15,
+            small_island_radius_cells: 90,
             small_island_min_clearance_cells: 150,
             max_elevation_m: 2500.0,
             base_elevation_m: 500.0,
@@ -245,11 +269,15 @@ impl Default for WorldGenConfig {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
-            settlement_target_count: 40,
-            settlement_min_spacing_cells: 80,
+            settlement_target_count: 60,
+            settlement_min_spacing_cells: 70,
             settlement_max_elevation_m: 1200.0,
             settlement_max_slope: 0.35,
-            settlement_river_flow_threshold: 500.0,
+            settlement_river_flow_threshold: 100.0,
+            settlement_along_road_count: 40,
+            settlement_inland_buffer_cells: 80,
+            settlement_coastal_spacing_mult: 1.6,
+            road_extra_neighbors: 3,
         }
     }
 }

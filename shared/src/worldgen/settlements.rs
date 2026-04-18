@@ -14,7 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use super::global_map::GlobalMap;
 use super::grid::bfs_distance_from;
-use super::rivers::RiverMap;
+use super::rivers::{Polyline, RiverMap};
+use super::roads::RoadNetwork;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Settlement {
@@ -23,9 +24,50 @@ pub struct Settlement {
     pub score: f32,
 }
 
-/// Pick up to `settlement_target_count` settlement sites. Input is the full
-/// global map (needs land_mask + elevation_m) plus the river flow field.
+/// Precomputed per-cell fields that both Phase 5 entry points need. Building
+/// them once and sharing avoids redoing the coast BFS, slope field, and
+/// river-distance BFS for every call site (two full-map BFS passes each).
+pub struct HabitabilityFields {
+    pub coast_dist: Vec<u16>,
+    pub slope: Vec<f32>,
+    pub dist_to_river: Vec<u16>,
+}
+
+pub fn compute_habitability_fields(map: &GlobalMap, river_map: &RiverMap) -> HabitabilityFields {
+    let cfg = &map.config;
+    let res = cfg.global_res as usize;
+    let total = res * res;
+    let coast_dist = bfs_distance_from(&map.land_mask, res, 0);
+    let slope = compute_slope(&map.elevation_m, res, cfg.meters_per_cell());
+    let river_thresh = cfg.settlement_river_flow_threshold.max(1.0);
+    let mut river_mask = vec![0u8; total];
+    for (i, &f) in river_map.flow.iter().enumerate() {
+        if f >= river_thresh && map.land_mask[i] == 1 {
+            river_mask[i] = 1;
+        }
+    }
+    let dist_to_river = bfs_distance_from(&river_mask, res, 1);
+    HabitabilityFields {
+        coast_dist,
+        slope,
+        dist_to_river,
+    }
+}
+
+/// Pick up to `settlement_target_count` settlement sites plus one guaranteed
+/// settlement per isolated landmass. Input is the full global map plus the
+/// river flow field; callers can also use `place_settlements_with_fields`
+/// directly to avoid recomputing the habitability fields.
 pub fn place_settlements(map: &GlobalMap, river_map: &RiverMap) -> Vec<Settlement> {
+    let fields = compute_habitability_fields(map, river_map);
+    place_settlements_with_fields(map, river_map, &fields)
+}
+
+pub fn place_settlements_with_fields(
+    map: &GlobalMap,
+    river_map: &RiverMap,
+    fields: &HabitabilityFields,
+) -> Vec<Settlement> {
     let cfg = &map.config;
     let res = cfg.global_res as usize;
     let total = res * res;
@@ -33,77 +75,216 @@ pub fn place_settlements(map: &GlobalMap, river_map: &RiverMap) -> Vec<Settlemen
     if target == 0 {
         return Vec::new();
     }
-
-    let coast_dist = bfs_distance_from(&map.land_mask, res, 0);
-    let slope = compute_slope(&map.elevation_m, res, cfg.meters_per_cell());
+    let HabitabilityFields {
+        coast_dist,
+        slope,
+        dist_to_river,
+    } = fields;
 
     let ctx = FitnessCtx {
-        res,
         elev: &map.elevation_m,
-        coast_dist: &coast_dist,
-        slope: &slope,
-        flow: &river_map.flow,
+        coast_dist,
+        slope,
+        dist_to_river,
         max_slope: cfg.settlement_max_slope,
         max_elev: cfg.settlement_max_elevation_m,
-        river_thresh: cfg.settlement_river_flow_threshold.max(1.0),
     };
-
-    let mut scored: Vec<(u32, f32)> = Vec::with_capacity(total / 8);
-    for i in 0..total {
-        if map.land_mask[i] == 0 {
-            continue;
-        }
-        if map.elevation_m[i] > ctx.max_elev {
-            continue;
-        }
-        if slope[i] > ctx.max_slope {
-            continue;
-        }
-        scored.push((i as u32, fitness(i, &ctx)));
-    }
-
-    if scored.is_empty() {
-        return Vec::new();
-    }
-
-    // Greedy min-spacing rejects some candidates, so we keep a generous
-    // headroom over the target count before applying it. `select_nth_unstable_by`
-    // is O(n), then we sort only the top partition in place.
-    const HEADROOM: usize = 40;
-    let keep_top = (target * HEADROOM).min(scored.len());
-    let nth = scored.len() - keep_top;
-    scored.select_nth_unstable_by(nth, |a, b| a.1.total_cmp(&b.1));
-    scored[nth..].sort_by(|a, b| b.1.total_cmp(&a.1));
 
     let res_f = res as f32;
     let min_spacing_actual = cfg
         .scaled_cells(cfg.settlement_min_spacing_cells as f32)
         .max(1.0);
     let min_sp_sq = min_spacing_actual.powi(2);
+    let coastal_sp_sq = (min_spacing_actual * cfg.settlement_coastal_spacing_mult.max(1.0)).powi(2);
+    let coast_threshold = cfg.scaled_cells_usize(cfg.settlement_inland_buffer_cells) as u16;
+    let spacing = SpacingCtx {
+        res_f,
+        min_sp_sq,
+        coastal_sp_sq,
+        coast_dist,
+        coast_threshold,
+    };
     let mut kept: Vec<Settlement> = Vec::with_capacity(target);
-    for &(idx, score) in &scored[nth..] {
-        if kept.len() >= target {
+
+    // Phase A (river quota): reserve one inland cell per river polyline,
+    // longest rivers first. Two tweaks vs naive fitness-greedy: the cell
+    // must be at least `inland_buffer` cells from the coast so the pick
+    // lands in the middle reaches rather than at the mouth, and we score
+    // with `fitness_plains` so coast proximity stops tipping the scale.
+    let inland_buffer = cfg.scaled_cells_usize(cfg.settlement_inland_buffer_cells) as u16;
+    let river_quota = ((target as f32 * 0.7) as usize).max(1).min(target);
+    let mut rivers_sorted: Vec<&Polyline> = river_map.rivers.iter().collect();
+    rivers_sorted.sort_by_key(|p| std::cmp::Reverse(p.points.len()));
+    for poly in &rivers_sorted {
+        if kept.len() >= river_quota {
             break;
         }
-        let cx = idx as usize % res;
-        let cy = idx as usize / res;
-        let x = cx as f32;
-        let y = cy as f32;
-        let ok = kept.iter().all(|s| {
-            let dx_raw = (s.cell_x as f32 - x).abs();
-            let dx = dx_raw.min(res_f - dx_raw);
-            let dy = s.cell_y as f32 - y;
-            dx * dx + dy * dy >= min_sp_sq
-        });
-        if ok {
-            kept.push(Settlement {
-                cell_x: cx as u32,
-                cell_y: cy as u32,
-                score,
-            });
+        let mut best: Option<(usize, f32)> = None;
+        for &(rx, ry) in &poly.points {
+            let ci = (ry as usize) * res + (rx as usize);
+            if !habitable(ci, map, slope, &ctx) {
+                continue;
+            }
+            if coast_dist[ci] < inland_buffer {
+                continue;
+            }
+            let s = fitness_plains(ci, &ctx);
+            if best.map(|(_, bs)| s > bs).unwrap_or(true) {
+                best = Some((ci, s));
+            }
+        }
+        if let Some((idx, score)) = best {
+            try_place(idx, score, res, &spacing, &mut kept);
         }
     }
+
+    // Phase B (interior plains): fill remaining slots using a plains-heavy
+    // fitness so fertile flatlands without rivers get occasional villages.
+    // Long rivers still pick up a 2nd/3rd settlement here because on-river
+    // plains also score highly, just without river dominance.
+    if kept.len() < target {
+        let mut scored: Vec<(u32, f32)> = Vec::with_capacity(total / 8);
+        for i in 0..total {
+            if !habitable(i, map, slope, &ctx) {
+                continue;
+            }
+            scored.push((i as u32, fitness_plains(i, &ctx)));
+        }
+        if !scored.is_empty() {
+            const HEADROOM: usize = 40;
+            let remaining = target - kept.len();
+            let keep_top = (remaining * HEADROOM).min(scored.len());
+            let nth = scored.len() - keep_top;
+            scored.select_nth_unstable_by(nth, |a, b| a.1.total_cmp(&b.1));
+            scored[nth..].sort_by(|a, b| b.1.total_cmp(&a.1));
+            for &(idx, score) in &scored[nth..] {
+                if kept.len() >= target {
+                    break;
+                }
+                try_place(idx as usize, score, res, &spacing, &mut kept);
+            }
+        }
+    }
+
+    // Phase C (island seeding): guarantee every isolated landmass gets at
+    // least one village. Small islands lose in Phase A (no rivers) and
+    // Phase B (global greedy prefers mainland cells) so a dedicated pass
+    // is required. Can push kept.len() past `target` — that's intentional.
+    seed_per_component(map, &ctx, slope, &spacing, &mut kept);
+
     kept
+}
+
+fn seed_per_component(
+    map: &GlobalMap,
+    ctx: &FitnessCtx,
+    slope: &[f32],
+    spacing: &SpacingCtx,
+    kept: &mut Vec<Settlement>,
+) {
+    let res = map.config.global_res as usize;
+    let total = res * res;
+
+    let mut has_existing = vec![false; total];
+    for s in kept.iter() {
+        let i = (s.cell_y as usize) * res + s.cell_x as usize;
+        has_existing[i] = true;
+    }
+
+    let mut label = vec![0u32; total];
+    let mut stack: Vec<usize> = Vec::new();
+    let mut next_label: u32 = 1;
+
+    // Single flood-fill pass that both labels components and tracks the
+    // best-fitness uninhabited cell per component.
+    for start in 0..total {
+        if map.land_mask[start] != 1 || label[start] != 0 {
+            continue;
+        }
+        stack.clear();
+        stack.push(start);
+        label[start] = next_label;
+        let mut best: Option<(usize, f32)> = None;
+        let mut has_settlement = false;
+        while let Some(ci) = stack.pop() {
+            if has_existing[ci] {
+                has_settlement = true;
+            }
+            if habitable(ci, map, slope, ctx) {
+                let s = fitness_plains(ci, ctx);
+                if best.map(|(_, bs)| s > bs).unwrap_or(true) {
+                    best = Some((ci, s));
+                }
+            }
+            let x = ci % res;
+            let y = ci / res;
+            let left = if x == 0 { res - 1 } else { x - 1 };
+            let right = if x + 1 == res { 0 } else { x + 1 };
+            let neighbors = [
+                y * res + left,
+                y * res + right,
+                if y > 0 { (y - 1) * res + x } else { usize::MAX },
+                if y + 1 < res {
+                    (y + 1) * res + x
+                } else {
+                    usize::MAX
+                },
+            ];
+            for &ni in &neighbors {
+                if ni != usize::MAX && map.land_mask[ni] == 1 && label[ni] == 0 {
+                    label[ni] = next_label;
+                    stack.push(ni);
+                }
+            }
+        }
+        if !has_settlement {
+            if let Some((idx, score)) = best {
+                try_place(idx, score, res, spacing, kept);
+            }
+        }
+        next_label += 1;
+    }
+}
+
+fn habitable(i: usize, map: &GlobalMap, slope: &[f32], ctx: &FitnessCtx) -> bool {
+    map.land_mask[i] == 1 && map.elevation_m[i] <= ctx.max_elev && slope[i] <= ctx.max_slope
+}
+
+struct SpacingCtx<'a> {
+    res_f: f32,
+    min_sp_sq: f32,
+    coastal_sp_sq: f32,
+    coast_dist: &'a [u16],
+    coast_threshold: u16,
+}
+
+fn try_place(idx: usize, score: f32, res: usize, sp: &SpacingCtx, kept: &mut Vec<Settlement>) {
+    let cx = idx % res;
+    let cy = idx / res;
+    let x = cx as f32;
+    let y = cy as f32;
+    let new_coastal = sp.coast_dist[idx] < sp.coast_threshold;
+    let ok = kept.iter().all(|s| {
+        let si = (s.cell_y as usize) * res + s.cell_x as usize;
+        // Coastal cells get enlarged spacing against any neighbor — breaks
+        // the "fence of villages every N cells along the shore" pattern.
+        let required_sq = if new_coastal || sp.coast_dist[si] < sp.coast_threshold {
+            sp.coastal_sp_sq
+        } else {
+            sp.min_sp_sq
+        };
+        let dx_raw = (s.cell_x as f32 - x).abs();
+        let dx = dx_raw.min(sp.res_f - dx_raw);
+        let dy = s.cell_y as f32 - y;
+        dx * dx + dy * dy >= required_sq
+    });
+    if ok {
+        kept.push(Settlement {
+            cell_x: cx as u32,
+            cell_y: cy as u32,
+            score,
+        });
+    }
 }
 
 /// Dimensionless slope (rise/run) per cell via central difference on the
@@ -127,66 +308,133 @@ fn compute_slope(elev: &[f32], res: usize, meters_per_cell: f32) -> Vec<f32> {
 }
 
 struct FitnessCtx<'a> {
-    res: usize,
     elev: &'a [f32],
     coast_dist: &'a [u16],
     slope: &'a [f32],
-    flow: &'a [f32],
+    dist_to_river: &'a [u16],
     max_slope: f32,
     max_elev: f32,
-    river_thresh: f32,
 }
 
-// Coastal ideal + spread, in cells. Bell-curve ideal is ~120m inland at the
-// 8m reference cell: close enough to the shore to feel coastal, far enough
-// that cities don't pile on the water line.
+// Coastal Gaussian: peak ~15 cells inland (120m at the 8m reference cell),
+// sigma 18 cells. Small weight because coastal cells are already abundant.
 const COAST_IDEAL_CELLS: f32 = 15.0;
 const COAST_SIGMA_CELLS: f32 = 18.0;
-const RIVER_LOG_CAP: f32 = 3.0;
-const W_COAST: f32 = 0.8;
-const W_RIVER: f32 = 1.5;
-const W_PLAINS: f32 = 0.5;
-const W_ELEV: f32 = 0.4;
+// Distance at which the river bonus decays to zero. ~80m at reference scale
+// makes "on the river" an inclusive band (settlements can sit a street away
+// from the water and still count).
+const RIVER_INFLUENCE_CELLS: f32 = 10.0;
 
-fn fitness(i: usize, ctx: &FitnessCtx) -> f32 {
+// Weights for the plains-emphasis scorer. River/coast barely contribute so
+// agricultural heartland (flat, low, dry) competes with river-adjacent spots.
+const WP_PLAINS: f32 = 2.0;
+const WP_ELEV: f32 = 1.5;
+const WP_RIVER: f32 = 0.5;
+const WP_COAST: f32 = 0.2;
+
+/// Seed additional villages along road cells — every road eventually grows
+/// a handful of wayside settlements, so pick the highest-fitness cells on
+/// the road polylines that clear min-spacing against the existing set.
+pub fn place_settlements_along_roads(
+    map: &GlobalMap,
+    river_map: &RiverMap,
+    roads: &RoadNetwork,
+    existing: &[Settlement],
+    target_additional: usize,
+) -> Vec<Settlement> {
+    let fields = compute_habitability_fields(map, river_map);
+    place_settlements_along_roads_with_fields(map, roads, existing, target_additional, &fields)
+}
+
+pub fn place_settlements_along_roads_with_fields(
+    map: &GlobalMap,
+    roads: &RoadNetwork,
+    existing: &[Settlement],
+    target_additional: usize,
+    fields: &HabitabilityFields,
+) -> Vec<Settlement> {
+    if target_additional == 0 || roads.roads.is_empty() {
+        return Vec::new();
+    }
+    let cfg = &map.config;
+    let res = cfg.global_res as usize;
+    let HabitabilityFields {
+        coast_dist,
+        slope,
+        dist_to_river,
+    } = fields;
+    let ctx = FitnessCtx {
+        elev: &map.elevation_m,
+        coast_dist,
+        slope,
+        dist_to_river,
+        max_slope: cfg.settlement_max_slope,
+        max_elev: cfg.settlement_max_elevation_m,
+    };
+
+    let mut road_cells: Vec<u32> = Vec::new();
+    for road in &roads.roads {
+        for &(x, y) in &road.points {
+            road_cells.push(((y as usize) * res + x as usize) as u32);
+        }
+    }
+    road_cells.sort_unstable();
+    road_cells.dedup();
+
+    let mut scored: Vec<(u32, f32)> = road_cells
+        .into_iter()
+        .filter_map(|ci| {
+            let ci_u = ci as usize;
+            if habitable(ci_u, map, slope, &ctx) {
+                Some((ci, fitness_plains(ci_u, &ctx)))
+            } else {
+                None
+            }
+        })
+        .collect();
+    scored.sort_by(|a, b| b.1.total_cmp(&a.1));
+
+    let res_f = res as f32;
+    let min_sp = cfg
+        .scaled_cells(cfg.settlement_min_spacing_cells as f32)
+        .max(1.0);
+    let min_sp_sq = min_sp.powi(2);
+    let coastal_sp_sq = (min_sp * cfg.settlement_coastal_spacing_mult.max(1.0)).powi(2);
+    let coast_threshold = cfg.scaled_cells_usize(cfg.settlement_inland_buffer_cells) as u16;
+    let spacing = SpacingCtx {
+        res_f,
+        min_sp_sq,
+        coastal_sp_sq,
+        coast_dist,
+        coast_threshold,
+    };
+
+    // Seed kept with the existing settlements so min-spacing keeps the new
+    // villages from overlapping them.
+    let mut kept: Vec<Settlement> = existing.to_vec();
+    let initial_len = kept.len();
+    for (idx, score) in scored {
+        if kept.len() - initial_len >= target_additional {
+            break;
+        }
+        try_place(idx as usize, score, res, &spacing, &mut kept);
+    }
+    kept.split_off(initial_len)
+}
+
+fn fitness_plains(i: usize, ctx: &FitnessCtx) -> f32 {
     let coast_cells = ctx.coast_dist[i] as f32;
     let coast_score = (-((coast_cells - COAST_IDEAL_CELLS).powi(2)
         / (2.0 * COAST_SIGMA_CELLS * COAST_SIGMA_CELLS)))
         .exp();
-
-    // River score uses the max flow across the cell + 4-neighbors so a
-    // settlement one cell off the actual riverbed still gets the bonus.
-    let res = ctx.res;
-    let x = i % res;
-    let y = i / res;
-    let left = if x == 0 { res - 1 } else { x - 1 };
-    let right = if x + 1 == res { 0 } else { x + 1 };
-    let candidates = [
-        ctx.flow[i],
-        ctx.flow[y * res + left],
-        ctx.flow[y * res + right],
-        if y > 0 {
-            ctx.flow[(y - 1) * res + x]
-        } else {
-            0.0
-        },
-        if y + 1 < res {
-            ctx.flow[(y + 1) * res + x]
-        } else {
-            0.0
-        },
-    ];
-    let f = candidates.iter().cloned().fold(0.0f32, f32::max);
-    let river_score = if f >= ctx.river_thresh {
-        (f / ctx.river_thresh).ln().min(RIVER_LOG_CAP)
-    } else {
-        0.0
-    };
-
+    let dist = ctx.dist_to_river[i] as f32;
+    let river_score = (1.0 - dist / RIVER_INFLUENCE_CELLS).max(0.0);
     let plains_score = 1.0 - (ctx.slope[i] / ctx.max_slope).clamp(0.0, 1.0);
     let elev_score = 1.0 - (ctx.elev[i] / ctx.max_elev).clamp(0.0, 1.0);
-
-    W_COAST * coast_score + W_RIVER * river_score + W_PLAINS * plains_score + W_ELEV * elev_score
+    WP_PLAINS * plains_score
+        + WP_ELEV * elev_score
+        + WP_RIVER * river_score
+        + WP_COAST * coast_score
 }
 
 #[cfg(test)]

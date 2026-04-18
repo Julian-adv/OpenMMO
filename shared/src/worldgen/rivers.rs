@@ -11,30 +11,10 @@
 //! subsequent phases (splatmap, vegetation) use to paint riverbeds and
 //! tint vegetation density.
 
-use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 
 use super::global_map::GlobalMap;
-
-/// Min-heap entry keyed by f32 total-ordering. Panics on NaN — heightmaps
-/// must never contain NaN.
-#[derive(Copy, Clone, PartialEq)]
-struct MinHeight(f32, u32);
-impl Eq for MinHeight {}
-impl Ord for MinHeight {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // Reverse so BinaryHeap (max-heap) pops the lowest height first.
-        other
-            .0
-            .total_cmp(&self.0)
-            .then_with(|| other.1.cmp(&self.1))
-    }
-}
-impl PartialOrd for MinHeight {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
-    }
-}
+use super::grid::MinF32;
 
 /// Priority-queue-based pit fill (Barnes et al. 2014). Starting from the
 /// sea / Y-border cells, flood inward; each cell is raised just above the
@@ -44,18 +24,18 @@ fn fill_pits(elev: &[f32], mask: &[u8], res: usize) -> Vec<f32> {
     let total = res * res;
     let mut filled = elev.to_vec();
     let mut visited = vec![false; total];
-    let mut pq: BinaryHeap<MinHeight> = BinaryHeap::new();
+    let mut pq: BinaryHeap<MinF32> = BinaryHeap::new();
 
     for i in 0..total {
         let y = i / res;
         let is_border = y == 0 || y == res - 1;
         if mask[i] == 0 || is_border {
-            pq.push(MinHeight(filled[i], i as u32));
+            pq.push(MinF32(filled[i], i as u32));
             visited[i] = true;
         }
     }
 
-    while let Some(MinHeight(hi, iu)) = pq.pop() {
+    while let Some(MinF32(hi, iu)) = pq.pop() {
         let i = iu as usize;
         let x = (i % res) as i32;
         let y = (i / res) as i32;
@@ -78,7 +58,7 @@ fn fill_pits(elev: &[f32], mask: &[u8], res: usize) -> Vec<f32> {
                 // it drains back toward the outlet we just came from.
                 let raised = elev[ni].max(hi + 1e-3);
                 filled[ni] = raised;
-                pq.push(MinHeight(raised, ni as u32));
+                pq.push(MinF32(raised, ni as u32));
             }
         }
     }
@@ -213,9 +193,21 @@ pub fn extract_rivers(
     // threshold. Candidates are filtered by a minimum-spacing pass so the
     // resulting river network has a handful of main stems rather than one
     // "river" per every rocky bump.
+    // Exclude ~2× the wall band from peak candidacy. The wall's uniform
+    // southward slope generates parallel peaks that trace as straight-line
+    // rivers; the 2× cushion catches peaks just past the wall where the
+    // wall-to-natural-terrain transition still produces a uniform gradient.
+    let wall_margin = map
+        .config
+        .scaled_cells_usize(map.config.y_border_wall_cells)
+        * 2;
     let mut candidates: Vec<(u32, f32)> = Vec::new();
     for i in 0..total {
         if mask[i] == 0 || elev[i] < min_peak_elevation {
+            continue;
+        }
+        let iy = i / res;
+        if iy < wall_margin || iy + wall_margin >= res {
             continue;
         }
         let x = (i % res) as i32;
@@ -352,6 +344,10 @@ mod tests {
             settlement_max_elevation_m: 1200.0,
             settlement_max_slope: 0.35,
             settlement_river_flow_threshold: 20.0,
+            settlement_along_road_count: 0,
+            settlement_inland_buffer_cells: 0,
+            settlement_coastal_spacing_mult: 1.0,
+            road_extra_neighbors: 0,
         }
     }
 

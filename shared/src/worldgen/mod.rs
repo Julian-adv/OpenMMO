@@ -17,6 +17,7 @@ pub(crate) mod grid;
 pub mod growth;
 pub mod noise;
 pub mod rivers;
+pub mod roads;
 pub mod settlements;
 
 pub use config::WorldGenConfig;

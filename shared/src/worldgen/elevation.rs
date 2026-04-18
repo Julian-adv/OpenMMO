@@ -133,12 +133,15 @@ pub fn generate_elevation(map: &mut GlobalMap) {
 
             // Y-border mountain wall: take the max of current elevation and a
             // wall height that peaks at the border and falls off inward.
+            // The detail fBm modulates wall height laterally (±40%) so the
+            // wall isn't a uniform ramp — without this, flow accumulation
+            // along the wall produces parallel straight-line rivers.
             if wall_cells > 0 {
                 let d_border = y.min(res - 1 - y);
                 if d_border < wall_cells {
-                    // 1.0 at exact border, 0 at wall_cells deep.
                     let t = 1.0 - (d_border as f32 / wall_cells as f32);
-                    let wall = smoothstep(0.0, 1.0, t) * wall_h;
+                    let variation = 0.5 + 1.0 * (detail * 0.5 + 0.5);
+                    let wall = smoothstep(0.0, 1.0, t) * wall_h * variation;
                     if wall > h {
                         h = wall;
                     }
@@ -223,6 +226,10 @@ mod tests {
             settlement_max_elevation_m: 1200.0,
             settlement_max_slope: 0.35,
             settlement_river_flow_threshold: 20.0,
+            settlement_along_road_count: 0,
+            settlement_inland_buffer_cells: 0,
+            settlement_coastal_spacing_mult: 1.0,
+            road_extra_neighbors: 0,
         }
     }
 

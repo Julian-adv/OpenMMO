@@ -331,6 +331,10 @@ mod tests {
             settlement_max_elevation_m: 1200.0,
             settlement_max_slope: 0.35,
             settlement_river_flow_threshold: 20.0,
+            settlement_along_road_count: 0,
+            settlement_inland_buffer_cells: 0,
+            settlement_coastal_spacing_mult: 1.0,
+            road_extra_neighbors: 0,
         }
     }
 
