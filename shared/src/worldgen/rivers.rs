@@ -312,6 +312,7 @@ mod tests {
             seed: 0xBEEF,
             world_size_m: 4096,
             global_res: res,
+            reference_res: res,
             sea_ratio: 0.3,
             mountain_ratio: 0.3,
             continent_frequency: 1.0 / 64.0,
@@ -346,6 +347,11 @@ mod tests {
             erosion_deposition_rate: 0.3,
             erosion_evaporation_rate: 0.02,
             erosion_radius_cells: 3,
+            settlement_target_count: 5,
+            settlement_min_spacing_cells: 10,
+            settlement_max_elevation_m: 1200.0,
+            settlement_max_slope: 0.35,
+            settlement_river_flow_threshold: 20.0,
         }
     }
 

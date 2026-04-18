@@ -4,7 +4,7 @@
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgb};
 use onlinerpg_shared::worldgen::{
-    continent, elevation, erosion, rivers, GlobalMap, WorldGenConfig,
+    continent, elevation, erosion, rivers, settlements, GlobalMap, WorldGenConfig,
 };
 use std::path::Path;
 use std::time::Instant;
@@ -75,6 +75,15 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         max_flow
     );
 
+    // --- Phase 5: settlements ----------------------------------------------
+    let t_ph5 = Instant::now();
+    let settlements_list = settlements::place_settlements(&map, &river_map);
+    eprintln!(
+        "Phase 5 (settlements):    {:.2}s  {} settlements",
+        t_ph5.elapsed().as_secs_f32(),
+        settlements_list.len()
+    );
+
     let t1 = Instant::now();
     // Coast distance field: used by the land/sea previews so that sand
     // appears only at the actual coastline (not wherever the independent
@@ -86,6 +95,12 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
     write_elevation_grayscale_png(&map, &seed_dir.join("02_elevation.png"))?;
     write_elevation_hypso_png(&map, &seed_dir.join("02_elevation_hypso.png"))?;
     write_rivers_png(&map, &river_map, &seed_dir.join("03_rivers.png"))?;
+    write_settlements_png(
+        &map,
+        &river_map,
+        &settlements_list,
+        &seed_dir.join("04_settlements.png"),
+    )?;
     eprintln!("  wrote PNGs: {:.2}s", t1.elapsed().as_secs_f32());
 
     // --- Meta ---------------------------------------------------------------
@@ -104,7 +119,16 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         "measured": {
             "sea_ratio": map.measured_sea_ratio(),
             "sea_level_potential": map.sea_level_potential,
+            "settlement_count": settlements_list.len(),
         },
+        "settlements": settlements_list
+            .iter()
+            .map(|s| serde_json::json!({
+                "cell_x": s.cell_x,
+                "cell_y": s.cell_y,
+                "score": s.score,
+            }))
+            .collect::<Vec<_>>(),
     });
     std::fs::write(
         seed_dir.join("meta.json"),
@@ -115,49 +139,110 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Hypso map with extracted river polylines drawn on top in bright blue.
-/// Line width scales with flow accumulation at the polyline's mouth so big
-/// rivers read thicker than small streams.
+/// Fill `img` with a muted hypsometric-tint background: `sea` fill for water
+/// cells, `hypso_color` run through `dim_land` for land. The caller then
+/// overlays whatever content they want (rivers, settlement dots, etc).
+fn paint_hypso_bg<F: Fn(Rgb<u8>) -> Rgb<u8>>(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    map: &GlobalMap,
+    sea: Rgb<u8>,
+    dim_land: F,
+) {
+    let n = map.config.global_res as usize;
+    let max_h = map.config.max_elevation_m.max(1.0);
+    for y in 0..n {
+        for x in 0..n {
+            let i = y * n + x;
+            let px = if map.land_mask[i] == 0 {
+                sea
+            } else {
+                dim_land(hypso_color(map.elevation_m[i] / max_h))
+            };
+            img.put_pixel(x as u32, y as u32, px);
+        }
+    }
+}
+
+fn write_settlements_png(
+    map: &GlobalMap,
+    river_map: &rivers::RiverMap,
+    settlements_list: &[settlements::Settlement],
+    path: &Path,
+) -> anyhow::Result<()> {
+    let n = map.config.global_res as usize;
+    let mut img = ImageBuffer::<Rgb<u8>, Vec<u8>>::new(n as u32, n as u32);
+    paint_hypso_bg(&mut img, map, Rgb([28, 65, 115]), |c| {
+        Rgb([
+            (c.0[0] as u16 * 2 / 3) as u8,
+            (c.0[1] as u16 * 2 / 3) as u8,
+            (c.0[2] as u16 * 2 / 3) as u8,
+        ])
+    });
+    for poly in &river_map.rivers {
+        for &(x, y) in &poly.points {
+            stamp_disk(&mut img, n, x as i32, y as i32, 1, Rgb([70, 140, 210]));
+        }
+    }
+
+    // Dot radius encodes relative score so top-scoring cities read bigger.
+    let max_score = settlements_list
+        .iter()
+        .map(|s| s.score)
+        .fold(0.0f32, f32::max)
+        .max(1e-6);
+    for s in settlements_list {
+        let t = s.score / max_score;
+        let inner = (2.0 + t * 3.0).round() as i32;
+        let outer = inner + 1;
+        stamp_disk(
+            &mut img,
+            n,
+            s.cell_x as i32,
+            s.cell_y as i32,
+            outer,
+            Rgb([25, 20, 10]),
+        );
+        stamp_disk(
+            &mut img,
+            n,
+            s.cell_x as i32,
+            s.cell_y as i32,
+            inner,
+            Rgb([240, 200, 60]),
+        );
+    }
+
+    img.save(path)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
 fn write_rivers_png(
     map: &GlobalMap,
     river_map: &rivers::RiverMap,
     path: &Path,
 ) -> anyhow::Result<()> {
     let n = map.config.global_res as usize;
-    let max_h = map.config.max_elevation_m.max(1.0);
     let mut img = ImageBuffer::<Rgb<u8>, Vec<u8>>::new(n as u32, n as u32);
-    // Base: muted hypso so rivers pop.
-    for y in 0..n {
-        for x in 0..n {
-            let i = y * n + x;
-            let px = if map.land_mask[i] == 0 {
-                Rgb([35, 80, 140])
-            } else {
-                let c = hypso_color(map.elevation_m[i] / max_h);
-                // Desaturate slightly so the blue rivers stand out.
-                Rgb([
-                    ((c.0[0] as u16 * 3 + 128) / 4) as u8,
-                    ((c.0[1] as u16 * 3 + 128) / 4) as u8,
-                    ((c.0[2] as u16 * 3 + 128) / 4) as u8,
-                ])
-            };
-            img.put_pixel(x as u32, y as u32, px);
-        }
-    }
+    // Land is desaturated toward gray so the blue river overlay reads.
+    paint_hypso_bg(&mut img, map, Rgb([35, 80, 140]), |c| {
+        Rgb([
+            ((c.0[0] as u16 * 3 + 128) / 4) as u8,
+            ((c.0[1] as u16 * 3 + 128) / 4) as u8,
+            ((c.0[2] as u16 * 3 + 128) / 4) as u8,
+        ])
+    });
 
-    // Overlay: render each polyline with thickness proportional to the log
-    // of its flow at the mouth. River color is a bright blue distinct from
-    // sea.
+    // Polyline thickness scales with log flow at the mouth so major rivers
+    // read visibly thicker than trickles.
     for poly in &river_map.rivers {
         if poly.points.is_empty() {
             continue;
         }
-        // Use flow at the last point (mouth) to set thickness.
         let mouth = *poly.points.last().unwrap();
         let mouth_idx = (mouth.1 as usize) * n + (mouth.0 as usize);
         let f = river_map.flow[mouth_idx];
-        let thickness = (f.ln().max(1.0) * 0.6) as i32;
-        let thickness = thickness.clamp(1, 4);
+        let thickness = ((f.ln().max(1.0) * 0.6) as i32).clamp(1, 4);
         for &(x, y) in &poly.points {
             stamp_disk(
                 &mut img,
