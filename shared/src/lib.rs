@@ -6,6 +6,7 @@ pub mod housing;
 pub mod inventory;
 pub mod monster_ai;
 pub mod pathfinding;
+pub mod worldgen;
 pub mod xp;
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]

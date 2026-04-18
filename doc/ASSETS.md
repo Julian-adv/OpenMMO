@@ -104,7 +104,11 @@
 - https://tangrams.github.io/heightmapper/#11.16667/34.4293/126.4164
 - export PATH="$HOME/.local/bin:$PATH" && rm -rf data/terrain/height/r*/h_*.bin && find data/terrain/height/ -type d -empty -delete 2>/dev/null; uv run --with Pillow --with numpy tools/import_heightmap.py     client/public/textures/height_map.png     --min-height -7 --max-height 60     --origin-tile -29 -31     --terrain-dir data/terrain
 
-- https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html
+- https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html for reference
+
+## vfx
+
+- https://github.com/tigerabrodi/webgpu-vfx for reference
 
 # Blender
 

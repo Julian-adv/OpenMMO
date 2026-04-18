@@ -60,6 +60,10 @@ data/monsters.json
 data/terrain/
 data/housing/
 server/data/game_data.db
+
+# Terrain generator preview output
+preview_out/
+preview_out*/
 agent-client/data/config.toml
 agent-client/data/prompts/memory/
 agent-client/data/npcs/**/memory.txt
