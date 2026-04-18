@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::coords::world_to_tile;
 use crate::defaults::{self, VERTS_PER_SIDE};
 use crate::io::TerrainIO;
 
@@ -10,11 +11,6 @@ const TILE_SIZE: f32 = defaults::TILE_DIM as f32;
 /// Encoding: `round((meters + 500.0) / 0.05)` → range -500m to +3276m.
 fn decode_height(value: u16) -> f32 {
     value as f32 * 0.05 - 500.0
-}
-
-/// Convert a world coordinate to the tile coordinate that contains it.
-fn world_to_tile(world_coord: f32) -> i32 {
-    ((world_coord + TILE_SIZE / 2.0) / TILE_SIZE).floor() as i32
 }
 
 /// Cache key for a tile.

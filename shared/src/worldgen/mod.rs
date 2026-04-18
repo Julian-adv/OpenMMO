@@ -19,6 +19,7 @@ pub mod noise;
 pub mod rivers;
 pub mod roads;
 pub mod settlements;
+pub mod tile_bake;
 
 pub use config::WorldGenConfig;
 pub use global_map::GlobalMap;

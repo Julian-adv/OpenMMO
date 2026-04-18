@@ -6,6 +6,12 @@ pub fn tile_to_region(tile: i32) -> i32 {
     tile.div_euclid(16)
 }
 
+/// Convert a world-space coordinate (X or Z, meters) to the tile index that
+/// contains it. Tile 0 spans [-32, 32), tile 1 [32, 96), etc.
+pub fn world_to_tile(world_coord: f32) -> i32 {
+    ((world_coord + 32.0) / 64.0).floor() as i32
+}
+
 /// Format region directory name: "r+00_+00", "r-01_+02"
 fn region_dir_name(rx: i32, rz: i32) -> String {
     format!("r{:+03}_{:+03}", rx, rz)

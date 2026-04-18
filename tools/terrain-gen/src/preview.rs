@@ -6,6 +6,7 @@ use image::{ImageBuffer, Rgb};
 use onlinerpg_shared::worldgen::{
     continent, elevation, erosion, rivers, roads, settlements, GlobalMap, WorldGenConfig,
 };
+use onlinerpg_shared::worldgen::{rivers::RiverMap, roads::RoadNetwork, settlements::Settlement};
 use std::path::Path;
 use std::time::Instant;
 
@@ -114,31 +115,7 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         settlements_list.len()
     );
 
-    let t1 = Instant::now();
-    // Coast distance field: used by the land/sea previews so that sand
-    // appears only at the actual coastline (not wherever the independent
-    // potential noise happens to be low).
-    let coast_dist = coast_distance(&map.land_mask, config.global_res as usize);
-    write_potential_png(&map, &seed_dir.join("01_potential.png"))?;
-    write_land_sea_png(&map, &coast_dist, &seed_dir.join("01_land_sea.png"))?;
-    write_land_sea_shifted_png(&map, &coast_dist, &seed_dir.join("01_land_sea_shifted.png"))?;
-    write_elevation_grayscale_png(&map, &seed_dir.join("02_elevation.png"))?;
-    write_elevation_hypso_png(&map, &seed_dir.join("02_elevation_hypso.png"))?;
-    write_rivers_png(&map, &river_map, &seed_dir.join("03_rivers.png"))?;
-    write_settlements_png(
-        &map,
-        &river_map,
-        &settlements_list,
-        &seed_dir.join("04_settlements.png"),
-    )?;
-    write_roads_png(
-        &map,
-        &river_map,
-        &road_net,
-        &settlements_list,
-        &seed_dir.join("05_roads.png"),
-    )?;
-    eprintln!("  wrote PNGs: {:.2}s", t1.elapsed().as_secs_f32());
+    write_pngs(&seed_dir, &map, &river_map, &road_net, &settlements_list)?;
 
     // --- Meta ---------------------------------------------------------------
     let meta = serde_json::json!({
@@ -174,6 +151,161 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
 
     eprintln!("Wrote preview to {}", seed_dir.display());
     Ok(())
+}
+
+/// Write all 8 preview PNGs for a fully-populated global map into `dir`.
+/// Shared between the `preview` command and `bake` (which dumps the same
+/// images alongside its baked tile artifacts so the same directory carries
+/// both the runtime-facing tiles and a human-facing overview).
+pub fn write_pngs(
+    dir: &Path,
+    map: &GlobalMap,
+    river_map: &RiverMap,
+    road_net: &RoadNetwork,
+    settlements_list: &[Settlement],
+) -> Result<()> {
+    let t = Instant::now();
+    // Coast distance field: used by the land/sea previews so that sand
+    // appears only at the actual coastline (not wherever the independent
+    // potential noise happens to be low).
+    let coast_dist = coast_distance(&map.land_mask, map.config.global_res as usize);
+    write_potential_png(map, &dir.join("01_potential.png"))?;
+    write_land_sea_png(map, &coast_dist, &dir.join("01_land_sea.png"))?;
+    write_land_sea_shifted_png(map, &coast_dist, &dir.join("01_land_sea_shifted.png"))?;
+    write_elevation_grayscale_png(map, &dir.join("02_elevation.png"))?;
+    write_elevation_hypso_png(map, &dir.join("02_elevation_hypso.png"))?;
+    write_rivers_png(map, river_map, &dir.join("03_rivers.png"))?;
+    write_settlements_png(
+        map,
+        river_map,
+        settlements_list,
+        &dir.join("04_settlements.png"),
+    )?;
+    write_roads_png(
+        map,
+        river_map,
+        road_net,
+        settlements_list,
+        &dir.join("05_roads.png"),
+    )?;
+    eprintln!("  wrote PNGs: {:.2}s", t.elapsed().as_secs_f32());
+    Ok(())
+}
+
+/// Draw region-grid lines (1 km spacing) and world-origin axes on top of an
+/// already-rendered PNG, then save. Shared wrapper so every preview image
+/// gets the same overlay without duplicating save error-context boilerplate.
+fn finish_png(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap, path: &Path) -> Result<()> {
+    overlay_region_grid(img, map);
+    img.save(path)
+        .with_context(|| format!("failed to write {}", path.display()))?;
+    Ok(())
+}
+
+/// Overlay region-boundary grid (1024 m pitch) plus origin axes on an image
+/// the same size as the global map. World origin sits at cell
+/// `global_res / 2`; region 0 starts at world -32 m (tile 0 spans [-32,32)),
+/// so boundaries live at `(world_size/2 − 32)/mpc + n·1024/mpc` cells for
+/// integer `n`. Every 4th region gets a heavier tint, origin axes are red.
+fn overlay_region_grid(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap) {
+    const REGION_SIZE_M: f32 = 1024.0;
+    /// Thick line every N regions (4 km default) so counting is easy on large
+    /// maps without having to tick off every 1 km square.
+    const MAJOR_STRIDE: i32 = 4;
+
+    let res = map.config.global_res as i32;
+    let mpc = map.config.meters_per_cell();
+    let region_px = REGION_SIZE_M / mpc;
+    if region_px < 2.0 {
+        // Regions smaller than a couple of pixels would produce a solid
+        // tint; just skip the overlay in that extreme low-res case.
+        return;
+    }
+    // Thickness scales with resolution so lines survive typical preview
+    // downscaling: at 1024 res = 1 px, at 4096 res = 4 px. Major lines and
+    // origin axes double up for extra contrast.
+    let base_thick = ((res as f32 / 1024.0).round() as i32).max(1);
+    let minor_thick = base_thick;
+    let major_thick = base_thick * 2;
+    let origin_thick = base_thick * 2;
+
+    let origin_cell = res as f32 * 0.5;
+    // Tile 0 spans [-32, +32) m; region 0's left/top edge sits at world -32 m
+    // (= half a tile inside region 0, same convention as `terrain::coords`).
+    let region0_edge = origin_cell - (onlinerpg_terrain::defaults::TILE_DIM as f32 * 0.5) / mpc;
+
+    let major = Rgb([20, 20, 20]);
+    let minor = Rgb([60, 60, 60]);
+    let origin = Rgb([230, 60, 60]);
+
+    let max_n = (res as f32 / region_px) as i32 + 2;
+    for n in -max_n..=max_n {
+        let pos_f = region0_edge + n as f32 * region_px;
+        if pos_f < 0.0 || pos_f >= res as f32 {
+            continue;
+        }
+        let pos = pos_f.round() as i32;
+        if pos < 0 || pos >= res {
+            continue;
+        }
+        let (color, alpha, thick) = if n.rem_euclid(MAJOR_STRIDE) == 0 {
+            (major, 0.55, major_thick)
+        } else {
+            (minor, 0.3, minor_thick)
+        };
+        draw_axis_line(img, pos, res, thick, color, alpha, Axis::Vertical);
+        draw_axis_line(img, pos, res, thick, color, alpha, Axis::Horizontal);
+    }
+
+    let o = origin_cell.round() as i32;
+    if (0..res).contains(&o) {
+        draw_axis_line(img, o, res, origin_thick, origin, 0.8, Axis::Vertical);
+        draw_axis_line(img, o, res, origin_thick, origin, 0.8, Axis::Horizontal);
+    }
+}
+
+#[derive(Copy, Clone)]
+enum Axis {
+    Vertical,
+    Horizontal,
+}
+
+/// Draw a straight grid line, `thickness` pixels wide, centered on `pos`.
+/// `Axis::Vertical` draws down the column `pos`, `Axis::Horizontal` across
+/// the row `pos`.
+fn draw_axis_line(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    pos: i32,
+    res: i32,
+    thickness: i32,
+    color: Rgb<u8>,
+    alpha: f32,
+    axis: Axis,
+) {
+    let half = thickness / 2;
+    for d in -half..(thickness - half) {
+        let minor_coord = pos + d;
+        if minor_coord < 0 || minor_coord >= res {
+            continue;
+        }
+        for major in 0..res as u32 {
+            let (x, y) = match axis {
+                Axis::Vertical => (minor_coord as u32, major),
+                Axis::Horizontal => (major, minor_coord as u32),
+            };
+            let px = *img.get_pixel(x, y);
+            img.put_pixel(x, y, blend_rgb(px, color, alpha));
+        }
+    }
+}
+
+fn blend_rgb(a: Rgb<u8>, b: Rgb<u8>, t: f32) -> Rgb<u8> {
+    let t = t.clamp(0.0, 1.0);
+    Rgb([
+        (a.0[0] as f32 * (1.0 - t) + b.0[0] as f32 * t) as u8,
+        (a.0[1] as f32 * (1.0 - t) + b.0[1] as f32 * t) as u8,
+        (a.0[2] as f32 * (1.0 - t) + b.0[2] as f32 * t) as u8,
+    ])
 }
 
 /// Fill `img` with a muted hypsometric-tint background: `sea` fill for water
@@ -248,8 +380,7 @@ fn write_roads_png(
             Rgb([240, 200, 60]),
         );
     }
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -302,8 +433,7 @@ fn write_settlements_png(
         );
     }
 
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -345,8 +475,7 @@ fn write_rivers_png(
         }
     }
 
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -388,8 +517,7 @@ fn write_elevation_grayscale_png(map: &GlobalMap, path: &Path) -> Result<()> {
             img.put_pixel(x, y, Rgb([g, g, g]));
         }
     }
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -410,8 +538,7 @@ fn write_elevation_hypso_png(map: &GlobalMap, path: &Path) -> Result<()> {
             img.put_pixel(x as u32, y as u32, px);
         }
     }
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -455,8 +582,7 @@ fn write_potential_png(map: &GlobalMap, path: &Path) -> Result<()> {
             img.put_pixel(x, y, Rgb([g, g, g]));
         }
     }
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -478,8 +604,7 @@ fn write_land_sea_shifted_png(map: &GlobalMap, coast_dist: &[u16], path: &Path) 
             img.put_pixel(x as u32, y as u32, px);
         }
     }
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 
@@ -494,8 +619,7 @@ fn write_land_sea_png(map: &GlobalMap, coast_dist: &[u16], path: &Path) -> Resul
             img.put_pixel(x, y, shade_cell(map, coast_dist, i));
         }
     }
-    img.save(path)
-        .with_context(|| format!("failed to write {}", path.display()))?;
+    finish_png(&mut img, map, path)?;
     Ok(())
 }
 

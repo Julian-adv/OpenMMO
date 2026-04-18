@@ -80,13 +80,15 @@ shared/src/worldgen/
   config.rs          # WorldGenConfig
   noise.rs           # 결정론적 Perlin + fBm (외부 crate 없음)
   global_map.rs      # GlobalMap 누적 구조
+  grid.rs            # BFS/min-heap helpers (crate-internal)
+  growth.rs          # Eden 성장 기반 대륙 시드 (Phase 1 sub-pass)
   continent.rs       # Phase 1
-  (elevation.rs)     # Phase 2 예정
-  (erosion.rs)       # Phase 3 예정
-  (rivers.rs)        # Phase 4 예정
-  (settlements.rs)   # Phase 5 예정
-  (roads.rs)         # Phase 6 예정
-  (tile_bake.rs)     # Phase 7 예정 (고해상도 샘플링)
+  elevation.rs       # Phase 2
+  erosion.rs         # Phase 3
+  rivers.rs          # Phase 4
+  settlements.rs     # Phase 5
+  roads.rs           # Phase 6
+  tile_bake.rs       # Phase 7 (고해상도 타일 샘플링 + V2 splatmap)
   (vegetation.rs)    # Phase 8 예정
 ```
 
@@ -204,11 +206,21 @@ preview는 수 초 안에 끝나야 반복 튜닝이 실용적임. 그래서 Pha
 - [x] Phase 5: 정착지 배치 (`settlements.rs`). 해안/강변/평야 fitness
       스코어 + greedy min-spacing으로 habitable 셀에서 top-N 배치.
       habitability는 elevation + slope 하드 컷오프.
-- [x] `tools/terrain-gen` 스캐폴딩 및 `preview` 명령. 출력:
-      `01_potential.png`, `01_land_sea.png`, `01_land_sea_shifted.png`
-      (wrap 검증용), `02_elevation.png`, `02_elevation_hypso.png`,
-      `03_rivers.png`, `04_settlements.png`, `meta.json` (정착지 목록 포함).
-- [ ] Phase 6: 도로 망 (정착지 간 A*).
-- [ ] Phase 7: 타일 베이크 (고해상도 hmap/splat, 기존 `TerrainIO` 포맷).
+- [x] Phase 6: 도로 망 (`roads.rs`). Prim MST + K-NN 추가 엣지 (평행 제거)
+      + 경사 페널티 A*. Phase 5b "도로변 마을" 후처리와 결합.
+- [x] Phase 7: 타일 베이크 (`tile_bake.rs`). 전역 맵 bilinear 샘플 +
+      high-freq detail noise + 해저 shallow bathymetry. V2 splatmap 은
+      road > river > sea > alpine > cliff > coast > plain 우선순위로
+      primary/secondary slot + blend 를 결정하고, 평야에는 vegMeta 에
+      short-grass 밀도 bake. 고정 6-슬롯 팔레트 (`rocky_terrain`,
+      `sandy_gravel`, `red_laterite`, `snow_02`, `gravel_road`,
+      `gravel_floor`).
+- [x] `tools/terrain-gen` 스캐폴딩 및 `preview` / `bake` 명령.
+      `preview` 출력: `01_potential.png`, `01_land_sea.png`,
+      `01_land_sea_shifted.png` (wrap 검증용), `02_elevation.png`,
+      `02_elevation_hypso.png`, `03_rivers.png`, `04_settlements.png`,
+      `05_roads.png`, `meta.json` (정착지 목록 포함).
+      `bake` 출력: `height/r{rx}_{rz}/h_{tx}_{tz}.bin`,
+      `splat/r{rx}_{rz}/s_{tx}_{tz}.bin`, `meta/r{rx}_{rz}.json`,
+      `worldgen.json` (seed/config/settlements/roads). rayon 병렬.
 - [ ] Phase 8: 초목/나무 배치.
-- [ ] `terrain-gen bake` 명령.
