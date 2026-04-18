@@ -106,7 +106,8 @@ export function makeSplatStandardMaterial({
   includeEditorOverlay = false,
 }: SplatParams) {
   // Splat bytes are integer indices — must NOT be bilinearly interpolated.
-  splatMap.wrapS = splatMap.wrapT = THREE.RepeatWrapping
+  // Wrap mode is left to the caller: shader samples 1 texel past tile edges,
+  // so RepeatWrapping would pull opposite-edge cells (sand bands at borders).
   splatMap.minFilter = THREE.NearestFilter
   splatMap.magFilter = THREE.NearestFilter
   splatMap.generateMipmaps = false

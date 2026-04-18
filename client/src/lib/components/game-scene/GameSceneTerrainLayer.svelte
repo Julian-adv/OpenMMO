@@ -178,6 +178,41 @@
     return mat
   }
 
+  // WebGPU bind groups capture textures at the material's first render;
+  // swapping `.value` later doesn't reliably rebind. So per-tile material
+  // must be (re)built with the real splat data BEFORE first render.
+  function makeTileMaterial(
+    splatMap: THREE.Texture,
+    layers: SplatLayer[],
+  ): MeshStandardNodeMaterial {
+    return makeSplatStandardMaterial({
+      atlas: buildSplatAtlas(layers),
+      tileScales: layers.map((l) => l.tile),
+      splatMap,
+      splatScale: 1.0,
+      sharedBrushUniforms: brushUniforms,
+      includeEditorOverlay: editorOverlayCompiled,
+    })
+  }
+
+  function swapTileMaterial(tileId: string, newMat: MeshStandardNodeMaterial) {
+    const oldMat = materialMap.get(tileId)
+    if (!oldMat) {
+      newMat.dispose()
+      return
+    }
+    materialMap.set(tileId, newMat)
+    if (terrainGroup) {
+      for (const child of terrainGroup.children) {
+        if (child instanceof THREE.Mesh && child.userData.tileId === tileId) {
+          child.material = newMat
+          break
+        }
+      }
+    }
+    oldMat.dispose()
+  }
+
   /** Upgrade all existing materials to include editor overlay.
    *  Called once when the map editor is first activated. */
   function upgradeToEditorMaterials() {
@@ -186,30 +221,18 @@
     // Dispose and flush pool — pooled materials lack editor overlay
     for (const m of materialPool) m.dispose()
     materialPool.length = 0
-    // Recreate materials for all active tiles
-    for (const [key, oldMat] of materialMap) {
+    for (const tileId of [...materialMap.keys()]) {
+      const oldMat = materialMap.get(tileId)!
       const newMat = createDefaultMaterial()
-      // Transfer all per-tile uniform values from old material
       const oldU = oldMat.userData.uniforms
       const newU = newMat.userData.uniforms
-      if (oldU && newU) {
-        for (const k of Object.keys(oldU)) {
-          if (k in newU && oldU[k]?.value !== undefined) {
-            newU[k].value = oldU[k].value
-          }
+      for (const k of Object.keys(oldU)) {
+        if (k in newU && oldU[k]?.value !== undefined) {
+          newU[k].value = oldU[k].value
         }
       }
-      materialMap.set(key, newMat)
-      // Update the mesh reference
-      const geo = geoMap.get(key)
-      if (geo && terrainGroup) {
-        terrainGroup.children.forEach((child) => {
-          if (child instanceof THREE.Mesh && child.geometry === geo) {
-            child.material = newMat
-          }
-        })
-      }
-      oldMat.dispose()
+      newU.uTileScales.array = oldU.uTileScales.array
+      swapTileMaterial(tileId, newMat)
     }
   }
 
@@ -262,24 +285,6 @@
       u.ormAtlas.value = defaultAtlas.ormAtlas
     }
     u.uTileScales.array = padTileScales(_defaultLayers.map((l) => l.tile))
-  }
-
-  /** Update a per-tile material's atlas/tileScales from resolved region layers. */
-  function applyLayersToMaterial(
-    mat: MeshStandardNodeMaterial,
-    resolved: { layers: SplatLayer[] },
-  ) {
-    const atlas = buildSplatAtlas(resolved.layers)
-    const u = mat.userData?.uniforms
-    if (!u) return
-    u.diffuseAtlas.value = atlas.diffuseAtlas
-    if (u.normalAtlas && atlas.normalAtlas) {
-      u.normalAtlas.value = atlas.normalAtlas
-    }
-    if (u.ormAtlas && atlas.ormAtlas) {
-      u.ormAtlas.value = atlas.ormAtlas
-    }
-    u.uTileScales.array = padTileScales(resolved.layers.map((l) => l.tile))
   }
 
   // ── Brush sync (updates shared uniform nodes → affects all materials) ──
@@ -449,19 +454,14 @@
         .catch(() => {})
 
       const tileId = tile.id
-      if (sMgr) {
-        sMgr.loadSplatmap(tileX, tileZ).then((tex) => {
-          const mat = materialMap.get(tileId)
-          if (mat) mat.userData.uniforms.splatMap.value = tex
-        })
-      }
-
-      if (mMgr) {
-        mMgr
-          .getLayersForTile(tileX, tileZ)
-          .then((resolved) => {
-            const mat = materialMap.get(tileId)
-            if (mat) applyLayersToMaterial(mat, resolved)
+      if (sMgr && mMgr) {
+        Promise.all([
+          sMgr.loadSplatmap(tileX, tileZ),
+          mMgr.getLayersForTile(tileX, tileZ),
+        ])
+          .then(([tex, resolved]) => {
+            if (!materialMap.has(tileId)) return
+            swapTileMaterial(tileId, makeTileMaterial(tex, resolved.layers))
           })
           .catch(() => {})
       }
@@ -480,8 +480,10 @@
       const { tileX, tileZ } = getTileCoords(tile)
       if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
         mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-          const mat = materialMap.get(tile.id)
-          if (mat) applyLayersToMaterial(mat, resolved)
+          const oldMat = materialMap.get(tile.id)
+          if (!oldMat) return
+          const splatMap = oldMat.userData.uniforms.splatMap.value
+          swapTileMaterial(tile.id, makeTileMaterial(splatMap, resolved.layers))
         })
       }
     }
