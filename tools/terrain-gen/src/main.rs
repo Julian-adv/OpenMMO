@@ -37,8 +37,10 @@ struct GenArgs {
     #[arg(long, default_value_t = 4096)]
     res: u32,
 
-    /// Target sea fraction (0..1).
-    #[arg(long, default_value_t = 0.50)]
+    /// Target sea fraction (0..1). Note: filters (top-N components, island
+    /// culling, inter-continent gap) add ~5-20% extra sea on top of this
+    /// target, so measured sea runs higher (e.g. target 0.3 → measured ~0.37).
+    #[arg(long, default_value_t = 0.30)]
     sea: f32,
 
     /// Continent wavelength in global cells.

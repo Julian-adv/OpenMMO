@@ -4,6 +4,10 @@ import type { ReferenceImageData } from './referenceImageSampler'
 
 export const TILE_DIM = 64
 export const VERTS_PER_SIDE = TILE_DIM + 1 // 65
+/** Splat texture padded by 1 cell on each side with neighbor-tile data so the
+ *  shader's +1 texel bilerp reads the neighbor instead of clamping to its own
+ *  edge cell (which produced visible seams at tile boundaries). */
+export const SPLAT_PADDED_DIM = TILE_DIM + 2 // 66
 export const REGION_SIZE = 16
 export const REGION_CELLS = REGION_SIZE * TILE_DIM // 1024
 

@@ -41,7 +41,7 @@ import {
   type SplatAtlasSet,
 } from '../utils/splatLayerLoader'
 import { MAX_PALETTE } from '../terrain/splat-encoding'
-import { TILE_DIM } from '../terrain/terrain-constants'
+import { SPLAT_PADDED_DIM, TILE_DIM } from '../terrain/terrain-constants'
 
 export type SplatLayer = {
   map: THREE.Texture // Albedo (sRGB)
@@ -105,8 +105,6 @@ export function makeSplatStandardMaterial({
   includeEditorOverlay = false,
 }: SplatParams) {
   // Splat bytes are integer indices — must NOT be bilinearly interpolated.
-  // Wrap mode is left to the caller: shader samples 1 texel past tile edges,
-  // so RepeatWrapping would pull opposite-edge cells (sand bands at borders).
   splatMap.minFilter = THREE.NearestFilter
   splatMap.magFilter = THREE.NearestFilter
   splatMap.generateMipmaps = false
@@ -152,10 +150,15 @@ export function makeSplatStandardMaterial({
   // This smooths transitions across cells that share at least one slot
   // (e.g. (grass,sand) ↔ (grass,laterite)). When neighbors share no slot,
   // pW+sW collapses to ~0 and we fall back to the nearest cell's blend.
-  const SPLAT_TEXEL = 1.0 / TILE_DIM
+  // The texture is SPLAT_PADDED_DIM × SPLAT_PADDED_DIM; the tile's own 64×64
+  // data lives in the interior [1..TILE_DIM]×[1..TILE_DIM]. `cellPos` stays
+  // in logical 0..TILE_DIM-1 cell space so the nearest-cell selection is
+  // unchanged; we shift the UV by +1.5 texels so cell 0 lands on the
+  // interior pixel 1 (not padding pixel 0).
+  const SPLAT_TEXEL = 1.0 / SPLAT_PADDED_DIM
 
   const cellPos = vUvSplat.mul(float(TILE_DIM)).sub(0.5)
-  const baseUv = cellPos.floor().add(0.5).mul(SPLAT_TEXEL)
+  const baseUv = cellPos.floor().add(1.5).mul(SPLAT_TEXEL)
   const fracUv = fract(cellPos)
   const s00 = splatTex.sample(baseUv).toVar()
   const s10 = splatTex.sample(baseUv.add(vec2(SPLAT_TEXEL, 0))).toVar()

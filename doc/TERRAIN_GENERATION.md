@@ -141,6 +141,29 @@ terrain-gen bake     --seed <N> [--config <toml>] --out <dir>
 preview는 수 초 안에 끝나야 반복 튜닝이 실용적임. 그래서 Phase 1-6은
 저해상도 전역 맵에서만 동작하도록 최적화한다.
 
+### 6.1 현재 사용 중인 bake 커맨드 (재현용)
+
+`data/terrain`에 들어 있는 현재 월드는 아래 커맨드로 정확히 재현된다.
+CLI의 모든 인자는 기본값 그대로이며, seed만 지정했다:
+
+```
+cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
+```
+
+주요 파라미터 (CLI 기본값):
+- `--seed 42` (master seed)
+- `--res 4096` (글로벌 맵 해상도, 8 m/cell)
+- `--sea 0.30` (타겟 해수 비율 → 필터 슬립으로 실측 ~0.37)
+- `--wavelength 700`, `--octaves 4`, `--gain 0.5` (대륙 fBm)
+- `--continents 3`, `--gap 120`, `--islands 15`
+- `--droplets 300000` (Phase 3 erosion)
+- `--settlements 60`, `--settlement-spacing 70`
+- Region 범위: `x=[-4,+3] z=[-4,+3]` (8×8 regions = 16,384 tiles)
+
+재현 불가능한 요소는 없음 — 동일 커맨드에서 동일 바이트가 나온다 (seed
+파생 규칙은 §9). 결과 요약은 `data/terrain/worldgen.json`의
+`baked_at` / `measured_sea_ratio` / settlements / roads 배열로 확인.
+
 ## 7. 기존 시스템과의 통합
 
 - **포맷**: 기존 `terrain` crate의 uint16 인코딩 (`height = value*0.05
@@ -190,7 +213,64 @@ preview는 수 초 안에 끝나야 반복 튜닝이 실용적임. 그래서 Pha
 - **바이옴 구분**: 온도/습도 노이즈로 더 세분(타이가/사막/열대 등)할지.
   현재는 고도/경사/수원 거리만 쓴다.
 
-## 11. 현재 진행 상황
+## 11. 계획: Vector feature distance 리팩토링
+
+현재 강/도로/해안은 모두 **raster mask + nearest 또는 bilinear lookup**으로
+분류된다. 이 방식은 4K 전역 맵의 8m 셀 lattice를 최종 결과물에 그대로
+노출한다:
+
+- 강: `river_mask[gi] > 0` nearest lookup → 8m 블록 픽셀레이션
+- 도로: `dist_to_road[gi] == 0` nearest lookup → 동일한 계단
+- 해안: `dist_to_sea` BFS가 raster 출처라 isoline이 셀 경계를 따라감.
+  `sample_coast_d_jittered`의 fBm jitter는 hack으로 가리려 했으나 lattice를
+  완전히 깨지 못함.
+
+핵심 관찰: 세 피처 모두 이미 **벡터 데이터(polyline)로 존재하거나 추출
+가능**하다. 해상도를 올릴 필요 없이 bake 시점에 world-space에서 polyline
+까지의 유클리드 거리로 분류하면 sub-meter 정밀도가 자동으로 나온다.
+
+### 11.1 통합 해법
+
+| Feature | Polyline 출처 | Bake 시점 |
+|---|---|---|
+| 강 | (이미 있음) `RiverMap.rivers: Vec<Polyline>` | 세그먼트 거리 |
+| 도로 | (이미 있음) `RoadNetwork.roads: Vec<Polyline>` | 세그먼트 거리 |
+| 해안 | **Marching Squares on `land_mask`** → coast polylines (신규) | 세그먼트 거리 + `land_mask` sign |
+
+공통 구조:
+1. Polyline을 **Chaikin 또는 Catmull-Rom으로 smoothing** → 8m vertex가
+   곡선으로.
+2. 월드 전체 세그먼트를 **2D grid 공간 인덱스**(버킷)로 정렬.
+3. 타일 bake 시 타일 bbox + margin에 걸친 버킷만 조회 → 타일당 수~수십
+   세그먼트만 거리 계산.
+4. Heightmap vertex와 splatmap cell 양쪽에서 `d_m` 사용:
+   - **Splat**: 강 폭 내부 → SAND primary + blend feathering.
+   - **Height carve**: `depth(d) = max_depth * smoothstep(river_width, 0, d)`
+     를 base에서 차감하면 실제 V-channel 생성.
+   - **해안 sand band**: 현재 `coast_d_cells`를 `coast_d_m`로 치환.
+
+### 11.2 제거 대상
+
+벡터 거리가 들어오면 다음은 불필요:
+- `BakeContext.river_mask` (rasterized polyline)
+- `BakeContext.dist_to_road` (BFS 결과물)
+- `BakeContext.dist_to_sea`, `dist_to_land` (BFS 결과물)
+- `sample_coast_d_jittered`의 fBm jitter (staircase 가리기용 hack이었음)
+
+### 11.3 진행 순서
+
+- [ ] **Step 1: 강** — `RiverMap.rivers` Chaikin smooth + 공간 인덱스 +
+      polyline-distance-based splat/carve. `river_mask` 제거. 결과 눈으로
+      확인.
+- [ ] **Step 2: 도로** — 동일 구조로 `RoadNetwork.roads`. `dist_to_road` 제거.
+- [ ] **Step 3: 해안** — Marching Squares로 `land_mask` 경계 polyline 추출,
+      Chaikin smooth, 공간 인덱스. `sample_coast_d_jittered` → polyline
+      distance로 교체. `dist_to_sea`/`dist_to_land` 제거 (bathymetry는 land
+      polyline까지의 거리로 대체).
+
+각 단계마다 `terrain-gen bake` 후 클라이언트에서 시각 검증.
+
+## 12. 현재 진행 상황
 
 - [x] Phase 1: 대륙/바다 마스크 + 프레임워크 (`shared/src/worldgen/`).
       seed 기반 Eden 성장(`growth.rs`)으로 연속 대륙 생성, 작은 섬 필터,
