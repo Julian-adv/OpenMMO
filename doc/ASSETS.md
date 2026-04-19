@@ -106,9 +106,10 @@
 
 - https://blog.runevision.com/2026/03/fast-and-gorgeous-erosion-filter.html for reference
 
-## vfx
+## for reference
 
 - https://github.com/tigerabrodi/webgpu-vfx for reference
+- https://freestylized.com/material/moss_ground_01/
 
 # Blender
 

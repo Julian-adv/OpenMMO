@@ -127,6 +127,10 @@ export function applyHeightToGeometry(
 
   posAttr.needsUpdate = true
   normalAttr.needsUpdate = true
+
+  // Bounding sphere still reflects the flat plane until recomputed; Mesh.raycast
+  // uses it for early-reject, so isometric rays miss the elevated mesh otherwise.
+  geometry.computeBoundingSphere()
 }
 
 export function refreshAdjacentTileEdges(
