@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { getTerrainApiUrl } from '../utils/networkUtils'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { worldToTileCoord } from './terrain-height-types'
-import { smoothstep } from '../terrain/terrain-constants'
+import { smoothstep, SPLAT_PADDED_DIM } from '../terrain/terrain-constants'
 import {
   BYTES_PER_CELL,
   applyBrush,
@@ -11,9 +11,92 @@ import {
 } from '../terrain/splat-encoding'
 
 const TILE_DIM = 64
+const PAD = SPLAT_PADDED_DIM // 66 — interior is [1..TILE_DIM]×[1..TILE_DIM]
+const PADDED_BYTES = PAD * PAD * BYTES_PER_CELL
 
 function tileKey(tileX: number, tileZ: number): string {
   return `${tileX},${tileZ}`
+}
+
+export function paddedOffset(cx: number, cz: number): number {
+  return (cz * PAD + cx) * BYTES_PER_CELL
+}
+
+function copyCell4(
+  src: Uint8Array,
+  srcOff: number,
+  dst: Uint8Array,
+  dstOff: number
+) {
+  dst[dstOff] = src[srcOff]
+  dst[dstOff + 1] = src[srcOff + 1]
+  dst[dstOff + 2] = src[srcOff + 2]
+  dst[dstOff + 3] = src[srcOff + 3]
+}
+
+// Offsets relative to the tile's own index: (0,0) is the interior write;
+// the other 8 are the 4 orthogonal edges + 4 corners that pull a 1-cell
+// border strip from the adjacent tile.
+export const NEIGHBOR_OFFSETS_9: ReadonlyArray<readonly [number, number]> = [
+  [-1, -1],
+  [0, -1],
+  [1, -1],
+  [-1, 0],
+  [0, 0],
+  [1, 0],
+  [-1, 1],
+  [0, 1],
+  [1, 1],
+]
+
+// Sign-driven indexing: `dx/dz = 0` fills the interior column/row of the
+// padded grid (src col/row tracks padded col/row - 1); `dx/dz = ±1` fills a
+// single-cell border strip, pulling the neighbor's matching edge column /
+// row. When `srcIsOwn` is true we're falling back to the tile's own edge
+// (equivalent to ClampToEdge for that side).
+export function writePaddedRange(
+  dst: Uint8Array,
+  src: Uint8Array,
+  srcIsOwn: boolean,
+  dx: number,
+  dz: number
+) {
+  const xStart = dx === -1 ? 0 : dx === 1 ? PAD - 1 : 1
+  const xEnd = dx === -1 ? 1 : dx === 1 ? PAD : PAD - 1
+  const zStart = dz === -1 ? 0 : dz === 1 ? PAD - 1 : 1
+  const zEnd = dz === -1 ? 1 : dz === 1 ? PAD : PAD - 1
+  const fixedCol =
+    dx === -1
+      ? srcIsOwn
+        ? 0
+        : TILE_DIM - 1
+      : dx === 1
+        ? srcIsOwn
+          ? TILE_DIM - 1
+          : 0
+        : -1
+  const fixedRow =
+    dz === -1
+      ? srcIsOwn
+        ? 0
+        : TILE_DIM - 1
+      : dz === 1
+        ? srcIsOwn
+          ? TILE_DIM - 1
+          : 0
+        : -1
+  for (let pz = zStart; pz < zEnd; pz++) {
+    const srcZ = fixedRow < 0 ? pz - 1 : fixedRow
+    for (let px = xStart; px < xEnd; px++) {
+      const srcX = fixedCol < 0 ? px - 1 : fixedCol
+      copyCell4(
+        src,
+        (srcZ * TILE_DIM + srcX) * BYTES_PER_CELL,
+        dst,
+        paddedOffset(px, pz)
+      )
+    }
+  }
 }
 
 function paintCell(
@@ -85,11 +168,86 @@ export class TerrainSplatManager {
     this.terrainApiUrl = getTerrainApiUrl()
   }
 
-  private createTexture(data: Uint8Array): THREE.DataTexture {
+  private textureData(tileX: number, tileZ: number): Uint8Array | null {
+    const tex = this.textures.get(tileKey(tileX, tileZ))
+    if (!tex) return null
+    return (tex.image as unknown as { data: Uint8Array }).data
+  }
+
+  /** Write one 3×3 neighborhood offset — interior when (0,0), border strip
+   *  otherwise. When the neighbor is missing, falls back to the tile's own
+   *  edge (ClampToEdge behaviour). */
+  private writeOffset(
+    dst: Uint8Array,
+    tileX: number,
+    tileZ: number,
+    own: Uint8Array,
+    dx: number,
+    dz: number
+  ) {
+    const nb =
+      dx === 0 && dz === 0
+        ? own
+        : (this.splatmaps.get(tileKey(tileX + dx, tileZ + dz)) ?? own)
+    writePaddedRange(dst, nb, nb === own, dx, dz)
+  }
+
+  private writePaddedAll(
+    dst: Uint8Array,
+    tileX: number,
+    tileZ: number,
+    own: Uint8Array
+  ) {
+    for (const [dx, dz] of NEIGHBOR_OFFSETS_9) {
+      this.writeOffset(dst, tileX, tileZ, own, dx, dz)
+    }
+  }
+
+  /** Re-upload just the border pixels for a tile whose neighbor changed. */
+  private refreshBorders(tileX: number, tileZ: number) {
+    const data = this.textureData(tileX, tileZ)
+    if (!data) return
+    const own = this.splatmaps.get(tileKey(tileX, tileZ))
+    if (!own) return
+    for (const [dx, dz] of NEIGHBOR_OFFSETS_9) {
+      if (dx === 0 && dz === 0) continue
+      this.writeOffset(data, tileX, tileZ, own, dx, dz)
+    }
+    const tex = this.textures.get(tileKey(tileX, tileZ))
+    if (tex) tex.needsUpdate = true
+  }
+
+  /** Rewrite the full padded buffer after this tile's own data changed. */
+  private refreshAll(tileX: number, tileZ: number) {
+    const data = this.textureData(tileX, tileZ)
+    if (!data) return
+    const own = this.splatmaps.get(tileKey(tileX, tileZ))
+    if (!own) return
+    this.writePaddedAll(data, tileX, tileZ, own)
+    const tex = this.textures.get(tileKey(tileX, tileZ))
+    if (tex) tex.needsUpdate = true
+  }
+
+  private refreshNeighborBorders(tileX: number, tileZ: number) {
+    for (const [dx, dz] of NEIGHBOR_OFFSETS_9) {
+      if (dx === 0 && dz === 0) continue
+      this.refreshBorders(tileX + dx, tileZ + dz)
+    }
+  }
+
+  private createTexture(tileX: number, tileZ: number): THREE.DataTexture {
+    const own = this.splatmaps.get(tileKey(tileX, tileZ))
+    if (!own) {
+      throw new Error(
+        `createTexture: tile (${tileX}, ${tileZ}) has no splat data loaded`
+      )
+    }
+    const padded = new Uint8Array(PADDED_BYTES)
+    this.writePaddedAll(padded, tileX, tileZ, own)
     const texture = new THREE.DataTexture(
-      data,
-      TILE_DIM,
-      TILE_DIM,
+      padded,
+      PAD,
+      PAD,
       THREE.RGBAFormat,
       THREE.UnsignedByteType
     )
@@ -117,8 +275,9 @@ export class TerrainSplatManager {
       // V2 default: all zeros → every cell is 100% palette slot 0.
       const data = new Uint8Array(TILE_DIM * TILE_DIM * BYTES_PER_CELL)
       this.splatmaps.set(key, data)
-      const texture = this.createTexture(data)
+      const texture = this.createTexture(tileX, tileZ)
       this.textures.set(key, texture)
+      this.refreshNeighborBorders(tileX, tileZ)
       return texture
     }
 
@@ -135,8 +294,12 @@ export class TerrainSplatManager {
         const buffer = await response.arrayBuffer()
         const data = new Uint8Array(buffer)
         this.splatmaps.set(key, data)
-        const texture = this.createTexture(data)
+        const texture = this.createTexture(tileX, tileZ)
         this.textures.set(key, texture)
+        // Neighbors that already had textures used a fallback border (own
+        // edge copy). Now that this tile's real data is present, rebuild
+        // their borders so seams that cross into this tile look correct.
+        this.refreshNeighborBorders(tileX, tileZ)
         return texture
       } catch (e) {
         console.error(`Splatmap fetch error (${tileX}, ${tileZ}):`, e)
@@ -225,8 +388,8 @@ export class TerrainSplatManager {
         }
 
         if (changed) {
-          const texture = this.textures.get(key)
-          if (texture) texture.needsUpdate = true
+          this.refreshAll(tx, tz)
+          this.refreshNeighborBorders(tx, tz)
           this.dirtyTiles.add(key)
           affectedTiles.push({ tileX: tx, tileZ: tz })
         }
@@ -312,8 +475,8 @@ export class TerrainSplatManager {
         }
 
         if (changed) {
-          const texture = this.textures.get(key)
-          if (texture) texture.needsUpdate = true
+          this.refreshAll(tx, tz)
+          this.refreshNeighborBorders(tx, tz)
           this.dirtyTiles.add(key)
           affectedTiles.push({ tileX: tx, tileZ: tz })
         }
@@ -368,11 +531,8 @@ export class TerrainSplatManager {
   setSplatmap(tileX: number, tileZ: number, data: Uint8Array): void {
     const key = tileKey(tileX, tileZ)
     this.splatmaps.set(key, data)
-    const existing = this.textures.get(key)
-    if (existing) {
-      ;(existing.image as unknown as { data: Uint8Array }).data.set(data)
-      existing.needsUpdate = true
-    }
+    if (this.textures.has(key)) this.refreshAll(tileX, tileZ)
+    this.refreshNeighborBorders(tileX, tileZ)
   }
 
   /** Mark a tile as dirty so it will be saved on next save cycle. */
@@ -397,6 +557,9 @@ export class TerrainSplatManager {
     }
     this.splatmaps.delete(key)
     this.textures.delete(key)
+    // Loaded neighbors used our edge cells for their borders — refresh them
+    // so they fall back to their own edge copy instead of stale data.
+    this.refreshNeighborBorders(tileX, tileZ)
   }
 
   /** Remove cached data without disposing GPU textures (they may still be rendered).
@@ -406,6 +569,7 @@ export class TerrainSplatManager {
     if (this.dirtyTiles.has(key)) return
     this.splatmaps.delete(key)
     this.textures.delete(key)
+    this.refreshNeighborBorders(tileX, tileZ)
   }
 
   async destroy() {

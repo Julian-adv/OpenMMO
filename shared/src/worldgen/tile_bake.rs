@@ -10,10 +10,12 @@
 //!
 //! The global map lives at `meters_per_cell` m/cell (typically 8). Tile
 //! vertices are 1 m apart, so each vertex sample is a bilinear interpolation
-//! of 2×2 global cells plus a high-frequency detail noise term. The splat
-//! layer uses a fixed six-slot region palette; primary/secondary indices and
-//! the `blend` byte are chosen per-cell by a priority ladder (road > river >
-//! sea > alpine > cliff > coast > plain).
+//! of 2×2 global cells plus a high-frequency detail noise term. Rivers are
+//! handled as world-space polylines (Chaikin-smoothed) and queried by
+//! point-to-segment distance during bake — they are not rasterized onto the
+//! global cell grid. The splat layer uses a fixed six-slot region palette;
+//! primary/secondary indices and the `blend` byte are chosen per-cell by a
+//! priority ladder (road > river > sea > alpine > cliff > coast > plain).
 
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +24,10 @@ use super::grid::bfs_distance_from;
 use super::noise::{fbm_wrap_x, PerlinNoise3D};
 use super::rivers::RiverMap;
 use super::roads::RoadNetwork;
+use super::vector_features::{
+    chaikin_smooth, min_distance_to_segments, polyline_to_world, segments_near_tile, Segment,
+    WorldPolyline,
+};
 
 /// Cell-count side of the splatmap (64×64 cells per tile).
 pub const TILE_DIM: usize = 64;
@@ -68,12 +74,37 @@ const DETAIL_MAX_AMPLITUDE: f32 = 6.0;
 /// Min detail amplitude (m) on lowland plains.
 const DETAIL_MIN_AMPLITUDE: f32 = 0.4;
 
+// --- River carve / splat ------------------------------------------------
+/// Half-width (m) of the flat river-bed floor. Points within this distance of
+/// the river polyline are carved to the full channel depth.
+const RIVER_CARVE_HALF_WIDTH_M: f32 = 2.5;
+/// Taper (m) beyond the flat floor at which the carve smoothly reaches zero.
+/// Total carve radius = HALF_WIDTH + TAPER.
+const RIVER_CARVE_TAPER_M: f32 = 10.0;
+/// Depth (m) removed from base elevation at the river center.
+const RIVER_CARVE_DEPTH_M: f32 = 2.0;
+/// Half-width (m) of the sandy-bank splat band around the river center.
+const RIVER_SAND_HALF_WIDTH_M: f32 = 5.0;
+/// Chaikin iterations applied to each river polyline before bake. Source
+/// vertices are at 8 m global-cell spacing; two rounds smooth that into a
+/// visible curve at 1 m tile resolution.
+const RIVER_CHAIKIN_ITERATIONS: u32 = 2;
+
 // --- Splat classification thresholds -------------------------------------
 /// Cells within this many global cells of the coast get a sand band. The
 /// blend is applied with a quadratic (`t²`) curve so most of the sand
 /// weight lives near the water line; sand-dominant extent ends up ~70% of
 /// this width (≈11 m at 2 cells × 8 m/cell).
 const COAST_SAND_CELLS: f32 = 2.0;
+/// Distance (in global cells) past the sand band over which the plain
+/// branch's slope-based dirt fades in from 0. Width 0 at the band edge →
+/// full at `COAST_SAND_CELLS + COAST_FADE_SPAN_CELLS`. Keeps the SAND→DIRT
+/// palette swap hidden (both sides 100% GROUND at the swap point).
+const COAST_FADE_SPAN_CELLS: f32 = 2.0;
+/// Distance (m) past the river sand band over which plain dirt fades in.
+/// Matches the river carve taper so slope returns to plain baseline right
+/// as the fade completes.
+const RIVER_FADE_SPAN_M: f32 = 10.0;
 /// Absolute elevation (m) at which the snow→rock blend starts fading in.
 const SNOW_ELEVATION_M: f32 = 1800.0;
 /// Elevation (m) above `SNOW_ELEVATION_M` at which snow is fully dominant.
@@ -99,8 +130,11 @@ pub struct BakeContext {
     /// BFS distance from each cell to the nearest land cell. On sea this
     /// serves as an "offshore depth" driver; on land it is zero.
     pub dist_to_land: Vec<u16>,
-    /// 255 = river cell (flow ≥ threshold AND land), 0 otherwise.
-    pub river_mask: Vec<u8>,
+    /// River polylines converted to world-space meters and Chaikin-smoothed.
+    /// Tile bake queries point-to-segment distance against these instead of
+    /// rasterizing them back into an 8 m mask; that preserves sub-meter
+    /// precision in the final splat/height carve.
+    pub rivers_world: Vec<WorldPolyline>,
     /// BFS distance from each cell to the nearest road cell.
     pub dist_to_road: Vec<u16>,
 }
@@ -108,26 +142,25 @@ pub struct BakeContext {
 impl BakeContext {
     pub fn new(map: &GlobalMap, river_map: &RiverMap, road_net: &RoadNetwork) -> Self {
         let res = map.config.global_res as usize;
-        let total = res * res;
 
         // Coast distance fields in both directions. `land_mask == 0` is sea:
         // sources = sea → distance to sea. sources = land → distance to land.
         let dist_to_sea = bfs_distance_from(&map.land_mask, res, 0);
         let dist_to_land = bfs_distance_from(&map.land_mask, res, 1);
 
-        // River cells: rasterize only the extracted polylines. Using the
-        // raw flow field would paint every micro-tributary as a river.
-        let mut river_mask = vec![0u8; total];
+        // Convert river polylines to world-space meters, split at the X seam,
+        // then Chaikin-smooth. The result is what bake_tile queries for
+        // polyline-distance-based river placement.
+        let mut rivers_world: Vec<WorldPolyline> = Vec::new();
         for poly in &river_map.rivers {
-            for &(x, y) in &poly.points {
-                let idx = (y as usize) * res + (x as usize);
-                if map.land_mask[idx] == 1 {
-                    river_mask[idx] = 255;
+            for wp in polyline_to_world(poly, &map.config) {
+                if wp.points.len() >= 2 {
+                    rivers_world.push(chaikin_smooth(&wp, RIVER_CHAIKIN_ITERATIONS));
                 }
             }
         }
 
-        let mut road_bin = vec![0u8; total];
+        let mut road_bin = vec![0u8; res * res];
         for road in &road_net.roads {
             for &(x, y) in &road.points {
                 road_bin[(y as usize) * res + (x as usize)] = 1;
@@ -141,7 +174,7 @@ impl BakeContext {
             detail_noise,
             dist_to_sea,
             dist_to_land,
-            river_mask,
+            rivers_world,
             dist_to_road,
         }
     }
@@ -157,9 +190,31 @@ pub struct BakedTile {
 
 /// Bake one tile at signed tile coordinate (tx, tz).
 pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedTile {
-    let heights = sample_tile_heights(map, ctx, tx, tz);
+    let tile_min_x = tx as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
+    let tile_min_z = tz as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
+    let tile_max_x = tile_min_x + TILE_DIM as f32;
+    let tile_max_z = tile_min_z + TILE_DIM as f32;
+
+    // Margin = largest radius at which any vector feature still affects
+    // this tile. Must cover both the heightmap carve (sand + taper) and
+    // the splat water-fade (sand + fade span) — whichever reaches further.
+    // Cells within the fade span that don't see the segment would get
+    // full-dirt instead of a partial fade, producing a sharp seam exactly
+    // on the tile boundary when the river runs close to it.
+    let river_margin = (RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M)
+        .max(RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M);
+    let river_segs = segments_near_tile(
+        &ctx.rivers_world,
+        tile_min_x,
+        tile_min_z,
+        tile_max_x,
+        tile_max_z,
+        river_margin,
+    );
+
+    let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs);
     let heightmap = encode_heightmap(&heights);
-    let splatmap = bake_splatmap(map, ctx, tx, tz, &heights);
+    let splatmap = bake_splatmap(map, ctx, tx, tz, &heights, &river_segs);
     BakedTile {
         heightmap,
         splatmap,
@@ -168,7 +223,13 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
 
 /// Generate the 65×65 f32 heightmap. Shared between the uint16 heightmap
 /// output and the splatmap slope computation (so both read identical heights).
-fn sample_tile_heights(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> Vec<f32> {
+fn sample_tile_heights(
+    map: &GlobalMap,
+    ctx: &BakeContext,
+    tx: i32,
+    tz: i32,
+    river_segs: &[Segment],
+) -> Vec<f32> {
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
     let inv_mpc = 1.0 / cfg.meters_per_cell();
@@ -182,7 +243,7 @@ fn sample_tile_heights(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> 
             let world_x = tile_origin_x + i as f32;
             let world_z = tile_origin_z + j as f32;
             heights[j * VERTS_PER_SIDE + i] =
-                sample_elevation_m(map, ctx, world_x, world_z, world_size, inv_mpc);
+                sample_elevation_m(map, ctx, world_x, world_z, world_size, inv_mpc, river_segs);
         }
     }
     heights
@@ -200,7 +261,8 @@ fn encode_heightmap(heights: &[f32]) -> Vec<u8> {
 }
 
 /// Bilinear-sample the global elevation at a world position, convert sea
-/// cells into a shallow bathymetry curve, and add high-frequency detail.
+/// cells into a shallow bathymetry curve, add high-frequency detail, and
+/// subtract a polyline-distance river carve.
 fn sample_elevation_m(
     map: &GlobalMap,
     ctx: &BakeContext,
@@ -208,6 +270,7 @@ fn sample_elevation_m(
     world_z: f32,
     world_size: f32,
     inv_mpc: f32,
+    river_segs: &[Segment],
 ) -> f32 {
     let base = bilinear_wrap_x(map, world_x, world_z, world_size, inv_mpc, |i| {
         cell_elevation_m(map, ctx, i)
@@ -233,8 +296,30 @@ fn sample_elevation_m(
     );
     let detail = n * amp * underwater_damp;
 
+    let river_d = min_distance_to_segments(world_x, world_z, river_segs);
+    let carve = river_carve_m(river_d);
+
     let max_cap = map.config.max_elevation_m;
-    (base + detail).clamp(-HEIGHT_BIAS, max_cap)
+    (base + detail - carve).clamp(-HEIGHT_BIAS, max_cap)
+}
+
+/// River channel profile: flat floor within `RIVER_CARVE_HALF_WIDTH_M`, then
+/// smoothstep taper to zero over the next `RIVER_CARVE_TAPER_M` meters. The
+/// flat floor avoids a visible kink at the bank and gives the water surface a
+/// consistent bed depth along the river.
+#[inline]
+fn river_carve_m(d_m: f32) -> f32 {
+    let full = RIVER_CARVE_HALF_WIDTH_M;
+    let total = full + RIVER_CARVE_TAPER_M;
+    if d_m >= total {
+        return 0.0;
+    }
+    if d_m <= full {
+        return RIVER_CARVE_DEPTH_M;
+    }
+    let t = (d_m - full) / RIVER_CARVE_TAPER_M;
+    let s = 1.0 - t * t * (3.0 - 2.0 * t);
+    RIVER_CARVE_DEPTH_M * s
 }
 
 /// Map a single global cell to "effective elevation": the raw meters for
@@ -267,7 +352,14 @@ fn short_grass_veg(density: u8) -> u8 {
     230 + density.min(9)
 }
 
-fn bake_splatmap(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32, heights: &[f32]) -> Vec<u8> {
+fn bake_splatmap(
+    map: &GlobalMap,
+    ctx: &BakeContext,
+    tx: i32,
+    tz: i32,
+    heights: &[f32],
+    river_segs: &[Segment],
+) -> Vec<u8> {
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
     let inv_mpc = 1.0 / cfg.meters_per_cell();
@@ -306,11 +398,11 @@ fn bake_splatmap(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32, heights: 
             // band doesn't reveal the 8 m global lattice as axis-aligned
             // staircase where d transitions from 2 to 3.
             let coast_d_cells = sample_coast_d_jittered(map, ctx, wx, wz, world_size, inv_mpc);
-            let is_river = ctx.river_mask[gi] > 0;
+            let river_d_m = min_distance_to_segments(wx, wz, river_segs);
             let on_road = ctx.dist_to_road[gi] == 0;
 
             let (primary, secondary, blend, veg) =
-                classify_splat(is_sea, is_river, on_road, h_center, slope, coast_d_cells);
+                classify_splat(is_sea, river_d_m, on_road, h_center, slope, coast_d_cells);
 
             let off = (cz * TILE_DIM + cx) * 4;
             let bytes = pack_splat(primary, secondary, blend, veg);
@@ -395,7 +487,7 @@ fn bilinear_wrap_x<F: Fn(usize) -> f32>(
 /// Splat priority ladder. Later branches only fire if earlier ones reject.
 fn classify_splat(
     is_sea: bool,
-    is_river: bool,
+    river_d_m: f32,
     on_road: bool,
     h_center: f32,
     slope: f32,
@@ -404,10 +496,25 @@ fn classify_splat(
     if on_road {
         // Roads override every biome so the network is always visible.
         (PAL_ROAD, PAL_PAVED, 0, 0)
-    } else if is_river {
-        // River bed: sandy with ground fade at the edges (blend ≠ 0 so banks
-        // read a touch greener where sampled at sub-pixel distance).
-        (PAL_SAND, PAL_GROUND, 30, 0)
+    } else if river_d_m < RIVER_SAND_HALF_WIDTH_M {
+        // River bed uses DIRT (not SAND) so it shares the (GROUND, DIRT)
+        // palette pair with the plain branch outside — crossing the band
+        // edge is a weight shift instead of a palette swap that would
+        // flicker across the boundary.
+        let t = (river_d_m / RIVER_SAND_HALF_WIDTH_M).clamp(0.0, 1.0);
+        let blend = (t * t * 255.0) as u8;
+        let rocky = (slope / SLOPE_CLIFF_START).clamp(0.0, 1.0);
+        let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
+        let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
+        // `* t` fades veg density from 0 at the center to plain density at
+        // the edge so the short-grass mesh doesn't pop on at the boundary.
+        let density = (grass_t * 9.0 * t).round().clamp(0.0, 9.0) as u8;
+        let veg = if density > 0 {
+            short_grass_veg(density)
+        } else {
+            0
+        };
+        (PAL_DIRT, PAL_GROUND, blend, veg)
     } else if is_sea {
         // Secondary = GROUND so the coast line shares a palette pair with
         // the land sand-band, keeping per-texture weights continuous
@@ -449,10 +556,9 @@ fn classify_splat(
             short_grass_veg(density),
         )
     } else {
-        // Secondary = SAND (not DIRT) so plains share a palette pair with
-        // the adjacent sand-band cells, keeping per-texture weights
-        // continuous across the outer coast boundary. Grass density thins
-        // with slope and altitude.
+        // `water_fade` is 0 at the coast/river sand-band outer edge and
+        // ramps to 1 over `*_FADE_SPAN_*`, so `blend = 0` meets the sand
+        // branch's `blend = 255` (both pure GROUND) with no texture pop.
         let rocky = (slope / SLOPE_CLIFF_START).clamp(0.0, 1.0);
         let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
         let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
@@ -462,7 +568,13 @@ fn classify_splat(
         } else {
             0
         };
-        (PAL_GROUND, PAL_SAND, (rocky * 180.0) as u8, veg)
+        let coast_fade =
+            ((coast_d_cells - COAST_SAND_CELLS) / COAST_FADE_SPAN_CELLS).clamp(0.0, 1.0);
+        let river_fade =
+            ((river_d_m - RIVER_SAND_HALF_WIDTH_M) / RIVER_FADE_SPAN_M).clamp(0.0, 1.0);
+        let water_fade = coast_fade.min(river_fade);
+        let blend = (rocky * 180.0 * water_fade) as u8;
+        (PAL_GROUND, PAL_DIRT, blend, veg)
     }
 }
 
@@ -586,6 +698,68 @@ mod tests {
                 veg
             );
         }
+    }
+
+    #[test]
+    fn river_margin_covers_water_fade_span() {
+        // Regression guard: the per-tile segment filter in `bake_tile` must
+        // include every segment whose distance to the tile bbox could still
+        // matter to the splat water-fade (which ramps through 0 → 1 over
+        // `RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M`). If the margin is
+        // smaller, edge cells near a river see INFINITY distance while
+        // neighbor-tile cells see a partial fade — a hard seam on the tile
+        // boundary. See the margin computation in `bake_tile`.
+        let river_margin = (RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M)
+            .max(RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M);
+        assert!(
+            river_margin >= RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M,
+            "margin {} does not cover fade span {}",
+            river_margin,
+            RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M
+        );
+        assert!(
+            river_margin >= RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M,
+            "margin {} does not cover carve taper {}",
+            river_margin,
+            RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M
+        );
+    }
+
+    #[test]
+    fn adjacent_tiles_see_same_nearby_river_segment() {
+        // Build a synthetic world with a single river polyline straddling
+        // the tile boundary at x = 0 (tile 0's right edge = tile 1's left
+        // edge). The per-tile filter in `bake_tile` uses
+        // `segments_near_tile` with the `river_margin` constant — both
+        // adjacent tiles must see the segment so their splat classification
+        // agrees at the boundary.
+        use super::super::vector_features::{segments_near_tile, WorldPolyline};
+        let polys = vec![WorldPolyline {
+            points: vec![[0.5, -10.0], [0.5, 10.0]],
+        }];
+        let margin = (RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M)
+            .max(RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M);
+        // Tile 0 covers [-32, 32] in X; tile 1 covers [32, 96]. The segment
+        // at x=0.5 is inside tile 0, and 31.5 m from tile 1's left edge —
+        // inside the margin (15 m) only when the segment is close enough,
+        // so we place it 14 m outside tile 1 to exercise the boundary case.
+        let near_tile_0 = segments_near_tile(&polys, -32.0, -16.0, 32.0, 16.0, margin);
+        assert_eq!(near_tile_0.len(), 1, "tile 0 must see segment at x=0.5");
+        // Now move the segment to lie `margin - 1` m west of tile 1's
+        // bbox: it must still appear in tile 1's filter list.
+        let polys2 = vec![WorldPolyline {
+            points: vec![
+                [32.0 - (margin - 1.0), -10.0],
+                [32.0 - (margin - 1.0), 10.0],
+            ],
+        }];
+        let near_tile_1 = segments_near_tile(&polys2, 32.0, -16.0, 96.0, 16.0, margin);
+        assert_eq!(
+            near_tile_1.len(),
+            1,
+            "tile 1 must see segment {} m west of its bbox",
+            margin - 1.0
+        );
     }
 
     #[test]

@@ -235,7 +235,7 @@ impl Default for WorldGenConfig {
             world_size_m: 32768,
             global_res: 4096,
             reference_res: 4096,
-            sea_ratio: 0.50,
+            sea_ratio: 0.30,
             mountain_ratio: 0.20,
             continent_frequency: 1.0 / 700.0,
             continent_octaves: 4,
