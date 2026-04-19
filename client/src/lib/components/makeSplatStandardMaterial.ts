@@ -17,7 +17,6 @@ import {
   vec4,
   float,
   int,
-  step,
   smoothstep,
   mix,
   min,
@@ -142,22 +141,17 @@ export function makeSplatStandardMaterial({
     return positionLocal
   })()
 
-  // ─── Decode splat cells + weight-space bilinear blend ────────────
+  // Splat pixel = cell corner (grid vertex); see `doc/SPLATMAP_V2.md`
+  // §6. Bilerp-of-resolved-corners smooths palette-pair boundaries (e.g.
+  // (SAND,GROUND) ↔ (GROUND,DIRT)) that a nearest-cell approach snapped
+  // at a half-cell seam.
   //
-  // P/S indices come from the nearest cell (whichever of the 4 taps the pixel
-  // sits in). The `blend` factor is interpolated across the 4 cells in weight
-  // space: each neighbor contributes its fraction of texture P and texture S.
-  // This smooths transitions across cells that share at least one slot
-  // (e.g. (grass,sand) ↔ (grass,laterite)). When neighbors share no slot,
-  // pW+sW collapses to ~0 and we fall back to the nearest cell's blend.
-  // The texture is SPLAT_PADDED_DIM × SPLAT_PADDED_DIM; the tile's own 64×64
-  // data lives in the interior [1..TILE_DIM]×[1..TILE_DIM]. `cellPos` stays
-  // in logical 0..TILE_DIM-1 cell space so the nearest-cell selection is
-  // unchanged; we shift the UV by +1.5 texels so cell 0 lands on the
-  // interior pixel 1 (not padding pixel 0).
+  // Texture is SPLAT_PADDED_DIM²; the tile's 64×64 data lives at
+  // interior [1..TILE_DIM]. The +1.5 texel shift lands cell 0 on
+  // interior pixel 1 instead of padding pixel 0.
   const SPLAT_TEXEL = 1.0 / SPLAT_PADDED_DIM
 
-  const cellPos = vUvSplat.mul(float(TILE_DIM)).sub(0.5)
+  const cellPos = vUvSplat.mul(float(TILE_DIM))
   const baseUv = cellPos.floor().add(1.5).mul(SPLAT_TEXEL)
   const fracUv = fract(cellPos)
   const s00 = splatTex.sample(baseUv).toVar()
@@ -180,53 +174,15 @@ export function makeSplatStandardMaterial({
   const d01 = decodeCell(s01)
   const d11 = decodeCell(s11)
 
-  // Weight of a decoded cell toward the given palette index.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function cellWeight(d: any, targetIdx: any) {
-    const pMatch = step(abs(d.p.sub(targetIdx)), float(0.5))
-    const sMatch = step(abs(d.s.sub(targetIdx)), float(0.5))
-    return pMatch.mul(float(d.blend).oneMinus()).add(sMatch.mul(float(d.blend)))
-  }
-
-  // Nearest cell (pixel's actual cell): select one of the 4 taps by fracUv.
-  const selX = step(float(0.5), fracUv.x)
-  const selY = step(float(0.5), fracUv.y)
-  const pIdxF = mix(
-    mix(d00.p, d10.p, selX),
-    mix(d01.p, d11.p, selX),
-    selY
-  ).toVar()
-  const sIdxF = mix(
-    mix(d00.s, d10.s, selX),
-    mix(d01.s, d11.s, selX),
-    selY
-  ).toVar()
-  const nearestBlend = mix(
-    mix(d00.blend, d10.blend, selX),
-    mix(d01.blend, d11.blend, selX),
-    selY
-  )
-
   const w00 = fracUv.x.oneMinus().mul(fracUv.y.oneMinus())
   const w10 = fracUv.x.mul(fracUv.y.oneMinus())
   const w01 = fracUv.x.oneMinus().mul(fracUv.y)
   const w11 = fracUv.x.mul(fracUv.y)
 
-  const pW = cellWeight(d00, pIdxF)
-    .mul(w00)
-    .add(cellWeight(d10, pIdxF).mul(w10))
-    .add(cellWeight(d01, pIdxF).mul(w01))
-    .add(cellWeight(d11, pIdxF).mul(w11))
-  const sW = cellWeight(d00, sIdxF)
-    .mul(w00)
-    .add(cellWeight(d10, sIdxF).mul(w10))
-    .add(cellWeight(d01, sIdxF).mul(w01))
-    .add(cellWeight(d11, sIdxF).mul(w11))
-
-  const totalW = pW.add(sW)
-  const hasWeight = step(float(0.01), totalW)
-  const interpBlend = sW.div(max(totalW, float(1e-4)))
-  const blend = mix(nearestBlend, interpBlend, hasWeight).toVar()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function bilerp4(v00: any, v10: any, v01: any, v11: any) {
+    return v00.mul(w00).add(v10.mul(w10)).add(v01.mul(w01)).add(v11.mul(w11))
+  }
 
   const fLocalUv = uv()
   const fUvDx = dFdx(fLocalUv)
@@ -249,10 +205,23 @@ export function makeSplatStandardMaterial({
     return { atlasUv, gx, gy }
   }
 
-  const tileP = uTileScales.element(int(pIdxF)).toVar()
-  const tileS = uTileScales.element(int(sIdxF)).toVar()
-  const pSlot = slotUv(pIdxF, tileP)
-  const sSlot = slotUv(sIdxF, tileS)
+  // Per-neighbor atlas slots + blend. colorNode/normalNode/orm each
+  // sample both slots per neighbor and bilerp the 4 resolved values.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function neighborSlots(d: any) {
+    const tP = uTileScales.element(int(d.p)).toVar()
+    const tS = uTileScales.element(int(d.s)).toVar()
+    return {
+      pSlot: slotUv(d.p, tP),
+      sSlot: slotUv(d.s, tS),
+      blend: d.blend,
+    }
+  }
+
+  const n00 = neighborSlots(d00)
+  const n10 = neighborSlots(d10)
+  const n01 = neighborSlots(d01)
+  const n11 = neighborSlots(d11)
 
   function sampleAtlasAt(
     atlasTex: TextureNode,
@@ -266,9 +235,18 @@ export function makeSplatStandardMaterial({
 
   // ─── Color node ─────────────────────────────────────────
   const colorNode = Fn(() => {
-    const cP = sampleAtlasAt(diffAtlasTex, pSlot).rgb
-    const cS = sampleAtlasAt(diffAtlasTex, sSlot).rgb
-    const blended = mix(cP, cS, blend)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function neighborDiffuse(n: any) {
+      const cP = sampleAtlasAt(diffAtlasTex, n.pSlot).rgb
+      const cS = sampleAtlasAt(diffAtlasTex, n.sSlot).rgb
+      return mix(cP, cS, n.blend)
+    }
+    const blended = bilerp4(
+      neighborDiffuse(n00),
+      neighborDiffuse(n10),
+      neighborDiffuse(n01),
+      neighborDiffuse(n11)
+    )
 
     if (!brush) return vec4(blended, 1.0)
 
@@ -328,19 +306,39 @@ export function makeSplatStandardMaterial({
   const tbn = TBNViewMatrix as unknown as Node<'mat3'>
   const normalNode = normAtlasTex
     ? Fn(() => {
-        const nP = sampleAtlasAt(normAtlasTex, pSlot).xyz.mul(2.0).sub(1.0)
-        const nS = sampleAtlasAt(normAtlasTex, sSlot).xyz.mul(2.0).sub(1.0)
-        const tangentNormal = mix(nP, nS, blend).normalize()
-        return tbn.mul(tangentNormal).normalize()
+        const normTex = normAtlasTex!
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        function neighborTangentNormal(n: any) {
+          const nP = sampleAtlasAt(normTex, n.pSlot).xyz.mul(2.0).sub(1.0)
+          const nS = sampleAtlasAt(normTex, n.sSlot).xyz.mul(2.0).sub(1.0)
+          return mix(nP, nS, n.blend)
+        }
+        const tangentNormal = bilerp4(
+          neighborTangentNormal(n00),
+          neighborTangentNormal(n10),
+          neighborTangentNormal(n01),
+          neighborTangentNormal(n11)
+        ).normalize()
+        return (tbn.mul(tangentNormal) as unknown as Node<'vec3'>).normalize()
       })()
     : undefined
 
   // ─── ORM node ───────────────────────────────────────────
   const ormBlended = ormAtlasTex
     ? Fn(() => {
-        const oP = sampleAtlasAt(ormAtlasTex, pSlot).rgb
-        const oS = sampleAtlasAt(ormAtlasTex, sSlot).rgb
-        return mix(oP, oS, blend)
+        const ormTex = ormAtlasTex!
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        function neighborOrm(n: any) {
+          const oP = sampleAtlasAt(ormTex, n.pSlot).rgb
+          const oS = sampleAtlasAt(ormTex, n.sSlot).rgb
+          return mix(oP, oS, n.blend)
+        }
+        return bilerp4(
+          neighborOrm(n00),
+          neighborOrm(n10),
+          neighborOrm(n01),
+          neighborOrm(n11)
+        )
       })()
     : null
   const roughnessNode = ormBlended ? ormBlended.g : undefined

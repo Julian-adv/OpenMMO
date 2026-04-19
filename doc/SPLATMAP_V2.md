@@ -99,56 +99,79 @@ Normal / ORM 동일 방식.
 ### 단점
 - 인덱스가 integer라 bilinear 보간 불가 → splat 텍스처는 **NEAREST 필터**로 샘플링. 경계 smoothing은 섹션 6의 weight-space bilinear로 처리.
 
-## 6. 셀 보간 전략 (Weight-space Bilinear Blend)
+## 6. 셀 보간 전략 (Corner-sampled Bilinear)
 
-splat 텍스처를 NEAREST로 샘플링하되, `blend` 값은 4 인접 셀의 가중치를 weight space에서 bilinear로 섞어 셀 격자가 보이지 않도록 한다. 인덱스는 그대로 현재 셀 기준, blend만 스무스하게.
+splat 텍스처의 각 픽셀을 **셀의 코너(grid vertex)** 에 매핑한다. 1 m × 1 m 셀은 네 코너 픽셀로 둘러싸이고, 셀 내부 렌더 픽셀은 네 코너 각각을 resolved color로 푼 뒤 표준 bilinear 가중치로 섞는다.
 
-### 핵심 아이디어
-각 셀은 자신의 (primary, secondary) 쌍에 대해 가중치 `(1-blend, blend)`를 갖는다. 현재 픽셀이 쓸 텍스처 `P`, `S`는 nearest 셀에서 확정되므로, 각 이웃 셀이 텍스처 `P`·`S`에 얼마나 기여하는지만 구해서 bilinear로 섞으면 된다.
+```
+splat map texture
 
-```glsl
-// 1. 현재 셀 (nearest) — 인덱스 P, S 확정
-vec4 cur = texture(splat, vUv);
-int pIdx = decodePrimary(cur);
-int sIdx = decodeSecondary(cur);
++--------+--------+---
+|        |        |
+| pixel1 | pixel2 |
+|        |        |
++--------+--------+---
+|        |        |
+| pixel3 | pixel4 |
+|        |        |
++--------+--------+---
+|        |        |
 
-// 2. 4 이웃 셀 샘플 (sub-cell 위치로 오프셋)
-vec2 cellPos = vUv * SPLAT_SIZE - 0.5;
-vec2 baseUv  = (floor(cellPos) + 0.5) / SPLAT_SIZE;
-vec2 frac    = fract(cellPos);
-vec4 s00 = texture(splat, baseUv);
-vec4 s10 = texture(splat, baseUv + vec2(1.0/SPLAT_SIZE, 0));
-vec4 s01 = texture(splat, baseUv + vec2(0, 1.0/SPLAT_SIZE));
-vec4 s11 = texture(splat, baseUv + vec2(1.0/SPLAT_SIZE, 1.0/SPLAT_SIZE));
 
-// 3. 각 셀의 texture-i 가중치: primary==i → (1-blend), secondary==i → blend, else 0
-float idxWeight(vec4 s, int i) {
-  return (s.primary == i ? 1.0 - s.blend : 0.0)
-       + (s.secondary == i ? s.blend : 0.0);
-}
+tile cell (1 m × 1 m) — 각 코너가 splat pixel
 
-// 4. Bilinear 가중치
-float w00 = (1-frac.x)*(1-frac.y), w10 = frac.x*(1-frac.y);
-float w01 = (1-frac.x)*frac.y,     w11 = frac.x*frac.y;
-
-// 5. 텍스처 P, S의 픽셀 가중치
-float pW = idxWeight(s00,pIdx)*w00 + idxWeight(s10,pIdx)*w10
-        + idxWeight(s01,pIdx)*w01 + idxWeight(s11,pIdx)*w11;
-float sW = /* same for sIdx */ ;
-
-// 6. 최종 blend
-float blend = (pW + sW > 0.01) ? sW / (pW + sW) : cur.blend;
+pixel1          pixel2
+      +-------------+-------------+---
+      | --> blend   |             |
+      | |           |             |
+      | |           |             |
+      | V blend     |             |
+      |             |             |
+pixel3+-------------+-------------+---
+      |       pixel4|             |
+      |             |             |
+      |             |             |
+      |             |             |
+      |             |             |
+      +-------------+-------------+---
+      |             |             |
 ```
 
-### 커버하는 케이스
-- **같은 쌍 (grass,sand) ↔ (grass,sand)**: `pW`, `sW` 모두 부드럽게 변화 → 부드러운 blend.
-- **primary 공유 (grass,sand) ↔ (grass,laterite)**: 공유된 grass의 `pW`는 부드럽고, 현재 셀의 secondary(sand)의 `sW`는 반대편 셀에서 0으로 fade → 격자 없음.
-- **완전 다른 쌍 (grass,sand) ↔ (snow,rock)**: `pW + sW ≈ 0` → nearest 셀 blend로 fallback. 경계가 선명하게 보이지만 이 케이스는 절차 생성에선 거의 발생하지 않음.
+### 핵심 아이디어
+
+각 코너 픽셀이 독립적으로 `(primary, secondary, blend)` 를 갖는다. 렌더 픽셀은 네 코너 각각을 `mix(atlas[primary], atlas[secondary], blend)` 로 resolve한 뒤 bilerp한다. 가중치를 "팔레트 슬롯별"로 따지지 않고 최종 색만 섞기 때문에 이웃 코너의 팔레트 페어가 달라도 seam이 생기지 않는다.
+
+```glsl
+vec2 cellPos = vUv * TILE_DIM;              // splat[c]은 셀 c의 TL 코너
+vec2 baseUv  = (floor(cellPos) + 1.5)
+             / SPLAT_PADDED_DIM;           // +1 padding, +0.5 texel center
+vec2 frac    = fract(cellPos);
+
+vec4 s00 = texture(splat, baseUv);
+vec4 s10 = texture(splat, baseUv + vec2(SPLAT_TEXEL, 0));
+vec4 s01 = texture(splat, baseUv + vec2(0, SPLAT_TEXEL));
+vec4 s11 = texture(splat, baseUv + vec2(SPLAT_TEXEL, SPLAT_TEXEL));
+
+// 코너당 2 atlas 샘플 → 4 코너 × 2 = 8 샘플/아틀라스
+vec3 c00 = mix(atlas[s00.p], atlas[s00.s], s00.blend);
+/* ... c10, c01, c11 동일 ... */
+
+float w00 = (1-frac.x)*(1-frac.y); float w10 = frac.x*(1-frac.y);
+float w01 = (1-frac.x)*frac.y;     float w11 = frac.x*frac.y;
+vec3 color = c00*w00 + c10*w10 + c01*w01 + c11*w11;
+```
+
+### 특성
+
+- **팔레트 페어가 달라도 seam 없음**: 코너마다 resolved color를 bilerp하므로 `(SAND, GROUND)` ↔ `(GROUND, DIRT)` 같은 페어 경계도 한 셀 전체에 걸쳐 선형 전환.
+- **셀 중심 = 네 코너 평균**: 셀 `(c, r)` 의 중심 렌더 픽셀은 `splat[c,r], splat[c+1,r], splat[c,r+1], splat[c+1,r+1]` 네 resolved color의 동일 가중 평균.
+- **데이터 의미**: 베이커가 셀 `(c, r)` 에 써 넣은 값은 해당 셀의 **TL 코너** 값으로 해석된다 (시각적으로 0.5 m 시프트). 셀 크기 1 m 대비 무시 가능.
 
 ### 비용
-- splat 샘플 1회 → **4회** (캐시 친화적, 64×64 텍스처라 미미)
-- atlas 샘플은 그대로 2회
-- 부가 연산 (곱셈·덧셈 몇 개) 무시 가능
+
+- splat 샘플 4 회 (64 × 64 텍스처 → L1 히트)
+- atlas 샘플 2 회 → **8 회** (diffuse + normal + ORM 3종 합산 24 fetch/pixel)
+- WebGPU 데스크톱에서 유효 부담 없음.
 
 ## 7. 페인트 로직
 

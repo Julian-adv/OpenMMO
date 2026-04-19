@@ -94,8 +94,8 @@ const RIVER_CHAIKIN_ITERATIONS: u32 = 2;
 /// Cells within this many global cells of the coast get a sand band. The
 /// blend is applied with a quadratic (`t²`) curve so most of the sand
 /// weight lives near the water line; sand-dominant extent ends up ~70% of
-/// this width (≈11 m at 2 cells × 8 m/cell).
-const COAST_SAND_CELLS: f32 = 2.0;
+/// this width (≈7.5 m at 1.33 cells × 8 m/cell).
+const COAST_SAND_CELLS: f32 = 1.33;
 /// Distance (in global cells) past the sand band over which the plain
 /// branch's slope-based dirt fades in from 0. Width 0 at the band edge →
 /// full at `COAST_SAND_CELLS + COAST_FADE_SPAN_CELLS`. Keeps the SAND→DIRT
@@ -698,6 +698,108 @@ mod tests {
                 veg
             );
         }
+    }
+
+    /// Flat plain. Slope is 0 so the plain branch's rocky component is 0 and
+    /// any blend value reflects only coastal/river fades, not terrain.
+    fn plain_inputs(coast_d_cells: f32) -> (bool, f32, bool, f32, f32, f32) {
+        (false, f32::INFINITY, false, 10.0, 0.0, coast_d_cells)
+    }
+
+    fn call_classify(args: (bool, f32, bool, f32, f32, f32)) -> (u8, u8, u8, u8) {
+        classify_splat(args.0, args.1, args.2, args.3, args.4, args.5)
+    }
+
+    #[test]
+    fn coast_water_line_is_pure_sand() {
+        // At coast_d=0 (adjacent to sea), the sand band must render 100% SAND
+        // so it visually connects to the shoreline.
+        let (p, s, blend, _) = call_classify(plain_inputs(0.0));
+        assert_eq!((p, s), (PAL_SAND, PAL_GROUND));
+        assert_eq!(blend, 0, "expected pure SAND primary at water line");
+    }
+
+    #[test]
+    fn coast_outer_edge_meets_plain_branch_seamlessly() {
+        // The design invariant that lets the palette pair swap
+        // ((SAND,GROUND) → (GROUND,DIRT)) be visually invisible: at exactly
+        // `coast_d_cells = COAST_SAND_CELLS`, the coast branch emits
+        // blend=255 (100% GROUND secondary) and the plain branch emits
+        // blend=0 (100% GROUND primary). Both sides render pure GROUND, so
+        // the shader's corner-sampled bilerp sees no texture discontinuity.
+        let (cp, cs, c_blend, _) = call_classify(plain_inputs(COAST_SAND_CELLS));
+        assert_eq!((cp, cs), (PAL_SAND, PAL_GROUND));
+        assert_eq!(c_blend, 255, "coast outer edge must be pure GROUND");
+
+        let (pp, ps, p_blend, _) = call_classify(plain_inputs(COAST_SAND_CELLS + 1e-4));
+        assert_eq!((pp, ps), (PAL_GROUND, PAL_DIRT));
+        assert_eq!(p_blend, 0, "plain at band edge must be pure GROUND");
+    }
+
+    #[test]
+    fn coast_blend_monotonic_across_band() {
+        // Quadratic `t²` ramp: strictly non-decreasing from 0 at water to 255
+        // at the outer edge. Any regression that breaks monotonicity would
+        // reintroduce visible bands inside the beach.
+        let steps = 16;
+        let mut prev = -1i32;
+        for i in 0..=steps {
+            let d = COAST_SAND_CELLS * (i as f32) / (steps as f32);
+            let (_, _, blend, _) = call_classify(plain_inputs(d));
+            assert!(
+                blend as i32 >= prev,
+                "non-monotonic coast blend at d={}: {} < {}",
+                d,
+                blend,
+                prev
+            );
+            prev = blend as i32;
+        }
+    }
+
+    #[test]
+    fn priority_road_beats_sea_and_river() {
+        // Roads must always win so the settlement network stays visible.
+        let (p, s, _, _) = classify_splat(true, 1.0, true, -5.0, 0.0, 0.0);
+        assert_eq!((p, s), (PAL_ROAD, PAL_PAVED));
+    }
+
+    #[test]
+    fn priority_river_beats_sea() {
+        // River bed uses (DIRT, GROUND) not (SAND, GROUND) — this is what
+        // keeps the river-edge → plain transition a weight shift rather than
+        // a palette swap. Regression guard for that choice.
+        let (p, s, _, _) = classify_splat(true, 0.0, false, -1.0, 0.0, 0.0);
+        assert_eq!((p, s), (PAL_DIRT, PAL_GROUND));
+    }
+
+    #[test]
+    fn river_outer_edge_meets_plain_seamlessly() {
+        // Same continuity invariant as `coast_outer_edge_...` but for rivers.
+        let at_edge = classify_splat(
+            false,
+            RIVER_SAND_HALF_WIDTH_M - 1e-4,
+            false,
+            10.0,
+            0.0,
+            100.0,
+        );
+        assert_eq!((at_edge.0, at_edge.1), (PAL_DIRT, PAL_GROUND));
+        assert_eq!(at_edge.2, 254, "river edge must be near-pure GROUND");
+
+        let past_edge = classify_splat(
+            false,
+            RIVER_SAND_HALF_WIDTH_M + 1e-4,
+            false,
+            10.0,
+            0.0,
+            100.0,
+        );
+        assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_DIRT));
+        assert_eq!(
+            past_edge.2, 0,
+            "plain just past river edge must be pure GROUND"
+        );
     }
 
     #[test]
