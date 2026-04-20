@@ -1,7 +1,5 @@
 import { writable } from 'svelte/store'
 import type { Position } from '../utils/movementUtils'
-import type { LayerConfig } from '../utils/splatLayerLoader'
-import type { TerrainMetaManager } from '../managers/terrainMetaManager'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import type { TerrainSplatManager } from '../managers/terrainSplatManager'
 import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
@@ -46,27 +44,8 @@ export const editorTool = writable<EditorTool>('height')
 // Road tool: first-click start point (null = awaiting first click)
 export const roadDrawStart = writable<{ x: number; z: number } | null>(null)
 
-// Splat layer: 0=R, 1=G, 2=B, 3=A (texture depends on region)
+// Currently selected global-palette slot for the splat brush (0..15).
 export const splatLayer = writable<number>(0)
-
-// Per-region layer info for the SplatBrushPanel
-export interface SplatLayerInfo {
-  label: string
-  color: string
-}
-
-const DEFAULT_SPLAT_LAYER_INFO: SplatLayerInfo[] = [
-  { label: 'Grass', color: '#66cc66' },
-  { label: 'Sand', color: '#d9ba6e' },
-  { label: 'Laterite', color: '#b06438' },
-  { label: 'Snow', color: '#ddeeff' },
-  { label: 'Paving', color: '#ebe1cd' },
-  { label: 'Road', color: '#8c877d' },
-]
-
-export const currentRegionLayers = writable<SplatLayerInfo[]>(
-  DEFAULT_SPLAT_LAYER_INFO
-)
 
 /** Display-name overrides for texture assets whose filenames don't match their appearance */
 const TEXTURE_LABEL_OVERRIDES: Record<string, string> = {
@@ -94,15 +73,6 @@ export const currentEditorRegion = writable<{
   rx: number
   rz: number
 } | null>(null)
-
-// Actual LayerConfig data for the current region (texture + tileScale)
-export const currentRegionConfigs = writable<LayerConfig[]>([])
-
-// MetaManager reference for SplatBrushPanel to save region texture changes
-export const editorMetaManager = writable<TerrainMetaManager | null>(null)
-
-// Incremented after saving region meta to trigger terrain re-render
-export const regionMetaVersion = writable<number>(0)
 
 // Procedural terrain generation dialog (stores the target region snapshot, null = closed)
 export const showGenerateDialog = writable<{ rx: number; rz: number } | null>(

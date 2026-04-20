@@ -14,8 +14,9 @@
 //! roads are handled as world-space polylines (Chaikin-smoothed) and queried
 //! by point-to-segment distance during bake. The splat layer uses a fixed
 //! five-slot region palette; primary/secondary indices and the `blend` byte
-//! are chosen per-cell by a priority ladder (road > river > sea > alpine >
-//! cliff > coast > plain).
+//! are chosen per-cell by a priority ladder (road > river > sea > cliff >
+//! alpine > slope > coast > plain). Cliff wins over alpine so a vertical
+//! marble face on a snowy peak still reads as bare rock.
 
 use serde::{Deserialize, Serialize};
 
@@ -42,12 +43,16 @@ const HEIGHT_STEP: f32 = 0.05;
 /// writer mirrors these positions via `default_palette_meta()`.
 pub const PAL_GROUND: u8 = 0; // rocky_terrain_02 — general ground under grass
 pub const PAL_SAND: u8 = 1; // sandy_gravel_02 — coast, river bed, shore
-pub const PAL_DIRT: u8 = 2; // red_laterite — barren mid-altitude / cliffs
+pub const PAL_DIRT: u8 = 2; // red_laterite — barren mid-altitude, gentle cliff base
 pub const PAL_SNOW: u8 = 3; // snow_02 — alpine peaks
 pub const PAL_ROAD: u8 = 4; // gravel_road — settlement road surfaces
+pub const PAL_CLIFF: u8 = 5; // marble_cliff_01 — exposed rock face on ≥45° slopes
+pub const PAL_RIVER_BED: u8 = 6; // ganges_river_pebbles — wet rocky river bottom
 
-/// Region metadata (`meta/r{rx}_{rz}.json`) the baker writes. Same palette
-/// for every region so the atlas cache is shared across the world.
+/// Global terrain palette. Identical across every tile/region — the client
+/// hardcodes the same list so an atlas built once serves the whole world. If
+/// you add a slot here, mirror it in `client/src/lib/utils/splatLayerLoader.ts`
+/// and any minimap-color tables.
 pub fn default_palette_meta() -> serde_json::Value {
     serde_json::json!({
         "layers": [
@@ -55,7 +60,9 @@ pub fn default_palette_meta() -> serde_json::Value {
             { "texture": "sandy_gravel_02_1k",         "tileScale": 8.0 },
             { "texture": "red_laterite_soil_stones_1k","tileScale": 10.0 },
             { "texture": "snow_02_1k",                 "tileScale": 4.0 },
-            { "texture": "gravel_road_1k",             "tileScale": 8.0 }
+            { "texture": "gravel_road_1k",             "tileScale": 8.0 },
+            { "texture": "marble_cliff_01_1k",         "tileScale": 32.0 },
+            { "texture": "ganges_river_pebbles_1k",    "tileScale": 24.0 }
         ]
     })
 }
@@ -131,6 +138,28 @@ const SNOW_FULL_SPAN_M: f32 = 400.0;
 const SLOPE_CLIFF_START: f32 = 0.9;
 /// Slope (Δm per 1 m horizontal) at which rock is fully dominant.
 const SLOPE_CLIFF_FULL: f32 = 2.5;
+/// Slope at which bare marble cliff (PAL_CLIFF) takes over as primary. 1.0 ≈
+/// tan(45°). Placed before alpine in the priority ladder, so a vertical face
+/// on a snowy peak reads as rock rather than snow.
+const CLIFF_SLOPE_THRESHOLD: f32 = 1.0;
+/// Slope at which non-cliff land cells start tinting with CLIFF as their
+/// secondary (secondary path for isolated steep ridges that don't cross the
+/// cliff-primary threshold). Fade spans ≈ 35°→45°.
+const CLIFF_FADE_START: f32 = 0.7;
+/// Reach (m) of the cliff-proximity influence on non-cliff cells. Beyond
+/// this the cliff texture contributes nothing.
+const CLIFF_PROXIMITY_RADIUS_M: f32 = 5.0;
+/// "Core" distance (m) within which non-cliff cells still render as 100%
+/// cliff texture. The distance grid is quantized at 1 m so cells adjacent
+/// to the cliff sit at d ≈ 1 — without this core zone a linear/smoothstep
+/// falloff at d = 1 gives only ~75% cliff, which reads as a visible step
+/// against the cliff-primary branch's 100%. 1.5 m covers the 8-way
+/// neighborhood (diagonal ≈ 1.41 m) with a little slack.
+const CLIFF_BLEND_CORE_M: f32 = 1.5;
+/// Per-tile search radius (cells) for the nearest cliff when computing
+/// proximity. Covers `CLIFF_PROXIMITY_RADIUS_M` plus a diagonal cell of
+/// slack so boundary cells along diagonals still resolve correctly.
+const CLIFF_PROXIMITY_SEARCH_CELLS: i32 = 6;
 /// Max depth (m) used to map sea bathymetry blend 0..=255.
 const SEA_MAX_DEPTH_FOR_BLEND: f32 = 10.0;
 /// Elevation band (m) for grass-density falloff: grass thins toward this height.
@@ -420,6 +449,33 @@ fn short_grass_veg(density: u8) -> u8 {
     230 + density.min(9)
 }
 
+/// Euclidean distance (cells ≡ meters) from cell `(cx, cz)` to the nearest
+/// `true` cell in the tile's cliff mask, clamped to
+/// `CLIFF_PROXIMITY_RADIUS_M` when the search box contains no cliff. O(1)
+/// per cell since the search box is bounded.
+fn nearest_cliff_distance(mask: &[bool], cx: usize, cz: usize) -> f32 {
+    let r = CLIFF_PROXIMITY_SEARCH_CELLS;
+    let mut best_sq = (CLIFF_PROXIMITY_RADIUS_M * CLIFF_PROXIMITY_RADIUS_M) + 1.0;
+    let x0 = (cx as i32 - r).max(0);
+    let z0 = (cz as i32 - r).max(0);
+    let x1 = (cx as i32 + r).min(TILE_DIM as i32 - 1);
+    let z1 = (cz as i32 + r).min(TILE_DIM as i32 - 1);
+    for nz in z0..=z1 {
+        for nx in x0..=x1 {
+            if !mask[nz as usize * TILE_DIM + nx as usize] {
+                continue;
+            }
+            let dx = nx - cx as i32;
+            let dz = nz - cz as i32;
+            let d_sq = (dx * dx + dz * dz) as f32;
+            if d_sq < best_sq {
+                best_sq = d_sq;
+            }
+        }
+    }
+    best_sq.sqrt().min(CLIFF_PROXIMITY_RADIUS_M)
+}
+
 fn bake_splatmap(
     map: &GlobalMap,
     ctx: &BakeContext,
@@ -439,39 +495,73 @@ fn bake_splatmap(
 
     let mut out = vec![0u8; TILE_DIM * TILE_DIM * 4];
 
+    // --- Pass 1: per-cell slope from the 4 tile vertices, plus the cliff
+    // mask. Edge softness is carried entirely by pass 2's proximity blend,
+    // so the mask stays faithful to the actually-steep terrain. -----------
+    let mut slope_grid = vec![0.0f32; TILE_DIM * TILE_DIM];
+    let mut cliff_mask = vec![false; TILE_DIM * TILE_DIM];
     for cz in 0..TILE_DIM {
         for cx in 0..TILE_DIM {
-            // Cell center in world units.
+            let h00 = heights[cz * VERTS_PER_SIDE + cx];
+            let h10 = heights[cz * VERTS_PER_SIDE + cx + 1];
+            let h01 = heights[(cz + 1) * VERTS_PER_SIDE + cx];
+            let h11 = heights[(cz + 1) * VERTS_PER_SIDE + cx + 1];
+            let dzdx = ((h10 + h11) - (h00 + h01)) * 0.5;
+            let dzdy = ((h01 + h11) - (h00 + h10)) * 0.5;
+            let slope = (dzdx * dzdx + dzdy * dzdy).sqrt();
+            let idx = cz * TILE_DIM + cx;
+            slope_grid[idx] = slope;
+            cliff_mask[idx] = slope >= CLIFF_SLOPE_THRESHOLD;
+        }
+    }
+
+    // --- Pass 2: classification. For non-cliff cells, find distance to the
+    // nearest cliff cell within `CLIFF_PROXIMITY_SEARCH_CELLS` and fold that
+    // into the plain branch's blend so the cliff texture bleeds out by
+    // `CLIFF_PROXIMITY_RADIUS_M` meters. -----------------------------------
+    for cz in 0..TILE_DIM {
+        for cx in 0..TILE_DIM {
             let wx = tile_origin_x + cx as f32 + 0.5;
             let wz = tile_origin_z + cz as f32 + 0.5;
 
-            // Nearest global cell for mask/field lookups.
             let gx = ((wx + world_size * 0.5) * inv_mpc).floor() as i32;
             let gy = ((wz + world_size * 0.5) * inv_mpc).floor() as i32;
             let gi =
                 (gy.clamp(0, res as i32 - 1) as usize) * res + (gx.rem_euclid(res as i32) as usize);
 
-            // Elevation at cell center = average of 4 surrounding vertices;
-            // slope from the finite-difference gradient of the same quad.
             let h00 = heights[cz * VERTS_PER_SIDE + cx];
             let h10 = heights[cz * VERTS_PER_SIDE + cx + 1];
             let h01 = heights[(cz + 1) * VERTS_PER_SIDE + cx];
             let h11 = heights[(cz + 1) * VERTS_PER_SIDE + cx + 1];
             let h_center = (h00 + h10 + h01 + h11) * 0.25;
-            let dzdx = ((h10 + h11) - (h00 + h01)) * 0.5;
-            let dzdy = ((h01 + h11) - (h00 + h10)) * 0.5;
-            let slope = (dzdx * dzdx + dzdy * dzdy).sqrt();
+
+            let idx = cz * TILE_DIM + cx;
+            let slope = slope_grid[idx];
+            // 0.0 at cliff boundary (inclusive), CLIFF_PROXIMITY_RADIUS_M for
+            // cells with no cliff in sight. Neighbor-tile cliffs aren't
+            // visible — proximity near a tile edge stops at the edge, which
+            // manifests as a slight softness asymmetry across seams. Fine at
+            // the current scale.
+            let cliff_proximity_m = if cliff_mask[idx] {
+                0.0
+            } else {
+                nearest_cliff_distance(&cliff_mask, cx, cz)
+            };
 
             let is_sea = map.land_mask[gi] == 0;
-            // Bilinear + noise-jittered coast distance so the sand→grass
-            // band doesn't reveal the 8 m global lattice as axis-aligned
-            // staircase where d transitions from 2 to 3.
             let coast_d_cells = sample_coast_d_jittered(map, ctx, wx, wz, world_size, inv_mpc);
             let river_d_m = min_distance_to_segments(wx, wz, river_segs);
             let road_d_m = min_distance_to_segments(wx, wz, road_segs);
 
-            let (primary, secondary, blend, veg) =
-                classify_splat(is_sea, river_d_m, road_d_m, h_center, slope, coast_d_cells);
+            let (primary, secondary, blend, veg) = classify_splat(
+                is_sea,
+                river_d_m,
+                road_d_m,
+                h_center,
+                slope,
+                coast_d_cells,
+                cliff_proximity_m,
+            );
 
             let off = (cz * TILE_DIM + cx) * 4;
             let bytes = pack_splat(primary, secondary, blend, veg);
@@ -621,6 +711,7 @@ fn classify_splat(
     h_center: f32,
     slope: f32,
     coast_d_cells: f32,
+    cliff_proximity_m: f32,
 ) -> (u8, u8, u8, u8) {
     if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
         // Roads override every biome so the network stays visible. Secondary
@@ -631,24 +722,31 @@ fn classify_splat(
         let blend = (t * t * 255.0) as u8;
         (PAL_ROAD, PAL_GROUND, blend, 0)
     } else if river_d_m < RIVER_SAND_HALF_WIDTH_M {
-        // River bed uses DIRT (not SAND) so it shares the (GROUND, DIRT)
-        // palette pair with the plain branch outside — crossing the band
-        // edge is a weight shift instead of a palette swap that would
-        // flicker across the boundary.
+        // River bed: wet pebbles (PAL_RIVER_BED). Secondary switches to CLIFF
+        // inside the cliff-proximity reach so the river-edge outer ring
+        // resolves to 100% CLIFF on both sides of the palette-pair swap
+        // against the adjacent plain cell; otherwise GROUND, meeting pure
+        // grass outside the sand band.
         let t = (river_d_m / RIVER_SAND_HALF_WIDTH_M).clamp(0.0, 1.0);
         let blend = (t * t * 255.0) as u8;
-        let rocky = (slope / SLOPE_CLIFF_START).clamp(0.0, 1.0);
-        let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
-        let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
-        // `* t` fades veg density from 0 at the center to plain density at
-        // the edge so the short-grass mesh doesn't pop on at the boundary.
-        let density = (grass_t * 9.0 * t).round().clamp(0.0, 9.0) as u8;
-        let veg = if density > 0 {
-            short_grass_veg(density)
+        let (secondary, veg) = if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M {
+            (PAL_CLIFF, 0)
         } else {
-            0
+            let rocky = (slope / SLOPE_CLIFF_START).clamp(0.0, 1.0);
+            let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
+            let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
+            // `* t` fades veg density from 0 at the center to plain density
+            // at the edge so the short-grass mesh doesn't pop on at the
+            // boundary.
+            let density = (grass_t * 9.0 * t).round().clamp(0.0, 9.0) as u8;
+            let v = if density > 0 {
+                short_grass_veg(density)
+            } else {
+                0
+            };
+            (PAL_GROUND, v)
         };
-        (PAL_DIRT, PAL_GROUND, blend, veg)
+        (PAL_RIVER_BED, secondary, blend, veg)
     } else if is_sea {
         // Secondary = GROUND so the coast line shares a palette pair with
         // the land sand-band, keeping per-texture weights continuous
@@ -657,19 +755,22 @@ fn classify_splat(
         let depth = (-h_center).max(0.0);
         let blend = ((depth / SEA_MAX_DEPTH_FOR_BLEND).clamp(0.0, 1.0) * 255.0) as u8;
         (PAL_SAND, PAL_GROUND, blend, 0)
+    } else if slope >= CLIFF_SLOPE_THRESHOLD {
+        // ≥45° face: exposed marble cliff. Placed before alpine so steep
+        // faces on snowy peaks still read as rock, not snow. Secondary =
+        // GROUND keeps the palette pair consistent with the cliff-fade
+        // branch below (just swapped primary/secondary), so there's no
+        // texture discontinuity at the threshold — both sides resolve to
+        // 100% CLIFF when slope is right at 1.0.
+        (PAL_CLIFF, PAL_GROUND, 0, 0)
     } else if h_center > SNOW_ELEVATION_M {
-        // Alpine: snow with rock showing through on exposed slopes.
+        // Alpine: snow with cliff showing through on exposed slopes, so the
+        // rocky blend matches the adjacent cliff patch color rather than
+        // introducing a third ground texture.
         let t = ((h_center - SNOW_ELEVATION_M) / SNOW_FULL_SPAN_M).clamp(0.0, 1.0);
         let rocky = (slope / SLOPE_CLIFF_FULL).clamp(0.0, 1.0);
-        // Full snow = 0 blend. Secondary is ground (rock) so `blend` bumps up
-        // where it's steep or just below the snow line.
         let blend = (((1.0 - t) * 120.0).max(rocky * 200.0)) as u8;
-        (PAL_SNOW, PAL_GROUND, blend, 0)
-    } else if slope > SLOPE_CLIFF_START {
-        // Steep slopes: rocky ground with laterite showing on the steepest.
-        let t =
-            ((slope - SLOPE_CLIFF_START) / (SLOPE_CLIFF_FULL - SLOPE_CLIFF_START)).clamp(0.0, 1.0);
-        (PAL_GROUND, PAL_DIRT, (t * 255.0) as u8, 0)
+        (PAL_SNOW, PAL_CLIFF, blend, 0)
     } else if coast_d_cells <= COAST_SAND_CELLS {
         // Quadratic blend keeps the first land cell (coast BFS d ≈ 1)
         // near 100% SAND so per-texture weights stay continuous with
@@ -690,18 +791,38 @@ fn classify_splat(
             short_grass_veg(density),
         )
     } else {
-        // `water_fade` is 0 at the coast/river sand-band outer edge and
-        // ramps to 1 over `*_FADE_SPAN_*`, so `blend = 0` meets the sand
-        // branch's `blend = 255` (both pure GROUND) with no texture pop.
-        let rocky = (slope / SLOPE_CLIFF_START).clamp(0.0, 1.0);
+        // Plain / slope branch: GROUND primary, CLIFF secondary. Cliff bleeds
+        // in via TWO channels and we take the max:
+        //   (1) slope-based: smoothstep over [CLIFF_FADE_START, threshold].
+        //       Fires on isolated steep ridges where the slope never quite
+        //       reaches the cliff-primary threshold.
+        //   (2) distance-based: proximity to a neighbor cell that DID cross
+        //       the threshold, falling off linearly over
+        //       CLIFF_PROXIMITY_RADIUS_M meters. This is what gives cliff
+        //       edges a 2–3 cell gradient even when the actual slope
+        //       transition is sharp enough that the slope-based channel
+        //       barely fires.
+        // Both channels meet the cliff-primary branch at 100% CLIFF (blend
+        // 255 on this side, primary CLIFF on that side), so crossing the
+        // threshold is a palette-pair swap with identical resolved colors.
+        // `water_fade` holds blend near zero along coast / river / road
+        // bands so banks stay clean grass.
+        let rocky_slope = smoothstep(CLIFF_FADE_START, CLIFF_SLOPE_THRESHOLD, slope);
+        // Dilation-then-smoothstep: cells within CORE_M stay at 1.0 so the
+        // first ring around a cliff matches the cliff-primary branch's 100%
+        // CLIFF exactly (no visible step), then fade smoothly to 0 over the
+        // remaining `RADIUS - CORE` meters.
+        let d_eff = (cliff_proximity_m - CLIFF_BLEND_CORE_M).max(0.0);
+        let fade_span = (CLIFF_PROXIMITY_RADIUS_M - CLIFF_BLEND_CORE_M).max(1e-3);
+        let rocky_proximity = 1.0 - smoothstep(0.0, fade_span, d_eff);
         let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
-        let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
-        let density = (grass_t * 9.0).round().clamp(0.0, 9.0) as u8;
-        let veg = if density > 0 {
-            short_grass_veg(density)
-        } else {
-            0
-        };
+        // Water_fade is what keeps road/river/coast banks looking like clean
+        // grass rather than picking up a slope tint from noise in the height
+        // field. Applying it to `rocky_slope` is fine: a shallow-gradient
+        // ridge near a river shouldn't read as rocky. But applying it to the
+        // distance-to-cliff channel would erase cliff influence next to
+        // actual cliffs that descend into water — e.g. the river cutting at
+        // the base of a cliff. So proximity bypasses water_fade entirely.
         let coast_fade =
             ((coast_d_cells - COAST_SAND_CELLS) / COAST_FADE_SPAN_CELLS).clamp(0.0, 1.0);
         let river_fade =
@@ -709,9 +830,25 @@ fn classify_splat(
         let road_fade =
             ((road_d_m - ROAD_HALF_WIDTH_M - ROAD_FADE_SPAN_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
         let water_fade = coast_fade.min(river_fade).min(road_fade);
-        let blend = (rocky * 180.0 * water_fade) as u8;
-        (PAL_GROUND, PAL_DIRT, blend, veg)
+        let rocky = (rocky_slope * water_fade).max(rocky_proximity);
+        // Grass density uses the same rocky value so the veg density
+        // agrees with the texture blend (dense rocky cliff → no grass).
+        let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
+        let density = (grass_t * 9.0).round().clamp(0.0, 9.0) as u8;
+        let veg = if density > 0 {
+            short_grass_veg(density)
+        } else {
+            0
+        };
+        let blend = (rocky * 255.0) as u8;
+        (PAL_GROUND, PAL_CLIFF, blend, veg)
     }
+}
+
+#[inline]
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
 }
 
 #[cfg(test)]
@@ -817,12 +954,12 @@ mod tests {
             let primary = (chunk[0] >> 4) & 0x0F;
             let secondary = chunk[0] & 0x0F;
             assert!(
-                primary <= PAL_ROAD,
+                primary <= PAL_RIVER_BED,
                 "primary slot {} out of palette",
                 primary
             );
             assert!(
-                secondary <= PAL_ROAD,
+                secondary <= PAL_RIVER_BED,
                 "secondary slot {} out of palette",
                 secondary
             );
@@ -852,7 +989,18 @@ mod tests {
     }
 
     fn call_classify(args: (bool, f32, f32, f32, f32, f32)) -> (u8, u8, u8, u8) {
-        classify_splat(args.0, args.1, args.2, args.3, args.4, args.5)
+        // No cliff in sight → proximity at max so the plain-branch distance
+        // channel contributes nothing. Tests that care about cliff-proximity
+        // behavior build their own call.
+        classify_splat(
+            args.0,
+            args.1,
+            args.2,
+            args.3,
+            args.4,
+            args.5,
+            CLIFF_PROXIMITY_RADIUS_M,
+        )
     }
 
     #[test]
@@ -877,7 +1025,7 @@ mod tests {
         assert_eq!(c_blend, 255, "coast outer edge must be pure GROUND");
 
         let (pp, ps, p_blend, _) = call_classify(plain_inputs(COAST_SAND_CELLS + 1e-4));
-        assert_eq!((pp, ps), (PAL_GROUND, PAL_DIRT));
+        assert_eq!((pp, ps), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(p_blend, 0, "plain at band edge must be pure GROUND");
     }
 
@@ -905,18 +1053,26 @@ mod tests {
     #[test]
     fn priority_road_beats_sea_and_river() {
         // Roads must always win so the settlement network stays visible.
-        let (p, s, blend, _) = classify_splat(true, 1.0, 0.0, -5.0, 0.0, 0.0);
+        let (p, s, blend, _) =
+            classify_splat(true, 1.0, 0.0, -5.0, 0.0, 0.0, CLIFF_PROXIMITY_RADIUS_M);
         assert_eq!((p, s), (PAL_ROAD, PAL_GROUND));
         assert_eq!(blend, 0, "road center must be 100% PAL_ROAD");
     }
 
     #[test]
     fn priority_river_beats_sea() {
-        // River bed uses (DIRT, GROUND) not (SAND, GROUND) — this is what
-        // keeps the river-edge → plain transition a weight shift rather than
-        // a palette swap. Regression guard for that choice.
-        let (p, s, _, _) = classify_splat(true, 0.0, f32::INFINITY, -1.0, 0.0, 0.0);
-        assert_eq!((p, s), (PAL_DIRT, PAL_GROUND));
+        // River bed uses (RIVER_BED, GROUND). Regression guard so an
+        // accidental swap back to DIRT (red laterite) won't slip through.
+        let (p, s, _, _) = classify_splat(
+            true,
+            0.0,
+            f32::INFINITY,
+            -1.0,
+            0.0,
+            0.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+        );
+        assert_eq!((p, s), (PAL_RIVER_BED, PAL_GROUND));
     }
 
     #[test]
@@ -929,8 +1085,9 @@ mod tests {
             10.0,
             0.0,
             100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
         );
-        assert_eq!((at_edge.0, at_edge.1), (PAL_DIRT, PAL_GROUND));
+        assert_eq!((at_edge.0, at_edge.1), (PAL_RIVER_BED, PAL_GROUND));
         assert_eq!(at_edge.2, 254, "river edge must be near-pure GROUND");
 
         let past_edge = classify_splat(
@@ -940,8 +1097,9 @@ mod tests {
             10.0,
             0.0,
             100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
         );
-        assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_DIRT));
+        assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(
             past_edge.2, 0,
             "plain just past river edge must be pure GROUND"
@@ -961,6 +1119,7 @@ mod tests {
             10.0,
             0.0,
             100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
         );
         assert_eq!((at_edge.0, at_edge.1), (PAL_ROAD, PAL_GROUND));
         assert_eq!(at_edge.2, 254, "road edge must be near-pure GROUND");
@@ -972,8 +1131,9 @@ mod tests {
             10.0,
             0.0,
             100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
         );
-        assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_DIRT));
+        assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(
             past_edge.2, 0,
             "plain just past road edge must be pure GROUND"
@@ -993,7 +1153,15 @@ mod tests {
         let mut prev = -1i32;
         for i in 0..=steps {
             let d = band_end * (i as f32) / (steps as f32);
-            let (primary, _, blend, _) = classify_splat(false, f32::INFINITY, d, 10.0, 0.0, 100.0);
+            let (primary, _, blend, _) = classify_splat(
+                false,
+                f32::INFINITY,
+                d,
+                10.0,
+                0.0,
+                100.0,
+                CLIFF_PROXIMITY_RADIUS_M,
+            );
             assert_eq!(
                 primary, PAL_ROAD,
                 "road branch must still be active at d={d}"
@@ -1017,8 +1185,24 @@ mod tests {
         // Slope 0.5 < SLOPE_CLIFF_START so the plain branch fires; its rocky
         // component is non-zero so a mismatched water_fade would surface as a
         // blend diff.
-        let at_margin = classify_splat(false, f32::INFINITY, road_margin, 10.0, 0.5, 100.0);
-        let no_road = classify_splat(false, f32::INFINITY, f32::INFINITY, 10.0, 0.5, 100.0);
+        let at_margin = classify_splat(
+            false,
+            f32::INFINITY,
+            road_margin,
+            10.0,
+            0.5,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+        );
+        let no_road = classify_splat(
+            false,
+            f32::INFINITY,
+            f32::INFINITY,
+            10.0,
+            0.5,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+        );
         assert_eq!(
             at_margin, no_road,
             "plain branch must match 'no road' output at road_margin"
@@ -1208,7 +1392,7 @@ mod tests {
             .get("layers")
             .and_then(|l| l.as_array())
             .expect("layers array");
-        assert_eq!(layers.len(), PAL_ROAD as usize + 1);
+        assert_eq!(layers.len(), PAL_RIVER_BED as usize + 1);
         for layer in layers {
             assert!(layer.get("texture").and_then(|t| t.as_str()).is_some());
             assert!(layer.get("tileScale").and_then(|t| t.as_f64()).is_some());

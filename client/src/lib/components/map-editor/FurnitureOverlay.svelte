@@ -19,7 +19,7 @@
   import { playerDebugInfo } from '../../stores/debugStore'
   import type { PlayerDebugInfo } from '../../stores/debugStore'
   import { mapEditorMode } from '../../stores/debugStore'
-  import { tileToRegion } from '../../managers/terrainMetaManager'
+  import { tileToRegion } from '../../terrain/terrain-constants'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { furnitureManager } from '../../managers/furnitureManager'
   import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'

@@ -3,7 +3,7 @@
   import { get } from 'svelte/store'
   import { playerDebugInfo } from '../../stores/debugStore'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
-  import { tileToRegion } from '../../managers/terrainMetaManager'
+  import { tileToRegion } from '../../terrain/terrain-constants'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
   import ZoneBrushPanel from './ZoneBrushPanel.svelte'

@@ -47,12 +47,16 @@ export type SplatLayer = {
   normalMap?: THREE.Texture // Normal (Linear)
   orm?: THREE.Texture // ORM: R=AO, G=Roughness, B=Metallic (Linear)
   tile: number
+  /** Swap U↔V on this slot (perceptual 90° rotation for isotropic textures). */
+  swapUv: boolean
 }
 
 export type SplatParams = {
   atlas: SplatAtlasSet
   /** Tile scales for each palette slot. Length 1..MAX_PALETTE; padded to MAX_PALETTE internally. */
   tileScales: number[]
+  /** Per-slot U↔V swap flags. Length 1..MAX_PALETTE; padded to 0. */
+  tileSwapUvs?: boolean[]
   splatMap: THREE.Texture
   splatScale?: number
   sharedBrushUniforms?: SplatBrushUniforms
@@ -88,6 +92,16 @@ export function padTileScales(tileScales: number[]): number[] {
   return out
 }
 
+/** Pad a boolean swap-flag array to length MAX_PALETTE with false, encoding
+ *  each flag as 0.0/1.0 so it can live in a float uniform array and be
+ *  multiplied with UV components without a shader branch. */
+export function padTileSwapUvs(tileSwapUvs: boolean[]): number[] {
+  const out = new Array<number>(MAX_PALETTE).fill(0)
+  const n = Math.min(tileSwapUvs.length, MAX_PALETTE)
+  for (let i = 0; i < n; i++) out[i] = tileSwapUvs[i] ? 1 : 0
+  return out
+}
+
 // Atlas slot geometry in normalized UV space.
 const SLOT_PX = ATLAS_SLOT_SIZE + 2 * ATLAS_BORDER
 const ATLAS_PX = SLOT_PX * ATLAS_GRID
@@ -98,6 +112,7 @@ const GRID_INV = 1.0 / ATLAS_GRID
 export function makeSplatStandardMaterial({
   atlas,
   tileScales,
+  tileSwapUvs = [],
   splatMap,
   splatScale = 1,
   sharedBrushUniforms,
@@ -111,6 +126,7 @@ export function makeSplatStandardMaterial({
   splatMap.needsUpdate = true
 
   const uTileScales = uniformArray(padTileScales(tileScales), 'float')
+  const uTileSwapUvs = uniformArray(padTileSwapUvs(tileSwapUvs), 'float')
   const uSplatScale = uniform(splatScale)
 
   const brush = includeEditorOverlay
@@ -189,20 +205,31 @@ export function makeSplatStandardMaterial({
   const fUvDy = dFdy(fLocalUv)
 
   // Compute atlas UV + texture gradients for a given slot index.
-  // idxF: float 0..MAX_PALETTE-1. tileScale: float.
+  // idxF: float 0..MAX_PALETTE-1. swap: 0 or 1; when 1, rotates the slot's
+  // UV 90° CW `(u, v) → (v, -u)`. A transpose would look similar but flips
+  // handedness — preserve rotation so tangent-space normals stay consistent.
+  // `swap` is echoed back so the normal path can apply the matching rotation.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function slotUv(idxF: any, tileScale: any) {
+  function slotUv(idxF: any, tileScale: any, swap: any) {
     const slotCol = idxF.mod(float(ATLAS_GRID))
     const slotRow = idxF.div(float(ATLAS_GRID)).floor()
     const slotOffset = vec2(slotCol, slotRow).mul(GRID_INV)
     const tiled = fLocalUv.mul(tileScale)
-    const atlasUv = fract(tiled)
+    const tiledRot = vec2(tiled.y, tiled.x.negate())
+    const uvLocal = mix(tiled, tiledRot, swap)
+    const atlasUv = fract(uvLocal)
       .mul(SUBTEX_NORM)
       .add(slotOffset)
       .add(BORDER_NORM)
-    const gx = fUvDx.mul(tileScale).mul(SUBTEX_NORM)
-    const gy = fUvDy.mul(tileScale).mul(SUBTEX_NORM)
-    return { atlasUv, gx, gy }
+    const gxRaw = fUvDx.mul(tileScale)
+    const gyRaw = fUvDy.mul(tileScale)
+    const gx = mix(gxRaw, vec2(gxRaw.y, gxRaw.x.negate()), swap).mul(
+      SUBTEX_NORM
+    )
+    const gy = mix(gyRaw, vec2(gyRaw.y, gyRaw.x.negate()), swap).mul(
+      SUBTEX_NORM
+    )
+    return { atlasUv, gx, gy, swap }
   }
 
   // Per-neighbor atlas slots + blend. colorNode/normalNode/orm each
@@ -211,9 +238,11 @@ export function makeSplatStandardMaterial({
   function neighborSlots(d: any) {
     const tP = uTileScales.element(int(d.p)).toVar()
     const tS = uTileScales.element(int(d.s)).toVar()
+    const swapP = uTileSwapUvs.element(int(d.p)).toVar()
+    const swapS = uTileSwapUvs.element(int(d.s)).toVar()
     return {
-      pSlot: slotUv(d.p, tP),
-      sSlot: slotUv(d.s, tS),
+      pSlot: slotUv(d.p, tP, swapP),
+      sSlot: slotUv(d.s, tS, swapS),
       blend: d.blend,
     }
   }
@@ -308,10 +337,22 @@ export function makeSplatStandardMaterial({
     ? Fn(() => {
         const normTex = normAtlasTex!
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        function rotateNormalXy(n: any, swap: any) {
+          // Match slotUv's 90° CW rotation in tangent space:
+          // (nx, ny, nz) → (-ny, nx, nz).
+          const rotatedXy = vec2(n.y.negate(), n.x)
+          const xy = mix(vec2(n.x, n.y), rotatedXy, swap)
+          return vec3(xy.x, xy.y, n.z)
+        }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         function neighborTangentNormal(n: any) {
           const nP = sampleAtlasAt(normTex, n.pSlot).xyz.mul(2.0).sub(1.0)
           const nS = sampleAtlasAt(normTex, n.sSlot).xyz.mul(2.0).sub(1.0)
-          return mix(nP, nS, n.blend)
+          return mix(
+            rotateNormalXy(nP, n.pSlot.swap),
+            rotateNormalXy(nS, n.sSlot.swap),
+            n.blend
+          )
         }
         const tangentNormal = bilerp4(
           neighborTangentNormal(n00),
@@ -363,6 +404,7 @@ export function makeSplatStandardMaterial({
     ...(normAtlasTex ? { normalAtlas: normAtlasTex } : {}),
     ...(ormAtlasTex ? { ormAtlas: ormAtlasTex } : {}),
     uTileScales,
+    uTileSwapUvs,
     ...(brush
       ? {
           brushCenter: brush.center,

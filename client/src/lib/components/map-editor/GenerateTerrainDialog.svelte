@@ -19,11 +19,9 @@
   import { get } from 'svelte/store'
   import {
     showGenerateDialog,
-    editorMetaManager,
     editorHeightManager,
     editorSplatManager,
     editorGrassDataManager,
-    regionMetaVersion,
     minimapVersion,
     terrainForceRebuild,
   } from '../../stores/editorStore'
@@ -34,7 +32,6 @@
     type NeighborEdgeData,
   } from '../../terrain/terrainGenerator'
   import { loadReferenceImage } from '../../terrain/referenceImageSampler'
-  import type { RegionMeta } from '../../managers/terrainMetaManager'
   import { getTerrainApiUrl } from '../../utils/networkUtils'
   import { generateRegionMinimap } from '../../terrain/regionMinimapGenerator'
   import { generateAndSaveGrassData } from '../../utils/grass-data'
@@ -116,14 +113,6 @@
       const nrx = rx + dir.drx
       const nrz = rz + dir.drz
 
-      // Check if the neighbor region has actually been generated
-      try {
-        const headResp = await fetch(`${apiUrl}/api/terrain/meta/${nrx}/${nrz}`, { method: 'HEAD' })
-        if (!headResp.ok) continue
-      } catch {
-        continue
-      }
-
       const edgeData = new Float32Array(REGION_SIZE * TILE_DIM)
       let hasData = false
 
@@ -176,9 +165,8 @@
     const region = get(showGenerateDialog)
     const heightManager = get(editorHeightManager)
     const splatManager = get(editorSplatManager)
-    const metaManager = get(editorMetaManager)
 
-    if (!region || !heightManager || !splatManager || !metaManager) return
+    if (!region || !heightManager || !splatManager) return
 
     generating = true
     progress = 0
@@ -211,23 +199,6 @@
         config,
         neighborEdges
       )
-
-      progress = 30
-      progressLabel = 'Saving region meta...'
-
-      // V2 palette — slot order must match GEN_SLOT in terrain-splat-gen.ts.
-      // Additional slots (paving/road) are reserved for manual paint.
-      const genMeta: RegionMeta = {
-        layers: [
-          { texture: 'rocky_terrain_02_1k', tileScale: 8.0 }, // 0: grass
-          { texture: 'sandy_gravel_02_1k', tileScale: 8.0 }, // 1: sand
-          { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 }, // 2: laterite
-          { texture: 'snow_02_1k', tileScale: 4.0 }, // 3: snow
-          { texture: 'patterned_paving_02_1k', tileScale: 30.0 }, // 4: paving
-          { texture: 'gravel_road_1k', tileScale: 8.0 }, // 5: road
-        ],
-      }
-      await metaManager.saveMeta(region.rx, region.rz, genMeta)
 
       progress = 35
       progressLabel = 'Applying tiles...'
@@ -266,14 +237,10 @@
       progress = 80
       progressLabel = 'Generating minimap...'
 
-      // Trigger region meta re-resolution
-      regionMetaVersion.update((v) => v + 1)
-
       // Generate minimap
       await generateRegionMinimap(
         region.rx,
         region.rz,
-        metaManager,
         (pct, label) => {
           progress = 80 + Math.round(pct * 0.18)
           progressLabel = label

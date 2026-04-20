@@ -52,6 +52,11 @@ export interface NeighborEdgeData {
 
 // --- Utility functions ---
 
+/** Tile → region (floor division by REGION_SIZE). Matches Rust's `i32.div_euclid(16)`. */
+export function tileToRegion(tile: number): number {
+  return Math.floor(tile / REGION_SIZE)
+}
+
 export function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t
 }

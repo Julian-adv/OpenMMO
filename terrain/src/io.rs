@@ -90,25 +90,6 @@ impl TerrainIO {
         fs::write(&path, data).await
     }
 
-    pub async fn meta_exists(&self, rx: i32, rz: i32) -> std::io::Result<bool> {
-        let path = coords::meta_path(&self.base_dir, rx, rz);
-        match fs::metadata(&path).await {
-            Ok(_) => Ok(true),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn read_meta(&self, rx: i32, rz: i32) -> std::io::Result<serde_json::Value> {
-        let path = coords::meta_path(&self.base_dir, rx, rz);
-        match fs::read_to_string(&path).await {
-            Ok(json_str) => serde_json::from_str(&json_str)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(defaults::default_meta_json()),
-            Err(e) => Err(e),
-        }
-    }
-
     pub async fn read_minimap(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::minimap_path(&self.base_dir, rx, rz);
         match fs::read(&path).await {
@@ -270,7 +251,6 @@ impl TerrainIO {
         let tree_dir = coords::tree_region_dir(&self.base_dir, rx, rz);
         let orig_height_dir = coords::original_height_region_dir(&self.base_dir, rx, rz);
         let orig_grass_dir = coords::original_grass_region_dir(&self.base_dir, rx, rz);
-        let meta_file = coords::meta_path(&self.base_dir, rx, rz);
         let minimap_file = coords::minimap_path(&self.base_dir, rx, rz);
 
         for dir in [
@@ -287,12 +267,10 @@ impl TerrainIO {
                 Err(e) => return Err(e),
             }
         }
-        for file in [&meta_file, &minimap_file] {
-            match fs::remove_file(file).await {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(e),
-            }
+        match fs::remove_file(&minimap_file).await {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
         }
         Ok(())
     }
@@ -373,36 +351,6 @@ impl TerrainIO {
         json: &serde_json::Value,
     ) -> std::io::Result<()> {
         let path = coords::furniture_path(&self.base_dir, rx, rz);
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).await?;
-        }
-        let json_str = serde_json::to_string_pretty(json)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-        fs::write(&path, json_str).await
-    }
-
-    pub async fn write_meta(
-        &self,
-        rx: i32,
-        rz: i32,
-        json: &serde_json::Value,
-    ) -> std::io::Result<()> {
-        let layers = json
-            .get("layers")
-            .and_then(|l| l.as_array())
-            .ok_or_else(|| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    "meta must contain \"layers\" array",
-                )
-            })?;
-        if layers.is_empty() || layers.len() > 16 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("layers must have 1..=16 entries, got {}", layers.len()),
-            ));
-        }
-        let path = coords::meta_path(&self.base_dir, rx, rz);
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).await?;
         }

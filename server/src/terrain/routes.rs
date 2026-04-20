@@ -46,10 +46,6 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
             post(ensure_original_grass),
         )
         .route(
-            "/api/terrain/meta/{rx}/{rz}",
-            get(get_meta).put(put_meta).head(head_meta),
-        )
-        .route(
             "/api/terrain/minimap/{rx}/{rz}",
             get(get_minimap).put(put_minimap),
         )
@@ -265,49 +261,6 @@ async fn put_grass(
         )
     })?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-async fn get_meta(
-    Path((rx, rz)): Path<(i32, i32)>,
-    State(terrain): State<Arc<TerrainIO>>,
-) -> Result<Response, StatusCode> {
-    let meta = terrain.read_meta(rx, rz).await.map_err(|e| {
-        error!("Failed to read meta ({}, {}): {}", rx, rz, e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    Ok(Json(meta).into_response())
-}
-
-async fn put_meta(
-    Path((rx, rz)): Path<(i32, i32)>,
-    State(terrain): State<Arc<TerrainIO>>,
-    Json(body): Json<serde_json::Value>,
-) -> Result<StatusCode, (StatusCode, String)> {
-    terrain
-        .write_meta(rx, rz, &body)
-        .await
-        .map_err(|e| match e.kind() {
-            std::io::ErrorKind::InvalidData => (StatusCode::BAD_REQUEST, e.to_string()),
-            _ => {
-                error!("Failed to write meta ({}, {}): {}", rx, rz, e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "Internal server error".to_string(),
-                )
-            }
-        })?;
-    Ok(StatusCode::NO_CONTENT)
-}
-
-async fn head_meta(
-    Path((rx, rz)): Path<(i32, i32)>,
-    State(terrain): State<Arc<TerrainIO>>,
-) -> StatusCode {
-    match terrain.meta_exists(rx, rz).await {
-        Ok(true) => StatusCode::OK,
-        Ok(false) => StatusCode::NOT_FOUND,
-        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
-    }
 }
 
 async fn get_minimap(

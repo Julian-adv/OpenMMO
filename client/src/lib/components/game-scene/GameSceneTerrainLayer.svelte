@@ -6,12 +6,12 @@
   import type { ReflectionRenderManager } from '../../managers/reflectionRenderManager'
   import { SvelteMap } from 'svelte/reactivity'
   import { onDestroy } from 'svelte'
-  import { get } from 'svelte/store'
   import SplatTerrain from '../SplatTerrain.svelte'
   import {
     makeSplatStandardMaterial,
     createSplatBrushUniforms,
     padTileScales,
+    padTileSwapUvs,
     type SplatBrushUniforms,
   } from '../makeSplatStandardMaterial'
   import type { SplatLayer } from '../makeSplatStandardMaterial'
@@ -19,8 +19,6 @@
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
-  import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
-  import { tileToRegion } from '../../managers/terrainMetaManager'
   import { loadSplatLayers, buildSplatAtlas } from '../../utils/splatLayerLoader'
   import type { SplatAtlasSet } from '../../utils/splatLayerLoader'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
@@ -29,8 +27,6 @@
     brushSize,
     brushMode,
     editorTool,
-    regionMetaVersion,
-    currentEditorRegion,
   } from '../../stores/editorStore'
   import type { BrushMode, EditorTool } from '../../stores/editorStore'
   import { enqueueTileWork } from '../../utils/tileWorkQueue'
@@ -42,7 +38,6 @@
     terrainGroup?: THREE.Group | undefined
     heightManager?: TerrainHeightManager | null
     splatManager?: TerrainSplatManager | null
-    metaManager?: TerrainMetaManager | null
     syncTileMeshes?: () => void
     renderer?: WebGPURenderer | null
     camera?: THREE.Camera | null
@@ -57,7 +52,6 @@
     terrainGroup = $bindable<THREE.Group | undefined>(undefined),
     heightManager = null,
     splatManager = null,
-    metaManager = null,
     syncTileMeshes = $bindable<() => void>(() => {}),
     renderer = null,
     camera = null,
@@ -170,6 +164,7 @@
     const mat = makeSplatStandardMaterial({
       atlas: defaultAtlas!,
       tileScales: _defaultLayers!.map((l) => l.tile),
+      tileSwapUvs: _defaultLayers!.map((l) => l.swapUv),
       splatMap: defaultSplat,
       splatScale: 1.0,
       sharedBrushUniforms: brushUniforms,
@@ -188,6 +183,7 @@
     return makeSplatStandardMaterial({
       atlas: buildSplatAtlas(layers),
       tileScales: layers.map((l) => l.tile),
+      tileSwapUvs: layers.map((l) => l.swapUv),
       splatMap,
       splatScale: 1.0,
       sharedBrushUniforms: brushUniforms,
@@ -232,6 +228,7 @@
         }
       }
       newU.uTileScales.array = oldU.uTileScales.array
+      newU.uTileSwapUvs.array = oldU.uTileSwapUvs.array
       swapTileMaterial(tileId, newMat)
     }
   }
@@ -285,6 +282,7 @@
       u.ormAtlas.value = defaultAtlas.ormAtlas
     }
     u.uTileScales.array = padTileScales(_defaultLayers.map((l) => l.tile))
+    u.uTileSwapUvs.array = padTileSwapUvs(_defaultLayers.map((l) => l.swapUv))
   }
 
   // ── Brush sync (updates shared uniform nodes → affects all materials) ──
@@ -426,7 +424,6 @@
     // Create geometries + assign pooled material + kick off async loads for new tiles
     const mgr = heightManager
     const sMgr = splatManager
-    const mMgr = metaManager
     for (const tile of terrainTiles) {
       if (geoMap.has(tile.id)) continue
 
@@ -454,37 +451,15 @@
         .catch(() => {})
 
       const tileId = tile.id
-      if (sMgr && mMgr) {
-        Promise.all([
-          sMgr.loadSplatmap(tileX, tileZ),
-          mMgr.getLayersForTile(tileX, tileZ),
-        ])
-          .then(([tex, resolved]) => {
+      if (sMgr && _defaultLayers) {
+        const layers = _defaultLayers
+        sMgr
+          .loadSplatmap(tileX, tileZ)
+          .then((tex) => {
             if (!materialMap.has(tileId)) return
-            swapTileMaterial(tileId, makeTileMaterial(tex, resolved.layers))
+            swapTileMaterial(tileId, makeTileMaterial(tex, layers))
           })
           .catch(() => {})
-      }
-    }
-  })
-
-  // Re-resolve region layers when meta changes (texture swap in SplatBrushPanel)
-  regionMetaVersion.subscribe((ver) => {
-    if (ver === 0 || !metaManager) return
-    const region = get(currentEditorRegion)
-    if (!region) return
-    const { rx, rz } = region
-    const mMgr = metaManager
-
-    for (const tile of terrainTiles) {
-      const { tileX, tileZ } = getTileCoords(tile)
-      if (tileToRegion(tileX) === rx && tileToRegion(tileZ) === rz) {
-        mMgr.getLayersForTile(tileX, tileZ).then((resolved) => {
-          const oldMat = materialMap.get(tile.id)
-          if (!oldMat) return
-          const splatMap = oldMat.userData.uniforms.splatMap.value
-          swapTileMaterial(tile.id, makeTileMaterial(splatMap, resolved.layers))
-        })
       }
     }
   })

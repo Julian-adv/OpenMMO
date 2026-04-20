@@ -22,10 +22,10 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
   import { worldMapVisible, debugVisible, teleportLoading } from '../stores/debugStore'
-  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, editorTreeDataManager, regionMetaVersion, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
+  import { showGenerateDialog, editorHeightManager, editorSplatManager, editorGrassDataManager, editorTreeDataManager, minimapVersion, terrainForceRebuild } from '../stores/editorStore'
   import { get } from 'svelte/store'
   import { regionMinimapServerUrl, generateRegionMinimap, fetchHousesInRegion } from '../terrain/regionMinimapGenerator'
-  import { tileToRegion } from '../managers/terrainMetaManager'
+  import { tileToRegion } from '../terrain/terrain-constants'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import { networkManager } from '../network/socket'
   import { regenerateRegionSplatmaps, type TerrainGenConfig } from '../terrain/terrainGenerator'
@@ -326,7 +326,6 @@
       // Evict cached tile data (without disposing GPU resources still in use)
       const heightManager = get(editorHeightManager)
       const splatManager = get(editorSplatManager)
-      const metaManager = get(editorMetaManager)
       for (let tz = 0; tz < REGION_SIZE; tz++) {
         for (let tx = 0; tx < REGION_SIZE; tx++) {
           const tileX = rx * REGION_SIZE + tx
@@ -335,8 +334,6 @@
           splatManager?.evictCachedData(tileX, tileZ)
         }
       }
-      metaManager?.invalidateRegion(rx, rz)
-      regionMetaVersion.update((v) => v + 1)
 
       // Invalidate minimap cache
       imageCache.delete(`${rx},${rz}`)
@@ -358,12 +355,10 @@
   async function handleRegenerateMinimap() {
     const rx = playerRegionRx
     const rz = playerRegionRz
-    const metaManager = get(editorMetaManager)
-    if (!metaManager) return
 
     generatingMinimap = true
     try {
-      await generateRegionMinimap(rx, rz, metaManager)
+      await generateRegionMinimap(rx, rz)
       imageCache.delete(`${rx},${rz}`)
       pendingLoads.delete(`${rx},${rz}`)
       minimapVersion.update((v) => v + 1)
@@ -430,20 +425,12 @@
     const rz = playerRegionRz
     const heightManager = get(editorHeightManager)
     const splatManager = get(editorSplatManager)
-    const metaManager = get(editorMetaManager)
-    if (!heightManager || !splatManager || !metaManager) return
+    if (!heightManager || !splatManager) return
 
     resplatting = true
     resplatProgress = 'Loading heightmaps...'
     try {
       const apiUrl = getTerrainApiUrl()
-
-      // Check if region exists
-      const metaResp = await fetch(`${apiUrl}/api/terrain/meta/${rx}/${rz}`, { method: 'HEAD' })
-      if (!metaResp.ok) {
-        alert(`Region (${rx}, ${rz}) has no terrain data.`)
-        return
-      }
 
       // Fetch all heightmaps for the region
       const tileHeightmaps: { tileX: number; tileZ: number; heightmap: Uint16Array }[] = []
@@ -586,7 +573,7 @@
 
       // Regenerate minimap
       resplatProgress = 'Generating minimap...'
-      await generateRegionMinimap(rx, rz, metaManager)
+      await generateRegionMinimap(rx, rz)
       minimapVersion.update((v) => v + 1)
 
       // Force terrain rebuild

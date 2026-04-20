@@ -6,36 +6,31 @@ import type { SplatLayer } from '../components/makeSplatStandardMaterial'
 export interface LayerConfig {
   texture: string
   tileScale: number
+  /** Swap U↔V on this slot (perceptually 90° rotation for isotropic textures).
+   *  Default false. Useful when a texture's dominant stripe direction doesn't
+   *  match the terrain orientation. */
+  swapUv?: boolean
 }
 
-/** Default palette for newly created regions. Up to MAX_PALETTE entries (see splat-encoding.ts). */
-export const DEFAULT_LAYER_CONFIGS: LayerConfig[] = [
-  { texture: 'rocky_terrain_02_1k', tileScale: 8.0 },
-  { texture: 'sandy_gravel_02_1k', tileScale: 8.0 },
-  { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 },
-  { texture: 'snow_02_1k', tileScale: 4.0 },
-  { texture: 'patterned_paving_02_1k', tileScale: 30.0 },
-  { texture: 'gravel_road_1k', tileScale: 8.0 },
+/**
+ * Global terrain palette — identical for every tile in the world. Slot order
+ * MUST match `shared/src/worldgen/tile_bake.rs::default_palette_meta()` and
+ * the `PAL_*` constants there, since the baker writes splat cells that index
+ * into this list.
+ */
+export const GLOBAL_PALETTE: LayerConfig[] = [
+  { texture: 'rocky_terrain_02_1k', tileScale: 8.0 }, // 0 PAL_GROUND
+  { texture: 'sandy_gravel_02_1k', tileScale: 8.0 }, // 1 PAL_SAND
+  { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 }, // 2 PAL_DIRT
+  { texture: 'snow_02_1k', tileScale: 4.0 }, // 3 PAL_SNOW
+  { texture: 'gravel_road_1k', tileScale: 8.0 }, // 4 PAL_ROAD
+  {
+    texture: 'marble_cliff_01_1k',
+    tileScale: 32.0,
+    swapUv: true,
+  }, // 5 PAL_CLIFF — 2 m/repeat; rotated 90° CW so marble banding runs horizontally across vertical cliff faces
+  { texture: 'ganges_river_pebbles_1k', tileScale: 24.0 }, // 6 PAL_RIVER_BED — ~2.67 m/repeat
 ]
-
-/** All available splat textures that can be assigned to region layers. */
-export const ALL_SPLAT_TEXTURES: { name: string; defaultTileScale: number }[] =
-  [
-    { name: 'rocky_terrain_02_1k', defaultTileScale: 8.0 },
-    { name: 'gravel_floor_1k', defaultTileScale: 6.0 },
-    { name: 'red_laterite_soil_stones_1k', defaultTileScale: 10.0 },
-    { name: 'snow_02_1k', defaultTileScale: 4.0 },
-    { name: 'gravel_road_1k', defaultTileScale: 8.0 },
-    { name: 'sandy_gravel_02_1k', defaultTileScale: 8.0 },
-    { name: 'fine_sand_material', defaultTileScale: 8.0 },
-    { name: 'cobblestone_color_1k', defaultTileScale: 40.0 },
-    { name: 'grey_stone_path_1k', defaultTileScale: 30.0 },
-    { name: 'stone_pathway_1k', defaultTileScale: 30.0 },
-    { name: 'pavement_02_1k', defaultTileScale: 40.0 },
-    { name: 'japanese_stone_wall_1k', defaultTileScale: 40.0 },
-    { name: 'rock_embedded_concrete_1k', defaultTileScale: 30.0 },
-    { name: 'patterned_paving_02_1k', defaultTileScale: 30.0 },
-  ]
 
 /** Atlas set: 2×2 packed textures for diffuse, normal, ORM */
 export interface SplatAtlasSet {
@@ -160,13 +155,14 @@ function extractTextures(gltf: GLTF): CachedTextures {
 /** Load a single texture by name, with caching. */
 export function loadSplatLayer(
   textureName: string,
-  tileScale: number
+  tileScale: number,
+  swapUv = false
 ): Promise<SplatLayer> {
   const cached = textureCache.get(textureName)
-  if (cached) return Promise.resolve({ ...cached, tile: tileScale })
+  if (cached) return Promise.resolve({ ...cached, tile: tileScale, swapUv })
 
   const existing = inflightTextures.get(textureName)
-  if (existing) return existing.then((t) => ({ ...t, tile: tileScale }))
+  if (existing) return existing.then((t) => ({ ...t, tile: tileScale, swapUv }))
 
   const promise = (async () => {
     try {
@@ -180,14 +176,16 @@ export function loadSplatLayer(
     }
   })()
   inflightTextures.set(textureName, promise)
-  return promise.then((t) => ({ ...t, tile: tileScale }))
+  return promise.then((t) => ({ ...t, tile: tileScale, swapUv }))
 }
 
 /** Load 1–MAX_PALETTE splat layers from config. Shared textures are loaded only once. */
 export function loadSplatLayers(
-  configs: LayerConfig[] = DEFAULT_LAYER_CONFIGS
+  configs: LayerConfig[] = GLOBAL_PALETTE
 ): Promise<SplatLayer[]> {
-  return Promise.all(configs.map((c) => loadSplatLayer(c.texture, c.tileScale)))
+  return Promise.all(
+    configs.map((c) => loadSplatLayer(c.texture, c.tileScale, c.swapUv))
+  )
 }
 
 // ── Atlas building ──────────────────────────────────────────────

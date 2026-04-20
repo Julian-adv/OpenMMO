@@ -1,7 +1,7 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentRegionLayers, textureNameToLabel, currentEditorRegion, currentRegionConfigs, editorMetaManager, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedFurnitureType, furnitureRotation, currentFurnitureData, selectedFurniturePlacementId, furniturePreviewPos, furnitureSubTool, roadDrawStart } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentEditorRegion, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedFurnitureType, furnitureRotation, currentFurnitureData, selectedFurniturePlacementId, furniturePreviewPos, furnitureSubTool, roadDrawStart } from '../../stores/editorStore'
   import type { EditorTool, ZoneSubTool, FurnitureSubTool, FurnitureRegionData } from '../../stores/editorStore'
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
@@ -15,11 +15,10 @@
   import type { TerrainTile } from '../game-scene/terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
-  import type { TerrainMetaManager } from '../../managers/terrainMetaManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
   import type { TerrainTreeDataManager } from '../../managers/terrainTreeDataManager'
   import { TILE_DIM } from '../../managers/terrain-height-types'
-  import { tileToRegion } from '../../managers/terrainMetaManager'
+  import { tileToRegion } from '../../terrain/terrain-constants'
   import { gameStore } from '../../stores/gameStore'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
   import { SvelteSet } from 'svelte/reactivity'
@@ -27,20 +26,17 @@
   import { filterTreeData } from '../../utils/tree-data'
   import { SHORT_GRASS_R_MIN } from '../../shaders/grass-material'
 
-  const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
-
   interface Props {
     camera: THREE.OrthographicCamera | undefined
     terrainMeshes: (THREE.Mesh | undefined)[]
     terrainTiles: TerrainTile[]
     heightManager: TerrainHeightManager | null
     splatManager: TerrainSplatManager | null
-    metaManager: TerrainMetaManager | null
     grassDataManager: TerrainGrassDataManager | null
     treeDataManager: TerrainTreeDataManager | null
   }
 
-  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, metaManager = null, grassDataManager = null, treeDataManager = null }: Props = $props()
+  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, grassDataManager = null, treeDataManager = null }: Props = $props()
 
   let isPainting = $state(false)
   let isPanning = $state(false)
@@ -169,27 +165,14 @@
       cursorHeight.set(heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ))
     }
 
-    // Update splat layer labels when region changes
-    if (metaManager) {
-      const rx = tileToRegion(tileX)
-      const rz = tileToRegion(tileZ)
-      if (rx !== lastRegionX || rz !== lastRegionZ) {
-        lastRegionX = rx
-        lastRegionZ = rz
-        currentEditorRegion.set({ rx, rz })
-        // Fetch furniture data for the new region
-        loadFurnitureForRegion(rx, rz)
-        const meta = metaManager.getMetaForTile(tileX, tileZ)
-        if (meta) {
-          currentRegionConfigs.set([...meta.layers])
-          currentRegionLayers.set(
-            meta.layers.map((l, i) => ({
-              label: textureNameToLabel(l.texture),
-              color: LAYER_COLORS[i] ?? '#ffffff',
-            }))
-          )
-        }
-      }
+    // Track which region the cursor is in so panels / furniture can react.
+    const rx = tileToRegion(tileX)
+    const rz = tileToRegion(tileZ)
+    if (rx !== lastRegionX || rz !== lastRegionZ) {
+      lastRegionX = rx
+      lastRegionZ = rz
+      currentEditorRegion.set({ rx, rz })
+      loadFurnitureForRegion(rx, rz)
     }
   }
 
@@ -769,7 +752,6 @@
   }
 
   onMount(() => {
-    if (metaManager) editorMetaManager.set(metaManager)
     if (heightManager) editorHeightManager.set(heightManager)
     if (splatManager) editorSplatManager.set(splatManager)
 

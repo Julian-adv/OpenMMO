@@ -29,12 +29,6 @@ pub fn splatmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     splat_region_dir(base, rx, rz).join(format!("s_{:+05}_{:+05}.bin", tx, tz))
 }
 
-/// Build filesystem path for a region metadata JSON file.
-pub fn meta_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
-    base.join("meta")
-        .join(format!("r{:+03}_{:+03}.json", rx, rz))
-}
-
 /// Build filesystem path for a region's height tile directory.
 pub fn height_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("height").join(region_dir_name(rx, rz))

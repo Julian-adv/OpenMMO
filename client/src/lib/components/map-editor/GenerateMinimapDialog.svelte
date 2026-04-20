@@ -2,7 +2,6 @@
   import { get } from 'svelte/store'
   import {
     showMinimapDialog,
-    editorMetaManager,
     minimapVersion,
   } from '../../stores/editorStore'
   import { generateRegionMinimap } from '../../terrain/regionMinimapGenerator'
@@ -17,8 +16,7 @@
 
   async function handleGenerate() {
     const region = get(showMinimapDialog)
-    const metaManager = get(editorMetaManager)
-    if (!region || !metaManager) return
+    if (!region) return
 
     generating = true
     progress = 0
@@ -28,7 +26,6 @@
       const _blob = await generateRegionMinimap(
         region.rx,
         region.rz,
-        metaManager,
         (pct, label) => {
           progress = pct
           progressLabel = label

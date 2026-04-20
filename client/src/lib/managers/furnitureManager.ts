@@ -5,7 +5,7 @@ import type {
   FurnitureRegionData,
 } from '../stores/editorStore'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
-import { tileToRegion } from './terrainMetaManager'
+import { tileToRegion } from '../terrain/terrain-constants'
 
 function regionKey(rx: number, rz: number): string {
   return `${rx},${rz}`

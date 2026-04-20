@@ -3,19 +3,9 @@
     brushSize,
     brushStrength,
     splatLayer,
-    currentRegionLayers,
-    currentEditorRegion,
-    currentRegionConfigs,
-    editorMetaManager,
-    regionMetaVersion,
     textureNameToLabel,
-    type SplatLayerInfo,
   } from '../../stores/editorStore'
-  import { ALL_SPLAT_TEXTURES, loadSplatLayer } from '../../utils/splatLayerLoader'
-  import type { LayerConfig } from '../../utils/splatLayerLoader'
-  import type { RegionMeta } from '../../managers/terrainMetaManager'
-  import { MAX_PALETTE } from '../../terrain/splat-encoding'
-  import { get } from 'svelte/store'
+  import { GLOBAL_PALETTE, loadSplatLayer } from '../../utils/splatLayerLoader'
 
   interface Props {
     title?: string
@@ -23,30 +13,29 @@
   }
   let {
     title = 'Splat Brush',
-    hint = '(right-click to change texture)',
+    hint = '(click to select slot)',
   }: Props = $props()
 
-  const LAYER_COLORS = ['#66cc66', '#999999', '#bb7744', '#ddeeff']
+  // One color swatch per global-palette slot — purely cosmetic fallback when
+  // a texture thumbnail hasn't loaded yet. Repeated for slot count > array length.
+  const SLOT_SWATCH_COLORS = [
+    '#66cc66', // 0 grass
+    '#d9ba6e', // 1 sand
+    '#b06438', // 2 laterite
+    '#ddeeff', // 3 snow
+    '#8c877d', // 4 road
+    '#c9c4ba', // 5 cliff
+  ]
   const THUMB_SIZE = 64
 
   let size = $state(3)
   let strength = $state(8)
   let layer = $state(0)
-  let layers = $state<SplatLayerInfo[]>([])
-  let configs = $state<LayerConfig[]>([])
-  let region = $state<{ rx: number; rz: number } | null>(null)
-  let openDropdown = $state<number | null>(null)
   let thumbnails = $state<Record<string, string>>({})
 
   brushSize.subscribe((v) => (size = v))
   brushStrength.subscribe((v) => (strength = v))
   splatLayer.subscribe((v) => (layer = v))
-  currentRegionLayers.subscribe((v) => (layers = v))
-  currentRegionConfigs.subscribe((v) => (configs = v))
-  currentEditorRegion.subscribe((v) => {
-    region = v
-    openDropdown = null
-  })
 
   async function loadThumbnails() {
     const canvas = document.createElement('canvas')
@@ -55,19 +44,19 @@
     const ctx = canvas.getContext('2d')!
 
     const loaded = await Promise.all(
-      ALL_SPLAT_TEXTURES.map((tex) =>
-        loadSplatLayer(tex.name, 1).catch(() => null)
+      GLOBAL_PALETTE.map((cfg) =>
+        loadSplatLayer(cfg.texture, 1).catch(() => null)
       )
     )
 
     const result: Record<string, string> = {}
-    for (let i = 0; i < ALL_SPLAT_TEXTURES.length; i++) {
+    for (let i = 0; i < GLOBAL_PALETTE.length; i++) {
       const l = loaded[i]
       const img = l?.map.image as HTMLImageElement | undefined
       if (!img) continue
       ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
       ctx.drawImage(img as HTMLImageElement, 0, 0, THUMB_SIZE, THUMB_SIZE)
-      result[ALL_SPLAT_TEXTURES[i].name] = canvas.toDataURL('image/jpeg', 0.7)
+      result[GLOBAL_PALETTE[i].texture] = canvas.toDataURL('image/jpeg', 0.7)
     }
     thumbnails = result
   }
@@ -86,58 +75,6 @@
 
   function selectLayer(index: number) {
     splatLayer.set(index)
-    if (openDropdown !== null && openDropdown !== index) {
-      openDropdown = null
-    }
-  }
-
-  function toggleDropdown(index: number) {
-    openDropdown = openDropdown === index ? null : index
-  }
-
-  async function persistPalette(newConfigs: LayerConfig[]) {
-    const metaManager = get(editorMetaManager)
-    if (!metaManager || !region) return
-    const meta: RegionMeta = { layers: newConfigs }
-    await metaManager.saveMeta(region.rx, region.rz, meta)
-    currentRegionConfigs.set([...newConfigs])
-    currentRegionLayers.set(
-      newConfigs.map((l, i) => ({
-        label: textureNameToLabel(l.texture),
-        color: LAYER_COLORS[i % LAYER_COLORS.length] ?? '#ffffff',
-      }))
-    )
-    regionMetaVersion.update((v) => v + 1)
-  }
-
-  async function changeTexture(slotIndex: number, textureName: string) {
-    const tex = ALL_SPLAT_TEXTURES.find((t) => t.name === textureName)
-    if (!tex) return
-
-    const newConfig: LayerConfig = {
-      texture: textureName,
-      tileScale:
-        configs[slotIndex]?.texture === textureName
-          ? configs[slotIndex].tileScale
-          : tex.defaultTileScale,
-    }
-
-    const newConfigs = [...configs]
-    newConfigs[slotIndex] = newConfig
-    await persistPalette(newConfigs)
-    openDropdown = null
-  }
-
-  async function addSlot() {
-    if (configs.length >= MAX_PALETTE) return
-    const fallback = ALL_SPLAT_TEXTURES[0]
-    if (!fallback) return
-    const newConfigs = [
-      ...configs,
-      { texture: fallback.name, tileScale: fallback.defaultTileScale },
-    ]
-    await persistPalette(newConfigs)
-    openDropdown = newConfigs.length - 1
   }
 </script>
 
@@ -146,49 +83,23 @@
 
   <div class="section-label">Brush <span class="hint">{hint}</span></div>
   <div class="palette-grid">
-    {#each layers as l, i (i)}
-      <div class="texture-slot">
-        <button
-          class="grid-item"
-          class:selected={layer === i}
-          onclick={() => selectLayer(i)}
-          oncontextmenu={(e) => { e.preventDefault(); selectLayer(i); toggleDropdown(i) }}
-          title={l.label}
-        >
-          {#if configs[i] && thumbnails[configs[i].texture]}
-            <img class="grid-thumb" src={thumbnails[configs[i].texture]} alt="" />
-          {:else}
-            <span class="grid-placeholder" style="color: {l.color}">?</span>
-          {/if}
-          <span class="grid-label">{l.label}</span>
-        </button>
-
-        {#if openDropdown === i}
-          <div class="dropdown-grid">
-            {#each ALL_SPLAT_TEXTURES as tex (tex.name)}
-              {@const isActive = configs[i]?.texture === tex.name}
-              <button
-                class="grid-item"
-                class:selected={isActive}
-                onclick={() => changeTexture(i, tex.name)}
-                title={textureNameToLabel(tex.name)}
-              >
-                {#if thumbnails[tex.name]}
-                  <img class="grid-thumb" src={thumbnails[tex.name]} alt="" />
-                {:else}
-                  <span class="grid-placeholder">?</span>
-                {/if}
-                <span class="grid-label">{textureNameToLabel(tex.name)}</span>
-                {#if isActive}<span class="grid-check">✓</span>{/if}
-              </button>
-            {/each}
-          </div>
+    {#each GLOBAL_PALETTE as cfg, i (cfg.texture)}
+      {@const label = textureNameToLabel(cfg.texture)}
+      {@const swatch = SLOT_SWATCH_COLORS[i % SLOT_SWATCH_COLORS.length]}
+      <button
+        class="grid-item"
+        class:selected={layer === i}
+        onclick={() => selectLayer(i)}
+        title={label}
+      >
+        {#if thumbnails[cfg.texture]}
+          <img class="grid-thumb" src={thumbnails[cfg.texture]} alt="" />
+        {:else}
+          <span class="grid-placeholder" style="color: {swatch}">?</span>
         {/if}
-      </div>
+        <span class="grid-label">{label}</span>
+      </button>
     {/each}
-    {#if configs.length < MAX_PALETTE}
-      <button class="add-slot-btn" onclick={addSlot} title="Add palette slot">+</button>
-    {/if}
   </div>
 
   <div class="control-row">
@@ -269,45 +180,6 @@
     margin-bottom: 8px;
   }
 
-  .add-slot-btn {
-    width: 64px;
-    height: 64px;
-    border: 2px dashed rgba(226, 185, 59, 0.4);
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.03);
-    color: #e2b93b;
-    font-size: 22px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .add-slot-btn:hover {
-    border-color: #e2b93b;
-    background: rgba(226, 185, 59, 0.08);
-  }
-
-  .texture-slot {
-    position: relative;
-  }
-
-  .dropdown-grid {
-    position: absolute;
-    left: 0;
-    bottom: 100%;
-    z-index: 10;
-    background: rgba(20, 20, 20, 0.95);
-    border: 1px solid rgba(226, 185, 59, 0.3);
-    border-radius: 4px;
-    margin-bottom: 2px;
-    padding: 4px;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 4px;
-    width: 240px;
-  }
-
   .grid-item {
     position: relative;
     width: 64px;
@@ -362,14 +234,6 @@
     text-overflow: ellipsis;
   }
 
-  .grid-check {
-    position: absolute;
-    top: 2px;
-    right: 3px;
-    color: #e2b93b;
-    font-size: 11px;
-    text-shadow: 0 0 3px rgba(0, 0, 0, 0.9);
-  }
 
   .control-row {
     display: flex;

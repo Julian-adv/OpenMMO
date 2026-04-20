@@ -44,12 +44,6 @@ fn splatmap_path_format() {
 }
 
 #[test]
-fn meta_path_format() {
-    let p = coords::meta_path(Path::new("t"), -1, 2);
-    assert_eq!(p.to_str().unwrap(), "t/meta/r-01_+02.json");
-}
-
-#[test]
 fn default_heightmap_size() {
     assert_eq!(
         defaults::default_heightmap().len(),
@@ -77,13 +71,6 @@ fn default_splatmap_first_cell_is_slot0() {
     assert_eq!(data[1], 0);
     assert_eq!(data[2], 0);
     assert_eq!(data[3], 0);
-}
-
-#[test]
-fn default_meta_palette_within_bounds() {
-    let meta = defaults::default_meta_json();
-    let layers = meta["layers"].as_array().unwrap();
-    assert!(!layers.is_empty() && layers.len() <= 16);
 }
 
 #[tokio::test]

@@ -63,7 +63,7 @@
     reflectionEnabled,
     housingEditorMode,
   } from '../stores/debugStore'
-  import { editorPanOffset, editorHeightManager, editorSplatManager, editorMetaManager, editorGrassDataManager, editorTreeDataManager, editorZoneManager, terrainForceRebuild } from '../stores/editorStore'
+  import { editorPanOffset, editorHeightManager, editorSplatManager, editorGrassDataManager, editorTreeDataManager, editorZoneManager, terrainForceRebuild } from '../stores/editorStore'
   import { ZoneManager } from '../managers/zoneManager'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
@@ -86,7 +86,6 @@
   import { createSceneLightingController } from './game-scene/scene-lighting'
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
-  import { TerrainMetaManager } from '../managers/terrainMetaManager'
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { TerrainTreeDataManager } from '../managers/terrainTreeDataManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
@@ -126,13 +125,11 @@
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
   const terrainSplatManager = new TerrainSplatManager()
-  const terrainMetaManager = new TerrainMetaManager()
   const terrainGrassDataManager = new TerrainGrassDataManager(terrainHeightManager)
   const terrainTreeDataManager = new TerrainTreeDataManager(terrainHeightManager)
   monsterManager.heightManager = terrainHeightManager
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
-  editorMetaManager.set(terrainMetaManager)
   editorZoneManager.set(new ZoneManager())
   editorGrassDataManager.set(terrainGrassDataManager)
   editorTreeDataManager.set(terrainTreeDataManager)
@@ -1000,7 +997,6 @@
   bind:syncTileMeshes={syncTileMeshes}
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
-  metaManager={terrainMetaManager}
   {renderer}
   {camera}
   {refractionManager}
@@ -1085,7 +1081,7 @@
 </T>
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} metaManager={terrainMetaManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} />
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} />
   <ZoneOverlay />
   <RoadOverlay />
   <NpcWaypointOverlay />

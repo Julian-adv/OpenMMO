@@ -26,12 +26,3 @@ pub fn default_heightmap() -> Vec<u8> {
 pub fn default_splatmap() -> Vec<u8> {
     vec![0u8; SPLATMAP_SIZE]
 }
-
-/// Default region metadata — single-layer palette. Regions grow this as needed (up to 16).
-pub fn default_meta_json() -> serde_json::Value {
-    serde_json::json!({
-      "layers": [
-        { "texture": "rocky_terrain_02_1k", "tileScale": 8.0 }
-      ]
-    })
-}

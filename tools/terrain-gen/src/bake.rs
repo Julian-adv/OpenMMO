@@ -1,7 +1,9 @@
 //! `bake` command: runs the full worldgen pipeline, then for every tile in
-//! the chosen region range writes heightmap + splatmap bin files, per-region
-//! palette meta files, and a top-level `worldgen.json` index with the seed,
-//! config, settlements, and road polylines in world coordinates.
+//! the chosen region range writes heightmap + splatmap bin files plus a
+//! top-level `worldgen.json` index with the seed, config, settlements, and
+//! road polylines in world coordinates. The texture palette is global (see
+//! `shared::worldgen::tile_bake::default_palette_meta` / the client's
+//! `GLOBAL_PALETTE`) so no per-region meta files are emitted.
 //!
 //! The file layout matches `terrain::TerrainIO` so the runtime can load the
 //! output without any format conversion.
@@ -104,7 +106,7 @@ pub fn run(
         t.elapsed().as_secs_f32()
     );
 
-    // --- Directory scaffolding + per-region palette meta. ---------------
+    // --- Directory scaffolding. ------------------------------------------
     let region_xs: Vec<i32> = (region_min.0..=region_max.0).collect();
     let region_zs: Vec<i32> = (region_min.1..=region_max.1).collect();
     let region_count = region_xs.len() * region_zs.len();
@@ -113,17 +115,11 @@ pub fn run(
         .with_context(|| format!("create {}/height", out.display()))?;
     std::fs::create_dir_all(out.join("splat"))
         .with_context(|| format!("create {}/splat", out.display()))?;
-    std::fs::create_dir_all(out.join("meta"))
-        .with_context(|| format!("create {}/meta", out.display()))?;
 
-    let meta_json_str = serde_json::to_string_pretty(&tile_bake::default_palette_meta())?;
     for &rx in &region_xs {
         for &rz in &region_zs {
             std::fs::create_dir_all(coords::height_region_dir(out, rx, rz))?;
             std::fs::create_dir_all(coords::splat_region_dir(out, rx, rz))?;
-            let meta_path = coords::meta_path(out, rx, rz);
-            std::fs::write(&meta_path, &meta_json_str)
-                .with_context(|| format!("write {}", meta_path.display()))?;
         }
     }
 

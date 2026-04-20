@@ -22,7 +22,7 @@
   import { networkManager } from '../network/socket'
   import { cameraDistance } from '../stores/cameraStore'
   import { worldToTileCell } from './game-scene/terrain-utils'
-  import { tileToRegion } from '../managers/terrainMetaManager'
+  import { tileToRegion } from '../terrain/terrain-constants'
   import { timeScale, sunTimeScale, sunDebugOffset } from '../stores/timeStore'
   import { findTwilightOnsetHour, SUN_DAY_DURATION_SECONDS } from '../utils/celestialSimulation'
   import { gameTimeState } from './GameTimeWidget.svelte'

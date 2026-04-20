@@ -16,8 +16,8 @@ import {
 } from './splat-encoding'
 
 /**
- * Palette slot assignments used by procedural generation. Must match the palette
- * seeded into RegionMeta in GenerateTerrainDialog.
+ * Palette slot assignments used by procedural generation. Must match the
+ * global palette defined in splatLayerLoader.ts (GLOBAL_PALETTE).
  */
 export const GEN_SLOT = {
   GRASS: 0,

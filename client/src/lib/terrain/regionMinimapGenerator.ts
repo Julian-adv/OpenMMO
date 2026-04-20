@@ -6,7 +6,7 @@ import {
   VERTS_PER_SIDE,
 } from './terrain-constants'
 import { MAX_PALETTE, unpackPrimary, unpackSecondary } from './splat-encoding'
-import type { TerrainMetaManager } from '../managers/terrainMetaManager'
+import { GLOBAL_PALETTE } from '../utils/splatLayerLoader'
 import type { HouseData } from '../types/housing'
 
 /** Height above which shore holes in water shader reveal sand underneath (~0.2-0.25m depth) */
@@ -23,6 +23,8 @@ const TEXTURE_COLORS: Record<string, [number, number, number]> = {
   red_laterite_soil_stones_1k: [180, 100, 60], // reddish-brown
   gravel_road_1k: [140, 135, 125], // gray
   patterned_paving_02_1k: [235, 225, 205], // pale beige (road)
+  marble_cliff_01_1k: [200, 195, 185], // light gray marble (cliff face)
+  ganges_river_pebbles_1k: [110, 100, 85], // wet river pebbles
 }
 
 const COLOR_SHALLOW_WATER: [number, number, number] = [100, 160, 220]
@@ -37,17 +39,17 @@ function decodeHeight(value: number): number {
 export async function generateRegionMinimap(
   rx: number,
   rz: number,
-  metaManager: TerrainMetaManager,
   onProgress?: (pct: number, label: string) => void
 ): Promise<Blob> {
   const apiUrl = getTerrainApiUrl()
-  const meta = await metaManager.fetchMeta(rx, rz)
 
-  // Pre-pad to MAX_PALETTE so the hot pixel loop can skip bounds / fallback checks.
+  // Global palette is identical for every region, so the per-slot color table
+  // is a one-time derivation. Pre-pad to MAX_PALETTE so the hot pixel loop can
+  // skip bounds / fallback checks.
   const channelColors: [number, number, number][] = new Array(MAX_PALETTE)
     .fill(null)
     .map(() => COLOR_FALLBACK)
-  meta.layers.forEach((layer, i) => {
+  GLOBAL_PALETTE.forEach((layer, i) => {
     channelColors[i] = TEXTURE_COLORS[layer.texture] ?? COLOR_FALLBACK
   })
 
