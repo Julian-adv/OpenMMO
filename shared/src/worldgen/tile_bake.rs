@@ -10,12 +10,12 @@
 //!
 //! The global map lives at `meters_per_cell` m/cell (typically 8). Tile
 //! vertices are 1 m apart, so each vertex sample is a bilinear interpolation
-//! of 2×2 global cells plus a high-frequency detail noise term. Rivers are
-//! handled as world-space polylines (Chaikin-smoothed) and queried by
-//! point-to-segment distance during bake — they are not rasterized onto the
-//! global cell grid. The splat layer uses a fixed six-slot region palette;
-//! primary/secondary indices and the `blend` byte are chosen per-cell by a
-//! priority ladder (road > river > sea > alpine > cliff > coast > plain).
+//! of 2×2 global cells plus a high-frequency detail noise term. Rivers and
+//! roads are handled as world-space polylines (Chaikin-smoothed) and queried
+//! by point-to-segment distance during bake. The splat layer uses a fixed
+//! five-slot region palette; primary/secondary indices and the `blend` byte
+//! are chosen per-cell by a priority ladder (road > river > sea > alpine >
+//! cliff > coast > plain).
 
 use serde::{Deserialize, Serialize};
 
@@ -45,7 +45,6 @@ pub const PAL_SAND: u8 = 1; // sandy_gravel_02 — coast, river bed, shore
 pub const PAL_DIRT: u8 = 2; // red_laterite — barren mid-altitude / cliffs
 pub const PAL_SNOW: u8 = 3; // snow_02 — alpine peaks
 pub const PAL_ROAD: u8 = 4; // gravel_road — settlement road surfaces
-pub const PAL_PAVED: u8 = 5; // gravel_floor — paved squares / highlights
 
 /// Region metadata (`meta/r{rx}_{rz}.json`) the baker writes. Same palette
 /// for every region so the atlas cache is shared across the world.
@@ -56,8 +55,7 @@ pub fn default_palette_meta() -> serde_json::Value {
             { "texture": "sandy_gravel_02_1k",         "tileScale": 8.0 },
             { "texture": "red_laterite_soil_stones_1k","tileScale": 10.0 },
             { "texture": "snow_02_1k",                 "tileScale": 4.0 },
-            { "texture": "gravel_road_1k",             "tileScale": 8.0 },
-            { "texture": "gravel_floor_1k",            "tileScale": 6.0 }
+            { "texture": "gravel_road_1k",             "tileScale": 8.0 }
         ]
     })
 }
@@ -89,6 +87,16 @@ const RIVER_SAND_HALF_WIDTH_M: f32 = 5.0;
 /// vertices are at 8 m global-cell spacing; two rounds smooth that into a
 /// visible curve at 1 m tile resolution.
 const RIVER_CHAIKIN_ITERATIONS: u32 = 2;
+
+// --- Road splat ---------------------------------------------------------
+/// Half-width (m) of the pure road surface. Points within this distance of the
+/// road polyline render as 100% PAL_ROAD.
+const ROAD_HALF_WIDTH_M: f32 = 2.0;
+/// Distance (m) past the pure-road band over which the splat fades to pure
+/// GROUND. Matches the plain branch's inner edge so crossing the outer edge is
+/// a weight shift, not a palette swap.
+const ROAD_FADE_SPAN_M: f32 = 2.0;
+const ROAD_CHAIKIN_ITERATIONS: u32 = 2;
 
 // --- Splat classification thresholds -------------------------------------
 /// Cells within this many global cells of the coast get a sand band. The
@@ -135,8 +143,10 @@ pub struct BakeContext {
     /// rasterizing them back into an 8 m mask; that preserves sub-meter
     /// precision in the final splat/height carve.
     pub rivers_world: Vec<WorldPolyline>,
-    /// BFS distance from each cell to the nearest road cell.
-    pub dist_to_road: Vec<u16>,
+    /// Road polylines, same treatment as `rivers_world`. The previous
+    /// rasterized `dist_to_road` BFS exposed the 8 m cell lattice as an
+    /// axis-aligned staircase along every straight road segment.
+    pub roads_world: Vec<WorldPolyline>,
 }
 
 impl BakeContext {
@@ -148,25 +158,16 @@ impl BakeContext {
         let dist_to_sea = bfs_distance_from(&map.land_mask, res, 0);
         let dist_to_land = bfs_distance_from(&map.land_mask, res, 1);
 
-        // Convert river polylines to world-space meters, split at the X seam,
-        // then Chaikin-smooth. The result is what bake_tile queries for
-        // polyline-distance-based river placement.
-        let mut rivers_world: Vec<WorldPolyline> = Vec::new();
-        for poly in &river_map.rivers {
-            for wp in polyline_to_world(poly, &map.config) {
-                if wp.points.len() >= 2 {
-                    rivers_world.push(chaikin_smooth(&wp, RIVER_CHAIKIN_ITERATIONS));
-                }
-            }
-        }
-
-        let mut road_bin = vec![0u8; res * res];
-        for road in &road_net.roads {
-            for &(x, y) in &road.points {
-                road_bin[(y as usize) * res + (x as usize)] = 1;
-            }
-        }
-        let dist_to_road = bfs_distance_from(&road_bin, res, 1);
+        let rivers_world = smooth_polylines(
+            river_map.rivers.iter().map(|p| p.points.as_slice()),
+            &map.config,
+            RIVER_CHAIKIN_ITERATIONS,
+        );
+        let roads_world = smooth_polylines(
+            road_net.roads.iter().map(|r| r.points.as_slice()),
+            &map.config,
+            ROAD_CHAIKIN_ITERATIONS,
+        );
 
         let detail_noise = PerlinNoise3D::new(map.config.seed ^ 0xD1EA_C17E_0000_0007);
 
@@ -175,9 +176,31 @@ impl BakeContext {
             dist_to_sea,
             dist_to_land,
             rivers_world,
-            dist_to_road,
+            roads_world,
         }
     }
+}
+
+/// Convert an iterator of cell-index polylines into world-space polylines,
+/// splitting at the X seam and Chaikin-smoothing each resulting segment.
+/// Shared between rivers and roads so both go through the exact same pipeline.
+fn smooth_polylines<'a, I>(
+    polylines: I,
+    cfg: &super::config::WorldGenConfig,
+    iterations: u32,
+) -> Vec<WorldPolyline>
+where
+    I: IntoIterator<Item = &'a [(u32, u32)]>,
+{
+    let mut out: Vec<WorldPolyline> = Vec::new();
+    for pts in polylines {
+        for wp in polyline_to_world(pts, cfg) {
+            if wp.points.len() >= 2 {
+                out.push(chaikin_smooth(&wp, iterations));
+            }
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -211,10 +234,22 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
         tile_max_z,
         river_margin,
     );
+    // `* 2.0`: the plain branch reads road distance up to HALF + FADE*2 via
+    // `road_fade`. Shrinking the margin would desynchronize the fade across
+    // tile boundaries.
+    let road_margin = ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M * 2.0;
+    let road_segs = segments_near_tile(
+        &ctx.roads_world,
+        tile_min_x,
+        tile_min_z,
+        tile_max_x,
+        tile_max_z,
+        road_margin,
+    );
 
     let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs);
     let heightmap = encode_heightmap(&heights);
-    let splatmap = bake_splatmap(map, ctx, tx, tz, &heights, &river_segs);
+    let splatmap = bake_splatmap(map, ctx, tx, tz, &heights, &river_segs, &road_segs);
     BakedTile {
         heightmap,
         splatmap,
@@ -365,6 +400,7 @@ fn bake_splatmap(
     tz: i32,
     heights: &[f32],
     river_segs: &[Segment],
+    road_segs: &[Segment],
 ) -> Vec<u8> {
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
@@ -405,10 +441,10 @@ fn bake_splatmap(
             // staircase where d transitions from 2 to 3.
             let coast_d_cells = sample_coast_d_jittered(map, ctx, wx, wz, world_size, inv_mpc);
             let river_d_m = min_distance_to_segments(wx, wz, river_segs);
-            let on_road = ctx.dist_to_road[gi] == 0;
+            let road_d_m = min_distance_to_segments(wx, wz, road_segs);
 
             let (primary, secondary, blend, veg) =
-                classify_splat(is_sea, river_d_m, on_road, h_center, slope, coast_d_cells);
+                classify_splat(is_sea, river_d_m, road_d_m, h_center, slope, coast_d_cells);
 
             let off = (cz * TILE_DIM + cx) * 4;
             let bytes = pack_splat(primary, secondary, blend, veg);
@@ -554,14 +590,19 @@ fn bilinear_wrap_x<F: Fn(usize) -> f32>(
 fn classify_splat(
     is_sea: bool,
     river_d_m: f32,
-    on_road: bool,
+    road_d_m: f32,
     h_center: f32,
     slope: f32,
     coast_d_cells: f32,
 ) -> (u8, u8, u8, u8) {
-    if on_road {
-        // Roads override every biome so the network is always visible.
-        (PAL_ROAD, PAL_PAVED, 0, 0)
+    if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
+        // Roads override every biome so the network stays visible. Secondary
+        // is PAL_GROUND so the fade outer edge (blend=255 → pure GROUND) meets
+        // the plain branch's inner edge (also pure GROUND) without a
+        // palette-swap pop.
+        let t = ((road_d_m - ROAD_HALF_WIDTH_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
+        let blend = (t * t * 255.0) as u8;
+        (PAL_ROAD, PAL_GROUND, blend, 0)
     } else if river_d_m < RIVER_SAND_HALF_WIDTH_M {
         // River bed uses DIRT (not SAND) so it shares the (GROUND, DIRT)
         // palette pair with the plain branch outside — crossing the band
@@ -638,7 +679,9 @@ fn classify_splat(
             ((coast_d_cells - COAST_SAND_CELLS) / COAST_FADE_SPAN_CELLS).clamp(0.0, 1.0);
         let river_fade =
             ((river_d_m - RIVER_SAND_HALF_WIDTH_M) / RIVER_FADE_SPAN_M).clamp(0.0, 1.0);
-        let water_fade = coast_fade.min(river_fade);
+        let road_fade =
+            ((road_d_m - ROAD_HALF_WIDTH_M - ROAD_FADE_SPAN_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
+        let water_fade = coast_fade.min(river_fade).min(road_fade);
         let blend = (rocky * 180.0 * water_fade) as u8;
         (PAL_GROUND, PAL_DIRT, blend, veg)
     }
@@ -747,12 +790,12 @@ mod tests {
             let primary = (chunk[0] >> 4) & 0x0F;
             let secondary = chunk[0] & 0x0F;
             assert!(
-                primary <= PAL_PAVED,
+                primary <= PAL_ROAD,
                 "primary slot {} out of palette",
                 primary
             );
             assert!(
-                secondary <= PAL_PAVED,
+                secondary <= PAL_ROAD,
                 "secondary slot {} out of palette",
                 secondary
             );
@@ -766,13 +809,22 @@ mod tests {
         }
     }
 
-    /// Flat plain. Slope is 0 so the plain branch's rocky component is 0 and
-    /// any blend value reflects only coastal/river fades, not terrain.
-    fn plain_inputs(coast_d_cells: f32) -> (bool, f32, bool, f32, f32, f32) {
-        (false, f32::INFINITY, false, 10.0, 0.0, coast_d_cells)
+    /// Flat plain far from any feature. Slope is 0 so the plain branch's
+    /// rocky component is 0 and any blend value reflects only coastal fades,
+    /// not terrain. Rivers and roads default to INFINITY so those branches
+    /// are inactive.
+    fn plain_inputs(coast_d_cells: f32) -> (bool, f32, f32, f32, f32, f32) {
+        (
+            false,
+            f32::INFINITY,
+            f32::INFINITY,
+            10.0,
+            0.0,
+            coast_d_cells,
+        )
     }
 
-    fn call_classify(args: (bool, f32, bool, f32, f32, f32)) -> (u8, u8, u8, u8) {
+    fn call_classify(args: (bool, f32, f32, f32, f32, f32)) -> (u8, u8, u8, u8) {
         classify_splat(args.0, args.1, args.2, args.3, args.4, args.5)
     }
 
@@ -826,8 +878,9 @@ mod tests {
     #[test]
     fn priority_road_beats_sea_and_river() {
         // Roads must always win so the settlement network stays visible.
-        let (p, s, _, _) = classify_splat(true, 1.0, true, -5.0, 0.0, 0.0);
-        assert_eq!((p, s), (PAL_ROAD, PAL_PAVED));
+        let (p, s, blend, _) = classify_splat(true, 1.0, 0.0, -5.0, 0.0, 0.0);
+        assert_eq!((p, s), (PAL_ROAD, PAL_GROUND));
+        assert_eq!(blend, 0, "road center must be 100% PAL_ROAD");
     }
 
     #[test]
@@ -835,7 +888,7 @@ mod tests {
         // River bed uses (DIRT, GROUND) not (SAND, GROUND) — this is what
         // keeps the river-edge → plain transition a weight shift rather than
         // a palette swap. Regression guard for that choice.
-        let (p, s, _, _) = classify_splat(true, 0.0, false, -1.0, 0.0, 0.0);
+        let (p, s, _, _) = classify_splat(true, 0.0, f32::INFINITY, -1.0, 0.0, 0.0);
         assert_eq!((p, s), (PAL_DIRT, PAL_GROUND));
     }
 
@@ -845,7 +898,7 @@ mod tests {
         let at_edge = classify_splat(
             false,
             RIVER_SAND_HALF_WIDTH_M - 1e-4,
-            false,
+            f32::INFINITY,
             10.0,
             0.0,
             100.0,
@@ -856,7 +909,7 @@ mod tests {
         let past_edge = classify_splat(
             false,
             RIVER_SAND_HALF_WIDTH_M + 1e-4,
-            false,
+            f32::INFINITY,
             10.0,
             0.0,
             100.0,
@@ -865,6 +918,106 @@ mod tests {
         assert_eq!(
             past_edge.2, 0,
             "plain just past river edge must be pure GROUND"
+        );
+    }
+
+    #[test]
+    fn road_outer_edge_meets_plain_seamlessly() {
+        // Continuity invariant for the road band: at the outer edge the road
+        // branch must emit blend=255 (pure GROUND secondary), and the plain
+        // branch just past must emit blend=0 (pure GROUND primary). If either
+        // side drifts, a visible seam appears along every road.
+        let at_edge = classify_splat(
+            false,
+            f32::INFINITY,
+            ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M - 1e-4,
+            10.0,
+            0.0,
+            100.0,
+        );
+        assert_eq!((at_edge.0, at_edge.1), (PAL_ROAD, PAL_GROUND));
+        assert_eq!(at_edge.2, 254, "road edge must be near-pure GROUND");
+
+        let past_edge = classify_splat(
+            false,
+            f32::INFINITY,
+            ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M + 1e-4,
+            10.0,
+            0.0,
+            100.0,
+        );
+        assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_DIRT));
+        assert_eq!(
+            past_edge.2, 0,
+            "plain just past road edge must be pure GROUND"
+        );
+    }
+
+    #[test]
+    fn road_blend_monotonic_across_band() {
+        // The road branch's blend curve (t² over the fade region) must be
+        // non-decreasing from 0 at the pure-road core to 255 at the outer
+        // edge. Any regression that breaks monotonicity would resurrect
+        // visible bands inside a single road. We sample strictly inside the
+        // band — past the outer edge the palette pair swaps (ROAD,GROUND) →
+        // (GROUND,DIRT) and raw blend bytes are no longer comparable.
+        let steps = 24;
+        let band_end = ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M - 1e-3;
+        let mut prev = -1i32;
+        for i in 0..=steps {
+            let d = band_end * (i as f32) / (steps as f32);
+            let (primary, _, blend, _) = classify_splat(false, f32::INFINITY, d, 10.0, 0.0, 100.0);
+            assert_eq!(
+                primary, PAL_ROAD,
+                "road branch must still be active at d={d}"
+            );
+            assert!(
+                blend as i32 >= prev,
+                "non-monotonic road blend at d={d}: {blend} < {prev}"
+            );
+            prev = blend as i32;
+        }
+    }
+
+    #[test]
+    fn road_margin_covers_plain_fade_span() {
+        // At the road margin distance, the plain branch's splat output must
+        // match the "no road in sight" output. Otherwise a tile whose filter
+        // excludes a road segment just past its margin would render a
+        // different blend than the neighbor tile that includes it — a hard
+        // seam along the tile boundary.
+        let road_margin = ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M * 2.0;
+        // Slope 0.5 < SLOPE_CLIFF_START so the plain branch fires; its rocky
+        // component is non-zero so a mismatched water_fade would surface as a
+        // blend diff.
+        let at_margin = classify_splat(false, f32::INFINITY, road_margin, 10.0, 0.5, 100.0);
+        let no_road = classify_splat(false, f32::INFINITY, f32::INFINITY, 10.0, 0.5, 100.0);
+        assert_eq!(
+            at_margin, no_road,
+            "plain branch must match 'no road' output at road_margin"
+        );
+    }
+
+    #[test]
+    fn adjacent_tiles_see_same_nearby_road_segment() {
+        // Same boundary regression guard as the river version but with the
+        // (smaller) road margin. A road segment `road_margin - 1` m outside
+        // a tile bbox must still appear in that tile's filter list so the
+        // plain branch's road_fade matches across tile edges.
+        use super::super::vector_features::{segments_near_tile, WorldPolyline};
+        let road_margin = ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M * 2.0;
+        let polys = vec![WorldPolyline {
+            points: vec![
+                [32.0 - (road_margin - 1.0), -10.0],
+                [32.0 - (road_margin - 1.0), 10.0],
+            ],
+        }];
+        let near = segments_near_tile(&polys, 32.0, -16.0, 96.0, 16.0, road_margin);
+        assert_eq!(
+            near.len(),
+            1,
+            "tile must see road segment {} m west of its bbox",
+            road_margin - 1.0
         );
     }
 
@@ -1022,13 +1175,13 @@ mod tests {
     }
 
     #[test]
-    fn palette_meta_has_six_layers() {
+    fn palette_meta_layer_count_matches_constants() {
         let meta = default_palette_meta();
         let layers = meta
             .get("layers")
             .and_then(|l| l.as_array())
             .expect("layers array");
-        assert_eq!(layers.len(), 6);
+        assert_eq!(layers.len(), PAL_ROAD as usize + 1);
         for layer in layers {
             assert!(layer.get("texture").and_then(|t| t.as_str()).is_some());
             assert!(layer.get("tileScale").and_then(|t| t.as_f64()).is_some());

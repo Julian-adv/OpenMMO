@@ -259,10 +259,10 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
 
 ### 11.3 진행 순서
 
-- [ ] **Step 1: 강** — `RiverMap.rivers` Chaikin smooth + 공간 인덱스 +
+- [x] **Step 1: 강** — `RiverMap.rivers` Chaikin smooth + 공간 인덱스 +
       polyline-distance-based splat/carve. `river_mask` 제거. 결과 눈으로
       확인.
-- [ ] **Step 2: 도로** — 동일 구조로 `RoadNetwork.roads`. `dist_to_road` 제거.
+- [x] **Step 2: 도로** — 동일 구조로 `RoadNetwork.roads`. `dist_to_road` 제거.
 - [ ] **Step 3: 해안** — Marching Squares로 `land_mask` 경계 polyline 추출,
       Chaikin smooth, 공간 인덱스. `sample_coast_d_jittered` → polyline
       distance로 교체. `dist_to_sea`/`dist_to_land` 제거 (bathymetry는 land
@@ -292,9 +292,8 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
       high-freq detail noise + 해저 shallow bathymetry. V2 splatmap 은
       road > river > sea > alpine > cliff > coast > plain 우선순위로
       primary/secondary slot + blend 를 결정하고, 평야에는 vegMeta 에
-      short-grass 밀도 bake. 고정 6-슬롯 팔레트 (`rocky_terrain`,
-      `sandy_gravel`, `red_laterite`, `snow_02`, `gravel_road`,
-      `gravel_floor`).
+      short-grass 밀도 bake. 고정 5-슬롯 팔레트 (`rocky_terrain`,
+      `sandy_gravel`, `red_laterite`, `snow_02`, `gravel_road`).
 - [x] `tools/terrain-gen` 스캐폴딩 및 `preview` / `bake` 명령.
       `preview` 출력: `01_potential.png`, `01_land_sea.png`,
       `01_land_sea_shifted.png` (wrap 검증용), `02_elevation.png`,

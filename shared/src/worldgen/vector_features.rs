@@ -14,7 +14,6 @@
 //! visible glitches exactly at the seam are acceptable for now.
 
 use super::config::WorldGenConfig;
-use super::rivers::Polyline;
 
 /// A polyline expressed in world-space meters (x, z).
 #[derive(Debug, Clone, Default)]
@@ -25,7 +24,7 @@ pub struct WorldPolyline {
 /// Convert a cell-index polyline to world-space meters. Segments whose
 /// endpoints straddle the X seam are split so each output polyline stays on
 /// one side of the seam.
-pub fn polyline_to_world(poly: &Polyline, cfg: &WorldGenConfig) -> Vec<WorldPolyline> {
+pub fn polyline_to_world(points: &[(u32, u32)], cfg: &WorldGenConfig) -> Vec<WorldPolyline> {
     let mpc = cfg.meters_per_cell();
     let half = cfg.world_size_m as f32 * 0.5;
 
@@ -38,8 +37,8 @@ pub fn polyline_to_world(poly: &Polyline, cfg: &WorldGenConfig) -> Vec<WorldPoly
     let mut out: Vec<WorldPolyline> = Vec::new();
     let mut current: Vec<[f32; 2]> = Vec::new();
 
-    for i in 0..poly.points.len() {
-        let p = to_world(&poly.points[i]);
+    for i in 0..points.len() {
+        let p = to_world(&points[i]);
         if let Some(&last) = current.last() {
             // Consecutive global cells differ by at most 1 cell in each axis,
             // so any dx exceeding half the world width must be an X-seam wrap.
@@ -160,6 +159,9 @@ pub fn point_segment_distance(px: f32, pz: f32, seg: &Segment) -> f32 {
 /// `sqrt` at the end instead of one per segment.
 #[inline]
 pub fn min_distance_to_segments(px: f32, pz: f32, segs: &[Segment]) -> f32 {
+    if segs.is_empty() {
+        return f32::INFINITY;
+    }
     let mut best_sq = f32::INFINITY;
     for seg in segs {
         let d_sq = point_segment_distance_sq(px, pz, seg);
@@ -174,7 +176,6 @@ pub fn min_distance_to_segments(px: f32, pz: f32, segs: &[Segment]) -> f32 {
 mod tests {
     use super::*;
     use crate::worldgen::config::WorldGenConfig;
-    use crate::worldgen::rivers::Polyline;
 
     fn test_config(res: u32, world_m: u32) -> WorldGenConfig {
         WorldGenConfig {
@@ -299,10 +300,8 @@ mod tests {
         // seam-split heuristic assumes adjacent grid cells, so the test
         // walks through adjacent cells to avoid triggering a false split.
         let cfg = test_config(8, 64);
-        let poly = Polyline {
-            points: vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)],
-        };
-        let out = polyline_to_world(&poly, &cfg);
+        let points: Vec<(u32, u32)> = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
+        let out = polyline_to_world(&points, &cfg);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].points.len(), 5);
         assert!((out[0].points[0][0] - -28.0).abs() < 1e-4);
@@ -318,10 +317,8 @@ mod tests {
         // the world's ±half boundary.
         let cfg = test_config(8, 64);
         let half = (cfg.world_size_m as f32) * 0.5;
-        let poly = Polyline {
-            points: vec![(6, 3), (7, 3), (0, 3), (1, 3)],
-        };
-        let out = polyline_to_world(&poly, &cfg);
+        let points: Vec<(u32, u32)> = vec![(6, 3), (7, 3), (0, 3), (1, 3)];
+        let out = polyline_to_world(&points, &cfg);
         assert_eq!(out.len(), 2, "seam-crossing polyline splits into 2");
         // First half ends at +half (seam nearest the eastern cells).
         let first_end = out[0].points.last().unwrap();
