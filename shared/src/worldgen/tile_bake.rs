@@ -72,6 +72,16 @@ const DETAIL_MAX_AMPLITUDE: f32 = 6.0;
 /// Min detail amplitude (m) on lowland plains.
 const DETAIL_MIN_AMPLITUDE: f32 = 0.4;
 
+// --- Rolling hills layer -------------------------------------------------
+// Universal hills applied to every land vertex, independent of the Phase 2
+// plain/mountain classification. Lives in Phase 7 rather than Phase 2
+// because Phase 3 erosion's 24 m brush blurs 60 m-wavelength features into
+// flat plateaus before they ever reach the tile baker.
+const HILLS_OCTAVES: u32 = 3;
+const HILLS_GAIN: f32 = 0.5;
+const HILLS_FREQUENCY: f32 = 1.0 / 60.0;
+const HILLS_AMPLITUDE_M: f32 = 5.0;
+
 // --- River carve / splat ------------------------------------------------
 /// Half-width (m) of the flat river-bed floor. Points within this distance of
 /// the river polyline are carved to the full channel depth.
@@ -337,11 +347,28 @@ fn sample_elevation_m(
     );
     let detail = n * amp * underwater_damp;
 
+    // Universal rolling hills, land only — bathymetry should stay flat.
+    let hills = if base >= 0.0 {
+        let hn = fbm_wrap_x(
+            &ctx.detail_noise,
+            world_x + world_size * 0.5,
+            world_z + world_size * 0.5,
+            world_size,
+            HILLS_FREQUENCY,
+            HILLS_OCTAVES,
+            DETAIL_LACUNARITY,
+            HILLS_GAIN,
+        );
+        hn * HILLS_AMPLITUDE_M
+    } else {
+        0.0
+    };
+
     let river_d = min_distance_to_segments(world_x, world_z, river_segs);
     let carve = river_carve_m(river_d);
 
     let max_cap = map.config.max_elevation_m;
-    (base + detail - carve).clamp(-HEIGHT_BIAS, max_cap)
+    (base + detail + hills - carve).clamp(-HEIGHT_BIAS, max_cap)
 }
 
 /// River channel profile: flat floor within `RIVER_CARVE_HALF_WIDTH_M`, then

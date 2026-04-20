@@ -53,7 +53,7 @@ pub fn run(
 
     let t = Instant::now();
     let mut river_map = rivers::compute_flow(&map);
-    let min_peak = config.max_elevation_m * 0.4;
+    let min_peak = config.max_elevation_m * 0.3;
     rivers::extract_rivers(&map, &mut river_map, min_peak, 20);
     eprintln!(
         "  Phase 4 (rivers):    {:.2}s  ({} polylines)",

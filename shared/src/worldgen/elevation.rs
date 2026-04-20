@@ -20,7 +20,9 @@ use super::noise::{fbm_wrap_x, PerlinNoise3D};
 
 const LACUNARITY: f32 = 2.0;
 const DETAIL_OCTAVES: u32 = 6;
-const DETAIL_GAIN: f32 = 0.5;
+/// Low gain so the finest 20 m octave stays ~4 m peak-to-peak in mountain
+/// regions, avoiding clusters of small bumps on top of larger hills.
+const DETAIL_GAIN: f32 = 0.29;
 const MOUNTAIN_SELECTOR_OCTAVES: u32 = 3;
 const MOUNTAIN_SELECTOR_GAIN: f32 = 0.55;
 
@@ -33,13 +35,19 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     // --- Distance from coast: normalized to 0..1 using a saturation depth.
     // Deeper than `coast_depth_cells` reads as "fully inland". 400 reference
     // cells ≈ 3.2km at the 8m/cell reference scale.
+    //
+    // The raw BFS field is 4-connected Manhattan, so near irregular
+    // coastlines it grows axis-aligned ridges that surface as visible
+    // 1-tile bumps on lowland slopes once the tile baker's Catmull-Rom
+    // samples them. Blurring before the smoothstep erases the artifact
+    // without shifting the macro coast → inland gradient.
     let dist_land = bfs_distance_from(&map.land_mask, res, 0);
+    let dist_land_smooth = box_blur_2d(&dist_land, res, 10);
     let coast_depth_cells = map.config.scaled_cells(400.0);
     let mut coast_norm = vec![0.0f32; total];
     for i in 0..total {
         if map.land_mask[i] == 1 {
-            let d = dist_land[i] as f32;
-            coast_norm[i] = (d / coast_depth_cells).clamp(0.0, 1.0);
+            coast_norm[i] = (dist_land_smooth[i] / coast_depth_cells).clamp(0.0, 1.0);
         }
     }
 
@@ -99,7 +107,9 @@ pub fn generate_elevation(map: &mut GlobalMap) {
                 continue; // sea stays at 0
             }
             // Base: rises smoothly from coast to a plateau with distance.
-            let base = smoothstep(0.0, 0.4, coast_norm[i]) * base_h;
+            // Wider saturation (0.8) keeps the coast → inland transition
+            // gentle so lowland tiles don't read as a single 40 m ridge.
+            let base = smoothstep(0.0, 0.8, coast_norm[i]) * base_h;
 
             // Detail: high-frequency fBm, in [-1, 1] approximately.
             let detail = fbm_wrap_x(
@@ -127,7 +137,12 @@ pub fn generate_elevation(map: &mut GlobalMap) {
                 mountain_score[i],
             );
             let plain_part = detail * pln_amp;
-            let mountain_part = (detail * 0.5 + 0.5).clamp(0.0, 1.0) * mtn_amp;
+            // Couple mountain amplitude to the base-elevation gradient so
+            // lowland cells don't inherit the mountain fBm's 100 m+ swings.
+            // Cubed so highlands (ratio ≈ 1) keep full amplitude while
+            // lowlands get very aggressive damping (0.5 → 0.125).
+            let base_frac = (base / base_h).clamp(0.0, 1.0).powi(3);
+            let mountain_part = (detail * 0.5 + 0.5).clamp(0.0, 1.0) * mtn_amp * base_frac;
             let detail_contribution = plain_part * (1.0 - mtn_factor) + mountain_part * mtn_factor;
             let mut h = base + detail_contribution * fade;
 
@@ -173,6 +188,41 @@ fn land_quantile(scores: &[f32], land_mask: &[u8], q: f32) -> f32 {
 fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
     let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
+}
+
+/// Separable 2-pass box blur of a `u16` field, returning `f32`. X wraps
+/// (world is cylindrical on the X axis), Y clamps. Used to smooth the
+/// Manhattan-distance coast field before it drives the base-elevation
+/// ramp; see comment at the call site.
+fn box_blur_2d(src: &[u16], res: usize, radius: usize) -> Vec<f32> {
+    let total = res * res;
+    let window = (2 * radius + 1) as f32;
+    let mut tmp = vec![0.0f32; total];
+    // Horizontal pass (X wraps).
+    for y in 0..res {
+        let row = y * res;
+        for x in 0..res {
+            let mut sum = 0.0f32;
+            for dx in 0..=(2 * radius) {
+                let xi = (x + res + dx).wrapping_sub(radius) % res;
+                sum += src[row + xi] as f32;
+            }
+            tmp[row + x] = sum / window;
+        }
+    }
+    // Vertical pass (Y clamps).
+    let mut out = vec![0.0f32; total];
+    for y in 0..res {
+        for x in 0..res {
+            let mut sum = 0.0f32;
+            for dy in 0..=(2 * radius) {
+                let yi = (y + dy).saturating_sub(radius).min(res - 1);
+                sum += tmp[yi * res + x];
+            }
+            out[y * res + x] = sum / window;
+        }
+    }
+    out
 }
 
 #[cfg(test)]

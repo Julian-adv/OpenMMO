@@ -79,14 +79,7 @@ async fn get_heightmap(
         error!("Failed to read heightmap ({}, {}): {}", x, z, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    Ok((
-        [
-            (header::CONTENT_TYPE, "application/octet-stream"),
-            (header::CACHE_CONTROL, "public, max-age=3600"),
-        ],
-        data,
-    )
-        .into_response())
+    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data).into_response())
 }
 
 async fn put_heightmap(
@@ -219,14 +212,7 @@ async fn get_splatmap(
         error!("Failed to read splatmap ({}, {}): {}", x, z, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    Ok((
-        [
-            (header::CONTENT_TYPE, "application/octet-stream"),
-            (header::CACHE_CONTROL, "public, max-age=3600"),
-        ],
-        data,
-    )
-        .into_response())
+    Ok(([(header::CONTENT_TYPE, "application/octet-stream")], data).into_response())
 }
 
 async fn put_splatmap(
@@ -259,14 +245,9 @@ async fn get_grass(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     match data {
-        Some(bytes) => Ok((
-            [
-                (header::CONTENT_TYPE, "application/octet-stream"),
-                (header::CACHE_CONTROL, "public, max-age=3600"),
-            ],
-            bytes,
-        )
-            .into_response()),
+        Some(bytes) => {
+            Ok(([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response())
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -294,11 +275,7 @@ async fn get_meta(
         error!("Failed to read meta ({}, {}): {}", rx, rz, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    Ok((
-        [(header::CACHE_CONTROL, "public, max-age=3600")],
-        Json(meta),
-    )
-        .into_response())
+    Ok(Json(meta).into_response())
 }
 
 async fn put_meta(
@@ -342,14 +319,7 @@ async fn get_minimap(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     match data {
-        Some(bytes) => Ok((
-            [
-                (header::CONTENT_TYPE, "image/png"),
-                (header::CACHE_CONTROL, "public, max-age=3600"),
-            ],
-            bytes,
-        )
-            .into_response()),
+        Some(bytes) => Ok(([(header::CONTENT_TYPE, "image/png")], bytes).into_response()),
         None => Err(StatusCode::NOT_FOUND),
     }
 }

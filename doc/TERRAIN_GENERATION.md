@@ -160,8 +160,23 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
 - `--settlements 60`, `--settlement-spacing 70`
 - Region 범위: `x=[-4,+3] z=[-4,+3]` (8×8 regions = 16,384 tiles)
 
-재현 불가능한 요소는 없음 — 동일 커맨드에서 동일 바이트가 나온다 (seed
-파생 규칙은 §9). 결과 요약은 `data/terrain/worldgen.json`의
+`WorldGenConfig` 기본값 외에, `worldgen.json`에 기록되지 않는 **코드 상수**도
+재현에 필요하다. 현 튜닝 값 (seed 42 기준, 저지대 부드럽게 + 고지대 구릉
+유지 타게팅):
+
+| 위치 | 상수 | 현재 값 | 원본 | 효과 |
+|------|------|--------|------|------|
+| `elevation.rs` | `DETAIL_GAIN` | 0.29 | 0.5 | 고주파 octave 감쇠, 봉우리 위 잔물결 제거 |
+| `elevation.rs` | `smoothstep(0, 0.8, …)` base ramp | 0.8 | 0.4 | 해안→내륙 전환 완만화 |
+| `elevation.rs` | `box_blur_2d(dist_land, r=10)` | 신규 | — | Manhattan BFS ridge artifact 제거 |
+| `elevation.rs` | mountain `base_frac.powi(3)` | 3승 | 1승 | 저지대 산지 진폭 강하게 감쇠, 고지대 그대로 |
+| `tile_bake.rs` | `HILLS_FREQUENCY` | 1/60 m | — | 모든 육지에 60m 파장 구릉 |
+| `tile_bake.rs` | `HILLS_AMPLITUDE_M` | 5.0 | — | 구릉 ±2.5m (30m 거리에 ~5m 기복) |
+| `tile_bake.rs` | `HILLS_OCTAVES`, `HILLS_GAIN` | 3, 0.5 | — | 60/30/15m 옥타브 |
+| `bake.rs` | `min_peak` 배율 | 0.3 | 0.4 | Phase 4 river peak 후보 확장 (~324 polylines) |
+
+재현 불가능한 요소는 없음 — 동일 커맨드 + 동일 코드에서 동일 바이트가
+나온다 (seed 파생 규칙은 §9). 결과 요약은 `data/terrain/worldgen.json`의
 `baked_at` / `measured_sea_ratio` / settlements / roads 배열로 확인.
 
 ## 7. 기존 시스템과의 통합
