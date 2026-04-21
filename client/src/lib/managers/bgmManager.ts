@@ -28,6 +28,10 @@ const BGM_FILES = [
   'Dawn Watch at the Gate.mp3',
   'Shadow Over the Village.mp3',
   'Sunlit Shopfront Waltz.mp3',
+  'Castle Glass & Copper Skies.mp3',
+  'Dies of the Dragon King.mp3',
+  'Shadowed Keep in G Minor.mp3',
+  'The Great Gate of Kyiv.mp3',
 ]
 
 const BATTLE_BGM_FILES = [
