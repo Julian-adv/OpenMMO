@@ -6,26 +6,13 @@ import {
   VERTS_PER_SIDE,
 } from './terrain-constants'
 import { MAX_PALETTE, unpackPrimary, unpackSecondary } from './splat-encoding'
-import { GLOBAL_PALETTE } from '../utils/splatLayerLoader'
+import { PALETTE } from '../utils/splatLayerLoader'
 import type { HouseData } from '../types/housing'
 
 /** Height above which shore holes in water shader reveal sand underneath (~0.2-0.25m depth) */
 const VISIBLE_SAND_THRESHOLD = -0.25
 
 const MAP_PX = REGION_SIZE * TILE_DIM // 1024
-
-/** Texture name → minimap RGB color */
-const TEXTURE_COLORS: Record<string, [number, number, number]> = {
-  rocky_terrain_02_1k: [80, 140, 50], // green (grass)
-  sandy_gravel_02_1k: [210, 185, 110], // sand
-  snow_02_1k: [240, 240, 245], // white
-  gravel_floor_1k: [160, 150, 130], // gray-brown
-  red_laterite_soil_stones_1k: [180, 100, 60], // reddish-brown
-  gravel_road_1k: [140, 135, 125], // gray
-  patterned_paving_02_1k: [235, 225, 205], // pale beige (road)
-  marble_cliff_01_1k: [200, 195, 185], // light gray marble (cliff face)
-  ganges_river_pebbles_1k: [110, 100, 85], // wet river pebbles
-}
 
 const COLOR_SHALLOW_WATER: [number, number, number] = [100, 160, 220]
 const COLOR_DEEP_WATER: [number, number, number] = [30, 60, 150]
@@ -49,8 +36,8 @@ export async function generateRegionMinimap(
   const channelColors: [number, number, number][] = new Array(MAX_PALETTE)
     .fill(null)
     .map(() => COLOR_FALLBACK)
-  GLOBAL_PALETTE.forEach((layer, i) => {
-    channelColors[i] = TEXTURE_COLORS[layer.texture] ?? COLOR_FALLBACK
+  PALETTE.forEach((layer, i) => {
+    channelColors[i] = layer.minimapColor
   })
 
   // Fetch all tiles' height + splat data

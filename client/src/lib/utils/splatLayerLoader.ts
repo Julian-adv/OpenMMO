@@ -2,35 +2,23 @@ import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/Addons.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import type { SplatLayer } from '../components/makeSplatStandardMaterial'
+import paletteJson from '../../../../shared/palette.json'
 
 export interface LayerConfig {
   texture: string
   tileScale: number
+  /** RGB 0..=255 used to color this slot on the minimap / world map. */
+  minimapColor: [number, number, number]
   /** Swap U↔V on this slot (perceptually 90° rotation for isotropic textures).
    *  Default false. Useful when a texture's dominant stripe direction doesn't
    *  match the terrain orientation. */
   swapUv?: boolean
 }
 
-/**
- * Global terrain palette — identical for every tile in the world. Slot order
- * MUST match `shared/src/worldgen/tile_bake.rs::default_palette_meta()` and
- * the `PAL_*` constants there, since the baker writes splat cells that index
- * into this list.
- */
-export const GLOBAL_PALETTE: LayerConfig[] = [
-  { texture: 'rocky_terrain_02_1k', tileScale: 8.0 }, // 0 PAL_GROUND
-  { texture: 'sandy_gravel_02_1k', tileScale: 8.0 }, // 1 PAL_SAND
-  { texture: 'red_laterite_soil_stones_1k', tileScale: 10.0 }, // 2 PAL_DIRT
-  { texture: 'snow_02_1k', tileScale: 4.0 }, // 3 PAL_SNOW
-  { texture: 'gravel_road_1k', tileScale: 8.0 }, // 4 PAL_ROAD
-  {
-    texture: 'marble_cliff_01_1k',
-    tileScale: 32.0,
-    swapUv: true,
-  }, // 5 PAL_CLIFF — 2 m/repeat; rotated 90° CW so marble banding runs horizontally across vertical cliff faces
-  { texture: 'ganges_river_pebbles_1k', tileScale: 24.0 }, // 6 PAL_RIVER_BED — ~2.67 m/repeat
-]
+/** Global terrain palette. Slot order must match the `PAL_*` constants in
+ *  `shared/src/worldgen/tile_bake.rs` — the baker writes those indices into
+ *  splat cells. */
+export const PALETTE = paletteJson.layers as unknown as LayerConfig[]
 
 /** Atlas set: 2×2 packed textures for diffuse, normal, ORM */
 export interface SplatAtlasSet {
@@ -179,9 +167,10 @@ export function loadSplatLayer(
   return promise.then((t) => ({ ...t, tile: tileScale, swapUv }))
 }
 
-/** Load 1–MAX_PALETTE splat layers from config. Shared textures are loaded only once. */
+/** Load 1–MAX_PALETTE splat layers from config. Shared textures are loaded
+ *  only once. Defaults to the compile-time-embedded global palette. */
 export function loadSplatLayers(
-  configs: LayerConfig[] = GLOBAL_PALETTE
+  configs: LayerConfig[] = PALETTE
 ): Promise<SplatLayer[]> {
   return Promise.all(
     configs.map((c) => loadSplatLayer(c.texture, c.tileScale, c.swapUv))

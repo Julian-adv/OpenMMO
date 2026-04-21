@@ -39,33 +39,24 @@ pub const VERTS_PER_SIDE: usize = TILE_DIM + 1;
 const HEIGHT_BIAS: f32 = 500.0;
 const HEIGHT_STEP: f32 = 0.05;
 
-/// Fixed palette slot indices used by this baker. The runtime `meta.json`
-/// writer mirrors these positions via `default_palette_meta()`.
+/// Fixed palette slot indices used by this baker. Must match slot order in
+/// `shared/palette.json`.
 pub const PAL_GROUND: u8 = 0; // rocky_terrain_02 — general ground under grass
 pub const PAL_SAND: u8 = 1; // sandy_gravel_02 — coast, river bed, shore
 pub const PAL_DIRT: u8 = 2; // red_laterite — barren mid-altitude, gentle cliff base
 pub const PAL_SNOW: u8 = 3; // snow_02 — alpine peaks
 pub const PAL_ROAD: u8 = 4; // gravel_road — settlement road surfaces
-pub const PAL_CLIFF: u8 = 5; // marble_cliff_01 — exposed rock face on ≥45° slopes
+pub const PAL_CLIFF: u8 = 5; // rocky_trail — exposed rock face on ≥45° slopes
 pub const PAL_RIVER_BED: u8 = 6; // ganges_river_pebbles — wet rocky river bottom
 
-/// Global terrain palette. Identical across every tile/region — the client
-/// hardcodes the same list so an atlas built once serves the whole world. If
-/// you add a slot here, mirror it in `client/src/lib/utils/splatLayerLoader.ts`
-/// and any minimap-color tables.
-pub fn default_palette_meta() -> serde_json::Value {
-    serde_json::json!({
-        "layers": [
-            { "texture": "rocky_terrain_02_1k",        "tileScale": 8.0 },
-            { "texture": "sandy_gravel_02_1k",         "tileScale": 8.0 },
-            { "texture": "red_laterite_soil_stones_1k","tileScale": 10.0 },
-            { "texture": "snow_02_1k",                 "tileScale": 4.0 },
-            { "texture": "gravel_road_1k",             "tileScale": 8.0 },
-            { "texture": "marble_cliff_01_1k",         "tileScale": 32.0 },
-            { "texture": "ganges_river_pebbles_1k",    "tileScale": 24.0 }
-        ]
-    })
-}
+/// Source of truth for the global terrain palette. Each slot: `texture`
+/// (GLB under `client/public/textures/`), `tileScale` (m per repeat),
+/// `minimapColor` (RGB 0..=255). The Rust baker only needs to know slot
+/// order (via `PAL_*` constants) — the actual fields are consumed by the
+/// client at bundle time. The embed here is just to keep the test below
+/// honest about this file's schema.
+#[cfg(test)]
+const PALETTE_JSON: &str = include_str!("../../palette.json");
 
 // --- Detail noise tuning -------------------------------------------------
 const DETAIL_OCTAVES: u32 = 4;
@@ -88,6 +79,12 @@ const HILLS_OCTAVES: u32 = 3;
 const HILLS_GAIN: f32 = 0.5;
 const HILLS_FREQUENCY: f32 = 1.0 / 60.0;
 const HILLS_AMPLITUDE_M: f32 = 5.0;
+/// Base elevation (m) over which the hills amplitude fades in from 0 to full.
+/// At base = 0 m (sea level) the hills are zero, ramping linearly to full
+/// amplitude at `HILLS_COASTAL_FADE_M`. Prevents the symmetric hills noise
+/// from pulling coastal lowlands below sea level and creating lagoons /
+/// standing-water pockets inland of the shoreline.
+const HILLS_COASTAL_FADE_M: f32 = 3.0;
 
 // --- River carve / splat ------------------------------------------------
 /// Half-width (m) of the flat river-bed floor. Points within this distance of
@@ -377,6 +374,9 @@ fn sample_elevation_m(
     let detail = n * amp * underwater_damp;
 
     // Universal rolling hills, land only — bathymetry should stay flat.
+    // Amplitude fades in over the first `HILLS_COASTAL_FADE_M` meters of base
+    // elevation so the symmetric noise can't pull 1-2 m coastal land below
+    // sea level and trap water in lagoons inland of the shoreline.
     let hills = if base >= 0.0 {
         let hn = fbm_wrap_x(
             &ctx.detail_noise,
@@ -388,7 +388,8 @@ fn sample_elevation_m(
             DETAIL_LACUNARITY,
             HILLS_GAIN,
         );
-        hn * HILLS_AMPLITUDE_M
+        let coastal_damp = (base / HILLS_COASTAL_FADE_M).clamp(0.0, 1.0);
+        hn * HILLS_AMPLITUDE_M * coastal_damp
     } else {
         0.0
     };
@@ -1386,8 +1387,9 @@ mod tests {
     }
 
     #[test]
-    fn palette_meta_layer_count_matches_constants() {
-        let meta = default_palette_meta();
+    fn palette_json_schema_matches_constants() {
+        let meta: serde_json::Value =
+            serde_json::from_str(PALETTE_JSON).expect("shared/palette.json is valid JSON");
         let layers = meta
             .get("layers")
             .and_then(|l| l.as_array())
@@ -1396,6 +1398,15 @@ mod tests {
         for layer in layers {
             assert!(layer.get("texture").and_then(|t| t.as_str()).is_some());
             assert!(layer.get("tileScale").and_then(|t| t.as_f64()).is_some());
+            let color = layer
+                .get("minimapColor")
+                .and_then(|c| c.as_array())
+                .expect("minimapColor array");
+            assert_eq!(color.len(), 3);
+            for c in color {
+                let v = c.as_u64().expect("minimapColor channel is u8");
+                assert!(v <= 255);
+            }
         }
     }
 }

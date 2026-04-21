@@ -5,7 +5,7 @@
     splatLayer,
     textureNameToLabel,
   } from '../../stores/editorStore'
-  import { GLOBAL_PALETTE, loadSplatLayer } from '../../utils/splatLayerLoader'
+  import { PALETTE, loadSplatLayer } from '../../utils/splatLayerLoader'
 
   interface Props {
     title?: string
@@ -16,16 +16,6 @@
     hint = '(click to select slot)',
   }: Props = $props()
 
-  // One color swatch per global-palette slot — purely cosmetic fallback when
-  // a texture thumbnail hasn't loaded yet. Repeated for slot count > array length.
-  const SLOT_SWATCH_COLORS = [
-    '#66cc66', // 0 grass
-    '#d9ba6e', // 1 sand
-    '#b06438', // 2 laterite
-    '#ddeeff', // 3 snow
-    '#8c877d', // 4 road
-    '#c9c4ba', // 5 cliff
-  ]
   const THUMB_SIZE = 64
 
   let size = $state(3)
@@ -44,19 +34,17 @@
     const ctx = canvas.getContext('2d')!
 
     const loaded = await Promise.all(
-      GLOBAL_PALETTE.map((cfg) =>
-        loadSplatLayer(cfg.texture, 1).catch(() => null)
-      )
+      PALETTE.map((cfg) => loadSplatLayer(cfg.texture, 1).catch(() => null))
     )
 
     const result: Record<string, string> = {}
-    for (let i = 0; i < GLOBAL_PALETTE.length; i++) {
+    for (let i = 0; i < PALETTE.length; i++) {
       const l = loaded[i]
       const img = l?.map.image as HTMLImageElement | undefined
       if (!img) continue
       ctx.clearRect(0, 0, THUMB_SIZE, THUMB_SIZE)
       ctx.drawImage(img as HTMLImageElement, 0, 0, THUMB_SIZE, THUMB_SIZE)
-      result[GLOBAL_PALETTE[i].texture] = canvas.toDataURL('image/jpeg', 0.7)
+      result[PALETTE[i].texture] = canvas.toDataURL('image/jpeg', 0.7)
     }
     thumbnails = result
   }
@@ -83,9 +71,9 @@
 
   <div class="section-label">Brush <span class="hint">{hint}</span></div>
   <div class="palette-grid">
-    {#each GLOBAL_PALETTE as cfg, i (cfg.texture)}
+    {#each PALETTE as cfg, i (cfg.texture)}
       {@const label = textureNameToLabel(cfg.texture)}
-      {@const swatch = SLOT_SWATCH_COLORS[i % SLOT_SWATCH_COLORS.length]}
+      {@const swatch = `rgb(${cfg.minimapColor[0]}, ${cfg.minimapColor[1]}, ${cfg.minimapColor[2]})`}
       <button
         class="grid-item"
         class:selected={layer === i}

@@ -1,9 +1,9 @@
 //! `bake` command: runs the full worldgen pipeline, then for every tile in
 //! the chosen region range writes heightmap + splatmap bin files plus a
 //! top-level `worldgen.json` index with the seed, config, settlements, and
-//! road polylines in world coordinates. The texture palette is global (see
-//! `shared::worldgen::tile_bake::default_palette_meta` / the client's
-//! `GLOBAL_PALETTE`) so no per-region meta files are emitted.
+//! road polylines in world coordinates. The texture palette is global
+//! (`shared/palette.json`, shared with the client at bundle time), so no
+//! per-region or per-bake meta files are emitted.
 //!
 //! The file layout matches `terrain::TerrainIO` so the runtime can load the
 //! output without any format conversion.
