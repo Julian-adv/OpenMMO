@@ -10,8 +10,8 @@
 
 use anyhow::{Context, Result};
 use onlinerpg_shared::worldgen::{
-    coasts, continent, elevation, erosion, rivers, roads, settlements, tile_bake, GlobalMap,
-    WorldGenConfig,
+    coasts, continent, elevation, erosion, rivers, roads, settlements, tile_bake, vegetation,
+    GlobalMap, WorldGenConfig,
 };
 use onlinerpg_terrain::coords;
 use rayon::prelude::*;
@@ -118,11 +118,17 @@ pub fn run(
         .with_context(|| format!("create {}/height", out.display()))?;
     std::fs::create_dir_all(out.join("splat"))
         .with_context(|| format!("create {}/splat", out.display()))?;
+    std::fs::create_dir_all(out.join("trees"))
+        .with_context(|| format!("create {}/trees", out.display()))?;
+    std::fs::create_dir_all(out.join("grass"))
+        .with_context(|| format!("create {}/grass", out.display()))?;
 
     for &rx in &region_xs {
         for &rz in &region_zs {
             std::fs::create_dir_all(coords::height_region_dir(out, rx, rz))?;
             std::fs::create_dir_all(coords::splat_region_dir(out, rx, rz))?;
+            std::fs::create_dir_all(coords::tree_region_dir(out, rx, rz))?;
+            std::fs::create_dir_all(coords::grass_region_dir(out, rx, rz))?;
         }
     }
 
@@ -157,6 +163,18 @@ pub fn run(
                 .with_context(|| format!("write {}", hpath.display()))?;
             std::fs::write(&spath, &baked.splatmap)
                 .with_context(|| format!("write {}", spath.display()))?;
+
+            // Phase 8: tree + grass placement files. The worldgen pipeline
+            // doesn't lay houses, so no exclusion rects — empty slice keeps
+            // the call compatible with a future replat that does.
+            let tree_bin = vegetation::bake_trees(tx, tz, &baked.splatmap, &baked.heightmap, &[]);
+            let grass_bin = vegetation::bake_grass(tx, tz, &baked.splatmap, &baked.heightmap);
+            let tpath = coords::tree_path(out, tx, tz);
+            let gpath = coords::grass_path(out, tx, tz);
+            std::fs::write(&tpath, &tree_bin)
+                .with_context(|| format!("write {}", tpath.display()))?;
+            std::fs::write(&gpath, &grass_bin)
+                .with_context(|| format!("write {}", gpath.display()))?;
 
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
             let report_at = next_report.load(Ordering::Relaxed);

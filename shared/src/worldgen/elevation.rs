@@ -16,7 +16,7 @@
 
 use super::global_map::GlobalMap;
 use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, PerlinNoise3D};
+use super::noise::{fbm_wrap_x, smoothstep, PerlinNoise3D};
 
 const LACUNARITY: f32 = 2.0;
 const DETAIL_OCTAVES: u32 = 6;
@@ -183,11 +183,6 @@ fn land_quantile(scores: &[f32], land_mask: &[u8], q: f32) -> f32 {
     }
     let idx = ((q.clamp(0.0, 1.0) * vals.len() as f32) as usize).min(vals.len() - 1);
     *vals.select_nth_unstable_by(idx, f32::total_cmp).1
-}
-
-fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
-    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 /// Separable 2-pass box blur of a `u16` field, returning `f32`. X wraps
