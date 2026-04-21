@@ -1,0 +1,11 @@
+{
+  "layers": [
+    { "texture": "rocky_terrain_02_1k",         "tileScale": 8.0,  "minimapColor": [ 80, 140,  50] },
+    { "texture": "sandy_gravel_02_1k",          "tileScale": 8.0,  "minimapColor": [210, 185, 110] },
+    { "texture": "red_laterite_soil_stones_1k", "tileScale": 10.0, "minimapColor": [180, 100,  60] },
+    { "texture": "snow_02_1k",                  "tileScale": 4.0,  "minimapColor": [240, 240, 245] },
+    { "texture": "gravel_road_1k",              "tileScale": 8.0,  "minimapColor": [140, 135, 125] },
+    { "texture": "rocky_trail_1k",              "tileScale": 20.0, "minimapColor": [130, 110,  90] },
+    { "texture": "ganges_river_pebbles_1k",     "tileScale": 24.0, "minimapColor": [100, 160, 220] }
+  ]
+}
