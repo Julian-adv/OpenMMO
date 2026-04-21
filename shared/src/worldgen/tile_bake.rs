@@ -22,8 +22,9 @@ use serde::{Deserialize, Serialize};
 
 use super::coasts::CoastPolyline;
 use super::global_map::GlobalMap;
+use super::grass_patches::{GrassPatchField, PatchSample};
 use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, PerlinNoise3D};
+use super::noise::{fbm_wrap_x, smoothstep, PerlinNoise3D};
 use super::rivers::RiverMap;
 use super::roads::RoadNetwork;
 use super::vector_features::{
@@ -174,6 +175,13 @@ const GRASS_FALLOFF_ELEVATION_M: f32 = 1600.0;
 pub struct BakeContext {
     /// Deterministic detail-noise source seeded off the master seed.
     pub detail_noise: PerlinNoise3D,
+    /// Warped-Voronoi patch field that gates grass coverage. Each seed claims
+    /// a circular territory (~22 m radius, jittered) with a per-patch tall/
+    /// short flag; a domain warp gives the territories organic shapes. Cells
+    /// outside every patch render as bare ground — the previous fBm+threshold
+    /// mask produced near-uniform coverage even at tight thresholds because
+    /// low-freq Perlin rarely dips far below zero.
+    pub grass_patches: GrassPatchField,
     /// BFS distance from each cell to the nearest land cell. On sea this
     /// drives the offshore bathymetry curve; on land it is zero. Kept on
     /// the cell grid because the catmull-rom elevation sampler reads its
@@ -233,9 +241,11 @@ impl BakeContext {
         );
 
         let detail_noise = PerlinNoise3D::new(map.config.seed ^ 0xD1EA_C17E_0000_0007);
+        let grass_patches = GrassPatchField::new(map.config.seed, map.config.world_size_m as f32);
 
         Self {
             detail_noise,
+            grass_patches,
             dist_to_land,
             rivers_world,
             roads_world,
@@ -332,7 +342,16 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
 
     let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs);
     let heightmap = encode_heightmap(&heights);
-    let splatmap = bake_splatmap(map, tx, tz, &heights, &river_segs, &road_segs, &coast_segs);
+    let splatmap = bake_splatmap(
+        map,
+        ctx,
+        tx,
+        tz,
+        &heights,
+        &river_segs,
+        &road_segs,
+        &coast_segs,
+    );
     BakedTile {
         heightmap,
         splatmap,
@@ -497,6 +516,12 @@ fn short_grass_veg(density: u8) -> u8 {
     230 + density.min(9)
 }
 
+/// Tall-grass vegMeta bytes live in 240..=249; pack a 0..=9 density there.
+#[inline]
+fn tall_grass_veg(density: u8) -> u8 {
+    240 + density.min(9)
+}
+
 /// Euclidean distance (cells ≡ meters) from cell `(cx, cz)` to the nearest
 /// `true` cell in the tile's cliff mask, clamped to
 /// `CLIFF_PROXIMITY_RADIUS_M` when the search box contains no cliff. O(1)
@@ -526,6 +551,7 @@ fn nearest_cliff_distance(mask: &[bool], cx: usize, cz: usize) -> f32 {
 
 fn bake_splatmap(
     map: &GlobalMap,
+    ctx: &BakeContext,
     tx: i32,
     tz: i32,
     heights: &[f32],
@@ -601,6 +627,9 @@ fn bake_splatmap(
             let river_d_m = min_distance_to_segments(wx, wz, river_segs);
             let road_d_m = min_distance_to_segments(wx, wz, road_segs);
 
+            // `classify_splat` only consumes the patch sample in its plain
+            // branch; passing a closure skips the warp + Voronoi query on
+            // every sea / road / river / cliff / alpine / coast cell.
             let (primary, secondary, blend, veg) = classify_splat(
                 is_sea,
                 river_d_m,
@@ -609,6 +638,7 @@ fn bake_splatmap(
                 slope,
                 coast_d_m,
                 cliff_proximity_m,
+                || ctx.grass_patches.sample(wx, wz),
             );
 
             let off = (cz * TILE_DIM + cx) * 4;
@@ -687,6 +717,8 @@ fn catmull_rom_wrap_x<F: Fn(usize) -> f32>(
 }
 
 /// Splat priority ladder. Later branches only fire if earlier ones reject.
+/// `patch` is invoked only when the plain branch fires, so non-plain cells
+/// skip the warped-Voronoi query entirely.
 fn classify_splat(
     is_sea: bool,
     river_d_m: f32,
@@ -695,6 +727,7 @@ fn classify_splat(
     slope: f32,
     coast_d_m: f32,
     cliff_proximity_m: f32,
+    patch: impl FnOnce() -> PatchSample,
 ) -> (u8, u8, u8, u8) {
     if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
         // Roads override every biome so the network stays visible. Secondary
@@ -816,24 +849,25 @@ fn classify_splat(
             ((road_d_m - ROAD_HALF_WIDTH_M - ROAD_FADE_SPAN_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
         let water_fade = coast_fade.min(river_fade).min(road_fade);
         let rocky = (rocky_slope * water_fade).max(rocky_proximity);
-        // Grass density uses the same rocky value so the veg density
-        // agrees with the texture blend (dense rocky cliff → no grass).
-        let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
-        let density = (grass_t * 9.0).round().clamp(0.0, 9.0) as u8;
+        // Density combines hard exclusions (rocky, highland) with the
+        // patch-field mask (0 outside patches, 1 inside, smooth fade at the
+        // edge). The patch sample is only pulled here, so non-plain cells
+        // skip the warp + Voronoi query entirely.
+        let eligibility = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
+        let patch = patch();
+        let density = (patch.strength * eligibility * 9.0).round().clamp(0.0, 9.0) as u8;
         let veg = if density > 0 {
-            short_grass_veg(density)
+            if patch.is_tall {
+                tall_grass_veg(density)
+            } else {
+                short_grass_veg(density)
+            }
         } else {
             0
         };
         let blend = (rocky * 255.0) as u8;
         (PAL_GROUND, PAL_CLIFF, blend, veg)
     }
-}
-
-#[inline]
-fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
-    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
 }
 
 #[cfg(test)]
@@ -950,10 +984,12 @@ mod tests {
                 "secondary slot {} out of palette",
                 secondary
             );
-            // veg byte is either 0 or a short-grass value in 230..=239.
+            // veg byte is either 0, short grass (230..=239), or tall grass
+            // (240..=249). The patch field chooses tall/short per-patch, so
+            // both ranges can appear in the same tile.
             let veg = chunk[3];
             assert!(
-                veg == 0 || (230..=239).contains(&veg),
+                veg == 0 || (230..=249).contains(&veg),
                 "unexpected veg byte {}",
                 veg
             );
@@ -968,6 +1004,14 @@ mod tests {
         (false, f32::INFINITY, f32::INFINITY, 10.0, 0.0, coast_d_m)
     }
 
+    /// Full-coverage short-grass patch used by tests that don't care about
+    /// veg output. Passed as `|| FULL_GRASS` where `classify_splat` wants a
+    /// `FnOnce() -> PatchSample`.
+    const FULL_GRASS: PatchSample = PatchSample {
+        strength: 1.0,
+        is_tall: false,
+    };
+
     fn call_classify(args: (bool, f32, f32, f32, f32, f32)) -> (u8, u8, u8, u8) {
         // No cliff in sight → proximity at max so the plain-branch distance
         // channel contributes nothing. Tests that care about cliff-proximity
@@ -980,6 +1024,7 @@ mod tests {
             args.4,
             args.5,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         )
     }
 
@@ -1033,8 +1078,16 @@ mod tests {
     #[test]
     fn priority_road_beats_sea_and_river() {
         // Roads must always win so the settlement network stays visible.
-        let (p, s, blend, _) =
-            classify_splat(true, 1.0, 0.0, -5.0, 0.0, 0.0, CLIFF_PROXIMITY_RADIUS_M);
+        let (p, s, blend, _) = classify_splat(
+            true,
+            1.0,
+            0.0,
+            -5.0,
+            0.0,
+            0.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
+        );
         assert_eq!((p, s), (PAL_ROAD, PAL_GROUND));
         assert_eq!(blend, 0, "road center must be 100% PAL_ROAD");
     }
@@ -1051,6 +1104,7 @@ mod tests {
             0.0,
             0.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         assert_eq!((p, s), (PAL_RIVER_BED, PAL_GROUND));
     }
@@ -1066,6 +1120,7 @@ mod tests {
             0.0,
             100.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         assert_eq!((at_edge.0, at_edge.1), (PAL_RIVER_BED, PAL_GROUND));
         assert_eq!(at_edge.2, 254, "river edge must be near-pure GROUND");
@@ -1078,6 +1133,7 @@ mod tests {
             0.0,
             100.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(
@@ -1100,6 +1156,7 @@ mod tests {
             0.0,
             100.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         assert_eq!((at_edge.0, at_edge.1), (PAL_ROAD, PAL_GROUND));
         assert_eq!(at_edge.2, 254, "road edge must be near-pure GROUND");
@@ -1112,6 +1169,7 @@ mod tests {
             0.0,
             100.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(
@@ -1141,6 +1199,7 @@ mod tests {
                 0.0,
                 100.0,
                 CLIFF_PROXIMITY_RADIUS_M,
+                || FULL_GRASS,
             );
             assert_eq!(
                 primary, PAL_ROAD,
@@ -1173,6 +1232,7 @@ mod tests {
             0.5,
             100.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         let no_road = classify_splat(
             false,
@@ -1182,6 +1242,7 @@ mod tests {
             0.5,
             100.0,
             CLIFF_PROXIMITY_RADIUS_M,
+            || FULL_GRASS,
         );
         assert_eq!(
             at_margin, no_road,
@@ -1363,6 +1424,104 @@ mod tests {
             (left_slope - right_slope).abs() < 1e-2,
             "c1 slope mismatch: left={left_slope} right={right_slope}"
         );
+    }
+
+    #[test]
+    fn non_plain_branches_do_not_sample_patch() {
+        // Efficiency regression guard: the warped-Voronoi query is ~the
+        // dominant cost of splat classification, so every non-plain branch
+        // MUST NOT invoke the patch closure. A panic-on-call closure catches
+        // any branch that accidentally starts pulling the sample eagerly.
+        let trip = || -> PatchSample { panic!("patch must not be sampled") };
+
+        // Road
+        classify_splat(
+            false,
+            f32::INFINITY,
+            0.0,
+            10.0,
+            0.0,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            trip,
+        );
+        // River (before sea check — river wins even in sea)
+        classify_splat(
+            true,
+            0.0,
+            f32::INFINITY,
+            -1.0,
+            0.0,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            trip,
+        );
+        // Sea
+        classify_splat(
+            true,
+            f32::INFINITY,
+            f32::INFINITY,
+            -5.0,
+            0.0,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            trip,
+        );
+        // Cliff (slope ≥ threshold)
+        classify_splat(
+            false,
+            f32::INFINITY,
+            f32::INFINITY,
+            10.0,
+            CLIFF_SLOPE_THRESHOLD + 0.1,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            trip,
+        );
+        // Alpine (elevation > snow line, slope below cliff threshold)
+        classify_splat(
+            false,
+            f32::INFINITY,
+            f32::INFINITY,
+            SNOW_ELEVATION_M + 100.0,
+            0.0,
+            100.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            trip,
+        );
+        // Coast sand band
+        classify_splat(
+            false,
+            f32::INFINITY,
+            f32::INFINITY,
+            10.0,
+            0.0,
+            COAST_SAND_M * 0.5,
+            CLIFF_PROXIMITY_RADIUS_M,
+            trip,
+        );
+    }
+
+    #[test]
+    fn plain_branch_samples_patch() {
+        // Inverse guard: if the plain branch ever stops reading the patch
+        // sample, every eligible land cell loses its veg byte silently.
+        use std::cell::Cell;
+        let called = Cell::new(false);
+        classify_splat(
+            false,
+            f32::INFINITY,
+            f32::INFINITY,
+            10.0,
+            0.0,
+            COAST_SAND_M + 1.0,
+            CLIFF_PROXIMITY_RADIUS_M,
+            || {
+                called.set(true);
+                FULL_GRASS
+            },
+        );
+        assert!(called.get(), "plain branch must sample patch");
     }
 
     #[test]

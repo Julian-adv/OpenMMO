@@ -14,6 +14,7 @@ pub mod continent;
 pub mod elevation;
 pub mod erosion;
 pub mod global_map;
+pub mod grass_patches;
 pub(crate) mod grid;
 pub mod growth;
 pub mod noise;
@@ -22,6 +23,7 @@ pub mod roads;
 pub mod settlements;
 pub mod tile_bake;
 pub mod vector_features;
+pub mod vegetation;
 
 pub use config::WorldGenConfig;
 pub use global_map::GlobalMap;

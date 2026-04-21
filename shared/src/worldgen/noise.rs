@@ -198,6 +198,14 @@ pub fn fbm_wrap_x(
     }
 }
 
+/// Hermite-interpolated smoothstep. Returns 0 at `edge0`, 1 at `edge1`, with
+/// a C¹-continuous ramp between. Works with inverted edges (edge0 > edge1).
+#[inline]
+pub fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 /// Fractal Brownian Motion: sum octaves with geometric frequency/amplitude.
 /// Output normalized to roughly [-1, 1].
 pub fn fbm2(noise: &PerlinNoise, x: f32, y: f32, octaves: u32, lacunarity: f32, gain: f32) -> f32 {

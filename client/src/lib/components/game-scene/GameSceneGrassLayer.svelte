@@ -641,14 +641,43 @@
     }
   }
 
-  // Half-diagonal of a 32×32 sub-chunk + vertical margin for grass height
-  const SUB_CHUNK_HALF_DIAG = Math.sqrt(SUB_CHUNK_SIZE * SUB_CHUNK_SIZE * 0.5 + 10 * 10)
+  // Vertical margin above the tallest blade for wind displacement + bending.
+  const GRASS_Y_MARGIN = 10
 
-  function setBoundingSphere(mesh: THREE.InstancedMesh, subChunkKey: string) {
+  function setBoundingSphere(
+    mesh: THREE.InstancedMesh,
+    subChunkKey: string,
+    data: SubChunkData,
+  ) {
     const [scx, scz] = subChunkKey.split(',').map(Number)
+    // Pull the Y center from actual blade positions: a fixed Y=0 leaves the
+    // sphere well below the terrain on hills, and the orthographic frustum
+    // (pitched ~35° looking down) culls it when the player is elevated —
+    // which is why near sub-chunks dropped out visually while far chunks on
+    // lower ground still intersected the frustum.
+    let minY = Infinity
+    let maxY = -Infinity
+    for (let i = 0; i < data.count; i++) {
+      const y = data.worldY[i]
+      if (y < minY) minY = y
+      if (y > maxY) maxY = y
+    }
+    if (!isFinite(minY)) {
+      minY = 0
+      maxY = 0
+    }
+    const centerY = (minY + maxY) / 2
+    const halfY = (maxY - minY) / 2 + GRASS_Y_MARGIN
+    const radius = Math.sqrt(
+      SUB_CHUNK_SIZE * SUB_CHUNK_SIZE * 0.5 + halfY * halfY,
+    )
     mesh.boundingSphere = new THREE.Sphere(
-      new THREE.Vector3((scx + 0.5) * SUB_CHUNK_SIZE, 0, (scz + 0.5) * SUB_CHUNK_SIZE),
-      SUB_CHUNK_HALF_DIAG,
+      new THREE.Vector3(
+        (scx + 0.5) * SUB_CHUNK_SIZE,
+        centerY,
+        (scz + 0.5) * SUB_CHUNK_SIZE,
+      ),
+      radius,
     )
   }
 
@@ -663,7 +692,7 @@
     // requires it. Leave as default identity matrices.
     slot.mesh.count = count
 
-    setBoundingSphere(slot.mesh, subChunkKey)
+    setBoundingSphere(slot.mesh, subChunkKey, data)
 
     if (slot.mesh.parent) slot.mesh.parent.remove(slot.mesh)
     grassGroup.add(slot.mesh)

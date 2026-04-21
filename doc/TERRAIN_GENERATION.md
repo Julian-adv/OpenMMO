@@ -91,7 +91,7 @@ shared/src/worldgen/
   coasts.rs          # 해안 polyline (Marching Squares)
   tile_bake.rs       # Phase 7 (고해상도 타일 샘플링 + V2 splatmap)
   vector_features.rs # polyline 공유 유틸 (Chaikin, 공간 인덱스, 거리)
-  (vegetation.rs)    # Phase 8 예정
+  vegetation.rs      # Phase 8 (tile별 tree V1 + grass V3 바이너리)
 ```
 
 ## 5. 오프라인 도구: `tools/terrain-gen`
@@ -318,8 +318,13 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
       high-freq detail noise + 해저 shallow bathymetry. V2 splatmap 은
       road > river > sea > alpine > cliff > coast > plain 우선순위로
       primary/secondary slot + blend 를 결정하고, 평야에는 vegMeta 에
-      short-grass 밀도 bake. 고정 5-슬롯 팔레트 (`rocky_terrain`,
+      short/tall-grass 밀도 bake. 고정 5-슬롯 팔레트 (`rocky_terrain`,
       `sandy_gravel`, `red_laterite`, `snow_02`, `gravel_road`).
+      **Grass patch mask**: `grass_patches.rs`의 warped-Voronoi 필드
+      (월드 스페이스 jittered grid seed + 도메인 warp, `growth.rs` 축소판).
+      이전 fBm+threshold 마스크는 정규화된 Perlin 출력이 거의 항상 임계값을
+      넘어 단조롭게 덮였는데, 패치 반경·seed 점유율·간격을 숫자로 제어하는
+      방식으로 교체. 패치별 tall/short 플래그로 variant 도 결정.
 - [x] `tools/terrain-gen` 스캐폴딩 및 `preview` / `bake` 명령.
       `preview` 출력: `01_potential.png`, `01_land_sea.png`,
       `01_land_sea_shifted.png` (wrap 검증용), `02_elevation.png`,
@@ -328,4 +333,19 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
       `bake` 출력: `height/r{rx}_{rz}/h_{tx}_{tz}.bin`,
       `splat/r{rx}_{rz}/s_{tx}_{tz}.bin`, `meta/r{rx}_{rz}.json`,
       `worldgen.json` (seed/config/settlements/roads). rayon 병렬.
-- [ ] Phase 8: 초목/나무 배치.
+- [x] Phase 8: 초목/나무 배치 (`vegetation.rs`). Phase 7이 splatmap vegMeta
+      바이트(230–249)에 쓴 밀도를 읽어 per-tile 배치를 베이크:
+      - 나무 V1 바이너리 (`trees/r±xx_±zz/t_±xxxxx_±zzzzz.bin`, 12-byte header
+        + 6 byte/instance): cell당 8% 확률, slope > 1.5 거부, 지형 y < 0.5 m
+        거부, tree.glb/tree2.glb 50:50 선택, 스케일 양자화.
+      - 풀 V3 바이너리 (`grass/r±xx_±zz/g_±xxxxx_±zzzzz.bin`, 16-byte header
+        + 6 byte/instance): short(230–239)/tall(240–249)/flower 3종. Short
+        12×12 blades/cell, tall 10×10, 경계 셀 30% boundary-blend conversion,
+        flower는 sparse short grass에 가중 확률. y < 0.05 m 거부.
+      - 결정론: `tileSeed(tx, tz)` + Mulberry32 (`createRng` 1:1 포팅).
+        클라이언트 `client/src/lib/utils/{tree-data,grass-data}.ts`의 포맷과
+        seed 규칙을 그대로 따르므로 동일 입력(splatmap+heightmap)에서 동일
+        출력이 나온다 (그래도 f32 양자화 차이로 바이트 일치까지는 보장 X,
+        시각적 동치 목표).
+      - 입력 가이드(biome/slope/수원 거리)는 Phase 7 `classify_splat`이 이미
+        vegMeta로 인코딩 중 — slope + highland + coast/river/road water_fade.
