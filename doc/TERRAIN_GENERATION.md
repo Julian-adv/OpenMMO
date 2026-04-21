@@ -88,7 +88,9 @@ shared/src/worldgen/
   rivers.rs          # Phase 4
   settlements.rs     # Phase 5
   roads.rs           # Phase 6
+  coasts.rs          # 해안 polyline (Marching Squares)
   tile_bake.rs       # Phase 7 (고해상도 타일 샘플링 + V2 splatmap)
+  vector_features.rs # polyline 공유 유틸 (Chaikin, 공간 인덱스, 거리)
   (vegetation.rs)    # Phase 8 예정
 ```
 
@@ -279,10 +281,18 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
       polyline-distance-based splat/carve. `river_mask` 제거. 결과 눈으로
       확인.
 - [x] **Step 2: 도로** — 동일 구조로 `RoadNetwork.roads`. `dist_to_road` 제거.
-- [ ] **Step 3: 해안** — Marching Squares로 `land_mask` 경계 polyline 추출,
-      Chaikin smooth, 공간 인덱스. `sample_coast_d_jittered` → polyline
-      distance로 교체. `dist_to_sea`/`dist_to_land` 제거 (bathymetry는 land
-      polyline까지의 거리로 대체).
+- [ ] **Step 3: 해안 — 보류.** Marching Squares 기반 polyline 추출
+      (`coasts.rs`) 자체는 구현되어 tile_bake까지 통합됐지만, 소스가 binary
+      `land_mask`라 경계가 여전히 8 m 셀에 정렬된다. Chaikin smoothing이
+      corner만 살짝 깎을 뿐 staircase 자체는 시각적으로 거의 그대로
+      남는다. 진정한 sub-cell smooth 해안선을 얻으려면 `continent_potential`
+      (continuous f32 field)에 isocontour를 적용해 vertex 위치를 두 셀
+      값의 linear interp로 결정해야 하는데, 이는 별개의 큰 작업이라
+      현 시점에선 안 하는 쪽으로 결정. 현재 코드는 `land_mask` 기반 MS
+      + polyline distance로 동작하며 `dist_to_sea` / `sample_coast_d_jittered`
+      는 제거된 상태. `dist_to_land`는 bathymetry 전용으로 유지 (catmull-rom
+      elevation 샘플러가 셀당 4×4 이웃을 읽어서 polyline 쿼리로 대체하면
+      bake 시간이 폭증).
 
 각 단계마다 `terrain-gen bake` 후 클라이언트에서 시각 검증.
 

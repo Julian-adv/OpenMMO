@@ -8,6 +8,7 @@
 //!
 //! Phases are built up incrementally: Phase 1 covers the continent/sea mask.
 
+pub mod coasts;
 pub mod config;
 pub mod continent;
 pub mod elevation;
