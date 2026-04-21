@@ -173,44 +173,10 @@
     return mat
   }
 
-  // WebGPU bind groups capture textures at the material's first render;
-  // swapping `.value` later doesn't reliably rebind. So per-tile material
-  // must be (re)built with the real splat data BEFORE first render.
-  function makeTileMaterial(
-    splatMap: THREE.Texture,
-    layers: SplatLayer[],
-  ): MeshStandardNodeMaterial {
-    return makeSplatStandardMaterial({
-      atlas: buildSplatAtlas(layers),
-      tileScales: layers.map((l) => l.tile),
-      tileSwapUvs: layers.map((l) => l.swapUv),
-      splatMap,
-      splatScale: 1.0,
-      sharedBrushUniforms: brushUniforms,
-      includeEditorOverlay: editorOverlayCompiled,
-    })
-  }
-
-  function swapTileMaterial(tileId: string, newMat: MeshStandardNodeMaterial) {
-    const oldMat = materialMap.get(tileId)
-    if (!oldMat) {
-      newMat.dispose()
-      return
-    }
-    materialMap.set(tileId, newMat)
-    if (terrainGroup) {
-      for (const child of terrainGroup.children) {
-        if (child instanceof THREE.Mesh && child.userData.tileId === tileId) {
-          child.material = newMat
-          break
-        }
-      }
-    }
-    oldMat.dispose()
-  }
-
   /** Upgrade all existing materials to include editor overlay.
-   *  Called once when the map editor is first activated. */
+   *  Called once when the map editor is first activated. The TSL graph
+   *  differs between overlay and non-overlay variants, so every existing
+   *  material must be replaced (not just mutated). */
   function upgradeToEditorMaterials() {
     if (editorOverlayCompiled) return
     editorOverlayCompiled = true
@@ -229,7 +195,18 @@
       }
       newU.uTileScales.array = oldU.uTileScales.array
       newU.uTileSwapUvs.array = oldU.uTileSwapUvs.array
-      swapTileMaterial(tileId, newMat)
+      materialMap.set(tileId, newMat)
+      if (terrainGroup) {
+        for (const child of terrainGroup.children) {
+          if (child instanceof THREE.Mesh && child.userData.tileId === tileId) {
+            child.material = newMat
+            break
+          }
+        }
+      }
+      // Old material uses the non-overlay TSL variant — dispose rather than
+      // return to pool, so the pool stays homogeneous with the overlay variant.
+      oldMat.dispose()
     }
   }
 
@@ -240,7 +217,9 @@
       resetMaterialToDefaults(mat)
       return mat
     }
-    // Create on demand — spreads TSL construction across frames
+    // Create on demand — spreads TSL construction across frames. The 9th
+    // tile on first load hits this path (pool is preseeded to 8); it stalls
+    // once for TSL→WGSL compile, then cycles back through the pool.
     if (!defaultAtlas || !_defaultLayers) return null
     return createDefaultMaterial()
   }
@@ -451,13 +430,20 @@
         .catch(() => {})
 
       const tileId = tile.id
-      if (sMgr && _defaultLayers) {
-        const layers = _defaultLayers
+      if (sMgr) {
         sMgr
           .loadSplatmap(tileX, tileZ)
           .then((tex) => {
-            if (!materialMap.has(tileId)) return
-            swapTileMaterial(tileId, makeTileMaterial(tex, layers))
+            const mat = materialMap.get(tileId)
+            if (!mat) return
+            // Mutate the pool material's splatmap uniform in place instead
+            // of creating a fresh MeshStandardNodeMaterial — creating a new
+            // material triggers a TSL→WGSL compile + pipeline compile on
+            // first render that stalls the frame for 100–1000ms. three.js
+            // WebGPU rebuilds the texture binding when a TextureNode's
+            // `.value` changes. Filter/mipmap/needsUpdate state is already
+            // configured by `terrainSplatManager.createTexture`.
+            mat.userData.uniforms.splatMap.value = tex
           })
           .catch(() => {})
       }
