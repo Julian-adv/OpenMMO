@@ -20,14 +20,15 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::coasts::CoastPolyline;
 use super::global_map::GlobalMap;
 use super::grid::bfs_distance_from;
 use super::noise::{fbm_wrap_x, PerlinNoise3D};
 use super::rivers::RiverMap;
 use super::roads::RoadNetwork;
 use super::vector_features::{
-    chaikin_smooth, min_distance_to_segments, polyline_to_world, segments_near_tile, Segment,
-    WorldPolyline,
+    cell_coord_passthrough, cell_index_to_center, chaikin_smooth, min_distance_to_segments,
+    polyline_to_world, segments_near_tile, Segment, WorldPolyline,
 };
 
 /// Cell-count side of the splatmap (64×64 cells per tile).
@@ -113,16 +114,21 @@ const ROAD_FADE_SPAN_M: f32 = 2.0;
 const ROAD_CHAIKIN_ITERATIONS: u32 = 2;
 
 // --- Splat classification thresholds -------------------------------------
-/// Cells within this many global cells of the coast get a sand band. The
-/// blend is applied with a quadratic (`t²`) curve so most of the sand
-/// weight lives near the water line; sand-dominant extent ends up ~70% of
-/// this width (≈7.5 m at 1.33 cells × 8 m/cell).
-const COAST_SAND_CELLS: f32 = 1.33;
-/// Distance (in global cells) past the sand band over which the plain
-/// branch's slope-based dirt fades in from 0. Width 0 at the band edge →
-/// full at `COAST_SAND_CELLS + COAST_FADE_SPAN_CELLS`. Keeps the SAND→DIRT
-/// palette swap hidden (both sides 100% GROUND at the swap point).
-const COAST_FADE_SPAN_CELLS: f32 = 2.0;
+/// Distance (m) from the coast polyline within which a land cell renders as
+/// the sand band. Replaces the prior `COAST_SAND_CELLS = 1.33 cells × 8 m =
+/// 10.67 m` threshold; equivalent radius, no longer locked to the 8 m
+/// global-cell lattice so the sand line follows the smoothed polyline at
+/// sub-meter precision.
+const COAST_SAND_M: f32 = 10.0;
+/// Distance (m) past the sand band over which the plain branch's slope-based
+/// dirt fades in from 0. Width 0 at the band edge → full at `COAST_SAND_M +
+/// COAST_FADE_SPAN_M`. Keeps the SAND→DIRT palette swap hidden (both sides
+/// 100% GROUND at the swap point).
+const COAST_FADE_SPAN_M: f32 = 16.0;
+/// Chaikin iterations applied to each coast polyline. Marching-squares
+/// emits axis-aligned segments at 8 m cell spacing; two rounds soften
+/// those into a curve at 1 m tile resolution, matching rivers/roads.
+const COAST_CHAIKIN_ITERATIONS: u32 = 2;
 /// Distance (m) past the river sand band over which plain dirt fades in.
 /// Matches the river carve taper so slope returns to plain baseline right
 /// as the fade completes.
@@ -168,11 +174,12 @@ const GRASS_FALLOFF_ELEVATION_M: f32 = 1600.0;
 pub struct BakeContext {
     /// Deterministic detail-noise source seeded off the master seed.
     pub detail_noise: PerlinNoise3D,
-    /// BFS distance from each cell to the nearest sea cell (u16 saturated).
-    /// On land this is the classical "coast distance"; on sea it is zero.
-    pub dist_to_sea: Vec<u16>,
     /// BFS distance from each cell to the nearest land cell. On sea this
-    /// serves as an "offshore depth" driver; on land it is zero.
+    /// drives the offshore bathymetry curve; on land it is zero. Kept on
+    /// the cell grid because the catmull-rom elevation sampler reads its
+    /// 4×4 neighborhood per cell, not per world position — recomputing the
+    /// distance per call against the coast polylines would dominate bake
+    /// time.
     pub dist_to_land: Vec<u16>,
     /// River polylines converted to world-space meters and Chaikin-smoothed.
     /// Tile bake queries point-to-segment distance against these instead of
@@ -183,54 +190,80 @@ pub struct BakeContext {
     /// rasterized `dist_to_road` BFS exposed the 8 m cell lattice as an
     /// axis-aligned staircase along every straight road segment.
     pub roads_world: Vec<WorldPolyline>,
+    /// Coast polylines (output of marching squares + Chaikin smoothing) in
+    /// world-space meters. The splat classifier queries point-to-segment
+    /// distance against these to draw the sand band, replacing the prior
+    /// bilinear-sampled `dist_to_sea` field whose 8 m lattice showed
+    /// through as axis-aligned staircase artifacts at the shoreline.
+    pub coasts_world: Vec<WorldPolyline>,
 }
 
 impl BakeContext {
-    pub fn new(map: &GlobalMap, river_map: &RiverMap, road_net: &RoadNetwork) -> Self {
+    pub fn new(
+        map: &GlobalMap,
+        river_map: &RiverMap,
+        road_net: &RoadNetwork,
+        coasts: &[CoastPolyline],
+    ) -> Self {
         let res = map.config.global_res as usize;
 
-        // Coast distance fields in both directions. `land_mask == 0` is sea:
-        // sources = sea → distance to sea. sources = land → distance to land.
-        let dist_to_sea = bfs_distance_from(&map.land_mask, res, 0);
+        // Bathymetry needs cell-granularity distance from sea cells to
+        // their nearest land. Kept as a BFS field rather than a polyline
+        // query because cell_elevation_m is called O(16 × 65² × n_tiles)
+        // times during baking.
         let dist_to_land = bfs_distance_from(&map.land_mask, res, 1);
 
         let rivers_world = smooth_polylines(
             river_map.rivers.iter().map(|p| p.points.as_slice()),
             &map.config,
             RIVER_CHAIKIN_ITERATIONS,
+            cell_index_to_center,
         );
         let roads_world = smooth_polylines(
             road_net.roads.iter().map(|r| r.points.as_slice()),
             &map.config,
             ROAD_CHAIKIN_ITERATIONS,
+            cell_index_to_center,
+        );
+        let coasts_world = smooth_polylines(
+            coasts.iter().map(|c| c.points.as_slice()),
+            &map.config,
+            COAST_CHAIKIN_ITERATIONS,
+            cell_coord_passthrough,
         );
 
         let detail_noise = PerlinNoise3D::new(map.config.seed ^ 0xD1EA_C17E_0000_0007);
 
         Self {
             detail_noise,
-            dist_to_sea,
             dist_to_land,
             rivers_world,
             roads_world,
+            coasts_world,
         }
     }
 }
 
-/// Convert an iterator of cell-index polylines into world-space polylines,
-/// splitting at the X seam and Chaikin-smoothing each resulting segment.
-/// Shared between rivers and roads so both go through the exact same pipeline.
-fn smooth_polylines<'a, I>(
+/// Convert an iterator of cell-coord polylines into world-space polylines,
+/// splitting at the X seam and Chaikin-smoothing each resulting piece.
+/// `to_cell` maps each input vertex to its cell-coord position (see
+/// `vector_features::polyline_to_world`); pass `cell_index_to_center` for
+/// `(u32, u32)` rivers/roads, `cell_coord_passthrough` for `[f32; 2]`
+/// coasts.
+fn smooth_polylines<'a, P, I, F>(
     polylines: I,
     cfg: &super::config::WorldGenConfig,
     iterations: u32,
+    to_cell: F,
 ) -> Vec<WorldPolyline>
 where
-    I: IntoIterator<Item = &'a [(u32, u32)]>,
+    P: 'a,
+    I: IntoIterator<Item = &'a [P]>,
+    F: Fn(&P) -> [f32; 2] + Copy,
 {
     let mut out: Vec<WorldPolyline> = Vec::new();
     for pts in polylines {
-        for wp in polyline_to_world(pts, cfg) {
+        for wp in polyline_to_world(pts, cfg, to_cell) {
             if wp.points.len() >= 2 {
                 out.push(chaikin_smooth(&wp, iterations));
             }
@@ -282,10 +315,24 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
         tile_max_z,
         road_margin,
     );
+    // Coast margin must reach as far as any classification branch consults
+    // it: sand-dominant out to COAST_SAND_M, then a slope-dirt fade out to
+    // COAST_SAND_M + COAST_FADE_SPAN_M. A cell within the fade span that
+    // doesn't see the segment would otherwise reach `min_distance_to_segments
+    // = INFINITY` and resolve to full-dirt, popping at the tile boundary.
+    let coast_margin = COAST_SAND_M + COAST_FADE_SPAN_M;
+    let coast_segs = segments_near_tile(
+        &ctx.coasts_world,
+        tile_min_x,
+        tile_min_z,
+        tile_max_x,
+        tile_max_z,
+        coast_margin,
+    );
 
     let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs);
     let heightmap = encode_heightmap(&heights);
-    let splatmap = bake_splatmap(map, ctx, tx, tz, &heights, &river_segs, &road_segs);
+    let splatmap = bake_splatmap(map, tx, tz, &heights, &river_segs, &road_segs, &coast_segs);
     BakedTile {
         heightmap,
         splatmap,
@@ -479,12 +526,12 @@ fn nearest_cliff_distance(mask: &[bool], cx: usize, cz: usize) -> f32 {
 
 fn bake_splatmap(
     map: &GlobalMap,
-    ctx: &BakeContext,
     tx: i32,
     tz: i32,
     heights: &[f32],
     river_segs: &[Segment],
     road_segs: &[Segment],
+    coast_segs: &[Segment],
 ) -> Vec<u8> {
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
@@ -550,7 +597,7 @@ fn bake_splatmap(
             };
 
             let is_sea = map.land_mask[gi] == 0;
-            let coast_d_cells = sample_coast_d_jittered(map, ctx, wx, wz, world_size, inv_mpc);
+            let coast_d_m = min_distance_to_segments(wx, wz, coast_segs);
             let river_d_m = min_distance_to_segments(wx, wz, river_segs);
             let road_d_m = min_distance_to_segments(wx, wz, road_segs);
 
@@ -560,7 +607,7 @@ fn bake_splatmap(
                 road_d_m,
                 h_center,
                 slope,
-                coast_d_cells,
+                coast_d_m,
                 cliff_proximity_m,
             );
 
@@ -571,46 +618,6 @@ fn bake_splatmap(
     }
 
     out
-}
-
-/// Wavelength (m) of the coast-boundary jitter noise. Sub-global-cell
-/// scale so the perturbation scrambles the 8 m lattice, not the continent
-/// shape.
-const COAST_JITTER_WAVELENGTH_M: f32 = 6.0;
-/// Amplitude (global cells) of the coast-boundary jitter. Roughly ±1 cell
-/// so a single splat cell can be pulled from d=1 into the sand band or
-/// from d=3 out of it — breaks straight edges without drifting the overall
-/// band width far from its designed 2 cells (≈16 m).
-const COAST_JITTER_AMPLITUDE_CELLS: f32 = 1.0;
-
-/// Bilinear sample the coast-distance field at an arbitrary world-space
-/// position (global cells, X wraps and Y clamps), then add a fine-scale
-/// fBm perturbation in cell units. Returns the jittered distance that the
-/// splat classifier compares against `COAST_SAND_CELLS`.
-fn sample_coast_d_jittered(
-    map: &GlobalMap,
-    ctx: &BakeContext,
-    wx: f32,
-    wz: f32,
-    world_size: f32,
-    inv_mpc: f32,
-) -> f32 {
-    let bilinear = bilinear_wrap_x(map, wx, wz, world_size, inv_mpc, |i| {
-        ctx.dist_to_sea[i] as f32
-    });
-    // Meter-scale jitter so the bilinear pass doesn't reveal the 8 m cell
-    // lattice as an axis-aligned staircase at the sand-band boundary.
-    let jitter = fbm_wrap_x(
-        &ctx.detail_noise,
-        wx + world_size * 0.5,
-        wz + world_size * 0.5,
-        world_size,
-        1.0 / COAST_JITTER_WAVELENGTH_M,
-        3,
-        2.0,
-        0.5,
-    ) * COAST_JITTER_AMPLITUDE_CELLS;
-    (bilinear + jitter).max(0.0)
 }
 
 /// One-axis Catmull-Rom basis at parameter `t ∈ [0, 1]` between `p1` and `p2`,
@@ -650,11 +657,10 @@ fn fractional_cell_coords(
     (res, gx0, gy0, gx_f - gx0 as f32, gy_f - gy0 as f32)
 }
 
-/// Catmull-Rom bicubic sample of a cell-indexed scalar field. Signature
-/// matches `bilinear_wrap_x`: X wraps, Z clamps. Reads a 4×4 neighborhood
-/// around the fractional position, so Y-border cells collapse shoulders
-/// onto the clamped row (still smooth, just degrades toward linear near the
-/// top/bottom edge of the world).
+/// Catmull-Rom bicubic sample of a cell-indexed scalar field. X wraps,
+/// Z clamps. Reads a 4×4 neighborhood around the fractional position, so
+/// Y-border cells collapse shoulders onto the clamped row (still smooth,
+/// degrades toward linear near the top/bottom edge of the world).
 fn catmull_rom_wrap_x<F: Fn(usize) -> f32>(
     map: &GlobalMap,
     wx: f32,
@@ -680,30 +686,6 @@ fn catmull_rom_wrap_x<F: Fn(usize) -> f32>(
     catmull_rom_1d(rows[0], rows[1], rows[2], rows[3], fy)
 }
 
-/// Bilinear sample a cell-indexed scalar field over the global-cell grid,
-/// evaluating `f` at each corner. X wraps, Z clamps — matching the world
-/// topology the rest of the worldgen pipeline assumes.
-fn bilinear_wrap_x<F: Fn(usize) -> f32>(
-    map: &GlobalMap,
-    wx: f32,
-    wz: f32,
-    world_size: f32,
-    inv_mpc: f32,
-    f: F,
-) -> f32 {
-    let (res, gx0, gy0, fx, fy) = fractional_cell_coords(map, wx, wz, world_size, inv_mpc);
-    let ix = |x: i32| x.rem_euclid(res) as usize;
-    let iy = |y: i32| y.clamp(0, res - 1) as usize;
-    let idx = |x: usize, y: usize| y * res as usize + x;
-    let s00 = f(idx(ix(gx0), iy(gy0)));
-    let s10 = f(idx(ix(gx0 + 1), iy(gy0)));
-    let s01 = f(idx(ix(gx0), iy(gy0 + 1)));
-    let s11 = f(idx(ix(gx0 + 1), iy(gy0 + 1)));
-    let s0 = s00 + (s10 - s00) * fx;
-    let s1 = s01 + (s11 - s01) * fx;
-    s0 + (s1 - s0) * fy
-}
-
 /// Splat priority ladder. Later branches only fire if earlier ones reject.
 fn classify_splat(
     is_sea: bool,
@@ -711,7 +693,7 @@ fn classify_splat(
     road_d_m: f32,
     h_center: f32,
     slope: f32,
-    coast_d_cells: f32,
+    coast_d_m: f32,
     cliff_proximity_m: f32,
 ) -> (u8, u8, u8, u8) {
     if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
@@ -772,15 +754,18 @@ fn classify_splat(
         let rocky = (slope / SLOPE_CLIFF_FULL).clamp(0.0, 1.0);
         let blend = (((1.0 - t) * 120.0).max(rocky * 200.0)) as u8;
         (PAL_SNOW, PAL_CLIFF, blend, 0)
-    } else if coast_d_cells <= COAST_SAND_CELLS {
-        // Quadratic blend keeps the first land cell (coast BFS d ≈ 1)
-        // near 100% SAND so per-texture weights stay continuous with
-        // the adjacent sea cell; a linear ramp would introduce ~25%
-        // GROUND on the first cell and read as a staircase. Grass
-        // density has a floor of 1 so the mesh fringe matches the
-        // adjacent plains' density of 9.
+    } else if !is_sea && coast_d_m <= COAST_SAND_M {
+        // Quadratic blend keeps cells right at the water line near 100%
+        // SAND so per-texture weights stay continuous with the adjacent
+        // sea cell; a linear ramp would introduce ~25% GROUND right at the
+        // shore and read as a staircase. Grass density has a floor of 1 so
+        // the mesh fringe matches the adjacent plains' density of 9.
+        // (`!is_sea` guard: distance alone has no sign, so a sea cell inside
+        // a narrow inlet that's <COAST_SAND_M from the coast line would
+        // otherwise compete for the sand band — land_mask is the source of
+        // truth for the side.)
         const DENSITY_MIN: f32 = 1.0;
-        let t = (coast_d_cells / COAST_SAND_CELLS).clamp(0.0, 1.0);
+        let t = (coast_d_m / COAST_SAND_M).clamp(0.0, 1.0);
         let blend_f = t * t;
         let density = (DENSITY_MIN + (9.0 - DENSITY_MIN) * t)
             .round()
@@ -824,8 +809,7 @@ fn classify_splat(
         // distance-to-cliff channel would erase cliff influence next to
         // actual cliffs that descend into water — e.g. the river cutting at
         // the base of a cliff. So proximity bypasses water_fade entirely.
-        let coast_fade =
-            ((coast_d_cells - COAST_SAND_CELLS) / COAST_FADE_SPAN_CELLS).clamp(0.0, 1.0);
+        let coast_fade = ((coast_d_m - COAST_SAND_M) / COAST_FADE_SPAN_M).clamp(0.0, 1.0);
         let river_fade =
             ((river_d_m - RIVER_SAND_HALF_WIDTH_M) / RIVER_FADE_SPAN_M).clamp(0.0, 1.0);
         let road_fade =
@@ -894,7 +878,9 @@ mod tests {
         rivers::extract_rivers(&map, &mut rm, 50.0, 4);
         let s = settlements::place_settlements(&map, &rm);
         let net = roads::compute_roads(&map, &s);
-        let ctx = BakeContext::new(&map, &rm, &net);
+        let coast_polys =
+            super::super::coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
+        let ctx = BakeContext::new(&map, &rm, &net, &coast_polys);
         (map, ctx)
     }
 
@@ -978,15 +964,8 @@ mod tests {
     /// rocky component is 0 and any blend value reflects only coastal fades,
     /// not terrain. Rivers and roads default to INFINITY so those branches
     /// are inactive.
-    fn plain_inputs(coast_d_cells: f32) -> (bool, f32, f32, f32, f32, f32) {
-        (
-            false,
-            f32::INFINITY,
-            f32::INFINITY,
-            10.0,
-            0.0,
-            coast_d_cells,
-        )
+    fn plain_inputs(coast_d_m: f32) -> (bool, f32, f32, f32, f32, f32) {
+        (false, f32::INFINITY, f32::INFINITY, 10.0, 0.0, coast_d_m)
     }
 
     fn call_classify(args: (bool, f32, f32, f32, f32, f32)) -> (u8, u8, u8, u8) {
@@ -1017,15 +996,15 @@ mod tests {
     fn coast_outer_edge_meets_plain_branch_seamlessly() {
         // The design invariant that lets the palette pair swap
         // ((SAND,GROUND) → (GROUND,DIRT)) be visually invisible: at exactly
-        // `coast_d_cells = COAST_SAND_CELLS`, the coast branch emits
-        // blend=255 (100% GROUND secondary) and the plain branch emits
-        // blend=0 (100% GROUND primary). Both sides render pure GROUND, so
-        // the shader's corner-sampled bilerp sees no texture discontinuity.
-        let (cp, cs, c_blend, _) = call_classify(plain_inputs(COAST_SAND_CELLS));
+        // `coast_d_m = COAST_SAND_M`, the coast branch emits blend=255 (100%
+        // GROUND secondary) and the plain branch emits blend=0 (100% GROUND
+        // primary). Both sides render pure GROUND, so the shader's
+        // corner-sampled bilerp sees no texture discontinuity.
+        let (cp, cs, c_blend, _) = call_classify(plain_inputs(COAST_SAND_M));
         assert_eq!((cp, cs), (PAL_SAND, PAL_GROUND));
         assert_eq!(c_blend, 255, "coast outer edge must be pure GROUND");
 
-        let (pp, ps, p_blend, _) = call_classify(plain_inputs(COAST_SAND_CELLS + 1e-4));
+        let (pp, ps, p_blend, _) = call_classify(plain_inputs(COAST_SAND_M + 1e-4));
         assert_eq!((pp, ps), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(p_blend, 0, "plain at band edge must be pure GROUND");
     }
@@ -1038,7 +1017,7 @@ mod tests {
         let steps = 16;
         let mut prev = -1i32;
         for i in 0..=steps {
-            let d = COAST_SAND_CELLS * (i as f32) / (steps as f32);
+            let d = COAST_SAND_M * (i as f32) / (steps as f32);
             let (_, _, blend, _) = call_classify(plain_inputs(d));
             assert!(
                 blend as i32 >= prev,

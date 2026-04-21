@@ -4,9 +4,11 @@
 use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgb};
 use onlinerpg_shared::worldgen::{
-    continent, elevation, erosion, rivers, roads, settlements, GlobalMap, WorldGenConfig,
+    coasts, continent, elevation, erosion, rivers, roads, settlements, GlobalMap, WorldGenConfig,
 };
-use onlinerpg_shared::worldgen::{rivers::RiverMap, roads::RoadNetwork, settlements::Settlement};
+use onlinerpg_shared::worldgen::{
+    coasts::CoastPolyline, rivers::RiverMap, roads::RoadNetwork, settlements::Settlement,
+};
 use std::path::Path;
 use std::time::Instant;
 
@@ -188,7 +190,13 @@ pub fn write_pngs(
         settlements_list,
         &dir.join("05_roads.png"),
     )?;
-    eprintln!("  wrote PNGs: {:.2}s", t.elapsed().as_secs_f32());
+    let coast_polys = coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
+    write_coasts_png(map, &coast_polys, &dir.join("06_coasts.png"))?;
+    eprintln!(
+        "  wrote PNGs: {:.2}s ({} coast polylines)",
+        t.elapsed().as_secs_f32(),
+        coast_polys.len()
+    );
     Ok(())
 }
 
@@ -477,6 +485,87 @@ fn write_rivers_png(
 
     finish_png(&mut img, map, path)?;
     Ok(())
+}
+
+/// Render the extracted coast polylines from `coasts::extract_coasts` over a
+/// dimmed land/sea background. Edges crossing the X seam are detected by
+/// `|dx| > res/2` and split so the line doesn't stripe across the image.
+fn write_coasts_png(
+    map: &GlobalMap,
+    coast_polys: &[CoastPolyline],
+    path: &Path,
+) -> anyhow::Result<()> {
+    let n = map.config.global_res as usize;
+    let mut img = ImageBuffer::<Rgb<u8>, Vec<u8>>::new(n as u32, n as u32);
+    paint_hypso_bg(&mut img, map, Rgb([28, 65, 115]), |c| {
+        Rgb([
+            (c.0[0] as u16 * 2 / 3) as u8,
+            (c.0[1] as u16 * 2 / 3) as u8,
+            (c.0[2] as u16 * 2 / 3) as u8,
+        ])
+    });
+    let coast_color = Rgb([255, 110, 40]);
+    // 4096-res map → 4 px disk, 1024-res → 1 px. Matches `overlay_region_grid`.
+    let radius = ((n as f32 / 1024.0).round() as i32).max(1);
+    for poly in coast_polys {
+        for w in poly.points.windows(2) {
+            draw_seam_aware_line(&mut img, n, w[0], w[1], coast_color, radius);
+        }
+    }
+    finish_png(&mut img, map, path)?;
+    Ok(())
+}
+
+/// Draw `a → b` as a thick line; if the edge crosses the X seam (cell-coord
+/// `|dx| > res/2`), split into two halves meeting at the world's east/west
+/// edge so the line doesn't stripe across the image.
+fn draw_seam_aware_line(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    n: usize,
+    a: [f32; 2],
+    b: [f32; 2],
+    color: Rgb<u8>,
+    radius: i32,
+) {
+    let half = n as f32 * 0.5;
+    if (b[0] - a[0]).abs() <= half {
+        draw_thick_line(img, n, a, b, color, radius);
+        return;
+    }
+    let res_f = n as f32;
+    let (lo, hi) = if a[0] < b[0] { (a, b) } else { (b, a) };
+    let span = lo[0] + (res_f - hi[0]);
+    if span <= 0.0 {
+        return;
+    }
+    let t = lo[0] / span;
+    let y_seam = lo[1] + (hi[1] - lo[1]) * t;
+    draw_thick_line(img, n, lo, [0.0, y_seam], color, radius);
+    draw_thick_line(img, n, [res_f, y_seam], hi, color, radius);
+}
+
+/// Stamp a disk of `radius` cells along the line `a → b` at half-cell
+/// intervals. Thickness scaling lets the preview survive aggressive
+/// downscaling in PNG viewers; for 1-pixel rasterization a per-sample
+/// `put_pixel` would do.
+fn draw_thick_line(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    n: usize,
+    a: [f32; 2],
+    b: [f32; 2],
+    color: Rgb<u8>,
+    radius: i32,
+) {
+    let dx = b[0] - a[0];
+    let dy = b[1] - a[1];
+    let len = (dx * dx + dy * dy).sqrt();
+    let steps = ((len * 2.0).ceil() as i32).max(1);
+    for i in 0..=steps {
+        let t = i as f32 / steps as f32;
+        let x = a[0] + dx * t;
+        let y = a[1] + dy * t;
+        stamp_disk(img, n, x.round() as i32, y.round() as i32, radius, color);
+    }
 }
 
 /// Paint a filled disk of `radius` cells at (cx, cy), wrapping X, clamping Y.

@@ -21,27 +21,35 @@ pub struct WorldPolyline {
     pub points: Vec<[f32; 2]>,
 }
 
-/// Convert a cell-index polyline to world-space meters. Segments whose
-/// endpoints straddle the X seam are split so each output polyline stays on
-/// one side of the seam.
-pub fn polyline_to_world(points: &[(u32, u32)], cfg: &WorldGenConfig) -> Vec<WorldPolyline> {
+/// Convert a polyline to world-space meters by mapping each input point
+/// through `to_cell` (returning cell-coord units, where (gx+0.5, gy+0.5) is
+/// the center of cell (gx, gy)) and then applying the world transform
+/// `pos * mpc - half`. Segments whose endpoints straddle the X seam are
+/// split so each output polyline stays on one side of the seam. Source
+/// vertices are assumed to be ≤ 1 cell apart in each axis — that's how
+/// the seam-split detection (|dx| > half world width) distinguishes a wrap
+/// from a long jump.
+///
+/// The closure form unifies cell-index polylines (rivers/roads, where
+/// `to_cell = |(x,y)| [x+0.5, y+0.5]`) with cell-edge half-integer
+/// polylines (coasts, where `to_cell = |p| *p`).
+pub fn polyline_to_world<P, F>(points: &[P], cfg: &WorldGenConfig, to_cell: F) -> Vec<WorldPolyline>
+where
+    F: Fn(&P) -> [f32; 2],
+{
     let mpc = cfg.meters_per_cell();
     let half = cfg.world_size_m as f32 * 0.5;
-
-    let to_world = |p: &(u32, u32)| -> [f32; 2] {
-        let x = (p.0 as f32 + 0.5) * mpc - half;
-        let z = (p.1 as f32 + 0.5) * mpc - half;
-        [x, z]
+    let to_world = |p: &P| -> [f32; 2] {
+        let c = to_cell(p);
+        [c[0] * mpc - half, c[1] * mpc - half]
     };
 
     let mut out: Vec<WorldPolyline> = Vec::new();
-    let mut current: Vec<[f32; 2]> = Vec::new();
+    let mut current: Vec<[f32; 2]> = Vec::with_capacity(points.len());
 
-    for i in 0..points.len() {
-        let p = to_world(&points[i]);
+    for raw in points {
+        let p = to_world(raw);
         if let Some(&last) = current.last() {
-            // Consecutive global cells differ by at most 1 cell in each axis,
-            // so any dx exceeding half the world width must be an X-seam wrap.
             if (p[0] - last[0]).abs() > half {
                 let edge_last = if last[0] > 0.0 { half } else { -half };
                 let edge_p = -edge_last;
@@ -63,6 +71,22 @@ pub fn polyline_to_world(points: &[(u32, u32)], cfg: &WorldGenConfig) -> Vec<Wor
         out.push(WorldPolyline { points: current });
     }
     out
+}
+
+/// Map a `(cell_x, cell_y)` index pair to its cell-center coordinate. Use
+/// with `polyline_to_world` for river/road polylines whose vertices are
+/// stored as integer cell indices.
+#[inline]
+pub fn cell_index_to_center(p: &(u32, u32)) -> [f32; 2] {
+    [p.0 as f32 + 0.5, p.1 as f32 + 0.5]
+}
+
+/// Identity mapping for polylines whose vertices already live in cell-coord
+/// half-integer space (e.g. `coasts::extract_coasts` output, where
+/// vertices sit on cell-edge midpoints).
+#[inline]
+pub fn cell_coord_passthrough(p: &[f32; 2]) -> [f32; 2] {
+    *p
 }
 
 /// Chaikin corner-cutting for open polylines. First and last vertices are
@@ -301,7 +325,7 @@ mod tests {
         // walks through adjacent cells to avoid triggering a false split.
         let cfg = test_config(8, 64);
         let points: Vec<(u32, u32)> = vec![(0, 0), (1, 1), (2, 2), (3, 3), (4, 4)];
-        let out = polyline_to_world(&points, &cfg);
+        let out = polyline_to_world(&points, &cfg, cell_index_to_center);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].points.len(), 5);
         assert!((out[0].points[0][0] - -28.0).abs() < 1e-4);
@@ -311,19 +335,29 @@ mod tests {
     }
 
     #[test]
+    fn polyline_to_world_handles_half_integer_vertices() {
+        // Coast vertices live on cell-edge midpoints — half-integer in cell
+        // coords. Vertex (0.5, 0.0) sits between cells (0,0) and (1,0)
+        // along their shared top edge: world x = 0.5 * 8 - 32 = -28.
+        let cfg = test_config(8, 64);
+        let points: Vec<[f32; 2]> = vec![[0.5, 0.0], [1.5, 0.0], [1.5, 1.0]];
+        let out = polyline_to_world(&points, &cfg, cell_coord_passthrough);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].points.len(), 3);
+        assert!((out[0].points[0][0] - -28.0).abs() < 1e-4);
+        assert!((out[0].points[1][0] - -20.0).abs() < 1e-4);
+        assert!((out[0].points[2][1] - -24.0).abs() < 1e-4);
+    }
+
+    #[test]
     fn polyline_to_world_splits_across_x_seam() {
-        // Cell indices that wrap the X seam (from rightmost to leftmost
-        // column) should split into two polylines, each terminating at
-        // the world's ±half boundary.
         let cfg = test_config(8, 64);
         let half = (cfg.world_size_m as f32) * 0.5;
         let points: Vec<(u32, u32)> = vec![(6, 3), (7, 3), (0, 3), (1, 3)];
-        let out = polyline_to_world(&points, &cfg);
+        let out = polyline_to_world(&points, &cfg, cell_index_to_center);
         assert_eq!(out.len(), 2, "seam-crossing polyline splits into 2");
-        // First half ends at +half (seam nearest the eastern cells).
         let first_end = out[0].points.last().unwrap();
         assert!((first_end[0] - half).abs() < 1e-3);
-        // Second half starts at -half.
         let second_start = out[1].points.first().unwrap();
         assert!((second_start[0] + half).abs() < 1e-3);
     }

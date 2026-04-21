@@ -10,7 +10,8 @@
 
 use anyhow::{Context, Result};
 use onlinerpg_shared::worldgen::{
-    continent, elevation, erosion, rivers, roads, settlements, tile_bake, GlobalMap, WorldGenConfig,
+    coasts, continent, elevation, erosion, rivers, roads, settlements, tile_bake, GlobalMap,
+    WorldGenConfig,
 };
 use onlinerpg_terrain::coords;
 use rayon::prelude::*;
@@ -100,10 +101,12 @@ pub fn run(
 
     // --- Phase 7 prep: build shared per-cell context. -------------------
     let t = Instant::now();
-    let ctx = tile_bake::BakeContext::new(&map, &river_map, &road_net);
+    let coast_polys = coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
+    let ctx = tile_bake::BakeContext::new(&map, &river_map, &road_net, &coast_polys);
     eprintln!(
-        "  Phase 7 prep:        {:.2}s  (coast/river/road fields)",
-        t.elapsed().as_secs_f32()
+        "  Phase 7 prep:        {:.2}s  ({} coast polylines + river/road fields)",
+        t.elapsed().as_secs_f32(),
+        coast_polys.len()
     );
 
     // --- Directory scaffolding. ------------------------------------------
