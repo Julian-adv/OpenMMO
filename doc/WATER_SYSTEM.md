@@ -146,6 +146,7 @@ WebGPU TSL(Three.js Shading Language) 노드 기반 커스텀 셰이더.
 
 ## 7. 향후 확장 *(TODO)*
 
-*   강, 호수 등 내륙 수계 표현.
+*   강: [RIVER_SYSTEM.md](RIVER_SYSTEM.md) 설계 참조 (미구현).
+*   호수: 추후.
 *   수면 높이를 타일/리전별로 다르게 설정 (현재는 전역 Y=0 고정).
 *   파도 높이·방향의 날씨 연동.

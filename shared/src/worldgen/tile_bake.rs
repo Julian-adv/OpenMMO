@@ -29,7 +29,9 @@ use super::rivers::RiverMap;
 use super::roads::RoadNetwork;
 use super::vector_features::{
     cell_coord_passthrough, cell_index_to_center, chaikin_smooth, min_distance_to_segments,
-    polyline_to_world, segments_near_tile, Segment, WorldPolyline,
+    nearest_river_segment, polyline_to_world, river_chaikin_smooth, river_polyline_to_world,
+    river_segments_near_tile, segments_near_tile, RiverSegment, RiverWorldPolyline, Segment,
+    WorldPolyline,
 };
 
 /// Cell-count side of the splatmap (64×64 cells per tile).
@@ -89,19 +91,17 @@ const HILLS_AMPLITUDE_M: f32 = 5.0;
 const HILLS_COASTAL_FADE_M: f32 = 3.0;
 
 // --- River carve / splat ------------------------------------------------
-/// Half-width (m) of the flat river-bed floor. Points within this distance of
-/// the river polyline are carved to the full channel depth.
-const RIVER_CARVE_HALF_WIDTH_M: f32 = 2.5;
-/// Taper (m) beyond the flat floor at which the carve smoothly reaches zero.
-/// Total carve radius = HALF_WIDTH + TAPER.
-const RIVER_CARVE_TAPER_M: f32 = 10.0;
-/// Depth (m) removed from base elevation at the river center.
-const RIVER_CARVE_DEPTH_M: f32 = 2.0;
-/// Half-width (m) of the sandy-bank splat band around the river center.
-const RIVER_SAND_HALF_WIDTH_M: f32 = 5.0;
-/// Chaikin iterations applied to each river polyline before bake. Source
-/// vertices are at 8 m global-cell spacing; two rounds smooth that into a
-/// visible curve at 1 m tile resolution.
+// Width, taper, and carve depth all grow linearly in `flow_norm ∈ [0, 1]`.
+// See RIVER_SYSTEM.md §2.4 / §2.5.
+pub const RIVER_MIN_WIDTH_M: f32 = 1.5;
+pub const RIVER_MAX_WIDTH_M: f32 = 10.0;
+const RIVER_CARVE_TAPER_MIN_M: f32 = 3.0;
+const RIVER_CARVE_TAPER_EXTRA_M: f32 = 7.0;
+const RIVER_CARVE_DEPTH_MIN_M: f32 = 0.6;
+const RIVER_CARVE_DEPTH_EXTRA_M: f32 = 1.4;
+const RIVER_SAND_WIDTH_MULT: f32 = 1.25;
+/// Two rounds smooth 8 m source vertices into a visible curve at 1 m tile
+/// resolution.
 const RIVER_CHAIKIN_ITERATIONS: u32 = 2;
 
 // --- Road splat ---------------------------------------------------------
@@ -189,11 +189,12 @@ pub struct BakeContext {
     /// distance per call against the coast polylines would dominate bake
     /// time.
     pub dist_to_land: Vec<u16>,
-    /// River polylines converted to world-space meters and Chaikin-smoothed.
-    /// Tile bake queries point-to-segment distance against these instead of
-    /// rasterizing them back into an 8 m mask; that preserves sub-meter
-    /// precision in the final splat/height carve.
-    pub rivers_world: Vec<WorldPolyline>,
+    /// River polylines in world-space meters, Chaikin-smoothed, with
+    /// per-vertex flow_norm + width attached. `nearest_river_segment`
+    /// interpolates width / flow / carve params at the exact projection
+    /// point so geometry grows from source to mouth without lattice
+    /// artifacts.
+    pub rivers_world: Vec<RiverWorldPolyline>,
     /// Road polylines, same treatment as `rivers_world`. The previous
     /// rasterized `dist_to_road` BFS exposed the 8 m cell lattice as an
     /// axis-aligned staircase along every straight road segment.
@@ -221,12 +222,7 @@ impl BakeContext {
         // times during baking.
         let dist_to_land = bfs_distance_from(&map.land_mask, res, 1);
 
-        let rivers_world = smooth_polylines(
-            river_map.rivers.iter().map(|p| p.points.as_slice()),
-            &map.config,
-            RIVER_CHAIKIN_ITERATIONS,
-            cell_index_to_center,
-        );
+        let rivers_world = smooth_river_polylines(river_map, &map.config, RIVER_CHAIKIN_ITERATIONS);
         let roads_world = smooth_polylines(
             road_net.roads.iter().map(|r| r.points.as_slice()),
             &map.config,
@@ -282,12 +278,132 @@ where
     out
 }
 
+/// River version of `smooth_polylines` that carries per-vertex flow/width
+/// through the seam-split + Chaikin pass.
+fn smooth_river_polylines(
+    river_map: &RiverMap,
+    cfg: &super::config::WorldGenConfig,
+    iterations: u32,
+) -> Vec<RiverWorldPolyline> {
+    let max_flow = river_map.max_flow();
+    let mut out: Vec<RiverWorldPolyline> = Vec::new();
+    for poly in &river_map.rivers {
+        let worlds = river_polyline_to_world(
+            &poly.points,
+            &poly.flow,
+            max_flow,
+            RIVER_MIN_WIDTH_M,
+            RIVER_MAX_WIDTH_M,
+            cfg,
+        );
+        for wp in worlds {
+            if wp.points.len() >= 2 {
+                out.push(river_chaikin_smooth(&wp, iterations));
+            }
+        }
+    }
+    out
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BakedTile {
     /// Row-major uint16 heightmap (little-endian), 65×65 × 2 bytes.
     pub heightmap: Vec<u8>,
     /// Row-major V2 splatmap, 64×64 × 4 bytes.
     pub splatmap: Vec<u8>,
+}
+
+/// River segments keyed by their midpoint-owning tile. Built once per bake
+/// (amortizing the world-wide scan across all tiles); segments in the same
+/// polyline share endpoints so neighboring tiles' ribbons still meet even
+/// when they own different halves.
+pub type RiverSegmentBuckets = std::collections::HashMap<(i32, i32), Vec<RiverSegment>>;
+
+pub fn bucket_river_segments_by_owner(ctx: &BakeContext) -> RiverSegmentBuckets {
+    let mut buckets: RiverSegmentBuckets = RiverSegmentBuckets::new();
+    for poly in &ctx.rivers_world {
+        if poly.points.len() < 2 {
+            continue;
+        }
+        for i in 0..poly.points.len() - 1 {
+            let a = poly.points[i];
+            let b = poly.points[i + 1];
+            let mx = (a[0] + b[0]) * 0.5;
+            let mz = (a[1] + b[1]) * 0.5;
+            // World → tile: tile 0 spans [-32, 32), tile 1 [32, 96), …
+            let tx = ((mx + TILE_DIM as f32 * 0.5) / TILE_DIM as f32).floor() as i32;
+            let tz = ((mz + TILE_DIM as f32 * 0.5) / TILE_DIM as f32).floor() as i32;
+            buckets.entry((tx, tz)).or_default().push(RiverSegment {
+                ax: a[0],
+                az: a[1],
+                bx: b[0],
+                bz: b[1],
+                flow_norm_a: poly.flow_norm[i],
+                flow_norm_b: poly.flow_norm[i + 1],
+                width_a: poly.width[i],
+                width_b: poly.width[i + 1],
+            });
+        }
+    }
+    buckets
+}
+
+pub const RIVER_BIN_MAGIC: &[u8; 4] = b"RIV1";
+pub const RIVER_BIN_VERSION: u16 = 1;
+pub const RIVER_BIN_HEADER_SIZE: usize = 16;
+pub const RIVER_BIN_SEGMENT_SIZE: usize = 32;
+
+/// Serialize a per-tile river segment list to the on-disk binary format
+/// documented in `RIVER_SYSTEM.md` §2.2. Returns `None` when the segment
+/// list is empty so callers can skip writing a file for tiles with no
+/// rivers (matches the vegetation pattern — missing file = none).
+///
+/// Layout:
+///
+/// ```text
+/// header (16 bytes):
+///   bytes 0..4   magic        b"RIV1"
+///   bytes 4..6   u16          version (currently 1)
+///   bytes 6..8   u16          segment_count
+///   bytes 8..12  f32          reserved (0.0)
+///   bytes 12..16 f32          reserved (0.0)
+///
+/// per-segment (32 bytes):
+///   bytes  0..4   f32          ax  — world-space start x
+///   bytes  4..8   f32          az  — world-space start z
+///   bytes  8..12  f32          bx  — world-space end x
+///   bytes 12..16  f32          bz  — world-space end z
+///   bytes 16..20  f32          width_a      — surface width at vertex A
+///   bytes 20..24  f32          width_b      — surface width at vertex B
+///   bytes 24..28  f32          flow_norm_a  — normalized flow at A
+///   bytes 28..32  f32          flow_norm_b  — normalized flow at B
+/// ```
+pub fn bake_rivers_binary(segments: &[RiverSegment]) -> Option<Vec<u8>> {
+    if segments.is_empty() {
+        return None;
+    }
+    let n = segments.len();
+    assert!(
+        n <= u16::MAX as usize,
+        "river segment count {n} exceeds u16 capacity"
+    );
+    let mut out = Vec::with_capacity(RIVER_BIN_HEADER_SIZE + n * RIVER_BIN_SEGMENT_SIZE);
+    out.extend_from_slice(RIVER_BIN_MAGIC);
+    out.extend_from_slice(&RIVER_BIN_VERSION.to_le_bytes());
+    out.extend_from_slice(&(n as u16).to_le_bytes());
+    out.extend_from_slice(&0f32.to_le_bytes());
+    out.extend_from_slice(&0f32.to_le_bytes());
+    for s in segments {
+        out.extend_from_slice(&s.ax.to_le_bytes());
+        out.extend_from_slice(&s.az.to_le_bytes());
+        out.extend_from_slice(&s.bx.to_le_bytes());
+        out.extend_from_slice(&s.bz.to_le_bytes());
+        out.extend_from_slice(&s.width_a.to_le_bytes());
+        out.extend_from_slice(&s.width_b.to_le_bytes());
+        out.extend_from_slice(&s.flow_norm_a.to_le_bytes());
+        out.extend_from_slice(&s.flow_norm_b.to_le_bytes());
+    }
+    Some(out)
 }
 
 /// Bake one tile at signed tile coordinate (tx, tz).
@@ -297,15 +413,15 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
     let tile_max_x = tile_min_x + TILE_DIM as f32;
     let tile_max_z = tile_min_z + TILE_DIM as f32;
 
-    // Margin = largest radius at which any vector feature still affects
-    // this tile. Must cover both the heightmap carve (sand + taper) and
-    // the splat water-fade (sand + fade span) — whichever reaches further.
-    // Cells within the fade span that don't see the segment would get
-    // full-dirt instead of a partial fade, producing a sharp seam exactly
-    // on the tile boundary when the river runs close to it.
-    let river_margin = (RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M)
-        .max(RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M);
-    let river_segs = segments_near_tile(
+    // Margin = largest radius at which any river segment can still affect
+    // this tile (carve taper or splat fade). Computed from the global
+    // maxima — a tile with only narrow source streams still uses the
+    // worldwide reach so neighbors agree on the shared cells.
+    let max_half_width = RIVER_MAX_WIDTH_M * 0.5;
+    let max_taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M;
+    let max_sand_half_width = RIVER_MAX_WIDTH_M * RIVER_SAND_WIDTH_MULT;
+    let river_margin = (max_half_width + max_taper).max(max_sand_half_width + RIVER_FADE_SPAN_M);
+    let river_segs = river_segments_near_tile(
         &ctx.rivers_world,
         tile_min_x,
         tile_min_z,
@@ -365,7 +481,7 @@ fn sample_tile_heights(
     ctx: &BakeContext,
     tx: i32,
     tz: i32,
-    river_segs: &[Segment],
+    river_segs: &[RiverSegment],
 ) -> Vec<f32> {
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
@@ -407,7 +523,7 @@ fn sample_elevation_m(
     world_z: f32,
     world_size: f32,
     inv_mpc: f32,
-    river_segs: &[Segment],
+    river_segs: &[RiverSegment],
 ) -> f32 {
     // Catmull-Rom (C1-continuous bicubic) instead of bilinear here: the 8 m
     // global cells are too coarse to describe a smooth hill, and bilinear's
@@ -460,30 +576,53 @@ fn sample_elevation_m(
         0.0
     };
 
-    let river_d = min_distance_to_segments(world_x, world_z, river_segs);
-    let carve = river_carve_m(river_d);
+    let carve = if let Some((d, idx, t)) = nearest_river_segment(world_x, world_z, river_segs) {
+        let seg = &river_segs[idx];
+        let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
+        let width = lerp(seg.width_a, seg.width_b, t);
+        let (half_width, taper, depth) = segment_carve_params(flow_norm, width);
+        river_carve_m(d, half_width, taper, depth)
+    } else {
+        0.0
+    };
 
     let max_cap = map.config.max_elevation_m;
     (base + detail + hills - carve).clamp(-HEIGHT_BIAS, max_cap)
 }
 
-/// River channel profile: flat floor within `RIVER_CARVE_HALF_WIDTH_M`, then
-/// smoothstep taper to zero over the next `RIVER_CARVE_TAPER_M` meters. The
-/// flat floor avoids a visible kink at the bank and gives the water surface a
-/// consistent bed depth along the river.
 #[inline]
-fn river_carve_m(d_m: f32) -> f32 {
-    let full = RIVER_CARVE_HALF_WIDTH_M;
-    let total = full + RIVER_CARVE_TAPER_M;
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a + (b - a) * t
+}
+
+/// Carve geometry at a point on the river: `(half_width, taper, depth)`.
+/// Flat bed matches the visible ribbon (`half_width = width * 0.5`) so the
+/// water surface sits on a consistent floor. Taper and depth grow linearly
+/// in flow so sources are shallow and mouths cut deeper. See
+/// RIVER_SYSTEM.md §2.5.
+#[inline]
+fn segment_carve_params(flow_norm: f32, width_m: f32) -> (f32, f32, f32) {
+    let half_width = width_m * 0.5;
+    let taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M * flow_norm;
+    let depth = RIVER_CARVE_DEPTH_MIN_M + RIVER_CARVE_DEPTH_EXTRA_M * flow_norm;
+    (half_width, taper, depth)
+}
+
+/// River channel profile: flat floor within `half_width`, smoothstep taper
+/// to zero over the next `taper` meters. Flat floor avoids a kink at the
+/// bank.
+#[inline]
+fn river_carve_m(d_m: f32, half_width: f32, taper: f32, depth: f32) -> f32 {
+    let total = half_width + taper;
     if d_m >= total {
         return 0.0;
     }
-    if d_m <= full {
-        return RIVER_CARVE_DEPTH_M;
+    if d_m <= half_width {
+        return depth;
     }
-    let t = (d_m - full) / RIVER_CARVE_TAPER_M;
+    let t = (d_m - half_width) / taper.max(1e-3);
     let s = 1.0 - t * t * (3.0 - 2.0 * t);
-    RIVER_CARVE_DEPTH_M * s
+    depth * s
 }
 
 /// Map a single global cell to "effective elevation": the raw meters for
@@ -555,7 +694,7 @@ fn bake_splatmap(
     tx: i32,
     tz: i32,
     heights: &[f32],
-    river_segs: &[Segment],
+    river_segs: &[RiverSegment],
     road_segs: &[Segment],
     coast_segs: &[Segment],
 ) -> Vec<u8> {
@@ -622,22 +761,27 @@ fn bake_splatmap(
                 nearest_cliff_distance(&cliff_mask, cx, cz)
             };
 
-            let is_sea = map.land_mask[gi] == 0;
-            let coast_d_m = min_distance_to_segments(wx, wz, coast_segs);
-            let river_d_m = min_distance_to_segments(wx, wz, river_segs);
-            let road_d_m = min_distance_to_segments(wx, wz, road_segs);
+            let (river_d_m, river_width_m) = nearest_river_segment(wx, wz, river_segs)
+                .map(|(d, idx, t)| {
+                    let s = &river_segs[idx];
+                    (d, lerp(s.width_a, s.width_b, t))
+                })
+                .unwrap_or((f32::INFINITY, 0.0));
 
             // `classify_splat` only consumes the patch sample in its plain
             // branch; passing a closure skips the warp + Voronoi query on
             // every sea / road / river / cliff / alpine / coast cell.
             let (primary, secondary, blend, veg) = classify_splat(
-                is_sea,
-                river_d_m,
-                road_d_m,
-                h_center,
-                slope,
-                coast_d_m,
-                cliff_proximity_m,
+                SplatInputs {
+                    is_sea: map.land_mask[gi] == 0,
+                    river_d_m,
+                    river_width_m,
+                    road_d_m: min_distance_to_segments(wx, wz, road_segs),
+                    h_center,
+                    slope,
+                    coast_d_m: min_distance_to_segments(wx, wz, coast_segs),
+                    cliff_proximity_m,
+                },
                 || ctx.grass_patches.sample(wx, wz),
             );
 
@@ -716,19 +860,40 @@ fn catmull_rom_wrap_x<F: Fn(usize) -> f32>(
     catmull_rom_1d(rows[0], rows[1], rows[2], rows[3], fy)
 }
 
-/// Splat priority ladder. Later branches only fire if earlier ones reject.
-/// `patch` is invoked only when the plain branch fires, so non-plain cells
-/// skip the warped-Voronoi query entirely.
-fn classify_splat(
+/// Per-cell inputs to `classify_splat`. Grouped so the priority ladder
+/// doesn't become a 9-positional-arg call; also lets new biome factors
+/// land as struct fields without churning every test call site.
+#[derive(Debug, Clone, Copy)]
+struct SplatInputs {
     is_sea: bool,
     river_d_m: f32,
+    /// Width of the nearest river at its projection point (m). Zero when
+    /// no river is in range — the priority ladder falls through naturally.
+    river_width_m: f32,
     road_d_m: f32,
     h_center: f32,
     slope: f32,
     coast_d_m: f32,
     cliff_proximity_m: f32,
-    patch: impl FnOnce() -> PatchSample,
-) -> (u8, u8, u8, u8) {
+}
+
+/// Splat priority ladder. Later branches only fire if earlier ones reject.
+/// `patch` is invoked only when the plain branch fires, so non-plain cells
+/// skip the warped-Voronoi query entirely.
+fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (u8, u8, u8, u8) {
+    let SplatInputs {
+        is_sea,
+        river_d_m,
+        river_width_m,
+        road_d_m,
+        h_center,
+        slope,
+        coast_d_m,
+        cliff_proximity_m,
+    } = inputs;
+    // 1 m floor on the sand band protects degenerate zero-width segments
+    // from disappearing entirely.
+    let river_sand_half_width_m = (river_width_m * RIVER_SAND_WIDTH_MULT).max(1.0);
     if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
         // Roads override every biome so the network stays visible. Secondary
         // is PAL_GROUND so the fade outer edge (blend=255 → pure GROUND) meets
@@ -737,13 +902,13 @@ fn classify_splat(
         let t = ((road_d_m - ROAD_HALF_WIDTH_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
         let blend = (t * t * 255.0) as u8;
         (PAL_ROAD, PAL_GROUND, blend, 0)
-    } else if river_d_m < RIVER_SAND_HALF_WIDTH_M {
+    } else if river_d_m < river_sand_half_width_m {
         // River bed: wet pebbles (PAL_RIVER_BED). Secondary switches to CLIFF
         // inside the cliff-proximity reach so the river-edge outer ring
         // resolves to 100% CLIFF on both sides of the palette-pair swap
         // against the adjacent plain cell; otherwise GROUND, meeting pure
         // grass outside the sand band.
-        let t = (river_d_m / RIVER_SAND_HALF_WIDTH_M).clamp(0.0, 1.0);
+        let t = (river_d_m / river_sand_half_width_m).clamp(0.0, 1.0);
         let blend = (t * t * 255.0) as u8;
         let (secondary, veg) = if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M {
             (PAL_CLIFF, 0)
@@ -844,7 +1009,7 @@ fn classify_splat(
         // the base of a cliff. So proximity bypasses water_fade entirely.
         let coast_fade = ((coast_d_m - COAST_SAND_M) / COAST_FADE_SPAN_M).clamp(0.0, 1.0);
         let river_fade =
-            ((river_d_m - RIVER_SAND_HALF_WIDTH_M) / RIVER_FADE_SPAN_M).clamp(0.0, 1.0);
+            ((river_d_m - river_sand_half_width_m) / RIVER_FADE_SPAN_M).clamp(0.0, 1.0);
         let road_fade =
             ((road_d_m - ROAD_HALF_WIDTH_M - ROAD_FADE_SPAN_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
         let water_fade = coast_fade.min(river_fade).min(road_fade);
@@ -1000,9 +1165,25 @@ mod tests {
     /// rocky component is 0 and any blend value reflects only coastal fades,
     /// not terrain. Rivers and roads default to INFINITY so those branches
     /// are inactive.
-    fn plain_inputs(coast_d_m: f32) -> (bool, f32, f32, f32, f32, f32) {
-        (false, f32::INFINITY, f32::INFINITY, 10.0, 0.0, coast_d_m)
+    fn plain_inputs(coast_d_m: f32) -> SplatInputs {
+        SplatInputs {
+            is_sea: false,
+            river_d_m: f32::INFINITY,
+            river_width_m: 0.0,
+            road_d_m: f32::INFINITY,
+            h_center: 10.0,
+            slope: 0.0,
+            coast_d_m,
+            cliff_proximity_m: CLIFF_PROXIMITY_RADIUS_M,
+        }
     }
+
+    /// Canonical width used by river-band tests. With `RIVER_SAND_WIDTH_MULT
+    /// = 1.25`, a width of 4 m yields a 5 m sand band — the value the
+    /// previous fixed `RIVER_SAND_HALF_WIDTH_M` constant used, so existing
+    /// regression expectations carry over.
+    const TEST_RIVER_WIDTH_M: f32 = 4.0;
+    const TEST_RIVER_SAND_HALF_WIDTH_M: f32 = TEST_RIVER_WIDTH_M * RIVER_SAND_WIDTH_MULT;
 
     /// Full-coverage short-grass patch used by tests that don't care about
     /// veg output. Passed as `|| FULL_GRASS` where `classify_splat` wants a
@@ -1012,20 +1193,8 @@ mod tests {
         is_tall: false,
     };
 
-    fn call_classify(args: (bool, f32, f32, f32, f32, f32)) -> (u8, u8, u8, u8) {
-        // No cliff in sight → proximity at max so the plain-branch distance
-        // channel contributes nothing. Tests that care about cliff-proximity
-        // behavior build their own call.
-        classify_splat(
-            args.0,
-            args.1,
-            args.2,
-            args.3,
-            args.4,
-            args.5,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        )
+    fn call_classify(inputs: SplatInputs) -> (u8, u8, u8, u8) {
+        classify_splat(inputs, || FULL_GRASS)
     }
 
     #[test]
@@ -1078,16 +1247,15 @@ mod tests {
     #[test]
     fn priority_road_beats_sea_and_river() {
         // Roads must always win so the settlement network stays visible.
-        let (p, s, blend, _) = classify_splat(
-            true,
-            1.0,
-            0.0,
-            -5.0,
-            0.0,
-            0.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let (p, s, blend, _) = call_classify(SplatInputs {
+            is_sea: true,
+            river_d_m: 1.0,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            road_d_m: 0.0,
+            h_center: -5.0,
+            coast_d_m: 0.0,
+            ..plain_inputs(0.0)
+        });
         assert_eq!((p, s), (PAL_ROAD, PAL_GROUND));
         assert_eq!(blend, 0, "road center must be 100% PAL_ROAD");
     }
@@ -1096,45 +1264,33 @@ mod tests {
     fn priority_river_beats_sea() {
         // River bed uses (RIVER_BED, GROUND). Regression guard so an
         // accidental swap back to DIRT (red laterite) won't slip through.
-        let (p, s, _, _) = classify_splat(
-            true,
-            0.0,
-            f32::INFINITY,
-            -1.0,
-            0.0,
-            0.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let (p, s, _, _) = call_classify(SplatInputs {
+            is_sea: true,
+            river_d_m: 0.0,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            h_center: -1.0,
+            coast_d_m: 0.0,
+            ..plain_inputs(0.0)
+        });
         assert_eq!((p, s), (PAL_RIVER_BED, PAL_GROUND));
     }
 
     #[test]
     fn river_outer_edge_meets_plain_seamlessly() {
         // Same continuity invariant as `coast_outer_edge_...` but for rivers.
-        let at_edge = classify_splat(
-            false,
-            RIVER_SAND_HALF_WIDTH_M - 1e-4,
-            f32::INFINITY,
-            10.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let at_edge = call_classify(SplatInputs {
+            river_d_m: TEST_RIVER_SAND_HALF_WIDTH_M - 1e-4,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            ..plain_inputs(100.0)
+        });
         assert_eq!((at_edge.0, at_edge.1), (PAL_RIVER_BED, PAL_GROUND));
         assert_eq!(at_edge.2, 254, "river edge must be near-pure GROUND");
 
-        let past_edge = classify_splat(
-            false,
-            RIVER_SAND_HALF_WIDTH_M + 1e-4,
-            f32::INFINITY,
-            10.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let past_edge = call_classify(SplatInputs {
+            river_d_m: TEST_RIVER_SAND_HALF_WIDTH_M + 1e-4,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            ..plain_inputs(100.0)
+        });
         assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(
             past_edge.2, 0,
@@ -1148,29 +1304,17 @@ mod tests {
         // branch must emit blend=255 (pure GROUND secondary), and the plain
         // branch just past must emit blend=0 (pure GROUND primary). If either
         // side drifts, a visible seam appears along every road.
-        let at_edge = classify_splat(
-            false,
-            f32::INFINITY,
-            ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M - 1e-4,
-            10.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let at_edge = call_classify(SplatInputs {
+            road_d_m: ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M - 1e-4,
+            ..plain_inputs(100.0)
+        });
         assert_eq!((at_edge.0, at_edge.1), (PAL_ROAD, PAL_GROUND));
         assert_eq!(at_edge.2, 254, "road edge must be near-pure GROUND");
 
-        let past_edge = classify_splat(
-            false,
-            f32::INFINITY,
-            ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M + 1e-4,
-            10.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let past_edge = call_classify(SplatInputs {
+            road_d_m: ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M + 1e-4,
+            ..plain_inputs(100.0)
+        });
         assert_eq!((past_edge.0, past_edge.1), (PAL_GROUND, PAL_CLIFF));
         assert_eq!(
             past_edge.2, 0,
@@ -1191,16 +1335,10 @@ mod tests {
         let mut prev = -1i32;
         for i in 0..=steps {
             let d = band_end * (i as f32) / (steps as f32);
-            let (primary, _, blend, _) = classify_splat(
-                false,
-                f32::INFINITY,
-                d,
-                10.0,
-                0.0,
-                100.0,
-                CLIFF_PROXIMITY_RADIUS_M,
-                || FULL_GRASS,
-            );
+            let (primary, _, blend, _) = call_classify(SplatInputs {
+                road_d_m: d,
+                ..plain_inputs(100.0)
+            });
             assert_eq!(
                 primary, PAL_ROAD,
                 "road branch must still be active at d={d}"
@@ -1224,26 +1362,15 @@ mod tests {
         // Slope 0.5 < SLOPE_CLIFF_START so the plain branch fires; its rocky
         // component is non-zero so a mismatched water_fade would surface as a
         // blend diff.
-        let at_margin = classify_splat(
-            false,
-            f32::INFINITY,
-            road_margin,
-            10.0,
-            0.5,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
-        let no_road = classify_splat(
-            false,
-            f32::INFINITY,
-            f32::INFINITY,
-            10.0,
-            0.5,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || FULL_GRASS,
-        );
+        let at_margin = call_classify(SplatInputs {
+            road_d_m: road_margin,
+            slope: 0.5,
+            ..plain_inputs(100.0)
+        });
+        let no_road = call_classify(SplatInputs {
+            slope: 0.5,
+            ..plain_inputs(100.0)
+        });
         assert_eq!(
             at_margin, no_road,
             "plain branch must match 'no road' output at road_margin"
@@ -1277,24 +1404,25 @@ mod tests {
     fn river_margin_covers_water_fade_span() {
         // Regression guard: the per-tile segment filter in `bake_tile` must
         // include every segment whose distance to the tile bbox could still
-        // matter to the splat water-fade (which ramps through 0 → 1 over
-        // `RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M`). If the margin is
-        // smaller, edge cells near a river see INFINITY distance while
-        // neighbor-tile cells see a partial fade — a hard seam on the tile
-        // boundary. See the margin computation in `bake_tile`.
-        let river_margin = (RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M)
-            .max(RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M);
+        // matter to the splat water-fade (max-width sand band + fade span)
+        // or the heightmap carve (max-width half-width + max taper). The
+        // margin is computed from the global maxima so every tile sees
+        // every segment that could influence it.
+        let max_half_width = RIVER_MAX_WIDTH_M * 0.5;
+        let max_taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M;
+        let max_sand = RIVER_MAX_WIDTH_M * RIVER_SAND_WIDTH_MULT;
+        let river_margin = (max_half_width + max_taper).max(max_sand + RIVER_FADE_SPAN_M);
         assert!(
-            river_margin >= RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M,
+            river_margin >= max_sand + RIVER_FADE_SPAN_M,
             "margin {} does not cover fade span {}",
             river_margin,
-            RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M
+            max_sand + RIVER_FADE_SPAN_M
         );
         assert!(
-            river_margin >= RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M,
+            river_margin >= max_half_width + max_taper,
             "margin {} does not cover carve taper {}",
             river_margin,
-            RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M
+            max_half_width + max_taper
         );
     }
 
@@ -1303,30 +1431,30 @@ mod tests {
         // Build a synthetic world with a single river polyline straddling
         // the tile boundary at x = 0 (tile 0's right edge = tile 1's left
         // edge). The per-tile filter in `bake_tile` uses
-        // `segments_near_tile` with the `river_margin` constant — both
-        // adjacent tiles must see the segment so their splat classification
-        // agrees at the boundary.
-        use super::super::vector_features::{segments_near_tile, WorldPolyline};
-        let polys = vec![WorldPolyline {
+        // `river_segments_near_tile` with the `river_margin` constant —
+        // both adjacent tiles must see the segment so their splat
+        // classification agrees at the boundary.
+        use super::super::vector_features::{river_segments_near_tile, RiverWorldPolyline};
+        let polys = vec![RiverWorldPolyline {
             points: vec![[0.5, -10.0], [0.5, 10.0]],
+            flow_norm: vec![0.5, 0.5],
+            width: vec![4.0, 4.0],
         }];
-        let margin = (RIVER_CARVE_HALF_WIDTH_M + RIVER_CARVE_TAPER_M)
-            .max(RIVER_SAND_HALF_WIDTH_M + RIVER_FADE_SPAN_M);
-        // Tile 0 covers [-32, 32] in X; tile 1 covers [32, 96]. The segment
-        // at x=0.5 is inside tile 0, and 31.5 m from tile 1's left edge —
-        // inside the margin (15 m) only when the segment is close enough,
-        // so we place it 14 m outside tile 1 to exercise the boundary case.
-        let near_tile_0 = segments_near_tile(&polys, -32.0, -16.0, 32.0, 16.0, margin);
+        let max_half_width = RIVER_MAX_WIDTH_M * 0.5;
+        let max_taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M;
+        let max_sand = RIVER_MAX_WIDTH_M * RIVER_SAND_WIDTH_MULT;
+        let margin = (max_half_width + max_taper).max(max_sand + RIVER_FADE_SPAN_M);
+        let near_tile_0 = river_segments_near_tile(&polys, -32.0, -16.0, 32.0, 16.0, margin);
         assert_eq!(near_tile_0.len(), 1, "tile 0 must see segment at x=0.5");
-        // Now move the segment to lie `margin - 1` m west of tile 1's
-        // bbox: it must still appear in tile 1's filter list.
-        let polys2 = vec![WorldPolyline {
+        let polys2 = vec![RiverWorldPolyline {
             points: vec![
                 [32.0 - (margin - 1.0), -10.0],
                 [32.0 - (margin - 1.0), 10.0],
             ],
+            flow_norm: vec![0.5, 0.5],
+            width: vec![4.0, 4.0],
         }];
-        let near_tile_1 = segments_near_tile(&polys2, 32.0, -16.0, 96.0, 16.0, margin);
+        let near_tile_1 = river_segments_near_tile(&polys2, 32.0, -16.0, 96.0, 16.0, margin);
         assert_eq!(
             near_tile_1.len(),
             1,
@@ -1436,70 +1564,104 @@ mod tests {
 
         // Road
         classify_splat(
-            false,
-            f32::INFINITY,
-            0.0,
-            10.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
+            SplatInputs {
+                road_d_m: 0.0,
+                ..plain_inputs(100.0)
+            },
             trip,
         );
         // River (before sea check — river wins even in sea)
         classify_splat(
-            true,
-            0.0,
-            f32::INFINITY,
-            -1.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
+            SplatInputs {
+                is_sea: true,
+                river_d_m: 0.0,
+                river_width_m: TEST_RIVER_WIDTH_M,
+                h_center: -1.0,
+                ..plain_inputs(100.0)
+            },
             trip,
         );
         // Sea
         classify_splat(
-            true,
-            f32::INFINITY,
-            f32::INFINITY,
-            -5.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
+            SplatInputs {
+                is_sea: true,
+                h_center: -5.0,
+                ..plain_inputs(100.0)
+            },
             trip,
         );
         // Cliff (slope ≥ threshold)
         classify_splat(
-            false,
-            f32::INFINITY,
-            f32::INFINITY,
-            10.0,
-            CLIFF_SLOPE_THRESHOLD + 0.1,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
+            SplatInputs {
+                slope: CLIFF_SLOPE_THRESHOLD + 0.1,
+                ..plain_inputs(100.0)
+            },
             trip,
         );
         // Alpine (elevation > snow line, slope below cliff threshold)
         classify_splat(
-            false,
-            f32::INFINITY,
-            f32::INFINITY,
-            SNOW_ELEVATION_M + 100.0,
-            0.0,
-            100.0,
-            CLIFF_PROXIMITY_RADIUS_M,
+            SplatInputs {
+                h_center: SNOW_ELEVATION_M + 100.0,
+                ..plain_inputs(100.0)
+            },
             trip,
         );
         // Coast sand band
-        classify_splat(
-            false,
-            f32::INFINITY,
-            f32::INFINITY,
-            10.0,
-            0.0,
-            COAST_SAND_M * 0.5,
-            CLIFF_PROXIMITY_RADIUS_M,
-            trip,
+        classify_splat(plain_inputs(COAST_SAND_M * 0.5), trip);
+    }
+
+    #[test]
+    fn river_binary_round_trip() {
+        // Empty segment list returns None so the baker can skip writing a
+        // file for tiles without rivers.
+        assert!(bake_rivers_binary(&[]).is_none());
+
+        let segs = vec![
+            RiverSegment {
+                ax: -10.5,
+                az: 7.25,
+                bx: 20.0,
+                bz: -8.0,
+                flow_norm_a: 0.125,
+                flow_norm_b: 0.875,
+                width_a: 2.0,
+                width_b: 8.0,
+            },
+            RiverSegment {
+                ax: 20.0,
+                az: -8.0,
+                bx: 22.5,
+                bz: -10.0,
+                flow_norm_a: 0.875,
+                flow_norm_b: 1.0,
+                width_a: 8.0,
+                width_b: 10.0,
+            },
+        ];
+        let bytes = bake_rivers_binary(&segs).expect("non-empty segments encode");
+        assert_eq!(
+            bytes.len(),
+            RIVER_BIN_HEADER_SIZE + segs.len() * RIVER_BIN_SEGMENT_SIZE
         );
+        // Magic + version + segment_count.
+        assert_eq!(&bytes[0..4], RIVER_BIN_MAGIC);
+        assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), RIVER_BIN_VERSION);
+        assert_eq!(u16::from_le_bytes([bytes[6], bytes[7]]), segs.len() as u16);
+
+        // First segment payload (offset 16).
+        let read_f32 = |off: usize| -> f32 {
+            f32::from_le_bytes([bytes[off], bytes[off + 1], bytes[off + 2], bytes[off + 3]])
+        };
+        assert_eq!(read_f32(16), segs[0].ax);
+        assert_eq!(read_f32(20), segs[0].az);
+        assert_eq!(read_f32(24), segs[0].bx);
+        assert_eq!(read_f32(28), segs[0].bz);
+        assert_eq!(read_f32(32), segs[0].width_a);
+        assert_eq!(read_f32(36), segs[0].width_b);
+        assert_eq!(read_f32(40), segs[0].flow_norm_a);
+        assert_eq!(read_f32(44), segs[0].flow_norm_b);
+        // Second segment starts at 16 + 32 = 48.
+        assert_eq!(read_f32(48), segs[1].ax);
     }
 
     #[test]
@@ -1508,19 +1670,10 @@ mod tests {
         // sample, every eligible land cell loses its veg byte silently.
         use std::cell::Cell;
         let called = Cell::new(false);
-        classify_splat(
-            false,
-            f32::INFINITY,
-            f32::INFINITY,
-            10.0,
-            0.0,
-            COAST_SAND_M + 1.0,
-            CLIFF_PROXIMITY_RADIUS_M,
-            || {
-                called.set(true);
-                FULL_GRASS
-            },
-        );
+        classify_splat(plain_inputs(COAST_SAND_M + 1.0), || {
+            called.set(true);
+            FULL_GRASS
+        });
         assert!(called.get(), "plain branch must sample patch");
     }
 

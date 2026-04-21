@@ -100,3 +100,16 @@ pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("minimap")
         .join(format!("r{:+03}_{:+03}.png", rx, rz))
 }
+
+/// Build filesystem path for a river-segment data file. The baker writes
+/// this only for tiles whose bbox (plus margin) contains any river segment;
+/// client code treats a missing file as "no rivers in this tile".
+pub fn river_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
+    let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
+    river_region_dir(base, rx, rz).join(format!("r_{:+05}_{:+05}.bin", tx, tz))
+}
+
+/// Build filesystem path for a region's river tile directory.
+pub fn river_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("rivers").join(region_dir_name(rx, rz))
+}

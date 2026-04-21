@@ -79,9 +79,30 @@ pub struct RiverMap {
     pub rivers: Vec<Polyline>,
 }
 
+impl RiverMap {
+    /// Maximum per-vertex flow across every extracted polyline, clamped to
+    /// ≥ 1 so log-normalization downstream never divides by zero. Recomputed
+    /// on demand (rivers vector mutates rarely, callers are offline bake /
+    /// preview).
+    pub fn max_flow(&self) -> f32 {
+        let mut m = 1.0f32;
+        for poly in &self.rivers {
+            for &f in &poly.flow {
+                if f > m {
+                    m = f;
+                }
+            }
+        }
+        m
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Polyline {
     pub points: Vec<(u32, u32)>,
+    /// Per-vertex flow accumulation (raw units, same scale as `RiverMap.flow`).
+    /// Same length as `points`. Drives downstream width growth.
+    pub flow: Vec<f32>,
 }
 
 /// Compute downstream pointers + flow accumulation for every land cell.
@@ -273,12 +294,14 @@ pub fn extract_rivers(
             continue;
         }
         let mut points: Vec<(u32, u32)> = Vec::new();
+        let mut flow_vals: Vec<f32> = Vec::new();
         let mut cur: Option<u32> = Some(start as u32);
         while let Some(ci32) = cur {
             let ci = ci32 as usize;
             let x = (ci % res) as u32;
             let y = (ci / res) as u32;
             points.push((x, y));
+            flow_vals.push(rivers.flow[ci]);
             if visited[ci] {
                 // Merge into an earlier-traced polyline — include this
                 // junction point so the tributary visibly connects.
@@ -288,7 +311,10 @@ pub fn extract_rivers(
             cur = rivers.downstream[ci];
         }
         if points.len() >= min_length {
-            rivers.rivers.push(Polyline { points });
+            rivers.rivers.push(Polyline {
+                points,
+                flow: flow_vals,
+            });
         }
     }
 }

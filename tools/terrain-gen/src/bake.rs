@@ -103,6 +103,7 @@ pub fn run(
     let t = Instant::now();
     let coast_polys = coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
     let ctx = tile_bake::BakeContext::new(&map, &river_map, &road_net, &coast_polys);
+    let river_buckets = tile_bake::bucket_river_segments_by_owner(&ctx);
     eprintln!(
         "  Phase 7 prep:        {:.2}s  ({} coast polylines + river/road fields)",
         t.elapsed().as_secs_f32(),
@@ -122,6 +123,8 @@ pub fn run(
         .with_context(|| format!("create {}/trees", out.display()))?;
     std::fs::create_dir_all(out.join("grass"))
         .with_context(|| format!("create {}/grass", out.display()))?;
+    std::fs::create_dir_all(out.join("rivers"))
+        .with_context(|| format!("create {}/rivers", out.display()))?;
 
     for &rx in &region_xs {
         for &rz in &region_zs {
@@ -129,6 +132,7 @@ pub fn run(
             std::fs::create_dir_all(coords::splat_region_dir(out, rx, rz))?;
             std::fs::create_dir_all(coords::tree_region_dir(out, rx, rz))?;
             std::fs::create_dir_all(coords::grass_region_dir(out, rx, rz))?;
+            std::fs::create_dir_all(coords::river_region_dir(out, rx, rz))?;
         }
     }
 
@@ -175,6 +179,18 @@ pub fn run(
                 .with_context(|| format!("write {}", tpath.display()))?;
             std::fs::write(&gpath, &grass_bin)
                 .with_context(|| format!("write {}", gpath.display()))?;
+
+            // River segment file. Skipped for tiles that own no segments
+            // (midpoint-based ownership) so the on-disk footprint stays
+            // small on ocean / inland tiles without rivers. Missing file
+            // = no rivers at load time.
+            if let Some(segs) = river_buckets.get(&(tx, tz)) {
+                if let Some(bin) = tile_bake::bake_rivers_binary(segs) {
+                    let rpath = coords::river_path(out, tx, tz);
+                    std::fs::write(&rpath, &bin)
+                        .with_context(|| format!("write {}", rpath.display()))?;
+                }
+            }
 
             let n = done.fetch_add(1, Ordering::Relaxed) + 1;
             let report_at = next_report.load(Ordering::Relaxed);
