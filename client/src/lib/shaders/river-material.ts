@@ -144,6 +144,22 @@ export function createRiverMaterial(
     const c1 = mix(uVeryShallowColor, uShallowColor, shallowBlend)
     const waterColor = mix(c1, uMidColor, midBlend).toVar()
 
+    // Estuary body-color fade. The river's per-ribbon "depth" is a lateral
+    // proxy (1-bankFactor), so the center of the ribbon hard-locks to the
+    // deep-river uMidColor regardless of *actual* water depth. In the
+    // estuary that center band is much darker than the shoreline sea tone
+    // and, while α tapers (1-vMouthFactor), a mid-α fragment stamps a
+    // visible dark band onto the coast. Pull the body toward an estuary
+    // tint with a quadratic ease-out — `1 - (1-x)^2` — so the color swap
+    // front-loads ahead of the α drop while keeping finite derivatives at
+    // both ends (a fractional-power curve like pow(x,0.25) has infinite
+    // slope at 0 and interpolation produced a visible seam across
+    // adjacent triangles, re: earlier `black line` regression).
+    const estuaryColor = vec3(0.2, 0.48, 0.42)
+    const oneMinus = float(1).sub(vMouthFactor)
+    const colorFade = float(1).sub(oneMinus.mul(oneMinus))
+    waterColor.assign(mix(waterColor, estuaryColor, colorFade))
+
     // Night darkening (same shape as ocean)
     const waterNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
       .mul(0.85)

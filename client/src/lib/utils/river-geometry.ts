@@ -321,8 +321,18 @@ export function buildRiverGeometry(
       // says so. Without this, an extension step at ribbon Y ≈ 0 (bed ≈
       // −0.6, still above the fade LOW) stayed partly opaque and read
       // as a darker strip beyond the real river.
+      //
+      // Saturate the extension fade by the *halfway* vertex (k=4 of 8)
+      // rather than at the geometric tip. Rationale per
+      // `webgpu_ribbon_fade_residual_edge.md`: a ribbon fading smoothly
+      // *up to* its last vertex leaves ~3–5% residual alpha on the
+      // tapered tail, and the tapered-tip geometry reads as a thin dark
+      // seam against the sea. Landing α=0 at k=4 leaves k=5–8 in the
+      // α=0 dead zone so only the smooth first-half carries any
+      // opacity; the tail vanishes invisibly.
       const extT = i > n0 ? (i - n0) / SEA_EXTEND_STEPS : 0
-      const extMouthFactor = extT * extT * (3 - 2 * extT)
+      const extSat = Math.min(1, extT / 0.5)
+      const extMouthFactor = extSat * extSat * (3 - 2 * extSat)
       const mouthFactor = Math.max(yMouthFactor, extMouthFactor)
 
       positions.push(leftX, centerY, leftZ)
