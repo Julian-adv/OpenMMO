@@ -12,8 +12,7 @@ use super::constants::{
     CLIFF_SLOPE_THRESHOLD, COAST_FADE_SPAN_M, COAST_SAND_M, GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF,
     PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW, RIVER_FADE_SPAN_M,
     RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND,
-    SLOPE_CLIFF_FULL, SLOPE_CLIFF_START, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM,
-    VERTS_PER_SIDE,
+    SLOPE_CLIFF_FULL, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
 use super::heightmap::lerp;
@@ -223,18 +222,24 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // resolves to 100% CLIFF on both sides of the palette-pair swap
         // against the adjacent plain cell; otherwise GROUND, meeting pure
         // grass outside the sand band.
-        let t = (river_d_m / river_sand_half_width_m).clamp(0.0, 1.0);
-        let blend = (t * t * 255.0) as u8;
+        //
+        // Vegetation: zero inside the actual water (river_d < width/2), then
+        // ramps from 0 at the water edge to plain density at the sand-band
+        // edge. The previous version started the ramp at the river center, so
+        // grass and trees pushed up against the water surface; gating on
+        // `water_half_width_m` instead keeps the wet zone clean while still
+        // letting some grass / sparse trees grow on the dry sand bank.
+        let sand_t = (river_d_m / river_sand_half_width_m).clamp(0.0, 1.0);
+        let blend = (sand_t * sand_t * 255.0) as u8;
         let (secondary, veg) = if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M {
             (PAL_CLIFF, 0)
         } else {
-            let rocky = (slope / SLOPE_CLIFF_START).clamp(0.0, 1.0);
+            let water_half_width_m = (river_width_m * 0.5).max(0.5);
+            let bank_width = (river_sand_half_width_m - water_half_width_m).max(1e-3);
+            let bank_t = ((river_d_m - water_half_width_m) / bank_width).clamp(0.0, 1.0);
             let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
-            let grass_t = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
-            // `* t` fades veg density from 0 at the center to plain density
-            // at the edge so the short-grass mesh doesn't pop on at the
-            // boundary.
-            let density = (grass_t * 9.0 * t).round().clamp(0.0, 9.0) as u8;
+            let grass_t = (1.0 - highland).max(0.0);
+            let density = (grass_t * 9.0 * bank_t).round().clamp(0.0, 9.0) as u8;
             let v = if density > 0 {
                 short_grass_veg(density)
             } else {
@@ -332,7 +337,9 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // Density combines hard exclusions (rocky, highland) with the
         // patch-field mask (0 outside patches, 1 inside, smooth fade at the
         // edge). The patch sample is only pulled here, so non-plain cells
-        // skip the warp + Voronoi query entirely.
+        // skip the warp + Voronoi query entirely. The river-bed branch
+        // ramps grass density up to plain at the sand-band edge so the
+        // transition is continuous without an extra fade here.
         let eligibility = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
         let patch = patch();
         let density = (patch.strength * eligibility * 9.0).round().clamp(0.0, 9.0) as u8;
@@ -472,6 +479,56 @@ mod tests {
     }
 
     #[test]
+    fn river_water_surface_emits_no_vegetation() {
+        // Vegetation must be zero across the actual water surface
+        // (river_d < width / 2). The previous version started the grass
+        // density ramp at the river center, so trees and grass appeared
+        // right on top of the water.
+        let water_half = TEST_RIVER_WIDTH_M * 0.5;
+        for d in [0.0, water_half * 0.5, water_half - 1e-4] {
+            let (p, _, _, veg) = call_classify(SplatInputs {
+                river_d_m: d,
+                river_width_m: TEST_RIVER_WIDTH_M,
+                ..plain_inputs(100.0)
+            });
+            assert_eq!(p, PAL_RIVER_BED, "expected river bed branch at d={d}");
+            assert_eq!(veg, 0, "water surface must be veg-free at d={d}");
+        }
+    }
+
+    #[test]
+    fn river_bank_grass_ramps_to_plain_density() {
+        // Past the water edge, vegetation density must climb across the dry
+        // sand/gravel bank so the bank reads as natural ground and meets
+        // the plain branch at full density at the sand-band edge.
+        let water_half = TEST_RIVER_WIDTH_M * 0.5;
+        let bank_mid = (water_half + TEST_RIVER_SAND_HALF_WIDTH_M) * 0.5;
+
+        let (_, _, _, veg_mid) = call_classify(SplatInputs {
+            river_d_m: bank_mid,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            ..plain_inputs(100.0)
+        });
+        assert!(
+            veg_mid != 0,
+            "mid-bank must carry some grass, got byte {veg_mid}"
+        );
+
+        let (_, _, _, veg_edge) = call_classify(SplatInputs {
+            river_d_m: TEST_RIVER_SAND_HALF_WIDTH_M - 1e-4,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            ..plain_inputs(100.0)
+        });
+        // At the sand edge, density should be 9 (plain baseline) so the
+        // hand-off to the plain branch is continuous.
+        assert_eq!(
+            veg_edge,
+            short_grass_veg(9),
+            "sand edge must reach short-grass density 9, got {veg_edge}"
+        );
+    }
+
+    #[test]
     fn river_outer_edge_meets_plain_seamlessly() {
         // Same continuity invariant as `coast_outer_edge_...` but for rivers.
         let at_edge = call_classify(SplatInputs {
@@ -555,9 +612,8 @@ mod tests {
         // different blend than the neighbor tile that includes it — a hard
         // seam along the tile boundary.
         let road_margin = ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M * 2.0;
-        // Slope 0.5 < SLOPE_CLIFF_START so the plain branch fires; its rocky
-        // component is non-zero so a mismatched water_fade would surface as a
-        // blend diff.
+        // Slope 0.5 < CLIFF_SLOPE_THRESHOLD so the plain branch fires; a
+        // mismatched water_fade in either call would surface as a blend diff.
         let at_margin = call_classify(SplatInputs {
             road_d_m: road_margin,
             slope: 0.5,

@@ -142,6 +142,18 @@ const SHORT_GRASS_R_MAX: u8 = 239;
 const TALL_GRASS_R_MIN: u8 = 240;
 const TALL_GRASS_R_MAX: u8 = 249;
 
+/// Inverse of `short_grass_veg` / `tall_grass_veg` in the splat baker:
+/// returns the 0..=9 density encoded in `r_val`. Caller is responsible for
+/// having already verified `r_val` falls inside one of the two grass bands.
+#[inline]
+fn veg_density(r_val: u8) -> u8 {
+    if r_val >= TALL_GRASS_R_MIN {
+        r_val - TALL_GRASS_R_MIN
+    } else {
+        r_val - SHORT_GRASS_R_MIN
+    }
+}
+
 const CHANNELS: usize = 4;
 const VEGMETA_OFFSET: usize = 3;
 
@@ -164,6 +176,13 @@ const TREE_V1_BYTES_PER_INSTANCE: usize = 6;
 /// covers the whole world — the runtime value was tuned when only visited
 /// tiles had data and surrounding tiles silently rendered empty.
 const TREE_PROBABILITY: f64 = 0.025;
+
+/// Minimum grass density (within either short or tall band) required for a
+/// cell to be eligible for tree spawning. The splatmap fades grass density
+/// to zero around rivers (and trails off near other features); gating trees
+/// here keeps the sparse fringe cells grass-only so trees don't push right
+/// up against the bank.
+const TREE_MIN_DENSITY: u8 = 4;
 
 /// `[(scaleMin, scaleRange)]` — slot 0 is `tree.glb`, slot 1 is `tree2.glb`.
 /// Must match `TREE_SCALE` in `tree-data.ts` so quantized `scale` bytes
@@ -201,6 +220,9 @@ pub fn bake_trees(
         for cx in 0..TILE_DIM {
             let r_val = splatmap[(cz * TILE_DIM + cx) * CHANNELS + VEGMETA_OFFSET];
             if r_val < SHORT_GRASS_R_MIN || r_val > TALL_GRASS_R_MAX {
+                continue;
+            }
+            if veg_density(r_val) < TREE_MIN_DENSITY {
                 continue;
             }
             if rng.next_f64() >= TREE_PROBABILITY {
@@ -598,6 +620,60 @@ mod tests {
         let c_tall = u32::from_le_bytes([bin[8], bin[9], bin[10], bin[11]]);
         let c_flower = u32::from_le_bytes([bin[12], bin[13], bin[14], bin[15]]);
         assert_eq!(c_short + c_tall + c_flower, 0);
+    }
+
+    #[test]
+    fn trees_skip_low_density_cells() {
+        // Sparse grass cells (density < TREE_MIN_DENSITY) must not spawn
+        // trees. Without the threshold, river-edge fade cells (density 1-3)
+        // would still pick up trees at the global probability.
+        let h = flat_heights(5.0);
+        let s = splat_with_veg(231); // short grass density 1
+        let bin = bake_trees(0, 0, &s, &h, &[]);
+        let c1 = u32::from_le_bytes([bin[4], bin[5], bin[6], bin[7]]);
+        let c2 = u32::from_le_bytes([bin[8], bin[9], bin[10], bin[11]]);
+        assert_eq!(c1 + c2, 0, "trees must skip density-1 short grass cells");
+
+        let s_tall = splat_with_veg(241); // tall grass density 1
+        let bin_t = bake_trees(0, 0, &s_tall, &h, &[]);
+        let t1 = u32::from_le_bytes([bin_t[4], bin_t[5], bin_t[6], bin_t[7]]);
+        let t2 = u32::from_le_bytes([bin_t[8], bin_t[9], bin_t[10], bin_t[11]]);
+        assert_eq!(t1 + t2, 0, "trees must skip density-1 tall grass cells");
+    }
+
+    #[test]
+    fn tree_min_density_boundary_is_exact() {
+        // density 3 (just below) → no trees; density 4 (== TREE_MIN_DENSITY)
+        // → trees can spawn. With 4096 cells and 0.025 probability the
+        // expected count at density 4 is ~100, so a non-zero result is a
+        // robust signal.
+        let h = flat_heights(5.0);
+
+        let just_below = splat_with_veg(233); // short density 3
+        let bin_lo = bake_trees(0, 0, &just_below, &h, &[]);
+        let c_lo = u32::from_le_bytes([bin_lo[4], bin_lo[5], bin_lo[6], bin_lo[7]])
+            + u32::from_le_bytes([bin_lo[8], bin_lo[9], bin_lo[10], bin_lo[11]]);
+        assert_eq!(c_lo, 0, "density 3 (TREE_MIN_DENSITY - 1) must skip trees");
+
+        let at_threshold = splat_with_veg(234); // short density 4
+        let bin_hi = bake_trees(0, 0, &at_threshold, &h, &[]);
+        let c_hi = u32::from_le_bytes([bin_hi[4], bin_hi[5], bin_hi[6], bin_hi[7]])
+            + u32::from_le_bytes([bin_hi[8], bin_hi[9], bin_hi[10], bin_hi[11]]);
+        assert!(
+            c_hi > 0,
+            "density 4 (== TREE_MIN_DENSITY) must allow trees, got {c_hi}"
+        );
+    }
+
+    #[test]
+    fn veg_density_round_trips_encoders() {
+        // veg_density is the inverse of short_grass_veg / tall_grass_veg in
+        // the splat baker. Drift between the two would cause the tree
+        // density gate to silently misclassify cells.
+        for d in 0..=9u8 {
+            assert_eq!(veg_density(SHORT_GRASS_R_MIN + d), d);
+            assert_eq!(veg_density(TALL_GRASS_R_MIN + d), d);
+        }
     }
 
     #[test]

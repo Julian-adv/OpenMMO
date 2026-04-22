@@ -104,9 +104,8 @@ pub(super) const RIVER_FADE_SPAN_M: f32 = 10.0;
 pub(super) const SNOW_ELEVATION_M: f32 = 1800.0;
 /// Elevation (m) above `SNOW_ELEVATION_M` at which snow is fully dominant.
 pub(super) const SNOW_FULL_SPAN_M: f32 = 400.0;
-/// Slope (Δm per 1 m horizontal) at which rock starts to dominate plains.
-pub(super) const SLOPE_CLIFF_START: f32 = 0.9;
-/// Slope (Δm per 1 m horizontal) at which rock is fully dominant.
+/// Slope (Δm per 1 m horizontal) at which rock is fully dominant in the
+/// alpine branch's snow→cliff blend.
 pub(super) const SLOPE_CLIFF_FULL: f32 = 2.5;
 /// Slope at which bare marble cliff (PAL_CLIFF) takes over as primary. 1.0 ≈
 /// tan(45°). Placed before alpine in the priority ladder, so a vertical face
