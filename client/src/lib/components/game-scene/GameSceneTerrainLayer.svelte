@@ -2,8 +2,6 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import type { MeshStandardNodeMaterial, WebGPURenderer } from 'three/webgpu'
-  import type { RefractionRenderManager } from '../../managers/refractionRenderManager'
-  import type { ReflectionRenderManager } from '../../managers/reflectionRenderManager'
   import { SvelteMap } from 'svelte/reactivity'
   import { onDestroy } from 'svelte'
   import SplatTerrain from '../SplatTerrain.svelte'
@@ -41,8 +39,6 @@
     syncTileMeshes?: () => void
     renderer?: WebGPURenderer | null
     camera?: THREE.Camera | null
-    refractionManager?: RefractionRenderManager | null
-    reflectionManager?: ReflectionRenderManager | null
   }
 
   let {
@@ -55,8 +51,6 @@
     syncTileMeshes = $bindable<() => void>(() => {}),
     renderer = null,
     camera = null,
-    refractionManager = null,
-    reflectionManager = null,
   }: Props = $props()
 
   // ── Default resources (created once) ──────────────────
@@ -143,8 +137,11 @@
 
     try {
       await compileForTarget(null)
-      if (refractionManager) await compileForTarget(refractionManager.target)
-      if (reflectionManager) await compileForTarget(reflectionManager.target)
+      // TODO: re-enable refraction/reflection target precompile once the
+      // WebGPU "texture used as RenderAttachment + TextureBinding" error
+      // it triggered (after the river layer landed) is root-caused.
+      // Until then: first new-tile refraction/reflection render will stall
+      // 100–1000ms compiling pipelines lazily.
     } catch (e) {
       console.warn('[TerrainLayer] pipeline precompile failed', e)
     }

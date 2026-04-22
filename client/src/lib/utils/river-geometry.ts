@@ -87,7 +87,7 @@ function buildChains(segs: RiverSegment[]): ChainLink[][] {
       }
       if (nextCount !== 1 || !next) break
       curSeg = next.seg
-      curForward = !next.forward
+      curForward = next.forward
     }
     if (chain.length > 0) chains.push(chain)
   }

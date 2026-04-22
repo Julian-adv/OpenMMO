@@ -1,5 +1,4 @@
 import type * as THREE from 'three'
-import type { ClippingGroup } from 'three/webgpu'
 import type { RefractionRenderManager } from '../../managers/refractionRenderManager'
 import type { ReflectionRenderManager } from '../../managers/reflectionRenderManager'
 import type { LoopProfiler } from './loop-profiler'
@@ -10,10 +9,7 @@ export interface MultiPassRefractionDeps {
   refractionEnabled: boolean
   waterGroup: THREE.Group | undefined
   terrainMeshes: (THREE.Mesh | undefined)[]
-  entityClipGroup: ClippingGroup | undefined
-  grassGroup: THREE.Group | undefined
-  treeGroup: THREE.Group | undefined
-  windParticlesGroup: THREE.Group | undefined
+  hiddenGroups: (THREE.Group | undefined)[]
 }
 
 export interface MultiPassReflectionDeps {
@@ -89,15 +85,8 @@ export function createMultiPassRenderer(): MultiPassRenderer {
           brushUniforms.gridVisible.value = 0.0
         }
 
-        // Hide entities, grass, trees, and particles during refraction
-        renderWithHiddenGroups(
-          [
-            deps.entityClipGroup as THREE.Group | undefined,
-            deps.grassGroup,
-            deps.treeGroup,
-            deps.windParticlesGroup,
-          ],
-          () => deps.refractionManager!.render()
+        renderWithHiddenGroups(deps.hiddenGroups, () =>
+          deps.refractionManager!.render()
         )
 
         if (brushUniforms?.brushActive) {
