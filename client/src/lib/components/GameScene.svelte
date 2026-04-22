@@ -604,6 +604,7 @@
         const wetnessStart = performance.now()
         currentRenderTag = 'wetness'
         waterLayerRef?.renderWetness(renderer)
+        riverLayerRef?.updateUniforms()
         currentRenderTag = 'main'
         loopProfiler.record('wetnessPass', performance.now() - wetnessStart)
       }
@@ -1057,6 +1058,13 @@
   {terrainTiles}
   heightManager={terrainHeightManager}
   {riverDataManager}
+  normalMap={waterNormalMap}
+  reflectionMap={reflectionTexture}
+  time={waterTime}
+  sunDirection={waterSunDir}
+  sunColor={waterSunColor}
+  cameraDirection={waterCamDir}
+  moonBrightness={waterMoonBrightness}
 />
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>
