@@ -44,7 +44,7 @@
 
   // Debug: overlay the ribbon's triangle edges so the tessellation is
   // visible. Flip to false (or wire to a UI toggle) to disable.
-  const SHOW_WIREFRAME = false
+  const SHOW_WIREFRAME = true
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: 0xff3366,
     transparent: true,

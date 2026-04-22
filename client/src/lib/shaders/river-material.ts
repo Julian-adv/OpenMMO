@@ -351,14 +351,11 @@ export function createRiverMaterial(
 
     // ── Alpha ──
     // River water is clearer near the banks — fade alpha from the channel
-    // toward the edge. Previously bottomed at bankFactor=1.0 so the full
-    // baked ribbon width contributed visible mid-α water: on the land
-    // side that stamped a muddy violet band where water tint overlaid
-    // the sand/grass splat. Terminate the fade at 0.75 so the outer 25%
-    // of the ribbon is fully transparent; the remaining 0-0.75 range
-    // keeps a smooth gradient, and the sand band from the splatmap
-    // carve still handles the visual bank itself.
-    const edgeFade = smoothstep(float(0.4), float(0.75), bankFactor)
+    // toward the edge. The ribbon geometry is built 1.5×+0.5m wider than
+    // the baked channel so it safely covers the carved sand band; a tight
+    // outer transparent margin (bankFactor > 0.9) absorbs that slack
+    // without eating into the visible water body.
+    const edgeFade = smoothstep(float(0.6), float(0.9), bankFactor)
     const bankAlpha = clamp(float(0.92).sub(edgeFade.mul(0.92)), 0.0, 1.0)
     // Estuary fade: vMouthFactor=1 where the ribbon sits in open sea.
     // Fully-opaque upstream, fully transparent at the mouth so the sea
