@@ -56,6 +56,7 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
                 .put(put_trees)
                 .layer(DefaultBodyLimit::max(16 * 1024 * 1024)),
         )
+        .route("/api/terrain/rivers/{x}/{z}", get(get_rivers))
         .route(
             "/api/terrain/furniture/{rx}/{rz}",
             get(get_furniture).put(put_furniture),
@@ -370,6 +371,22 @@ async fn put_trees(
         )
     })?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_rivers(
+    Path((x, z)): Path<(i32, i32)>,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    let data = terrain.read_rivers(x, z).await.map_err(|e| {
+        error!("Failed to read rivers ({}, {}): {}", x, z, e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    match data {
+        Some(bytes) => {
+            Ok(([(header::CONTENT_TYPE, "application/octet-stream")], bytes).into_response())
+        }
+        None => Err(StatusCode::NOT_FOUND),
+    }
 }
 
 async fn delete_region_handler(

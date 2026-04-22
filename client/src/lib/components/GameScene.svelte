@@ -26,6 +26,7 @@
   import GameSceneWaterLayer from './game-scene/GameSceneWaterLayer.svelte'
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
   import GameSceneTreeLayer from './game-scene/GameSceneTreeLayer.svelte'
+  import GameSceneRiverLayer from './game-scene/GameSceneRiverLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
   import GameSceneHousingLayer from './game-scene/GameSceneHousingLayer.svelte'
   import { drainTileWork } from '../utils/tileWorkQueue'
@@ -88,6 +89,7 @@
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
   import { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
   import { TerrainTreeDataManager } from '../managers/terrainTreeDataManager'
+  import { RiverDataManager } from '../managers/riverDataManager'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import { initHousingTextures } from '../utils/housing-textures'
   import {
@@ -127,6 +129,7 @@
   const terrainSplatManager = new TerrainSplatManager()
   const terrainGrassDataManager = new TerrainGrassDataManager(terrainHeightManager)
   const terrainTreeDataManager = new TerrainTreeDataManager(terrainHeightManager)
+  const riverDataManager = new RiverDataManager()
   monsterManager.heightManager = terrainHeightManager
   editorHeightManager.set(terrainHeightManager)
   editorSplatManager.set(terrainSplatManager)
@@ -1043,6 +1046,12 @@
   refractionMap={refractionTexture}
   reflectionMap={reflectionTexture}
   bind:waterGroup={waterGroup}
+/>
+
+<GameSceneRiverLayer
+  {terrainTiles}
+  heightManager={terrainHeightManager}
+  {riverDataManager}
 />
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>

@@ -194,6 +194,19 @@ impl TerrainIO {
         fs::write(&path, data).await
     }
 
+    /// Read per-tile river-segment data (variable-length binary, format
+    /// `RIV1` documented in `shared/src/worldgen/tile_bake.rs`). Returns
+    /// None for tiles with no baked rivers — the offline baker only writes
+    /// files for tiles that own at least one segment.
+    pub async fn read_rivers(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
+        let path = coords::river_path(&self.base_dir, tx, tz);
+        match fs::read(&path).await {
+            Ok(data) => Ok(Some(data)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Read original (pre-housing) grass placement data. Returns None if not found.
     pub async fn read_original_grass(&self, tx: i32, tz: i32) -> std::io::Result<Option<Vec<u8>>> {
         let path = coords::original_grass_path(&self.base_dir, tx, tz);
