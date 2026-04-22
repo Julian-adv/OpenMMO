@@ -11,6 +11,20 @@ import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 const RIVER_DEPTH_OFFSET_M = 0.6
 
 /**
+ * Scale applied to baked surface widths so the water ribbon covers the
+ * gravel/sand band carved around the channel. Purely render-side; the bake
+ * still uses the unscaled widths for terrain carving.
+ */
+const RIVER_WIDTH_SCALE = 1.5
+
+/**
+ * Extra meters added to each side of the ribbon on top of the scaled width,
+ * so thin and wide rivers alike pick up a consistent "sits over the bank"
+ * margin. 0.5m here = +1m total width.
+ */
+const RIVER_WIDTH_PAD_M = 0.5
+
+/**
  * Below this cosine of the interior angle between two adjacent segments,
  * the miter extension explodes (a perfect 180° reversal divides by zero).
  * Clamp to avoid vertex spikes; visible as a small bevel at sharp turns.
@@ -168,6 +182,17 @@ export function buildRiverGeometry(
       flows[i + 1] = fb
     }
 
+    // `buildChains` walks from degree-1 endpoints without regard to flow,
+    // so ~half of all chains come out oriented upstream. Reverse the arrays
+    // in place so index 0 is always the headwater and index n is the mouth;
+    // this makes `flowDir` (segment tangent) point downstream consistently.
+    if (flows[n] < flows[0]) {
+      px.reverse()
+      pz.reverse()
+      widths.reverse()
+      flows.reverse()
+    }
+
     const baseVertex = positions.length / 3
     let cumulativeLen = 0
     for (let i = 0; i <= n; i++) {
@@ -192,7 +217,8 @@ export function buildRiverGeometry(
         if (cosHalf > MIN_MITER_COSINE) miter = 1 / cosHalf
       }
 
-      const halfWidth = widths[i] * 0.5 * miter
+      const halfWidth =
+        (widths[i] * 0.5 * RIVER_WIDTH_SCALE + RIVER_WIDTH_PAD_M) * miter
       const leftX = px[i] + nx * halfWidth
       const leftZ = pz[i] + nz * halfWidth
       const rightX = px[i] - nx * halfWidth
@@ -203,12 +229,20 @@ export function buildRiverGeometry(
       }
       const v = cumulativeLen
 
-      positions.push(leftX, sampleY(leftX, leftZ), leftZ)
+      // Sample the carved bed at the centerline and use it for both bank
+      // vertices. Sampling at each bank instead makes the ribbon rise with
+      // the terrain outside the carved channel (ribbon buries into the
+      // hillsides going upstream) or bows if carving depth varies across
+      // the width. One centerline Y per step keeps the surface flat and
+      // always seated in the channel.
+      const centerY = sampleY(px[i], pz[i])
+
+      positions.push(leftX, centerY, leftZ)
       uvs.push(0, v)
       flowDirs.push(txN, tzN)
       flowNorms.push(flows[i])
       edgeDists.push(1)
-      positions.push(rightX, sampleY(rightX, rightZ), rightZ)
+      positions.push(rightX, centerY, rightZ)
       uvs.push(1, v)
       flowDirs.push(txN, tzN)
       flowNorms.push(flows[i])

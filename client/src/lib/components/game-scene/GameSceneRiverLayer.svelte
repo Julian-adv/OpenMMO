@@ -7,14 +7,36 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { RiverDataManager } from '../../managers/riverDataManager'
   import { buildRiverGeometry } from '../../utils/river-geometry'
+  import {
+    createRiverMaterial,
+    type RiverMaterialResult,
+  } from '../../shaders/river-material'
 
   interface Props {
     terrainTiles: TerrainTile[]
     heightManager: TerrainHeightManager | null
     riverDataManager: RiverDataManager | null
+    normalMap?: THREE.Texture | null
+    reflectionMap?: THREE.Texture | null
+    time?: number
+    sunDirection?: THREE.Vector3 | null
+    sunColor?: THREE.Color | null
+    cameraDirection?: THREE.Vector3 | null
+    moonBrightness?: number
   }
 
-  let { terrainTiles, heightManager, riverDataManager }: Props = $props()
+  let {
+    terrainTiles,
+    heightManager,
+    riverDataManager,
+    normalMap = null,
+    reflectionMap = null,
+    time = 0,
+    sunDirection = null,
+    sunColor = null,
+    cameraDirection = null,
+    moonBrightness = 0,
+  }: Props = $props()
 
   const riverGroup = new THREE.Group()
   riverGroup.name = 'rivers'
@@ -32,13 +54,34 @@
   /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
   const inflightTiles = new Set<string>()
 
-  const debugMaterial = new THREE.MeshBasicMaterial({
+  // One material shared across tiles — all ribbons use the same uniforms.
+  // Created lazily once both textures are available; any tile meshes built
+  // before creation carry a transient basic material and are upgraded in the
+  // $effect below when the shared material comes online.
+  let riverMaterialResult: RiverMaterialResult | null = null
+  const placeholderMaterial = new THREE.MeshBasicMaterial({
     color: 0x33ccff,
     transparent: true,
-    opacity: 0.7,
+    opacity: 0.6,
     depthWrite: false,
     side: THREE.DoubleSide,
   })
+
+  function currentMaterial(): THREE.Material {
+    return riverMaterialResult?.material ?? placeholderMaterial
+  }
+
+  /** Called from the game loop each frame to sync uniforms. */
+  export function updateUniforms() {
+    if (!riverMaterialResult) return
+    const u = riverMaterialResult.uniforms
+    u.uTime.value = time
+    if (sunDirection) u.uSunDirection.value.copy(sunDirection)
+    if (sunColor) u.uSunColor.value.copy(sunColor)
+    if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
+    u.uMoonBrightness.value = moonBrightness
+    if (reflectionMap) u.uReflectionMap.value = reflectionMap
+  }
 
   function disposeTile(id: string) {
     const mesh = tileMeshes.get(id)
@@ -73,7 +116,7 @@
         tileMeshes.set(id, null)
         return
       }
-      const mesh = new THREE.Mesh(geometry, debugMaterial)
+      const mesh = new THREE.Mesh(geometry, currentMaterial())
       mesh.receiveShadow = false
       mesh.castShadow = false
       riverGroup.add(mesh)
@@ -82,6 +125,20 @@
       inflightTiles.delete(id)
     }
   }
+
+  // Promote tile meshes from placeholder to the shared river material once
+  // the required textures are available.
+  $effect(() => {
+    if (riverMaterialResult || !normalMap) return
+    riverMaterialResult = createRiverMaterial({
+      normalMap,
+      reflectionMap,
+    })
+    const mat = riverMaterialResult.material
+    for (const mesh of tileMeshes.values()) {
+      if (mesh) mesh.material = mat
+    }
+  })
 
   $effect(() => {
     if (!riverDataManager || !heightManager) return
