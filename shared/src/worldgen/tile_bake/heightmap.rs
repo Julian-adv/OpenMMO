@@ -7,7 +7,8 @@ use super::constants::{
     DETAIL_FREQUENCY, DETAIL_GAIN, DETAIL_LACUNARITY, DETAIL_MAX_AMPLITUDE, DETAIL_MIN_AMPLITUDE,
     DETAIL_OCTAVES, HEIGHT_BIAS, HEIGHT_STEP, HILLS_AMPLITUDE_M, HILLS_COASTAL_FADE_M,
     HILLS_FREQUENCY, HILLS_GAIN, HILLS_OCTAVES, RIVER_CARVE_DEPTH_EXTRA_M,
-    RIVER_CARVE_DEPTH_MIN_M, RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, TILE_DIM,
+    RIVER_CARVE_DEPTH_MIN_M, RIVER_CARVE_MIN_BED_Y_M, RIVER_CARVE_TAPER_EXTRA_M,
+    RIVER_CARVE_TAPER_MIN_M, TILE_DIM,
     VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
@@ -114,7 +115,7 @@ fn sample_elevation_m(
         0.0
     };
 
-    let carve = if let Some((d, idx, t)) = nearest_river_segment(world_x, world_z, river_segs) {
+    let raw_carve = if let Some((d, idx, t)) = nearest_river_segment(world_x, world_z, river_segs) {
         let seg = &river_segs[idx];
         let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
         let width = lerp(seg.width_a, seg.width_b, t);
@@ -124,8 +125,18 @@ fn sample_elevation_m(
         0.0
     };
 
+    // Cap the carve so it can't drag the bed below RIVER_CARVE_MIN_BED_Y_M.
+    // Inland (pre_carve high) the cap is much larger than the natural carve
+    // so nothing changes; near the estuary (pre_carve near sea level) the
+    // cap shrinks and the channel smoothly rises to sit just above the
+    // ocean plane — stops the sea shader from rendering shore/wet-sand
+    // inside what should be a river channel.
+    let pre_carve = base + detail + hills;
+    let carve_cap = (pre_carve - RIVER_CARVE_MIN_BED_Y_M).max(0.0);
+    let carve = raw_carve.min(carve_cap);
+
     let max_cap = map.config.max_elevation_m;
-    (base + detail + hills - carve).clamp(-HEIGHT_BIAS, max_cap)
+    (pre_carve - carve).clamp(-HEIGHT_BIAS, max_cap)
 }
 
 #[inline]

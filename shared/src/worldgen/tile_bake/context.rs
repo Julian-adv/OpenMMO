@@ -16,6 +16,7 @@ use super::super::vector_features::{
 };
 use super::constants::{
     COAST_CHAIKIN_ITERATIONS, RIVER_CHAIKIN_ITERATIONS, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M,
+    RIVER_MOUTH_FAN_BASE_HIGH_M, RIVER_MOUTH_FAN_BASE_LOW_M, RIVER_MOUTH_FAN_EXTRA,
     ROAD_CHAIKIN_ITERATIONS,
 };
 
@@ -69,7 +70,14 @@ impl BakeContext {
         // times during baking.
         let dist_to_land = bfs_distance_from(&map.land_mask, res, 1);
 
-        let rivers_world = smooth_river_polylines(river_map, &map.config, RIVER_CHAIKIN_ITERATIONS);
+        let mut rivers_world =
+            smooth_river_polylines(river_map, &map.config, RIVER_CHAIKIN_ITERATIONS);
+        // Widen polyline widths near the coast so the estuary fans out into
+        // a small delta. Heightmap carve, splatmap classification, and the
+        // client ribbon all consume these per-vertex widths, so applying
+        // the scale here keeps the three consistent — if this lived only
+        // on the client, the water plane would overhang the carved banks.
+        apply_mouth_fan_widths(&mut rivers_world, map, &dist_to_land);
         let roads_world = smooth_polylines(
             road_net.roads.iter().map(|r| r.points.as_slice()),
             &map.config,
@@ -93,6 +101,47 @@ impl BakeContext {
             rivers_world,
             roads_world,
             coasts_world,
+        }
+    }
+}
+
+/// Scale each polyline vertex's `width` by a factor that ramps up as the
+/// surrounding (base) elevation falls toward sea level. See constants
+/// `RIVER_MOUTH_FAN_*`. The base elevation is sampled from the coarse
+/// 4K grid — sub-meter accuracy isn't needed since the fan scale is a
+/// gentle smoothstep over several meters of Y.
+fn apply_mouth_fan_widths(
+    rivers_world: &mut [RiverWorldPolyline],
+    map: &GlobalMap,
+    dist_to_land: &[u16],
+) {
+    let res = map.config.global_res as usize;
+    let mpc = map.config.meters_per_cell();
+    let half = map.config.world_size_m as f32 * 0.5;
+
+    let sample_base = |wx: f32, wz: f32| -> f32 {
+        let xs = ((wx + half) / mpc).floor() as i32;
+        let zs = ((wz + half) / mpc).floor() as i32;
+        // X wraps, Z clamps — mirrors `cell_elevation_m`'s indexing rules.
+        let cx = xs.rem_euclid(res as i32) as usize;
+        let cz = zs.clamp(0, res as i32 - 1) as usize;
+        let i = cz * res + cx;
+        if map.land_mask[i] == 1 {
+            map.elevation_m[i]
+        } else {
+            let d = dist_to_land[i] as f32;
+            -(0.5 + d.min(40.0) * 0.25)
+        }
+    };
+
+    let span = RIVER_MOUTH_FAN_BASE_HIGH_M - RIVER_MOUTH_FAN_BASE_LOW_M;
+    for poly in rivers_world.iter_mut() {
+        for i in 0..poly.points.len() {
+            let base = sample_base(poly.points[i][0], poly.points[i][1]);
+            let t = ((base - RIVER_MOUTH_FAN_BASE_LOW_M) / span).clamp(0.0, 1.0);
+            // Hermite smoothstep, inverted: 1 at low base, 0 at high base.
+            let s = 1.0 - t * t * (3.0 - 2.0 * t);
+            poly.width[i] *= 1.0 + RIVER_MOUTH_FAN_EXTRA * s;
         }
     }
 }

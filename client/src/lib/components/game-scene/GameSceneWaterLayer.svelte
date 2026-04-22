@@ -8,8 +8,10 @@
     createWaterMaterial,
     waterHeightFallbackTex,
     waterWetnessFallbackTex,
+    waterSplatFallbackTex,
     type WaterMaterialResult,
   } from '../../shaders/water-material'
+  import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import {
     createWetnessSystem,
     type WetnessResult,
@@ -25,6 +27,7 @@
     terrainGeometry: THREE.BufferGeometry | null
     terrainTiles: TerrainTile[]
     heightManager?: TerrainHeightManager | null
+    splatManager?: TerrainSplatManager | null
     normalMap?: THREE.Texture | null
     foamMap?: THREE.Texture | null
     causticsMap?: THREE.Texture | null
@@ -42,6 +45,7 @@
     terrainGeometry,
     terrainTiles,
     heightManager = null,
+    splatManager = null,
     normalMap = null,
     foamMap = null,
     causticsMap = null,
@@ -143,6 +147,7 @@
     const result = waterMatMap.get(id)
     if (result) {
       result.uniforms.uHeightmapTexture.value = waterHeightFallbackTex
+      result.uniforms.uSplatMap.value = waterSplatFallbackTex
       waterMatMap.delete(id)
       waterMatPool.push(result)
     }
@@ -190,6 +195,23 @@
             if (causticsMap) u.uCausticsMap.value = causticsMap
             if (refractionMap) u.uRefractionMap.value = refractionMap
             if (reflectionMap) u.uReflectionMap.value = reflectionMap
+            // Splat texture: foam-suppression channel lives in byte 1 (G).
+            // Fallback has G=255 so missing splat reads as "no river nearby".
+            // Start from cache, then promote once async load completes —
+            // terrain layer typically loads it first so the cache path hits.
+            const cachedSplat = splatManager?.getSplatTexture(tileX, tileZ)
+            u.uSplatMap.value = cachedSplat ?? waterSplatFallbackTex
+            if (!cachedSplat && splatManager) {
+              splatManager
+                .loadSplatmap(tileX, tileZ)
+                .then((tex) => {
+                  const cur = waterMatMap.get(id)
+                  if (cur) cur.uniforms.uSplatMap.value = tex
+                })
+                .catch(() => {
+                  /* missing splat — leave fallback in place */
+                })
+            }
             // Acquire or create wetness render system for this tile
             const pooledWetness = wetnessPool.pop()
             if (pooledWetness) {

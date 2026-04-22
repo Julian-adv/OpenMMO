@@ -11,6 +11,10 @@ export interface WaterMaterialOptions {
   refractionMap?: THREE.Texture | null
   reflectionMap?: THREE.Texture | null
   wetnessMap?: THREE.Texture | null
+  /** Per-tile splatmap. Byte 1 (G channel) stores river proximity —
+   *  0 on a river center, 255 past the foam-suppress radius. Sampled by
+   *  the water shader to attenuate shoreline foam at estuaries. */
+  splatMap?: THREE.Texture | null
 }
 
 export interface WaterMaterialUniforms {
@@ -26,6 +30,7 @@ export interface WaterMaterialUniforms {
   uFoamMap: { value: THREE.Texture }
   uCausticsMap: { value: THREE.Texture }
   uWetnessMap: { value: THREE.Texture }
+  uSplatMap: { value: THREE.Texture }
   uCaptureMode: { value: number }
   uWaveA: { value: THREE.Vector4 }
   uWaveB: { value: THREE.Vector4 }
@@ -57,6 +62,16 @@ export const waterWetnessFallbackTex = new THREE.DataTexture(
   THREE.RGBAFormat
 )
 waterWetnessFallbackTex.needsUpdate = true
+
+/** Splatmap fallback (RGBA8) with G=255 — "no river nearby", so the
+ *  water shader leaves foam at full strength when no splatmap is bound. */
+export const waterSplatFallbackTex = new THREE.DataTexture(
+  new Uint8Array([0, 255, 0, 0]),
+  1,
+  1,
+  THREE.RGBAFormat
+)
+waterSplatFallbackTex.needsUpdate = true
 
 /** Heightmap-compatible fallback (RedFormat + FloatType) — must match the format
  *  the heightmap TextureNode was compiled with, otherwise WebGPU bind groups fail. */
