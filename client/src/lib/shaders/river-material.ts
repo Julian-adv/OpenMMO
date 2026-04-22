@@ -77,7 +77,6 @@ export interface RiverMaterialResult {
  * by `buildRiverGeometry`:
  *   uv.x       — 0 at left bank, 1 at right bank
  *   uv.y       — cumulative chain length (meters), used for scrolling
- *   flowDir    — per-vertex XZ tangent, drives normal/foam scroll
  *   flowNorm   — 0..1 flow accumulation, scales scroll speed
  */
 export function createRiverMaterial(
@@ -104,11 +103,9 @@ export function createRiverMaterial(
   // ── Varyings / Attributes ──
   const vWorldPos = varying(vec3(0), 'r_worldPos')
   const vClipPos = varying(vec4(0), 'r_clipPos')
-  const vFlowDir = varying(vec2(0), 'r_flowDir')
   const vFlowNorm = varying(float(0), 'r_flowNorm')
   const vMouthFactor = varying(float(0), 'r_mouthFactor')
 
-  const aFlowDir = attribute('flowDir', 'vec2')
   const aFlowNorm = attribute('flowNorm', 'float')
   const aMouthFactor = attribute('mouthFactor', 'float')
 
@@ -118,7 +115,6 @@ export function createRiverMaterial(
     const localPos = vec4(positionLocal, 1.0)
     const worldPos = modelWorldMatrix.mul(localPos).toVar()
     vWorldPos.assign(worldPos.xyz)
-    vFlowDir.assign(aFlowDir)
     vFlowNorm.assign(aFlowNorm)
     vMouthFactor.assign(aMouthFactor)
     const clipPos = cameraProjectionMatrix.mul(cameraViewMatrix).mul(worldPos)
@@ -166,34 +162,44 @@ export function createRiverMaterial(
       .add(0.15)
     waterColor.mulAssign(waterNightFactor)
 
-    // ── Flow-aligned normal map ──
-    // Scroll speed rises with flow accumulation; clamp at a baseline so
-    // stagnant headwaters still ripple a little. Kept slow so the surface
-    // reads as a calm lowland river rather than a chute.
+    // ── Channel-aligned normal map ──
+    // Sample in mesh UV (uv.x ∈ [0,1] cross-bank, uv.y meters along
+    // channel). World-XZ sampling with a per-fragment flow-vector scroll
+    // left visible per-triangle seams at curves because flow interpolates
+    // as a vector; mesh UV interpolates as two scalars so the texture
+    // follows the channel bend smoothly. REF_WIDTH converts uv.x to
+    // meters so cross-channel and along-channel tile rates roughly match
+    // at typical river widths.
+    //
+    // Perturbation stays world-axis (R→worldX, G→worldZ) on purpose:
+    // rotating into a channel frame ties distortion direction to the
+    // channel, which amplifies into visible "clouds flowing" through the
+    // cloud-plane projection and kills specular sparkle variety.
     const scrollSpeed = float(0.06).add(vFlowNorm.mul(0.22))
-    const flow = normalize(vFlowDir)
-    // Cross-flow vector for the secondary layer — breaks up tiling seams.
-    const cross = vec2(flow.y.negate(), flow.x)
+    const REF_WIDTH = float(20.0)
+    const meshUV = vec2(uvCoord.x.sub(0.5).mul(REF_WIDTH), uvCoord.y)
 
-    const baseUV1 = vWorldPos.xz.mul(0.45)
-    const baseUV2 = vWorldPos.xz.mul(0.27)
-    // Scrolling UV by `+flow*t` makes the pattern appear to move in `-flow`,
-    // so we subtract to get visible downstream motion.
-    const nUV1 = baseUV1.sub(flow.mul(uTime.mul(scrollSpeed)))
-    const nUV2 = baseUV2.sub(
-      flow.mul(uTime.mul(scrollSpeed).mul(0.6)).sub(cross.mul(0.3))
-    )
+    // Two-sample normal-map average → world-axis ripple normal. Used for
+    // both the surface ripple (flow-driven scroll) and the sky reflection
+    // (opposed scrolls, computed below).
+    const buildRippleN = (uv1: _N, uv2: _N): _N => {
+      const s = normalMapTex
+        .sample(uv1)
+        .add(normalMapTex.sample(uv2))
+        .mul(0.5)
+        .sub(1.0)
+      return normalize(vec3(s.r.mul(1.2), float(1.0), s.g.mul(1.2)))
+    }
 
-    const nSample = normalMapTex
-      .sample(nUV1)
-      .add(normalMapTex.sample(nUV2))
-      .mul(0.5)
-      .sub(1.0)
-    // Rotate XZ-plane perturbation using the flow frame so ripples elongate
-    // along the direction of travel (the tangential component is scaled down).
-    const rippleN = normalize(
-      vec3(nSample.r.mul(1.2), float(1.0), nSample.g.mul(1.2))
-    )
+    // Scroll sample point upstream (−V) so the texture appears to flow
+    // downstream.
+    const tScroll = uTime.mul(scrollSpeed)
+    const nUV1 = meshUV.mul(0.45).sub(vec2(float(0), tScroll))
+    const nUV2 = meshUV
+      .mul(0.27)
+      .add(vec2(float(0.3), float(0)))
+      .sub(vec2(float(0), tScroll.mul(0.6)))
+    const rippleN = buildRippleN(nUV1, nUV2)
 
     // ── View / screen setup ──
     const viewDir = normalize(vec3(uCameraDirection).negate())
@@ -204,7 +210,35 @@ export function createRiverMaterial(
     // gets multiplied by `cloudHeight / reflectDir.y` when projected onto the
     // cloud plane, so even small wobbles turn into huge UV jitter that
     // triggers aggressive mipmapping and averages the photo to a flat tone.
-    const reflNormal = normalize(mix(vec3(0, 1, 0), rippleN, 0.05))
+    //
+    // A dedicated reflection normal uses *opposed* V scrolls — their
+    // translational components largely cancel so the cloud image wobbles
+    // in place instead of drifting at ripple speed. The 1.0/0.9 imbalance
+    // prevents the wobble collapsing into a directional drift; tune
+    // agitation via SHAKE_RATE, not the imbalance.
+    //
+    // Three speed axes, all decoupled from surface ripple (`scrollSpeed`
+    // above):
+    //   WOBBLE_SHAKE_RATE — opposed-scroll rate (per-fragment oscillation)
+    //   WOBBLE_DRIFT_RATE — constant V offset on both samples (how fast
+    //     the wobble pattern rides the current)
+    //   CLOUD_DRIFT_RATE  — sky-cloud photo's own drift, applied to
+    //     cloudUV below — independent of the water surface
+    const WOBBLE_SHAKE_RATE = float(0.05)
+    const WOBBLE_DRIFT_RATE = float(0.1)
+    const CLOUD_DRIFT_RATE = vec2(float(0.0015), float(0.0008))
+    const reflT = uTime.mul(WOBBLE_SHAKE_RATE)
+    const reflDrift = vec2(float(0), uTime.mul(WOBBLE_DRIFT_RATE))
+    const reflNUV1 = meshUV
+      .mul(0.45)
+      .sub(vec2(float(0), reflT))
+      .sub(reflDrift)
+    const reflNUV2 = meshUV
+      .mul(0.33)
+      .add(vec2(float(0.4), reflT.mul(0.9)))
+      .sub(reflDrift)
+    const reflRippleN = buildRippleN(reflNUV1, reflNUV2)
+    const reflNormal = normalize(mix(vec3(0, 1, 0), reflRippleN, 0.05))
     const reflectDir = reflect(viewDir.negate(), reflNormal)
     const skyY = clamp(reflectDir.y.mul(0.5).add(0.5), 0.0, 1.0)
 
@@ -264,7 +298,7 @@ export function createRiverMaterial(
     const CLOUD_UV_SCALE = 1 / 30
     const cloudUV = cloudPlane
       .mul(CLOUD_UV_SCALE)
-      .add(vec2(uTime.mul(0.0015), uTime.mul(0.0008)))
+      .add(CLOUD_DRIFT_RATE.mul(uTime))
     const photoSky = cloudTex.sample(cloudUV).rgb
     // Contrast boost: pow curve pushes sky mid-tones toward dark while
     // leaving near-white clouds intact. Higher exponent = deeper dark sky
@@ -291,11 +325,13 @@ export function createRiverMaterial(
     const specular = uSunColor.rgb.mul(pow(NdotH, float(128)).mul(0.35)).toVar()
 
     const sparkleT = uTime.mul(0.05)
+    // Sparkle UV shares the mesh-UV frame used by the ripple normal so the
+    // sparkle pattern scrolls along the channel instead of world axes.
     const sp1 = normalMapTex.sample(
-      vWorldPos.xz.mul(0.55).add(flow.mul(sparkleT))
+      meshUV.mul(0.55).sub(vec2(float(0), sparkleT))
     ).r
     const sp2 = normalMapTex.sample(
-      vWorldPos.xz.mul(0.9).sub(flow.mul(sparkleT.mul(0.6)))
+      meshUV.mul(0.9).add(vec2(float(0), sparkleT.mul(0.6)))
     ).g
     const sunSparkleStrength = smoothstep(float(0), float(0.15), sunY).mul(
       float(0.3).add(float(0.7).mul(sunY))
