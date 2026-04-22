@@ -27,6 +27,10 @@
 - https://polyhaven.com/a/japanese_stone_wall
 - https://polyhaven.com/a/rock_embedded_concrete
 
+## cloud
+
+- <a href="https://kr.freepik.com/free-photo/white-cloud_3816314.htm#fromView=keyword&page=1&position=8&uuid=159badd4-6cbe-4767-aec8-8a40d2789230&query=Sky+cloud">작가 lifeforstock 출처 Freepik</a>
+
 ## sea
 
 - sea https://www.filterforge.com/filters/4141.html
