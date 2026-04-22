@@ -148,6 +148,7 @@
   let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
+  let riverLayerRef = $state<GameSceneRiverLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(undefined)
@@ -613,10 +614,14 @@
       currentRenderTag = 'refraction'
       multiPassRenderer.renderRefraction({
         camera, refractionManager, refractionEnabled: $refractionEnabled,
-        waterGroup, terrainMeshes, entityClipGroup,
-        grassGroup: grassLayerRef?.getGroup(),
-        treeGroup: treeLayerRef?.getGroup(),
-        windParticlesGroup: windParticlesRef?.getGroup(),
+        waterGroup, terrainMeshes,
+        hiddenGroups: [
+          entityClipGroup as THREE.Group | undefined,
+          grassLayerRef?.getGroup(),
+          treeLayerRef?.getGroup(),
+          windParticlesRef?.getGroup(),
+          riverLayerRef?.getGroup(),
+        ],
       }, loopProfiler)
       currentRenderTag = 'main'
 
@@ -630,6 +635,7 @@
           windParticlesRef?.getGroup(),
           furnitureOverlayRef?.getGroup(),
           entityClipGroup as THREE.Group | undefined,
+          riverLayerRef?.getGroup(),
         ],
         getNametagGroups: () => {
           const groups: THREE.Group[] = []
@@ -1002,8 +1008,6 @@
   splatManager={terrainSplatManager}
   {renderer}
   {camera}
-  {refractionManager}
-  {reflectionManager}
 />
 
 <GameSceneHousingLayer
@@ -1049,6 +1053,7 @@
 />
 
 <GameSceneRiverLayer
+  bind:this={riverLayerRef}
   {terrainTiles}
   heightManager={terrainHeightManager}
   {riverDataManager}

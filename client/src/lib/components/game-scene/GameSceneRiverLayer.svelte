@@ -19,6 +19,10 @@
   const riverGroup = new THREE.Group()
   riverGroup.name = 'rivers'
 
+  export function getGroup(): THREE.Group {
+    return riverGroup
+  }
+
   // Plain (non-reactive): async load callbacks mutate this, and a reactive
   // dep would retrigger the $effect below and churn frames. Only the
   // `terrainTiles` prop drives the effect. `null` value = processed but
