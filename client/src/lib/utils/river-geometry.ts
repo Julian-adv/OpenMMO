@@ -1,6 +1,17 @@
 import * as THREE from 'three'
 import type { RiverSegment } from './river-data'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
+import { SEA_LEVEL } from '../components/game-scene/terrain-utils'
+
+/**
+ * Y for ribbon vertices in the sea-extension segment. Sits just above the
+ * sea shader's surface (SEA_LEVEL=0) so the extension delta can't sink
+ * below it regardless of the carved seafloor depth — heightmap sampling
+ * would drop Y with the seabed and stamp a hollow "underwater geometry"
+ * look near the mouth. 2 cm of clearance dodges z-fighting with the sea
+ * quad while staying visually coplanar with the sea at this scale.
+ */
+const SEA_EXTEND_SURFACE_Y = SEA_LEVEL + 0.02
 
 /**
  * Water surface offset (m) above the carved channel bed. The bake carves
@@ -38,7 +49,7 @@ const RIVER_WIDTH_PAD_M = 0.5
  * that extension and keeps the visible river flowing out onto the water
  * rather than ending at the surf line.
  */
-const MOUTH_FADE_Y_LOW = -0.3
+const MOUTH_FADE_Y_LOW = -0.7
 const MOUTH_FADE_Y_HIGH = 0.4
 
 /**
@@ -76,7 +87,7 @@ interface ChainLink {
 /** Endpoints are shared across tile files; the baker preserves float
  *  bit patterns on both sides of the midpoint-ownership split, so
  *  equal-precision decimal keys match bit-for-bit. */
-function endpointKey(x: number, z: number): string {
+export function endpointKey(x: number, z: number): string {
   return `${x.toFixed(3)},${z.toFixed(3)}`
 }
 
@@ -169,7 +180,8 @@ export interface RiverGeometryResult {
  */
 export function buildRiverGeometry(
   segments: RiverSegment[],
-  heightManager: TerrainHeightManager | null
+  heightManager: TerrainHeightManager | null,
+  externalEndpoints?: ReadonlySet<string>
 ): RiverGeometryResult {
   const chains = buildChains(segments)
 
@@ -234,8 +246,21 @@ export function buildRiverGeometry(
     // itself, not just the carved channel. Keeps extension widths equal
     // to the last segment so the ribbon reads as a uniform sea-bound
     // delta instead of a tapering point.
+    //
+    // Skip extension if the chain's terminal endpoint is also an endpoint
+    // of a segment in a neighboring tile (midpoint-ownership split). In
+    // that case the "tip" is really a tile-seam continuation, and both
+    // tiles would independently paint their own 16m sea extension from
+    // the same shared point — producing two overlapping delta ribbons.
     let n = n0
-    if (n0 >= 1 && sampleY(px[n0], pz[n0]) < SEA_EXTEND_TRIGGER_Y) {
+    const tipKey = n0 >= 1 ? endpointKey(px[n0], pz[n0]) : ''
+    const isTileSeam =
+      tipKey !== '' && (externalEndpoints?.has(tipKey) ?? false)
+    if (
+      n0 >= 1 &&
+      !isTileSeam &&
+      sampleY(px[n0], pz[n0]) < SEA_EXTEND_TRIGGER_Y
+    ) {
       const [exTx, exTz] = normalizedDelta(
         px[n0 - 1],
         pz[n0 - 1],
@@ -292,7 +317,14 @@ export function buildRiverGeometry(
       const rightX = px[i] - nx * halfWidth
       const rightZ = pz[i] - nz * halfWidth
 
-      const centerY = sampleY(px[i], pz[i])
+      // Extension vertices ride a fixed sea-surface Y — following the
+      // heightmap out past the polyline tip drags the ribbon down with
+      // the carved seafloor (e.g. Y ≈ −2 m over a continental shelf),
+      // so the delta geometry dives underwater even though its alpha
+      // fades to zero. Lock to `SEA_EXTEND_SURFACE_Y` (just above the
+      // sea shader) so the ribbon sits on the sea surface like a real
+      // estuary plume.
+      const centerY = i > n0 ? SEA_EXTEND_SURFACE_Y : sampleY(px[i], pz[i])
 
       if (i > 0) {
         cumulativeLen += Math.hypot(px[i] - px[i - 1], pz[i] - pz[i - 1])

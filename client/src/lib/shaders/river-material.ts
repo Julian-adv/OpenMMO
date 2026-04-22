@@ -323,9 +323,22 @@ export function createRiverMaterial(
     // Deep navy body with moderate reflection; fresnel still boosts
     // reflectivity at grazing angles so the far surface reads brighter.
     const fresnel = pow(float(1).sub(NdotV), float(2)).mul(0.5)
-    const reflectionMix = clamp(float(0.35).add(fresnel), 0.0, 0.9)
+    // Estuary reflection fade. River uses ~0.35 base sky reflection while the
+    // sea shallow uses ~0.03 — at the mouth that mismatch stamps a blue
+    // sky-tinted band against the teal shoreline. Fade the base toward the
+    // sea's value on the same `colorFade` curve as the body tint so both
+    // transitions land together without introducing a new fade front.
+    const reflectionBase = mix(float(0.35), float(0.03), colorFade)
+    const reflectionMix = clamp(reflectionBase.add(fresnel), 0.0, 0.9)
+    // Specular + sparkle also need to fade at the mouth. They bypass
+    // reflectionMix (added directly to color) so without damping the
+    // flow-aligned sun sparkle stamps a "river texture" streak into the
+    // calm sea surface even after body color and sky reflection match.
+    // Use `1 - colorFade = (1 - vMouthFactor)^2` — quadratic ease-in so
+    // the inland river keeps its sparkle and only the estuary calms down.
+    const estuaryCalm = float(1).sub(colorFade)
     const color = mix(waterColor, skyReflection, reflectionMix)
-      .add(specular.mul(depthFactor))
+      .add(specular.mul(depthFactor).mul(estuaryCalm))
       .toVar()
 
     color.assign(mix(color, reflectionSample.rgb, reflectionSample.a.mul(0.3)))
@@ -338,10 +351,14 @@ export function createRiverMaterial(
 
     // ── Alpha ──
     // River water is clearer near the banks — fade alpha from the channel
-    // toward the edge. Reaches α = 0 at the bank (bankFactor=1) so the
-    // ribbon's lateral boundary dissolves into the sand splat rather
-    // than terminating in a visible line where it meets the coast.
-    const edgeFade = smoothstep(float(0.4), float(1.0), bankFactor)
+    // toward the edge. Previously bottomed at bankFactor=1.0 so the full
+    // baked ribbon width contributed visible mid-α water: on the land
+    // side that stamped a muddy violet band where water tint overlaid
+    // the sand/grass splat. Terminate the fade at 0.75 so the outer 25%
+    // of the ribbon is fully transparent; the remaining 0-0.75 range
+    // keeps a smooth gradient, and the sand band from the splatmap
+    // carve still handles the visual bank itself.
+    const edgeFade = smoothstep(float(0.4), float(0.75), bankFactor)
     const bankAlpha = clamp(float(0.92).sub(edgeFade.mul(0.92)), 0.0, 1.0)
     // Estuary fade: vMouthFactor=1 where the ribbon sits in open sea.
     // Fully-opaque upstream, fully transparent at the mouth so the sea
