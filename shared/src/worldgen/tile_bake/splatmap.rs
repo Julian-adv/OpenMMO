@@ -11,7 +11,8 @@ use super::constants::{
     CLIFF_BLEND_CORE_M, CLIFF_FADE_START, CLIFF_PROXIMITY_RADIUS_M, CLIFF_PROXIMITY_SEARCH_CELLS,
     CLIFF_SLOPE_THRESHOLD, COAST_FADE_SPAN_M, COAST_SAND_M, GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF,
     PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW, RIVER_FADE_SPAN_M,
-    RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND,
+    RIVER_FOAM_SUPPRESS_RADIUS_M, RIVER_MOUTH_SAND_COAST_DIST_M, RIVER_SAND_WIDTH_MULT,
+    ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND,
     SLOPE_CLIFF_FULL, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
@@ -19,11 +20,19 @@ use super::heightmap::lerp;
 
 /// Pack one splat cell into 4 bytes following the V2 layout
 /// (`doc/SPLATMAP_V2.md`).
+///
+/// `river_proximity` (formerly byte 1 "reserved") encodes "how close is
+/// this cell to a river polyline":
+///   255 = far from any river (no suppression),
+///     0 = inside / on the river center line.
+/// Consumed by the sea shader to attenuate its shoreline-foam band where
+/// a river meets the ocean — otherwise a bright foam line cuts across
+/// every estuary.
 #[inline]
-fn pack_splat(primary: u8, secondary: u8, blend: u8, veg: u8) -> [u8; 4] {
+fn pack_splat(primary: u8, secondary: u8, blend: u8, veg: u8, river_proximity: u8) -> [u8; 4] {
     [
         ((primary & 0x0F) << 4) | (secondary & 0x0F),
-        0, // reserved (byte 1)
+        river_proximity,
         blend,
         veg,
     ]
@@ -165,8 +174,17 @@ pub(super) fn bake_splatmap(
                 || ctx.grass_patches.sample(wx, wz),
             );
 
+            // River proximity: linear ramp 0..RIVER_FOAM_SUPPRESS_RADIUS_M
+            // → 0..255 (clamped). Used by the sea shader to fade out its
+            // shoreline-foam band where a river meets the ocean.
+            let river_proximity = {
+                let t =
+                    (river_d_m / RIVER_FOAM_SUPPRESS_RADIUS_M).clamp(0.0, 1.0);
+                (t * 255.0) as u8
+            };
+
             let off = (cz * TILE_DIM + cx) * 4;
-            let bytes = pack_splat(primary, secondary, blend, veg);
+            let bytes = pack_splat(primary, secondary, blend, veg, river_proximity);
             out[off..off + 4].copy_from_slice(&bytes);
         }
     }
@@ -231,23 +249,45 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // letting some grass / sparse trees grow on the dry sand bank.
         let sand_t = (river_d_m / river_sand_half_width_m).clamp(0.0, 1.0);
         let blend = (sand_t * sand_t * 255.0) as u8;
-        let (secondary, veg) = if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M {
-            (PAL_CLIFF, 0)
+        // Near the estuary, swap the river-bed palette to coast sand so
+        // the last ~15 m of channel reads as a sandy delta continuous with
+        // the beach instead of a wet-pebble strip jutting into the surf.
+        // Keyed on horizontal distance to the ocean coast polyline: the
+        // bake's carve floor flattens h_center over ~40 m inland at gentle
+        // mouths, so an elevation-based cutoff was too coarse — a coastal
+        // distance directly caps the delta length. Both palettes share
+        // the GROUND secondary so the bank fade stays smooth across the
+        // swap.
+        let is_mouth_sand = coast_d_m < RIVER_MOUTH_SAND_COAST_DIST_M;
+        let primary = if is_mouth_sand {
+            PAL_SAND
         } else {
-            let water_half_width_m = (river_width_m * 0.5).max(0.5);
-            let bank_width = (river_sand_half_width_m - water_half_width_m).max(1e-3);
-            let bank_t = ((river_d_m - water_half_width_m) / bank_width).clamp(0.0, 1.0);
-            let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
-            let grass_t = (1.0 - highland).max(0.0);
-            let density = (grass_t * 9.0 * bank_t).round().clamp(0.0, 9.0) as u8;
-            let v = if density > 0 {
-                short_grass_veg(density)
-            } else {
-                0
-            };
-            (PAL_GROUND, v)
+            PAL_RIVER_BED
         };
-        (PAL_RIVER_BED, secondary, blend, veg)
+        // Cliff proximity blends PAL_CLIFF into the outer bank so the
+        // palette pair matches the adjacent plain branch (which secondaries
+        // to CLIFF). At the estuary the adjacent branch is beach SAND, not
+        // cliffy plain, so routing the bank outer edge through CLIFF here
+        // produces a visible gravel strip between sand and grass. Skip the
+        // cliff blend for sand-primary cells and go straight to grass.
+        let (secondary, veg) =
+            if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M && !is_mouth_sand {
+                (PAL_CLIFF, 0)
+            } else {
+                let water_half_width_m = (river_width_m * 0.5).max(0.5);
+                let bank_width = (river_sand_half_width_m - water_half_width_m).max(1e-3);
+                let bank_t = ((river_d_m - water_half_width_m) / bank_width).clamp(0.0, 1.0);
+                let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
+                let grass_t = (1.0 - highland).max(0.0);
+                let density = (grass_t * 9.0 * bank_t).round().clamp(0.0, 9.0) as u8;
+                let v = if density > 0 {
+                    short_grass_veg(density)
+                } else {
+                    0
+                };
+                (PAL_GROUND, v)
+            };
+        (primary, secondary, blend, veg)
     } else if is_sea {
         // Secondary = GROUND so the coast line shares a palette pair with
         // the land sand-band, keeping per-texture weights continuous
@@ -465,8 +505,16 @@ mod tests {
 
     #[test]
     fn priority_river_beats_sea() {
-        // River bed uses (RIVER_BED, GROUND). Regression guard so an
-        // accidental swap back to DIRT (red laterite) won't slip through.
+        // River branch must fire even when the sea branch would also match
+        // (is_sea=true, h_center<0). Regression guard so the ladder ordering
+        // doesn't regress — an accidental swap would most likely surface as
+        // DIRT (red laterite) from the plain branch.
+        //
+        // Near-sea-level h_center falls into the estuary sand window, so the
+        // primary is PAL_SAND instead of PAL_RIVER_BED; both share the
+        // GROUND secondary so coast/river continuity still holds. Inland
+        // (`priority_river_beats_sea_inland`) exercises the PAL_RIVER_BED
+        // path.
         let (p, s, _, _) = call_classify(SplatInputs {
             is_sea: true,
             river_d_m: 0.0,
@@ -474,6 +522,18 @@ mod tests {
             h_center: -1.0,
             coast_d_m: 0.0,
             ..plain_inputs(0.0)
+        });
+        assert_eq!((p, s), (PAL_SAND, PAL_GROUND));
+    }
+
+    #[test]
+    fn priority_river_beats_sea_inland() {
+        // Same priority guard as above, but at inland h_center so the river
+        // branch emits PAL_RIVER_BED (the wet-pebble inland look).
+        let (p, s, _, _) = call_classify(SplatInputs {
+            river_d_m: 0.0,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            ..plain_inputs(100.0)
         });
         assert_eq!((p, s), (PAL_RIVER_BED, PAL_GROUND));
     }

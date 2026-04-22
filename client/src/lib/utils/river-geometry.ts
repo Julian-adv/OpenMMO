@@ -25,6 +25,38 @@ const RIVER_WIDTH_SCALE = 1.5
 const RIVER_WIDTH_PAD_M = 0.5
 
 /**
+ * Estuary alpha fade window (meters of surface Y). Below LOW the ribbon is
+ * fully faded (vertex sits in open sea water), above HIGH it renders
+ * unchanged. Between the two the `mouthFactor` attribute ramps from 1→0
+ * using smoothstep, which the river shader multiplies into alpha so the
+ * ribbon dissolves into the sea quad instead of terminating in a hard edge.
+ *
+ * Window is pushed seaward so the fade completes in deeper water rather
+ * than at the shoreline. With the sea-extension step (`SEA_EXTEND_*`) the
+ * ribbon has vertices well past the original polyline tip at negative
+ * bed Y, so a LOW of −0.3 m (bed ≈ −0.9 m) lands the final alpha inside
+ * that extension and keeps the visible river flowing out onto the water
+ * rather than ending at the surf line.
+ */
+const MOUTH_FADE_Y_LOW = -0.3
+const MOUTH_FADE_Y_HIGH = 0.4
+
+/**
+ * Chains whose last vertex sits below this surface Y are extended past
+ * the Phase-4 polyline tip into the sea by `SEA_EXTEND_METERS`, added in
+ * `SEA_EXTEND_STEPS` uniform steps. Each step scales width by
+ * `1 - k/STEPS` so the extension tapers from full fan width at the
+ * polyline tip to zero at its own tip — a teardrop delta rather than a
+ * constant-width tongue jutting into the sea. Also ensures the sea
+ * shader's foam-suppression radius covers the whole delta (the bake
+ * field is keyed on the polyline itself, and a wider-than-needed
+ * radius is harmless).
+ */
+const SEA_EXTEND_TRIGGER_Y = 0.6
+const SEA_EXTEND_METERS = 16
+const SEA_EXTEND_STEPS = 8
+
+/**
  * Below this cosine of the interior angle between two adjacent segments,
  * the miter extension explodes (a perfect 180° reversal divides by zero).
  * Clamp to avoid vertex spikes; visible as a small bevel at sharp turns.
@@ -132,6 +164,8 @@ export interface RiverGeometryResult {
  * - `flowDir` (vec2): segment-local tangent (XZ normalized).
  * - `flowNorm` (float): per-vertex normalized flow (0..1).
  * - `edgeDist` (float): 0 at centerline, 1 at either bank.
+ * - `mouthFactor` (float): 1 where the vertex sits at sea level, 0 inland;
+ *   drives the estuary alpha fade in the shader. See MOUTH_FADE_Y_*.
  */
 export function buildRiverGeometry(
   segments: RiverSegment[],
@@ -144,6 +178,7 @@ export function buildRiverGeometry(
   const flowDirs: number[] = []
   const flowNorms: number[] = []
   const edgeDists: number[] = []
+  const mouthFactors: number[] = []
   const indices: number[] = []
 
   const sampleY = (x: number, z: number): number => {
@@ -154,12 +189,12 @@ export function buildRiverGeometry(
   for (const chain of chains) {
     if (chain.length === 0) continue
 
-    const n = chain.length
-    const px = new Array<number>(n + 1)
-    const pz = new Array<number>(n + 1)
-    const widths = new Array<number>(n + 1)
-    const flows = new Array<number>(n + 1)
-    for (let i = 0; i < n; i++) {
+    const n0 = chain.length
+    const px: number[] = new Array<number>(n0 + 1)
+    const pz: number[] = new Array<number>(n0 + 1)
+    const widths: number[] = new Array<number>(n0 + 1)
+    const flows: number[] = new Array<number>(n0 + 1)
+    for (let i = 0; i < n0; i++) {
       const link = chain[i]
       const s = segments[link.seg]
       const ax = link.forward ? s.ax : s.bx
@@ -186,11 +221,39 @@ export function buildRiverGeometry(
     // so ~half of all chains come out oriented upstream. Reverse the arrays
     // in place so index 0 is always the headwater and index n is the mouth;
     // this makes `flowDir` (segment tangent) point downstream consistently.
-    if (flows[n] < flows[0]) {
+    if (flows[n0] < flows[0]) {
       px.reverse()
       pz.reverse()
       widths.reverse()
       flows.reverse()
+    }
+
+    // Extend the ribbon past the polyline tip into the sea when the chain
+    // terminates below sea level, so the alpha fade has room to blend to
+    // zero and the sea shader's foam-suppression radius covers the delta
+    // itself, not just the carved channel. Keeps extension widths equal
+    // to the last segment so the ribbon reads as a uniform sea-bound
+    // delta instead of a tapering point.
+    let n = n0
+    if (n0 >= 1 && sampleY(px[n0], pz[n0]) < SEA_EXTEND_TRIGGER_Y) {
+      const [exTx, exTz] = normalizedDelta(
+        px[n0 - 1],
+        pz[n0 - 1],
+        px[n0],
+        pz[n0]
+      )
+      for (let k = 1; k <= SEA_EXTEND_STEPS; k++) {
+        const t = k / SEA_EXTEND_STEPS
+        const d = SEA_EXTEND_METERS * t
+        // Linear width taper: extension tip reaches zero width so the
+        // delta reads as a teardrop rather than a constant-width tongue.
+        const widthScale = 1 - t
+        px.push(px[n0] + exTx * d)
+        pz.push(pz[n0] + exTz * d)
+        widths.push(widths[n0] * widthScale)
+        flows.push(flows[n0])
+        n++
+      }
     }
 
     const baseVertex = positions.length / 3
@@ -217,6 +280,11 @@ export function buildRiverGeometry(
         if (cosHalf > MIN_MITER_COSINE) miter = 1 / cosHalf
       }
 
+      // Widths already carry the estuary fan scaling from the bake (see
+      // `apply_mouth_fan_widths` in shared/worldgen/tile_bake/context.rs),
+      // so heightmap carve and splat sand band widen in lockstep with this
+      // ribbon — applying any extra scale here would make the water plane
+      // overhang the carved banks.
       const halfWidth =
         (widths[i] * 0.5 * RIVER_WIDTH_SCALE + RIVER_WIDTH_PAD_M) * miter
       const leftX = px[i] + nx * halfWidth
@@ -224,29 +292,51 @@ export function buildRiverGeometry(
       const rightX = px[i] - nx * halfWidth
       const rightZ = pz[i] - nz * halfWidth
 
+      const centerY = sampleY(px[i], pz[i])
+
       if (i > 0) {
         cumulativeLen += Math.hypot(px[i] - px[i - 1], pz[i] - pz[i - 1])
       }
       const v = cumulativeLen
 
-      // Sample the carved bed at the centerline and use it for both bank
-      // vertices. Sampling at each bank instead makes the ribbon rise with
-      // the terrain outside the carved channel (ribbon buries into the
-      // hillsides going upstream) or bows if carving depth varies across
-      // the width. One centerline Y per step keeps the surface flat and
-      // always seated in the channel.
-      const centerY = sampleY(px[i], pz[i])
+      // `centerY` is sampled at the centerline and reused for both bank
+      // vertices — sampling at each bank instead makes the ribbon rise
+      // with the terrain outside the carved channel (ribbon buries into
+      // hillsides going upstream) or bows if carve depth varies across
+      // the width.
+
+      // Hermite smoothstep(LOW, HIGH, centerY), then inverted so 1=mouth, 0=inland.
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          (centerY - MOUTH_FADE_Y_LOW) / (MOUTH_FADE_Y_HIGH - MOUTH_FADE_Y_LOW)
+        )
+      )
+      const yMouthFactor = 1 - t * t * (3 - 2 * t)
+      // Extension vertices (i > n0) also fade by their progression into
+      // the sea so a shallow continental shelf can't leave a visible
+      // narrow-ribbon "plane" past the polyline tip. Combined via OR:
+      // the vertex is faded if either its depth OR its extension-index
+      // says so. Without this, an extension step at ribbon Y ≈ 0 (bed ≈
+      // −0.6, still above the fade LOW) stayed partly opaque and read
+      // as a darker strip beyond the real river.
+      const extT = i > n0 ? (i - n0) / SEA_EXTEND_STEPS : 0
+      const extMouthFactor = extT * extT * (3 - 2 * extT)
+      const mouthFactor = Math.max(yMouthFactor, extMouthFactor)
 
       positions.push(leftX, centerY, leftZ)
       uvs.push(0, v)
       flowDirs.push(txN, tzN)
       flowNorms.push(flows[i])
       edgeDists.push(1)
+      mouthFactors.push(mouthFactor)
       positions.push(rightX, centerY, rightZ)
       uvs.push(1, v)
       flowDirs.push(txN, tzN)
       flowNorms.push(flows[i])
       edgeDists.push(1)
+      mouthFactors.push(mouthFactor)
     }
 
     for (let i = 0; i < n; i++) {
@@ -276,6 +366,10 @@ export function buildRiverGeometry(
   geometry.setAttribute(
     'edgeDist',
     new THREE.Float32BufferAttribute(edgeDists, 1)
+  )
+  geometry.setAttribute(
+    'mouthFactor',
+    new THREE.Float32BufferAttribute(mouthFactors, 1)
   )
   geometry.setIndex(indices)
   geometry.computeBoundingSphere()

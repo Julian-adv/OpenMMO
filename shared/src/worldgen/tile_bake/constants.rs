@@ -65,6 +65,33 @@ pub(super) const RIVER_CARVE_TAPER_MIN_M: f32 = 3.0;
 pub(super) const RIVER_CARVE_TAPER_EXTRA_M: f32 = 7.0;
 pub(super) const RIVER_CARVE_DEPTH_MIN_M: f32 = 0.6;
 pub(super) const RIVER_CARVE_DEPTH_EXTRA_M: f32 = 1.4;
+/// Lower bound on post-carve terrain elevation inside a river channel
+/// (meters). Prevents carving from dragging the bed below sea level near
+/// the estuary — if the bed sinks under Y=0 the ocean shader treats the
+/// river channel as an inlet and renders shore/wet-sand patterns inside
+/// it. Keeping the bed a hair above sea level zeros out the ocean-shader
+/// depth query there so only the river ribbon is visible. See
+/// RIVER_SYSTEM.md §10.
+pub(super) const RIVER_CARVE_MIN_BED_Y_M: f32 = 0.3;
+/// River-bed splat switches from `PAL_RIVER_BED` (ganges pebbles — wet
+/// inland bed look) to `PAL_SAND` (sandy_gravel_02 — matches coast) where
+/// the cell is within this horizontal distance of the ocean coast
+/// polyline. Horizontal distance rather than elevation because the bake's
+/// carve floor holds h_center flat for ~40 m inland at gentle mouths; an
+/// elevation cutoff clipped sand to just the first few meters while this
+/// directly caps the delta length at the ocean-facing side.
+pub(super) const RIVER_MOUTH_SAND_COAST_DIST_M: f32 = 15.0;
+/// Width-fan window (meters of base-cell elevation). Below `LOW` the
+/// polyline vertex is widened to `1 + EXTRA` of its natural width; above
+/// `HIGH` it keeps the natural width. Applied globally to `rivers_world`
+/// in `BakeContext::new` so heightmap carving, splatmap classification,
+/// and the client ribbon all see the same fan-scaled widths — otherwise
+/// the water surface plane widens past the carved banks. The scale ties
+/// to the visual fade in `river-geometry.ts` (`FAN_WIDTH_Y_*`); keep them
+/// in sync when tuning.
+pub(super) const RIVER_MOUTH_FAN_BASE_LOW_M: f32 = 0.0;
+pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 3.0;
+pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 1.2;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 1.25;
 /// Two rounds smooth 8 m source vertices into a visible curve at 1 m tile
 /// resolution.
@@ -100,6 +127,14 @@ pub(super) const COAST_CHAIKIN_ITERATIONS: u32 = 2;
 /// Matches the river carve taper so slope returns to plain baseline right
 /// as the fade completes.
 pub(super) const RIVER_FADE_SPAN_M: f32 = 10.0;
+/// Radius (m) the sea shader uses to fade its shoreline-foam band
+/// toward zero near river mouths. Encoded into the splatmap's byte-1
+/// channel as a 0..255 linear ramp (0 on the river centerline, 255 at
+/// or past this radius). Larger = wider foam-free zone around every
+/// river outlet. Sized to match / exceed the client ribbon's sea
+/// extension (`SEA_EXTEND_METERS`) so the full extended delta sits in
+/// the suppression zone.
+pub(super) const RIVER_FOAM_SUPPRESS_RADIUS_M: f32 = 30.0;
 /// Absolute elevation (m) at which the snow→rock blend starts fading in.
 pub(super) const SNOW_ELEVATION_M: f32 = 1800.0;
 /// Elevation (m) above `SNOW_ELEVATION_M` at which snow is fully dominant.

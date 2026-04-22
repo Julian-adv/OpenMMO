@@ -340,9 +340,7 @@ binary에 쓰지 않고, 클라이언트는 width/flow_norm만 소비 (carve는 
   아직 불필요 (월드 전체 river 세그먼트 수가 수천 수준으로 추정).
 - **플레이어 수영 판정**: 수면 Y를 서버가 알아야 플레이어 수영 상태를 판정할 수
   있다. 서버 측 river 샘플링은 별도 작업. 우선 시각화만.
-- **강↔바다 경계**: 강 하구에서 수면 Y가 0(바다)로 수렴. 리본 끝 세그먼트를
-  바다 quad와 살짝 오버랩시켜 seam을 숨길지, 명시적으로 zero-length 종단 처리할지
-  구현 시 결정.
+- **강↔바다 경계**: §10 참조 — 하구 처리 방식 확정됨.
 
 ## 9. 핵심 파일 (예상)
 
@@ -357,3 +355,89 @@ binary에 쓰지 않고, 클라이언트는 width/flow_norm만 소비 (carve는 
 | `client/src/lib/shaders/river-material.ts` | (신규) 강 TSL 쉐이더 |
 | `client/src/lib/components/RiverTile.svelte` | (신규) 강 타일 메시 + 유니폼 |
 | `client/src/lib/components/game-scene/GameSceneRiverLayer.svelte` | (신규) 타일 관리 레이어 |
+
+## 10. 하구(estuary) 처리
+
+### 10.1 현재 증상
+
+강이 바다로 흘러드는 지점에서 경계가 매우 부자연스럽다:
+
+1. 강(`river-material.ts`)과 바다(`water-material.ts`)가 별개 셰이더·메시로 돌아가고
+   색 팔레트가 다르다. 강은 `uVeryShallowColor=(0.22, 0.3, 0.3)`부터 시작하는
+   milky cyan 톤, 바다는 더 짙은 deep blue 팔레트.
+2. 강 리본이 바다 안까지 일정 폭으로 밀고 들어가는데, `bankFactor` 기반 밝은
+   물가 엣지(흰 foam/얕은 색)가 **바다 깊이 위에서도** 그대로 보여서 강이
+   바다 위에 떠 있는 카펫처럼 보인다.
+3. 폭이 일정한 리본이라 하구가 자연스럽게 퍼지지 않는다. 현실의 하구는
+   부채꼴로 넓어지며 퇴적/혼탁이 일어난다.
+
+### 10.2 선택지 (강→약 추천순)
+
+1. **하구 세그먼트에서 강 리본을 바다에 blend out** — 가장 저렴, 효과 큼.
+   `river-geometry.ts`에서 바다에 가까운 마지막 N 세그먼트에 per-vertex
+   `mouthFactor` attribute (경계로 갈수록 0→1)을 부여. 셰이더에서:
+   - `bankFactor` 영향을 `mouthFactor`만큼 약화 → 엣지 foam 제거
+   - 알파를 `mouthFactor`만큼 페이드
+   - 강 색(`waterColor`)을 바다 deep 색 쪽으로 mix
+   지오메트리 변경 없이 강이 바다 속으로 사라지듯 보인다. 두 셰이더를 합칠 필요 X.
+2. **하구 지형 카빙 (delta/갯벌)** — 사실감 최상.
+   bake 단계에서 하구 세그먼트 양옆을 부채꼴로 넓혀 모래톱/갯벌을 만들고,
+   강 리본도 동일하게 fan-out. 1번과 조합하면 진짜 하구 모습. worldgen 수정이
+   필요해 이터레이션 비용 있음.
+3. **Sediment plume** — 가장 리얼.
+   바다 셰이더에 "가장 가까운 강 하구로부터의 거리" 마스크 (SDF/거리장
+   텍스쳐 또는 per-tile uniform)를 넘겨 반경 내에서 물색을 탁한 갈/녹으로 섞음.
+   바다 셰이더에 거리 정보를 공급하는 파이프라인 신설 필요 → 구현 비용 중간~높음.
+4. **색 팔레트 통일** — 근본적.
+   강의 `uVeryShallowColor/uShallowColor/uMidColor`를 바다 팔레트와 맞추거나,
+   둘 다 공통된 depth(y 차이) 함수로 색 계산. 경계 이음매가 줄지만 강 고유의
+   얕은 cyan tone이 약해짐. 1번과 보완적.
+5. **(응급처치) 리본 마지막 쿼드의 foam만 끄기** — 최소 변경.
+   `isMouth=1` 속성 주고 `edgeFade`에서 bank 엣지 foam만 skip. 하드 컷은 남지만
+   눈에 띄는 흰 테두리는 사라짐.
+
+### 10.3 확정 방향
+
+**1번 (하구 국소 blend-out) + bake bed floor.** 처음엔 1번만으로 충분할 줄 알았는데
+구현 후 확인해 보니 숨겨져 있던 두 번째 문제가 드러남:
+
+- 강 carving은 base 고도에 관계없이 flow_norm에 따라 최대 2m까지 파기 때문에
+  하구 근처 지형이 sea level 아래(−2m)로 내려간다.
+- 바다 쉐이더는 `depth = max(0, waterY − terrainY)`가 양수면 어디든 물을
+  렌더한다. 강 채널 지형이 음수이므로 바다 쉐이더가 "얕은 물가"(shore/wet-sand)
+  모드로 강 채널 안까지 물을 그린다.
+- 강 ribbon 알파를 페이드해도 그 아래 바다 쉐이더가 그대로 드러나서 어색함.
+
+**따라서 두 단계로 해결:**
+
+1. **Bake bed floor** (`RIVER_CARVE_MIN_BED_Y_M = 0.1 m`): `sample_elevation_m`
+   에서 carve가 post-carve 지형을 sea level 아래로 끌지 못하게 clamp. 내륙
+   (pre_carve 높음)에서는 natural carve < limit이라 영향 없음. 하구 근처에서만
+   bed가 0.1 m 위로 들어올려짐 → 바다 쉐이더의 depth query가 0이 되어 shore
+   렌더링이 꺼짐.
+2. **Ribbon alpha fade** (§10.4): per-vertex `mouthFactor`로 ribbon을 페이드.
+   Bed floor와 어우러져 페이드 범위 `LOW=0.2 m, HIGH=0.6 m` 선정. Lip
+   zone(bed=0.1 m → ribbon Y=0.7 m)은 **완전히 보이고**, Phase-4 polyline이
+   coast 너머 sea cell로 이어지는 구간(bed < 0, ribbon Y < 0.6)에서만
+   페이드가 발동해 ribbon 끝이 바다에 녹아든다.
+
+**색 팔레트 전역 불변**: 두 단계 모두 색 uniform은 건드리지 않는다. Bed floor는
+geometry만 수정, ribbon fade는 알파에만 곱함. `mouthFactor = 0`인 vertex는
+셰이더 출력이 기존과 비트 단위 동일.
+
+4번(팔레트 통일)은 **채택하지 않음**. 2번(delta 지형)과 3번(sediment plume)은
+worldgen 개편 타이밍에 별도 과제.
+
+### 10.4 구현 메모
+
+- **하구 판정**: 별도 메타데이터가 필요 없다. `mouthFactor`는 vertex의 수면 Y
+  (=bed + `RIVER_DEPTH_OFFSET_M`) 기반 smoothstep. Bed floor가 하구 근처 bed를
+  sea level 근처로 들어 올려놓았기 때문에, Y-기반 판정이 자연스럽게 "sea level
+  에 가까움"을 "하구에 있음"과 동일하게 인식한다. 내륙 sink/호수 하구에도
+  동일한 로직이 적용되지만 현재 worldgen에 호수 종단이 없으므로 실질 영향 없음.
+- **색 처리 범위**: 셰이더의 색 관련 식(`waterColor`, `reflectionMix`, 바다 색
+  mix 등)은 건드리지 않음. `mouthFactor`는 오직 최종 알파에만 곱한다:
+  `alpha = bankAlpha * (1 - mouthFactor)`. `mouthFactor = 0`일 때 기존 출력과
+  비트 단위 동일 — regression은 `mouthFactor > 0` 영역에서만 발생 가능.
+- **Bake 재실행 필요**: `RIVER_CARVE_MIN_BED_Y_M` 상수는 baked heightmap에 구워진다.
+  변경 후 `terrain-gen bake` 필수.

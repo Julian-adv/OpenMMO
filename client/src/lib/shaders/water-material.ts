@@ -32,6 +32,7 @@ import {
   type WaterMaterialResult,
   waterFallbackTex,
   waterWetnessFallbackTex,
+  waterSplatFallbackTex,
   waveConfigs,
 } from './water-types'
 
@@ -40,6 +41,7 @@ export {
   waterFallbackTex,
   waterWetnessFallbackTex,
   waterHeightFallbackTex,
+  waterSplatFallbackTex,
 } from './water-types'
 export type {
   WaterMaterialOptions,
@@ -102,6 +104,7 @@ export function createWaterMaterial(
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
   const wetnessMapTex = texture(options.wetnessMap ?? waterWetnessFallbackTex)
+  const splatMapTex = texture(options.splatMap ?? waterSplatFallbackTex)
   const noiseTex = texture(getNoiseTexture())
   const uCaptureMode = uniform(0)
 
@@ -517,6 +520,14 @@ export function createWaterMaterial(
     const depthFactor = clamp(depth.div(uMaxDepth), 0.0, 1.0)
     const sunY = uSunDirection.y
 
+    // River-proximity gate. Byte 1 of the splatmap (G channel) ramps
+    // 0 → 1 from a river center out to RIVER_FOAM_SUPPRESS_RADIUS_M. We
+    // square it so surface effects (foam, wet sand, caustics) fade in
+    // softly past the near-river zone rather than linearly — without
+    // this, estuaries show a sharp step-edge where each effect resumes.
+    const riverFoamGate = splatMapTex.sample(toHeightmapUV(vUv)).g.toVar()
+    riverFoamGate.assign(riverFoamGate.mul(riverFoamGate))
+
     // Base water color (4-stop depth gradient)
     const waterColor = buildDepthColor(depthFactor).toVar()
 
@@ -541,8 +552,11 @@ export function createWaterMaterial(
     // Blend refraction into water color
     waterColor.assign(mix(waterColor, refraction.color, refraction.mixFactor))
 
-    // Underwater caustics
-    waterColor.addAssign(buildCaustics(vOrigWorldPos, depthFactor))
+    // Underwater caustics — gated by river proximity so the animated
+    // sun-dapple pattern doesn't read across the river mouth.
+    waterColor.addAssign(
+      buildCaustics(vOrigWorldPos, depthFactor).mul(riverFoamGate)
+    )
 
     // Specular highlights + sun sparkles
     const { specular, sparkle } = buildSpecular(
@@ -625,8 +639,10 @@ export function createWaterMaterial(
     color.mulAssign(nightDarken.mul(nightExtra))
 
     // Additive foam (after night darkening so foam white isn't darkened)
-    color.addAssign(foam.foamAdd)
-    color.addAssign(vec3(1, 1, 1).mul(foam.shoreBaseTex.mul(0.4)))
+    color.addAssign(foam.foamAdd.mul(riverFoamGate))
+    color.addAssign(
+      vec3(1, 1, 1).mul(foam.shoreBaseTex.mul(0.4).mul(riverFoamGate))
+    )
 
     // Alpha
     const a1 = mix(
@@ -641,22 +657,33 @@ export function createWaterMaterial(
     )
     const refrAlphaBoost = refraction.mixFactor.mul(0.9)
     const alpha = max(baseAlpha, refrAlphaBoost)
-      .add(foam.foamWithTex.mul(0.9))
+      .add(foam.foamWithTex.mul(riverFoamGate).mul(0.9))
       .add(sparkle)
       .min(1.0)
       .toVar()
 
-    // Shore edge
-    alpha.mulAssign(max(shore.holeAlpha, shore.holeFoamFringe))
+    // Shore edge — attenuate the foamy fringe near river mouths so the
+    // estuary surface reads as continuous water rather than a white
+    // collar cutting across the river. `holeAlpha` is left untouched so
+    // the wet-sand / hole-in-water pattern past the foam band still
+    // renders (the ribbon will cover it via alpha fade).
+    alpha.mulAssign(
+      max(shore.holeAlpha, shore.holeFoamFringe.mul(riverFoamGate))
+    )
 
-    // Wet sand
+    // Wet sand — also gated by river proximity. Estuary sand should
+    // read as a dry delta blending into the river ribbon, not as an
+    // oceanic wet-sand band. The same gate keeps the wet-darken +
+    // alpha-boost out of the foam-suppression radius.
     const wet = buildWetSand(
       refraction.color,
       shore.holeAlpha,
       shore.holeFoamFringe
     )
-    color.assign(mix(color, wet.wetTerrainColor, wet.colorWetBlend))
-    alpha.assign(max(alpha, wet.wetBlend.mul(0.6)))
+    color.assign(
+      mix(color, wet.wetTerrainColor, wet.colorWetBlend.mul(riverFoamGate))
+    )
+    alpha.assign(max(alpha, wet.wetBlend.mul(0.6).mul(riverFoamGate)))
 
     // Night alpha reduction for very shallow water
     const veryShallowWeight = float(1).sub(
@@ -707,6 +734,7 @@ export function createWaterMaterial(
       uFoamMap: foamMapTex,
       uCausticsMap: causticsTex,
       uWetnessMap: wetnessMapTex,
+      uSplatMap: splatMapTex,
       uCaptureMode,
       uWaveA,
       uWaveB,

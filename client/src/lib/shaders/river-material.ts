@@ -45,7 +45,7 @@ function getCloudTexture(): THREE.Texture {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type N = any // TSL node — broad type for internal helper params
+type _N = any // TSL node — broad type for internal helper params
 
 export interface RiverMaterialOptions {
   normalMap: THREE.Texture
@@ -106,9 +106,11 @@ export function createRiverMaterial(
   const vClipPos = varying(vec4(0), 'r_clipPos')
   const vFlowDir = varying(vec2(0), 'r_flowDir')
   const vFlowNorm = varying(float(0), 'r_flowNorm')
+  const vMouthFactor = varying(float(0), 'r_mouthFactor')
 
   const aFlowDir = attribute('flowDir', 'vec2')
   const aFlowNorm = attribute('flowNorm', 'float')
+  const aMouthFactor = attribute('mouthFactor', 'float')
 
   // ── Vertex Shader ─────────────────────────────────────
 
@@ -118,6 +120,7 @@ export function createRiverMaterial(
     vWorldPos.assign(worldPos.xyz)
     vFlowDir.assign(aFlowDir)
     vFlowNorm.assign(aFlowNorm)
+    vMouthFactor.assign(aMouthFactor)
     const clipPos = cameraProjectionMatrix.mul(cameraViewMatrix).mul(worldPos)
     vClipPos.assign(clipPos)
     return clipPos
@@ -189,7 +192,9 @@ export function createRiverMaterial(
     const reflectDir = reflect(viewDir.negate(), reflNormal)
     const skyY = clamp(reflectDir.y.mul(0.5).add(0.5), 0.0, 1.0)
 
-    const nightFactor = float(1).sub(smoothstep(float(-0.15), float(0.05), sunY))
+    const nightFactor = float(1).sub(
+      smoothstep(float(-0.15), float(0.05), sunY)
+    )
     const twilightFactor = smoothstep(float(-0.15), float(0.0), sunY).mul(
       float(1).sub(smoothstep(float(0.05), float(0.3), sunY))
     )
@@ -248,13 +253,11 @@ export function createRiverMaterial(
     // Contrast boost: pow curve pushes sky mid-tones toward dark while
     // leaving near-white clouds intact. Higher exponent = deeper dark sky
     // vs bright clouds separation.
-    const contrastedSky = pow(photoSky, vec3(2.0, 2.0, 2.0))
+    const contrastedSky = photoSky.pow(vec3(2.0, 2.0, 2.0))
     // Photo has no ground/twilight/night variants — only apply during day
     // and fade out toward the horizon where the procedural gradient wins.
     const photoGate = smoothstep(float(0.15), float(0.45), skyY).mul(dayFactor)
-    skyReflection.assign(
-      mix(skyReflection, contrastedSky, photoGate.mul(0.95))
-    )
+    skyReflection.assign(mix(skyReflection, contrastedSky, photoGate.mul(0.95)))
 
     // Planar entity reflection
     const reflUV = vec2(screenUV.x, float(1.0).sub(screenUV.y))
@@ -269,9 +272,7 @@ export function createRiverMaterial(
     const specNormal = normalize(mix(vec3(0, 1, 0), rippleN, 0.3))
     const halfDir = normalize(vec3(uSunDirection).add(viewDir))
     const NdotH = max(dot(specNormal, halfDir), 0.0)
-    const specular = uSunColor.rgb
-      .mul(pow(NdotH, float(128)).mul(0.35))
-      .toVar()
+    const specular = uSunColor.rgb.mul(pow(NdotH, float(128)).mul(0.35)).toVar()
 
     const sparkleT = uTime.mul(0.05)
     const sp1 = normalMapTex.sample(
@@ -280,11 +281,9 @@ export function createRiverMaterial(
     const sp2 = normalMapTex.sample(
       vWorldPos.xz.mul(0.9).sub(flow.mul(sparkleT.mul(0.6)))
     ).g
-    const sunSparkleStrength = smoothstep(
-      float(0),
-      float(0.15),
-      sunY
-    ).mul(float(0.3).add(float(0.7).mul(sunY)))
+    const sunSparkleStrength = smoothstep(float(0), float(0.15), sunY).mul(
+      float(0.3).add(float(0.7).mul(sunY))
+    )
     const moonSparkleStrength = float(1)
       .sub(smoothstep(float(-0.05), float(0.05), sunY))
       .mul(0.15)
@@ -323,9 +322,17 @@ export function createRiverMaterial(
 
     // ── Alpha ──
     // River water is clearer near the banks — fade alpha from the channel
-    // toward the edge so gravel / sand show through instead of a hard cut.
-    const edgeFade = smoothstep(float(0.55), float(1.0), bankFactor)
-    const alpha = clamp(float(0.92).sub(edgeFade.mul(0.75)), 0.0, 1.0)
+    // toward the edge. Reaches α = 0 at the bank (bankFactor=1) so the
+    // ribbon's lateral boundary dissolves into the sand splat rather
+    // than terminating in a visible line where it meets the coast.
+    const edgeFade = smoothstep(float(0.4), float(1.0), bankFactor)
+    const bankAlpha = clamp(float(0.92).sub(edgeFade.mul(0.92)), 0.0, 1.0)
+    // Estuary fade: vMouthFactor=1 where the ribbon sits in open sea.
+    // Fully-opaque upstream, fully transparent at the mouth so the sea
+    // quad underneath takes over. Coverage of the sea shader's shoreline
+    // foam band is handled independently by the sea shader sampling the
+    // splatmap's river-proximity byte and attenuating its own foam term.
+    const alpha = bankAlpha.mul(float(1).sub(vMouthFactor))
 
     return vec4(color, alpha)
   })()

@@ -1040,6 +1040,7 @@
   {terrainGeometry}
   {terrainTiles}
   heightManager={terrainHeightManager}
+  splatManager={terrainSplatManager}
   normalMap={waterNormalMap}
   foamMap={waterFoamMap}
   causticsMap={waterCausticsMap}
