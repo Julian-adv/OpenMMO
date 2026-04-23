@@ -1,5 +1,9 @@
 import * as THREE from 'three'
 import type { NodeMaterial } from 'three/webgpu'
+import { vec2, float, smoothstep, max, clamp } from 'three/tsl'
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type N = any // TSL node — broad type for shared helper params
 
 // ─── Interfaces ─────────────────────────────────────────
 
@@ -83,6 +87,70 @@ export const waterHeightFallbackTex = new THREE.DataTexture(
   THREE.FloatType
 )
 waterHeightFallbackTex.needsUpdate = true
+
+// ─── Cloud Texture ─────────────────────────────────────
+
+// Sky-cloud reference photo (see doc/ASSETS.md). Non-tileable so we
+// MirroredRepeat to hide seams across the projected cloud plane.
+// Shared between river and water (sea) materials so they read the same
+// sky when sampled with the cloud-plane projection trick.
+let _cloudTex: THREE.Texture | null = null
+export function getCloudTexture(): THREE.Texture {
+  if (!_cloudTex) {
+    const loader = new THREE.TextureLoader()
+    _cloudTex = loader.load('/textures/white-cloud.jpg')
+    _cloudTex.wrapS = _cloudTex.wrapT = THREE.MirroredRepeatWrapping
+    _cloudTex.minFilter = THREE.LinearMipMapLinearFilter
+    _cloudTex.magFilter = THREE.LinearFilter
+    // Photo is sRGB-encoded; without this it's treated as linear and all
+    // colors wash out to a milky pale since gamma decode is skipped.
+    _cloudTex.colorSpace = THREE.SRGBColorSpace
+  }
+  return _cloudTex
+}
+
+// ─── Cloud Plane Sampling ──────────────────────────────
+
+// Project the reflection ray onto a virtual cloud plane and sample the
+// sky photo. Caller picks the reflectDir — river uses its sky reflectDir
+// directly; sea uses a dedicated almost-flat normal because the rippled
+// `reflNormal` (mix factor 0.3) would blow the projected UV gradient out
+// and force the lowest mip into a milky smear.
+//
+// Returns `cloudColor` (squared for cloud/sky contrast) and `cloudWeight`
+// (horizon fade × dayFactor — photo has no night/twilight variants).
+//
+// `cloudFreeY` floor of 0.25 (not 0.15) prevents mip saturation at near-
+// grazing angles where `cloudHeight / reflectDir.y` blows the UV up.
+const CLOUD_HEIGHT = 150
+const CLOUD_UV_SCALE = 1 / 30
+const CLOUD_DRIFT_RATE: readonly [number, number] = [0.0015, 0.0008]
+
+export function sampleCloudPhoto(
+  cloudReflectDir: N,
+  worldXZ: N,
+  uTime: N,
+  dayFactor: N,
+  cloudTex: N
+): { cloudColor: N; cloudWeight: N } {
+  const cloudSkyY = clamp(cloudReflectDir.y.mul(0.5).add(0.5), 0.0, 1.0)
+  const cloudFreeY = max(cloudReflectDir.y, float(0.25))
+  const cloudPlane = worldXZ.add(
+    cloudReflectDir.xz.mul(float(CLOUD_HEIGHT).div(cloudFreeY))
+  )
+  const cloudUV = cloudPlane
+    .mul(CLOUD_UV_SCALE)
+    .add(
+      vec2(float(CLOUD_DRIFT_RATE[0]), float(CLOUD_DRIFT_RATE[1])).mul(uTime)
+    )
+  const photoSky = cloudTex.sample(cloudUV).rgb
+  // x*x is materially cheaper than pow(x, 2) on WebGPU (1 MAD vs ~3 ops).
+  const cloudColor = photoSky.mul(photoSky)
+  const cloudWeight = smoothstep(float(0.15), float(0.45), cloudSkyY).mul(
+    dayFactor
+  )
+  return { cloudColor, cloudWeight }
+}
 
 // ─── Wave Configuration ────────────────────────────────
 

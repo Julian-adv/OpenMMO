@@ -34,6 +34,8 @@ import {
   waterWetnessFallbackTex,
   waterSplatFallbackTex,
   waveConfigs,
+  getCloudTexture,
+  sampleCloudPhoto,
 } from './water-types'
 
 // Re-export public API from water-types
@@ -106,6 +108,7 @@ export function createWaterMaterial(
   const wetnessMapTex = texture(options.wetnessMap ?? waterWetnessFallbackTex)
   const splatMapTex = texture(options.splatMap ?? waterSplatFallbackTex)
   const noiseTex = texture(getNoiseTexture())
+  const cloudTex = texture(getCloudTexture())
   const uCaptureMode = uniform(0)
 
   // ── Varyings ──
@@ -311,7 +314,7 @@ export function createWaterMaterial(
       mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
     )
 
-    return { skyReflection, reflectionSample }
+    return { skyReflection, reflectionSample, dayFactor }
   }
 
   function buildShoreMask(depth: N, worldPos: N, waveSpeed: N) {
@@ -490,7 +493,13 @@ export function createWaterMaterial(
     const p = worldPos.xyz
     const vtxTerrainH = heightmapTex.sample(toHeightmapUV(vUv)).r
     const vtxDepth = max(float(0), p.y.sub(vtxTerrainH))
-    const waveDamping = smoothstep(float(0.0), float(1.5), vtxDepth)
+    // Cubic ease keeps endpoints fixed but compresses the shallow half so
+    // the emerald band stays calm — cloud reflection downstream amplified
+    // the perceived wave motion and a plain smoothstep read as choppy.
+    const waveDamping = pow(
+      smoothstep(float(0.0), float(1.5), vtxDepth),
+      float(3.0)
+    )
 
     const gerstnerOffset = gerstnerWave(uWaveA, p, uTime)
       .add(gerstnerWave(uWaveB, p, uTime))
@@ -565,11 +574,26 @@ export function createWaterMaterial(
       vWorldPos
     )
 
-    // Sky + entity reflection
-    const { skyReflection, reflectionSample } = buildSkyReflection(
+    // Sky + entity reflection.
+    const { skyReflection, reflectionSample, dayFactor } = buildSkyReflection(
       surfaceNormal,
       viewDir,
       screenUV
+    )
+
+    // Cloud-photo reflection. Dedicated almost-flat normal — sea's rippled
+    // `reflNormal` (mix 0.3) blows the projected UV gradient out and forces
+    // the lowest mip. Applied AFTER the mid-color tint below (not folded
+    // into `skyReflection`) so the photo survives the ~50× attenuation of
+    // the 70% midColor tint and the small fresnel sky weight.
+    const cloudReflNormal = normalize(mix(vec3(0, 1, 0), surfaceNormal, 0.05))
+    const cloudReflectDir = reflect(viewDir.negate(), cloudReflNormal)
+    const { cloudColor, cloudWeight } = sampleCloudPhoto(
+      cloudReflectDir,
+      vWorldPos.xz,
+      uTime,
+      dayFactor,
+      cloudTex
     )
 
     // Wave timing (shared by shore mask + foam)
@@ -620,6 +644,35 @@ export function createWaterMaterial(
     )
       .add(specular.mul(shallowDamp))
       .toVar()
+
+    // Full-color cloud overlay on the deep body. Gated OUT of the emerald
+    // shallows (depthFactor < 0.25) because the photo's blue-sky pedestal
+    // between cloud shapes would push the coastal green toward blue.
+    // Also off below 0.05 so it doesn't bleed onto the wet-sand strip.
+    const cloudDepthGate = smoothstep(float(0.25), float(0.55), depthFactor)
+    const cloudMix = cloudDepthGate.mul(0.65)
+    color.assign(mix(color, cloudColor, cloudWeight.mul(cloudMix)))
+
+    // Bright-cloud highlight in the emerald band — the complement window of
+    // the gate above. We still want the white cloud SHAPES to read here,
+    // just not the blue pedestal between them. Threshold on channel-max
+    // luminance to drop the pedestal, then blend pure white (mixing white
+    // into emerald lifts V along the same hue, so the green survives).
+    const cloudLum = max(cloudColor.r, max(cloudColor.g, cloudColor.b))
+    const cloudBrightMask = smoothstep(float(0.4), float(0.95), cloudLum)
+    const highlightBandGate = smoothstep(
+      float(0.05),
+      float(0.15),
+      depthFactor
+    ).mul(float(1).sub(cloudDepthGate))
+    const highlightMix = highlightBandGate.mul(0.25)
+    color.assign(
+      mix(
+        color,
+        vec3(1, 1, 1),
+        cloudWeight.mul(highlightMix).mul(cloudBrightMask)
+      )
+    )
 
     // Entity reflection overlay
     color.assign(mix(color, reflectionSample.rgb, reflectionSample.a.mul(0.3)))

@@ -25,24 +25,11 @@ import {
   cameraProjectionMatrix,
   cameraViewMatrix,
 } from 'three/tsl'
-import { waterFallbackTex } from './water-types'
-
-// Sky-cloud reference photo (see doc/ASSETS.md). Non-tileable so we
-// MirroredRepeat to hide seams across the projected cloud plane.
-let _cloudTex: THREE.Texture | null = null
-function getCloudTexture(): THREE.Texture {
-  if (!_cloudTex) {
-    const loader = new THREE.TextureLoader()
-    _cloudTex = loader.load('/textures/white-cloud.jpg')
-    _cloudTex.wrapS = _cloudTex.wrapT = THREE.MirroredRepeatWrapping
-    _cloudTex.minFilter = THREE.LinearMipMapLinearFilter
-    _cloudTex.magFilter = THREE.LinearFilter
-    // Photo is sRGB-encoded; without this it's treated as linear and all
-    // colors wash out to a milky pale since gamma decode is skipped.
-    _cloudTex.colorSpace = THREE.SRGBColorSpace
-  }
-  return _cloudTex
-}
+import {
+  waterFallbackTex,
+  getCloudTexture,
+  sampleCloudPhoto,
+} from './water-types'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type _N = any // TSL node — broad type for internal helper params
@@ -260,16 +247,12 @@ export function createRiverMaterial(
     // prevents the wobble collapsing into a directional drift; tune
     // agitation via SHAKE_RATE, not the imbalance.
     //
-    // Three speed axes, all decoupled from surface ripple (`scrollSpeed`
-    // above):
+    // Two speed axes, decoupled from surface ripple (`scrollSpeed` above):
     //   WOBBLE_SHAKE_RATE — opposed-scroll rate (per-fragment oscillation)
     //   WOBBLE_DRIFT_RATE — constant V offset on both samples (how fast
     //     the wobble pattern rides the current)
-    //   CLOUD_DRIFT_RATE  — sky-cloud photo's own drift, applied to
-    //     cloudUV below — independent of the water surface
     const WOBBLE_SHAKE_RATE = float(0.05)
     const WOBBLE_DRIFT_RATE = float(0.1)
-    const CLOUD_DRIFT_RATE = vec2(float(0.0015), float(0.0008))
     const reflT = uTime.mul(WOBBLE_SHAKE_RATE)
     const reflDrift = vec2(float(0), uTime.mul(WOBBLE_DRIFT_RATE))
     const reflNUV1 = meshUV
@@ -323,34 +306,17 @@ export function createRiverMaterial(
     const sunDot = max(dot(reflectDir, vec3(uSunDirection)), 0.0)
     skyReflection.addAssign(uSunColor.rgb.mul(pow(sunDot, float(8)).mul(0.25)))
 
-    // ── Sky photo reflection ──
-    // There's no skybox; project the reflection ray onto an imagined cloud
-    // plane and sample the sky-cloud photo directly as the reflected color.
-    // cloudPlane UV = `worldXZ + reflectDir.xz * h / reflectDir.y` — without
-    // the worldXZ term every pixel samples almost the same point (viewDir is
-    // a single uniform here), so the sky would look like a uniform smear
-    // instead of distinct patches. Height + scale are sized so the
-    // reflection offset stays within one mirror tile of the image.
-    const cloudHeight = float(150)
-    const cloudFreeY = max(reflectDir.y, float(0.15))
-    const cloudPlane = vWorldPos.xz.add(
-      reflectDir.xz.mul(cloudHeight.div(cloudFreeY))
+    // Sky photo: project reflectDir onto a virtual cloud plane and sample.
+    // No skybox here, so the photo IS the sky color. River reuses its sky
+    // `reflectDir` (already built from a near-flat normal); see helper.
+    const { cloudColor, cloudWeight } = sampleCloudPhoto(
+      reflectDir,
+      vWorldPos.xz,
+      uTime,
+      dayFactor,
+      cloudTex
     )
-    // Smaller divisor = more of the photo per camera view. Too small (~1/10)
-    // and the steep UV gradient forces the lowest mip → milky average.
-    const CLOUD_UV_SCALE = 1 / 30
-    const cloudUV = cloudPlane
-      .mul(CLOUD_UV_SCALE)
-      .add(CLOUD_DRIFT_RATE.mul(uTime))
-    const photoSky = cloudTex.sample(cloudUV).rgb
-    // Contrast boost: pow curve pushes sky mid-tones toward dark while
-    // leaving near-white clouds intact. Higher exponent = deeper dark sky
-    // vs bright clouds separation.
-    const contrastedSky = photoSky.pow(vec3(2.0, 2.0, 2.0))
-    // Photo has no ground/twilight/night variants — only apply during day
-    // and fade out toward the horizon where the procedural gradient wins.
-    const photoGate = smoothstep(float(0.15), float(0.45), skyY).mul(dayFactor)
-    skyReflection.assign(mix(skyReflection, contrastedSky, photoGate.mul(0.95)))
+    skyReflection.assign(mix(skyReflection, cloudColor, cloudWeight.mul(0.95)))
 
     // Planar entity reflection
     const reflectionSample = reflectionTex.sample(
