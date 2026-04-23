@@ -93,6 +93,24 @@ pub(super) const RIVER_MOUTH_FAN_BASE_LOW_M: f32 = 0.0;
 pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 3.0;
 pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 1.2;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
+/// Base spatial frequency (cycles per meter) of the along-river noise that
+/// widens and narrows the pebble/sand band so it doesn't read as a constant
+/// ribbon parallel to the centerline. ~1/22 gives ~22 m wavelength — short
+/// enough to see a few cycles across one screen width at typical camera
+/// zoom, long enough that each bulge still reads as a point bar and not
+/// as jittery band-edge noise.
+pub(super) const RIVER_BAND_NOISE_FREQ: f32 = 1.0 / 22.0;
+/// Band-width scale amplitude around 1.0. With noise in [-1, 1] and AMP
+/// 0.45 the band scales over [0.55, 1.45] — a point bar can grow to ~45%
+/// wider than the baseline, or tighten to ~55% of it. Clamped below
+/// against `water_half + 0.5 m` so the water edge always has a minimal
+/// sand strip regardless of dips.
+pub(super) const RIVER_BAND_NOISE_AMP: f32 = 0.45;
+/// Octave count for the along-river band noise. 2 octaves give a smooth
+/// primary wave with one layer of fine jitter; more octaves push the
+/// variation down into sub-10 m wobble that reads as texture noise rather
+/// than geomorphic shape.
+pub(super) const RIVER_BAND_NOISE_OCTAVES: u32 = 2;
 /// Two rounds smooth 8 m source vertices into a visible curve at 1 m tile
 /// resolution.
 pub(super) const RIVER_CHAIKIN_ITERATIONS: u32 = 2;

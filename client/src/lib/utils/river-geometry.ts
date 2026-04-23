@@ -19,7 +19,7 @@ const SEA_EXTEND_SURFACE_Y = SEA_LEVEL + 0.02
  * amount above the sampled ground puts the water at roughly the rim of
  * the plain elevation regardless of flow.
  */
-const RIVER_DEPTH_OFFSET_M = 0.6
+const RIVER_DEPTH_OFFSET_M = 0.5
 
 /**
  * Scale applied to baked surface widths so the water ribbon covers the

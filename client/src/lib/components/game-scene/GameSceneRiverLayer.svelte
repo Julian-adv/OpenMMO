@@ -19,6 +19,7 @@
     riverDataManager: RiverDataManager | null
     normalMap?: THREE.Texture | null
     reflectionMap?: THREE.Texture | null
+    refractionMap?: THREE.Texture | null
     time?: number
     sunDirection?: THREE.Vector3 | null
     sunColor?: THREE.Color | null
@@ -32,6 +33,7 @@
     riverDataManager,
     normalMap = null,
     reflectionMap = null,
+    refractionMap = null,
     time = 0,
     sunDirection = null,
     sunColor = null,
@@ -104,7 +106,12 @@
     return riverMaterialResult?.material ?? placeholderMaterial
   }
 
-  /** Called from the game loop each frame to sync uniforms. */
+  /** Called from the game loop each frame to sync uniforms.
+   *  Reflection/refraction textures are captured once at material
+   *  creation (they're render targets set up at scene init and never
+   *  swapped); WebGPU bind groups lock to the initial reference anyway
+   *  (see `webgpu_precompile_bind_group_staleness`), so reassigning
+   *  them per frame is a no-op — skip the extra write. */
   export function updateUniforms() {
     if (!riverMaterialResult) return
     const u = riverMaterialResult.uniforms
@@ -113,7 +120,6 @@
     if (sunColor) u.uSunColor.value.copy(sunColor)
     if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
     u.uMoonBrightness.value = moonBrightness
-    if (reflectionMap) u.uReflectionMap.value = reflectionMap
   }
 
   function disposeTile(id: string) {
@@ -220,6 +226,7 @@
     riverMaterialResult = createRiverMaterial({
       normalMap,
       reflectionMap,
+      refractionMap,
     })
     const mat = riverMaterialResult.material
     for (const mesh of tileMeshes.values()) {

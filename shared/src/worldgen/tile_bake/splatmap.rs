@@ -3,14 +3,15 @@
 
 use super::super::global_map::GlobalMap;
 use super::super::grass_patches::PatchSample;
-use super::super::noise::smoothstep;
+use super::super::noise::{fbm_wrap_x, smoothstep};
 use super::super::vector_features::{
     min_distance_to_segments, nearest_river_segment, RiverSegment, Segment,
 };
 use super::constants::{
     CLIFF_BLEND_CORE_M, CLIFF_FADE_START, CLIFF_PROXIMITY_RADIUS_M, CLIFF_PROXIMITY_SEARCH_CELLS,
-    CLIFF_SLOPE_THRESHOLD, COAST_FADE_SPAN_M, COAST_SAND_M, GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF,
-    PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW, RIVER_FADE_SPAN_M,
+    CLIFF_SLOPE_THRESHOLD, COAST_FADE_SPAN_M, COAST_SAND_M, DETAIL_GAIN, DETAIL_LACUNARITY,
+    GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW,
+    RIVER_BAND_NOISE_AMP, RIVER_BAND_NOISE_FREQ, RIVER_BAND_NOISE_OCTAVES, RIVER_FADE_SPAN_M,
     RIVER_FOAM_SUPPRESS_RADIUS_M, RIVER_MOUTH_SAND_COAST_DIST_M, RIVER_SAND_WIDTH_MULT,
     ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND,
     SLOPE_CLIFF_FULL, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
@@ -166,12 +167,31 @@ pub(super) fn bake_splatmap(
                 nearest_cliff_distance(&cliff_mask, cx, cz)
             };
 
-            let (river_d_m, river_width_m) = nearest_river_segment(wx, wz, river_segs)
-                .map(|(d, idx, t)| {
-                    let s = &river_segs[idx];
-                    (d, lerp(s.width_a, s.width_b, t))
-                })
-                .unwrap_or((f32::INFINITY, 0.0));
+            // Along-river noise on the sand-band half-width. Sampled at the
+            // *projection* onto the polyline (not the cell itself) so both
+            // banks at a given cross-section get the same scale — keeps the
+            // band symmetric per station while letting it widen and
+            // narrow as you move along the river.
+            let (river_d_m, river_width_m, river_band_scale) =
+                nearest_river_segment(wx, wz, river_segs)
+                    .map(|(d, idx, t)| {
+                        let s = &river_segs[idx];
+                        let px = lerp(s.ax, s.bx, t);
+                        let pz = lerp(s.az, s.bz, t);
+                        let n = fbm_wrap_x(
+                            &ctx.detail_noise,
+                            px + world_size * 0.5,
+                            pz + world_size * 0.5,
+                            world_size,
+                            RIVER_BAND_NOISE_FREQ,
+                            RIVER_BAND_NOISE_OCTAVES,
+                            DETAIL_LACUNARITY,
+                            DETAIL_GAIN,
+                        );
+                        let scale = 1.0 + n * RIVER_BAND_NOISE_AMP;
+                        (d, lerp(s.width_a, s.width_b, t), scale)
+                    })
+                    .unwrap_or((f32::INFINITY, 0.0, 1.0));
 
             // `classify_splat` only consumes the patch sample in its plain
             // branch; passing a closure skips the warp + Voronoi query on
@@ -181,6 +201,7 @@ pub(super) fn bake_splatmap(
                     is_sea: map.land_mask[gi] == 0,
                     river_d_m,
                     river_width_m,
+                    river_band_scale,
                     road_d_m: min_distance_to_segments(wx, wz, road_segs),
                     h_center,
                     slope,
@@ -218,6 +239,11 @@ struct SplatInputs {
     /// Width of the nearest river at its projection point (m). Zero when
     /// no river is in range — the priority ladder falls through naturally.
     river_width_m: f32,
+    /// Scalar multiplier on `river_sand_half_width_m`, sampled from a
+    /// low-frequency noise along the river centerline. 1.0 = no variation
+    /// (tests, no-river cells). Typical bake range ~[0.55, 1.45] (see
+    /// `RIVER_BAND_NOISE_AMP`).
+    river_band_scale: f32,
     road_d_m: f32,
     h_center: f32,
     slope: f32,
@@ -233,15 +259,22 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         is_sea,
         river_d_m,
         river_width_m,
+        river_band_scale,
         road_d_m,
         h_center,
         slope,
         coast_d_m,
         cliff_proximity_m,
     } = inputs;
-    // 1 m floor on the sand band protects degenerate zero-width segments
-    // from disappearing entirely.
-    let river_sand_half_width_m = (river_width_m * RIVER_SAND_WIDTH_MULT).max(1.0);
+    // Along-river noise scales the sand-band half-width so point bars
+    // widen and pinch instead of reading as a constant ribbon. Floor at
+    // `water_half + 0.5 m` so even at the noise's trough the water edge
+    // still carries a thin sand strip (otherwise banks would briefly
+    // touch grass directly); the 1 m absolute floor still protects
+    // degenerate zero-width segments from disappearing entirely.
+    let water_half_m = (river_width_m * 0.5).max(0.5);
+    let river_sand_half_width_m =
+        (river_width_m * RIVER_SAND_WIDTH_MULT * river_band_scale).max(water_half_m + 0.5).max(1.0);
     if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
         // Roads override every biome so the network stays visible. Secondary
         // is PAL_GROUND so the fade outer edge (blend=255 → pure GROUND) meets
@@ -300,9 +333,8 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
             if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M && is_pebble {
                 (PAL_CLIFF, 0)
             } else {
-                let water_half_width_m = (river_width_m * 0.5).max(0.5);
-                let bank_width = (river_sand_half_width_m - water_half_width_m).max(1e-3);
-                let bank_t = ((river_d_m - water_half_width_m) / bank_width).clamp(0.0, 1.0);
+                let bank_width = (river_sand_half_width_m - water_half_m).max(1e-3);
+                let bank_t = ((river_d_m - water_half_m) / bank_width).clamp(0.0, 1.0);
                 let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
                 let grass_t = (1.0 - highland).max(0.0);
                 // Inherit the plain branch's patchy Voronoi pattern so the
@@ -434,6 +466,7 @@ mod tests {
             is_sea: false,
             river_d_m: f32::INFINITY,
             river_width_m: 0.0,
+            river_band_scale: 1.0,
             road_d_m: f32::INFINITY,
             h_center: 10.0,
             slope: 0.0,

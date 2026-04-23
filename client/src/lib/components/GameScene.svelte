@@ -1061,6 +1061,7 @@
   {riverDataManager}
   normalMap={waterNormalMap}
   reflectionMap={reflectionTexture}
+  refractionMap={refractionTexture}
   time={waterTime}
   sunDirection={waterSunDir}
   sunColor={waterSunColor}

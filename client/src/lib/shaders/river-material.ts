@@ -50,6 +50,7 @@ type _N = any // TSL node — broad type for internal helper params
 export interface RiverMaterialOptions {
   normalMap: THREE.Texture
   reflectionMap?: THREE.Texture | null
+  refractionMap?: THREE.Texture | null
 }
 
 export interface RiverMaterialUniforms {
@@ -59,6 +60,7 @@ export interface RiverMaterialUniforms {
   uCameraDirection: { value: THREE.Vector3 }
   uMoonBrightness: { value: number }
   uReflectionMap: { value: THREE.Texture }
+  uRefractionMap: { value: THREE.Texture }
   uNormalMap: { value: THREE.Texture }
 }
 
@@ -95,9 +97,15 @@ export function createRiverMaterial(
   const uShallowColor = uniform(new THREE.Color(0.06, 0.14, 0.22))
   const uMidColor = uniform(new THREE.Color(0.02, 0.05, 0.12))
 
+  // UV distortion amplitude in screen space. Keep modest — values above
+  // ~0.15 push samples far enough that the refraction reads as random
+  // color flecks rather than a coherent bed with ripples on top.
+  const uRefractionStrength = uniform(0.04)
+
   // ── Texture Nodes ──
   const normalMapTex = texture(options.normalMap)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
+  const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
   const cloudTex = texture(getCloudTexture())
 
   // ── Varyings / Attributes ──
@@ -204,6 +212,41 @@ export function createRiverMaterial(
     // ── View / screen setup ──
     const viewDir = normalize(vec3(uCameraDirection).negate())
     const screenUV = vClipPos.xy.mul(0.5).add(0.5)
+    // Render targets store rows top-down; flip Y once and reuse for
+    // both refraction and reflection screen-space sampling below.
+    const screenUVFlipped = vec2(screenUV.x, float(1.0).sub(screenUV.y))
+
+    // ── Refraction: show river bottom through shallow bank water ──
+    // "Shallow" is proxied by `bankFactor` (no real depth). Two tricks to
+    // keep the refraction readable as *water over bed* rather than as
+    // bare terrain bleeding through a transparent ribbon:
+    //
+    //   1) Peak inside the opaque band. The refraction ramp peaks
+    //      around bankFactor 0.6, matching the alpha edge-fade start
+    //      below — so the strongest refraction sits in still-opaque
+    //      water. Peaking later would let the alpha fade reveal
+    //      identical raw terrain through the same pixels, masking
+    //      the wobble entirely.
+    //
+    //   2) Tint the sampled bed with a teal absorption filter. Without
+    //      this the refracted pixel is indistinguishable from the raw
+    //      terrain (same colors, same scale) — the wobble reads as
+    //      noise, not as water. The tint makes the refracted region
+    //      visibly cooler/greener, so the eye registers it as shallow
+    //      clear water over a colored bed.
+    const refrDistort = rippleN.xz.mul(uRefractionStrength)
+    const refrUV = clamp(screenUVFlipped.add(refrDistort), 0.0, 1.0)
+    const rawRefr = refractionTex.sample(refrUV).rgb
+    // Shallow-water absorption tint — a classic teal that reads as
+    // clear freshwater. Mix weight 0.55 keeps the bed color recognizable
+    // (pebbles still look pebbly) while shifting the hue clearly away
+    // from raw terrain.
+    const waterAbsorbTint = vec3(0.45, 0.75, 0.7)
+    const tintedRefr = mix(rawRefr, rawRefr.mul(waterAbsorbTint), 0.55)
+    const refrShallow = smoothstep(float(0.15), float(0.6), bankFactor).toVar()
+    const refrMouthFade = float(1).sub(vMouthFactor)
+    const refrMix = refrShallow.mul(refrMouthFade).mul(0.9).toVar()
+    waterColor.assign(mix(waterColor, tintedRefr, refrMix))
 
     // ── Sky + planar reflection (same shape as ocean, condensed) ──
     // Use an almost-flat normal for the sky reflection: the ripple amplitude
@@ -310,9 +353,8 @@ export function createRiverMaterial(
     skyReflection.assign(mix(skyReflection, contrastedSky, photoGate.mul(0.95)))
 
     // Planar entity reflection
-    const reflUV = vec2(screenUV.x, float(1.0).sub(screenUV.y))
     const reflectionSample = reflectionTex.sample(
-      clamp(reflUV.add(rippleN.xz.mul(0.01)), 0.0, 1.0)
+      clamp(screenUVFlipped.add(rippleN.xz.mul(0.01)), 0.0, 1.0)
     )
     skyReflection.assign(
       mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
@@ -364,7 +406,14 @@ export function createRiverMaterial(
     // sky-tinted band against the teal shoreline. Fade the base toward the
     // sea's value on the same `colorFade` curve as the body tint so both
     // transitions land together without introducing a new fade front.
-    const reflectionBase = mix(float(0.35), float(0.03), colorFade)
+    // Also fade toward the banks — where we just baked in the refraction
+    // sample, heavy sky reflection would wash the bed color back out.
+    const reflectionBaseEstuary = mix(float(0.35), float(0.03), colorFade)
+    const reflectionBase = mix(
+      reflectionBaseEstuary,
+      float(0.05),
+      refrShallow.mul(0.9)
+    )
     const reflectionMix = clamp(reflectionBase.add(fresnel), 0.0, 0.9)
     // Specular + sparkle also need to fade at the mouth. They bypass
     // reflectionMix (added directly to color) so without damping the
@@ -388,11 +437,20 @@ export function createRiverMaterial(
     // ── Alpha ──
     // River water is clearer near the banks — fade alpha from the channel
     // toward the edge. The ribbon geometry is built 1.5×+0.5m wider than
-    // the baked channel so it safely covers the carved sand band; a tight
-    // outer transparent margin (bankFactor > 0.9) absorbs that slack
-    // without eating into the visible water body.
-    const edgeFade = smoothstep(float(0.6), float(0.9), bankFactor)
-    const bankAlpha = clamp(float(0.92).sub(edgeFade.mul(0.92)), 0.0, 1.0)
+    // the baked channel so the outer strip sits over the carved pebble
+    // bank that should read as exposed shore, not as submerged bed.
+    //
+    // Two competing constraints:
+    //   • Fade must start *after* the refraction peak (≈0.6) — if alpha
+    //     drops while refraction is still strong, direct-terrain view
+    //     leaks through the same pixels and the wobble disappears.
+    //   • Fade must finish before the outer geometry margin so the
+    //     pebble bank behind it is visible — a late/long fade leaves
+    //     the water stamped over the shore.
+    // A narrow fast ramp threads both: opaque through the refraction
+    // band, then a hard drop that uncovers the shore.
+    const edgeFade = smoothstep(float(0.55), float(0.85), bankFactor)
+    const bankAlpha = clamp(float(0.95).sub(edgeFade.mul(0.95)), 0.0, 1.0)
     // Estuary fade: vMouthFactor=1 where the ribbon sits in open sea.
     // Fully-opaque upstream, fully transparent at the mouth so the sea
     // quad underneath takes over. Coverage of the sea shader's shoreline
@@ -421,6 +479,7 @@ export function createRiverMaterial(
       uCameraDirection,
       uMoonBrightness,
       uReflectionMap: reflectionTex,
+      uRefractionMap: refractionTex,
       uNormalMap: normalMapTex,
     },
   }
