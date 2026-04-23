@@ -76,17 +76,25 @@
   /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
   const tileSegments = new Map<string, RiverSegment[]>()
 
-  function collectExternalEndpoints(excludeId: string): Set<string> {
+  /** Map each shared seam endpoint to the other endpoint of the neighbor
+   *  tile's segment that touches it. The river-geometry ribbon loop uses
+   *  this as a "ghost point" so the tangent at a tile-seam chain tip is
+   *  averaged across the split — both tiles then bevel the ribbon
+   *  identically at the shared centerline point. */
+  function collectExternalContinuations(
+    excludeId: string
+     
+  ): Map<string, [number, number]> {
     /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
-    const set = new Set<string>()
+    const map = new Map<string, [number, number]>()
     for (const [id, segs] of tileSegments) {
       if (id === excludeId) continue
       for (const s of segs) {
-        set.add(endpointKey(s.ax, s.az))
-        set.add(endpointKey(s.bx, s.bz))
+        map.set(endpointKey(s.ax, s.az), [s.bx, s.bz])
+        map.set(endpointKey(s.bx, s.bz), [s.ax, s.az])
       }
     }
-    return set
+    return map
   }
 
   // One material shared across tiles — all ribbons use the same uniforms.
@@ -151,11 +159,11 @@
       wireframeMeshes.delete(id)
     }
 
-    const externalEndpoints = collectExternalEndpoints(id)
+    const externalContinuations = collectExternalContinuations(id)
     const { geometry, vertexCount } = buildRiverGeometry(
       segments,
       heightManager,
-      externalEndpoints
+      externalContinuations
     )
     if (vertexCount === 0) {
       geometry.dispose()

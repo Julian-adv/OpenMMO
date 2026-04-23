@@ -177,11 +177,20 @@ export interface RiverGeometryResult {
  * - `edgeDist` (float): 0 at centerline, 1 at either bank.
  * - `mouthFactor` (float): 1 where the vertex sits at sea level, 0 inland;
  *   drives the estuary alpha fade in the shader. See MOUTH_FADE_Y_*.
+ *
+ * `externalContinuations` supplies the neighbor tile's adjacent-segment
+ * other-endpoint for each shared seam point, keyed by `endpointKey`. When
+ * a chain tip sits on a tile seam the ghost point lets the tangent
+ * averaging span the split — without it, each tile treats its own end as
+ * a hard endpoint and computes a tangent from its inward segment only.
+ * The two tiles then bevel the ribbon differently at the same centerline
+ * point, leaving a visible gap/kink ~1 m wide along one bank — the "cut"
+ * the player sees when standing at the seam.
  */
 export function buildRiverGeometry(
   segments: RiverSegment[],
   heightManager: TerrainHeightManager | null,
-  externalEndpoints?: ReadonlySet<string>
+  externalContinuations?: ReadonlyMap<string, [number, number]>
 ): RiverGeometryResult {
   const chains = buildChains(segments)
 
@@ -240,25 +249,30 @@ export function buildRiverGeometry(
       flows.reverse()
     }
 
+    // Ghost points — the neighbor tile's continuation of the chain past
+    // each chain tip that sits on a tile seam. In the vertex loop the
+    // tangent at i=0 / i=n is averaged against the ghost so both tiles
+    // bevel the ribbon identically at the shared centerline. Tail ghost
+    // also signals "not a real mouth" so the sea extension below skips
+    // — otherwise both tiles would paint overlapping 16m deltas from
+    // the same shared point.
+    const headKey = n0 >= 1 ? endpointKey(px[0], pz[0]) : ''
+    const tailKey = n0 >= 1 ? endpointKey(px[n0], pz[n0]) : ''
+    const ghostPrev =
+      headKey !== '' ? (externalContinuations?.get(headKey) ?? null) : null
+    const ghostNextSeam =
+      tailKey !== '' ? (externalContinuations?.get(tailKey) ?? null) : null
+
     // Extend the ribbon past the polyline tip into the sea when the chain
     // terminates below sea level, so the alpha fade has room to blend to
     // zero and the sea shader's foam-suppression radius covers the delta
     // itself, not just the carved channel. Keeps extension widths equal
     // to the last segment so the ribbon reads as a uniform sea-bound
     // delta instead of a tapering point.
-    //
-    // Skip extension if the chain's terminal endpoint is also an endpoint
-    // of a segment in a neighboring tile (midpoint-ownership split). In
-    // that case the "tip" is really a tile-seam continuation, and both
-    // tiles would independently paint their own 16m sea extension from
-    // the same shared point — producing two overlapping delta ribbons.
     let n = n0
-    const tipKey = n0 >= 1 ? endpointKey(px[n0], pz[n0]) : ''
-    const isTileSeam =
-      tipKey !== '' && (externalEndpoints?.has(tipKey) ?? false)
     if (
       n0 >= 1 &&
-      !isTileSeam &&
+      ghostNextSeam === null &&
       sampleY(px[n0], pz[n0]) < SEA_EXTEND_TRIGGER_Y
     ) {
       const [exTx, exTz] = normalizedDelta(
@@ -284,12 +298,25 @@ export function buildRiverGeometry(
     const baseVertex = positions.length / 3
     let cumulativeLen = 0
     for (let i = 0; i <= n; i++) {
-      const [pTx, pTz] =
-        i > 0 ? normalizedDelta(px[i - 1], pz[i - 1], px[i], pz[i]) : [0, 0]
-      const [nTx, nTz] =
-        i < n ? normalizedDelta(px[i], pz[i], px[i + 1], pz[i + 1]) : [0, 0]
-      const tx = i === 0 ? nTx : i === n ? pTx : (pTx + nTx) * 0.5
-      const tz = i === 0 ? nTz : i === n ? pTz : (pTz + nTz) * 0.5
+      // Prev/next polyline neighbor, falling back to the seam ghost at
+      // chain tips. `ghostNextSeam` is null when a sea extension was
+      // applied (mutex via the extension guard), so extension-tip vertices
+      // correctly land here as a true endpoint.
+      const prevPt = i > 0 ? ([px[i - 1], pz[i - 1]] as const) : ghostPrev
+      const nextPt = i < n ? ([px[i + 1], pz[i + 1]] as const) : ghostNextSeam
+      const hasPrev = prevPt !== null
+      const hasNext = nextPt !== null
+      const [pTx, pTz] = prevPt
+        ? normalizedDelta(prevPt[0], prevPt[1], px[i], pz[i])
+        : [0, 0]
+      const [nTx, nTz] = nextPt
+        ? normalizedDelta(px[i], pz[i], nextPt[0], nextPt[1])
+        : [0, 0]
+      // Average both tangents at interior vertices; a single-sided tip
+      // uses whichever tangent exists (the absent one stays [0,0]).
+      const avgScale = hasPrev && hasNext ? 0.5 : 1
+      const tx = avgScale * (pTx + nTx)
+      const tz = avgScale * (pTz + nTz)
       const tLen = Math.hypot(tx, tz)
       const txN = tLen > 1e-6 ? tx / tLen : 0
       const tzN = tLen > 1e-6 ? tz / tLen : 1
@@ -299,7 +326,7 @@ export function buildRiverGeometry(
       // Miter extension = half-width / cos(theta/2). Clamp so 180°
       // reversals don't spike vertex positions to infinity.
       let miter = 1
-      if (i > 0 && i < n) {
+      if (hasPrev && hasNext) {
         const dot = pTx * nTx + pTz * nTz
         const cosHalf = Math.sqrt(Math.max(0, (1 + dot) * 0.5))
         if (cosHalf > MIN_MITER_COSINE) miter = 1 / cosHalf
