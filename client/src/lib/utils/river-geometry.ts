@@ -68,6 +68,18 @@ const SEA_EXTEND_METERS = 16
 const SEA_EXTEND_STEPS = 8
 
 /**
+ * Mouth-region alpha ramp tuning. The wedge alpha follows a bell curve:
+ *   • Polyline approach [n0 - SEA_RAMP_STEPS .. n0]: ramp from the
+ *     upstream-sampled yMouthFactor toward fully opaque (alpha 1).
+ *   • Wedge [n0+1 .. n0+SEA_EXTEND_STEPS]: ramp from opaque back to
+ *     transparent over WEDGE_FADE_STEPS, with the remaining steps
+ *     parked in the α=0 dead zone (per residual-edge memo, a width-
+ *     tapered tip with smooth fade-to-zero leaves a thin dark seam).
+ */
+const SEA_RAMP_STEPS = 3
+const WEDGE_FADE_STEPS = 5
+
+/**
  * Below this cosine of the interior angle between two adjacent segments,
  * the miter extension explodes (a perfect 180° reversal divides by zero).
  * Clamp to avoid vertex spikes; visible as a small bevel at sharp turns.
@@ -89,6 +101,14 @@ interface ChainLink {
  *  equal-precision decimal keys match bit-for-bit. */
 export function endpointKey(x: number, z: number): string {
   return `${x.toFixed(3)},${z.toFixed(3)}`
+}
+
+/** GLSL-style Hermite smoothstep on the JS side. Used by the mouth-fade
+ *  alpha math; matches the curve TSL would compute on the GPU side so
+ *  baked vertex factors and shader-side ramps interpolate the same way. */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
+  return t * t * (3 - 2 * t)
 }
 
 function normalizedDelta(
@@ -295,6 +315,21 @@ export function buildRiverGeometry(
       }
     }
 
+    // Anchor the mouth ramp on a vertex a few steps upstream of n0 so
+    // its alpha sits outside the y-fade range — sampling at n0 itself
+    // (or n0-1) would inherit the near-sea-level alpha and the wedge
+    // would never reach a fully opaque crest.
+    const seaExtended = n > n0
+    const mouthSourceI = Math.max(0, n0 - SEA_RAMP_STEPS)
+    const mouthSourceFactor = seaExtended
+      ? 1 -
+        smoothstep(
+          MOUTH_FADE_Y_LOW,
+          MOUTH_FADE_Y_HIGH,
+          sampleY(px[mouthSourceI], pz[mouthSourceI])
+        )
+      : 0
+
     const baseVertex = positions.length / 3
     let cumulativeLen = 0
     for (let i = 0; i <= n; i++) {
@@ -364,35 +399,22 @@ export function buildRiverGeometry(
       // hillsides going upstream) or bows if carve depth varies across
       // the width.
 
-      // Hermite smoothstep(LOW, HIGH, centerY), then inverted so 1=mouth, 0=inland.
-      const t = Math.max(
-        0,
-        Math.min(
-          1,
-          (centerY - MOUTH_FADE_Y_LOW) / (MOUTH_FADE_Y_HIGH - MOUTH_FADE_Y_LOW)
-        )
-      )
-      const yMouthFactor = 1 - t * t * (3 - 2 * t)
-      // Extension vertices (i > n0) also fade by their progression into
-      // the sea so a shallow continental shelf can't leave a visible
-      // narrow-ribbon "plane" past the polyline tip. Combined via OR:
-      // the vertex is faded if either its depth OR its extension-index
-      // says so. Without this, an extension step at ribbon Y ≈ 0 (bed ≈
-      // −0.6, still above the fade LOW) stayed partly opaque and read
-      // as a darker strip beyond the real river.
-      //
-      // Saturate the extension fade by the *halfway* vertex (k=4 of 8)
-      // rather than at the geometric tip. Rationale per
-      // `webgpu_ribbon_fade_residual_edge.md`: a ribbon fading smoothly
-      // *up to* its last vertex leaves ~3–5% residual alpha on the
-      // tapered tail, and the tapered-tip geometry reads as a thin dark
-      // seam against the sea. Landing α=0 at k=4 leaves k=5–8 in the
-      // α=0 dead zone so only the smooth first-half carries any
-      // opacity; the tail vanishes invisibly.
-      const extT = i > n0 ? (i - n0) / SEA_EXTEND_STEPS : 0
-      const extSat = Math.min(1, extT / 0.5)
-      const extMouthFactor = extSat * extSat * (3 - 2 * extSat)
-      const mouthFactor = Math.max(yMouthFactor, extMouthFactor)
+      // Inverted so 1 = mouth (transparent), 0 = inland (opaque).
+      const yMouthFactor =
+        1 - smoothstep(MOUTH_FADE_Y_LOW, MOUTH_FADE_Y_HIGH, centerY)
+      // Two-stage mouth ramp: smoothstep upstream-sample → 0 across the
+      // polyline approach, then 0 → 1 across the wedge. Outside the
+      // mouth region, fall back to the natural y-fade.
+      let mouthFactor: number
+      if (!seaExtended || i < mouthSourceI) {
+        mouthFactor = yMouthFactor
+      } else if (i <= n0) {
+        const rampT = (i - mouthSourceI) / (n0 - mouthSourceI)
+        mouthFactor = mouthSourceFactor * (1 - smoothstep(0, 1, rampT))
+      } else {
+        const wedgeT = Math.min(1, (i - n0) / WEDGE_FADE_STEPS)
+        mouthFactor = smoothstep(0, 1, wedgeT)
+      }
 
       positions.push(leftX, centerY, leftZ)
       uvs.push(0, v)
