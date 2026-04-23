@@ -50,6 +50,22 @@ fn tall_grass_veg(density: u8) -> u8 {
     240 + density.min(9)
 }
 
+/// Convert a patch sample + eligibility (0..1) into a packed vegMeta byte.
+/// All three grass-emitting branches share this pattern: density scales with
+/// both `patch.strength` and a branch-local eligibility factor, then the byte
+/// picks short/tall based on the patch variant.
+#[inline]
+fn grass_veg_from_patch(p: &PatchSample, eligibility: f32) -> u8 {
+    let density = (p.strength * eligibility * 9.0).round() as u8;
+    if density == 0 {
+        0
+    } else if p.is_tall {
+        tall_grass_veg(density)
+    } else {
+        short_grass_veg(density)
+    }
+}
+
 /// Euclidean distance (cells ≡ meters) from cell `(cx, cz)` to the nearest
 /// `true` cell in the tile's cliff mask, clamped to
 /// `CLIFF_PROXIMITY_RADIUS_M` when the search box contains no cliff. O(1)
@@ -248,22 +264,32 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // `water_half_width_m` instead keeps the wet zone clean while still
         // letting some grass / sparse trees grow on the dry sand bank.
         let sand_t = (river_d_m / river_sand_half_width_m).clamp(0.0, 1.0);
-        let blend = (sand_t * sand_t * 255.0) as u8;
-        // Near the estuary, swap the river-bed palette to coast sand so
-        // the last ~15 m of channel reads as a sandy delta continuous with
-        // the beach instead of a wet-pebble strip jutting into the surf.
-        // Keyed on horizontal distance to the ocean coast polyline: the
-        // bake's carve floor flattens h_center over ~40 m inland at gentle
-        // mouths, so an elevation-based cutoff was too coarse — a coastal
-        // distance directly caps the delta length. Both palettes share
-        // the GROUND secondary so the bank fade stays smooth across the
-        // swap.
-        let is_mouth_sand = coast_d_m < RIVER_MOUTH_SAND_COAST_DIST_M;
-        let primary = if is_mouth_sand {
-            PAL_SAND
+        // Near the estuary, the pebble band tapers toward the centerline
+        // while SAND fills the outer annulus, so the wet-pebble region
+        // retracts into the water as we approach the beach instead of
+        // ending in a coast-parallel strip. At `RIVER_MOUTH_SAND_COAST_DIST_M`
+        // and beyond the pebble wedge covers the full sand-band; at the
+        // coast it's 0 and the entire band is SAND continuous with the
+        // beach. Keyed on horizontal distance to the ocean coast polyline:
+        // the bake's carve floor flattens h_center over ~40 m inland at
+        // gentle mouths, so an elevation cutoff was too coarse — a coastal
+        // distance directly caps the delta length. Both palettes share the
+        // GROUND secondary so the bank fade stays smooth across the swap.
+        let pebble_wedge_t = smoothstep(0.0, RIVER_MOUTH_SAND_COAST_DIST_M, coast_d_m);
+        let pebble_half_width_m = river_sand_half_width_m * pebble_wedge_t;
+        let is_pebble = river_d_m < pebble_half_width_m;
+        let primary = if is_pebble { PAL_RIVER_BED } else { PAL_SAND };
+        // Sand-primary cells share the coast-sand branch's quadratic coast
+        // ramp so cells just inside / just outside the river band carry
+        // matching blend weights at equal `coast_d_m` — without this the
+        // river-adjacent beach would fade to grass while the abutting beach
+        // stays pure SAND, stamping a visible seam at the band edge.
+        let coast_sand_fade = if is_pebble {
+            1.0
         } else {
-            PAL_RIVER_BED
+            (coast_d_m / COAST_SAND_M).clamp(0.0, 1.0).powi(2)
         };
+        let blend = (sand_t * sand_t * coast_sand_fade * 255.0) as u8;
         // Cliff proximity blends PAL_CLIFF into the outer bank so the
         // palette pair matches the adjacent plain branch (which secondaries
         // to CLIFF). At the estuary the adjacent branch is beach SAND, not
@@ -271,7 +297,7 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // produces a visible gravel strip between sand and grass. Skip the
         // cliff blend for sand-primary cells and go straight to grass.
         let (secondary, veg) =
-            if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M && !is_mouth_sand {
+            if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M && is_pebble {
                 (PAL_CLIFF, 0)
             } else {
                 let water_half_width_m = (river_width_m * 0.5).max(0.5);
@@ -279,9 +305,14 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
                 let bank_t = ((river_d_m - water_half_width_m) / bank_width).clamp(0.0, 1.0);
                 let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
                 let grass_t = (1.0 - highland).max(0.0);
-                let density = (grass_t * 9.0 * bank_t).round().clamp(0.0, 9.0) as u8;
-                let v = if density > 0 {
-                    short_grass_veg(density)
+                // Inherit the plain branch's patchy Voronoi pattern so the
+                // bank grass doesn't stamp a forced-max density ring at the
+                // sand-band edge. Gate skips the warped-Voronoi query when
+                // density would be 0 regardless — see
+                // `non_plain_branches_do_not_sample_patch` test.
+                let bank_gate = grass_t * bank_t;
+                let v = if bank_gate > 0.0 {
+                    grass_veg_from_patch(&patch(), bank_gate)
                 } else {
                     0
                 };
@@ -316,24 +347,24 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // Quadratic blend keeps cells right at the water line near 100%
         // SAND so per-texture weights stay continuous with the adjacent
         // sea cell; a linear ramp would introduce ~25% GROUND right at the
-        // shore and read as a staircase. Grass density has a floor of 1 so
-        // the mesh fringe matches the adjacent plains' density of 9.
+        // shore and read as a staircase. Grass density reads from the same
+        // patch field as the plain branch so the beach-edge grass inherits
+        // the patchy Voronoi pattern — a fixed density-9 fringe stamped a
+        // uniform green ring against patchy plain just past the band.
         // (`!is_sea` guard: distance alone has no sign, so a sea cell inside
         // a narrow inlet that's <COAST_SAND_M from the coast line would
         // otherwise compete for the sand band — land_mask is the source of
         // truth for the side.)
-        const DENSITY_MIN: f32 = 1.0;
         let t = (coast_d_m / COAST_SAND_M).clamp(0.0, 1.0);
         let blend_f = t * t;
-        let density = (DENSITY_MIN + (9.0 - DENSITY_MIN) * t)
-            .round()
-            .clamp(DENSITY_MIN, 9.0) as u8;
-        (
-            PAL_SAND,
-            PAL_GROUND,
-            (blend_f * 255.0) as u8,
-            short_grass_veg(density),
-        )
+        // Gate skips the warped-Voronoi query at the water line (t=0) —
+        // see `non_plain_branches_do_not_sample_patch` test.
+        let v = if t > 0.0 {
+            grass_veg_from_patch(&patch(), t)
+        } else {
+            0
+        };
+        (PAL_SAND, PAL_GROUND, (blend_f * 255.0) as u8, v)
     } else {
         // Plain / slope branch: GROUND primary, CLIFF secondary. Cliff bleeds
         // in via TWO channels and we take the max:
@@ -381,17 +412,7 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // ramps grass density up to plain at the sand-band edge so the
         // transition is continuous without an extra fade here.
         let eligibility = (1.0 - rocky).max(0.0) * (1.0 - highland).max(0.0);
-        let patch = patch();
-        let density = (patch.strength * eligibility * 9.0).round().clamp(0.0, 9.0) as u8;
-        let veg = if density > 0 {
-            if patch.is_tall {
-                tall_grass_veg(density)
-            } else {
-                short_grass_veg(density)
-            }
-        } else {
-            0
-        };
+        let veg = grass_veg_from_patch(&patch(), eligibility);
         let blend = (rocky * 255.0) as u8;
         (PAL_GROUND, PAL_CLIFF, blend, veg)
     }
@@ -829,8 +850,10 @@ mod tests {
             },
             trip,
         );
-        // Coast sand band
-        classify_splat(plain_inputs(COAST_SAND_M * 0.5), trip);
+        // Coast sand band — tested at the water line only. Mid-band cells
+        // intentionally sample patch for continuity with the plain branch's
+        // patchy grass field, so they're excluded from this guard.
+        classify_splat(plain_inputs(0.0), trip);
     }
 
     #[test]
