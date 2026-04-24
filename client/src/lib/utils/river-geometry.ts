@@ -220,6 +220,15 @@ export function buildRiverGeometry(
   const flowNorms: number[] = []
   const edgeDists: number[] = []
   const mouthFactors: number[] = []
+  // Signed perpendicular distance from the centerline at each vertex
+  // (−halfWidth at left, +halfWidth at right). Interpolates linearly
+  // within each triangle to the true world cross-distance of the
+  // fragment — unlike `uv.x ∈ [0,1]` whose world-space gradient flips
+  // direction between the two triangles of a rapidly flaring segment
+  // (wide-fan diagonal), stamping opposite-flowing normal-map scroll
+  // per triangle at the mouth. Feeding this to the shader's meshUV.x
+  // keeps cross-channel texture frequency uniform in world meters.
+  const crossMeters: number[] = []
   const indices: number[] = []
 
   const sampleY = (x: number, z: number): number => {
@@ -425,12 +434,14 @@ export function buildRiverGeometry(
       flowNorms.push(flows[i])
       edgeDists.push(1)
       mouthFactors.push(mouthFactor)
+      crossMeters.push(-halfWidth)
       positions.push(rightX, centerY, rightZ)
       uvs.push(1, v)
       flowDirs.push(txN, tzN)
       flowNorms.push(flows[i])
       edgeDists.push(1)
       mouthFactors.push(mouthFactor)
+      crossMeters.push(halfWidth)
     }
 
     for (let i = 0; i < n; i++) {
@@ -464,6 +475,10 @@ export function buildRiverGeometry(
   geometry.setAttribute(
     'mouthFactor',
     new THREE.Float32BufferAttribute(mouthFactors, 1)
+  )
+  geometry.setAttribute(
+    'crossMeters',
+    new THREE.Float32BufferAttribute(crossMeters, 1)
   )
   geometry.setIndex(indices)
   geometry.computeBoundingSphere()
