@@ -56,12 +56,12 @@ const MOUTH_FADE_Y_HIGH = 0.4
  * Chains whose last vertex sits below this surface Y are extended past
  * the Phase-4 polyline tip into the sea by `SEA_EXTEND_METERS`, added in
  * `SEA_EXTEND_STEPS` uniform steps. Each step scales width by
- * `1 - k/STEPS` so the extension tapers from full fan width at the
- * polyline tip to zero at its own tip — a teardrop delta rather than a
- * constant-width tongue jutting into the sea. Also ensures the sea
- * shader's foam-suppression radius covers the whole delta (the bake
- * field is keyed on the polyline itself, and a wider-than-needed
- * radius is harmless).
+ * `1 - k/STEPS` so the extension tapers from full (fanned) width at the
+ * polyline tip back to zero at its own tip — the land-side polyline
+ * opens into a 부채꼴 via bake-time `RIVER_MOUTH_FAN_EXTRA`, then narrows
+ * back into the sea here, producing the symmetric spindle-shaped delta
+ * centered on the coastline. Also ensures the sea shader's foam-
+ * suppression radius covers the whole extension.
  */
 const SEA_EXTEND_TRIGGER_Y = 0.6
 const SEA_EXTEND_METERS = 16
@@ -304,8 +304,11 @@ export function buildRiverGeometry(
       for (let k = 1; k <= SEA_EXTEND_STEPS; k++) {
         const t = k / SEA_EXTEND_STEPS
         const d = SEA_EXTEND_METERS * t
-        // Linear width taper: extension tip reaches zero width so the
-        // delta reads as a teardrop rather than a constant-width tongue.
+        // Linear width taper: extension tip reaches zero width. The
+        // land-side polyline already fans open via bake-time
+        // `RIVER_MOUTH_FAN_EXTRA`; tapering back here produces a
+        // symmetric spindle centered on the coastline instead of a
+        // one-sided flag.
         const widthScale = 1 - t
         px.push(px[n0] + exTx * d)
         pz.push(pz[n0] + exTz * d)

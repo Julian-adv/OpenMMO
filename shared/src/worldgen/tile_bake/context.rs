@@ -119,12 +119,17 @@ fn apply_mouth_fan_widths(
     let mpc = map.config.meters_per_cell();
     let half = map.config.world_size_m as f32 * 0.5;
 
-    let sample_base = |wx: f32, wz: f32| -> f32 {
-        let xs = ((wx + half) / mpc).floor() as i32;
-        let zs = ((wz + half) / mpc).floor() as i32;
-        // X wraps, Z clamps — mirrors `cell_elevation_m`'s indexing rules.
-        let cx = xs.rem_euclid(res as i32) as usize;
-        let cz = zs.clamp(0, res as i32 - 1) as usize;
+    // Bilinear sample of the coarse 4K base-elevation grid. A naive
+    // floor-to-cell produced visible stair-steps in the mouth fan
+    // because ~4 sub-meter polyline vertices fall inside one 8 m cell
+    // and all got the same width multiplier — the fan widened in 8 m
+    // jumps rather than smoothly. Interpolating across neighbours makes
+    // the per-vertex base elevation (and therefore the fan ramp)
+    // continuous along the polyline.
+    let sample_cell = |ix: i32, iz: i32| -> f32 {
+        // X wraps, Z clamps — mirrors `cell_elevation_m`'s rules.
+        let cx = ix.rem_euclid(res as i32) as usize;
+        let cz = iz.clamp(0, res as i32 - 1) as usize;
         let i = cz * res + cx;
         if map.land_mask[i] == 1 {
             map.elevation_m[i]
@@ -133,14 +138,35 @@ fn apply_mouth_fan_widths(
             -(0.5 + d.min(40.0) * 0.25)
         }
     };
+    let sample_base = |wx: f32, wz: f32| -> f32 {
+        // Cell-center basis: fx=0 at cell 0's center, fx=1 at cell 1's.
+        let fx = (wx + half) / mpc - 0.5;
+        let fz = (wz + half) / mpc - 0.5;
+        let ix0 = fx.floor() as i32;
+        let iz0 = fz.floor() as i32;
+        let tx = fx - ix0 as f32;
+        let tz = fz - iz0 as f32;
+        let e00 = sample_cell(ix0, iz0);
+        let e10 = sample_cell(ix0 + 1, iz0);
+        let e01 = sample_cell(ix0, iz0 + 1);
+        let e11 = sample_cell(ix0 + 1, iz0 + 1);
+        let e0 = e00 * (1.0 - tx) + e10 * tx;
+        let e1 = e01 * (1.0 - tx) + e11 * tx;
+        e0 * (1.0 - tz) + e1 * tz
+    };
 
     let span = RIVER_MOUTH_FAN_BASE_HIGH_M - RIVER_MOUTH_FAN_BASE_LOW_M;
     for poly in rivers_world.iter_mut() {
         for i in 0..poly.points.len() {
             let base = sample_base(poly.points[i][0], poly.points[i][1]);
             let t = ((base - RIVER_MOUTH_FAN_BASE_LOW_M) / span).clamp(0.0, 1.0);
-            // Hermite smoothstep, inverted: 1 at low base, 0 at high base.
-            let s = 1.0 - t * t * (3.0 - 2.0 * t);
+            // Quadratic ease-in (inverted): front-loads the widening
+            // toward sea level so the fan reads as a localized delta
+            // flare rather than a uniformly wider river, while staying
+            // smooth enough to form a bell curve rather than the sharp
+            // T-shape a cubic ramp produces.
+            let one_minus_t = 1.0 - t;
+            let s = one_minus_t * one_minus_t;
             poly.width[i] *= 1.0 + RIVER_MOUTH_FAN_EXTRA * s;
         }
     }
