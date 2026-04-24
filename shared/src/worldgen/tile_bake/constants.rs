@@ -86,12 +86,21 @@ pub(super) const RIVER_MOUTH_SAND_COAST_DIST_M: f32 = 20.0;
 /// `HIGH` it keeps the natural width. Applied globally to `rivers_world`
 /// in `BakeContext::new` so heightmap carving, splatmap classification,
 /// and the client ribbon all see the same fan-scaled widths — otherwise
-/// the water surface plane widens past the carved banks. The scale ties
-/// to the visual fade in `river-geometry.ts` (`FAN_WIDTH_Y_*`); keep them
-/// in sync when tuning.
+/// the water surface plane widens past the carved banks.
+///
+/// Window is tuned so the fan opens close to the coast rather than
+/// widening the river far upstream — a wider window reads as "river
+/// is just wider here" instead of as a localized 부채꼴 delta.
+/// Combined with `EXTRA = 3.0` and the quadratic ramp in
+/// `apply_mouth_fan_widths` this gives a pronounced but smooth bell
+/// flare over the last ~2 m of approach elevation (typically
+/// 10–20 m horizontal at coastal slopes). Past the coast, the client
+/// sea extension tapers back to a point (see `SEA_EXTEND_*` in
+/// `river-geometry.ts`), producing the symmetric spindle-shaped delta
+/// centered on the coastline.
 pub(super) const RIVER_MOUTH_FAN_BASE_LOW_M: f32 = 0.0;
-pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 3.0;
-pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 1.2;
+pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 2.0;
+pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 3.0;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
 /// Base spatial frequency (cycles per meter) of the along-river noise that
 /// widens and narrows the pebble/sand band so it doesn't read as a constant
