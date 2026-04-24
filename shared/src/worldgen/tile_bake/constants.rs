@@ -80,7 +80,7 @@ pub(super) const RIVER_CARVE_MIN_BED_Y_M: f32 = 0.3;
 /// carve floor holds h_center flat for ~40 m inland at gentle mouths; an
 /// elevation cutoff clipped sand to just the first few meters while this
 /// directly caps the delta length at the ocean-facing side.
-pub(super) const RIVER_MOUTH_SAND_COAST_DIST_M: f32 = 20.0;
+pub(super) const RIVER_MOUTH_SAND_COAST_DIST_M: f32 = 50.0;
 /// Width-fan window (meters of base-cell elevation). Below `LOW` the
 /// polyline vertex is widened to `1 + EXTRA` of its natural width; above
 /// `HIGH` it keeps the natural width. Applied globally to `rivers_world`
