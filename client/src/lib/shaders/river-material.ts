@@ -100,9 +100,11 @@ export function createRiverMaterial(
   const vClipPos = varying(vec4(0), 'r_clipPos')
   const vFlowNorm = varying(float(0), 'r_flowNorm')
   const vMouthFactor = varying(float(0), 'r_mouthFactor')
+  const vCrossMeters = varying(float(0), 'r_crossMeters')
 
   const aFlowNorm = attribute('flowNorm', 'float')
   const aMouthFactor = attribute('mouthFactor', 'float')
+  const aCrossMeters = attribute('crossMeters', 'float')
 
   // ── Vertex Shader ─────────────────────────────────────
 
@@ -112,6 +114,7 @@ export function createRiverMaterial(
     vWorldPos.assign(worldPos.xyz)
     vFlowNorm.assign(aFlowNorm)
     vMouthFactor.assign(aMouthFactor)
+    vCrossMeters.assign(aCrossMeters)
     const clipPos = cameraProjectionMatrix.mul(cameraViewMatrix).mul(worldPos)
     vClipPos.assign(clipPos)
     return clipPos
@@ -158,21 +161,30 @@ export function createRiverMaterial(
     waterColor.mulAssign(waterNightFactor)
 
     // ── Channel-aligned normal map ──
-    // Sample in mesh UV (uv.x ∈ [0,1] cross-bank, uv.y meters along
-    // channel). World-XZ sampling with a per-fragment flow-vector scroll
-    // left visible per-triangle seams at curves because flow interpolates
-    // as a vector; mesh UV interpolates as two scalars so the texture
-    // follows the channel bend smoothly. REF_WIDTH converts uv.x to
-    // meters so cross-channel and along-channel tile rates roughly match
-    // at typical river widths.
+    // Sample in channel-space mesh UV (meshUV.x = signed world meters
+    // from centerline via the `crossMeters` attribute, meshUV.y =
+    // cumulative meters along the chain). World-XZ sampling with a
+    // per-fragment flow-vector scroll left visible per-triangle seams
+    // at curves because flow interpolates as a vector; this scalar
+    // mesh UV interpolates cleanly so the texture follows the channel
+    // bend smoothly.
+    //
+    // Previously the cross axis was `(uv.x − 0.5) × REF_WIDTH`, mapping
+    // the ribbon-local [0,1] bank coord to a fixed 20 m texture span.
+    // At the mouth fan the two triangles of one widening segment have
+    // radically different world-space UV gradients (the wide-fan
+    // diagonal skews them), which flipped the normal-map scroll
+    // direction per triangle and read as alternating strips. Using the
+    // `crossMeters` attribute — linear in world position — keeps the
+    // gradient direction identical across both triangles of every
+    // segment regardless of how fast the ribbon flares.
     //
     // Perturbation stays world-axis (R→worldX, G→worldZ) on purpose:
     // rotating into a channel frame ties distortion direction to the
-    // channel, which amplifies into visible "clouds flowing" through the
-    // cloud-plane projection and kills specular sparkle variety.
+    // channel, which amplifies into visible "clouds flowing" through
+    // the cloud-plane projection and kills specular sparkle variety.
     const scrollSpeed = float(0.06).add(vFlowNorm.mul(0.22))
-    const REF_WIDTH = float(20.0)
-    const meshUV = vec2(uvCoord.x.sub(0.5).mul(REF_WIDTH), uvCoord.y)
+    const meshUV = vec2(vCrossMeters, uvCoord.y)
 
     // Two-sample normal-map average → world-axis ripple normal. Used for
     // both the surface ripple (flow-driven scroll) and the sky reflection
