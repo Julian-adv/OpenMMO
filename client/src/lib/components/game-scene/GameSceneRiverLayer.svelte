@@ -3,7 +3,7 @@
   import * as THREE from 'three'
 
   import type { TerrainTile } from './terrain-utils'
-  import { TERRAIN_TILE_SIZE } from './terrain-utils'
+  import { TERRAIN_TILE_SIZE, parseTileId } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { RiverDataManager } from '../../managers/riverDataManager'
   import { buildRiverGeometry, endpointKey } from '../../utils/river-geometry'
@@ -46,7 +46,7 @@
 
   // Debug: overlay the ribbon's triangle edges so the tessellation is
   // visible. Flip to false (or wire to a UI toggle) to disable.
-  const SHOW_WIREFRAME = true
+  const SHOW_WIREFRAME = false
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: 0xff3366,
     transparent: true,
@@ -153,13 +153,47 @@
     tileHeightTextures.delete(id)
   }
 
-  /** Parse tile coords from a `tileX_tileZ` id (matches `createTerrainTiles`). */
-  function parseTileId(id: string): { tileX: number; tileZ: number } | null {
-    const [sx, sz] = id.split('_')
-    const tileX = Number(sx)
-    const tileZ = Number(sz)
-    if (!Number.isFinite(tileX) || !Number.isFinite(tileZ)) return null
-    return { tileX, tileZ }
+  /** Create-on-demand the per-tile river material. Returns the existing
+   *  cached material if already created, or null when normalMap / coords
+   *  aren't ready yet (caller falls back to `placeholderMaterial`). */
+  function ensureTileMaterial(
+    id: string,
+    heightTex: THREE.DataTexture
+  ): RiverMaterialResult | null {
+    const cached = tileMaterials.get(id)
+    if (cached) return cached
+    if (!normalMap) return null
+    const coords = parseTileId(id)
+    if (!coords) return null
+    const result = createRiverMaterial({
+      normalMap,
+      heightmapTexture: heightTex,
+      reflectionMap,
+      refractionMap,
+    })
+    const tileMinX = coords.tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    const tileMinZ = coords.tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    result.uniforms.uTileMin.value.set(tileMinX, tileMinZ)
+    tileMaterials.set(id, result)
+    return result
+  }
+
+  /** Acquire-or-refresh the per-tile heightmap texture. Same create-once,
+   *  in-place update pattern the water layer uses so the WebGPU bind group
+   *  keeps a stable reference (per `webgpu_precompile_bind_group_staleness`). */
+  function ensureTileHeightTexture(id: string): THREE.DataTexture | null {
+    if (!heightManager) return null
+    const coords = parseTileId(id)
+    if (!coords) return null
+    const cached = tileHeightTextures.get(id)
+    if (cached) {
+      heightManager.updateHeightmapTexture(coords.tileX, coords.tileZ, cached)
+      return cached
+    }
+    const tex = heightManager.getHeightmapTexture(coords.tileX, coords.tileZ)
+    if (!tex) return null
+    tileHeightTextures.set(id, tex)
+    return tex
   }
 
   function buildTileMesh(id: string, segments: RiverSegment[]) {
@@ -187,43 +221,8 @@
       return
     }
 
-    const coords = parseTileId(id)
-    // Acquire/refresh the per-tile heightmap texture. Same pattern the
-    // water layer uses — create-once, in-place update on rebuild so the
-    // bind group keeps a stable reference (per webgpu_precompile memo).
-    let heightTex = tileHeightTextures.get(id)
-    if (heightTex && coords && heightManager) {
-      heightManager.updateHeightmapTexture(coords.tileX, coords.tileZ, heightTex)
-    } else if (coords && heightManager) {
-      const tex = heightManager.getHeightmapTexture(coords.tileX, coords.tileZ)
-      if (tex) {
-        heightTex = tex
-        tileHeightTextures.set(id, tex)
-      }
-    }
-
-    // Acquire/create per-tile river material. Without the heightmap we
-    // can't create the real material yet — leave the geometry off-scene
-    // and rebuild once the heightmap arrives.
-    let matResult = tileMaterials.get(id)
-    if (!matResult && normalMap && heightTex) {
-      matResult = createRiverMaterial({
-        normalMap,
-        heightmapTexture: heightTex,
-        reflectionMap,
-        refractionMap,
-      })
-      if (coords) {
-        const tileMinX = coords.tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMinZ = coords.tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        matResult.uniforms.uTileMin.value.set(tileMinX, tileMinZ)
-      }
-      tileMaterials.set(id, matResult)
-    } else if (matResult && heightTex) {
-      // Refresh heightmap reference on rebuild; tile origin is fixed.
-      matResult.uniforms.uHeightmapTexture.value = heightTex
-    }
-
+    const heightTex = ensureTileHeightTexture(id)
+    const matResult = heightTex ? ensureTileMaterial(id, heightTex) : null
     const meshMaterial: THREE.Material = matResult?.material ?? placeholderMaterial
     const mesh = new THREE.Mesh(geometry, meshMaterial)
     mesh.receiveShadow = false
@@ -283,30 +282,16 @@
   }
 
   // Promote tile meshes from placeholder to per-tile river materials once
-  // normalMap is available. Tiles built before this still hold the
-  // placeholder material; create their material now using the heightmap
-  // texture each tile already cached.
+  // normalMap arrives. Tiles built before that point still hold the
+  // placeholder; build their material now using the cached heightmap.
   $effect(() => {
     if (!normalMap) return
     for (const [id, mesh] of tileMeshes) {
       if (!mesh) continue
-      if (tileMaterials.has(id)) continue
       const heightTex = tileHeightTextures.get(id)
       if (!heightTex) continue
-      const coords = parseTileId(id)
-      const result = createRiverMaterial({
-        normalMap,
-        heightmapTexture: heightTex,
-        reflectionMap,
-        refractionMap,
-      })
-      if (coords) {
-        const tileMinX = coords.tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        const tileMinZ = coords.tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-        result.uniforms.uTileMin.value.set(tileMinX, tileMinZ)
-      }
-      tileMaterials.set(id, result)
-      mesh.material = result.material
+      const result = ensureTileMaterial(id, heightTex)
+      if (result) mesh.material = result.material
     }
   })
 

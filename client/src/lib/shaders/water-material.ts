@@ -36,6 +36,7 @@ import {
   waveConfigs,
   getCloudTexture,
   sampleCloudPhoto,
+  toHeightmapUV,
 } from './water-types'
 
 // Re-export public API from water-types
@@ -117,9 +118,6 @@ export function createWaterMaterial(
   const vWaveHeight = varying(float(0), 'v_waveHeight')
   const vClipPos = varying(vec4(0), 'v_clipPos')
   const vUv = varying(vec2(0), 'v_uv')
-
-  // Aligns 65 vertices with 65×65 texel centers
-  const toHeightmapUV = (uvCoord: N) => uvCoord.mul(64.0 / 65.0).add(0.5 / 65.0)
 
   // Sample pre-baked noise: texture has 64 periods, so UV = noiseCoord / 64
   const NOISE_PERIODS = 64

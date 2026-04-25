@@ -55,6 +55,17 @@ export function createTerrainTiles(
   return tiles
 }
 
+/** Inverse of `createTerrainTiles`'s id format. Returns null on a malformed id. */
+export function parseTileId(
+  id: string
+): { tileX: number; tileZ: number } | null {
+  const [sx, sz] = id.split('_')
+  const tileX = Number(sx)
+  const tileZ = Number(sz)
+  if (!Number.isFinite(tileX) || !Number.isFinite(tileZ)) return null
+  return { tileX, tileZ }
+}
+
 /**
  * Get the floor-based chunk coordinate for a world position.
  * Combined with the 2×2 grid, this ensures the player is always

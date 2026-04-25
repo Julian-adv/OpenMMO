@@ -88,6 +88,18 @@ export const waterHeightFallbackTex = new THREE.DataTexture(
 )
 waterHeightFallbackTex.needsUpdate = true
 
+// ─── Heightmap Sampling ───────────────────────────────
+
+/** 65×65 heightmap covers a 64m tile with vertices on texel CENTERS, so
+ *  vertex UVs in [0,1] need a half-texel inset on each side to land on
+ *  centers rather than edges. Sea and river materials must agree on this
+ *  alignment so a fragment in the river ribbon at the same world XZ as
+ *  a sea fragment reads the identical bed height — that's what keeps
+ *  their alpha edges on the same shoreline contour. */
+export function toHeightmapUV(uvCoord: N): N {
+  return uvCoord.mul(64.0 / 65.0).add(0.5 / 65.0)
+}
+
 // ─── Cloud Texture ─────────────────────────────────────
 
 // Sky-cloud reference photo (see doc/ASSETS.md). Non-tileable so we
