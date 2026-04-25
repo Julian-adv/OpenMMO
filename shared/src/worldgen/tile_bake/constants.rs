@@ -66,13 +66,16 @@ pub(super) const RIVER_CARVE_TAPER_EXTRA_M: f32 = 7.0;
 pub(super) const RIVER_CARVE_DEPTH_MIN_M: f32 = 0.6;
 pub(super) const RIVER_CARVE_DEPTH_EXTRA_M: f32 = 1.4;
 /// Lower bound on post-carve terrain elevation inside a river channel
-/// (meters). Prevents carving from dragging the bed below sea level near
-/// the estuary — if the bed sinks under Y=0 the ocean shader treats the
-/// river channel as an inlet and renders shore/wet-sand patterns inside
-/// it. Keeping the bed a hair above sea level zeros out the ocean-shader
-/// depth query there so only the river ribbon is visible. See
-/// RIVER_SYSTEM.md §10.
-pub(super) const RIVER_CARVE_MIN_BED_Y_M: f32 = 0.3;
+/// (meters). Stops carving from dragging the bed deep enough that the
+/// ocean shader floods the channel with shore/wet-sand patterns. Tuned
+/// just below sea level — at -0.1 m the river bed sits in the sea
+/// shader's hard-cut zone (depth < 0.01 m → α=0) so the ocean doesn't
+/// render inside the channel, while still leaving enough headroom under
+/// the river surface (centerY = bed + RIVER_DEPTH_OFFSET_M = 0.4 m at
+/// the estuary) for the river shader's depth-based edge fade to produce
+/// a visible bank gradient instead of stamping a uniform-opaque slab.
+/// See RIVER_SYSTEM.md §10.
+pub(super) const RIVER_CARVE_MIN_BED_Y_M: f32 = -0.1;
 /// River-bed splat switches from `PAL_RIVER_BED` (ganges pebbles — wet
 /// inland bed look) to `PAL_SAND` (sandy_gravel_02 — matches coast) where
 /// the cell is within this horizontal distance of the ocean coast

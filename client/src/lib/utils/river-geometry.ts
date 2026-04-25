@@ -31,9 +31,14 @@ const RIVER_WIDTH_SCALE = 1.5
 /**
  * Extra meters added to each side of the ribbon on top of the scaled width,
  * so thin and wide rivers alike pick up a consistent "sits over the bank"
- * margin. 0.5m here = +1m total width.
+ * margin. With the depth-based edge fade in `river-material.ts`, fragments
+ * past the carve taper sample natural ground (depth ≈ 0 → α 0) and
+ * automatically read as transparent, so widening the pad just exposes
+ * more soft-fade band without painting over dry land. 2m = +4m total
+ * width — leaves room for the taper gradient even on the smallest
+ * tributaries.
  */
-const RIVER_WIDTH_PAD_M = 0.5
+const RIVER_WIDTH_PAD_M = 4.5
 
 /**
  * Estuary alpha fade window (meters of surface Y). Below LOW the ribbon is
@@ -386,10 +391,6 @@ export function buildRiverGeometry(
       // overhang the carved banks.
       const halfWidth =
         (widths[i] * 0.5 * RIVER_WIDTH_SCALE + RIVER_WIDTH_PAD_M) * miter
-      const leftX = px[i] + nx * halfWidth
-      const leftZ = pz[i] + nz * halfWidth
-      const rightX = px[i] - nx * halfWidth
-      const rightZ = pz[i] - nz * halfWidth
 
       // Extension vertices ride a fixed sea-surface Y — following the
       // heightmap out past the polyline tip drags the ribbon down with
@@ -427,6 +428,11 @@ export function buildRiverGeometry(
         const wedgeT = Math.min(1, (i - n0) / WEDGE_FADE_STEPS)
         mouthFactor = smoothstep(0, 1, wedgeT)
       }
+
+      const leftX = px[i] + nx * halfWidth
+      const leftZ = pz[i] + nz * halfWidth
+      const rightX = px[i] - nx * halfWidth
+      const rightZ = pz[i] - nz * halfWidth
 
       positions.push(leftX, centerY, leftZ)
       uvs.push(0, v)

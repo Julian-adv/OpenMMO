@@ -237,25 +237,27 @@ fn sample_elevation_m(
         0.0
     };
 
-    let raw_carve = if let Some((d, idx, t)) = nearest_river_segment(world_x, world_z, river_segs) {
+    // Cap the carve depth at the source so the taper profile stays smooth
+    // across its full width even in shallow areas. Without this — capping
+    // the *final* carve after taper — the cap floor (0.3m above
+    // `RIVER_CARVE_MIN_BED_Y_M`) clamps the channel center AND the entire
+    // taper band to the same bedHeight near the estuary, killing the
+    // lateral depth gradient the river shader relies on for edge fade.
+    // Capping `depth` BEFORE `river_carve_m` shrinks the whole profile
+    // proportionally — channel still bottoms out at the floor, but the
+    // taper rises smoothly back to natural ground over its full width.
+    let pre_carve = base + detail + hills;
+    let max_carve_depth = (pre_carve - RIVER_CARVE_MIN_BED_Y_M).max(0.0);
+    let carve = if let Some((d, idx, t)) = nearest_river_segment(world_x, world_z, river_segs) {
         let seg = &river_segs[idx];
         let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
         let width = lerp(seg.width_a, seg.width_b, t);
         let (half_width, taper, depth) = segment_carve_params(flow_norm, width);
-        river_carve_m(d, half_width, taper, depth)
+        let local_depth = depth.min(max_carve_depth);
+        river_carve_m(d, half_width, taper, local_depth)
     } else {
         0.0
     };
-
-    // Cap the carve so it can't drag the bed below RIVER_CARVE_MIN_BED_Y_M.
-    // Inland (pre_carve high) the cap is much larger than the natural carve
-    // so nothing changes; near the estuary (pre_carve near sea level) the
-    // cap shrinks and the channel smoothly rises to sit just above the
-    // ocean plane — stops the sea shader from rendering shore/wet-sand
-    // inside what should be a river channel.
-    let pre_carve = base + detail + hills;
-    let carve_cap = (pre_carve - RIVER_CARVE_MIN_BED_Y_M).max(0.0);
-    let carve = raw_carve.min(carve_cap);
 
     // Sandy finger-islands in the delta. Applied *after* the carve
     // subtraction so the carve can't immediately re-cut the bump back

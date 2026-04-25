@@ -36,6 +36,7 @@ type _N = any // TSL node — broad type for internal helper params
 
 export interface RiverMaterialOptions {
   normalMap: THREE.Texture
+  heightmapTexture: THREE.Texture
   reflectionMap?: THREE.Texture | null
   refractionMap?: THREE.Texture | null
 }
@@ -49,6 +50,8 @@ export interface RiverMaterialUniforms {
   uReflectionMap: { value: THREE.Texture }
   uRefractionMap: { value: THREE.Texture }
   uNormalMap: { value: THREE.Texture }
+  uHeightmapTexture: { value: THREE.Texture }
+  uTileMin: { value: THREE.Vector2 }
 }
 
 export interface RiverMaterialResult {
@@ -77,6 +80,11 @@ export function createRiverMaterial(
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
   const uCameraDirection = uniform(new THREE.Vector3(0, -1, 0))
   const uMoonBrightness = uniform(0)
+  // World-space minimum corner of the tile this material renders. The river
+  // strip lives in world coords; the heightmap covers a single tile [tileMin,
+  // tileMin + 64m]. Subtracting this gives the local UV used to sample bed
+  // height (mirrors how the sea shader samples its tile heightmap).
+  const uTileMin = uniform(new THREE.Vector2(0, 0))
 
   // Palette — dark inland river: muddy bank → mid blue → deep navy. Mostly
   // a mirror for the sky, which is where the "color" really comes from.
@@ -93,7 +101,15 @@ export function createRiverMaterial(
   const normalMapTex = texture(options.normalMap)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
+  const heightmapTex = texture(options.heightmapTexture)
   const cloudTex = texture(getCloudTexture())
+
+  // Tile heightmap is 65×65 covering a 64m tile, with vertices aligned to
+  // texel centers. Same alignment helper as water-material.ts so river bed
+  // sampling matches sea bed sampling exactly at the shoreline contour.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const toHeightmapUV = (uvCoord: any) =>
+    uvCoord.mul(64.0 / 65.0).add(0.5 / 65.0)
 
   // ── Varyings / Attributes ──
   const vWorldPos = varying(vec3(0), 'r_worldPos')
@@ -413,28 +429,62 @@ export function createRiverMaterial(
     color.mulAssign(nightDarken)
 
     // ── Alpha ──
-    // River water is clearer near the banks — fade alpha from the channel
-    // toward the edge. The ribbon geometry is built 1.5×+0.5m wider than
-    // the baked channel so the outer strip sits over the carved pebble
-    // bank that should read as exposed shore, not as submerged bed.
+    // River body opacity. The depth-based cut + shore fade below handle
+    // the bank transition naturally: the ribbon geometry is wider than
+    // the carved channel, so its outer strip sits over the raised pebble
+    // bank where depth ≈ 0 and the depth fade drops alpha. No need for
+    // a separate strip-local edge fade.
+    const baseAlpha = float(0.95)
+
+    // Depth-based edge fade. The carved channel has water sitting exactly
+    // `RIVER_DEPTH_OFFSET_M = 0.5 m` above the bed, so a fragment over
+    // the centerline always reads depth ≈ 0.5 m regardless of natural
+    // terrain elevation. Past the carve taper the heightmap rises back
+    // toward natural ground and depth → 0; that's where the strip should
+    // fade transparent.
     //
-    // Two competing constraints:
-    //   • Fade must start *after* the refraction peak (≈0.6) — if alpha
-    //     drops while refraction is still strong, direct-terrain view
-    //     leaks through the same pixels and the wobble disappears.
-    //   • Fade must finish before the outer geometry margin so the
-    //     pebble bank behind it is visible — a late/long fade leaves
-    //     the water stamped over the shore.
-    // A narrow fast ramp threads both: opaque through the refraction
-    // band, then a hard drop that uncovers the shore.
-    const edgeFade = smoothstep(float(0.55), float(0.85), bankFactor)
-    const bankAlpha = clamp(float(0.95).sub(edgeFade.mul(0.95)), 0.0, 1.0)
+    // Bed height is sampled per fragment from the same tile heightmap the
+    // sea shader uses, so both shaders see the same baseline at the same
+    // resolution and their boundaries land on the same shoreline contour.
+    //
+    // World XZ → tile UV: subtract tile origin and divide by tile size
+    // (64 m), then apply the 65×65 texel-center alignment used by sea.
+    // V is flipped vs world Z because `THREE.PlaneGeometry` defaults to
+    // UV.v increasing with local +Y, and `rotateX(-π/2)` maps +Y to −Z
+    // — so vUv.v=0 lives at worldZ = tileMaxZ. Sea shader inherits this
+    // via the rotated plane's vUv; here we recompute from world XZ, so
+    // we flip V manually to match.
+    //
+    // UV is clamped because mouth-fan extensions (16 m past the polyline
+    // tip) can spill into a neighbor tile; clamped sampling reads the edge
+    // texel, but mouthFactor → 1 there already drives alpha to 0 so the
+    // approximation is invisible.
+    const localU = vWorldPos.x.sub(uTileMin.x).div(64.0)
+    const localV = float(1).sub(vWorldPos.z.sub(uTileMin.y).div(64.0))
+    const heightmapUV = clamp(toHeightmapUV(vec2(localU, localV)), 0.0, 1.0)
+    const bedHeight = heightmapTex.sample(heightmapUV).r
+    const depth = max(float(0), vWorldPos.y.sub(bedHeight))
+    // Hard cut at 0–5 cm depth so the strip's geometric edge over land
+    // (depth 0) reads as fully transparent.
+    const depthEdgeCut = smoothstep(float(0), float(0.05), depth)
+    // Body fade: depth ≤ 0.2 m → near-transparent (α 0.05 plateau);
+    // depth 0.2 m → 0.5 m ramps up to body opacity 0.95. Pairs with the
+    // bake's 0.5 m centerline depth so the carved channel stays solid.
+    const depthAlpha = mix(
+      float(0.005),
+      float(0.95),
+      smoothstep(float(0.2), float(0.5), depth)
+    )
+
     // Estuary fade: vMouthFactor=1 where the ribbon sits in open sea.
     // Fully-opaque upstream, fully transparent at the mouth so the sea
     // quad underneath takes over. Coverage of the sea shader's shoreline
     // foam band is handled independently by the sea shader sampling the
     // splatmap's river-proximity byte and attenuating its own foam term.
-    const alpha = bankAlpha.mul(float(1).sub(vMouthFactor))
+    const alpha = baseAlpha
+      .mul(float(1).sub(vMouthFactor))
+      .mul(depthEdgeCut)
+      .mul(depthAlpha)
 
     return vec4(color, alpha)
   })()
@@ -459,6 +509,8 @@ export function createRiverMaterial(
       uReflectionMap: reflectionTex,
       uRefractionMap: refractionTex,
       uNormalMap: normalMapTex,
+      uHeightmapTexture: heightmapTex,
+      uTileMin,
     },
   }
 }

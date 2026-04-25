@@ -46,7 +46,7 @@
 
   // Debug: overlay the ribbon's triangle edges so the tessellation is
   // visible. Flip to false (or wire to a UI toggle) to disable.
-  const SHOW_WIREFRAME = false
+  const SHOW_WIREFRAME = true
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: 0xff3366,
     transparent: true,
@@ -97,11 +97,15 @@
     return map
   }
 
-  // One material shared across tiles — all ribbons use the same uniforms.
-  // Created lazily once both textures are available; any tile meshes built
-  // before creation carry a transient basic material and are upgraded in the
-  // $effect below when the shared material comes online.
-  let riverMaterialResult: RiverMaterialResult | null = null
+  // Per-tile river material — each instance binds to its own tile heightmap
+  // so the depth-based edge fade samples the same data the sea shader does
+  // and the two boundaries land on the same shoreline contour. Tiles built
+  // before normalMap is available carry a transient basic material and are
+  // upgraded in the `$effect` below when the shared textures come online.
+  /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+  const tileMaterials = new Map<string, RiverMaterialResult>()
+  /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+  const tileHeightTextures = new Map<string, THREE.DataTexture>()
   const placeholderMaterial = new THREE.MeshBasicMaterial({
     color: 0x33ccff,
     transparent: true,
@@ -110,24 +114,21 @@
     side: THREE.DoubleSide,
   })
 
-  function currentMaterial(): THREE.Material {
-    return riverMaterialResult?.material ?? placeholderMaterial
-  }
-
-  /** Called from the game loop each frame to sync uniforms.
-   *  Reflection/refraction textures are captured once at material
-   *  creation (they're render targets set up at scene init and never
-   *  swapped); WebGPU bind groups lock to the initial reference anyway
-   *  (see `webgpu_precompile_bind_group_staleness`), so reassigning
-   *  them per frame is a no-op — skip the extra write. */
+  /** Called from the game loop each frame to sync uniforms across all tile
+   *  materials. Reflection/refraction textures are captured once at material
+   *  creation (they're render targets set up at scene init and never swapped);
+   *  WebGPU bind groups lock to the initial reference anyway (see
+   *  `webgpu_precompile_bind_group_staleness`), so reassigning them per frame
+   *  is a no-op — skip the extra write. */
   export function updateUniforms() {
-    if (!riverMaterialResult) return
-    const u = riverMaterialResult.uniforms
-    u.uTime.value = time
-    if (sunDirection) u.uSunDirection.value.copy(sunDirection)
-    if (sunColor) u.uSunColor.value.copy(sunColor)
-    if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
-    u.uMoonBrightness.value = moonBrightness
+    for (const result of tileMaterials.values()) {
+      const u = result.uniforms
+      u.uTime.value = time
+      if (sunDirection) u.uSunDirection.value.copy(sunDirection)
+      if (sunColor) u.uSunColor.value.copy(sunColor)
+      if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
+      u.uMoonBrightness.value = moonBrightness
+    }
   }
 
   function disposeTile(id: string) {
@@ -144,6 +145,21 @@
     }
     tileMeshes.delete(id)
     tileSegments.delete(id)
+    // Drop the per-tile material; pipeline recompile cost is paid on next
+    // load. Don't dispose the heightmap texture — Three.js Sampler binding
+    // listens for 'dispose' and nullifies .texture, but _init doesn't sync
+    // sampler bindings, so a re-pooled material would crash. GC handles it.
+    tileMaterials.delete(id)
+    tileHeightTextures.delete(id)
+  }
+
+  /** Parse tile coords from a `tileX_tileZ` id (matches `createTerrainTiles`). */
+  function parseTileId(id: string): { tileX: number; tileZ: number } | null {
+    const [sx, sz] = id.split('_')
+    const tileX = Number(sx)
+    const tileZ = Number(sz)
+    if (!Number.isFinite(tileX) || !Number.isFinite(tileZ)) return null
+    return { tileX, tileZ }
   }
 
   function buildTileMesh(id: string, segments: RiverSegment[]) {
@@ -170,7 +186,46 @@
       tileMeshes.set(id, null)
       return
     }
-    const mesh = new THREE.Mesh(geometry, currentMaterial())
+
+    const coords = parseTileId(id)
+    // Acquire/refresh the per-tile heightmap texture. Same pattern the
+    // water layer uses — create-once, in-place update on rebuild so the
+    // bind group keeps a stable reference (per webgpu_precompile memo).
+    let heightTex = tileHeightTextures.get(id)
+    if (heightTex && coords && heightManager) {
+      heightManager.updateHeightmapTexture(coords.tileX, coords.tileZ, heightTex)
+    } else if (coords && heightManager) {
+      const tex = heightManager.getHeightmapTexture(coords.tileX, coords.tileZ)
+      if (tex) {
+        heightTex = tex
+        tileHeightTextures.set(id, tex)
+      }
+    }
+
+    // Acquire/create per-tile river material. Without the heightmap we
+    // can't create the real material yet — leave the geometry off-scene
+    // and rebuild once the heightmap arrives.
+    let matResult = tileMaterials.get(id)
+    if (!matResult && normalMap && heightTex) {
+      matResult = createRiverMaterial({
+        normalMap,
+        heightmapTexture: heightTex,
+        reflectionMap,
+        refractionMap,
+      })
+      if (coords) {
+        const tileMinX = coords.tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const tileMinZ = coords.tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        matResult.uniforms.uTileMin.value.set(tileMinX, tileMinZ)
+      }
+      tileMaterials.set(id, matResult)
+    } else if (matResult && heightTex) {
+      // Refresh heightmap reference on rebuild; tile origin is fixed.
+      matResult.uniforms.uHeightmapTexture.value = heightTex
+    }
+
+    const meshMaterial: THREE.Material = matResult?.material ?? placeholderMaterial
+    const mesh = new THREE.Mesh(geometry, meshMaterial)
     mesh.receiveShadow = false
     mesh.castShadow = false
     // River ribbon and sea quad both use alpha blending with depthWrite
@@ -227,18 +282,31 @@
     }
   }
 
-  // Promote tile meshes from placeholder to the shared river material once
-  // the required textures are available.
+  // Promote tile meshes from placeholder to per-tile river materials once
+  // normalMap is available. Tiles built before this still hold the
+  // placeholder material; create their material now using the heightmap
+  // texture each tile already cached.
   $effect(() => {
-    if (riverMaterialResult || !normalMap) return
-    riverMaterialResult = createRiverMaterial({
-      normalMap,
-      reflectionMap,
-      refractionMap,
-    })
-    const mat = riverMaterialResult.material
-    for (const mesh of tileMeshes.values()) {
-      if (mesh) mesh.material = mat
+    if (!normalMap) return
+    for (const [id, mesh] of tileMeshes) {
+      if (!mesh) continue
+      if (tileMaterials.has(id)) continue
+      const heightTex = tileHeightTextures.get(id)
+      if (!heightTex) continue
+      const coords = parseTileId(id)
+      const result = createRiverMaterial({
+        normalMap,
+        heightmapTexture: heightTex,
+        reflectionMap,
+        refractionMap,
+      })
+      if (coords) {
+        const tileMinX = coords.tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        const tileMinZ = coords.tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+        result.uniforms.uTileMin.value.set(tileMinX, tileMinZ)
+      }
+      tileMaterials.set(id, result)
+      mesh.material = result.material
     }
   })
 
