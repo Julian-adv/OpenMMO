@@ -34,6 +34,7 @@ pub use constants::{
     RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, TILE_DIM, VERTS_PER_SIDE,
 };
 pub use context::BakeContext;
+use context::MouthIsland;
 pub use rivers_bin::{
     bake_rivers_binary, bucket_river_segments_by_owner, RiverSegmentBuckets, RIVER_BIN_HEADER_SIZE,
     RIVER_BIN_MAGIC, RIVER_BIN_SEGMENT_SIZE, RIVER_BIN_VERSION,
@@ -103,8 +104,21 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
         tile_max_z,
         coast_margin,
     );
+    // Extra margin so the heightmap-smoothing pass's 2-vertex
+    // out-of-tile ring can still see any island whose bump reaches into
+    // that ring — otherwise a tile edge drawn across the end of an
+    // adjacent tile's island would blur against a bump-less ghost and
+    // reintroduce a seam.
+    const ISLAND_BLUR_MARGIN_M: f32 = 2.0;
+    let mouth_islands = mouth_islands_near_tile(
+        &ctx.mouth_islands,
+        tile_min_x - ISLAND_BLUR_MARGIN_M,
+        tile_min_z - ISLAND_BLUR_MARGIN_M,
+        tile_max_x + ISLAND_BLUR_MARGIN_M,
+        tile_max_z + ISLAND_BLUR_MARGIN_M,
+    );
 
-    let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs);
+    let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs, &mouth_islands);
     let heightmap = encode_heightmap(&heights);
     let splatmap = bake_splatmap(
         map,
@@ -120,6 +134,31 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
         heightmap,
         splatmap,
     }
+}
+
+/// AABB-cull `MouthIsland`s against a tile's world-space bounds so the
+/// per-vertex bump loop iterates only the local handful. Vertex-level
+/// bumps inside `sample_elevation_m` still do their own bbox rejection.
+fn mouth_islands_near_tile(
+    islands: &[MouthIsland],
+    tile_min_x: f32,
+    tile_min_z: f32,
+    tile_max_x: f32,
+    tile_max_z: f32,
+) -> Vec<MouthIsland> {
+    islands
+        .iter()
+        .filter(|island| {
+            let r = island.reach_m;
+            let cx = island.center[0];
+            let cz = island.center[1];
+            cx + r >= tile_min_x
+                && cx - r <= tile_max_x
+                && cz + r >= tile_min_z
+                && cz - r <= tile_max_z
+        })
+        .copied()
+        .collect()
 }
 
 #[cfg(test)]
