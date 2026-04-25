@@ -16,6 +16,7 @@ import {
   pow,
   abs,
   max,
+  step,
   reflect,
   varying,
   normalize,
@@ -37,7 +38,13 @@ type _N = any // TSL node — broad type for internal helper params
 
 export interface RiverMaterialOptions {
   normalMap: THREE.Texture
+  // Owner-tile heightmap + the 3 neighbors the ribbon may spill into
+  // (X-axis, Z-axis, XZ-corner). Omitted bindings fall back to the owner
+  // heightmap so the 4-way blend collapses to a single sample.
   heightmapTexture: THREE.Texture
+  heightmapXTexture?: THREE.Texture | null
+  heightmapZTexture?: THREE.Texture | null
+  heightmapXZTexture?: THREE.Texture | null
   reflectionMap?: THREE.Texture | null
   refractionMap?: THREE.Texture | null
 }
@@ -52,7 +59,15 @@ export interface RiverMaterialUniforms {
   uRefractionMap: { value: THREE.Texture }
   uNormalMap: { value: THREE.Texture }
   uHeightmapTexture: { value: THREE.Texture }
+  uHeightmapXTexture: { value: THREE.Texture }
+  uHeightmapZTexture: { value: THREE.Texture }
+  uHeightmapXZTexture: { value: THREE.Texture }
   uTileMin: { value: THREE.Vector2 }
+  // Only uTileMinX.x and uTileMinZ.y are read by the shader; the
+  // perpendicular components match the owner. The corner tile-min is
+  // implicit (uTileMinX.x, uTileMinZ.y).
+  uTileMinX: { value: THREE.Vector2 }
+  uTileMinZ: { value: THREE.Vector2 }
 }
 
 export interface RiverMaterialResult {
@@ -86,6 +101,8 @@ export function createRiverMaterial(
   // tileMin + 64m]. Subtracting this gives the local UV used to sample bed
   // height (mirrors how the sea shader samples its tile heightmap).
   const uTileMin = uniform(new THREE.Vector2(0, 0))
+  const uTileMinX = uniform(new THREE.Vector2(0, 0))
+  const uTileMinZ = uniform(new THREE.Vector2(0, 0))
 
   // Palette — dark inland river: muddy bank → mid blue → deep navy. Mostly
   // a mirror for the sky, which is where the "color" really comes from.
@@ -103,6 +120,11 @@ export function createRiverMaterial(
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
   const heightmapTex = texture(options.heightmapTexture)
+  const optHeight = (t?: THREE.Texture | null) =>
+    texture(t ?? options.heightmapTexture)
+  const heightmapXTex = optHeight(options.heightmapXTexture)
+  const heightmapZTex = optHeight(options.heightmapZTexture)
+  const heightmapXZTex = optHeight(options.heightmapXZTexture)
   const cloudTex = texture(getCloudTexture())
 
   // ── Varyings / Attributes ──
@@ -423,22 +445,44 @@ export function createRiverMaterial(
     color.mulAssign(nightDarken)
 
     // ── Alpha ──
-    // Bed height is sampled per fragment from the same tile heightmap the
-    // sea shader uses, so river/sea boundaries land on the same shoreline
-    // contour. V is flipped vs world Z because `THREE.PlaneGeometry`
-    // defaults to UV.v increasing with local +Y and `rotateX(-π/2)` maps
-    // +Y → −Z — so vUv.v=0 lives at worldZ = tileMaxZ. Sea shader
-    // inherits this via the rotated plane's vUv; here we recompute from
-    // world XZ so we flip V manually to match.
+    // V is flipped vs world Z because `THREE.PlaneGeometry` defaults to
+    // UV.v increasing with local +Y and `rotateX(-π/2)` maps +Y → −Z, so
+    // sea heightmap UVs land at v=0 ⇒ tileMaxZ. We recompute from world
+    // XZ here and flip manually to match the sea shader's sampling so
+    // river/sea alpha boundaries land on the same shoreline contour.
     //
-    // UV is clamped because mouth-fan extensions (16 m past the polyline
-    // tip) can spill into a neighbor tile; clamped sampling reads the edge
-    // texel but mouthFactor → 1 there already drives alpha to 0 so the
-    // approximation is invisible.
-    const localU = vWorldPos.x.sub(uTileMin.x).div(64.0)
-    const localV = float(1).sub(vWorldPos.z.sub(uTileMin.y).div(64.0))
-    const heightmapUV = clamp(toHeightmapUV(vec2(localU, localV)), 0.0, 1.0)
-    const bedHeight = heightmapTex.sample(heightmapUV).r
+    // 4-way spill: the ribbon (mouth-fan extension + width pad) can
+    // overshoot the owner tile in X, Z, or both; the both-axis case
+    // covers a *diagonal* corner tile that neither single neighbor sees.
+    // Without all four samples a single-tile clamp freezes bed height at
+    // the edge texel and the depth-based alpha plateaus in a small
+    // rectangular patch over the corner.
+    const ownerLocalU = vWorldPos.x.sub(uTileMin.x).div(64.0)
+    const ownerLocalV = float(1).sub(vWorldPos.z.sub(uTileMin.y).div(64.0))
+    const xLocalU = vWorldPos.x.sub(uTileMinX.x).div(64.0)
+    const zLocalV = float(1).sub(vWorldPos.z.sub(uTileMinZ.y).div(64.0))
+
+    const uvOwner = clamp(
+      toHeightmapUV(vec2(ownerLocalU, ownerLocalV)),
+      0.0,
+      1.0
+    )
+    const uvX = clamp(toHeightmapUV(vec2(xLocalU, ownerLocalV)), 0.0, 1.0)
+    const uvZ = clamp(toHeightmapUV(vec2(ownerLocalU, zLocalV)), 0.0, 1.0)
+    const uvXZ = clamp(toHeightmapUV(vec2(xLocalU, zLocalV)), 0.0, 1.0)
+
+    const hOwner = heightmapTex.sample(uvOwner).r
+    const hX = heightmapXTex.sample(uvX).r
+    const hZ = heightmapZTex.sample(uvZ).r
+    const hXZ = heightmapXZTex.sample(uvXZ).r
+
+    // When an axis has no spill the layer points its tile-min at the
+    // owner — xLocalU then equals ownerLocalU and the matching texture
+    // binding collapses to heightmapTex, so the mix lands on the owner
+    // sample regardless of which side the half-plane test selects.
+    const xside = step(float(0), xLocalU).mul(step(xLocalU, float(1)))
+    const zside = step(float(0), zLocalV).mul(step(zLocalV, float(1)))
+    const bedHeight = mix(mix(hOwner, hX, xside), mix(hZ, hXZ, xside), zside)
     const depth = max(float(0), vWorldPos.y.sub(bedHeight))
     const depthEdgeCut = smoothstep(float(0), float(0.05), depth)
     // Pairs with the bake's `RIVER_DEPTH_OFFSET_M = 0.5 m` centerline depth:
@@ -481,7 +525,12 @@ export function createRiverMaterial(
       uRefractionMap: refractionTex,
       uNormalMap: normalMapTex,
       uHeightmapTexture: heightmapTex,
+      uHeightmapXTexture: heightmapXTex,
+      uHeightmapZTexture: heightmapZTex,
+      uHeightmapXZTexture: heightmapXZTex,
       uTileMin,
+      uTileMinX,
+      uTileMinZ,
     },
   }
 }

@@ -69,6 +69,14 @@
   const wireframeMeshes = new Map<string, THREE.LineSegments>()
   /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
   const inflightTiles = new Set<string>()
+  // Per-tile build queue. `buildTileMesh` is async and can be invoked
+  // concurrently for the same id (placeholder-promotion effect ⨯
+  // neighbor-rebuild loop ⨯ initial load). Without serialization two
+  // overlapping builds race on `riverGroup.add` / `tileMeshes.set` and
+  // can leak a mesh into the scene. Each call awaits the prior in-flight
+  // build for that id so disposal-then-add stays atomic.
+  /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+  const buildChain = new Map<string, Promise<void>>()
   // Per-tile segment cache so we can compute "endpoints present in other
   // tiles" when deciding whether a chain tip is a real mouth (extend into
   // sea) or a tile-seam continuation (skip the extension to avoid two
@@ -153,29 +161,107 @@
     tileHeightTextures.delete(id)
   }
 
-  /** Create-on-demand the per-tile river material. Returns the existing
-   *  cached material if already created, or null when normalMap / coords
-   *  aren't ready yet (caller falls back to `placeholderMaterial`). */
+  interface SpillBindings {
+    xTex: THREE.DataTexture | null
+    zTex: THREE.DataTexture | null
+    xzTex: THREE.DataTexture | null
+    // Worldspace tile-min on each axis the ribbon spills into. Defaults
+    // to the owner's own min when that axis has no spill — pre-baked by
+    // the caller so `ensureTileMaterial` doesn't repeat the math.
+    xMinX: number
+    zMinZ: number
+  }
+
+  function tileMinFromCoords(tileX: number, tileZ: number): [number, number] {
+    return [
+      tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2,
+      tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2,
+    ]
+  }
+
+  /** Create-on-demand the per-tile river material. All spill bindings
+   *  must be resolved up-front — WebGPU bind groups lock to the initial
+   *  texture references at compile time, so swapping samplers
+   *  post-creation is a no-op (see memory:
+   *  webgpu_precompile_bind_group_staleness). When the cached material
+   *  was built with different bindings, drop and recreate. Returns null
+   *  when normalMap / coords aren't ready yet (caller falls back to
+   *  `placeholderMaterial`). */
   function ensureTileMaterial(
     id: string,
-    heightTex: THREE.DataTexture
+    heightTex: THREE.DataTexture,
+    spill: SpillBindings
   ): RiverMaterialResult | null {
+    const xTex = spill.xTex ?? heightTex
+    const zTex = spill.zTex ?? heightTex
+    const xzTex = spill.xzTex ?? heightTex
     const cached = tileMaterials.get(id)
-    if (cached) return cached
+    if (cached) {
+      if (
+        cached.uniforms.uHeightmapXTexture.value === xTex &&
+        cached.uniforms.uHeightmapZTexture.value === zTex &&
+        cached.uniforms.uHeightmapXZTexture.value === xzTex
+      ) {
+        return cached
+      }
+      tileMaterials.delete(id)
+    }
     if (!normalMap) return null
     const coords = parseTileId(id)
     if (!coords) return null
     const result = createRiverMaterial({
       normalMap,
       heightmapTexture: heightTex,
+      heightmapXTexture: xTex,
+      heightmapZTexture: zTex,
+      heightmapXZTexture: xzTex,
       reflectionMap,
       refractionMap,
     })
-    const tileMinX = coords.tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-    const tileMinZ = coords.tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+    const [tileMinX, tileMinZ] = tileMinFromCoords(coords.tileX, coords.tileZ)
     result.uniforms.uTileMin.value.set(tileMinX, tileMinZ)
+    result.uniforms.uTileMinX.value.set(spill.xMinX, tileMinZ)
+    result.uniforms.uTileMinZ.value.set(tileMinX, spill.zMinZ)
     tileMaterials.set(id, result)
     return result
+  }
+
+  /** Pick the dominant-spill neighbor on each axis. Both axes spilling
+   *  produces a diagonal-corner overshoot the caller must also load —
+   *  if the corner is left unbound, alpha freezes in a small rectangular
+   *  patch where the ribbon enters the corner quadrant. */
+  function determineSpillNeighbors(
+    id: string,
+    geometry: THREE.BufferGeometry
+  ): { xTileX: number | null; zTileZ: number | null } | null {
+    const coords = parseTileId(id)
+    if (!coords) return null
+    const bbox = geometry.boundingBox
+    if (!bbox) return null
+    const [tileMinX, tileMinZ] = tileMinFromCoords(coords.tileX, coords.tileZ)
+    const tileMaxX = tileMinX + TERRAIN_TILE_SIZE
+    const tileMaxZ = tileMinZ + TERRAIN_TILE_SIZE
+    const overMinusX = tileMinX - bbox.min.x
+    const overPlusX = bbox.max.x - tileMaxX
+    const overMinusZ = tileMinZ - bbox.min.z
+    const overPlusZ = bbox.max.z - tileMaxZ
+    let xTileX: number | null = null
+    if (overPlusX > 0 && overPlusX >= overMinusX) xTileX = coords.tileX + 1
+    else if (overMinusX > 0) xTileX = coords.tileX - 1
+    let zTileZ: number | null = null
+    if (overPlusZ > 0 && overPlusZ >= overMinusZ) zTileZ = coords.tileZ + 1
+    else if (overMinusZ > 0) zTileZ = coords.tileZ - 1
+    if (xTileX === null && zTileZ === null) return null
+    return { xTileX, zTileZ }
+  }
+
+  async function loadNeighborTex(
+    tileX: number,
+    tileZ: number
+  ): Promise<THREE.DataTexture | null> {
+    if (!heightManager) return null
+    await heightManager.loadHeightmap(tileX, tileZ).catch(() => null)
+    return heightManager.getHeightmapTexture(tileX, tileZ)
   }
 
   /** Acquire-or-refresh the per-tile heightmap texture. Same create-once,
@@ -196,7 +282,7 @@
     return tex
   }
 
-  function buildTileMesh(id: string, segments: RiverSegment[]) {
+  function disposePriorMesh(id: string) {
     const prev = tileMeshes.get(id)
     if (prev) {
       riverGroup.remove(prev)
@@ -208,7 +294,24 @@
       prevWf.geometry.dispose()
       wireframeMeshes.delete(id)
     }
+  }
 
+  /** Public entry point. Serializes per-id so concurrent invocations
+   *  from the placeholder-promotion `$effect`, the neighbor-rebuild
+   *  loop, and the initial load can't race on `riverGroup.add` /
+   *  `tileMeshes.set` and leak a mesh into the scene. */
+  function buildTileMesh(id: string, segments: RiverSegment[]): Promise<void> {
+    const prior = buildChain.get(id) ?? Promise.resolve()
+    const next = prior
+      .catch(() => undefined)
+      .then(() => buildTileMeshInner(id, segments))
+    buildChain.set(id, next)
+    return next.finally(() => {
+      if (buildChain.get(id) === next) buildChain.delete(id)
+    })
+  }
+
+  async function buildTileMeshInner(id: string, segments: RiverSegment[]) {
     const externalContinuations = collectExternalContinuations(id)
     const { geometry, vertexCount } = buildRiverGeometry(
       segments,
@@ -217,12 +320,53 @@
     )
     if (vertexCount === 0) {
       geometry.dispose()
+      disposePriorMesh(id)
       tileMeshes.set(id, null)
       return
     }
 
+    const ownerCoords = parseTileId(id)
+    const spill = determineSpillNeighbors(id, geometry)
+    const [ownerMinX, ownerMinZ] = ownerCoords
+      ? tileMinFromCoords(ownerCoords.tileX, ownerCoords.tileZ)
+      : [0, 0]
+    const spillBindings: SpillBindings = {
+      xTex: null,
+      zTex: null,
+      xzTex: null,
+      xMinX: ownerMinX,
+      zMinZ: ownerMinZ,
+    }
+    if (spill && heightManager && ownerCoords) {
+      const xT = spill.xTileX
+      const zT = spill.zTileZ
+      const [xTexLoad, zTexLoad, xzTexLoad] = await Promise.all([
+        xT !== null ? loadNeighborTex(xT, ownerCoords.tileZ) : null,
+        zT !== null ? loadNeighborTex(ownerCoords.tileX, zT) : null,
+        xT !== null && zT !== null ? loadNeighborTex(xT, zT) : null,
+      ])
+      if (xT !== null) {
+        spillBindings.xTex = xTexLoad
+        spillBindings.xMinX = tileMinFromCoords(xT, ownerCoords.tileZ)[0]
+      }
+      if (zT !== null) {
+        spillBindings.zTex = zTexLoad
+        spillBindings.zMinZ = tileMinFromCoords(ownerCoords.tileX, zT)[1]
+      }
+      // Corner: if only one axis spills, the corner sample is unreachable
+      // (the corresponding half-plane test stays 0 in valid fragment
+      // ranges) — folding it to that single axis neighbor keeps the
+      // sampler bound to a real texture without affecting output.
+      spillBindings.xzTex =
+        xzTexLoad ?? spillBindings.xTex ?? spillBindings.zTex
+    }
+
+    disposePriorMesh(id)
+
     const heightTex = ensureTileHeightTexture(id)
-    const matResult = heightTex ? ensureTileMaterial(id, heightTex) : null
+    const matResult = heightTex
+      ? ensureTileMaterial(id, heightTex, spillBindings)
+      : null
     const meshMaterial: THREE.Material = matResult?.material ?? placeholderMaterial
     const mesh = new THREE.Mesh(geometry, meshMaterial)
     mesh.receiveShadow = false
@@ -259,23 +403,29 @@
     if (!riverDataManager || !heightManager) return
     inflightTiles.add(id)
     try {
-      await heightManager.loadHeightmap(tileX, tileZ).catch(() => null)
-      const data = await riverDataManager.loadRiverData(tileX, tileZ)
+      const [, data] = await Promise.all([
+        heightManager.loadHeightmap(tileX, tileZ).catch(() => null),
+        riverDataManager.loadRiverData(tileX, tileZ),
+      ])
       if (!data || data.segments.length === 0) {
         tileMeshes.set(id, null)
         return
       }
       tileSegments.set(id, data.segments)
-      buildTileMesh(id, data.segments)
+      await buildTileMesh(id, data.segments)
 
-      // Rebuild any already-built neighbor tiles — their chains may have
-      // terminated at a tile-seam point whose "shared with neighbor" status
-      // only becomes known now that this tile's segments are loaded.
+      // Rebuild already-built neighbor tiles in parallel — their chains
+      // may have terminated at a tile-seam point whose "shared with
+      // neighbor" status only becomes known now that this tile's
+      // segments are loaded. `buildTileMesh` is per-id serialized so
+      // the parallel kick-off is safe.
+      const rebuilds: Promise<void>[] = []
       for (const [otherId, segs] of tileSegments) {
         if (otherId === id) continue
         if (!tileMeshes.get(otherId)) continue
-        buildTileMesh(otherId, segs)
+        rebuilds.push(buildTileMesh(otherId, segs))
       }
+      await Promise.all(rebuilds)
     } finally {
       inflightTiles.delete(id)
     }
@@ -283,15 +433,17 @@
 
   // Promote tile meshes from placeholder to per-tile river materials once
   // normalMap arrives. Tiles built before that point still hold the
-  // placeholder; build their material now using the cached heightmap.
+  // placeholder; rebuild via `buildTileMesh` (rather than a hot material
+  // swap) so the spill neighbor binding lands at material-compile time
+  // along with the primary heightmap.
   $effect(() => {
     if (!normalMap) return
     for (const [id, mesh] of tileMeshes) {
       if (!mesh) continue
-      const heightTex = tileHeightTextures.get(id)
-      if (!heightTex) continue
-      const result = ensureTileMaterial(id, heightTex)
-      if (result) mesh.material = result.material
+      if (mesh.material !== placeholderMaterial) continue
+      const segs = tileSegments.get(id)
+      if (!segs) continue
+      void buildTileMesh(id, segs)
     }
   })
 
