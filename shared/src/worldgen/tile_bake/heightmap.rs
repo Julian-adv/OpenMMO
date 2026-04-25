@@ -11,7 +11,7 @@ use super::constants::{
     RIVER_CARVE_TAPER_MIN_M, TILE_DIM,
     VERTS_PER_SIDE,
 };
-use super::context::BakeContext;
+use super::context::{BakeContext, MouthIsland};
 
 /// Generate the 65×65 f32 heightmap. Shared between the uint16 heightmap
 /// output and the splatmap slope computation (so both read identical heights).
@@ -21,6 +21,7 @@ pub(super) fn sample_tile_heights(
     tx: i32,
     tz: i32,
     river_segs: &[RiverSegment],
+    mouth_islands: &[MouthIsland],
 ) -> Vec<f32> {
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
@@ -30,15 +31,135 @@ pub(super) fn sample_tile_heights(
     let tile_origin_x = tx as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
     let tile_origin_z = tz as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
 
+    let sample_world = |wx: f32, wz: f32| {
+        sample_elevation_m(
+            map,
+            ctx,
+            wx,
+            wz,
+            world_size,
+            inv_mpc,
+            river_segs,
+            mouth_islands,
+        )
+    };
     for j in 0..VERTS_PER_SIDE {
         for i in 0..VERTS_PER_SIDE {
             let world_x = tile_origin_x + i as f32;
             let world_z = tile_origin_z + j as f32;
-            heights[j * VERTS_PER_SIDE + i] =
-                sample_elevation_m(map, ctx, world_x, world_z, world_size, inv_mpc, river_segs);
+            heights[j * VERTS_PER_SIDE + i] = sample_world(world_x, world_z);
         }
     }
+    smooth_island_area(
+        &mut heights,
+        tile_origin_x,
+        tile_origin_z,
+        mouth_islands,
+        sample_world,
+    );
     heights
+}
+
+/// 3×3 Gaussian approximation, σ ≈ 0.85, sum = 16.
+const KERNEL: [[u32; 3]; 3] = [[1, 2, 1], [2, 4, 2], [1, 2, 1]];
+const KERNEL_SUM: f32 = 16.0;
+
+/// Convolve the 3×3 kernel against `src` centered at `(ci, cj)`. Caller
+/// owns bounds checking — the kernel reads `ci±1, cj±1`.
+#[inline]
+fn blur3x3(src: &[f32], stride: usize, ci: usize, cj: usize) -> f32 {
+    let mut acc = 0.0f32;
+    for dj in 0..3 {
+        for di in 0..3 {
+            let ni = ci + di - 1;
+            let nj = cj + dj - 1;
+            acc += src[nj * stride + ni] * KERNEL[dj][di] as f32;
+        }
+    }
+    acc / KERNEL_SUM
+}
+
+/// Two-pass 3×3 Gaussian blur applied only to vertices inside any
+/// mouth-island's reach (plus a small margin to fade the surf-chop
+/// wobble just beyond the bump). Two tight passes preserve the bar
+/// crown better than a single wide kernel.
+///
+/// Seam-safe: the 2-vertex out-of-tile ring is re-sampled via
+/// `sample_world`, and neighbouring tiles sampling the same world
+/// positions for their own rings produce matching seam output.
+fn smooth_island_area(
+    heights: &mut [f32],
+    tile_origin_x: f32,
+    tile_origin_z: f32,
+    islands: &[MouthIsland],
+    sample_world: impl Fn(f32, f32) -> f32,
+) {
+    if islands.is_empty() {
+        return;
+    }
+    const BLUR_EXTRA_M: f32 = 2.0;
+    let mut mask = vec![false; VERTS_PER_SIDE * VERTS_PER_SIDE];
+    let mut any_masked = false;
+    for j in 0..VERTS_PER_SIDE {
+        for i in 0..VERTS_PER_SIDE {
+            let wx = tile_origin_x + i as f32;
+            let wz = tile_origin_z + j as f32;
+            for island in islands {
+                let r = island.reach_m + BLUR_EXTRA_M;
+                let dx = wx - island.center[0];
+                let dz = wz - island.center[1];
+                if (dx * dx + dz * dz) <= r * r {
+                    mask[j * VERTS_PER_SIDE + i] = true;
+                    any_masked = true;
+                    break;
+                }
+            }
+        }
+    }
+    if !any_masked {
+        return;
+    }
+
+    // Extended grid (VERTS+4)² with a 2-vertex ring of out-of-tile
+    // samples so both 3×3 passes feed identical neighbourhoods on both
+    // sides of a shared seam.
+    const RING: usize = 2;
+    const EXT: usize = VERTS_PER_SIDE + 2 * RING;
+    let mut ext = vec![0.0f32; EXT * EXT];
+    let vps_i32 = VERTS_PER_SIDE as i32;
+    let ring_i32 = RING as i32;
+    for ej in 0..EXT {
+        for ei in 0..EXT {
+            let i = ei as i32 - ring_i32;
+            let j = ej as i32 - ring_i32;
+            if i >= 0 && i < vps_i32 && j >= 0 && j < vps_i32 {
+                ext[ej * EXT + ei] = heights[j as usize * VERTS_PER_SIDE + i as usize];
+            } else {
+                ext[ej * EXT + ei] =
+                    sample_world(tile_origin_x + i as f32, tile_origin_z + j as f32);
+            }
+        }
+    }
+
+    // Pass 1: blur EXT into MID, leaving a 1-vertex border of blurred
+    // values around the 65² region for pass 2.
+    const MID: usize = VERTS_PER_SIDE + 2;
+    let mut mid = vec![0.0f32; MID * MID];
+    for mj in 0..MID {
+        for mi in 0..MID {
+            mid[mj * MID + mi] = blur3x3(&ext, EXT, mi + 1, mj + 1);
+        }
+    }
+
+    // Pass 2: blur MID into masked positions of `heights`.
+    for j in 0..VERTS_PER_SIDE {
+        for i in 0..VERTS_PER_SIDE {
+            if !mask[j * VERTS_PER_SIDE + i] {
+                continue;
+            }
+            heights[j * VERTS_PER_SIDE + i] = blur3x3(&mid, MID, i + 1, j + 1);
+        }
+    }
 }
 
 pub(super) fn encode_heightmap(heights: &[f32]) -> Vec<u8> {
@@ -63,6 +184,7 @@ fn sample_elevation_m(
     world_size: f32,
     inv_mpc: f32,
     river_segs: &[RiverSegment],
+    mouth_islands: &[MouthIsland],
 ) -> f32 {
     // Catmull-Rom (C1-continuous bicubic) instead of bilinear here: the 8 m
     // global cells are too coarse to describe a smooth hill, and bilinear's
@@ -71,7 +193,7 @@ fn sample_elevation_m(
     // use bilinear; bicubic overshoot at a sharp land/sea transition would
     // distort the shoreline.
     let base = catmull_rom_wrap_x(map, world_x, world_z, world_size, inv_mpc, |i| {
-        cell_elevation_m(map, ctx, i)
+        cell_elevation_m(map, &ctx.dist_to_land, i)
     });
 
     // Amplitude scales with relative elevation so plains stay calm and peaks
@@ -135,8 +257,27 @@ fn sample_elevation_m(
     let carve_cap = (pre_carve - RIVER_CARVE_MIN_BED_Y_M).max(0.0);
     let carve = raw_carve.min(carve_cap);
 
+    // Sandy finger-islands in the delta. Applied *after* the carve
+    // subtraction so the carve can't immediately re-cut the bump back
+    // out — island peak rides on top of the post-carve bed floor
+    // (`RIVER_CARVE_MIN_BED_Y_M = 0.3 m` near the mouth). Max over
+    // overlapping islands rather than sum so adjacent bumps merge into
+    // one larger bar instead of stacking into spikes.
+    let mut island_bump = 0.0f32;
+    for island in mouth_islands {
+        if (world_x - island.center[0]).abs() > island.reach_m
+            || (world_z - island.center[1]).abs() > island.reach_m
+        {
+            continue;
+        }
+        let h = island.bump_m(world_x, world_z);
+        if h > island_bump {
+            island_bump = h;
+        }
+    }
+
     let max_cap = map.config.max_elevation_m;
-    (pre_carve - carve).clamp(-HEIGHT_BIAS, max_cap)
+    (pre_carve - carve + island_bump).clamp(-HEIGHT_BIAS, max_cap)
 }
 
 #[inline]
@@ -175,13 +316,15 @@ fn river_carve_m(d_m: f32, half_width: f32, taper: f32, depth: f32) -> f32 {
 }
 
 /// Map a single global cell to "effective elevation": the raw meters for
-/// land, or a shallow negative bathymetry for sea (deeper offshore, capped).
-fn cell_elevation_m(map: &GlobalMap, ctx: &BakeContext, i: usize) -> f32 {
+/// land, or a shallow negative bathymetry for sea (deeper offshore, capped
+/// so depth ramps 0.5 m at the shore up to ~10 m far offshore). Shared by
+/// every coarse-grid elevation sampler so all paths agree on the
+/// shoreline bathymetry curve.
+pub(super) fn cell_elevation_m(map: &GlobalMap, dist_to_land: &[u16], i: usize) -> f32 {
     if map.land_mask[i] == 1 {
         map.elevation_m[i]
     } else {
-        // Depth ramps 0.5 m at the shore up to ~10 m far offshore.
-        let d = ctx.dist_to_land[i] as f32;
+        let d = dist_to_land[i] as f32;
         -(0.5 + d.min(40.0) * 0.25)
     }
 }

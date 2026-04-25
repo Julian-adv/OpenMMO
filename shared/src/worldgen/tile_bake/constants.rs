@@ -102,6 +102,53 @@ pub(super) const RIVER_MOUTH_FAN_BASE_LOW_M: f32 = 0.0;
 pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 2.0;
 pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 3.0;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
+
+// --- Mouth finger-islands ------------------------------------------------
+// Procedural sandy bars scattered inside each river's estuary fan. Rise
+// above the carved channel floor (sitting at `RIVER_CARVE_MIN_BED_Y_M`
+// near the mouth) as elongated capsules aligned with the apex flow
+// direction. The splatmap's mouth-pebble retraction already paints them
+// SAND since they sit inside the river band with `coast_d_m` well below
+// `RIVER_MOUTH_SAND_COAST_DIST_M`.
+pub(super) const MOUTH_ISLAND_COUNT_MIN: u32 = 4;
+pub(super) const MOUTH_ISLAND_COUNT_MAX: u32 = 5;
+pub(super) const MOUTH_ISLAND_RADIUS_MIN_M: f32 = 3.0;
+pub(super) const MOUTH_ISLAND_RADIUS_MAX_M: f32 = 5.0;
+/// Normalised axis position (0=upstream tip, 1=downstream tip) at which
+/// the island reaches its widest radius. 0.75 gives a teardrop with the
+/// fat end pointing seaward — delta bars erode to a point on the
+/// flow-facing edge and settle sediment on the downstream lee side.
+pub(super) const MOUTH_ISLAND_WIDEST_AXIS_T: f32 = 0.75;
+/// Axial height boost at the land-side tip (u=0), ramped linearly to
+/// zero at the sea-side tip. Sediment stacks at the upstream head where
+/// flow plants it; the downstream tail is drift-thinned.
+pub(super) const MOUTH_ISLAND_LAND_HEIGHT_BOOST: f32 = 0.3;
+/// Peak elevation range (m) ABOVE the post-carve sample. Sea cells sit
+/// on bathymetry around −0.5 m, so the peak must budget for lifting the
+/// surface up through the waterline AND leaving a visible dry crown.
+/// The upper end of the range also budgets for the height attenuation
+/// from `smooth_island_area`'s Gaussian pass.
+pub(super) const MOUTH_ISLAND_PEAK_MIN_M: f32 = 1.1;
+pub(super) const MOUTH_ISLAND_PEAK_MAX_M: f32 = 1.5;
+/// Base elevation (m) at which a polyline vertex is considered the
+/// "apex" of its mouth — the last point still on land. Islands spawn
+/// downstream of here.
+pub(super) const MOUTH_ISLAND_APEX_ELEV_M: f32 = 0.4;
+/// Upstream-tip along-tangent bound from the apex. Small range bundles
+/// all tips into a "wrist" cluster — the fingers-of-a-hand silhouette.
+pub(super) const MOUTH_ISLAND_TIP_ALONG_MAX_M: f32 = 4.0;
+/// Downstream-end along-tangent range from the apex. Kept inside the
+/// pebble-wedge retraction zone (`RIVER_MOUTH_SAND_COAST_DIST_M = 50 m`)
+/// so the whole bar classifies as sand.
+pub(super) const MOUTH_ISLAND_END_ALONG_MIN_M: f32 = 16.0;
+pub(super) const MOUTH_ISLAND_END_ALONG_MAX_M: f32 = 30.0;
+/// Half-angle (radians) of the fan across which island slots are
+/// evenly distributed. Slot-based angles guarantee angular separation;
+/// pure random scatter collapses neighbours into overlap.
+pub(super) const MOUTH_ISLAND_FAN_HALF_ANGLE_RAD: f32 = 0.7;
+/// Small per-island angle jitter (radians) on top of the slot angle to
+/// break perfect symmetry.
+pub(super) const MOUTH_ISLAND_ANGLE_JITTER_RAD: f32 = 0.09;
 /// Base spatial frequency (cycles per meter) of the along-river noise that
 /// widens and narrows the pebble/sand band so it doesn't read as a constant
 /// ribbon parallel to the centerline. ~1/22 gives ~22 m wavelength — short
