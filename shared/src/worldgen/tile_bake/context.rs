@@ -315,12 +315,13 @@ fn apply_mouth_fan_widths(
     for poly in rivers_world.iter_mut() {
         for i in 0..poly.points.len() {
             let base = sample_base_elevation(map, dist_to_land, poly.points[i][0], poly.points[i][1]);
-            let t = ((base - RIVER_MOUTH_FAN_BASE_LOW_M) / span).clamp(0.0, 1.0);
-            // Quadratic ease-in (inverted): front-loads the widening
-            // toward sea level so the fan reads as a localized delta
-            // flare rather than a uniformly wider river, while staying
-            // smooth enough to form a bell curve rather than the sharp
-            // T-shape a cubic ramp produces.
+            // J-curve: `(1-t)^2` with only the upper bound clamped, so
+            // underwater polyline vertices (`t < 0`) push `s > 1` and
+            // the multiplier accelerates monotonically with no plateau.
+            // Lower clamp would saturate every below-sea-level vertex
+            // at the same peak — visible as a constant-width band along
+            // the last few cells before the coastline.
+            let t = ((base - RIVER_MOUTH_FAN_BASE_LOW_M) / span).min(1.0);
             let one_minus_t = 1.0 - t;
             let s = one_minus_t * one_minus_t;
             poly.width[i] *= 1.0 + RIVER_MOUTH_FAN_EXTRA * s;

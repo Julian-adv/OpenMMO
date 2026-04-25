@@ -93,17 +93,21 @@ pub(super) const RIVER_MOUTH_SAND_COAST_DIST_M: f32 = 50.0;
 ///
 /// Window is tuned so the fan opens close to the coast rather than
 /// widening the river far upstream — a wider window reads as "river
-/// is just wider here" instead of as a localized 부채꼴 delta.
-/// Combined with `EXTRA = 3.0` and the quadratic ramp in
-/// `apply_mouth_fan_widths` this gives a pronounced but smooth bell
-/// flare over the last ~2 m of approach elevation (typically
-/// 10–20 m horizontal at coastal slopes). Past the coast, the client
-/// sea extension tapers back to a point (see `SEA_EXTEND_*` in
-/// `river-geometry.ts`), producing the symmetric spindle-shaped delta
-/// centered on the coastline.
+/// is just wider here" instead of as a localized 부채꼴 delta. The
+/// `~4 m of approach elevation` window translates to roughly
+/// 20–40 m of horizontal polyline at typical coastal slopes. Past
+/// the coast, the client sea extension tapers the wedge back to a
+/// point (see `SEA_EXTEND_*` in `river-geometry.ts`), producing the
+/// symmetric spindle-shaped delta centered on the coastline.
+///
+/// The fan is unbounded below `LOW_M` by design: `apply_mouth_fan_widths`
+/// lets the J-curve keep climbing for underwater polyline vertices so
+/// the rate of widening stays monotonic (no plateau at the coastline),
+/// and the wedge taper bounds the final visual width regardless of
+/// tip multiplier.
 pub(super) const RIVER_MOUTH_FAN_BASE_LOW_M: f32 = 0.0;
-pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 2.0;
-pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 3.0;
+pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 4.0;
+pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 2.5;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
 
 // --- Mouth finger-islands ------------------------------------------------

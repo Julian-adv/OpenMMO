@@ -491,13 +491,21 @@ export function createRiverMaterial(
     const depthAlpha = mix(
       float(0.005),
       float(0.95),
-      smoothstep(float(0.2), float(0.5), depth)
+      smoothstep(float(0.3), float(0.5), depth)
     )
 
-    // vMouthFactor=1 in the open-sea wedge: alpha → 0 so the sea quad
-    // underneath takes over.
+    // Lateral strip-edge fade. The wedge geometry tapers to width=0 at
+    // its tip so the distal end disappears on its own; what remains is
+    // the lateral seam where the wedge meets the sea quad along its
+    // banks. Inland this fade is dominated by `depthEdgeCut` (carved
+    // banks rise toward natural ground so depth → 0 there); it only
+    // meaningfully bites over the open-sea wedge where both depth
+    // factors saturate at 1 over the deep seabed.
+    const stripEdgeFade = float(1).sub(
+      smoothstep(float(0.85), float(1.0), bankFactor)
+    )
     const alpha = float(0.95)
-      .mul(float(1).sub(vMouthFactor))
+      .mul(stripEdgeFade)
       .mul(depthEdgeCut)
       .mul(depthAlpha)
 
