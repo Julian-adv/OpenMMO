@@ -38,7 +38,7 @@ const RIVER_WIDTH_SCALE = 1.5
  * width — leaves room for the taper gradient even on the smallest
  * tributaries.
  */
-const RIVER_WIDTH_PAD_M = 4.5
+const RIVER_WIDTH_PAD_M = 1.0
 
 /**
  * Estuary alpha fade window (meters of surface Y). Below LOW the ribbon is
@@ -202,6 +202,13 @@ export interface RiverGeometryResult {
  * - `edgeDist` (float): 0 at centerline, 1 at either bank.
  * - `mouthFactor` (float): 1 where the vertex sits at sea level, 0 inland;
  *   drives the estuary alpha fade in the shader. See MOUTH_FADE_Y_*.
+ * - `centerlineXZ` (vec2): world XZ of the chain centerline at this
+ *   vertex's cross-section (same on left/right). Paired with `flowDir`
+ *   in the fragment shader to reproject the per-triangle linear V (chain
+ *   progress) back to a bilinear value: in a flared quad the diagonal
+ *   split makes one triangle thin and the other thick, and per-triangle
+ *   linear interpolation of `uv.y` would scroll the texture at different
+ *   apparent rates between the two halves.
  *
  * `externalContinuations` supplies the neighbor tile's adjacent-segment
  * other-endpoint for each shared seam point, keyed by `endpointKey`. When
@@ -234,6 +241,11 @@ export function buildRiverGeometry(
   // per triangle at the mouth. Feeding this to the shader's meshUV.x
   // keeps cross-channel texture frequency uniform in world meters.
   const crossMeters: number[] = []
+  // World XZ of the chain centerline at this vertex's cross-section
+  // (px[i], pz[i]). Both left/right vertices share it. Paired with the
+  // chain tangent (flowDir) in the fragment shader, it lets us recover
+  // bilinear V from the per-triangle linear V — see attribute docstring.
+  const centerlineXZs: number[] = []
   const indices: number[] = []
 
   const sampleY = (x: number, z: number): number => {
@@ -441,6 +453,7 @@ export function buildRiverGeometry(
       edgeDists.push(1)
       mouthFactors.push(mouthFactor)
       crossMeters.push(-halfWidth)
+      centerlineXZs.push(px[i], pz[i])
       positions.push(rightX, centerY, rightZ)
       uvs.push(1, v)
       flowDirs.push(txN, tzN)
@@ -448,6 +461,7 @@ export function buildRiverGeometry(
       edgeDists.push(1)
       mouthFactors.push(mouthFactor)
       crossMeters.push(halfWidth)
+      centerlineXZs.push(px[i], pz[i])
     }
 
     for (let i = 0; i < n; i++) {
@@ -485,6 +499,10 @@ export function buildRiverGeometry(
   geometry.setAttribute(
     'crossMeters',
     new THREE.Float32BufferAttribute(crossMeters, 1)
+  )
+  geometry.setAttribute(
+    'centerlineXZ',
+    new THREE.Float32BufferAttribute(centerlineXZs, 2)
   )
   geometry.setIndex(indices)
   geometry.computeBoundingSphere()
