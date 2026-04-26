@@ -111,6 +111,12 @@ interface ChainLink {
   forward: boolean
 }
 
+interface FlowUvBasis {
+  dirX: number
+  dirZ: number
+  offset: number
+}
+
 /** Squared 3D distance between two vertices in a flat positions array
  *  (3 floats per vertex). Used by the strip-diagonal picker. */
 function distSq3(positions: number[], i: number, j: number): number {
@@ -219,17 +225,18 @@ export interface RiverGeometryResult {
  * - `uv` (vec2): U = cross-ribbon (0 left … 1 right), V = cumulative chain
  *   length (meters) for texture scrolling.
  * - `flowDir` (vec2): segment-local tangent (XZ normalized).
+ * - `flowUvDir` (vec2), `flowUvOffset` (float): per-triangle planar
+ *   downstream UV basis. The geometry is expanded to non-indexed
+ *   triangles so these values stay constant across each triangle; the
+ *   shader uses `dot(worldXZ, flowUvDir) + flowUvOffset` for ripple V.
  * - `flowNorm` (float): per-vertex normalized flow (0..1).
  * - `edgeDist` (float): 0 at centerline, 1 at either bank.
  * - `mouthFactor` (float): 1 where the vertex sits at sea level, 0 inland;
  *   drives the estuary alpha fade in the shader. See MOUTH_FADE_Y_*.
  * - `centerlineXZ` (vec2): world XZ of the chain centerline at this
- *   vertex's cross-section (same on left/right). Paired with `flowDir`
- *   in the fragment shader to reproject the per-triangle linear V (chain
- *   progress) back to a bilinear value: in a flared quad the diagonal
- *   split makes one triangle thin and the other thick, and per-triangle
- *   linear interpolation of `uv.y` would scroll the texture at different
- *   apparent rates between the two halves.
+ *   vertex's cross-section (same on left/right). The shader uses this to
+ *   compare the river surface against the centerline bed height for a
+ *   stable depth fade.
  *
  * `externalContinuations` supplies the neighbor tile's adjacent-segment
  * other-endpoint for each shared seam point, keyed by `endpointKey`. When
@@ -263,11 +270,10 @@ export function buildRiverGeometry(
   // keeps cross-channel texture frequency uniform in world meters.
   const crossMeters: number[] = []
   // World XZ of the chain centerline at this vertex's cross-section
-  // (px[i], pz[i]). Both left/right vertices share it. Paired with the
-  // chain tangent (flowDir) in the fragment shader, it lets us recover
-  // bilinear V from the per-triangle linear V — see attribute docstring.
+  // (px[i], pz[i]). Both left/right vertices share it.
   const centerlineXZs: number[] = []
   const indices: number[] = []
+  const flowUvBases: FlowUvBasis[] = []
 
   const sampleY = (x: number, z: number): number => {
     if (!heightManager) return 0
@@ -439,12 +445,16 @@ export function buildRiverGeometry(
       // overhang the carved banks.
       const requestedHalfWidth =
         widths[i] * 0.5 * RIVER_WIDTH_SCALE + RIVER_WIDTH_PAD_M
-      const insideHalfWidth = Math.min(requestedHalfWidth, halfWidthCap)
-      const outsideHalfWidth = requestedHalfWidth
-      const leftHalfWidth =
-        (crossSign > 0 ? insideHalfWidth : outsideHalfWidth) * miter
-      const rightHalfWidth =
-        (crossSign < 0 ? insideHalfWidth : outsideHalfWidth) * miter
+      const miteredHalfWidth = requestedHalfWidth * miter
+      // The bend-safety cap describes the final distance from the
+      // centerline after mitering. Applying it before the miter lets a
+      // sharp enough corner multiply the "safe" inside bank back past the
+      // cap, which can reintroduce skinny flipped-looking triangles near
+      // the bend tip.
+      const insideHalfWidth = Math.min(miteredHalfWidth, halfWidthCap)
+      const outsideHalfWidth = miteredHalfWidth
+      const leftHalfWidth = crossSign > 0 ? insideHalfWidth : outsideHalfWidth
+      const rightHalfWidth = crossSign < 0 ? insideHalfWidth : outsideHalfWidth
 
       // Extension vertices ride a fixed sea-surface Y — following the
       // heightmap out past the polyline tip drags the ribbon down with
@@ -511,6 +521,34 @@ export function buildRiverGeometry(
       const b = baseVertex + 2 * i + 1
       const c = baseVertex + 2 * (i + 1)
       const d = baseVertex + 2 * (i + 1) + 1
+
+      const quad = [a, b, c, d]
+      let dirX = 0
+      let dirZ = 0
+      for (const vi of quad) {
+        const fi = vi * 2
+        dirX += flowDirs[fi]
+        dirZ += flowDirs[fi + 1]
+      }
+      const dirLen = Math.hypot(dirX, dirZ)
+      if (dirLen > 1e-6) {
+        dirX /= dirLen
+        dirZ /= dirLen
+      } else {
+        dirX = 0
+        dirZ = 1
+      }
+
+      let offset = 0
+      for (const vi of quad) {
+        const pi = vi * 3
+        const ui = vi * 2
+        offset +=
+          uvs[ui + 1] - (positions[pi] * dirX + positions[pi + 2] * dirZ)
+      }
+      offset /= quad.length
+      const flowUvBasis = { dirX, dirZ, offset }
+
       // Pick shorter diagonal so per-triangle Y gradient stays symmetric
       // across bend direction. A fixed diagonal traverses the wide side
       // of the trapezoid on one curve direction and amplifies depth
@@ -522,42 +560,97 @@ export function buildRiverGeometry(
         indices.push(a, b, d)
         indices.push(a, d, c)
       }
+      flowUvBases.push(flowUvBasis, flowUvBasis)
     }
+  }
+
+  // Expand the indexed strip into independent triangles so each triangle
+  // can carry a constant planar flow basis. Using interpolated per-vertex
+  // tangents/anchors in the shader made long skinny bend triangles locally
+  // invert or over-scale the V gradient; a triangle-constant basis keeps
+  // downstream direction and apparent ripple speed stable.
+  const expandedPositions: number[] = []
+  const expandedUvs: number[] = []
+  const expandedFlowDirs: number[] = []
+  const expandedFlowUvDirs: number[] = []
+  const expandedFlowUvOffsets: number[] = []
+  const expandedFlowNorms: number[] = []
+  const expandedEdgeDists: number[] = []
+  const expandedMouthFactors: number[] = []
+  const expandedCrossMeters: number[] = []
+  const expandedCenterlineXZs: number[] = []
+
+  const pushVertex = (
+    i: number,
+    flowUvDirX: number,
+    flowUvDirZ: number,
+    flowUvOffset: number
+  ) => {
+    const pi = i * 3
+    const ui = i * 2
+    expandedPositions.push(positions[pi], positions[pi + 1], positions[pi + 2])
+    expandedUvs.push(uvs[ui], uvs[ui + 1])
+    expandedFlowDirs.push(flowDirs[ui], flowDirs[ui + 1])
+    expandedFlowUvDirs.push(flowUvDirX, flowUvDirZ)
+    expandedFlowUvOffsets.push(flowUvOffset)
+    expandedFlowNorms.push(flowNorms[i])
+    expandedEdgeDists.push(edgeDists[i])
+    expandedMouthFactors.push(mouthFactors[i])
+    expandedCrossMeters.push(crossMeters[i])
+    expandedCenterlineXZs.push(centerlineXZs[ui], centerlineXZs[ui + 1])
+  }
+
+  for (let ii = 0; ii < indices.length; ii += 3) {
+    const ia = indices[ii]
+    const ib = indices[ii + 1]
+    const ic = indices[ii + 2]
+    const { dirX, dirZ, offset } = flowUvBases[ii / 3]
+
+    pushVertex(ia, dirX, dirZ, offset)
+    pushVertex(ib, dirX, dirZ, offset)
+    pushVertex(ic, dirX, dirZ, offset)
   }
 
   const geometry = new THREE.BufferGeometry()
   geometry.setAttribute(
     'position',
-    new THREE.Float32BufferAttribute(positions, 3)
+    new THREE.Float32BufferAttribute(expandedPositions, 3)
   )
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(expandedUvs, 2))
   geometry.setAttribute(
     'flowDir',
-    new THREE.Float32BufferAttribute(flowDirs, 2)
+    new THREE.Float32BufferAttribute(expandedFlowDirs, 2)
+  )
+  geometry.setAttribute(
+    'flowUvDir',
+    new THREE.Float32BufferAttribute(expandedFlowUvDirs, 2)
+  )
+  geometry.setAttribute(
+    'flowUvOffset',
+    new THREE.Float32BufferAttribute(expandedFlowUvOffsets, 1)
   )
   geometry.setAttribute(
     'flowNorm',
-    new THREE.Float32BufferAttribute(flowNorms, 1)
+    new THREE.Float32BufferAttribute(expandedFlowNorms, 1)
   )
   geometry.setAttribute(
     'edgeDist',
-    new THREE.Float32BufferAttribute(edgeDists, 1)
+    new THREE.Float32BufferAttribute(expandedEdgeDists, 1)
   )
   geometry.setAttribute(
     'mouthFactor',
-    new THREE.Float32BufferAttribute(mouthFactors, 1)
+    new THREE.Float32BufferAttribute(expandedMouthFactors, 1)
   )
   geometry.setAttribute(
     'crossMeters',
-    new THREE.Float32BufferAttribute(crossMeters, 1)
+    new THREE.Float32BufferAttribute(expandedCrossMeters, 1)
   )
   geometry.setAttribute(
     'centerlineXZ',
-    new THREE.Float32BufferAttribute(centerlineXZs, 2)
+    new THREE.Float32BufferAttribute(expandedCenterlineXZs, 2)
   )
-  geometry.setIndex(indices)
   geometry.computeBoundingSphere()
   geometry.computeBoundingBox()
 
-  return { geometry, vertexCount: positions.length / 3 }
+  return { geometry, vertexCount: expandedPositions.length / 3 }
 }

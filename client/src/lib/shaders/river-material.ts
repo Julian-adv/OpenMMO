@@ -135,13 +135,15 @@ export function createRiverMaterial(
   const vFlowNorm = varying(float(0), 'r_flowNorm')
   const vMouthFactor = varying(float(0), 'r_mouthFactor')
   const vCrossMeters = varying(float(0), 'r_crossMeters')
-  const vChainTangent = varying(vec2(0), 'r_chainTangent')
+  const vFlowUvDir = varying(vec2(0), 'r_flowUvDir')
+  const vFlowUvOffset = varying(float(0), 'r_flowUvOffset')
   const vCenterlineXZ = varying(vec2(0), 'r_centerlineXZ')
 
   const aFlowNorm = attribute('flowNorm', 'float')
   const aMouthFactor = attribute('mouthFactor', 'float')
   const aCrossMeters = attribute('crossMeters', 'float')
-  const aChainTangent = attribute('flowDir', 'vec2')
+  const aFlowUvDir = attribute('flowUvDir', 'vec2')
+  const aFlowUvOffset = attribute('flowUvOffset', 'float')
   const aCenterlineXZ = attribute('centerlineXZ', 'vec2')
 
   // ── Vertex Shader ─────────────────────────────────────
@@ -153,7 +155,8 @@ export function createRiverMaterial(
     vFlowNorm.assign(aFlowNorm)
     vMouthFactor.assign(aMouthFactor)
     vCrossMeters.assign(aCrossMeters)
-    vChainTangent.assign(aChainTangent)
+    vFlowUvDir.assign(aFlowUvDir)
+    vFlowUvOffset.assign(aFlowUvOffset)
     vCenterlineXZ.assign(aCenterlineXZ)
     const clipPos = cameraProjectionMatrix.mul(cameraViewMatrix).mul(worldPos)
     vClipPos.assign(clipPos)
@@ -224,20 +227,12 @@ export function createRiverMaterial(
     // channel, which amplifies into visible "clouds flowing" through
     // the cloud-plane projection and kills specular sparkle variety.
     const scrollSpeed = float(0.06).add(vFlowNorm.mul(0.22))
-    // Per-triangle linear interpolation of `uvCoord.y` (cumulative chain
-    // length, in meters) gives different chain progress in the two
-    // triangles of a flared quad: when the diagonal split makes one
-    // triangle thin and the other thick, the V coordinate gradient in
-    // world space differs across the diagonal, so the texture appears to
-    // scroll at different apparent speeds in each half. Reproject onto
-    // the chain centerline using the per-vertex anchor + tangent — at
-    // each vertex the offset is exactly zero (right/left vertices sit
-    // perpendicular to the tangent from the centerline) so the value at
-    // vertices is unchanged, while off-vertex fragments collapse to the
-    // true bilinear chain progress regardless of which triangle they
-    // landed in.
-    const chainOffset = vWorldPos.xz.sub(vCenterlineXZ).dot(vChainTangent)
-    const meshUV = vec2(vCrossMeters, uvCoord.y.add(chainOffset))
+    // Per-triangle planar downstream coordinate. The geometry duplicates
+    // vertices per triangle so `flowUvDir/Offset` are constant within a
+    // triangle: the V gradient stays unit-length downstream instead of
+    // stretching to near-stillness in long skinny bend triangles.
+    const flowV = vWorldPos.xz.dot(vFlowUvDir).add(vFlowUvOffset)
+    const meshUV = vec2(vCrossMeters, flowV)
 
     // Two-sample normal-map average → world-axis ripple normal. Used for
     // both the surface ripple (flow-driven scroll) and the sky reflection
