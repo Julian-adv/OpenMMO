@@ -539,10 +539,17 @@ export function createRiverMaterial(
     const stripEdgeFade = float(1).sub(
       smoothstep(float(0.85), float(1.0), bankFactor)
     )
+    // Estuary alpha fade: `mouthFactor` is 1 over the sea-extension wedge
+    // and 0 inland (see `MOUTH_FADE_Y_*` / wedge ramp in river-geometry.ts).
+    // Without this multiply the wedge keeps its full body alpha and the
+    // delta tip stamps a visible river plume out over deep sea instead of
+    // dissolving into the sea quad.
+    const mouthAlphaFade = float(1).sub(vMouthFactor)
     const alpha = float(0.95)
       .mul(stripEdgeFade)
       .mul(depthEdgeCut)
       .mul(depthAlpha)
+      .mul(mouthAlphaFade)
 
     return vec4(color, alpha)
   })()
