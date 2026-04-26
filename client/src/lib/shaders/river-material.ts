@@ -32,6 +32,8 @@ import {
   sampleCloudPhoto,
   toHeightmapUV,
 } from './water-types'
+import { RIVER_DEPTH_OFFSET_M } from '../utils/river-geometry'
+import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type _N = any // TSL node — broad type for internal helper params
@@ -476,41 +478,60 @@ export function createRiverMaterial(
     // Without all four samples a single-tile clamp freezes bed height at
     // the edge texel and the depth-based alpha plateaus in a small
     // rectangular patch over the corner.
-    const ownerLocalU = vWorldPos.x.sub(uTileMin.x).div(64.0)
-    const ownerLocalV = float(1).sub(vWorldPos.z.sub(uTileMin.y).div(64.0))
-    const xLocalU = vWorldPos.x.sub(uTileMinX.x).div(64.0)
-    const zLocalV = float(1).sub(vWorldPos.z.sub(uTileMinZ.y).div(64.0))
-
-    const uvOwner = clamp(
-      toHeightmapUV(vec2(ownerLocalU, ownerLocalV)),
-      0.0,
-      1.0
-    )
-    const uvX = clamp(toHeightmapUV(vec2(xLocalU, ownerLocalV)), 0.0, 1.0)
-    const uvZ = clamp(toHeightmapUV(vec2(ownerLocalU, zLocalV)), 0.0, 1.0)
-    const uvXZ = clamp(toHeightmapUV(vec2(xLocalU, zLocalV)), 0.0, 1.0)
-
-    const hOwner = heightmapTex.sample(uvOwner).r
-    const hX = heightmapXTex.sample(uvX).r
-    const hZ = heightmapZTex.sample(uvZ).r
-    const hXZ = heightmapXZTex.sample(uvXZ).r
-
+    // 4-way spill bed sample helper. Reused for the fragment bed and the
+    // centerline-projected river surface so the two cancel cleanly mid-
+    // segment regardless of chain sampling density.
+    //
     // When an axis has no spill the layer points its tile-min at the
     // owner — xLocalU then equals ownerLocalU and the matching texture
     // binding collapses to heightmapTex, so the mix lands on the owner
     // sample regardless of which side the half-plane test selects.
-    const xside = step(float(0), xLocalU).mul(step(xLocalU, float(1)))
-    const zside = step(float(0), zLocalV).mul(step(zLocalV, float(1)))
-    const bedHeight = mix(mix(hOwner, hX, xside), mix(hZ, hXZ, xside), zside)
-    const depth = max(float(0), vWorldPos.y.sub(bedHeight))
+    const tileSize = float(TERRAIN_TILE_SIZE)
+    const sampleBed = (worldXZ: _N): _N => {
+      const ownerLocalU = worldXZ.x.sub(uTileMin.x).div(tileSize)
+      const ownerLocalV = float(1).sub(worldXZ.y.sub(uTileMin.y).div(tileSize))
+      const xLocalU = worldXZ.x.sub(uTileMinX.x).div(tileSize)
+      const zLocalV = float(1).sub(worldXZ.y.sub(uTileMinZ.y).div(tileSize))
+
+      const uvOwner = clamp(
+        toHeightmapUV(vec2(ownerLocalU, ownerLocalV)),
+        0.0,
+        1.0
+      )
+      const uvX = clamp(toHeightmapUV(vec2(xLocalU, ownerLocalV)), 0.0, 1.0)
+      const uvZ = clamp(toHeightmapUV(vec2(ownerLocalU, zLocalV)), 0.0, 1.0)
+      const uvXZ = clamp(toHeightmapUV(vec2(xLocalU, zLocalV)), 0.0, 1.0)
+
+      const hOwner = heightmapTex.sample(uvOwner).r
+      const hX = heightmapXTex.sample(uvX).r
+      const hZ = heightmapZTex.sample(uvZ).r
+      const hXZ = heightmapXZTex.sample(uvXZ).r
+
+      const xside = step(float(0), xLocalU).mul(step(xLocalU, float(1)))
+      const zside = step(float(0), zLocalV).mul(step(zLocalV, float(1)))
+      return mix(mix(hOwner, hX, xside), mix(hZ, hXZ, xside), zside)
+    }
+
+    const bedHeight = sampleBed(vWorldPos.xz)
+    // Reconstruct the river surface at the chain centerline projection
+    // (bilinear bed at vCenterlineXZ + bake offset) instead of from
+    // linearly-interpolated vertex y. Vertex y is sampled only at chain
+    // centerline points and chord-interpolated between them, so any bed
+    // curvature mid-segment makes the lerped surface diverge from the
+    // true `bed + offset`. Sharing one bilinear sampler with bedHeight
+    // pins depth to exactly the offset along the centerline.
+    const surfaceY = sampleBed(vCenterlineXZ).add(RIVER_DEPTH_OFFSET_M)
+    const depth = max(float(0), surfaceY.sub(bedHeight))
     const depthEdgeCut = smoothstep(float(0), float(0.05), depth)
-    // Pairs with the bake's `RIVER_DEPTH_OFFSET_M = 0.5 m` centerline depth:
-    // anything past 0.5 m is body-opaque; the 0.2 → 0.5 ramp covers the
-    // carved bank rising back toward natural ground.
+    // Body alpha ramp. Upper bound = bake centerline carve depth
+    // (RIVER_DEPTH_OFFSET_M) so the channel body hits full opacity.
+    // Lower bound 0.05 m spreads the bank-slope transition wide enough
+    // that a typical 0.2 m bed change doesn't compress into a knife-
+    // sharp screen-space band. depthEdgeCut anchors the 5 cm hard edge.
     const depthAlpha = mix(
       float(0.005),
       float(0.95),
-      smoothstep(float(0.3), float(0.5), depth)
+      smoothstep(float(0.05), float(RIVER_DEPTH_OFFSET_M), depth)
     )
 
     // Lateral strip-edge fade. The wedge geometry tapers to width=0 at

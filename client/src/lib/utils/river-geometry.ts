@@ -19,7 +19,7 @@ const SEA_EXTEND_SURFACE_Y = SEA_LEVEL + 0.02
  * amount above the sampled ground puts the water at roughly the rim of
  * the plain elevation regardless of flow.
  */
-const RIVER_DEPTH_OFFSET_M = 0.5
+export const RIVER_DEPTH_OFFSET_M = 0.5
 
 /**
  * Scale applied to baked surface widths so the water ribbon covers the
@@ -91,6 +91,16 @@ const WEDGE_FADE_STEPS = 5
  */
 const MIN_MITER_COSINE = 0.25
 
+/**
+ * Inside-corner halfWidth cap as a fraction of the local radius of
+ * curvature R = L_segment / (2·sin(θ_half)). At halfWidth ≥ R consecutive
+ * inside-bank vertices converge at the center of curvature and the strip
+ * self-intersects (triangle flip + flow inversion). 0.4–0.8 trades
+ * obvious bend pinching for residual overlap; 0.6 sits comfortably on
+ * smooth curves without over-narrowing tight bends.
+ */
+const RIVER_BEND_SAFETY = 0.6
+
 interface Endpoint {
   seg: number
   forward: boolean
@@ -99,6 +109,17 @@ interface Endpoint {
 interface ChainLink {
   seg: number
   forward: boolean
+}
+
+/** Squared 3D distance between two vertices in a flat positions array
+ *  (3 floats per vertex). Used by the strip-diagonal picker. */
+function distSq3(positions: number[], i: number, j: number): number {
+  const ai = i * 3
+  const aj = j * 3
+  const dx = positions[ai] - positions[aj]
+  const dy = positions[ai + 1] - positions[aj + 1]
+  const dz = positions[ai + 2] - positions[aj + 2]
+  return dx * dx + dy * dy + dz * dz
 }
 
 /** Endpoints are shared across tile files; the baker preserves float
@@ -390,10 +411,25 @@ export function buildRiverGeometry(
       // Miter extension = half-width / cos(theta/2). Clamp so 180°
       // reversals don't spike vertex positions to infinity.
       let miter = 1
+      // Inside-corner cap (see RIVER_BEND_SAFETY). crossSign sign-codes
+      // the bend direction: +1 chain turns LEFT (inside = +nx side =
+      // LEFT bank), -1 turns RIGHT, 0 straight. Only the inside bank
+      // gets capped — the outside is stretched along the bend exterior
+      // and never self-intersects.
+      let halfWidthCap = Infinity
+      let crossSign = 0
       if (hasPrev && hasNext) {
         const dot = pTx * nTx + pTz * nTz
         const cosHalf = Math.sqrt(Math.max(0, (1 + dot) * 0.5))
+        const sinHalf = Math.sqrt(Math.max(0, (1 - dot) * 0.5))
         if (cosHalf > MIN_MITER_COSINE) miter = 1 / cosHalf
+        if (sinHalf > 1e-3 && prevPt && nextPt) {
+          const Lprev = Math.hypot(prevPt[0] - px[i], prevPt[1] - pz[i])
+          const Lnext = Math.hypot(nextPt[0] - px[i], nextPt[1] - pz[i])
+          const radiusOfCurvature = Math.min(Lprev, Lnext) / (2 * sinHalf)
+          halfWidthCap = RIVER_BEND_SAFETY * radiusOfCurvature
+          crossSign = Math.sign(pTx * nTz - pTz * nTx)
+        }
       }
 
       // Widths already carry the estuary fan scaling from the bake (see
@@ -401,8 +437,14 @@ export function buildRiverGeometry(
       // so heightmap carve and splat sand band widen in lockstep with this
       // ribbon — applying any extra scale here would make the water plane
       // overhang the carved banks.
-      const halfWidth =
-        (widths[i] * 0.5 * RIVER_WIDTH_SCALE + RIVER_WIDTH_PAD_M) * miter
+      const requestedHalfWidth =
+        widths[i] * 0.5 * RIVER_WIDTH_SCALE + RIVER_WIDTH_PAD_M
+      const insideHalfWidth = Math.min(requestedHalfWidth, halfWidthCap)
+      const outsideHalfWidth = requestedHalfWidth
+      const leftHalfWidth =
+        (crossSign > 0 ? insideHalfWidth : outsideHalfWidth) * miter
+      const rightHalfWidth =
+        (crossSign < 0 ? insideHalfWidth : outsideHalfWidth) * miter
 
       // Extension vertices ride a fixed sea-surface Y — following the
       // heightmap out past the polyline tip drags the ribbon down with
@@ -441,10 +483,10 @@ export function buildRiverGeometry(
         mouthFactor = smoothstep(0, 1, wedgeT)
       }
 
-      const leftX = px[i] + nx * halfWidth
-      const leftZ = pz[i] + nz * halfWidth
-      const rightX = px[i] - nx * halfWidth
-      const rightZ = pz[i] - nz * halfWidth
+      const leftX = px[i] + nx * leftHalfWidth
+      const leftZ = pz[i] + nz * leftHalfWidth
+      const rightX = px[i] - nx * rightHalfWidth
+      const rightZ = pz[i] - nz * rightHalfWidth
 
       positions.push(leftX, centerY, leftZ)
       uvs.push(0, v)
@@ -452,7 +494,7 @@ export function buildRiverGeometry(
       flowNorms.push(flows[i])
       edgeDists.push(1)
       mouthFactors.push(mouthFactor)
-      crossMeters.push(-halfWidth)
+      crossMeters.push(-leftHalfWidth)
       centerlineXZs.push(px[i], pz[i])
       positions.push(rightX, centerY, rightZ)
       uvs.push(1, v)
@@ -460,7 +502,7 @@ export function buildRiverGeometry(
       flowNorms.push(flows[i])
       edgeDists.push(1)
       mouthFactors.push(mouthFactor)
-      crossMeters.push(halfWidth)
+      crossMeters.push(rightHalfWidth)
       centerlineXZs.push(px[i], pz[i])
     }
 
@@ -469,8 +511,17 @@ export function buildRiverGeometry(
       const b = baseVertex + 2 * i + 1
       const c = baseVertex + 2 * (i + 1)
       const d = baseVertex + 2 * (i + 1) + 1
-      indices.push(a, b, c)
-      indices.push(b, d, c)
+      // Pick shorter diagonal so per-triangle Y gradient stays symmetric
+      // across bend direction. A fixed diagonal traverses the wide side
+      // of the trapezoid on one curve direction and amplifies depth
+      // mismatch through the 5 cm depthEdgeCut.
+      if (distSq3(positions, b, c) <= distSq3(positions, a, d)) {
+        indices.push(a, b, c)
+        indices.push(b, d, c)
+      } else {
+        indices.push(a, b, d)
+        indices.push(a, d, c)
+      }
     }
   }
 
