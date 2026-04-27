@@ -99,7 +99,19 @@ const MIN_MITER_COSINE = 0.25
  * obvious bend pinching for residual overlap; 0.6 sits comfortably on
  * smooth curves without over-narrowing tight bends.
  */
-const RIVER_BEND_SAFETY = 0.6
+const RIVER_BEND_SAFETY = 0.7
+
+/** Half-width (in vertices) of the cubic-taper window that eases the
+ *  inside-bank cap from each tight vertex to its neighbors, so the bend
+ *  pinch fades out instead of snapping back to full width. */
+const BEND_CAP_SMOOTH_RADIUS = 10
+
+/** Laplacian (0.25/0.5/0.25) smoothing passes on the centerline. Endpoints
+ *  stay anchored — multi-pass ghost-point smoothing diverges because each
+ *  tile only sees one ghost per seam, so after pass 1 the neighbor's
+ *  interior has moved but the local ghost still points at its pre-smooth
+ *  value, drifting the two sides of the seam apart. */
+const CENTERLINE_SMOOTH_PASSES = 8
 
 interface Endpoint {
   seg: number
@@ -254,6 +266,16 @@ export function buildRiverGeometry(
 ): RiverGeometryResult {
   const chains = buildChains(segments)
 
+  // Per-endpoint segment degree. Used at the smoothing pass to detect
+  // junction tips (degree ≥ 3) and anchor them like tile-seam tips.
+  const segmentDegree = new Map<string, number>()
+  for (const s of segments) {
+    const ka = endpointKey(s.ax, s.az)
+    const kb = endpointKey(s.bx, s.bz)
+    segmentDegree.set(ka, (segmentDegree.get(ka) ?? 0) + 1)
+    segmentDegree.set(kb, (segmentDegree.get(kb) ?? 0) + 1)
+  }
+
   const positions: number[] = []
   const uvs: number[] = []
   const flowDirs: number[] = []
@@ -336,6 +358,33 @@ export function buildRiverGeometry(
     const ghostNextSeam =
       tailKey !== '' ? (externalContinuations?.get(tailKey) ?? null) : null
 
+    // Anchor not only the chain tip but also the tip's immediate neighbor
+    // when the tip is shared (tile-seam ghost or junction): sibling chains
+    // see that neighbor's pre-smooth position and would tear the ribbon if
+    // we moved it.
+    const headIsJunction = (segmentDegree.get(headKey) ?? 0) >= 3
+    const tailIsJunction = (segmentDegree.get(tailKey) ?? 0) >= 3
+    if (n0 >= 2) {
+      const startInterior =
+        ghostPrev !== null || headIsJunction ? 2 : 1
+      const endInterior =
+        ghostNextSeam !== null || tailIsJunction ? n0 - 1 : n0
+      if (startInterior < endInterior) {
+        const tmpX = new Array<number>(n0 + 1)
+        const tmpZ = new Array<number>(n0 + 1)
+        for (let pass = 0; pass < CENTERLINE_SMOOTH_PASSES; pass++) {
+          for (let i = startInterior; i < endInterior; i++) {
+            tmpX[i] = 0.25 * px[i - 1] + 0.5 * px[i] + 0.25 * px[i + 1]
+            tmpZ[i] = 0.25 * pz[i - 1] + 0.5 * pz[i] + 0.25 * pz[i + 1]
+          }
+          for (let i = startInterior; i < endInterior; i++) {
+            px[i] = tmpX[i]
+            pz[i] = tmpZ[i]
+          }
+        }
+      }
+    }
+
     // Extend the ribbon past the polyline tip into the sea when the chain
     // terminates below sea level, so the alpha fade has room to blend to
     // zero and the sea shader's foam-suppression radius covers the delta
@@ -386,6 +435,54 @@ export function buildRiverGeometry(
         )
       : 0
 
+    // Per-vertex inside-bank cap and bend direction, hoisted so the
+    // smoothing pass below can window over the result. Bounded to the real
+    // polyline (i ≤ n0); extension vertices stay at the array's Infinity/0
+    // defaults so the main loop reads them as "no cap, straight".
+    const rawCaps: number[] = new Array(n + 1).fill(Infinity)
+    const rawCrossSigns: number[] = new Array(n + 1).fill(0)
+    for (let i = 0; i <= n0; i++) {
+      const prevPt = i > 0 ? ([px[i - 1], pz[i - 1]] as const) : ghostPrev
+      const nextPt = i < n0 ? ([px[i + 1], pz[i + 1]] as const) : ghostNextSeam
+      if (!prevPt || !nextPt) continue
+      const [pTx, pTz] = normalizedDelta(prevPt[0], prevPt[1], px[i], pz[i])
+      const [nTx, nTz] = normalizedDelta(px[i], pz[i], nextPt[0], nextPt[1])
+      const dot = pTx * nTx + pTz * nTz
+      const sinHalf = Math.sqrt(Math.max(0, (1 - dot) * 0.5))
+      if (sinHalf <= 1e-3) continue
+      const Lprev = Math.hypot(prevPt[0] - px[i], prevPt[1] - pz[i])
+      const Lnext = Math.hypot(nextPt[0] - px[i], nextPt[1] - pz[i])
+      const radiusOfCurvature = Math.min(Lprev, Lnext) / (2 * sinHalf)
+      rawCaps[i] = RIVER_BEND_SAFETY * radiusOfCurvature
+      rawCrossSigns[i] = Math.sign(pTx * nTz - pTz * nTx)
+    }
+
+    // Cubic-taper smoothing: each bend broadcasts cap/pull(|k|/N) to
+    // neighbors and the vertex takes the min, so caps ease into bends
+    // along a smoothstep curve rather than snapping at the apex.
+    const smoothedCaps: number[] = new Array(n + 1).fill(Infinity)
+    const smoothedCrossSigns: number[] = new Array(n + 1).fill(0)
+    for (let i = 0; i <= n0; i++) {
+      let bestCap = Infinity
+      let bestSign = rawCrossSigns[i]
+      for (let k = -BEND_CAP_SMOOTH_RADIUS; k <= BEND_CAP_SMOOTH_RADIUS; k++) {
+        const j = i + k
+        if (j < 0 || j > n0) continue
+        const cj = rawCaps[j]
+        if (!Number.isFinite(cj)) continue
+        const t = Math.abs(k) / BEND_CAP_SMOOTH_RADIUS
+        const pull = 1 - smoothstep(0, 1, t)
+        if (pull < 1e-6) continue
+        const candidate = cj / pull
+        if (candidate < bestCap) {
+          bestCap = candidate
+          bestSign = rawCrossSigns[j]
+        }
+      }
+      smoothedCaps[i] = bestCap
+      smoothedCrossSigns[i] = bestSign
+    }
+
     const baseVertex = positions.length / 3
     let cumulativeLen = 0
     for (let i = 0; i <= n; i++) {
@@ -417,26 +514,15 @@ export function buildRiverGeometry(
       // Miter extension = half-width / cos(theta/2). Clamp so 180°
       // reversals don't spike vertex positions to infinity.
       let miter = 1
-      // Inside-corner cap (see RIVER_BEND_SAFETY). crossSign sign-codes
-      // the bend direction: +1 chain turns LEFT (inside = +nx side =
-      // LEFT bank), -1 turns RIGHT, 0 straight. Only the inside bank
-      // gets capped — the outside is stretched along the bend exterior
-      // and never self-intersects.
-      let halfWidthCap = Infinity
-      let crossSign = 0
       if (hasPrev && hasNext) {
         const dot = pTx * nTx + pTz * nTz
         const cosHalf = Math.sqrt(Math.max(0, (1 + dot) * 0.5))
-        const sinHalf = Math.sqrt(Math.max(0, (1 - dot) * 0.5))
         if (cosHalf > MIN_MITER_COSINE) miter = 1 / cosHalf
-        if (sinHalf > 1e-3 && prevPt && nextPt) {
-          const Lprev = Math.hypot(prevPt[0] - px[i], prevPt[1] - pz[i])
-          const Lnext = Math.hypot(nextPt[0] - px[i], nextPt[1] - pz[i])
-          const radiusOfCurvature = Math.min(Lprev, Lnext) / (2 * sinHalf)
-          halfWidthCap = RIVER_BEND_SAFETY * radiusOfCurvature
-          crossSign = Math.sign(pTx * nTz - pTz * nTx)
-        }
       }
+      // crossSign codes the bend direction so only the inside bank gets
+      // capped: +1 LEFT turn (inside = +nx), -1 RIGHT, 0 straight.
+      const halfWidthCap = smoothedCaps[i]
+      const crossSign = smoothedCrossSigns[i]
 
       // Widths already carry the estuary fan scaling from the bake (see
       // `apply_mouth_fan_widths` in shared/worldgen/tile_bake/context.rs),

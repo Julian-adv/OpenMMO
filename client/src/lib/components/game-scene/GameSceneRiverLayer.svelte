@@ -46,7 +46,7 @@
 
   // Debug: overlay the ribbon's triangle edges so the tessellation is
   // visible. Flip to false (or wire to a UI toggle) to disable.
-  const SHOW_WIREFRAME = false
+  const SHOW_WIREFRAME = true
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: 0xff3366,
     transparent: true,
@@ -414,15 +414,15 @@
       tileSegments.set(id, data.segments)
       await buildTileMesh(id, data.segments)
 
-      // Rebuild already-built neighbor tiles in parallel — their chains
-      // may have terminated at a tile-seam point whose "shared with
-      // neighbor" status only becomes known now that this tile's
-      // segments are loaded. `buildTileMesh` is per-id serialized so
-      // the parallel kick-off is safe.
+      // Rebuild every other tile with segments — seam-shared status
+      // only becomes known now that our segments landed. Don't gate on
+      // `tileMeshes.get(otherId)`: an in-progress first build started
+      // before our `tileSegments.set` and saw an empty ghost set, so
+      // its smoothing moved a vertex we treat as a ghost reference.
+      // `buildTileMesh` serializes per-id; this rebuild queues behind.
       const rebuilds: Promise<void>[] = []
       for (const [otherId, segs] of tileSegments) {
         if (otherId === id) continue
-        if (!tileMeshes.get(otherId)) continue
         rebuilds.push(buildTileMesh(otherId, segs))
       }
       await Promise.all(rebuilds)
