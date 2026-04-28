@@ -6,8 +6,8 @@ pub const TILE_DIM: usize = 64;
 pub const VERTS_PER_SIDE: usize = TILE_DIM + 1;
 
 /// Heightmap encoding: 10000 → 0.0 m, step 0.05 m. Covers -500..+2776 m.
-pub(super) const HEIGHT_BIAS: f32 = 500.0;
-pub(super) const HEIGHT_STEP: f32 = 0.05;
+pub const HEIGHT_BIAS: f32 = 500.0;
+pub const HEIGHT_STEP: f32 = 0.05;
 
 /// Fixed palette slot indices used by this baker. Must match slot order in
 /// `shared/palette.json`.

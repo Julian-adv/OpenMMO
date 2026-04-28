@@ -30,8 +30,8 @@ use super::global_map::GlobalMap;
 use super::vector_features::{river_segments_near_tile, segments_near_tile};
 
 pub use constants::{
-    PAL_CLIFF, PAL_DIRT, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW,
-    RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, TILE_DIM, VERTS_PER_SIDE,
+    HEIGHT_BIAS, HEIGHT_STEP, PAL_CLIFF, PAL_DIRT, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND,
+    PAL_SNOW, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, TILE_DIM, VERTS_PER_SIDE,
 };
 pub use context::BakeContext;
 use context::MouthIsland;

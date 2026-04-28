@@ -17,11 +17,7 @@
 //! Future biome / forest density variations should flow through vegMeta as
 //! well so that the runtime and the baker stay aligned on inputs.
 
-use super::tile_bake::{TILE_DIM, VERTS_PER_SIDE};
-
-// === Shared heightmap encoding (must match tile_bake) ===
-const HEIGHT_BIAS: f32 = 500.0;
-const HEIGHT_STEP: f32 = 0.05;
+use super::tile_bake::{HEIGHT_BIAS, HEIGHT_STEP, TILE_DIM, VERTS_PER_SIDE};
 
 #[inline]
 fn decode_height(v: u16) -> f32 {

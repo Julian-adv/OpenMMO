@@ -158,9 +158,9 @@ enum Cmd {
     },
 
     /// Bake per-tile heightmap + splatmap files into a `data/terrain/`-shaped
-    /// layout. Baking the full world is expensive (~6 GB), so the default
-    /// region range is an 8×8 square around the origin. Expand explicitly
-    /// when ready to write the whole world.
+    /// layout. The default region range covers the full 32×32 km world
+    /// (32×32 regions around the origin). Narrow the range explicitly for
+    /// faster iteration on a sub-area.
     Bake {
         #[command(flatten)]
         gen: GenArgs,
@@ -172,19 +172,19 @@ enum Cmd {
         out: PathBuf,
 
         /// Minimum region X (inclusive). Region = 16 tiles = 1024 m at 64 m/tile.
-        #[arg(long, default_value_t = -4, allow_hyphen_values = true)]
+        #[arg(long, default_value_t = -16, allow_hyphen_values = true)]
         region_x_min: i32,
 
         /// Maximum region X (inclusive).
-        #[arg(long, default_value_t = 3, allow_hyphen_values = true)]
+        #[arg(long, default_value_t = 15, allow_hyphen_values = true)]
         region_x_max: i32,
 
         /// Minimum region Z (inclusive).
-        #[arg(long, default_value_t = -4, allow_hyphen_values = true)]
+        #[arg(long, default_value_t = -16, allow_hyphen_values = true)]
         region_z_min: i32,
 
         /// Maximum region Z (inclusive).
-        #[arg(long, default_value_t = 3, allow_hyphen_values = true)]
+        #[arg(long, default_value_t = 15, allow_hyphen_values = true)]
         region_z_max: i32,
     },
 }
