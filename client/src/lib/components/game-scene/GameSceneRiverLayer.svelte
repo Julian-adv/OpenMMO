@@ -6,12 +6,23 @@
   import { TERRAIN_TILE_SIZE, parseTileId } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { RiverDataManager } from '../../managers/riverDataManager'
-  import { buildRiverGeometry, endpointKey } from '../../utils/river-geometry'
+  import {
+    buildChains,
+    buildRiverGeometry,
+    endpointKey,
+    type SeamGhostExtension,
+  } from '../../utils/river-geometry'
   import type { RiverSegment } from '../../utils/river-data'
   import {
     createRiverMaterial,
     type RiverMaterialResult,
   } from '../../shaders/river-material'
+
+  /** Depth of the cross-tile ghost extension provided per shared seam.
+   *  Should be ≥ BEND_CAP_SMOOTH_RADIUS in river-geometry (=10) so the
+   *  cap-smoothing window reaches a fully-anchored neighbor cap on the
+   *  far side. A small margin handles future tweaks of that constant. */
+  const SEAM_GHOST_EXTENSION_DEPTH = 12
 
   interface Props {
     terrainTiles: TerrainTile[]
@@ -84,22 +95,78 @@
   /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
   const tileSegments = new Map<string, RiverSegment[]>()
 
-  /** Map each shared seam endpoint to the other endpoint of the neighbor
-   *  tile's segment that touches it. The river-geometry ribbon loop uses
-   *  this as a "ghost point" so the tangent at a tile-seam chain tip is
-   *  averaged across the split — both tiles then bevel the ribbon
-   *  identically at the shared centerline point. */
+  // Cross-tile cumulative-length values at shared seam endpoints; see
+  // `RiverGeometryResult.publishedOffsets` for the full rationale. The
+  // rebuild cascade below propagates values downstream over O(chain
+  // depth) rounds.
+  /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+  const chainOffsets = new Map<string, number>()
+
+  /** Map each shared seam endpoint to a list of K positions stepping
+   *  inward along the neighbor tile's chain. Position 0 is the
+   *  immediate ghost (used by river-geometry for tangent averaging at
+   *  the seam tip); the rest extend the bend-cap smoothing window
+   *  across the seam so a tight bend within K vertices of the seam in
+   *  one tile propagates to the other side and both tiles compute
+   *  identical inside-bank caps. Reuses `buildChains` to share the
+   *  degree-1-tip-walking logic with the geometry builder; only
+   *  chain ends that are degree-1 (true seam tips, not junctions)
+   *  qualify as extension keys. */
   function collectExternalContinuations(
     excludeId: string
-     
-  ): Map<string, [number, number]> {
+  ): Map<string, SeamGhostExtension> {
     /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
-    const map = new Map<string, [number, number]>()
+    const map = new Map<string, SeamGhostExtension>()
     for (const [id, segs] of tileSegments) {
       if (id === excludeId) continue
+
+      // Endpoint degree: chain tips that aren't degree-1 are junctions
+      // (degree ≥ 3) which can't be ghost-extended unambiguously.
+      /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+      const degree = new Map<string, number>()
       for (const s of segs) {
-        map.set(endpointKey(s.ax, s.az), [s.bx, s.bz])
-        map.set(endpointKey(s.bx, s.bz), [s.ax, s.az])
+        const ka = endpointKey(s.ax, s.az)
+        const kb = endpointKey(s.bx, s.bz)
+        degree.set(ka, (degree.get(ka) ?? 0) + 1)
+        degree.set(kb, (degree.get(kb) ?? 0) + 1)
+      }
+
+      for (const chain of buildChains(segs)) {
+        if (chain.length === 0) continue
+        // Reconstruct vertex positions along the oriented chain
+        // (n+1 positions for n links). positions[0] = chain head
+        // endpoint, positions[chain.length] = chain tail endpoint.
+        const positions: Array<readonly [number, number]> = new Array(
+          chain.length + 1
+        )
+        const first = segs[chain[0].seg]
+        positions[0] = chain[0].forward
+          ? [first.ax, first.az]
+          : [first.bx, first.bz]
+        for (let i = 0; i < chain.length; i++) {
+          const link = chain[i]
+          const s = segs[link.seg]
+          positions[i + 1] = link.forward ? [s.bx, s.bz] : [s.ax, s.az]
+        }
+
+        const headKey = endpointKey(positions[0][0], positions[0][1])
+        if (degree.get(headKey) === 1) {
+          const walk = positions.slice(1, 1 + SEAM_GHOST_EXTENSION_DEPTH)
+          if (walk.length > 0) map.set(headKey, walk)
+        }
+        const tailIdx = chain.length
+        const tailKey = endpointKey(positions[tailIdx][0], positions[tailIdx][1])
+        if (degree.get(tailKey) === 1) {
+          const walk: Array<readonly [number, number]> = []
+          for (
+            let i = tailIdx - 1;
+            i >= 0 && walk.length < SEAM_GHOST_EXTENSION_DEPTH;
+            i--
+          ) {
+            walk.push(positions[i])
+          }
+          if (walk.length > 0) map.set(tailKey, walk)
+        }
       }
     }
     return map
@@ -159,6 +226,20 @@
     // sampler bindings, so a re-pooled material would crash. GC handles it.
     tileMaterials.delete(id)
     tileHeightTextures.delete(id)
+    // Drop chainOffsets entries whose endpoints no surviving loaded tile
+    // still references — without this the map grows unboundedly across
+    // a roaming session as tiles are loaded and disposed.
+    /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+    const live = new Set<string>()
+    for (const segs of tileSegments.values()) {
+      for (const s of segs) {
+        live.add(endpointKey(s.ax, s.az))
+        live.add(endpointKey(s.bx, s.bz))
+      }
+    }
+    for (const key of [...chainOffsets.keys()]) {
+      if (!live.has(key)) chainOffsets.delete(key)
+    }
   }
 
   interface SpillBindings {
@@ -313,11 +394,16 @@
 
   async function buildTileMeshInner(id: string, segments: RiverSegment[]) {
     const externalContinuations = collectExternalContinuations(id)
-    const { geometry, vertexCount } = buildRiverGeometry(
+    const { geometry, vertexCount, publishedOffsets } = buildRiverGeometry(
       segments,
       heightManager,
-      externalContinuations
+      externalContinuations,
+      chainOffsets
     )
+    // Publish into the shared map; downstream tile reads on next rebuild.
+    for (const [seamKey, value] of publishedOffsets) {
+      chainOffsets.set(seamKey, value)
+    }
     if (vertexCount === 0) {
       geometry.dispose()
       disposePriorMesh(id)
