@@ -34,7 +34,7 @@ use tracing_subscriber;
 #[command(about = "MMORPG Game Server", long_about = None)]
 struct Args {
     /// Port number to listen on
-    #[arg(short, long, default_value_t = 8080)]
+    #[arg(short, long, default_value_t = 10006)]
     port: u16,
 
     /// Port for terrain REST API (default: game port + 1)

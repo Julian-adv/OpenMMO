@@ -75,7 +75,7 @@ Memory는 LLM 응답에 `memory_update` 필드를 추가하여 자동 갱신 (ap
 ## Config 구조
 
 ```toml
-server = "ws://localhost:10015"
+server = "ws://localhost:10006"
 
 [[npcs]]
 account = "npc_guard"

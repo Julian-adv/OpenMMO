@@ -675,7 +675,7 @@ fn spawn_llm_task(
         let http_url = server_url
             .replace("wss://", "https://")
             .replace("ws://", "http://");
-        // Bump the port by 1 (e.g. ws://host:10015 → http://host:10016)
+        // Bump the port by 1 (e.g. ws://host:10006 → http://host:10007)
         if let Some(colon_pos) = http_url.rfind(':') {
             if let Ok(port) = http_url[colon_pos + 1..].parse::<u16>() {
                 format!("{}{}", &http_url[..colon_pos + 1], port + 1)

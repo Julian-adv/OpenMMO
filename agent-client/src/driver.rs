@@ -381,7 +381,7 @@ pub struct DriverConfig {
     pub idle_interval: Duration,
     pub activity_window: Duration,
     pub schedule: Vec<ScheduleEntry>,
-    /// HTTP base URL for the game server API (e.g. "http://127.0.0.1:10015").
+    /// HTTP base URL for the game server API (e.g. "http://127.0.0.1:10007").
     pub api_base_url: String,
 }
 

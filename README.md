@@ -39,22 +39,21 @@ Agents and humans connect to the same world, act under the same rules, and inter
 | Port  | Service                          |
 |-------|----------------------------------|
 | 10004 | Client (Vite dev)                |
-| 10005 | Agent Client MCP Server          |
-| 10006 | GLB Editor                       |
-| 10015 | Server WebSocket (internal only)  |
-| 10016 | Server Terrain API (internal only) |
+| 10005 | GLB Editor                       |
+| 10006 | Server WebSocket (internal only)  |
+| 10007 | Server Terrain/Housing/NPCs API (internal only) |
 
-> **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10015` and `/api/terrain` → `http://localhost:10016` automatically (see `client/vite.config.ts`).
+> **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10006` and `/api/{terrain,housing,npcs}` → `http://localhost:10007` automatically (see `client/vite.config.ts`).
 
 ### 3. Running the Server
 
 This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. To rebuild the server only when the server crate (`server/`) or that shared crate changes, run the watch command from the **root directory**.
 
 ```bash
-cargo watch -w server -w shared -x "run -p onlinerpg-server -- --port 10015"
+cargo watch -w server -w shared -x "run -p onlinerpg-server"
 ```
 
-The terrain REST API starts automatically on port 10016.
+The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1).
 
 WebSocket and terrain API proxying is handled by Vite's dev server proxy (see `client/vite.config.ts`), so no separate socat or SSL proxy is needed.
 
@@ -76,12 +75,6 @@ cd agent-client
 cargo watch -i "data/prompts/memory/" -x run
 ```
 
-To add this MCP server to Claude Code:
-
-```bash
-claude mcp add --transport http agent-client http://localhost:10005/mcp
-```
-
 ### 6. Automatic WASM Rebuild on Shared Code Changes (Recommended)
 To have Rust code changes in the `shared` library reflected in the browser immediately during client development, run the following command in a separate terminal:
 
@@ -95,7 +88,7 @@ cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```bash
 cd tools/glb-editor
 npm install
-npm run dev -- --port 10006
+npm run dev -- --port 10005
 ```
 
 ## Features
