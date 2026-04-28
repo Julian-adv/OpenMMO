@@ -13,8 +13,8 @@
     "kind": "bridge",
     "gridAlign": true,
     "bridge": {
-      "deckMinX": -2.07,
-      "deckMaxX": 2.07,
+      "deckMinX": -1.77,
+      "deckMaxX": 1.77,
       "deckMinZ": -10.13,
       "deckMaxZ": 10.13,
       "deckCrownY": 2.5,
