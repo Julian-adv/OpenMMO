@@ -6,6 +6,8 @@ import type {
 } from '../stores/editorStore'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { tileToRegion } from '../terrain/terrain-constants'
+import { loadGLB } from '../utils/gltfCache'
+import { detectFootprint, type FootprintData } from '../utils/objectFootprint'
 
 function regionKey(rx: number, rz: number): string {
   return `${rx},${rz}`
@@ -15,6 +17,7 @@ export class ObjectManager {
   private cache = new Map<string, ObjectRegionData>()
   private terrainApiUrl: string
   private catalogCache: ObjectDef[] | null = null
+  private footprintCache = new Map<string, FootprintData>()
 
   constructor() {
     this.terrainApiUrl = getTerrainApiUrl()
@@ -25,6 +28,18 @@ export class ObjectManager {
     const resp = await fetch('/models/objects/catalog.json')
     const data: ObjectDef[] = await resp.json()
     this.catalogCache = data
+    return data
+  }
+
+  async fetchFootprint(objectType: string): Promise<FootprintData | null> {
+    const cached = this.footprintCache.get(objectType)
+    if (cached) return cached
+    await this.fetchCatalog()
+    const def = this.getCatalogEntry(objectType)
+    if (!def) return null
+    const gltf = await loadGLB(`/models/objects/${def.model}`)
+    const data = detectFootprint(gltf.scene)
+    this.footprintCache.set(objectType, data)
     return data
   }
 

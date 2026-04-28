@@ -8,6 +8,7 @@
     currentObjectData,
     selectedObjectPlacementId,
     objectSubTool,
+    editorHeightManager,
   } from '../../stores/editorStore'
   import type {
     ObjectDef,
@@ -16,8 +17,10 @@
     ObjectSubTool,
   } from '../../stores/editorStore'
   import { objectManager } from '../../managers/objectManager'
+  import { rotateRect } from '../../utils/objectFootprint'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { currentEditorRegion } from '../../stores/editorStore'
+  import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
 
   let catalog = $state<ObjectDef[]>([])
   let selected = $state<string | null>(null)
@@ -28,8 +31,12 @@
   let floor = $state(-1)
   /** Anchors slider range so it doesn't drift while dragging. */
   let baseY = $state<number | null>(null)
+  let heightManager = $state<TerrainHeightManager | null>(null)
+  let flattening = $state(false)
 
   const Y_RANGE = 5
+  /** Tight blend so flattening doesn't bleed into surrounding terrain (e.g. river banks). */
+  const FLATTEN_BLEND_RADIUS = 2
 
   const unsubs = [
     objectCatalog.subscribe((v) => (catalog = v)),
@@ -47,6 +54,7 @@
     }),
     objectSubTool.subscribe((v) => (subTool = v)),
     playerFloorLevel.subscribe((v) => (floor = v)),
+    editorHeightManager.subscribe((v) => (heightManager = v)),
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
@@ -91,6 +99,34 @@
     const region = get(currentEditorRegion)
     if (region) {
       objectManager.saveObject(region.rx, region.rz, updated)
+    }
+  }
+
+  async function flattenTerrain() {
+    const p = selectedPlacement
+    const hm = heightManager
+    if (!p || !hm || flattening) return
+
+    flattening = true
+    try {
+      const fp = await objectManager.fetchFootprint(p.type)
+      if (!fp || fp.rects.length === 0) return
+
+      const targetY = p.y + fp.minLocalY
+      for (const r of fp.rects) {
+        const rotated = rotateRect(r, p.rotation)
+        hm.flattenArea(
+          rotated.minX + p.x,
+          rotated.minZ + p.z,
+          rotated.maxX + p.x,
+          rotated.maxZ + p.z,
+          targetY,
+          FLATTEN_BLEND_RADIUS
+        )
+      }
+      await hm.saveAllDirty()
+    } finally {
+      flattening = false
     }
   }
 
@@ -198,6 +234,13 @@
           <span class="info-label">Floor:</span>
           <span class="info-value">{selectedPlacement.floorLevel + 1}F</span>
         </div>
+        <button
+          class="flatten-btn"
+          onclick={flattenTerrain}
+          disabled={flattening || !heightManager}
+        >
+          {flattening ? 'Flattening…' : 'Flatten Terrain'}
+        </button>
         <button class="delete-btn" onclick={deletePlacement}>Delete</button>
       </div>
     {:else}
@@ -390,6 +433,29 @@
     width: 42px;
     text-align: right;
     flex-shrink: 0;
+  }
+
+  .flatten-btn {
+    margin-top: 4px;
+    width: 100%;
+    padding: 5px;
+    background: rgba(68, 204, 255, 0.15);
+    border: 1px solid rgba(68, 204, 255, 0.4);
+    border-radius: 4px;
+    color: #44ccff;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: bold;
+  }
+
+  .flatten-btn:hover:not(:disabled) {
+    background: rgba(68, 204, 255, 0.3);
+  }
+
+  .flatten-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .delete-btn {
