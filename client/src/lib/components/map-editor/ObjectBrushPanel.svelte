@@ -9,6 +9,7 @@
     selectedObjectPlacementId,
     objectSubTool,
     editorHeightManager,
+    editorGrassDataManager,
   } from '../../stores/editorStore'
   import type {
     ObjectDef,
@@ -17,10 +18,13 @@
     ObjectSubTool,
   } from '../../stores/editorStore'
   import { objectManager } from '../../managers/objectManager'
-  import { rotateRect } from '../../utils/objectFootprint'
+  import { rotateRect, type FootprintRect } from '../../utils/objectFootprint'
+  import { removeGrassInRect } from '../../utils/grass-data'
+  import { worldToTileCoord, tileKey } from '../../managers/terrain-height-types'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { currentEditorRegion } from '../../stores/editorStore'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
+  import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
 
   let catalog = $state<ObjectDef[]>([])
   let selected = $state<string | null>(null)
@@ -32,6 +36,7 @@
   /** Anchors slider range so it doesn't drift while dragging. */
   let baseY = $state<number | null>(null)
   let heightManager = $state<TerrainHeightManager | null>(null)
+  let grassManager = $state<TerrainGrassDataManager | null>(null)
   let flattening = $state(false)
 
   const Y_RANGE = 5
@@ -55,6 +60,7 @@
     objectSubTool.subscribe((v) => (subTool = v)),
     playerFloorLevel.subscribe((v) => (floor = v)),
     editorHeightManager.subscribe((v) => (heightManager = v)),
+    editorGrassDataManager.subscribe((v) => (grassManager = v)),
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
@@ -113,18 +119,57 @@
       if (!fp || fp.rects.length === 0) return
 
       const targetY = p.y + fp.minLocalY
-      for (const r of fp.rects) {
+      const worldRects: FootprintRect[] = fp.rects.map((r) => {
         const rotated = rotateRect(r, p.rotation)
-        hm.flattenArea(
-          rotated.minX + p.x,
-          rotated.minZ + p.z,
-          rotated.maxX + p.x,
-          rotated.maxZ + p.z,
-          targetY,
-          FLATTEN_BLEND_RADIUS
-        )
+        return {
+          minX: rotated.minX + p.x,
+          maxX: rotated.maxX + p.x,
+          minZ: rotated.minZ + p.z,
+          maxZ: rotated.maxZ + p.z,
+        }
+      })
+      for (const wr of worldRects) {
+        hm.flattenArea(wr.minX, wr.minZ, wr.maxX, wr.maxZ, targetY, FLATTEN_BLEND_RADIUS)
       }
       await hm.saveAllDirty()
+
+      const gm = grassManager
+      if (!gm) return
+
+      const tileBuckets = new Map<string, { tx: number; tz: number; rects: FootprintRect[] }>()
+      for (const wr of worldRects) {
+        const txMin = worldToTileCoord(wr.minX)
+        const txMax = worldToTileCoord(wr.maxX)
+        const tzMin = worldToTileCoord(wr.minZ)
+        const tzMax = worldToTileCoord(wr.maxZ)
+        for (let tx = txMin; tx <= txMax; tx++) {
+          for (let tz = tzMin; tz <= tzMax; tz++) {
+            const key = tileKey(tx, tz)
+            let bucket = tileBuckets.get(key)
+            if (!bucket) {
+              bucket = { tx, tz, rects: [] }
+              tileBuckets.set(key, bucket)
+            }
+            bucket.rects.push(wr)
+          }
+        }
+      }
+
+      await Promise.all(
+        [...tileBuckets.values()].map(async ({ tx, tz, rects }) => {
+          let data = gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
+          if (!data) return
+          let changed = false
+          for (const r of rects) {
+            const next = removeGrassInRect(data, r.minX, r.minZ, r.maxX, r.maxZ)
+            if (next) {
+              data = next
+              changed = true
+            }
+          }
+          if (changed) await gm.saveGrassData(tx, tz, data)
+        })
+      )
     } finally {
       flattening = false
     }
