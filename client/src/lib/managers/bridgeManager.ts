@@ -128,6 +128,25 @@ class BridgeManager {
     return this.findBridgeAt(wx, wz, currentY)?.deckY ?? null
   }
 
+  /**
+   * Returns the placement id of a bridge that visually occludes the player
+   * along the isometric camera ray R(s) = (px - s, py + s, pz + s), s >= 0.
+   * The AABB has no lower Y bound (sLow=0) so a player directly under the
+   * deck still counts as occluded — otherwise the ray would exit the XZ box
+   * before climbing to the bridge bottom.
+   */
+  findOccludingBridgeId(px: number, py: number, pz: number): number | null {
+    for (const [id, b] of this.bridges) {
+      const topY = b.py + b.meta.deckCrownY + 1.5
+      const sHigh = topY - py
+      if (sHigh <= 0) continue
+      const sMin = Math.max(px - b.worldMaxX, b.worldMinZ - pz, 0)
+      const sMax = Math.min(px - b.worldMinX, b.worldMaxZ - pz, sHigh)
+      if (sMin <= sMax) return id
+    }
+    return null
+  }
+
   /** Block crossing the long-side railing of a deck. Short ends remain open for entry/exit. */
   isMovementBlocked(
     fromX: number,

@@ -33,6 +33,7 @@
   const PREVIEW_OPACITY = 0.5
   const SELECTION_OPACITY = 0.9
   const SELECTION_RENDER_ORDER = 999
+  const GHOST_OPACITY = 0.3
 
   let tool = $state<EditorTool>('height')
   let placements = $state<ObjectPlacement[]>([])
@@ -223,8 +224,19 @@ let lastBuildKey = ''
       if (catDef?.kind) {
         clone.userData.objectKind = catDef.kind
       }
+      // Per-instance material clone so the ghost toggle doesn't leak across placements.
+      if (catDef?.kind === 'bridge') {
+        clone.traverse((o) => {
+          if (o instanceof THREE.Mesh && o.material) {
+            o.material = (o.material as THREE.Material).clone()
+          }
+        })
+      }
       group.add(clone)
     }
+    // Fresh clones start opaque; the $effect will re-apply ghost next frame
+    // if the player is still under a bridge.
+    ghostBridgeId = null
   }
 
   function updatePreview() {
@@ -281,6 +293,40 @@ let lastBuildKey = ''
     void tool
     void isEditorMode
     updatePreview()
+  })
+
+  let ghostBridgeId: number | null = null
+
+  function applyBridgeGhost(placementId: number, ghost: boolean) {
+    for (const child of group.children) {
+      if (child.userData.objectId !== placementId) continue
+      child.traverse((o) => {
+        if (!(o instanceof THREE.Mesh)) return
+        const m = o.material as THREE.Material
+        m.transparent = ghost
+        m.opacity = ghost ? GHOST_OPACITY : 1
+        m.depthWrite = !ghost
+        // Toggling `transparent` changes blend state — without needsUpdate
+        // the shader isn't recompiled and opacity is silently ignored.
+        m.needsUpdate = true
+        // Draw after the river ribbon (renderOrder=1) so alpha-blended deck
+        // sorts above water consistently.
+        o.renderOrder = ghost ? 2 : 0
+      })
+    }
+  }
+
+  $effect(() => {
+    if (!debugInfo) return
+    const id = bridgeManager.findOccludingBridgeId(
+      debugInfo.position.x,
+      debugInfo.position.y,
+      debugInfo.position.z
+    )
+    if (id === ghostBridgeId) return
+    if (ghostBridgeId !== null) applyBridgeGhost(ghostBridgeId, false)
+    if (id !== null) applyBridgeGhost(id, true)
+    ghostBridgeId = id
   })
 
   export function getGroup(): THREE.Group {
