@@ -93,7 +93,12 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
     );
 
     let t_ph6 = Instant::now();
-    let road_net = roads::compute_roads(&map, &settlements_list);
+    let mut road_net = roads::compute_roads(&map, &settlements_list, &river_map);
+    roads::snap_crossings_to_grid(
+        &mut road_net,
+        &mut river_map,
+        map.config.global_res as usize,
+    );
     eprintln!(
         "Phase 6 (roads):          {:.2}s  {} roads",
         t_ph6.elapsed().as_secs_f32(),

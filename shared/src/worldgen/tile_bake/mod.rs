@@ -14,9 +14,11 @@
 //! roads are handled as world-space polylines (Chaikin-smoothed) and queried
 //! by point-to-segment distance during bake. The splat layer uses a fixed
 //! five-slot region palette; primary/secondary indices and the `blend` byte
-//! are chosen per-cell by a priority ladder (road > river > sea > cliff >
-//! alpine > slope > coast > plain). Cliff wins over alpine so a vertical
-//! marble face on a snowy peak still reads as bare rock.
+//! are chosen per-cell by a priority ladder (river > road > sea > cliff >
+//! alpine > slope > coast > plain). River bed wins over road so road→river
+//! crossings keep their wet-pebble texture for a future bridge mesh; cliff
+//! wins over alpine so a vertical marble face on a snowy peak still reads
+//! as bare rock.
 
 mod constants;
 mod context;
@@ -203,7 +205,7 @@ mod tests {
         let mut rm = rivers::compute_flow(&map);
         rivers::extract_rivers(&map, &mut rm, 50.0, 4);
         let s = settlements::place_settlements(&map, &rm);
-        let net = roads::compute_roads(&map, &s);
+        let net = roads::compute_roads(&map, &s, &rm);
         let coast_polys =
             super::super::coasts::extract_coasts(&map.land_mask, map.config.global_res as usize);
         let ctx = BakeContext::new(&map, &rm, &net, &coast_polys);
