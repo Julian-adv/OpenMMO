@@ -30,6 +30,8 @@
 
   const HIGHLIGHT_COLOR = new THREE.Color(0x44ccff)
   const PREVIEW_OPACITY = 0.5
+  const SELECTION_OPACITY = 0.9
+  const SELECTION_RENDER_ORDER = 999
 
   let tool = $state<EditorTool>('height')
   let placements = $state<ObjectPlacement[]>([])
@@ -84,6 +86,7 @@
   })
 
   const modelCache = new SvelteMap<string, THREE.Group>()
+  const modelBounds = new SvelteMap<string, { center: THREE.Vector3; size: THREE.Vector3 }>()
   const loadingModels = new SvelteSet<string>()
   let catalogById = new Map<string, ObjectDef>()
 
@@ -103,6 +106,12 @@
           child.castShadow = true
         }
       })
+      const box = new THREE.Box3().setFromObject(model)
+      const center = new THREE.Vector3()
+      const size = new THREE.Vector3()
+      box.getCenter(center)
+      box.getSize(size)
+      modelBounds.set(objectId, { center, size })
       modelCache.set(objectId, model)
       lastBuildKey = ''
       rebuild()
@@ -122,8 +131,30 @@
     obj.traverse((child) => {
       if (child instanceof THREE.Mesh && child.material) {
         child.material.dispose()
+      } else if (child instanceof THREE.LineSegments) {
+        child.geometry.dispose()
+        ;(child.material as THREE.Material).dispose()
       }
     })
+  }
+
+  function createSelectionBox(
+    center: THREE.Vector3,
+    size: THREE.Vector3
+  ): THREE.LineSegments {
+    const box = new THREE.BoxGeometry(size.x, size.y, size.z)
+    const geo = new THREE.EdgesGeometry(box)
+    box.dispose()
+    const mat = new THREE.LineBasicMaterial({
+      color: HIGHLIGHT_COLOR,
+      depthTest: false,
+      transparent: true,
+      opacity: SELECTION_OPACITY,
+    })
+    const lines = new THREE.LineSegments(geo, mat)
+    lines.position.copy(center)
+    lines.renderOrder = SELECTION_RENDER_ORDER
+    return lines
   }
 
   function setPreviewMaterial(obj: THREE.Object3D, opacity: number) {
@@ -137,18 +168,7 @@
     })
   }
 
-  function applyHighlight(obj: THREE.Object3D) {
-    obj.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        const mat = (child.material as THREE.MeshStandardMaterial).clone()
-        mat.emissive = HIGHLIGHT_COLOR
-        mat.emissiveIntensity = 0.3
-        child.material = mat
-      }
-    })
-  }
-
-  let lastBuildKey = ''
+let lastBuildKey = ''
   const isEditing = () => isEditorMode && tool === 'object'
 
   function buildKey(p: ObjectPlacement[]): string {
@@ -186,7 +206,10 @@
       clone.position.set(p.x, p.y, p.z)
       clone.rotation.y = (p.rotation * Math.PI) / 180
       if (isEditing() && p.id === selectedId) {
-        applyHighlight(clone)
+        const bounds = modelBounds.get(p.type)
+        if (bounds) {
+          clone.add(createSelectionBox(bounds.center, bounds.size))
+        }
       }
       clone.userData.objectId = p.id
       clone.userData.objectType = p.type

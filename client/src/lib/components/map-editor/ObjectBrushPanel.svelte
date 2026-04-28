@@ -26,13 +26,25 @@
   let selectedPlacementId = $state<number | null>(null)
   let subTool = $state<ObjectSubTool>('place')
   let floor = $state(-1)
+  /** Anchors slider range so it doesn't drift while dragging. */
+  let baseY = $state<number | null>(null)
+
+  const Y_RANGE = 5
 
   const unsubs = [
     objectCatalog.subscribe((v) => (catalog = v)),
     selectedObjectType.subscribe((v) => (selected = v)),
     objectRotation.subscribe((v) => (rotation = v)),
     currentObjectData.subscribe((v) => (placements = v.placements)),
-    selectedObjectPlacementId.subscribe((v) => (selectedPlacementId = v)),
+    selectedObjectPlacementId.subscribe((id) => {
+      selectedPlacementId = id
+      if (id === null) {
+        baseY = null
+      } else {
+        const p = get(currentObjectData).placements.find((p) => p.id === id)
+        baseY = p?.y ?? null
+      }
+    }),
     objectSubTool.subscribe((v) => (subTool = v)),
     playerFloorLevel.subscribe((v) => (floor = v)),
   ]
@@ -54,6 +66,31 @@
     objectSubTool.set(tool)
     if (tool === 'place') {
       selectedObjectPlacementId.set(null)
+    }
+  }
+
+  function applyY(newY: number): ObjectRegionData | null {
+    if (selectedPlacementId === null) return null
+    const data = get(currentObjectData)
+    const updated: ObjectRegionData = {
+      placements: data.placements.map((p) =>
+        p.id === selectedPlacementId ? { ...p, y: newY } : p
+      ),
+    }
+    currentObjectData.set(updated)
+    return updated
+  }
+
+  function previewY(newY: number) {
+    applyY(newY)
+  }
+
+  function commitY(newY: number) {
+    const updated = applyY(newY)
+    if (!updated) return
+    const region = get(currentEditorRegion)
+    if (region) {
+      objectManager.saveObject(region.rx, region.rz, updated)
     }
   }
 
@@ -137,6 +174,22 @@
           <span class="info-label">Pos:</span>
           <span class="info-value">{formatPos(selectedPlacement)}</span>
         </div>
+        {#if baseY !== null}
+          <div class="coord-row">
+            <span class="info-label">Y:</span>
+            <input
+              class="y-slider"
+              type="range"
+              min={baseY - Y_RANGE}
+              max={baseY + Y_RANGE}
+              step="0.05"
+              value={selectedPlacement.y}
+              oninput={(e) => previewY(parseFloat(e.currentTarget.value))}
+              onchange={(e) => commitY(parseFloat(e.currentTarget.value))}
+            />
+            <span class="y-value">{selectedPlacement.y.toFixed(2)}</span>
+          </div>
+        {/if}
         <div class="coord-row">
           <span class="info-label">Rot:</span>
           <span class="info-value">{selectedPlacement.rotation}&deg;</span>
@@ -321,6 +374,22 @@
   .info-value {
     color: #ccc;
     flex: 1;
+  }
+
+  .y-slider {
+    flex: 1;
+    min-width: 0;
+    height: 14px;
+    accent-color: #44ccff;
+    margin: 0;
+  }
+
+  .y-value {
+    color: #44ccff;
+    font-variant-numeric: tabular-nums;
+    width: 42px;
+    text-align: right;
+    flex-shrink: 0;
   }
 
   .delete-btn {
