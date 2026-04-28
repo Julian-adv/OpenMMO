@@ -6,6 +6,13 @@ import type { WallDirection } from '../utils/house-geometry'
 const MAX_DOOR_INTERACT_DISTANCE = 2.0
 const MAX_OBJECT_INTERACT_DISTANCE = 3.0
 
+function hasAncestorBridge(obj: THREE.Object3D | null): boolean {
+  for (let o = obj; o; o = o.parent) {
+    if (o.userData?.objectKind === 'bridge') return true
+  }
+  return false
+}
+
 export type ClickIntent =
   | {
       type: 'attack_monster'
@@ -232,6 +239,17 @@ class InputHandler {
               }
             }
             obj = obj.parent
+          }
+        }
+        const face = objectHits[0].face
+        if (
+          face &&
+          face.normal.y > 0.5 &&
+          hasAncestorBridge(objectHits[0].object)
+        ) {
+          return {
+            type: 'move_to_ground',
+            position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
           }
         }
       }

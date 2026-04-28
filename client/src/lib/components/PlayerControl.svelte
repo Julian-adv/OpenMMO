@@ -23,6 +23,7 @@
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { playerFloorOffset, playerFloorLevel } from '../stores/housingStore'
   import { housingManager } from '../managers/housingManager'
+  import { bridgeManager } from '../managers/bridgeManager'
   import { findPath } from '../managers/pathfinding'
   import { passability_get_floor_at } from '../wasm/onlinerpg_shared'
   import { get } from 'svelte/store'
@@ -41,8 +42,25 @@
 
   let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, doorMeshes, objectMeshes, attackCooldown }: Props = $props()
 
+  let floorOffset = 0
+  playerFloorOffset.subscribe((v) => (floorOffset = v))
+
   function sampleHeight(x: number, z: number): number {
-    return heightManager.getHeightAtWorldPosition(x, z) + get(playerFloorOffset)
+    const deckY = bridgeManager.findDeckYAt(x, z, currentPlayer?.position.y ?? null)
+    if (deckY !== null) return deckY
+    return heightManager.getHeightAtWorldPosition(x, z) + floorOffset
+  }
+
+  function isMovementBlocked(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number,
+    y: number
+  ): boolean {
+    if (housingManager.isMovementBlocked(fromX, fromZ, toX, toZ, y)) return true
+    if (bridgeManager.isMovementBlocked(fromX, fromZ, toX, toZ, y)) return true
+    return false
   }
 
   let currentPlayer = $state<LocalPlayer | null>(null)
@@ -496,7 +514,7 @@
       // Check wall collision before finalizing arrival
       if (
         movementTarget &&
-        housingManager.isMovementBlocked(
+        isMovementBlocked(
           currentPos.x,
           currentPos.z,
           movementTarget.x,
@@ -561,7 +579,7 @@
     } else {
       // Check wall collision before updating position
       if (
-        housingManager.isMovementBlocked(
+        isMovementBlocked(
           currentPos.x,
           currentPos.z,
           result.newPos.x,
@@ -623,7 +641,7 @@
 
       // Wall collision check (use current Y for correct floor matching)
       if (
-        housingManager.isMovementBlocked(
+        isMovementBlocked(
           currentPlayer.position.x,
           currentPlayer.position.z,
           newX,

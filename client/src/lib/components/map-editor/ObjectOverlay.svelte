@@ -22,6 +22,7 @@
   import { tileToRegion } from '../../terrain/terrain-constants'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { objectManager } from '../../managers/objectManager'
+  import { bridgeManager } from '../../managers/bridgeManager'
   import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
   import { housingManager } from '../../managers/housingManager'
   import { loadGLB } from '../../utils/gltfCache'
@@ -74,6 +75,7 @@
 
     const data = await objectManager.fetchObject(rx, rz)
     currentObjectData.set(data)
+    bridgeManager.syncRegion(data.placements, catalogById)
   }
 
   $effect(() => {
@@ -217,6 +219,9 @@ let lastBuildKey = ''
       if (catDef?.interaction) {
         clone.userData.objectInteraction = catDef.interaction
         clone.userData.objectInteractOffset = catDef.interactOffset
+      }
+      if (catDef?.kind) {
+        clone.userData.objectKind = catDef.kind
       }
       group.add(clone)
     }

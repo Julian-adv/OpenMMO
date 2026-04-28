@@ -120,6 +120,16 @@ export const hoveredZoneIndex = writable<{
 } | null>(null)
 
 // Object editor stores
+export interface BridgeMeta {
+  deckMinX: number
+  deckMaxX: number
+  deckMinZ: number
+  deckMaxZ: number
+  deckCrownY: number
+  deckEndY: number
+  deckAxis: 'z' | 'x'
+}
+
 export interface ObjectDef {
   id: string
   name: string
@@ -128,6 +138,8 @@ export interface ObjectDef {
   interactOffset?: Position
   /** Snap placement position to 1m grid (cell corners) */
   gridAlign?: boolean
+  kind?: 'bridge'
+  bridge?: BridgeMeta
 }
 
 export interface ObjectPlacement {

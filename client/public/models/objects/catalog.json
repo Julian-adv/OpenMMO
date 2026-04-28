@@ -10,6 +10,16 @@
     "id": "stone_bridge",
     "name": "Stone Bridge",
     "model": "stone_bridge.glb",
-    "gridAlign": true
+    "kind": "bridge",
+    "gridAlign": true,
+    "bridge": {
+      "deckMinX": -2.07,
+      "deckMaxX": 2.07,
+      "deckMinZ": -10.13,
+      "deckMaxZ": 10.13,
+      "deckCrownY": 2.5,
+      "deckEndY": 1.0,
+      "deckAxis": "z"
+    }
   }
 ]
