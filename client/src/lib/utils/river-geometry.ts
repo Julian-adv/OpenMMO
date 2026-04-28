@@ -118,7 +118,7 @@ interface Endpoint {
   forward: boolean
 }
 
-interface ChainLink {
+export interface ChainLink {
   seg: number
   forward: boolean
 }
@@ -147,6 +147,20 @@ export function endpointKey(x: number, z: number): string {
   return `${x.toFixed(3)},${z.toFixed(3)}`
 }
 
+/**
+ * The neighbor tile's chain continuation past a shared seam centerline
+ * point. `[0]` is the first vertex past the seam (innermost — same as
+ * the previous single-ghost data); subsequent entries walk further into
+ * the neighbor's chain. Length should be ≥ BEND_CAP_SMOOTH_RADIUS so
+ * the cross-seam cap-smoothing window has full coverage. Without this
+ * extension, the smoothing window is one-sided per tile and a tight
+ * bend within K vertices of the seam in one tile fails to propagate to
+ * the other side, leaving a width discontinuity even though the seam
+ * tip itself is consistent. Junction tips (degree ≥ 3) make the walk
+ * ambiguous and are skipped by the caller.
+ */
+export type SeamGhostExtension = ReadonlyArray<readonly [number, number]>
+
 /** GLSL-style Hermite smoothstep on the JS side. Used by the mouth-fade
  *  alpha math; matches the curve TSL would compute on the GPU side so
  *  baked vertex factors and shader-side ramps interpolate the same way. */
@@ -168,7 +182,7 @@ function normalizedDelta(
   return [dx / len, dz / len]
 }
 
-function buildChains(segs: RiverSegment[]): ChainLink[][] {
+export function buildChains(segs: RiverSegment[]): ChainLink[][] {
   if (segs.length === 0) return []
 
   const byEndpoint = new Map<string, Endpoint[]>()
@@ -227,6 +241,16 @@ function buildChains(segs: RiverSegment[]): ChainLink[][] {
 export interface RiverGeometryResult {
   geometry: THREE.BufferGeometry
   vertexCount: number
+  /**
+   * For each chain whose downstream tip sits on a tile seam, the
+   * cumulative-length value at that tip (used as `uv.y` by the shader's
+   * `flowV`). The caller writes these into a shared cross-tile map; the
+   * downstream tile reads its head-seam entry on its next build to
+   * start `cumulativeLen` at the same value, so the normal-map V phase
+   * stays continuous across the seam instead of snapping back to 0 and
+   * displaying a half-cycle ripple jump.
+   */
+  publishedOffsets: Map<string, number>
 }
 
 /**
@@ -262,7 +286,19 @@ export interface RiverGeometryResult {
 export function buildRiverGeometry(
   segments: RiverSegment[],
   heightManager: TerrainHeightManager | null,
-  externalContinuations?: ReadonlyMap<string, [number, number]>
+  externalContinuations?: ReadonlyMap<string, SeamGhostExtension>,
+  /**
+   * Cumulative-length values published by neighbor tiles at shared
+   * tile-seam endpoints (see `RiverGeometryResult.publishedOffsets`).
+   * When a chain's head sits on such a seam, we start its
+   * `cumulativeLen` at the published value so the shader's flowV is
+   * continuous across the seam — without it, each tile resets to 0
+   * and the texture phase snaps back, looking like the ripple flow
+   * direction abruptly changes between adjacent quads. Junctions and
+   * within-tile chain heads are not in the map and naturally start
+   * at 0.
+   */
+  chainOffsets?: ReadonlyMap<string, number>
 ): RiverGeometryResult {
   const chains = buildChains(segments)
 
@@ -275,6 +311,8 @@ export function buildRiverGeometry(
     segmentDegree.set(ka, (segmentDegree.get(ka) ?? 0) + 1)
     segmentDegree.set(kb, (segmentDegree.get(kb) ?? 0) + 1)
   }
+
+  const publishedOffsets = new Map<string, number>()
 
   const positions: number[] = []
   const uvs: number[] = []
@@ -353,10 +391,17 @@ export function buildRiverGeometry(
     // the same shared point.
     const headKey = n0 >= 1 ? endpointKey(px[0], pz[0]) : ''
     const tailKey = n0 >= 1 ? endpointKey(px[n0], pz[n0]) : ''
-    const ghostPrev =
+    const headExtension =
       headKey !== '' ? (externalContinuations?.get(headKey) ?? null) : null
-    const ghostNextSeam =
+    const tailExtension =
       tailKey !== '' ? (externalContinuations?.get(tailKey) ?? null) : null
+    // Innermost ghost — used for tangent averaging at the seam tip and
+    // as the single-position fallback. The full extension feeds the
+    // cross-seam cap-smoothing window further down.
+    const ghostPrev: readonly [number, number] | null =
+      headExtension && headExtension.length > 0 ? headExtension[0] : null
+    const ghostNextSeam: readonly [number, number] | null =
+      tailExtension && tailExtension.length > 0 ? tailExtension[0] : null
 
     // Anchor not only the chain tip but also the tip's immediate neighbor
     // when the tip is shared (tile-seam ghost or junction): sibling chains
@@ -364,11 +409,22 @@ export function buildRiverGeometry(
     // we moved it.
     const headIsJunction = (segmentDegree.get(headKey) ?? 0) >= 3
     const tailIsJunction = (segmentDegree.get(tailKey) ?? 0) >= 3
+
+    // Snapshot the raw polyline before centerline smoothing. The bend-cap
+    // pass below builds a combined polyline that splices in the
+    // neighbor's RAW ghost positions (read directly from segment data —
+    // no smoothing applied), so the own-side polyline must also be raw
+    // for the input arrays to match in the seam region. If we used the
+    // smoothed `px/pz` here, tile A's interior near the seam would have
+    // moved by 0.1–0.5 m while tile B's view of those positions (via
+    // ghost) is still raw, and rawCaps in the K-window would diverge
+    // again — the very mismatch this combined approach exists to fix.
+    const rawPx = px.slice()
+    const rawPz = pz.slice()
+
     if (n0 >= 2) {
-      const startInterior =
-        ghostPrev !== null || headIsJunction ? 2 : 1
-      const endInterior =
-        ghostNextSeam !== null || tailIsJunction ? n0 - 1 : n0
+      const startInterior = ghostPrev !== null || headIsJunction ? 2 : 1
+      const endInterior = ghostNextSeam !== null || tailIsJunction ? n0 - 1 : n0
       if (startInterior < endInterior) {
         const tmpX = new Array<number>(n0 + 1)
         const tmpZ = new Array<number>(n0 + 1)
@@ -435,48 +491,97 @@ export function buildRiverGeometry(
         )
       : 0
 
-    // Per-vertex inside-bank cap and bend direction, hoisted so the
-    // smoothing pass below can window over the result. Bounded to the real
-    // polyline (i ≤ n0); extension vertices stay at the array's Infinity/0
-    // defaults so the main loop reads them as "no cap, straight".
-    const rawCaps: number[] = new Array(n + 1).fill(Infinity)
-    const rawCrossSigns: number[] = new Array(n + 1).fill(0)
-    for (let i = 0; i <= n0; i++) {
-      const prevPt = i > 0 ? ([px[i - 1], pz[i - 1]] as const) : ghostPrev
-      const nextPt = i < n0 ? ([px[i + 1], pz[i + 1]] as const) : ghostNextSeam
-      if (!prevPt || !nextPt) continue
-      const [pTx, pTz] = normalizedDelta(prevPt[0], prevPt[1], px[i], pz[i])
-      const [nTx, nTz] = normalizedDelta(px[i], pz[i], nextPt[0], nextPt[1])
+    // Combined polyline for cross-seam-consistent bend-cap computation.
+    // Layout: [headExtension reversed (outer→inner)] + rawPx[0..n0] +
+    // [tailExtension (inner→outer)]. Both tiles touching a shared seam
+    // see identical raw values in the seam region (own raw + neighbor's
+    // raw via SeamGhostExtension), so rawCaps and smoothedCaps in that
+    // region come out identical on both sides — the seam tip's bank
+    // vertices line up exactly without a kink. Tail extension is
+    // suppressed when a sea extension was added (mutex via
+    // ghostNextSeam) — the chain's own tip is the real mouth there, no
+    // neighbor data to splice. Junction tips have no extension and
+    // remain one-sided, which is fine since junctions can't be made to
+    // align without separate polygon filling anyway.
+    const headLen = headExtension?.length ?? 0
+    const tailLen = ghostNextSeam !== null ? (tailExtension?.length ?? 0) : 0
+    const cLen = headLen + (n0 + 1) + tailLen
+    const combinedX: number[] = new Array(cLen)
+    const combinedZ: number[] = new Array(cLen)
+    if (headExtension) {
+      for (let j = 0; j < headLen; j++) {
+        const e = headExtension[headLen - 1 - j]
+        combinedX[j] = e[0]
+        combinedZ[j] = e[1]
+      }
+    }
+    for (let j = 0; j <= n0; j++) {
+      combinedX[headLen + j] = rawPx[j]
+      combinedZ[headLen + j] = rawPz[j]
+    }
+    if (tailExtension && tailLen > 0) {
+      for (let j = 0; j < tailLen; j++) {
+        const e = tailExtension[j]
+        combinedX[headLen + n0 + 1 + j] = e[0]
+        combinedZ[headLen + n0 + 1 + j] = e[1]
+      }
+    }
+
+    const cRawCaps: number[] = new Array(cLen).fill(Infinity)
+    const cRawCrossSigns: number[] = new Array(cLen).fill(0)
+    for (let i = 1; i < cLen - 1; i++) {
+      const [pTx, pTz] = normalizedDelta(
+        combinedX[i - 1],
+        combinedZ[i - 1],
+        combinedX[i],
+        combinedZ[i]
+      )
+      const [nTx, nTz] = normalizedDelta(
+        combinedX[i],
+        combinedZ[i],
+        combinedX[i + 1],
+        combinedZ[i + 1]
+      )
       const dot = pTx * nTx + pTz * nTz
       const sinHalf = Math.sqrt(Math.max(0, (1 - dot) * 0.5))
       if (sinHalf <= 1e-3) continue
-      const Lprev = Math.hypot(prevPt[0] - px[i], prevPt[1] - pz[i])
-      const Lnext = Math.hypot(nextPt[0] - px[i], nextPt[1] - pz[i])
+      const Lprev = Math.hypot(
+        combinedX[i - 1] - combinedX[i],
+        combinedZ[i - 1] - combinedZ[i]
+      )
+      const Lnext = Math.hypot(
+        combinedX[i] - combinedX[i + 1],
+        combinedZ[i] - combinedZ[i + 1]
+      )
       const radiusOfCurvature = Math.min(Lprev, Lnext) / (2 * sinHalf)
-      rawCaps[i] = RIVER_BEND_SAFETY * radiusOfCurvature
-      rawCrossSigns[i] = Math.sign(pTx * nTz - pTz * nTx)
+      cRawCaps[i] = RIVER_BEND_SAFETY * radiusOfCurvature
+      cRawCrossSigns[i] = Math.sign(pTx * nTz - pTz * nTx)
     }
 
     // Cubic-taper smoothing: each bend broadcasts cap/pull(|k|/N) to
     // neighbors and the vertex takes the min, so caps ease into bends
-    // along a smoothstep curve rather than snapping at the apex.
+    // along a smoothstep curve rather than snapping at the apex. Window
+    // operates over the COMBINED polyline so vertices near the seam
+    // pull from the neighbor's interior caps; sea-extension vertices
+    // (i > n0) stay at Infinity/0 since they're not in the polyline.
     const smoothedCaps: number[] = new Array(n + 1).fill(Infinity)
     const smoothedCrossSigns: number[] = new Array(n + 1).fill(0)
     for (let i = 0; i <= n0; i++) {
+      const ci = headLen + i
       let bestCap = Infinity
-      let bestSign = rawCrossSigns[i]
+      let bestSign = cRawCrossSigns[ci]
       for (let k = -BEND_CAP_SMOOTH_RADIUS; k <= BEND_CAP_SMOOTH_RADIUS; k++) {
-        const j = i + k
-        if (j < 0 || j > n0) continue
-        const cj = rawCaps[j]
-        if (!Number.isFinite(cj)) continue
+        const cj = ci + k
+        if (cj < 0 || cj >= cLen) continue
+        const capVal = cRawCaps[cj]
+        if (!Number.isFinite(capVal)) continue
         const t = Math.abs(k) / BEND_CAP_SMOOTH_RADIUS
         const pull = 1 - smoothstep(0, 1, t)
         if (pull < 1e-6) continue
-        const candidate = cj / pull
+        const candidate = capVal / pull
         if (candidate < bestCap) {
           bestCap = candidate
-          bestSign = rawCrossSigns[j]
+          bestSign = cRawCrossSigns[cj]
         }
       }
       smoothedCaps[i] = bestCap
@@ -484,7 +589,13 @@ export function buildRiverGeometry(
     }
 
     const baseVertex = positions.length / 3
-    let cumulativeLen = 0
+    // Continue cumulativeLen across the seam (see `chainOffsets` param).
+    const chainStartOffset =
+      ghostPrev !== null && headKey !== ''
+        ? (chainOffsets?.get(headKey) ?? 0)
+        : 0
+    let cumulativeLen = chainStartOffset
+    let cumulativeLenAtTail = chainStartOffset
     for (let i = 0; i <= n; i++) {
       // Prev/next polyline neighbor, falling back to the seam ghost at
       // chain tips. `ghostNextSeam` is null when a sea extension was
@@ -554,6 +665,11 @@ export function buildRiverGeometry(
       if (i > 0) {
         cumulativeLen += Math.hypot(px[i] - px[i - 1], pz[i] - pz[i - 1])
       }
+      // Snapshot at the polyline tail (before any sea-extension steps)
+      // so we can publish it as the downstream tile's starting offset.
+      // Sea-extension vertices sit past n0 and only exist when there's
+      // no downstream tile, so they don't need to be in the snapshot.
+      if (i === n0) cumulativeLenAtTail = cumulativeLen
       const v = cumulativeLen
 
       // `centerY` is sampled at the centerline and reused for both bank
@@ -600,6 +716,14 @@ export function buildRiverGeometry(
       mouthFactors.push(mouthFactor)
       crossMeters.push(rightHalfWidth)
       centerlineXZs.push(px[i], pz[i])
+    }
+
+    // Publish our tail-seam value so the downstream tile can pick up
+    // `cumulativeLen` from here on its next build. Only meaningful when
+    // the tail is on a tile seam (ghostNextSeam set); junctions and
+    // real mouths have no downstream chain to feed.
+    if (ghostNextSeam !== null && tailKey !== '') {
+      publishedOffsets.set(tailKey, cumulativeLenAtTail)
     }
 
     for (let i = 0; i < n; i++) {
@@ -738,5 +862,9 @@ export function buildRiverGeometry(
   geometry.computeBoundingSphere()
   geometry.computeBoundingBox()
 
-  return { geometry, vertexCount: expandedPositions.length / 3 }
+  return {
+    geometry,
+    vertexCount: expandedPositions.length / 3,
+    publishedOffsets,
+  }
 }
