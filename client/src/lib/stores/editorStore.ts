@@ -32,13 +32,7 @@ export type BrushMode = 'raise' | 'lower' | 'flatten'
 export const brushMode = writable<BrushMode>('raise')
 
 // Editor tool selection
-export type EditorTool =
-  | 'height'
-  | 'splat'
-  | 'road'
-  | 'zone'
-  | 'npc'
-  | 'furniture'
+export type EditorTool = 'height' | 'splat' | 'road' | 'zone' | 'npc' | 'object'
 export const editorTool = writable<EditorTool>('height')
 
 // Road tool: first-click start point (null = awaiting first click)
@@ -125,16 +119,18 @@ export const hoveredZoneIndex = writable<{
   index: number
 } | null>(null)
 
-// Furniture editor stores
-export interface FurnitureDef {
+// Object editor stores
+export interface ObjectDef {
   id: string
   name: string
   model: string
-  interaction: string
+  interaction?: string
   interactOffset?: Position
+  /** Snap placement position to 1m grid (cell corners) */
+  gridAlign?: boolean
 }
 
-export interface FurniturePlacement {
+export interface ObjectPlacement {
   id: number
   type: string
   x: number
@@ -144,20 +140,20 @@ export interface FurniturePlacement {
   floorLevel: number
 }
 
-export interface FurnitureRegionData {
-  placements: FurniturePlacement[]
+export interface ObjectRegionData {
+  placements: ObjectPlacement[]
 }
 
-export type FurnitureSubTool = 'place' | 'select'
-export const furnitureSubTool = writable<FurnitureSubTool>('place')
-export const furnitureCatalog = writable<FurnitureDef[]>([])
-export const selectedFurnitureType = writable<string | null>(null)
-export const furnitureRotation = writable<number>(0)
-export const currentFurnitureData = writable<FurnitureRegionData>({
+export type ObjectSubTool = 'place' | 'select'
+export const objectSubTool = writable<ObjectSubTool>('place')
+export const objectCatalog = writable<ObjectDef[]>([])
+export const selectedObjectType = writable<string | null>(null)
+export const objectRotation = writable<number>(0)
+export const currentObjectData = writable<ObjectRegionData>({
   placements: [],
 })
-export const selectedFurniturePlacementId = writable<number | null>(null)
-export const furniturePreviewPos = writable<{
+export const selectedObjectPlacementId = writable<number | null>(null)
+export const objectPreviewPos = writable<{
   x: number
   y: number
   z: number

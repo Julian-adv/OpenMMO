@@ -4,7 +4,7 @@ import type { Position } from '../utils/movementUtils'
 import type { WallDirection } from '../utils/house-geometry'
 
 const MAX_DOOR_INTERACT_DISTANCE = 2.0
-const MAX_FURNITURE_INTERACT_DISTANCE = 3.0
+const MAX_OBJECT_INTERACT_DISTANCE = 3.0
 
 export type ClickIntent =
   | {
@@ -21,9 +21,9 @@ export type ClickIntent =
       segmentIndex: number
     }
   | {
-      type: 'interact_furniture'
-      furnitureId: number
-      furnitureType: string
+      type: 'interact_object'
+      objectId: number
+      objectType: string
       interaction: string
       position: Position
       rotation: number
@@ -42,7 +42,7 @@ export interface RaycastContext {
   camera: THREE.Camera
   monsterMeshes: THREE.Group[]
   doorMeshes: THREE.Object3D[]
-  furnitureMeshes: THREE.Object3D[]
+  objectMeshes: THREE.Object3D[]
   groundItemMeshes: THREE.Object3D[]
   groundMeshes: THREE.Object3D[]
   playerPosition: Position
@@ -196,42 +196,39 @@ class InputHandler {
       }
     }
 
-    // Check intersection with furniture meshes
-    if (context.furnitureMeshes.length > 0) {
-      const furnitureHits = raycaster.intersectObjects(
-        context.furnitureMeshes,
-        true
-      )
-      if (furnitureHits.length > 0) {
-        const hitPoint = furnitureHits[0].point
+    // Check intersection with object meshes
+    if (context.objectMeshes.length > 0) {
+      const objectHits = raycaster.intersectObjects(context.objectMeshes, true)
+      if (objectHits.length > 0) {
+        const hitPoint = objectHits[0].point
         const pp = context.playerPosition
         const dx = hitPoint.x - pp.x
         const dz = hitPoint.z - pp.z
         if (
           dx * dx + dz * dz <=
-          MAX_FURNITURE_INTERACT_DISTANCE * MAX_FURNITURE_INTERACT_DISTANCE
+          MAX_OBJECT_INTERACT_DISTANCE * MAX_OBJECT_INTERACT_DISTANCE
         ) {
-          let obj: THREE.Object3D | null = furnitureHits[0].object
+          let obj: THREE.Object3D | null = objectHits[0].object
           while (obj) {
             const d = obj.userData
             if (
               d &&
-              d.furnitureId != null &&
-              d.furnitureType &&
-              d.furnitureInteraction
+              d.objectId != null &&
+              d.objectType &&
+              d.objectInteraction
             ) {
               return {
-                type: 'interact_furniture',
-                furnitureId: d.furnitureId as number,
-                furnitureType: d.furnitureType,
-                interaction: d.furnitureInteraction,
+                type: 'interact_object',
+                objectId: d.objectId as number,
+                objectType: d.objectType,
+                interaction: d.objectInteraction,
                 position: {
                   x: obj.position.x,
                   y: obj.position.y,
                   z: obj.position.z,
                 },
                 rotation: obj.rotation.y,
-                interactOffset: d.furnitureInteractOffset,
+                interactOffset: d.objectInteractOffset,
               }
             }
             obj = obj.parent

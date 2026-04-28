@@ -5,5 +5,11 @@
     "model": "bed.glb",
     "interaction": "sleep",
     "interactOffset": { "x": 0, "y": 0.78, "z": 0 }
+  },
+  {
+    "id": "stone_bridge",
+    "name": "Stone Bridge",
+    "model": "stone_bridge.glb",
+    "gridAlign": true
   }
 ]

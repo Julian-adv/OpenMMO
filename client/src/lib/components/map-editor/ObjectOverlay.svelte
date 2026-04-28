@@ -4,24 +4,24 @@
   import { onDestroy } from 'svelte'
   import {
     editorTool,
-    currentFurnitureData,
-    furnitureCatalog,
-    selectedFurniturePlacementId,
-    furniturePreviewPos,
-    furnitureRotation,
-    selectedFurnitureType,
+    currentObjectData,
+    objectCatalog,
+    selectedObjectPlacementId,
+    objectPreviewPos,
+    objectRotation,
+    selectedObjectType,
   } from '../../stores/editorStore'
   import type {
     EditorTool,
-    FurnitureDef,
-    FurniturePlacement,
+    ObjectDef,
+    ObjectPlacement,
   } from '../../stores/editorStore'
   import { playerDebugInfo } from '../../stores/debugStore'
   import type { PlayerDebugInfo } from '../../stores/debugStore'
   import { mapEditorMode } from '../../stores/debugStore'
   import { tileToRegion } from '../../terrain/terrain-constants'
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
-  import { furnitureManager } from '../../managers/furnitureManager'
+  import { objectManager } from '../../managers/objectManager'
   import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
   import { housingManager } from '../../managers/housingManager'
   import { loadGLB } from '../../utils/gltfCache'
@@ -32,7 +32,7 @@
   const PREVIEW_OPACITY = 0.5
 
   let tool = $state<EditorTool>('height')
-  let placements = $state<FurniturePlacement[]>([])
+  let placements = $state<ObjectPlacement[]>([])
   let catalogLength = $state(0)
   let selectedId = $state<number | null>(null)
   let previewPos = $state<{ x: number; y: number; z: number } | null>(null)
@@ -45,12 +45,12 @@
 
   const unsubs: Unsubscriber[] = [
     editorTool.subscribe((v) => (tool = v)),
-    currentFurnitureData.subscribe((v) => (placements = v.placements)),
-    furnitureCatalog.subscribe((v) => (catalogLength = v.length)),
-    selectedFurniturePlacementId.subscribe((v) => (selectedId = v)),
-    furniturePreviewPos.subscribe((v) => (previewPos = v)),
-    furnitureRotation.subscribe((v) => (rotation = v)),
-    selectedFurnitureType.subscribe((v) => (selectedType = v)),
+    currentObjectData.subscribe((v) => (placements = v.placements)),
+    objectCatalog.subscribe((v) => (catalogLength = v.length)),
+    selectedObjectPlacementId.subscribe((v) => (selectedId = v)),
+    objectPreviewPos.subscribe((v) => (previewPos = v)),
+    objectRotation.subscribe((v) => (rotation = v)),
+    selectedObjectType.subscribe((v) => (selectedType = v)),
     playerDebugInfo.subscribe((v) => (debugInfo = v)),
     mapEditorMode.subscribe((v) => (isEditorMode = v)),
     playerFloorLevel.subscribe((v) => (currentFloor = v)),
@@ -60,18 +60,18 @@
 
   let lastLoadedRegion = { rx: NaN, rz: NaN }
 
-  async function loadRegionFurniture(rx: number, rz: number) {
+  async function loadRegionObject(rx: number, rz: number) {
     if (rx === lastLoadedRegion.rx && rz === lastLoadedRegion.rz) return
     lastLoadedRegion = { rx, rz }
 
     if (catalogLength === 0) {
-      const cat = await furnitureManager.fetchCatalog()
-      furnitureCatalog.set(cat)
+      const cat = await objectManager.fetchCatalog()
+      objectCatalog.set(cat)
       catalogById = new Map(cat.map((d) => [d.id, d]))
     }
 
-    const data = await furnitureManager.fetchFurniture(rx, rz)
-    currentFurnitureData.set(data)
+    const data = await objectManager.fetchObject(rx, rz)
+    currentObjectData.set(data)
   }
 
   $effect(() => {
@@ -80,40 +80,40 @@
     const tileZ = Math.round(debugInfo.position.z / TERRAIN_TILE_SIZE)
     const rx = tileToRegion(tileX)
     const rz = tileToRegion(tileZ)
-    loadRegionFurniture(rx, rz)
+    loadRegionObject(rx, rz)
   })
 
   const modelCache = new SvelteMap<string, THREE.Group>()
   const loadingModels = new SvelteSet<string>()
-  let catalogById = new Map<string, FurnitureDef>()
+  let catalogById = new Map<string, ObjectDef>()
 
-  async function getModel(furnitureId: string): Promise<THREE.Group | null> {
-    if (modelCache.has(furnitureId)) return modelCache.get(furnitureId)!
-    if (loadingModels.has(furnitureId)) return null
+  async function getModel(objectId: string): Promise<THREE.Group | null> {
+    if (modelCache.has(objectId)) return modelCache.get(objectId)!
+    if (loadingModels.has(objectId)) return null
 
-    const def = catalogById.get(furnitureId)
+    const def = catalogById.get(objectId)
     if (!def) return null
 
-    loadingModels.add(furnitureId)
+    loadingModels.add(objectId)
     try {
-      const gltf = await loadGLB(`/models/furniture/${def.model}`)
+      const gltf = await loadGLB(`/models/objects/${def.model}`)
       const model = gltf.scene.clone()
       model.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = true
         }
       })
-      modelCache.set(furnitureId, model)
+      modelCache.set(objectId, model)
       lastBuildKey = ''
       rebuild()
       return model
     } finally {
-      loadingModels.delete(furnitureId)
+      loadingModels.delete(objectId)
     }
   }
 
   let group = new THREE.Group()
-  group.name = 'furniture-overlay'
+  group.name = 'object-overlay'
 
   let previewGroup: THREE.Group | null = null
   let previewType: string | null = null
@@ -149,9 +149,9 @@
   }
 
   let lastBuildKey = ''
-  const isEditing = () => isEditorMode && tool === 'furniture'
+  const isEditing = () => isEditorMode && tool === 'object'
 
-  function buildKey(p: FurniturePlacement[]): string {
+  function buildKey(p: ObjectPlacement[]): string {
     return p.map((v) => `${v.id}:${v.type}:${v.x}:${v.y}:${v.z}:${v.rotation}`).join('|')
   }
 
@@ -188,12 +188,12 @@
       if (isEditing() && p.id === selectedId) {
         applyHighlight(clone)
       }
-      clone.userData.furnitureId = p.id
-      clone.userData.furnitureType = p.type
+      clone.userData.objectId = p.id
+      clone.userData.objectType = p.type
       const catDef = catalogById.get(p.type)
       if (catDef?.interaction) {
-        clone.userData.furnitureInteraction = catDef.interaction
-        clone.userData.furnitureInteractOffset = catDef.interactOffset
+        clone.userData.objectInteraction = catDef.interaction
+        clone.userData.objectInteractOffset = catDef.interactOffset
       }
       group.add(clone)
     }

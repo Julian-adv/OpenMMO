@@ -2,77 +2,77 @@
   import { onMount, onDestroy } from 'svelte'
   import { get } from 'svelte/store'
   import {
-    furnitureCatalog,
-    selectedFurnitureType,
-    furnitureRotation,
-    currentFurnitureData,
-    selectedFurniturePlacementId,
-    furnitureSubTool,
+    objectCatalog,
+    selectedObjectType,
+    objectRotation,
+    currentObjectData,
+    selectedObjectPlacementId,
+    objectSubTool,
   } from '../../stores/editorStore'
   import type {
-    FurnitureDef,
-    FurniturePlacement,
-    FurnitureRegionData,
-    FurnitureSubTool,
+    ObjectDef,
+    ObjectPlacement,
+    ObjectRegionData,
+    ObjectSubTool,
   } from '../../stores/editorStore'
-  import { furnitureManager } from '../../managers/furnitureManager'
+  import { objectManager } from '../../managers/objectManager'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { currentEditorRegion } from '../../stores/editorStore'
 
-  let catalog = $state<FurnitureDef[]>([])
+  let catalog = $state<ObjectDef[]>([])
   let selected = $state<string | null>(null)
   let rotation = $state(0)
-  let placements = $state<FurniturePlacement[]>([])
+  let placements = $state<ObjectPlacement[]>([])
   let selectedPlacementId = $state<number | null>(null)
-  let subTool = $state<FurnitureSubTool>('place')
+  let subTool = $state<ObjectSubTool>('place')
   let floor = $state(-1)
 
   const unsubs = [
-    furnitureCatalog.subscribe((v) => (catalog = v)),
-    selectedFurnitureType.subscribe((v) => (selected = v)),
-    furnitureRotation.subscribe((v) => (rotation = v)),
-    currentFurnitureData.subscribe((v) => (placements = v.placements)),
-    selectedFurniturePlacementId.subscribe((v) => (selectedPlacementId = v)),
-    furnitureSubTool.subscribe((v) => (subTool = v)),
+    objectCatalog.subscribe((v) => (catalog = v)),
+    selectedObjectType.subscribe((v) => (selected = v)),
+    objectRotation.subscribe((v) => (rotation = v)),
+    currentObjectData.subscribe((v) => (placements = v.placements)),
+    selectedObjectPlacementId.subscribe((v) => (selectedPlacementId = v)),
+    objectSubTool.subscribe((v) => (subTool = v)),
     playerFloorLevel.subscribe((v) => (floor = v)),
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
   onMount(async () => {
-    if (get(furnitureCatalog).length > 0) return
-    const list = await furnitureManager.fetchCatalog()
-    furnitureCatalog.set(list)
+    if (get(objectCatalog).length > 0) return
+    const list = await objectManager.fetchCatalog()
+    objectCatalog.set(list)
   })
 
   function selectType(id: string) {
-    selectedFurnitureType.set(id)
-    furnitureSubTool.set('place')
-    selectedFurniturePlacementId.set(null)
+    selectedObjectType.set(id)
+    objectSubTool.set('place')
+    selectedObjectPlacementId.set(null)
   }
 
-  function setSubTool(tool: FurnitureSubTool) {
-    furnitureSubTool.set(tool)
+  function setSubTool(tool: ObjectSubTool) {
+    objectSubTool.set(tool)
     if (tool === 'place') {
-      selectedFurniturePlacementId.set(null)
+      selectedObjectPlacementId.set(null)
     }
   }
 
   async function deletePlacement() {
     if (selectedPlacementId === null) return
-    const data = get(currentFurnitureData)
-    const updated: FurnitureRegionData = {
+    const data = get(currentObjectData)
+    const updated: ObjectRegionData = {
       placements: data.placements.filter((p) => p.id !== selectedPlacementId),
     }
-    currentFurnitureData.set(updated)
-    selectedFurniturePlacementId.set(null)
+    currentObjectData.set(updated)
+    selectedObjectPlacementId.set(null)
 
     const region = get(currentEditorRegion)
     if (region) {
-      await furnitureManager.saveFurniture(region.rx, region.rz, updated)
+      await objectManager.saveObject(region.rx, region.rz, updated)
     }
   }
 
-  function formatPos(p: FurniturePlacement): string {
+  function formatPos(p: ObjectPlacement): string {
     return `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)}`
   }
 
@@ -81,8 +81,8 @@
   )
 </script>
 
-<div class="furniture-panel">
-  <div class="panel-title">Furniture</div>
+<div class="object-panel">
+  <div class="panel-title">Object</div>
 
   <div class="sub-tools">
     <button
@@ -99,10 +99,10 @@
 
   {#if subTool === 'place'}
     <div class="section-label">Catalog</div>
-    <div class="furniture-list">
+    <div class="object-list">
       {#each catalog as item (item.id)}
         <button
-          class="furniture-item-btn"
+          class="object-item-btn"
           class:active={selected === item.id}
           onclick={() => selectType(item.id)}
         >
@@ -123,7 +123,7 @@
         <span class="rotation-hint">Follow player floor</span>
       </div>
     {:else}
-      <div class="draw-hint">Select a furniture type to place</div>
+      <div class="draw-hint">Select an object type to place</div>
     {/if}
   {:else}
     {#if selectedPlacement}
@@ -148,7 +148,7 @@
         <button class="delete-btn" onclick={deletePlacement}>Delete</button>
       </div>
     {:else}
-      <div class="draw-hint">Click a placed furniture to select</div>
+      <div class="draw-hint">Click a placed object to select</div>
     {/if}
   {/if}
 
@@ -169,7 +169,7 @@
 </div>
 
 <style>
-  .furniture-panel {
+  .object-panel {
     background: rgba(0, 0, 0, 0.85);
     color: #e0e0e0;
     padding: 12px 16px;
@@ -230,7 +230,7 @@
     margin-top: 8px;
   }
 
-  .furniture-list {
+  .object-list {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -238,7 +238,7 @@
     overflow-y: auto;
   }
 
-  .furniture-item-btn {
+  .object-item-btn {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -254,12 +254,12 @@
     width: 100%;
   }
 
-  .furniture-item-btn:hover {
+  .object-item-btn:hover {
     color: #ccc;
     background: rgba(255, 255, 255, 0.1);
   }
 
-  .furniture-item-btn.active {
+  .object-item-btn.active {
     background: rgba(68, 204, 255, 0.15);
     border-color: rgba(68, 204, 255, 0.4);
     color: #44ccff;

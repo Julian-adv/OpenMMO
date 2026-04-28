@@ -8,7 +8,7 @@
   import SplatBrushPanel from './SplatBrushPanel.svelte'
   import ZoneBrushPanel from './ZoneBrushPanel.svelte'
   import NpcBrushPanel from './NpcBrushPanel.svelte'
-  import FurnitureBrushPanel from './FurnitureBrushPanel.svelte'
+  import ObjectBrushPanel from './ObjectBrushPanel.svelte'
 
   function getPlayerRegion(): { rx: number; rz: number } | null {
     const info = get(playerDebugInfo)
@@ -64,9 +64,9 @@
     >NPC</button>
     <button
       class="tool-tab"
-      class:active={$editorTool === 'furniture'}
-      onclick={() => editorTool.set('furniture')}
-    >Furniture</button>
+      class:active={$editorTool === 'object'}
+      onclick={() => editorTool.set('object')}
+    >Object</button>
     <button
       class="tool-tab generate-btn"
       onclick={openGenerateDialog}
@@ -82,8 +82,8 @@
     <ZoneBrushPanel />
   {:else if $editorTool === 'npc'}
     <NpcBrushPanel />
-  {:else if $editorTool === 'furniture'}
-    <FurnitureBrushPanel />
+  {:else if $editorTool === 'object'}
+    <ObjectBrushPanel />
   {/if}
 </div>
 

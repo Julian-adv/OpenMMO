@@ -289,22 +289,22 @@ impl super::GameState {
     pub async fn set_player_interaction(
         &self,
         player_id: &PlayerId,
-        furniture_type: Option<String>,
-        furniture_id: Option<u32>,
+        object_type: Option<String>,
+        object_id: Option<u32>,
     ) {
         let rejected = {
             let mut players = self.players.write().await;
 
-            // Reject if the specific furniture is already occupied
-            if furniture_id.is_some_and(|fid| {
+            // Reject if the specific object is already occupied
+            if object_id.is_some_and(|fid| {
                 players
                     .values()
-                    .any(|p| p.id != *player_id && p.furniture_id == Some(fid))
+                    .any(|p| p.id != *player_id && p.object_id == Some(fid))
             }) {
                 true
             } else if let Some(player) = players.get_mut(player_id) {
-                player.furniture_type = furniture_type.clone();
-                player.furniture_id = furniture_id;
+                player.object_type = object_type.clone();
+                player.object_id = object_id;
                 false
             } else {
                 false
@@ -323,7 +323,7 @@ impl super::GameState {
             self.broadcast(
                 ServerMessage::PlayerInteractionChanged {
                     player_id: player_id.clone(),
-                    furniture_type,
+                    object_type,
                 },
                 None,
             );

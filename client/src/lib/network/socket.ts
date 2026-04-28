@@ -343,11 +343,11 @@ class NetworkManager {
     this.sendMessage({ TorchToggle: { enabled } })
   }
 
-  sendInteractFurniture(furnitureType: string, furnitureId: number) {
+  sendInteractObject(objectType: string, objectId: number) {
     this.sendMessage({
-      InteractFurniture: {
-        furniture_type: furnitureType,
-        furniture_id: furnitureId,
+      InteractObject: {
+        object_type: objectType,
+        object_id: objectId,
       },
     })
   }

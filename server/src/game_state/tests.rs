@@ -43,8 +43,8 @@ async fn respawn_player_revives_dead_player_only() {
         is_npc: false,
         torch_on: false,
         floor_level: 0,
-        furniture_type: None,
-        furniture_id: None,
+        object_type: None,
+        object_id: None,
         last_combat_at: 0,
     };
     let player_id = player.id.clone();
@@ -101,8 +101,8 @@ async fn respawn_player_ignores_alive_player() {
         is_npc: false,
         torch_on: false,
         floor_level: 0,
-        furniture_type: None,
-        furniture_id: None,
+        object_type: None,
+        object_id: None,
         last_combat_at: 0,
     };
     let player_id = player.id.clone();
