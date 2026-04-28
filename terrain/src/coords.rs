@@ -78,9 +78,9 @@ pub fn zone_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
 
-/// Build filesystem path for a region furniture JSON file.
-pub fn furniture_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
-    base.join("furniture")
+/// Build filesystem path for a region object JSON file.
+pub fn object_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("objects")
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
 

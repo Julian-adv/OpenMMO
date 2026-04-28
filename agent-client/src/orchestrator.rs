@@ -56,10 +56,10 @@ pub struct ScheduleEntry {
     pub floor_level: u8,
     /// Human-readable label for LLM prompt context.
     pub label: Option<String>,
-    /// Furniture type to interact with after arriving (e.g. "bed").
+    /// Object type to interact with after arriving (e.g. "bed").
     pub action: Option<String>,
-    /// Furniture placement ID to interact with.
-    pub furniture_id: Option<u32>,
+    /// Object placement ID to interact with.
+    pub object_id: Option<u32>,
     /// Optional patrol route: list of [x, y, z] waypoints to visit before going to `pos`.
     #[serde(default)]
     pub waypoints: Vec<[f32; 3]>,

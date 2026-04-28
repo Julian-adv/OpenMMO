@@ -632,16 +632,16 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::InteractFurniture {
-            furniture_type,
-            furniture_id,
+        ClientMessage::InteractObject {
+            object_type,
+            object_id,
         } => {
             if let Some(id) = &state.player_id {
                 game_state
-                    .set_player_interaction(id, Some(furniture_type), Some(furniture_id))
+                    .set_player_interaction(id, Some(object_type), Some(object_id))
                     .await;
             } else {
-                warn!("Received interact furniture from client that is not in game");
+                warn!("Received interact object from client that is not in game");
             }
         }
 

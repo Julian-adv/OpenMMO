@@ -1,8 +1,8 @@
 import { getTerrainApiUrl } from '../utils/networkUtils'
 import type {
-  FurnitureDef,
-  FurniturePlacement,
-  FurnitureRegionData,
+  ObjectDef,
+  ObjectPlacement,
+  ObjectRegionData,
 } from '../stores/editorStore'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { tileToRegion } from '../terrain/terrain-constants'
@@ -11,51 +11,51 @@ function regionKey(rx: number, rz: number): string {
   return `${rx},${rz}`
 }
 
-export class FurnitureManager {
-  private cache = new Map<string, FurnitureRegionData>()
+export class ObjectManager {
+  private cache = new Map<string, ObjectRegionData>()
   private terrainApiUrl: string
-  private catalogCache: FurnitureDef[] | null = null
+  private catalogCache: ObjectDef[] | null = null
 
   constructor() {
     this.terrainApiUrl = getTerrainApiUrl()
   }
 
-  async fetchCatalog(): Promise<FurnitureDef[]> {
+  async fetchCatalog(): Promise<ObjectDef[]> {
     if (this.catalogCache) return this.catalogCache
-    const resp = await fetch('/models/furniture/catalog.json')
-    const data: FurnitureDef[] = await resp.json()
+    const resp = await fetch('/models/objects/catalog.json')
+    const data: ObjectDef[] = await resp.json()
     this.catalogCache = data
     return data
   }
 
-  async fetchFurniture(rx: number, rz: number): Promise<FurnitureRegionData> {
+  async fetchObject(rx: number, rz: number): Promise<ObjectRegionData> {
     const key = regionKey(rx, rz)
     const cached = this.cache.get(key)
     if (cached) return cached
 
     try {
       const resp = await fetch(
-        `${this.terrainApiUrl}/api/terrain/furniture/${rx}/${rz}`
+        `${this.terrainApiUrl}/api/terrain/objects/${rx}/${rz}`
       )
       const json = await resp.json()
-      const data: FurnitureRegionData = {
+      const data: ObjectRegionData = {
         placements: json.placements ?? [],
       }
       this.cache.set(key, data)
       return data
     } catch {
-      const data: FurnitureRegionData = { placements: [] }
+      const data: ObjectRegionData = { placements: [] }
       this.cache.set(key, data)
       return data
     }
   }
 
-  async saveFurniture(
+  async saveObject(
     rx: number,
     rz: number,
-    data: FurnitureRegionData
+    data: ObjectRegionData
   ): Promise<void> {
-    await fetch(`${this.terrainApiUrl}/api/terrain/furniture/${rx}/${rz}`, {
+    await fetch(`${this.terrainApiUrl}/api/terrain/objects/${rx}/${rz}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -63,7 +63,7 @@ export class FurnitureManager {
     this.cache.set(regionKey(rx, rz), data)
   }
 
-  getCached(rx: number, rz: number): FurnitureRegionData | null {
+  getCached(rx: number, rz: number): ObjectRegionData | null {
     return this.cache.get(regionKey(rx, rz)) ?? null
   }
 
@@ -71,23 +71,23 @@ export class FurnitureManager {
     this.cache.delete(regionKey(rx, rz))
   }
 
-  /** Look up a furniture definition by type id (e.g. "bed"). Returns null if catalog not loaded or not found. */
-  getCatalogEntry(furnitureType: string): FurnitureDef | null {
+  /** Look up a object definition by type id (e.g. "bed"). Returns null if catalog not loaded or not found. */
+  getCatalogEntry(objectType: string): ObjectDef | null {
     if (!this.catalogCache) return null
-    return this.catalogCache.find((d) => d.id === furnitureType) ?? null
+    return this.catalogCache.find((d) => d.id === objectType) ?? null
   }
 
-  /** Find the nearest furniture placement of the given type to a world position, searching all cached regions. */
+  /** Find the nearest object placement of the given type to a world position, searching all cached regions. */
   findNearestPlacement(
-    furnitureType: string,
+    objectType: string,
     wx: number,
     wz: number
-  ): FurniturePlacement | null {
-    let best: FurniturePlacement | null = null
+  ): ObjectPlacement | null {
+    let best: ObjectPlacement | null = null
     let bestDist = Infinity
     for (const region of this.cache.values()) {
       for (const p of region.placements) {
-        if (p.type !== furnitureType) continue
+        if (p.type !== objectType) continue
         const dx = p.x - wx
         const dz = p.z - wz
         const dist = dx * dx + dz * dz
@@ -102,19 +102,19 @@ export class FurnitureManager {
 
   /** Like findNearestPlacement but fetches the region first if not cached. */
   async findNearestPlacementAsync(
-    furnitureType: string,
+    objectType: string,
     wx: number,
     wz: number
-  ): Promise<FurniturePlacement | null> {
+  ): Promise<ObjectPlacement | null> {
     // Ensure the region containing this position is loaded
     const tileX = Math.floor(wx / TERRAIN_TILE_SIZE)
     const tileZ = Math.floor(wz / TERRAIN_TILE_SIZE)
     const rx = tileToRegion(tileX)
     const rz = tileToRegion(tileZ)
-    await this.fetchFurniture(rx, rz)
-    return this.findNearestPlacement(furnitureType, wx, wz)
+    await this.fetchObject(rx, rz)
+    return this.findNearestPlacement(objectType, wx, wz)
   }
 }
 
 /** Shared singleton instance */
-export const furnitureManager = new FurnitureManager()
+export const objectManager = new ObjectManager()

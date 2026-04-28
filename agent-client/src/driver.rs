@@ -955,7 +955,7 @@ async fn handle_response(
     let mut last_attack_target = None;
 
     for action in &agent_resp.actions {
-        // Skip movement/attack when resting on furniture (schedule action active)
+        // Skip movement/attack when resting on object (schedule action active)
         if skip_movement
             && matches!(
                 action,
@@ -963,7 +963,7 @@ async fn handle_response(
             )
         {
             debug!(
-                "Skipping {:?} action — schedule furniture interaction active",
+                "Skipping {:?} action — schedule object interaction active",
                 action
             );
             continue;
@@ -1103,16 +1103,16 @@ async fn check_schedule_transition(
 
 /// Walk to a schedule entry's position and set the final rotation.
 /// If the entry has waypoints, visits each one in order before going to `pos`.
-/// Send InteractFurniture if the schedule entry has an action and furniture_id.
+/// Send InteractObject if the schedule entry has an action and object_id.
 async fn send_interact_if_needed(s: &mut SharedState, entry: &ScheduleEntry) {
-    if let (Some(ref furniture_type), Some(furniture_id)) = (&entry.action, entry.furniture_id) {
-        debug!("Sending InteractFurniture: {furniture_type} (id={furniture_id})");
-        let cmd = ClientMessage::InteractFurniture {
-            furniture_type: furniture_type.clone(),
-            furniture_id,
+    if let (Some(ref object_type), Some(object_id)) = (&entry.action, entry.object_id) {
+        debug!("Sending InteractObject: {object_type} (id={object_id})");
+        let cmd = ClientMessage::InteractObject {
+            object_type: object_type.clone(),
+            object_id,
         };
         if let Err(e) = s.send_command(cmd).await {
-            error!("Failed to send InteractFurniture: {e}");
+            error!("Failed to send InteractObject: {e}");
         }
     }
 }

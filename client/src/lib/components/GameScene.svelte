@@ -37,7 +37,7 @@
   import ZoneOverlay from './map-editor/ZoneOverlay.svelte'
   import RoadOverlay from './map-editor/RoadOverlay.svelte'
   import NpcWaypointOverlay from './map-editor/NpcWaypointOverlay.svelte'
-  import FurnitureOverlay from './map-editor/FurnitureOverlay.svelte'
+  import ObjectOverlay from './map-editor/ObjectOverlay.svelte'
   import HousingEditorCursor from './map-editor/HousingEditorCursor.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
@@ -152,7 +152,7 @@
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(undefined)
-  let furnitureOverlayRef = $state<FurnitureOverlay | undefined>(undefined)
+  let objectOverlayRef = $state<ObjectOverlay | undefined>(undefined)
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
   /** ClippingGroup instance with Y=0 clip plane, starts disabled. */
   const entityClipGroupObj = (() => {
@@ -634,7 +634,7 @@
           grassLayerRef?.getGroup(),
           treeLayerRef?.getGroup(),
           windParticlesRef?.getGroup(),
-          furnitureOverlayRef?.getGroup(),
+          objectOverlayRef?.getGroup(),
           entityClipGroup as THREE.Group | undefined,
           riverLayerRef?.getGroup(),
         ],
@@ -1082,7 +1082,7 @@
     {terrainMeshes}
     housingGroup={housingLayerRef?.getGroup() ?? null}
     doorMeshes={housingLayerRef?.getDoorMeshes() ?? []}
-    furnitureMeshes={furnitureOverlayRef ? [furnitureOverlayRef.getGroup()] : []}
+    objectMeshes={objectOverlayRef ? [objectOverlayRef.getGroup()] : []}
     groundItemMeshes={groundItemsLayerRef?.getGroup() ? [groundItemsLayerRef.getGroup()!] : []}
     {monsterModels}
     {playerAttackDuration}
@@ -1110,7 +1110,7 @@
   <RoadOverlay />
   <NpcWaypointOverlay />
 {/if}
-<FurnitureOverlay bind:this={furnitureOverlayRef} />
+<ObjectOverlay bind:this={objectOverlayRef} />
 
 {#if $housingEditorMode}
   <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />

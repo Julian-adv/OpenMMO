@@ -36,7 +36,7 @@
     terrainMeshes: (THREE.Mesh | undefined)[]
     housingGroup: THREE.Group | null
     doorMeshes: THREE.Object3D[]
-    furnitureMeshes: THREE.Object3D[]
+    objectMeshes: THREE.Object3D[]
     groundItemMeshes: THREE.Object3D[]
     monsterModels: (Monster | undefined)[]
     playerAttackDuration: number
@@ -61,7 +61,7 @@
     terrainMeshes,
     housingGroup,
     doorMeshes,
-    furnitureMeshes,
+    objectMeshes,
     groundItemMeshes,
     monsterModels,
     playerAttackDuration,
@@ -172,7 +172,7 @@
       .map((model) => model?.getMeshGroup())
       .filter((group) => group !== undefined) as THREE.Group[]}
     {doorMeshes}
-    {furnitureMeshes}
+    {objectMeshes}
     {groundItemMeshes}
     attackCooldown={playerAttackDuration}
   />

@@ -12,7 +12,7 @@ import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
 import { housingManager } from '../managers/housingManager'
-import { furnitureManager } from '../managers/furnitureManager'
+import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { setInventory } from '../stores/inventoryStore'
 import type { MonsterData } from '../types/Monster'
@@ -54,19 +54,19 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
   }
 }
 
-/** Resolve furniture interaction for a remote player: find nearest placement, snap position/rotation. */
-async function applyFurnitureInteraction(
+/** Resolve object interaction for a remote player: find nearest placement, snap position/rotation. */
+async function applyObjectInteraction(
   playerId: string,
-  furnitureType: string,
+  objectType: string,
   wx: number,
   wz: number
 ) {
-  await furnitureManager.fetchCatalog()
-  const def = furnitureManager.getCatalogEntry(furnitureType)
-  const anim = def?.interaction ?? furnitureType
+  await objectManager.fetchCatalog()
+  const def = objectManager.getCatalogEntry(objectType)
+  const anim = def?.interaction ?? objectType
   const offsetY = def?.interactOffset?.y ?? 0
-  const placement = await furnitureManager.findNearestPlacementAsync(
-    furnitureType,
+  const placement = await objectManager.findNearestPlacementAsync(
+    objectType,
     wx,
     wz
   )
@@ -171,10 +171,10 @@ export function handleServerMessage(
             serverPlayer.position,
             serverPlayer.rotation
           )
-          if (serverPlayer.furniture_type) {
-            applyFurnitureInteraction(
+          if (serverPlayer.object_type) {
+            applyObjectInteraction(
               serverPlayer.id,
-              serverPlayer.furniture_type,
+              serverPlayer.object_type,
               serverPlayer.position.x,
               serverPlayer.position.z
             )
@@ -278,10 +278,10 @@ export function handleServerMessage(
                 serverPlayer.position,
                 serverPlayer.rotation
               )
-              if (serverPlayer.furniture_type) {
-                applyFurnitureInteraction(
+              if (serverPlayer.object_type) {
+                applyObjectInteraction(
                   serverPlayer.id,
-                  serverPlayer.furniture_type,
+                  serverPlayer.object_type,
                   serverPlayer.position.x,
                   serverPlayer.position.z
                 )
@@ -557,12 +557,12 @@ export function handleServerMessage(
       if (state.currentPlayer?.id === data.player_id) {
         break
       }
-      const ft: string | null = data.furniture_type ?? null
+      const ft: string | null = data.object_type ?? null
       if (ft) {
         const rp = remotePlayerManager.players.get(data.player_id)
         const wx = rp?.position.x ?? 0
         const wz = rp?.position.z ?? 0
-        applyFurnitureInteraction(data.player_id, ft, wx, wz)
+        applyObjectInteraction(data.player_id, ft, wx, wz)
       } else {
         remotePlayerManager.handleStopInteraction(data.player_id)
       }

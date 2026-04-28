@@ -33,7 +33,7 @@ export type ServerPlayer = {
   is_npc: boolean
   torch_on: boolean
   floor_level: number
-  furniture_type?: string
+  object_type?: string
 }
 
 export type ServerMonster = {
@@ -137,7 +137,7 @@ export type ClientMessage =
         segment_index: number
       }
     }
-  | { InteractFurniture: { furniture_type: string; furniture_id: number } }
+  | { InteractObject: { object_type: string; object_id: number } }
   | 'StopInteraction'
   | 'Heartbeat'
   | { EquipItem: { instance_id: number } }

@@ -35,11 +35,11 @@
     groundItemMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
     doorMeshes: THREE.Object3D[]
-    furnitureMeshes: THREE.Object3D[]
+    objectMeshes: THREE.Object3D[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, doorMeshes, furnitureMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, doorMeshes, objectMeshes, attackCooldown }: Props = $props()
 
   function sampleHeight(x: number, z: number): number {
     return heightManager.getHeightAtWorldPosition(x, z) + get(playerFloorOffset)
@@ -113,7 +113,7 @@
     }
   })
 
-  function exitFurnitureInteraction(notify = true) {
+  function exitObjectInteraction(notify = true) {
     if (currentPlayer) {
       const footDist = 0.7
       const fx = currentPlayer.position.x + Math.sin(playerRotation) * footDist
@@ -349,7 +349,7 @@
     }
 
     // Keep player Y aligned with terrain height (handles spawn and terrain edits)
-    // Skip during furniture interaction — character is positioned on the furniture
+    // Skip during object interaction — character is positioned on the object
     if (playerState.state !== 'interact' && currentPlayer && heightManager.hasHeightData(currentPlayer.position.x, currentPlayer.position.z)) {
       const terrainY = sampleHeight(currentPlayer.position.x, currentPlayer.position.z)
       if (Math.abs(currentPlayer.position.y - terrainY) > 0.001) {
@@ -591,12 +591,12 @@
       return
     }
 
-    // Stand up first when leaving furniture interaction
+    // Stand up first when leaving object interaction
     if (playerState.state === 'interact') {
       if (playerState.interactionAnim === 'pickup') {
         exitPickupInteraction()
       } else {
-        exitFurnitureInteraction()
+        exitObjectInteraction()
       }
     }
 
@@ -670,7 +670,7 @@
   export function handleClickToMove(clickPosition: Position) {
     if (currentPlayer && currentPlayer.health <= 0) return
 
-    // Stand up first when leaving furniture interaction
+    // Stand up first when leaving object interaction
     if (playerState.state === 'interact') {
       if (playerState.interactionAnim === 'pickup') {
         exitPickupInteraction()
@@ -678,7 +678,7 @@
         return
       }
 
-      exitFurnitureInteraction()
+      exitObjectInteraction()
 
       if (standUpTimer) clearTimeout(standUpTimer)
       standUpTimer = setTimeout(() => {
@@ -758,7 +758,7 @@
       camera,
       monsterMeshes,
       doorMeshes,
-      furnitureMeshes,
+      objectMeshes,
       groundItemMeshes,
       groundMeshes,
       playerPosition: {
@@ -796,12 +796,12 @@
         )
         break
       }
-      case 'interact_furniture': {
+      case 'interact_object': {
         combatController.cancelCombat()
         isMoving = false
         movementTarget = null
 
-        // Align character with furniture rotation (face +Z / south)
+        // Align character with object rotation (face +Z / south)
         playerRotation = intent.rotation
 
         const interactState: PlayerState = {
@@ -826,7 +826,7 @@
           }
         }
 
-        networkManager.sendInteractFurniture(intent.furnitureType, intent.furnitureId)
+        networkManager.sendInteractObject(intent.objectType, intent.objectId)
         break
       }
       case 'pickup_ground_item': {
@@ -882,7 +882,7 @@
     const unsubscribeInteractionRejected = networkManager.interactionRejected.on(
       () => {
         if (playerState.state === 'interact') {
-          exitFurnitureInteraction(false)
+          exitObjectInteraction(false)
         }
       }
     )

@@ -191,9 +191,9 @@ pub struct Player {
     #[serde(default)]
     pub floor_level: i8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub furniture_type: Option<String>,
+    pub object_type: Option<String>,
     #[serde(skip)]
-    pub furniture_id: Option<u32>,
+    pub object_id: Option<u32>,
     #[serde(skip)]
     pub last_combat_at: u64,
 }
@@ -334,9 +334,9 @@ pub enum ClientMessage {
     TorchToggle {
         enabled: bool,
     },
-    InteractFurniture {
-        furniture_type: String,
-        furniture_id: u32,
+    InteractObject {
+        object_type: String,
+        object_id: u32,
     },
     StopInteraction,
     Heartbeat,
@@ -505,7 +505,7 @@ pub enum ServerMessage {
     },
     PlayerInteractionChanged {
         player_id: String,
-        furniture_type: Option<String>,
+        object_type: Option<String>,
     },
     InteractionRejected {
         reason: String,
@@ -986,8 +986,8 @@ mod tests {
                 is_npc: false,
                 torch_on: false,
                 floor_level: 0,
-                furniture_type: None,
-                furniture_id: None,
+                object_type: None,
+                object_id: None,
                 last_combat_at: 0,
             },
         );

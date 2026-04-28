@@ -1,11 +1,11 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentEditorRegion, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedFurnitureType, furnitureRotation, currentFurnitureData, selectedFurniturePlacementId, furniturePreviewPos, furnitureSubTool, roadDrawStart } from '../../stores/editorStore'
-  import type { EditorTool, ZoneSubTool, FurnitureSubTool, FurnitureRegionData } from '../../stores/editorStore'
+  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentEditorRegion, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedObjectType, objectRotation, currentObjectData, selectedObjectPlacementId, objectPreviewPos, objectSubTool, roadDrawStart } from '../../stores/editorStore'
+  import type { EditorTool, ZoneSubTool, ObjectSubTool, ObjectRegionData } from '../../stores/editorStore'
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
-  import { furnitureManager } from '../../managers/furnitureManager'
+  import { objectManager } from '../../managers/objectManager'
   import { housingManager } from '../../managers/housingManager'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { floorYBase, DEFAULT_WALL_HEIGHT } from '../../utils/house-geo-utils'
@@ -62,11 +62,20 @@
   let currentDragWaypoint = $state<number | null>(null)
   let npcManager: NpcScheduleManager | null = null
 
-  // Furniture editor state
-  let currentFurnitureType = $state<string | null>(null)
-  let currentFurnitureRot = $state(0)
-  let currentFurnitureSubTool = $state<FurnitureSubTool>('place')
+  // Object editor state
+  let currentObjectType = $state<string | null>(null)
+  let currentObjectRot = $state(0)
+  let currentObjectSubTool = $state<ObjectSubTool>('place')
   let currentPlayerFloor = $state(-1)
+
+  function snapXZ(x: number, z: number): { x: number; z: number } {
+    if (!currentObjectType) return { x, z }
+    const def = objectManager.getCatalogEntry(currentObjectType)
+    if (def?.gridAlign) {
+      return { x: Math.round(x), z: Math.round(z) }
+    }
+    return { x, z }
+  }
 
   brushSize.subscribe((v) => (currentBrushSize = v))
   brushStrength.subscribe((v) => (currentBrushStrength = v))
@@ -92,9 +101,9 @@
   selectedNpcSchedule.subscribe((v) => (currentNpcSchedule = v))
   selectedScheduleIndex.subscribe((v) => (currentSchedIdx = v))
   draggingWaypointIndex.subscribe((v) => (currentDragWaypoint = v))
-  selectedFurnitureType.subscribe((v) => (currentFurnitureType = v))
-  furnitureRotation.subscribe((v) => (currentFurnitureRot = v))
-  furnitureSubTool.subscribe((v) => (currentFurnitureSubTool = v))
+  selectedObjectType.subscribe((v) => (currentObjectType = v))
+  objectRotation.subscribe((v) => (currentObjectRot = v))
+  objectSubTool.subscribe((v) => (currentObjectSubTool = v))
   playerFloorLevel.subscribe((v) => (currentPlayerFloor = v))
 
   function syncBrushMode() {
@@ -165,14 +174,14 @@
       cursorHeight.set(heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ))
     }
 
-    // Track which region the cursor is in so panels / furniture can react.
+    // Track which region the cursor is in so panels / objects can react.
     const rx = tileToRegion(tileX)
     const rz = tileToRegion(tileZ)
     if (rx !== lastRegionX || rz !== lastRegionZ) {
       lastRegionX = rx
       lastRegionZ = rz
       currentEditorRegion.set({ rx, rz })
-      loadFurnitureForRegion(rx, rz)
+      loadObjectForRegion(rx, rz)
     }
   }
 
@@ -343,15 +352,16 @@
 
     updateCursorFromHit(hit)
 
-    if (currentTool === 'furniture' && currentFurnitureSubTool === 'place' && currentFurnitureType) {
+    if (currentTool === 'object' && currentObjectSubTool === 'place' && currentObjectType) {
+      const snapped = snapXZ(hit.point.x, hit.point.z)
       const terrainY = heightManager
-        ? heightManager.getHeightAtWorldPosition(hit.point.x, hit.point.z)
+        ? heightManager.getHeightAtWorldPosition(snapped.x, snapped.z)
         : 0
       const floor = Math.max(0, currentPlayerFloor)
       const y = terrainY + floorYBase(floor, DEFAULT_WALL_HEIGHT)
-      furniturePreviewPos.set({ x: hit.point.x, y, z: hit.point.z })
-    } else if (currentTool !== 'furniture') {
-      furniturePreviewPos.set(null)
+      objectPreviewPos.set({ x: snapped.x, y, z: snapped.z })
+    } else if (currentTool !== 'object') {
+      objectPreviewPos.set(null)
     }
 
     if (currentTool === 'npc' && currentDragWaypoint !== null) {
@@ -483,48 +493,45 @@
     selectedNpcSchedule.set(updated)
   }
 
-  // --- Furniture interaction ---
+  // --- Object interaction ---
 
-  async function loadFurnitureForRegion(rx: number, rz: number) {
-
-    const data = await furnitureManager.fetchFurniture(rx, rz)
-    currentFurnitureData.set(data)
-    selectedFurniturePlacementId.set(null)
+  async function loadObjectForRegion(rx: number, rz: number) {
+    const data = await objectManager.fetchObject(rx, rz)
+    currentObjectData.set(data)
+    selectedObjectPlacementId.set(null)
   }
 
-  async function handleFurnitureMouseDown(worldX: number, worldZ: number) {
-    if (currentFurnitureSubTool === 'place') {
-      if (!currentFurnitureType) return
+  async function handleObjectMouseDown(worldX: number, worldZ: number) {
+    if (currentObjectSubTool === 'place') {
+      if (!currentObjectType) return
+      const snapped = snapXZ(worldX, worldZ)
       const terrainY = heightManager
-        ? heightManager.getHeightAtWorldPosition(worldX, worldZ)
+        ? heightManager.getHeightAtWorldPosition(snapped.x, snapped.z)
         : 0
       const floor = Math.max(0, currentPlayerFloor)
       const y = terrainY + floorYBase(floor, DEFAULT_WALL_HEIGHT)
-      const data = get(currentFurnitureData)
+      const data = get(currentObjectData)
       const maxId = data.placements.reduce((max, p) => Math.max(max, p.id), 0)
       const placement = {
         id: maxId + 1,
-        type: currentFurnitureType,
-        x: worldX,
+        type: currentObjectType,
+        x: snapped.x,
         y,
-        z: worldZ,
-        rotation: currentFurnitureRot,
+        z: snapped.z,
+        rotation: currentObjectRot,
         floorLevel: floor,
       }
-      const updated: FurnitureRegionData = {
+      const updated: ObjectRegionData = {
         placements: [...data.placements, placement],
       }
-      currentFurnitureData.set(updated)
+      currentObjectData.set(updated)
 
-      // Auto-save
       const region = get(currentEditorRegion)
       if (region) {
-    
-        await furnitureManager.saveFurniture(region.rx, region.rz, updated)
+        await objectManager.saveObject(region.rx, region.rz, updated)
       }
     } else {
-      // Select mode: find closest placement
-      const data = get(currentFurnitureData)
+      const data = get(currentObjectData)
       const threshold = 4
       let bestDist = threshold * threshold
       let bestId: number | null = null
@@ -537,7 +544,7 @@
           bestId = p.id
         }
       }
-      selectedFurniturePlacementId.set(bestId)
+      selectedObjectPlacementId.set(bestId)
     }
   }
 
@@ -656,9 +663,9 @@
       return
     }
 
-    if (currentTool === 'furniture') {
+    if (currentTool === 'object') {
       updateCursorFromHit(hit)
-      handleFurnitureMouseDown(hit.point.x, hit.point.z)
+      handleObjectMouseDown(hit.point.x, hit.point.z)
       return
     }
 
@@ -681,19 +688,19 @@
     flushVegetationRemoval()
   }
 
-  async function handleFurnitureDelete() {
-    const placementId = get(selectedFurniturePlacementId)
+  async function handleObjectDelete() {
+    const placementId = get(selectedObjectPlacementId)
     if (placementId === null) return
-    const data = get(currentFurnitureData)
-    const updated: FurnitureRegionData = {
+    const data = get(currentObjectData)
+    const updated: ObjectRegionData = {
       placements: data.placements.filter((p) => p.id !== placementId),
     }
-    currentFurnitureData.set(updated)
-    selectedFurniturePlacementId.set(null)
+    currentObjectData.set(updated)
+    selectedObjectPlacementId.set(null)
 
     const region = get(currentEditorRegion)
     if (region) {
-      await furnitureManager.saveFurniture(region.rx, region.rz, updated)
+      await objectManager.saveObject(region.rx, region.rz, updated)
     }
   }
 
@@ -706,12 +713,12 @@
       ctrlHeld = true
       syncBrushMode()
     }
-    if (currentTool === 'furniture') {
+    if (currentTool === 'object') {
       if (event.key === 'r' || event.key === 'R') {
-        furnitureRotation.update((r) => (r + 90) % 360)
+        objectRotation.update((r) => (r + 90) % 360)
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
-        handleFurnitureDelete()
+        handleObjectDelete()
       }
     }
   }
