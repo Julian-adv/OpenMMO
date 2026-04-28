@@ -13,8 +13,8 @@ use super::constants::{
     GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW,
     RIVER_BAND_NOISE_AMP, RIVER_BAND_NOISE_FREQ, RIVER_BAND_NOISE_OCTAVES, RIVER_FADE_SPAN_M,
     RIVER_FOAM_SUPPRESS_RADIUS_M, RIVER_MOUTH_SAND_COAST_DIST_M, RIVER_SAND_WIDTH_MULT,
-    ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND,
-    SLOPE_CLIFF_FULL, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
+    ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND, SLOPE_CLIFF_FULL,
+    SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
 use super::heightmap::lerp;
@@ -215,8 +215,7 @@ pub(super) fn bake_splatmap(
             // → 0..255 (clamped). Used by the sea shader to fade out its
             // shoreline-foam band where a river meets the ocean.
             let river_proximity = {
-                let t =
-                    (river_d_m / RIVER_FOAM_SUPPRESS_RADIUS_M).clamp(0.0, 1.0);
+                let t = (river_d_m / RIVER_FOAM_SUPPRESS_RADIUS_M).clamp(0.0, 1.0);
                 (t * 255.0) as u8
             };
 
@@ -273,17 +272,17 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
     // touch grass directly); the 1 m absolute floor still protects
     // degenerate zero-width segments from disappearing entirely.
     let water_half_m = (river_width_m * 0.5).max(0.5);
-    let river_sand_half_width_m =
-        (river_width_m * RIVER_SAND_WIDTH_MULT * river_band_scale).max(water_half_m + 0.5).max(1.0);
-    if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
-        // Roads override every biome so the network stays visible. Secondary
-        // is PAL_GROUND so the fade outer edge (blend=255 → pure GROUND) meets
-        // the plain branch's inner edge (also pure GROUND) without a
-        // palette-swap pop.
-        let t = ((road_d_m - ROAD_HALF_WIDTH_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
-        let blend = (t * t * 255.0) as u8;
-        (PAL_ROAD, PAL_GROUND, blend, 0)
-    } else if river_d_m < river_sand_half_width_m {
+    let river_sand_half_width_m = (river_width_m * RIVER_SAND_WIDTH_MULT * river_band_scale)
+        .max(water_half_m + 0.5)
+        .max(1.0);
+    if river_d_m < river_sand_half_width_m {
+        // River bed wins over road inside the sand band: where a road
+        // crosses the channel the bake leaves the wet-pebble texture in
+        // place (a future bridge mesh covers the gap), instead of stamping
+        // a road strip across the riverbed. Roads parallel-along-bank still
+        // paint normally — those cells are outside the sand band and fall
+        // through to the road branch below.
+        //
         // River bed: wet pebbles (PAL_RIVER_BED). Secondary switches to CLIFF
         // inside the cliff-proximity reach so the river-edge outer ring
         // resolves to 100% CLIFF on both sides of the palette-pair swap
@@ -329,28 +328,36 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // cliffy plain, so routing the bank outer edge through CLIFF here
         // produces a visible gravel strip between sand and grass. Skip the
         // cliff blend for sand-primary cells and go straight to grass.
-        let (secondary, veg) =
-            if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M && is_pebble {
-                (PAL_CLIFF, 0)
+        let (secondary, veg) = if cliff_proximity_m < CLIFF_PROXIMITY_RADIUS_M && is_pebble {
+            (PAL_CLIFF, 0)
+        } else {
+            let bank_width = (river_sand_half_width_m - water_half_m).max(1e-3);
+            let bank_t = ((river_d_m - water_half_m) / bank_width).clamp(0.0, 1.0);
+            let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
+            let grass_t = (1.0 - highland).max(0.0);
+            // Inherit the plain branch's patchy Voronoi pattern so the
+            // bank grass doesn't stamp a forced-max density ring at the
+            // sand-band edge. Gate skips the warped-Voronoi query when
+            // density would be 0 regardless — see
+            // `non_plain_branches_do_not_sample_patch` test.
+            let bank_gate = grass_t * bank_t;
+            let v = if bank_gate > 0.0 {
+                grass_veg_from_patch(&patch(), bank_gate)
             } else {
-                let bank_width = (river_sand_half_width_m - water_half_m).max(1e-3);
-                let bank_t = ((river_d_m - water_half_m) / bank_width).clamp(0.0, 1.0);
-                let highland = (h_center / GRASS_FALLOFF_ELEVATION_M).clamp(0.0, 1.0);
-                let grass_t = (1.0 - highland).max(0.0);
-                // Inherit the plain branch's patchy Voronoi pattern so the
-                // bank grass doesn't stamp a forced-max density ring at the
-                // sand-band edge. Gate skips the warped-Voronoi query when
-                // density would be 0 regardless — see
-                // `non_plain_branches_do_not_sample_patch` test.
-                let bank_gate = grass_t * bank_t;
-                let v = if bank_gate > 0.0 {
-                    grass_veg_from_patch(&patch(), bank_gate)
-                } else {
-                    0
-                };
-                (PAL_GROUND, v)
+                0
             };
+            (PAL_GROUND, v)
+        };
         (primary, secondary, blend, veg)
+    } else if road_d_m < ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M {
+        // Roads override every biome (other than river bed, handled above)
+        // so the network stays visible. Secondary is PAL_GROUND so the
+        // fade outer edge (blend=255 → pure GROUND) meets the plain
+        // branch's inner edge (also pure GROUND) without a palette-swap
+        // pop.
+        let t = ((road_d_m - ROAD_HALF_WIDTH_M) / ROAD_FADE_SPAN_M).clamp(0.0, 1.0);
+        let blend = (t * t * 255.0) as u8;
+        (PAL_ROAD, PAL_GROUND, blend, 0)
     } else if is_sea {
         // Secondary = GROUND so the coast line shares a palette pair with
         // the land sand-band, keeping per-texture weights continuous
@@ -542,11 +549,13 @@ mod tests {
     }
 
     #[test]
-    fn priority_road_beats_sea_and_river() {
-        // Roads must always win so the settlement network stays visible.
+    fn priority_road_beats_sea() {
+        // Roads must win over sea / sand-coast / plain so the settlement
+        // network stays visible. Picks `river_d_m` past the sand-band
+        // outer edge so the higher-priority river branch is inactive.
         let (p, s, blend, _) = call_classify(SplatInputs {
             is_sea: true,
-            river_d_m: 1.0,
+            river_d_m: TEST_RIVER_SAND_HALF_WIDTH_M + 1.0,
             river_width_m: TEST_RIVER_WIDTH_M,
             road_d_m: 0.0,
             h_center: -5.0,
@@ -555,6 +564,22 @@ mod tests {
         });
         assert_eq!((p, s), (PAL_ROAD, PAL_GROUND));
         assert_eq!(blend, 0, "road center must be 100% PAL_ROAD");
+    }
+
+    #[test]
+    fn priority_river_beats_road() {
+        // River bed must override road inside the sand band so a road
+        // crossing the channel keeps the wet-pebble texture (the future
+        // bridge mesh covers the gap). With `road_d_m = 0` the cell is
+        // dead-center on a road, but `river_d_m = 0` keeps it on the river
+        // centerline — the river branch wins.
+        let (p, s, _, _) = call_classify(SplatInputs {
+            river_d_m: 0.0,
+            river_width_m: TEST_RIVER_WIDTH_M,
+            road_d_m: 0.0,
+            ..plain_inputs(100.0)
+        });
+        assert_eq!((p, s), (PAL_RIVER_BED, PAL_GROUND));
     }
 
     #[test]
@@ -800,9 +825,7 @@ mod tests {
         // `river_segments_near_tile` with the `river_margin` constant —
         // both adjacent tiles must see the segment so their splat
         // classification agrees at the boundary.
-        use super::super::super::vector_features::{
-            river_segments_near_tile, RiverWorldPolyline,
-        };
+        use super::super::super::vector_features::{river_segments_near_tile, RiverWorldPolyline};
         let polys = vec![RiverWorldPolyline {
             points: vec![[0.5, -10.0], [0.5, 10.0]],
             flow_norm: vec![0.5, 0.5],

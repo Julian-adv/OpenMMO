@@ -93,7 +93,16 @@ pub fn run(
     );
 
     let t = Instant::now();
-    let road_net = roads::compute_roads(&map, &settlements_list);
+    let mut road_net = roads::compute_roads(&map, &settlements_list, &river_map);
+    // Bridges in the runtime are placed on a 90°-grid only, so snap a small
+    // window of cells at every road↔river crossing into pure cardinal
+    // strips before tile baking — otherwise a diagonal A* crossing would
+    // leave a sub-cell gap that no axis-aligned bridge mesh fits.
+    roads::snap_crossings_to_grid(
+        &mut road_net,
+        &mut river_map,
+        map.config.global_res as usize,
+    );
     eprintln!(
         "  Phase 6 (roads):     {:.2}s  ({} roads)",
         t.elapsed().as_secs_f32(),
