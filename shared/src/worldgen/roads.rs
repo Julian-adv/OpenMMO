@@ -158,6 +158,10 @@ pub fn compute_roads(
 struct RiverField {
     mask: Vec<u8>,
     tangent: Vec<(f32, f32)>,
+    /// Snap-axis class of each river cell, derived from `tangent`. Cached
+    /// at construction so the per-step A* perpendicularity gate is a byte
+    /// load instead of 4 muls + 4 compares per river-touching neighbour.
+    axis: Vec<SnapAxis>,
     near_river: Vec<u8>,
 }
 
@@ -166,6 +170,7 @@ impl RiverField {
         let total = res * res;
         let mut mask = vec![0u8; total];
         let mut tangent = vec![(0.0f32, 0.0f32); total];
+        let mut axis = vec![SnapAxis::Horizontal; total];
         let res_f = res as f32;
         for poly in rivers {
             let pts = &poly.points;
@@ -194,13 +199,17 @@ impl RiverField {
                     dx += res_f;
                 }
                 let len = (dx * dx + dy * dy).sqrt().max(1e-6);
-                tangent[idx] = (dx / len, dy / len);
+                let tx = dx / len;
+                let ty = dy / len;
+                tangent[idx] = (tx, ty);
+                axis[idx] = pick_river_axis(tx, ty);
             }
         }
         let near_river = chebyshev_dilate(&mask, res);
         Self {
             mask,
             tangent,
+            axis,
             near_river,
         }
     }
@@ -415,15 +424,21 @@ fn a_star(
                     continue;
                 }
                 let is_diag = dx.abs() + dy.abs() == 2;
-                // Bridges sit on the 90° grid, so the road must enter and
-                // leave every river cell cardinally — reject diagonals
-                // that touch the river at `ni`, `ci`, or either off-diagonal
-                // shoulder (which would skim past the channel without
-                // landing on it).
-                if is_diag {
-                    if river_field.mask[ni] != 0 || river_field.mask[ci] != 0 {
+                let ci_river = river_field.mask[ci] != 0;
+                let ni_river = river_field.mask[ni] != 0;
+                // Bridges always sit at 90° to the river but support 4 grid
+                // orientations (H / V / NW-SE / NE-SW), so any river-touching
+                // step must be on the perpendicular of the river's local
+                // snap-axis class — non-perpendicular crossings are
+                // rejected outright.
+                if ci_river || ni_river {
+                    let endpoint = if ni_river { ni } else { ci };
+                    if step_axis(dx, dy) != river_field.axis[endpoint].perpendicular() {
                         continue;
                     }
+                } else if is_diag {
+                    // Pure-land diagonal: reject corner-cuts where a
+                    // shoulder is river (would skim past a 1-cell channel).
                     let sh1 = (cy as usize) * res + (cx + dx).rem_euclid(res_i) as usize;
                     let sh2 = (cy + dy) as usize * res + cx as usize;
                     if river_field.mask[sh1] != 0 || river_field.mask[sh2] != 0 {
@@ -492,20 +507,73 @@ fn heuristic(sx: usize, sy: usize, gx: usize, gy: usize, res: usize) -> f32 {
 /// straight strip — enough for a grid-aligned bridge mesh to drop in.
 const GRID_SNAP_HALF_WINDOW: usize = 3;
 
-/// Cardinal axis used by the grid-snap pass. The road takes one axis at a
-/// crossing; the river takes the other.
+/// Axis used by the grid-snap pass. The road takes one axis at a
+/// crossing; the river takes the perpendicular partner. Cardinals
+/// (`Horizontal`/`Vertical`) pair with each other; diagonals
+/// (`DiagonalNwSe`/`DiagonalNeSw`) pair with each other.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
-enum CardinalAxis {
+enum SnapAxis {
     Horizontal,
     Vertical,
+    /// `dy = dx` line (running NW↔SE).
+    DiagonalNwSe,
+    /// `dy = -dx` line (running NE↔SW).
+    DiagonalNeSw,
 }
 
-/// Bridges in the runtime are placed grid-aligned at 90°, so this pass
-/// rewrites a small window of cells around every road↔river crossing into
-/// axis-aligned strips: the road on one cardinal, the river on the other.
-/// Mutates both polylines in place; first/last index of each polyline is
-/// preserved so settlement / river-source / river-mouth anchors don't
-/// drift. Run once after `compute_roads`, before tile baking.
+impl SnapAxis {
+    fn perpendicular(self) -> SnapAxis {
+        match self {
+            SnapAxis::Horizontal => SnapAxis::Vertical,
+            SnapAxis::Vertical => SnapAxis::Horizontal,
+            SnapAxis::DiagonalNwSe => SnapAxis::DiagonalNeSw,
+            SnapAxis::DiagonalNeSw => SnapAxis::DiagonalNwSe,
+        }
+    }
+}
+
+/// Pick the snap axis whose unit direction is most aligned with `(dx, dy)`.
+/// Compares squared projections — the four axes form a 45°-step rosette,
+/// so the dominant projection wins by ≥ cos²(22.5°) margin in the generic
+/// case. Used both to classify river tangents (A* perpendicularity gate)
+/// and to drive the grid-snap pass.
+fn pick_river_axis(dx: f32, dy: f32) -> SnapAxis {
+    let h = dx * dx;
+    let v = dy * dy;
+    let nw_se = (dx + dy).powi(2) * 0.5;
+    let ne_sw = (dx - dy).powi(2) * 0.5;
+    if h >= v && h >= nw_se && h >= ne_sw {
+        SnapAxis::Horizontal
+    } else if v >= nw_se && v >= ne_sw {
+        SnapAxis::Vertical
+    } else if nw_se >= ne_sw {
+        SnapAxis::DiagonalNwSe
+    } else {
+        SnapAxis::DiagonalNeSw
+    }
+}
+
+/// Snap-axis classification of a single A* step. The 8-way step neighbourhood
+/// maps onto the 4 axes: `(±1, 0) → Horizontal`, `(0, ±1) → Vertical`,
+/// `(±1, ±1) same sign → NW-SE`, opposite sign `→ NE-SW`.
+fn step_axis(dx: i32, dy: i32) -> SnapAxis {
+    match (dx, dy) {
+        (_, 0) => SnapAxis::Horizontal,
+        (0, _) => SnapAxis::Vertical,
+        (a, b) if a == b => SnapAxis::DiagonalNwSe,
+        _ => SnapAxis::DiagonalNeSw,
+    }
+}
+
+/// Bridges in the runtime are placed at 90° to the channel — supporting
+/// both grid-aligned and 45°-rotated drops — so this pass rewrites a small
+/// window of cells around every road↔river crossing into axis-aligned
+/// strips: the road on one snap axis, the river on the perpendicular
+/// partner. The chosen pair (cardinal-cardinal or diagonal-diagonal)
+/// follows the river's local direction. Mutates both polylines in place;
+/// first/last index of each polyline is preserved so settlement /
+/// river-source / river-mouth anchors don't drift. Run once after
+/// `compute_roads`, before tile baking.
 pub fn snap_crossings_to_grid(road_net: &mut RoadNetwork, river_map: &mut RiverMap, res: usize) {
     let total = res * res;
     // Cell → (river_idx, point_idx). First river to claim a cell wins; later
@@ -550,11 +618,8 @@ pub fn snap_crossings_to_grid(road_net: &mut RoadNetwork, river_map: &mut RiverM
                 GRID_SNAP_HALF_WINDOW,
                 res,
             );
-            let (river_axis, road_axis) = if river_dir.0.abs() >= river_dir.1.abs() {
-                (CardinalAxis::Horizontal, CardinalAxis::Vertical)
-            } else {
-                (CardinalAxis::Vertical, CardinalAxis::Horizontal)
-            };
+            let river_axis = pick_river_axis(river_dir.0 as f32, river_dir.1 as f32);
+            let road_axis = river_axis.perpendicular();
 
             let snapped_road_end = snap_polyline_window(
                 &mut road_net.roads[road_idx].points,
@@ -593,12 +658,7 @@ fn local_dir(points: &[(u32, u32)], idx: usize, half_w: usize, res: usize) -> (i
     let (px, py) = points[i_lo];
     let (qx, qy) = points[i_hi];
     let res_i = res as i32;
-    let mut dx = qx as i32 - px as i32;
-    if dx > res_i / 2 {
-        dx -= res_i;
-    } else if dx < -res_i / 2 {
-        dx += res_i;
-    }
+    let dx = fold_x_delta(qx as i32 - px as i32, res_i);
     let dy = qy as i32 - py as i32;
     (dx, dy)
 }
@@ -616,7 +676,7 @@ fn snap_polyline_window(
     points: &mut [(u32, u32)],
     idx: usize,
     half_w: usize,
-    axis: CardinalAxis,
+    axis: SnapAxis,
     res: usize,
 ) -> usize {
     let n = points.len();
@@ -633,40 +693,53 @@ fn snap_polyline_window(
     let len = i_end - i_start;
     let res_i = res as i32;
     let (cx, cy) = points[idx];
+    let cx_i = cx as i32;
+    let cy_i = cy as i32;
+    let span = (len + 2) as f32;
+    let hi_idx = (i_end + 1).min(n - 1);
 
-    match axis {
-        CardinalAxis::Horizontal => {
-            // Anchor along-axis (X) at the unchanged neighbours just outside
-            // the window so the snapped strip joins the rest of the polyline
-            // without a sudden along-axis jump (only the cross-axis Y bends).
-            let x_lo = points[i_start - 1].0 as i32;
-            let x_hi = points[(i_end + 1).min(n - 1)].0 as i32;
-            let mut delta = x_hi - x_lo;
-            if delta > res_i / 2 {
-                delta -= res_i;
-            } else if delta < -res_i / 2 {
-                delta += res_i;
-            }
-            let span = (len + 2) as f32;
-            for k in 0..=len {
-                let t = (k as f32 + 1.0) / span;
-                let x = x_lo + (delta as f32 * t).round() as i32;
-                points[i_start + k] = (x.rem_euclid(res_i) as u32, cy);
-            }
-        }
-        CardinalAxis::Vertical => {
-            let y_lo = points[i_start - 1].1 as i32;
-            let y_hi = points[(i_end + 1).min(n - 1)].1 as i32;
-            let delta = y_hi - y_lo;
-            let span = (len + 2) as f32;
-            for k in 0..=len {
-                let t = (k as f32 + 1.0) / span;
-                let y = y_lo + (delta as f32 * t).round() as i32;
-                points[i_start + k] = (cx, y.clamp(0, res_i - 1) as u32);
-            }
-        }
+    // Parameterise the snapped strip as `(cx, cy) + s * (ux, uy)`, where
+    // `(ux, uy)` is the integer along-axis direction (unit length for
+    // cardinals, √2 for diagonals — we divide by `len_sq` so `s` steps in
+    // cells along the axis). The cross-axis component is implicitly 0:
+    // points snap onto the line through the crossing cell, only the
+    // along-axis offset interpolates between the anchor neighbours just
+    // outside the window. This produces the same single-kink-at-boundary
+    // join discipline for all four axes.
+    let (ux, uy, len_sq) = match axis {
+        SnapAxis::Horizontal => (1, 0, 1),
+        SnapAxis::Vertical => (0, 1, 1),
+        SnapAxis::DiagonalNwSe => (1, 1, 2),
+        SnapAxis::DiagonalNeSw => (1, -1, 2),
+    };
+    let (x_lo, y_lo) = points[i_start - 1];
+    let (x_hi, y_hi) = points[hi_idx];
+    let dx_lo = fold_x_delta(x_lo as i32 - cx_i, res_i);
+    let dy_lo = y_lo as i32 - cy_i;
+    let dx_hi = fold_x_delta(x_hi as i32 - cx_i, res_i);
+    let dy_hi = y_hi as i32 - cy_i;
+    let inv_len_sq = 1.0 / len_sq as f32;
+    let s_lo = (dx_lo * ux + dy_lo * uy) as f32 * inv_len_sq;
+    let s_hi = (dx_hi * ux + dy_hi * uy) as f32 * inv_len_sq;
+    for k in 0..=len {
+        let t = (k as f32 + 1.0) / span;
+        let s = (s_lo + (s_hi - s_lo) * t).round() as i32;
+        let x = (cx_i + s * ux).rem_euclid(res_i) as u32;
+        let y = (cy_i + s * uy).clamp(0, res_i - 1) as u32;
+        points[i_start + k] = (x, y);
     }
     i_end
+}
+
+/// Fold a raw X delta into the shorter wrap direction (≤ res/2 in magnitude).
+#[inline]
+fn fold_x_delta(mut d: i32, res_i: i32) -> i32 {
+    if d > res_i / 2 {
+        d -= res_i;
+    } else if d < -res_i / 2 {
+        d += res_i;
+    }
+    d
 }
 
 #[cfg(test)]
@@ -809,6 +882,75 @@ mod tests {
                 "river point {} not on snap column at crossing",
                 k
             );
+        }
+        // Crossing cell still appears on both polylines so the bridge has
+        // a coincident attach point.
+        assert!(snapped_road.contains(&crossing_cell));
+        assert!(snapped_river.contains(&crossing_cell));
+    }
+
+    #[test]
+    fn snap_picks_diagonal_axes_for_diagonal_river() {
+        // Synthetic crossing: a NW-SE river meets a NE-SW road at one
+        // shared cell. The river's local direction is (+1, +1) so snap
+        // picks `river_axis = DiagonalNwSe`, and the road snaps to the
+        // perpendicular `DiagonalNeSw` line through the crossing cell.
+        let res = 64usize;
+        let crossing_cell = (32u32, 32u32);
+
+        // River along y = x (NW → SE) through the crossing cell.
+        let river_pts: Vec<(u32, u32)> = (0..32).map(|i| (16 + i as u32, 16 + i as u32)).collect();
+        let crossing_river_idx = river_pts
+            .iter()
+            .position(|&p| p == crossing_cell)
+            .expect("river must pass through the crossing cell");
+
+        // Road along y = -x + 64 (NE → SW) through the crossing cell.
+        let road_pts: Vec<(u32, u32)> = (0..32).map(|i| (16 + i as u32, 48 - i as u32)).collect();
+        let crossing_road_idx = road_pts
+            .iter()
+            .position(|&p| p == crossing_cell)
+            .expect("road must pass through the crossing cell");
+
+        let mut net = RoadNetwork {
+            roads: vec![Road {
+                points: road_pts.clone(),
+            }],
+        };
+        let mut river_map = RiverMap {
+            downstream: Vec::new(),
+            flow: Vec::new(),
+            rivers: vec![Polyline {
+                points: river_pts.clone(),
+                flow: vec![1.0; river_pts.len()],
+            }],
+        };
+        snap_crossings_to_grid(&mut net, &mut river_map, res);
+
+        let snapped_road = &net.roads[0].points;
+        let snapped_river = &river_map.rivers[0].points;
+        // Endpoint anchors must survive the snap.
+        assert_eq!(snapped_road.first(), Some(&road_pts[0]));
+        assert_eq!(snapped_road.last(), Some(&road_pts[road_pts.len() - 1]));
+        assert_eq!(snapped_river.first(), Some(&river_pts[0]));
+        assert_eq!(snapped_river.last(), Some(&river_pts[river_pts.len() - 1]));
+
+        // River window: every cell satisfies `dy = dx` relative to the
+        // crossing — strictly on the NW-SE diagonal.
+        let half = GRID_SNAP_HALF_WINDOW;
+        for k in (crossing_river_idx - half)..=(crossing_river_idx + half) {
+            let (x, y) = snapped_river[k];
+            let dx = x as i32 - crossing_cell.0 as i32;
+            let dy = y as i32 - crossing_cell.1 as i32;
+            assert_eq!(dy, dx, "river point {k} not on NW-SE diagonal");
+        }
+        // Road window: every cell satisfies `dy = -dx` — on the NE-SW
+        // diagonal perpendicular to the river.
+        for k in (crossing_road_idx - half)..=(crossing_road_idx + half) {
+            let (x, y) = snapped_road[k];
+            let dx = x as i32 - crossing_cell.0 as i32;
+            let dy = y as i32 - crossing_cell.1 as i32;
+            assert_eq!(dy, -dx, "road point {k} not on NE-SW diagonal");
         }
         // Crossing cell still appears on both polylines so the bridge has
         // a coincident attach point.
