@@ -103,6 +103,10 @@
 
 - bed.glb https://sketchfab.com/3d-models/old-wooden-bed-frame-and-dirty-sheets-79c856755e6a44a3bcf19671e5c70d2d
 
+## Objects
+
+- stone bridge https://sketchfab.com/3d-models/stone-bridge-a5d380cd08654b508b4b643056038605
+
 ## Terrain
 
 - https://tangrams.github.io/heightmapper/#11.16667/34.4293/126.4164
