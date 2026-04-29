@@ -3,6 +3,7 @@ import type {
   ObjectDef,
   ObjectPlacement,
 } from '../stores/editorStore'
+import { rotatedRectAabb } from '../utils/objectFootprint'
 
 interface RegisteredBridge {
   px: number
@@ -137,11 +138,43 @@ class BridgeManager {
    */
   findOccludingBridgeId(px: number, py: number, pz: number): number | null {
     for (const [id, b] of this.bridges) {
-      const topY = b.py + b.meta.deckCrownY + 1.5
+      const m = b.meta
+      const topY = b.py + m.deckCrownY + 1.5
       const sHigh = topY - py
       if (sHigh <= 0) continue
-      const sMin = Math.max(px - b.worldMaxX, b.worldMinZ - pz, 0)
-      const sMax = Math.min(px - b.worldMinX, b.worldMaxZ - pz, sHigh)
+      // Skip if the player is standing on this bridge's deck — the deck below
+      // their feet doesn't occlude them from the camera, only the structure
+      // *above* would, which we ignore for self-occlusion clarity.
+      const { lx, lz } = this.toLocal(b, px, pz)
+      if (this.insideRect(b, lx, lz)) {
+        const deckY = b.py + this.deckLocalY(b, lx, lz)
+        if (py >= deckY - 0.5) continue
+      }
+      // Intersect the iso camera ray with the rotated deck rect in local
+      // space. AABB-only checks false-positive at non-axis rotations because
+      // the rotated rect's AABB is much larger than the rect itself.
+      const lvx = -b.cosRot - b.sinRot
+      const lvz = -b.sinRot + b.cosRot
+      let sMin = 0
+      let sMax = sHigh
+      // Local X slab
+      if (Math.abs(lvx) < 1e-9) {
+        if (lx < m.deckMinX || lx > m.deckMaxX) continue
+      } else {
+        const s1 = (m.deckMinX - lx) / lvx
+        const s2 = (m.deckMaxX - lx) / lvx
+        sMin = Math.max(sMin, Math.min(s1, s2))
+        sMax = Math.min(sMax, Math.max(s1, s2))
+      }
+      // Local Z slab
+      if (Math.abs(lvz) < 1e-9) {
+        if (lz < m.deckMinZ || lz > m.deckMaxZ) continue
+      } else {
+        const s1 = (m.deckMinZ - lz) / lvz
+        const s2 = (m.deckMaxZ - lz) / lvz
+        sMin = Math.max(sMin, Math.min(s1, s2))
+        sMax = Math.min(sMax, Math.max(s1, s2))
+      }
       if (sMin <= sMax) return id
     }
     return null
@@ -171,32 +204,6 @@ class BridgeManager {
     }
     return false
   }
-}
-
-function rotatedRectAabb(
-  minX: number,
-  maxX: number,
-  minZ: number,
-  maxZ: number,
-  rot: number
-): { minX: number; maxX: number; minZ: number; maxZ: number } {
-  const c = Math.cos(rot)
-  const s = Math.sin(rot)
-  let aMinX = Infinity,
-    aMaxX = -Infinity,
-    aMinZ = Infinity,
-    aMaxZ = -Infinity
-  for (const lx of [minX, maxX]) {
-    for (const lz of [minZ, maxZ]) {
-      const wx = lx * c + lz * s
-      const wz = -lx * s + lz * c
-      if (wx < aMinX) aMinX = wx
-      if (wx > aMaxX) aMaxX = wx
-      if (wz < aMinZ) aMinZ = wz
-      if (wz > aMaxZ) aMaxZ = wz
-    }
-  }
-  return { minX: aMinX, maxX: aMaxX, minZ: aMinZ, maxZ: aMaxZ }
 }
 
 export const bridgeManager = new BridgeManager()

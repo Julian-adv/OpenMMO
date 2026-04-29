@@ -536,11 +536,31 @@
       let bestDist = threshold * threshold
       let bestId: number | null = null
       for (const p of data.placements) {
+        // Skip orphans whose type was removed from the catalog — they have no
+        // visible mesh, so letting them win the click intercepts selection.
+        const def = objectManager.getCatalogEntry(p.type)
+        if (!def) continue
         const dx = worldX - p.x
         const dz = worldZ - p.z
-        const dist = dx * dx + dz * dz
-        if (dist < bestDist) {
-          bestDist = dist
+        let distSq: number
+        if (def.kind === 'bridge' && def.bridge) {
+          // Bridges are long — distance-to-center misses clicks on the deck
+          // ends. Measure distance to the rotated deck rect instead so any
+          // click on (or near) the deck selects this placement.
+          const m = def.bridge
+          const rot = (p.rotation * Math.PI) / 180
+          const cos = Math.cos(rot)
+          const sin = Math.sin(rot)
+          const lx = dx * cos - dz * sin
+          const lz = dx * sin + dz * cos
+          const ddx = Math.max(m.deckMinX - lx, 0, lx - m.deckMaxX)
+          const ddz = Math.max(m.deckMinZ - lz, 0, lz - m.deckMaxZ)
+          distSq = ddx * ddx + ddz * ddz
+        } else {
+          distSq = dx * dx + dz * dz
+        }
+        if (distSq < bestDist) {
+          bestDist = distSq
           bestId = p.id
         }
       }
@@ -715,7 +735,7 @@
     }
     if (currentTool === 'object') {
       if (event.key === 'r' || event.key === 'R') {
-        objectRotation.update((r) => (r + 90) % 360)
+        objectRotation.update((r) => (r + 45) % 360)
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         handleObjectDelete()

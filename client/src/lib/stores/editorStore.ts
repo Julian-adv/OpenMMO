@@ -138,6 +138,9 @@ export interface ObjectDef {
   interactOffset?: Position
   /** Snap placement position to 1m grid (cell corners) */
   gridAlign?: boolean
+  /** Lift the flatten brush's target Y above the model's foot (bury the
+   *  abutment by this many metres). Optional; defaults to 0. */
+  flattenBuryDepth?: number
   kind?: 'bridge'
   bridge?: BridgeMeta
 }

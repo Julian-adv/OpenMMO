@@ -47,9 +47,18 @@
   let currentFloor = $state(-1)
   let currentHouseId = $state<string | null>(null)
 
+  let catalogById = new Map<string, ObjectDef>()
+
   const unsubs: Unsubscriber[] = [
     editorTool.subscribe((v) => (tool = v)),
-    currentObjectData.subscribe((v) => (placements = v.placements)),
+    currentObjectData.subscribe((v) => {
+      placements = v.placements
+      // Re-sync bridgeManager so newly placed/edited bridges become walkable
+      // immediately. Guard for the initial empty-state fire before catalog loads.
+      if (catalogById.size > 0) {
+        bridgeManager.syncRegion(v.placements, catalogById)
+      }
+    }),
     objectCatalog.subscribe((v) => (catalogLength = v.length)),
     selectedObjectPlacementId.subscribe((v) => (selectedId = v)),
     objectPreviewPos.subscribe((v) => (previewPos = v)),
@@ -91,7 +100,6 @@
   const modelCache = new SvelteMap<string, THREE.Group>()
   const modelBounds = new SvelteMap<string, { center: THREE.Vector3; size: THREE.Vector3 }>()
   const loadingModels = new SvelteSet<string>()
-  let catalogById = new Map<string, ObjectDef>()
 
   async function getModel(objectId: string): Promise<THREE.Group | null> {
     if (modelCache.has(objectId)) return modelCache.get(objectId)!

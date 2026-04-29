@@ -119,22 +119,32 @@ function extractRects(cells: Set<string>): FootprintRect[] {
 }
 
 /**
- * Rotate a rect's AABB by a 90° step around the model origin (matches
- * THREE.Object3D rotation.y semantics: positive angle rotates +Z toward +X).
+ * AABB of an axis-aligned XZ rect rotated by `rot` radians around its origin
+ * (THREE.Object3D rotation.y semantics: positive rotates +Z toward +X).
  */
-export function rotateRect(
-  r: FootprintRect,
-  rotationDeg: number
-): FootprintRect {
-  const rot = ((rotationDeg % 360) + 360) % 360
-  switch (rot) {
-    case 90:
-      return { minX: r.minZ, maxX: r.maxZ, minZ: -r.maxX, maxZ: -r.minX }
-    case 180:
-      return { minX: -r.maxX, maxX: -r.minX, minZ: -r.maxZ, maxZ: -r.minZ }
-    case 270:
-      return { minX: -r.maxZ, maxX: -r.minZ, minZ: r.minX, maxZ: r.maxX }
-    default:
-      return r
+export function rotatedRectAabb(
+  minX: number,
+  maxX: number,
+  minZ: number,
+  maxZ: number,
+  rot: number
+): { minX: number; maxX: number; minZ: number; maxZ: number } {
+  const c = Math.cos(rot)
+  const s = Math.sin(rot)
+  let aMinX = Infinity,
+    aMaxX = -Infinity,
+    aMinZ = Infinity,
+    aMaxZ = -Infinity
+  for (const lx of [minX, maxX]) {
+    for (const lz of [minZ, maxZ]) {
+      const wx = lx * c + lz * s
+      const wz = -lx * s + lz * c
+      if (wx < aMinX) aMinX = wx
+      if (wx > aMaxX) aMaxX = wx
+      if (wz < aMinZ) aMinZ = wz
+      if (wz > aMaxZ) aMaxZ = wz
+    }
   }
+  return { minX: aMinX, maxX: aMaxX, minZ: aMinZ, maxZ: aMaxZ }
 }
+
