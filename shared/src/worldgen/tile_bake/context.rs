@@ -17,17 +17,16 @@ use super::super::vector_features::{
     cell_coord_passthrough, cell_index_to_center, chaikin_smooth, polyline_to_world,
     river_chaikin_smooth, river_polyline_to_world, RiverWorldPolyline, WorldPolyline,
 };
-use super::heightmap::cell_elevation_m;
 use super::constants::{
     COAST_CHAIKIN_ITERATIONS, MOUTH_ISLAND_ANGLE_JITTER_RAD, MOUTH_ISLAND_APEX_ELEV_M,
     MOUTH_ISLAND_COUNT_MAX, MOUTH_ISLAND_COUNT_MIN, MOUTH_ISLAND_END_ALONG_MAX_M,
-    MOUTH_ISLAND_END_ALONG_MIN_M, MOUTH_ISLAND_FAN_HALF_ANGLE_RAD,
-    MOUTH_ISLAND_LAND_HEIGHT_BOOST, MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M,
-    MOUTH_ISLAND_RADIUS_MAX_M, MOUTH_ISLAND_RADIUS_MIN_M, MOUTH_ISLAND_TIP_ALONG_MAX_M,
-    MOUTH_ISLAND_WIDEST_AXIS_T, RIVER_CHAIKIN_ITERATIONS, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M,
-    RIVER_MOUTH_FAN_BASE_HIGH_M, RIVER_MOUTH_FAN_BASE_LOW_M, RIVER_MOUTH_FAN_EXTRA,
-    ROAD_CHAIKIN_ITERATIONS,
+    MOUTH_ISLAND_END_ALONG_MIN_M, MOUTH_ISLAND_FAN_HALF_ANGLE_RAD, MOUTH_ISLAND_LAND_HEIGHT_BOOST,
+    MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M, MOUTH_ISLAND_RADIUS_MAX_M,
+    MOUTH_ISLAND_RADIUS_MIN_M, MOUTH_ISLAND_TIP_ALONG_MAX_M, MOUTH_ISLAND_WIDEST_AXIS_T,
+    RIVER_CHAIKIN_ITERATIONS, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, RIVER_MOUTH_FAN_BASE_HIGH_M,
+    RIVER_MOUTH_FAN_BASE_LOW_M, RIVER_MOUTH_FAN_EXTRA, ROAD_CHAIKIN_ITERATIONS,
 };
+use super::heightmap::cell_elevation_m;
 
 pub struct BakeContext {
     /// Deterministic detail-noise source seeded off the master seed.
@@ -314,7 +313,8 @@ fn apply_mouth_fan_widths(
     let span = RIVER_MOUTH_FAN_BASE_HIGH_M - RIVER_MOUTH_FAN_BASE_LOW_M;
     for poly in rivers_world.iter_mut() {
         for i in 0..poly.points.len() {
-            let base = sample_base_elevation(map, dist_to_land, poly.points[i][0], poly.points[i][1]);
+            let base =
+                sample_base_elevation(map, dist_to_land, poly.points[i][0], poly.points[i][1]);
             // J-curve: `(1-t)^2` with only the upper bound clamped, so
             // underwater polyline vertices (`t < 0`) push `s > 1` and
             // the multiplier accelerates monotonically with no plateau.
