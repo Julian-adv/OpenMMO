@@ -38,5 +38,22 @@
       "deckEndY": 0.4,
       "deckAxis": "z"
     }
+  },
+  {
+    "id": "big_stone_bridge",
+    "name": "Big Stone Bridge",
+    "model": "big_stone_bridge.glb",
+    "kind": "bridge",
+    "gridAlign": true,
+    "flattenBuryDepth": 0.9,
+    "bridge": {
+      "deckMinX": -2.32,
+      "deckMaxX": 2.32,
+      "deckMinZ": -14.0,
+      "deckMaxZ": 14.0,
+      "deckCrownY": 2.44,
+      "deckEndY": 0.15,
+      "deckAxis": "z"
+    }
   }
 ]
