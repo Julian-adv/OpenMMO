@@ -14,6 +14,7 @@ import {
 } from './terrain-height-geometry'
 import { TERRAIN_TILE_SIZE } from '../components/game-scene/terrain-utils'
 import { smoothstep } from '../terrain/terrain-constants'
+import { rotatedRectAabb } from '../utils/objectFootprint'
 
 function finalizeBrush(
   state: TerrainHeightState,
@@ -484,6 +485,126 @@ export function flattenArea(
           const dx = Math.max(minX - worldCX, 0, worldCX - maxX)
           const dz = Math.max(minZ - worldCZ, 0, worldCZ - maxZ)
           const distFromEdge = Math.sqrt(dx * dx + dz * dz)
+
+          const idx = cz * VERTS_PER_SIDE + cx
+
+          if (isProtected && isProtected(worldCX, worldCZ)) continue
+
+          if (distFromEdge <= 0) {
+            data[idx] = Math.max(0, Math.min(65535, targetEncoded))
+          } else if (distFromEdge < blendRadius) {
+            const t = distFromEdge / blendRadius
+            const blend = 1 - t * t * (3 - 2 * t)
+            const currentHeight = decodeHeight(data[idx])
+            const newHeight =
+              currentHeight + (targetHeight - currentHeight) * blend
+            const newValue = Math.max(
+              0,
+              Math.min(65535, encodeHeight(newHeight))
+            )
+            data[idx] = newValue
+          } else {
+            continue
+          }
+
+          if (!affectedKeys.has(key)) {
+            affectedKeys.add(key)
+            affected.push({ tileX: tx, tileZ: tz })
+            state.dirtyTiles.add(key)
+          }
+        }
+      }
+
+      const geometry = state.geometries.get(key)
+      if (geometry) {
+        applyHeightToGeometry(state, tx, tz, geometry)
+      }
+    }
+  }
+
+  finalizeBrush(state, affected)
+  return affected
+}
+
+/**
+ * Flatten a rectangle that's rotated around (centerX, centerZ). Same blend
+ * behaviour as flattenArea, but distance is measured to the rotated rect's
+ * edges (not its world AABB), so a 45° footprint doesn't bleed terrain into
+ * the AABB corners that fall outside the actual rect.
+ */
+export function flattenRotatedRect(
+  state: TerrainHeightState,
+  centerX: number,
+  centerZ: number,
+  rotationDeg: number,
+  localMinX: number,
+  localMaxX: number,
+  localMinZ: number,
+  localMaxZ: number,
+  targetHeight: number,
+  blendRadius: number,
+  ensureOriginal: (tileX: number, tileZ: number) => void,
+  isProtected?: (worldX: number, worldZ: number) => boolean
+): AffectedTile[] {
+  const affected: AffectedTile[] = []
+  const affectedKeys = new Set<string>()
+  const targetEncoded = encodeHeight(targetHeight)
+
+  const rot = (rotationDeg * Math.PI) / 180
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+
+  const aabb = rotatedRectAabb(localMinX, localMaxX, localMinZ, localMaxZ, rot)
+  const expandedMinX = centerX + aabb.minX - blendRadius
+  const expandedMinZ = centerZ + aabb.minZ - blendRadius
+  const expandedMaxX = centerX + aabb.maxX + blendRadius
+  const expandedMaxZ = centerZ + aabb.maxZ + blendRadius
+
+  const minTileX = worldToTileCoord(expandedMinX)
+  const maxTileX = worldToTileCoord(expandedMaxX)
+  const minTileZ = worldToTileCoord(expandedMinZ)
+  const maxTileZ = worldToTileCoord(expandedMaxZ)
+
+  for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+    for (let tx = minTileX; tx <= maxTileX; tx++) {
+      ensureOriginal(tx, tz)
+    }
+  }
+
+  for (let tz = minTileZ; tz <= maxTileZ; tz++) {
+    for (let tx = minTileX; tx <= maxTileX; tx++) {
+      const key = tileKey(tx, tz)
+      const data = state.heightmaps.get(key)
+      if (!data) continue
+
+      const tileMinX = tx * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+      const tileMinZ = tz * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
+
+      const startCX = Math.max(0, Math.floor(expandedMinX - tileMinX))
+      const endCX = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(expandedMaxX - tileMinX)
+      )
+      const startCZ = Math.max(0, Math.floor(expandedMinZ - tileMinZ))
+      const endCZ = Math.min(
+        VERTS_PER_SIDE - 1,
+        Math.floor(expandedMaxZ - tileMinZ)
+      )
+
+      for (let cz = startCZ; cz <= endCZ; cz++) {
+        for (let cx = startCX; cx <= endCX; cx++) {
+          const worldCX = tileMinX + cx
+          const worldCZ = tileMinZ + cz
+
+          // World → local: lx = dx*cos - dz*sin, lz = dx*sin + dz*cos
+          const dx = worldCX - centerX
+          const dz = worldCZ - centerZ
+          const lx = dx * cos - dz * sin
+          const lz = dx * sin + dz * cos
+
+          const ddx = Math.max(localMinX - lx, 0, lx - localMaxX)
+          const ddz = Math.max(localMinZ - lz, 0, lz - localMaxZ)
+          const distFromEdge = Math.sqrt(ddx * ddx + ddz * ddz)
 
           const idx = cz * VERTS_PER_SIDE + cx
 

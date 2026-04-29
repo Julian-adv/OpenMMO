@@ -18,7 +18,7 @@
     ObjectSubTool,
   } from '../../stores/editorStore'
   import { objectManager } from '../../managers/objectManager'
-  import { rotateRect, type FootprintRect } from '../../utils/objectFootprint'
+  import { rotatedRectAabb, type FootprintRect } from '../../utils/objectFootprint'
   import { removeGrassInRect } from '../../utils/grass-data'
   import { worldToTileCoord, tileKey } from '../../managers/terrain-height-types'
   import { playerFloorLevel } from '../../stores/housingStore'
@@ -118,20 +118,39 @@
       const fp = await objectManager.fetchFootprint(p.type)
       if (!fp || fp.rects.length === 0) return
 
-      const targetY = p.y + fp.minLocalY
-      const worldRects: FootprintRect[] = fp.rects.map((r) => {
-        const rotated = rotateRect(r, p.rotation)
-        return {
-          minX: rotated.minX + p.x,
-          maxX: rotated.maxX + p.x,
-          minZ: rotated.minZ + p.z,
-          maxZ: rotated.maxZ + p.z,
-        }
-      })
-      for (const wr of worldRects) {
-        hm.flattenArea(wr.minX, wr.minZ, wr.maxX, wr.maxZ, targetY, FLATTEN_BLEND_RADIUS)
+      const buryDepth = objectManager.getCatalogEntry(p.type)?.flattenBuryDepth ?? 0
+      const targetY = p.y + fp.minLocalY + buryDepth
+      // Flatten using the local rect + placement rotation so footprints rotated
+      // off-axis (e.g. 45°) carve the right oriented region instead of bleeding
+      // into the rotated rect's AABB corners.
+      for (const r of fp.rects) {
+        hm.flattenRotatedRect(
+          p.x,
+          p.z,
+          p.rotation,
+          r.minX,
+          r.maxX,
+          r.minZ,
+          r.maxZ,
+          targetY,
+          FLATTEN_BLEND_RADIUS
+        )
       }
       await hm.saveAllDirty()
+
+      // World AABB of each rotated rect, used for grass-removal tile bucketing.
+      // (removeGrassInRect is AABB-only — at non-90° rotations this over-clears
+      // grass slightly into the AABB corners, which is acceptable.)
+      const rot = (p.rotation * Math.PI) / 180
+      const worldRects: FootprintRect[] = fp.rects.map((r) => {
+        const a = rotatedRectAabb(r.minX, r.maxX, r.minZ, r.maxZ, rot)
+        return {
+          minX: p.x + a.minX,
+          maxX: p.x + a.maxX,
+          minZ: p.z + a.minZ,
+          maxZ: p.z + a.maxZ,
+        }
+      })
 
       const gm = grassManager
       if (!gm) return

@@ -23,6 +23,7 @@ import {
   applyFlatten as doFlatten,
   applyFlattenLine as doFlattenLine,
   flattenArea as doFlattenArea,
+  flattenRotatedRect as doFlattenRotatedRect,
   restoreFromOriginal as doRestore,
 } from './terrain-height-brushes'
 import {
@@ -318,6 +319,36 @@ export class TerrainHeightManager {
       minZ,
       maxX,
       maxZ,
+      targetHeight,
+      blendRadius,
+      (tx, tz) => this.ensureOriginalHeightmap(tx, tz),
+      isProtected
+    )
+    this.finalize(affected)
+    return affected
+  }
+
+  flattenRotatedRect(
+    centerX: number,
+    centerZ: number,
+    rotationDeg: number,
+    localMinX: number,
+    localMaxX: number,
+    localMinZ: number,
+    localMaxZ: number,
+    targetHeight: number,
+    blendRadius: number,
+    isProtected?: (worldX: number, worldZ: number) => boolean
+  ): AffectedTile[] {
+    const affected = doFlattenRotatedRect(
+      this.state,
+      centerX,
+      centerZ,
+      rotationDeg,
+      localMinX,
+      localMaxX,
+      localMinZ,
+      localMaxZ,
       targetHeight,
       blendRadius,
       (tx, tz) => this.ensureOriginalHeightmap(tx, tz),

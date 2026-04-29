@@ -21,5 +21,22 @@
       "deckEndY": 1.0,
       "deckAxis": "z"
     }
+  },
+  {
+    "id": "bridge_wood",
+    "name": "Wood Bridge",
+    "model": "bridge_wood.glb",
+    "kind": "bridge",
+    "gridAlign": true,
+    "flattenBuryDepth": 0.2,
+    "bridge": {
+      "deckMinX": -2.0,
+      "deckMaxX": 2.0,
+      "deckMinZ": -13.0,
+      "deckMaxZ": 13.0,
+      "deckCrownY": 2.08,
+      "deckEndY": 0.4,
+      "deckAxis": "z"
+    }
   }
 ]
