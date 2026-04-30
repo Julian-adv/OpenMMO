@@ -139,8 +139,7 @@ class BridgeManager {
   findOccludingBridgeId(px: number, py: number, pz: number): number | null {
     for (const [id, b] of this.bridges) {
       const m = b.meta
-      const topY = b.py + m.deckCrownY + 1.5
-      const sHigh = topY - py
+      const sHigh = b.py + m.deckCrownY - py
       if (sHigh <= 0) continue
       // Skip if the player is standing on this bridge's deck — the deck below
       // their feet doesn't occlude them from the camera, only the structure
@@ -175,7 +174,17 @@ class BridgeManager {
         sMin = Math.max(sMin, Math.min(s1, s2))
         sMax = Math.min(sMax, Math.max(s1, s2))
       }
-      if (sMin <= sMax) return id
+      if (sMin > sMax) continue
+      // Ray crosses the deck rect in XZ — but it only occludes the player if
+      // it enters from BELOW the deck. A player on the bank just outside the
+      // deck edge still has the ray cross the rect (going up-and-into it),
+      // yet the ray is already above the deck Y at the entry point, so the
+      // bridge isn't actually between camera and player.
+      const lxAtEntry = lx + sMin * lvx
+      const lzAtEntry = lz + sMin * lvz
+      const deckYAtEntry = b.py + this.deckLocalY(b, lxAtEntry, lzAtEntry)
+      if (py + sMin >= deckYAtEntry) continue
+      return id
     }
     return null
   }
