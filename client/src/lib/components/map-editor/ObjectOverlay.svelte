@@ -111,10 +111,16 @@
     loadingModels.add(objectId)
     try {
       const gltf = await loadGLB(`/models/objects/${def.model}`)
+      // Bridges ray-cast against the cached, untransformed scene at runtime
+      // so the player Y tracks the actual deck curve precisely.
+      if (def.kind === 'bridge') {
+        bridgeManager.registerBridgeMesh(objectId, gltf.scene)
+      }
       const model = gltf.scene.clone()
       model.traverse((child) => {
         if (child instanceof THREE.Mesh) {
           child.castShadow = true
+          child.receiveShadow = true
         }
       })
       const box = new THREE.Box3().setFromObject(model)

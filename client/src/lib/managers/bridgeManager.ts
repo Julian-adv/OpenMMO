@@ -1,9 +1,11 @@
+import * as THREE from 'three'
 import type {
   BridgeMeta,
   ObjectDef,
   ObjectPlacement,
 } from '../stores/editorStore'
 import { rotatedRectAabb } from '../utils/objectFootprint'
+import { lerp } from '../terrain/terrain-constants'
 
 interface RegisteredBridge {
   px: number
@@ -25,6 +27,7 @@ interface RegisteredBridge {
   paddedMinZ: number
   paddedMaxZ: number
   meta: BridgeMeta
+  modelId: string
 }
 
 /** Player Y must be within this distance of deckY to count as "on the deck".
@@ -50,8 +53,22 @@ const DEFAULT_RAIL_ENTRY_OUTSIDE_OFFSET = 0.3
  *  the offset itself — tune separately. */
 const FADE_SKIP_OVERSHOOT_CUSHION = 0.3
 
+/** Vertical offset above `deckCrownY` from which the deck-Y probe ray fires.
+ *  Small constant — just needs to clear the crown so the ray starts above
+ *  the highest deck point. */
+const DECK_RAY_HEIGHT_ABOVE_CROWN_M = 5
+
 class BridgeManager {
   private bridges = new Map<number, RegisteredBridge>()
+  private bridgeMeshes = new Map<string, THREE.Object3D>()
+  private raycaster = new THREE.Raycaster()
+  private rayOrigin = new THREE.Vector3()
+  private rayDir = new THREE.Vector3(0, -1, 0)
+
+  registerBridgeMesh(modelId: string, scene: THREE.Object3D) {
+    scene.updateMatrixWorld(true)
+    this.bridgeMeshes.set(modelId, scene)
+  }
 
   syncRegion(placements: ObjectPlacement[], catalog: Map<string, ObjectDef>) {
     for (const p of placements) {
@@ -92,6 +109,7 @@ class BridgeManager {
         paddedMinZ: worldMinZ - pad,
         paddedMaxZ: worldMaxZ + pad,
         meta: m,
+        modelId: p.type,
       })
     }
   }
@@ -111,9 +129,27 @@ class BridgeManager {
 
   private deckLocalY(b: RegisteredBridge, lx: number, lz: number): number {
     const m = b.meta
+    const mesh = this.bridgeMeshes.get(b.modelId)
+    if (mesh) {
+      // Registered scene sits at world origin, so local == world for the ray.
+      // A miss returns Infinity so the caller's tolerance check rejects it
+      // (e.g. point in a deck hole) — falling through to the samples curve
+      // here would lie about the surface Y at that (lx, lz).
+      this.rayOrigin.set(lx, m.deckCrownY + DECK_RAY_HEIGHT_ABOVE_CROWN_M, lz)
+      this.raycaster.set(this.rayOrigin, this.rayDir)
+      const hits = this.raycaster.intersectObject(mesh, true)
+      return hits.length > 0 ? hits[0].point.y : Infinity
+    }
     const along = m.deckAxis === 'z' ? lz : lx
     if (b.halfLen <= 0) return m.deckCrownY
     const t = Math.min(1, Math.abs(along) / b.halfLen)
+    const samples = m.deckYSamples
+    if (samples && samples.length >= 2) {
+      const last = samples.length - 1
+      const f = t * last
+      const i = Math.min(last - 1, Math.floor(f))
+      return lerp(samples[i], samples[i + 1], f - i)
+    }
     return m.deckCrownY - (m.deckCrownY - m.deckEndY) * t * t
   }
 
