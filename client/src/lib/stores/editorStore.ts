@@ -128,6 +128,11 @@ export interface BridgeMeta {
   deckCrownY: number
   deckEndY: number
   deckAxis: 'z' | 'x'
+  /** Distance beyond the deck rect on the long-side direction where the
+   *  parapet/abutment structure ends. Used by movement collision to stop the
+   *  player's body fully clear of the railing on entry from outside. Defaults
+   *  to a small value if unspecified. */
+  railOuterOffset?: number
 }
 
 export interface ObjectDef {

@@ -20,7 +20,8 @@
       "deckMaxZ": 10.13,
       "deckCrownY": 2.5,
       "deckEndY": 1.0,
-      "deckAxis": "z"
+      "deckAxis": "z",
+      "railOuterOffset": 0.3
     }
   },
   {
@@ -37,7 +38,8 @@
       "deckMaxZ": 13.0,
       "deckCrownY": 2.08,
       "deckEndY": 0.4,
-      "deckAxis": "z"
+      "deckAxis": "z",
+      "railOuterOffset": 0.4
     }
   },
   {
@@ -55,7 +57,8 @@
       "deckMaxZ": 14.0,
       "deckCrownY": 2.44,
       "deckEndY": 0.15,
-      "deckAxis": "z"
+      "deckAxis": "z",
+      "railOuterOffset": 1.8
     }
   }
 ]
