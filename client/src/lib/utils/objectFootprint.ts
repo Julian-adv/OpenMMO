@@ -147,4 +147,3 @@ export function rotatedRectAabb(
   }
   return { minX: aMinX, maxX: aMaxX, minZ: aMinZ, maxZ: aMaxZ }
 }
-
