@@ -2,7 +2,7 @@
 
 use super::super::global_map::GlobalMap;
 use super::super::noise::fbm_wrap_x;
-use super::super::vector_features::{nearest_river_segment, RiverSegment};
+use super::super::vector_features::{nearest_river_segment, river_segments_near_tile, RiverSegment};
 use super::constants::{
     DETAIL_FREQUENCY, DETAIL_GAIN, DETAIL_LACUNARITY, DETAIL_MAX_AMPLITUDE, DETAIL_MIN_AMPLITUDE,
     DETAIL_OCTAVES, HEIGHT_BIAS, HEIGHT_STEP, HILLS_AMPLITUDE_M, HILLS_COASTAL_FADE_M,
@@ -159,6 +159,27 @@ fn smooth_island_area(
             heights[j * VERTS_PER_SIDE + i] = blur3x3(&mid, MID, i + 1, j + 1);
         }
     }
+}
+
+/// Sample the baked elevation at a single world point — same pipeline as
+/// `sample_tile_heights` but for one isolated query (e.g. bridge bank
+/// probes). Pulls only the river segments within a small AABB around the
+/// probe so the cost stays O(handful) regardless of world size. Mouth-
+/// island bumps are skipped: bank probes sit past the channel edge, well
+/// outside any island reach.
+pub(super) fn sample_height_single(map: &GlobalMap, ctx: &BakeContext, wx: f32, wz: f32) -> f32 {
+    use super::constants::{
+        RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_FADE_SPAN_M,
+        RIVER_MAX_WIDTH_M, RIVER_SAND_WIDTH_MULT,
+    };
+    let max_half = RIVER_MAX_WIDTH_M * 0.5;
+    let max_taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M;
+    let max_sand_half = RIVER_MAX_WIDTH_M * RIVER_SAND_WIDTH_MULT;
+    let river_margin = (max_half + max_taper).max(max_sand_half + RIVER_FADE_SPAN_M);
+    let segs = river_segments_near_tile(&ctx.rivers_world, wx, wz, wx, wz, river_margin);
+    let world_size = map.config.world_size_m as f32;
+    let inv_mpc = 1.0 / map.config.meters_per_cell();
+    sample_elevation_m(map, ctx, wx, wz, world_size, inv_mpc, &segs, &[])
 }
 
 pub(super) fn encode_heightmap(heights: &[f32]) -> Vec<u8> {

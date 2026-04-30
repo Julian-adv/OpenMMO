@@ -12,6 +12,7 @@
     "model": "stone_bridge.glb",
     "kind": "bridge",
     "gridAlign": true,
+    "minLocalY": 0.0,
     "bridge": {
       "deckMinX": -1.77,
       "deckMaxX": 1.77,
@@ -45,6 +46,7 @@
     "model": "big_stone_bridge.glb",
     "kind": "bridge",
     "gridAlign": true,
+    "minLocalY": -0.85,
     "flattenBuryDepth": 0.9,
     "bridge": {
       "deckMinX": -2.32,

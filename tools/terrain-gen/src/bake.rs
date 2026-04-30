@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use image::{ImageBuffer, Rgb, RgbImage};
 use onlinerpg_shared::worldgen::{
     coasts, continent, elevation, erosion, rivers, roads, settlements,
-    tile_bake::{self, HEIGHT_BIAS, HEIGHT_STEP, TILE_DIM, VERTS_PER_SIDE},
+    tile_bake::{self, bridges, HEIGHT_BIAS, HEIGHT_STEP, TILE_DIM, VERTS_PER_SIDE},
     vegetation, GlobalMap, WorldGenConfig,
 };
 use onlinerpg_terrain::coords;
@@ -137,6 +137,23 @@ pub fn run(
         coast_polys.len()
     );
 
+    // --- Bridge placement: detect road↔river crossings, write region
+    // object JSONs, and pre-bucket per-tile flatten directives so the
+    // parallel bake can apply them inline with heightmap sampling. -------
+    let t = Instant::now();
+    let bridge_catalog = load_bridge_catalog().ok_or_else(|| {
+        anyhow::anyhow!("bridge catalog entries 'stone_bridge' and 'big_stone_bridge' missing")
+    })?;
+    let bridge_placements =
+        bridges::detect_bridges(&map, &river_map, &road_net, &ctx, &bridge_catalog);
+    let bridge_flattens = bridges::group_flattens_by_tile(&bridge_placements, &bridge_catalog);
+    eprintln!(
+        "  Phase 7 bridges:     {:.2}s  ({} bridges across {} tiles)",
+        t.elapsed().as_secs_f32(),
+        bridge_placements.len(),
+        bridge_flattens.len()
+    );
+
     // --- Directory scaffolding. ------------------------------------------
     let region_xs: Vec<i32> = (region_min.0..=region_max.0).collect();
     let region_zs: Vec<i32> = (region_min.1..=region_max.1).collect();
@@ -154,6 +171,8 @@ pub fn run(
         .with_context(|| format!("create {}/rivers", out.display()))?;
     std::fs::create_dir_all(out.join("minimap"))
         .with_context(|| format!("create {}/minimap", out.display()))?;
+    std::fs::create_dir_all(out.join("objects"))
+        .with_context(|| format!("create {}/objects", out.display()))?;
 
     for &rx in &region_xs {
         for &rz in &region_zs {
@@ -202,7 +221,11 @@ pub fn run(
     tile_coords
         .par_iter()
         .try_for_each(|&(tx, tz)| -> Result<()> {
-            let baked = tile_bake::bake_tile(&map, &ctx, tx, tz);
+            let flattens = bridge_flattens
+                .get(&(tx, tz))
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let baked = tile_bake::bake_tile_with_bridges(&map, &ctx, tx, tz, flattens);
             let hpath = coords::heightmap_path(out, tx, tz);
             let spath = coords::splatmap_path(out, tx, tz);
             std::fs::write(&hpath, &baked.heightmap)
@@ -298,6 +321,16 @@ pub fn run(
         "Wrote {} region minimap PNGs in {:.2}s",
         region_count,
         t_mini.elapsed().as_secs_f32()
+    );
+
+    // --- Region object JSONs (bridges grouped by region). ---------------
+    let t_obj = Instant::now();
+    let region_count_written =
+        write_object_regions(out, &bridge_placements, region_min, region_max)?;
+    eprintln!(
+        "Wrote {} region object JSONs in {:.2}s",
+        region_count_written,
+        t_obj.elapsed().as_secs_f32()
     );
 
     // --- Top-level worldgen.json index. ----------------------------------
@@ -456,4 +489,83 @@ fn stamp_tile_minimap(
             img.put_pixel(base_x + cx as u32, base_z + cz as u32, Rgb(rgb));
         }
     }
+}
+
+/// Embedded copy of `client/public/models/objects/catalog.json` so the bake
+/// runs without a runtime config path. Compiled-in rather than read from
+/// disk because the bake binary runs from arbitrary working directories.
+const CATALOG_JSON: &str =
+    include_str!("../../../client/public/models/objects/catalog.json");
+
+fn load_bridge_catalog() -> Option<bridges::BridgeCatalog> {
+    let entries: serde_json::Value = serde_json::from_str(CATALOG_JSON).ok()?;
+    let arr = entries.as_array()?;
+    let parse = |id: &str| -> Option<bridges::BridgeModel> {
+        let entry = arr
+            .iter()
+            .find(|e| e.get("id").and_then(|v| v.as_str()) == Some(id))?;
+        let bridge = entry.get("bridge")?;
+        let opt_f32 = |key: &str| entry.get(key).and_then(|v| v.as_f64()).map(|v| v as f32);
+        Some(bridges::BridgeModel {
+            id: id.to_string(),
+            deck_min_x: bridge.get("deckMinX")?.as_f64()? as f32,
+            deck_max_x: bridge.get("deckMaxX")?.as_f64()? as f32,
+            deck_min_z: bridge.get("deckMinZ")?.as_f64()? as f32,
+            deck_max_z: bridge.get("deckMaxZ")?.as_f64()? as f32,
+            min_local_y: opt_f32("minLocalY").unwrap_or(0.0),
+            flatten_bury_depth: opt_f32("flattenBuryDepth").unwrap_or(0.0),
+        })
+    };
+    Some(bridges::BridgeCatalog {
+        narrow: parse("stone_bridge")?,
+        wide: parse("big_stone_bridge")?,
+    })
+}
+
+/// Group placements by region and write `objects/r±NN_±NN.json`. Skips
+/// regions outside the requested bake range to match the existing per-tile
+/// output discipline. Returns the number of region files written.
+fn write_object_regions(
+    out: &Path,
+    placements: &[bridges::BridgePlacement],
+    region_min: (i32, i32),
+    region_max: (i32, i32),
+) -> Result<usize> {
+    use std::collections::HashMap;
+    let mut by_region: HashMap<(i32, i32), Vec<&bridges::BridgePlacement>> = HashMap::new();
+    for p in placements {
+        let tx = coords::world_to_tile(p.x);
+        let tz = coords::world_to_tile(p.z);
+        let rx = coords::tile_to_region(tx);
+        let rz = coords::tile_to_region(tz);
+        if rx < region_min.0 || rx > region_max.0 || rz < region_min.1 || rz > region_max.1 {
+            continue;
+        }
+        by_region.entry((rx, rz)).or_default().push(p);
+    }
+
+    let mut written = 0usize;
+    for ((rx, rz), region_placements) in &by_region {
+        let placements_json: Vec<serde_json::Value> = region_placements
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                serde_json::json!({
+                    "floorLevel": 0,
+                    "id": (i + 1) as u32,
+                    "rotation": p.rotation,
+                    "type": p.model_id,
+                    "x": p.x,
+                    "y": p.y,
+                    "z": p.z,
+                })
+            })
+            .collect();
+        let json = serde_json::json!({ "placements": placements_json });
+        let path = coords::object_path(out, *rx, *rz);
+        std::fs::write(&path, serde_json::to_string_pretty(&json)?)
+            .with_context(|| format!("write {}", path.display()))?;
+        written += 1;
+    }
+    Ok(written)
 }

@@ -20,6 +20,7 @@
 //! wins over alpine so a vertical marble face on a snowy peak still reads
 //! as bare rock.
 
+pub mod bridges;
 mod constants;
 mod context;
 mod heightmap;
@@ -59,6 +60,20 @@ pub struct BakedTile {
 
 /// Bake one tile at signed tile coordinate (tx, tz).
 pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedTile {
+    bake_tile_with_bridges(map, ctx, tx, tz, &[])
+}
+
+/// Like `bake_tile` but applies a per-tile bridge flatten pass to the
+/// heightmap (the splatmap is unchanged — bridge piers paint through their
+/// model at runtime, not via splat). Caller obtains the per-tile flatten
+/// list from `bridges::group_flattens_by_tile`.
+pub fn bake_tile_with_bridges(
+    map: &GlobalMap,
+    ctx: &BakeContext,
+    tx: i32,
+    tz: i32,
+    bridge_flattens: &[bridges::BridgeFlatten],
+) -> BakedTile {
     let tile_min_x = tx as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
     let tile_min_z = tz as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
     let tile_max_x = tile_min_x + TILE_DIM as f32;
@@ -120,7 +135,10 @@ pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedT
         tile_max_z + ISLAND_BLUR_MARGIN_M,
     );
 
-    let heights = sample_tile_heights(map, ctx, tx, tz, &river_segs, &mouth_islands);
+    let mut heights = sample_tile_heights(map, ctx, tx, tz, &river_segs, &mouth_islands);
+    if !bridge_flattens.is_empty() {
+        bridges::apply_bridge_flatten(&mut heights, tile_min_x, tile_min_z, bridge_flattens);
+    }
     let heightmap = encode_heightmap(&heights);
     let splatmap = bake_splatmap(
         map,
