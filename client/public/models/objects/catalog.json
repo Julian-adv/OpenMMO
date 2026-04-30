@@ -4,7 +4,11 @@
     "name": "Bed",
     "model": "bed.glb",
     "interaction": "sleep",
-    "interactOffset": { "x": 0, "y": 0.78, "z": 0 }
+    "interactOffset": {
+      "x": 0,
+      "y": 0.78,
+      "z": 0
+    }
   },
   {
     "id": "stone_bridge",
@@ -12,16 +16,20 @@
     "model": "stone_bridge.glb",
     "kind": "bridge",
     "gridAlign": true,
-    "minLocalY": 0.0,
+    "minLocalY": 0,
     "bridge": {
       "deckMinX": -1.77,
       "deckMaxX": 1.77,
       "deckMinZ": -10.13,
       "deckMaxZ": 10.13,
       "deckCrownY": 2.5,
-      "deckEndY": 1.0,
+      "deckEndY": 1,
       "deckAxis": "z",
-      "railOuterOffset": 0.3
+      "railOuterOffset": 0.3,
+      "deckYSamples": [
+        2.4951, 2.466, 2.3864, 2.2548, 2.0581, 1.8262, 1.4958, 1.1615, 0.821,
+        0.4108, 0.0006
+      ]
     }
   },
   {
@@ -32,14 +40,18 @@
     "gridAlign": true,
     "flattenBuryDepth": 0.2,
     "bridge": {
-      "deckMinX": -2.0,
-      "deckMaxX": 2.0,
-      "deckMinZ": -13.0,
-      "deckMaxZ": 13.0,
+      "deckMinX": -2,
+      "deckMaxX": 2,
+      "deckMinZ": -13,
+      "deckMaxZ": 13,
       "deckCrownY": 2.08,
       "deckEndY": 0.4,
       "deckAxis": "z",
-      "railOuterOffset": 0.4
+      "railOuterOffset": 0.4,
+      "deckYSamples": [
+        2.0824, 2.0578, 2.0008, 1.8872, 1.7115, 1.4986, 1.2119, 0.9122, 0.5851,
+        0.3941, 0.3941
+      ]
     }
   },
   {
@@ -53,12 +65,16 @@
     "bridge": {
       "deckMinX": -2.32,
       "deckMaxX": 2.32,
-      "deckMinZ": -14.0,
-      "deckMaxZ": 14.0,
+      "deckMinZ": -14,
+      "deckMaxZ": 14,
       "deckCrownY": 2.44,
       "deckEndY": 0.15,
       "deckAxis": "z",
-      "railOuterOffset": 1.8
+      "railOuterOffset": 1.8,
+      "deckYSamples": [
+        2.4378, 2.356, 2.2743, 2.0416, 1.7963, 1.4486, 1.0824, 0.6838, 0.2756,
+        0.15, 0.15
+      ]
     }
   }
 ]
