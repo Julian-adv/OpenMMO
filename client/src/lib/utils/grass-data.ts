@@ -708,7 +708,6 @@ export function regenerateVegMeta(
   const grassMask = buildGrassMask(splatData, D * D)
   const densityGrid = new Uint8Array(D * D)
   const typeGrid = new Uint8Array(D * D)
-  // Seed 0 matches the resplat pipeline (see WorldMapDialog handleResplat).
   scatterGrassCircles(
     D,
     D,
