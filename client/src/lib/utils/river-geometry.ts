@@ -101,6 +101,20 @@ const MIN_MITER_COSINE = 0.25
  */
 const RIVER_BEND_SAFETY = 0.7
 
+/** Minimum interior bend angle that arms the inside-bank cap; gates
+ *  both raw-cap recording and cap propagation through the smoothing
+ *  window. */
+const MIN_BEND_ANGLE_DEG = 12
+const MIN_BEND_DOT = Math.cos(THREE.MathUtils.degToRad(MIN_BEND_ANGLE_DEG))
+
+/** Baseline span (raw vertices) for the bend tangent estimate.
+ *  Single-segment angles measured on the ~2m-spaced Chaikin raw
+ *  polyline overstate the curvature visible after the JS-side 8-pass
+ *  Laplacian on `px/pz`; an ≈8m chord matches the smoothed centerline.
+ *  Cross-tile consistency holds while the seam ghost extension
+ *  (length ≥ BEND_CAP_SMOOTH_RADIUS = 10) covers this baseline. */
+const CAP_ANGLE_BASELINE = 4
+
 /** Half-width (in vertices) of the cubic-taper window that eases the
  *  inside-bank cap from each tight vertex to its neighbors, so the bend
  *  pinch fades out instead of snapping back to full width. */
@@ -529,29 +543,36 @@ export function buildRiverGeometry(
 
     const cRawCaps: number[] = new Array(cLen).fill(Infinity)
     const cRawCrossSigns: number[] = new Array(cLen).fill(0)
+    // Locally-straight vertices never accept a propagated cap from a
+    // real bend within the cubic-taper window — see smoothing-loop gate.
+    const cLocalDots: number[] = new Array(cLen).fill(1)
     for (let i = 1; i < cLen - 1; i++) {
+      const iPrev = Math.max(0, i - CAP_ANGLE_BASELINE)
+      const iNext = Math.min(cLen - 1, i + CAP_ANGLE_BASELINE)
       const [pTx, pTz] = normalizedDelta(
-        combinedX[i - 1],
-        combinedZ[i - 1],
+        combinedX[iPrev],
+        combinedZ[iPrev],
         combinedX[i],
         combinedZ[i]
       )
       const [nTx, nTz] = normalizedDelta(
         combinedX[i],
         combinedZ[i],
-        combinedX[i + 1],
-        combinedZ[i + 1]
+        combinedX[iNext],
+        combinedZ[iNext]
       )
       const dot = pTx * nTx + pTz * nTz
+      cLocalDots[i] = dot
+      if (dot >= MIN_BEND_DOT) continue
       const sinHalf = Math.sqrt(Math.max(0, (1 - dot) * 0.5))
       if (sinHalf <= 1e-3) continue
       const Lprev = Math.hypot(
-        combinedX[i - 1] - combinedX[i],
-        combinedZ[i - 1] - combinedZ[i]
+        combinedX[iPrev] - combinedX[i],
+        combinedZ[iPrev] - combinedZ[i]
       )
       const Lnext = Math.hypot(
-        combinedX[i] - combinedX[i + 1],
-        combinedZ[i] - combinedZ[i + 1]
+        combinedX[i] - combinedX[iNext],
+        combinedZ[i] - combinedZ[iNext]
       )
       const radiusOfCurvature = Math.min(Lprev, Lnext) / (2 * sinHalf)
       cRawCaps[i] = RIVER_BEND_SAFETY * radiusOfCurvature
@@ -568,6 +589,7 @@ export function buildRiverGeometry(
     const smoothedCrossSigns: number[] = new Array(n + 1).fill(0)
     for (let i = 0; i <= n0; i++) {
       const ci = headLen + i
+      if (cLocalDots[ci] >= MIN_BEND_DOT) continue
       let bestCap = Infinity
       let bestSign = cRawCrossSigns[ci]
       for (let k = -BEND_CAP_SMOOTH_RADIUS; k <= BEND_CAP_SMOOTH_RADIUS; k++) {
