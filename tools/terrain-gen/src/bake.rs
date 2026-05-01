@@ -137,6 +137,27 @@ pub fn run(
         coast_polys.len()
     );
 
+    // --- Settlement pads: 50 m circular flatten around each settlement so
+    // houses sit on level ground regardless of the underlying hills. The
+    // splatmap is left untouched (roads still paint through). Built before
+    // bridge detection so bridge bank probes can read the post-pad surface
+    // when the bridge lands inside a town. ------------------------------
+    let t = Instant::now();
+    let settlement_directives = tile_bake::settlement_flatten::build_directives(
+        &settlements_list,
+        &map.config,
+        &map,
+        &ctx,
+    );
+    let settlement_flattens =
+        tile_bake::settlement_flatten::group_flattens_by_tile(&settlement_directives);
+    eprintln!(
+        "  Phase 7 pads:        {:.2}s  ({} settlements across {} tiles)",
+        t.elapsed().as_secs_f32(),
+        settlements_list.len(),
+        settlement_flattens.len()
+    );
+
     // --- Bridge placement: detect road↔river crossings, write region
     // object JSONs, and pre-bucket per-tile flatten directives so the
     // parallel bake can apply them inline with heightmap sampling. -------
@@ -144,31 +165,20 @@ pub fn run(
     let bridge_catalog = load_bridge_catalog().ok_or_else(|| {
         anyhow::anyhow!("bridge catalog entries 'stone_bridge' and 'big_stone_bridge' missing")
     })?;
-    let bridge_placements =
-        bridges::detect_bridges(&map, &river_map, &road_net, &ctx, &bridge_catalog);
+    let bridge_placements = bridges::detect_bridges(
+        &map,
+        &river_map,
+        &road_net,
+        &ctx,
+        &bridge_catalog,
+        &settlement_directives,
+    );
     let bridge_flattens = bridges::group_flattens_by_tile(&bridge_placements, &bridge_catalog);
     eprintln!(
         "  Phase 7 bridges:     {:.2}s  ({} bridges across {} tiles)",
         t.elapsed().as_secs_f32(),
         bridge_placements.len(),
         bridge_flattens.len()
-    );
-
-    // --- Settlement pads: 50 m circular flatten around each settlement so
-    // houses sit on level ground regardless of the underlying hills. The
-    // splatmap is left untouched (roads still paint through). ------------
-    let t = Instant::now();
-    let settlement_flattens = tile_bake::settlement_flatten::group_flattens_by_tile(
-        &settlements_list,
-        &map.config,
-        &map,
-        &ctx,
-    );
-    eprintln!(
-        "  Phase 7 pads:        {:.2}s  ({} settlements across {} tiles)",
-        t.elapsed().as_secs_f32(),
-        settlements_list.len(),
-        settlement_flattens.len()
     );
 
     // --- Directory scaffolding. ------------------------------------------

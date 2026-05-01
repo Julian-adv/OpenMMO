@@ -7,13 +7,18 @@
 //! so `BRIDGE_WIDE_RIBBON_M` is compared against that to pick the wide
 //! (`big_stone_bridge`) vs the narrow (`stone_bridge`) model.
 //!
-//! Bridge Y sits at the midpoint of the two banks: terrain heights are
-//! sampled perpendicular to the river tangent at distance `half_width +
-//! carve_taper + BANK_PROBE_MARGIN_M` on each side, where the carve has
-//! tapered to zero so the sample reads natural ground. Rotation comes from
-//! the road tangent (perpendicular to the river tangent) — converted to a
-//! three.js Y-rotation that aligns the deck's local +Z with the road
-//! direction.
+//! Bridge Y sits at the midpoint of the surface the deck ends meet:
+//! heights are sampled perpendicular to the river tangent at
+//! `model.deck_min_z` and `model.deck_max_z`, then run through
+//! `settlement_flatten::flatten_height_at` so a deck end inside a town
+//! pad reads the flattened pad surface instead of the natural hill. The
+//! river carve stays excluded — the carve runs after the pad in the per-
+//! tile bake and would pull the sample below the level the bridge
+//! visually meets. Sampling at the deck-end distance (rather than further
+//! out past the carve) keeps the flattened deck rect aligned with the
+//! surrounding terrain. Rotation comes from the road tangent (perpendicular
+//! to the river tangent) — converted to a three.js Y-rotation that aligns
+//! the deck's local +Z with the road direction.
 //!
 //! Per-tile heightmap flatten replicates the editor's
 //! `flattenRotatedRect` (see
@@ -29,11 +34,10 @@ use super::super::global_map::GlobalMap;
 use super::super::rivers::RiverMap;
 use super::super::roads::RoadNetwork;
 use super::super::vector_features::{nearest_river_segment, river_segments_near_tile};
-use super::constants::{
-    RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, TILE_DIM, VERTS_PER_SIDE,
-};
+use super::constants::{TILE_DIM, VERTS_PER_SIDE};
 use super::context::BakeContext;
-use super::heightmap::sample_height_single;
+use super::heightmap::sample_natural_height_single;
+use super::settlement_flatten::{flatten_height_at, SettlementFlatten};
 
 /// Width threshold (rendered ribbon meters) above which the wider bridge
 /// model is selected. Matches the user-facing river width, not the baked
@@ -45,11 +49,6 @@ const BRIDGE_WIDE_RIBBON_M: f32 = 14.0;
 /// `RIVER_WIDTH_SCALE` and `RIVER_WIDTH_PAD_M`.
 const RIVER_RIBBON_WIDTH_SCALE: f32 = 1.5;
 const RIVER_RIBBON_WIDTH_PAD_M: f32 = 1.0;
-
-/// Lateral offset past the channel edge at which bank height is sampled.
-/// The carve taper falls off over `RIVER_CARVE_TAPER_*`; sampling one extra
-/// meter outside that band guarantees the read is on natural ground.
-const BANK_PROBE_MARGIN_M: f32 = 1.0;
 
 /// Smoothstep blend distance (m) past the rotated deck rect, matching the
 /// editor's `FLATTEN_BLEND_RADIUS = 2`.
@@ -149,6 +148,7 @@ pub fn detect_bridges(
     road_net: &RoadNetwork,
     ctx: &BakeContext,
     catalog: &BridgeCatalog,
+    settlement_directives: &[SettlementFlatten],
 ) -> Vec<BridgePlacement> {
     let map_config = &map.config;
     let res = map_config.global_res as usize;
@@ -228,21 +228,19 @@ pub fn detect_bridges(
                 baked_width * RIVER_RIBBON_WIDTH_SCALE + RIVER_RIBBON_WIDTH_PAD_M * 2.0;
             let model = catalog.pick(visible_width);
 
-            let half_width = baked_width * 0.5;
-            // Use full carve taper so even the deepest channel's bank
-            // sample is past the depth gradient. Plus a meter for safety.
-            let probe_dist = half_width
-                + RIVER_CARVE_TAPER_MIN_M
-                + RIVER_CARVE_TAPER_EXTRA_M
-                + BANK_PROBE_MARGIN_M;
             let perp_x = -rt_dz;
             let perp_z = rt_dx;
-            let bank_a_x = wx + perp_x * probe_dist;
-            let bank_a_z = wz + perp_z * probe_dist;
-            let bank_b_x = wx - perp_x * probe_dist;
-            let bank_b_z = wz - perp_z * probe_dist;
-            let h_a = sample_height_single(map, ctx, bank_a_x, bank_a_z);
-            let h_b = sample_height_single(map, ctx, bank_b_x, bank_b_z);
+            let probe = |x: f32, z: f32| {
+                flatten_height_at(
+                    x,
+                    z,
+                    sample_natural_height_single(map, ctx, x, z),
+                    settlement_directives,
+                    &ctx.detail_noise,
+                )
+            };
+            let h_a = probe(wx + perp_x * model.deck_max_z, wz + perp_z * model.deck_max_z);
+            let h_b = probe(wx + perp_x * model.deck_min_z, wz + perp_z * model.deck_min_z);
             let bridge_y = (h_a + h_b) * 0.5;
 
             // Deck local +Z aligns with the road tangent (perpendicular to

@@ -204,6 +204,23 @@ pub(super) fn sample_height_single(map: &GlobalMap, ctx: &BakeContext, wx: f32, 
     sample_elevation_m(map, ctx, wx, wz, world_size, inv_mpc, &segs, &[])
 }
 
+/// Like `sample_height_single` but skips the river carve so the read is
+/// the natural ground surface (base + detail + hills). Used for bridge
+/// deck-end probes: those points can fall *inside* the river carve taper,
+/// where the carved bank reads several meters below the natural surface
+/// the bridge actually wants to sit on. Mouth-island bumps stay off for
+/// the same reason as `sample_height_single`.
+pub(super) fn sample_natural_height_single(
+    map: &GlobalMap,
+    ctx: &BakeContext,
+    wx: f32,
+    wz: f32,
+) -> f32 {
+    let world_size = map.config.world_size_m as f32;
+    let inv_mpc = 1.0 / map.config.meters_per_cell();
+    sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc, &[])
+}
+
 pub(super) fn encode_heightmap(heights: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(heights.len() * 2);
     for &h in heights {

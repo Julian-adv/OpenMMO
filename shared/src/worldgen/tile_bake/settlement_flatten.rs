@@ -53,41 +53,104 @@ pub struct SettlementFlatten {
     target_y: f32,
 }
 
-/// Build per-tile flatten directives for every settlement. A settlement
-/// gets cloned into the directive list for every tile its (radius + blend)
-/// reach overlaps; tiles without any settlement reach receive nothing.
-pub fn group_flattens_by_tile(
+/// Build the deduped list of flatten directives — one per settlement, with
+/// `target_y` resolved from the natural-terrain sample at the center. Used
+/// both for per-tile bucketing (`group_flattens_by_tile`) and for queries
+/// at a single world point (`flatten_height_at`, e.g. bridge-bank probes
+/// that need to read the post-flatten pad surface, not the natural hill).
+pub fn build_directives(
     settlements: &[Settlement],
     cfg: &WorldGenConfig,
     map: &GlobalMap,
     ctx: &BakeContext,
-) -> HashMap<(i32, i32), Vec<SettlementFlatten>> {
+) -> Vec<SettlementFlatten> {
     let mpc = cfg.meters_per_cell();
     let half = cfg.world_size_m as f32 * 0.5;
+    settlements
+        .iter()
+        .map(|s| {
+            let cx = (s.cell_x as f32 + 0.5) * mpc - half;
+            let cz = (s.cell_y as f32 + 0.5) * mpc - half;
+            let target_y = sample_height_single(map, ctx, cx, cz);
+            SettlementFlatten {
+                center_x: cx,
+                center_z: cz,
+                target_y,
+            }
+        })
+        .collect()
+}
 
+/// Bucket pre-built directives by tile. A settlement gets cloned into
+/// every tile its (radius + blend) reach overlaps; tiles without any
+/// settlement reach receive nothing.
+pub fn group_flattens_by_tile(
+    directives: &[SettlementFlatten],
+) -> HashMap<(i32, i32), Vec<SettlementFlatten>> {
     let mut out: HashMap<(i32, i32), Vec<SettlementFlatten>> = HashMap::new();
-    for s in settlements {
-        let cx = (s.cell_x as f32 + 0.5) * mpc - half;
-        let cz = (s.cell_y as f32 + 0.5) * mpc - half;
-        let target_y = sample_height_single(map, ctx, cx, cz);
-
-        let directive = SettlementFlatten {
-            center_x: cx,
-            center_z: cz,
-            target_y,
-        };
-
-        let tile_min_x = super::world_to_tile(cx - REACH_M);
-        let tile_max_x = super::world_to_tile(cx + REACH_M);
-        let tile_min_z = super::world_to_tile(cz - REACH_M);
-        let tile_max_z = super::world_to_tile(cz + REACH_M);
+    for d in directives {
+        let tile_min_x = super::world_to_tile(d.center_x - REACH_M);
+        let tile_max_x = super::world_to_tile(d.center_x + REACH_M);
+        let tile_min_z = super::world_to_tile(d.center_z - REACH_M);
+        let tile_max_z = super::world_to_tile(d.center_z + REACH_M);
         for tz in tile_min_z..=tile_max_z {
             for tx in tile_min_x..=tile_max_x {
-                out.entry((tx, tz)).or_default().push(directive.clone());
+                out.entry((tx, tz)).or_default().push(d.clone());
             }
         }
     }
     out
+}
+
+/// Evaluate the post-flatten height at a single world point. `natural` is
+/// the un-flattened terrain at `(wx, wz)`; for points outside every pad the
+/// function returns it unchanged. Used by bridge bank probes so they read
+/// the same pad surface the per-tile bake will write.
+pub(super) fn flatten_height_at(
+    wx: f32,
+    wz: f32,
+    natural: f32,
+    directives: &[SettlementFlatten],
+    detail_noise: &PerlinNoise3D,
+) -> f32 {
+    let mut h = natural;
+    for fl in directives {
+        h = apply_one(h, wx, wz, fl, detail_noise);
+    }
+    h
+}
+
+/// Single-directive per-point pad evaluation. Shared by `flatten_height_at`
+/// (one-off probes) and `apply_settlement_flatten` (per-vertex sweep) so
+/// the inside / blend / outside math has one source of truth — drift here
+/// would desync bridge bank probes from the heightmap they're predicting.
+fn apply_one(
+    h: f32,
+    wx: f32,
+    wz: f32,
+    fl: &SettlementFlatten,
+    detail_noise: &PerlinNoise3D,
+) -> f32 {
+    let dx = wx - fl.center_x;
+    let dz = wz - fl.center_z;
+    let dist_sq = dx * dx + dz * dz;
+    if dist_sq >= OUTER_SQ {
+        return h;
+    }
+    if dist_sq <= INNER_SQ {
+        return fl.target_y;
+    }
+    let n = detail_noise.sample(wx * BOUNDARY_NOISE_FREQ, wz * BOUNDARY_NOISE_FREQ, 0.5);
+    let dist = dist_sq.sqrt();
+    let edge = dist + n * BOUNDARY_NOISE_AMP_M - SETTLEMENT_FLAT_RADIUS_M;
+    if edge <= 0.0 {
+        fl.target_y
+    } else if edge < SETTLEMENT_FLATTEN_BLEND_M {
+        let s = 1.0 - smoothstep(0.0, SETTLEMENT_FLATTEN_BLEND_M, edge);
+        h + (fl.target_y - h) * s
+    } else {
+        h
+    }
 }
 
 /// Apply each flatten directive to the tile's heights buffer. Inside the
@@ -110,31 +173,8 @@ pub(super) fn apply_settlement_flatten(
             for i in i0..=i1 {
                 let wx = tile_origin_x + i as f32;
                 let wz = tile_origin_z + j as f32;
-                let dx = wx - fl.center_x;
-                let dz = wz - fl.center_z;
-                let dist_sq = dx * dx + dz * dz;
                 let idx = j * VERTS_PER_SIDE + i;
-                if dist_sq <= INNER_SQ {
-                    heights[idx] = fl.target_y;
-                    continue;
-                }
-                if dist_sq >= OUTER_SQ {
-                    continue;
-                }
-                // Sampled in world coords so adjacent tiles agree at the seam.
-                let n = detail_noise.sample(
-                    wx * BOUNDARY_NOISE_FREQ,
-                    wz * BOUNDARY_NOISE_FREQ,
-                    0.5,
-                );
-                let dist = dist_sq.sqrt();
-                let edge = dist + n * BOUNDARY_NOISE_AMP_M - SETTLEMENT_FLAT_RADIUS_M;
-                if edge <= 0.0 {
-                    heights[idx] = fl.target_y;
-                } else if edge < SETTLEMENT_FLATTEN_BLEND_M {
-                    let s = 1.0 - smoothstep(0.0, SETTLEMENT_FLATTEN_BLEND_M, edge);
-                    heights[idx] = heights[idx] + (fl.target_y - heights[idx]) * s;
-                }
+                heights[idx] = apply_one(heights[idx], wx, wz, fl, detail_noise);
             }
         }
     }
