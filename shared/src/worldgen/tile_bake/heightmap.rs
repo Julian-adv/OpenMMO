@@ -2,7 +2,9 @@
 
 use super::super::global_map::GlobalMap;
 use super::super::noise::fbm_wrap_x;
-use super::super::vector_features::{nearest_river_segment, river_segments_near_tile, RiverSegment};
+use super::super::vector_features::{
+    nearest_river_segment, river_segments_near_tile, RiverSegment,
+};
 use super::constants::{
     DETAIL_FREQUENCY, DETAIL_GAIN, DETAIL_LACUNARITY, DETAIL_MAX_AMPLITUDE, DETAIL_MIN_AMPLITUDE,
     DETAIL_OCTAVES, HEIGHT_BIAS, HEIGHT_STEP, HILLS_AMPLITUDE_M, HILLS_COASTAL_FADE_M,
@@ -169,8 +171,8 @@ fn smooth_island_area(
 /// outside any island reach.
 pub(super) fn sample_height_single(map: &GlobalMap, ctx: &BakeContext, wx: f32, wz: f32) -> f32 {
     use super::constants::{
-        RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_FADE_SPAN_M,
-        RIVER_MAX_WIDTH_M, RIVER_SAND_WIDTH_MULT,
+        RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_FADE_SPAN_M, RIVER_MAX_WIDTH_M,
+        RIVER_SAND_WIDTH_MULT,
     };
     let max_half = RIVER_MAX_WIDTH_M * 0.5;
     let max_taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M;

@@ -28,9 +28,7 @@ use serde::{Deserialize, Serialize};
 use super::super::global_map::GlobalMap;
 use super::super::rivers::RiverMap;
 use super::super::roads::RoadNetwork;
-use super::super::vector_features::{
-    nearest_river_segment, river_segments_near_tile,
-};
+use super::super::vector_features::{nearest_river_segment, river_segments_near_tile};
 use super::constants::{
     RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, TILE_DIM, VERTS_PER_SIDE,
 };
@@ -168,7 +166,10 @@ pub fn detect_bridges(
     let mpc = map_config.meters_per_cell();
     let half = map_config.world_size_m as f32 * 0.5;
     let cell_to_world = |cx: u32, cy: u32| -> (f32, f32) {
-        ((cx as f32 + 0.5) * mpc - half, (cy as f32 + 0.5) * mpc - half)
+        (
+            (cx as f32 + 0.5) * mpc - half,
+            (cy as f32 + 0.5) * mpc - half,
+        )
     };
 
     // Dedup by crossing cell — multiple roads can converge on the same
@@ -178,21 +179,18 @@ pub fn detect_bridges(
     let mut out = Vec::new();
     for road in &road_net.roads {
         let n = road.points.len();
-        if n < 3 {
+        if n < 2 {
             continue;
         }
-        // Same anchor discipline as `snap_crossings_to_grid`: skip the first
-        // and last vertex so we don't drop a bridge straight onto a settlement.
-        let mut pi = 1usize;
-        while pi + 1 < n {
-            let (rx, ry) = road.points[pi];
+        // Endpoints included: on-river settlements (Phase A river-town
+        // pattern) put their only road↔river contact at the endpoint. Bank
+        // settlements naturally skip via the river_cell miss.
+        for &(rx, ry) in &road.points {
             let cell = (ry as usize) * res + (rx as usize);
             let Some((river_idx, river_pi)) = river_cell[cell] else {
-                pi += 1;
                 continue;
             };
             if !placed_cells.insert(cell) {
-                pi += 1;
                 continue;
             }
 
@@ -223,10 +221,7 @@ pub fn detect_bridges(
                     let s = &local_segs[idx];
                     s.width_a + (s.width_b - s.width_a) * t
                 }
-                None => {
-                    pi += 1;
-                    continue;
-                }
+                None => continue,
             };
 
             let visible_width =
@@ -265,8 +260,6 @@ pub fn detect_bridges(
                 z: wz,
                 rotation: rotation_deg,
             });
-
-            pi += 1;
         }
     }
     out
@@ -398,7 +391,11 @@ mod canonical_tests {
         // The bridge deck has bilateral symmetry across the XZ plane, so
         // rotations that differ by 180° look identical. The canonical form
         // must collapse them onto the same value.
-        let pairs = [(0.25 * PI, 1.25 * PI), (0.5 * PI, 1.5 * PI), (0.75 * PI, 1.75 * PI)];
+        let pairs = [
+            (0.25 * PI, 1.25 * PI),
+            (0.5 * PI, 1.5 * PI),
+            (0.75 * PI, 1.75 * PI),
+        ];
         for (a, b) in pairs {
             let ca = canonical_deck_angle(a);
             let cb = canonical_deck_angle(b);
@@ -410,7 +407,15 @@ mod canonical_tests {
     fn canonical_in_zero_to_pi_range() {
         // Output must always sit in [0, π) so JSON diffs are stable across
         // bakes regardless of upstream tangent sign flips.
-        let samples = [-2.0 * PI, -1.5 * PI, -0.1, 0.0, 0.5 * PI, PI - 1e-6, 2.5 * PI];
+        let samples = [
+            -2.0 * PI,
+            -1.5 * PI,
+            -0.1,
+            0.0,
+            0.5 * PI,
+            PI - 1e-6,
+            2.5 * PI,
+        ];
         for theta in samples {
             let c = canonical_deck_angle(theta);
             assert!(c >= 0.0 && c < PI + 1e-4, "θ={theta} → {c}");
