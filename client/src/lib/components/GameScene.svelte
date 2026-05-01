@@ -144,6 +144,7 @@
   let waterSunColor = $state<THREE.Color | null>(null)
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterMoonBrightness = $state(0)
+  let waterTorchLight = $state<THREE.PointLight | null>(null)
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let waterLayerRef = $state<GameSceneWaterLayer | undefined>(undefined)
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
@@ -511,6 +512,14 @@
 
       // Update unified torch light flickering (single shadow-casting light)
       playersLayer?.updateUnifiedTorchFlicker(deltaTime / 1000)
+      // Capture torch ref once for the river shader. The PointLight mutates
+      // its own position/intensity in place each frame, so a single stable
+      // reference is enough — the shader reads .position / .intensity at
+      // uniform-write time.
+      if (!waterTorchLight) {
+        const tl = playersLayer?.getUnifiedTorchLight()
+        if (tl) waterTorchLight = tl
+      }
 
       // Update monster animations
       const monsterAnimationStart = performance.now()
@@ -1067,6 +1076,7 @@
   sunColor={waterSunColor}
   cameraDirection={waterCamDir}
   moonBrightness={waterMoonBrightness}
+  torchLight={waterTorchLight}
 />
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>

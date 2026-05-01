@@ -17,6 +17,7 @@ import {
   abs,
   max,
   step,
+  length,
   reflect,
   varying,
   normalize,
@@ -57,6 +58,10 @@ export interface RiverMaterialUniforms {
   uSunColor: { value: THREE.Color }
   uCameraDirection: { value: THREE.Vector3 }
   uMoonBrightness: { value: number }
+  uTorchPos: { value: THREE.Vector3 }
+  uTorchColor: { value: THREE.Color }
+  uTorchIntensity: { value: number }
+  uTorchDistance: { value: number }
   uReflectionMap: { value: THREE.Texture }
   uRefractionMap: { value: THREE.Texture }
   uNormalMap: { value: THREE.Texture }
@@ -98,6 +103,13 @@ export function createRiverMaterial(
   const uSunColor = uniform(new THREE.Color(1.0, 0.95, 0.8))
   const uCameraDirection = uniform(new THREE.Vector3(0, -1, 0))
   const uMoonBrightness = uniform(0)
+  // Torch point light (mirrors GameScenePlayersLayer's unifiedTorchLight).
+  // Intensity is `0` when no active torch in scene, so the contribution
+  // naturally vanishes.
+  const uTorchPos = uniform(new THREE.Vector3(0, -1000, 0))
+  const uTorchColor = uniform(new THREE.Color(1.0, 0.8, 0.4))
+  const uTorchIntensity = uniform(0)
+  const uTorchDistance = uniform(50)
   // World-space minimum corner of the tile this material renders. The river
   // strip lives in world coords; the heightmap covers a single tile [tileMin,
   // tileMin + 64m]. Subtracting this gives the local UV used to sample bed
@@ -197,10 +209,11 @@ export function createRiverMaterial(
     const colorFade = float(1).sub(oneMinus.mul(oneMinus))
     waterColor.assign(mix(waterColor, estuaryColor, colorFade))
 
-    // Night darkening (same shape as ocean)
+    // Night darkening. Floor (0.3) keeps the surface visibly tinted at
+    // night so a torch-lit bed doesn't bleed through alpha unmasked.
     const waterNightFactor = smoothstep(float(-0.05), float(0.1), sunY)
-      .mul(0.85)
-      .add(0.15)
+      .mul(0.7)
+      .add(0.3)
     waterColor.mulAssign(waterNightFactor)
 
     // ── Channel-aligned normal map ──
@@ -263,6 +276,30 @@ export function createRiverMaterial(
     // both refraction and reflection screen-space sampling below.
     const screenUVFlipped = vec2(screenUV.x, float(1.0).sub(screenUV.y))
 
+    // ── Torch proximity ──
+    // Computed up-front because two consumers need it: refraction
+    // damping (below) and surface lighting (further down). The
+    // PointLight that drives `uTorchPos` also lights the river bed in
+    // the world, so the captured refraction texture is much brighter
+    // near the torch — without damping refraction near the torch the
+    // lit bed bleeds through and reads as transparent water.
+    const torchVec = uTorchPos.sub(vWorldPos)
+    const torchLen = length(torchVec)
+    const torchAtten = pow(
+      max(float(0), float(1).sub(torchLen.div(uTorchDistance))),
+      float(2)
+    )
+    const torchDir = torchVec.div(max(torchLen, float(0.001)))
+    // 0..1 proximity factor — peaks under the torch, falls off with the
+    // same quadratic curve the lighting uses. `uTorchIntensity` is ~50
+    // when the torch is on, ~0 otherwise, so the multiply doubles as an
+    // on/off gate.
+    const torchProximity = clamp(
+      torchAtten.mul(uTorchIntensity).mul(0.04),
+      0.0,
+      1.0
+    ).toVar()
+
     // ── Refraction: show river bottom through shallow bank water ──
     // "Shallow" is proxied by `bankFactor` (no real depth). Two tricks to
     // keep the refraction readable as *water over bed* rather than as
@@ -293,6 +330,11 @@ export function createRiverMaterial(
     const refrShallow = smoothstep(float(0.15), float(0.6), bankFactor).toVar()
     const refrMouthFade = float(1).sub(vMouthFactor)
     const refrMix = refrShallow.mul(refrMouthFade).mul(0.9).toVar()
+    // Dampen refraction inside the torch radius — the torch lights the bed
+    // brightly, and full-strength refraction there reads as transparent
+    // water instead of a torch-lit surface. 0.7 max suppression leaves
+    // enough wobble to still register as water over a bed.
+    refrMix.mulAssign(float(1).sub(torchProximity.mul(0.9)))
     waterColor.assign(mix(waterColor, tintedRefr, refrMix))
 
     // ── Sky + planar reflection (same shape as ocean, condensed) ──
@@ -460,6 +502,48 @@ export function createRiverMaterial(
       .add(0.25)
     color.mulAssign(nightDarken)
 
+    // ── Moonlight ──
+    // Use `-uSunDirection` as moon direction (moon arcs opposite sun).
+    // Pure Lambert: troughs stay dark, only crests pick up moonlight, so
+    // ripples gain visibility without lifting overall body brightness.
+    const moonDir = normalize(vec3(uSunDirection).negate())
+    const moonNdotL = max(dot(rippleN, moonDir), 0.0)
+    const moonAmbient = vec3(0.05, 0.07, 0.12)
+      .mul(uMoonBrightness)
+      .mul(moonNdotL)
+    color.addAssign(moonAmbient)
+
+    const moonHalfDir = normalize(moonDir.add(viewDir))
+    const moonNdotH = max(dot(specNormal, moonHalfDir), 0.0)
+    const moonSpec = vec3(0.55, 0.65, 0.85)
+      .mul(pow(moonNdotH, float(128)))
+      .mul(uMoonBrightness)
+      .mul(0.1)
+    color.addAssign(moonSpec.mul(depthFactor).mul(estuaryCalm))
+
+    // ── Torch point light ──
+    // `torchAtten` / `torchDir` reused from the refraction-damping pass
+    // above so refraction and surface lighting share one falloff curve.
+    const torchNdotL = max(dot(rippleN, torchDir), 0.0)
+    const torchDiffuse = uTorchColor.rgb
+      .mul(torchNdotL)
+      .mul(torchAtten)
+      .mul(uTorchIntensity)
+      .mul(0.0015)
+    // Specular uses a torch-specific normal with stronger ripple weight
+    // (0.6 vs sun's 0.3) and a wider lobe (exp 24 vs 128) so wave facets
+    // break the highlight into ripple relief instead of a smooth disk.
+    const torchSpecNormal = normalize(mix(vec3(0, 1, 0), rippleN, 0.6))
+    const torchHalfDir = normalize(torchDir.add(viewDir))
+    const torchNdotH = max(dot(torchSpecNormal, torchHalfDir), 0.0)
+    const torchSpec = uTorchColor.rgb
+      .mul(pow(torchNdotH, float(24)))
+      .mul(torchAtten)
+      .mul(uTorchIntensity)
+      .mul(0.025)
+    color.addAssign(torchDiffuse)
+    color.addAssign(torchSpec.mul(depthFactor).mul(estuaryCalm))
+
     // ── Alpha ──
     // V is flipped vs world Z because `THREE.PlaneGeometry` defaults to
     // UV.v increasing with local +Y and `rotateX(-π/2)` maps +Y → −Z, so
@@ -527,7 +611,13 @@ export function createRiverMaterial(
       float(0.005),
       float(0.95),
       smoothstep(float(0.05), float(RIVER_DEPTH_OFFSET_M), depth)
-    )
+    ).toVar()
+    // Torch opacity floor. Shallow areas have depthAlpha ~ 0.005, so the
+    // torch-lit bed bleeds straight through alpha-blend regardless of
+    // refraction damping. `max` lifts only the floor (peaks at 0.45) so
+    // deep water keeps its 0.95 and there's no opaque disk silhouette
+    // around the torch.
+    depthAlpha.assign(max(depthAlpha, torchProximity.mul(0.45)))
 
     // Lateral strip-edge fade. The wedge geometry tapers to width=0 at
     // its tip so the distal end disappears on its own; what remains is
@@ -571,6 +661,10 @@ export function createRiverMaterial(
       uSunColor,
       uCameraDirection,
       uMoonBrightness,
+      uTorchPos,
+      uTorchColor,
+      uTorchIntensity,
+      uTorchDistance,
       uReflectionMap: reflectionTex,
       uRefractionMap: refractionTex,
       uNormalMap: normalMapTex,

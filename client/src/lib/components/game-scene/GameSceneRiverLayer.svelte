@@ -36,6 +36,7 @@
     sunColor?: THREE.Color | null
     cameraDirection?: THREE.Vector3 | null
     moonBrightness?: number
+    torchLight?: THREE.PointLight | null
   }
 
   let {
@@ -50,6 +51,7 @@
     sunColor = null,
     cameraDirection = null,
     moonBrightness = 0,
+    torchLight = null,
   }: Props = $props()
 
   const riverGroup = new THREE.Group()
@@ -203,6 +205,14 @@
       if (sunColor) u.uSunColor.value.copy(sunColor)
       if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)
       u.uMoonBrightness.value = moonBrightness
+      if (torchLight) {
+        u.uTorchPos.value.copy(torchLight.position)
+        u.uTorchColor.value.copy(torchLight.color)
+        u.uTorchIntensity.value = torchLight.intensity
+        u.uTorchDistance.value = torchLight.distance
+      } else {
+        u.uTorchIntensity.value = 0
+      }
     }
   }
 

@@ -156,6 +156,10 @@
       unifiedTorchLight.intensity = 0
     }
   }
+
+  export function getUnifiedTorchLight(): THREE.PointLight | undefined {
+    return unifiedTorchLight
+  }
 </script>
 
 {#if camera && terrainMeshes.some((mesh) => mesh !== undefined)}
