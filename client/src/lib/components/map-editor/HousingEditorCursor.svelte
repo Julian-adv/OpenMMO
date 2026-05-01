@@ -727,9 +727,6 @@
 
     const pos = { ...previewPos }
     const { sx, sz } = getRotatedSize()
-    const centerX = pos.x + sx / 2
-    const centerZ = pos.z + sz / 2
-    const targetHeight = heightManager.getHeightAtWorldPosition(centerX, centerZ)
 
     const newRoom = buildRoomData(sx, sz)
     const shouldFlattenTerrain = currentFloorLevel === 0 && currentRoomType !== 'stairwell'
@@ -750,6 +747,24 @@
       )
     } else {
       targetHouse = housingManager.findAdjacentHouse(pos.x, pos.z, sx, sz)
+    }
+
+    // Attached rooms inherit the house's floor height so the floors line up;
+    // a new house averages terrain across the footprint to balance cut/fill.
+    let targetHeight: number
+    if (targetHouse) {
+      targetHeight = targetHouse.origin.y
+    } else {
+      let sum = 0
+      for (let j = 0; j < sz; j++) {
+        for (let i = 0; i < sx; i++) {
+          sum += heightManager.getHeightAtWorldPosition(
+            pos.x + i + 0.5,
+            pos.z + j + 0.5
+          )
+        }
+      }
+      targetHeight = sum / (sx * sz)
     }
 
     let saved: HouseData | null
