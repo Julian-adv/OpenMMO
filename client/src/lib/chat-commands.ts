@@ -7,6 +7,7 @@ import {
   editorSplatManager,
   editorGrassDataManager,
 } from './stores/editorStore'
+import { riverWireframeVisible } from './stores/debugStore'
 import { computeGrassPlacement, regenerateVegMeta } from './utils/grass-data'
 
 type CommandHandler = (args: string) => void
@@ -25,6 +26,15 @@ const commands: Record<string, CommandHandler> = {
     } else {
       addChatMessage({ text: 'Position: unknown', sender: 'system' })
     }
+  },
+
+  '/wireframe': () => {
+    const next = !get(riverWireframeVisible)
+    riverWireframeVisible.set(next)
+    addChatMessage({
+      text: `River wireframe: ${next ? 'on' : 'off'}`,
+      sender: 'system',
+    })
   },
 
   '/regrow': () => {
@@ -94,6 +104,8 @@ const commands: Record<string, CommandHandler> = {
     )
   },
 }
+
+export const commandNames = Object.keys(commands).sort()
 
 export function handleCommand(input: string): boolean {
   const spaceIndex = input.indexOf(' ')

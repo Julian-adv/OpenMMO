@@ -1,7 +1,7 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
-  import { handleCommand } from '../chat-commands'
+  import { handleCommand, commandNames } from '../chat-commands'
 
   type Tab = 'say' | 'combat'
 
@@ -33,7 +33,27 @@
     }
   }
 
+  let tabCycle: { matches: string[]; index: number } | null = null
+
+  function completeCommand() {
+    if (!messageInput.startsWith('/') || messageInput.includes(' ')) return
+    if (tabCycle && tabCycle.matches[tabCycle.index] === messageInput) {
+      tabCycle.index = (tabCycle.index + 1) % tabCycle.matches.length
+      messageInput = tabCycle.matches[tabCycle.index]
+      return
+    }
+    const matches = commandNames.filter((n) => n.startsWith(messageInput))
+    if (matches.length === 0) return
+    tabCycle = { matches, index: 0 }
+    messageInput = matches[0]
+  }
+
   function handleKeyDown(event: KeyboardEvent) {
+    if (event.key === 'Tab') {
+      event.preventDefault()
+      completeCommand()
+      return
+    }
     if (event.key === 'Enter') {
       event.preventDefault()
       sendMessage()

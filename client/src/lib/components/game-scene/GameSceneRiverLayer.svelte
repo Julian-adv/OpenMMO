@@ -17,6 +17,7 @@
     createRiverMaterial,
     type RiverMaterialResult,
   } from '../../shaders/river-material'
+  import { riverWireframeVisible } from '../../stores/debugStore'
 
   /** Depth of the cross-tile ghost extension provided per shared seam.
    *  Should be ≥ BEND_CAP_SMOOTH_RADIUS in river-geometry (=10) so the
@@ -57,9 +58,6 @@
   const riverGroup = new THREE.Group()
   riverGroup.name = 'rivers'
 
-  // Debug: overlay the ribbon's triangle edges so the tessellation is
-  // visible. Flip to false (or wire to a UI toggle) to disable.
-  const SHOW_WIREFRAME = false
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: 0xff3366,
     transparent: true,
@@ -215,6 +213,39 @@
       }
     }
   }
+
+  function addWireframeForTile(id: string, geometry: THREE.BufferGeometry) {
+    if (wireframeMeshes.has(id)) return
+    const wf = new THREE.LineSegments(
+      new THREE.WireframeGeometry(geometry),
+      wireframeMaterial
+    )
+    wf.renderOrder = 10
+    wf.castShadow = false
+    wf.receiveShadow = false
+    riverGroup.add(wf)
+    wireframeMeshes.set(id, wf)
+  }
+
+  function removeWireframeForTile(id: string) {
+    const wf = wireframeMeshes.get(id)
+    if (!wf) return
+    riverGroup.remove(wf)
+    wf.geometry.dispose()
+    wireframeMeshes.delete(id)
+  }
+
+  $effect(() => {
+    if ($riverWireframeVisible) {
+      for (const [id, mesh] of tileMeshes) {
+        if (mesh) addWireframeForTile(id, mesh.geometry)
+      }
+    } else {
+      for (const id of [...wireframeMeshes.keys()]) {
+        removeWireframeForTile(id)
+      }
+    }
+  })
 
   function disposeTile(id: string) {
     const mesh = tileMeshes.get(id)
@@ -477,16 +508,8 @@
     riverGroup.add(mesh)
     tileMeshes.set(id, mesh)
 
-    if (SHOW_WIREFRAME) {
-      const wf = new THREE.LineSegments(
-        new THREE.WireframeGeometry(geometry),
-        wireframeMaterial
-      )
-      wf.renderOrder = 10
-      wf.castShadow = false
-      wf.receiveShadow = false
-      riverGroup.add(wf)
-      wireframeMeshes.set(id, wf)
+    if ($riverWireframeVisible) {
+      addWireframeForTile(id, geometry)
     }
   }
 
