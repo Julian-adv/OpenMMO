@@ -347,10 +347,10 @@ pub fn group_flattens_by_tile(
         let world_min_z = p.z + a_min_z - blend;
         let world_max_z = p.z + a_max_z + blend;
 
-        let tile_min_x = world_to_tile(world_min_x);
-        let tile_max_x = world_to_tile(world_max_x);
-        let tile_min_z = world_to_tile(world_min_z);
-        let tile_max_z = world_to_tile(world_max_z);
+        let tile_min_x = super::world_to_tile(world_min_x);
+        let tile_max_x = super::world_to_tile(world_max_x);
+        let tile_min_z = super::world_to_tile(world_min_z);
+        let tile_max_z = super::world_to_tile(world_max_z);
 
         let target_y = p.y + model.flatten_target_offset();
         let directive = BridgeFlatten {
@@ -374,11 +374,6 @@ pub fn group_flattens_by_tile(
         }
     }
     out
-}
-
-#[inline]
-fn world_to_tile(wx: f32) -> i32 {
-    ((wx + TILE_DIM as f32 * 0.5) / TILE_DIM as f32).floor() as i32
 }
 
 #[cfg(test)]

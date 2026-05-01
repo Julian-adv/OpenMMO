@@ -154,6 +154,23 @@ pub fn run(
         bridge_flattens.len()
     );
 
+    // --- Settlement pads: 50 m circular flatten around each settlement so
+    // houses sit on level ground regardless of the underlying hills. The
+    // splatmap is left untouched (roads still paint through). ------------
+    let t = Instant::now();
+    let settlement_flattens = tile_bake::settlement_flatten::group_flattens_by_tile(
+        &settlements_list,
+        &map.config,
+        &map,
+        &ctx,
+    );
+    eprintln!(
+        "  Phase 7 pads:        {:.2}s  ({} settlements across {} tiles)",
+        t.elapsed().as_secs_f32(),
+        settlements_list.len(),
+        settlement_flattens.len()
+    );
+
     // --- Directory scaffolding. ------------------------------------------
     let region_xs: Vec<i32> = (region_min.0..=region_max.0).collect();
     let region_zs: Vec<i32> = (region_min.1..=region_max.1).collect();
@@ -225,7 +242,11 @@ pub fn run(
                 .get(&(tx, tz))
                 .map(Vec::as_slice)
                 .unwrap_or(&[]);
-            let baked = tile_bake::bake_tile_with_bridges(&map, &ctx, tx, tz, flattens);
+            let pads = settlement_flattens
+                .get(&(tx, tz))
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let baked = tile_bake::bake_tile_with_bridges(&map, &ctx, tx, tz, flattens, pads);
             let hpath = coords::heightmap_path(out, tx, tz);
             let spath = coords::splatmap_path(out, tx, tz);
             std::fs::write(&hpath, &baked.heightmap)

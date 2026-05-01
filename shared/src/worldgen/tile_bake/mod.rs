@@ -25,6 +25,7 @@ mod constants;
 mod context;
 mod heightmap;
 mod rivers_bin;
+pub mod settlement_flatten;
 mod splatmap;
 
 use serde::{Deserialize, Serialize};
@@ -47,7 +48,7 @@ use constants::{
     COAST_FADE_SPAN_M, COAST_SAND_M, RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M,
     RIVER_FADE_SPAN_M, RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M,
 };
-use heightmap::{encode_heightmap, sample_tile_heights};
+use heightmap::{apply_river_carve_to_tile, encode_heightmap, sample_tile_heights_no_carve};
 use splatmap::bake_splatmap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,19 +61,22 @@ pub struct BakedTile {
 
 /// Bake one tile at signed tile coordinate (tx, tz).
 pub fn bake_tile(map: &GlobalMap, ctx: &BakeContext, tx: i32, tz: i32) -> BakedTile {
-    bake_tile_with_bridges(map, ctx, tx, tz, &[])
+    bake_tile_with_bridges(map, ctx, tx, tz, &[], &[])
 }
 
-/// Like `bake_tile` but applies a per-tile bridge flatten pass to the
-/// heightmap (the splatmap is unchanged — bridge piers paint through their
-/// model at runtime, not via splat). Caller obtains the per-tile flatten
-/// list from `bridges::group_flattens_by_tile`.
+/// Like `bake_tile` but applies per-tile heightmap flatten passes — bridge
+/// decks (rotated rect) and settlements (circular pads). The splatmap
+/// is unchanged: bridge piers and house pads paint through their models
+/// at runtime, not via splat. Caller obtains the per-tile lists from
+/// `bridges::group_flattens_by_tile` and
+/// `settlement_flatten::group_flattens_by_tile`.
 pub fn bake_tile_with_bridges(
     map: &GlobalMap,
     ctx: &BakeContext,
     tx: i32,
     tz: i32,
     bridge_flattens: &[bridges::BridgeFlatten],
+    settlement_flattens: &[settlement_flatten::SettlementFlatten],
 ) -> BakedTile {
     let tile_min_x = tx as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
     let tile_min_z = tz as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
@@ -135,7 +139,21 @@ pub fn bake_tile_with_bridges(
         tile_max_z + ISLAND_BLUR_MARGIN_M,
     );
 
-    let mut heights = sample_tile_heights(map, ctx, tx, tz, &river_segs, &mouth_islands);
+    // Order: natural surface → settlement pad → river carve → bridge deck.
+    // Carving after the pad lets rivers cut a real channel through the
+    // flattened settlement, and bridges run last so the deck rect fills the
+    // channel back up at the crossing.
+    let mut heights = sample_tile_heights_no_carve(map, ctx, tx, tz, &mouth_islands);
+    if !settlement_flattens.is_empty() {
+        settlement_flatten::apply_settlement_flatten(
+            &mut heights,
+            tile_min_x,
+            tile_min_z,
+            settlement_flattens,
+            &ctx.detail_noise,
+        );
+    }
+    apply_river_carve_to_tile(&mut heights, map, tile_min_x, tile_min_z, &river_segs);
     if !bridge_flattens.is_empty() {
         bridges::apply_bridge_flatten(&mut heights, tile_min_x, tile_min_z, bridge_flattens);
     }
@@ -154,6 +172,15 @@ pub fn bake_tile_with_bridges(
         heightmap,
         splatmap,
     }
+}
+
+/// World-space X (or Z) → signed tile index. The +TILE_DIM/2 shift puts the
+/// world origin at a tile center (matching `tile_origin_x = tx*TILE_DIM -
+/// TILE_DIM/2`), so a world coord falls in tile `tx` when `tx*TILE_DIM -
+/// TILE_DIM/2 ≤ wx < (tx+1)*TILE_DIM - TILE_DIM/2`.
+#[inline]
+pub(super) fn world_to_tile(wx: f32) -> i32 {
+    ((wx + TILE_DIM as f32 * 0.5) / TILE_DIM as f32).floor() as i32
 }
 
 /// AABB-cull `MouthIsland`s against a tile's world-space bounds so the
