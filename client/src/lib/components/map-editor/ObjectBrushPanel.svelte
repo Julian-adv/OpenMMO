@@ -155,6 +155,7 @@
       const gm = grassManager
       if (!gm) return
 
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity
       const tileBuckets = new Map<string, { tx: number; tz: number; rects: FootprintRect[] }>()
       for (const wr of worldRects) {
         const txMin = worldToTileCoord(wr.minX)
