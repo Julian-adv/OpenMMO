@@ -1,29 +1,10 @@
 <script lang="ts">
-  import { hoveredCell, editorTool, showGenerateDialog, currentEditorRegion } from '../../stores/editorStore'
-  import { get } from 'svelte/store'
-  import { playerDebugInfo } from '../../stores/debugStore'
-  import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
-  import { tileToRegion } from '../../terrain/terrain-constants'
+  import { hoveredCell, editorTool, currentEditorRegion } from '../../stores/editorStore'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
   import ZoneBrushPanel from './ZoneBrushPanel.svelte'
   import NpcBrushPanel from './NpcBrushPanel.svelte'
   import ObjectBrushPanel from './ObjectBrushPanel.svelte'
-
-  function getPlayerRegion(): { rx: number; rz: number } | null {
-    const info = get(playerDebugInfo)
-    if (!info) return null
-    const tileX = Math.round(info.position.x / TERRAIN_TILE_SIZE)
-    const tileZ = Math.round(info.position.z / TERRAIN_TILE_SIZE)
-    return { rx: tileToRegion(tileX), rz: tileToRegion(tileZ) }
-  }
-
-  function openGenerateDialog() {
-    const region = getPlayerRegion()
-    if (region) {
-      showGenerateDialog.set({ rx: region.rx, rz: region.rz })
-    }
-  }
 </script>
 
 <div class="editor-mode-badge">
@@ -67,10 +48,6 @@
       class:active={$editorTool === 'object'}
       onclick={() => editorTool.set('object')}
     >Object</button>
-    <button
-      class="tool-tab generate-btn"
-      onclick={openGenerateDialog}
-    >Generate</button>
   </div>
   {#if $editorTool === 'height'}
     <HeightBrushPanel />
@@ -154,11 +131,5 @@
   .tool-tab.active {
     background: rgba(226, 185, 59, 0.25);
     color: #e2b93b;
-  }
-
-  .tool-tab.generate-btn {
-    margin-left: 4px;
-    border-left: 1px solid rgba(255, 255, 255, 0.15);
-    padding-left: 14px;
   }
 </style>

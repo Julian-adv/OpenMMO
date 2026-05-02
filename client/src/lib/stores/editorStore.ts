@@ -68,16 +68,6 @@ export const currentEditorRegion = writable<{
   rz: number
 } | null>(null)
 
-// Procedural terrain generation dialog (stores the target region snapshot, null = closed)
-export const showGenerateDialog = writable<{ rx: number; rz: number } | null>(
-  null
-)
-
-// Region minimap generation dialog (stores the target region snapshot, null = closed)
-export const showMinimapDialog = writable<{ rx: number; rz: number } | null>(
-  null
-)
-
 // Bumped after minimap upload to bust cached img src
 export const minimapVersion = writable<number>(0)
 

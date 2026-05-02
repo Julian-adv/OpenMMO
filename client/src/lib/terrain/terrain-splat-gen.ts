@@ -1,30 +1,13 @@
 import { createRng } from '../utils/simplex-noise'
-import {
-  REGION_CELLS,
-  SNOW_FULL_HEIGHT,
-  SNOW_START_HEIGHT,
-  smoothstep,
-  type TerrainGenConfig,
-} from './terrain-constants'
+import { smoothstep } from './terrain-constants'
 import {
   BYTES_PER_CELL,
   GRASS_DENSITY_LEVELS,
-  VEGMETA_OFFSET,
-  packIndices,
   unpackPrimary,
-  writeGrass,
 } from './splat-encoding'
 
-/**
- * Palette slot assignments used by procedural generation. Must match the
- * global palette defined in splatLayerLoader.ts (GLOBAL_PALETTE).
- */
-export const GEN_SLOT = {
-  GRASS: 0,
-  SAND: 1,
-  LATERITE: 2,
-  SNOW: 3,
-} as const
+/** Palette slot for grass cells; matches GLOBAL_PALETTE in splatLayerLoader.ts. */
+const GRASS_SLOT = 0
 
 /** Grass is placed only where the cell is ≥90% grass (mirrors legacy R>=230 rule). */
 export const GRASS_BLEND_MAX = 26
@@ -119,133 +102,6 @@ export function scatterGrassCircles(
   }
 }
 
-export function computeCoastDistance(heightField: Float32Array): Float32Array {
-  const N = REGION_CELLS
-  const total = N * N
-  const dist = new Float32Array(total)
-  dist.fill(Infinity)
-
-  const queue = new Uint32Array(total)
-  const inQueue = new Uint8Array(total)
-  let head = 0
-  let tail = 0
-
-  for (let i = 0; i < total; i++) {
-    if (heightField[i] < 0) {
-      dist[i] = 0
-      queue[tail++] = i
-      inQueue[i] = 1
-    }
-  }
-
-  while (head < tail) {
-    const cur = queue[head++]
-    inQueue[cur] = 0
-    const cx = cur % N
-    const cz = Math.floor(cur / N)
-    const curDist = dist[cur]
-
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dz === 0) continue
-        const nx = cx + dx
-        const nz = cz + dz
-        if (nx < 0 || nx >= N || nz < 0 || nz >= N) continue
-        const ni = nz * N + nx
-        const newDist = curDist + (dx !== 0 && dz !== 0 ? 1.414 : 1)
-        if (newDist < dist[ni]) {
-          dist[ni] = newDist
-          if (!inQueue[ni]) {
-            queue[tail++] = ni
-            inQueue[ni] = 1
-          }
-        }
-      }
-    }
-  }
-
-  return dist
-}
-
-export function generateSplatMap(
-  heightField: Float32Array,
-  coastDist: Float32Array,
-  config: TerrainGenConfig,
-  regionX: number,
-  regionZ: number
-): Uint8Array {
-  const N = REGION_CELLS
-  const splatField = new Uint8Array(N * N * BYTES_PER_CELL)
-  const SAND_BAND = 12
-  const SAND_HEIGHT_MAX = 0.9
-
-  for (let cz = 0; cz < N; cz++) {
-    for (let cx = 0; cx < N; cx++) {
-      const i = cz * N + cx
-      const pi = i * BYTES_PER_CELL
-      const h = heightField[i]
-      const dist = coastDist[i]
-
-      const hL = cx > 0 ? heightField[i - 1] : h
-      const hR = cx < N - 1 ? heightField[i + 1] : h
-      const hU = cz > 0 ? heightField[i - N] : h
-      const hD = cz < N - 1 ? heightField[i + N] : h
-      const slope = Math.sqrt((hR - hL) * (hR - hL) + (hD - hU) * (hD - hU)) / 2
-
-      let primary: number = GEN_SLOT.GRASS
-      let secondary: number = GEN_SLOT.GRASS
-      let blend = 0
-
-      if (h < 0) {
-        primary = GEN_SLOT.SAND
-        secondary = GEN_SLOT.SAND
-      } else if (dist < SAND_BAND && h < SAND_HEIGHT_MAX) {
-        const distFactor = 1.0 - dist / SAND_BAND
-        const heightFactor = 1.0 - smoothstep(0, SAND_HEIGHT_MAX, h)
-        const sandFactor = distFactor * heightFactor
-        secondary = GEN_SLOT.SAND
-        blend = Math.round(sandFactor * 255)
-      } else if (slope > 1.5) {
-        secondary = GEN_SLOT.LATERITE
-        blend = Math.round(smoothstep(1.5, 3.0, slope) * 255)
-      } else if (h > SNOW_START_HEIGHT) {
-        secondary = GEN_SLOT.SNOW
-        blend = Math.round(
-          smoothstep(SNOW_START_HEIGHT, SNOW_FULL_HEIGHT, h) * 255
-        )
-      }
-
-      splatField[pi + 0] = packIndices(primary, secondary)
-      splatField[pi + 1] = 0
-      splatField[pi + 2] = blend
-      splatField[pi + 3] = 0
-    }
-  }
-
-  const grassMask = buildGrassMask(splatField, N * N)
-  const densityGrid = new Uint8Array(N * N)
-  const typeGrid = new Uint8Array(N * N)
-  scatterGrassCircles(
-    N,
-    N,
-    regionX * N,
-    regionZ * N,
-    grassMask,
-    densityGrid,
-    typeGrid,
-    config.seed
-  )
-
-  for (let i = 0; i < N * N; i++) {
-    splatField[i * BYTES_PER_CELL + VEGMETA_OFFSET] = writeGrass(
-      densityGrid[i],
-      typeGrid[i] === 1
-    )
-  }
-
-  return splatField
-}
-
 /** Build a grass-eligibility mask: cells that are ≥90% vegetation-base primary. */
 export function buildGrassMask(
   splatField: Uint8Array,
@@ -255,7 +111,7 @@ export function buildGrassMask(
   for (let i = 0; i < cellCount; i++) {
     const pi = i * BYTES_PER_CELL
     if (
-      unpackPrimary(splatField[pi]) === GEN_SLOT.GRASS &&
+      unpackPrimary(splatField[pi]) === GRASS_SLOT &&
       splatField[pi + 2] <= GRASS_BLEND_MAX
     ) {
       mask[i] = 1

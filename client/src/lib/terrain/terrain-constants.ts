@@ -1,5 +1,3 @@
-import type { ReferenceImageData } from './referenceImageSampler'
-
 // --- Constants ---
 
 export const TILE_DIM = 64
@@ -21,34 +19,6 @@ export const DEEP_WATER_THRESHOLD = -1.5
 export const SNOW_START_HEIGHT = 300
 /** Absolute height (meters) at which terrain is fully snow */
 export const SNOW_FULL_HEIGHT = 350
-
-// --- Types ---
-
-export interface TerrainGenConfig {
-  seed: number
-  minHeight: number // meters (-500 ~ 0)
-  maxHeight: number // meters (0 ~ 3276)
-  seaProportion: number // 0..1
-  plainProportion: number // 0..1
-  mountainProportion: number // 0..1
-  shallowSeaRatio: number // 0..1, fraction of sea area that is shallow
-  riverCount: number // 0..5
-  referenceImage?: ReferenceImageData // optional reference image for biome placement
-}
-
-export interface GeneratedTile {
-  tileX: number
-  tileZ: number
-  heightmap: Uint16Array // 4225 values (65*65, vertex-based)
-  splatmap: Uint8Array // 16384 values (64*64*4, cell-based)
-}
-
-export interface NeighborEdgeData {
-  north?: Float32Array // 1024 heights (top row of the region above)
-  south?: Float32Array // 1024 heights (bottom row of the region below)
-  east?: Float32Array // 1024 heights (left column of the region to the right)
-  west?: Float32Array // 1024 heights (right column of the region to the left)
-}
 
 // --- Utility functions ---
 

@@ -5,7 +5,6 @@
   import CelestialDebugDialog from './CelestialDebugDialog.svelte'
   import MapEditorPanel from './map-editor/MapEditorPanel.svelte'
   import HousingEditorPanel from './map-editor/HousingEditorPanel.svelte'
-  import GenerateTerrainDialog from './map-editor/GenerateTerrainDialog.svelte'
   import CharacterPanel from './CharacterPanel.svelte'
   import InventoryPanel from './InventoryPanel.svelte'
   import DragGhost from './DragGhost.svelte'
@@ -13,7 +12,6 @@
   import RespawnDialog from './RespawnDialog.svelte'
   import WorldMapDialog from './WorldMapDialog.svelte'
   import { mapEditorMode, worldMapVisible, inventoryVisible, characterPanelVisible, teleportLoading, housingEditorMode } from '../stores/debugStore'
-  import { showGenerateDialog } from '../stores/editorStore'
   import type { AccountCharacter } from '../network/socket'
 
   interface Props {
@@ -64,9 +62,6 @@
   {/if}
   {#if $housingEditorMode}
     <HousingEditorPanel />
-  {/if}
-  {#if $showGenerateDialog}
-    <GenerateTerrainDialog />
   {/if}
   {#if selectedCharacter && !$mapEditorMode}
     <CharacterPanel

@@ -16,13 +16,14 @@
 
 use super::global_map::GlobalMap;
 use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, smoothstep, PerlinNoise3D};
+use super::noise::{fbm_wrap_x, fbm_wrap_x_damped, smoothstep, PerlinNoise3D, ValueNoise3D};
 
 const LACUNARITY: f32 = 2.0;
-const DETAIL_OCTAVES: u32 = 6;
-/// Low gain so the finest 20 m octave stays ~4 m peak-to-peak in mountain
-/// regions, avoiding clusters of small bumps on top of larger hills.
-const DETAIL_GAIN: f32 = 0.29;
+/// Damped fBm self-attenuates further detail in steep regions, so a 7th
+/// octave can ride along without producing the "noisy hills on hills" look
+/// that vanilla fBm gives at gain 0.5.
+const DETAIL_OCTAVES: u32 = 7;
+const DETAIL_GAIN: f32 = 0.5;
 const MOUNTAIN_SELECTOR_OCTAVES: u32 = 3;
 const MOUNTAIN_SELECTOR_GAIN: f32 = 0.55;
 
@@ -53,7 +54,9 @@ pub fn generate_elevation(map: &mut GlobalMap) {
 
     // --- Noise fields (deterministic per master seed).
     let seed = map.config.seed;
-    let detail_noise = PerlinNoise3D::new(seed ^ 0xE1_E_E1_E_E1_E_E1_E_u64);
+    // Detail noise carries the analytic-derivative damped fBm: erosion-shaped
+    // ridges/valleys via per-octave gradient damping (Iñigo Quílez, "morenoise").
+    let detail_noise = ValueNoise3D::new(seed ^ 0xE1_E_E1_E_E1_E_E1_E_u64);
     let mountain_noise = PerlinNoise3D::new(seed ^ 0xA1_A_A1_A_A1_A_A1_A_u64);
     let detail_freq = map
         .config
@@ -111,8 +114,8 @@ pub fn generate_elevation(map: &mut GlobalMap) {
             // gentle so lowland tiles don't read as a single 40 m ridge.
             let base = smoothstep(0.0, 0.8, coast_norm[i]) * base_h;
 
-            // Detail: high-frequency fBm, in [-1, 1] approximately.
-            let detail = fbm_wrap_x(
+            // Detail: derivative-damped fBm in [-1, 1] approximately.
+            let detail = fbm_wrap_x_damped(
                 &detail_noise,
                 x as f32,
                 y as f32,

@@ -6,25 +6,32 @@
 use rand::rngs::SmallRng;
 use rand::{RngCore, SeedableRng};
 
+/// Build a duplicated 512-entry permutation table from a seed via Fisher-Yates
+/// shuffle. The duplication eliminates lookup index masking in noise samplers.
+fn build_perm_table(seed: u64) -> [u16; 512] {
+    let mut p: [u16; 256] = core::array::from_fn(|i| i as u16);
+    let mut rng = SmallRng::seed_from_u64(seed);
+    for i in (1..256).rev() {
+        let j = (rng.next_u32() as usize) % (i + 1);
+        p.swap(i, j);
+    }
+    let mut perm = [0u16; 512];
+    for i in 0..256 {
+        perm[i] = p[i];
+        perm[i + 256] = p[i];
+    }
+    perm
+}
+
 pub struct PerlinNoise {
     perm: [u16; 512],
 }
 
 impl PerlinNoise {
     pub fn new(seed: u64) -> Self {
-        let mut p: [u16; 256] = core::array::from_fn(|i| i as u16);
-        let mut rng = SmallRng::seed_from_u64(seed);
-        // Fisher–Yates shuffle.
-        for i in (1..256).rev() {
-            let j = (rng.next_u32() as usize) % (i + 1);
-            p.swap(i, j);
+        Self {
+            perm: build_perm_table(seed),
         }
-        let mut perm = [0u16; 512];
-        for i in 0..256 {
-            perm[i] = p[i];
-            perm[i + 256] = p[i];
-        }
-        Self { perm }
     }
 
     /// Sample the noise at (x, y). Output is in approximately [-1, 1].
@@ -82,18 +89,9 @@ pub struct PerlinNoise3D {
 
 impl PerlinNoise3D {
     pub fn new(seed: u64) -> Self {
-        let mut p: [u16; 256] = core::array::from_fn(|i| i as u16);
-        let mut rng = SmallRng::seed_from_u64(seed);
-        for i in (1..256).rev() {
-            let j = (rng.next_u32() as usize) % (i + 1);
-            p.swap(i, j);
+        Self {
+            perm: build_perm_table(seed),
         }
-        let mut perm = [0u16; 512];
-        for i in 0..256 {
-            perm[i] = p[i];
-            perm[i + 256] = p[i];
-        }
-        Self { perm }
     }
 
     pub fn sample(&self, x: f32, y: f32, z: f32) -> f32 {
@@ -175,11 +173,7 @@ pub fn fbm_wrap_x(
     lacunarity: f32,
     gain: f32,
 ) -> f32 {
-    let angle = 2.0 * std::f32::consts::PI * x / world_width;
-    let r = world_width * base_freq / (2.0 * std::f32::consts::PI);
-    let cx = r * angle.cos();
-    let cz = r * angle.sin();
-    let ny = y * base_freq;
+    let (cx, ny, cz) = wrap_x_to_circle(x, y, world_width, base_freq);
 
     let mut f = 1.0f32;
     let mut a = 1.0f32;
@@ -196,6 +190,134 @@ pub fn fbm_wrap_x(
     } else {
         0.0
     }
+}
+
+/// Map world `(x, y)` onto the 3D circle-wrap parameterization used by both
+/// `fbm_wrap_x` and `fbm_wrap_x_damped`: world X folds to a circle of radius
+/// `world_width·base_freq / 2π`, world Y is linear.
+#[inline]
+fn wrap_x_to_circle(x: f32, y: f32, world_width: f32, base_freq: f32) -> (f32, f32, f32) {
+    let angle = 2.0 * std::f32::consts::PI * x / world_width;
+    let r = world_width * base_freq / (2.0 * std::f32::consts::PI);
+    (r * angle.cos(), y * base_freq, r * angle.sin())
+}
+
+/// 3D value noise (hashed corner values, trilinear interpolation with quintic
+/// fade) that returns the noise value alongside its analytical gradient.
+/// Cheap and exact compared to central-differences sampling — needed for the
+/// derivative-damped fBm pattern (Iñigo Quílez, "morenoise").
+///
+/// Reference: https://iquilezles.org/articles/morenoise/
+pub struct ValueNoise3D {
+    perm: [u16; 512],
+}
+
+impl ValueNoise3D {
+    pub fn new(seed: u64) -> Self {
+        Self {
+            perm: build_perm_table(seed),
+        }
+    }
+
+    /// Hash 3 lattice indices (each masked to 0..256) into a value in [-1, 1].
+    #[inline]
+    fn hash(&self, ix: usize, iy: usize, iz: usize) -> f32 {
+        let h = self.perm[self.perm[self.perm[ix] as usize + iy] as usize + iz] as f32;
+        h * (2.0 / 255.0) - 1.0
+    }
+
+    /// Sample value noise at `(x, y, z)`. Returns `(value, dvalue/dx,
+    /// dvalue/dy, dvalue/dz)` — the gradient is the closed form of the
+    /// quintic-faded trilinear interpolation, so it is exact and matches
+    /// the surface slope of `value` for arbitrarily small offsets.
+    pub fn sample_with_deriv(&self, x: f32, y: f32, z: f32) -> (f32, f32, f32, f32) {
+        let xi = x.floor() as i32;
+        let yi = y.floor() as i32;
+        let zi = z.floor() as i32;
+        let fx = x - xi as f32;
+        let fy = y - yi as f32;
+        let fz = z - zi as f32;
+
+        let ix0 = (xi & 255) as usize;
+        let iy0 = (yi & 255) as usize;
+        let iz0 = (zi & 255) as usize;
+        let ix1 = (ix0 + 1) & 255;
+        let iy1 = (iy0 + 1) & 255;
+        let iz1 = (iz0 + 1) & 255;
+
+        let a = self.hash(ix0, iy0, iz0);
+        let b = self.hash(ix1, iy0, iz0);
+        let c = self.hash(ix0, iy1, iz0);
+        let d = self.hash(ix1, iy1, iz0);
+        let e = self.hash(ix0, iy0, iz1);
+        let f = self.hash(ix1, iy0, iz1);
+        let g = self.hash(ix0, iy1, iz1);
+        let h = self.hash(ix1, iy1, iz1);
+
+        let u = fade(fx);
+        let v = fade(fy);
+        let w = fade(fz);
+        let du = fade_deriv(fx);
+        let dv = fade_deriv(fy);
+        let dw = fade_deriv(fz);
+
+        let k0 = a;
+        let k1 = b - a;
+        let k2 = c - a;
+        let k3 = e - a;
+        let k4 = a - b - c + d;
+        let k5 = a - c - e + g;
+        let k6 = a - b - e + f;
+        let k7 = -a + b + c - d + e - f - g + h;
+
+        let value =
+            k0 + k1 * u + k2 * v + k3 * w + k4 * u * v + k5 * v * w + k6 * u * w + k7 * u * v * w;
+        let dvdx = du * (k1 + k4 * v + k6 * w + k7 * v * w);
+        let dvdy = dv * (k2 + k4 * u + k5 * w + k7 * u * w);
+        let dvdz = dw * (k3 + k5 * v + k6 * u + k7 * u * v);
+        (value, dvdx, dvdy, dvdz)
+    }
+}
+
+/// Derivative of the quintic fade `f(t)=6t⁵-15t⁴+10t³`.
+#[inline]
+fn fade_deriv(t: f32) -> f32 {
+    30.0 * t * t * (t * (t - 2.0) + 1.0)
+}
+
+/// Derivative-damped fBm with X-axis circle wrap (Iñigo Quílez "morenoise").
+/// Each octave's contribution is divided by `1 + |Σ∇noise|²`, so further
+/// detail is damped wherever the surface is already steep — yielding eroded
+/// ridges and smooth basins instead of uniformly noisy fBm. Output rescaled
+/// to roughly [-1, 1] to match `fbm_wrap_x`'s contract.
+pub fn fbm_wrap_x_damped(
+    noise: &ValueNoise3D,
+    x: f32,
+    y: f32,
+    world_width: f32,
+    base_freq: f32,
+    octaves: u32,
+    lacunarity: f32,
+    gain: f32,
+) -> f32 {
+    let (cx, ny, cz) = wrap_x_to_circle(x, y, world_width, base_freq);
+
+    let mut f = 1.0f32;
+    let mut amp = 1.0f32;
+    let mut sum = 0.0f32;
+    let (mut dx, mut dy, mut dz) = (0.0f32, 0.0f32, 0.0f32);
+    for _ in 0..octaves {
+        let (n, ndx, ndy, ndz) = noise.sample_with_deriv(cx * f, ny * f, cz * f);
+        dx += ndx;
+        dy += ndy;
+        dz += ndz;
+        sum += amp * n / (1.0 + dx * dx + dy * dy + dz * dz);
+        f *= lacunarity;
+        amp *= gain;
+    }
+    // Damped fBm converges to ~half the amplitude of normalized fBm; the 2.0
+    // gain spreads typical output back to ~[-1, 1] without a true running norm.
+    (sum * 2.0).clamp(-1.0, 1.0)
 }
 
 /// Hermite-interpolated smoothstep. Returns 0 at `edge0`, 1 at `edge1`, with
@@ -353,6 +475,63 @@ mod tests {
         assert!(
             mx - mn > 0.1,
             "wrapped fBm has near-constant output: range {}",
+            mx - mn
+        );
+    }
+
+    #[test]
+    fn value_noise_analytic_derivative_matches_central_difference() {
+        let n = ValueNoise3D::new(31);
+        let h = 1e-3f32;
+        for &(x, y, z) in &[(0.37f32, 1.21, -0.55), (-2.4, 3.8, 0.2), (5.5, 0.0, 2.1)] {
+            let (_, dx, dy, dz) = n.sample_with_deriv(x, y, z);
+            let (vp_x, _, _, _) = n.sample_with_deriv(x + h, y, z);
+            let (vm_x, _, _, _) = n.sample_with_deriv(x - h, y, z);
+            let (vp_y, _, _, _) = n.sample_with_deriv(x, y + h, z);
+            let (vm_y, _, _, _) = n.sample_with_deriv(x, y - h, z);
+            let (vp_z, _, _, _) = n.sample_with_deriv(x, y, z + h);
+            let (vm_z, _, _, _) = n.sample_with_deriv(x, y, z - h);
+            let cdx = (vp_x - vm_x) / (2.0 * h);
+            let cdy = (vp_y - vm_y) / (2.0 * h);
+            let cdz = (vp_z - vm_z) / (2.0 * h);
+            assert!((dx - cdx).abs() < 1e-2, "dx mismatch at ({x},{y},{z}): analytic {dx} vs CD {cdx}");
+            assert!((dy - cdy).abs() < 1e-2, "dy mismatch at ({x},{y},{z}): analytic {dy} vs CD {cdy}");
+            assert!((dz - cdz).abs() < 1e-2, "dz mismatch at ({x},{y},{z}): analytic {dz} vs CD {cdz}");
+        }
+    }
+
+    #[test]
+    fn fbm_wrap_x_damped_is_periodic() {
+        let n = ValueNoise3D::new(7);
+        let world_width = 4096.0;
+        let base_freq = 1.0 / 700.0;
+        for yi in 0..16 {
+            let y = yi as f32 * 137.0;
+            let a = fbm_wrap_x_damped(&n, 0.0, y, world_width, base_freq, 6, 2.0, 0.5);
+            let b = fbm_wrap_x_damped(&n, world_width, y, world_width, base_freq, 6, 2.0, 0.5);
+            assert!(
+                (a - b).abs() < 1e-5,
+                "damped wrap failed at y={y}: {a} vs {b}"
+            );
+        }
+    }
+
+    #[test]
+    fn fbm_wrap_x_damped_varies_across_width() {
+        let n = ValueNoise3D::new(11);
+        let world_width = 4096.0;
+        let base_freq = 1.0 / 700.0;
+        let mut mn = f32::INFINITY;
+        let mut mx = f32::NEG_INFINITY;
+        for xi in 0..32 {
+            let x = xi as f32 * (world_width / 32.0);
+            let v = fbm_wrap_x_damped(&n, x, 1000.0, world_width, base_freq, 6, 2.0, 0.5);
+            mn = mn.min(v);
+            mx = mx.max(v);
+        }
+        assert!(
+            mx - mn > 0.05,
+            "damped fBm has near-constant output: range {}",
             mx - mn
         );
     }
