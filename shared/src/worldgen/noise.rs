@@ -494,9 +494,18 @@ mod tests {
             let cdx = (vp_x - vm_x) / (2.0 * h);
             let cdy = (vp_y - vm_y) / (2.0 * h);
             let cdz = (vp_z - vm_z) / (2.0 * h);
-            assert!((dx - cdx).abs() < 1e-2, "dx mismatch at ({x},{y},{z}): analytic {dx} vs CD {cdx}");
-            assert!((dy - cdy).abs() < 1e-2, "dy mismatch at ({x},{y},{z}): analytic {dy} vs CD {cdy}");
-            assert!((dz - cdz).abs() < 1e-2, "dz mismatch at ({x},{y},{z}): analytic {dz} vs CD {cdz}");
+            assert!(
+                (dx - cdx).abs() < 1e-2,
+                "dx mismatch at ({x},{y},{z}): analytic {dx} vs CD {cdx}"
+            );
+            assert!(
+                (dy - cdy).abs() < 1e-2,
+                "dy mismatch at ({x},{y},{z}): analytic {dy} vs CD {cdy}"
+            );
+            assert!(
+                (dz - cdz).abs() < 1e-2,
+                "dz mismatch at ({x},{y},{z}): analytic {dz} vs CD {cdz}"
+            );
         }
     }
 

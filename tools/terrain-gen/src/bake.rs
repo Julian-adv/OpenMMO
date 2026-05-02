@@ -94,6 +94,12 @@ pub fn run(
 
     let t = Instant::now();
     let mut road_net = roads::compute_roads(&map, &settlements_list, &river_map);
+    // Fuse pairs of roads that emerge from the same town and run nearly
+    // parallel for a long stretch — replace the duplicate prefixes with a
+    // shared trunk so the network reads as one road that Y-forks at the
+    // divergence point instead of two near-parallel routes. Run before
+    // grid-snap so the snap pass sees the merged geometry.
+    roads::merge_parallel_runs(&mut road_net, map.config.global_res as usize);
     // Bridges in the runtime are placed on a 90°-grid only, so snap a small
     // window of cells at every road↔river crossing into pure cardinal
     // strips before tile baking — otherwise a diagonal A* crossing would
@@ -143,12 +149,8 @@ pub fn run(
     // bridge detection so bridge bank probes can read the post-pad surface
     // when the bridge lands inside a town. ------------------------------
     let t = Instant::now();
-    let settlement_directives = tile_bake::settlement_flatten::build_directives(
-        &settlements_list,
-        &map.config,
-        &map,
-        &ctx,
-    );
+    let settlement_directives =
+        tile_bake::settlement_flatten::build_directives(&settlements_list, &map.config, &map, &ctx);
     let settlement_flattens =
         tile_bake::settlement_flatten::group_flattens_by_tile(&settlement_directives);
     eprintln!(
@@ -276,15 +278,29 @@ pub fn run(
             std::fs::write(&gpath, &grass_bin)
                 .with_context(|| format!("write {}", gpath.display()))?;
 
-            // River segment file. Skipped for tiles that own no segments
-            // (midpoint-based ownership) so the on-disk footprint stays
-            // small on ocean / inland tiles without rivers. Missing file
-            // = no rivers at load time.
-            if let Some(segs) = river_buckets.get(&(tx, tz)) {
-                if let Some(bin) = tile_bake::bake_rivers_binary(segs) {
-                    let rpath = coords::river_path(out, tx, tz);
-                    std::fs::write(&rpath, &bin)
-                        .with_context(|| format!("write {}", rpath.display()))?;
+            // River segment file. Conditionally written so ocean / inland
+            // tiles without rivers stay zero-footprint (missing file = no
+            // rivers at load time). A previous bake's bin can outlive its
+            // own worldgen run, so when this bake produces no segments for
+            // the tile, remove any stale file in place — otherwise the
+            // client would load a ribbon while the always-rewritten splat
+            // / heightmap / vegetation files reflect the new world.
+            let rpath = coords::river_path(out, tx, tz);
+            let bin = river_buckets
+                .get(&(tx, tz))
+                .and_then(|segs| tile_bake::bake_rivers_binary(segs));
+            if let Some(bin) = bin {
+                std::fs::write(&rpath, &bin)
+                    .with_context(|| format!("write {}", rpath.display()))?;
+            } else {
+                match std::fs::remove_file(&rpath) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => {
+                        return Err(
+                            anyhow::Error::from(e).context(format!("remove {}", rpath.display()))
+                        );
+                    }
                 }
             }
 
@@ -530,8 +546,7 @@ fn stamp_tile_minimap(
 /// Embedded copy of `client/public/models/objects/catalog.json` so the bake
 /// runs without a runtime config path. Compiled-in rather than read from
 /// disk because the bake binary runs from arbitrary working directories.
-const CATALOG_JSON: &str =
-    include_str!("../../../client/public/models/objects/catalog.json");
+const CATALOG_JSON: &str = include_str!("../../../client/public/models/objects/catalog.json");
 
 fn load_bridge_catalog() -> Option<bridges::BridgeCatalog> {
     let entries: serde_json::Value = serde_json::from_str(CATALOG_JSON).ok()?;
@@ -608,9 +623,7 @@ fn write_object_regions(
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
                 Err(e) => {
-                    return Err(
-                        anyhow::Error::from(e).context(format!("read {}", path.display()))
-                    );
+                    return Err(anyhow::Error::from(e).context(format!("read {}", path.display())));
                 }
             };
             let kept: Vec<serde_json::Value> = existing

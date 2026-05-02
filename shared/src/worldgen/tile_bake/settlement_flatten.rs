@@ -40,8 +40,8 @@ const BOUNDARY_NOISE_AMP_M: f32 = 8.0;
 const REACH_M: f32 = SETTLEMENT_FLAT_RADIUS_M + BOUNDARY_NOISE_AMP_M + SETTLEMENT_FLATTEN_BLEND_M;
 /// Squared distance below which a vertex is unconditionally inside the flat
 /// core regardless of noise sign — skips the Perlin sample.
-const INNER_SQ: f32 =
-    (SETTLEMENT_FLAT_RADIUS_M - BOUNDARY_NOISE_AMP_M) * (SETTLEMENT_FLAT_RADIUS_M - BOUNDARY_NOISE_AMP_M);
+const INNER_SQ: f32 = (SETTLEMENT_FLAT_RADIUS_M - BOUNDARY_NOISE_AMP_M)
+    * (SETTLEMENT_FLAT_RADIUS_M - BOUNDARY_NOISE_AMP_M);
 /// Squared distance above which a vertex is unconditionally outside the
 /// blend ring regardless of noise sign — skips the vertex entirely.
 const OUTER_SQ: f32 = REACH_M * REACH_M;

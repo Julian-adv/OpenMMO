@@ -311,8 +311,15 @@ fn sample_elevation_m(
     river_segs: &[RiverSegment],
     mouth_islands: &[MouthIsland],
 ) -> f32 {
-    let natural =
-        sample_elevation_no_carve(map, ctx, world_x, world_z, world_size, inv_mpc, mouth_islands);
+    let natural = sample_elevation_no_carve(
+        map,
+        ctx,
+        world_x,
+        world_z,
+        world_size,
+        inv_mpc,
+        mouth_islands,
+    );
     let carve = carve_at_point(world_x, world_z, natural, river_segs);
     let max_cap = map.config.max_elevation_m;
     (natural - carve).clamp(-HEIGHT_BIAS, max_cap)

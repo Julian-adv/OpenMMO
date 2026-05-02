@@ -247,8 +247,14 @@ pub fn detect_bridges(
                     &ctx.detail_noise,
                 )
             };
-            let h_a = probe(wx + perp_x * model.deck_max_z, wz + perp_z * model.deck_max_z);
-            let h_b = probe(wx + perp_x * model.deck_min_z, wz + perp_z * model.deck_min_z);
+            let h_a = probe(
+                wx + perp_x * model.deck_max_z,
+                wz + perp_z * model.deck_max_z,
+            );
+            let h_b = probe(
+                wx + perp_x * model.deck_min_z,
+                wz + perp_z * model.deck_min_z,
+            );
             let bridge_y = (h_a + h_b) * 0.5;
 
             // Deck local +Z aligns with the road tangent (perpendicular to
