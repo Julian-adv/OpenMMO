@@ -27,10 +27,24 @@ pub struct RoadNetwork {
     pub roads: Vec<Road>,
 }
 
-/// Each meter of elevation change along an A* step adds this many cells of
-/// cost. Tuned so roads route around real hills but don't detour absurdly
-/// far to avoid a modest incline.
-const SLOPE_WEIGHT: f32 = 0.04;
+/// Linear penalty per unit grade applied to every road step, scaled by the
+/// step's horizontal length in cells. At a 5 % grade this adds
+/// `0.05 * SLOPE_WEIGHT_LIN` cells of cost per cell of travel — gentle
+/// background bias that bends roads slightly toward the contour line on
+/// rolling hills without introducing detours on truly flat ground.
+const SLOPE_WEIGHT_LIN: f32 = 0.4;
+/// Grade above which the quadratic steep-slope penalty kicks in
+/// (≈10 %, the steep edge of comfortable highway grades). Below this only
+/// the linear term contributes.
+const SLOPE_STEEP_THRESHOLD: f32 = 0.10;
+/// Quadratic weight on `(grade - SLOPE_STEEP_THRESHOLD)²` above the
+/// threshold, in cells of cost per cell of horizontal travel. Tuned so a
+/// 20 % grade pays ~0.7 cells/cell, 30 % ~2.5, 40 % ~5.5, 50 % ~10 —
+/// large enough that A* prefers contour-following detours of tens of cells
+/// over taking a steep face head-on, naturally bending roads around steep
+/// hillsides instead of climbing them. (True switchbacks would need
+/// direction-aware A* state and aren't modeled.)
+const SLOPE_QUAD_WEIGHT: f32 = 60.0;
 
 /// Flat penalty (in cells of A* cost) for stepping into a river cell. Keeps
 /// roads slightly biased toward the dry-land path even when a perpendicular
@@ -383,6 +397,7 @@ fn a_star(
     let res_i = res as i32;
     let elev = &map.elevation_m;
     let mask = &map.land_mask;
+    let meters_per_cell = map.config.meters_per_cell();
     debug_assert_eq!(river_field.mask.len(), res * res);
 
     let start = sy * res + sx;
@@ -458,7 +473,17 @@ fn a_star(
                     (1.0, dx as f32, dy as f32)
                 };
                 let dh = (elev[ni] - h).abs();
-                let cost = base + dh * SLOPE_WEIGHT + river_field.step_penalty(ni, sdx, sdy);
+                // Grade is per cell of horizontal travel (so diagonals
+                // benefit fairly: same dh over √2 cells reads as a gentler
+                // slope). Quadratic excess past `SLOPE_STEEP_THRESHOLD`
+                // makes steep faces explode in cost so A* contours around
+                // them instead of climbing.
+                let step_length_m = base * meters_per_cell;
+                let grade = dh / step_length_m;
+                let excess = (grade - SLOPE_STEEP_THRESHOLD).max(0.0);
+                let slope_cost =
+                    base * (grade * SLOPE_WEIGHT_LIN + excess * excess * SLOPE_QUAD_WEIGHT);
+                let cost = base + slope_cost + river_field.step_penalty(ni, sdx, sdy);
                 let tentative = scratch.g_score[ci] + cost;
                 if tentative < scratch.g_score[ni] {
                     scratch.g_score[ni] = tentative;

@@ -356,8 +356,13 @@ pub fn run(
 
     // --- Region object JSONs (bridges grouped by region). ---------------
     let t_obj = Instant::now();
-    let region_count_written =
-        write_object_regions(out, &bridge_placements, region_min, region_max)?;
+    let region_count_written = write_object_regions(
+        out,
+        &bridge_placements,
+        &bridge_catalog,
+        region_min,
+        region_max,
+    )?;
     eprintln!(
         "Wrote {} region object JSONs in {:.2}s",
         region_count_written,
@@ -556,13 +561,21 @@ fn load_bridge_catalog() -> Option<bridges::BridgeCatalog> {
 /// Group placements by region and write `objects/r±NN_±NN.json`. Skips
 /// regions outside the requested bake range to match the existing per-tile
 /// output discipline. Returns the number of region files written.
+///
+/// Stale bake-emitted bridges are pruned here: each region in the bake
+/// range is read, placements whose `type` is in `BridgeCatalog::model_ids`
+/// are dropped, and surviving non-bridge placements are merged with this
+/// bake's bridges. New bridge IDs continue past the highest kept ID so
+/// editor-side `id`-keyed references on user-placed objects stay stable
+/// across bakes. A region whose merged result is empty has its file
+/// removed.
 fn write_object_regions(
     out: &Path,
     placements: &[bridges::BridgePlacement],
+    catalog: &bridges::BridgeCatalog,
     region_min: (i32, i32),
     region_max: (i32, i32),
 ) -> Result<usize> {
-    use std::collections::HashMap;
     let mut by_region: HashMap<(i32, i32), Vec<&bridges::BridgePlacement>> = HashMap::new();
     for p in placements {
         let tx = coords::world_to_tile(p.x);
@@ -575,28 +588,75 @@ fn write_object_regions(
         by_region.entry((rx, rz)).or_default().push(p);
     }
 
-    let mut written = 0usize;
-    for ((rx, rz), region_placements) in &by_region {
-        let placements_json: Vec<serde_json::Value> = region_placements
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                serde_json::json!({
-                    "floorLevel": 0,
-                    "id": (i + 1) as u32,
-                    "rotation": p.rotation,
-                    "type": p.model_id,
-                    "x": p.x,
-                    "y": p.y,
-                    "z": p.z,
+    let bridge_ids = catalog.model_ids();
+    let written = AtomicUsize::new(0);
+    let region_pairs: Vec<(i32, i32)> = (region_min.1..=region_max.1)
+        .flat_map(|rz| (region_min.0..=region_max.0).map(move |rx| (rx, rz)))
+        .collect();
+    region_pairs
+        .into_par_iter()
+        .try_for_each(|(rx, rz)| -> Result<()> {
+            let path = coords::object_path(out, rx, rz);
+            let existing: Vec<serde_json::Value> = match std::fs::read_to_string(&path) {
+                Ok(s) => {
+                    let val: serde_json::Value = serde_json::from_str(&s)
+                        .with_context(|| format!("parse {}", path.display()))?;
+                    val.get("placements")
+                        .and_then(|v| v.as_array())
+                        .cloned()
+                        .unwrap_or_default()
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+                Err(e) => {
+                    return Err(
+                        anyhow::Error::from(e).context(format!("read {}", path.display()))
+                    );
+                }
+            };
+            let kept: Vec<serde_json::Value> = existing
+                .iter()
+                .filter(|p| {
+                    let t = p.get("type").and_then(|t| t.as_str()).unwrap_or("");
+                    !bridge_ids.contains(&t)
                 })
-            })
-            .collect();
-        let json = serde_json::json!({ "placements": placements_json });
-        let path = coords::object_path(out, *rx, *rz);
-        std::fs::write(&path, serde_json::to_string_pretty(&json)?)
-            .with_context(|| format!("write {}", path.display()))?;
-        written += 1;
-    }
-    Ok(written)
+                .cloned()
+                .collect();
+            let stripped = kept.len() != existing.len();
+            let new_bridges = by_region.get(&(rx, rz));
+            // Region untouched: file's bridges (if any) match what we'd
+            // re-emit, and there's nothing new to add. Skip the rewrite.
+            if !stripped && new_bridges.is_none() {
+                return Ok(());
+            }
+            let max_kept_id = kept
+                .iter()
+                .filter_map(|p| p.get("id").and_then(|v| v.as_u64()))
+                .max()
+                .unwrap_or(0);
+            let mut merged = kept;
+            if let Some(region_placements) = new_bridges {
+                for (i, p) in region_placements.iter().enumerate() {
+                    merged.push(serde_json::json!({
+                        "floorLevel": 0,
+                        "id": max_kept_id + 1 + i as u64,
+                        "rotation": p.rotation,
+                        "type": p.model_id,
+                        "x": p.x,
+                        "y": p.y,
+                        "z": p.z,
+                    }));
+                }
+            }
+            if merged.is_empty() {
+                std::fs::remove_file(&path)
+                    .with_context(|| format!("remove {}", path.display()))?;
+            } else {
+                let json = serde_json::json!({ "placements": merged });
+                std::fs::write(&path, serde_json::to_string_pretty(&json)?)
+                    .with_context(|| format!("write {}", path.display()))?;
+                written.fetch_add(1, Ordering::Relaxed);
+            }
+            Ok(())
+        })?;
+    Ok(written.into_inner())
 }

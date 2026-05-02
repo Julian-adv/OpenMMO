@@ -102,6 +102,14 @@ impl BridgeCatalog {
             None
         }
     }
+
+    /// Catalog model IDs the bake owns. Used by region-object writers to
+    /// strip stale bake-emitted bridges from `objects/r±NN_±NN.json` before
+    /// writing fresh placements (so user-placed objects in the same region
+    /// survive across bakes).
+    pub fn model_ids(&self) -> [&str; 2] {
+        [self.narrow.id.as_str(), self.wide.id.as_str()]
+    }
 }
 
 /// One bridge to drop in the world. Coordinates and rotation match the
