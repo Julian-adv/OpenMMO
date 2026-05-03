@@ -1,5 +1,36 @@
 use serde::{Deserialize, Serialize};
 
+/// A region-targeted mountain insertion. World-meter coordinates with origin
+/// at map center. The boost cascades: peaks ≥ 40% of `max_elevation_m` seed
+/// rivers, which then attract settlements via the dist_to_river fitness term.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ElevationHotspot {
+    pub center_x_m: f32,
+    pub center_y_m: f32,
+    pub radius_m: f32,
+    pub peak_m: f32,
+    /// Cap on final elevation inside the disk. `None` = uncapped (only the
+    /// global `max_elevation_m` applies). Use to hold a hotspot under the
+    /// splatmap snow line (1800 m) regardless of how stacking noise lands.
+    #[serde(default)]
+    pub cap_elev_m: Option<f32>,
+}
+
+/// A linear elevation-carve along a polyline. Each cell within `width_m / 2`
+/// of the segment is clamped (via `min`) to a linearly-interpolated target
+/// elevation — no raises, only lowers — yielding a monotonic downhill chain
+/// that flow accumulation will follow.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RiverCarvePath {
+    pub start_x_m: f32,
+    pub start_y_m: f32,
+    pub end_x_m: f32,
+    pub end_y_m: f32,
+    pub width_m: f32,
+    pub start_elev_m: f32,
+    pub end_elev_m: f32,
+}
+
 /// Configuration for a full procedural world generation run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorldGenConfig {
@@ -238,11 +269,33 @@ pub struct WorldGenConfig {
     /// so islands and along-road villages aren't starved.
     pub settlement_phase_a_spacing_mult: f32,
 
+    /// Settlements within this distance (meters) of the south map edge are
+    /// rejected. The southern strip is dominated by the Y-border wall and
+    /// reads as polar terrain; villages clustered there look out of place.
+    /// 0 = disabled. North edge is unaffected (the wall ramp on the north
+    /// side currently blocks placement on its own).
+    pub settlement_south_edge_exclusion_m: f32,
+
     // --- Phase 6: roads ---------------------------------------------------
     /// K in the K-nearest-neighbor graph added on top of the MST when
     /// computing the road network. 0 = MST only; higher = denser graph
     /// with more cross-links → more hubs and inland routes. Typical: 2-3.
     pub road_extra_neighbors: u32,
+
+    /// Region-targeted mountain hotspots applied after baseline elevation,
+    /// before erosion. Use these to guarantee that a specific part of the
+    /// world hosts mountains/rivers/cities even when the seed's noise
+    /// otherwise leaves it as featureless plain. Empty = pure procedural.
+    #[serde(default)]
+    pub elevation_hotspots: Vec<ElevationHotspot>,
+
+    /// Polyline channels carved into the elevation after hotspots. Used to
+    /// engineer river courses across plains where the noise's drainage
+    /// divides would otherwise strand flow. Cells along each path are
+    /// clamped (via `min`) to a linearly-interpolated target elevation,
+    /// producing a guaranteed downhill valley.
+    #[serde(default)]
+    pub river_carve_paths: Vec<RiverCarvePath>,
 }
 
 impl Default for WorldGenConfig {
@@ -296,7 +349,37 @@ impl Default for WorldGenConfig {
             settlement_coastal_spacing_mult: 1.6,
             settlement_mouth_count: 500,
             settlement_phase_a_spacing_mult: 2.0,
+            settlement_south_edge_exclusion_m: 1700.0,
             road_extra_neighbors: 5,
+            // Two hand-tuned coastal hotspots and one west-flowing carve
+            // populate the SW quadrant of the seed-42 world. Caps held below
+            // the 1800 m snow line so peaks read as forested rather than
+            // alpine.
+            elevation_hotspots: vec![
+                ElevationHotspot {
+                    center_x_m: -9760.0,
+                    center_y_m: 13792.0,
+                    radius_m: 2800.0,
+                    peak_m: 1100.0,
+                    cap_elev_m: Some(1750.0),
+                },
+                ElevationHotspot {
+                    center_x_m: -2144.0,
+                    center_y_m: 13728.0,
+                    radius_m: 2400.0,
+                    peak_m: 900.0,
+                    cap_elev_m: Some(1750.0),
+                },
+            ],
+            river_carve_paths: vec![RiverCarvePath {
+                start_x_m: -12624.0,
+                start_y_m: 13792.0,
+                end_x_m: -14784.0,
+                end_y_m: 13216.0,
+                width_m: 80.0,
+                start_elev_m: 480.0,
+                end_elev_m: 0.0,
+            }],
         }
     }
 }
@@ -305,6 +388,14 @@ impl WorldGenConfig {
     /// Meters per global cell.
     pub fn meters_per_cell(&self) -> f32 {
         self.world_size_m as f32 / self.global_res as f32
+    }
+
+    /// World meters → fractional global-cell coordinate. World origin sits
+    /// at cell (`global_res / 2`, `global_res / 2`).
+    pub fn world_m_to_cell(&self, x_m: f32, y_m: f32) -> (f32, f32) {
+        let mpc = self.meters_per_cell();
+        let origin = self.global_res as f32 * 0.5;
+        (x_m / mpc + origin, y_m / mpc + origin)
     }
 
     /// Total number of global-map cells.
