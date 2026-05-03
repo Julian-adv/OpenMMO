@@ -15,7 +15,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use super::global_map::GlobalMap;
 use super::grid::MinF32;
 use super::rivers::{Polyline, RiverMap};
-use super::settlements::Settlement;
+use super::settlements::{settlement_label, Settlement};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Road {
@@ -450,64 +450,70 @@ pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
 
     let mut bin_keys: Vec<(i32, i32)> = bins.keys().copied().collect();
     bin_keys.sort_unstable();
+    // Two parallel polylines within `threshold` cells of each other can
+    // straddle a 6-cell bin boundary, so each seed point checks the 3×3
+    // bin neighborhood instead of just its own bin. `best.entry((lo, hi))`
+    // collapses the duplicate visits a pair gets across overlapping bins.
     for key in &bin_keys {
         let pts = &bins[key];
-        if pts.len() < 2 {
-            continue;
-        }
-        for i in 0..pts.len() {
-            for j in (i + 1)..pts.len() {
-                let (ra, ia) = (pts[i].0 as usize, pts[i].1 as usize);
-                let (rb, ib) = (pts[j].0 as usize, pts[j].1 as usize);
-                if ra == rb {
-                    continue;
-                }
-                let (lo, lo_idx, hi, hi_idx) = if ra < rb {
-                    (ra, ia, rb, ib)
-                } else {
-                    (rb, ib, ra, ia)
-                };
-                let pair = (lo, hi);
-                let a = &road_net.roads[lo].points;
-                let b = &road_net.roads[hi].points;
-                if shares_endpoint(a, b) {
-                    continue;
-                }
-                if cell_dist_sq(a[lo_idx], b[hi_idx], res_i) > threshold_sq {
-                    continue;
-                }
+        for &(ra_u32, ia_u32) in pts {
+            let (ra, ia) = (ra_u32 as usize, ia_u32 as usize);
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let nbr_key = (key.0 + dx, key.1 + dy);
+                    let Some(nbr_pts) = bins.get(&nbr_key) else {
+                        continue;
+                    };
+                    for &(rb_u32, ib_u32) in nbr_pts {
+                        let (rb, ib) = (rb_u32 as usize, ib_u32 as usize);
+                        if ra >= rb {
+                            // Skip self-pairs and the (b, a) ordering of
+                            // any pair we'll see (or have seen) as (a, b).
+                            continue;
+                        }
+                        let (lo, lo_idx, hi, hi_idx) = (ra, ia, rb, ib);
+                        let pair = (lo, hi);
+                        let a = &road_net.roads[lo].points;
+                        let b = &road_net.roads[hi].points;
+                        if shares_endpoint(a, b) {
+                            continue;
+                        }
+                        if cell_dist_sq(a[lo_idx], b[hi_idx], res_i) > threshold_sq {
+                            continue;
+                        }
 
-                // Forward alignment (both walked in the same direction).
-                let (e_lo_f, e_hi_f) =
-                    extend_run(a, b, lo_idx, hi_idx, 1, 1, res_i, threshold_sq);
-                let (s_lo_f, s_hi_f) =
-                    extend_run(a, b, lo_idx, hi_idx, -1, -1, res_i, threshold_sq);
-                let len_f = e_lo_f - s_lo_f;
+                        // Forward alignment (both walked in the same direction).
+                        let (e_lo_f, e_hi_f) =
+                            extend_run(a, b, lo_idx, hi_idx, 1, 1, res_i, threshold_sq);
+                        let (s_lo_f, s_hi_f) =
+                            extend_run(a, b, lo_idx, hi_idx, -1, -1, res_i, threshold_sq);
+                        let len_f = e_lo_f - s_lo_f;
 
-                // Reverse alignment (b walked opposite direction). Forward
-                // half walks i↑ / j↓ and lands at (i_hi, j_lo); backward
-                // half walks i↓ / j↑ and lands at (i_lo, j_hi).
-                let (e_lo_r, j_lo_r) =
-                    extend_run(a, b, lo_idx, hi_idx, 1, -1, res_i, threshold_sq);
-                let (s_lo_r, j_hi_r) =
-                    extend_run(a, b, lo_idx, hi_idx, -1, 1, res_i, threshold_sq);
-                let len_r = e_lo_r - s_lo_r;
+                        // Reverse alignment (b walked opposite direction).
+                        // Forward half walks i↑ / j↓ and lands at
+                        // (i_hi, j_lo); backward half walks i↓ / j↑ and
+                        // lands at (i_lo, j_hi).
+                        let (e_lo_r, j_lo_r) =
+                            extend_run(a, b, lo_idx, hi_idx, 1, -1, res_i, threshold_sq);
+                        let (s_lo_r, j_hi_r) =
+                            extend_run(a, b, lo_idx, hi_idx, -1, 1, res_i, threshold_sq);
+                        let len_r = e_lo_r - s_lo_r;
 
-                let (best_len, alignment) = if len_f >= len_r {
-                    (len_f, (s_lo_f, e_lo_f, s_hi_f, e_hi_f, false))
-                } else {
-                    (len_r, (s_lo_r, e_lo_r, j_lo_r, j_hi_r, true))
-                };
+                        let (best_len, alignment) = if len_f >= len_r {
+                            (len_f, (s_lo_f, e_lo_f, s_hi_f, e_hi_f, false))
+                        } else {
+                            (len_r, (s_lo_r, e_lo_r, j_lo_r, j_hi_r, true))
+                        };
 
-                if best_len < min_len {
-                    continue;
-                }
+                        if best_len < min_len {
+                            continue;
+                        }
 
-                let entry = best
-                    .entry(pair)
-                    .or_insert((0, (0, 0, 0, 0, false)));
-                if best_len > entry.0 {
-                    *entry = (best_len, alignment);
+                        let entry = best.entry(pair).or_insert((0, (0, 0, 0, 0, false)));
+                        if best_len > entry.0 {
+                            *entry = (best_len, alignment);
+                        }
+                    }
                 }
             }
         }
@@ -882,21 +888,6 @@ fn redirect_parallel_forks(
     }
     if redirects > 0 {
         eprintln!("fork-redirect: {redirects} edge(s) redirected");
-    }
-}
-
-/// Two-char base-36 settlement ID matching the preview overlay so log
-/// output (e.g. "1k") is grep-able against the worldgen_preview PNGs.
-fn settlement_label(idx: usize) -> String {
-    const ALPHA: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
-    if idx < 36 * 36 {
-        format!(
-            "{}{}",
-            ALPHA[idx / 36] as char,
-            ALPHA[idx % 36] as char
-        )
-    } else {
-        format!("#{idx}")
     }
 }
 

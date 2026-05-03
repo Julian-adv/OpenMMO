@@ -474,6 +474,8 @@ mod tests {
             settlement_along_road_count: 0,
             settlement_inland_buffer_cells: 0,
             settlement_coastal_spacing_mult: 1.0,
+            settlement_mouth_count: 0,
+            settlement_phase_a_spacing_mult: 1.0,
             road_extra_neighbors: 0,
         }
     }

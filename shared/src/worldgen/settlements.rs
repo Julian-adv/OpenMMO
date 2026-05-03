@@ -10,6 +10,8 @@
 //! or steeper than the slope cap are excluded outright. Everything else
 //! is a soft bias in the score.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
 use super::global_map::GlobalMap;
@@ -104,37 +106,61 @@ pub fn place_settlements_with_fields(
         coast_dist,
         coast_threshold,
     };
+    // Phase-A picks cluster on the same elevation/slope contour when
+    // sibling rivers share a valley plain, so inflate the per-pick spacing
+    // here to push them across distinct valleys. Phases B and C use the
+    // unmultiplied spacing so islands and infill villages aren't starved.
+    let phase_a_mult = cfg.settlement_phase_a_spacing_mult.max(1.0);
+    let phase_a_spacing = SpacingCtx {
+        min_sp_sq: (min_spacing_actual * phase_a_mult).powi(2),
+        ..spacing
+    };
     let mut kept: Vec<Settlement> = Vec::with_capacity(target);
 
-    // Phase A (river quota): reserve one inland cell per river polyline,
-    // longest rivers first. Two tweaks vs naive fitness-greedy: the cell
-    // must be at least `inland_buffer` cells from the coast so the pick
-    // lands in the middle reaches rather than at the mouth, and we score
-    // with `fitness_plains` so coast proximity stops tipping the scale.
+    // Phase A (river quota): one settlement per *drainage basin*. Picking
+    // per mouth (instead of per polyline) keeps tributaries of one valley
+    // from each landing their own village in a tight inland cluster. The
+    // top-N basins by mouth flow get a coastal port at the mouth; the rest
+    // get the inland middle-reach pick.
     let inland_buffer = cfg.scaled_cells_usize(cfg.settlement_inland_buffer_cells) as u16;
     let river_quota = ((target as f32 * 0.7) as usize).max(1).min(target);
     let mut rivers_sorted: Vec<&Polyline> = river_map.rivers.iter().collect();
     rivers_sorted.sort_by_key(|p| std::cmp::Reverse(p.points.len()));
-    for poly in &rivers_sorted {
+
+    // Cache each polyline's mouth cell once so the unique-mouths build and
+    // the per-river loop don't both walk the polyline tail.
+    let polyline_mouths: Vec<Option<usize>> = rivers_sorted
+        .iter()
+        .map(|p| mouth_land_cell(p, map, res))
+        .collect();
+    let mut unique_mouths: Vec<usize> = polyline_mouths
+        .iter()
+        .filter_map(|m| *m)
+        .collect::<HashSet<usize>>()
+        .into_iter()
+        .collect();
+    unique_mouths.sort_by(|a, b| river_map.flow[*b].total_cmp(&river_map.flow[*a]));
+    let mouth_target = (cfg.settlement_mouth_count as usize).min(unique_mouths.len());
+    let mouth_pick_set: HashSet<usize> =
+        unique_mouths.iter().take(mouth_target).copied().collect();
+
+    let mut seen_mouths: HashSet<usize> = HashSet::new();
+    for (poly, mouth_opt) in rivers_sorted.iter().zip(polyline_mouths.iter()) {
         if kept.len() >= river_quota {
             break;
         }
-        let mut best: Option<(usize, f32)> = None;
-        for &(rx, ry) in &poly.points {
-            let ci = (ry as usize) * res + (rx as usize);
-            if !habitable(ci, map, slope, &ctx) {
-                continue;
-            }
-            if coast_dist[ci] < inland_buffer {
-                continue;
-            }
-            let s = fitness_plains(ci, &ctx);
-            if best.map(|(_, bs)| s > bs).unwrap_or(true) {
-                best = Some((ci, s));
-            }
+        let Some(mouth) = *mouth_opt else { continue };
+        if !seen_mouths.insert(mouth) {
+            continue;
         }
+        let best = if mouth_pick_set.contains(&mouth) {
+            best_mouth_cell(poly, map, slope, &ctx, res)
+                .or_else(|| best_middle_cell(poly, map, slope, &ctx, inland_buffer, res))
+        } else {
+            best_middle_cell(poly, map, slope, &ctx, inland_buffer, res)
+        };
         if let Some((idx, score)) = best {
-            try_place(idx, score, res, &spacing, &mut kept);
+            try_place(idx, score, res, &phase_a_spacing, &mut kept);
         }
     }
 
@@ -244,6 +270,104 @@ fn seed_per_component(
         }
         next_label += 1;
     }
+}
+
+/// Index of the polyline's last land cell, or `None` if the polyline has no
+/// land cells (purely sea, shouldn't normally happen). Rivers are extracted
+/// upstream→downstream so the mouth is at the end.
+fn mouth_land_cell(poly: &Polyline, map: &GlobalMap, res: usize) -> Option<usize> {
+    poly.points.iter().rev().find_map(|&(x, y)| {
+        let i = (y as usize) * res + (x as usize);
+        if map.land_mask[i] == 1 {
+            Some(i)
+        } else {
+            None
+        }
+    })
+}
+
+/// Two-char base-36 settlement ID (e.g. "00", "1k", "??" for indices past
+/// 36²). Used by both the worldgen preview's PNG overlay and the road
+/// pipeline's diagnostic logs so grepping a log line against the overlay
+/// PNG matches.
+pub fn settlement_label(idx: usize) -> String {
+    const ALPHA: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    if idx < 36 * 36 {
+        format!("{}{}", ALPHA[idx / 36] as char, ALPHA[idx % 36] as char)
+    } else {
+        "??".to_string()
+    }
+}
+
+/// Best habitable cell within a small radius around the river mouth that
+/// sits on or near the coast. Returns `None` if no such cell exists (mouth
+/// in a sink, surrounding land too steep, etc.) so the caller can fall back
+/// to the middle-reach pick.
+fn best_mouth_cell(
+    poly: &Polyline,
+    map: &GlobalMap,
+    slope: &[f32],
+    ctx: &FitnessCtx,
+    res: usize,
+) -> Option<(usize, f32)> {
+    const SEARCH_RADIUS: i32 = 8;
+    const COAST_MAX_DIST: u16 = 6;
+    let mouth = mouth_land_cell(poly, map, res)?;
+    let mx = (mouth % res) as i32;
+    let my = (mouth / res) as i32;
+    let mut best: Option<(usize, f32)> = None;
+    for dy in -SEARCH_RADIUS..=SEARCH_RADIUS {
+        let ny = my + dy;
+        if ny < 0 || ny >= res as i32 {
+            continue;
+        }
+        for dx in -SEARCH_RADIUS..=SEARCH_RADIUS {
+            if dx * dx + dy * dy > SEARCH_RADIUS * SEARCH_RADIUS {
+                continue;
+            }
+            let nx = (mx + dx).rem_euclid(res as i32) as usize;
+            let ni = (ny as usize) * res + nx;
+            if !habitable(ni, map, slope, ctx) {
+                continue;
+            }
+            if ctx.coast_dist[ni] > COAST_MAX_DIST {
+                continue;
+            }
+            let s = fitness_plains(ni, ctx);
+            if best.map(|(_, bs)| s > bs).unwrap_or(true) {
+                best = Some((ni, s));
+            }
+        }
+    }
+    best
+}
+
+/// Best inland cell along the polyline that sits at least `inland_buffer`
+/// cells from the coast. Default Phase-A behavior for rivers not picked
+/// for coastal-port treatment.
+fn best_middle_cell(
+    poly: &Polyline,
+    map: &GlobalMap,
+    slope: &[f32],
+    ctx: &FitnessCtx,
+    inland_buffer: u16,
+    res: usize,
+) -> Option<(usize, f32)> {
+    let mut best: Option<(usize, f32)> = None;
+    for &(rx, ry) in &poly.points {
+        let ci = (ry as usize) * res + (rx as usize);
+        if !habitable(ci, map, slope, ctx) {
+            continue;
+        }
+        if ctx.coast_dist[ci] < inland_buffer {
+            continue;
+        }
+        let s = fitness_plains(ci, ctx);
+        if best.map(|(_, bs)| s > bs).unwrap_or(true) {
+            best = Some((ci, s));
+        }
+    }
+    best
 }
 
 fn habitable(i: usize, map: &GlobalMap, slope: &[f32], ctx: &FitnessCtx) -> bool {

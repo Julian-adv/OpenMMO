@@ -100,6 +100,11 @@ pub fn run(
     // divergence point instead of two near-parallel routes. Run before
     // grid-snap so the snap pass sees the merged geometry.
     roads::merge_parallel_runs(&mut road_net, map.config.global_res as usize);
+    // Second pass picks up parallel pairs that don't share an endpoint —
+    // e.g. two roads heading from a coastal corridor toward different
+    // hub cities a few hundred meters apart. The endpoint-anchored pass
+    // can't see those because their start/end cells differ.
+    roads::merge_parallel_interiors(&mut road_net, map.config.global_res as usize);
     // Bridges in the runtime are placed on a 90°-grid only, so snap a small
     // window of cells at every road↔river crossing into pure cardinal
     // strips before tile baking — otherwise a diagonal A* crossing would

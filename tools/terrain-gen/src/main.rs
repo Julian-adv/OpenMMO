@@ -114,6 +114,19 @@ struct GenArgs {
     /// Minimum spacing between settlements in global cells.
     #[arg(long, default_value_t = 70)]
     settlement_spacing: u32,
+
+    /// Number of largest rivers (by mouth flow) to anchor at the coastal
+    /// mouth instead of the inland middle reach. Default is set above any
+    /// realistic river count so Phase A defaults to mouth-first for every
+    /// river. 0 = original (always inland middle reach).
+    #[arg(long, default_value_t = 500)]
+    river_mouth_settlements: u32,
+
+    /// Spacing multiplier for Phase-A river picks. Higher = Phase-A
+    /// settlements spread further apart, reducing inland clusters of
+    /// sibling-river picks at the cost of fewer total Phase-A villages.
+    #[arg(long, default_value_t = 2.0)]
+    phase_a_spacing_mult: f32,
 }
 
 impl GenArgs {
@@ -140,6 +153,8 @@ impl GenArgs {
             erosion_droplet_count: self.droplets,
             settlement_target_count: self.settlements,
             settlement_min_spacing_cells: self.settlement_spacing.max(1),
+            settlement_mouth_count: self.river_mouth_settlements,
+            settlement_phase_a_spacing_mult: self.phase_a_spacing_mult,
             ..WorldGenConfig::default()
         }
     }

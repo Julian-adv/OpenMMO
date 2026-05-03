@@ -94,6 +94,8 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
 
     let t_ph6 = Instant::now();
     let mut road_net = roads::compute_roads(&map, &settlements_list, &river_map);
+    roads::merge_parallel_runs(&mut road_net, map.config.global_res as usize);
+    roads::merge_parallel_interiors(&mut road_net, map.config.global_res as usize);
     roads::snap_crossings_to_grid(
         &mut road_net,
         &mut river_map,
@@ -144,7 +146,9 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         },
         "settlements": settlements_list
             .iter()
-            .map(|s| serde_json::json!({
+            .enumerate()
+            .map(|(i, s)| serde_json::json!({
+                "id": settlements::settlement_label(i),
                 "cell_x": s.cell_x,
                 "cell_y": s.cell_y,
                 "score": s.score,
@@ -375,7 +379,11 @@ fn write_roads_png(
     // the PNG is downscaled in a viewer (e.g. IDE preview).
     let outer = (map.config.global_res as i32 / 200).max(5);
     let inner = outer - 2;
-    for s in settlements_list {
+    // Label scale: at 4096-res `outer` ≈ 20 px; "a0" at scale 2 = 22×14 px,
+    // fits inside the 36 px inner disk with a couple px breathing room. Scale
+    // tracks `outer` so smaller previews still render readable text.
+    let label_scale = (outer / 7).max(1);
+    for (idx, s) in settlements_list.iter().enumerate() {
         stamp_disk(
             &mut img,
             n,
@@ -391,6 +399,16 @@ fn write_roads_png(
             s.cell_y as i32,
             inner,
             Rgb([240, 200, 60]),
+        );
+        let id = settlements::settlement_label(idx);
+        draw_text_centered(
+            &mut img,
+            n,
+            s.cell_x as i32,
+            s.cell_y as i32,
+            &id,
+            Rgb([20, 15, 5]),
+            label_scale,
         );
     }
     finish_png(&mut img, map, path)?;
@@ -570,6 +588,117 @@ fn draw_thick_line(
         let x = a[0] + dx * t;
         let y = a[1] + dy * t;
         stamp_disk(img, n, x.round() as i32, y.round() as i32, radius, color);
+    }
+}
+
+/// 5×7 bitmap glyphs indexed by base-36 digit (0..=9 then a..=z), top-to-
+/// bottom rows, 5 LSB bits per row (bit 4 = leftmost pixel). Hand-rolled
+/// to avoid pulling a font crate for a 36-glyph need.
+const FONT_GLYPHS: [[u8; 7]; 36] = [
+    [0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E], // 0
+    [0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E], // 1
+    [0x0E, 0x11, 0x01, 0x06, 0x08, 0x10, 0x1F], // 2
+    [0x1F, 0x02, 0x04, 0x02, 0x01, 0x11, 0x0E], // 3
+    [0x02, 0x06, 0x0A, 0x12, 0x1F, 0x02, 0x02], // 4
+    [0x1F, 0x10, 0x1E, 0x01, 0x01, 0x11, 0x0E], // 5
+    [0x06, 0x08, 0x10, 0x1E, 0x11, 0x11, 0x0E], // 6
+    [0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08], // 7
+    [0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E], // 8
+    [0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C], // 9
+    [0x00, 0x00, 0x0E, 0x01, 0x0F, 0x11, 0x0F], // a
+    [0x10, 0x10, 0x16, 0x19, 0x11, 0x11, 0x1E], // b
+    [0x00, 0x00, 0x0E, 0x10, 0x10, 0x10, 0x0E], // c
+    [0x01, 0x01, 0x0D, 0x13, 0x11, 0x11, 0x0F], // d
+    [0x00, 0x00, 0x0E, 0x11, 0x1F, 0x10, 0x0E], // e
+    [0x06, 0x09, 0x08, 0x1C, 0x08, 0x08, 0x08], // f
+    [0x00, 0x00, 0x0F, 0x11, 0x0F, 0x01, 0x0E], // g
+    [0x10, 0x10, 0x16, 0x19, 0x11, 0x11, 0x11], // h
+    [0x04, 0x00, 0x0C, 0x04, 0x04, 0x04, 0x0E], // i
+    [0x02, 0x00, 0x06, 0x02, 0x02, 0x12, 0x0C], // j
+    [0x10, 0x10, 0x12, 0x14, 0x18, 0x14, 0x12], // k
+    [0x0C, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E], // l
+    [0x00, 0x00, 0x1A, 0x15, 0x15, 0x11, 0x11], // m
+    [0x00, 0x00, 0x16, 0x19, 0x11, 0x11, 0x11], // n
+    [0x00, 0x00, 0x0E, 0x11, 0x11, 0x11, 0x0E], // o
+    [0x00, 0x00, 0x16, 0x19, 0x1E, 0x10, 0x10], // p
+    [0x00, 0x00, 0x0D, 0x13, 0x0F, 0x01, 0x01], // q
+    [0x00, 0x00, 0x16, 0x19, 0x10, 0x10, 0x10], // r
+    [0x00, 0x00, 0x0F, 0x10, 0x0E, 0x01, 0x1E], // s
+    [0x08, 0x08, 0x1C, 0x08, 0x08, 0x09, 0x06], // t
+    [0x00, 0x00, 0x11, 0x11, 0x11, 0x13, 0x0D], // u
+    [0x00, 0x00, 0x11, 0x11, 0x11, 0x0A, 0x04], // v
+    [0x00, 0x00, 0x11, 0x11, 0x15, 0x15, 0x0A], // w
+    [0x00, 0x00, 0x11, 0x0A, 0x04, 0x0A, 0x11], // x
+    [0x00, 0x00, 0x11, 0x11, 0x0F, 0x01, 0x0E], // y
+    [0x00, 0x00, 0x1F, 0x02, 0x04, 0x08, 0x1F], // z
+];
+
+/// Glyph for "?" used for any char outside 0..=9 / a..=z (e.g. the "??"
+/// overflow label from `settlement_label`).
+const GLYPH_QUESTION: [u8; 7] = [0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04];
+
+fn font_glyph(c: char) -> [u8; 7] {
+    c.to_digit(36)
+        .map(|d| FONT_GLYPHS[d as usize])
+        .unwrap_or(GLYPH_QUESTION)
+}
+
+/// Stamp a 5×7 glyph at `(left, top)` scaled by `scale` (each lit bit becomes
+/// a `scale×scale` block). X wraps, Y clamps — same conventions as `stamp_disk`.
+fn draw_glyph(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    n: usize,
+    left: i32,
+    top: i32,
+    bitmap: &[u8; 7],
+    color: Rgb<u8>,
+    scale: i32,
+) {
+    for row in 0..7i32 {
+        let bits = bitmap[row as usize];
+        for col in 0..5i32 {
+            if (bits >> (4 - col)) & 1 == 0 {
+                continue;
+            }
+            for sy in 0..scale {
+                for sx in 0..scale {
+                    let py = top + row * scale + sy;
+                    if py < 0 || py >= n as i32 {
+                        continue;
+                    }
+                    let px = (left + col * scale + sx).rem_euclid(n as i32) as u32;
+                    img.put_pixel(px, py as u32, color);
+                }
+            }
+        }
+    }
+}
+
+/// Render `text` centered on `(cx, cy)` using the 5×7 bitmap font at `scale`.
+/// Inter-character gap is 1 scaled pixel so dense IDs ("a0") stay readable.
+fn draw_text_centered(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    n: usize,
+    cx: i32,
+    cy: i32,
+    text: &str,
+    color: Rgb<u8>,
+    scale: i32,
+) {
+    let char_w = 5 * scale;
+    let char_h = 7 * scale;
+    let gap = scale;
+    let count = text.chars().count() as i32;
+    if count == 0 {
+        return;
+    }
+    let total_w = count * char_w + (count - 1) * gap;
+    let mut left = cx - total_w / 2;
+    let top = cy - char_h / 2;
+    for c in text.chars() {
+        let glyph = font_glyph(c);
+        draw_glyph(img, n, left, top, &glyph, color, scale);
+        left += char_w + gap;
     }
 }
 
