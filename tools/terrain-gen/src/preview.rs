@@ -219,20 +219,46 @@ fn finish_png(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap, path: &P
     Ok(())
 }
 
-/// Overlay region-boundary grid (1024 m pitch) plus origin axes on an image
-/// the same size as the global map. World origin sits at cell
-/// `global_res / 2`; region 0 starts at world -32 m (tile 0 spans [-32,32)),
-/// so boundaries live at `(world_size/2 − 32)/mpc + n·1024/mpc` cells for
-/// integer `n`. Every 4th region gets a heavier tint, origin axes are red.
-fn overlay_region_grid(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap) {
+/// Geometry of the 1 km region grid mapped onto a global-map image. Region 0
+/// starts at world −32 m (tile 0 spans [−32, +32) m), so its top/left edge
+/// sits half a tile inside the world origin — same convention as
+/// `terrain::coords`.
+struct RegionGrid {
+    res: i32,
+    region_px: f32,
+    region0_edge: f32,
+    origin_cell: f32,
+}
+
+fn region_grid(map: &GlobalMap) -> RegionGrid {
     const REGION_SIZE_M: f32 = 1024.0;
+    let res = map.config.global_res as i32;
+    let mpc = map.config.meters_per_cell();
+    let region_px = REGION_SIZE_M / mpc;
+    let origin_cell = res as f32 * 0.5;
+    let region0_edge = origin_cell - (onlinerpg_terrain::defaults::TILE_DIM as f32 * 0.5) / mpc;
+    RegionGrid {
+        res,
+        region_px,
+        region0_edge,
+        origin_cell,
+    }
+}
+
+/// Overlay region-boundary grid (1024 m pitch) plus origin axes on an image
+/// the same size as the global map. Every 4th region gets a heavier tint,
+/// origin axes are red.
+fn overlay_region_grid(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap) {
     /// Thick line every N regions (4 km default) so counting is easy on large
     /// maps without having to tick off every 1 km square.
     const MAJOR_STRIDE: i32 = 4;
 
-    let res = map.config.global_res as i32;
-    let mpc = map.config.meters_per_cell();
-    let region_px = REGION_SIZE_M / mpc;
+    let RegionGrid {
+        res,
+        region_px,
+        region0_edge,
+        origin_cell,
+    } = region_grid(map);
     if region_px < 2.0 {
         // Regions smaller than a couple of pixels would produce a solid
         // tint; just skip the overlay in that extreme low-res case.
@@ -245,11 +271,6 @@ fn overlay_region_grid(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap)
     let minor_thick = base_thick;
     let major_thick = base_thick * 2;
     let origin_thick = base_thick * 2;
-
-    let origin_cell = res as f32 * 0.5;
-    // Tile 0 spans [-32, +32) m; region 0's left/top edge sits at world -32 m
-    // (= half a tile inside region 0, same convention as `terrain::coords`).
-    let region0_edge = origin_cell - (onlinerpg_terrain::defaults::TILE_DIM as f32 * 0.5) / mpc;
 
     let major = Rgb([20, 20, 20]);
     let minor = Rgb([60, 60, 60]);
@@ -278,6 +299,72 @@ fn overlay_region_grid(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap)
     if (0..res).contains(&o) {
         draw_axis_line(img, o, res, origin_thick, origin, 0.8, Axis::Vertical);
         draw_axis_line(img, o, res, origin_thick, origin, 0.8, Axis::Horizontal);
+    }
+}
+
+/// Draw region-coordinate labels along the four image edges, e.g. `+0`, `-3`,
+/// at the center of each region. Uses the same 5×7 bitmap font as settlement
+/// labels so map references in conversation match what's drawn on disks.
+fn overlay_region_labels(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMap) {
+    let RegionGrid {
+        res,
+        region_px,
+        region0_edge,
+        ..
+    } = region_grid(map);
+    if region_px < 24.0 {
+        return;
+    }
+
+    // Match the settlement-label scale derivation so edge labels and disk
+    // labels render at the same size on a given preview.
+    let outer = (res / 200).max(5);
+    let scale = (outer / 7).max(1);
+    let char_w = 5 * scale;
+    let char_h = 7 * scale;
+    let gap = scale;
+    let pad = scale;
+
+    let text_color = Rgb([245, 245, 240]);
+    let bg_color = Rgb([15, 15, 22]);
+
+    let edge_inset = pad * 2;
+    let cy_top = edge_inset + char_h / 2;
+    let cy_bot = res - edge_inset - char_h / 2 - 1;
+    // Reserve a horizontal slot wide enough for a 3-char label like "+12" so
+    // the left/right column sits at a consistent X regardless of the actual
+    // visible region range.
+    let edge_slot_w = 3 * char_w + 2 * gap;
+    let cx_left = edge_inset + edge_slot_w / 2;
+    let cx_right = res - edge_inset - edge_slot_w / 2 - 1;
+
+    let n_min = ((-region0_edge) / region_px).floor() as i32 - 1;
+    let n_max = ((res as f32 - region0_edge) / region_px).ceil() as i32 + 1;
+
+    let n_usize = res as usize;
+    for n in n_min..=n_max {
+        let center_f = region0_edge + (n as f32 + 0.5) * region_px;
+        if center_f < 0.0 || center_f >= res as f32 {
+            continue;
+        }
+        let center = center_f.round() as i32;
+        let label = format!("{:+}", n);
+        let mut place = |cx, cy| {
+            draw_text_with_bg(
+                img, n_usize, cx, cy, &label, text_color, bg_color, scale, pad,
+            );
+        };
+
+        if center > cx_left + edge_slot_w / 2 + pad
+            && center < cx_right - edge_slot_w / 2 - pad
+        {
+            place(center, cy_top);
+            place(center, cy_bot);
+        }
+        if center > cy_top + char_h / 2 + pad && center < cy_bot - char_h / 2 - pad {
+            place(cx_left, center);
+            place(cx_right, center);
+        }
     }
 }
 
@@ -411,7 +498,13 @@ fn write_roads_png(
             label_scale,
         );
     }
-    finish_png(&mut img, map, path)?;
+    // Roads PNG is the reference image used in conversation, so it gets
+    // region-coordinate labels along all four edges on top of the standard
+    // grid overlay. Other previews keep the grid only.
+    overlay_region_grid(&mut img, map);
+    overlay_region_labels(&mut img, map);
+    img.save(path)
+        .with_context(|| format!("failed to write {}", path.display()))?;
     Ok(())
 }
 
@@ -636,11 +729,18 @@ const FONT_GLYPHS: [[u8; 7]; 36] = [
 /// Glyph for "?" used for any char outside 0..=9 / a..=z (e.g. the "??"
 /// overflow label from `settlement_label`).
 const GLYPH_QUESTION: [u8; 7] = [0x0E, 0x11, 0x01, 0x02, 0x04, 0x00, 0x04];
+const GLYPH_PLUS: [u8; 7] = [0x00, 0x04, 0x04, 0x1F, 0x04, 0x04, 0x00];
+const GLYPH_MINUS: [u8; 7] = [0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00];
 
 fn font_glyph(c: char) -> [u8; 7] {
-    c.to_digit(36)
-        .map(|d| FONT_GLYPHS[d as usize])
-        .unwrap_or(GLYPH_QUESTION)
+    match c {
+        '+' => GLYPH_PLUS,
+        '-' => GLYPH_MINUS,
+        _ => c
+            .to_digit(36)
+            .map(|d| FONT_GLYPHS[d as usize])
+            .unwrap_or(GLYPH_QUESTION),
+    }
 }
 
 /// Stamp a 5×7 glyph at `(left, top)` scaled by `scale` (each lit bit becomes
@@ -674,6 +774,24 @@ fn draw_glyph(
     }
 }
 
+/// Pixel bbox `(left, top, right, bot)` of `text` rendered by
+/// `draw_text_centered` at `scale`, centered on `(cx, cy)`. Right/bot are
+/// exclusive. Empty strings collapse to a zero-width rect at the center.
+fn text_bbox(text: &str, scale: i32, cx: i32, cy: i32) -> (i32, i32, i32, i32) {
+    let char_w = 5 * scale;
+    let char_h = 7 * scale;
+    let gap = scale;
+    let count = text.chars().count() as i32;
+    let total_w = if count > 0 {
+        count * char_w + (count - 1) * gap
+    } else {
+        0
+    };
+    let left = cx - total_w / 2;
+    let top = cy - char_h / 2;
+    (left, top, left + total_w, top + char_h)
+}
+
 /// Render `text` centered on `(cx, cy)` using the 5×7 bitmap font at `scale`.
 /// Inter-character gap is 1 scaled pixel so dense IDs ("a0") stay readable.
 fn draw_text_centered(
@@ -685,21 +803,43 @@ fn draw_text_centered(
     color: Rgb<u8>,
     scale: i32,
 ) {
-    let char_w = 5 * scale;
-    let char_h = 7 * scale;
-    let gap = scale;
-    let count = text.chars().count() as i32;
-    if count == 0 {
+    let (mut left, top, _, _) = text_bbox(text, scale, cx, cy);
+    let advance = 5 * scale + scale;
+    for c in text.chars() {
+        draw_glyph(img, n, left, top, &font_glyph(c), color, scale);
+        left += advance;
+    }
+}
+
+/// Draw `text` centered at `(cx, cy)` with a solid background pad behind it.
+/// Used by the edge-region labels where text sits on arbitrary terrain colors
+/// and needs guaranteed contrast (settlement labels rely on the yellow disk
+/// behind them instead). `pad` is in scaled pixels around the glyph block.
+fn draw_text_with_bg(
+    img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>,
+    n: usize,
+    cx: i32,
+    cy: i32,
+    text: &str,
+    text_color: Rgb<u8>,
+    bg_color: Rgb<u8>,
+    scale: i32,
+    pad: i32,
+) {
+    if text.is_empty() {
         return;
     }
-    let total_w = count * char_w + (count - 1) * gap;
-    let mut left = cx - total_w / 2;
-    let top = cy - char_h / 2;
-    for c in text.chars() {
-        let glyph = font_glyph(c);
-        draw_glyph(img, n, left, top, &glyph, color, scale);
-        left += char_w + gap;
+    let (l, t, r, b) = text_bbox(text, scale, cx, cy);
+    let x0 = (l - pad).max(0);
+    let x1 = (r + pad).min(n as i32);
+    let y0 = (t - pad).max(0);
+    let y1 = (b + pad).min(n as i32);
+    for py in y0..y1 {
+        for px in x0..x1 {
+            img.put_pixel(px as u32, py as u32, bg_color);
+        }
     }
+    draw_text_centered(img, n, cx, cy, text, text_color, scale);
 }
 
 /// Paint a filled disk of `radius` cells at (cx, cy), wrapping X, clamping Y.
