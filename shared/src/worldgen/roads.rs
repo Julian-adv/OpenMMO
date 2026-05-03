@@ -75,6 +75,37 @@ const RIVER_PARALLEL_PENALTY: f32 = 50.0;
 /// detour-around-the-river alternative.
 const RIVER_BUFFER_PENALTY: f32 = 1.5;
 
+/// Cosine threshold above which two incident edges at the same vertex are
+/// considered too parallel to read as distinct roads. The longer one then
+/// gets redirected to fork off the closer endpoint instead. cos(20°) ≈
+/// 0.94 matches the KNN-extras filter — only catch the most obviously
+/// parallel pairs. Wider angles (e.g. 30°) read as proper Y-junctions and
+/// shouldn't be collapsed even if a midpoint city happens to be on the
+/// way.
+const FORK_REDIRECT_MIN_COS: f32 = 0.94;
+
+/// Cost multiplier for an A* step that lands on a cell already covered by
+/// an earlier road in the same `compute_roads` pass. Slope, river-crossing
+/// orientation, and detour cost have already been "paid" by whoever laid
+/// the trunk, so following it is essentially free — A* should funnel
+/// toward existing pavement and only break new ground when the detour
+/// would be much longer than the direct route. Edges are processed
+/// longest-first so trunks form before branches; 0.5× balances merging
+/// (so two cities heading the same way don't lay parallel pavement) with
+/// preserving genuine alternate routes (e.g. a mountain pass shortcut
+/// shouldn't get sucked onto a long valley trunk just because the trunk
+/// exists).
+const EXISTING_ROAD_FACTOR: f32 = 0.5;
+
+/// Cap on the redirect's detour ratio: redirect (v→far) → (near→far) only
+/// when (|v-near| + |near-far|) ≤ this × |v-far|. Without the guard, two
+/// settlements at roughly equal distance from a hub get collapsed into a
+/// chain even though the "through" route is much longer than the direct
+/// road. 1.2× means the chain must be at most 20 % longer — i.e. `near`
+/// genuinely sits along the way to `far`, not just somewhere in the
+/// general direction.
+const FORK_REDIRECT_MAX_DETOUR: f32 = 1.2;
+
 pub fn compute_roads(
     map: &GlobalMap,
     settlements: &[Settlement],
@@ -117,11 +148,9 @@ pub fn compute_roads(
                 if edge_set.contains(&canonical((i, j))) {
                     continue;
                 }
-                let dir_j = direction(&settlements[i], &settlements[j], res_f);
-                let too_parallel = neighbors[i].iter().any(|&k| {
-                    let dir_k = direction(&settlements[i], &settlements[k], res_f);
-                    cos_angle(dir_j, dir_k) > MIN_ANGLE_COS
-                });
+                let too_parallel = neighbors[i]
+                    .iter()
+                    .any(|&k| pair_cos_at(i, j, k, settlements, res_f) > MIN_ANGLE_COS);
                 if too_parallel {
                     continue;
                 }
@@ -133,15 +162,30 @@ pub fn compute_roads(
         }
     }
 
+    // MST has no parallel-fork rejection of its own (it just minimizes total
+    // length), so two cities downstream of the same hub can both sit in the
+    // hub's adjacency at near-parallel angles. Real road builders would never
+    // lay redundant pavement next to an existing trunk; redirect those forks
+    // through the closer city so the network reads as a Y-junction.
+    redirect_parallel_forks(&mut edge_set, settlements, res_f);
+
+    // Longest edges first so trunks form before branches and later
+    // branches snap onto the trunk via `road_mask`.
     let mut edges: Vec<(usize, usize)> = edge_set.into_iter().collect();
-    edges.sort_unstable();
+    edges.sort_by(|&(a1, b1), &(a2, b2)| {
+        let d1 = euclidean_sq(&settlements[a1], &settlements[b1], res_f);
+        let d2 = euclidean_sq(&settlements[a2], &settlements[b2], res_f);
+        d2.total_cmp(&d1).then((a1, b1).cmp(&(a2, b2)))
+    });
 
     // Pre-allocate A* scratch buffers once and reset per call instead of
     // re-allocating 3× res² vectors for every edge. At 4096² this avoids
     // gigabytes of allocation traffic over the N-edge road loop.
-    let total = (map.config.global_res as usize).pow(2);
+    let res_usize = map.config.global_res as usize;
+    let total = res_usize.pow(2);
     let mut scratch = AStarScratch::new(total);
-    let river_field = RiverField::from_polylines(&river_map.rivers, map.config.global_res as usize);
+    let river_field = RiverField::from_polylines(&river_map.rivers, res_usize);
+    let mut road_mask = vec![0u8; total];
     let mut roads = Vec::with_capacity(edges.len());
     for (a, b) in edges {
         let sa = &settlements[a];
@@ -155,7 +199,11 @@ pub fn compute_roads(
             sb.cell_y as usize,
             &mut scratch,
             &river_field,
+            &road_mask,
         ) {
+            for &(x, y) in &path {
+                road_mask[(y as usize) * res_usize + x as usize] = 1;
+            }
             roads.push(Road { points: path });
         }
     }
@@ -347,6 +395,227 @@ fn cell_dist_sq(a: (u32, u32), b: (u32, u32), res_i: i32) -> f32 {
     dx * dx + (dy as f32).powi(2)
 }
 
+/// Cell-distance threshold for treating two interior road points as
+/// co-located. Slightly looser than the endpoint-anchored threshold because
+/// A* paths drift more in the middle than near forced-pass-through cells —
+/// roads that share a corridor (same valley, same coastline run) often
+/// hover ~4–5 cells apart even when the player perceives them as one
+/// trunk.
+const INTERIOR_MERGE_THRESHOLD_CELLS: f32 = 5.0;
+/// Minimum shared run for the interior pass. Higher than the endpoint
+/// version's 30 because mid-polyline splices replace the *middle* of a
+/// road, which is a more disruptive edit; we want a clear visual payoff.
+const INTERIOR_MERGE_MIN_LEN_CELLS: usize = 60;
+/// Bin edge for the spatial hash used to find candidate alignment points.
+/// Large enough that any pair of points within `THRESHOLD_CELLS` lands in
+/// the same or an adjacent bin.
+const INTERIOR_MERGE_BIN_CELLS: i32 = 6;
+
+/// Fuse pairs of roads that DON'T share an endpoint (or whose shared
+/// endpoint diverges instantly) but run nearly parallel for a long
+/// *interior* stretch — replace the higher-indexed road's matching segment
+/// with the lower-indexed road's cells so the rendered network reads as a
+/// single trunk with two Y-forks instead of two adjacent ribbons.
+///
+/// Run after `merge_parallel_runs` so the endpoint-anchored merges already
+/// happened. Each road participates in at most one splice per pass to keep
+/// the index math sane: a road that's a trunk for match A keeps its
+/// geometry, a road that's a follower for match B has its mid-section
+/// rewritten, but we never let a road be both in the same pass (cascading
+/// edits would invalidate the alignment indices recorded for B).
+pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
+    if road_net.roads.len() < 2 {
+        return;
+    }
+    let res_i = res as i32;
+    let threshold_sq = INTERIOR_MERGE_THRESHOLD_CELLS * INTERIOR_MERGE_THRESHOLD_CELLS;
+    let min_len = INTERIOR_MERGE_MIN_LEN_CELLS;
+
+    // Spatial hash: bin coords → list of (road_idx, point_idx).
+    let mut bins: HashMap<(i32, i32), Vec<(u32, u32)>> = HashMap::new();
+    for (ri, road) in road_net.roads.iter().enumerate() {
+        if road.points.len() < min_len + 1 {
+            continue;
+        }
+        for (pi, &(x, y)) in road.points.iter().enumerate() {
+            let key = (x as i32 / INTERIOR_MERGE_BIN_CELLS, y as i32 / INTERIOR_MERGE_BIN_CELLS);
+            bins.entry(key).or_default().push((ri as u32, pi as u32));
+        }
+    }
+
+    // Best alignment per (lo, hi) road pair, where lo < hi.
+    // Stored as (length, i_lo, i_hi, j_lo, j_hi, j_descending).
+    type Alignment = (usize, usize, usize, usize, bool);
+    let mut best: HashMap<(usize, usize), (usize, Alignment)> = HashMap::new();
+
+    let mut bin_keys: Vec<(i32, i32)> = bins.keys().copied().collect();
+    bin_keys.sort_unstable();
+    for key in &bin_keys {
+        let pts = &bins[key];
+        if pts.len() < 2 {
+            continue;
+        }
+        for i in 0..pts.len() {
+            for j in (i + 1)..pts.len() {
+                let (ra, ia) = (pts[i].0 as usize, pts[i].1 as usize);
+                let (rb, ib) = (pts[j].0 as usize, pts[j].1 as usize);
+                if ra == rb {
+                    continue;
+                }
+                let (lo, lo_idx, hi, hi_idx) = if ra < rb {
+                    (ra, ia, rb, ib)
+                } else {
+                    (rb, ib, ra, ia)
+                };
+                let pair = (lo, hi);
+                let a = &road_net.roads[lo].points;
+                let b = &road_net.roads[hi].points;
+                if shares_endpoint(a, b) {
+                    continue;
+                }
+                if cell_dist_sq(a[lo_idx], b[hi_idx], res_i) > threshold_sq {
+                    continue;
+                }
+
+                // Forward alignment (both walked in the same direction).
+                let (e_lo_f, e_hi_f) =
+                    extend_run(a, b, lo_idx, hi_idx, 1, 1, res_i, threshold_sq);
+                let (s_lo_f, s_hi_f) =
+                    extend_run(a, b, lo_idx, hi_idx, -1, -1, res_i, threshold_sq);
+                let len_f = e_lo_f - s_lo_f;
+
+                // Reverse alignment (b walked opposite direction). Forward
+                // half walks i↑ / j↓ and lands at (i_hi, j_lo); backward
+                // half walks i↓ / j↑ and lands at (i_lo, j_hi).
+                let (e_lo_r, j_lo_r) =
+                    extend_run(a, b, lo_idx, hi_idx, 1, -1, res_i, threshold_sq);
+                let (s_lo_r, j_hi_r) =
+                    extend_run(a, b, lo_idx, hi_idx, -1, 1, res_i, threshold_sq);
+                let len_r = e_lo_r - s_lo_r;
+
+                let (best_len, alignment) = if len_f >= len_r {
+                    (len_f, (s_lo_f, e_lo_f, s_hi_f, e_hi_f, false))
+                } else {
+                    (len_r, (s_lo_r, e_lo_r, j_lo_r, j_hi_r, true))
+                };
+
+                if best_len < min_len {
+                    continue;
+                }
+
+                let entry = best
+                    .entry(pair)
+                    .or_insert((0, (0, 0, 0, 0, false)));
+                if best_len > entry.0 {
+                    *entry = (best_len, alignment);
+                }
+            }
+        }
+    }
+
+    // Apply splices longest-first; tiebreak by pair indices for
+    // determinism. Each road participates at most once.
+    let mut matches: Vec<((usize, usize), usize, Alignment)> = best
+        .into_iter()
+        .map(|(pair, (len, a))| (pair, len, a))
+        .collect();
+    matches.sort_by(|x, y| y.1.cmp(&x.1).then_with(|| x.0.cmp(&y.0)));
+
+    let mut claimed = vec![false; road_net.roads.len()];
+    let mut applied = 0usize;
+    let mut total_cells = 0usize;
+    for ((lo, hi), len, (i_lo, i_hi, j_lo, j_hi, j_descending)) in matches {
+        if claimed[lo] || claimed[hi] {
+            continue;
+        }
+        if i_lo >= i_hi || j_lo >= j_hi {
+            continue;
+        }
+        let trunk_segment: Vec<(u32, u32)> =
+            road_net.roads[lo].points[i_lo..=i_hi].to_vec();
+        let segment: Vec<(u32, u32)> = if j_descending {
+            trunk_segment.into_iter().rev().collect()
+        } else {
+            trunk_segment
+        };
+        road_net.roads[hi].points.splice(j_lo..=j_hi, segment);
+        claimed[lo] = true;
+        claimed[hi] = true;
+        applied += 1;
+        total_cells += len;
+    }
+    eprintln!(
+        "  interior parallel merge: {} pairs fused, {} cells of shared trunk",
+        applied, total_cells
+    );
+}
+
+/// True if either polyline endpoint of `a` coincides with either endpoint
+/// of `b`. Endpoint-shared pairs are handled by `merge_parallel_runs`; the
+/// interior pass skips them so it doesn't fight the endpoint splice.
+fn shares_endpoint(a: &[(u32, u32)], b: &[(u32, u32)]) -> bool {
+    if a.is_empty() || b.is_empty() {
+        return false;
+    }
+    let a0 = a[0];
+    let a_n = a[a.len() - 1];
+    let b0 = b[0];
+    let b_n = b[b.len() - 1];
+    a0 == b0 || a0 == b_n || a_n == b0 || a_n == b_n
+}
+
+/// Walk both polylines from `(i0, j0)` along directions `(di, dj)` (each
+/// ±1), greedily aligning a's next cell to its closest match in b within
+/// `LOOKAHEAD` steps. Returns the last `(i, j)` that stayed within the
+/// distance threshold. Used to extend a candidate alignment found by the
+/// spatial bin scan into the longest contiguous parallel run on either
+/// side of the seed.
+fn extend_run(
+    a: &[(u32, u32)],
+    b: &[(u32, u32)],
+    i0: usize,
+    j0: usize,
+    di: i32,
+    dj: i32,
+    res_i: i32,
+    threshold_sq: f32,
+) -> (usize, usize) {
+    let n_a = a.len() as i32;
+    let n_b = b.len() as i32;
+    let lookahead = PARALLEL_MERGE_LOOKAHEAD as i32;
+    let mut i = i0 as i32;
+    let mut j = j0 as i32;
+    let mut last_i = i;
+    let mut last_j = j;
+    loop {
+        let ni = i + di;
+        if ni < 0 || ni >= n_a {
+            break;
+        }
+        let mut best_j = j;
+        let mut best_d = f32::INFINITY;
+        for k in 0..=lookahead {
+            let cand = j + k * dj;
+            if cand < 0 || cand >= n_b {
+                break;
+            }
+            let d = cell_dist_sq(a[ni as usize], b[cand as usize], res_i);
+            if d < best_d {
+                best_d = d;
+                best_j = cand;
+            }
+        }
+        if best_d > threshold_sq {
+            break;
+        }
+        i = ni;
+        j = best_j;
+        last_i = i;
+        last_j = j;
+    }
+    (last_i as usize, last_j as usize)
+}
+
 /// Build the trunk's first `split_idx + 1` cells in oriented-view order
 /// (shared endpoint first), as an owned Vec.
 fn oriented_prefix(points: &[(u32, u32)], from: EndKind, split_idx: usize) -> Vec<(u32, u32)> {
@@ -535,6 +804,102 @@ fn canonical(e: (usize, usize)) -> (usize, usize) {
     }
 }
 
+/// Iteratively redirect near-parallel forks: at any vertex where two
+/// incident edges (v→a, v→b) leave at less than the FORK_REDIRECT angle,
+/// drop the longer one (v→b) and reroute it through the closer endpoint
+/// (insert a→b). The graph stays connected because b was reachable through
+/// v and is now reachable via v→a→b. Convergence: each redirect either
+/// drops a duplicate edge or strictly shortens total edge length (a sits
+/// roughly between v and b along the shared direction, so |a-b| < |v-b|),
+/// so this terminates after at most O(E) redirects in practice.
+fn redirect_parallel_forks(
+    edge_set: &mut HashSet<(usize, usize)>,
+    settlements: &[Settlement],
+    res_f: f32,
+) {
+    let n = settlements.len();
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    let mut sorted_edges: Vec<(usize, usize)> = edge_set.iter().copied().collect();
+    sorted_edges.sort_unstable();
+    for (a, b) in sorted_edges {
+        adj[a].push(b);
+        adj[b].push(a);
+    }
+    let mut redirects = 0usize;
+    loop {
+        // (v, near, far, cos): drop edge (v, far), insert (near, far).
+        let mut redirect: Option<(usize, usize, usize, f32)> = None;
+        'scan: for v in 0..n {
+            // Tie-break by index so the redirect choice doesn't depend on
+            // HashSet iteration order.
+            let mut nbrs: Vec<(f32, usize)> = adj[v]
+                .iter()
+                .map(|&u| (euclidean_sq(&settlements[v], &settlements[u], res_f), u))
+                .collect();
+            nbrs.sort_by(|x, y| x.0.total_cmp(&y.0).then_with(|| x.1.cmp(&y.1)));
+            for i in 0..nbrs.len() {
+                for j in (i + 1)..nbrs.len() {
+                    let near = nbrs[i].1;
+                    let far = nbrs[j].1;
+                    let c = pair_cos_at(v, near, far, settlements, res_f);
+                    if c <= FORK_REDIRECT_MIN_COS {
+                        continue;
+                    }
+                    let d_v_near = nbrs[i].0.sqrt();
+                    let d_v_far = nbrs[j].0.sqrt();
+                    let d_near_far =
+                        euclidean_sq(&settlements[near], &settlements[far], res_f).sqrt();
+                    if (d_v_near + d_near_far) > FORK_REDIRECT_MAX_DETOUR * d_v_far {
+                        continue;
+                    }
+                    redirect = Some((v, near, far, c));
+                    break 'scan;
+                }
+            }
+        }
+        match redirect {
+            None => break,
+            Some((v, near, far, c)) => {
+                let angle_deg = c.clamp(-1.0, 1.0).acos().to_degrees();
+                eprintln!(
+                    "fork-redirect: drop ({} → {}), add ({} → {}) — angle {angle_deg:.1}° at {}",
+                    settlement_label(v),
+                    settlement_label(far),
+                    settlement_label(near),
+                    settlement_label(far),
+                    settlement_label(v),
+                );
+                edge_set.remove(&canonical((v, far)));
+                adj[v].retain(|&x| x != far);
+                adj[far].retain(|&x| x != v);
+                if near != far && edge_set.insert(canonical((near, far))) {
+                    adj[near].push(far);
+                    adj[far].push(near);
+                }
+                redirects += 1;
+            }
+        }
+    }
+    if redirects > 0 {
+        eprintln!("fork-redirect: {redirects} edge(s) redirected");
+    }
+}
+
+/// Two-char base-36 settlement ID matching the preview overlay so log
+/// output (e.g. "1k") is grep-able against the worldgen_preview PNGs.
+fn settlement_label(idx: usize) -> String {
+    const ALPHA: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
+    if idx < 36 * 36 {
+        format!(
+            "{}{}",
+            ALPHA[idx / 36] as char,
+            ALPHA[idx % 36] as char
+        )
+    } else {
+        format!("#{idx}")
+    }
+}
+
 /// Classical Prim's MST on settlement positions, with X-wrap-aware squared
 /// Euclidean distance. `O(n²)` — fine for hundreds of cities.
 fn prim_mst(settlements: &[Settlement], res_f: f32) -> Vec<(usize, usize)> {
@@ -603,6 +968,16 @@ fn cos_angle(a: (f32, f32), b: (f32, f32)) -> f32 {
     a.0 * b.0 + a.1 * b.1
 }
 
+/// Cosine of the angle between the two rays leaving `v` toward `a` and `b`.
+/// Wraps the `cos_angle(direction, direction)` pattern that both the
+/// KNN-extras filter and the fork-redirect pass share.
+fn pair_cos_at(v: usize, a: usize, b: usize, settlements: &[Settlement], res_f: f32) -> f32 {
+    cos_angle(
+        direction(&settlements[v], &settlements[a], res_f),
+        direction(&settlements[v], &settlements[b], res_f),
+    )
+}
+
 fn a_star(
     map: &GlobalMap,
     sx: usize,
@@ -611,6 +986,7 @@ fn a_star(
     gy: usize,
     scratch: &mut AStarScratch,
     river_field: &RiverField,
+    road_mask: &[u8],
 ) -> Option<Vec<(u32, u32)>> {
     let res = map.config.global_res as usize;
     let res_i = res as i32;
@@ -691,18 +1067,24 @@ fn a_star(
                 } else {
                     (1.0, dx as f32, dy as f32)
                 };
-                let dh = (elev[ni] - h).abs();
-                // Grade is per cell of horizontal travel (so diagonals
-                // benefit fairly: same dh over √2 cells reads as a gentler
-                // slope). Quadratic excess past `SLOPE_STEEP_THRESHOLD`
-                // makes steep faces explode in cost so A* contours around
-                // them instead of climbing.
-                let step_length_m = base * meters_per_cell;
-                let grade = dh / step_length_m;
-                let excess = (grade - SLOPE_STEEP_THRESHOLD).max(0.0);
-                let slope_cost =
-                    base * (grade * SLOPE_WEIGHT_LIN + excess * excess * SLOPE_QUAD_WEIGHT);
-                let cost = base + slope_cost + river_field.step_penalty(ni, sdx, sdy);
+                // Existing-road cells: a previous edge already laid this
+                // pavement, so re-using it skips slope/river penalties
+                // entirely (see EXISTING_ROAD_FACTOR for the trade-off).
+                let cost = if road_mask[ni] != 0 {
+                    base * EXISTING_ROAD_FACTOR
+                } else {
+                    let dh = (elev[ni] - h).abs();
+                    // Grade is per cell of horizontal travel so diagonals
+                    // benefit fairly. Quadratic excess past the steep
+                    // threshold makes A* contour around steep faces
+                    // instead of climbing them.
+                    let step_length_m = base * meters_per_cell;
+                    let grade = dh / step_length_m;
+                    let excess = (grade - SLOPE_STEEP_THRESHOLD).max(0.0);
+                    let slope_cost =
+                        base * (grade * SLOPE_WEIGHT_LIN + excess * excess * SLOPE_QUAD_WEIGHT);
+                    base + slope_cost + river_field.step_penalty(ni, sdx, sdy)
+                };
                 let tentative = scratch.g_score[ci] + cost;
                 if tentative < scratch.g_score[ni] {
                     scratch.g_score[ni] = tentative;
@@ -1086,9 +1468,7 @@ mod tests {
             .expect("river must pass through the crossing cell");
 
         let mut net = RoadNetwork {
-            roads: vec![Road {
-                points: road_pts.clone(),
-            }],
+            roads: vec![Road { points: road_pts.clone() }],
         };
         let mut river_map = RiverMap {
             downstream: Vec::new(),
@@ -1157,9 +1537,7 @@ mod tests {
             .expect("road must pass through the crossing cell");
 
         let mut net = RoadNetwork {
-            roads: vec![Road {
-                points: road_pts.clone(),
-            }],
+            roads: vec![Road { points: road_pts.clone() }],
         };
         let mut river_map = RiverMap {
             downstream: Vec::new(),
@@ -1228,12 +1606,8 @@ mod tests {
 
         let mut net = RoadNetwork {
             roads: vec![
-                Road {
-                    points: a_pts.clone(),
-                },
-                Road {
-                    points: b_pts.clone(),
-                },
+                Road { points: a_pts.clone() },
+                Road { points: b_pts.clone() },
             ],
         };
         merge_parallel_runs(&mut net, res);
@@ -1278,12 +1652,8 @@ mod tests {
 
         let mut net = RoadNetwork {
             roads: vec![
-                Road {
-                    points: a_pts.clone(),
-                },
-                Road {
-                    points: b_pts.clone(),
-                },
+                Road { points: a_pts.clone() },
+                Road { points: b_pts.clone() },
             ],
         };
         merge_parallel_runs(&mut net, res);
@@ -1316,12 +1686,8 @@ mod tests {
 
         let mut net = RoadNetwork {
             roads: vec![
-                Road {
-                    points: a_pts.clone(),
-                },
-                Road {
-                    points: b_pts.clone(),
-                },
+                Road { points: a_pts.clone() },
+                Road { points: b_pts.clone() },
             ],
         };
         merge_parallel_runs(&mut net, res);
@@ -1348,5 +1714,83 @@ mod tests {
             "shared trailing run only {shared_run} cells, expected at least {}",
             PARALLEL_MERGE_MIN_LEN_CELLS
         );
+    }
+
+    fn s(x: u32, y: u32) -> Settlement {
+        Settlement {
+            cell_x: x,
+            cell_y: y,
+            score: 0.0,
+        }
+    }
+
+    #[test]
+    fn fork_redirect_reroutes_parallel_pair_through_closer_city() {
+        // v at origin, near at (100, 0), far at (200, 5). v→near and v→far
+        // share a near-zero angle (cos ≈ 0.9997 ≫ threshold), so v→far must
+        // be redirected to near→far.
+        let settlements = [s(0, 0), s(100, 0), s(200, 5)];
+        let res_f = 4096.0;
+        let mut edge_set: HashSet<(usize, usize)> = HashSet::new();
+        edge_set.insert(canonical((0, 1)));
+        edge_set.insert(canonical((0, 2)));
+
+        redirect_parallel_forks(&mut edge_set, &settlements, res_f);
+
+        assert!(
+            edge_set.contains(&canonical((0, 1))),
+            "v→near must remain"
+        );
+        assert!(
+            !edge_set.contains(&canonical((0, 2))),
+            "v→far must be removed"
+        );
+        assert!(
+            edge_set.contains(&canonical((1, 2))),
+            "near→far must be added"
+        );
+    }
+
+    #[test]
+    fn fork_redirect_keeps_well_separated_edges() {
+        // Three edges from v fanning out at 120°. None are parallel —
+        // edge_set must be unchanged.
+        let settlements = [
+            s(2048, 2048),
+            s(2148, 2048),                // east
+            s(1998, 2048 + 87),           // 120° from east
+            s(1998, 2048 - 87),           // 240° from east
+        ];
+        let res_f = 4096.0;
+        let mut edge_set: HashSet<(usize, usize)> = HashSet::new();
+        edge_set.insert(canonical((0, 1)));
+        edge_set.insert(canonical((0, 2)));
+        edge_set.insert(canonical((0, 3)));
+        let before = edge_set.clone();
+
+        redirect_parallel_forks(&mut edge_set, &settlements, res_f);
+
+        assert_eq!(edge_set, before);
+    }
+
+    #[test]
+    fn fork_redirect_chains_through_collinear_cities() {
+        // Four collinear cities at 0, 100, 200, 300 — v has direct edges to
+        // all three downstream cities. After redirect they should chain
+        // 0→1→2→3 instead of fanning from 0.
+        let settlements = [s(0, 0), s(100, 0), s(200, 0), s(300, 0)];
+        let res_f = 4096.0;
+        let mut edge_set: HashSet<(usize, usize)> = HashSet::new();
+        edge_set.insert(canonical((0, 1)));
+        edge_set.insert(canonical((0, 2)));
+        edge_set.insert(canonical((0, 3)));
+
+        redirect_parallel_forks(&mut edge_set, &settlements, res_f);
+
+        assert!(edge_set.contains(&canonical((0, 1))));
+        assert!(edge_set.contains(&canonical((1, 2))));
+        assert!(edge_set.contains(&canonical((2, 3))));
+        assert!(!edge_set.contains(&canonical((0, 2))));
+        assert!(!edge_set.contains(&canonical((0, 3))));
     }
 }

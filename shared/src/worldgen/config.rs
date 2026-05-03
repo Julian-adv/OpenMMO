@@ -221,6 +221,23 @@ pub struct WorldGenConfig {
     /// line up in a regular fence along the shore.
     pub settlement_coastal_spacing_mult: f32,
 
+    /// Number of rivers (top by mouth flow) whose Phase-A pick is placed at
+    /// the coastal mouth instead of the inland middle reach. Default is set
+    /// well above the typical river count so Phase A defaults to mouth-first
+    /// for *every* river (with a fallback to the inland middle reach when no
+    /// habitable cell exists near the mouth) — matches the real-world
+    /// pattern where almost all major settlements grew at river mouths.
+    pub settlement_mouth_count: u32,
+
+    /// Spacing multiplier applied to Phase-A river picks. Without an inflated
+    /// spacing, sibling rivers in one wide valley plain land their middle-
+    /// reach picks within ~100 cells of each other (each picks the highest-
+    /// score cell in its own drainage, but those cells line up along the
+    /// same foothill contour). Multiplying spacing here forces Phase-A picks
+    /// onto distinct valleys; Phase B / Phase C use the unmultiplied spacing
+    /// so islands and along-road villages aren't starved.
+    pub settlement_phase_a_spacing_mult: f32,
+
     // --- Phase 6: roads ---------------------------------------------------
     /// K in the K-nearest-neighbor graph added on top of the MST when
     /// computing the road network. 0 = MST only; higher = denser graph
@@ -277,7 +294,9 @@ impl Default for WorldGenConfig {
             settlement_along_road_count: 40,
             settlement_inland_buffer_cells: 80,
             settlement_coastal_spacing_mult: 1.6,
-            road_extra_neighbors: 3,
+            settlement_mouth_count: 500,
+            settlement_phase_a_spacing_mult: 2.0,
+            road_extra_neighbors: 5,
         }
     }
 }
