@@ -15,7 +15,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use super::global_map::GlobalMap;
 use super::grid::MinF32;
 use super::rivers::{Polyline, RiverMap};
-use super::settlements::{settlement_label, Settlement};
+use super::settlements::Settlement;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Road {
@@ -865,16 +865,7 @@ fn redirect_parallel_forks(
         }
         match redirect {
             None => break,
-            Some((v, near, far, c)) => {
-                let angle_deg = c.clamp(-1.0, 1.0).acos().to_degrees();
-                eprintln!(
-                    "fork-redirect: drop ({} → {}), add ({} → {}) — angle {angle_deg:.1}° at {}",
-                    settlement_label(v),
-                    settlement_label(far),
-                    settlement_label(near),
-                    settlement_label(far),
-                    settlement_label(v),
-                );
+            Some((v, near, far, _c)) => {
                 edge_set.remove(&canonical((v, far)));
                 adj[v].retain(|&x| x != far);
                 adj[far].retain(|&x| x != v);

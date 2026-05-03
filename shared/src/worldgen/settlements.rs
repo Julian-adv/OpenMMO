@@ -80,17 +80,10 @@ pub fn place_settlements_with_fields(
     let HabitabilityFields {
         coast_dist,
         slope,
-        dist_to_river,
+        dist_to_river: _,
     } = fields;
 
-    let ctx = FitnessCtx {
-        elev: &map.elevation_m,
-        coast_dist,
-        slope,
-        dist_to_river,
-        max_slope: cfg.settlement_max_slope,
-        max_elev: cfg.settlement_max_elevation_m,
-    };
+    let ctx = FitnessCtx::from_config(map, fields);
 
     let res_f = res as f32;
     let min_spacing_actual = cfg
@@ -371,7 +364,11 @@ fn best_middle_cell(
 }
 
 fn habitable(i: usize, map: &GlobalMap, slope: &[f32], ctx: &FitnessCtx) -> bool {
-    map.land_mask[i] == 1 && map.elevation_m[i] <= ctx.max_elev && slope[i] <= ctx.max_slope
+    if map.land_mask[i] != 1 || map.elevation_m[i] > ctx.max_elev || slope[i] > ctx.max_slope {
+        return false;
+    }
+    let cy = i / map.config.global_res as usize;
+    cy <= ctx.max_cy
 }
 
 struct SpacingCtx<'a> {
@@ -438,6 +435,33 @@ struct FitnessCtx<'a> {
     dist_to_river: &'a [u16],
     max_slope: f32,
     max_elev: f32,
+    /// Largest cell-y (inclusive) that passes habitability. Cells with
+    /// `cy > max_cy` are inside the south-edge exclusion band. `usize::MAX`
+    /// disables the check.
+    max_cy: usize,
+}
+
+impl FitnessCtx<'_> {
+    fn from_config<'a>(map: &'a GlobalMap, fields: &'a HabitabilityFields) -> FitnessCtx<'a> {
+        let cfg = &map.config;
+        let max_cy = if cfg.settlement_south_edge_exclusion_m > 0.0 {
+            let res = cfg.global_res as usize;
+            let excl_cells = (cfg.settlement_south_edge_exclusion_m / cfg.meters_per_cell())
+                .ceil() as usize;
+            res.saturating_sub(excl_cells + 1)
+        } else {
+            usize::MAX
+        };
+        FitnessCtx {
+            elev: &map.elevation_m,
+            coast_dist: &fields.coast_dist,
+            slope: &fields.slope,
+            dist_to_river: &fields.dist_to_river,
+            max_slope: cfg.settlement_max_slope,
+            max_elev: cfg.settlement_max_elevation_m,
+            max_cy,
+        }
+    }
 }
 
 // Coastal Gaussian: peak ~15 cells inland (120m at the 8m reference cell),
@@ -485,16 +509,9 @@ pub fn place_settlements_along_roads_with_fields(
     let HabitabilityFields {
         coast_dist,
         slope,
-        dist_to_river,
+        dist_to_river: _,
     } = fields;
-    let ctx = FitnessCtx {
-        elev: &map.elevation_m,
-        coast_dist,
-        slope,
-        dist_to_river,
-        max_slope: cfg.settlement_max_slope,
-        max_elev: cfg.settlement_max_elevation_m,
-    };
+    let ctx = FitnessCtx::from_config(map, fields);
 
     let mut road_cells: Vec<u32> = Vec::new();
     for road in &roads.roads {

@@ -16,7 +16,8 @@
 
 use super::global_map::GlobalMap;
 use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, fbm_wrap_x_damped, smoothstep, PerlinNoise3D, ValueNoise3D};
+use super::noise::{fbm_wrap_x, fbm_wrap_x_damped, smoothstep, PerlinNoise, PerlinNoise3D, ValueNoise3D};
+use super::vector_features::project_point_to_segment;
 
 const LACUNARITY: f32 = 2.0;
 /// Damped fBm self-attenuates further detail in steep regions, so a 7th
@@ -170,7 +171,117 @@ pub fn generate_elevation(map: &mut GlobalMap) {
         }
     }
 
+    apply_elevation_hotspots(map, &mut elevation);
+    apply_river_carve_paths(map, &mut elevation);
+
     map.elevation_m = elevation;
+}
+
+/// Hotspot disk-boundary "lobes" per radius. ~1.5 keeps the disk lopsided
+/// without reading as a periodic ringing.
+const HOTSPOT_SHAPE_LOBES: f32 = 1.5;
+/// Inner sub-summit count per radius. ~5 places 2-3 visible bumps inside.
+const HOTSPOT_DETAIL_LOBES: f32 = 5.0;
+/// ± fraction of nominal radius perturbed by the shape noise.
+const HOTSPOT_RADIUS_PERTURB: f32 = 0.35;
+/// ± fraction of `peak_m` modulated by the detail noise (scaled by `t`).
+const HOTSPOT_DETAIL_AMPLITUDE: f32 = 0.3;
+
+fn apply_river_carve_paths(map: &GlobalMap, elevation: &mut [f32]) {
+    if map.config.river_carve_paths.is_empty() {
+        return;
+    }
+    let res = map.config.global_res as usize;
+    let mpc = map.config.meters_per_cell();
+
+    for path in &map.config.river_carve_paths {
+        let (ax, ay) = map.config.world_m_to_cell(path.start_x_m, path.start_y_m);
+        let (bx, by) = map.config.world_m_to_cell(path.end_x_m, path.end_y_m);
+        let half_w_cells = (path.width_m * 0.5 / mpc).max(0.5);
+        let half_w_sq = half_w_cells * half_w_cells;
+        let pad = half_w_cells.ceil() as i32 + 1;
+        let bb_x_min = (ax.min(bx) as i32) - pad;
+        let bb_x_max = (ax.max(bx) as i32) + pad;
+        let bb_y_min = ((ay.min(by) as i32) - pad).max(0) as usize;
+        let bb_y_max = ((ay.max(by) as i32) + pad).min(res as i32 - 1) as usize;
+
+        for y in bb_y_min..=bb_y_max {
+            for xi in bb_x_min..=bb_x_max {
+                let x = xi.rem_euclid(res as i32) as usize;
+                let i = y * res + x;
+                if map.land_mask[i] == 0 {
+                    continue;
+                }
+                let (d_sq, t) = project_point_to_segment(xi as f32, y as f32, ax, ay, bx, by);
+                if d_sq > half_w_sq {
+                    continue;
+                }
+                let target = path.start_elev_m * (1.0 - t) + path.end_elev_m * t;
+                if elevation[i] > target {
+                    elevation[i] = target;
+                }
+            }
+        }
+    }
+}
+
+fn apply_elevation_hotspots(map: &GlobalMap, elevation: &mut [f32]) {
+    if map.config.elevation_hotspots.is_empty() {
+        return;
+    }
+    let res = map.config.global_res as usize;
+    let mpc = map.config.meters_per_cell();
+    let max_h = map.config.max_elevation_m;
+    // Two independent fields: shape perturbs the disk boundary; detail adds
+    // sub-summits. Seeded apart so they don't ringfit at scaled frequencies.
+    let shape_noise = PerlinNoise::new(map.config.seed ^ 0xC0FFEE_C0FFEE);
+    let detail_noise = PerlinNoise::new(map.config.seed ^ 0xDEADBEEF_DEADBEEF);
+
+    for spot in &map.config.elevation_hotspots {
+        let (cx, cy) = map.config.world_m_to_cell(spot.center_x_m, spot.center_y_m);
+        let r_cells = (spot.radius_m / mpc).max(1.0);
+        let shape_freq = HOTSPOT_SHAPE_LOBES / r_cells;
+        let detail_freq = HOTSPOT_DETAIL_LOBES / r_cells;
+        let r_max = r_cells * (1.0 + HOTSPOT_RADIUS_PERTURB);
+        let pad = r_max.ceil() as i32 + 1;
+        let y_min = ((cy as i32) - pad).max(0) as usize;
+        let y_max = ((cy as i32) + pad).min(res as i32 - 1) as usize;
+        let x_min_i = (cx as i32) - pad;
+        let x_max_i = (cx as i32) + pad;
+
+        for y in y_min..=y_max {
+            for xi in x_min_i..=x_max_i {
+                let x = xi.rem_euclid(res as i32) as usize;
+                let i = y * res + x;
+                if map.land_mask[i] == 0 {
+                    continue;
+                }
+                let dx = xi as f32 - cx;
+                let dy = y as f32 - cy;
+                let d_sq = dx * dx + dy * dy;
+                if d_sq >= r_max * r_max {
+                    continue;
+                }
+                let s = shape_noise.sample(x as f32 * shape_freq, y as f32 * shape_freq);
+                let eff_r = r_cells * (1.0 + HOTSPOT_RADIUS_PERTURB * s);
+                if d_sq >= eff_r * eff_r {
+                    continue;
+                }
+                let t = 1.0 - d_sq.sqrt() / eff_r;
+                let falloff = t * t;
+                let n_detail = detail_noise.sample(x as f32 * detail_freq, y as f32 * detail_freq);
+                let modulation = 1.0 + HOTSPOT_DETAIL_AMPLITUDE * n_detail * t;
+                let boost = spot.peak_m * falloff * modulation;
+                if boost > 0.0 {
+                    let mut h = (elevation[i] + boost).min(max_h);
+                    if let Some(cap) = spot.cap_elev_m {
+                        h = h.min(cap);
+                    }
+                    elevation[i] = h;
+                }
+            }
+        }
+    }
 }
 
 /// Return the value in `scores` at quantile `q`, considering only land
@@ -279,7 +390,10 @@ mod tests {
             settlement_coastal_spacing_mult: 1.0,
             settlement_mouth_count: 0,
             settlement_phase_a_spacing_mult: 1.0,
+            settlement_south_edge_exclusion_m: 0.0,
             road_extra_neighbors: 0,
+            elevation_hotspots: Vec::new(),
+            river_carve_paths: Vec::new(),
         }
     }
 
