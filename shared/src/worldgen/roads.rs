@@ -447,6 +447,10 @@ pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
     // Stored as (length, i_lo, i_hi, j_lo, j_hi, j_descending).
     type Alignment = (usize, usize, usize, usize, bool);
     let mut best: HashMap<(usize, usize), (usize, Alignment)> = HashMap::new();
+    // Per-pair `i_lo` ranges already discovered by extend_run. Disjoint
+    // runs are still found — their seed `i_lo` falls outside every
+    // recorded range.
+    let mut covered_lo: HashMap<(usize, usize), Vec<(usize, usize)>> = HashMap::new();
 
     let mut bin_keys: Vec<(i32, i32)> = bins.keys().copied().collect();
     bin_keys.sort_unstable();
@@ -473,6 +477,11 @@ pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
                         }
                         let (lo, lo_idx, hi, hi_idx) = (ra, ia, rb, ib);
                         let pair = (lo, hi);
+                        if let Some(ranges) = covered_lo.get(&pair) {
+                            if ranges.iter().any(|&(s, e)| lo_idx >= s && lo_idx <= e) {
+                                continue;
+                            }
+                        }
                         let a = &road_net.roads[lo].points;
                         let b = &road_net.roads[hi].points;
                         if shares_endpoint(a, b) {
@@ -508,6 +517,11 @@ pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
                         if best_len < min_len {
                             continue;
                         }
+
+                        covered_lo
+                            .entry(pair)
+                            .or_default()
+                            .push((alignment.0, alignment.1));
 
                         let entry = best.entry(pair).or_insert((0, (0, 0, 0, 0, false)));
                         if best_len > entry.0 {
@@ -783,6 +797,9 @@ struct AStarScratch {
     came_from: Vec<u32>,
     closed: Vec<bool>,
     open: BinaryHeap<MinF32>,
+    /// Cells touched by the previous run, so reset() only revisits them
+    /// instead of fill()-ing all res² entries every edge.
+    touched: Vec<u32>,
 }
 
 impl AStarScratch {
@@ -792,13 +809,27 @@ impl AStarScratch {
             came_from: vec![u32::MAX; total],
             closed: vec![false; total],
             open: BinaryHeap::new(),
+            touched: Vec::new(),
         }
     }
     fn reset(&mut self) {
-        self.g_score.fill(f32::INFINITY);
-        self.came_from.fill(u32::MAX);
-        self.closed.fill(false);
+        for &i in &self.touched {
+            let idx = i as usize;
+            self.g_score[idx] = f32::INFINITY;
+            self.came_from[idx] = u32::MAX;
+            self.closed[idx] = false;
+        }
+        self.touched.clear();
         self.open.clear();
+    }
+    /// Add `idx` to the reset list if its g_score is still at the
+    /// untouched sentinel (infinity). Idempotent — safe to call on every
+    /// neighbor relaxation; only the first call per cell pushes.
+    #[inline]
+    fn touch_if_new(&mut self, idx: usize) {
+        if self.g_score[idx].is_infinite() {
+            self.touched.push(idx as u32);
+        }
     }
 }
 
@@ -983,6 +1014,7 @@ fn a_star(
         return None;
     }
 
+    scratch.touch_if_new(start);
     scratch.g_score[start] = 0.0;
     scratch
         .open
@@ -1069,6 +1101,7 @@ fn a_star(
                 };
                 let tentative = scratch.g_score[ci] + cost;
                 if tentative < scratch.g_score[ni] {
+                    scratch.touch_if_new(ni);
                     scratch.g_score[ni] = tentative;
                     scratch.came_from[ni] = cur;
                     let f = tentative + heuristic(nx, ny as usize, gx, gy, res);
