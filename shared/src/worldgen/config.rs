@@ -276,6 +276,15 @@ pub struct WorldGenConfig {
     /// side currently blocks placement on its own).
     pub settlement_south_edge_exclusion_m: f32,
 
+    /// Maximum allowable distance (meters) from any habitable cell to its
+    /// nearest settlement. After Phases A-C run, a coverage-fill pass adds
+    /// settlements at the most isolated habitable cells until every cell
+    /// is within this distance of one. Bypasses min-spacing so the gap
+    /// guarantee holds even in regions the fitness placer skipped.
+    /// 0 disables the pass. Typical: ~4000 m so no inhabitable area is
+    /// more than a 4 km hike from a town.
+    pub settlement_max_gap_m: f32,
+
     // --- Phase 6: roads ---------------------------------------------------
     /// K in the K-nearest-neighbor graph added on top of the MST when
     /// computing the road network. 0 = MST only; higher = denser graph
@@ -350,36 +359,14 @@ impl Default for WorldGenConfig {
             settlement_mouth_count: 500,
             settlement_phase_a_spacing_mult: 2.0,
             settlement_south_edge_exclusion_m: 1700.0,
+            settlement_max_gap_m: 4000.0,
             road_extra_neighbors: 5,
-            // Two hand-tuned coastal hotspots and one west-flowing carve
-            // populate the SW quadrant of the seed-42 world. Caps held below
-            // the 1800 m snow line so peaks read as forested rather than
-            // alpine.
-            elevation_hotspots: vec![
-                ElevationHotspot {
-                    center_x_m: -9760.0,
-                    center_y_m: 13792.0,
-                    radius_m: 2800.0,
-                    peak_m: 1100.0,
-                    cap_elev_m: Some(1750.0),
-                },
-                ElevationHotspot {
-                    center_x_m: -2144.0,
-                    center_y_m: 13728.0,
-                    radius_m: 2400.0,
-                    peak_m: 900.0,
-                    cap_elev_m: Some(1750.0),
-                },
-            ],
-            river_carve_paths: vec![RiverCarvePath {
-                start_x_m: -12624.0,
-                start_y_m: 13792.0,
-                end_x_m: -14784.0,
-                end_y_m: 13216.0,
-                width_m: 80.0,
-                start_elev_m: 480.0,
-                end_elev_m: 0.0,
-            }],
+            // No hand-tuned hotspots/carves by default — Phase 5's coverage-
+            // gap pass guarantees cities everywhere, so engineering mountains
+            // and rivers to attract cities is no longer needed. The struct
+            // types remain available for one-off art-direction tuning.
+            elevation_hotspots: vec![],
+            river_carve_paths: vec![],
         }
     }
 }

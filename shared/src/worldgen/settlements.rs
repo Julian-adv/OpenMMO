@@ -39,7 +39,7 @@ pub fn compute_habitability_fields(map: &GlobalMap, river_map: &RiverMap) -> Hab
     let cfg = &map.config;
     let res = cfg.global_res as usize;
     let total = res * res;
-    let coast_dist = bfs_distance_from(&map.land_mask, res, 0);
+    let coast_dist = bfs_distance_from(&map.land_mask, res, 0, None);
     let slope = compute_slope(&map.elevation_m, res, cfg.meters_per_cell());
     let river_thresh = cfg.settlement_river_flow_threshold.max(1.0);
     let mut river_mask = vec![0u8; total];
@@ -48,7 +48,7 @@ pub fn compute_habitability_fields(map: &GlobalMap, river_map: &RiverMap) -> Hab
             river_mask[i] = 1;
         }
     }
-    let dist_to_river = bfs_distance_from(&river_mask, res, 1);
+    let dist_to_river = bfs_distance_from(&river_mask, res, 1, None);
     HabitabilityFields {
         coast_dist,
         slope,
@@ -191,7 +191,89 @@ pub fn place_settlements_with_fields(
     // is required. Can push kept.len() past `target` — that's intentional.
     seed_per_component(map, &ctx, slope, &spacing, &mut kept);
 
+    // Phase D (coverage fill): drop a settlement at the most isolated
+    // habitable cell as long as some cell is farther than max_gap_m from
+    // any existing settlement. Guarantees every habitable area is within
+    // walking distance of a town even where Phase A's per-river picks
+    // and Phase B's plains heuristic leave a gap.
+    seed_coverage_gaps(map, &ctx, slope, &mut kept);
+
     kept
+}
+
+/// Iteratively place settlements at the habitable cell that is farthest from
+/// any existing settlement (walking distance through land only) until every
+/// habitable cell is within `settlement_max_gap_m`. Bypasses min-spacing —
+/// the gap criterion replaces it. Sea is impassable so an isolated landmass
+/// can't appear "covered" by a city across the strait.
+fn seed_coverage_gaps(
+    map: &GlobalMap,
+    ctx: &FitnessCtx,
+    slope: &[f32],
+    kept: &mut Vec<Settlement>,
+) {
+    let cfg = &map.config;
+    let max_gap_m = cfg.settlement_max_gap_m;
+    if max_gap_m <= 0.0 {
+        return;
+    }
+    let res = cfg.global_res as usize;
+    let total = res * res;
+    let max_gap_cells = (max_gap_m / cfg.meters_per_cell()).round() as u16;
+
+    // Precompute the habitable mask once: the per-cell elevation/slope/coast
+    // checks each touch four arrays, and we'd otherwise redo them across the
+    // whole map per outer iteration.
+    let habitable_mask: Vec<u8> = (0..total)
+        .map(|i| habitable(i, map, slope, ctx) as u8)
+        .collect();
+
+    let mut sources = vec![0u8; total];
+    for s in kept.iter() {
+        let i = (s.cell_y as usize) * res + s.cell_x as usize;
+        sources[i] = 1;
+    }
+    let mut dist = bfs_distance_from(&sources, res, 1, Some(&map.land_mask));
+
+    // Reused single-source mask; we set/clear the picked cell each pass
+    // instead of allocating a fresh `vec![0u8; total]` per iteration.
+    let mut single_source = vec![0u8; total];
+    loop {
+        let mut farthest_idx: Option<usize> = None;
+        let mut farthest_d: u16 = 0;
+        for i in 0..total {
+            if habitable_mask[i] == 0 {
+                continue;
+            }
+            let d = dist[i];
+            if d <= max_gap_cells || d == u16::MAX {
+                continue;
+            }
+            if d > farthest_d {
+                farthest_d = d;
+                farthest_idx = Some(i);
+            }
+        }
+        let Some(idx) = farthest_idx else {
+            break;
+        };
+        kept.push(Settlement {
+            cell_x: (idx % res) as u32,
+            cell_y: (idx / res) as u32,
+            score: fitness_plains(idx, ctx),
+        });
+
+        // Pointwise-min with a single-source BFS from the new pick — far
+        // cells already have their final distance, so this converges fast.
+        single_source[idx] = 1;
+        let new_dist = bfs_distance_from(&single_source, res, 1, Some(&map.land_mask));
+        single_source[idx] = 0;
+        for j in 0..total {
+            if new_dist[j] < dist[j] {
+                dist[j] = new_dist[j];
+            }
+        }
+    }
 }
 
 fn seed_per_component(
@@ -593,6 +675,9 @@ mod tests {
             settlement_target_count: 8,
             settlement_min_spacing_cells: (res / 10).max(4),
             settlement_river_flow_threshold: 20.0,
+            // Tests assert target_count and min-spacing invariants that
+            // Phase D's coverage-fill intentionally relaxes; disable here.
+            settlement_max_gap_m: 0.0,
             ..WorldGenConfig::default()
         }
     }
