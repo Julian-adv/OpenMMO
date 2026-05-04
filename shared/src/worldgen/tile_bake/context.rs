@@ -140,7 +140,7 @@ impl BakeContext {
         // their nearest land. Kept as a BFS field rather than a polyline
         // query because cell_elevation_m is called O(16 × 65² × n_tiles)
         // times during baking.
-        let dist_to_land = bfs_distance_from(&map.land_mask, res, 1);
+        let dist_to_land = bfs_distance_from(&map.land_mask, res, 1, None);
 
         let mut rivers_world =
             smooth_river_polylines(river_map, &map.config, RIVER_CHAIKIN_ITERATIONS);

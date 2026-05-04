@@ -32,8 +32,15 @@ impl PartialOrd for MinF32 {
 /// Multi-source 4-connected BFS over a binary mask, returning the cell-
 /// distance from every cell to the nearest source cell. X wraps, Y doesn't.
 /// Source cells (where `mask[i] == source_val`) have distance 0. Distances
-/// are saturated to `u16::MAX`.
-pub(crate) fn bfs_distance_from(mask: &[u8], res: usize, source_val: u8) -> Vec<u16> {
+/// are saturated to `u16::MAX`. Pass `Some(passable)` to constrain expansion
+/// to cells where `passable[n] == 1` (e.g. land-only walking distance);
+/// sources themselves don't need to be passable.
+pub(crate) fn bfs_distance_from(
+    mask: &[u8],
+    res: usize,
+    source_val: u8,
+    passable: Option<&[u8]>,
+) -> Vec<u16> {
     let total = res * res;
     let mut dist = vec![u16::MAX; total];
     let mut queue: VecDeque<usize> = VecDeque::new();
@@ -51,6 +58,11 @@ pub(crate) fn bfs_distance_from(mask: &[u8], res: usize, source_val: u8) -> Vec<
         let left = if x == 0 { res - 1 } else { x - 1 };
         let right = if x + 1 == res { 0 } else { x + 1 };
         let mut visit = |n: usize| {
+            if let Some(p) = passable {
+                if p[n] != 1 {
+                    return;
+                }
+            }
             if dist[n] > nd {
                 dist[n] = nd;
                 queue.push_back(n);

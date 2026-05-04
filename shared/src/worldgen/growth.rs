@@ -200,7 +200,7 @@ fn scatter_small_islands(
     // Distance field: for every sea cell, BFS distance (in cells) to the
     // nearest land cell. Used to reject candidate centers that are too
     // close to continents. O(N) total.
-    let dist_to_land = bfs_distance_from(mask, res, 1);
+    let dist_to_land = bfs_distance_from(mask, res, 1, None);
 
     // Each placed island's "claim radius" (center + radius + clearance) must
     // not overlap any other placed island's claim. Track placements.

@@ -43,7 +43,7 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     // 1-tile bumps on lowland slopes once the tile baker's Catmull-Rom
     // samples them. Blurring before the smoothstep erases the artifact
     // without shifting the macro coast → inland gradient.
-    let dist_land = bfs_distance_from(&map.land_mask, res, 0);
+    let dist_land = bfs_distance_from(&map.land_mask, res, 0, None);
     let dist_land_smooth = box_blur_2d(&dist_land, res, 10);
     let coast_depth_cells = map.config.scaled_cells(400.0);
     let mut coast_norm = vec![0.0f32; total];
@@ -391,6 +391,7 @@ mod tests {
             settlement_mouth_count: 0,
             settlement_phase_a_spacing_mult: 1.0,
             settlement_south_edge_exclusion_m: 0.0,
+            settlement_max_gap_m: 0.0,
             road_extra_neighbors: 0,
             elevation_hotspots: Vec::new(),
             river_carve_paths: Vec::new(),
@@ -480,7 +481,7 @@ mod tests {
         let mut map = continent::generate_continent_mask(&cfg);
         generate_elevation(&mut map);
         let res = cfg.global_res as usize;
-        let dist = bfs_distance_from(&map.land_mask, res, 0);
+        let dist = bfs_distance_from(&map.land_mask, res, 0, None);
         let mut coast_max: f32 = 0.0;
         let mut inland_max: f32 = 0.0;
         for i in 0..map.land_mask.len() {
