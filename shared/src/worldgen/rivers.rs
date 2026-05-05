@@ -16,6 +16,13 @@ use std::collections::BinaryHeap;
 use super::global_map::GlobalMap;
 use super::grid::MinF32;
 
+/// Peak elevation threshold (as a fraction of `max_elevation_m`) for
+/// `extract_rivers` to treat a local maximum as a river source. Shared
+/// between the bake and preview pipelines so the same map produces the
+/// same polylines in both, and used by Phase 4b's gap-fill to size its
+/// seeded mountains comfortably above this bar.
+pub const RIVER_PEAK_ELEVATION_FRAC: f32 = 0.3;
+
 /// Priority-queue-based pit fill (Barnes et al. 2014). Starting from the
 /// sea / Y-border cells, flood inward; each cell is raised just above the
 /// highest point on the least-costly path back to an outlet, guaranteeing
@@ -377,6 +384,7 @@ mod tests {
             settlement_phase_a_spacing_mult: 1.0,
             settlement_south_edge_exclusion_m: 0.0,
             settlement_max_gap_m: 0.0,
+            river_gap_max_m: 0.0,
             road_extra_neighbors: 0,
             elevation_hotspots: Vec::new(),
             river_carve_paths: Vec::new(),

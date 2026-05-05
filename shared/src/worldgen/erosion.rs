@@ -338,6 +338,7 @@ mod tests {
             settlement_phase_a_spacing_mult: 1.0,
             settlement_south_edge_exclusion_m: 0.0,
             settlement_max_gap_m: 0.0,
+            river_gap_max_m: 0.0,
             road_extra_neighbors: 0,
             elevation_hotspots: Vec::new(),
             river_carve_paths: Vec::new(),

@@ -50,6 +50,36 @@ pub(crate) fn bfs_distance_from(
             queue.push_back(i);
         }
     }
+    propagate_bfs(&mut dist, &mut queue, res, passable);
+    dist
+}
+
+/// Extend an existing BFS distance field with a single new source. Sets
+/// `dist[start] = 0` and propagates the wavefront, only overwriting cells
+/// where the new source improves the existing distance. Lets callers
+/// incrementally maintain a nearest-source field as new sources are added
+/// without re-running a full multi-source BFS each time.
+pub(crate) fn bfs_distance_extend_from_cell(
+    dist: &mut [u16],
+    res: usize,
+    start: usize,
+    passable: Option<&[u8]>,
+) {
+    if dist[start] == 0 {
+        return;
+    }
+    dist[start] = 0;
+    let mut queue: VecDeque<usize> = VecDeque::new();
+    queue.push_back(start);
+    propagate_bfs(dist, &mut queue, res, passable);
+}
+
+fn propagate_bfs(
+    dist: &mut [u16],
+    queue: &mut VecDeque<usize>,
+    res: usize,
+    passable: Option<&[u8]>,
+) {
     while let Some(i) = queue.pop_front() {
         let d = dist[i];
         let nd = d.saturating_add(1);
@@ -77,5 +107,4 @@ pub(crate) fn bfs_distance_from(
             visit((y + 1) * res + x);
         }
     }
-    dist
 }

@@ -134,8 +134,7 @@ pub fn place_settlements_with_fields(
         .collect();
     unique_mouths.sort_by(|a, b| river_map.flow[*b].total_cmp(&river_map.flow[*a]));
     let mouth_target = (cfg.settlement_mouth_count as usize).min(unique_mouths.len());
-    let mouth_pick_set: HashSet<usize> =
-        unique_mouths.iter().take(mouth_target).copied().collect();
+    let mouth_pick_set: HashSet<usize> = unique_mouths.iter().take(mouth_target).copied().collect();
 
     let mut seen_mouths: HashSet<usize> = HashSet::new();
     for (poly, mouth_opt) in rivers_sorted.iter().zip(polyline_mouths.iter()) {
@@ -528,8 +527,8 @@ impl FitnessCtx<'_> {
         let cfg = &map.config;
         let max_cy = if cfg.settlement_south_edge_exclusion_m > 0.0 {
             let res = cfg.global_res as usize;
-            let excl_cells = (cfg.settlement_south_edge_exclusion_m / cfg.meters_per_cell())
-                .ceil() as usize;
+            let excl_cells =
+                (cfg.settlement_south_edge_exclusion_m / cfg.meters_per_cell()).ceil() as usize;
             res.saturating_sub(excl_cells + 1)
         } else {
             usize::MAX

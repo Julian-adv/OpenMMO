@@ -14,9 +14,13 @@
 //!     toward `y_border_wall_height_m` to form an impassable range.
 //!   - Sea cells always sit at 0 m.
 
+use super::config::{ElevationHotspot, WorldGenConfig};
 use super::global_map::GlobalMap;
-use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, fbm_wrap_x_damped, smoothstep, PerlinNoise, PerlinNoise3D, ValueNoise3D};
+use super::grid::{bfs_distance_extend_from_cell, bfs_distance_from};
+use super::noise::{
+    fbm_wrap_x, fbm_wrap_x_damped, smoothstep, PerlinNoise, PerlinNoise3D, ValueNoise3D,
+};
+use super::rivers::{RiverMap, RIVER_PEAK_ELEVATION_FRAC};
 use super::vector_features::project_point_to_segment;
 
 const LACUNARITY: f32 = 2.0;
@@ -226,19 +230,36 @@ fn apply_river_carve_paths(map: &GlobalMap, elevation: &mut [f32]) {
 }
 
 fn apply_elevation_hotspots(map: &GlobalMap, elevation: &mut [f32]) {
-    if map.config.elevation_hotspots.is_empty() {
+    apply_hotspots_to(
+        &map.config,
+        &map.land_mask,
+        elevation,
+        &map.config.elevation_hotspots,
+    );
+}
+
+/// Stack a slice of hotspots onto an elevation buffer. Shared between Phase 2's
+/// config-driven application and the river-gap fill pass which generates
+/// hotspots algorithmically. No-op for an empty slice.
+pub(crate) fn apply_hotspots_to(
+    cfg: &WorldGenConfig,
+    land_mask: &[u8],
+    elevation: &mut [f32],
+    hotspots: &[ElevationHotspot],
+) {
+    if hotspots.is_empty() {
         return;
     }
-    let res = map.config.global_res as usize;
-    let mpc = map.config.meters_per_cell();
-    let max_h = map.config.max_elevation_m;
+    let res = cfg.global_res as usize;
+    let mpc = cfg.meters_per_cell();
+    let max_h = cfg.max_elevation_m;
     // Two independent fields: shape perturbs the disk boundary; detail adds
     // sub-summits. Seeded apart so they don't ringfit at scaled frequencies.
-    let shape_noise = PerlinNoise::new(map.config.seed ^ 0xC0FFEE_C0FFEE);
-    let detail_noise = PerlinNoise::new(map.config.seed ^ 0xDEADBEEF_DEADBEEF);
+    let shape_noise = PerlinNoise::new(cfg.seed ^ 0xC0FFEE_C0FFEE);
+    let detail_noise = PerlinNoise::new(cfg.seed ^ 0xDEADBEEF_DEADBEEF);
 
-    for spot in &map.config.elevation_hotspots {
-        let (cx, cy) = map.config.world_m_to_cell(spot.center_x_m, spot.center_y_m);
+    for spot in hotspots {
+        let (cx, cy) = cfg.world_m_to_cell(spot.center_x_m, spot.center_y_m);
         let r_cells = (spot.radius_m / mpc).max(1.0);
         let shape_freq = HOTSPOT_SHAPE_LOBES / r_cells;
         let detail_freq = HOTSPOT_DETAIL_LOBES / r_cells;
@@ -253,7 +274,7 @@ fn apply_elevation_hotspots(map: &GlobalMap, elevation: &mut [f32]) {
             for xi in x_min_i..=x_max_i {
                 let x = xi.rem_euclid(res as i32) as usize;
                 let i = y * res + x;
-                if map.land_mask[i] == 0 {
+                if land_mask[i] == 0 {
                     continue;
                 }
                 let dx = xi as f32 - cx;
@@ -282,6 +303,129 @@ fn apply_elevation_hotspots(map: &GlobalMap, elevation: &mut [f32]) {
             }
         }
     }
+}
+
+/// Peak ratio for gap-fill hotspots. Sits comfortably above
+/// `RIVER_PEAK_ELEVATION_FRAC` so the seeded summit clears the river
+/// extraction threshold even after the hotspot's detail noise dips.
+const RIVER_GAP_PEAK_FRAC: f32 = 0.4;
+/// Hotspot disk radius in meters. 2 km keeps the seeded mountain reading
+/// as a low hill rather than a spike at typical `peak_m` values.
+const RIVER_GAP_RADIUS_M: f32 = 2000.0;
+/// Lowland filter for gap-fill candidates: cells already above this
+/// fraction of `max_elevation_m` are mountain-grade and either drain
+/// rivers already or would clip against the elevation cap if a hotspot
+/// were stacked there.
+const RIVER_GAP_LOWLAND_FRAC: f32 = 0.4;
+const _: () = assert!(
+    RIVER_GAP_PEAK_FRAC > RIVER_PEAK_ELEVATION_FRAC,
+    "gap-fill peak must clear the river extraction threshold"
+);
+
+/// Phase 4 follow-up: drop low mountains in lowlands far from any river so
+/// the next river-extraction pass spawns fresh streams there. Returns the
+/// list of added hotspots and mutates `map.elevation_m` in place. No-op
+/// when `cfg.river_gap_max_m == 0.0`.
+///
+/// Caller is expected to re-run `rivers::compute_flow` + `extract_rivers`
+/// after this function so the new peaks materialize as polylines.
+pub fn seed_river_gap_mountains(
+    map: &mut GlobalMap,
+    river_map: &RiverMap,
+) -> Vec<ElevationHotspot> {
+    let max_gap_m = map.config.river_gap_max_m;
+    if max_gap_m <= 0.0 {
+        return Vec::new();
+    }
+    let res = map.config.global_res as usize;
+    let total = res * res;
+    let mpc = map.config.meters_per_cell();
+    let max_gap_cells = (max_gap_m / mpc).round() as u16;
+    let peak_m = map.config.max_elevation_m * RIVER_GAP_PEAK_FRAC;
+    let lowland_thresh = map.config.max_elevation_m * RIVER_GAP_LOWLAND_FRAC;
+    // Match the wall margin `extract_rivers` uses to exclude peaks; a hotspot
+    // placed inside it wouldn't seed anything.
+    let wall_margin = map
+        .config
+        .scaled_cells_usize(map.config.y_border_wall_cells)
+        * 2;
+    // Initial river-source mask: only cells on an extracted polyline. Using
+    // raw flow accumulation would catch every micro-drainage in a lowland
+    // (rain channeled through a single cell exceeds the default 100-flow
+    // threshold easily), making the entire continent read as "river covered"
+    // from the gap-fill's perspective. Polyline-based matches what's visible
+    // in the rivers PNG — the user-facing definition of "where a river is".
+    let mut river_mask = vec![0u8; total];
+    for poly in &river_map.rivers {
+        for &(x, y) in &poly.points {
+            let i = (y as usize) * res + x as usize;
+            if map.land_mask[i] == 1 {
+                river_mask[i] = 1;
+            }
+        }
+    }
+    let mut dist = bfs_distance_from(&river_mask, res, 1, Some(&map.land_mask));
+
+    // Habitable for gap-fill: lowland land cell outside the Y-border wall
+    // exclusion. Slope/coast filters from settlements aren't relevant — we
+    // only care whether the neighborhood lacks a river.
+    let mut habitable = vec![0u8; total];
+    for i in 0..total {
+        if map.land_mask[i] != 1 {
+            continue;
+        }
+        if map.elevation_m[i] >= lowland_thresh {
+            continue;
+        }
+        let iy = i / res;
+        if iy < wall_margin || iy + wall_margin >= res {
+            continue;
+        }
+        habitable[i] = 1;
+    }
+
+    let mut added: Vec<ElevationHotspot> = Vec::new();
+    let origin = map.config.world_size_m as f32 * 0.5;
+    loop {
+        let mut farthest_idx: Option<usize> = None;
+        let mut farthest_d: u16 = 0;
+        for i in 0..total {
+            if habitable[i] == 0 {
+                continue;
+            }
+            let d = dist[i];
+            if d <= max_gap_cells || d == u16::MAX {
+                continue;
+            }
+            if d > farthest_d {
+                farthest_d = d;
+                farthest_idx = Some(i);
+            }
+        }
+        let Some(idx) = farthest_idx else {
+            break;
+        };
+        let cell_x = (idx % res) as u32;
+        let cell_y = (idx / res) as u32;
+        let world_x = (cell_x as f32 + 0.5) * mpc - origin;
+        let world_y = (cell_y as f32 + 0.5) * mpc - origin;
+        added.push(ElevationHotspot {
+            center_x_m: world_x,
+            center_y_m: world_y,
+            radius_m: RIVER_GAP_RADIUS_M,
+            peak_m,
+            cap_elev_m: None,
+        });
+
+        // Treat the new center as a future river source. The actual stream
+        // produced by the hotspot will run *near* this cell, so using the
+        // center as a BFS seed is a coverage estimate — accurate enough that
+        // subsequent gap picks don't pile up around the same valley.
+        bfs_distance_extend_from_cell(&mut dist, res, idx, Some(&map.land_mask));
+    }
+
+    apply_hotspots_to(&map.config, &map.land_mask, &mut map.elevation_m, &added);
+    added
 }
 
 /// Return the value in `scores` at quantile `q`, considering only land
@@ -392,6 +536,7 @@ mod tests {
             settlement_phase_a_spacing_mult: 1.0,
             settlement_south_edge_exclusion_m: 0.0,
             settlement_max_gap_m: 0.0,
+            river_gap_max_m: 0.0,
             road_extra_neighbors: 0,
             elevation_hotspots: Vec::new(),
             river_carve_paths: Vec::new(),
@@ -500,5 +645,71 @@ mod tests {
                 "inland max {inland_max} not > coast max {coast_max} (fade should limit coastal peaks)"
             );
         }
+    }
+
+    #[test]
+    fn river_gap_pass_disabled_is_noop() {
+        let mut cfg = test_config(128);
+        cfg.river_gap_max_m = 0.0;
+        let mut map = continent::generate_continent_mask(&cfg);
+        generate_elevation(&mut map);
+        let mut river_map = super::super::rivers::compute_flow(&map);
+        super::super::rivers::extract_rivers(&map, &mut river_map, 50.0, 4);
+        let pre = map.elevation_m.clone();
+        let added = seed_river_gap_mountains(&mut map, &river_map);
+        assert!(added.is_empty());
+        assert_eq!(
+            map.elevation_m, pre,
+            "elevation must not change when disabled"
+        );
+    }
+
+    #[test]
+    fn river_gap_pass_seeds_low_mountains_in_riverless_lowland() {
+        // Lowland continent with a single synthetic polyline at one edge —
+        // the rest of the map should register as "far from rivers" and the
+        // gap-fill must place at least one hotspot reaching the seed threshold.
+        let mut cfg = test_config(256);
+        cfg.sea_ratio = 0.2;
+        cfg.target_continent_count = 1;
+        cfg.continent_gap_cells = 0;
+        cfg.mountain_ratio = 0.0;
+        cfg.mountain_amplitude_m = 0.0;
+        cfg.y_border_wall_cells = 0;
+        cfg.y_border_wall_height_m = 0.0;
+        // mpc=16 at res=256, world=4096. 1024 m gap → 64 cells.
+        cfg.river_gap_max_m = 1024.0;
+        let mut map = continent::generate_continent_mask(&cfg);
+        generate_elevation(&mut map);
+        // Build a minimal RiverMap: flow vec the right size, one polyline in
+        // a single cell at the world's NW corner (still inside the continent
+        // for typical seeds). Most of the map ends up far from this point.
+        let res = cfg.global_res as usize;
+        let total = res * res;
+        let mut river_map = super::super::rivers::RiverMap {
+            downstream: vec![None; total],
+            flow: vec![0.0; total],
+            rivers: Vec::new(),
+        };
+        // Pick the first land cell as the "river"; the test only needs one.
+        let one_river = (0..total)
+            .find(|&i| map.land_mask[i] == 1)
+            .expect("test map should have at least one land cell");
+        river_map.rivers.push(super::super::rivers::Polyline {
+            points: vec![((one_river % res) as u32, (one_river / res) as u32)],
+            flow: vec![1.0],
+        });
+
+        let added = seed_river_gap_mountains(&mut map, &river_map);
+        assert!(!added.is_empty(), "expected at least one gap-fill hotspot");
+        let post_max = map.elevation_m.iter().copied().fold(0.0f32, f32::max);
+        // `mountain_amplitude_m=0` guarantees pre-pass elevation stays well
+        // below this threshold, so a single check on the post-pass max is
+        // sufficient to prove the gap-fill ran and seeded a mountain.
+        let seed_thresh = cfg.max_elevation_m * super::super::rivers::RIVER_PEAK_ELEVATION_FRAC;
+        assert!(
+            post_max >= seed_thresh,
+            "gap-fill should raise some cell above {seed_thresh:.0} m (got {post_max:.0})"
+        );
     }
 }

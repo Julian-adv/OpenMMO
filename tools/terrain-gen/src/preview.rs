@@ -63,10 +63,7 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
     // --- Phase 4: flow accumulation + river extraction ----------------------
     let t_ph4 = Instant::now();
     let mut river_map = rivers::compute_flow(&map);
-    // Peak-based extraction: rivers start at elevation local maxima above
-    // 40% of max elevation (so they originate in real mountains). Each
-    // peak traces downstream; tributaries branch off and merge visibly.
-    let min_peak = config.max_elevation_m * 0.4;
+    let min_peak = config.max_elevation_m * rivers::RIVER_PEAK_ELEVATION_FRAC;
     let min_length = 20usize;
     rivers::extract_rivers(&map, &mut river_map, min_peak, min_length);
     let max_flow = river_map.flow.iter().cloned().fold(0.0f32, f32::max);
@@ -77,6 +74,20 @@ pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
         min_peak,
         max_flow
     );
+
+    // --- Phase 4b: gap-fill mountains for riverless lowlands ---------------
+    let added_hotspots = elevation::seed_river_gap_mountains(&mut map, &river_map);
+    if !added_hotspots.is_empty() {
+        let t_ph4b = Instant::now();
+        river_map = rivers::compute_flow(&map);
+        rivers::extract_rivers(&map, &mut river_map, min_peak, min_length);
+        eprintln!(
+            "Phase 4b (gap fill):      {:.2}s  +{} mountain hotspots, {} rivers",
+            t_ph4b.elapsed().as_secs_f32(),
+            added_hotspots.len(),
+            river_map.rivers.len()
+        );
+    }
 
     // Habitability fields are shared by Phase 5a and 5b — building once
     // avoids recomputing coast BFS, slope, and river-distance BFS.
@@ -355,9 +366,7 @@ fn overlay_region_labels(img: &mut ImageBuffer<Rgb<u8>, Vec<u8>>, map: &GlobalMa
             );
         };
 
-        if center > cx_left + edge_slot_w / 2 + pad
-            && center < cx_right - edge_slot_w / 2 - pad
-        {
+        if center > cx_left + edge_slot_w / 2 + pad && center < cx_right - edge_slot_w / 2 - pad {
             place(center, cy_top);
             place(center, cy_bot);
         }

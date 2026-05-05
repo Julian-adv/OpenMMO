@@ -285,6 +285,16 @@ pub struct WorldGenConfig {
     /// more than a 4 km hike from a town.
     pub settlement_max_gap_m: f32,
 
+    /// Maximum allowable distance (meters) from a lowland land cell to the
+    /// nearest river. After Phase 4's first river extraction, a gap-fill
+    /// pass drops a low mountain (`ElevationHotspot`) at the most isolated
+    /// lowland cell, then re-runs flow accumulation + river extraction so
+    /// the seeded peak births a fresh river. Iterates until every lowland
+    /// cell is within this distance of either a real or hotspot-anchored
+    /// river. 0 disables the pass. Typical: ~4000 m so no plain is more
+    /// than a 4 km walk from a stream.
+    pub river_gap_max_m: f32,
+
     // --- Phase 6: roads ---------------------------------------------------
     /// K in the K-nearest-neighbor graph added on top of the MST when
     /// computing the road network. 0 = MST only; higher = denser graph
@@ -360,6 +370,7 @@ impl Default for WorldGenConfig {
             settlement_phase_a_spacing_mult: 2.0,
             settlement_south_edge_exclusion_m: 1700.0,
             settlement_max_gap_m: 4000.0,
+            river_gap_max_m: 4000.0,
             road_extra_neighbors: 5,
             // No hand-tuned hotspots/carves by default — Phase 5's coverage-
             // gap pass guarantees cities everywhere, so engineering mountains

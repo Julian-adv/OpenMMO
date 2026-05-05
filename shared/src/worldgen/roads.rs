@@ -438,7 +438,10 @@ pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
             continue;
         }
         for (pi, &(x, y)) in road.points.iter().enumerate() {
-            let key = (x as i32 / INTERIOR_MERGE_BIN_CELLS, y as i32 / INTERIOR_MERGE_BIN_CELLS);
+            let key = (
+                x as i32 / INTERIOR_MERGE_BIN_CELLS,
+                y as i32 / INTERIOR_MERGE_BIN_CELLS,
+            );
             bins.entry(key).or_default().push((ri as u32, pi as u32));
         }
     }
@@ -551,8 +554,7 @@ pub fn merge_parallel_interiors(road_net: &mut RoadNetwork, res: usize) {
         if i_lo >= i_hi || j_lo >= j_hi {
             continue;
         }
-        let trunk_segment: Vec<(u32, u32)> =
-            road_net.roads[lo].points[i_lo..=i_hi].to_vec();
+        let trunk_segment: Vec<(u32, u32)> = road_net.roads[lo].points[i_lo..=i_hi].to_vec();
         let segment: Vec<(u32, u32)> = if j_descending {
             trunk_segment.into_iter().rev().collect()
         } else {
@@ -1483,7 +1485,9 @@ mod tests {
             .expect("river must pass through the crossing cell");
 
         let mut net = RoadNetwork {
-            roads: vec![Road { points: road_pts.clone() }],
+            roads: vec![Road {
+                points: road_pts.clone(),
+            }],
         };
         let mut river_map = RiverMap {
             downstream: Vec::new(),
@@ -1552,7 +1556,9 @@ mod tests {
             .expect("road must pass through the crossing cell");
 
         let mut net = RoadNetwork {
-            roads: vec![Road { points: road_pts.clone() }],
+            roads: vec![Road {
+                points: road_pts.clone(),
+            }],
         };
         let mut river_map = RiverMap {
             downstream: Vec::new(),
@@ -1621,8 +1627,12 @@ mod tests {
 
         let mut net = RoadNetwork {
             roads: vec![
-                Road { points: a_pts.clone() },
-                Road { points: b_pts.clone() },
+                Road {
+                    points: a_pts.clone(),
+                },
+                Road {
+                    points: b_pts.clone(),
+                },
             ],
         };
         merge_parallel_runs(&mut net, res);
@@ -1667,8 +1677,12 @@ mod tests {
 
         let mut net = RoadNetwork {
             roads: vec![
-                Road { points: a_pts.clone() },
-                Road { points: b_pts.clone() },
+                Road {
+                    points: a_pts.clone(),
+                },
+                Road {
+                    points: b_pts.clone(),
+                },
             ],
         };
         merge_parallel_runs(&mut net, res);
@@ -1701,8 +1715,12 @@ mod tests {
 
         let mut net = RoadNetwork {
             roads: vec![
-                Road { points: a_pts.clone() },
-                Road { points: b_pts.clone() },
+                Road {
+                    points: a_pts.clone(),
+                },
+                Road {
+                    points: b_pts.clone(),
+                },
             ],
         };
         merge_parallel_runs(&mut net, res);
@@ -1752,10 +1770,7 @@ mod tests {
 
         redirect_parallel_forks(&mut edge_set, &settlements, res_f);
 
-        assert!(
-            edge_set.contains(&canonical((0, 1))),
-            "v→near must remain"
-        );
+        assert!(edge_set.contains(&canonical((0, 1))), "v→near must remain");
         assert!(
             !edge_set.contains(&canonical((0, 2))),
             "v→far must be removed"
@@ -1772,9 +1787,9 @@ mod tests {
         // edge_set must be unchanged.
         let settlements = [
             s(2048, 2048),
-            s(2148, 2048),                // east
-            s(1998, 2048 + 87),           // 120° from east
-            s(1998, 2048 - 87),           // 240° from east
+            s(2148, 2048),      // east
+            s(1998, 2048 + 87), // 120° from east
+            s(1998, 2048 - 87), // 240° from east
         ];
         let res_f = 4096.0;
         let mut edge_set: HashSet<(usize, usize)> = HashSet::new();

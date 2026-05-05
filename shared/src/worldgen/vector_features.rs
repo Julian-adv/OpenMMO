@@ -398,7 +398,14 @@ pub fn segments_near_tile(
 /// which needs `t` to interpolate per-vertex scalars at the exact
 /// projection point.
 #[inline]
-pub(crate) fn project_point_to_segment(px: f32, pz: f32, ax: f32, az: f32, bx: f32, bz: f32) -> (f32, f32) {
+pub(crate) fn project_point_to_segment(
+    px: f32,
+    pz: f32,
+    ax: f32,
+    az: f32,
+    bx: f32,
+    bz: f32,
+) -> (f32, f32) {
     let dx = bx - ax;
     let dz = bz - az;
     let len_sq = dx * dx + dz * dz;

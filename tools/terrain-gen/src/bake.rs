@@ -74,13 +74,26 @@ pub fn run(
 
     let t = Instant::now();
     let mut river_map = rivers::compute_flow(&map);
-    let min_peak = config.max_elevation_m * 0.3;
+    let min_peak = config.max_elevation_m * rivers::RIVER_PEAK_ELEVATION_FRAC;
     rivers::extract_rivers(&map, &mut river_map, min_peak, 20);
     eprintln!(
         "  Phase 4 (rivers):    {:.2}s  ({} polylines)",
         t.elapsed().as_secs_f32(),
         river_map.rivers.len()
     );
+
+    let added_hotspots = elevation::seed_river_gap_mountains(&mut map, &river_map);
+    if !added_hotspots.is_empty() {
+        let t = Instant::now();
+        river_map = rivers::compute_flow(&map);
+        rivers::extract_rivers(&map, &mut river_map, min_peak, 20);
+        eprintln!(
+            "  Phase 4b (gap fill): {:.2}s  (+{} mountain hotspots, {} polylines)",
+            t.elapsed().as_secs_f32(),
+            added_hotspots.len(),
+            river_map.rivers.len()
+        );
+    }
 
     let t = Instant::now();
     let fields = settlements::compute_habitability_fields(&map, &river_map);
