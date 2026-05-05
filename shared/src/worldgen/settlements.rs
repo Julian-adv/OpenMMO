@@ -38,22 +38,34 @@ pub struct HabitabilityFields {
 pub fn compute_habitability_fields(map: &GlobalMap, river_map: &RiverMap) -> HabitabilityFields {
     let cfg = &map.config;
     let res = cfg.global_res as usize;
-    let total = res * res;
     let coast_dist = bfs_distance_from(&map.land_mask, res, 0, None);
     let slope = compute_slope(&map.elevation_m, res, cfg.meters_per_cell());
     let river_thresh = cfg.settlement_river_flow_threshold.max(1.0);
-    let mut river_mask = vec![0u8; total];
-    for (i, &f) in river_map.flow.iter().enumerate() {
-        if f >= river_thresh && map.land_mask[i] == 1 {
-            river_mask[i] = 1;
-        }
-    }
+    let river_mask = extracted_river_mask(map, river_map, river_thresh);
     let dist_to_river = bfs_distance_from(&river_mask, res, 1, None);
     HabitabilityFields {
         coast_dist,
         slope,
         dist_to_river,
     }
+}
+
+fn extracted_river_mask(map: &GlobalMap, river_map: &RiverMap, river_thresh: f32) -> Vec<u8> {
+    let res = map.config.global_res as usize;
+    let total = res * res;
+    let mut river_mask = vec![0u8; total];
+    for poly in &river_map.rivers {
+        for (&(x, y), &flow) in poly.points.iter().zip(poly.flow.iter()) {
+            if flow < river_thresh {
+                continue;
+            }
+            let idx = y as usize * res + x as usize;
+            if map.land_mask[idx] == 1 {
+                river_mask[idx] = 1;
+            }
+        }
+    }
+    river_mask
 }
 
 /// Pick up to `settlement_target_count` settlement sites plus one guaranteed
@@ -689,6 +701,22 @@ mod tests {
         (map, rm)
     }
 
+    fn flat_land_map(mut cfg: WorldGenConfig) -> GlobalMap {
+        cfg.settlement_river_flow_threshold = 20.0;
+        let total = cfg.global_res as usize * cfg.global_res as usize;
+        GlobalMap {
+            config: cfg,
+            continent_potential: vec![1.0; total],
+            land_mask: vec![1; total],
+            sea_level_potential: 0.0,
+            elevation_m: vec![10.0; total],
+        }
+    }
+
+    fn idx(res: usize, x: u32, y: u32) -> usize {
+        y as usize * res + x as usize
+    }
+
     #[test]
     fn settlements_respect_min_spacing() {
         let cfg = test_config(128);
@@ -758,5 +786,33 @@ mod tests {
             cfg.settlement_target_count
         );
         assert!(!settlements.is_empty(), "no settlements placed at all");
+    }
+
+    #[test]
+    fn river_distance_ignores_flow_without_extracted_polyline() {
+        let cfg = test_config(32);
+        let map = flat_land_map(cfg);
+        let res = map.config.global_res as usize;
+        let total = res * res;
+        let hidden = idx(res, 20, 15);
+        let visible = idx(res, 10, 15);
+        let mut rm = RiverMap {
+            downstream: vec![None; total],
+            flow: vec![0.0; total],
+            rivers: vec![rivers::Polyline {
+                points: vec![(10, 14), (10, 15), (10, 16)],
+                flow: vec![25.0, 30.0, 35.0],
+            }],
+        };
+        rm.flow[hidden] = 200.0;
+        rm.flow[visible] = 30.0;
+
+        let fields = compute_habitability_fields(&map, &rm);
+
+        assert_eq!(fields.dist_to_river[visible], 0);
+        assert!(
+            fields.dist_to_river[hidden] > 0,
+            "raw flow without an extracted river must not seed river distance"
+        );
     }
 }

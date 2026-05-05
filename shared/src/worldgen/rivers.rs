@@ -23,6 +23,22 @@ use super::grid::MinF32;
 /// seeded mountains comfortably above this bar.
 pub const RIVER_PEAK_ELEVATION_FRAC: f32 = 0.3;
 
+/// Nearby rivers flowing in nearly the same direction are visually read as
+/// duplicate channels. Let the first traced main stem claim a small corridor;
+/// later traces that enter it snap to the existing stem and stop there.
+const PARALLEL_MERGE_RADIUS_FRAC: f32 = 0.003;
+const PARALLEL_MERGE_RADIUS_MIN: i32 = 2;
+const PARALLEL_MERGE_RADIUS_MAX: i32 = 12;
+const PARALLEL_MERGE_MIN_DOT: f32 = 0.7;
+
+#[derive(Clone, Copy)]
+struct MergeClaim {
+    target: u32,
+    dir_x: i8,
+    dir_y: i8,
+    dist_sq: u16,
+}
+
 /// Priority-queue-based pit fill (Barnes et al. 2014). Starting from the
 /// sea / Y-border cells, flood inward; each cell is raised just above the
 /// highest point on the least-costly path back to an outlet, guaranteeing
@@ -70,6 +86,114 @@ fn fill_pits(elev: &[f32], mask: &[u8], res: usize) -> Vec<f32> {
         }
     }
     filled
+}
+
+fn parallel_merge_radius_cells(res: usize) -> i32 {
+    ((res as f32 * PARALLEL_MERGE_RADIUS_FRAC).round() as i32)
+        .clamp(PARALLEL_MERGE_RADIUS_MIN, PARALLEL_MERGE_RADIUS_MAX)
+}
+
+fn step_dir(from: (u32, u32), to: (u32, u32), res: usize) -> Option<(i8, i8)> {
+    let mut dx = to.0 as i32 - from.0 as i32;
+    let half = res as i32 / 2;
+    if dx > half {
+        dx -= res as i32;
+    } else if dx < -half {
+        dx += res as i32;
+    }
+    let dy = to.1 as i32 - from.1 as i32;
+    if dx == 0 && dy == 0 {
+        None
+    } else {
+        Some((dx.signum() as i8, dy.signum() as i8))
+    }
+}
+
+fn downstream_dir(cell: usize, downstream: &[Option<u32>], res: usize) -> Option<(i8, i8)> {
+    let target = downstream[cell]? as usize;
+    let from = ((cell % res) as u32, (cell / res) as u32);
+    let to = ((target % res) as u32, (target / res) as u32);
+    step_dir(from, to, res)
+}
+
+fn polyline_dir(points: &[(u32, u32)], pi: usize, res: usize) -> Option<(i8, i8)> {
+    if pi + 1 < points.len() {
+        step_dir(points[pi], points[pi + 1], res)
+    } else if pi > 0 {
+        step_dir(points[pi - 1], points[pi], res)
+    } else {
+        None
+    }
+}
+
+fn directions_parallel_downstream(a: (i8, i8), b: (i8, i8)) -> bool {
+    let ax = a.0 as f32;
+    let ay = a.1 as f32;
+    let bx = b.0 as f32;
+    let by = b.1 as f32;
+    let dot = ax * bx + ay * by;
+    if dot <= 0.0 {
+        return false;
+    }
+    let len = (ax * ax + ay * ay).sqrt() * (bx * bx + by * by).sqrt();
+    len > 0.0 && dot / len >= PARALLEL_MERGE_MIN_DOT
+}
+
+fn parallel_merge_target(
+    claims: &[Option<MergeClaim>],
+    cell: usize,
+    dir: Option<(i8, i8)>,
+) -> Option<u32> {
+    let claim = claims[cell]?;
+    let dir = dir?;
+    if directions_parallel_downstream(dir, (claim.dir_x, claim.dir_y)) {
+        Some(claim.target)
+    } else {
+        None
+    }
+}
+
+fn add_parallel_merge_claims(
+    claims: &mut [Option<MergeClaim>],
+    points: &[(u32, u32)],
+    downstream: &[Option<u32>],
+    res: usize,
+    radius: i32,
+) {
+    let radius_sq = radius * radius;
+    for (pi, &(x, y)) in points.iter().enumerate() {
+        let cell = y as usize * res + x as usize;
+        let Some((dir_x, dir_y)) =
+            downstream_dir(cell, downstream, res).or_else(|| polyline_dir(points, pi, res))
+        else {
+            continue;
+        };
+
+        for dy in -radius..=radius {
+            let ny = y as i32 + dy;
+            if ny < 0 || ny >= res as i32 {
+                continue;
+            }
+            for dx in -radius..=radius {
+                let dist_sq = dx * dx + dy * dy;
+                if dist_sq > radius_sq {
+                    continue;
+                }
+                let nx = (x as i32 + dx).rem_euclid(res as i32) as usize;
+                let ni = ny as usize * res + nx;
+                let claim = MergeClaim {
+                    target: cell as u32,
+                    dir_x,
+                    dir_y,
+                    dist_sq: dist_sq as u16,
+                };
+                match claims[ni] {
+                    Some(existing) if existing.dist_sq <= claim.dist_sq => {}
+                    _ => claims[ni] = Some(claim),
+                }
+            }
+        }
+    }
 }
 
 pub struct RiverMap {
@@ -295,6 +419,8 @@ pub fn extract_rivers(
 
     // --- 2. Trace each peak downstream until sea / sink / merge.
     let mut visited = vec![false; total];
+    let merge_radius = parallel_merge_radius_cells(res);
+    let mut merge_claims: Vec<Option<MergeClaim>> = vec![None; total];
     for (peak_idx, _) in peaks {
         let start = peak_idx as usize;
         if visited[start] {
@@ -314,10 +440,31 @@ pub fn extract_rivers(
                 // junction point so the tributary visibly connects.
                 break;
             }
+            if let Some(target) = parallel_merge_target(
+                &merge_claims,
+                ci,
+                downstream_dir(ci, &rivers.downstream, res),
+            ) {
+                visited[ci] = true;
+                let ti = target as usize;
+                let target_point = ((ti % res) as u32, (ti / res) as u32);
+                if points.last().copied() != Some(target_point) {
+                    points.push(target_point);
+                    flow_vals.push(rivers.flow[ti]);
+                }
+                break;
+            }
             visited[ci] = true;
             cur = rivers.downstream[ci];
         }
         if points.len() >= min_length {
+            add_parallel_merge_claims(
+                &mut merge_claims,
+                &points,
+                &rivers.downstream,
+                res,
+                merge_radius,
+            );
             rivers.rivers.push(Polyline {
                 points,
                 flow: flow_vals,
@@ -331,6 +478,7 @@ mod tests {
     use super::super::{continent, elevation};
     use super::*;
     use crate::worldgen::config::WorldGenConfig;
+    use crate::worldgen::global_map::GlobalMap;
 
     fn test_config(res: u32) -> WorldGenConfig {
         WorldGenConfig {
@@ -392,6 +540,48 @@ mod tests {
         }
     }
 
+    fn cell_idx(res: u32, x: u32, y: u32) -> usize {
+        y as usize * res as usize + x as usize
+    }
+
+    fn blank_map(res: u32) -> GlobalMap {
+        let cfg = test_config(res);
+        let total = res as usize * res as usize;
+        GlobalMap {
+            config: cfg,
+            continent_potential: vec![1.0; total],
+            land_mask: vec![1; total],
+            sea_level_potential: 0.0,
+            elevation_m: vec![0.0; total],
+        }
+    }
+
+    fn blank_river_map(res: u32) -> RiverMap {
+        let total = res as usize * res as usize;
+        RiverMap {
+            downstream: vec![None; total],
+            flow: vec![1.0; total],
+            rivers: Vec::new(),
+        }
+    }
+
+    fn seed_manual_river(
+        map: &mut GlobalMap,
+        rivers: &mut RiverMap,
+        points: &[(u32, u32)],
+        source_elev: f32,
+    ) {
+        let res = map.config.global_res;
+        for (pi, &(x, y)) in points.iter().enumerate() {
+            let idx = cell_idx(res, x, y);
+            map.elevation_m[idx] = source_elev - pi as f32;
+            rivers.flow[idx] = (pi + 1) as f32;
+            if let Some(&(nx, ny)) = points.get(pi + 1) {
+                rivers.downstream[idx] = Some(cell_idx(res, nx, ny) as u32);
+            }
+        }
+    }
+
     #[test]
     fn flow_accumulates_downhill() {
         // On a land cell with a strictly downhill neighbor, flow at the
@@ -444,5 +634,43 @@ mod tests {
         for r in &rm.rivers {
             assert!(r.points.len() >= 4);
         }
+    }
+
+    #[test]
+    fn near_parallel_rivers_merge_into_existing_stem() {
+        let res = 128;
+        let mut map = blank_map(res);
+        let mut rm = blank_river_map(res);
+
+        let mut main: Vec<(u32, u32)> = (10u32..=44).map(|y| (30, y)).collect();
+        main.extend((1u32..=14).map(|k| (30 + k, 44 + k)));
+        main.extend((59u32..=100).map(|y| (44, y)));
+
+        let mut parallel: Vec<(u32, u32)> = (10u32..=44).map(|y| (70, y)).collect();
+        parallel.extend((1u32..=24).map(|k| (70 - k, 44 + k)));
+        parallel.extend((69u32..=100).map(|y| (46, y)));
+
+        seed_manual_river(&mut map, &mut rm, &main, 240.0);
+        seed_manual_river(&mut map, &mut rm, &parallel, 220.0);
+
+        extract_rivers(&map, &mut rm, 50.0, 4);
+
+        let main_poly = rm
+            .rivers
+            .iter()
+            .find(|poly| poly.points.first() == Some(&(30, 10)))
+            .expect("main river was not extracted");
+        assert_eq!(main_poly.points.last(), Some(&(44, 100)));
+
+        let merged_poly = rm
+            .rivers
+            .iter()
+            .find(|poly| poly.points.first() == Some(&(70, 10)))
+            .expect("parallel river was not extracted");
+        assert_eq!(merged_poly.points.last(), Some(&(44, 68)));
+        assert!(
+            !merged_poly.points.contains(&(46, 90)),
+            "parallel river should stop once it joins the main stem"
+        );
     }
 }
