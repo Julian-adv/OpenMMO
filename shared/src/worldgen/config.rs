@@ -169,6 +169,15 @@ pub struct WorldGenConfig {
     /// creates local peaks and valleys on top of the base gradient.
     pub detail_wavelength_cells: f32,
 
+    /// Minimum distance (meters) from the coast that procedural mountains
+    /// are allowed to reach. Within this band the mountain/plain selector
+    /// is gated toward "plain" (smooth ramp from 0 at the shoreline to 1
+    /// at the buffer edge), and the river-gap-fill pass excludes hotspot
+    /// centers whose disk would extend into the band. Coastal mountains
+    /// produce unwalkable cliffs at the water's edge in-game; pushing
+    /// them inland keeps shores playable. 0 = disabled (legacy behavior).
+    pub mountain_inland_buffer_m: f32,
+
     /// Number of cells of the north/south border where land is boosted
     /// toward `max_elevation_m` to form an impassable mountain wall (since
     /// Y doesn't wrap). 0 = disabled.
@@ -347,6 +356,7 @@ impl Default for WorldGenConfig {
             plain_amplitude_m: 40.0,
             mountain_selector_wavelength_cells: 900.0,
             detail_wavelength_cells: 80.0,
+            mountain_inland_buffer_m: 1500.0,
             y_border_wall_cells: 16,
             y_border_wall_height_m: 2200.0,
             erosion_droplet_count: 300_000,

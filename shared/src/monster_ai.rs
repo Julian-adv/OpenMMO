@@ -777,25 +777,6 @@ mod tests {
     use rand::rngs::SmallRng;
     use rand::SeedableRng;
 
-    /// Dummy PathProvider that always returns an empty path.
-    struct NoPath;
-    impl PathProvider for NoPath {
-        fn find_path(
-            &self,
-            _sx: f32,
-            _sz: f32,
-            _sf: u8,
-            _gx: f32,
-            _gz: f32,
-            _gf: u8,
-        ) -> PathResult {
-            PathResult {
-                waypoints: vec![],
-                found: false,
-            }
-        }
-    }
-
     /// PathProvider that returns a straight-line path to the goal.
     struct DirectPath;
     impl PathProvider for DirectPath {

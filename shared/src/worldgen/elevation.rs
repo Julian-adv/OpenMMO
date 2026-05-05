@@ -57,6 +57,13 @@ pub fn generate_elevation(map: &mut GlobalMap) {
         }
     }
 
+    // Coastal mountain gate: ramps from 0 at the shoreline to 1 at
+    // `mountain_inland_buffer_m`. Multiplied into `mtn_factor` below so
+    // procedural mountain noise can't replace plain noise inside the buffer
+    // band — base + plain detail still rises gently, but no peaks are
+    // selected at the water's edge. 0 buffer = legacy (always 1).
+    let mtn_buffer_cells = map.config.mountain_inland_buffer_m / map.config.meters_per_cell();
+
     // --- Noise fields (deterministic per master seed).
     let seed = map.config.seed;
     // Detail noise carries the analytic-derivative damped fBm: erosion-shaped
@@ -139,11 +146,15 @@ pub fn generate_elevation(map: &mut GlobalMap) {
             // doesn't show a hard step in the heightmap. `mtn_factor`
             // ramps from 0 just below the quantile threshold to 1 well above.
             let mtn_band = 0.15; // ±15% of the selector noise range
-            let mtn_factor = smoothstep(
+            let mut mtn_factor = smoothstep(
                 mountain_threshold - mtn_band,
                 mountain_threshold + mtn_band,
                 mountain_score[i],
             );
+            if mtn_buffer_cells > 0.0 {
+                let coast_gate = smoothstep(0.0, mtn_buffer_cells, dist_land_smooth[i]);
+                mtn_factor *= coast_gate;
+            }
             let plain_part = detail * pln_amp;
             // Couple mountain amplitude to the base-elevation gradient so
             // lowland cells don't inherit the mountain fBm's 100 m+ swings.
@@ -366,9 +377,20 @@ pub fn seed_river_gap_mountains(
     }
     let mut dist = bfs_distance_from(&river_mask, res, 1, Some(&map.land_mask));
 
+    // Coastal exclusion for hotspot centers: the disk extends
+    // `RIVER_GAP_RADIUS_M` outward, so any center within
+    // `mountain_inland_buffer_m + RIVER_GAP_RADIUS_M` of the shoreline would
+    // raise terrain inside the no-mountain band. Compute distance-to-sea
+    // once and skip those cells in the habitable mask.
+    let coast_dist = bfs_distance_from(&map.land_mask, res, 0, None);
+    let coast_buffer_cells = ((map.config.mountain_inland_buffer_m + RIVER_GAP_RADIUS_M) / mpc)
+        .round()
+        .max(0.0) as u16;
+
     // Habitable for gap-fill: lowland land cell outside the Y-border wall
-    // exclusion. Slope/coast filters from settlements aren't relevant — we
-    // only care whether the neighborhood lacks a river.
+    // exclusion and far enough from the coast that the hotspot disk fits
+    // inland. Slope filters from settlements aren't relevant — we only
+    // care whether the neighborhood lacks a river.
     let mut habitable = vec![0u8; total];
     for i in 0..total {
         if map.land_mask[i] != 1 {
@@ -379,6 +401,9 @@ pub fn seed_river_gap_mountains(
         }
         let iy = i / res;
         if iy < wall_margin || iy + wall_margin >= res {
+            continue;
+        }
+        if coast_dist[i] < coast_buffer_cells {
             continue;
         }
         habitable[i] = 1;
@@ -513,6 +538,7 @@ mod tests {
             plain_amplitude_m: 150.0,
             mountain_selector_wavelength_cells: 64.0,
             detail_wavelength_cells: 16.0,
+            mountain_inland_buffer_m: 0.0,
             y_border_wall_cells: 8,
             y_border_wall_height_m: 2200.0,
             erosion_droplet_count: 0,
