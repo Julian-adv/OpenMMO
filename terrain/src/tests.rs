@@ -144,7 +144,7 @@ async fn height_sampler_flat_terrain() {
     // Default heightmap is all sea level (0.0m)
     let dir = std::path::PathBuf::from("/tmp/_onlinerpg_test_sampler_nonexistent");
     let terrain_io = crate::io::TerrainIO::new(dir);
-    let mut sampler = crate::height::HeightSampler::new(terrain_io);
+    let sampler = crate::height::HeightSampler::new(terrain_io);
 
     let h = sampler.sample_height(0.0, 0.0).await.unwrap();
     assert!((h - 0.0).abs() < 0.001, "Expected sea level, got {h}");

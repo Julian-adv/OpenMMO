@@ -361,6 +361,7 @@ mod tests {
             plain_amplitude_m: 40.0,
             mountain_selector_wavelength_cells: 64.0,
             detail_wavelength_cells: 16.0,
+            mountain_inland_buffer_m: 0.0,
             y_border_wall_cells: 0,
             y_border_wall_height_m: 0.0,
             erosion_droplet_count: 0,
