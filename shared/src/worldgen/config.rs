@@ -300,8 +300,10 @@ pub struct WorldGenConfig {
     /// lowland cell, then re-runs flow accumulation + river extraction so
     /// the seeded peak births a fresh river. Iterates until every lowland
     /// cell is within this distance of either a real or hotspot-anchored
-    /// river. 0 disables the pass. Typical: ~4000 m so no plain is more
-    /// than a 4 km walk from a stream.
+    /// river. 0 disables the pass. Default: 3500 m — at 4000 m, regions
+    /// like (r+12, -7) on seed 42 had every cell barely-but-not-quite a
+    /// gap (max ~3920 m to a river), so visually riverless plains escaped
+    /// the gap-fill; tightening to 3500 m catches them.
     pub river_gap_max_m: f32,
 
     // --- Phase 6: roads ---------------------------------------------------
@@ -380,7 +382,7 @@ impl Default for WorldGenConfig {
             settlement_phase_a_spacing_mult: 2.0,
             settlement_south_edge_exclusion_m: 1700.0,
             settlement_max_gap_m: 4000.0,
-            river_gap_max_m: 4000.0,
+            river_gap_max_m: 3500.0,
             road_extra_neighbors: 5,
             // No hand-tuned hotspots/carves by default — Phase 5's coverage-
             // gap pass guarantees cities everywhere, so engineering mountains

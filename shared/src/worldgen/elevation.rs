@@ -377,15 +377,15 @@ pub fn seed_river_gap_mountains(
     }
     let mut dist = bfs_distance_from(&river_mask, res, 1, Some(&map.land_mask));
 
-    // Coastal exclusion for hotspot centers: the disk extends
-    // `RIVER_GAP_RADIUS_M` outward, so any center within
-    // `mountain_inland_buffer_m + RIVER_GAP_RADIUS_M` of the shoreline would
-    // raise terrain inside the no-mountain band. Compute distance-to-sea
-    // once and skip those cells in the habitable mask.
+    // Coastal exclusion for hotspot centers: only require that the disk
+    // fits inland (`RIVER_GAP_RADIUS_M`). `apply_hotspots_to` already
+    // skips sea cells, so the smooth disk falloff doesn't create the
+    // shoreline cliff problem that the main-pass
+    // `mountain_inland_buffer_m` gate is designed to prevent — stacking
+    // that buffer here would shut peninsulas under ~7 km wide out of
+    // the gap-fill entirely, leaving them as river deserts.
     let coast_dist = bfs_distance_from(&map.land_mask, res, 0, None);
-    let coast_buffer_cells = ((map.config.mountain_inland_buffer_m + RIVER_GAP_RADIUS_M) / mpc)
-        .round()
-        .max(0.0) as u16;
+    let coast_buffer_cells = (RIVER_GAP_RADIUS_M / mpc).round() as u16;
 
     // Habitable for gap-fill: lowland land cell outside the Y-border wall
     // exclusion and far enough from the coast that the hotspot disk fits
