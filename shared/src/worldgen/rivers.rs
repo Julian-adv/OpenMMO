@@ -31,6 +31,19 @@ const PARALLEL_MERGE_RADIUS_MIN: i32 = 2;
 const PARALLEL_MERGE_RADIUS_MAX: i32 = 12;
 const PARALLEL_MERGE_MIN_DOT: f32 = 0.7;
 
+/// D8 flow over broad lowlands can lock onto a single cardinal / diagonal
+/// direction for hundreds of cells. After extraction, gently displace river
+/// vertices in low-slope reaches so the baked carve/ribbon reads as a natural
+/// channel instead of a ruler-straight grid trace.
+const MEANDER_MIN_LENGTH_CELLS: f32 = 40.0;
+const MEANDER_TANGENT_WINDOW: usize = 8;
+const MEANDER_WAVELENGTH_CELLS: f32 = 56.0;
+const MEANDER_ENDPOINT_TAPER_CELLS: f32 = 36.0;
+const MEANDER_BASE_AMPLITUDE_CELLS: f32 = 0.75;
+const MEANDER_FLOW_AMPLITUDE_CELLS: f32 = 3.0;
+const MEANDER_SLOPE_LOW: f32 = 0.025;
+const MEANDER_SLOPE_HIGH: f32 = 0.14;
+
 #[derive(Clone, Copy)]
 struct MergeClaim {
     target: u32,
@@ -150,6 +163,258 @@ fn parallel_merge_target(
         Some(claim.target)
     } else {
         None
+    }
+}
+
+fn smoothstep01(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
+fn smoothstep(edge0: f32, edge1: f32, x: f32) -> f32 {
+    if (edge1 - edge0).abs() < f32::EPSILON {
+        return if x >= edge1 { 1.0 } else { 0.0 };
+    }
+    smoothstep01((x - edge0) / (edge1 - edge0))
+}
+
+fn hash_unit(mut x: u64) -> f32 {
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xff51afd7ed558ccd);
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xc4ceb9fe1a85ec53);
+    x ^= x >> 33;
+    ((x >> 40) as f32) / ((1u64 << 24) as f32)
+}
+
+#[inline]
+fn folded_x_delta(from_x: u32, to_x: u32, res: usize) -> i32 {
+    let mut dx = to_x as i32 - from_x as i32;
+    let res_i = res as i32;
+    if dx > res_i / 2 {
+        dx -= res_i;
+    } else if dx < -res_i / 2 {
+        dx += res_i;
+    }
+    dx
+}
+
+fn cumulative_lengths_cells(points: &[(u32, u32)], res: usize) -> Vec<f32> {
+    let mut lengths = Vec::with_capacity(points.len());
+    lengths.push(0.0);
+    for i in 1..points.len() {
+        let dx = folded_x_delta(points[i - 1].0, points[i].0, res) as f32;
+        let dy = points[i].1 as f32 - points[i - 1].1 as f32;
+        lengths.push(lengths[i - 1] + (dx * dx + dy * dy).sqrt());
+    }
+    lengths
+}
+
+fn meandered_point(
+    map: &GlobalMap,
+    points: &[(u32, u32)],
+    flow: &[f32],
+    cumulative: &[f32],
+    anchors: &[bool],
+    max_flow: f32,
+    river_index: usize,
+    point_index: usize,
+) -> (u32, u32) {
+    let res = map.config.global_res as usize;
+    let n = points.len();
+    let original = points[point_index];
+    if point_index == 0 || point_index + 1 == n {
+        return original;
+    }
+    if anchors[original.1 as usize * res + original.0 as usize] {
+        return original;
+    }
+
+    let total_len = *cumulative.last().unwrap_or(&0.0);
+    if total_len < MEANDER_MIN_LENGTH_CELLS {
+        return original;
+    }
+
+    let lo = point_index.saturating_sub(MEANDER_TANGENT_WINDOW);
+    let hi = (point_index + MEANDER_TANGENT_WINDOW).min(n - 1);
+    if lo == hi {
+        return original;
+    }
+
+    let dx = folded_x_delta(points[lo].0, points[hi].0, res) as f32;
+    let dy = points[hi].1 as f32 - points[lo].1 as f32;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 1e-3 {
+        return original;
+    }
+
+    let mpc = map.config.meters_per_cell();
+    let elev_lo = map.elevation_m[points[lo].1 as usize * res + points[lo].0 as usize];
+    let elev_hi = map.elevation_m[points[hi].1 as usize * res + points[hi].0 as usize];
+    let slope = (elev_lo - elev_hi).abs() / (len * mpc).max(1e-3);
+    let slope_gate = 1.0 - smoothstep(MEANDER_SLOPE_LOW, MEANDER_SLOPE_HIGH, slope);
+    if slope_gate <= 0.01 {
+        return original;
+    }
+
+    let endpoint_dist = cumulative[point_index].min(total_len - cumulative[point_index]);
+    let taper_len = MEANDER_ENDPOINT_TAPER_CELLS.min(total_len * 0.5).max(1.0);
+    let endpoint_gate = smoothstep01(endpoint_dist / taper_len);
+    if endpoint_gate <= 0.01 {
+        return original;
+    }
+
+    let flow_norm = if max_flow > 1.0 {
+        flow[point_index].max(1.0).log2() / max_flow.log2()
+    } else {
+        0.0
+    }
+    .clamp(0.0, 1.0);
+
+    let phase = hash_unit(
+        map.config.seed
+            ^ ((river_index as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15))
+            ^ 0xA11C_E5ED_5EA_u64,
+    ) * std::f32::consts::TAU;
+    let s = cumulative[point_index];
+    let wave_a = (s / MEANDER_WAVELENGTH_CELLS * std::f32::consts::TAU + phase).sin();
+    let wave_b =
+        (s / (MEANDER_WAVELENGTH_CELLS * 0.47) * std::f32::consts::TAU + phase * 1.73).sin();
+    let wave = wave_a + wave_b * 0.35;
+    let amp = (MEANDER_BASE_AMPLITUDE_CELLS + MEANDER_FLOW_AMPLITUDE_CELLS * flow_norm)
+        * endpoint_gate
+        * slope_gate;
+    let offset = wave * amp;
+    if offset.abs() < 0.5 {
+        return original;
+    }
+
+    let nx = -dy / len;
+    let ny = dx / len;
+    for scale in [1.0f32, 0.5] {
+        let x = (original.0 as f32 + nx * offset * scale).round() as i32;
+        let y = (original.1 as f32 + ny * offset * scale).round() as i32;
+        let x = x.rem_euclid(res as i32) as u32;
+        let y = y.clamp(0, res as i32 - 1) as u32;
+        let idx = y as usize * res + x as usize;
+        if map.land_mask[idx] == 1 {
+            return (x, y);
+        }
+    }
+
+    original
+}
+
+fn append_wrapped_line(
+    points: &mut Vec<(u32, u32)>,
+    flow: &mut Vec<f32>,
+    from: (u32, u32),
+    to: (u32, u32),
+    flow_from: f32,
+    flow_to: f32,
+    res: usize,
+) {
+    let dx = folded_x_delta(from.0, to.0, res);
+    let dy = to.1 as i32 - from.1 as i32;
+    let steps = dx.abs().max(dy.abs()) as usize;
+    if steps == 0 {
+        return;
+    }
+    for step in 1..=steps {
+        let t = step as f32 / steps as f32;
+        let x = (from.0 as i32 + (dx as f32 * t).round() as i32).rem_euclid(res as i32) as u32;
+        let y = (from.1 as i32 + (dy as f32 * t).round() as i32).clamp(0, res as i32 - 1) as u32;
+        let p = (x, y);
+        let f = flow_from + (flow_to - flow_from) * t;
+        if points.last().copied() == Some(p) {
+            if let Some(last_flow) = flow.last_mut() {
+                *last_flow = f;
+            }
+        } else {
+            points.push(p);
+            flow.push(f);
+        }
+    }
+}
+
+fn naturalize_river_meanders(map: &GlobalMap, rivers: &mut [Polyline]) {
+    let res = map.config.global_res as usize;
+    let total = res * res;
+    let mut occurrences = vec![0u8; total];
+    for poly in rivers.iter() {
+        for &(x, y) in &poly.points {
+            let idx = y as usize * res + x as usize;
+            occurrences[idx] = occurrences[idx].saturating_add(1);
+        }
+    }
+
+    // Keep sources, mouths, and junction cells fixed. Tributary polylines end
+    // exactly on a main-stem cell; if the main stem meanders that shared
+    // interior point while the tributary endpoint stays put, the rendered
+    // ribbons separate by a few meters at the confluence.
+    let mut anchors = occurrences
+        .iter()
+        .map(|&count| count > 1)
+        .collect::<Vec<bool>>();
+    for poly in rivers.iter() {
+        if let Some(&(x, y)) = poly.points.first() {
+            anchors[y as usize * res + x as usize] = true;
+        }
+        if let Some(&(x, y)) = poly.points.last() {
+            anchors[y as usize * res + x as usize] = true;
+        }
+    }
+
+    let max_flow = rivers
+        .iter()
+        .flat_map(|poly| poly.flow.iter().copied())
+        .fold(1.0f32, f32::max);
+
+    for (ri, poly) in rivers.iter_mut().enumerate() {
+        if poly.points.len() < 3 || poly.points.len() != poly.flow.len() {
+            continue;
+        }
+
+        let cumulative = cumulative_lengths_cells(&poly.points, res);
+        if *cumulative.last().unwrap_or(&0.0) < MEANDER_MIN_LENGTH_CELLS {
+            continue;
+        }
+
+        let targets: Vec<(u32, u32)> = (0..poly.points.len())
+            .map(|i| {
+                meandered_point(
+                    map,
+                    &poly.points,
+                    &poly.flow,
+                    &cumulative,
+                    &anchors,
+                    max_flow,
+                    ri,
+                    i,
+                )
+            })
+            .collect();
+
+        let mut new_points = Vec::with_capacity(poly.points.len());
+        let mut new_flow = Vec::with_capacity(poly.flow.len());
+        new_points.push(targets[0]);
+        new_flow.push(poly.flow[0]);
+        for i in 1..targets.len() {
+            append_wrapped_line(
+                &mut new_points,
+                &mut new_flow,
+                targets[i - 1],
+                targets[i],
+                poly.flow[i - 1],
+                poly.flow[i],
+                res,
+            );
+        }
+
+        if new_points.len() >= 2 && new_points.len() == new_flow.len() {
+            poly.points = new_points;
+            poly.flow = new_flow;
+        }
     }
 }
 
@@ -471,6 +736,8 @@ pub fn extract_rivers(
             });
         }
     }
+
+    naturalize_river_meanders(map, &mut rivers.rivers);
 }
 
 #[cfg(test)]
@@ -671,6 +938,38 @@ mod tests {
         assert!(
             !merged_poly.points.contains(&(46, 90)),
             "parallel river should stop once it joins the main stem"
+        );
+    }
+
+    #[test]
+    fn meander_keeps_tributary_junctions_connected() {
+        let res = 128;
+        let map = blank_map(res);
+        let junction = (64, 64);
+        let main: Vec<(u32, u32)> = (20u32..=100).map(|y| (64, y)).collect();
+        let tributary: Vec<(u32, u32)> = (0u32..=34).map(|k| (30 + k, 30 + k)).collect();
+
+        let mut rivers = vec![
+            Polyline {
+                flow: vec![200.0; main.len()],
+                points: main,
+            },
+            Polyline {
+                flow: vec![100.0; tributary.len()],
+                points: tributary,
+            },
+        ];
+
+        naturalize_river_meanders(&map, &mut rivers);
+
+        assert!(
+            rivers[0].points.contains(&junction),
+            "main stem must keep shared junction anchored"
+        );
+        assert_eq!(
+            rivers[1].points.last(),
+            Some(&junction),
+            "tributary endpoint must remain on the same junction"
         );
     }
 }
