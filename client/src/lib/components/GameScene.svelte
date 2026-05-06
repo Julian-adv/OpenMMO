@@ -576,6 +576,8 @@
         loopProfiler.record('windParticles', performance.now() - windStart)
       }
 
+      riverLayerRef?.update(deltaTime, camera)
+
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()
       updateCameraWithOffset(cameraOffset)
@@ -1077,6 +1079,7 @@
   cameraDirection={waterCamDir}
   moonBrightness={waterMoonBrightness}
   torchLight={waterTorchLight}
+  playerPosition={currentPlayer?.position ?? null}
 />
 
 <T is={entityClipGroupObj} bind:ref={entityClipGroup}>
