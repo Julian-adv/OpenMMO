@@ -14,6 +14,10 @@ use super::constants::{
 };
 use super::context::{BakeContext, MouthIsland};
 
+const RIVER_BEND_TURN_FULL_STRENGTH_RAD: f32 = std::f32::consts::FRAC_PI_4;
+const RIVER_BEND_OUTER_DEPTH_EXTRA: f32 = 0.30;
+const RIVER_BEND_INNER_DEPTH_REDUCTION: f32 = 0.35;
+
 /// Generate the 65×65 f32 heightmap WITHOUT the river carve. Splitting the
 /// carve out into a separate pass (`apply_river_carve_to_tile`) lets later
 /// stages (settlement pad flatten) modify the natural surface first, so
@@ -339,7 +343,17 @@ fn carve_at_point(world_x: f32, world_z: f32, current_h: f32, segs: &[RiverSegme
     let width = lerp(seg.width_a, seg.width_b, t);
     let (half_width, taper, depth) = segment_carve_params(flow_norm, width);
     let max_carve_depth = (current_h - RIVER_CARVE_MIN_BED_Y_M).max(0.0);
-    river_carve_m(d, half_width, taper, depth.min(max_carve_depth))
+    let signed_d = signed_distance_to_segment(world_x, world_z, seg, t);
+    let outside_strength = bend_outside_strength(segs, idx, t);
+    river_carve_capped_m(
+        d,
+        signed_d,
+        outside_strength,
+        half_width,
+        taper,
+        depth,
+        max_carve_depth,
+    )
 }
 
 #[inline]
@@ -348,10 +362,9 @@ pub(super) fn lerp(a: f32, b: f32, t: f32) -> f32 {
 }
 
 /// Carve geometry at a point on the river: `(half_width, taper, depth)`.
-/// Flat bed matches the visible ribbon (`half_width = width * 0.5`) so the
-/// water surface sits on a consistent floor. Taper and depth grow linearly
-/// in flow so sources are shallow and mouths cut deeper. See
-/// RIVER_SYSTEM.md §2.5.
+/// The base bed width matches the visible ribbon (`half_width = width * 0.5`).
+/// Taper and depth grow linearly in flow so sources are shallow and mouths
+/// cut deeper. See RIVER_SYSTEM.md §2.5.
 #[inline]
 fn segment_carve_params(flow_norm: f32, width_m: f32) -> (f32, f32, f32) {
     let half_width = width_m * 0.5;
@@ -360,11 +373,26 @@ fn segment_carve_params(flow_norm: f32, width_m: f32) -> (f32, f32, f32) {
     (half_width, taper, depth)
 }
 
-/// River channel profile: flat floor within `half_width`, smoothstep taper
-/// to zero over the next `taper` meters. Flat floor avoids a kink at the
-/// bank.
+/// River channel profile: straight reaches keep a flat floor within
+/// `half_width`; bends bias that floor so the outside bank cuts a little
+/// deeper while the inside bank shelves shallower. The outer taper then
+/// smoothsteps to zero over the next `taper` meters.
 #[inline]
-fn river_carve_m(d_m: f32, half_width: f32, taper: f32, depth: f32) -> f32 {
+fn river_carve_capped_m(
+    d_m: f32,
+    signed_d_m: f32,
+    outside_strength: f32,
+    half_width: f32,
+    taper: f32,
+    depth: f32,
+    max_depth: f32,
+) -> f32 {
+    let depth = bend_biased_depth(depth, signed_d_m, outside_strength, half_width).min(max_depth);
+    river_carve_profile_m(d_m, half_width, taper, depth)
+}
+
+#[inline]
+fn river_carve_profile_m(d_m: f32, half_width: f32, taper: f32, depth: f32) -> f32 {
     let total = half_width + taper;
     if d_m >= total {
         return 0.0;
@@ -375,6 +403,79 @@ fn river_carve_m(d_m: f32, half_width: f32, taper: f32, depth: f32) -> f32 {
     let t = (d_m - half_width) / taper.max(1e-3);
     let s = 1.0 - t * t * (3.0 - 2.0 * t);
     depth * s
+}
+
+/// Bend strength is signed by outside-bank direction: + means the left side
+/// of the downstream segment is outside, - means the right side is outside.
+fn bend_outside_strength(segs: &[RiverSegment], idx: usize, t: f32) -> f32 {
+    let seg = &segs[idx];
+    let start = idx
+        .checked_sub(1)
+        .and_then(|prev_idx| {
+            let prev = &segs[prev_idx];
+            segments_touch(prev.bx, prev.bz, seg.ax, seg.az)
+                .then(|| -turn_strength(prev.ax, prev.az, prev.bx, prev.bz, seg.bx, seg.bz))
+        })
+        .unwrap_or(0.0);
+    let end = segs
+        .get(idx + 1)
+        .and_then(|next| {
+            segments_touch(seg.bx, seg.bz, next.ax, next.az)
+                .then(|| -turn_strength(seg.ax, seg.az, seg.bx, seg.bz, next.bx, next.bz))
+        })
+        .unwrap_or(0.0);
+    lerp(start, end, t).clamp(-1.0, 1.0)
+}
+
+fn turn_strength(ax: f32, az: f32, bx: f32, bz: f32, cx: f32, cz: f32) -> f32 {
+    let ux = bx - ax;
+    let uz = bz - az;
+    let vx = cx - bx;
+    let vz = cz - bz;
+    let ul = (ux * ux + uz * uz).sqrt();
+    let vl = (vx * vx + vz * vz).sqrt();
+    if ul <= 1e-3 || vl <= 1e-3 {
+        return 0.0;
+    }
+    let ux = ux / ul;
+    let uz = uz / ul;
+    let vx = vx / vl;
+    let vz = vz / vl;
+    let cross = ux * vz - uz * vx;
+    let dot = (ux * vx + uz * vz).clamp(-1.0, 1.0);
+    (cross.atan2(dot) / RIVER_BEND_TURN_FULL_STRENGTH_RAD).clamp(-1.0, 1.0)
+}
+
+fn segments_touch(ax: f32, az: f32, bx: f32, bz: f32) -> bool {
+    let dx = ax - bx;
+    let dz = az - bz;
+    dx * dx + dz * dz <= 1e-4
+}
+
+fn signed_distance_to_segment(px: f32, pz: f32, seg: &RiverSegment, t: f32) -> f32 {
+    let dx = seg.bx - seg.ax;
+    let dz = seg.bz - seg.az;
+    let len = (dx * dx + dz * dz).sqrt();
+    if len <= 1e-3 {
+        return 0.0;
+    }
+    let cx = seg.ax + dx * t;
+    let cz = seg.az + dz * t;
+    let cross = dx * (pz - cz) - dz * (px - cx);
+    cross / len
+}
+
+fn bend_biased_depth(depth: f32, signed_d_m: f32, outside_strength: f32, half_width: f32) -> f32 {
+    if half_width <= 1e-3 || outside_strength.abs() <= 1e-3 {
+        return depth;
+    }
+    let lateral = (signed_d_m / half_width).clamp(-1.0, 1.0);
+    let outside_alignment = (lateral * outside_strength).clamp(-1.0, 1.0);
+    if outside_alignment >= 0.0 {
+        depth * (1.0 + RIVER_BEND_OUTER_DEPTH_EXTRA * outside_alignment)
+    } else {
+        depth * (1.0 + RIVER_BEND_INNER_DEPTH_REDUCTION * outside_alignment)
+    }
 }
 
 /// Map a single global cell to "effective elevation": the raw meters for
@@ -549,6 +650,97 @@ mod tests {
         assert!(
             (left_slope - right_slope).abs() < 1e-2,
             "c1 slope mismatch: left={left_slope} right={right_slope}"
+        );
+    }
+
+    #[test]
+    fn straight_river_carve_keeps_flat_bed() {
+        let depth = 2.0;
+        let carve = river_carve_capped_m(3.0, 3.0, 0.0, 5.0, 4.0, depth, f32::INFINITY);
+        assert!(
+            (carve - depth).abs() < 1e-5,
+            "straight channel should keep the legacy flat-bed depth"
+        );
+    }
+
+    #[test]
+    fn bend_carve_deepens_outside_and_shallows_inside_bank() {
+        let depth = 2.0;
+        let half_width = 5.0;
+        let outside_strength = 1.0;
+        let outer = river_carve_capped_m(
+            half_width,
+            half_width,
+            outside_strength,
+            half_width,
+            4.0,
+            depth,
+            f32::INFINITY,
+        );
+        let center = river_carve_capped_m(
+            0.0,
+            0.0,
+            outside_strength,
+            half_width,
+            4.0,
+            depth,
+            f32::INFINITY,
+        );
+        let inner = river_carve_capped_m(
+            half_width,
+            -half_width,
+            outside_strength,
+            half_width,
+            4.0,
+            depth,
+            f32::INFINITY,
+        );
+
+        assert!(outer > center, "outside bank should cut below base depth");
+        assert!(
+            inner < center,
+            "inside bank should become shallower toward the point bar"
+        );
+    }
+
+    #[test]
+    fn river_depth_cap_preserves_taper_gradient() {
+        let carve = river_carve_capped_m(6.0, 0.0, 0.0, 5.0, 5.0, 2.0, 1.0);
+        assert!(
+            carve < 1.0,
+            "cap should limit bed depth before taper so the edge still fades"
+        );
+    }
+
+    #[test]
+    fn bend_direction_follows_polyline_turn() {
+        let segs = vec![
+            RiverSegment {
+                ax: 0.0,
+                az: -10.0,
+                bx: 0.0,
+                bz: 0.0,
+                flow_norm_a: 0.0,
+                flow_norm_b: 0.0,
+                width_a: 4.0,
+                width_b: 4.0,
+            },
+            RiverSegment {
+                ax: 0.0,
+                az: 0.0,
+                bx: 10.0,
+                bz: 0.0,
+                flow_norm_a: 0.0,
+                flow_norm_b: 0.0,
+                width_a: 4.0,
+                width_b: 4.0,
+            },
+        ];
+
+        let after_right_turn = bend_outside_strength(&segs, 1, 0.0);
+        assert!(
+            after_right_turn > 0.99,
+            "right turn should put the outside bank on the left side"
         );
     }
 }
