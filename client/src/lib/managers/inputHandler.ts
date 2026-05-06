@@ -111,6 +111,10 @@ class InputHandler {
     ]
 
     const raycaster = new Raycaster()
+    const centerNDC = new Vector2(
+      ((event.clientX - rect.left) / rect.width) * 2 - 1,
+      -((event.clientY - rect.top) / rect.height) * 2 + 1
+    )
 
     // Check intersection with monsters using 5 rays
     if (context.monsterMeshes.length > 0) {
@@ -162,10 +166,6 @@ class InputHandler {
       }
     }
 
-    const centerNDC = new Vector2(
-      ((event.clientX - rect.left) / rect.width) * 2 - 1,
-      -((event.clientY - rect.top) / rect.height) * 2 + 1
-    )
     raycaster.setFromCamera(centerNDC, context.camera)
 
     // Check intersection with door meshes
@@ -288,13 +288,15 @@ class InputHandler {
     }
     const intersects = raycaster.intersectObjects(context.groundMeshes, true)
 
-    // Pick the first hit with an upward-facing normal (floor/terrain, not walls)
-    for (const hit of intersects) {
-      if (hit.face && hit.face.normal.y > 0.5) {
-        return {
-          type: 'move_to_ground',
-          position: { x: hit.point.x, y: hit.point.y, z: hit.point.z },
-        }
+    if (intersects.length > 0) {
+      const firstHit = intersects[0]
+      return {
+        type: 'move_to_ground',
+        position: {
+          x: firstHit.point.x,
+          y: firstHit.point.y,
+          z: firstHit.point.z,
+        },
       }
     }
 
