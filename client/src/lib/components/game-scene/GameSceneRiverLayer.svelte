@@ -1,5 +1,6 @@
 <script lang="ts">
   import { T } from '@threlte/core'
+  import { onDestroy } from 'svelte'
   import * as THREE from 'three'
 
   import type { TerrainTile } from './terrain-utils'
@@ -10,6 +11,7 @@
     buildChains,
     buildRiverGeometry,
     endpointKey,
+    RIVER_DEPTH_OFFSET_M,
     type SeamGhostExtension,
   } from '../../utils/river-geometry'
   import type { RiverSegment } from '../../utils/river-data'
@@ -18,6 +20,10 @@
     type RiverMaterialResult,
   } from '../../shaders/river-material'
   import { riverWireframeVisible } from '../../stores/debugStore'
+  import {
+    WaterfallSprayParticles,
+    type WaterfallSprayEmitter,
+  } from '../../effects/waterfall-spray-particles'
 
   /** Depth of the cross-tile ghost extension provided per shared seam.
    *  Should be ≥ BEND_CAP_SMOOTH_RADIUS in river-geometry (=10) so the
@@ -38,6 +44,7 @@
     cameraDirection?: THREE.Vector3 | null
     moonBrightness?: number
     torchLight?: THREE.PointLight | null
+    playerPosition?: { x: number; y: number; z: number } | null
   }
 
   let {
@@ -53,10 +60,18 @@
     cameraDirection = null,
     moonBrightness = 0,
     torchLight = null,
+    playerPosition = null,
   }: Props = $props()
 
   const riverGroup = new THREE.Group()
   riverGroup.name = 'rivers'
+  const waterfallSpray = new WaterfallSprayParticles()
+  riverGroup.add(waterfallSpray.group)
+
+  const WATERFALL_MIN_BEND_DOT = Math.cos(THREE.MathUtils.degToRad(8))
+  const WATERFALL_MIN_DROP_M = 0.05
+  const WATERFALL_MIN_SLOPE = 0.015
+  const WATERFALL_PLAYER_FOCUS_RADIUS = 96
 
   const wireframeMaterial = new THREE.LineBasicMaterial({
     color: 0xff3366,
@@ -68,6 +83,22 @@
 
   export function getGroup(): THREE.Group {
     return riverGroup
+  }
+
+  export function update(deltaTime: number, camera: THREE.Camera | undefined) {
+    const sunY = sunDirection?.y ?? 0.8
+    const dayFactor = THREE.MathUtils.smoothstep(sunY, -0.08, 0.35)
+    const lightFactor = THREE.MathUtils.clamp(
+      0.34 + dayFactor * 1.35 + moonBrightness * 0.12,
+      0.28,
+      1.75
+    )
+    waterfallSpray.setLightFactor(lightFactor)
+    waterfallSpray.setDayWhiteness(THREE.MathUtils.clamp(dayFactor * 0.38, 0, 0.38))
+    waterfallSpray.setCloudReflectionMix(
+      THREE.MathUtils.lerp(0.3, 0.7, dayFactor)
+    )
+    waterfallSpray.update(deltaTime / 1000, camera)
   }
 
   // Plain (non-reactive): async load callbacks mutate this, and a reactive
@@ -94,6 +125,8 @@
   // overlapping deltas rendered from both sides of the seam).
   /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
   const tileSegments = new Map<string, RiverSegment[]>()
+  /* eslint-disable-next-line svelte/prefer-svelte-reactivity */
+  const tileSprayEmitters = new Map<string, WaterfallSprayEmitter[]>()
 
   // Cross-tile cumulative-length values at shared seam endpoints; see
   // `RiverGeometryResult.publishedOffsets` for the full rationale. The
@@ -261,6 +294,8 @@
     }
     tileMeshes.delete(id)
     tileSegments.delete(id)
+    tileSprayEmitters.delete(id)
+    syncSprayEmitters()
     // Drop the per-tile material; pipeline recompile cost is paid on next
     // load. Don't dispose the heightmap texture — Three.js Sampler binding
     // listens for 'dispose' and nullifies .texture, but _init doesn't sync
@@ -281,6 +316,204 @@
     for (const key of [...chainOffsets.keys()]) {
       if (!live.has(key)) chainOffsets.delete(key)
     }
+  }
+
+  function syncSprayEmitters() {
+    waterfallSpray.setEmitters([...tileSprayEmitters.values()].flat())
+  }
+
+  function normalized2(
+    x1: number,
+    z1: number,
+    x2: number,
+    z2: number
+  ): [number, number, number] {
+    const dx = x2 - x1
+    const dz = z2 - z1
+    const len = Math.hypot(dx, dz)
+    if (len < 1e-6) return [0, 1, 0]
+    return [dx / len, dz / len, len]
+  }
+
+  function buildBendCandidate(
+    candidateId: string,
+    prev: { x: number; z: number },
+    current: { x: number; z: number },
+    next: { x: number; z: number },
+    width: number
+  ): WaterfallSprayEmitter | null {
+    if (!heightManager) return null
+
+    const [prevDirX, prevDirZ, prevLen] = normalized2(
+      prev.x,
+      prev.z,
+      current.x,
+      current.z
+    )
+    const [nextDirX, nextDirZ, nextLen] = normalized2(
+      current.x,
+      current.z,
+      next.x,
+      next.z
+    )
+    if (prevLen < 0.5 || nextLen < 0.5) return null
+
+    const bendDot = prevDirX * nextDirX + prevDirZ * nextDirZ
+    if (bendDot > WATERFALL_MIN_BEND_DOT) return null
+
+    if (playerPosition) {
+      const playerDist = Math.hypot(
+        current.x - playerPosition.x,
+        current.z - playerPosition.z
+      )
+      if (playerDist > WATERFALL_PLAYER_FOCUS_RADIUS) return null
+    }
+
+    if (
+      !heightManager.hasHeightData(prev.x, prev.z) ||
+      !heightManager.hasHeightData(current.x, current.z) ||
+      !heightManager.hasHeightData(next.x, next.z)
+    ) {
+      return null
+    }
+
+    const yPrev = heightManager.getHeightAtWorldPosition(prev.x, prev.z)
+    const yCurrent = heightManager.getHeightAtWorldPosition(
+      current.x,
+      current.z
+    )
+    const yNext = heightManager.getHeightAtWorldPosition(next.x, next.z)
+    const drop = Math.max(yPrev - yCurrent, yCurrent - yNext, yPrev - yNext, 0)
+    const slope = drop / (prevLen + nextLen)
+    if (drop < WATERFALL_MIN_DROP_M || slope < WATERFALL_MIN_SLOPE) return null
+
+    const bendStrength = 1 - THREE.MathUtils.clamp(bendDot, -1, 1)
+    const terrainSlope = (yNext - yCurrent) / nextLen
+    const launchSlope = THREE.MathUtils.clamp(terrainSlope + 0.16, -0.55, 0.28)
+    const intensity = THREE.MathUtils.clamp(
+      5.5 + drop * 4 + bendStrength * 9 + slope * 12,
+      6,
+      14
+    )
+    const radius = THREE.MathUtils.clamp(width * 0.75 + 1, 2.2, 5.8)
+
+    return {
+      id: candidateId,
+      x: current.x - nextDirX * Math.min(0.85, nextLen * 0.32),
+      y: yCurrent + RIVER_DEPTH_OFFSET_M + 0.05,
+      z: current.z - nextDirZ * Math.min(0.85, nextLen * 0.32),
+      dirX: nextDirX,
+      dirZ: nextDirZ,
+      radius,
+      intensity,
+      launchSlope,
+    }
+  }
+
+  function collectSprayEmitters(
+    id: string,
+    segments: RiverSegment[]
+  ): WaterfallSprayEmitter[] {
+    if (!heightManager) return []
+
+    const externalContinuations = collectExternalContinuations(id)
+    let best: WaterfallSprayEmitter | null = null
+    const consider = (candidate: WaterfallSprayEmitter | null) => {
+      if (!candidate) return
+      if (!best || candidate.intensity > best.intensity) best = candidate
+    }
+
+    for (const chain of buildChains(segments)) {
+      if (chain.length < 2) continue
+
+      const n = chain.length
+      const px: number[] = new Array(n + 1)
+      const pz: number[] = new Array(n + 1)
+      const widths: number[] = new Array(n + 1)
+
+      let firstFlow = 0
+      let lastFlow = 0
+      for (let i = 0; i < n; i++) {
+        const link = chain[i]
+        const segment = segments[link.seg]
+        const ax = link.forward ? segment.ax : segment.bx
+        const az = link.forward ? segment.az : segment.bz
+        const bx = link.forward ? segment.bx : segment.ax
+        const bz = link.forward ? segment.bz : segment.az
+        const wa = link.forward ? segment.widthA : segment.widthB
+        const wb = link.forward ? segment.widthB : segment.widthA
+        const fa = link.forward ? segment.flowNormA : segment.flowNormB
+        const fb = link.forward ? segment.flowNormB : segment.flowNormA
+
+        if (i === 0) {
+          px[0] = ax
+          pz[0] = az
+          widths[0] = wa
+          firstFlow = fa
+        }
+        px[i + 1] = bx
+        pz[i + 1] = bz
+        widths[i + 1] = wb
+        if (i === n - 1) lastFlow = fb
+      }
+
+      if (lastFlow < firstFlow) {
+        px.reverse()
+        pz.reverse()
+        widths.reverse()
+      }
+
+      const point = (i: number) => ({ x: px[i], z: pz[i] })
+
+      for (let i = 1; i < n; i++) {
+        consider(
+          buildBendCandidate(
+            `${id}:bend:${i}`,
+            point(i - 1),
+            point(i),
+            point(i + 1),
+            widths[i]
+          )
+        )
+      }
+
+      const headKey = endpointKey(px[0], pz[0])
+      const headExtension = externalContinuations.get(headKey)
+      if (headExtension && headExtension.length > 0) {
+        consider(
+          buildBendCandidate(
+            `${id}:bend:head`,
+            { x: headExtension[0][0], z: headExtension[0][1] },
+            point(0),
+            point(1),
+            widths[0]
+          )
+        )
+      }
+
+      const tailKey = endpointKey(px[n], pz[n])
+      const tailExtension = externalContinuations.get(tailKey)
+      if (tailExtension && tailExtension.length > 0) {
+        consider(
+          buildBendCandidate(
+            `${id}:bend:tail`,
+            point(n - 1),
+            point(n),
+            { x: tailExtension[0][0], z: tailExtension[0][1] },
+            widths[n]
+          )
+        )
+      }
+    }
+
+    return best ? [best] : []
+  }
+
+  function refreshSprayEmitters(id: string, segments: RiverSegment[]) {
+    const emitters = collectSprayEmitters(id, segments)
+    if (emitters.length > 0) tileSprayEmitters.set(id, emitters)
+    else tileSprayEmitters.delete(id)
+    syncSprayEmitters()
   }
 
   interface SpillBindings {
@@ -449,6 +682,8 @@
       geometry.dispose()
       disposePriorMesh(id)
       tileMeshes.set(id, null)
+      tileSprayEmitters.delete(id)
+      syncSprayEmitters()
       return
     }
 
@@ -507,6 +742,7 @@
     mesh.renderOrder = 1
     riverGroup.add(mesh)
     tileMeshes.set(id, mesh)
+    refreshSprayEmitters(id, segments)
 
     if ($riverWireframeVisible) {
       addWireframeForTile(id, geometry)
@@ -578,6 +814,10 @@
       const tileZ = Math.round(tile.position[2] / TERRAIN_TILE_SIZE)
       void loadRiverTile(tile.id, tileX, tileZ)
     }
+  })
+
+  onDestroy(() => {
+    waterfallSpray.dispose()
   })
 </script>
 
