@@ -27,6 +27,7 @@ EXPORT_PACKS = {
         "walk",
         "jog",
         "run",
+        "jump",
     ],
     "combat_melee": [
         "slash1",

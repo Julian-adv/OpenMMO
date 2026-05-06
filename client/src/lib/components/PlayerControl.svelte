@@ -13,6 +13,8 @@
     calculateMovementStep,
     initMovementState,
     getMovementMode,
+    isSlopeTooSteepUphill,
+    SLOPE_LOOKAHEAD_DISTANCE,
     DEFAULT_MOVEMENT_CONFIG,
     type Position,
     type MovementState,
@@ -89,6 +91,63 @@
 
   const STAND_UP_DURATION = 300 // ms, matches animation crossfade duration
   let standUpTimer: ReturnType<typeof setTimeout> | null = null
+
+  const JUMP_FEEDBACK_DURATION_MS = 1500
+  const JUMP_FEEDBACK_COOLDOWN_MS = 1000
+  let jumpFeedbackTimer: ReturnType<typeof setTimeout> | null = null
+  let lastJumpFeedbackAt = 0
+
+  /**
+   * Sample the terrain ahead of `from` along (dirX, dirZ) and report whether
+   * the climb to that point would exceed MAX_TRAVERSABLE_SLOPE_DEG.
+   *
+   * Uses sampleHeight() so it respects bridges/housing floor offsets the
+   * same way as the player's vertical position.
+   */
+  function isUphillTooSteep(
+    fromX: number,
+    fromZ: number,
+    fromY: number,
+    dirX: number,
+    dirZ: number
+  ): boolean {
+    const aheadX = fromX + dirX * SLOPE_LOOKAHEAD_DISTANCE
+    const aheadZ = fromZ + dirZ * SLOPE_LOOKAHEAD_DISTANCE
+    const aheadY = sampleHeight(aheadX, aheadZ)
+    return isSlopeTooSteepUphill(fromY, aheadY, SLOPE_LOOKAHEAD_DISTANCE)
+  }
+
+  /**
+   * Briefly switch the player to the 'jump' state to play the jump animation
+   * as a one-shot feedback that the terrain ahead is too steep. Cooldown
+   * prevents the animation from restarting every frame while the user keeps
+   * pushing into the slope.
+   */
+  function triggerJumpFeedback() {
+    const now = Date.now()
+    if (now - lastJumpFeedbackAt < JUMP_FEEDBACK_COOLDOWN_MS) return
+    lastJumpFeedbackAt = now
+
+    const jumpState: PlayerState = {
+      ...playerState,
+      state: 'jump',
+      speed: 0,
+      movementMode: undefined,
+      attackCounter: undefined,
+    }
+    playerState = jumpState
+    onStateChange(jumpState)
+
+    if (jumpFeedbackTimer) clearTimeout(jumpFeedbackTimer)
+    jumpFeedbackTimer = setTimeout(() => {
+      jumpFeedbackTimer = null
+      // Only return to idle if we're still in the jump feedback state —
+      // some other event (combat, interaction) may have already moved us on.
+      if (playerState.state === 'jump') {
+        updatePlayerState()
+      }
+    }, JUMP_FEEDBACK_DURATION_MS)
+  }
 
   let pendingPickupInstanceId = $state<number | null>(null)
 
@@ -591,6 +650,17 @@
         return
       }
 
+      // Slope-too-steep check: look ahead in the movement direction and
+      // refuse to climb if the terrain there is steeper than the limit.
+      // dirX/dirZ derived from rotation (= atan2(dx, dz) → x = sin, z = cos).
+      const dirX = Math.sin(result.rotation)
+      const dirZ = Math.cos(result.rotation)
+      if (isUphillTooSteep(currentPos.x, currentPos.z, currentPos.y, dirX, dirZ)) {
+        stopMovement()
+        triggerJumpFeedback()
+        return
+      }
+
       gameStore.update((state) => {
         if (state.currentPlayer) {
           const y = sampleHeight(result.newPos.x, result.newPos.z)
@@ -650,6 +720,22 @@
         )
       ) {
         stopMovement()
+        return
+      }
+
+      // Slope-too-steep check (uphill only): refuse to climb terrain
+      // steeper than MAX_TRAVERSABLE_SLOPE_DEG and play jump as feedback.
+      if (
+        isUphillTooSteep(
+          currentPlayer.position.x,
+          currentPlayer.position.z,
+          currentPlayer.position.y,
+          dir.x,
+          dir.z
+        )
+      ) {
+        stopMovement()
+        triggerJumpFeedback()
         return
       }
 
@@ -911,6 +997,7 @@
       unsubscribePlayerRespawned()
       unsubscribeInteractionRejected()
       if (standUpTimer) clearTimeout(standUpTimer)
+      if (jumpFeedbackTimer) clearTimeout(jumpFeedbackTimer)
     }
   })
 </script>

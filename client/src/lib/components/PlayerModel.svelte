@@ -34,7 +34,7 @@
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
 
   import type { CharacterClass, Gender } from '../network/networkTypes'
-  import { type MovementMode } from '../utils/movementUtils'
+  import { type MovementMode, type PlayerStateName } from '../utils/movementUtils'
   import { TorchFireParticles } from '../effects/torch-fire-particles'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
@@ -44,7 +44,7 @@
     position: Vector3
     name: string
     isCurrentPlayer: boolean
-    playerState: 'idle' | 'moving' | 'attack' | 'dead' | 'interact'
+    playerState: PlayerStateName
     interactionAnim?: string
     interactOffsetY?: number
     attackCounter?: number
@@ -145,7 +145,7 @@
   let socialClipsByName = new SvelteMap<string, THREE.AnimationClip>()
   let socialLoading = false
   let lastPlayerState = $state<
-    'idle' | 'moving' | 'attack' | 'dead' | 'interact' | undefined
+    PlayerStateName | undefined
   >(undefined)
   let lastAttackCounter = $state(0)
   let dyingFinishedNotified = $state(false)
@@ -412,6 +412,12 @@
       // Find index for slash1 or fallback
       // Assuming AnimationIndex.SLASH1 exists and maps correctly
       clip = validAnimations[AnimationIndex.SLASH1]
+    } else if (playerState === 'jump') {
+      // One-shot feedback when slope is too steep to climb. After the clip
+      // finishes, PlayerControl flips the state back to idle/moving and we
+      // crossfade to the next animation naturally.
+      currentMovementAnimationIndex = undefined
+      clip = validAnimations[AnimationIndex.JUMP]
     } else if (playerState === 'dead') {
       currentMovementAnimationIndex = undefined
       dyingFinishedNotified = false

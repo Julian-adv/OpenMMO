@@ -29,15 +29,57 @@ export interface MovementResult {
   arrived: boolean
 }
 
+export type PlayerStateName =
+  | 'idle'
+  | 'moving'
+  | 'attack'
+  | 'dead'
+  | 'interact'
+  | 'jump'
+
 export interface PlayerState {
   position: Position
-  state: 'idle' | 'moving' | 'attack' | 'dead' | 'interact'
+  state: PlayerStateName
   speed: number
   rotation: number
   movementMode?: MovementMode
   attackCounter?: number
   interactionAnim?: string
   interactOffsetY?: number
+}
+
+/**
+ * Maximum traversable slope in degrees. Anything steeper than this from the
+ * player's current position is treated as un-climbable; the movement system
+ * blocks the step and triggers a jump animation as feedback.
+ */
+export const MAX_TRAVERSABLE_SLOPE_DEG = 50
+
+/** Horizontal lookahead distance (meters) used to estimate the slope ahead
+ *  of the player. Small enough to be sensitive, large enough to avoid
+ *  per-frame noise from heightmap bilinear interpolation. */
+export const SLOPE_LOOKAHEAD_DISTANCE = 0.5
+
+const MAX_TRAVERSABLE_SLOPE_TAN = Math.tan(
+  (MAX_TRAVERSABLE_SLOPE_DEG * Math.PI) / 180
+)
+
+/**
+ * Returns true if the upward slope from `currentY` to `forwardY` over
+ * `lookaheadDistance` exceeds MAX_TRAVERSABLE_SLOPE_DEG.
+ *
+ * Only blocks UPHILL motion — descending steep terrain is allowed so the
+ * player isn't trapped if they wander to a cliff edge.
+ */
+export function isSlopeTooSteepUphill(
+  currentY: number,
+  forwardY: number,
+  lookaheadDistance: number = SLOPE_LOOKAHEAD_DISTANCE
+): boolean {
+  if (lookaheadDistance < 1e-6) return false
+  const dy = forwardY - currentY
+  if (dy <= 0) return false
+  return dy / lookaheadDistance > MAX_TRAVERSABLE_SLOPE_TAN
 }
 
 /**

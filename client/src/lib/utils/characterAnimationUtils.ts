@@ -26,6 +26,7 @@ const ANIMATION_SOURCE_BY_NAME: Record<AnimationName, AnimationSource> = {
   [AnimationName.WALK]: 'locomotion',
   [AnimationName.JOG]: 'locomotion',
   [AnimationName.RUN]: 'locomotion',
+  [AnimationName.JUMP]: 'locomotion',
   [AnimationName.SLASH1]: 'combat_melee',
   [AnimationName.SLASH2]: 'combat_melee',
   [AnimationName.SLASH3]: 'combat_melee',
