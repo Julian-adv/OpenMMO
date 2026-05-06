@@ -1,5 +1,7 @@
 # Client (Node.js/Svelte)
 node_modules/
+.env
+.env.local
 client/node_modules/
 client/dist/
 client/build/

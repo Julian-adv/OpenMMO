@@ -1,0 +1,4 @@
+interface:
+  display_name: "Open Localhost Game"
+  short_description: "Log in and enter the local BotdleField game"
+  default_prompt: "Use $open-localhost-game to open localhost, log in, select the default character, and start the game."
