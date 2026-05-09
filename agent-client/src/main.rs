@@ -1,6 +1,7 @@
 mod claude;
 mod codex;
 mod driver;
+mod geom;
 mod llm_scheduler;
 mod monster_ai;
 mod openrouter;

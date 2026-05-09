@@ -11,7 +11,7 @@ use tracing::{debug, error, info, warn};
 use crate::state::SharedState;
 
 use super::action::{action_to_command, parse_agent_response, resolve_move_goal, AgentAction};
-use super::combat::{chase_monster, compute_face_monster, ChaseResult};
+use super::combat::{chase_monster, ChaseResult};
 use super::movement::{execute_move, MoveResult};
 
 /// Parse and execute the agent's response.
@@ -80,7 +80,7 @@ pub(super) async fn handle_response(
                 ChaseResult::InRange => {
                     // Face the monster before attacking
                     let mut s = state.lock().await;
-                    if let Some(face_cmd) = compute_face_monster(&s, monster_id) {
+                    if let Some(face_cmd) = s.face_monster_command(monster_id) {
                         if let Err(e) = s.send_command(face_cmd).await {
                             error!("Failed to send face-monster move: {e}");
                         }

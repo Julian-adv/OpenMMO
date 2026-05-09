@@ -630,6 +630,21 @@ impl SharedState {
         )
     }
 
+    /// Build a `PlayerMove` command at the current position rotated to face
+    /// the monster. Mirrors the web client's pre-attack position-sync, so
+    /// the swing animation orients toward the target. Returns `None` if
+    /// either the agent or the monster isn't currently known.
+    pub fn face_monster_command(&self, monster_id: &str) -> Option<ClientMessage> {
+        let monster = self.nearby_monsters.get(monster_id)?;
+        let self_player = self.self_player.as_ref()?;
+        let to_monster = crate::geom::PlanarDelta::between(&self_player.position, &monster.position);
+        Some(ClientMessage::PlayerMove {
+            position: self_player.position.clone(),
+            rotation: to_monster.rotation(),
+            floor_level: self.self_floor_level as i8,
+        })
+    }
+
     /// Find a valid spawn position within the given area.
     /// Tries random positions, rejecting blocked locations (inside houses).
     /// Y coordinate is set to 0; the monster AI will correct via terrain height on first move.

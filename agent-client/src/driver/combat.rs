@@ -13,6 +13,7 @@ use onlinerpg_shared::ClientMessage;
 use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
+use crate::geom::PlanarDelta;
 use crate::state::SharedState;
 
 /// Minimum distance to a monster before attacking (matches client-side threshold).
@@ -72,7 +73,7 @@ pub(super) async fn tick_combat(
     // Face the monster before attacking (matches web client behavior)
     {
         let mut s = state.lock().await;
-        if let Some(face_cmd) = compute_face_monster(&s, &monster_id) {
+        if let Some(face_cmd) = s.face_monster_command(&monster_id) {
             if let Err(e) = s.send_command(face_cmd).await {
                 error!("Failed to send face-monster move: {e}");
                 return None;
@@ -129,14 +130,12 @@ pub(super) async fn chase_monster(
 
             let monster = &s.nearby_monsters[monster_id];
             let player = s.self_player.as_ref().unwrap();
-            let dx = monster.position.x - player.position.x;
-            let dz = monster.position.z - player.position.z;
-            let dist_sq = dx * dx + dz * dz;
-            let in_range = dist_sq <= ATTACK_RANGE * ATTACK_RANGE;
+            let to_monster = PlanarDelta::between(&player.position, &monster.position);
+            let in_range = to_monster.dist <= ATTACK_RANGE;
 
-            let monster_shift = ((monster.position.x - last_monster_x).powi(2)
-                + (monster.position.z - last_monster_z).powi(2))
-            .sqrt();
+            let monster_shift =
+                PlanarDelta::xz(last_monster_x, last_monster_z, monster.position.x, monster.position.z)
+                    .dist;
             let needs_repath = path_waypoints.is_empty()
                 || path_index >= path_waypoints.len()
                 || monster_shift > REROUTE_THRESHOLD;
@@ -183,15 +182,14 @@ pub(super) async fn chase_monster(
                     Some(p) => p,
                     None => return ChaseResult::Lost,
                 };
-                let dx = wp.x - player.position.x;
-                let dz = wp.z - player.position.z;
+                let to_wp = PlanarDelta::to_xz(&player.position, wp.x, wp.z);
                 ClientMessage::PlayerMove {
                     position: onlinerpg_shared::Position {
                         x: wp.x,
                         y: player.position.y,
                         z: wp.z,
                     },
-                    rotation: dx.atan2(dz),
+                    rotation: to_wp.rotation(),
                     floor_level: wp.floor as i8,
                 }
             };
@@ -210,27 +208,6 @@ pub(super) async fn chase_monster(
     }
 }
 
-/// Return a PlayerMove command at the current position but rotated to face the monster.
-/// Matches the web client's behavior of sending a position sync with facing rotation
-/// before each attack.
-pub(super) fn compute_face_monster(
-    state: &SharedState,
-    monster_id: &str,
-) -> Option<ClientMessage> {
-    let monster = state.nearby_monsters.get(monster_id)?;
-    let self_player = state.self_player.as_ref()?;
-
-    let dx = monster.position.x - self_player.position.x;
-    let dz = monster.position.z - self_player.position.z;
-    let rotation = dx.atan2(dz);
-
-    Some(ClientMessage::PlayerMove {
-        position: self_player.position.clone(),
-        rotation,
-        floor_level: state.self_floor_level as i8,
-    })
-}
-
 /// If the agent is too far from the target monster, return a PlayerMove
 /// command stopping just inside `ATTACK_RANGE` of the monster. Used as the
 /// fall-through when A* can't return a path (e.g. monster on un-pathable
@@ -239,27 +216,21 @@ fn compute_move_to_monster(state: &SharedState, monster_id: &str) -> Option<Clie
     let monster = state.nearby_monsters.get(monster_id)?;
     let self_player = state.self_player.as_ref()?;
 
-    let dx = monster.position.x - self_player.position.x;
-    let dz = monster.position.z - self_player.position.z;
-    let dist = (dx * dx + dz * dz).sqrt();
-
-    if dist <= ATTACK_RANGE {
+    let to_monster = PlanarDelta::between(&self_player.position, &monster.position);
+    if to_monster.dist <= ATTACK_RANGE {
         return None; // Already in range
     }
 
     // Move to a point just inside ATTACK_RANGE from the monster
-    let move_dist = dist - ATTACK_RANGE + 0.5;
-    let ratio = move_dist / dist;
-    let target_x = self_player.position.x + dx * ratio;
-    let target_z = self_player.position.z + dz * ratio;
-
+    let move_dist = to_monster.dist - ATTACK_RANGE + 0.5;
+    let ratio = move_dist / to_monster.dist;
     Some(ClientMessage::PlayerMove {
         position: onlinerpg_shared::Position {
-            x: target_x,
+            x: self_player.position.x + to_monster.dx * ratio,
             y: monster.position.y,
-            z: target_z,
+            z: self_player.position.z + to_monster.dz * ratio,
         },
-        rotation: dx.atan2(dz),
+        rotation: to_monster.rotation(),
         floor_level: 0,
     })
 }

@@ -223,27 +223,14 @@ pub async fn llm_driver(
             .is_some_and(|i| schedule[i].action.is_some());
 
         // === Check if LLM response arrived ===
-        if let Some(ref handle) = llm_in_flight {
-            if handle.is_finished() {
-                let handle = llm_in_flight.take().unwrap();
-                match handle.await {
-                    Ok(Ok(response)) => {
-                        let new_target =
-                            handle_response(&state, &response, &memory_file, has_scheduled_action)
-                                .await;
-                        if new_target.is_some() {
-                            attack_target = new_target;
-                        }
-                        last_prompt_at = Instant::now();
-                    }
-                    Ok(Err(e)) => {
-                        error!("[{label}] LLM prompt failed: {e}");
-                        last_prompt_at = Instant::now();
-                    }
-                    Err(e) => {
-                        error!("[{label}] LLM task panicked: {e}");
-                        last_prompt_at = Instant::now();
-                    }
+        if llm_in_flight.as_ref().is_some_and(|h| h.is_finished()) {
+            let handle = llm_in_flight.take().unwrap();
+            last_prompt_at = Instant::now();
+            if let Some(response) = await_llm_response(handle, &label).await {
+                let new_target =
+                    handle_response(&state, &response, &memory_file, has_scheduled_action).await;
+                if new_target.is_some() {
+                    attack_target = new_target;
                 }
             }
         }
@@ -320,5 +307,25 @@ pub async fn llm_driver(
         llm_in_flight = Some(tokio::spawn(async move {
             sched.submit(&lbl, priority, prompt, inv).await
         }));
+    }
+}
+
+/// Await a finished LLM submission and unwrap the join/scheduler result.
+/// Logs the failure and returns `None` for both join panics and scheduler
+/// errors so the caller can collapse three error arms into one branch.
+async fn await_llm_response(
+    handle: tokio::task::JoinHandle<anyhow::Result<String>>,
+    label: &str,
+) -> Option<String> {
+    match handle.await {
+        Ok(Ok(response)) => Some(response),
+        Ok(Err(e)) => {
+            error!("[{label}] LLM prompt failed: {e}");
+            None
+        }
+        Err(e) => {
+            error!("[{label}] LLM task panicked: {e}");
+            None
+        }
     }
 }

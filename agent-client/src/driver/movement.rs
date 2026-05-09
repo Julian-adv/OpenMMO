@@ -11,6 +11,7 @@ use onlinerpg_shared::ClientMessage;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
+use crate::geom::PlanarDelta;
 use crate::orchestrator::ScheduleEntry;
 use crate::state::SharedState;
 
@@ -112,10 +113,9 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
     {
         let mut s = state.lock().await;
         if let Some(ref p) = s.self_player {
-            let dx = x - p.position.x;
-            let dz = z - p.position.z;
+            let to_target = PlanarDelta::to_xz(&p.position, x, z);
             let same_floor = s.self_floor_level == entry.floor_level;
-            if same_floor && (dx * dx + dz * dz).sqrt() < SCHEDULE_ARRIVAL_RADIUS {
+            if same_floor && to_target.dist < SCHEDULE_ARRIVAL_RADIUS {
                 debug!("Already near schedule target — skipping movement");
                 send_interact_if_needed(&mut s, entry).await;
                 return;
@@ -189,20 +189,18 @@ pub(super) async fn execute_move(
                     None => return MoveResult::Error,
                 };
 
-                let dx = wp.x - player.position.x;
-                let dz = wp.z - player.position.z;
-                let dist = (dx * dx + dz * dz).sqrt();
-                if dist < 0.1 {
+                let to_wp = PlanarDelta::to_xz(&player.position, wp.x, wp.z);
+                if to_wp.dist < 0.1 {
                     break;
                 }
 
-                let (step_x, step_z, step_dist) = if dist <= MAX_STEP_DIST {
-                    (wp.x, wp.z, dist)
+                let (step_x, step_z, step_dist) = if to_wp.dist <= MAX_STEP_DIST {
+                    (wp.x, wp.z, to_wp.dist)
                 } else {
-                    let ratio = MAX_STEP_DIST / dist;
+                    let ratio = MAX_STEP_DIST / to_wp.dist;
                     (
-                        player.position.x + dx * ratio,
-                        player.position.z + dz * ratio,
+                        player.position.x + to_wp.dx * ratio,
+                        player.position.z + to_wp.dz * ratio,
                         MAX_STEP_DIST,
                     )
                 };
@@ -213,7 +211,7 @@ pub(super) async fn execute_move(
                         y: player.position.y,
                         z: step_z,
                     },
-                    rotation: dx.atan2(dz),
+                    rotation: to_wp.rotation(),
                     floor_level: wp.floor as i8,
                 };
                 s.self_floor_level = wp.floor;
