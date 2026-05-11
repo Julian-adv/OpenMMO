@@ -43,7 +43,6 @@
         const u = waterResult.uniforms
         u.uHeightmapTexture.value = heightmapTexture
         u.uTime.value = time
-        waterResult.updateWaveDirections(time)
         if (sunDirection) u.uSunDirection.value.copy(sunDirection)
         if (sunColor) u.uSunColor.value.copy(sunColor)
         if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)

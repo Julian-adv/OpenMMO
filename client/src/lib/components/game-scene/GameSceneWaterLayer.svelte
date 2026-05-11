@@ -73,7 +73,6 @@
       const heightTex = heightTexMap.get(id)
       if (heightTex) u.uHeightmapTexture.value = heightTex
       u.uTime.value = time
-      waterResult.updateWaveDirections(time)
       if (sunDirection) u.uSunDirection.value.copy(sunDirection)
       if (sunColor) u.uSunColor.value.copy(sunColor)
       if (cameraDirection) u.uCameraDirection.value.copy(cameraDirection)

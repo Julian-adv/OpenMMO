@@ -43,7 +43,6 @@ export interface WaterMaterialUniforms {
 
 export interface WaterMaterialResult {
   material: NodeMaterial
-  updateWaveDirections: (elapsed: number) => void
   uniforms: WaterMaterialUniforms
 }
 
@@ -166,22 +165,23 @@ export function sampleCloudPhoto(
 
 // ─── Wave Configuration ────────────────────────────────
 
+// Direction must NOT rotate in time: Gerstner phase k·dot(d, p.xz) gives
+// any d'(t) an apparent phase velocity proportional to |p| — invisible
+// near world origin, seizure-like far from it. Wind shifts must use a
+// phase uniform, not direction rotation.
 export const waveConfigs = [
   {
     angle: Math.random() * Math.PI * 2,
-    speed: 0.0013,
     steepness: 0.06,
     wavelength: 20,
   },
   {
     angle: Math.random() * Math.PI * 2,
-    speed: 0.0021,
     steepness: 0.04,
     wavelength: 14,
   },
   {
     angle: Math.random() * Math.PI * 2,
-    speed: 0.0009,
     steepness: 0.03,
     wavelength: 9,
   },

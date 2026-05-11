@@ -77,16 +77,16 @@ export function createWaterMaterial(
 ): WaterMaterialResult {
   // ── Uniforms ──
   const uTime = uniform(0)
-  const uWaveA = uniform(
-    new THREE.Vector4(0, 1, waveConfigs[0].steepness, waveConfigs[0].wavelength)
-  )
-  const uWaveB = uniform(
-    new THREE.Vector4(0, 1, waveConfigs[1].steepness, waveConfigs[1].wavelength)
-  )
-  const uWaveC = uniform(
-    new THREE.Vector4(0, 1, waveConfigs[2].steepness, waveConfigs[2].wavelength)
-  )
-  const waveUniforms = [uWaveA, uWaveB, uWaveC]
+  const makeWaveVec = (cfg: (typeof waveConfigs)[number]) =>
+    new THREE.Vector4(
+      Math.sin(cfg.angle),
+      Math.cos(cfg.angle),
+      cfg.steepness,
+      cfg.wavelength
+    )
+  const uWaveA = uniform(makeWaveVec(waveConfigs[0]))
+  const uWaveB = uniform(makeWaveVec(waveConfigs[1]))
+  const uWaveC = uniform(makeWaveVec(waveConfigs[2]))
 
   const uVeryShallowColor = uniform(new THREE.Color(0.75, 0.88, 0.78))
   const uShallowColor = uniform(new THREE.Color(0.2, 0.58, 0.42))
@@ -759,19 +759,8 @@ export function createWaterMaterial(
   material.vertexNode = positionNode
   material.fragmentNode = fragmentNode
 
-  const updateWaveDirections = (elapsed: number) => {
-    for (let i = 0; i < waveConfigs.length; i++) {
-      const cfg = waveConfigs[i]
-      const angle = cfg.angle + elapsed * cfg.speed
-      const v = waveUniforms[i].value
-      v.x = Math.sin(angle)
-      v.y = Math.cos(angle)
-    }
-  }
-
   return {
     material,
-    updateWaveDirections,
     uniforms: {
       uTime,
       uSunDirection,

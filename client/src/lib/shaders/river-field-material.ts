@@ -32,6 +32,7 @@ import {
   sampleCloudPhoto,
   toHeightmapUV,
 } from './water-types'
+import { SEA_LEVEL } from '../components/game-scene/terrain-utils'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any // TSL node — broad type for internal helper params
@@ -66,6 +67,8 @@ export interface RiverFieldMaterialUniforms {
   uNormalMap: { value: THREE.Texture }
   uHeightmapTexture: { value: THREE.Texture }
   uRiverField: { value: THREE.Texture }
+  uSeaLevel: { value: number }
+  uSeaFadeRange: { value: number }
 }
 
 export interface RiverFieldMaterialResult {
@@ -96,6 +99,11 @@ export function createRiverFieldMaterial(
    *  channel center hits full body just before the offset cap. */
   const uMaxDepth = uniform(0.5)
   const uRefractionStrength = uniform(0.04)
+
+  /** Fade the river to fully transparent at the estuary so the sea shader
+   *  takes over. Alpha → 0 below `uSeaLevel`, full above `+ uSeaFadeRange`. */
+  const uSeaLevel = uniform(SEA_LEVEL)
+  const uSeaFadeRange = uniform(0.3)
 
   // ── Textures ──
   const heightmapTex = texture(options.heightmapTexture)
@@ -422,7 +430,12 @@ export function createRiverFieldMaterial(
       smoothstep(float(0.05), uMaxDepth, depth)
     ).toVar()
     bodyAlpha.assign(max(bodyAlpha, torchProximity.mul(0.45)))
-    const alpha = float(0.95).mul(depthEdgeCut).mul(bodyAlpha)
+    const seaFade = smoothstep(
+      uSeaLevel,
+      uSeaLevel.add(uSeaFadeRange),
+      surfaceY
+    )
+    const alpha = float(0.95).mul(depthEdgeCut).mul(bodyAlpha).mul(seaFade)
 
     return vec4(color, alpha)
   })()
@@ -452,6 +465,8 @@ export function createRiverFieldMaterial(
       uNormalMap: normalMapTex,
       uHeightmapTexture: heightmapTex,
       uRiverField: riverFieldTex,
+      uSeaLevel,
+      uSeaFadeRange,
     },
   }
 }
