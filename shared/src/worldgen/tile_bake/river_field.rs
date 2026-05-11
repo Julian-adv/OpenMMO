@@ -31,7 +31,8 @@ use super::super::global_map::GlobalMap;
 use super::super::vector_features::{project_point_to_segment, RiverSegment};
 use super::constants::{
     HEIGHT_BIAS, HEIGHT_STEP, RIVER_CARVE_DEPTH_EXTRA_M, RIVER_CARVE_DEPTH_MIN_M,
-    RIVER_CARVE_MIN_BED_Y_M, RIVER_DEPTH_OFFSET_M, VERTS_PER_SIDE,
+    RIVER_CARVE_MIN_BED_Y_M, RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M,
+    RIVER_DEPTH_OFFSET_M, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
 use super::heightmap::{lerp, sample_natural_height_single};
@@ -126,7 +127,7 @@ fn weighted_flow_and_nearest(
     pz: f32,
     segs: &[RiverSegment],
     tangents: &[(f32, f32)],
-) -> Option<(f32, f32, usize, f32)> {
+) -> Option<(f32, f32, usize, f32, f32)> {
     if segs.is_empty() {
         return None;
     }
@@ -152,8 +153,9 @@ fn weighted_flow_and_nearest(
         sz += tz * w;
         w_total += w;
     }
+    let best_d = best_sq.sqrt();
     if w_total < 1e-6 {
-        return Some((0.0, 0.0, best_idx, best_t));
+        return Some((0.0, 0.0, best_idx, best_t, best_d));
     }
     let fx = sx / w_total;
     let fz = sz / w_total;
@@ -166,7 +168,7 @@ fn weighted_flow_and_nearest(
         // direction instead of stalling the shader's ripple/scroll.
         tangents[best_idx]
     };
-    Some((fx, fz, best_idx, best_t))
+    Some((fx, fz, best_idx, best_t, best_d))
 }
 
 /// Compute the field record for one pixel: river surface elevation +
@@ -194,7 +196,7 @@ fn compute_pixel(
     river_segs: &[RiverSegment],
     seg_tangents: &[(f32, f32)],
 ) -> (f32, f32, f32) {
-    let Some((flow_x, flow_z, idx, t)) =
+    let Some((flow_x, flow_z, idx, t, dist)) =
         weighted_flow_and_nearest(wx, wz, river_segs, seg_tangents)
     else {
         return (bed_y_pixel, 0.0, 0.0);
@@ -217,7 +219,27 @@ fn compute_pixel(
             let capped = depth.min((natural - RIVER_CARVE_MIN_BED_Y_M).max(0.0));
             natural - capped
         });
-    let surface_y = bed_at_proj + RIVER_DEPTH_OFFSET_M;
+    // Collapse the surface back to local bed beyond the carve's lateral
+    // influence. Without this the polyline-projected `bed_at_proj` lifts
+    // surfaceY above any pixel that happens to be far from the river but
+    // sits in a lower geographic region (cliffs, deltas, estuary flats),
+    // and the shader's `depth = surface − local_bed` then renders the
+    // river as a flood. Use the same `half_width + taper` envelope as
+    // `segment_carve_params` so the visible water matches the carve width.
+    let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
+    let width = lerp(seg.width_a, seg.width_b, t);
+    let half_width = width * 0.5;
+    let taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M * flow_norm;
+    let surface_full = bed_at_proj + RIVER_DEPTH_OFFSET_M;
+    let surface_y = if dist <= half_width {
+        surface_full
+    } else if dist >= half_width + taper {
+        bed_y_pixel
+    } else {
+        let u = (dist - half_width) / taper.max(1e-3);
+        let s = 1.0 - u * u * (3.0 - 2.0 * u);
+        bed_y_pixel + (surface_full - bed_y_pixel) * s
+    };
 
     (surface_y, flow_x, flow_z)
 }
@@ -334,12 +356,11 @@ mod tests {
     }
 
     #[test]
-    fn surface_is_horizontal_across_whole_tile() {
-        // Every pixel projects to the same centerline section, so its
-        // baked surfaceY must match regardless of perpendicular distance.
-        // Visibility is the shader's job (depth-fade against terrain),
-        // which depends on `apply_min_land_floor` keeping land bed above
-        // `RIVER_DEPTH_OFFSET_M` past the carve.
+    fn surface_collapses_to_local_bed_beyond_carve_envelope() {
+        // Within the carve's `half_width + taper` envelope the surface sits
+        // at `bed_at_proj + RIVER_DEPTH_OFFSET_M`; beyond it the surface
+        // collapses to the local bed so the shader's depth-fade hides the
+        // river instead of letting it spill into surrounding lower terrain.
         let (map, ctx) = small_test_ctx();
         let mut heights = vec![5.0f32; VERTS_PER_SIDE * VERTS_PER_SIDE];
         // Stamp a deeper centerline so bed_at_proj differs from bed_y_pixel:
@@ -366,18 +387,23 @@ mod tests {
             let s = u16::from_le_bytes([bin[off], bin[off + 1]]);
             s as f32 * HEIGHT_STEP - HEIGHT_BIAS
         };
-        // Three pixels at increasing perpendicular distance; all must
-        // share the same surface Y.
+        // half_width = 2.0, taper = 3.0 + 7.0*0.5 = 6.5, envelope = 8.5.
+        // j=32 → dist=0 (on axis), j=33 → dist=1 (inside half_width),
+        // j=60 → dist=28 (well past envelope).
         let on_axis = pixel_surface(32, 32);
-        let mid = pixel_surface(32, 40);
+        let inside_half_width = pixel_surface(32, 33);
         let far = pixel_surface(32, 60);
         assert!(
-            (on_axis - mid).abs() < 0.05 && (on_axis - far).abs() < 0.05,
-            "surface must be horizontal across the tile: axis={on_axis} mid={mid} far={far}"
+            (on_axis - 1.5).abs() < 0.1,
+            "on-axis surface should be bed_at_proj (1.0m) + offset (0.5m), got {on_axis}"
         );
         assert!(
-            (on_axis - 1.5).abs() < 0.1,
-            "surface should be bed_at_proj (1.0m) + offset (0.5m), got {on_axis}"
+            (inside_half_width - 1.5).abs() < 0.1,
+            "inside half_width surface stays at the river level, got {inside_half_width}"
+        );
+        assert!(
+            (far - 5.0).abs() < 0.1,
+            "beyond carve envelope surface collapses to local bed (5.0m), got {far}"
         );
 
         // Flow direction propagates to every pixel so ripples are
