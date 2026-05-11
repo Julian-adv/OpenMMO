@@ -67,8 +67,8 @@ export interface RiverFieldMaterialUniforms {
   uNormalMap: { value: THREE.Texture }
   uHeightmapTexture: { value: THREE.Texture }
   uRiverField: { value: THREE.Texture }
-  uSeaLevel: { value: number }
-  uSeaFadeRange: { value: number }
+  uSeaFadeBottom: { value: number }
+  uSeaFadeTop: { value: number }
 }
 
 export interface RiverFieldMaterialResult {
@@ -100,10 +100,13 @@ export function createRiverFieldMaterial(
   const uMaxDepth = uniform(0.5)
   const uRefractionStrength = uniform(0.04)
 
-  /** Fade the river to fully transparent at the estuary so the sea shader
-   *  takes over. Alpha → 0 below `uSeaLevel`, full above `+ uSeaFadeRange`. */
-  const uSeaLevel = uniform(SEA_LEVEL)
-  const uSeaFadeRange = uniform(0.3)
+  /** Fade band on the local bed height. The bake pins `surfaceY` to
+   *  `bed_at_proj + 0.5` at the polyline endpoint so it stays ~0.5 m even
+   *  beyond the coast, hence the gate must read `bedHeight`. Defaults
+   *  keep the river opaque to −0.6 m (river carve floor is 0 m) and fully
+   *  transparent below −1.5 m. */
+  const uSeaFadeTop = uniform(SEA_LEVEL - 0.6)
+  const uSeaFadeBottom = uniform(SEA_LEVEL - 1.5)
 
   // ── Textures ──
   const heightmapTex = texture(options.heightmapTexture)
@@ -430,11 +433,7 @@ export function createRiverFieldMaterial(
       smoothstep(float(0.05), uMaxDepth, depth)
     ).toVar()
     bodyAlpha.assign(max(bodyAlpha, torchProximity.mul(0.45)))
-    const seaFade = smoothstep(
-      uSeaLevel,
-      uSeaLevel.add(uSeaFadeRange),
-      surfaceY
-    )
+    const seaFade = smoothstep(uSeaFadeBottom, uSeaFadeTop, bedHeight)
     const alpha = float(0.95).mul(depthEdgeCut).mul(bodyAlpha).mul(seaFade)
 
     return vec4(color, alpha)
@@ -465,8 +464,8 @@ export function createRiverFieldMaterial(
       uNormalMap: normalMapTex,
       uHeightmapTexture: heightmapTex,
       uRiverField: riverFieldTex,
-      uSeaLevel,
-      uSeaFadeRange,
+      uSeaFadeBottom,
+      uSeaFadeTop,
     },
   }
 }
