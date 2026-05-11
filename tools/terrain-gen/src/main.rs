@@ -9,6 +9,7 @@
 //! See `doc/TERRAIN_GENERATION.md` for the full design.
 
 mod bake;
+mod inspect;
 mod preview;
 
 use anyhow::Result;
@@ -221,6 +222,18 @@ enum Cmd {
         #[arg(long, default_value_t = 15, allow_hyphen_values = true)]
         region_z_max: i32,
     },
+
+    /// Dump river segment data influencing a single tile.
+    InspectTile {
+        #[command(flatten)]
+        gen: GenArgs,
+        /// Tile X index.
+        #[arg(long, allow_hyphen_values = true)]
+        tile_x: i32,
+        /// Tile Z index.
+        #[arg(long, allow_hyphen_values = true)]
+        tile_z: i32,
+    },
 }
 
 fn main() -> Result<()> {
@@ -254,6 +267,10 @@ fn main() -> Result<()> {
                 (region_x_min, region_z_min),
                 (region_x_max, region_z_max),
             )
+        }
+        Cmd::InspectTile { gen, tile_x, tile_z } => {
+            let cfg = gen.into_config();
+            inspect::run(&cfg, tile_x, tile_z)
         }
     }
 }

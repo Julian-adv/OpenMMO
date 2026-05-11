@@ -23,6 +23,8 @@ import {
   modelWorldMatrix,
   cameraProjectionMatrix,
   cameraViewMatrix,
+  fract,
+  abs,
 } from 'three/tsl'
 import {
   waterFallbackTex,
@@ -153,25 +155,57 @@ export function createRiverFieldMaterial(
     const flowDir = riverFieldTex.sample(sampleUV).gb
 
     // Ripple normal: world-XZ aligned UVs scrolled along flow.
-    // Two-sample average at different scales decorrelates the pattern.
+    // Two-phase flowmap: `flowDir × uTime` would grow unboundedly, causing
+    // adjacent pixels with slightly different flowDir (Voronoi boundaries,
+    // confluences) to decorrelate in texture space and develop a vortex
+    // artifact. Wrap each phase in [0, 1] and crossfade two half-period-
+    // offset phases so the wrap is invisible.
     const NORMAL_SCALE = float(0.18)
-    const scrollSpeed = float(0.4)
-    const tScroll = uTime.mul(scrollSpeed)
-    const flowOffset = flowDir.mul(tScroll)
-    const nUV1 = vWorldPos.xz.mul(NORMAL_SCALE).sub(flowOffset)
-    const nUV2 = vWorldPos.xz
-      .mul(NORMAL_SCALE.mul(0.6))
-      .add(vec2(0.3, 0))
-      .sub(flowOffset.mul(0.7))
-    const buildRippleN = (a: N, b: N): N => {
-      const s = normalMapTex
-        .sample(a)
-        .add(normalMapTex.sample(b))
+    const buildWrappedDrift = (rate: N, flow: N) => {
+      const phase = uTime.mul(rate)
+      const pA = fract(phase)
+      const pB = fract(phase.add(0.5))
+      const mixW = abs(pA.sub(0.5)).mul(2.0)
+      return { driftA: flow.mul(pA), driftB: flow.mul(pB), mixW }
+    }
+    const {
+      driftA: flowOffA,
+      driftB: flowOffB,
+      mixW: rippleMix,
+    } = buildWrappedDrift(float(0.4), flowDir)
+    const nBase1 = vWorldPos.xz.mul(NORMAL_SCALE)
+    const nBase2 = vWorldPos.xz.mul(NORMAL_SCALE.mul(0.6)).add(vec2(0.3, 0))
+    // `flowScale2` attenuates flow drift on the finer-scale second sample
+    // so the two scales don't move in lockstep.
+    const buildRippleN = (
+      a: N,
+      b: N,
+      offA: N,
+      offB: N,
+      flowScale2: N,
+      mixW: N
+    ): N => {
+      const sA = normalMapTex
+        .sample(a.sub(offA))
+        .add(normalMapTex.sample(b.sub(offA.mul(flowScale2))))
         .mul(0.5)
         .sub(1.0)
+      const sB = normalMapTex
+        .sample(a.sub(offB))
+        .add(normalMapTex.sample(b.sub(offB.mul(flowScale2))))
+        .mul(0.5)
+        .sub(1.0)
+      const s = mix(sA, sB, mixW)
       return normalize(vec3(s.r.mul(1.2), float(1.0), s.g.mul(1.2)))
     }
-    const rippleN = buildRippleN(nUV1, nUV2)
+    const rippleN = buildRippleN(
+      nBase1,
+      nBase2,
+      flowOffA,
+      flowOffB,
+      float(0.7),
+      rippleMix
+    )
 
     // ── View / screen ──
     const viewDir = normalize(vec3(uCameraDirection).negate())
@@ -208,20 +242,30 @@ export function createRiverFieldMaterial(
     waterColor.assign(mix(waterColor, tintedRefr, refrMix))
 
     // ── Sky reflection (condensed sea pattern) ──
+    // `reflT` is a uniform vertical scroll (no per-pixel flowDir term)
+    // so it stays as `uTime × rate` without flowmap wrapping. The flow-
+    // aligned drift reuses `buildWrappedDrift` to keep its phase bounded.
     const WOBBLE_SHAKE_RATE = float(0.05)
     const WOBBLE_DRIFT_RATE = float(0.05)
     const reflT = uTime.mul(WOBBLE_SHAKE_RATE)
-    const reflDrift = flowDir.mul(uTime.mul(WOBBLE_DRIFT_RATE))
-    const reflNUV1 = vWorldPos.xz
-      .mul(NORMAL_SCALE)
-      .sub(vec2(0, reflT))
-      .sub(reflDrift)
-    const reflNUV2 = vWorldPos.xz
+    const {
+      driftA: reflDriftA,
+      driftB: reflDriftB,
+      mixW: reflMix,
+    } = buildWrappedDrift(WOBBLE_DRIFT_RATE, flowDir)
+    const reflBase1 = vWorldPos.xz.mul(NORMAL_SCALE).sub(vec2(0, reflT))
+    const reflBase2 = vWorldPos.xz
       .mul(NORMAL_SCALE.mul(0.7))
       .add(vec2(0.4, 0))
       .add(vec2(0, reflT.mul(0.9)))
-      .sub(reflDrift)
-    const reflRippleN = buildRippleN(reflNUV1, reflNUV2)
+    const reflRippleN = buildRippleN(
+      reflBase1,
+      reflBase2,
+      reflDriftA,
+      reflDriftB,
+      float(1.0),
+      reflMix
+    )
     const reflNormal = normalize(mix(vec3(0, 1, 0), reflRippleN, 0.05))
     const reflectDir = reflect(viewDir.negate(), reflNormal)
     const skyY = clamp(reflectDir.y.mul(0.5).add(0.5), 0.0, 1.0)

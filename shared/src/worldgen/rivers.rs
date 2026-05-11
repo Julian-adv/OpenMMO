@@ -11,7 +11,7 @@
 //! subsequent phases (splatmap, vegetation) use to paint riverbeds and
 //! tint vegetation density.
 
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 
 use super::global_map::GlobalMap;
 use super::grid::{MinF32, fold_x_delta};
@@ -882,7 +882,56 @@ pub fn extract_rivers(
 
     synthesize_distributary_deltas(map, &mut rivers.rivers);
     naturalize_river_meanders(map, &mut rivers.rivers);
+    remove_polyline_self_overlaps(&mut rivers.rivers);
     merge_overlapping_polylines(map, &mut rivers.rivers);
+}
+
+/// Minimum arc-length (in vertices) between two revisits of the same cell
+/// for it to count as a self-overlap loop. Short revisits are normal —
+/// Bresenham rasterization between meander targets can briefly back-track.
+const SELF_OVERLAP_MIN_LOOP_VERTICES: usize = 8;
+
+/// Excise hairpin loops where the polyline revisits a cell after a non-
+/// trivial detour. Caused by `naturalize_river_meanders` pushing two arc-
+/// length-distant sections onto the same cell — the loop renders fine
+/// geometrically (both arms fit inside the river's width) but the baked
+/// flow field reads as two parallel arms of opposite direction, smearing
+/// the water shader's normalmap scroll.
+///
+/// Pass walks each polyline once with a `cell -> first_visit_index` hash.
+/// On revisit at index `i` of a cell first seen at `j`, if `i − j ≥
+/// SELF_OVERLAP_MIN_LOOP_VERTICES` we drop indices `j+1..=i` so the
+/// polyline crosses the area exactly once. The first-visit map is built
+/// fresh after each excision so the scan is robust against cascading loops.
+fn remove_polyline_self_overlaps(rivers: &mut [Polyline]) {
+    for poly in rivers.iter_mut() {
+        loop {
+            let n = poly.points.len();
+            if n < 2 * SELF_OVERLAP_MIN_LOOP_VERTICES {
+                break;
+            }
+            let mut first_visit: HashMap<(u32, u32), usize> = HashMap::with_capacity(n);
+            let mut drain_range: Option<(usize, usize)> = None;
+            for i in 0..n {
+                let cell = poly.points[i];
+                if let Some(&j) = first_visit.get(&cell) {
+                    if i - j >= SELF_OVERLAP_MIN_LOOP_VERTICES {
+                        drain_range = Some((j + 1, i + 1));
+                        break;
+                    }
+                } else {
+                    first_visit.insert(cell, i);
+                }
+            }
+            let Some((lo, hi)) = drain_range else {
+                break;
+            };
+            poly.points.drain(lo..hi);
+            if poly.flow.len() >= hi {
+                poly.flow.drain(lo..hi);
+            }
+        }
+    }
 }
 
 /// Cells on either side of a polyline that the carve still reaches —

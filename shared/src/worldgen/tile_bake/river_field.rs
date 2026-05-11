@@ -28,7 +28,7 @@
 //! which tile owns the segment.
 
 use super::super::global_map::GlobalMap;
-use super::super::vector_features::{nearest_river_segment, RiverSegment};
+use super::super::vector_features::{project_point_to_segment, RiverSegment};
 use super::constants::{
     HEIGHT_BIAS, HEIGHT_STEP, RIVER_CARVE_DEPTH_EXTRA_M, RIVER_CARVE_DEPTH_MIN_M,
     RIVER_CARVE_MIN_BED_Y_M, RIVER_DEPTH_OFFSET_M, VERTS_PER_SIDE,
@@ -56,6 +56,25 @@ pub fn bake_river_field(
     if river_segs.is_empty() {
         return None;
     }
+
+    // Unit tangent per segment — used by every pixel's flow accumulation,
+    // so amortize the sqrt over the tile instead of paying it per pixel.
+    // Zero-length segments produce (0, 0) which the weighting loop skips.
+    let seg_tangents: Vec<(f32, f32)> = river_segs
+        .iter()
+        .map(|s| {
+            let dx = s.bx - s.ax;
+            let dz = s.bz - s.az;
+            let len_sq = dx * dx + dz * dz;
+            if len_sq < 1e-6 {
+                (0.0, 0.0)
+            } else {
+                let inv = 1.0 / len_sq.sqrt();
+                (dx * inv, dz * inv)
+            }
+        })
+        .collect();
+
     let mut out = Vec::with_capacity(RIVER_FIELD_TOTAL_SIZE);
     out.extend_from_slice(RIVER_FIELD_BIN_MAGIC);
     out.extend_from_slice(&RIVER_FIELD_BIN_VERSION.to_le_bytes());
@@ -68,7 +87,6 @@ pub fn bake_river_field(
             let wx = tile_origin_x + i as f32;
             let wz = tile_origin_z + j as f32;
             let bed_y = heights[j * VERTS_PER_SIDE + i];
-
             let (surface_y, flow_x, flow_z) = compute_pixel(
                 wx,
                 wz,
@@ -79,17 +97,14 @@ pub fn bake_river_field(
                 tile_origin_x,
                 tile_origin_z,
                 river_segs,
+                &seg_tangents,
             );
-
             let v = ((surface_y + HEIGHT_BIAS) / HEIGHT_STEP)
                 .round()
                 .clamp(0.0, 65535.0) as u16;
             out.extend_from_slice(&v.to_le_bytes());
-
-            let fx = encode_unit(flow_x);
-            let fz = encode_unit(flow_z);
-            out.push(fx as u8);
-            out.push(fz as u8);
+            out.push(encode_unit(flow_x) as u8);
+            out.push(encode_unit(flow_z) as u8);
         }
     }
     Some(out)
@@ -98,6 +113,60 @@ pub fn bake_river_field(
 #[inline]
 fn encode_unit(v: f32) -> i8 {
     (v.clamp(-1.0, 1.0) * 127.0).round().clamp(-127.0, 127.0) as i8
+}
+
+/// Single-pass query that returns both the inverse-distance-weighted flow
+/// direction (averaged across all segments with weight `1/(d² + 1)`) and
+/// the nearest segment's `(idx, t)` for surface elevation. Near a Voronoi
+/// boundary two segments have comparable weights so the blended direction
+/// crosses smoothly; away from boundaries the squared falloff makes the
+/// nearest segment dominate. Avoids a separate post-smoothing pass.
+fn weighted_flow_and_nearest(
+    px: f32,
+    pz: f32,
+    segs: &[RiverSegment],
+    tangents: &[(f32, f32)],
+) -> Option<(f32, f32, usize, f32)> {
+    if segs.is_empty() {
+        return None;
+    }
+    let mut sx = 0.0f32;
+    let mut sz = 0.0f32;
+    let mut w_total = 0.0f32;
+    let mut best_sq = f32::INFINITY;
+    let mut best_idx = 0usize;
+    let mut best_t = 0.0f32;
+    for (i, s) in segs.iter().enumerate() {
+        let (d_sq, t) = project_point_to_segment(px, pz, s.ax, s.az, s.bx, s.bz);
+        if d_sq < best_sq {
+            best_sq = d_sq;
+            best_idx = i;
+            best_t = t;
+        }
+        let (tx, tz) = tangents[i];
+        if tx == 0.0 && tz == 0.0 {
+            continue;
+        }
+        let w = 1.0 / (d_sq + 1.0);
+        sx += tx * w;
+        sz += tz * w;
+        w_total += w;
+    }
+    if w_total < 1e-6 {
+        return Some((0.0, 0.0, best_idx, best_t));
+    }
+    let fx = sx / w_total;
+    let fz = sz / w_total;
+    let mag = (fx * fx + fz * fz).sqrt();
+    let (fx, fz) = if mag > 1e-4 {
+        (fx / mag, fz / mag)
+    } else {
+        // Cancellation (opposing tangents balanced) — fall back to the
+        // dominant segment so the pixel still carries a meaningful flow
+        // direction instead of stalling the shader's ripple/scroll.
+        tangents[best_idx]
+    };
+    Some((fx, fz, best_idx, best_t))
 }
 
 /// Compute the field record for one pixel: river surface elevation +
@@ -123,17 +192,14 @@ fn compute_pixel(
     tile_origin_x: f32,
     tile_origin_z: f32,
     river_segs: &[RiverSegment],
+    seg_tangents: &[(f32, f32)],
 ) -> (f32, f32, f32) {
-    let Some((_d, idx, t)) = nearest_river_segment(wx, wz, river_segs) else {
+    let Some((flow_x, flow_z, idx, t)) =
+        weighted_flow_and_nearest(wx, wz, river_segs, seg_tangents)
+    else {
         return (bed_y_pixel, 0.0, 0.0);
     };
     let seg = &river_segs[idx];
-
-    let dx = seg.bx - seg.ax;
-    let dz = seg.bz - seg.az;
-    let len = (dx * dx + dz * dz).sqrt().max(1e-3);
-    let flow_x = dx / len;
-    let flow_z = dz / len;
 
     // Surface = carved bed at the centerline projection + runtime offset.
     // For in-tile projections, bilinear-sample the already-baked
