@@ -75,8 +75,8 @@ pub const RIVER_MIN_WIDTH_M: f32 = 1.5;
 pub const RIVER_MAX_WIDTH_M: f32 = 10.0;
 pub(super) const RIVER_CARVE_TAPER_MIN_M: f32 = 3.0;
 pub(super) const RIVER_CARVE_TAPER_EXTRA_M: f32 = 7.0;
-pub(super) const RIVER_CARVE_DEPTH_MIN_M: f32 = 0.6;
-pub(super) const RIVER_CARVE_DEPTH_EXTRA_M: f32 = 1.4;
+pub(super) const RIVER_CARVE_DEPTH_MIN_M: f32 = 1.5;
+pub(super) const RIVER_CARVE_DEPTH_EXTRA_M: f32 = 2.5;
 /// Lower bound on post-carve terrain elevation inside a river channel
 /// (meters). Sits exactly at sea level so the sea shader's
 /// `edgeCutoff = smoothstep(0, 0.01, depth)` cuts ocean alpha to 0
