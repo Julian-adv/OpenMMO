@@ -18,13 +18,14 @@ use super::super::vector_features::{
     river_chaikin_smooth, river_polyline_to_world, RiverWorldPolyline, WorldPolyline,
 };
 use super::constants::{
-    COAST_CHAIKIN_ITERATIONS, MOUTH_ISLAND_ANGLE_JITTER_RAD, MOUTH_ISLAND_APEX_ELEV_M,
-    MOUTH_ISLAND_COUNT_MAX, MOUTH_ISLAND_COUNT_MIN, MOUTH_ISLAND_END_ALONG_MAX_M,
-    MOUTH_ISLAND_END_ALONG_MIN_M, MOUTH_ISLAND_FAN_HALF_ANGLE_RAD, MOUTH_ISLAND_LAND_HEIGHT_BOOST,
-    MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M, MOUTH_ISLAND_RADIUS_MAX_M,
-    MOUTH_ISLAND_RADIUS_MIN_M, MOUTH_ISLAND_TIP_ALONG_MAX_M, MOUTH_ISLAND_WIDEST_AXIS_T,
-    RIVER_CHAIKIN_ITERATIONS, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, RIVER_MOUTH_FAN_BASE_HIGH_M,
-    RIVER_MOUTH_FAN_BASE_LOW_M, RIVER_MOUTH_FAN_EXTRA, ROAD_CHAIKIN_ITERATIONS,
+    COAST_CHAIKIN_ITERATIONS, MOUTH_ISLAND_APEX_ELEV_M, MOUTH_ISLAND_COUNT_MAX,
+    MOUTH_ISLAND_COUNT_MIN, MOUTH_ISLAND_END_ALONG_MAX_M, MOUTH_ISLAND_END_ALONG_MIN_M,
+    MOUTH_ISLAND_LAND_HEIGHT_BOOST, MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M,
+    MOUTH_ISLAND_PERP_JITTER_M, MOUTH_ISLAND_RADIUS_MAX_M, MOUTH_ISLAND_RADIUS_MIN_M,
+    MOUTH_ISLAND_SPACING_M, MOUTH_ISLAND_SPREAD_FRAC, MOUTH_ISLAND_TIP_ALONG_MAX_M,
+    MOUTH_ISLAND_WIDEST_AXIS_T, RIVER_CHAIKIN_ITERATIONS, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M,
+    RIVER_MOUTH_FAN_BASE_HIGH_M, RIVER_MOUTH_FAN_BASE_LOW_M, RIVER_MOUTH_FAN_EXTRA,
+    RIVER_MOUTH_FAN_SHARPNESS, ROAD_CHAIKIN_ITERATIONS,
 };
 use super::heightmap::cell_elevation_m;
 
@@ -248,32 +249,40 @@ fn generate_mouth_islands(
 
         let apex_pt = poly.points[apex];
 
+        // Mouth width (post-`apply_mouth_fan_widths`) drives both count and
+        // lateral spread so bars distribute across the visible water plane,
+        // matching real distributary mouth bars.
+        let mouth_width = poly.width[poly.width.len() - 1];
+        let mouth_half = mouth_width * 0.5;
+        let count = ((mouth_width / MOUTH_ISLAND_SPACING_M).round() as u32)
+            .clamp(MOUTH_ISLAND_COUNT_MIN, MOUTH_ISLAND_COUNT_MAX);
+
         let mut rng = SmallRng::seed_from_u64(
             master_seed ^ (poly_idx as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
         );
-        let count = rng.gen_range(MOUTH_ISLAND_COUNT_MIN..=MOUTH_ISLAND_COUNT_MAX);
         for i in 0..count {
             let slot_t = if count <= 1 {
                 0.5
             } else {
                 i as f32 / (count as f32 - 1.0)
             };
-            let base_angle = (slot_t * 2.0 - 1.0) * MOUTH_ISLAND_FAN_HALF_ANGLE_RAD;
-            let jitter = (rng.gen::<f32>() * 2.0 - 1.0) * MOUTH_ISLAND_ANGLE_JITTER_RAD;
-            let theta = base_angle + jitter;
-            let cos_t = theta.cos();
-            let sin_t = theta.sin();
-            let fan_x = tangent[0] * cos_t + normal[0] * sin_t;
-            let fan_z = tangent[1] * cos_t + normal[1] * sin_t;
+            // Even perpendicular spread across the mouth, leaving a margin
+            // near the banks via `SPREAD_FRAC`. Small jitter breaks the
+            // perfect-lattice silhouette.
+            let perp_offset = (slot_t * 2.0 - 1.0) * mouth_half * MOUTH_ISLAND_SPREAD_FRAC;
+            let perp_jitter = (rng.gen::<f32>() * 2.0 - 1.0) * MOUTH_ISLAND_PERP_JITTER_M;
+            let lateral = perp_offset + perp_jitter;
 
+            // Along-tangent positions stay random so neighbours don't
+            // line up at identical seaward distances.
             let tip_along = rng.gen::<f32>() * MOUTH_ISLAND_TIP_ALONG_MAX_M;
-            let tip_x = apex_pt[0] + fan_x * tip_along;
-            let tip_z = apex_pt[1] + fan_z * tip_along;
-
             let end_along =
                 rng.gen_range(MOUTH_ISLAND_END_ALONG_MIN_M..MOUTH_ISLAND_END_ALONG_MAX_M);
-            let end_x = apex_pt[0] + fan_x * end_along;
-            let end_z = apex_pt[1] + fan_z * end_along;
+
+            let tip_x = apex_pt[0] + tangent[0] * tip_along + normal[0] * lateral;
+            let tip_z = apex_pt[1] + tangent[1] * tip_along + normal[1] * lateral;
+            let end_x = apex_pt[0] + tangent[0] * end_along + normal[0] * lateral;
+            let end_z = apex_pt[1] + tangent[1] * end_along + normal[1] * lateral;
 
             let axis_x = end_x - tip_x;
             let axis_z = end_z - tip_z;
@@ -311,19 +320,20 @@ fn apply_mouth_fan_widths(
     dist_to_land: &[u16],
 ) {
     let span = RIVER_MOUTH_FAN_BASE_HIGH_M - RIVER_MOUTH_FAN_BASE_LOW_M;
+    let k = RIVER_MOUTH_FAN_SHARPNESS;
+    let s_norm = (1.0 + k) / k;
+    let inv_one_plus_k = 1.0 / (1.0 + k);
+    // Stop just before the pole at `t = -1/k` so the multiplier stays
+    // finite for offshore vertices that Chaikin smoothing may pull past
+    // the asymptote. Past this point growth would be unbounded.
+    const POLE_EPS: f32 = 0.05;
+    let t_min = -1.0 / k + POLE_EPS;
     for poly in rivers_world.iter_mut() {
         for i in 0..poly.points.len() {
             let base =
                 sample_base_elevation(map, dist_to_land, poly.points[i][0], poly.points[i][1]);
-            // J-curve: `(1-t)^2` with only the upper bound clamped, so
-            // underwater polyline vertices (`t < 0`) push `s > 1` and
-            // the multiplier accelerates monotonically with no plateau.
-            // Lower clamp would saturate every below-sea-level vertex
-            // at the same peak — visible as a constant-width band along
-            // the last few cells before the coastline.
-            let t = ((base - RIVER_MOUTH_FAN_BASE_LOW_M) / span).min(1.0);
-            let one_minus_t = 1.0 - t;
-            let s = one_minus_t * one_minus_t;
+            let t = ((base - RIVER_MOUTH_FAN_BASE_LOW_M) / span).clamp(t_min, 1.0);
+            let s = (1.0 / (k * t + 1.0) - inv_one_plus_k) * s_norm;
             poly.width[i] *= 1.0 + RIVER_MOUTH_FAN_EXTRA * s;
         }
     }

@@ -116,13 +116,20 @@ pub(super) const RIVER_MOUTH_SAND_COAST_DIST_M: f32 = 50.0;
 /// symmetric spindle-shaped delta centered on the coastline.
 ///
 /// The fan is unbounded below `LOW_M` by design: `apply_mouth_fan_widths`
-/// lets the J-curve keep climbing for underwater polyline vertices so
-/// the rate of widening stays monotonic (no plateau at the coastline),
-/// and the wedge taper bounds the final visual width regardless of
-/// tip multiplier.
+/// lets the reciprocal curve keep climbing for underwater polyline
+/// vertices so the rate of widening stays monotonic (no plateau at the
+/// coastline), and the wedge taper bounds the final visual width
+/// regardless of tip multiplier.
+///
+/// `SHARPNESS` controls how concentrated the widening is around the
+/// coastline. The shape factor is `s(t) = ((1 + k)/(k·t + 1) - 1) / k`
+/// with `k = SHARPNESS`, which is the unit-normalized form of `1/(k·t+1)`:
+/// `s(1)=0`, `s(0)=1`, and `s` blows up as `t → -1/k` from above. Higher
+/// `k` ⇒ flatter upstream + sharper flare at the coast.
 pub(super) const RIVER_MOUTH_FAN_BASE_LOW_M: f32 = 0.0;
 pub(super) const RIVER_MOUTH_FAN_BASE_HIGH_M: f32 = 4.0;
-pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 2.5;
+pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 2.0;
+pub(super) const RIVER_MOUTH_FAN_SHARPNESS: f32 = 2.0;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
 
 // --- Mouth finger-islands ------------------------------------------------
@@ -132,8 +139,21 @@ pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
 // direction. The splatmap's mouth-pebble retraction already paints them
 // SAND since they sit inside the river band with `coast_d_m` well below
 // `RIVER_MOUTH_SAND_COAST_DIST_M`.
-pub(super) const MOUTH_ISLAND_COUNT_MIN: u32 = 4;
-pub(super) const MOUTH_ISLAND_COUNT_MAX: u32 = 5;
+pub(super) const MOUTH_ISLAND_COUNT_MIN: u32 = 3;
+pub(super) const MOUTH_ISLAND_COUNT_MAX: u32 = 8;
+/// Target along-mouth spacing (m): the actual island count is the
+/// mouth width divided by this, clamped to `[MIN, MAX]`. ~6 m gives
+/// ~3 bars across a 20 m mouth and ~7 across a 40 m mouth — enough to
+/// read as a delta lattice rather than a tight cluster.
+pub(super) const MOUTH_ISLAND_SPACING_M: f32 = 6.0;
+/// Fraction of the mouth's half-width across which island lateral
+/// positions are spread. <1 leaves a margin near the channel banks so
+/// bars stay inside the visible water rather than poking into the
+/// taper zone.
+pub(super) const MOUTH_ISLAND_SPREAD_FRAC: f32 = 0.75;
+/// Lateral position jitter (m) on top of the evenly-spaced perpendicular
+/// offset so neighbouring bars don't read as a perfect lattice.
+pub(super) const MOUTH_ISLAND_PERP_JITTER_M: f32 = 1.5;
 pub(super) const MOUTH_ISLAND_RADIUS_MIN_M: f32 = 3.0;
 pub(super) const MOUTH_ISLAND_RADIUS_MAX_M: f32 = 5.0;
 /// Normalised axis position (0=upstream tip, 1=downstream tip) at which
@@ -164,13 +184,6 @@ pub(super) const MOUTH_ISLAND_TIP_ALONG_MAX_M: f32 = 4.0;
 /// so the whole bar classifies as sand.
 pub(super) const MOUTH_ISLAND_END_ALONG_MIN_M: f32 = 16.0;
 pub(super) const MOUTH_ISLAND_END_ALONG_MAX_M: f32 = 30.0;
-/// Half-angle (radians) of the fan across which island slots are
-/// evenly distributed. Slot-based angles guarantee angular separation;
-/// pure random scatter collapses neighbours into overlap.
-pub(super) const MOUTH_ISLAND_FAN_HALF_ANGLE_RAD: f32 = 0.7;
-/// Small per-island angle jitter (radians) on top of the slot angle to
-/// break perfect symmetry.
-pub(super) const MOUTH_ISLAND_ANGLE_JITTER_RAD: f32 = 0.09;
 /// Base spatial frequency (cycles per meter) of the along-river noise that
 /// widens and narrows the pebble/sand band so it doesn't read as a constant
 /// ribbon parallel to the centerline. ~1/22 gives ~22 m wavelength — short
