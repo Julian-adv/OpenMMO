@@ -20,15 +20,16 @@ use super::super::vector_features::{
 use super::constants::{
     COAST_CHAIKIN_ITERATIONS, MOUTH_ISLAND_COUNT_MAX, MOUTH_ISLAND_COUNT_MIN,
     MOUTH_ISLAND_END_ALONG_FRAC_MAX, MOUTH_ISLAND_END_ALONG_FRAC_MIN,
-    MOUTH_ISLAND_LAND_HEIGHT_BOOST, MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M,
+    MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M,
     MOUTH_ISLAND_PERP_JITTER_M, MOUTH_ISLAND_RADIUS_MAX_M, MOUTH_ISLAND_RADIUS_MIN_M,
     MOUTH_ISLAND_SPACING_M, MOUTH_ISLAND_SPREAD_FRAC, MOUTH_ISLAND_TIP_ALONG_FRAC_MAX,
-    MOUTH_ISLAND_TIP_ALONG_FRAC_MIN, MOUTH_ISLAND_WIDEST_AXIS_T, RIVER_CHAIKIN_ITERATIONS,
+    MOUTH_ISLAND_TIP_ALONG_FRAC_MIN, MOUTH_ISLAND_TIP_LATERAL_FRAC,
+    MOUTH_ISLAND_TIP_RADIUS_FRAC, MOUTH_ISLAND_WIDEST_AXIS_T, RIVER_CHAIKIN_ITERATIONS,
     RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M, RIVER_MOUTH_FAN_ARC_CELLS,
     RIVER_MOUTH_FAN_BANK_WOBBLE_M, RIVER_MOUTH_FAN_BANK_WOBBLE_WAVELENGTH_M,
     RIVER_MOUTH_FAN_EXTRA, RIVER_MOUTH_FAN_SHARPNESS, ROAD_CHAIKIN_ITERATIONS,
 };
-use super::heightmap::cell_elevation_m;
+use super::heightmap::{cell_elevation_m, lerp};
 
 pub struct BakeContext {
     /// Deterministic detail-noise source seeded off the master seed.
@@ -112,7 +113,17 @@ impl MouthIsland {
             (u - u_peak) / (1.0 - u_peak)
         };
         let r_scale = (1.0 - t * t).sqrt();
-        let r_at_u = self.radius * r_scale;
+        // Asymmetric width: the upstream half-ellipse is squeezed by
+        // `TIP_RADIUS_FRAC` at u=0, ramping linearly back to 1.0 at the
+        // widest axis so the seam at `u_peak` stays kink-free. The
+        // downstream half keeps full radius. Real delta bars are
+        // narrower on the flow-facing edge where current scours.
+        let side_scale = if u <= u_peak {
+            lerp(MOUTH_ISLAND_TIP_RADIUS_FRAC, 1.0, u / u_peak)
+        } else {
+            1.0
+        };
+        let r_at_u = self.radius * r_scale * side_scale;
         if r_at_u <= 1e-3 {
             return 0.0;
         }
@@ -128,8 +139,7 @@ impl MouthIsland {
         let t_sq = d_sq / r_sq;
         let one_minus_tsq = 1.0 - t_sq;
         let s = one_minus_tsq * one_minus_tsq;
-        let height_scale = 1.0 + MOUTH_ISLAND_LAND_HEIGHT_BOOST * (1.0 - u);
-        self.peak_m * height_scale * s
+        self.peak_m * s
     }
 }
 
@@ -304,8 +314,12 @@ fn generate_mouth_islands(
             let tip_along = tip_frac * fan_arc_m;
             let end_along = end_frac * fan_arc_m;
 
-            let tip_x = apex_pt[0] + tangent[0] * tip_along + normal[0] * lateral;
-            let tip_z = apex_pt[1] + tangent[1] * tip_along + normal[1] * lateral;
+            // Tip lateral is compressed toward the centerline so fingers
+            // splay outward from apex to mouth rather than running as
+            // parallel bars.
+            let tip_lateral = lateral * MOUTH_ISLAND_TIP_LATERAL_FRAC;
+            let tip_x = apex_pt[0] + tangent[0] * tip_along + normal[0] * tip_lateral;
+            let tip_z = apex_pt[1] + tangent[1] * tip_along + normal[1] * tip_lateral;
             let end_x = apex_pt[0] + tangent[0] * end_along + normal[0] * lateral;
             let end_z = apex_pt[1] + tangent[1] * end_along + normal[1] * lateral;
 

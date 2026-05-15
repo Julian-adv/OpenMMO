@@ -150,10 +150,11 @@ pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
 pub(super) const MOUTH_ISLAND_COUNT_MIN: u32 = 3;
 pub(super) const MOUTH_ISLAND_COUNT_MAX: u32 = 8;
 /// Target along-mouth spacing (m): the actual island count is the
-/// mouth width divided by this, clamped to `[MIN, MAX]`. ~6 m gives
-/// ~3 bars across a 20 m mouth and ~7 across a 40 m mouth — enough to
-/// read as a delta lattice rather than a tight cluster.
-pub(super) const MOUTH_ISLAND_SPACING_M: f32 = 6.0;
+/// mouth width divided by this, clamped to `[MIN, MAX]`. ~16 m gives
+/// ~6 bars across a ~100 m mouth (typical large-river post-fan width)
+/// — sparse enough that each bar reads as an individual island rather
+/// than a packed lattice.
+pub(super) const MOUTH_ISLAND_SPACING_M: f32 = 16.0;
 /// Fraction of the mouth's half-width across which island lateral
 /// positions are spread. <1 leaves a margin near the channel banks so
 /// bars stay inside the visible water rather than poking into the
@@ -164,15 +165,17 @@ pub(super) const MOUTH_ISLAND_SPREAD_FRAC: f32 = 0.55;
 pub(super) const MOUTH_ISLAND_PERP_JITTER_M: f32 = 1.5;
 pub(super) const MOUTH_ISLAND_RADIUS_MIN_M: f32 = 3.0;
 pub(super) const MOUTH_ISLAND_RADIUS_MAX_M: f32 = 5.0;
+/// Lateral radius multiplier at the upstream tip. Linearly ramps from
+/// this fraction at u=0 to 1.0 at u=u_peak so the downstream half keeps
+/// its full radius. <1 narrows the upstream silhouette without
+/// introducing a kink at the widest axis — matches a real delta bar's
+/// teardrop top-down outline (narrow flow-facing head, broad lee tail).
+pub(super) const MOUTH_ISLAND_TIP_RADIUS_FRAC: f32 = 0.8;
 /// Normalised axis position (0=upstream tip, 1=downstream tip) at which
 /// the island reaches its widest radius. 0.75 gives a teardrop with the
 /// fat end pointing seaward — delta bars erode to a point on the
 /// flow-facing edge and settle sediment on the downstream lee side.
 pub(super) const MOUTH_ISLAND_WIDEST_AXIS_T: f32 = 0.75;
-/// Axial height boost at the land-side tip (u=0), ramped linearly to
-/// zero at the sea-side tip. Sediment stacks at the upstream head where
-/// flow plants it; the downstream tail is drift-thinned.
-pub(super) const MOUTH_ISLAND_LAND_HEIGHT_BOOST: f32 = 0.3;
 /// Peak elevation range (m) ABOVE the post-carve sample. Sea cells sit
 /// on bathymetry around −0.5 m, so the peak must budget for lifting the
 /// surface up through the waterline AND leaving a visible dry crown.
@@ -189,6 +192,12 @@ pub(super) const MOUTH_ISLAND_TIP_ALONG_FRAC_MIN: f32 = 0.40;
 pub(super) const MOUTH_ISLAND_TIP_ALONG_FRAC_MAX: f32 = 0.55;
 pub(super) const MOUTH_ISLAND_END_ALONG_FRAC_MIN: f32 = 0.75;
 pub(super) const MOUTH_ISLAND_END_ALONG_FRAC_MAX: f32 = 0.95;
+/// Fraction of the end-vertex lateral offset that the upstream tip
+/// inherits. <1 pulls tips toward the river centerline while ends stay
+/// at the full perpendicular spread — fingers splay outward from the
+/// apex to the mouth, matching real delta distributary geometry instead
+/// of reading as a parallel grid of bars.
+pub(super) const MOUTH_ISLAND_TIP_LATERAL_FRAC: f32 = 0.5;
 /// Base spatial frequency (cycles per meter) of the along-river noise that
 /// widens and narrows the pebble/sand band so it doesn't read as a constant
 /// ribbon parallel to the centerline. ~1/22 gives ~22 m wavelength — short
