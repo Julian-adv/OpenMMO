@@ -18,8 +18,8 @@ use super::super::vector_features::{
     river_chaikin_smooth, river_polyline_to_world, RiverWorldPolyline, WorldPolyline,
 };
 use super::constants::{
-    COAST_CHAIKIN_ITERATIONS, MOUTH_ISLAND_COUNT_MAX, MOUTH_ISLAND_COUNT_MIN,
-    MOUTH_ISLAND_END_ALONG_FRAC_MAX, MOUTH_ISLAND_END_ALONG_FRAC_MIN,
+    COAST_CHAIKIN_ITERATIONS, MOUTH_ISLAND_BEND_AMP_M, MOUTH_ISLAND_COUNT_MAX,
+    MOUTH_ISLAND_COUNT_MIN, MOUTH_ISLAND_END_ALONG_FRAC_MAX, MOUTH_ISLAND_END_ALONG_FRAC_MIN,
     MOUTH_ISLAND_PEAK_MAX_M, MOUTH_ISLAND_PEAK_MIN_M,
     MOUTH_ISLAND_PERP_JITTER_M, MOUTH_ISLAND_RADIUS_MAX_M, MOUTH_ISLAND_RADIUS_MIN_M,
     MOUTH_ISLAND_SPACING_M, MOUTH_ISLAND_SPREAD_FRAC, MOUTH_ISLAND_TIP_ALONG_FRAC_MAX,
@@ -78,7 +78,10 @@ pub(super) struct MouthIsland {
     pub(super) half_len: f32,
     pub(super) radius: f32,
     pub(super) peak_m: f32,
-    /// Precomputed `half_len + radius` for bbox culling; constant per island.
+    /// Per-island signed offset; see `MOUTH_ISLAND_BEND_AMP_M`.
+    pub(super) bend_amp_m: f32,
+    /// Precomputed `half_len + radius + |bend_amp_m|` for bbox culling;
+    /// constant per island.
     pub(super) reach_m: f32,
 }
 
@@ -127,8 +130,13 @@ impl MouthIsland {
         if r_at_u <= 1e-3 {
             return 0.0;
         }
-        let px = self.center[0] + self.tangent[0] * along_raw;
-        let pz = self.center[1] + self.tangent[1] * along_raw;
+        // Perp extent from the bend is bounded by `|bend_amp_m|`, which
+        // is already folded into `reach_m` for bbox culling.
+        let bend = self.bend_amp_m * (std::f32::consts::PI * u).sin();
+        let normal_x = -self.tangent[1];
+        let normal_z = self.tangent[0];
+        let px = self.center[0] + self.tangent[0] * along_raw + normal_x * bend;
+        let pz = self.center[1] + self.tangent[1] * along_raw + normal_z * bend;
         let perp_dx = wx - px;
         let perp_dz = wz - pz;
         let d_sq = perp_dx * perp_dx + perp_dz * perp_dz;
@@ -300,7 +308,7 @@ fn generate_mouth_islands(
             // near the banks via `SPREAD_FRAC`. Small jitter breaks the
             // perfect-lattice silhouette.
             let perp_offset = (slot_t * 2.0 - 1.0) * mouth_half * MOUTH_ISLAND_SPREAD_FRAC;
-            let perp_jitter = (rng.gen::<f32>() * 2.0 - 1.0) * MOUTH_ISLAND_PERP_JITTER_M;
+            let perp_jitter = rng.gen_range(-MOUTH_ISLAND_PERP_JITTER_M..MOUTH_ISLAND_PERP_JITTER_M);
             let lateral = perp_offset + perp_jitter;
 
             // Tip sits around mid-fan, end near the mouth — fingers reach
@@ -334,6 +342,7 @@ fn generate_mouth_islands(
 
             let radius = rng.gen_range(MOUTH_ISLAND_RADIUS_MIN_M..MOUTH_ISLAND_RADIUS_MAX_M);
             let peak = rng.gen_range(MOUTH_ISLAND_PEAK_MIN_M..MOUTH_ISLAND_PEAK_MAX_M);
+            let bend_amp = rng.gen_range(-MOUTH_ISLAND_BEND_AMP_M..MOUTH_ISLAND_BEND_AMP_M);
             let half_len = length * 0.5;
             islands.push(MouthIsland {
                 center,
@@ -341,7 +350,8 @@ fn generate_mouth_islands(
                 half_len,
                 radius,
                 peak_m: peak,
-                reach_m: half_len + radius,
+                bend_amp_m: bend_amp,
+                reach_m: half_len + radius + bend_amp.abs(),
             });
         }
     }

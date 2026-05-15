@@ -165,6 +165,12 @@ pub(super) const MOUTH_ISLAND_SPREAD_FRAC: f32 = 0.55;
 pub(super) const MOUTH_ISLAND_PERP_JITTER_M: f32 = 1.5;
 pub(super) const MOUTH_ISLAND_RADIUS_MIN_M: f32 = 3.0;
 pub(super) const MOUTH_ISLAND_RADIUS_MAX_M: f32 = 5.0;
+/// Peak signed perpendicular offset (m) of the medial axis at its
+/// midpoint. The bend follows `sin(π·u)` so it's zero at both tips and
+/// peaks at u=0.5, giving a banana-curve silhouette. Sign and magnitude
+/// are randomised per island so adjacent bars don't all kink the same
+/// way; absolute value is bounded by this constant.
+pub(super) const MOUTH_ISLAND_BEND_AMP_M: f32 = 1.5;
 /// Lateral radius multiplier at the upstream tip. Linearly ramps from
 /// this fraction at u=0 to 1.0 at u=u_peak so the downstream half keeps
 /// its full radius. <1 narrows the upstream silhouette without
