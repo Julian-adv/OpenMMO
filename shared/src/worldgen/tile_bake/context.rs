@@ -10,7 +10,7 @@ use super::super::config::WorldGenConfig;
 use super::super::global_map::GlobalMap;
 use super::super::grass_patches::GrassPatchField;
 use super::super::grid::bfs_distance_from;
-use super::super::noise::PerlinNoise3D;
+use super::super::noise::{smoothstep, PerlinNoise3D};
 use super::super::rivers::RiverMap;
 use super::super::roads::RoadNetwork;
 use super::super::vector_features::{
@@ -138,10 +138,11 @@ fn sample_base_elevation(map: &GlobalMap, dist_to_land: &[u16], wx: f32, wz: f32
     e0 * (1.0 - tz) + e1 * tz
 }
 
-/// Replace the sea-bound tail of each river with 5-7 narrow distributary
-/// branches. The split starts at the same arc distance where the old mouth
-/// fan began widening; the original polyline is truncated there and the
-/// generated branches carry the flow into the sea with gentle S-curves.
+/// Replace the sea-bound tail of each river with several narrow distributary
+/// branches (`RIVER_MOUTH_BRANCH_COUNT_MIN..=MAX`). The split starts at the
+/// same arc distance where the old mouth fan began widening; the original
+/// polyline is truncated there and the generated branches carry the flow
+/// into the sea with gentle S-curves.
 fn apply_mouth_distributaries(
     rivers_world: &mut Vec<RiverWorldPolyline>,
     map: &GlobalMap,
@@ -204,20 +205,13 @@ fn split_mouth_polyline(
             ^ (poly_idx as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15),
     );
     let count = rng.gen_range(RIVER_MOUTH_BRANCH_COUNT_MIN..=RIVER_MOUTH_BRANCH_COUNT_MAX);
+    debug_assert!(count >= 2);
     let spread_half = RIVER_MOUTH_BRANCH_SPREAD_M.min(axis_len * 0.75);
-    let spacing = if count > 1 {
-        spread_half * 2.0 / (count - 1) as f32
-    } else {
-        0.0
-    };
+    let spacing = spread_half * 2.0 / (count - 1) as f32;
 
     let mut out = Vec::with_capacity(count as usize);
     for i in 0..count {
-        let slot_t = if count <= 1 {
-            0.5
-        } else {
-            i as f32 / (count - 1) as f32
-        };
+        let slot_t = i as f32 / (count - 1) as f32;
         let jitter_cap = RIVER_MOUTH_BRANCH_END_JITTER_M.min(spacing * 0.25);
         let edge_damp = if i == 0 || i + 1 == count { 0.45 } else { 1.0 };
         let jitter = rng.gen_range(-jitter_cap..=jitter_cap) * edge_damp;
@@ -269,32 +263,32 @@ fn polyline_arc_lengths(points: &[[f32; 2]]) -> (Vec<f32>, f32) {
     (lens, cumulative)
 }
 
+const SEA_SEARCH_STEP_M: f32 = 8.0;
+const SEA_SEARCH_MAX_FORWARD_STEPS: usize = 40;
+const SEA_SEARCH_EXTRA_STEPS: usize = 4;
+const SEA_SEARCH_LATERAL_STEPS: i32 = 4;
+const SEA_SEARCH_TARGET_ELEVATION_M: f32 = -1.5;
+
 fn push_point_to_sea(
     p: [f32; 2],
     tangent: [f32; 2],
     map: &GlobalMap,
     dist_to_land: &[u16],
 ) -> [f32; 2] {
-    const STEP_M: f32 = 8.0;
-    const MAX_FORWARD_STEPS: usize = 40;
-    const SEA_EXTRA_STEPS: usize = 4;
-    const LATERAL_SEARCH_STEPS: i32 = 4;
-    const TARGET_SEA_ELEVATION_M: f32 = -1.5;
-
     let start = clamp_world_point(p, map);
     let normal = [-tangent[1], tangent[0]];
     let mut best_sea: Option<([f32; 2], f32)> = None;
 
-    for forward_step in 0..=MAX_FORWARD_STEPS {
-        let forward_m = forward_step as f32 * STEP_M;
-        let max_lateral_steps = ((forward_step as i32 + 1) / 3).min(LATERAL_SEARCH_STEPS);
+    for forward_step in 0..=SEA_SEARCH_MAX_FORWARD_STEPS {
+        let forward_m = forward_step as f32 * SEA_SEARCH_STEP_M;
+        let max_lateral_steps = ((forward_step as i32 + 1) / 3).min(SEA_SEARCH_LATERAL_STEPS);
 
         for lateral_step in 0..=max_lateral_steps {
             for sign in [-1.0f32, 1.0] {
                 if lateral_step == 0 && sign < 0.0 {
                     continue;
                 }
-                let lateral_m = lateral_step as f32 * STEP_M * sign;
+                let lateral_m = lateral_step as f32 * SEA_SEARCH_STEP_M * sign;
                 let candidate = clamp_world_point(
                     [
                         start[0] + tangent[0] * forward_m + normal[0] * lateral_m,
@@ -313,27 +307,27 @@ fn push_point_to_sea(
                 {
                     best_sea = Some((candidate, elevation));
                 }
-                if elevation <= TARGET_SEA_ELEVATION_M {
+                if elevation <= SEA_SEARCH_TARGET_ELEVATION_M {
                     return push_point_deeper_into_sea(
                         candidate,
+                        elevation,
                         tangent,
                         map,
                         dist_to_land,
-                        SEA_EXTRA_STEPS,
                     );
                 }
             }
         }
     }
 
-    if let Some((candidate, _)) = best_sea {
-        return push_point_deeper_into_sea(candidate, tangent, map, dist_to_land, SEA_EXTRA_STEPS);
+    if let Some((candidate, elevation)) = best_sea {
+        return push_point_deeper_into_sea(candidate, elevation, tangent, map, dist_to_land);
     }
 
     clamp_world_point(
         [
-            start[0] + tangent[0] * STEP_M * MAX_FORWARD_STEPS as f32,
-            start[1] + tangent[1] * STEP_M * MAX_FORWARD_STEPS as f32,
+            start[0] + tangent[0] * SEA_SEARCH_STEP_M * SEA_SEARCH_MAX_FORWARD_STEPS as f32,
+            start[1] + tangent[1] * SEA_SEARCH_STEP_M * SEA_SEARCH_MAX_FORWARD_STEPS as f32,
         ],
         map,
     )
@@ -341,19 +335,17 @@ fn push_point_to_sea(
 
 fn push_point_deeper_into_sea(
     mut p: [f32; 2],
+    start_elevation: f32,
     tangent: [f32; 2],
     map: &GlobalMap,
     dist_to_land: &[u16],
-    steps: usize,
 ) -> [f32; 2] {
-    const STEP_M: f32 = 8.0;
-
     let mut best = p;
-    let mut best_elevation = sample_base_elevation(map, dist_to_land, p[0], p[1]);
+    let mut best_elevation = start_elevation;
 
-    for _ in 0..steps {
-        p[0] += tangent[0] * STEP_M;
-        p[1] += tangent[1] * STEP_M;
+    for _ in 0..SEA_SEARCH_EXTRA_STEPS {
+        p[0] += tangent[0] * SEA_SEARCH_STEP_M;
+        p[1] += tangent[1] * SEA_SEARCH_STEP_M;
         p = clamp_world_point(p, map);
         let elevation = sample_base_elevation(map, dist_to_land, p[0], p[1]);
         if elevation < best_elevation {
@@ -410,10 +402,10 @@ fn build_distributary_branch(
             apex[1] + axis_z * t + normal[1] * s,
         ]);
         flow_norm.push(apex_flow + (end_flow - apex_flow) * t);
-        let width_t = smoothstep01(t / 0.25);
+        let width_t = smoothstep(0.0, RIVER_MOUTH_BRANCH_WIDTH_RAMP_T, t);
         widths.push(apex_width + (end_width - apex_width) * width_t);
-        let initial_drop_t = smoothstep01(t / bed_drop_t);
-        let sea_drop_t = smoothstep01((t - bed_drop_t) / (1.0 - bed_drop_t));
+        let initial_drop_t = smoothstep(0.0, bed_drop_t, t);
+        let sea_drop_t = smoothstep(bed_drop_t, 1.0, t);
         let shallow_floor = RIVER_CARVE_MIN_BED_Y_M
             + (RIVER_MOUTH_BRANCH_BED_Y_M - RIVER_CARVE_MIN_BED_Y_M) * initial_drop_t;
         bed_floor.push(shallow_floor + (end_bed_floor - RIVER_MOUTH_BRANCH_BED_Y_M) * sea_drop_t);
@@ -430,10 +422,9 @@ fn build_distributary_branch(
     )
 }
 
-fn smoothstep01(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
-}
+/// Fraction of the branch length over which the carved width ramps from the
+/// apex (full river) width down to the narrow sea-contact end width.
+const RIVER_MOUTH_BRANCH_WIDTH_RAMP_T: f32 = 0.25;
 
 /// Convert an iterator of cell-coord polylines into world-space polylines,
 /// splitting at the X seam and Chaikin-smoothing each resulting piece.

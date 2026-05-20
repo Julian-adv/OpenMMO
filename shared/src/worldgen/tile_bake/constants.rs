@@ -93,20 +93,22 @@ pub(super) const RIVER_CARVE_MIN_BED_Y_M: f32 = 0.0;
 pub(super) const RIVER_DEPTH_OFFSET_M: f32 = 0.5;
 /// River-bed splat switches from `PAL_RIVER_BED` (ganges pebbles — wet
 /// inland bed look) to `PAL_SAND` (sandy_gravel_02 — matches shallow sea)
-/// as the river enters the mouth fan. Keyed on the projected segment
-/// width: if a mouth segment grows past `RIVER_MAX_WIDTH_M`, that remains
-/// the natural fan-entry signal. Smoothstep from `BASE_M` (still
-/// pebble) to `BASE_M + FADE_M` (fully sand) keeps the swap a couple of
-/// cells wide so the seam doesn't pop.
+/// near river mouths. The trigger is either a per-segment width above
+/// `RIVER_MAX_WIDTH_M` (legacy wide-fan code paths) or a sub-sea bed-floor
+/// target carried by mouth distributary branches. Smoothstep from `BASE_M`
+/// (still pebble) to `BASE_M + FADE_M` (fully sand) keeps the swap a couple
+/// of cells wide so the seam doesn't pop.
 pub(super) const RIVER_FAN_SAND_BASE_WIDTH_M: f32 = RIVER_MAX_WIDTH_M;
 pub(super) const RIVER_FAN_SAND_FADE_M: f32 = 3.0;
 /// Distributary window (cells of arc-length measured back from the river
 /// mouth). The original river is kept up to this apex, then the baker
 /// replaces the sea-bound tail with several narrow S-curved branches.
 pub const RIVER_MOUTH_FAN_ARC_CELLS: f32 = 8.5;
-/// Legacy fan scale used for conservative road avoidance and tile river
-/// margins around delta mouths. The baked mouth no longer becomes one wide
-/// ribbon; it uses this same scale only to size the distributary spread.
+/// Fan scale used for road A* avoidance and tile river margins around
+/// delta mouths, and also to size the distributary endpoint spread
+/// (`RIVER_MOUTH_BRANCH_SPREAD_M`). Bake polylines themselves are no
+/// longer widened by this factor — they are split into distributaries
+/// instead.
 pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 10.0;
 pub(super) const RIVER_MOUTH_FAN_SHARPNESS: f32 = 1.5;
 pub(super) const RIVER_MOUTH_BRANCH_COUNT_MIN: u32 = 2;
@@ -118,9 +120,8 @@ pub(super) const RIVER_MOUTH_BRANCH_SPREAD_M: f32 =
 pub(super) const RIVER_MOUTH_BRANCH_END_JITTER_M: f32 = 4.0;
 /// Maximum signed S-curve offset (m) applied to each branch centerline.
 pub(super) const RIVER_MOUTH_BRANCH_MEANDER_M: f32 = 12.0;
-/// End width as a fraction of the original mouth width, capped below. The
-/// branch starts at the incoming river width and tapers to this narrower
-/// sea contact width.
+/// End width as a fraction of the original mouth width, clamped to
+/// `[RIVER_MOUTH_BRANCH_END_WIDTH_MIN_M, RIVER_MOUTH_BRANCH_END_WIDTH_MAX_M]`.
 pub(super) const RIVER_MOUTH_BRANCH_END_WIDTH_SCALE: f32 = 0.04;
 pub(super) const RIVER_MOUTH_BRANCH_END_WIDTH_MIN_M: f32 = 0.2;
 pub(super) const RIVER_MOUTH_BRANCH_END_WIDTH_MAX_M: f32 = 0.65;

@@ -310,12 +310,14 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // seam straddles a couple of cells instead of popping.
         // Both palettes share the GROUND secondary so the bank fade stays
         // smooth across the swap.
-        let mouth_sand_t = smoothstep(
+        let mut mouth_sand_t = smoothstep(
             RIVER_FAN_SAND_BASE_WIDTH_M,
             RIVER_FAN_SAND_BASE_WIDTH_M + RIVER_FAN_SAND_FADE_M,
             river_width_m,
-        )
-        .max(smoothstep(0.01, 0.25, -river_bed_floor_m));
+        );
+        if river_bed_floor_m < 0.0 {
+            mouth_sand_t = mouth_sand_t.max(smoothstep(0.01, 0.25, -river_bed_floor_m));
+        }
         let pebble_half_width_m = river_sand_half_width_m * (1.0 - mouth_sand_t);
         let is_pebble = river_d_m < pebble_half_width_m;
         let primary = if is_pebble { PAL_RIVER_BED } else { PAL_SAND };

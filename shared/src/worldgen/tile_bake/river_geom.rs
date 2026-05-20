@@ -1,6 +1,9 @@
-//! Shared river-width derivation: flow → baked width plus the legacy
-//! mouth-fan factor used by road A* to keep routes out of broad delta
-//! zones before the tile baker later splits the mouth into distributaries.
+//! Shared river-width derivation: flow → baked width plus the mouth-fan
+//! factor. Note that bake-time polylines are NOT widened by the fan factor
+//! — the tile baker splits each mouth into distributary branches instead
+//! (`context::apply_mouth_distributaries`). The fan factor lives on only to
+//! predict where bridges would land too wide so road A* can detour around
+//! delta mouths before bake.
 
 use super::super::global_map::GlobalMap;
 use super::super::grid::fold_x_delta_f32;

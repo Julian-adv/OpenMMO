@@ -308,6 +308,11 @@ fn segment_bed_floor(seg: &RiverSegment, width_m: f32, t: f32) -> f32 {
     let max_excess = RIVER_MAX_WIDTH_M * RIVER_MOUTH_FAN_EXTRA;
     let fan_frac = (excess / max_excess.max(1e-3)).clamp(0.0, 1.0);
     let fan_floor = RIVER_CARVE_MIN_BED_Y_M - RIVER_MOUTH_FAN_BED_DROP_M * fan_frac;
+    // Natural rivers have both endpoints at 0 — skip the lerp/min on the hot
+    // path. fan_floor is always ≤ 0, so min(fan_floor, 0.0) == fan_floor.
+    if seg.bed_floor_a == 0.0 && seg.bed_floor_b == 0.0 {
+        return fan_floor;
+    }
     let branch_floor = lerp(seg.bed_floor_a, seg.bed_floor_b, t);
     fan_floor.min(branch_floor)
 }
