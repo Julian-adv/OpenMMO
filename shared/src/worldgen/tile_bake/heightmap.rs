@@ -1,7 +1,7 @@
 //! 65×65 heightmap sampling, encoding, and river-carve geometry.
 
 use super::super::global_map::GlobalMap;
-use super::super::noise::fbm_wrap_x;
+use super::super::noise::{fbm_wrap_x, smoothstep};
 use super::super::vector_features::{nearest_river_segment, RiverSegment};
 use super::constants::{
     DETAIL_COAST_DAMP, DETAIL_FREQUENCY, DETAIL_GAIN, DETAIL_LACUNARITY, DETAIL_MAX_AMPLITUDE,
@@ -9,7 +9,8 @@ use super::constants::{
     HILLS_COASTAL_FADE_M, HILLS_FREQUENCY, HILLS_GAIN, HILLS_OCTAVES, LAND_BASE_MIN_Y_M,
     RIVER_CARVE_DEPTH_EXTRA_M, RIVER_CARVE_DEPTH_MIN_M, RIVER_CARVE_MIN_BED_Y_M,
     RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_MAX_WIDTH_M,
-    RIVER_MOUTH_FAN_BED_DROP_M, RIVER_MOUTH_FAN_EXTRA, TILE_DIM, VERTS_PER_SIDE,
+    RIVER_MOUTH_BRANCH_BED_Y_M, RIVER_MOUTH_BRANCH_TAPER_M, RIVER_MOUTH_FAN_BED_DROP_M,
+    RIVER_MOUTH_FAN_EXTRA, TILE_DIM, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
 
@@ -267,8 +268,14 @@ fn carve_at_point_detailed(
     let seg = &segs[idx];
     let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
     let width = lerp(seg.width_a, seg.width_b, t);
-    let (half_width, taper, depth) = segment_carve_params(flow_norm, width);
+    let (half_width, natural_taper, depth) = segment_carve_params(flow_norm, width);
     let bed_floor = segment_bed_floor(seg, width, t);
+    // Distributary branches replace the gentle 3–10 m bank with a steeper
+    // ~2 m cut as the bed sinks sub-sea — a 0.15 m channel ringed by a 10 m
+    // slope looks like a crater. Lerp on bed_floor so the apex (bed_floor ≈
+    // 0) keeps the natural bank and only the seaward end cuts steep.
+    let branch_t = smoothstep(0.0, -RIVER_MOUTH_BRANCH_BED_Y_M, -bed_floor);
+    let taper = lerp(natural_taper, RIVER_MOUTH_BRANCH_TAPER_M, branch_t);
     let max_carve_depth = (current_h - bed_floor).max(0.0);
     let signed_d = signed_distance_to_segment(world_x, world_z, seg, t);
     let outside_strength = bend_outside_strength(segs, idx, t);

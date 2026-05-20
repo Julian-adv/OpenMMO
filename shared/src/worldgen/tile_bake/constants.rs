@@ -111,7 +111,7 @@ pub const RIVER_MOUTH_FAN_ARC_CELLS: f32 = 8.5;
 /// instead.
 pub(super) const RIVER_MOUTH_FAN_EXTRA: f32 = 10.0;
 pub(super) const RIVER_MOUTH_FAN_SHARPNESS: f32 = 1.5;
-pub(super) const RIVER_MOUTH_BRANCH_COUNT_MIN: u32 = 2;
+pub(super) const RIVER_MOUTH_BRANCH_COUNT_MIN: u32 = 4;
 pub(super) const RIVER_MOUTH_BRANCH_COUNT_MAX: u32 = 6;
 /// Half-width (m) of the fan-shaped endpoint spread for distributaries.
 pub(super) const RIVER_MOUTH_BRANCH_SPREAD_M: f32 =
@@ -144,6 +144,11 @@ pub(super) const RIVER_MOUTH_BRANCH_END_WIDTH_MAX_M: f32 = 0.65;
 /// narrow as they approach the sea, so the carve needs a small sub-sea floor
 /// to keep the channel visibly connected to ocean water.
 pub(super) const RIVER_MOUTH_BRANCH_BED_Y_M: f32 = -0.5;
+/// Bank taper width (m) for distributary branches, replacing the natural
+/// 3–10 m bank as the bed sinks sub-sea. Narrow branches with a 0.15 m
+/// half-width look absurd with a 10 m gentle slope; this gives them a
+/// steeper cut more like a stream incising the coast.
+pub(super) const RIVER_MOUTH_BRANCH_TAPER_M: f32 = 5.0;
 /// Drop of the river-bed floor below `RIVER_CARVE_MIN_BED_Y_M` in the fan
 /// zone, proportional to width excess. At the fan peak the bed sits at
 /// `-RIVER_MOUTH_FAN_BED_DROP_M` so the channel reads as shallow sea.
