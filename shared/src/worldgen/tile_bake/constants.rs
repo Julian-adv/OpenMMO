@@ -149,6 +149,12 @@ pub(super) const RIVER_MOUTH_BRANCH_BED_Y_M: f32 = -0.5;
 /// `-RIVER_MOUTH_FAN_BED_DROP_M` so the channel reads as shallow sea.
 pub(super) const RIVER_MOUTH_FAN_BED_DROP_M: f32 = 1.5;
 pub(super) const RIVER_SAND_WIDTH_MULT: f32 = 0.7;
+/// Extra sand-band reach (m) past the water edge for mouth distributary
+/// branches. Needs to clear the carve taper (`RIVER_CARVE_TAPER_MIN/EXTRA`
+/// = 3–10 m) plus give a visible sand collar on natural-elevation land —
+/// otherwise the sand sits entirely inside the depressed bank and reads
+/// as still-water-adjacent grass.
+pub(super) const RIVER_MOUTH_BRANCH_SAND_MARGIN_M: f32 = 5.0;
 
 /// Base spatial frequency (cycles per meter) of the along-river noise that
 /// widens and narrows the pebble/sand band so it doesn't read as a constant

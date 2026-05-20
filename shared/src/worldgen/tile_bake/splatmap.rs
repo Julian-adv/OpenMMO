@@ -13,7 +13,8 @@ use super::constants::{
     GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW,
     RIVER_BAND_NOISE_AMP, RIVER_BAND_NOISE_FREQ, RIVER_BAND_NOISE_OCTAVES, RIVER_FADE_SPAN_M,
     RIVER_FAN_SAND_BASE_WIDTH_M, RIVER_FAN_SAND_FADE_M, RIVER_FOAM_SUPPRESS_RADIUS_M,
-    RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND,
+    RIVER_MOUTH_BRANCH_SAND_MARGIN_M, RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M,
+    SEA_MAX_DEPTH_FOR_BLEND,
     SLOPE_CLIFF_FULL, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
@@ -278,8 +279,17 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
     // touch grass directly); the 1 m absolute floor still protects
     // degenerate zero-width segments from disappearing entirely.
     let water_half_m = (river_width_m * 0.5).max(0.5);
+    // Mouth distributary branches (sub-sea bed-floor) get a wider sand
+    // collar so the bed and the natural-elevation land past the carve
+    // taper read as beach instead of grass. Natural rivers keep the
+    // tighter 0.5 m band that sits inside their own gentler taper.
+    let bank_sand_margin_m = if river_bed_floor_m < 0.0 {
+        RIVER_MOUTH_BRANCH_SAND_MARGIN_M
+    } else {
+        0.5
+    };
     let river_sand_half_width_m = (river_width_m * RIVER_SAND_WIDTH_MULT * river_band_scale)
-        .max(water_half_m + 0.5)
+        .max(water_half_m + bank_sand_margin_m)
         .max(1.0);
     if river_d_m < river_sand_half_width_m {
         // River bed wins over road inside the sand band: where a road
