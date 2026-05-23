@@ -88,18 +88,22 @@ shared/src/worldgen/
   rivers.rs            # Phase 4 (flow → polyline + meander/distributary 후처리)
   coasts.rs            # 해안 polyline (Marching Squares on land_mask)
   settlements.rs       # Phase 5 (해안/강변/평야 fitness + greedy min-spacing)
-  roads/               # Phase 6 (MST + K-NN A*; merge_parallel_runs; bridge snap)
+  roads/               # Phase 6 (MST + K-NN A*; merge_parallel_runs +
+                       #          merge_parallel_interiors; bridge snap)
   vector_features.rs   # polyline 공유 유틸 (Chaikin, RiverSegment, projection)
   vegetation.rs        # Phase 8 (tree V1 + grass V3 per-tile binary)
   grass_patches.rs     # warped-Voronoi grass patch field
   tile_bake/           # Phase 7 (per-tile bake)
     mod.rs             # 오케스트레이션 + BakeContext
-    constants.rs       # TILE_DIM, VERTS_PER_SIDE, HEIGHT_BIAS/STEP, RIVER_* 상수
+    constants.rs       # TILE_DIM, VERTS_PER_SIDE, HEIGHT_BIAS/STEP,
+                       # DETAIL_*, HILLS_*, RIVER_* 상수 (베이크 단계 튜닝)
     context.rs         # BakeContext — 전역 → 타일 샘플링 캐시
     heightmap.rs       # 65×65 heightmap 샘플 + flow-aware 강 carve
     splatmap.rs        # 64×64 V2 splatmap (priority ladder)
     river_field.rs     # RFD1 (River Field Data v1; surfaceY + flowDir) 바이너리 (강 셰이더 입력)
-    bridges.rs         # bridge deck rectangle flatten
+    river_geom.rs      # 공유 width/taper/fan-arc 계산 (heightmap·splatmap·
+                       # bridges·river_field 가 모두 같은 폭 공식을 보도록)
+    bridges.rs         # bridge deck rectangle flatten + 모델 선택 (stone vs wood_long)
     settlement_flatten.rs # 정착지 영역 평탄화
 ```
 
@@ -107,6 +111,9 @@ shared/src/worldgen/
 스플랫맵·heightmap 이 각각 독립한 한 페이즈가 되어 단일 파일이 비대해졌고,
 정점/픽셀 루프 비용 분석을 모듈별로 가능하게 하려는 의도. RFD1 출력은
 `river_field.rs` 가 단독 책임 — [RIVER_SYSTEM.md](RIVER_SYSTEM.md) 참조.
+강 폭/테이퍼/델타 fan 공식은 `river_geom.rs` 가 단일 소스 — 같은 vertex 에 대해
+heightmap carve, splatmap sand band, bridge 모델 선택, RFD1 surface 가 동일한
+값을 보장한다.
 
 ## 5. 오프라인 도구: `tools/terrain-gen`
 
@@ -116,35 +123,57 @@ Rust 바이너리 crate (워크스페이스 새 멤버). `shared::worldgen`에
 ### 5.1 명령 구조
 
 ```
-terrain-gen preview  --seed <N> [--config <toml>]
-terrain-gen bake     --seed <N> [--config <toml>] --out <dir>
+terrain-gen preview      --seed <N>             [--out <dir>]
+terrain-gen bake         --seed <N> --out <dir> [--region-{x,z}-{min,max} <i>]
+terrain-gen inspect-tile --seed <N> --tile-x <TX> --tile-z <TZ>
+terrain-gen probe-point  --seed <N> --at <X,Z>  [--at <X,Z> ...]
 ```
 
 - `preview`: 전역 맵만 생성하고 PNG 여러 장 출력 (elevation, biome,
-  rivers overlay, settlements + roads). 수초 내 완료. 반복 튜닝용.
-- `bake`: 전역 맵 + 모든 262,144개 타일 파일을 `data/terrain/` 포맷에
-  맞춰 디스크에 쓴다. 수 분~ 수십 분. 타일 수가 많으므로 rayon 병렬화.
+  rivers overlay, settlements + roads, coasts). 수초 내 완료. 반복 튜닝용.
+- `bake`: 전역 맵 + 지정 region 범위 내 타일 파일을 `data/terrain/` 포맷에
+  맞춰 디스크에 쓴다. 디폴트 region 범위 (`-16..=15` X/Z) 는 32 km 월드
+  전체 = 32×32 regions × 256 tiles = **262,144 tiles**. 수 분~ 수십 분
+  걸리며 rayon 병렬화. bake 끝에서 같은 `--out` 아래 `worldgen_preview/`
+  도 함께 쓴다.
+- `inspect-tile` / `probe-point`: 디버깅 (§12.3 참조).
 
-### 5.2 config 파일
+### 5.2 config / 파라미터 노출
 
-`WorldGenConfig`를 TOML로 수정 가능하게 한다. 시드 튜닝 시 코드 리빌드
-없이 파라미터 조정. 기본값은 코드 상수.
+`WorldGenConfig` 자체는 `serde` 직렬화 가능하지만, 현재 CLI 에 TOML 로더는
+없다. 튜닝 표면은 두 곳:
+
+1. **CLI 플래그** (`GenArgs` in `tools/terrain-gen/src/main.rs`) — seed,
+   해상도, 대륙 fBm, 침식 sim_res, 정착지/강 mouth 등 자주 만지는 값만
+   노출. 나머지 필드는 `WorldGenConfig::default()` 값.
+2. **`shared/src/worldgen/config.rs` defaults + `tile_bake/constants.rs`**
+   — Phase 3b 의 plain band, 침식 상수, 베이크 단계 detail/hills/river
+   튜닝은 코드 상수. 변경 시 리빌드.
 
 ### 5.3 출력물
 
-**Preview 모드** (`preview_out/<seed>/`):
-- `elevation.png` — grayscale, 4096² (해수면 0 기준 명도 매핑)
-- `biome.png` — RGB (바다/해안/평야/숲/산 색상)
-- `rivers.png` — elevation에 하천 polyline overlay
-- `settlements.png` — biome에 정착지 점 + 도로 overlay
-- `meta.json` — 사용된 config, 관측 통계 (실제 sea_ratio, 마을 수 등)
+**Preview 모드** (`preview_out/<seed_hex>/`):
+- `01_potential.png` — Phase 1 continent potential field
+- `01_land_sea.png`, `01_land_sea_shifted.png` — land mask + X-wrap 검증
+- `02_elevation.png`, `02_elevation_hypso.png` — grayscale + 색상 매핑
+- `03_rivers.png` — hypso 위 하천 polyline overlay
+- `04_settlements.png` — 정착지 라벨 overlay
+- `05_roads.png` — 도로망 overlay
+- `06_coasts.png` — 추출된 coast polyline overlay
+- `meta.json` — 사용된 config 요약, 관측 통계 (실제 sea_ratio, 마을 수 등)
 
-**Bake 모드** (`data/terrain/` 또는 지정 경로):
+**Bake 모드** (`data/terrain/` 또는 지정 경로) — 팔레트는 전역
+(`shared/palette.json`) 이므로 per-region meta 파일은 없다:
 - `height/r±xx_±zz/h_±xxxxx_±zzzzz.bin` — uint16 65×65
 - `splat/r±xx_±zz/s_±xxxxx_±zzzzz.bin` — 64×64×4 bytes (V2)
-- `meta/r±xx_±zz.json` — 팔레트 (리전의 biome 구성에 따라 자동 결정)
+- `river-field/r±xx_±zz/r_±xxxxx_±zzzzz.bin` — RFD1 (강 있는 타일만)
+- `trees/r±xx_±zz/t_±xxxxx_±zzzzz.bin` — Phase 8 tree V1
+- `grass/r±xx_±zz/g_±xxxxx_±zzzzz.bin` — Phase 8 grass V3
+- `minimap/m_r±xx_±zz.png` — region 단위 minimap (1 px = 1 splat cell)
+- `objects/r±xx_±zz.json` — region 단위 오브젝트 목록 (현재 bridge placements)
 - `worldgen.json` — 시드, config, 정착지/도로 목록 (게임 서버가
   로드할 수 있도록)
+- `worldgen_preview/` — bake 중 같은 시드의 §5.3 preview PNG 도 함께 dump
 
 ## 6. 반복 워크플로우
 
@@ -174,23 +203,24 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
 - `--continents 3`, `--gap 120`, `--islands 15`
 - `--erosion-res 1024` (Phase 3 simulation grid; auto = `ceil(1.4 · sim_res)` iterations)
 - `--settlements 60`, `--settlement-spacing 70`
-- Region 범위: `x=[-4,+3] z=[-4,+3]` (8×8 regions = 16,384 tiles)
+- Region 범위: `x=[-16,+15] z=[-16,+15]` (32×32 regions = 262,144 tiles, 32 km 월드 전체)
 
-`WorldGenConfig` 기본값 외에, `worldgen.json`에 기록되지 않는 **코드 상수**도
-재현에 필요하다. 현 튜닝 값 (seed 42 기준, 저지대 부드럽게 + 고지대 구릉
-유지 타게팅):
+`WorldGenConfig` 기본값 외에, CLI 에 노출되지 않은 **코드 상수**도
+재현에 필요하다. seed 42 의 현재 튜닝 핵심 (저지대 부드럽게 + 해안 석호
+방지 + 강 추출 범위):
 
-| 위치 | 상수 | 현재 값 | 원본 | 효과 |
-|------|------|--------|------|------|
-| `elevation.rs` | `DETAIL_GAIN` | 0.29 | 0.5 | 고주파 octave 감쇠, 봉우리 위 잔물결 제거 |
-| `elevation.rs` | `smoothstep(0, 0.8, …)` base ramp | 0.8 | 0.4 | 해안→내륙 전환 완만화 |
-| `elevation.rs` | `box_blur_2d(dist_land, r=10)` | 신규 | — | Manhattan BFS ridge artifact 제거 |
-| `elevation.rs` | mountain `base_frac.powi(3)` | 3승 | 1승 | 저지대 산지 진폭 강하게 감쇠, 고지대 그대로 |
-| `tile_bake/constants.rs` | `HILLS_FREQUENCY` | 1/60 m | — | 모든 육지에 60m 파장 구릉 |
-| `tile_bake/constants.rs` | `HILLS_AMPLITUDE_M` | 5.0 | — | 구릉 ±2.5m (30m 거리에 ~5m 기복) |
-| `tile_bake/constants.rs` | `HILLS_OCTAVES`, `HILLS_GAIN` | 3, 0.5 | — | 60/30/15m 옥타브 |
-| `tile_bake/constants.rs` | `HILLS_COASTAL_FADE_M` | 3.0 | — | base=0~3m 구간 구릉 진폭 선형 페이드 → 해안 석호 방지 |
-| `tools/terrain-gen` | `min_peak` 배율 | 0.3 | 0.4 | Phase 4 river peak 후보 확장 (~324 polylines) |
+| 위치 | 상수 | 현재 값 | 효과 |
+|------|------|--------|------|
+| `config.rs` (default) | `plain_band_pivot_m` / `plain_band_power` | 1200 m / 15.0 | Phase 3b 깊은 평지 압축 — 1200 m 미만 표고는 강한 power curve 로 0 쪽으로 끌어내려 플레이어가 걷는 평지 면적 확대. 1200 m 위 산악은 그대로. |
+| `config.rs` (default) | `lowland_expansion_power` | 1.4 | post-erosion 표고에 `(h/peak)^p` 적용, 저지대 면적 추가 확장. |
+| `config.rs` (default) | `min_land_height_m` / 노이즈 | 1.0 m, ±0.25 m | 강 surfaceY (0.5 m) 위로 육지 floor 유지 → 강 메시 depth-fade 가 자연 둑에서 종료. |
+| `config.rs` (default) | `coast_beach_max_height_m` / `_distance_cells` | 0.1 m / 12 | 해안 12 cell (~96 m) 동안 자연 표고에서 0.1 m 로 ramp. `coast_cliff_fraction = 0.2` 만큼 절벽 유지. |
+| `tile_bake/constants.rs` | `DETAIL_GAIN`, `DETAIL_FREQUENCY` | 0.5, 1/16 m | 베이크 단계 detail noise — 4 옥타브로 1 m vertex 간격까지 도달. |
+| `tile_bake/constants.rs` | `HILLS_FREQUENCY` / `HILLS_AMPLITUDE_M` | 1/60 m / 5.0 | 모든 육지에 60 m 파장, ±2.5 m 구릉. Phase 3 의 24 m brush 가 60 m feature 를 평탄화하므로 베이크 단계에서 추가. |
+| `tile_bake/constants.rs` | `HILLS_OCTAVES`, `HILLS_GAIN` | 3, 0.5 | 60 / 30 / 15 m 옥타브. |
+| `tile_bake/constants.rs` | `HILLS_COASTAL_FADE_M`, `DETAIL_COAST_DAMP` | 3.0 m, 0.5 | base=0..3 m 구간 hills/detail 진폭 페이드 — 해안 석호 방지. |
+| `rivers.rs` | `RIVER_PEAK_ELEVATION_FRAC` | 0.3 | Phase 4 river peak 후보 = `max_elevation_m × 0.3` 이상. |
+| `tile_bake/constants.rs` | `RIVER_MOUTH_FAN_ARC_CELLS` / `RIVER_DELTA_BUFFER_ARC_CELLS` | 8.5 / 14.0 | mouth distributary fan 범위와, bridge/A* 가 강을 건너야 할 upstream buffer. 후자가 넓어야 다리가 fan apex 위쪽에서 강을 가로지름. |
 
 재현 불가능한 요소는 없음 — 동일 커맨드 + 동일 코드에서 동일 바이트가
 나온다 (seed 파생 규칙은 §9). 결과 요약은 `data/terrain/worldgen.json`의
@@ -296,17 +326,20 @@ cargo run -p terrain-gen --release -- bake --seed 42 --out data/terrain
 
 ### 12.1 베이크 출력물
 
-`bake` 명령은 region 범위 내 타일마다 다음을 쓴다:
+`bake` 명령은 region 범위 내 타일마다 다음을 쓴다 (팔레트는 전역
+`shared/palette.json` 이라 per-region meta 파일 없음):
 
 ```
 data/terrain/
-  height/r±xx_±zz/h_±xxxxx_±zzzzz.bin   # 65×65 uint16
-  splat/r±xx_±zz/s_±xxxxx_±zzzzz.bin    # 64×64×4 (V2)
-  rivers/r±xx_±zz/r_±xxxxx_±zzzzz.bin   # RFD1 (강 있는 타일만)
-  trees/r±xx_±zz/t_±xxxxx_±zzzzz.bin    # V1
-  grass/r±xx_±zz/g_±xxxxx_±zzzzz.bin    # V3
-  meta/r±xx_±zz.json                    # 팔레트 (region 단위)
-  worldgen.json                         # seed/config/settlements/roads
+  height/r±xx_±zz/h_±xxxxx_±zzzzz.bin       # 65×65 uint16
+  splat/r±xx_±zz/s_±xxxxx_±zzzzz.bin        # 64×64×4 (V2)
+  river-field/r±xx_±zz/r_±xxxxx_±zzzzz.bin  # RFD1 (강 있는 타일만)
+  trees/r±xx_±zz/t_±xxxxx_±zzzzz.bin        # V1
+  grass/r±xx_±zz/g_±xxxxx_±zzzzz.bin        # V3
+  minimap/m_r±xx_±zz.png                    # region 단위 minimap (1 px = 1 cell)
+  objects/r±xx_±zz.json                     # region 단위 오브젝트 (현재 bridges)
+  worldgen.json                             # seed/config/settlements/roads
+  worldgen_preview/                         # §5.3 preview PNGs 의 dump
 ```
 
 ### 12.2 Preview 출력물
@@ -321,6 +354,10 @@ preview_out/<seed>/
 
 ### 12.3 디버깅 도구
 
-`terrain-gen inspect-tile --seed N --tile-x TX --tile-z TZ` — 지정 타일에
-영향을 주는 강 segment 들을 텍스트로 덤프. `naturalize_river_meanders` /
-`remove_polyline_self_overlaps` 출력 검증용.
+- `terrain-gen inspect-tile --seed N --tile-x TX --tile-z TZ` — 지정 타일에
+  영향을 주는 강 segment 들을 텍스트로 덤프. `naturalize_river_meanders` /
+  `remove_polyline_self_overlaps` 출력 검증용.
+- `terrain-gen probe-point --seed N --at X,Z [--at X,Z ...]` — 지정 world
+  좌표에서 자연 표고, 가장 가까운 강 segment 파라미터 (t, 폭, flow_norm),
+  carve 후 표고를 분해 출력. 강 carve depth/width 회귀 시 한 점을 picking
+  해 검증하는 용도. `--at` 를 반복해 여러 점을 한 번에 probe.

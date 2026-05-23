@@ -39,11 +39,11 @@ WebGPU TSL(Three.js Shading Language) 노드 기반 커스텀 셰이더.
 *   3개의 Gerstner Wave를 합산하여 수면의 물리적 파동을 시뮬레이션한다.
 *   Gerstner Wave는 사인파와 달리 파봉이 뾰족하고 파곡이 넓은 자연스러운 해양 파동을 생성한다.
 *   타일 경계 이음새 방지를 위해 Y축(수직) 변위만 적용한다 (X/Z 이동 없음).
-*   파라미터 (방향, 회전속도, Steepness, Wavelength):
-    *   Wave A: 랜덤 초기각, 0.0013 rad/s, 0.06, 20m
-    *   Wave B: 랜덤 초기각, 0.0021 rad/s, 0.04, 14m
-    *   Wave C: 랜덤 초기각, 0.0009 rad/s, 0.03, 9m
-*   파동 방향은 시간에 따라 천천히 회전하며(angle + elapsed × speed), 모듈 레벨에서 공유되어 모든 타일이 동일한 방향을 사용한다.
+*   파라미터 (Angle, Steepness, Wavelength), `client/src/lib/shaders/water-types.ts::waveConfigs`:
+    *   Wave A: 세션당 랜덤 각, 0.06, 20m
+    *   Wave B: 세션당 랜덤 각, 0.04, 14m
+    *   Wave C: 세션당 랜덤 각, 0.03, 9m
+*   파동 방향은 **시간에 따라 회전하지 않는다**. Gerstner 위상 `k · dot(d, p.xz)` 에서 `d(t)` 의 시간 미분이 좌표 크기 `|p|` 에 비례한 위상속도를 만들어, 월드 원점에서 멀어질수록 파동이 "발작하듯" 빠르게 진동하는 버그가 있었다. 바람 시프트가 필요하면 direction 회전이 아니라 phase uniform 으로 적용해야 한다. 모듈 레벨 공유로 모든 타일이 동일한 각을 쓴다.
 *   **얕은 물 감쇠**: 하이트맵에서 수심을 샘플링하여 depth 0~1.5 범위에서 smoothstep으로 파동을 감쇠시킨다.
 *   **해석적 노멀 계산**: `gerstnerNormal()` TSL 함수가 각 파동의 편미분(tangent/bitangent)을 반환하여 분석적으로 표면 노멀을 합산한다.
 
@@ -60,7 +60,7 @@ WebGPU TSL(Three.js Shading Language) 노드 기반 커스텀 셰이더.
 3.  **표면 노멀:** Gerstner 해석적 노멀(대형 파동)과 노멀맵 리플(세밀 요철)을 합산한다. 노멀맵은 3방향으로 파동 방향/위상 속도에 맞춰 UV를 이동하며 샘플링한다.
 4.  **굴절:** 화면 UV를 표면 노멀 XZ로 왜곡(강도 0.04)하여 굴절 텍스처를 샘플링한다. Y-flip으로 WebGPU 렌더 타겟 좌표 보정. depthFactor 0~0.25 범위에서 70% 혼합, 깊은 곳에서 페이드.
 5.  **야간 색상 감쇠:** 태양 고도에 따라 waterColor에 0.15~1.0 승수를 적용하여 밤에 어두운 물색을 유지한다.
-6.  **수중 코스틱스(Caustics):** 초기화 시 한 번 생성한 정적 보로노이 텍스처를 셰이더에서 시간에 따라 UV를 이동시켜 2개 레이어로 샘플링, min 합성하여 애니메이션한다. 거품 텍스처를 디테일로 곱하고, 쉬머(shimmer) 효과로 반짝임을 추가한다. depthFactor 0.05~0.25에서 게이트되어 극얕은 곳에서는 보이지 않음. 밤에는 dim blue-grey 색조로 전환.
+6.  **수중 코스틱스(Caustics):** 사전 베이크된 256×256 Voronoi distance-field PNG (`/textures/caustics.png`) 를 로드해, 셰이더에서 시간에 따라 UV를 이동시켜 2개 레이어로 샘플링하고 min 합성하여 애니메이션한다. 거품 텍스처를 디테일로 곱하고, 쉬머(shimmer) 효과로 반짝임을 추가한다. depthFactor 0.05~0.25에서 게이트되어 극얕은 곳에서는 보이지 않음. 밤에는 dim blue-grey 색조로 전환.
 7.  **스페큘러 + 스파클:**
     *   Blinn-Phong 스페큘러(power 128): 부드러운 노멀(`mix(up, surfaceN, 0.3)`)로 넓은 반사.
     *   노멀맵(waternormals.jpg) 기반 스파클: 2-레이어 샘플링, 파봉(wave crest)에서 강화.
@@ -105,23 +105,26 @@ WebGPU TSL(Three.js Shading Language) 노드 기반 커스텀 셰이더.
     *   극얕은(0~0.08): 0.05 → 얕은(0.08~0.35): 0.35 → 깊은: 0.97.
     *   거품(×0.9) 및 스파클로 부스트 (최대 1.0).
     *   `holeAlpha`와 `holeFoamFringe`의 max로 해안 구멍 가장자리 처리.
+18. **강 outlet 거품 억제 (River foam gate):** 스플랫맵의 G 채널
+    (`tile_bake/splatmap.rs` 에서 강 중심선 기준 `RIVER_FOAM_SUPPRESS_RADIUS_M
+    = 30 m` 까지 0→1 로 ramp 인코딩) 을 `riverFoamGate` 로 사용. 제곱
+    감쇠해 강 mouth 근처에서 caustics·shore foam·foam band·wet sand·hole
+    foam fringe 가 모두 흐려진다. 강 셰이더([RIVER_SYSTEM.md](RIVER_SYSTEM.md))
+    의 distributary 가 바다와 만나는 지점에서 해변 거품 fringe 가 강 위로
+    번져 보이는 것을 막기 위해 도입.
 
-## 4. 절차적 텍스처 생성
+## 4. 텍스처 자산
 
-렌더링에 필요한 텍스처 중 일부는 런타임에 절차적으로 생성한다.
+물 셰이더에 들어가는 보조 텍스처는 모두 디스크 PNG/JPG 로 사전 베이크되어
+있다 (절차적 런타임 생성 없음 — 결정론적이라 한 번 굽고 정적 자산으로
+배포).
 
-| 텍스처 | 해상도 | 생성 방식 | 파일 |
-|--------|--------|-----------|------|
-| 코스틱스 | 256×256 | 128셀 보로노이 거리 필드, `pow(d, 2.5)` 샤프닝 | `caustics-gen.ts` |
-
-외부 텍스처(파일에서 로드):
-
-| 텍스처 | 용도 | 파일 |
-|--------|------|------|
-| 노멀맵 | 리플 노멀 + 스파클 패턴 (three.js 예제에서 가져옴) | `client/public/textures/waternormals.jpg` |
-| 거품(foam) | 해안 거품 패턴 + 코스틱스 디테일 (원본을 흑백 변환 후 min-max 스트레치 적용) | `client/public/textures/13843.png` |
-
-파일: `client/src/lib/shaders/water-foam-gen.ts`
+| 텍스처 | 해상도 | 생성 방식 | 경로 / 로더 |
+|--------|--------|-----------|-------------|
+| 코스틱스 | 256×256 | 128셀 보로노이 거리 필드, `pow(d, 2.5)` 샤프닝 (사전 베이크) | `client/public/textures/caustics.png` (로더: `caustics-gen.ts::loadCausticsTexture`) |
+| 노멀맵 | — | three.js 예제 자산 (리플 노멀 + 스파클 패턴) | `client/public/textures/waternormals.jpg` |
+| 거품(foam) | — | 해안 거품 패턴 + 코스틱스 디테일 (원본을 흑백 변환 후 min-max 스트레치 적용) | `client/public/textures/13843.png` (로더: `water-foam-gen.ts`) |
+| 클라우드 | — | 하늘 반사용 구름 사진 (`doc/ASSETS.md` 참조, non-tileable) | `client/public/textures/white-cloud.jpg` (로더: `water-types.ts::loadCloudTexture`) |
 
 ## 5. 타일 관리
 
@@ -136,9 +139,10 @@ WebGPU TSL(Three.js Shading Language) 노드 기반 커스텀 셰이더.
 | 파일 | 역할 |
 |------|------|
 | `client/src/lib/shaders/water-material.ts` | 물 셰이더 (Gerstner + 프래그먼트 전체) |
-| `client/src/lib/shaders/water-normal-gen.ts` | 절차적 노멀맵 생성 |
+| `client/src/lib/shaders/water-types.ts` | 공통 타입, `waveConfigs`, `toHeightmapUV` half-texel inset, 구름 텍스처 로더 |
+| `client/src/lib/shaders/water-normal-gen.ts` | 노멀맵 로더/처리 |
 | `client/src/lib/shaders/water-foam-gen.ts` | 거품/수면 텍스처 로더 |
-| `client/src/lib/shaders/caustics-gen.ts` | 절차적 코스틱스 텍스처 생성 |
+| `client/src/lib/shaders/caustics-gen.ts` | 사전 베이크된 caustics PNG 로더 |
 | `client/src/lib/components/WaterTile.svelte` | 물 타일 컴포넌트 (머티리얼 생성·유니폼 갱신) |
 | `client/src/lib/components/game-scene/GameSceneWaterLayer.svelte` | 물 타일 관리 레이어 |
 | `client/src/lib/managers/refractionRenderManager.ts` | 굴절 렌더 패스 |
