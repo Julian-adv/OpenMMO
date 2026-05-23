@@ -12,8 +12,8 @@ use super::super::global_map::GlobalMap;
 use super::super::grid::{fold_x_delta_f32, MinF32};
 use super::super::rivers::RiverMap;
 use super::super::tile_bake::river_geom::{
-    flow_log_inv, is_delta_cell, polyline_arc_lengths_cells, predicted_visible_width,
-    BRIDGE_MAX_VISIBLE_WIDTH_M,
+    flow_log_inv, polyline_arcs, predicted_visible_width, BRIDGE_MAX_VISIBLE_WIDTH_M,
+    RIVER_DELTA_BUFFER_ARC_CELLS,
 };
 use super::axis::{pick_river_axis, step_axis, SnapAxis};
 
@@ -111,19 +111,14 @@ impl RiverField {
         let res_f = res as f32;
         let inv_log_max = flow_log_inv(river_map.max_flow());
 
-        for poly in &river_map.rivers {
+        for (poly_idx, poly) in river_map.rivers.iter().enumerate() {
+            let Some(arcs) = polyline_arcs(poly, map, poly_idx) else {
+                continue;
+            };
             let pts = &poly.points;
             let n = pts.len();
-            if n < 2 {
-                continue;
-            }
-            let lens = polyline_arc_lengths_cells(pts, res_f);
-            let total_arc = *lens.last().unwrap();
-            let (end_x, end_y) = pts[n - 1];
-            let mouth_in_sea = map.land_mask[(end_y as usize) * res + (end_x as usize)] == 0;
 
-            for i in 0..n {
-                let (x, y) = pts[i];
+            for (i, &(x, y)) in pts.iter().enumerate() {
                 let idx = (y as usize) * res + (x as usize);
                 let prev = if i == 0 { pts[i] } else { pts[i - 1] };
                 let next = if i + 1 >= n { pts[i] } else { pts[i + 1] };
@@ -135,7 +130,11 @@ impl RiverField {
 
                 // Multiple polylines can touch the same cell; widen-wins
                 // so the wide flag survives a narrower polyline overwrite.
-                let is_wide = is_delta_cell(mouth_in_sea, total_arc - lens[i])
+                // The buffer (wider than the fan apex) keeps A* detoured
+                // past the visible distributary fan, not just past apex.
+                let in_buffer =
+                    arcs.mouth_in_sea && arcs.arc_to_mouth(i) < RIVER_DELTA_BUFFER_ARC_CELLS;
+                let is_wide = in_buffer
                     || predicted_visible_width(poly.flow[i], inv_log_max)
                         > BRIDGE_MAX_VISIBLE_WIDTH_M;
                 let new_mark = if is_wide { MASK_WIDE } else { MASK_RIVER };

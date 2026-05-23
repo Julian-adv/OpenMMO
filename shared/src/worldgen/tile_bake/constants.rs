@@ -104,6 +104,12 @@ pub(super) const RIVER_FAN_SAND_FADE_M: f32 = 3.0;
 /// mouth). The original river is kept up to this apex, then the baker
 /// replaces the sea-bound tail with several narrow S-curved branches.
 pub const RIVER_MOUTH_FAN_ARC_CELLS: f32 = 8.5;
+/// Bridge / road avoidance buffer (cells of arc-length back from a sea
+/// mouth). Larger than [`RIVER_MOUTH_FAN_ARC_CELLS`] so the chosen crossing
+/// lands a few cells UPSTREAM of where the distributary fan starts, not at
+/// the polyline apex. The narrower fan constant still drives branch
+/// generation and settlement habitability.
+pub const RIVER_DELTA_BUFFER_ARC_CELLS: f32 = 14.0;
 /// Fan scale used for road A* avoidance and tile river margins around
 /// delta mouths, and also to size the distributary endpoint spread
 /// (`RIVER_MOUTH_BRANCH_SPREAD_M`). Bake polylines themselves are no

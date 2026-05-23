@@ -314,9 +314,11 @@ fn branch_aware_taper(natural_taper: f32, bed_floor: f32) -> f32 {
 /// Natural reaches use `RIVER_CARVE_TAPER_MIN + flow_norm × EXTRA`; segments
 /// whose `segment_bed_floor` dips sub-sea (i.e. distributary branches) lerp
 /// toward the steeper `RIVER_MOUTH_BRANCH_TAPER_M` so the bank cut matches
-/// what the heightmap actually carves. Bridge placement reads this as the
-/// half-width that the river renderer's depth-fade contour occupies —
-/// visible water spans `width + 2 × taper`.
+/// what the heightmap actually carves. The full surface→bed collapse
+/// envelope is `half_width + taper` on each side, but the smoothstep in
+/// `river_field::compute_pixel` puts the *visible* water boundary near
+/// `half_width + 0.5·taper`, so bridge placement uses `width + taper`
+/// as the visible-water span.
 #[inline]
 pub(super) fn segment_carve_taper_at(seg: &RiverSegment, t: f32) -> f32 {
     let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);

@@ -1,47 +1,42 @@
 //! Shared river-width derivation: flow → baked width, plus the mouth-fan
-//! curve used by the renderer/per-pixel width math. Note that bake-time
-//! polylines are NOT widened by the fan factor — the tile baker splits each
-//! mouth into distributary branches instead
-//! (`context::apply_mouth_distributaries`). The road-A* / settlement
-//! "wide-river" gate therefore flags the delta region (within
-//! `RIVER_MOUTH_FAN_ARC_CELLS` of a sea-bound mouth) directly as impassable,
-//! and elsewhere predicts visible width from the natural polyline width
-//! without folding the fan back in.
+//! curve used by the renderer/per-pixel width math. Bake-time polylines are
+//! NOT widened by the fan factor — the tile baker splits each mouth into
+//! distributary branches instead (`context::apply_mouth_distributaries`).
+//! Two delta thresholds split this concept:
+//! [`RIVER_MOUTH_FAN_ARC_CELLS`] gates branch generation and settlement
+//! habitability (so port towns sit just above the apex);
+//! [`RIVER_DELTA_BUFFER_ARC_CELLS`] gates road A* and bridge placement so
+//! the chosen crossing lands upstream of the visible fan.
 
 use super::super::global_map::GlobalMap;
 use super::super::grid::fold_x_delta_f32;
-use super::super::rivers::RiverMap;
+use super::super::rivers::{Polyline, RiverMap};
 use super::constants::{
     RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M,
     RIVER_MOUTH_FAN_EXTRA, RIVER_MOUTH_FAN_SHARPNESS,
 };
 
-pub use super::constants::RIVER_MOUTH_FAN_ARC_CELLS;
+pub use super::constants::{RIVER_DELTA_BUFFER_ARC_CELLS, RIVER_MOUTH_FAN_ARC_CELLS};
 
-/// Hard cap (visible water meters — `baked_width + 2 × carve_taper`) above
+/// Hard cap (visible water meters — `baked_width + carve_taper`) above
 /// which no bridge is placed and road A* refuses to cross. Matches the wide
 /// bridge model's deck length so the deck ends always land on solid bank
 /// past the river's depth-fade contour.
 pub const BRIDGE_MAX_VISIBLE_WIDTH_M: f32 = 28.0;
 
 /// Predicted visible water width (m) at a river vertex: baked channel width
-/// plus 2× the natural-reach carve taper that grows with `flow_norm`. Tracks
-/// per-vertex flow so a medium river at `flow_norm ≈ 0.5` reads as ~18 m
-/// visible instead of the worst-case ~28 m the old constant-threshold gate
-/// assumed — that conservatism over-detoured every fork above ~78 % flow,
-/// including ordinary inland rivers a wide bridge can clearly span.
+/// plus the natural-reach carve taper that grows with `flow_norm`. The
+/// taper is added once (not 2×) because the `river_field` shader's
+/// surface→bed smoothstep puts the *visible* water boundary near
+/// `half_width + 0.5·taper` on each side, not at the alpha-zero contour
+/// `half_width + taper`. At max flow this reads ~20 m visible.
 ///
-/// Note this **ignores the mouth-fan multiplier**: bake-time replaces the
-/// post-apex tail of every sea-bound river with several narrower
-/// distributary branches (see `context::apply_mouth_distributaries`), so
-/// the wide single-channel envelope `mouth_fan_factor` describes never
-/// actually gets carved. Folding the fan into this gate over-detours roads
-/// around every delta mouth even though each distributary stays narrower
-/// than the bridge model can span.
-///
-/// Distributary branches use the steeper but shorter
-/// [`RIVER_MOUTH_BRANCH_TAPER_M`] (5 m fixed) than this natural formula
-/// gives, so for branches this remains an upper bound; bake-time
+/// Ignores the mouth-fan multiplier: bake-time replaces the post-apex tail
+/// with narrower distributary branches (see
+/// `context::apply_mouth_distributaries`), so the wide single-channel
+/// envelope `mouth_fan_factor` describes never actually gets carved.
+/// Distributary branches use the shorter [`RIVER_MOUTH_BRANCH_TAPER_M`]
+/// (5 m fixed); for branches this remains an upper bound and bake-time
 /// `segment_carve_taper_at` resolves the true width when the bridge is
 /// placed.
 #[inline]
@@ -53,7 +48,7 @@ pub fn predicted_visible_width(raw_flow: f32, inv_log_max: f32) -> f32 {
     };
     let baked = RIVER_MIN_WIDTH_M + (RIVER_MAX_WIDTH_M - RIVER_MIN_WIDTH_M) * norm;
     let taper = RIVER_CARVE_TAPER_MIN_M + RIVER_CARVE_TAPER_EXTRA_M * norm;
-    baked + 2.0 * taper
+    baked + taper
 }
 
 // Pre-folded mouth-fan curve coefficients. `s(t) = (1/(k·t+1) - 1/(1+k)) · (1+k)/k`
@@ -98,39 +93,28 @@ pub fn mouth_fan_factor(t: f32) -> f32 {
 }
 
 /// Per-cell boolean mask: `true` where any river polyline vertex would
-/// either (a) sit in the post-apex delta region of a sea-bound mouth, where
+/// either (a) sit in the post-apex delta region of a sea-bound mouth (where
 /// `apply_mouth_distributaries` replaces the natural channel with several
-/// branches a single bridge can't span coherently, or (b) carry a predicted
-/// visible width above [`BRIDGE_MAX_VISIBLE_WIDTH_M`] on a non-delta reach.
-/// Mirrors the gate road A* applies in
-/// [`crate::worldgen::roads::astar::RiverField`] — both consumers (road
-/// pathing and settlement placement) want the same definition of "can't
-/// drop a bridge here, must detour upstream".
+/// branches a single bridge can't span), or (b) carry a predicted visible
+/// width above [`BRIDGE_MAX_VISIBLE_WIDTH_M`] on a non-delta reach. Used
+/// by settlement habitability — the narrow [`RIVER_MOUTH_FAN_ARC_CELLS`]
+/// gate lets port towns sit just above the apex.
 pub fn wide_river_cell_mask(map: &GlobalMap, river_map: &RiverMap) -> Vec<bool> {
     let res = map.config.global_res as usize;
-    let total = res * res;
-    let mut out = vec![false; total];
-    let res_f = res as f32;
+    let mut out = vec![false; res * res];
     let inv_log_max = flow_log_inv(river_map.max_flow());
 
-    for poly in &river_map.rivers {
-        let pts = &poly.points;
-        let n = pts.len();
-        if n < 2 {
+    for (poly_idx, poly) in river_map.rivers.iter().enumerate() {
+        let Some(arcs) = polyline_arcs(poly, map, poly_idx) else {
             continue;
-        }
-        let lens = polyline_arc_lengths_cells(pts, res_f);
-        let total_arc = *lens.last().unwrap();
-        let (end_x, end_y) = pts[n - 1];
-        let mouth_in_sea = map.land_mask[(end_y as usize) * res + (end_x as usize)] == 0;
-        for i in 0..n {
-            let (x, y) = pts[i];
-            let idx = (y as usize) * res + (x as usize);
-            if is_delta_cell(mouth_in_sea, total_arc - lens[i])
-                || predicted_visible_width(poly.flow[i], inv_log_max)
-                    > BRIDGE_MAX_VISIBLE_WIDTH_M
-            {
-                out[idx] = true;
+        };
+        for (i, &(x, y)) in poly.points.iter().enumerate() {
+            let in_fan = arcs.mouth_in_sea
+                && arcs.arc_to_mouth(i) < RIVER_MOUTH_FAN_ARC_CELLS;
+            let too_wide = predicted_visible_width(poly.flow[i], inv_log_max)
+                > BRIDGE_MAX_VISIBLE_WIDTH_M;
+            if in_fan || too_wide {
+                out[(y as usize) * res + (x as usize)] = true;
             }
         }
     }
@@ -157,13 +141,48 @@ pub fn polyline_arc_lengths_cells(pts: &[(u32, u32)], res_f: f32) -> Vec<f32> {
     lens
 }
 
-/// `true` for vertices in the post-apex delta region of a sea-bound river
-/// — within [`RIVER_MOUTH_FAN_ARC_CELLS`] arc-cells of the sea mouth.
-/// Marks the same cells `context::apply_mouth_distributaries` would slice
-/// off the natural polyline and replace with narrower branches at bake time.
-/// Both gates use this so the road network detours upstream of the apex
-/// rather than threading the multi-branch delta directly.
-#[inline]
-pub fn is_delta_cell(mouth_in_sea: bool, arc_to_mouth_cells: f32) -> bool {
-    mouth_in_sea && arc_to_mouth_cells < RIVER_MOUTH_FAN_ARC_CELLS
+/// Per-polyline arc-length table + sea-mouth flag, computed once and
+/// reused by the three consumers that gate on delta arc-distance
+/// ([`wide_river_cell_mask`], `RiverField::from_river_map`,
+/// `detect_bridges`). Returned by [`polyline_arcs`].
+pub struct PolylineArcs {
+    pub lens: Vec<f32>,
+    pub total_arc: f32,
+    /// `true` when the polyline's downstream end sits on a sea cell — the
+    /// precondition for any delta gating. Inland tributaries get
+    /// `mouth_in_sea = false` and bypass the gates entirely.
+    pub mouth_in_sea: bool,
+    /// Index into `river_map.rivers`. Stored so callers building a lookup
+    /// table can `collect` straight into an indexed `Vec<Option<_>>`.
+    pub poly_idx: usize,
+}
+
+impl PolylineArcs {
+    /// Arc length from vertex `i` to the polyline's downstream end, in
+    /// global cells. Used to compare against
+    /// [`RIVER_MOUTH_FAN_ARC_CELLS`] or [`RIVER_DELTA_BUFFER_ARC_CELLS`].
+    #[inline]
+    pub fn arc_to_mouth(&self, i: usize) -> f32 {
+        self.total_arc - self.lens[i]
+    }
+}
+
+/// Build the arc-length table for one polyline plus its sea-mouth flag, or
+/// return `None` for polylines too short to meaningfully sample.
+pub fn polyline_arcs(poly: &Polyline, map: &GlobalMap, poly_idx: usize) -> Option<PolylineArcs> {
+    let n = poly.points.len();
+    if n < 2 {
+        return None;
+    }
+    let res = map.config.global_res as usize;
+    let (end_x, end_y) = poly.points[n - 1];
+    let mouth_in_sea = map.land_mask[(end_y as usize) * res + (end_x as usize)] == 0;
+    let lens = polyline_arc_lengths_cells(&poly.points, res as f32);
+    let total_arc = *lens.last().unwrap();
+    Some(PolylineArcs {
+        lens,
+        total_arc,
+        mouth_in_sea,
+        poly_idx,
+    })
 }

@@ -2,9 +2,10 @@
 //!
 //! Run after `roads::snap_crossings_to_grid`: every interior road cell that
 //! coincides with a river cell becomes one bridge. Visible water width at
-//! the crossing is `baked_width + 2 × segment_carve_taper_at(...)` — the
-//! same envelope `river_field::compute_pixel` uses to collapse surface→bed,
-//! so it matches the depth-fade contour the player sees. That width is
+//! the crossing is `baked_width + segment_carve_taper_at(...)` — the taper
+//! is added once because the `river_field::compute_pixel` smoothstep puts
+//! the *visible* water boundary near `half_width + 0.5·taper` per side,
+//! inside the alpha-zero contour `half_width + taper`. That width is
 //! compared against `BRIDGE_WIDE_RIBBON_M` to pick the wide
 //! (`bridge_wood_long`) vs the narrow (`stone_bridge`) model.
 //!
@@ -39,17 +40,18 @@ use super::super::vector_features::{nearest_river_segment, river_segments_near_t
 use super::constants::{TILE_DIM, VERTS_PER_SIDE};
 use super::context::BakeContext;
 use super::heightmap::{sample_natural_height_single, segment_carve_taper_at};
-use super::river_geom::BRIDGE_MAX_VISIBLE_WIDTH_M;
+use super::river_geom::{
+    polyline_arcs, PolylineArcs, BRIDGE_MAX_VISIBLE_WIDTH_M, RIVER_DELTA_BUFFER_ARC_CELLS,
+};
 use super::settlement_flatten::{flatten_height_at, SettlementFlatten};
 
-/// Width threshold (visible water meters — `width + 2 × carve_taper`)
-/// above which the wider `bridge_wood_long` is selected over the narrow
-/// `stone_bridge`. Tuned against the seed-42 world's river distribution
-/// (most crossings sit at visible 19–25 m; only a handful of distributary
-/// branches and headwater stubs fall below ~16 m), so the narrow model
-/// stays visible on the smallest crossings while every mature river gets
-/// the wide deck.
-const BRIDGE_WIDE_RIBBON_M: f32 = 16.0;
+/// Width threshold (visible water meters — `width + carve_taper`) above
+/// which the wider `bridge_wood_long` is selected over the narrow
+/// `stone_bridge`. Natural reaches sit at `4 + 16·flow_norm` m visible
+/// (max ~20 m at full flow). 12 m maps to `flow_norm ≈ 0.5`, so the upper
+/// half of the flow distribution lands on the wide model while headwater
+/// stubs and tapering distributary branches keep the narrow stone bridge.
+const BRIDGE_WIDE_RIBBON_M: f32 = 12.0;
 
 /// Smoothstep blend distance (m) past the rotated deck rect, matching the
 /// editor's `FLATTEN_BLEND_RADIUS = 2`.
@@ -226,6 +228,15 @@ pub fn detect_bridges(
         }
     }
 
+    // Arc table indexed by polyline; populated only for sea-bound polylines
+    // so the delta-buffer gate below is a single Option lookup per crossing.
+    let poly_arcs: Vec<Option<PolylineArcs>> = river_map
+        .rivers
+        .iter()
+        .enumerate()
+        .map(|(i, poly)| polyline_arcs(poly, map, i).filter(|a| a.mouth_in_sea))
+        .collect();
+
     let mpc = map_config.meters_per_cell();
     let half = map_config.world_size_m as f32 * 0.5;
     let cell_to_world = |cx: u32, cy: u32| -> (f32, f32) {
@@ -257,6 +268,18 @@ pub fn detect_bridges(
                 continue;
             }
 
+            // Skip bridges inside the sea-bound delta buffer. Road A* marks
+            // the same band MASK_WIDE so it only enters as start/goal, but
+            // when a river-mouth settlement lives on a delta cell that
+            // exemption would otherwise drop a bridge mid-distributary-fan.
+            // The settlement pad covers the river at that cell so the
+            // missing bridge leaves no visual gap.
+            if let Some(arcs) = &poly_arcs[river_idx as usize] {
+                if arcs.arc_to_mouth(river_pi as usize) < RIVER_DELTA_BUFFER_ARC_CELLS {
+                    continue;
+                }
+            }
+
             let (wx, wz) = cell_to_world(rx, ry);
 
             // River-aligned tangent. Read direction from the river polyline
@@ -279,19 +302,17 @@ pub fn detect_bridges(
                 wz + probe_margin,
                 0.0,
             );
-            // Visible water width = baked width + 2 × effective carve taper.
-            // The renderer's depth-fade collapses surface→bed at exactly
-            // that lateral envelope (see `river_field::compute_pixel`), so
-            // the bridge has to span from one fade edge to the other.
-            // Distributary branches carry a shorter taper than natural
-            // reaches; pulling the taper from the segment keeps both kinds
-            // measured by the same yardstick the player sees.
+            // Visible water width = baked + taper. See the module doc for
+            // why the taper enters once (smoothstep boundary, not
+            // alpha-zero contour). Branches carry a shorter taper than
+            // natural reaches; pulling it from the segment keeps both
+            // kinds measured by the same yardstick.
             let visible_width = match nearest_river_segment(wx, wz, &local_segs) {
                 Some((_, idx, t)) => {
                     let s = &local_segs[idx];
                     let baked = s.width_a + (s.width_b - s.width_a) * t;
                     let taper = segment_carve_taper_at(s, t);
-                    baked + 2.0 * taper
+                    baked + taper
                 }
                 None => continue,
             };
