@@ -124,18 +124,21 @@ Rust 바이너리 crate (워크스페이스 새 멤버). `shared::worldgen`에
 
 ```
 terrain-gen preview      --seed <N>             [--out <dir>]
-terrain-gen bake         --seed <N> --out <dir> [--region-{x,z}-{min,max} <i>]
+terrain-gen bake         --seed <N>             [--out <dir>] [--region-{x,z}-{min,max} <i>]
 terrain-gen inspect-tile --seed <N> --tile-x <TX> --tile-z <TZ>
 terrain-gen probe-point  --seed <N> --at <X,Z>  [--at <X,Z> ...]
 ```
 
 - `preview`: 전역 맵만 생성하고 PNG 여러 장 출력 (elevation, biome,
   rivers overlay, settlements + roads, coasts). 수초 내 완료. 반복 튜닝용.
+  `--out` 기본값은 `data/terrain/worldgen_preview` → 실제 PNG 는
+  `data/terrain/worldgen_preview/<seed-hex>/` 에 떨어진다.
 - `bake`: 전역 맵 + 지정 region 범위 내 타일 파일을 `data/terrain/` 포맷에
-  맞춰 디스크에 쓴다. 디폴트 region 범위 (`-16..=15` X/Z) 는 32 km 월드
-  전체 = 32×32 regions × 256 tiles = **262,144 tiles**. 수 분~ 수십 분
-  걸리며 rayon 병렬화. bake 끝에서 같은 `--out` 아래 `worldgen_preview/`
-  도 함께 쓴다.
+  맞춰 디스크에 쓴다. `--out` 기본값은 `data/terrain`. 디폴트 region 범위
+  (`-16..=15` X/Z) 는 32 km 월드 전체 = 32×32 regions × 256 tiles =
+  **262,144 tiles**. 수 분~ 수십 분 걸리며 rayon 병렬화. bake 끝에서 같은
+  `--out` 아래 `worldgen_preview/<seed-hex>/` 에도 preview PNG 를 함께
+  떨군다 (preview 명령과 동일 위치, 중복 방지).
 - `inspect-tile` / `probe-point`: 디버깅 (§12.3 참조).
 
 ### 5.2 config / 파라미터 노출
@@ -152,7 +155,8 @@ terrain-gen probe-point  --seed <N> --at <X,Z>  [--at <X,Z> ...]
 
 ### 5.3 출력물
 
-**Preview 모드** (`preview_out/<seed_hex>/`):
+**Preview 모드** (기본 `data/terrain/worldgen_preview/<seed_hex>/`,
+`--out <dir>` 지정 시 `<dir>/<seed_hex>/`):
 - `01_potential.png` — Phase 1 continent potential field
 - `01_land_sea.png`, `01_land_sea_shifted.png` — land mask + X-wrap 검증
 - `02_elevation.png`, `02_elevation_hypso.png` — grayscale + 색상 매핑
@@ -173,14 +177,15 @@ terrain-gen probe-point  --seed <N> --at <X,Z>  [--at <X,Z> ...]
 - `objects/r±xx_±zz.json` — region 단위 오브젝트 목록 (현재 bridge placements)
 - `worldgen.json` — 시드, config, 정착지/도로 목록 (게임 서버가
   로드할 수 있도록)
-- `worldgen_preview/` — bake 중 같은 시드의 §5.3 preview PNG 도 함께 dump
+- `worldgen_preview/<seed_hex>/` — bake 중 같은 시드의 §5.3 preview PNG 도 함께 dump (preview 명령의 기본 출력 경로와 동일)
 
 ## 6. 반복 워크플로우
 
 1. `terrain-gen preview --seed 12345` 실행.
-2. `preview_out/12345/*.png` 열어서 확인.
+2. `data/terrain/worldgen_preview/0000000000003039/*.png` (= seed 12345 hex)
+   열어서 확인.
 3. 마음에 안 들면 시드 바꾸거나 config 조정 → goto 1.
-4. 마음에 들면 `terrain-gen bake --seed 12345 --out data/terrain`.
+4. 마음에 들면 `terrain-gen bake --seed 12345` (`--out` 기본 `data/terrain`).
 5. 게임 실행. 기존 `TerrainIO`가 파일을 그대로 로드.
 
 preview는 수 초 안에 끝나야 반복 튜닝이 실용적임. 그래서 Phase 1-6은
@@ -339,13 +344,13 @@ data/terrain/
   minimap/m_r±xx_±zz.png                    # region 단위 minimap (1 px = 1 cell)
   objects/r±xx_±zz.json                     # region 단위 오브젝트 (현재 bridges)
   worldgen.json                             # seed/config/settlements/roads
-  worldgen_preview/                         # §5.3 preview PNGs 의 dump
+  worldgen_preview/<seed_hex>/              # §5.3 preview PNGs 의 dump (preview 명령과 동일 경로)
 ```
 
 ### 12.2 Preview 출력물
 
 ```
-preview_out/<seed>/
+data/terrain/worldgen_preview/<seed_hex>/     # 기본 위치 (--out 미지정 시)
   01_potential.png, 01_land_sea.png, 01_land_sea_shifted.png (X-wrap 검증)
   02_elevation.png, 02_elevation_hypso.png
   03_rivers.png, 04_settlements.png, 05_roads.png

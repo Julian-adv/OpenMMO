@@ -2,9 +2,14 @@
 //!
 //! Iterative workflow:
 //!   1. `terrain-gen preview --seed N`  — dump PNGs for visual inspection
+//!      (default `--out data/terrain/worldgen_preview` → files land in
+//!      `data/terrain/worldgen_preview/<seed-hex>/`)
 //!   2. tweak seed / config, repeat until satisfied
-//!   3. `terrain-gen bake --seed N --out <dir>` — write per-tile height &
-//!      splat files matching the runtime `TerrainIO` format.
+//!   3. `terrain-gen bake --seed N` — write per-tile height & splat files
+//!      matching the runtime `TerrainIO` format (default
+//!      `--out data/terrain`). Bake also re-emits the preview PNGs into the
+//!      same `worldgen_preview/<seed-hex>/` folder so a single source of
+//!      truth is kept across both commands.
 //!
 //! See `doc/TERRAIN_GENERATION.md` for the full design.
 
@@ -187,8 +192,9 @@ enum Cmd {
         #[command(flatten)]
         gen: GenArgs,
 
-        /// Output directory. A sub-folder named after the seed is created inside.
-        #[arg(long, default_value = "preview_out")]
+        /// Output root. A sub-folder named after the seed is created inside,
+        /// so the default puts PNGs at `data/terrain/worldgen_preview/<seed-hex>/`.
+        #[arg(long, default_value = "data/terrain/worldgen_preview")]
         out: PathBuf,
     },
 
@@ -201,9 +207,11 @@ enum Cmd {
         gen: GenArgs,
 
         /// Output directory (written directly: `out/height/…`, `out/splat/…`,
-        /// `out/meta/…`, `out/worldgen.json`). No seed subfolder so the
-        /// layout matches what the runtime `TerrainIO` expects.
-        #[arg(long)]
+        /// `out/worldgen.json`, …). No seed subfolder so the layout matches
+        /// what the runtime `TerrainIO` expects. PNG previews are emitted
+        /// under `out/worldgen_preview/<seed-hex>/`, matching the `preview`
+        /// command's default location.
+        #[arg(long, default_value = "data/terrain")]
         out: PathBuf,
 
         /// Minimum region X (inclusive). Region = 16 tiles = 1024 m at 64 m/tile.

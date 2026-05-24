@@ -432,7 +432,9 @@ pub fn run(
     std::fs::write(&wpath, serde_json::to_string_pretty(&worldgen_json)?)
         .with_context(|| format!("write {}", wpath.display()))?;
 
-    let preview_dir = out.join("worldgen_preview");
+    let preview_dir = out
+        .join("worldgen_preview")
+        .join(crate::preview::seed_subdir(config.seed));
     std::fs::create_dir_all(&preview_dir)
         .with_context(|| format!("create {}", preview_dir.display()))?;
     crate::preview::write_pngs(&preview_dir, &map, &river_map, &road_net, &settlements_list)?;

@@ -20,8 +20,14 @@ use onlinerpg_shared::worldgen::{rivers::RiverMap, roads::RoadNetwork, settlemen
 use std::path::Path;
 use std::time::Instant;
 
+/// Subdirectory name used by both `preview` and `bake` to scope a run's
+/// preview PNGs by seed (`worldgen_preview/<seed-hex>/`).
+pub fn seed_subdir(seed: u64) -> String {
+    format!("{:016x}", seed)
+}
+
 pub fn run(config: &WorldGenConfig, out_root: &Path) -> Result<()> {
-    let seed_dir = out_root.join(format!("{:016x}", config.seed));
+    let seed_dir = out_root.join(seed_subdir(config.seed));
     std::fs::create_dir_all(&seed_dir)
         .with_context(|| format!("failed to create {}", seed_dir.display()))?;
 
