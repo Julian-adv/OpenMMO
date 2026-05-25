@@ -18,7 +18,9 @@ pub const PAL_SNOW: u8 = 3; // snow_02 — alpine peaks
 pub const PAL_ROAD: u8 = 4; // gravel_road — settlement road surfaces
 pub const PAL_CLIFF: u8 = 5; // rocky_trail — exposed rock face on ≥45° slopes
 pub const PAL_RIVER_BED: u8 = 6; // ganges_river_pebbles — wet rocky river bottom
+#[allow(dead_code)]
 pub const PAL_STONE_PATH: u8 = 7; // stone_pathway — paved stone path / plaza
+#[allow(dead_code)]
 pub const PAL_PAVING: u8 = 8; // patterned_paving_02 — patterned paving / courtyard
 
 /// Source of truth for the global terrain palette. Each slot: `texture`

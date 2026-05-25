@@ -153,6 +153,11 @@ pub fn passability_is_movement_blocked(
 }
 
 #[wasm_bindgen]
+pub fn passability_is_circle_blocked(x: f32, z: f32, r: f32, y: f32) -> bool {
+    with_cache(|c| pathfinding::is_circle_blocked(c, x, z, r, y))
+}
+
+#[wasm_bindgen]
 pub fn passability_is_cardinal_move_blocked(
     cell_x: i32,
     cell_z: i32,

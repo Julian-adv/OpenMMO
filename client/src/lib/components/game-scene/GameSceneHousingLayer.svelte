@@ -24,7 +24,12 @@
     getGhostHousingMaterial,
     HOUSING_TEXTURES,
   } from '../../utils/housing-textures'
-  import { WOOD_TEXTURE_IDX, SHUTTER_PANEL_TEXTURE_IDX } from '../../utils/house-geo-utils'
+  import {
+    WOOD_TEXTURE_IDX,
+    SHUTTER_PANEL_TEXTURE_IDX,
+    WALL_THICKNESS,
+    ROOF_OVERHANG,
+  } from '../../utils/house-geo-utils'
   import { getWallByDir } from '../../managers/housingManager'
   import { housingManager } from '../../managers/housingManager'
   import {
@@ -477,7 +482,13 @@
    * concave shapes (L/T/U) don't falsely occlude when the player stands
    * in the outdoor concave gap — the ray passes through the gap and
    * misses every room.
+   *
+   * Requires MIN_OCCLUSION_DEPTH of ray inside the AABB before counting
+   * it as occluding. The AABB extends ROOF_OVERHANG past walls, so a
+   * player standing right at a wall grazes the AABB without the wall
+   * actually being between them and the camera.
    */
+  const MIN_OCCLUSION_DEPTH = ROOF_OVERHANG + WALL_THICKNESS
   function houseOccludesPlayer(
     roomAABBs: THREE.Box3[],
     px: number,
@@ -490,7 +501,7 @@
       const sLow = Math.max(aabb.min.y - py, 0)
       const sMin = Math.max(px - aabb.max.x, aabb.min.z - pz, sLow)
       const sMax = Math.min(px - aabb.min.x, aabb.max.z - pz, sHigh)
-      if (sMin <= sMax) return true
+      if (sMax - sMin > MIN_OCCLUSION_DEPTH) return true
     }
     return false
   }

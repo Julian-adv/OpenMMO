@@ -44,6 +44,10 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
     )
   }
 
+  // Half-width of the player's collision footprint. Cylinder-vs-wall check
+  // at the destination keeps the player from embedding into walls.
+  const PLAYER_RADIUS = 0.3
+
   function isMovementBlocked(
     fromX: number,
     fromZ: number,
@@ -53,6 +57,13 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
   ): boolean {
     if (housingManager.isMovementBlocked(fromX, fromZ, toX, toZ, y)) return true
     if (bridgeManager.isMovementBlocked(fromX, fromZ, toX, toZ, y)) return true
+    if (housingManager.isCircleBlocked(toX, toZ, PLAYER_RADIUS, y)) {
+      // Allow movement when the source is already overlapping a wall (e.g.
+      // spawn next to a freshly placed editor wall) so the player can escape.
+      if (!housingManager.isCircleBlocked(fromX, fromZ, PLAYER_RADIUS, y)) {
+        return true
+      }
+    }
     return false
   }
 

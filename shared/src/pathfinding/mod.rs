@@ -25,7 +25,8 @@ mod stair;
 pub use astar::{find_path, DEFAULT_MAX_NODES};
 pub use cache::{apply_door_overlays, build_runtime_passability, update_door_edge};
 pub use query::{
-    get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked, is_movement_blocked,
+    get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked, is_circle_blocked,
+    is_movement_blocked,
 };
 pub use smooth::find_and_smooth_path;
 

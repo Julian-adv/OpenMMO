@@ -18,6 +18,7 @@ import {
   passability_remove_house,
   passability_update_door,
   passability_is_movement_blocked,
+  passability_is_circle_blocked,
 } from '../wasm/onlinerpg_shared'
 import {
   checkOverlap,
@@ -256,6 +257,11 @@ export class HousingManager {
     y: number
   ): boolean {
     return passability_is_movement_blocked(fromX, fromZ, toX, toZ, y)
+  }
+
+  /** Check if a circle of radius r at (x, z) overlaps any blocking wall. */
+  isCircleBlocked(x: number, z: number, r: number, y: number): boolean {
+    return passability_is_circle_blocked(x, z, r, y)
   }
 
   /** Update local cache without server call (triggers geometry rebuild). */

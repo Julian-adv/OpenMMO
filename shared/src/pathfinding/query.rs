@@ -132,6 +132,80 @@ pub fn is_movement_blocked(
     false
 }
 
+/// Check if a circle of radius `r` at `(x, z)` overlaps any blocking wall
+/// edge. Used to enforce player thickness so the character stops short of
+/// walls instead of embedding into them.
+pub fn is_circle_blocked(cache: &PassabilityCache, x: f32, z: f32, r: f32, y: f32) -> bool {
+    let r2 = r * r;
+    for rp in cache.values() {
+        if x + r < rp.min_x || x - r > rp.max_x || z + r < rp.min_z || z - r > rp.max_z {
+            continue;
+        }
+        for floor in &rp.floors {
+            if y < floor.y_base - 0.5 || y >= floor.y_base + floor.wall_height {
+                continue;
+            }
+            let local_x = x - rp.house_origin_x - floor.origin_x as f32;
+            let local_z = z - rp.house_origin_z - floor.origin_z as f32;
+            let w = floor.width as i32;
+            let d = floor.depth as i32;
+            let min_cx = ((local_x - r).floor() as i32).max(0);
+            let max_cx = ((local_x + r).floor() as i32).min(w - 1);
+            let min_cz = ((local_z - r).floor() as i32).max(0);
+            let max_cz = ((local_z + r).floor() as i32).min(d - 1);
+            for cz in min_cz..=max_cz {
+                for cx in min_cx..=max_cx {
+                    let cell = floor.cells[(cx + cz * w) as usize];
+                    if cell == 0 {
+                        continue;
+                    }
+                    let cx_f = cx as f32;
+                    let cz_f = cz as f32;
+                    if cell & EDGE_N != 0
+                        && unit_segment_dist_sq(local_x, local_z, cx_f, cz_f, true) < r2
+                    {
+                        return true;
+                    }
+                    if cell & EDGE_S != 0
+                        && unit_segment_dist_sq(local_x, local_z, cx_f, cz_f + 1.0, true) < r2
+                    {
+                        return true;
+                    }
+                    if cell & EDGE_W != 0
+                        && unit_segment_dist_sq(local_x, local_z, cx_f, cz_f, false) < r2
+                    {
+                        return true;
+                    }
+                    if cell & EDGE_E != 0
+                        && unit_segment_dist_sq(local_x, local_z, cx_f + 1.0, cz_f, false) < r2
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Squared distance from point `(px, pz)` to a unit-length axis-aligned
+/// segment starting at `(sx, sz)`. `along_x` selects whether the segment
+/// extends in +X (a north/south wall) or +Z (a west/east wall).
+#[inline]
+fn unit_segment_dist_sq(px: f32, pz: f32, sx: f32, sz: f32, along_x: bool) -> f32 {
+    if along_x {
+        let cx = px.clamp(sx, sx + 1.0);
+        let dx = px - cx;
+        let dz = pz - sz;
+        dx * dx + dz * dz
+    } else {
+        let cz = pz.clamp(sz, sz + 1.0);
+        let dx = px - sx;
+        let dz = pz - cz;
+        dx * dx + dz * dz
+    }
+}
+
 /// Check if any cell boundary crossing along one axis is blocked.
 fn edge_blocks_axis(
     from_a: f32,
