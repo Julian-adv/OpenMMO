@@ -31,6 +31,21 @@ export function worldToTileCell(wx: number, wz: number) {
   return { tileX, tileZ, cellX, cellZ }
 }
 
+export function worldRectToTileBounds(
+  minX: number,
+  minZ: number,
+  maxX: number,
+  maxZ: number
+) {
+  const S = TERRAIN_TILE_SIZE
+  return {
+    tileMinX: Math.floor((minX + S / 2) / S),
+    tileMaxX: Math.floor((maxX + S / 2) / S),
+    tileMinZ: Math.floor((minZ + S / 2) / S),
+    tileMaxZ: Math.floor((maxZ + S / 2) / S),
+  }
+}
+
 /**
  * Create a 2×2 tile grid based on the player's floor-rounded chunk position.
  * The 4 tiles always cover the player: (fx,fz), (fx+1,fz), (fx,fz+1), (fx+1,fz+1).

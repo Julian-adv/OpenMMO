@@ -952,5 +952,5 @@
 <ObjectOverlay bind:this={objectOverlayRef} />
 
 {#if $housingEditorMode}
-  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />
+  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />
 {/if}
