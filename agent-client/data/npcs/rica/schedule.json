@@ -2,19 +2,19 @@
   "schedule": [
     {
       "at": "day",
-      "pos": [-1536.3, 9.8, 476.5],
-      "rotation": 21.6,
+      "pos": [-1474.7, 0.9, 4737.1],
+      "rotation": 0.0,
       "floor_level": 0,
       "label": "market stall on ground floor"
     },
     {
       "at": "night",
-      "pos": [-1534.5, 13.0, 473.0],
+      "pos": [-1474.6, 4.2, 4735.4],
       "rotation": -70.0,
       "floor_level": 1,
       "label": "bedroom on 2nd floor",
       "action": "bed",
-      "object_id": 1
+      "object_id": 3
     }
   ]
 }

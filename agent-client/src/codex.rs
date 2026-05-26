@@ -34,13 +34,18 @@ impl Default for CodexConfig {
 }
 
 /// JSONL event from `codex exec --json`.
-/// Events have varying shapes; we extract text from `item.completed` events.
+/// Events have varying shapes; we extract text from `item.completed` events
+/// and error details from `error` / `turn.failed` events.
 #[derive(Debug, Deserialize)]
 struct CodexEvent {
     #[serde(rename = "type")]
     event_type: String,
     /// Present on "item.completed" events
     item: Option<CodexItem>,
+    /// Present on "error" events — raw error string (often nested JSON)
+    message: Option<String>,
+    /// Present on "turn.failed" events
+    error: Option<CodexErrorBody>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +54,36 @@ struct CodexItem {
     item_type: Option<String>,
     /// Text content for agent_message items
     text: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CodexErrorBody {
+    message: Option<String>,
+}
+
+/// Try to peel the `error.message` from an outer JSON wrapper like
+/// `{"type":"error","status":400,"error":{"message":"..."}}`. Returns the raw
+/// string if it doesn't match that shape.
+fn unwrap_error_message(raw: &str) -> String {
+    #[derive(Deserialize)]
+    struct Outer {
+        error: Option<Inner>,
+    }
+    #[derive(Deserialize)]
+    struct Inner {
+        message: Option<String>,
+    }
+    if let Ok(Outer {
+        error: Some(Inner {
+            message: Some(msg), ..
+        }),
+        ..
+    }) = serde_json::from_str::<Outer>(raw)
+    {
+        msg
+    } else {
+        raw.to_string()
+    }
 }
 
 /// Invokes `codex exec` per prompt in full-auto JSONL mode.
@@ -73,12 +108,10 @@ impl LlmBackend for CodexInvoker {
     async fn send_message(&self, content: &str) -> anyhow::Result<String> {
         info!(">>> TO CODEX ({} bytes):\n{}", content.len(), content);
 
-        // Build the full prompt: system prompt + user content
         let full_prompt = format!("{}\n\n{}", self.system_prompt, content);
 
         let mut cmd = Command::new("codex");
         cmd.arg("exec")
-            .arg("--full-auto")
             .arg("--sandbox")
             .arg("read-only")
             .arg("--json")
@@ -97,7 +130,6 @@ impl LlmBackend for CodexInvoker {
             .spawn()
             .map_err(|e| anyhow::anyhow!("Failed to spawn codex CLI: {e}"))?;
 
-        // Write prompt to stdin then close it
         if let Some(mut stdin) = child.stdin.take() {
             stdin.write_all(full_prompt.as_bytes()).await?;
             stdin.shutdown().await?;
@@ -112,7 +144,6 @@ impl LlmBackend for CodexInvoker {
             .take()
             .ok_or_else(|| anyhow::anyhow!("Failed to capture codex stderr"))?;
 
-        // Log stderr in background
         tokio::spawn(async move {
             let reader = BufReader::new(stderr);
             let mut lines = reader.lines();
@@ -121,33 +152,56 @@ impl LlmBackend for CodexInvoker {
             }
         });
 
-        // Read JSONL lines and extract agent_message text from item.completed events
+        // Capture error/turn.failed messages so they can be surfaced if no
+        // agent_message arrives.
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
         let mut last_text = String::new();
+        let mut last_error: Option<String> = None;
 
         while let Ok(Some(line)) = lines.next_line().await {
             debug!(target: "codex_stdout", "{}", line);
-            if let Ok(event) = serde_json::from_str::<CodexEvent>(&line) {
-                if event.event_type == "item.completed" {
-                    if let Some(item) = &event.item {
-                        if item.item_type.as_deref() == Some("agent_message") {
-                            if let Some(text) = &item.text {
-                                last_text = text.clone();
-                            }
-                        }
+            let Ok(event) = serde_json::from_str::<CodexEvent>(&line) else {
+                continue;
+            };
+            match event.event_type.as_str() {
+                "item.completed" => {
+                    if let Some(text) = event
+                        .item
+                        .filter(|i| i.item_type.as_deref() == Some("agent_message"))
+                        .and_then(|i| i.text)
+                    {
+                        last_text = text;
                     }
                 }
+                "error" => {
+                    if let Some(raw) = event.message {
+                        last_error = Some(unwrap_error_message(&raw));
+                    }
+                }
+                "turn.failed" => {
+                    if let Some(raw) = event.error.and_then(|e| e.message) {
+                        last_error = Some(unwrap_error_message(&raw));
+                    }
+                }
+                _ => {}
             }
         }
 
-        // Wait for process to finish
         let status = child.wait().await?;
         if !status.success() {
             warn!("Codex process exited with status: {status}");
         }
 
         let response = last_text.trim().to_string();
+        if response.is_empty() {
+            if let Some(err) = last_error {
+                return Err(anyhow::anyhow!("Codex error: {err}"));
+            }
+            return Err(anyhow::anyhow!(
+                "Codex produced no agent_message (exit: {status})"
+            ));
+        }
         info!("<<< FROM CODEX ({} bytes):\n{}", response.len(), response);
         Ok(response)
     }
