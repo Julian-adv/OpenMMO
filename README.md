@@ -66,12 +66,12 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - **AI-Generated BGM**: ~50 background music tracks generated with [Suno](https://suno.com) and [Google Flow Music](https://labs.google/fx/tools/music-fx)
   - Ultima-inspired medieval fantasy palette (lute, recorder, harp, strings, percussion, brass)
   - Separate ambient and battle pools — battle music kicks in on combat with crossfade, lingers briefly, then fades back to the ambient track
-  - Listen to samples (click to play in GitHub's audio player):
-    - Royal march — [Triumphal Procession](client/public/bgm/Triumphal%20Procession.mp3)
-    - Open field — [Winds of the Open Plain](client/public/bgm/Winds%20of%20the%20Open%20Plain.mp3)
-    - Hearth / inn — [Hearthside Respite](client/public/bgm/Hearthside%20Respite.mp3)
-    - Battle — [Blood and Bronze](client/public/bgm/Blood%20and%20Bronze.mp3)
-    - Epic orchestral (Google Flow) — [Visions of the Realm](client/public/bgm/Visions%20of%20the%20Realm%20%28Epic%20Orchestral%20Version%29.m4a)
+  - Listen to samples (opens in the browser's built-in audio player):
+    - Royal march — [Triumphal Procession](https://github.com/Julian-adv/OnlineRPG/raw/master/client/public/bgm/Triumphal%20Procession.mp3)
+    - Open field — [Winds of the Open Plain](https://github.com/Julian-adv/OnlineRPG/raw/master/client/public/bgm/Winds%20of%20the%20Open%20Plain.mp3)
+    - Hearth / inn — [Hearthside Respite](https://github.com/Julian-adv/OnlineRPG/raw/master/client/public/bgm/Hearthside%20Respite.mp3)
+    - Battle — [Blood and Bronze](https://github.com/Julian-adv/OnlineRPG/raw/master/client/public/bgm/Blood%20and%20Bronze.mp3)
+    - Epic orchestral (Google Flow) — [Visions of the Realm](https://github.com/Julian-adv/OnlineRPG/raw/master/client/public/bgm/Visions%20of%20the%20Realm%20%28Epic%20Orchestral%20Version%29.m4a)
 - **Chat System**: Real-time chat functionality
 - **Player Movement**: Character control via mouse/keyboard
 
