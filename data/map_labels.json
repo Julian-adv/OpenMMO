@@ -1,0 +1,184 @@
+{
+  "valdran": {
+    "id": "valdran",
+    "name": "VALDRAN",
+    "kind": "continent",
+    "x": 3122.8,
+    "z": 7819.9
+  },
+  "havgard": {
+    "id": "havgard",
+    "name": "HAVGARD",
+    "kind": "continent",
+    "x": 9757.1,
+    "z": -5691.1
+  },
+  "seros": {
+    "id": "seros",
+    "name": "SEROS",
+    "kind": "continent",
+    "x": -14447.9,
+    "z": -51
+  },
+  "garasden": {
+    "id": "garasden",
+    "name": "Garasden",
+    "kind": "capital",
+    "x": 1929.6,
+    "z": 2746.2
+  },
+  "stenhavn": {
+    "id": "stenhavn",
+    "name": "Stenhavn",
+    "kind": "capital",
+    "x": 9452.6,
+    "z": -4267.2
+  },
+  "frihavn": {
+    "id": "frihavn",
+    "name": "Frihavn",
+    "kind": "city",
+    "x": 3950.9,
+    "z": -11469.7
+  },
+  "brovik": {
+    "id": "brovik",
+    "name": "Brovik",
+    "kind": "city",
+    "x": 2731.3,
+    "z": -1339.3
+  },
+  "edra": {
+    "id": "edra",
+    "name": "Edra",
+    "kind": "city",
+    "x": 5840,
+    "z": 240
+  },
+  "riftmark": {
+    "id": "riftmark",
+    "name": "Riftmark",
+    "kind": "city",
+    "x": -2704,
+    "z": 10328
+  },
+  "mistfall": {
+    "id": "mistfall",
+    "name": "Mistfall",
+    "kind": "city",
+    "x": -11184,
+    "z": 3208
+  },
+  "aldermark": {
+    "id": "aldermark",
+    "name": "Aldermark",
+    "kind": "town",
+    "x": -1475.2,
+    "z": 4741.6
+  },
+  "elmir-sea": {
+    "id": "elmir-sea",
+    "name": "Elmir Sea",
+    "kind": "sea",
+    "x": -6206.4,
+    "z": 2491.4
+  },
+  "mistward-sea": {
+    "id": "mistward-sea",
+    "name": "Mistward Sea",
+    "kind": "sea",
+    "x": -12604.3,
+    "z": -8710.8
+  },
+  "silverbight": {
+    "id": "silverbight",
+    "name": "Silverbight",
+    "kind": "sea",
+    "x": 6416.1,
+    "z": -9266.6
+  },
+  "brosund": {
+    "id": "brosund",
+    "name": "Brosund",
+    "kind": "sea",
+    "x": 4286,
+    "z": -550
+  },
+  "dawnward-sea": {
+    "id": "dawnward-sea",
+    "name": "Dawnward Sea",
+    "kind": "sea",
+    "x": 12012.5,
+    "z": 6155.6
+  },
+  "mistisle": {
+    "id": "mistisle",
+    "name": "Mistisle",
+    "kind": "island",
+    "x": -8974,
+    "z": -7811
+  },
+  "eldorisle": {
+    "id": "eldorisle",
+    "name": "Eldorisle",
+    "kind": "island",
+    "x": -5878,
+    "z": 7866
+  },
+  "ashisle": {
+    "id": "ashisle",
+    "name": "Ashisle",
+    "kind": "island",
+    "x": 12456,
+    "z": 8302
+  },
+  "wreckisle": {
+    "id": "wreckisle",
+    "name": "Wreckisle",
+    "kind": "island",
+    "x": -4292,
+    "z": 530
+  },
+  "saltisle": {
+    "id": "saltisle",
+    "name": "Saltisle",
+    "kind": "island",
+    "x": -6214,
+    "z": -8635
+  },
+  "gullisle": {
+    "id": "gullisle",
+    "name": "Gullisle",
+    "kind": "island",
+    "x": -132,
+    "z": 10613
+  },
+  "springisle": {
+    "id": "springisle",
+    "name": "Springisle",
+    "kind": "island",
+    "x": 14573,
+    "z": 12234
+  },
+  "vergeisle": {
+    "id": "vergeisle",
+    "name": "Vergeisle",
+    "kind": "island",
+    "x": 14336,
+    "z": 15536
+  },
+  "rillisle": {
+    "id": "rillisle",
+    "name": "Rillisle",
+    "kind": "island",
+    "x": -4384,
+    "z": 3660
+  },
+  "serinisle": {
+    "id": "serinisle",
+    "name": "Serinisle",
+    "kind": "island",
+    "x": -6848,
+    "z": 4700
+  }
+}

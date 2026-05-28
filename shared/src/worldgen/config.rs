@@ -518,13 +518,21 @@ impl Default for WorldGenConfig {
             coast_cliff_fraction: 0.2,
             coast_cliff_wavelength_cells: 80.0,
             // Small-island hill pass: stamp a ~200 m bump on every
-            // land component up to ~40k cells (≈ a 110-cell-radius
-            // disc at 8 m/cell, comfortably above the 90-cell mean
-            // small_island_radius scatter discs). 0.85× radius
-            // keeps the hill crown short of the beach so the coast
-            // ramp still wins at the shoreline.
+            // land component up to ~80k cells (≈ a 160-cell-radius
+            // disc at 8 m/cell). The cutoff has to clear medium islands
+            // that sit in a dead zone: too big for this pass but too
+            // small/flat to grow a natural ≥750 m peak, so they get no
+            // river and the river-gap pass also skips them (every cell
+            // is unreachable from a mainland river, and the whole island
+            // is within the 2 km coast buffer). On seed 42 the only such
+            // island was 46k cells; 80k catches it (and similar mediums)
+            // while staying well under the next natural-river island
+            // (~193k cells), which keeps a dome off terrain that already
+            // carves its own relief. 0.85× radius keeps the hill crown
+            // short of the beach so the coast ramp still wins at the
+            // shoreline.
             small_island_hill_peak_m: 200.0,
-            small_island_hill_max_cells: 40_000,
+            small_island_hill_max_cells: 80_000,
             small_island_hill_radius_frac: 0.85,
             // Island rivers: 80 m peak threshold sits comfortably
             // below the 200 m hill crown so seeded peaks always

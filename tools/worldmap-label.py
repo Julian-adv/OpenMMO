@@ -10,14 +10,15 @@ first if missing:
 (produces 07_worldmap.png — the grid/label-free relief layer.)
 
 Run:  uv run tools/worldmap-label.py
-Edit the LABELS table below to move/rename places. Positions may be given as
-either world meters {"world": (x_m, z_m)} (game coords; Aldermark uses this)
-or raw base-image pixels {"px": (x, y)} on the 4096px map.
+Place-name data is the shared source data/map_labels.csv (world meters, game
+coords) — the SAME table the in-game world map (M key) reads. Edit that CSV to
+move/rename places; this script just renders it onto the doc map.
 
 This is a DRAFT auto-placement: only Aldermark is georeferenced from the real
 spawn point; continents/cities/seas were assigned to generated terrain features
 and are meant to be nudged by hand.
 """
+import csv
 import glob
 import json
 import sys
@@ -51,24 +52,16 @@ ORIGIN = RES / 2                              # world origin cell
 def world_to_px(x_m, z_m):
     return (x_m / MPC + ORIGIN, z_m / MPC + ORIGIN)
 
-# --- editable label table -------------------------------------------------
+# --- shared label table ---------------------------------------------------
+# Source of truth: data/map_labels.csv (id,name,kind,x,z) in world meters.
 # kind: continent | capital | city | town | sea
-LABELS = [
-    {"name": "VALDRAN", "kind": "continent", "px": (2150, 3150)},
-    {"name": "AIRM",    "kind": "continent", "px": (2978, 988)},
-    {"name": "SEROS",   "kind": "continent", "px": (560, 2339)},
-
-    {"name": "Garasden", "kind": "capital", "px": (2778, 2078)},
-    {"name": "Edra",     "kind": "city",    "px": (3113, 3115)},
-    {"name": "Riftmark", "kind": "city",    "px": (1710, 3339)},
-    {"name": "Mistfall", "kind": "city",    "px": (650, 2449)},
-
-    {"name": "Aldermark", "kind": "town", "world": (-1475.2, 4741.6)},
-
-    {"name": "Elmir Sea",    "kind": "sea", "px": (1180, 2250)},
-    {"name": "Mistward Sea", "kind": "sea", "px": (180, 1650)},
-    {"name": "Darkbight",    "kind": "sea", "px": (1980, 360)},
-]
+LABELS_CSV = ROOT / "data/map_labels.csv"
+with LABELS_CSV.open(newline="") as fh:
+    LABELS = [
+        {"name": row["name"], "kind": row["kind"],
+         "world": (float(row["x"]), float(row["z"]))}
+        for row in csv.DictReader(fh)
+    ]
 
 # --- style per kind -------------------------------------------------------
 def find_font(names):
@@ -87,7 +80,8 @@ STYLE = {
     "capital":   (SERIF_BOLD, 50, (255, 252, 244), (25, 18, 10), 4, 13, "ring2"),
     "city":      (SERIF_BOLD, 38, (255, 252, 244), (25, 18, 10), 3, 9, "ring"),
     "town":      (SERIF_BOLD, 40, (255, 246, 220), (60, 25, 10), 3, 11, "town"),
-    "sea":       (SERIF, 46, (200, 224, 244), (18, 38, 66), 3, 0, None),
+    "sea":       (SERIF, 46, (126, 200, 240), (18, 38, 66), 3, 0, None),
+    "island":    (SERIF, 30, (224, 238, 224), (28, 40, 30), 2, 0, None),
 }
 
 img = Image.open(BASE).convert("RGB")
@@ -117,7 +111,7 @@ for L in LABELS:
     f = font(fp, size)
     if mk:
         draw_marker(cx, cy, mr, mk)
-    if L["kind"] in ("continent", "sea"):
+    if L["kind"] in ("continent", "sea", "island"):
         # centered label, no marker
         d.text((cx, cy), L["name"], font=f, fill=fill, stroke_fill=stroke,
                stroke_width=sw, anchor="mm")

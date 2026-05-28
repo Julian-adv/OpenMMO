@@ -1,5 +1,6 @@
 <script module lang="ts">
   import { SvelteMap } from 'svelte/reactivity'
+  import mapLabelsJson from '../../../../data/map_labels.json'
 
   const REGION_SIZE = 16
   const TILE_DIM = 64
@@ -8,6 +9,37 @@
   const MIN_ZOOM = 1
   const MAX_ZOOM = 32
   const DEFAULT_ZOOM = 8
+
+  // --- Shared place-name labels (same source as the doc map: data/map_labels.csv) ---
+  type LabelKind = 'continent' | 'capital' | 'city' | 'town' | 'sea' | 'island'
+  interface MapLabel {
+    name: string
+    kind: LabelKind
+    x: number // world meters
+    z: number
+  }
+  const MAP_LABELS: MapLabel[] = Object.values(
+    mapLabelsJson as unknown as Record<string, MapLabel>,
+  )
+
+  // Per-kind zoom visibility: shown when min <= zoomSpan <= max (zoomSpan = regions
+  // across; larger = zoomed out). Continents/seas appear when zoomed out, settlements
+  // when zoomed in.
+  // Settlements (capital/city/town) share the same max so they all appear together
+  // at the zoom where the capital is visible.
+  const LABEL_ZOOM: Record<LabelKind, { min: number; max: number }> = {
+    continent: { min: 8, max: Infinity },
+    sea: { min: 4, max: Infinity },
+    capital: { min: 1, max: 24 },
+    city: { min: 1, max: 24 },
+    town: { min: 1, max: 24 },
+    island: { min: 1, max: 16 },
+  }
+
+  // Matches the canvas's -45deg map rotation, applied to label screen positions.
+  const ROTATE_ANGLE = -Math.PI / 4
+  const COS_R = Math.cos(ROTATE_ANGLE)
+  const SIN_R = Math.sin(ROTATE_ANGLE)
 
   // --- Image cache (module-level, persists across component lifecycle) ---
   const imageCache = new SvelteMap<string, HTMLImageElement | null>()
@@ -133,7 +165,6 @@
     ctx.fillRect(0, 0, cw, ch)
 
     // 45-degree rotation: expand visible region to cover rotated corners
-    const ROTATE_ANGLE = -Math.PI / 4
     const expand = Math.SQRT2 // rotated square needs ~1.41x coverage
 
     const expandedViewWorldW = viewWorldW * expand
@@ -200,6 +231,47 @@
       ctx.fill()
       ctx.restore()
     })
+  })
+
+  // --- Place-name label overlay (HTML layer, not burned into the canvas) ---
+  interface PlacedLabel {
+    name: string
+    kind: LabelKind
+    left: number
+    top: number
+  }
+
+  let visibleLabels = $derived.by<PlacedLabel[]>(() => {
+    const cw = containerW
+    const ch = containerH
+    if (cw <= 0 || ch <= 0) return []
+
+    // Same view transform the canvas render effect uses.
+    const viewSize = zoomSpan * REGION_PX
+    const canvasSize = Math.min(cw, ch)
+    const scale = canvasSize / viewSize
+    const viewLeft = camX - cw / scale / 2
+    const viewTop = camZ - ch / scale / 2
+
+    const margin = 80 // keep labels whose anchor is just off-edge
+    const out: PlacedLabel[] = []
+    for (const label of MAP_LABELS) {
+      const tier = LABEL_ZOOM[label.kind]
+      if (zoomSpan < tier.min || zoomSpan > tier.max) continue
+
+      // World -> pre-rotation canvas coords (matches the player marker).
+      const lx = (label.x - viewLeft) * scale
+      const ly = (label.z - viewTop) * scale
+      // Rotate around canvas center to match ctx.rotate(ROTATE_ANGLE).
+      const ox = lx - cw / 2
+      const oy = ly - ch / 2
+      const left = ox * COS_R - oy * SIN_R + cw / 2
+      const top = ox * SIN_R + oy * COS_R + ch / 2
+
+      if (left < -margin || left > cw + margin || top < -margin || top > ch + margin) continue
+      out.push({ name: label.name, kind: label.kind, left, top })
+    }
+    return out
   })
 
   // --- Zoom controls ---
@@ -386,6 +458,20 @@
         height={containerH}
         class="map-canvas"
       ></canvas>
+      <div class="label-layer">
+        {#each visibleLabels as label (label.name)}
+          <div
+            class="map-label {label.kind}"
+            class:area={label.kind === 'continent' || label.kind === 'sea' || label.kind === 'island'}
+            style="left: {label.left}px; top: {label.top}px;"
+          >
+            {#if label.kind !== 'continent' && label.kind !== 'sea' && label.kind !== 'island'}
+              <span class="marker"></span>
+            {/if}
+            <span class="text">{label.name}</span>
+          </div>
+        {/each}
+      </div>
     </div>
   </div>
 </div>
@@ -478,6 +564,114 @@
     position: absolute;
     inset: 0;
     display: block;
+  }
+
+  /* Place-name labels: HTML overlay above the canvas, clicks pass through. */
+  .label-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .map-label {
+    position: absolute;
+    user-select: none;
+  }
+
+  .map-label .marker {
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    box-sizing: border-box;
+  }
+
+  .map-label .text {
+    position: absolute;
+    left: 0;
+    top: 0;
+    white-space: nowrap;
+    font-family: Georgia, 'Times New Roman', serif;
+    /* dark halo for readability over varied terrain */
+    text-shadow:
+      0 0 2px #000,
+      1px 1px 1px #000,
+      -1px 1px 1px #000,
+      1px -1px 1px #000,
+      -1px -1px 1px #000;
+  }
+
+  /* point kinds (capital/city/town): marker centered on anchor, text to the right */
+  .map-label:not(.area) .text {
+    transform: translate(11px, -50%);
+  }
+
+  /* area kinds (continent/sea): centered label, no marker */
+  .map-label.area .text {
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .map-label.continent .text {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: #f6f0e2;
+  }
+
+  .map-label.sea .text {
+    font-size: 16px;
+    font-style: italic;
+    letter-spacing: 1px;
+    color: #7ec8f0;
+  }
+
+  .map-label.island .text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #d6e6cf;
+  }
+
+  .map-label.capital .text {
+    font-size: 16px;
+    font-weight: 700;
+    color: #fffcf4;
+  }
+
+  .map-label.city .text {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fffcf4;
+  }
+
+  .map-label.town .text {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff6dc;
+  }
+
+  .map-label.capital .marker {
+    width: 13px;
+    height: 13px;
+    background: #fad746;
+    border: 2px solid #19120a;
+    box-shadow: 0 0 0 3px rgba(25, 18, 10, 0.55);
+  }
+
+  .map-label.city .marker {
+    width: 10px;
+    height: 10px;
+    background: #f5d250;
+    border: 2px solid #19120a;
+  }
+
+  .map-label.town .marker {
+    width: 11px;
+    height: 11px;
+    background: #f5d250;
+    border: 2px solid #287832;
   }
 
 </style>
