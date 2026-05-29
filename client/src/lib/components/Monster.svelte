@@ -4,6 +4,7 @@
   import { SkeletonUtils, GLTFLoader } from 'three/examples/jsm/Addons.js'
   import * as THREE from 'three'
   import { get } from 'svelte/store'
+  import { untrack } from 'svelte'
   import { timeScale } from '../stores/timeStore'
   import DamageText from './DamageText.svelte'
 
@@ -24,7 +25,24 @@
 
   const def = $derived(getMonsterDef(type))
 
-  const gltf = useLoader(GLTFLoader).load('/models/scp939.glb')
+  // Monster type is fixed for the component's lifetime, so the model and any
+  // hand weapon are resolved once at init from the initial type, not reactively.
+  const initialDef = untrack(() => getMonsterDef(type))
+  const initialModel = initialDef?.model ?? 'monsters/scp939.glb'
+  const gltf = useLoader(GLTFLoader).load(`/models/${initialModel}`)
+
+  // Optional hand weapon, attached to a skeleton bone.
+  const initialWeapon = initialDef?.weapon
+  const initialWeaponBone = initialDef?.weaponBone
+  const weaponGltf = initialWeapon
+    ? useLoader(GLTFLoader).load(`/models/${initialWeapon}`)
+    : undefined
+
+  // Weapon grip transform relative to the attach bone, tuned by eye.
+  const WEAPON_OFFSET = new THREE.Vector3(0, 0, 0)
+  const WEAPON_ROTATION = new THREE.Euler(0, 0, 0)
+  const WEAPON_SCALE = 1
+  let weaponAttached = false
 
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
@@ -102,11 +120,11 @@
         newAction.reset().fadeIn(0.2).play()
 
         if (monsterState === 'dead') {
-          if (clipName === '939_Die') {
+          if (clipName === (def?.animDie ?? 'Die')) {
             newAction.setLoop(THREE.LoopOnce, 1)
             newAction.clampWhenFinished = true
           } else {
-            // 939_Dead should loop or stay idle
+            // Post-death pose clip should loop / stay idle
             newAction.setLoop(THREE.LoopRepeat, Infinity)
             newAction.clampWhenFinished = false
           }
@@ -223,6 +241,49 @@
         })
       }
     }
+  })
+
+  // Attach the hand weapon once both the model and weapon GLB are ready.
+  $effect(() => {
+    if (
+      weaponAttached ||
+      !model ||
+      !initialWeapon ||
+      !initialWeaponBone ||
+      !weaponGltf ||
+      !$weaponGltf
+    )
+      return
+
+    let bone: THREE.Object3D | undefined
+    model.traverse((o) => {
+      if (o.name === initialWeaponBone) bone = o
+    })
+    if (!bone) {
+      console.warn(`Weapon bone ${initialWeaponBone} not found on ${type}`)
+      weaponAttached = true
+      return
+    }
+
+    const weapon = $weaponGltf.scene.clone(true)
+    weapon.position.copy(WEAPON_OFFSET)
+    weapon.rotation.copy(WEAPON_ROTATION)
+    weapon.scale.setScalar(WEAPON_SCALE)
+    weapon.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh
+        // Clone materials so corpse-fade opacity is per-instance.
+        mesh.material = Array.isArray(mesh.material)
+          ? mesh.material.map((m) => m.clone())
+          : mesh.material.clone()
+        mesh.castShadow = true
+        mesh.receiveShadow = true
+        // Clicking the weapon should still target the monster.
+        child.userData.monsterId = id
+      }
+    })
+    bone.add(weapon)
+    weaponAttached = true
   })
 
   // Export the model group for raycasting from parent

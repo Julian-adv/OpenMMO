@@ -22,6 +22,10 @@ export interface MonsterDefinition {
   animHit: string
   animDie: string
   animDead: string
+  /** Optional weapon model (relative to /models/) attached to a hand bone. */
+  weapon?: string
+  /** Skeleton bone name the weapon is parented to (e.g. 'RightHand'). */
+  weaponBone?: string
 }
 
 const monsterDefs = monstersJson as Record<string, MonsterDefinition>
