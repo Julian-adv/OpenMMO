@@ -331,6 +331,8 @@ impl SharedState {
             | ServerMessage::GameState { .. }
             | ServerMessage::PlayerJoined { .. }
             | ServerMessage::PlayerLeft { .. }
+            | ServerMessage::PlayerAppeared { .. }
+            | ServerMessage::PlayerDisappeared { .. }
             | ServerMessage::MonsterSpawned { .. }
             | ServerMessage::MonsterAssigned { .. }
             | ServerMessage::SpawnMonsterRequest { .. }
@@ -391,11 +393,12 @@ impl SharedState {
                     }
                 }
             }
-            ServerMessage::PlayerJoined { player } => {
+            ServerMessage::PlayerJoined { player } | ServerMessage::PlayerAppeared { player } => {
                 self.nearby_players
                     .insert(player.id.clone(), player.clone());
             }
-            ServerMessage::PlayerLeft { player_id } => {
+            ServerMessage::PlayerLeft { player_id }
+            | ServerMessage::PlayerDisappeared { player_id } => {
                 self.nearby_players.remove(player_id);
                 self.seen_nearby_players.remove(player_id);
             }
@@ -516,6 +519,7 @@ impl SharedState {
         match &msg {
             ServerMessage::GameState { .. }
             | ServerMessage::PlayerJoined { .. }
+            | ServerMessage::PlayerAppeared { .. }
             | ServerMessage::PlayerMoved { .. } => {
                 self.check_nearby_player_proximity();
             }

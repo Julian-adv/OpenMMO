@@ -7,7 +7,7 @@ import {
   addChatBubble,
   resetGameStore,
 } from '../stores/gameStore'
-import type { LocalPlayer, RemotePlayer } from '../stores/gameStore'
+import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
 import { Vector3 } from 'three'
 import { remotePlayerManager } from '../managers/remotePlayerManager'
 import { monsterManager } from '../managers/monsterManager'
@@ -76,6 +76,21 @@ async function applyObjectInteraction(
     : undefined
   const rot = placement ? placement.rotation : undefined
   remotePlayerManager.handleInteraction(playerId, anim, offsetY, pos, rot)
+}
+
+/** Spawn a remote player's visual, apply any object interaction, and store it in game state. */
+function addRemotePlayerToState(state: GameState, sp: ServerPlayer) {
+  remotePlayerManager.initPlayer(sp.id, sp.position, sp.rotation)
+  if (sp.object_type) {
+    applyObjectInteraction(sp.id, sp.object_type, sp.position.x, sp.position.z)
+  }
+  state.otherPlayers.set(sp.id, toRemotePlayer(sp))
+}
+
+/** Remove a remote player's visual and store entry. */
+function removeRemotePlayerFromState(state: GameState, playerId: string) {
+  remotePlayerManager.removePlayer(playerId)
+  state.otherPlayers.delete(playerId)
 }
 
 export type MessageEvents = {
@@ -160,27 +175,13 @@ export function handleServerMessage(
     case 'PlayerJoined': {
       const serverPlayer: ServerPlayer = data.player
       const player = toLocalPlayer(serverPlayer)
-      const remotePlayer = toRemotePlayer(serverPlayer)
       let joinedName: string | null = null
       gameStore.update((state) => {
         if (!state.currentPlayer) {
           console.log('Setting current player from PlayerJoined:', player)
           return { ...state, currentPlayer: player }
         } else if (serverPlayer.id !== state.currentPlayer.id) {
-          remotePlayerManager.initPlayer(
-            serverPlayer.id,
-            serverPlayer.position,
-            serverPlayer.rotation
-          )
-          if (serverPlayer.object_type) {
-            applyObjectInteraction(
-              serverPlayer.id,
-              serverPlayer.object_type,
-              serverPlayer.position.x,
-              serverPlayer.position.z
-            )
-          }
-          state.otherPlayers.set(serverPlayer.id, remotePlayer)
+          addRemotePlayerToState(state, serverPlayer)
           joinedName = serverPlayer.name
         }
         return state
@@ -194,13 +195,23 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerAppeared': {
+      const serverPlayer: ServerPlayer = data.player
+      gameStore.update((state) => {
+        if (serverPlayer.id !== state.currentPlayer?.id) {
+          addRemotePlayerToState(state, serverPlayer)
+        }
+        return state
+      })
+      break
+    }
+
     case 'PlayerLeft': {
       let leftName: string | null = null
       gameStore.update((state) => {
         const player = state.otherPlayers.get(data.player_id)
-        remotePlayerManager.removePlayer(data.player_id)
+        removeRemotePlayerFromState(state, data.player_id)
         if (player) {
-          state.otherPlayers.delete(data.player_id)
           leftName = player.name
         }
         return state
@@ -208,6 +219,14 @@ export function handleServerMessage(
       if (leftName) {
         addChatMessage({ text: `${leftName} left the game`, sender: 'system' })
       }
+      break
+    }
+
+    case 'PlayerDisappeared': {
+      gameStore.update((state) => {
+        removeRemotePlayerFromState(state, data.player_id)
+        return state
+      })
       break
     }
 

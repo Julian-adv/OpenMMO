@@ -127,12 +127,22 @@ fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
             }
             Some(format!("[PlayerJoined] {}", player.name))
         }
+        ServerMessage::PlayerAppeared { player } => {
+            if !within_event_range(state, player.position.x, player.position.z) {
+                return None;
+            }
+            Some(format!("[PlayerAppeared] {}", player.name))
+        }
         ServerMessage::PlayerLeft { player_id } => {
             if !player_within_event_range(state, player_id) {
                 return None;
             }
             Some(format!("[PlayerLeft] {}", player_name(state, player_id)))
         }
+        ServerMessage::PlayerDisappeared { player_id } => Some(format!(
+            "[PlayerDisappeared] {}",
+            player_name(state, player_id)
+        )),
         ServerMessage::PlayerMoved {
             player_id,
             position,

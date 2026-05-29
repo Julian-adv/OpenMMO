@@ -1,7 +1,7 @@
 use crate::auth::CharacterSaveData;
 use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
 use crate::world_config::world_config;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
@@ -57,6 +57,44 @@ impl super::GameState {
         }
     }
 
+    pub async fn send_direct_message_to_players(
+        &self,
+        player_ids: &[PlayerId],
+        msg: ServerMessage,
+    ) {
+        self.send_direct_message_to_players_except(player_ids, msg, None)
+            .await;
+    }
+
+    pub async fn send_direct_message_to_players_except(
+        &self,
+        player_ids: &[PlayerId],
+        msg: ServerMessage,
+        skip_player_id: Option<&PlayerId>,
+    ) {
+        let channels = self.direct_channels.read().await;
+        for player_id in player_ids {
+            if skip_player_id.is_some_and(|skip_id| skip_id == player_id) {
+                continue;
+            }
+            if let Some(tx) = channels.get(player_id) {
+                let _ = tx.send(msg.clone());
+            }
+        }
+    }
+
+    pub async fn send_direct_message_to_players_within_position(
+        &self,
+        position: &Position,
+        radius: f32,
+        msg: ServerMessage,
+        skip_player_id: Option<&PlayerId>,
+    ) {
+        let player_ids = self.player_ids_within_position(position, radius).await;
+        self.send_direct_message_to_players_except(&player_ids, msg, skip_player_id)
+            .await;
+    }
+
     pub async fn register_player_character(
         &self,
         player_id: &PlayerId,
@@ -104,33 +142,61 @@ impl super::GameState {
         let player_id = player.id.clone();
         let player_name = player.name.clone();
         let player_number = self.get_or_assign_player_number(&player_id).await;
+        let player_position = player.position.clone();
 
         {
             let mut players = self.players.write().await;
             players.insert(player_id.clone(), player.clone());
         }
+        self.insert_player_spatial_cell(&player_id, &player_position)
+            .await;
 
         info!(
             "Player {} ({}) joined the game [#{}]",
             player_name, player_id, player_number
         );
 
-        self.broadcast(ServerMessage::PlayerJoined { player }, None);
+        let nearby_player_ids = self
+            .player_ids_within(&player_id, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .await;
+        let nearby_player_set: HashSet<_> = nearby_player_ids.iter().cloned().collect();
+        self.send_direct_message_to_players_except(
+            &nearby_player_ids,
+            ServerMessage::PlayerJoined {
+                player: player.clone(),
+            },
+            Some(&player_id),
+        )
+        .await;
 
-        // Return game_state to be sent directly to the new player only
+        // Return visible game_state to be sent directly to the new player only
         let current_players = self.players.read().await;
         let other_players: HashMap<String, Player> = current_players
             .iter()
-            .filter(|(id, _)| *id != &player_id)
+            .filter(|(id, _)| nearby_player_set.contains(*id) && *id != &player_id)
             .map(|(id, player)| (id.clone(), player.clone()))
             .collect();
 
-        let monsters = self.monsters.read().await.clone();
+        let monsters: HashMap<String, crate::types::Monster> = self
+            .monsters
+            .read()
+            .await
+            .iter()
+            .filter(|(_, monster)| {
+                monster.position.dist_xz_sq(&player_position)
+                    <= super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS
+            })
+            .map(|(id, monster)| (id.clone(), monster.clone()))
+            .collect();
         let ground_items: Vec<_> = self
             .ground_items
             .read()
             .await
             .values()
+            .filter(|sgi| {
+                sgi.item.position.dist_xz_sq(&player_position)
+                    <= super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS
+            })
             .map(|sgi| sgi.item.clone())
             .collect();
 
@@ -157,9 +223,17 @@ impl super::GameState {
             removed
         };
 
-        let mut players = self.players.write().await;
+        let nearby_player_ids = self
+            .player_ids_within(player_id, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .await;
+        let removed_player = {
+            let mut players = self.players.write().await;
+            players.remove(player_id)
+        };
 
-        if let Some(player) = players.remove(player_id) {
+        if let Some(player) = removed_player {
+            self.remove_player_spatial_cell(player_id, &player.position)
+                .await;
             info!(
                 "Player {} ({}) left the game{}",
                 player.name,
@@ -168,12 +242,14 @@ impl super::GameState {
                     .map(|n| format!(" [#{}]", n))
                     .unwrap_or_default()
             );
-            self.broadcast(
+            self.send_direct_message_to_players_except(
+                &nearby_player_ids,
                 ServerMessage::PlayerLeft {
                     player_id: player_id.clone(),
                 },
-                None,
-            );
+                Some(player_id),
+            )
+            .await;
         } else {
             warn!("Attempted to remove non-existent player: {}", player_id);
         }
@@ -186,26 +262,36 @@ impl super::GameState {
         new_rotation: f32,
         floor_level: i8,
     ) {
-        let mut players = self.players.write().await;
+        let (old_position, moved_player) = {
+            let mut players = self.players.write().await;
 
-        if let Some(player) = players.get_mut(player_id) {
+            let Some(player) = players.get_mut(player_id) else {
+                warn!("Attempted to move non-existent player: {}", player_id);
+                return;
+            };
+
+            let old_position = player.position.clone();
             player.position = new_position.clone();
             player.rotation = new_rotation;
             player.floor_level = floor_level;
-            drop(players);
-            self.mark_dirty(player_id).await;
-            self.broadcast(
-                ServerMessage::PlayerMoved {
-                    player_id: player_id.clone(),
-                    position: new_position,
-                    rotation: new_rotation,
-                    floor_level,
-                },
-                None,
-            );
-        } else {
-            warn!("Attempted to move non-existent player: {}", player_id);
-        }
+            (old_position, player.clone())
+        };
+
+        self.move_player_spatial_cell(player_id, &old_position, &new_position)
+            .await;
+        self.mark_dirty(player_id).await;
+        self.fanout_player_position_update(
+            player_id,
+            &old_position,
+            &moved_player,
+            ServerMessage::PlayerMoved {
+                player_id: player_id.clone(),
+                position: new_position,
+                rotation: new_rotation,
+                floor_level,
+            },
+        )
+        .await;
     }
 
     pub async fn teleport_player(
@@ -214,20 +300,33 @@ impl super::GameState {
         new_position: Position,
         new_rotation: f32,
     ) {
-        let mut players = self.players.write().await;
-        if let Some(player) = players.get_mut(player_id) {
-            player.position = new_position.clone();
-            player.rotation = new_rotation;
-            drop(players);
+        let moved = {
+            let mut players = self.players.write().await;
+            if let Some(player) = players.get_mut(player_id) {
+                let old_position = player.position.clone();
+                player.position = new_position.clone();
+                player.rotation = new_rotation;
+                Some((old_position, player.clone()))
+            } else {
+                None
+            }
+        };
+
+        if let Some((old_position, moved_player)) = moved {
+            self.move_player_spatial_cell(player_id, &old_position, &new_position)
+                .await;
             self.mark_dirty(player_id).await;
-            self.broadcast(
+            self.fanout_player_position_update(
+                player_id,
+                &old_position,
+                &moved_player,
                 ServerMessage::PlayerTeleported {
                     player_id: player_id.clone(),
                     position: new_position,
                     rotation: new_rotation,
                 },
-                None,
-            );
+            )
+            .await;
         }
     }
 
@@ -243,6 +342,7 @@ impl super::GameState {
                     return;
                 }
                 player.health = player.max_health;
+                let old_position = player.position.clone();
                 let spawn = &world_config().spawn_position;
                 player.position = Position {
                     x: spawn.x,
@@ -250,16 +350,26 @@ impl super::GameState {
                     z: spawn.z,
                 };
                 player.rotation = spawn.rotation;
-                Some(player.clone())
+                Some((old_position, player.clone()))
             } else {
                 None
             }
         };
 
-        if let Some(player) = respawned_player {
+        if let Some((old_position, player)) = respawned_player {
             info!("Player {} ({}) respawned", player.name, player.id);
+            self.move_player_spatial_cell(player_id, &old_position, &player.position)
+                .await;
             self.mark_dirty(player_id).await;
-            self.broadcast(ServerMessage::PlayerRespawned { player }, None);
+            self.fanout_player_position_update(
+                player_id,
+                &old_position,
+                &player,
+                ServerMessage::PlayerRespawned {
+                    player: player.clone(),
+                },
+            )
+            .await;
         } else {
             warn!("Attempted to respawn non-existent player: {}", player_id);
         }
@@ -273,16 +383,27 @@ impl super::GameState {
     }
 
     pub async fn toggle_player_torch(&self, player_id: &PlayerId, enabled: bool) {
-        let mut players = self.players.write().await;
-        if let Some(player) = players.get_mut(player_id) {
-            player.torch_on = enabled;
-            self.broadcast(
+        let position = {
+            let mut players = self.players.write().await;
+            if let Some(player) = players.get_mut(player_id) {
+                player.torch_on = enabled;
+                Some(player.position)
+            } else {
+                None
+            }
+        };
+
+        if let Some(position) = position {
+            self.send_direct_message_to_players_within_position(
+                &position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::PlayerTorchToggled {
                     player_id: player_id.clone(),
                     enabled,
                 },
                 None,
-            );
+            )
+            .await;
         }
     }
 
@@ -292,7 +413,7 @@ impl super::GameState {
         object_type: Option<String>,
         object_id: Option<u32>,
     ) {
-        let rejected = {
+        let rejected_or_position = {
             let mut players = self.players.write().await;
 
             // Reject if the specific object is already occupied
@@ -301,17 +422,17 @@ impl super::GameState {
                     .values()
                     .any(|p| p.id != *player_id && p.object_id == Some(fid))
             }) {
-                true
+                Err(())
             } else if let Some(player) = players.get_mut(player_id) {
                 player.object_type = object_type.clone();
                 player.object_id = object_id;
-                false
+                Ok(Some(player.position))
             } else {
-                false
+                Ok(None)
             }
         };
 
-        if rejected {
+        if rejected_or_position.is_err() {
             self.send_direct_message(
                 player_id,
                 ServerMessage::InteractionRejected {
@@ -319,14 +440,17 @@ impl super::GameState {
                 },
             )
             .await;
-        } else {
-            self.broadcast(
+        } else if let Ok(Some(position)) = rejected_or_position {
+            self.send_direct_message_to_players_within_position(
+                &position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::PlayerInteractionChanged {
                     player_id: player_id.clone(),
                     object_type,
                 },
                 None,
-            );
+            )
+            .await;
         }
     }
 
@@ -375,19 +499,244 @@ impl super::GameState {
         Some(build_save_data(player, *char_id, *xp))
     }
 
-    pub async fn has_human_player_within(&self, player_id: &PlayerId, radius: f32) -> bool {
-        let players = self.players.read().await;
-        let Some(player) = players.get(player_id) else {
-            return false;
+    async fn insert_player_spatial_cell(&self, player_id: &PlayerId, position: &Position) {
+        let mut cells = self.player_spatial_cells.write().await;
+        cells
+            .entry(super::SpatialCell::from_position(position))
+            .or_default()
+            .insert(player_id.clone());
+    }
+
+    async fn remove_player_spatial_cell(&self, player_id: &PlayerId, position: &Position) {
+        let cell = super::SpatialCell::from_position(position);
+        let mut cells = self.player_spatial_cells.write().await;
+        let should_remove = if let Some(player_ids) = cells.get_mut(&cell) {
+            player_ids.remove(player_id);
+            player_ids.is_empty()
+        } else {
+            false
         };
 
+        if should_remove {
+            cells.remove(&cell);
+        }
+    }
+
+    async fn move_player_spatial_cell(
+        &self,
+        player_id: &PlayerId,
+        old_position: &Position,
+        new_position: &Position,
+    ) {
+        let old_cell = super::SpatialCell::from_position(old_position);
+        let new_cell = super::SpatialCell::from_position(new_position);
+        if old_cell == new_cell {
+            return;
+        }
+
+        let mut cells = self.player_spatial_cells.write().await;
+        let should_remove_old = if let Some(player_ids) = cells.get_mut(&old_cell) {
+            player_ids.remove(player_id);
+            player_ids.is_empty()
+        } else {
+            false
+        };
+
+        if should_remove_old {
+            cells.remove(&old_cell);
+        }
+
+        cells.entry(new_cell).or_default().insert(player_id.clone());
+    }
+
+    async fn fanout_player_position_update(
+        &self,
+        player_id: &PlayerId,
+        old_position: &Position,
+        player: &Player,
+        update_msg: ServerMessage,
+    ) {
+        let old_visible: HashSet<PlayerId> = self
+            .player_ids_within_position(old_position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .await
+            .into_iter()
+            .filter(|id| id != player_id)
+            .collect();
+        let new_visible: HashSet<PlayerId> = self
+            .player_ids_within(player_id, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .await
+            .into_iter()
+            .filter(|id| id != player_id)
+            .collect();
+
+        let left: Vec<_> = old_visible.difference(&new_visible).cloned().collect();
+        let entered: Vec<_> = new_visible.difference(&old_visible).cloned().collect();
+        let stayed: Vec<_> = new_visible.intersection(&old_visible).cloned().collect();
+
+        for other_id in &left {
+            self.send_direct_message(
+                player_id,
+                ServerMessage::PlayerDisappeared {
+                    player_id: other_id.clone(),
+                },
+            )
+            .await;
+            self.send_direct_message(
+                other_id,
+                ServerMessage::PlayerDisappeared {
+                    player_id: player_id.clone(),
+                },
+            )
+            .await;
+        }
+
+        let entered_players = {
+            let players = self.players.read().await;
+            entered
+                .iter()
+                .filter_map(|id| players.get(id).cloned())
+                .collect::<Vec<_>>()
+        };
+
+        for other in entered_players {
+            self.send_direct_message(
+                player_id,
+                ServerMessage::PlayerAppeared {
+                    player: other.clone(),
+                },
+            )
+            .await;
+            self.send_direct_message(
+                &other.id,
+                ServerMessage::PlayerAppeared {
+                    player: player.clone(),
+                },
+            )
+            .await;
+        }
+
+        let (monsters_left, monsters_entered) = {
+            let monsters = self.monsters.read().await;
+            let radius_sq = super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS;
+            let old_monsters: HashSet<_> = monsters
+                .iter()
+                .filter(|(_, monster)| old_position.dist_xz_sq(&monster.position) <= radius_sq)
+                .map(|(id, _)| id.clone())
+                .collect();
+            let new_monsters: HashSet<_> = monsters
+                .iter()
+                .filter(|(_, monster)| player.position.dist_xz_sq(&monster.position) <= radius_sq)
+                .map(|(id, _)| id.clone())
+                .collect();
+
+            let left = old_monsters
+                .difference(&new_monsters)
+                .cloned()
+                .collect::<Vec<_>>();
+            let entered = new_monsters
+                .difference(&old_monsters)
+                .filter_map(|id| monsters.get(id).cloned())
+                .collect::<Vec<_>>();
+            (left, entered)
+        };
+
+        for monster_id in monsters_left {
+            self.send_direct_message(player_id, ServerMessage::MonsterRemoved { monster_id })
+                .await;
+        }
+        for monster in monsters_entered {
+            self.send_direct_message(player_id, ServerMessage::MonsterSpawned { monster })
+                .await;
+        }
+
+        let (items_left, items_entered) = {
+            let ground_items = self.ground_items.read().await;
+            let radius_sq = super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS;
+            let old_items: HashSet<_> = ground_items
+                .iter()
+                .filter(|(_, sgi)| old_position.dist_xz_sq(&sgi.item.position) <= radius_sq)
+                .map(|(id, _)| *id)
+                .collect();
+            let new_items: HashSet<_> = ground_items
+                .iter()
+                .filter(|(_, sgi)| player.position.dist_xz_sq(&sgi.item.position) <= radius_sq)
+                .map(|(id, _)| *id)
+                .collect();
+
+            let left = old_items
+                .difference(&new_items)
+                .copied()
+                .collect::<Vec<_>>();
+            let entered = new_items
+                .difference(&old_items)
+                .filter_map(|id| ground_items.get(id).map(|sgi| sgi.item.clone()))
+                .collect::<Vec<_>>();
+            (left, entered)
+        };
+
+        for instance_id in items_left {
+            self.send_direct_message(player_id, ServerMessage::GroundItemRemoved { instance_id })
+                .await;
+        }
+        for item in items_entered {
+            self.send_direct_message(player_id, ServerMessage::GroundItemSpawned { item })
+                .await;
+        }
+
+        self.send_direct_message(player_id, update_msg.clone())
+            .await;
+        self.send_direct_message_to_players(&stayed, update_msg)
+            .await;
+    }
+
+    pub async fn player_ids_within_position(
+        &self,
+        position: &Position,
+        radius: f32,
+    ) -> Vec<PlayerId> {
+        let center_cell = super::SpatialCell::from_position(position);
+        let cell_radius = (radius / super::PLAYER_SPATIAL_CELL_SIZE).ceil() as i32;
         let radius_sq = radius * radius;
-        players.iter().any(|(other_id, other)| {
-            if other_id == player_id || other.is_npc {
-                return false;
+        let players = self.players.read().await;
+        let cells = self.player_spatial_cells.read().await;
+        let mut player_ids = Vec::new();
+
+        for cell_x in (center_cell.x - cell_radius)..=(center_cell.x + cell_radius) {
+            for cell_z in (center_cell.z - cell_radius)..=(center_cell.z + cell_radius) {
+                let cell = super::SpatialCell {
+                    x: cell_x,
+                    z: cell_z,
+                };
+
+                let Some(cell_player_ids) = cells.get(&cell) else {
+                    continue;
+                };
+
+                for player_id in cell_player_ids {
+                    let Some(player) = players.get(player_id) else {
+                        continue;
+                    };
+
+                    if position.dist_xz_sq(&player.position) <= radius_sq {
+                        player_ids.push(player_id.clone());
+                    }
+                }
             }
-            other.position.dist_xz_sq(&player.position) <= radius_sq
-        })
+        }
+
+        player_ids
+    }
+
+    pub async fn player_ids_within(&self, player_id: &PlayerId, radius: f32) -> Vec<PlayerId> {
+        let position = {
+            let players = self.players.read().await;
+            let Some(player) = players.get(player_id) else {
+                return Vec::new();
+            };
+            player.position
+        };
+
+        self.player_ids_within_position(&position, radius).await
     }
 
     #[allow(dead_code)]

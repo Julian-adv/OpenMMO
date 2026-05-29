@@ -7,13 +7,14 @@ use tracing::{info, warn};
 impl super::GameState {
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
         // 1. Check if monster exists and is alive first, get its type
-        let monster_type = {
+        let (monster_type, monster_position) = {
             let monsters = self.monsters.read().await;
             let monster = monsters.get(&monster_id);
             if monster.is_none() || monster.unwrap().state == MonsterState::Dead {
                 return;
             }
-            monster.unwrap().monster_type.clone()
+            let monster = monster.unwrap();
+            (monster.monster_type.clone(), monster.position)
         };
 
         let player_name = {
@@ -64,7 +65,9 @@ impl super::GameState {
             }
 
             // Send attack result
-            self.broadcast(
+            self.send_direct_message_to_players_within_position(
+                &monster_position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::PlayerAttacked {
                     player_id: player_id.clone(),
                     monster_id: monster_id.clone(),
@@ -73,7 +76,8 @@ impl super::GameState {
                     damage: result_damage,
                 },
                 None,
-            );
+            )
+            .await;
 
             if result_hit {
                 let mut monsters = self.monsters.write().await;
@@ -98,12 +102,15 @@ impl super::GameState {
 
                 if is_dead {
                     info!("Monster {} died, broadcasting dead state", monster_id);
-                    self.broadcast(
+                    self.send_direct_message_to_players_within_position(
+                        &monster_position,
+                        super::AGENT_EVENT_DELIVERY_RADIUS,
                         ServerMessage::MonsterDead {
                             monster_id: monster_id.clone(),
                         },
                         None,
-                    );
+                    )
+                    .await;
 
                     // Award XP to the player who killed the monster
                     let xp_def = self.monster_defs.get(&monster_type);
@@ -224,14 +231,20 @@ impl super::GameState {
                         let mut monsters = game_state.monsters.write().await;
                         if let Some(monster) = monsters.get(&id_to_remove) {
                             if monster.state == MonsterState::Dead {
+                                let monster_position = monster.position;
                                 monsters.remove(&id_to_remove);
+                                drop(monsters);
                                 info!("Monster {} removed after 30s corpse time", id_to_remove);
-                                game_state.broadcast(
-                                    ServerMessage::MonsterRemoved {
-                                        monster_id: id_to_remove,
-                                    },
-                                    None,
-                                );
+                                game_state
+                                    .send_direct_message_to_players_within_position(
+                                        &monster_position,
+                                        super::AGENT_EVENT_DELIVERY_RADIUS,
+                                        ServerMessage::MonsterRemoved {
+                                            monster_id: id_to_remove,
+                                        },
+                                        None,
+                                    )
+                                    .await;
                             }
                         }
                     });
@@ -302,6 +315,7 @@ impl super::GameState {
         // Update player HP and combat timestamp
         let mut did_die = false;
         let mut current_health = 0;
+        let mut target_position = None;
 
         {
             let mut players = self.players.write().await;
@@ -319,6 +333,7 @@ impl super::GameState {
                     }
                 }
                 current_health = player.health;
+                target_position = Some(player.position);
             }
         }
 
@@ -327,27 +342,51 @@ impl super::GameState {
         }
 
         // Send attack result after server-side HP update.
-        self.broadcast(
-            ServerMessage::MonsterAttackedPlayer {
-                monster_id: monster_id.to_string(),
-                player_id: target_player_id.to_string(),
-                hit: result.hit,
-                roll: result.roll,
-                damage: result.damage,
-                current_health,
-            },
-            None,
-        );
+        let attack_msg = ServerMessage::MonsterAttackedPlayer {
+            monster_id: monster_id.to_string(),
+            player_id: target_player_id.to_string(),
+            hit: result.hit,
+            roll: result.roll,
+            damage: result.damage,
+            current_health,
+        };
+        if let Some(target_position) = target_position {
+            self.send_direct_message_to_players_within_position(
+                &target_position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
+                attack_msg,
+                None,
+            )
+            .await;
+        } else {
+            self.send_direct_message(
+                &target_player_id.to_string(),
+                ServerMessage::MonsterAttackedPlayer {
+                    monster_id: monster_id.to_string(),
+                    player_id: target_player_id.to_string(),
+                    hit: result.hit,
+                    roll: result.roll,
+                    damage: result.damage,
+                    current_health,
+                },
+            )
+            .await;
+        }
 
         if did_die {
             let dead_player_id = target_player_id.to_string();
             self.apply_player_death_penalty(&dead_player_id).await;
-            self.broadcast(
-                ServerMessage::PlayerDead {
-                    player_id: dead_player_id,
-                },
-                None,
-            );
+            if let Some(target_position) = target_position {
+                self.send_direct_message_to_players_within_position(
+                    &target_position,
+                    super::AGENT_EVENT_DELIVERY_RADIUS,
+                    ServerMessage::PlayerDead {
+                        player_id: dead_player_id,
+                    },
+                    None,
+                )
+                .await;
+            }
         }
     }
 
@@ -385,6 +424,7 @@ impl super::GameState {
         }
 
         let mut regen_dirty: Vec<PlayerId> = Vec::new();
+        let mut regen_messages = Vec::new();
         {
             let mut players = self.players.write().await;
             for (player_id, amount) in updates {
@@ -395,18 +435,28 @@ impl super::GameState {
 
                         if player.health != old_health {
                             regen_dirty.push(player_id.clone());
-                            self.broadcast(
+                            let position = player.position;
+                            regen_messages.push((
+                                position,
                                 ServerMessage::PlayerHealthUpdate {
                                     player_id: player_id.clone(),
                                     health: player.health,
                                     max_health: player.max_health,
                                 },
-                                None,
-                            );
+                            ));
                         }
                     }
                 }
             }
+        }
+        for (position, msg) in regen_messages {
+            self.send_direct_message_to_players_within_position(
+                &position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
+                msg,
+                None,
+            )
+            .await;
         }
         for pid in regen_dirty {
             self.mark_dirty(&pid).await;

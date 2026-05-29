@@ -84,13 +84,10 @@ impl super::GameState {
 
     pub fn broadcast_game_time(&self) -> GameDateTime {
         let datetime = self.current_game_datetime();
-        self.broadcast(
-            ServerMessage::GameTimeSync {
-                is_night: Self::is_night(&datetime),
-                datetime: datetime.clone(),
-            },
-            None,
-        );
+        self.broadcast(ServerMessage::GameTimeSync {
+            is_night: Self::is_night(&datetime),
+            datetime: datetime.clone(),
+        });
         datetime
     }
 }

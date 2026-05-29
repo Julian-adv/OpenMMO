@@ -245,6 +245,9 @@ mod tests {
             ServerMessage::PlayerLeft {
                 player_id: "p1".to_string(),
             },
+            ServerMessage::PlayerDisappeared {
+                player_id: "p1".to_string(),
+            },
             ServerMessage::MonsterDead {
                 monster_id: "m1".to_string(),
             },

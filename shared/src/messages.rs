@@ -142,6 +142,12 @@ pub enum ServerMessage {
     PlayerLeft {
         player_id: String,
     },
+    PlayerAppeared {
+        player: Player,
+    },
+    PlayerDisappeared {
+        player_id: String,
+    },
     PlayerMoved {
         player_id: String,
         position: Position,

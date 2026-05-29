@@ -1,4 +1,5 @@
 use crate::types::{MonsterState, Position, ServerMessage};
+use std::collections::HashSet;
 use tracing::{info, warn};
 
 /// Keep spawns this many meters clear of every no-spawn zone (towns), so the
@@ -15,7 +16,7 @@ impl super::GameState {
             .find(|r| r.monster_type == monster_type)
     }
 
-    /// Create a monster, broadcast to all, and return it (or None if limit reached).
+    /// Create a monster, notify nearby players, and return it (or None if limit reached).
     pub async fn spawn_monster(
         &self,
         monster_type: String,
@@ -96,12 +97,15 @@ impl super::GameState {
             id, owner_number, spawn_count, alive
         );
 
-        self.broadcast(
+        self.send_direct_message_to_players_within_position(
+            &monster.position,
+            super::AGENT_EVENT_DELIVERY_RADIUS,
             ServerMessage::MonsterSpawned {
                 monster: monster.clone(),
             },
             None,
-        );
+        )
+        .await;
         Some(monster)
     }
 
@@ -113,51 +117,109 @@ impl super::GameState {
         state: MonsterState,
         target_position: Position,
     ) {
-        let mut monsters = self.monsters.write().await;
+        let (old_position, owner_id, monster) = {
+            let mut monsters = self.monsters.write().await;
 
-        if let Some(monster) = monsters.get_mut(&monster_id) {
+            let Some(monster) = monsters.get_mut(&monster_id) else {
+                return;
+            };
             if monster.state == MonsterState::Dead {
                 return;
             }
+            let old_position = monster.position;
             monster.position = new_position.clone();
             monster.rotation = rotation;
             monster.state = state;
+            (old_position, monster.owner_id.clone(), monster.clone())
+        };
 
-            self.broadcast(
-                ServerMessage::MonsterMoved {
-                    monster_id,
-                    position: new_position,
-                    rotation,
-                    state,
-                    target_position,
-                    owner_id: monster.owner_id.clone(),
-                },
-                monster.owner_id.clone(),
-            );
-        }
+        self.fanout_monster_position_update(
+            &monster,
+            old_position,
+            ServerMessage::MonsterMoved {
+                monster_id,
+                position: new_position,
+                rotation,
+                state,
+                target_position,
+                owner_id: owner_id.clone(),
+            },
+            owner_id.as_ref(),
+        )
+        .await;
+    }
+
+    async fn fanout_monster_position_update(
+        &self,
+        monster: &crate::types::Monster,
+        old_position: Position,
+        update_msg: ServerMessage,
+        skip_player_id: Option<&String>,
+    ) {
+        let old_visible: HashSet<_> = self
+            .player_ids_within_position(&old_position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .await
+            .into_iter()
+            .filter(|id| skip_player_id.map_or(true, |skip_id| skip_id != id))
+            .collect();
+        let new_visible: HashSet<_> = self
+            .player_ids_within_position(&monster.position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .await
+            .into_iter()
+            .filter(|id| skip_player_id.map_or(true, |skip_id| skip_id != id))
+            .collect();
+
+        let left: Vec<_> = old_visible.difference(&new_visible).cloned().collect();
+        let entered: Vec<_> = new_visible.difference(&old_visible).cloned().collect();
+        let stayed: Vec<_> = new_visible.intersection(&old_visible).cloned().collect();
+
+        self.send_direct_message_to_players(
+            &left,
+            ServerMessage::MonsterRemoved {
+                monster_id: monster.id.clone(),
+            },
+        )
+        .await;
+        self.send_direct_message_to_players(
+            &entered,
+            ServerMessage::MonsterSpawned {
+                monster: monster.clone(),
+            },
+        )
+        .await;
+        self.send_direct_message_to_players(&stayed, update_msg)
+            .await;
     }
 
     pub async fn remove_monsters_by_owner(&self, owner_id: &str) {
-        let mut monsters = self.monsters.write().await;
+        let removed_monsters = {
+            let mut monsters = self.monsters.write().await;
+            let owned_ids: Vec<String> = monsters
+                .iter()
+                .filter(|(_, m)| m.owner_id.as_deref() == Some(owner_id))
+                .map(|(id, _)| id.clone())
+                .collect();
 
-        let owned_ids: Vec<String> = monsters
-            .iter()
-            .filter(|(_, m)| m.owner_id.as_deref() == Some(owner_id))
-            .map(|(id, _)| id.clone())
-            .collect();
+            owned_ids
+                .into_iter()
+                .filter_map(|monster_id| monsters.remove(&monster_id))
+                .collect::<Vec<_>>()
+        };
 
-        for monster_id in &owned_ids {
-            monsters.remove(monster_id);
+        for monster in removed_monsters {
             info!(
                 "Removed monster {} (owner {} disconnected)",
-                monster_id, owner_id
+                monster.id, owner_id
             );
-            self.broadcast(
+            self.send_direct_message_to_players_within_position(
+                &monster.position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::MonsterRemoved {
-                    monster_id: monster_id.clone(),
+                    monster_id: monster.id,
                 },
                 None,
-            );
+            )
+            .await;
         }
     }
 

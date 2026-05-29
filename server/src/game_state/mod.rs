@@ -22,15 +22,26 @@ struct DoorKey {
     segment_index: u32,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct SpatialCell {
+    x: i32,
+    z: i32,
+}
+
+const PLAYER_SPATIAL_CELL_SIZE: f32 = onlinerpg_shared::NPC_SIGHT_RADIUS;
+
+impl SpatialCell {
+    fn from_position(position: &Position) -> Self {
+        Self {
+            x: (position.x / PLAYER_SPATIAL_CELL_SIZE).floor() as i32,
+            z: (position.z / PLAYER_SPATIAL_CELL_SIZE).floor() as i32,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BroadcastMessage {
-    /// Structural form, only inspected by NPC connections to proximity-gate
-    /// delivery. Wrapped in `Arc` so the per-receiver clone done by the
-    /// broadcast channel is a refcount bump, not a deep copy of the payload.
-    pub msg: Arc<ServerMessage>,
     pub bytes: Bytes,
-    /// If set, skip sending to this player (used for MonsterMoved owner filtering).
-    pub skip_player_id: Option<PlayerId>,
 }
 
 pub type GameStateSender = broadcast::Sender<BroadcastMessage>;
@@ -66,6 +77,7 @@ pub(crate) struct ServerGroundItem {
 #[derive(Clone)]
 pub struct GameState {
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
+    player_spatial_cells: Arc<RwLock<HashMap<SpatialCell, HashSet<PlayerId>>>>,
     monsters: Arc<RwLock<HashMap<String, crate::types::Monster>>>,
     broadcast_tx: GameStateSender,
     game_clock_start_real: Instant,
@@ -105,6 +117,7 @@ impl GameState {
 
         Self {
             players: Arc::new(RwLock::new(HashMap::new())),
+            player_spatial_cells: Arc::new(RwLock::new(HashMap::new())),
             monsters: Arc::new(RwLock::new(HashMap::new())),
             broadcast_tx,
             game_clock_start_real: Instant::now(),
@@ -134,13 +147,11 @@ impl GameState {
         self.broadcast_tx.subscribe()
     }
 
-    pub(crate) fn broadcast(&self, msg: ServerMessage, skip_player_id: Option<PlayerId>) {
+    pub(crate) fn broadcast(&self, msg: ServerMessage) {
         match serialize_server_msg(&msg) {
             Ok(bytes) => {
                 let _ = self.broadcast_tx.send(BroadcastMessage {
-                    msg: Arc::new(msg),
                     bytes: Bytes::from(bytes),
-                    skip_player_id,
                 });
             }
             Err(e) => error!("Failed to serialize broadcast message: {}", e),

@@ -1,4 +1,6 @@
 use crate::types::{PlayerId, ServerMessage};
+
+const CHAT_DELIVERY_RADIUS: f32 = super::AGENT_EVENT_DELIVERY_RADIUS;
 use tracing::{info, warn};
 
 impl super::GameState {
@@ -27,17 +29,24 @@ impl super::GameState {
             return;
         }
 
-        let players = self.players.read().await;
+        let player_name = {
+            let players = self.players.read().await;
+            players.get(player_id).map(|player| player.name.clone())
+        };
 
-        if let Some(player) = players.get(player_id) {
-            info!("Chat message from {}: {}", player.name, message);
-            self.broadcast(
+        if let Some(player_name) = player_name {
+            info!("Chat message from {}: {}", player_name, message);
+            let recipients = self
+                .player_ids_within(player_id, CHAT_DELIVERY_RADIUS)
+                .await;
+            self.send_direct_message_to_players(
+                &recipients,
                 ServerMessage::ChatMessage {
                     player_id: player_id.clone(),
                     message,
                 },
-                None,
-            );
+            )
+            .await;
         } else {
             warn!("Chat message from non-existent player: {}", player_id);
         }

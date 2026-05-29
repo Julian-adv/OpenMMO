@@ -321,7 +321,14 @@ impl super::GameState {
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        self.broadcast(ServerMessage::GroundItemSpawned { item: ground_item }, None);
+        let item_position = ground_item.position;
+        self.send_direct_message_to_players_within_position(
+            &item_position,
+            super::AGENT_EVENT_DELIVERY_RADIUS,
+            ServerMessage::GroundItemSpawned { item: ground_item },
+            None,
+        )
+        .await;
     }
 
     pub async fn pickup_item(&self, player_id: &PlayerId, instance_id: u64) {
@@ -366,6 +373,7 @@ impl super::GameState {
         let max_weight = self.max_carry_weight(player_id).await;
 
         // Acquire write lock for both weight check and mutation atomically
+        let item_position = ground_item.position;
         let snapshot = {
             let mut ground_items = self.ground_items.write().await;
             if ground_items.remove(&instance_id).is_none() {
@@ -405,7 +413,13 @@ impl super::GameState {
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        self.broadcast(ServerMessage::GroundItemRemoved { instance_id }, None);
+        self.send_direct_message_to_players_within_position(
+            &item_position,
+            super::AGENT_EVENT_DELIVERY_RADIUS,
+            ServerMessage::GroundItemRemoved { instance_id },
+            None,
+        )
+        .await;
     }
 
     pub async fn tick_ground_item_despawn(&self) {
@@ -425,16 +439,23 @@ impl super::GameState {
             return;
         }
 
-        {
+        let removed_items = {
             let mut ground_items = self.ground_items.write().await;
-            for id in &to_remove {
-                ground_items.remove(id);
-            }
-        }
+            to_remove
+                .iter()
+                .filter_map(|id| ground_items.remove(id).map(|sgi| (*id, sgi.item.position)))
+                .collect::<Vec<_>>()
+        };
 
-        info!("Despawned {} ground item(s)", to_remove.len());
-        for id in to_remove {
-            self.broadcast(ServerMessage::GroundItemRemoved { instance_id: id }, None);
+        info!("Despawned {} ground item(s)", removed_items.len());
+        for (id, position) in removed_items {
+            self.send_direct_message_to_players_within_position(
+                &position,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
+                ServerMessage::GroundItemRemoved { instance_id: id },
+                None,
+            )
+            .await;
         }
     }
 

@@ -155,6 +155,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::CharacterError { .. } => "CharacterError",
         ServerMessage::PlayerJoined { .. } => "PlayerJoined",
         ServerMessage::PlayerLeft { .. } => "PlayerLeft",
+        ServerMessage::PlayerAppeared { .. } => "PlayerAppeared",
+        ServerMessage::PlayerDisappeared { .. } => "PlayerDisappeared",
         ServerMessage::PlayerMoved { .. } => "PlayerMoved",
         ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
         ServerMessage::ChatMessage { .. } => "ChatMessage",
