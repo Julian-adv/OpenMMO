@@ -411,7 +411,10 @@ export function handleServerMessage(
       break
 
     case 'MonsterDead':
-      monsterManager.handleMonsterDead(data.monster_id)
+      monsterManager.handleMonsterDead(
+        data.monster_id,
+        data.dropped_weapon_item_def_id
+      )
       break
 
     case 'PlayerAttacked': {

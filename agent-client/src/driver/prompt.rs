@@ -168,7 +168,7 @@ fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
                 monster.id, monster.monster_type
             ))
         }
-        ServerMessage::MonsterDead { monster_id } => {
+        ServerMessage::MonsterDead { monster_id, .. } => {
             if !monster_within_event_range(state, monster_id) {
                 return None;
             }

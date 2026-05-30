@@ -19,10 +19,18 @@
     id: string
     type: string
     lastDamageInfo?: MonsterData['lastDamageInfo']
+    droppedWeaponItemDefId?: string
   }
 
-  let { position, rotation, monsterState, id, type, lastDamageInfo }: Props =
-    $props()
+  let {
+    position,
+    rotation,
+    monsterState,
+    id,
+    type,
+    lastDamageInfo,
+    droppedWeaponItemDefId,
+  }: Props = $props()
 
   const def = $derived(getMonsterDef(type))
 
@@ -47,6 +55,7 @@
   const WEAPON_ROTATION = new THREE.Euler(0, 0, 0)
   const WEAPON_SCALE = 1
   let weaponAttached = false
+  let weaponObject: THREE.Object3D | undefined
 
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
@@ -247,8 +256,19 @@
     }
   })
 
-  // Attach the hand weapon once both the model and weapon GLB are ready.
+  // Attach the hand weapon once both the model and weapon GLB are ready, and
+  // detach it again if the monster dies and drops the weapon to the ground.
   $effect(() => {
+    // The held weapon dropped on death — detach it if it was attached.
+    if (monsterState === 'dead' && droppedWeaponItemDefId) {
+      if (weaponObject) {
+        weaponObject.removeFromParent()
+        weaponObject = undefined
+        weaponAttached = false
+      }
+      return
+    }
+
     if (
       weaponAttached ||
       !model ||
@@ -269,11 +289,11 @@
       return
     }
 
-    const weapon = $weaponGltf.scene.clone(true)
-    weapon.position.copy(WEAPON_OFFSET)
-    weapon.rotation.copy(WEAPON_ROTATION)
-    weapon.scale.setScalar(WEAPON_SCALE)
-    weapon.traverse((child) => {
+    weaponObject = $weaponGltf.scene.clone(true)
+    weaponObject.position.copy(WEAPON_OFFSET)
+    weaponObject.rotation.copy(WEAPON_ROTATION)
+    weaponObject.scale.setScalar(WEAPON_SCALE)
+    weaponObject.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh
         // Clone materials so corpse-fade opacity is per-instance.
@@ -286,7 +306,7 @@
         child.userData.monsterId = id
       }
     })
-    bone.add(weapon)
+    bone.add(weaponObject)
     weaponAttached = true
   })
 

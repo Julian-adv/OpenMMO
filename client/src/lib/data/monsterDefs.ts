@@ -24,6 +24,8 @@ export interface MonsterDefinition {
   animDead: string
   /** Optional weapon item id, or legacy model path relative to /models/. */
   weapon?: string
+  /** Chance from 0-1 that the weapon is dropped on death. */
+  weaponDropChance?: number
   /** Skeleton bone name the weapon is parented to (e.g. 'RightHand'). */
   weaponBone?: string
 }

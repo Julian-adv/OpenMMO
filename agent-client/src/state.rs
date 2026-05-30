@@ -426,7 +426,7 @@ impl SharedState {
                     .insert(monster.id.clone(), monster.clone());
                 self.monster_ai.add_monster(monster);
             }
-            ServerMessage::MonsterDead { monster_id } => {
+            ServerMessage::MonsterDead { monster_id, .. } => {
                 self.nearby_monsters.remove(monster_id);
                 self.monster_ai.handle_monster_dead(monster_id);
             }

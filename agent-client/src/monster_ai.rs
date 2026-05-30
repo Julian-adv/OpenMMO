@@ -14,6 +14,22 @@ pub struct MonsterAiManager {
     templates: HashMap<String, AiTemplate>,
     /// Maps monster_type -> template name
     type_to_template: HashMap<String, String>,
+    type_to_movement: HashMap<String, MonsterMovement>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct MonsterMovement {
+    pub walk_speed: f32,
+    pub run_speed: f32,
+}
+
+impl Default for MonsterMovement {
+    fn default() -> Self {
+        Self {
+            walk_speed: 1.0,
+            run_speed: 8.0,
+        }
+    }
 }
 
 impl MonsterAiManager {
@@ -22,6 +38,7 @@ impl MonsterAiManager {
             brains: HashMap::new(),
             templates: HashMap::new(),
             type_to_template: HashMap::new(),
+            type_to_movement: HashMap::new(),
         }
     }
 
@@ -30,20 +47,45 @@ impl MonsterAiManager {
         monster_ai::load_templates(json).unwrap_or_default()
     }
 
-    /// Load monster type -> template name mapping from monsters.json.
-    pub fn load_type_mapping(monsters_json: &str) -> HashMap<String, String> {
+    /// Load per-type AI template names and movement speeds from monsters.json
+    /// in a single parse.
+    pub fn load_monster_data(
+        monsters_json: &str,
+    ) -> (HashMap<String, String>, HashMap<String, MonsterMovement>) {
         #[derive(serde::Deserialize)]
         struct RawMonster {
             #[serde(rename = "aiTemplate", default = "default_template")]
             ai_template: String,
+            #[serde(rename = "walkSpeed", default = "default_walk_speed")]
+            walk_speed: f32,
+            #[serde(rename = "runSpeed", default = "default_run_speed")]
+            run_speed: f32,
         }
         fn default_template() -> String {
             "default".to_string()
         }
+        fn default_walk_speed() -> f32 {
+            MonsterMovement::default().walk_speed
+        }
+        fn default_run_speed() -> f32 {
+            MonsterMovement::default().run_speed
+        }
 
         let raw: HashMap<String, RawMonster> =
             serde_json::from_str(monsters_json).unwrap_or_default();
-        raw.into_iter().map(|(id, r)| (id, r.ai_template)).collect()
+        let mut type_to_template = HashMap::with_capacity(raw.len());
+        let mut type_to_movement = HashMap::with_capacity(raw.len());
+        for (id, r) in raw {
+            type_to_template.insert(id.clone(), r.ai_template);
+            type_to_movement.insert(
+                id,
+                MonsterMovement {
+                    walk_speed: r.walk_speed,
+                    run_speed: r.run_speed,
+                },
+            );
+        }
+        (type_to_template, type_to_movement)
     }
 
     pub fn set_templates(&mut self, templates: HashMap<String, AiTemplate>) {
@@ -54,8 +96,16 @@ impl MonsterAiManager {
         self.type_to_template = mapping;
     }
 
-    fn get_template(&self, monster_type: &str) -> &AiTemplate {
-        resolve_template(&self.type_to_template, &self.templates, monster_type)
+    pub fn set_movement_speeds(&mut self, movement: HashMap<String, MonsterMovement>) {
+        self.type_to_movement = movement;
+    }
+
+    /// Resolve the template name for a monster type, falling back to "default".
+    fn template_name_for(&self, monster_type: &str) -> String {
+        self.type_to_template
+            .get(monster_type)
+            .cloned()
+            .unwrap_or_else(|| "default".to_string())
     }
 
     /// Register a newly assigned monster.
@@ -64,13 +114,22 @@ impl MonsterAiManager {
             "Monster AI: managing {} (type={})",
             monster.id, monster.monster_type
         );
-        let template = self.get_template(&monster.monster_type);
+        let template_name = self.template_name_for(&monster.monster_type);
+        let template = template_by_name(&self.templates, &template_name);
+        let movement = self
+            .type_to_movement
+            .get(&monster.monster_type)
+            .copied()
+            .unwrap_or_default();
         let brain = MonsterBrain::new(
             monster.id.clone(),
             monster.monster_type.clone(),
+            template_name,
             monster.position.clone(),
             monster.health,
             monster.max_health,
+            movement.walk_speed,
+            movement.run_speed,
             template,
         );
         self.brains.insert(monster.id.clone(), brain);
@@ -92,9 +151,9 @@ impl MonsterAiManager {
         damage: u32,
         passability_cache: &PassabilityCache,
     ) -> Vec<ClientMessage> {
-        // Get template name before mutable borrow
+        // Get template before mutable borrow
         let template = if let Some(brain) = self.brains.get(monster_id) {
-            self.get_template(&brain.monster_type).clone()
+            template_by_name(&self.templates, &brain.template_name).clone()
         } else {
             return vec![];
         };
@@ -145,8 +204,7 @@ impl MonsterAiManager {
 
         let mut all_commands = Vec::new();
         for brain in self.brains.values_mut() {
-            let template =
-                resolve_template(&self.type_to_template, &self.templates, &brain.monster_type);
+            let template = template_by_name(&self.templates, &brain.template_name);
             let result = brain.tick(delta_ms, &players, template, &path_provider, &mut rng);
             all_commands.extend(result.commands.into_iter().map(command_to_client_msg));
         }
@@ -159,17 +217,15 @@ impl MonsterAiManager {
     }
 }
 
-fn resolve_template<'a>(
-    type_to_template: &HashMap<String, String>,
+/// Look up a template by its resolved name, falling back to a shared default.
+/// Takes `&templates` (not `&self`) so it can be called inside a `values_mut`
+/// loop over `self.brains` without a borrow conflict.
+fn template_by_name<'a>(
     templates: &'a HashMap<String, AiTemplate>,
-    monster_type: &str,
+    template_name: &str,
 ) -> &'a AiTemplate {
     static DEFAULT: std::sync::LazyLock<AiTemplate> = std::sync::LazyLock::new(AiTemplate::default);
-    let name = type_to_template
-        .get(monster_type)
-        .map(|s| s.as_str())
-        .unwrap_or("default");
-    templates.get(name).unwrap_or(&DEFAULT)
+    templates.get(template_name).unwrap_or(&DEFAULT)
 }
 
 fn command_to_client_msg(cmd: AiCommand) -> ClientMessage {

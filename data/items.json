@@ -109,7 +109,7 @@
     "weight": 2,
     "equipSlot": "main_hand",
     "stackable": false,
-    "icon": "sword.png",
+    "icon": "goblin_sword.png",
     "worldModel": "goblin_sword.glb",
     "damageDice": "1d4"
   },

@@ -250,6 +250,7 @@ mod tests {
             },
             ServerMessage::MonsterDead {
                 monster_id: "m1".to_string(),
+                dropped_weapon_item_def_id: Some("goblin_sword".to_string()),
             },
             ServerMessage::PlayerAttacked {
                 player_id: "p1".to_string(),

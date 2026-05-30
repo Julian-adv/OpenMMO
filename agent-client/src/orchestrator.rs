@@ -160,6 +160,7 @@ pub struct SharedResources {
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
     pub ai_templates: Arc<HashMap<String, AiTemplate>>,
     pub type_mapping: Arc<HashMap<String, String>>,
+    pub movement_speeds: Arc<HashMap<String, crate::monster_ai::MonsterMovement>>,
     pub scheduler: LlmScheduler,
 }
 
@@ -449,6 +450,7 @@ async fn run_npc_session(
     let state_for_ai = Arc::clone(&state);
     let templates_for_ai = Arc::clone(&shared.ai_templates);
     let mapping_for_ai = Arc::clone(&shared.type_mapping);
+    let movement_for_ai = Arc::clone(&shared.movement_speeds);
     let ai_task = tokio::spawn(async move {
         let tick_interval = Duration::from_secs(1);
         let mut interval = tokio::time::interval(tick_interval);
@@ -458,6 +460,7 @@ async fn run_npc_session(
             let mut s = state_for_ai.lock().await;
             s.monster_ai.set_templates((*templates_for_ai).clone());
             s.monster_ai.set_type_mapping((*mapping_for_ai).clone());
+            s.monster_ai.set_movement_speeds((*movement_for_ai).clone());
         }
 
         loop {

@@ -2,6 +2,7 @@ use crate::game::{character_hp, combat};
 use crate::types::{MonsterState, PlayerId, ServerMessage};
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem};
 use onlinerpg_shared::xp;
+use rand::Rng;
 use tracing::{info, warn};
 
 impl super::GameState {
@@ -101,22 +102,28 @@ impl super::GameState {
                 }
 
                 if is_dead {
+                    let dropped_weapon_item_def_id = self
+                        .monster_defs
+                        .get(&monster_type)
+                        .filter(|def| {
+                            def.weapon_drop_chance >= 1.0
+                                || rand::thread_rng().gen::<f32>() < def.weapon_drop_chance
+                        })
+                        .and_then(|def| def.weapon.as_deref())
+                        .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
+
                     info!("Monster {} died, broadcasting dead state", monster_id);
                     self.send_direct_message_to_players_within_position(
                         &monster_position,
                         super::AGENT_EVENT_DELIVERY_RADIUS,
                         ServerMessage::MonsterDead {
                             monster_id: monster_id.clone(),
+                            dropped_weapon_item_def_id: dropped_weapon_item_def_id.clone(),
                         },
                         None,
                     )
                     .await;
 
-                    let dropped_weapon_item_def_id = self
-                        .monster_defs
-                        .get(&monster_type)
-                        .and_then(|def| def.weapon.as_deref())
-                        .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
                     if let Some(item_def_id) = dropped_weapon_item_def_id {
                         let instance_id = self.next_instance_id().await;
                         let ground_item = GroundItem {

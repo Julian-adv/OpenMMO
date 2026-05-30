@@ -268,6 +268,8 @@ pub fn ai_create_brain(val: JsValue) -> Result<(), JsError> {
         position: Position,
         health: u32,
         max_health: u32,
+        walk_speed: f32,
+        run_speed: f32,
         template_name: String,
     }
 
@@ -279,9 +281,12 @@ pub fn ai_create_brain(val: JsValue) -> Result<(), JsError> {
     let brain = MonsterBrain::new(
         args.monster_id.clone(),
         args.monster_type,
+        args.template_name,
         args.position,
         args.health,
         args.max_health,
+        args.walk_speed,
+        args.run_speed,
         &template,
     );
 
@@ -310,7 +315,7 @@ pub fn ai_tick_brain(
             None => return None,
         };
 
-        let template = get_template(&brain.monster_type);
+        let template = get_template(&brain.template_name);
         let mut rng = rand::thread_rng();
         Some(brain.tick(delta_ms, &players, &template, &WasmPathProvider, &mut rng))
     });
@@ -335,7 +340,7 @@ pub fn ai_handle_hit(
             None => return vec![],
         };
 
-        let template = get_template(&brain.monster_type);
+        let template = get_template(&brain.template_name);
         let mut rng = rand::thread_rng();
         brain.handle_hit(
             attacker_id,

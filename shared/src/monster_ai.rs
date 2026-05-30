@@ -25,8 +25,6 @@ pub struct AiTemplate {
     pub chase_range: f32,
     pub attack_cooldown_ms: f32,
     pub leash_range: f32,
-    pub walk_speed: f32,
-    pub run_speed: f32,
     pub hit_stagger_ms: f32,
     pub flee_health_ratio: f32,
     pub flee_chance: f32,
@@ -48,8 +46,6 @@ impl Default for AiTemplate {
             chase_range: 25.0,
             attack_cooldown_ms: 1500.0,
             leash_range: 50.0,
-            walk_speed: 1.0,
-            run_speed: 8.0,
             hit_stagger_ms: 800.0,
             flee_health_ratio: 0.3,
             flee_chance: 0.5,
@@ -191,6 +187,7 @@ impl<'a> PathProvider for CachePathProvider<'a> {
 pub struct MonsterBrain {
     pub monster_id: String,
     pub monster_type: String,
+    pub template_name: String,
     pub position: Position,
     pub rotation: f32,
     pub health: u32,
@@ -198,6 +195,8 @@ pub struct MonsterBrain {
     state: AiState,
     state_timer_ms: f32,
     target_player_id: Option<String>,
+    walk_speed: f32,
+    run_speed: f32,
     move_speed: f32,
     target_position: Option<Position>,
     waypoints: Vec<PathWaypoint>,
@@ -212,21 +211,27 @@ impl MonsterBrain {
     pub fn new(
         monster_id: String,
         monster_type: String,
+        template_name: String,
         position: Position,
         health: u32,
         max_health: u32,
+        walk_speed: f32,
+        run_speed: f32,
         template: &AiTemplate,
     ) -> Self {
         Self {
             monster_id,
             monster_type,
+            template_name,
             rotation: 0.0,
             health,
             max_health,
             state: AiState::Idle,
             state_timer_ms: 0.0,
             target_player_id: None,
-            move_speed: template.walk_speed,
+            walk_speed,
+            run_speed,
+            move_speed: walk_speed,
             target_position: None,
             waypoints: Vec::new(),
             current_waypoint_idx: 0,
@@ -321,7 +326,7 @@ impl MonsterBrain {
 
         self.health = self.health.saturating_sub(if hit { damage } else { 0 });
         self.target_player_id = Some(attacker_id.to_string());
-        self.move_speed = template.run_speed;
+        self.move_speed = self.run_speed;
 
         if self.health == 0 {
             self.state = AiState::Dead;
@@ -339,7 +344,7 @@ impl MonsterBrain {
                 self.state_timer_ms = 0.0;
                 commands.push(self.make_move_cmd());
             } else {
-                self.transition_to_flee(&mut commands, template, path_provider);
+                self.transition_to_flee(&mut commands, path_provider);
             }
         } else if hit {
             self.state = AiState::Hit;
@@ -413,7 +418,7 @@ impl MonsterBrain {
         if self.state_timer_ms >= template.hit_stagger_ms {
             if self.health <= self.flee_health_threshold && rng.gen::<f32>() < template.flee_chance
             {
-                self.transition_to_flee(commands, template, path_provider);
+                self.transition_to_flee(commands, path_provider);
             } else {
                 self.state = AiState::Attack;
                 self.state_timer_ms = 0.0;
@@ -484,7 +489,7 @@ impl MonsterBrain {
                 });
             }
         } else {
-            self.move_speed = template.run_speed;
+            self.move_speed = self.run_speed;
             let target_pos = &target.position;
 
             let needs_repath = self.waypoints.is_empty()
@@ -600,10 +605,10 @@ impl MonsterBrain {
 
         if is_walk {
             self.state = AiState::Walk;
-            self.move_speed = template.walk_speed;
+            self.move_speed = self.walk_speed;
         } else {
             self.state = AiState::Run;
-            self.move_speed = template.run_speed;
+            self.move_speed = self.run_speed;
         }
 
         self.state_timer_ms = 0.0;
@@ -636,12 +641,11 @@ impl MonsterBrain {
     fn transition_to_flee(
         &mut self,
         commands: &mut Vec<AiCommand>,
-        template: &AiTemplate,
         path_provider: &dyn PathProvider,
     ) {
         self.state = AiState::Flee;
         self.state_timer_ms = 0.0;
-        self.move_speed = template.run_speed;
+        self.move_speed = self.run_speed;
 
         self.compute_path(self.spawn_position.x, self.spawn_position.z, path_provider);
 
@@ -670,7 +674,7 @@ impl MonsterBrain {
 
         self.state = AiState::Return;
         self.state_timer_ms = 0.0;
-        self.move_speed = template.walk_speed;
+        self.move_speed = self.walk_speed;
         self.target_position = Some(self.spawn_position.clone());
 
         self.compute_path(self.spawn_position.x, self.spawn_position.z, path_provider);
@@ -796,6 +800,7 @@ mod tests {
         MonsterBrain::new(
             "test_m1".into(),
             "scp939".into(),
+            "default".into(),
             Position {
                 x: 10.0,
                 y: 0.0,
@@ -803,6 +808,8 @@ mod tests {
             },
             10,
             10,
+            1.0,
+            8.0,
             template,
         )
     }
@@ -874,8 +881,6 @@ mod tests {
         "chaseRange": 25.0,
         "attackCooldownMs": 1500.0,
         "leashRange": 50.0,
-        "walkSpeed": 1.0,
-        "runSpeed": 8.0,
         "hitStaggerMs": 800.0,
         "fleeHealthRatio": 0.3,
         "fleeChance": 0.5,
@@ -903,7 +908,7 @@ mod tests {
         // Put brain in attack state with a target
         brain.state = AiState::Attack;
         brain.target_player_id = Some("p1".into());
-        brain.move_speed = t.run_speed;
+        brain.move_speed = brain.run_speed;
 
         let players = vec![NearbyPlayer {
             id: "p1".into(),

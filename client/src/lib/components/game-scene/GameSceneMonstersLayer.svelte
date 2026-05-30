@@ -20,5 +20,6 @@
     rotation={monster.rotation}
     monsterState={monster.state}
     lastDamageInfo={monster.lastDamageInfo}
+    droppedWeaponItemDefId={monster.droppedWeaponItemDefId}
   />
 {/each}

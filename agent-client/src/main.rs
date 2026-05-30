@@ -125,14 +125,15 @@ async fn main() -> anyhow::Result<()> {
     let ai_templates = monster_ai::MonsterAiManager::load_templates_from_json(include_str!(
         "../../data/ai_templates.json"
     ));
-    let type_mapping =
-        monster_ai::MonsterAiManager::load_type_mapping(include_str!("../../data/monsters.json"));
+    let (type_mapping, movement_speeds) =
+        monster_ai::MonsterAiManager::load_monster_data(include_str!("../../data/monsters.json"));
 
     let shared = Arc::new(SharedResources {
         height_sampler: Arc::new(create_height_sampler(&config.terrain_dir)),
         world_cache: Arc::new(std::sync::RwLock::new(state::WorldCache::new())),
         ai_templates: Arc::new(ai_templates),
         type_mapping: Arc::new(type_mapping),
+        movement_speeds: Arc::new(movement_speeds),
         scheduler: llm_scheduler::LlmScheduler::new(config.max_concurrent),
     });
 

@@ -200,6 +200,7 @@ pub enum ServerMessage {
     },
     MonsterDead {
         monster_id: String,
+        dropped_weapon_item_def_id: Option<String>,
     },
     PlayerAttacked {
         player_id: String,

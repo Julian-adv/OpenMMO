@@ -3,6 +3,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
 
+fn default_weapon_drop_chance() -> f32 {
+    1.0
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[allow(dead_code)]
 pub struct MonsterDefinition {
@@ -24,6 +28,8 @@ pub struct MonsterDefinition {
     pub damage_roll: String,
     #[serde(default)]
     pub weapon: Option<String>,
+    #[serde(rename = "weaponDropChance", default = "default_weapon_drop_chance")]
+    pub weapon_drop_chance: f32,
     #[serde(rename = "weaponBone", default)]
     pub weapon_bone: Option<String>,
     pub level: u8,

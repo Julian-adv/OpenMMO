@@ -140,6 +140,8 @@ class MonsterManager {
         position,
         health: hp,
         maxHealth: maxHp,
+        walkSpeed: def?.walkSpeed ?? 1,
+        runSpeed: def?.runSpeed ?? 8,
         templateName,
       })
     }
@@ -154,10 +156,11 @@ class MonsterManager {
     this.monsters.delete(id)
   }
 
-  handleMonsterDead(id: string) {
+  handleMonsterDead(id: string, droppedWeaponItemDefId?: string | null) {
     const monster = this.monsters.get(id)
     if (monster) {
       ai_handle_death(id)
+      monster.droppedWeaponItemDefId = droppedWeaponItemDefId ?? undefined
       // If we are waiting for an impact, delay the visual death
       if (monster.impactDelay && monster.impactDelay > 0) {
         monster.isDeadPending = true
