@@ -10,7 +10,7 @@ first if missing:
 (produces 07_worldmap.png — the grid/label-free relief layer.)
 
 Run:  uv run tools/worldmap-label.py
-Place-name data is the shared source data/map_labels.csv (world meters, game
+Place-name data is the shared source data-src/map_labels.csv (world meters, game
 coords) — the SAME table the in-game world map (M key) reads. Edit that CSV to
 move/rename places; this script just renders it onto the doc map.
 
@@ -53,9 +53,9 @@ def world_to_px(x_m, z_m):
     return (x_m / MPC + ORIGIN, z_m / MPC + ORIGIN)
 
 # --- shared label table ---------------------------------------------------
-# Source of truth: data/map_labels.csv (id,name,kind,x,z) in world meters.
+# Source of truth: data-src/map_labels.csv (id,name,kind,x,z) in world meters.
 # kind: continent | capital | city | town | sea
-LABELS_CSV = ROOT / "data/map_labels.csv"
+LABELS_CSV = ROOT / "data-src/map_labels.csv"
 with LABELS_CSV.open(newline="") as fh:
     LABELS = [
         {"name": row["name"], "kind": row["kind"],

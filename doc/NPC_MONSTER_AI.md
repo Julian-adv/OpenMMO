@@ -160,15 +160,16 @@ min_interval_secs = 5
 - `shared/src/lib.rs` — 프로토콜 타입 정의 (Monster, MonsterState, 메시지 variants)
 - `server/src/game_state/monster.rs` — 서버 몬스터 스폰/소유/위치 동기화
 - `server/src/game_state/combat.rs` — 서버 전투 판정 (플레이어↔몬스터)
-- `server/src/monster_defs.rs` — 몬스터 정의 로드 (`data/monsters.json`)
-- `server/src/world_config.rs` — 월드 설정 로드 (`data/world.json` 스폰 규칙)
+- `server/src/monster_defs.rs` — 생성된 몬스터 정의 로드 (`data/monsters.json`)
+- `server/src/world_config.rs` — 월드 설정 로드 (`data-src/world.json` 스폰 규칙)
 - `server/src/connection.rs` — 메시지 라우팅 (RequestSpawnMonster, MonsterMove 등)
 - `client/src/lib/managers/monsterManager.ts` — 클라이언트 몬스터 AI FSM (Phase 1 구현체)
 - `client/src/lib/network/messageHandlers.ts` — 클라이언트 메시지 핸들러
 - `client/src/lib/network/socket.ts` — 클라이언트 네트워크 전송 메서드
 - `client/src/lib/types/Monster.ts` — 클라이언트 MonsterData 타입
-- `data/monsters.json` — 몬스터 정의 데이터
-- `data/world.json` — 월드/스폰 설정
+- `data-src/monsters.csv` — 몬스터 정의 원본 데이터
+- `data/monsters.json` — 생성된 몬스터 정의 데이터
+- `data-src/world.json` — 월드/스폰 설정
 - `agent-client/src/driver.rs` — LLM driver loop, combat tick (스케줄러가 대체 예정)
 - `agent-client/src/state.rs` — SharedState 확장 (MonsterBrain 추가 예정)
 - `agent-client/src/main.rs` — 세션 라이프사이클 (orchestrator 확장 예정)

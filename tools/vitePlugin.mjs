@@ -4,10 +4,10 @@ import { fileURLToPath } from 'url'
 import { convertCsvFile } from './convert.mjs'
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url))
-const dataDir = path.join(toolsDir, '..', 'data')
+const sourceDir = path.join(toolsDir, '..', 'data-src')
 
 function convertAllCsv() {
-  const csvFiles = fs.readdirSync(dataDir).filter((f) => f.endsWith('.csv'))
+  const csvFiles = fs.readdirSync(sourceDir).filter((f) => f.endsWith('.csv'))
   for (const csvFile of csvFiles) {
     const { count } = convertCsvFile(csvFile)
     console.log(
@@ -23,10 +23,10 @@ export function monsterCsvPlugin() {
       convertAllCsv()
     },
     configureServer(server) {
-      server.watcher.add(path.join(dataDir, '*.csv'))
+      server.watcher.add(path.join(sourceDir, '*.csv'))
       server.watcher.on('change', (changedPath) => {
         const resolved = path.resolve(changedPath)
-        if (resolved.startsWith(dataDir) && resolved.endsWith('.csv')) {
+        if (resolved.startsWith(sourceDir) && resolved.endsWith('.csv')) {
           const csvFile = path.basename(resolved)
           const { count } = convertCsvFile(csvFile)
           console.log(

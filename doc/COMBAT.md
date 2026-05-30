@@ -212,7 +212,7 @@ d20 굴림 ≤ hitThreshold  →  빗나감
 NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.**
 
 - 캐릭터: 생성 시 DEX 기반 공식으로 계산 (위 섹션 참고)
-- 몬스터: `data/monsters.json`에 직접 정의
+- 몬스터: `data-src/monsters.csv`에 정의하고 `data/monsters.json`으로 생성
 - 10이 기준점 (이 이상부터 XP 보너스가 가속)
 
 | GUARD | 의미 |
@@ -229,7 +229,7 @@ NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.
 
 ## 몬스터 스탯 정의
 
-몬스터는 [data/monsters.json](../data/monsters.json)에 정의한다.
+몬스터는 [data-src/monsters.csv](../data-src/monsters.csv)에 정의하고, 빌드/개발 도구가 [data/monsters.json](../data/monsters.json)을 생성한다.
 
 | 필드 | 타입 | 설명 |
 |------|------|------|

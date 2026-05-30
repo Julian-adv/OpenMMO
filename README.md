@@ -144,10 +144,10 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 ### 3. Running the Server
 
-This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. To rebuild the server only when the server crate (`server/`) or that shared crate changes, run the watch command from the **root directory**.
+This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. Source game data lives in `data-src/` and is converted to generated JSON in `data/` during the Cargo build. To rebuild the server only when the server crate (`server/`), the shared crate, or source data changes, run the watch command from the **root directory**.
 
 ```bash
-cargo watch -w server -w shared -x "run -p onlinerpg-server"
+cargo watch -w server -w shared -w data-src -x "run -p onlinerpg-server"
 ```
 
 The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1).

@@ -42,13 +42,12 @@ impl MonsterAiManager {
         }
     }
 
-    /// Load AI templates from JSON (data/ai_templates.json).
+    /// Load AI templates from JSON (data-src/ai_templates.json).
     pub fn load_templates_from_json(json: &str) -> HashMap<String, AiTemplate> {
         monster_ai::load_templates(json).unwrap_or_default()
     }
 
-    /// Load per-type AI template names and movement speeds from monsters.json
-    /// in a single parse.
+    /// Load per-type AI template names and movement speeds from generated monsters.json.
     pub fn load_monster_data(
         monsters_json: &str,
     ) -> (HashMap<String, String>, HashMap<String, MonsterMovement>) {

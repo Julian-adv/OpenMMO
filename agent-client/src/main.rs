@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let ai_templates = monster_ai::MonsterAiManager::load_templates_from_json(include_str!(
-        "../../data/ai_templates.json"
+        "../../data-src/ai_templates.json"
     ));
     let (type_mapping, movement_speeds) =
         monster_ai::MonsterAiManager::load_monster_data(include_str!("../../data/monsters.json"));

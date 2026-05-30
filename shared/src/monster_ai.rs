@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
-// AiTemplate — loaded from data/ai_templates.json
+// AiTemplate — loaded from data-src/ai_templates.json
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +58,7 @@ impl Default for AiTemplate {
     }
 }
 
-/// Load AI templates from JSON string (data/ai_templates.json).
+/// Load AI templates from JSON string (data-src/ai_templates.json).
 pub fn load_templates(json: &str) -> Result<HashMap<String, AiTemplate>, serde_json::Error> {
     serde_json::from_str(json)
 }

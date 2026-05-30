@@ -21,3 +21,6 @@ async-trait = "0.1"
 rmcp = { version = "1", features = ["server", "transport-streamable-http-server"] }
 axum = "0.8"
 tower-http = { version = "0.6", features = ["cors"] }
+
+[build-dependencies]
+serde_json = "1.0"

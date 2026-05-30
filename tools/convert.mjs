@@ -3,6 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const toolsDir = path.dirname(fileURLToPath(import.meta.url))
+const sourceDir = path.join(toolsDir, '..', 'data-src')
 const dataDir = path.join(toolsDir, '..', 'data')
 
 /**
@@ -10,10 +11,11 @@ const dataDir = path.join(toolsDir, '..', 'data')
  * Returns the number of entries converted.
  */
 export function convertCsvFile(csvFileName) {
-  const csvPath = path.join(dataDir, csvFileName)
+  const csvPath = path.join(sourceDir, csvFileName)
   const jsonFileName = csvFileName.replace(/\.csv$/, '.json')
   const jsonPath = path.join(dataDir, jsonFileName)
 
+  fs.mkdirSync(dataDir, { recursive: true })
   const csv = fs.readFileSync(csvPath, 'utf-8').trim()
   const lines = csv.split('\n')
   const headers = lines[0].split(',')
@@ -58,7 +60,7 @@ const isDirectRun =
   path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))
 
 if (isDirectRun) {
-  const csvFiles = fs.readdirSync(dataDir).filter((f) => f.endsWith('.csv'))
+  const csvFiles = fs.readdirSync(sourceDir).filter((f) => f.endsWith('.csv'))
   for (const csvFile of csvFiles) {
     const { count, jsonPath } = convertCsvFile(csvFile)
     console.log(`Converted ${count} entry/entries from ${csvFile} -> ${jsonPath}`)

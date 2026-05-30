@@ -10,7 +10,7 @@
   const MAX_ZOOM = 32
   const DEFAULT_ZOOM = 8
 
-  // --- Shared place-name labels (same source as the doc map: data/map_labels.csv) ---
+  // --- Shared place-name labels (generated from data-src/map_labels.csv) ---
   type LabelKind = 'continent' | 'capital' | 'city' | 'town' | 'sea' | 'island'
   interface MapLabel {
     name: string

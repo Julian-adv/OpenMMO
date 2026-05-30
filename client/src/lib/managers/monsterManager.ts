@@ -22,7 +22,7 @@ import {
   ai_handle_hit,
   ai_handle_death,
 } from '../wasm/onlinerpg_shared'
-import aiTemplatesJson from '../../../../data/ai_templates.json'
+import aiTemplatesJson from '../../../../data-src/ai_templates.json'
 import monstersJson from '../../../../data/monsters.json'
 
 type MonsterState = MonsterData['state']

@@ -48,7 +48,7 @@ pub struct SpawnPosition {
 }
 
 static WORLD_CONFIG: LazyLock<WorldConfig> = LazyLock::new(|| {
-    let data = include_str!("../../data/world.json");
+    let data = include_str!("../../data-src/world.json");
     serde_json::from_str(data).expect("Failed to parse world.json")
 });
 
