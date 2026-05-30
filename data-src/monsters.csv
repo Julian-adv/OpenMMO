@@ -1,3 +1,3 @@
 id,name,model,health,level,guard,walkSpeed,runSpeed,attackRange,chaseRange,attackCooldown,damageRoll,hitThreshold,fleeHealthRatio,fleeChance,returnChance,aiTemplate,animIdle,animWalk,animRun,animAttack,animHit,animDie,animDead,weapon,weaponDropChance,weaponBone
 scp939,Stalker,monsters/scp939.glb,10,3,5,1.0,8.0,2.0,25.0,1500,1d6,10,0.3,0.5,0.7,default,939_Idle,939_Walking,939_Running,939_Attack1,939_AddStagger1,939_Die,939_Dead,,,
-orc,Orc,monsters/orc.glb,15,4,6,1.0,2.5,2.0,25.0,1800,1d8,11,0.2,0.3,0.7,default,Sword_Idle_Rig,Walk_Loop_Rig,Jog_Fwd_Loop_Rig,Sword_Attack_Rig,Hit_Chest_Rig,Death01_Rig,Death01_Rig,goblin_sword,0.25,RightHand
+orc,Orc,monsters/orc.glb,15,4,6,1.0,4.5,2.0,25.0,1800,1d8,11,0.2,0.3,0.7,default,Sword_Idle_Rig,Walk_Loop_Rig,Jog_Fwd_Loop_Rig,Sword_Attack_Rig,Hit_Chest_Rig,Death01_Rig,Death01_Rig,goblin_sword,0.25,RightHand
