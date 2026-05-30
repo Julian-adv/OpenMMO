@@ -679,7 +679,7 @@ impl super::GameState {
                 .await;
         }
         for item in items_entered {
-            self.send_direct_message(player_id, ServerMessage::GroundItemSpawned { item })
+            self.send_direct_message(player_id, ServerMessage::GroundItemAppeared { item })
                 .await;
         }
 

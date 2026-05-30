@@ -5,14 +5,18 @@
   import { getWeaponModelPath } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
-  import type { GroundItemData } from '../managers/groundItemManager'
+  import {
+    evaluateSpawnAnimation,
+    type GroundItemData,
+  } from '../managers/groundItemManager'
 
   interface Props {
     data: GroundItemData
     rotation?: number
+    animationTimeMs?: number
   }
 
-  let { data, rotation = 0 }: Props = $props()
+  let { data, rotation = 0, animationTimeMs = 0 }: Props = $props()
 
   const def = $derived(getItemDef(data.itemDefId))
   const label = $derived(def?.name ?? data.itemDefId)
@@ -83,13 +87,25 @@
   }
 
   const nameTexture = $derived(worldModelScene ? null : makeNameTexture(label))
+
+  const spawnTransform = $derived(
+    data.spawnAnimation && !data.inHand
+      ? evaluateSpawnAnimation(data.spawnAnimation, animationTimeMs)
+      : null
+  )
+  const displayX = $derived(data.position.x + (spawnTransform?.offsetX ?? 0))
+  const displayY = $derived(
+    data.position.y + 0.3 + (spawnTransform?.offsetY ?? 0)
+  )
+  const displayZ = $derived(data.position.z + (spawnTransform?.offsetZ ?? 0))
 </script>
 
 <T.Group
-  position.x={data.position.x}
-  position.y={data.position.y + 0.3}
-  position.z={data.position.z}
-  rotation.y={worldModelScene ? 0 : rotation}
+  position.x={displayX}
+  position.y={displayY}
+  position.z={displayZ}
+  rotation.y={data.restingRotationY + (worldModelScene || data.spawnAnimation ? 0 : rotation)}
+  rotation.z={spawnTransform?.spinZ ?? 0}
   userData={{ groundItemId: data.instanceId }}
 >
   <T.Group bind:ref={groundParentRef} />

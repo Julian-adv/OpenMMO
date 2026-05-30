@@ -284,8 +284,12 @@ pub enum ServerMessage {
     InventoryUpdated {
         inventory: inventory::PlayerInventory,
     },
-    /// A new item appeared on the ground.
+    /// A new item was created on the ground.
     GroundItemSpawned {
+        item: inventory::GroundItem,
+    },
+    /// An existing ground item became visible to the client.
+    GroundItemAppeared {
         item: inventory::GroundItem,
     },
     /// A ground item was picked up or despawned.

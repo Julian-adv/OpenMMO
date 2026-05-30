@@ -279,11 +279,11 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
     }
 
     match direct_rx.try_recv() {
-        Ok(ServerMessage::GroundItemSpawned { item }) => {
+        Ok(ServerMessage::GroundItemAppeared { item }) => {
             assert_eq!(item.instance_id, 42);
         }
         other => panic!(
-            "Expected GroundItemSpawned when entering AOI, got {:?}",
+            "Expected GroundItemAppeared when entering AOI, got {:?}",
             other
         ),
     }

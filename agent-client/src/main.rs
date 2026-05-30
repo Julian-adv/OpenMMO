@@ -188,6 +188,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::InventoryState { .. } => "InventoryState",
         ServerMessage::InventoryUpdated { .. } => "InventoryUpdated",
         ServerMessage::GroundItemSpawned { .. } => "GroundItemSpawned",
+        ServerMessage::GroundItemAppeared { .. } => "GroundItemAppeared",
         ServerMessage::GroundItemRemoved { .. } => "GroundItemRemoved",
         ServerMessage::InventoryError { .. } => "InventoryError",
     }

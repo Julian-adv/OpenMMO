@@ -2,6 +2,7 @@ import { MathUtils } from 'three'
 import { get } from 'svelte/store'
 import { gameStore, addChatMessage } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
+import { groundItemManager } from './managers/groundItemManager'
 import {
   editorHeightManager,
   editorSplatManager,
@@ -11,6 +12,8 @@ import { riverWireframeVisible } from './stores/debugStore'
 import { computeGrassPlacement, regenerateVegMeta } from './utils/grass-data'
 
 type CommandHandler = (args: string) => void
+
+let nextDebugDropInstanceId = -1
 
 const commands: Record<string, CommandHandler> = {
   '/pos': () => {
@@ -26,6 +29,44 @@ const commands: Record<string, CommandHandler> = {
     } else {
       addChatMessage({ text: 'Position: unknown', sender: 'system' })
     }
+  },
+
+  '/drop': () => {
+    const player = get(gameStore).currentPlayer
+    if (!player) {
+      addChatMessage({
+        text: 'Drop: player position unknown',
+        sender: 'system',
+      })
+      return
+    }
+
+    const forwardX = Math.sin(player.rotation)
+    const forwardZ = Math.cos(player.rotation)
+    const landingAngle = Math.random() * Math.PI * 2
+    const landingDistance = Math.sqrt(Math.random()) * 0.7
+    const landingOffsetX = Math.cos(landingAngle) * landingDistance
+    const landingOffsetZ = Math.sin(landingAngle) * landingDistance
+    const instanceId = nextDebugDropInstanceId--
+
+    groundItemManager.spawn(
+      {
+        instance_id: instanceId,
+        item_def_id: 'goblin_sword',
+        position: {
+          x: player.position.x + forwardX + landingOffsetX,
+          y: player.position.y,
+          z: player.position.z + forwardZ + landingOffsetZ,
+        },
+        floor_level: 0,
+      },
+      { animateSpawn: true }
+    )
+
+    addChatMessage({
+      text: 'Drop: spawned animated Goblin Sword near 1m ahead',
+      sender: 'system',
+    })
   },
 
   '/wireframe': () => {

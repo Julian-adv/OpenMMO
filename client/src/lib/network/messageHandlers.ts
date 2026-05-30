@@ -633,6 +633,12 @@ export function handleServerMessage(
       break
 
     case 'GroundItemSpawned':
+      groundItemManager.spawn(data.item as ServerGroundItem, {
+        animateSpawn: true,
+      })
+      break
+
+    case 'GroundItemAppeared':
       groundItemManager.spawn(data.item as ServerGroundItem)
       break
 
