@@ -125,6 +125,13 @@
 
   let pendingPickupInstanceId = $state<number | null>(null)
 
+  function finishPendingPickup() {
+    const id = pendingPickupInstanceId
+    if (id === null) return
+    groundItemManager.finishPickup(id)
+    pendingPickupInstanceId = null
+  }
+
   function exitPickupInteraction() {
     if (
       playerState.state !== 'interact' ||
@@ -132,6 +139,7 @@
     ) {
       return
     }
+    finishPendingPickup()
     setPlayerState(buildIdleAfterInteract(playerState))
   }
 
@@ -151,12 +159,10 @@
   }
 
   $effect(() => {
-    const id = pendingPickupInstanceId
-    if (id === null) return
+    if (pendingPickupInstanceId === null) return
     const s = playerState
     if (s.state !== 'interact' || s.interactionAnim !== 'pickup') {
-      groundItemManager.finishPickup(id)
-      pendingPickupInstanceId = null
+      finishPendingPickup()
     }
   })
 
