@@ -33,6 +33,23 @@
     "pathRecalcMs": 500.0,
     "targetMoveThreshold": 3.0
   },
+  "brave": {
+    "idleMoveChance": 0.3,
+    "idleCheckMs": 1000.0,
+    "minMoveDist": 2.0,
+    "maxMoveDist": 10.0,
+    "attackRange": 2.0,
+    "chaseRange": 25.0,
+    "leashRange": 50.0,
+    "hitStaggerMs": 800.0,
+    "fleeHealthRatio": 0.0,
+    "fleeChance": 0.0,
+    "fleeDurationMs": 0.0,
+    "returnChance": 0.7,
+    "returnArriveDist": 5.0,
+    "pathRecalcMs": 500.0,
+    "targetMoveThreshold": 3.0
+  },
   "timid": {
     "idleMoveChance": 0.15,
     "idleCheckMs": 1000.0,
@@ -42,10 +59,10 @@
     "chaseRange": 15.0,
     "leashRange": 30.0,
     "hitStaggerMs": 800.0,
-    "fleeHealthRatio": 0.5,
-    "fleeChance": 0.8,
+    "fleeHealthRatio": 0.3,
+    "fleeChance": 0.5,
     "fleeDurationMs": 5000.0,
-    "returnChance": 0.9,
+    "returnChance": 0.0,
     "returnArriveDist": 5.0,
     "pathRecalcMs": 500.0,
     "targetMoveThreshold": 3.0

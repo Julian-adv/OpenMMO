@@ -12,9 +12,7 @@ export interface MonsterDefinition {
   attackCooldown: number
   attackImpactDelay: number
   attackDamageTextDelay: number
-  fleeHealthRatio: number
-  fleeChance: number
-  returnChance: number
+  aiTemplate: string
   damageRoll: string
   hitThreshold: number
   animIdle: string
