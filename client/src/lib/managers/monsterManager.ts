@@ -22,6 +22,7 @@ import {
 } from '../data/combatTiming'
 import {
   ai_load_templates,
+  ai_load_behavior_trees,
   ai_create_brain,
   ai_remove_brain,
   ai_tick_brain,
@@ -29,6 +30,7 @@ import {
   ai_handle_death,
 } from '../wasm/onlinerpg_shared'
 import aiTemplatesJson from '../../../../data-src/ai_templates.json'
+import behaviorTreesJson from '../../../../data-src/behavior_trees.json'
 import monstersJson from '../../../../data/monsters.json'
 
 type MonsterState = MonsterData['state']
@@ -75,6 +77,7 @@ class MonsterManager {
   private ensureTemplatesLoaded() {
     if (!this.templatesLoaded) {
       ai_load_templates(JSON.stringify(aiTemplatesJson))
+      ai_load_behavior_trees(JSON.stringify(behaviorTreesJson))
       this.templatesLoaded = true
     }
   }

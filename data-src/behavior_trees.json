@@ -1,0 +1,230 @@
+{
+  "schemaVersion": 1,
+  "trees": {
+    "timid": {
+      "description": "Avoids prolonged combat, flees when badly hurt, and only chases nearby targets.",
+      "root": {
+        "type": "selector",
+        "children": [
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "is_beyond_leash",
+                "params": {
+                  "range": 30.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "return_to_spawn",
+                "params": {
+                  "arriveDist": 5.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "health_below_ratio",
+                "params": {
+                  "ratio": 0.3
+                }
+              },
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.5
+                }
+              },
+              {
+                "type": "action",
+                "name": "flee_from_target",
+                "params": {
+                  "durationMs": 5000.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "has_target"
+              },
+              {
+                "type": "condition",
+                "name": "target_in_range",
+                "params": {
+                  "range": 2.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "attack_target"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "has_target"
+              },
+              {
+                "type": "condition",
+                "name": "target_in_range",
+                "params": {
+                  "range": 15.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "chase_target",
+                "params": {
+                  "pathRecalcMs": 500.0,
+                  "targetMoveThreshold": 3.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.15
+                }
+              },
+              {
+                "type": "action",
+                "name": "wander",
+                "params": {
+                  "minMoveDist": 2.0,
+                  "maxMoveDist": 10.0,
+                  "checkMs": 1000.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "action",
+            "name": "idle"
+          }
+        ]
+      }
+    },
+    "brave": {
+      "description": "Holds its ground, keeps pressure on valid targets, and does not flee at low health.",
+      "root": {
+        "type": "selector",
+        "children": [
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "is_beyond_leash",
+                "params": {
+                  "range": 50.0
+                }
+              },
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.7
+                }
+              },
+              {
+                "type": "action",
+                "name": "return_to_spawn",
+                "params": {
+                  "arriveDist": 5.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "has_target"
+              },
+              {
+                "type": "condition",
+                "name": "target_in_range",
+                "params": {
+                  "range": 2.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "attack_target"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "has_target"
+              },
+              {
+                "type": "condition",
+                "name": "target_in_range",
+                "params": {
+                  "range": 25.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "chase_target",
+                "params": {
+                  "pathRecalcMs": 500.0,
+                  "targetMoveThreshold": 3.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.3
+                }
+              },
+              {
+                "type": "action",
+                "name": "wander",
+                "params": {
+                  "minMoveDist": 2.0,
+                  "maxMoveDist": 10.0,
+                  "checkMs": 1000.0
+                }
+              }
+            ]
+          },
+          {
+            "type": "action",
+            "name": "idle"
+          }
+        ]
+      }
+    }
+  }
+}

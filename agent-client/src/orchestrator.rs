@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use futures_util::StreamExt;
-use onlinerpg_shared::monster_ai::AiTemplate;
+use onlinerpg_shared::monster_ai::{AiTemplate, BehaviorTree};
 use onlinerpg_shared::{ClientMessage, ServerMessage};
 use onlinerpg_terrain::height::HeightSampler;
 use serde::Deserialize;
@@ -159,6 +159,7 @@ pub struct SharedResources {
     pub height_sampler: Arc<HeightSampler>,
     pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
     pub ai_templates: Arc<HashMap<String, AiTemplate>>,
+    pub behavior_trees: Arc<HashMap<String, BehaviorTree>>,
     pub type_mapping: Arc<HashMap<String, String>>,
     pub movement_speeds: Arc<HashMap<String, crate::monster_ai::MonsterMovement>>,
     pub scheduler: LlmScheduler,
@@ -449,6 +450,7 @@ async fn run_npc_session(
     // Monster AI tick task (1Hz)
     let state_for_ai = Arc::clone(&state);
     let templates_for_ai = Arc::clone(&shared.ai_templates);
+    let trees_for_ai = Arc::clone(&shared.behavior_trees);
     let mapping_for_ai = Arc::clone(&shared.type_mapping);
     let movement_for_ai = Arc::clone(&shared.movement_speeds);
     let ai_task = tokio::spawn(async move {
@@ -459,6 +461,7 @@ async fn run_npc_session(
         {
             let mut s = state_for_ai.lock().await;
             s.monster_ai.set_templates((*templates_for_ai).clone());
+            s.monster_ai.set_behavior_trees((*trees_for_ai).clone());
             s.monster_ai.set_type_mapping((*mapping_for_ai).clone());
             s.monster_ai.set_movement_speeds((*movement_for_ai).clone());
         }

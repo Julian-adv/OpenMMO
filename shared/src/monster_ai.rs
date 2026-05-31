@@ -62,6 +62,60 @@ pub fn load_templates(json: &str) -> Result<HashMap<String, AiTemplate>, serde_j
 }
 
 // ---------------------------------------------------------------------------
+// BehaviorTree — loaded from data-src/behavior_trees.json
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BehaviorTreeFile {
+    #[serde(default)]
+    pub schema_version: u32,
+    pub trees: HashMap<String, BehaviorTree>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BehaviorTree {
+    #[serde(default)]
+    pub description: Option<String>,
+    pub root: BehaviorNode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BehaviorNode {
+    Selector {
+        children: Vec<BehaviorNode>,
+    },
+    Sequence {
+        children: Vec<BehaviorNode>,
+    },
+    Condition {
+        name: String,
+        #[serde(default)]
+        params: HashMap<String, f32>,
+    },
+    Action {
+        name: String,
+        #[serde(default)]
+        params: HashMap<String, f32>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BehaviorStatus {
+    Success,
+    Failure,
+    Running,
+}
+
+/// Load behavior trees from JSON string (data-src/behavior_trees.json).
+pub fn load_behavior_trees(json: &str) -> Result<HashMap<String, BehaviorTree>, serde_json::Error> {
+    let file: BehaviorTreeFile = serde_json::from_str(json)?;
+    Ok(file.trees)
+}
+
+// ---------------------------------------------------------------------------
 // AiState — internal FSM state (superset of network MonsterState)
 // ---------------------------------------------------------------------------
 
@@ -260,6 +314,41 @@ impl MonsterBrain {
     // Main tick
     // =========================================================================
 
+    /// Build a `TickResult` snapshot of the brain's current pose plus `commands`.
+    fn tick_result(&self, commands: Vec<AiCommand>) -> TickResult {
+        TickResult {
+            commands,
+            position: self.position.clone(),
+            rotation: self.rotation,
+            state: self.state.to_monster_state(),
+        }
+    }
+
+    /// Tick the brain, driving it from `behavior_tree` when present and falling
+    /// back to the built-in FSM otherwise. This is the single dispatch point so
+    /// callers never have to branch on the presence of a tree.
+    pub fn tick_policy(
+        &mut self,
+        delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
+        template: &AiTemplate,
+        behavior_tree: Option<&BehaviorTree>,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> TickResult {
+        match behavior_tree {
+            Some(tree) => self.tick_with_behavior_tree(
+                delta_ms,
+                nearby_players,
+                template,
+                tree,
+                path_provider,
+                rng,
+            ),
+            None => self.tick(delta_ms, nearby_players, template, path_provider, rng),
+        }
+    }
+
     pub fn tick(
         &mut self,
         delta_ms: f32,
@@ -269,12 +358,7 @@ impl MonsterBrain {
         rng: &mut impl Rng,
     ) -> TickResult {
         if self.state == AiState::Dead || self.health == 0 {
-            return TickResult {
-                commands: vec![],
-                position: self.position.clone(),
-                rotation: self.rotation,
-                state: self.state.to_monster_state(),
-            };
+            return self.tick_result(vec![]);
         }
 
         self.state_timer_ms += delta_ms;
@@ -300,17 +384,98 @@ impl MonsterBrain {
             AiState::Dead => {}
         }
 
-        TickResult {
-            commands,
-            position: self.position.clone(),
-            rotation: self.rotation,
-            state: self.state.to_monster_state(),
+        self.tick_result(commands)
+    }
+
+    pub fn tick_with_behavior_tree(
+        &mut self,
+        delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
+        template: &AiTemplate,
+        behavior_tree: &BehaviorTree,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> TickResult {
+        if self.state == AiState::Dead || self.health == 0 {
+            return self.tick_result(vec![]);
         }
+
+        self.state_timer_ms += delta_ms;
+        self.path_elapsed_ms += delta_ms;
+        let mut commands = Vec::new();
+
+        if self.state == AiState::Hit {
+            if self.state_timer_ms < template.hit_stagger_ms {
+                return self.tick_result(commands);
+            }
+            self.state = AiState::Idle;
+            self.state_timer_ms = 0.0;
+        }
+
+        if matches!(self.state, AiState::Walk | AiState::Run) {
+            self.tick_patrol(delta_ms, &mut commands, template, path_provider, rng);
+        } else {
+            let status = self.eval_behavior_node(
+                &behavior_tree.root,
+                delta_ms,
+                nearby_players,
+                &mut commands,
+                template,
+                path_provider,
+                rng,
+            );
+
+            if status == BehaviorStatus::Failure && self.state != AiState::Idle {
+                self.transition_to_idle(&mut commands);
+            }
+        }
+
+        self.tick_result(commands)
     }
 
     // =========================================================================
     // Event handlers
     // =========================================================================
+
+    /// Dispatch a hit to the behavior-tree handler when a tree drives this
+    /// brain, otherwise to the built-in FSM handler. Single branch point so
+    /// callers don't duplicate the tree-presence check.
+    pub fn handle_hit_policy(
+        &mut self,
+        attacker_id: &str,
+        hit: bool,
+        damage: u32,
+        template: &AiTemplate,
+        has_behavior_tree: bool,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> Vec<AiCommand> {
+        if has_behavior_tree {
+            self.handle_hit_with_behavior_tree(attacker_id, hit, damage)
+        } else {
+            self.handle_hit(attacker_id, hit, damage, template, path_provider, rng)
+        }
+    }
+
+    /// Apply incoming damage and acquire `attacker_id` as the target. Returns
+    /// `false` if the brain is already dead or the hit was lethal (in which
+    /// case no further reaction should be produced).
+    fn apply_hit(&mut self, attacker_id: &str, hit: bool, damage: u32) -> bool {
+        if self.state == AiState::Dead {
+            return false;
+        }
+
+        self.health = self.health.saturating_sub(if hit { damage } else { 0 });
+        self.target_player_id = Some(attacker_id.to_string());
+        self.move_speed = self.run_speed;
+
+        if self.health == 0 {
+            self.state = AiState::Dead;
+            return false;
+        }
+
+        true
+    }
 
     pub fn handle_hit(
         &mut self,
@@ -321,16 +486,7 @@ impl MonsterBrain {
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
     ) -> Vec<AiCommand> {
-        if self.state == AiState::Dead {
-            return vec![];
-        }
-
-        self.health = self.health.saturating_sub(if hit { damage } else { 0 });
-        self.target_player_id = Some(attacker_id.to_string());
-        self.move_speed = self.run_speed;
-
-        if self.health == 0 {
-            self.state = AiState::Dead;
+        if !self.apply_hit(attacker_id, hit, damage) {
             return vec![];
         }
 
@@ -358,6 +514,25 @@ impl MonsterBrain {
         commands
     }
 
+    pub fn handle_hit_with_behavior_tree(
+        &mut self,
+        attacker_id: &str,
+        hit: bool,
+        damage: u32,
+    ) -> Vec<AiCommand> {
+        if !self.apply_hit(attacker_id, hit, damage) {
+            return vec![];
+        }
+
+        if hit {
+            self.state = AiState::Hit;
+            self.state_timer_ms = 0.0;
+            vec![self.make_move_cmd()]
+        } else {
+            vec![]
+        }
+    }
+
     pub fn handle_death(&mut self) {
         self.state = AiState::Dead;
         self.health = 0;
@@ -380,7 +555,13 @@ impl MonsterBrain {
         self.state_timer_ms = 0.0;
 
         if rng.gen::<f32>() < template.idle_move_chance {
-            self.transition_to_move(commands, template, path_provider, rng);
+            self.transition_to_move(
+                commands,
+                template.min_move_dist,
+                template.max_move_dist,
+                path_provider,
+                rng,
+            );
         }
     }
 
@@ -402,7 +583,13 @@ impl MonsterBrain {
             if rng.gen::<f32>() < 0.5 {
                 self.transition_to_idle(commands);
             } else {
-                self.transition_to_move(commands, template, path_provider, rng);
+                self.transition_to_move(
+                    commands,
+                    template.min_move_dist,
+                    template.max_move_dist,
+                    path_provider,
+                    rng,
+                );
             }
         }
     }
@@ -572,6 +759,391 @@ impl MonsterBrain {
     }
 
     // =========================================================================
+    // Behavior tree execution
+    // =========================================================================
+
+    fn eval_behavior_node(
+        &mut self,
+        node: &BehaviorNode,
+        delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> BehaviorStatus {
+        match node {
+            BehaviorNode::Selector { children } => {
+                for child in children {
+                    match self.eval_behavior_node(
+                        child,
+                        delta_ms,
+                        nearby_players,
+                        commands,
+                        template,
+                        path_provider,
+                        rng,
+                    ) {
+                        BehaviorStatus::Failure => {}
+                        status => return status,
+                    }
+                }
+                BehaviorStatus::Failure
+            }
+            BehaviorNode::Sequence { children } => {
+                for child in children {
+                    match self.eval_behavior_node(
+                        child,
+                        delta_ms,
+                        nearby_players,
+                        commands,
+                        template,
+                        path_provider,
+                        rng,
+                    ) {
+                        BehaviorStatus::Success => {}
+                        status => return status,
+                    }
+                }
+                BehaviorStatus::Success
+            }
+            BehaviorNode::Condition { name, params } => {
+                self.eval_condition(name, params, nearby_players, rng)
+            }
+            BehaviorNode::Action { name, params } => self.eval_action(
+                name,
+                params,
+                delta_ms,
+                nearby_players,
+                commands,
+                template,
+                path_provider,
+                rng,
+            ),
+        }
+    }
+
+    fn eval_condition(
+        &mut self,
+        name: &str,
+        params: &HashMap<String, f32>,
+        nearby_players: &[NearbyPlayer],
+        rng: &mut impl Rng,
+    ) -> BehaviorStatus {
+        match name {
+            "has_target" => {
+                if self.current_target(nearby_players).is_some() {
+                    BehaviorStatus::Success
+                } else {
+                    BehaviorStatus::Failure
+                }
+            }
+            "target_in_range" => {
+                let range = param(params, "range", 0.0);
+                if self.select_target_in_range(nearby_players, range) {
+                    BehaviorStatus::Success
+                } else {
+                    BehaviorStatus::Failure
+                }
+            }
+            "is_beyond_leash" => {
+                let range = param(params, "range", f32::MAX);
+                let dx = self.position.x - self.spawn_position.x;
+                let dz = self.position.z - self.spawn_position.z;
+                if self.state == AiState::Return || dx * dx + dz * dz > range * range {
+                    BehaviorStatus::Success
+                } else {
+                    BehaviorStatus::Failure
+                }
+            }
+            "health_below_ratio" => {
+                let ratio = param(params, "ratio", 0.0);
+                let health_ratio = if self.max_health == 0 {
+                    0.0
+                } else {
+                    self.health as f32 / self.max_health as f32
+                };
+                if self.state == AiState::Flee || health_ratio <= ratio {
+                    BehaviorStatus::Success
+                } else {
+                    BehaviorStatus::Failure
+                }
+            }
+            "chance" => {
+                let probability = param(params, "probability", 0.0).clamp(0.0, 1.0);
+                if matches!(self.state, AiState::Flee | AiState::Return)
+                    || rng.gen::<f32>() < probability
+                {
+                    BehaviorStatus::Success
+                } else {
+                    BehaviorStatus::Failure
+                }
+            }
+            _ => BehaviorStatus::Failure,
+        }
+    }
+
+    fn eval_action(
+        &mut self,
+        name: &str,
+        params: &HashMap<String, f32>,
+        delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> BehaviorStatus {
+        match name {
+            "idle" => {
+                if self.state != AiState::Idle {
+                    self.transition_to_idle(commands);
+                }
+                BehaviorStatus::Success
+            }
+            "wander" => self.bt_wander(params, commands, template, path_provider, rng),
+            "return_to_spawn" => {
+                self.bt_return_to_spawn(params, delta_ms, commands, template, path_provider)
+            }
+            "flee_from_target" => {
+                self.bt_flee_from_target(params, delta_ms, commands, template, path_provider)
+            }
+            "attack_target" => self.bt_attack_target(params, nearby_players, commands, template),
+            "chase_target" => self.bt_chase_target(
+                params,
+                delta_ms,
+                nearby_players,
+                commands,
+                template,
+                path_provider,
+            ),
+            _ => BehaviorStatus::Failure,
+        }
+    }
+
+    fn bt_wander(
+        &mut self,
+        params: &HashMap<String, f32>,
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+    ) -> BehaviorStatus {
+        let check_ms = param(params, "checkMs", template.idle_check_ms);
+        if self.state_timer_ms < check_ms {
+            return BehaviorStatus::Failure;
+        }
+
+        let min_move_dist = param(params, "minMoveDist", template.min_move_dist);
+        let max_move_dist = param(params, "maxMoveDist", template.max_move_dist);
+
+        self.state_timer_ms = 0.0;
+        self.transition_to_move(commands, min_move_dist, max_move_dist, path_provider, rng);
+        if matches!(self.state, AiState::Walk | AiState::Run) {
+            BehaviorStatus::Running
+        } else {
+            BehaviorStatus::Failure
+        }
+    }
+
+    fn bt_return_to_spawn(
+        &mut self,
+        params: &HashMap<String, f32>,
+        delta_ms: f32,
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+        path_provider: &dyn PathProvider,
+    ) -> BehaviorStatus {
+        let arrive_dist = param(params, "arriveDist", template.return_arrive_dist);
+        let dx = self.spawn_position.x - self.position.x;
+        let dz = self.spawn_position.z - self.position.z;
+        if dx * dx + dz * dz <= arrive_dist * arrive_dist {
+            self.transition_to_idle(commands);
+            return BehaviorStatus::Success;
+        }
+
+        if self.state != AiState::Return {
+            self.state = AiState::Return;
+            self.state_timer_ms = 0.0;
+            self.move_speed = self.walk_speed;
+            self.target_position = Some(self.spawn_position.clone());
+            self.compute_path(self.spawn_position.x, self.spawn_position.z, path_provider);
+            if self.waypoints.is_empty() {
+                self.transition_to_idle(commands);
+                return BehaviorStatus::Failure;
+            }
+            self.face_first_waypoint();
+        }
+
+        self.follow_path(delta_ms);
+        commands.push(self.make_move_cmd());
+        BehaviorStatus::Running
+    }
+
+    fn bt_flee_from_target(
+        &mut self,
+        params: &HashMap<String, f32>,
+        delta_ms: f32,
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+        path_provider: &dyn PathProvider,
+    ) -> BehaviorStatus {
+        let duration_ms = param(params, "durationMs", template.flee_duration_ms);
+        if self.state != AiState::Flee {
+            self.transition_to_flee(commands, path_provider);
+            if self.state != AiState::Flee {
+                return BehaviorStatus::Failure;
+            }
+            return BehaviorStatus::Running;
+        }
+
+        if self.state_timer_ms >= duration_ms {
+            self.target_player_id = None;
+            self.transition_to_idle(commands);
+            return BehaviorStatus::Success;
+        }
+
+        let reached = self.follow_path(delta_ms);
+        if reached {
+            self.target_player_id = None;
+            self.transition_to_idle(commands);
+            return BehaviorStatus::Success;
+        }
+
+        commands.push(self.make_move_cmd());
+        BehaviorStatus::Running
+    }
+
+    fn bt_attack_target(
+        &mut self,
+        params: &HashMap<String, f32>,
+        nearby_players: &[NearbyPlayer],
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+    ) -> BehaviorStatus {
+        let target = match self.current_target(nearby_players) {
+            Some(target) => target,
+            None => return BehaviorStatus::Failure,
+        };
+
+        let dx = target.position.x - self.position.x;
+        let dz = target.position.z - self.position.z;
+        let range = param(params, "range", template.attack_range);
+        if dx * dx + dz * dz > range * range {
+            return BehaviorStatus::Failure;
+        }
+
+        let target_id = target.id.clone();
+        self.rotation = dx.atan2(dz);
+        if self.state != AiState::Attack {
+            self.state = AiState::Attack;
+            self.state_timer_ms = self.attack_cooldown_ms;
+            self.target_position = None;
+            self.waypoints.clear();
+            commands.push(self.make_move_cmd());
+        }
+
+        if self.state_timer_ms >= self.attack_cooldown_ms {
+            self.state_timer_ms = 0.0;
+            commands.push(self.make_move_cmd());
+            commands.push(AiCommand::Attack {
+                monster_id: self.monster_id.clone(),
+                target_player_id: target_id,
+            });
+        }
+
+        BehaviorStatus::Running
+    }
+
+    fn bt_chase_target(
+        &mut self,
+        params: &HashMap<String, f32>,
+        delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
+        commands: &mut Vec<AiCommand>,
+        template: &AiTemplate,
+        path_provider: &dyn PathProvider,
+    ) -> BehaviorStatus {
+        let target = match self.current_target(nearby_players) {
+            Some(target) => target,
+            None => return BehaviorStatus::Failure,
+        };
+
+        let target_pos = target.position.clone();
+        let path_recalc_ms = param(params, "pathRecalcMs", template.path_recalc_ms);
+        let target_move_threshold = param(
+            params,
+            "targetMoveThreshold",
+            template.target_move_threshold,
+        );
+
+        self.state = AiState::Attack;
+        self.move_speed = self.run_speed;
+
+        let needs_repath = self.waypoints.is_empty()
+            || self.current_waypoint_idx >= self.waypoints.len()
+            || self.path_elapsed_ms > path_recalc_ms
+            || self.target_moved_significantly_by(&target_pos, target_move_threshold);
+
+        if needs_repath {
+            self.compute_path(target_pos.x, target_pos.z, path_provider);
+            self.last_known_target_pos = Some(target_pos.clone());
+            if self.waypoints.is_empty() {
+                return BehaviorStatus::Failure;
+            }
+        }
+
+        self.follow_path(delta_ms);
+        commands.push(AiCommand::Move {
+            monster_id: self.monster_id.clone(),
+            position: self.position.clone(),
+            rotation: self.rotation,
+            state: MonsterState::Attack,
+            target_position: target_pos,
+        });
+        BehaviorStatus::Running
+    }
+
+    fn select_target_in_range(&mut self, nearby_players: &[NearbyPlayer], range: f32) -> bool {
+        let range_sq = range * range;
+
+        if let Some(target_id) = &self.target_player_id {
+            return nearby_players.iter().any(|p| {
+                p.id == *target_id && p.health > 0 && self.dist_sq_to(&p.position) <= range_sq
+            });
+        }
+
+        let selected = nearby_players
+            .iter()
+            .filter_map(|p| {
+                let dist_sq = self.dist_sq_to(&p.position);
+                (p.health > 0 && dist_sq <= range_sq).then_some((dist_sq, p))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, p)| p.id.clone());
+
+        if let Some(id) = selected {
+            self.target_player_id = Some(id);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn current_target<'a>(&self, nearby_players: &'a [NearbyPlayer]) -> Option<&'a NearbyPlayer> {
+        let target_id = self.target_player_id.as_ref()?;
+        nearby_players
+            .iter()
+            .find(|p| p.id == *target_id && p.health > 0)
+    }
+
+    fn dist_sq_to(&self, position: &Position) -> f32 {
+        let dx = position.x - self.position.x;
+        let dz = position.z - self.position.z;
+        dx * dx + dz * dz
+    }
+
+    // =========================================================================
     // Transition helpers
     // =========================================================================
 
@@ -596,12 +1168,13 @@ impl MonsterBrain {
     fn transition_to_move(
         &mut self,
         commands: &mut Vec<AiCommand>,
-        template: &AiTemplate,
+        min_move_dist: f32,
+        max_move_dist: f32,
         path_provider: &dyn PathProvider,
         rng: &mut impl Rng,
     ) {
         let angle: f32 = rng.gen_range(0.0..std::f32::consts::TAU);
-        let dist: f32 = rng.gen_range(template.min_move_dist..template.max_move_dist);
+        let dist: f32 = rng.gen_range(min_move_dist..max_move_dist);
 
         let target_x = self.position.x + angle.cos() * dist;
         let target_z = self.position.z + angle.sin() * dist;
@@ -753,13 +1326,16 @@ impl MonsterBrain {
     }
 
     fn target_moved_significantly(&self, target_pos: &Position, template: &AiTemplate) -> bool {
+        self.target_moved_significantly_by(target_pos, template.target_move_threshold)
+    }
+
+    fn target_moved_significantly_by(&self, target_pos: &Position, threshold: f32) -> bool {
         match &self.last_known_target_pos {
             None => true,
             Some(last) => {
                 let dx = target_pos.x - last.x;
                 let dz = target_pos.z - last.z;
-                (dx * dx + dz * dz)
-                    > template.target_move_threshold * template.target_move_threshold
+                (dx * dx + dz * dz) > threshold * threshold
             }
         }
     }
@@ -776,6 +1352,10 @@ impl MonsterBrain {
                 .unwrap_or(self.position.clone()),
         }
     }
+}
+
+fn param(params: &HashMap<String, f32>, name: &str, default: f32) -> f32 {
+    params.get(name).copied().unwrap_or(default)
 }
 
 // ---------------------------------------------------------------------------
@@ -904,6 +1484,173 @@ mod tests {
         let t = &templates["default"];
         assert_eq!(t.idle_move_chance, 0.3);
         assert_eq!(t.leash_range, 50.0);
+    }
+
+    #[test]
+    fn load_behavior_trees_parses_json() {
+        let trees = load_behavior_trees(include_str!("../../data-src/behavior_trees.json"))
+            .expect("behavior_trees.json should parse");
+
+        assert!(trees.contains_key("timid"));
+        assert!(trees.contains_key("brave"));
+    }
+
+    #[test]
+    fn behavior_tree_attacks_target_in_range() {
+        let t = AiTemplate::default();
+        let mut brain = make_brain(&t);
+        brain.attack_cooldown_ms = 1000.0;
+        let tree = BehaviorTree {
+            description: None,
+            root: BehaviorNode::Selector {
+                children: vec![
+                    BehaviorNode::Sequence {
+                        children: vec![
+                            BehaviorNode::Condition {
+                                name: "target_in_range".into(),
+                                params: HashMap::from([("range".into(), 2.0)]),
+                            },
+                            BehaviorNode::Action {
+                                name: "attack_target".into(),
+                                params: HashMap::new(),
+                            },
+                        ],
+                    },
+                    BehaviorNode::Action {
+                        name: "idle".into(),
+                        params: HashMap::new(),
+                    },
+                ],
+            },
+        };
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        let players = vec![NearbyPlayer {
+            id: "p1".into(),
+            position: Position {
+                x: 11.0,
+                y: 0.0,
+                z: 10.0,
+            },
+            health: 10,
+        }];
+
+        let result =
+            brain.tick_with_behavior_tree(16.0, &players, &t, &tree, &DirectPath, &mut rng);
+
+        assert!(result
+            .commands
+            .iter()
+            .any(|c| matches!(c, AiCommand::Attack { .. })));
+        assert_eq!(brain.state(), AiState::Attack);
+    }
+
+    #[test]
+    fn behavior_tree_chases_target_in_range() {
+        let t = AiTemplate::default();
+        let mut brain = make_brain(&t);
+        let tree = BehaviorTree {
+            description: None,
+            root: BehaviorNode::Selector {
+                children: vec![
+                    BehaviorNode::Sequence {
+                        children: vec![
+                            BehaviorNode::Condition {
+                                name: "target_in_range".into(),
+                                params: HashMap::from([("range".into(), 25.0)]),
+                            },
+                            BehaviorNode::Action {
+                                name: "chase_target".into(),
+                                params: HashMap::new(),
+                            },
+                        ],
+                    },
+                    BehaviorNode::Action {
+                        name: "idle".into(),
+                        params: HashMap::new(),
+                    },
+                ],
+            },
+        };
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        let players = vec![NearbyPlayer {
+            id: "p1".into(),
+            position: Position {
+                x: 15.0,
+                y: 0.0,
+                z: 10.0,
+            },
+            health: 10,
+        }];
+
+        let result =
+            brain.tick_with_behavior_tree(50.0, &players, &t, &tree, &DirectPath, &mut rng);
+
+        assert!(result
+            .commands
+            .iter()
+            .any(|c| matches!(c, AiCommand::Move { .. })));
+        assert_eq!(brain.state(), AiState::Attack);
+    }
+
+    #[test]
+    fn behavior_tree_requires_existing_target_before_attacking() {
+        let t = AiTemplate::default();
+        let mut brain = make_brain(&t);
+        let tree = BehaviorTree {
+            description: None,
+            root: BehaviorNode::Selector {
+                children: vec![
+                    BehaviorNode::Sequence {
+                        children: vec![
+                            BehaviorNode::Condition {
+                                name: "has_target".into(),
+                                params: HashMap::new(),
+                            },
+                            BehaviorNode::Condition {
+                                name: "target_in_range".into(),
+                                params: HashMap::from([("range".into(), 2.0)]),
+                            },
+                            BehaviorNode::Action {
+                                name: "attack_target".into(),
+                                params: HashMap::new(),
+                            },
+                        ],
+                    },
+                    BehaviorNode::Action {
+                        name: "idle".into(),
+                        params: HashMap::new(),
+                    },
+                ],
+            },
+        };
+        let mut rng = SmallRng::seed_from_u64(42);
+        let players = vec![NearbyPlayer {
+            id: "p1".into(),
+            position: Position {
+                x: 11.0,
+                y: 0.0,
+                z: 10.0,
+            },
+            health: 10,
+        }];
+
+        let peaceful =
+            brain.tick_with_behavior_tree(16.0, &players, &t, &tree, &DirectPath, &mut rng);
+        assert!(!peaceful
+            .commands
+            .iter()
+            .any(|c| matches!(c, AiCommand::Attack { .. })));
+        assert_eq!(brain.state(), AiState::Idle);
+
+        brain.handle_hit_with_behavior_tree("p1", false, 0);
+        let provoked =
+            brain.tick_with_behavior_tree(16.0, &players, &t, &tree, &DirectPath, &mut rng);
+        assert!(provoked
+            .commands
+            .iter()
+            .any(|c| matches!(c, AiCommand::Attack { .. })));
     }
 
     #[test]

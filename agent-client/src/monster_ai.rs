@@ -1,7 +1,7 @@
 //! Monster AI adapter — delegates to `onlinerpg_shared::monster_ai`.
 
 use onlinerpg_shared::monster_ai::{
-    self, AiCommand, AiTemplate, CachePathProvider, MonsterBrain, NearbyPlayer,
+    self, AiCommand, AiTemplate, BehaviorTree, CachePathProvider, MonsterBrain, NearbyPlayer,
 };
 use onlinerpg_shared::pathfinding::PassabilityCache;
 use onlinerpg_shared::{ClientMessage, Monster, Player};
@@ -12,6 +12,7 @@ use tracing::info;
 pub struct MonsterAiManager {
     brains: HashMap<String, MonsterBrain>,
     templates: HashMap<String, AiTemplate>,
+    behavior_trees: HashMap<String, BehaviorTree>,
     /// Maps monster_type -> template name
     type_to_template: HashMap<String, String>,
     type_to_movement: HashMap<String, MonsterMovement>,
@@ -39,6 +40,7 @@ impl MonsterAiManager {
         Self {
             brains: HashMap::new(),
             templates: HashMap::new(),
+            behavior_trees: HashMap::new(),
             type_to_template: HashMap::new(),
             type_to_movement: HashMap::new(),
         }
@@ -47,6 +49,11 @@ impl MonsterAiManager {
     /// Load AI templates from JSON (data-src/ai_templates.json).
     pub fn load_templates_from_json(json: &str) -> HashMap<String, AiTemplate> {
         monster_ai::load_templates(json).unwrap_or_default()
+    }
+
+    /// Load behavior trees from JSON (data-src/behavior_trees.json).
+    pub fn load_behavior_trees_from_json(json: &str) -> HashMap<String, BehaviorTree> {
+        monster_ai::load_behavior_trees(json).unwrap_or_default()
     }
 
     /// Load per-type AI template names and movement speeds from generated monsters.json.
@@ -97,6 +104,10 @@ impl MonsterAiManager {
 
     pub fn set_templates(&mut self, templates: HashMap<String, AiTemplate>) {
         self.templates = templates;
+    }
+
+    pub fn set_behavior_trees(&mut self, behavior_trees: HashMap<String, BehaviorTree>) {
+        self.behavior_trees = behavior_trees;
     }
 
     pub fn set_type_mapping(&mut self, mapping: HashMap<String, String>) {
@@ -160,8 +171,11 @@ impl MonsterAiManager {
         passability_cache: &PassabilityCache,
     ) -> Vec<ClientMessage> {
         // Get template before mutable borrow
-        let template = if let Some(brain) = self.brains.get(monster_id) {
-            template_by_name(&self.templates, &brain.template_name).clone()
+        let (template, has_behavior_tree) = if let Some(brain) = self.brains.get(monster_id) {
+            (
+                template_by_name(&self.templates, &brain.template_name).clone(),
+                self.behavior_trees.contains_key(&brain.template_name),
+            )
         } else {
             return vec![];
         };
@@ -171,11 +185,12 @@ impl MonsterAiManager {
             cache: passability_cache,
         };
         let mut rng = rand::thread_rng();
-        let cmds = brain.handle_hit(
+        let cmds = brain.handle_hit_policy(
             attacker_id,
             hit,
             damage,
             &template,
+            has_behavior_tree,
             &path_provider,
             &mut rng,
         );
@@ -211,9 +226,19 @@ impl MonsterAiManager {
         let mut rng = rand::thread_rng();
 
         let mut all_commands = Vec::new();
+        let templates = &self.templates;
+        let behavior_trees = &self.behavior_trees;
         for brain in self.brains.values_mut() {
-            let template = template_by_name(&self.templates, &brain.template_name);
-            let result = brain.tick(delta_ms, &players, template, &path_provider, &mut rng);
+            let template = template_by_name(templates, &brain.template_name);
+            let behavior_tree = behavior_trees.get(&brain.template_name);
+            let result = brain.tick_policy(
+                delta_ms,
+                &players,
+                template,
+                behavior_tree,
+                &path_provider,
+                &mut rng,
+            );
             all_commands.extend(result.commands.into_iter().map(command_to_client_msg));
         }
         all_commands

@@ -16,7 +16,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::housing;
 use crate::messages::{deserialize_server_msg, serialize_client_msg, ClientMessage};
-use crate::monster_ai::{self, AiTemplate, MonsterBrain, NearbyPlayer};
+use crate::monster_ai::{self, AiTemplate, BehaviorTree, MonsterBrain, NearbyPlayer};
 use crate::pathfinding::{self, PassabilityCache};
 use crate::world::Position;
 
@@ -218,6 +218,7 @@ struct PathResultJs {
 thread_local! {
     static MONSTER_BRAINS: RefCell<HashMap<String, MonsterBrain>> = RefCell::new(HashMap::new());
     static AI_TEMPLATES: RefCell<HashMap<String, AiTemplate>> = RefCell::new(HashMap::new());
+    static AI_BEHAVIOR_TREES: RefCell<HashMap<String, BehaviorTree>> = RefCell::new(HashMap::new());
 }
 
 fn get_template(monster_type: &str) -> AiTemplate {
@@ -255,6 +256,14 @@ pub fn ai_load_templates(json: &str) -> Result<(), JsError> {
     let templates = monster_ai::load_templates(json)
         .map_err(|e| JsError::new(&format!("Failed to parse AI templates: {e}")))?;
     AI_TEMPLATES.with(|t| *t.borrow_mut() = templates);
+    Ok(())
+}
+
+#[wasm_bindgen]
+pub fn ai_load_behavior_trees(json: &str) -> Result<(), JsError> {
+    let trees = monster_ai::load_behavior_trees(json)
+        .map_err(|e| JsError::new(&format!("Failed to parse behavior trees: {e}")))?;
+    AI_BEHAVIOR_TREES.with(|t| *t.borrow_mut() = trees);
     Ok(())
 }
 
@@ -319,7 +328,17 @@ pub fn ai_tick_brain(
 
         let template = get_template(&brain.template_name);
         let mut rng = rand::thread_rng();
-        Some(brain.tick(delta_ms, &players, &template, &WasmPathProvider, &mut rng))
+        Some(AI_BEHAVIOR_TREES.with(|trees| {
+            let trees = trees.borrow();
+            brain.tick_policy(
+                delta_ms,
+                &players,
+                &template,
+                trees.get(&brain.template_name),
+                &WasmPathProvider,
+                &mut rng,
+            )
+        }))
     });
 
     match result {
@@ -343,12 +362,15 @@ pub fn ai_handle_hit(
         };
 
         let template = get_template(&brain.template_name);
+        let has_behavior_tree =
+            AI_BEHAVIOR_TREES.with(|t| t.borrow().contains_key(&brain.template_name));
         let mut rng = rand::thread_rng();
-        brain.handle_hit(
+        brain.handle_hit_policy(
             attacker_id,
             hit,
             damage,
             &template,
+            has_behavior_tree,
             &WasmPathProvider,
             &mut rng,
         )
