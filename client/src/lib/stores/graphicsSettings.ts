@@ -20,6 +20,7 @@ export interface GraphicsPreset {
   enableWindParticles: boolean
   enableHousingLayer: boolean
   enableTorchEffects: boolean
+  enableTorchShadows: boolean
   terrainQueueDrainTilesBeforeStagger: number
   terrainTileWorkPerFrame: number | undefined
   terrainMaterialPrecompilePoolSize: number
@@ -41,6 +42,7 @@ const FULL_RENDER_SETTINGS = {
   enableWindParticles: true,
   enableHousingLayer: true,
   enableTorchEffects: true,
+  enableTorchShadows: true,
   terrainQueueDrainTilesBeforeStagger: Infinity,
   terrainTileWorkPerFrame: undefined,
   terrainMaterialPrecompilePoolSize: 8,
@@ -143,10 +145,11 @@ function getMobileSafePreset(preset: GraphicsPreset): GraphicsPreset {
     enableWaterLayer: true,
     enableWaterEffects: false,
     enableGrassLayer: false,
-    enableTreeLayer: false,
+    enableTreeLayer: true,
     enableWindParticles: false,
-    enableHousingLayer: false,
-    enableTorchEffects: false,
+    enableHousingLayer: true,
+    enableTorchEffects: true,
+    enableTorchShadows: false,
     terrainQueueDrainTilesBeforeStagger: Infinity,
     terrainTileWorkPerFrame: 1,
     terrainMaterialPrecompilePoolSize: 1,
@@ -187,6 +190,12 @@ export function applyInitialAntialias(): boolean {
 
 export const graphicsQuality = writable<QualityLevel>(loadQuality())
 
+// Device budget and base presets are constant for the session, so the effective
+// preset is a pure function of `level`. Cache it — `getCurrentPreset()` is read
+// on hot paths (grass streaming) where re-spreading the mobile-safe object per
+// call would be wasted allocation.
+const _effectivePresetCache: Partial<Record<QualityLevel, GraphicsPreset>> = {}
+
 /** True when the current preset's antialias differs from what the renderer was created with. */
 export const reloadNeeded = derived(graphicsQuality, (level) => {
   try {
@@ -208,12 +217,6 @@ graphicsQuality.subscribe((level) => {
   refractionEnabled.set(preset.refraction)
   reflectionEnabled.set(preset.reflection)
 })
-
-// Device budget and base presets are constant for the session, so the effective
-// preset is a pure function of `level`. Cache it — `getCurrentPreset()` is read
-// on hot paths (grass streaming) where re-spreading the mobile-safe object per
-// call would be wasted allocation.
-const _effectivePresetCache: Partial<Record<QualityLevel, GraphicsPreset>> = {}
 
 export function getEffectivePreset(level: QualityLevel): GraphicsPreset {
   return (_effectivePresetCache[level] ??=

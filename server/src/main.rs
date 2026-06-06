@@ -208,8 +208,12 @@ async fn main() {
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
-    let terrain_app = terrain_router(terrain_io)
-        .merge(housing_router(housing_io))
+    let terrain_app = terrain_router(Arc::clone(&terrain_io))
+        .merge(housing_router(
+            Arc::clone(&housing_io),
+            terrain_io,
+            Arc::clone(&game_state),
+        ))
         .merge(npc_router(npc_io))
         .layer(cors)
         .layer(CompressionLayer::new());

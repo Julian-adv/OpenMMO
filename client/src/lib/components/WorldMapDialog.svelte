@@ -113,6 +113,7 @@
 
   // --- Zoom state (in regions/km) ---
   let zoomSpan = $state(DEFAULT_ZOOM)
+  let teleportMode = $state(false)
 
   // Restore saved view state or center on player when dialog opens
   $effect(() => {
@@ -134,6 +135,10 @@
 
   // --- Drag state ---
   let isDragging = $state(false)
+  let suppressNextClick = false
+  // Squared pixel distance a pointer must travel before a drag suppresses the
+  // click that would otherwise fire on pointerup.
+  const DRAG_THRESHOLD_PX2 = 9
   let dragStartMouseX = 0
   let dragStartMouseZ = 0
   let dragStartCamX = 0
@@ -330,25 +335,33 @@
   })
 
   // --- Drag to pan ---
-  function handleMouseDown(event: MouseEvent) {
+  function handlePointerDown(event: PointerEvent) {
     if (event.ctrlKey) return // let Ctrl+click through for teleport
-    if (event.button !== 0) return
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    event.preventDefault()
     isDragging = true
+    suppressNextClick = false
     dragStartMouseX = event.clientX
     dragStartMouseZ = event.clientY
     dragStartCamX = camX
     dragStartCamZ = camZ
   }
 
-  function handleMouseMove(event: MouseEvent) {
+  function handlePointerMove(event: PointerEvent) {
     if (!isDragging) return
+    event.preventDefault()
     const viewSize = zoomSpan * REGION_PX
     const canvasSize = Math.min(containerW, containerH)
     const scale = canvasSize / viewSize
 
     // Rotate mouse delta by +45 degrees to undo the canvas rotation
-    const dx = (event.clientX - dragStartMouseX) / scale
-    const dz = (event.clientY - dragStartMouseZ) / scale
+    const rawDx = event.clientX - dragStartMouseX
+    const rawDz = event.clientY - dragStartMouseZ
+    if (!suppressNextClick && rawDx * rawDx + rawDz * rawDz > DRAG_THRESHOLD_PX2) {
+      suppressNextClick = true
+    }
+    const dx = rawDx / scale
+    const dz = rawDz / scale
     const angle = Math.PI / 4
     const cosA = Math.cos(angle)
     const sinA = Math.sin(angle)
@@ -356,17 +369,19 @@
     camZ = dragStartCamZ - (dx * sinA + dz * cosA)
   }
 
-  function handleMouseUp() {
+  function handlePointerUp() {
     isDragging = false
   }
 
   $effect(() => {
     if (!isDragging) return
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
     }
   })
 
@@ -386,6 +401,7 @@
       imageCache.clear()
       pendingLoads.clear()
     }
+    teleportMode = false
     worldMapVisible.set(false)
   }
 
@@ -402,7 +418,15 @@
   }
 
   function handleMapClick(event: MouseEvent) {
-    if (!event.ctrlKey || !containerEl || containerW <= 0 || containerH <= 0) return
+    if (suppressNextClick) {
+      suppressNextClick = false
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    const teleportRequested = event.ctrlKey || teleportMode
+    if (!teleportRequested || !containerEl || containerW <= 0 || containerH <= 0)
+      return
     event.preventDefault()
     event.stopPropagation()
 
@@ -464,6 +488,12 @@
         <button class="ctrl-btn" onclick={zoomOut} title="Zoom Out">&minus;</button>
         <button class="ctrl-btn" onclick={zoomReset} title="Reset Zoom">Reset</button>
         <button class="ctrl-btn" onclick={resetCamera} title="Center on Player">&#8982;</button>
+        <button
+          class="ctrl-btn"
+          class:active={teleportMode}
+          onclick={() => (teleportMode = !teleportMode)}
+          title="Teleport Mode"
+        >TP</button>
       </div>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
@@ -473,7 +503,7 @@
       class="map-container"
       class:dragging={isDragging}
       bind:this={containerEl}
-      onmousedown={handleMouseDown}
+      onpointerdown={handlePointerDown}
       onclick={handleMapClick}
     >
       <canvas
@@ -568,6 +598,12 @@
     color: #fff;
   }
 
+  .ctrl-btn.active {
+    border-color: rgba(240, 192, 64, 0.65);
+    background: rgba(240, 192, 64, 0.2);
+    color: #ffe08a;
+  }
+
   .close-btn {
     background: none;
     border: none;
@@ -588,6 +624,8 @@
     min-height: 0;
     overflow: hidden;
     cursor: grab;
+    touch-action: none;
+    user-select: none;
   }
 
   .map-container.dragging {

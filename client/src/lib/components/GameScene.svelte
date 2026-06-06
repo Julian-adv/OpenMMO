@@ -852,7 +852,7 @@
      existing material (~12s stall). Intensity 0 = invisible but pipelines
      are compiled with shadow support. After compilation, move offscreen so
      the shadow frustum captures nothing (avoids 6× cube-face renders/frame). -->
-{#if graphicsPreset.enableTorchEffects}
+{#if graphicsPreset.enableTorchShadows}
   <T.PointLight
     bind:ref={placeholderShadowLight}
     position={isSceneCompiling ? [0, 0, 0] : [0, OFFSCREEN_Y, 0]}
@@ -967,6 +967,7 @@
     {monsterModels}
     {playerAttackDuration}
     torchEffectsDisabled={!graphicsPreset.enableTorchEffects}
+    torchLightCastsShadow={graphicsPreset.enableTorchShadows}
     heightManager={terrainHeightManager}
     onStateChange={handlePlayerStateChange}
     onAttackDuration={(duration) => (playerAttackDuration = duration)}
@@ -989,7 +990,7 @@
 </T>
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} />
+  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} grassDataManager={terrainGrassDataManager} />
   <ZoneOverlay />
   <RoadOverlay />
   <NpcWaypointOverlay />
@@ -1006,5 +1007,5 @@
 {/if}
 
 {#if $housingEditorMode}
-  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} treeDataManager={terrainTreeDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />
+  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />
 {/if}

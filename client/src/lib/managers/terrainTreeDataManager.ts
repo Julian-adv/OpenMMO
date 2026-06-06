@@ -1,9 +1,5 @@
 import { getTerrainApiUrl } from '../utils/networkUtils'
-import {
-  decodeTreeData,
-  encodeTreeBuffer,
-  type TreePlacementData,
-} from '../utils/tree-data'
+import { decodeTreeData, type TreePlacementData } from '../utils/tree-data'
 import { tileKey } from './terrain-height-types'
 import type { TerrainHeightManager } from './terrainHeightManager'
 
@@ -73,35 +69,6 @@ export class TerrainTreeDataManager {
     return promise
   }
 
-  async saveTreeData(
-    tileX: number,
-    tileZ: number,
-    data: TreePlacementData
-  ): Promise<void> {
-    const key = tileKey(tileX, tileZ)
-    this.cache.set(key, data)
-    this.missingTiles.delete(key)
-
-    for (const cb of this.tileUpdateListeners) cb(tileX, tileZ)
-
-    try {
-      const url = `${this.terrainApiUrl}/api/terrain/trees/${tileX}/${tileZ}`
-      const wireBuffer = encodeTreeBuffer(data, tileX, tileZ)
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/octet-stream' },
-        body: wireBuffer,
-      })
-      if (!response.ok) {
-        console.error(
-          `Failed to save tree data (${tileX}, ${tileZ}): ${response.status}`
-        )
-      }
-    } catch (e) {
-      console.error(`Tree data save error (${tileX}, ${tileZ}):`, e)
-    }
-  }
-
   getCachedTreeData(tileX: number, tileZ: number): TreePlacementData | null {
     return this.cache.get(tileKey(tileX, tileZ)) ?? null
   }
@@ -110,6 +77,24 @@ export class TerrainTreeDataManager {
     const key = tileKey(tileX, tileZ)
     this.cache.delete(key)
     this.missingTiles.delete(key)
+  }
+
+  async refreshTiles(
+    tiles: readonly (readonly [number, number])[]
+  ): Promise<void> {
+    const unique = new Map<string, readonly [number, number]>()
+    for (const tile of tiles) {
+      unique.set(tileKey(tile[0], tile[1]), tile)
+    }
+
+    await Promise.all(
+      Array.from(unique.values(), ([tileX, tileZ]) => {
+        this.invalidate(tileX, tileZ)
+        return this.loadTreeData(tileX, tileZ).finally(() => {
+          for (const cb of this.tileUpdateListeners) cb(tileX, tileZ)
+        })
+      })
+    )
   }
 
   /** Subscribe to per-tile data updates. Returns unsubscribe function. */

@@ -659,39 +659,16 @@ async fn handle_client_message(
             state.last_heartbeat = std::time::Instant::now();
         }
 
-        ClientMessage::PlaceHouse { house } => {
-            let player_id = state.player_id.clone();
-            if let Some(pid) = player_id {
-                let position = house.origin;
-                game_state
-                    .send_direct_message_to_players_within_position(
-                        &position,
-                        crate::game_state::AGENT_EVENT_DELIVERY_RADIUS,
-                        ServerMessage::HouseSpawned { house },
-                        Some(&pid),
-                    )
-                    .await;
-            }
+        ClientMessage::PlaceHouse { .. } => {
+            warn!("Ignoring client-side PlaceHouse broadcast request; use the housing REST API");
         }
 
         ClientMessage::ModifyRoom { .. } => {
             // TODO: room modification broadcast
         }
 
-        ClientMessage::RemoveHouse { house_id } => {
-            let player_id = state.player_id.clone();
-            if let Some(pid) = player_id {
-                if let Some((position, _)) = game_state.get_player_position(&pid).await {
-                    game_state
-                        .send_direct_message_to_players_within_position(
-                            &position,
-                            crate::game_state::AGENT_EVENT_DELIVERY_RADIUS,
-                            ServerMessage::HouseRemoved { house_id },
-                            Some(&pid),
-                        )
-                        .await;
-                }
-            }
+        ClientMessage::RemoveHouse { .. } => {
+            warn!("Ignoring client-side RemoveHouse broadcast request; use the housing REST API");
         }
 
         ClientMessage::ToggleDoor {

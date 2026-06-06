@@ -262,6 +262,9 @@ pub enum ServerMessage {
     HouseUpdated {
         house: housing::HouseData,
     },
+    TreeTilesInvalidated {
+        tiles: Vec<(i32, i32)>,
+    },
     HouseRemoved {
         house_id: String,
     },

@@ -17,6 +17,7 @@ import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { deathDropDelayQueue } from '../managers/deathDropDelay'
 import { setInventory } from '../stores/inventoryStore'
+import { editorTreeDataManager } from '../stores/editorStore'
 import type { MonsterData } from '../types/Monster'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
@@ -639,6 +640,12 @@ export function handleServerMessage(
     case 'HouseUpdated':
       housingManager.handleRemoteHouseSpawned(data.house)
       break
+
+    case 'TreeTilesInvalidated': {
+      const treeDataManager = get(editorTreeDataManager)
+      if (treeDataManager) void treeDataManager.refreshTiles(data.tiles ?? [])
+      break
+    }
 
     case 'HouseRemoved':
       housingManager.handleRemoteHouseRemoved(data.house_id)

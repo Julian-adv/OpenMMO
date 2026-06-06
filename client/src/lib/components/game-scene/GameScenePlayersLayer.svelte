@@ -50,6 +50,7 @@
     playerControl?: PlayerControl
     currentPlayerModel?: PlayerModel | null
     otherPlayerModels?: (PlayerModel | undefined)[]
+    torchLightCastsShadow?: boolean
   }
 
   let {
@@ -76,6 +77,7 @@
     playerControl = $bindable<PlayerControl>(),
     currentPlayerModel = $bindable<PlayerModel | null>(null),
     otherPlayerModels = $bindable<(PlayerModel | undefined)[]>([]),
+    torchLightCastsShadow = true,
   }: Props = $props()
 
   // Sync attack animation duration to remote player manager
@@ -103,7 +105,7 @@
     return map
   })
 
-  // Unified torch: exactly one shadow-casting PointLight for the entire scene.
+  // Unified torch: exactly one PointLight for the entire scene.
   // Priority: local player's torch (if ON) > closest visible remote player
   // with torchOn. When no candidate, intensity drops to 0. Keeping the
   // PointLight count at a constant 1 avoids WebGPU pipeline recompile stalls.
@@ -254,9 +256,9 @@
     {/if}
   {/each}
 
-  <!-- Unified shadow-casting point light. Mounted exactly once, priority:
-       local torch > closest visible remote torch. castShadow is always true
-       (never toggled — toggling triggers WebGPU pipeline recompile stall).
+  <!-- Unified point light. Mounted exactly once, priority:
+       local torch > closest visible remote torch. Shadow mode is fixed by the
+       effective graphics preset (mobile keeps the light but skips shadow maps).
        Position/intensity are driven from the game loop. -->
   {#if !torchEffectsDisabled}
     <T.PointLight
@@ -266,7 +268,7 @@
       intensity={0}
       distance={TORCH_BASE_DISTANCE}
       decay={TORCH_BASE_DECAY}
-      castShadow
+      castShadow={torchLightCastsShadow}
       shadow.mapSize.width={512}
       shadow.mapSize.height={512}
       shadow.camera.near={0.5}

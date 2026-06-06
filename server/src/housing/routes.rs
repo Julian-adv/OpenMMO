@@ -1,16 +1,37 @@
+use crate::{
+    game_state::{GameState, AGENT_EVENT_DELIVERY_RADIUS},
+    types::ServerMessage,
+};
 use axum::{
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
 };
-use onlinerpg_shared::housing::HouseData;
+use onlinerpg_shared::housing::{HouseData, RoomType};
+use onlinerpg_terrain::{
+    io::TerrainIO,
+    trees::{remove_trees_in_rects, TreeRemovalStats},
+};
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, info};
 
 use super::{next_house_id, validate_house, world_to_chunk, HousingIO, CHUNK_SIZE};
 
-pub fn housing_router(housing_io: Arc<HousingIO>) -> Router {
+#[derive(Clone)]
+struct HousingRouteState {
+    housing: Arc<HousingIO>,
+    terrain: Arc<TerrainIO>,
+    game_state: Arc<GameState>,
+}
+
+const TREE_HOUSE_MARGIN: f32 = 2.0;
+
+pub fn housing_router(
+    housing_io: Arc<HousingIO>,
+    terrain_io: Arc<TerrainIO>,
+    game_state: Arc<GameState>,
+) -> Router {
     Router::new()
         .route("/api/housing/area/{cx}/{cz}", get(get_houses_in_chunk))
         .route("/api/housing", post(create_house))
@@ -18,14 +39,18 @@ pub fn housing_router(housing_io: Arc<HousingIO>) -> Router {
             "/api/housing/{house_id}",
             get(get_house).put(update_house).delete(delete_house),
         )
-        .with_state(housing_io)
+        .with_state(HousingRouteState {
+            housing: housing_io,
+            terrain: terrain_io,
+            game_state,
+        })
 }
 
 async fn get_houses_in_chunk(
     Path((cx, cz)): Path<(i32, i32)>,
-    State(housing): State<Arc<HousingIO>>,
+    State(state): State<HousingRouteState>,
 ) -> Result<Json<Vec<HouseData>>, StatusCode> {
-    let houses = housing.read_chunk(cx, cz).await.map_err(|e| {
+    let houses = state.housing.read_chunk(cx, cz).await.map_err(|e| {
         error!("Failed to read housing chunk ({}, {}): {}", cx, cz, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -34,9 +59,9 @@ async fn get_houses_in_chunk(
 
 async fn get_house(
     Path(house_id): Path<String>,
-    State(housing): State<Arc<HousingIO>>,
+    State(state): State<HousingRouteState>,
 ) -> Result<Json<HouseData>, StatusCode> {
-    let house = housing.find_house(&house_id).await.map_err(|e| {
+    let house = state.housing.find_house(&house_id).await.map_err(|e| {
         error!("Failed to find house {}: {}", house_id, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -47,11 +72,11 @@ async fn get_house(
 }
 
 async fn create_house(
-    State(housing): State<Arc<HousingIO>>,
+    State(state): State<HousingRouteState>,
     Json(mut house): Json<HouseData>,
 ) -> Result<(StatusCode, Json<HouseData>), (StatusCode, String)> {
     // Load neighbors for validation, then derive ID from loaded data
-    let neighbors = load_neighbors(&housing, &house).await?;
+    let neighbors = load_neighbors(&state.housing, &house).await?;
     let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
     house.id = next_house_id(cx, cz, &neighbors);
 
@@ -59,36 +84,56 @@ async fn create_house(
         return Err((StatusCode::BAD_REQUEST, msg));
     }
 
-    housing.write_house(&house).await.map_err(|e| {
+    state.housing.write_house(&house).await.map_err(|e| {
         error!("Failed to write house {}: {}", house.id, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Internal server error".to_string(),
         )
     })?;
+    let tree_stats = remove_house_trees(&state.terrain, &house).await?;
+    broadcast_house_change(
+        &state.game_state,
+        &house,
+        ServerMessage::HouseSpawned {
+            house: house.clone(),
+        },
+        &tree_stats.changed_tiles,
+    )
+    .await;
     Ok((StatusCode::CREATED, Json(house)))
 }
 
 async fn update_house(
     Path(house_id): Path<String>,
-    State(housing): State<Arc<HousingIO>>,
+    State(state): State<HousingRouteState>,
     Json(mut house): Json<HouseData>,
 ) -> Result<Json<HouseData>, (StatusCode, String)> {
     house.id = house_id;
 
-    let neighbors = load_neighbors(&housing, &house).await?;
+    let neighbors = load_neighbors(&state.housing, &house).await?;
 
     if let Err(msg) = validate_house(&house, &neighbors) {
         return Err((StatusCode::BAD_REQUEST, msg));
     }
 
-    housing.write_house(&house).await.map_err(|e| {
+    state.housing.write_house(&house).await.map_err(|e| {
         error!("Failed to write house {}: {}", house.id, e);
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "Internal server error".to_string(),
         )
     })?;
+    let tree_stats = remove_house_trees(&state.terrain, &house).await?;
+    broadcast_house_change(
+        &state.game_state,
+        &house,
+        ServerMessage::HouseUpdated {
+            house: house.clone(),
+        },
+        &tree_stats.changed_tiles,
+    )
+    .await;
     Ok(Json(house))
 }
 
@@ -131,10 +176,10 @@ async fn load_neighbors(
 
 async fn delete_house(
     Path(house_id): Path<String>,
-    State(housing): State<Arc<HousingIO>>,
+    State(state): State<HousingRouteState>,
 ) -> Result<StatusCode, StatusCode> {
     // Search all chunks for this house
-    let house = housing.find_house(&house_id).await.map_err(|e| {
+    let house = state.housing.find_house(&house_id).await.map_err(|e| {
         error!("Failed to find house {} for deletion: {}", house_id, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -142,12 +187,93 @@ async fn delete_house(
     match house {
         Some(h) => {
             let (cx, cz) = super::world_to_chunk(h.origin.x, h.origin.z);
-            housing.delete_house(&house_id, cx, cz).await.map_err(|e| {
-                error!("Failed to delete house {}: {}", house_id, e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+            state
+                .housing
+                .delete_house(&house_id, cx, cz)
+                .await
+                .map_err(|e| {
+                    error!("Failed to delete house {}: {}", house_id, e);
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+            state
+                .game_state
+                .send_direct_message_to_players_within_position(
+                    &h.origin,
+                    AGENT_EVENT_DELIVERY_RADIUS,
+                    ServerMessage::HouseRemoved { house_id },
+                    None,
+                )
+                .await;
             Ok(StatusCode::NO_CONTENT)
         }
         None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn remove_house_trees(
+    terrain: &TerrainIO,
+    house: &HouseData,
+) -> Result<TreeRemovalStats, (StatusCode, String)> {
+    let rects: Vec<[f32; 4]> = house
+        .rooms
+        .iter()
+        .filter(|room| room.floor_level == 0 && room.room_type != RoomType::Stairwell)
+        .map(|room| {
+            let min_x = house.origin.x + room.local_x as f32 - TREE_HOUSE_MARGIN;
+            let min_z = house.origin.z + room.local_z as f32 - TREE_HOUSE_MARGIN;
+            let max_x =
+                house.origin.x + room.local_x as f32 + room.size_x as f32 + TREE_HOUSE_MARGIN;
+            let max_z =
+                house.origin.z + room.local_z as f32 + room.size_z as f32 + TREE_HOUSE_MARGIN;
+            [min_x, min_z, max_x, max_z]
+        })
+        .collect();
+
+    // An empty rect set yields zeroed stats from `remove_trees_in_rects`, so no
+    // early return is needed here.
+    let stats = remove_trees_in_rects(terrain, &rects).await.map_err(|e| {
+        error!("Failed to remove trees under house {}: {}", house.id, e);
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Internal server error".to_string(),
+        )
+    })?;
+
+    if stats.trees_removed > 0 {
+        info!(
+            "Removed {} tree(s) under house {} across {} tile(s)",
+            stats.trees_removed, stats.tiles_changed, house.id
+        );
+    }
+
+    Ok(stats)
+}
+
+async fn broadcast_house_change(
+    game_state: &GameState,
+    house: &HouseData,
+    house_msg: ServerMessage,
+    changed_tree_tiles: &[(i32, i32)],
+) {
+    game_state
+        .send_direct_message_to_players_within_position(
+            &house.origin,
+            AGENT_EVENT_DELIVERY_RADIUS,
+            house_msg,
+            None,
+        )
+        .await;
+
+    if !changed_tree_tiles.is_empty() {
+        game_state
+            .send_direct_message_to_players_within_position(
+                &house.origin,
+                AGENT_EVENT_DELIVERY_RADIUS,
+                ServerMessage::TreeTilesInvalidated {
+                    tiles: changed_tree_tiles.to_vec(),
+                },
+                None,
+            )
+            .await;
     }
 }

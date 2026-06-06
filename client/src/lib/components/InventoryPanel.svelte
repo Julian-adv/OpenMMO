@@ -132,6 +132,9 @@
 
 <style>
   .inventory-panel {
+    --inventory-slot-size: 64px;
+    --inventory-slot-gap: 6px;
+    --inventory-visible-rows: 10;
     position: fixed;
     right: 16px;
     top: 45%;
@@ -148,6 +151,7 @@
     font-family: 'Courier New', monospace;
     font-size: 12px;
     pointer-events: auto;
+    max-width: calc(100vw - 32px);
   }
 
   .inventory-panel.drop-target {
@@ -191,15 +195,21 @@
 
   .bag-grid {
     display: grid;
-    grid-template-columns: repeat(5, 64px);
-    grid-template-rows: repeat(10, 64px);
-    gap: 6px;
+    grid-template-columns: repeat(5, var(--inventory-slot-size));
+    grid-template-rows: repeat(10, var(--inventory-slot-size));
+    gap: var(--inventory-slot-gap);
+    max-height: calc(
+      var(--inventory-slot-size) * var(--inventory-visible-rows) +
+        var(--inventory-slot-gap) * (var(--inventory-visible-rows) - 1)
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .grid-cell {
     position: relative;
-    width: 64px;
-    height: 64px;
+    width: var(--inventory-slot-size);
+    height: var(--inventory-slot-size);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -209,8 +219,8 @@
 
   .item-icon {
     position: absolute;
-    width: 64px;
-    height: 64px;
+    width: var(--inventory-slot-size);
+    height: var(--inventory-slot-size);
     image-rendering: pixelated;
   }
 
@@ -224,4 +234,48 @@
     text-shadow: 0 0 3px rgba(0, 0, 0, 0.8);
   }
 
+  @media (max-width: 600px), (pointer: coarse) {
+    .inventory-panel {
+      --inventory-slot-size: 48px;
+      --inventory-slot-gap: 5px;
+      --inventory-visible-rows: 3;
+      right: calc(8px + env(safe-area-inset-right));
+      top: auto;
+      bottom: calc(72px + env(safe-area-inset-bottom));
+      transform: none;
+      padding: 8px;
+      border-radius: 8px;
+    }
+
+    .panel-header {
+      padding-bottom: 6px;
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+
+    .panel-title {
+      font-size: 13px;
+    }
+
+    .weight-display {
+      font-size: 10px;
+    }
+
+    .close-btn {
+      min-width: 32px;
+      min-height: 32px;
+      font-size: 22px;
+    }
+
+    .bag-grid {
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  @media (max-width: 340px) {
+    .inventory-panel {
+      --inventory-slot-size: 44px;
+      --inventory-slot-gap: 4px;
+    }
+  }
 </style>

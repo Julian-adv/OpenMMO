@@ -211,12 +211,16 @@
 
 <style>
   .character-panel {
+    --character-panel-width: 364px;
+    --equip-section-height: 540px;
+    --equip-slot-size: 64px;
+    --equip-icon-size: 56px;
     position: fixed;
     left: 16px;
     top: 45%;
     transform: translateY(-50%);
     z-index: 40;
-    width: 364px;
+    width: var(--character-panel-width);
     max-height: 80vh;
     display: flex;
     flex-direction: column;
@@ -358,7 +362,7 @@
   .equip-section {
     position: relative;
     border-radius: 6px;
-    min-height: 540px;
+    min-height: var(--equip-section-height);
   }
 
   .equip-bg {
@@ -374,8 +378,8 @@
 
   .equip-slot {
     position: absolute;
-    width: 64px;
-    height: 64px;
+    width: var(--equip-slot-size);
+    height: var(--equip-slot-size);
     transform: translate(-50%, -50%);
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 6px;
@@ -399,10 +403,100 @@
   }
 
   .equip-icon {
-    width: 56px;
-    height: 56px;
+    width: var(--equip-icon-size);
+    height: var(--equip-icon-size);
     image-rendering: pixelated;
     pointer-events: none;
   }
 
+  @media (max-width: 600px), (pointer: coarse) {
+    .character-panel {
+      --character-panel-width: min(292px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+      --equip-section-height: min(330px, calc(100dvh - 228px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+      --equip-slot-size: 44px;
+      --equip-icon-size: 38px;
+      left: calc(8px + env(safe-area-inset-left));
+      top: calc(8px + env(safe-area-inset-top));
+      transform: none;
+      max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      padding: 8px;
+      border-radius: 8px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .panel-header {
+      padding-bottom: 6px;
+      margin-bottom: 6px;
+      gap: 8px;
+    }
+
+    .panel-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+    }
+
+    .panel-class {
+      font-size: 10px;
+      white-space: nowrap;
+    }
+
+    .close-btn {
+      min-width: 32px;
+      min-height: 32px;
+      font-size: 22px;
+    }
+
+    .panel-section {
+      margin-bottom: 6px;
+    }
+
+    .section-label {
+      margin-bottom: 3px;
+      font-size: 10px;
+    }
+
+    .stats-grid {
+      gap: 2px;
+      margin-bottom: 6px;
+    }
+
+    .stat-row {
+      gap: 4px;
+      padding: 2px 3px;
+    }
+
+    .stat-label {
+      min-width: 28px;
+      font-size: 9px;
+    }
+
+    .stat-value {
+      font-size: 11px;
+    }
+
+    .exp-header {
+      gap: 6px;
+    }
+
+    .exp-text {
+      font-size: 10px;
+    }
+
+    .exp-track {
+      height: 6px;
+    }
+  }
+
+  @media (max-width: 340px) {
+    .character-panel {
+      --equip-section-height: min(300px, calc(100dvh - 220px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+      --equip-slot-size: 40px;
+      --equip-icon-size: 34px;
+    }
+  }
 </style>

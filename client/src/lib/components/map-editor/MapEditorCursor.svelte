@@ -16,14 +16,12 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
-  import type { TerrainTreeDataManager } from '../../managers/terrainTreeDataManager'
   import { TILE_DIM } from '../../managers/terrain-height-types'
   import { tileToRegion } from '../../terrain/terrain-constants'
   import { gameStore } from '../../stores/gameStore'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
   import { SvelteSet } from 'svelte/reactivity'
   import { filterGrassData } from '../../utils/grass-data'
-  import { filterTreeData } from '../../utils/tree-data'
   import { SHORT_GRASS_R_MIN } from '../../shaders/grass-material'
 
   interface Props {
@@ -33,10 +31,9 @@
     heightManager: TerrainHeightManager | null
     splatManager: TerrainSplatManager | null
     grassDataManager: TerrainGrassDataManager | null
-    treeDataManager: TerrainTreeDataManager | null
   }
 
-  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, grassDataManager = null, treeDataManager = null }: Props = $props()
+  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, grassDataManager = null }: Props = $props()
 
   let isPainting = $state(false)
   let isPanning = $state(false)
@@ -248,14 +245,6 @@
         if (grassData) {
           const filtered = filterGrassData(grassData, shouldRemove)
           if (filtered) grassDataManager.saveGrassData(tileX, tileZ, filtered)
-        }
-      }
-
-      if (treeDataManager) {
-        const treeData = treeDataManager.getCachedTreeData(tileX, tileZ)
-        if (treeData) {
-          const filtered = filterTreeData(treeData, shouldRemove)
-          if (filtered) treeDataManager.saveTreeData(tileX, tileZ, filtered)
         }
       }
     }

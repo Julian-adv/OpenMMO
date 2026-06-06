@@ -37,9 +37,7 @@
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
-  import type { TerrainTreeDataManager } from '../../managers/terrainTreeDataManager'
   import { removeGrassInRect } from '../../utils/grass-data'
-  import { filterTreeData } from '../../utils/tree-data'
   import { TERRAIN_TILE_SIZE, worldRectToTileBounds } from '../game-scene/terrain-utils'
 
   interface Props {
@@ -47,11 +45,10 @@
     terrainMeshes: (THREE.Mesh | undefined)[]
     heightManager: TerrainHeightManager | null
     grassDataManager: TerrainGrassDataManager | null
-    treeDataManager: TerrainTreeDataManager | null
     housingGroup: THREE.Group | null
   }
 
-  let { camera, terrainMeshes, heightManager, grassDataManager, treeDataManager, housingGroup }: Props =
+  let { camera, terrainMeshes, heightManager, grassDataManager, housingGroup }: Props =
     $props()
 
   const { renderer } = useThrelte()
@@ -833,33 +830,6 @@
               rectMaxZ
             )
             if (filtered) grassDataManager.saveGrassData(tx, tz, filtered)
-          }
-        }
-      }
-
-      // Remove trees under the house footprint (+ 2m margin for canopy)
-      if (treeDataManager) {
-        const TREE_MARGIN = 2
-        const rectMinX = pos.x - TREE_MARGIN
-        const rectMinZ = pos.z - TREE_MARGIN
-        const rectMaxX = pos.x + sx + TREE_MARGIN
-        const rectMaxZ = pos.z + sz + TREE_MARGIN
-
-        const { tileMinX, tileMaxX, tileMinZ, tileMaxZ } =
-          worldRectToTileBounds(rectMinX, rectMinZ, rectMaxX, rectMaxZ)
-
-        for (let tz = tileMinZ; tz <= tileMaxZ; tz++) {
-          for (let tx = tileMinX; tx <= tileMaxX; tx++) {
-            const cached =
-              treeDataManager.getCachedTreeData(tx, tz) ??
-              (await treeDataManager.loadTreeData(tx, tz))
-            if (!cached) continue
-            const filtered = filterTreeData(
-              cached,
-              (x, z) =>
-                x >= rectMinX && x <= rectMaxX && z >= rectMinZ && z <= rectMaxZ
-            )
-            if (filtered) treeDataManager.saveTreeData(tx, tz, filtered)
           }
         }
       }
