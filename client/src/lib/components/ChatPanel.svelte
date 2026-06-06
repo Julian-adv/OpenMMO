@@ -4,6 +4,7 @@
   import { handleCommand, commandNames } from '../chat-commands'
 
   type Tab = 'say' | 'combat'
+  const TRANSCRIPT_FADE_DELAY_MS = 10_000
 
   let activeTab = $state<Tab>('say')
   let chatMessages = $derived($gameStore.chatMessages)
@@ -11,6 +12,8 @@
   let isConnected = $derived($gameStore.isConnected)
   let messageInput = $state('')
   let chatContainer = $state<HTMLDivElement>()
+  let transcriptVisible = $state(true)
+  let fadeTimer: number | undefined
 
   $effect(() => {
     const len =
@@ -19,6 +22,28 @@
       chatContainer.scrollTop = chatContainer.scrollHeight
     }
   })
+
+  function revealTranscript() {
+    transcriptVisible = true
+    window.clearTimeout(fadeTimer)
+    fadeTimer = window.setTimeout(() => {
+      transcriptVisible = false
+    }, TRANSCRIPT_FADE_DELAY_MS)
+  }
+
+  // Re-reveal the transcript on tab switch or new chat/combat activity.
+  $effect(() => {
+    void activeTab
+    void chatMessages.length
+    void combatMessages.length
+    revealTranscript()
+    return () => window.clearTimeout(fadeTimer)
+  })
+
+  function setActiveTab(tab: Tab) {
+    activeTab = tab
+    revealTranscript()
+  }
 
   function sendMessage() {
     const trimmed = messageInput.trim()
@@ -83,19 +108,19 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<div class="chat-panel">
+<div class="chat-panel" class:transcript-faded={!transcriptVisible}>
   <div class="tabs">
     <button
       class="tab"
       class:active={activeTab === 'say'}
-      onclick={() => (activeTab = 'say')}
+      onclick={() => setActiveTab('say')}
     >
       Chat
     </button>
     <button
       class="tab"
       class:active={activeTab === 'combat'}
-      onclick={() => (activeTab = 'combat')}
+      onclick={() => setActiveTab('combat')}
     >
       Combat
     </button>
@@ -127,25 +152,24 @@
     {/if}
   </div>
 
-  {#if activeTab === 'say'}
-    <div class="chat-input" class:disconnected={!isConnected}>
-      <input
-        type="text"
-        bind:this={chatInput}
-        bind:value={messageInput}
-        onkeydown={handleKeyDown}
-        onblur={restoreViewportAfterKeyboard}
-        placeholder="Type a message..."
-        disabled={!isConnected}
-      />
-      <button
-        onclick={sendMessage}
-        disabled={!isConnected || !messageInput.trim()}
-      >
-        Send
-      </button>
-    </div>
-  {/if}
+  <div class="chat-input" class:disconnected={!isConnected}>
+    <input
+      type="text"
+      bind:this={chatInput}
+      bind:value={messageInput}
+      onkeydown={handleKeyDown}
+      onfocus={() => setActiveTab('say')}
+      onblur={restoreViewportAfterKeyboard}
+      placeholder="Type a message..."
+      disabled={!isConnected}
+    />
+    <button
+      onclick={sendMessage}
+      disabled={!isConnected || !messageInput.trim()}
+    >
+      Send
+    </button>
+  </div>
 </div>
 
 <style>
@@ -162,12 +186,27 @@
     flex-direction: column;
     font-family:
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    transition:
+      background 700ms ease,
+      border-color 700ms ease;
+  }
+
+  .chat-panel.transcript-faded {
+    background: transparent;
+    border-color: transparent;
+    pointer-events: none;
+  }
+
+  .chat-panel.transcript-faded .chat-input,
+  .chat-panel.transcript-faded .chat-input * {
+    pointer-events: auto;
   }
 
   .tabs {
     display: flex;
     border-bottom: 1px solid #4a5568;
     flex-shrink: 0;
+    transition: opacity 700ms ease;
   }
 
   .tab {
@@ -204,6 +243,13 @@
     gap: 5px;
     width: 100%;
     box-sizing: border-box;
+    transition: opacity 700ms ease;
+  }
+
+  .chat-panel.transcript-faded .tabs,
+  .chat-panel.transcript-faded .chat-messages {
+    opacity: 0;
+    pointer-events: none;
   }
 
   .message {
@@ -270,7 +316,9 @@
   }
 
   .chat-input input::placeholder {
-    color: #718096;
+    color: rgba(113, 128, 150, 0.5);
+    font-size: 11px;
+    opacity: 1;
   }
 
   .chat-input input:disabled {
@@ -314,17 +362,39 @@
   @media (max-width: 600px), (pointer: coarse) and (max-width: 900px) {
     .chat-panel {
       left: max(8px, env(safe-area-inset-left));
-      bottom: calc(max(8px, env(safe-area-inset-bottom)) + 46px);
+      bottom: calc(max(8px, env(safe-area-inset-bottom)) + 44px);
       width: min(300px, calc(100vw - 96px - env(safe-area-inset-left) - env(safe-area-inset-right)));
       height: min(124px, 22dvh);
       box-sizing: border-box;
       border-radius: 6px;
     }
 
+    .tabs {
+      position: absolute;
+      top: 0;
+      left: calc(100% + 4px);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      border-bottom: none;
+    }
+
     .tab {
-      padding: 3px 0;
-      font-size: 10px;
-      border-radius: 6px 6px 0 0;
+      flex: none;
+      width: 46px;
+      height: 24px;
+      padding: 0;
+      border: 1px solid #4a5568;
+      border-radius: 5px;
+      background: rgba(26, 32, 44, 0.88);
+      font-size: 9px;
+      line-height: 1;
+    }
+
+    .tab.active {
+      background: rgba(66, 153, 225, 0.26);
+      border-color: rgba(66, 153, 225, 0.7);
+      border-bottom: 1px solid rgba(66, 153, 225, 0.7);
     }
 
     .chat-messages {
@@ -350,10 +420,20 @@
       min-width: 0;
     }
 
+    .chat-input input::placeholder {
+      font-size: 12px;
+    }
+
     .chat-input button {
       margin: 2px;
       padding: 4px 8px;
       font-size: 11px;
+    }
+  }
+
+  @media (orientation: landscape) and (pointer: coarse) and (max-height: 600px) {
+    .chat-panel {
+      bottom: 2px;
     }
   }
 </style>

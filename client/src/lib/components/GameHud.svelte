@@ -181,14 +181,32 @@
     .corner-actions {
       right: max(12px, env(safe-area-inset-right));
       bottom: max(12px, env(safe-area-inset-bottom));
-      flex-direction: column;
-      align-items: flex-end;
+      flex-direction: row;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .respawn-reopen {
+      height: 32px;
+      padding: 0 8px;
+      font-size: 11px;
     }
 
     .corner-btn {
-      width: 44px;
-      height: 44px;
-      padding: 10px;
+      width: 32px;
+      height: 32px;
+      padding: 7px;
+    }
+
+    .corner-btn svg {
+      width: 16px;
+      height: 16px;
+    }
+  }
+
+  @media (orientation: landscape) and (pointer: coarse) and (max-height: 600px) {
+    .corner-actions {
+      bottom: 2px;
     }
   }
 </style>

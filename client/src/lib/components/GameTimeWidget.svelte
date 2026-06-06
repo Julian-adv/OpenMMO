@@ -482,4 +482,17 @@
     white-space: nowrap;
     letter-spacing: 1px;
   }
+
+  @media (orientation: portrait) and (pointer: coarse) and (max-width: 900px) {
+    .time-widget {
+      top: max(10px, env(safe-area-inset-top));
+    }
+  }
+
+  @media (orientation: landscape) and (pointer: coarse) and (max-height: 600px) {
+    .time-widget {
+      top: 2px;
+      right: max(10px, env(safe-area-inset-right));
+    }
+  }
 </style>

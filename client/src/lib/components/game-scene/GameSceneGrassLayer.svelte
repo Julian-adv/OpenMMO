@@ -36,12 +36,14 @@
     terrainTiles: TerrainTile[]
     grassDataManager: TerrainGrassDataManager | null
     playerPosition?: THREE.Vector3 | null
+    grassCastsShadow?: boolean
   }
 
   let {
     terrainTiles,
     grassDataManager = null,
     playerPosition = null,
+    grassCastsShadow = true,
   }: Props = $props()
 
   // ── Sub-chunk grass rendering ──────────────────────────
@@ -190,7 +192,7 @@
     const mesh = new THREE.InstancedMesh(geom, mat, capacity)
     // Do NOT set mesh.count = 0 here! WebGPU allocates GPU buffers based on
     // mesh.count at first render. If 0, the buffer can never grow later.
-    mesh.castShadow = true
+    mesh.castShadow = grassCastsShadow
     mesh.receiveShadow = false
     mesh.frustumCulled = true
     return { mesh, ctx, capacity }
@@ -210,6 +212,14 @@
     }
     return slots[index]!
   }
+
+  $effect(() => {
+    for (const slots of [shortSlots, tallSlots, flowerSlots]) {
+      for (const slot of slots) {
+        if (slot) slot.mesh.castShadow = grassCastsShadow
+      }
+    }
+  })
 
   // ── Wind debug arrow ──────────────────────────────────────
   const WIND_ARROW_COLOR = 0x00ff88

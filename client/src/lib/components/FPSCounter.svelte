@@ -511,4 +511,19 @@
     background: #2f855a;
     border-color: #68d391;
   }
+
+  @media (orientation: portrait) and (pointer: coarse) and (max-width: 900px) {
+    .debug-toggle-btn,
+    .hud-container {
+      top: max(10px, env(safe-area-inset-top));
+    }
+  }
+
+  @media (orientation: landscape) and (pointer: coarse) and (max-height: 600px) {
+    .debug-toggle-btn,
+    .hud-container {
+      top: 2px;
+      left: max(10px, env(safe-area-inset-left));
+    }
+  }
 </style>

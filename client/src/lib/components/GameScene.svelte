@@ -893,6 +893,7 @@
     {terrainTiles}
     grassDataManager={terrainGrassDataManager}
     playerPosition={currentPlayer?.position ?? null}
+    grassCastsShadow={graphicsPreset.renderBudget !== 'mobile'}
   />
 {/if}
 
