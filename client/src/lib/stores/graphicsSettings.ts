@@ -16,7 +16,10 @@ export interface GraphicsPreset {
   enableWaterLayer: boolean
   enableWaterEffects: boolean
   enableGrassLayer: boolean
+  grassCastsShadow: boolean
   enableTreeLayer: boolean
+  treeInstanceLimit: number
+  treeCastsShadow: boolean
   enableWindParticles: boolean
   enableHousingLayer: boolean
   enableTorchEffects: boolean
@@ -38,7 +41,10 @@ const FULL_RENDER_SETTINGS = {
   enableWaterLayer: true,
   enableWaterEffects: true,
   enableGrassLayer: true,
+  grassCastsShadow: true,
   enableTreeLayer: true,
+  treeInstanceLimit: 1024,
+  treeCastsShadow: true,
   enableWindParticles: true,
   enableHousingLayer: true,
   enableTorchEffects: true,
@@ -135,17 +141,20 @@ function getMobileSafePreset(preset: GraphicsPreset): GraphicsPreset {
   return {
     ...preset,
     renderBudget: 'mobile',
-    pixelRatioCap: Math.min(preset.pixelRatioCap, 1.0),
+    pixelRatioCap: Math.min(preset.pixelRatioCap, 0.75),
     shadowMapSize: Math.min(preset.shadowMapSize, 512),
     antialias: false,
     refraction: false,
     reflection: false,
-    grassDensity: Math.min(preset.grassDensity, 0.18),
+    grassDensity: 0,
     enableDirectionalShadows: true,
     enableWaterLayer: true,
     enableWaterEffects: false,
-    enableGrassLayer: true,
+    enableGrassLayer: false,
+    grassCastsShadow: false,
     enableTreeLayer: true,
+    treeInstanceLimit: 384,
+    treeCastsShadow: false,
     enableWindParticles: false,
     enableHousingLayer: true,
     enableTorchEffects: true,

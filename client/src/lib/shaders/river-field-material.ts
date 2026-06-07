@@ -114,6 +114,8 @@ export function createRiverFieldMaterial(
   const normalMapTex = texture(options.normalMap)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
+  const reflectionMixScale = float(options.reflectionMap ? 1 : 0)
+  const refractionMixScale = float(options.refractionMap ? 1 : 0)
   const cloudTex = texture(getCloudTexture())
 
   // ── Varyings ──
@@ -246,7 +248,7 @@ export function createRiverFieldMaterial(
     const refrShallow = float(1)
       .sub(smoothstep(float(0.05), float(0.5), depthFactor))
       .toVar()
-    const refrMix = refrShallow.mul(0.85).toVar()
+    const refrMix = refrShallow.mul(0.85).mul(refractionMixScale).toVar()
     waterColor.assign(mix(waterColor, refrColor, refrMix))
 
     // ── Sky reflection (condensed sea pattern) ──
@@ -320,7 +322,13 @@ export function createRiverFieldMaterial(
       dayFactor,
       cloudTex
     )
-    skyReflection.assign(mix(skyReflection, cloudColor, cloudWeight.mul(0.95)))
+    skyReflection.assign(
+      mix(
+        skyReflection,
+        cloudColor,
+        cloudWeight.mul(mix(float(0.42), float(0.95), reflectionMixScale))
+      )
+    )
 
     const cloudLuma = dot(cloudColor, LUMA_REC601)
     const cloudHorizonWeight = smoothstep(float(0.15), float(0.45), skyY)
@@ -343,7 +351,11 @@ export function createRiverFieldMaterial(
       clamp(screenUVFlipped.add(rippleN.xz.mul(0.01)), 0.0, 1.0)
     )
     skyReflection.assign(
-      mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
+      mix(
+        skyReflection,
+        reflectionSample.rgb,
+        reflectionSample.a.mul(0.5).mul(reflectionMixScale)
+      )
     )
 
     // Torch remains reflection-only: its flickering PointLight intensity
@@ -417,7 +429,8 @@ export function createRiverFieldMaterial(
       reflectionBase
         .add(fresnel)
         .add(twilightReflectionLift)
-        .add(nightReflectionLift),
+        .add(nightReflectionLift)
+        .mul(mix(float(0.58), float(1.0), reflectionMixScale)),
       0.0,
       0.9
     )
@@ -425,7 +438,13 @@ export function createRiverFieldMaterial(
       .add(specular.mul(depthFactor))
       .toVar()
 
-    color.assign(mix(color, reflectionSample.rgb, reflectionSample.a.mul(0.3)))
+    color.assign(
+      mix(
+        color,
+        reflectionSample.rgb,
+        reflectionSample.a.mul(0.3).mul(reflectionMixScale)
+      )
+    )
 
     // Night grade only mutes the final river body; torch reflection is added
     // afterward so flicker stays warm and visible.

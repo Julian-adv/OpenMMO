@@ -649,6 +649,7 @@
       localCalendarDate: calDate,
       ambientLight,
       directionalLight,
+      directionalShadowsEnabled: graphicsPreset.enableDirectionalShadows,
       scene,
       sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
@@ -717,6 +718,7 @@
     })
 
     const sceneRes = initScene(renderer, scene, viewportSize.width, viewportSize.height, {
+      skipWaterLayer: !graphicsPreset.enableWaterLayer,
       skipWaterEffects: !graphicsPreset.enableWaterEffects,
     })
     terrainGeometry = sceneRes.terrainGeometry
@@ -838,8 +840,8 @@
   castShadow={graphicsPreset.enableDirectionalShadows}
   shadow.bias={-0.0002}
   shadow.normalBias={0.15}
-  shadow.mapSize.width={2048}
-  shadow.mapSize.height={2048}
+  shadow.mapSize.width={graphicsPreset.shadowMapSize}
+  shadow.mapSize.height={graphicsPreset.shadowMapSize}
 />
 <T.AmbientLight
   bind:ref={ambientLight}
@@ -893,7 +895,7 @@
     {terrainTiles}
     grassDataManager={terrainGrassDataManager}
     playerPosition={currentPlayer?.position ?? null}
-    grassCastsShadow={graphicsPreset.renderBudget !== 'mobile'}
+    grassCastsShadow={graphicsPreset.grassCastsShadow}
   />
 {/if}
 
@@ -903,6 +905,8 @@
     {terrainTiles}
     treeDataManager={terrainTreeDataManager}
     playerPosition={currentPlayer?.position ?? null}
+    maxInstances={graphicsPreset.treeInstanceLimit}
+    treeCastsShadow={graphicsPreset.treeCastsShadow}
   />
 {/if}
 

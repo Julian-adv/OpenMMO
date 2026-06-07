@@ -27,13 +27,31 @@ export function initScene(
   scene: THREE.Scene,
   viewportWidth: number,
   viewportHeight: number,
-  options: { skipWaterEffects?: boolean } = {}
+  options: { skipWaterLayer?: boolean; skipWaterEffects?: boolean } = {}
 ): SceneInitResult {
   // Create terrain geometry
   const terrainGeometry = createTerrainGeometry(
     TERRAIN_TILE_SIZE,
     TERRAIN_TILE_SEGMENTS
   )
+
+  // Shared by both skip paths: no refraction/reflection render targets.
+  const noWaterEffects = {
+    refractionManager: null,
+    refractionTexture: null,
+    reflectionManager: null,
+    reflectionTexture: null,
+  }
+
+  if (options.skipWaterLayer) {
+    return {
+      terrainGeometry,
+      waterNormalMap: null,
+      waterFoamMapPromise: Promise.resolve(null),
+      waterCausticsMapPromise: Promise.resolve(null),
+      ...noWaterEffects,
+    }
+  }
 
   // Load water textures
   const loader = new THREE.TextureLoader()
@@ -51,10 +69,7 @@ export function initScene(
       waterNormalMap,
       waterFoamMapPromise,
       waterCausticsMapPromise,
-      refractionManager: null,
-      refractionTexture: null,
-      reflectionManager: null,
-      reflectionTexture: null,
+      ...noWaterEffects,
     }
   }
 

@@ -46,9 +46,11 @@ export async function bootstrapSceneAssets(
   })
 
   const splatPromise = loadSplatLayers()
-  // Await flower texture loading so grass materials can be compiled
-  // (all geometry is now created synchronously)
-  const grassAssetsPromise = loadFlowerColorTexture()
+  // Await flower texture loading only when grass is enabled. On mobile the
+  // grass layer is skipped entirely to avoid WebGPU memory spikes.
+  const grassAssetsPromise = graphicsPreset.enableGrassLayer
+    ? loadFlowerColorTexture()
+    : Promise.resolve()
   const housingTexturesPromise = initHousingTextures()
   // Pre-load housing chunks around the player in parallel with other assets
   // so house geometry is built before the loading screen is dismissed.

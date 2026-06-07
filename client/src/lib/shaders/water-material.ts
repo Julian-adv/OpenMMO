@@ -107,6 +107,7 @@ export function createWaterMaterial(
   const refractionTex = texture(options.refractionMap ?? waterFallbackTex)
   const reflectionTex = texture(options.reflectionMap ?? waterFallbackTex)
   const refractionMixScale = float(options.refractionMap ? 1 : 0)
+  const reflectionMixScale = float(options.reflectionMap ? 1 : 0)
   const wetnessMapTex = texture(options.wetnessMap ?? waterWetnessFallbackTex)
   const splatMapTex = texture(options.splatMap ?? waterSplatFallbackTex)
   const noiseTex = texture(getNoiseTexture())
@@ -311,7 +312,11 @@ export function createWaterMaterial(
       clamp(reflUV.add(surfaceNormal.xz.mul(0.01)), 0.0, 1.0)
     )
     skyReflection.assign(
-      mix(skyReflection, reflectionSample.rgb, reflectionSample.a.mul(0.5))
+      mix(
+        skyReflection,
+        reflectionSample.rgb,
+        reflectionSample.a.mul(0.5).mul(reflectionMixScale)
+      )
     )
 
     return { skyReflection, reflectionSample, dayFactor }
@@ -650,7 +655,9 @@ export function createWaterMaterial(
     // between cloud shapes would push the coastal green toward blue.
     // Also off below 0.05 so it doesn't bleed onto the wet-sand strip.
     const cloudDepthGate = smoothstep(float(0.25), float(0.55), depthFactor)
-    const cloudMix = cloudDepthGate.mul(0.65)
+    const cloudMix = cloudDepthGate.mul(
+      mix(float(0.18), float(0.65), reflectionMixScale)
+    )
     color.assign(mix(color, cloudColor, cloudWeight.mul(cloudMix)))
 
     // Bright-cloud highlight in the emerald band — the complement window of
@@ -665,7 +672,9 @@ export function createWaterMaterial(
       float(0.15),
       depthFactor
     ).mul(float(1).sub(cloudDepthGate))
-    const highlightMix = highlightBandGate.mul(0.25)
+    const highlightMix = highlightBandGate.mul(
+      mix(float(0.08), float(0.25), reflectionMixScale)
+    )
     color.assign(
       mix(
         color,
@@ -675,7 +684,13 @@ export function createWaterMaterial(
     )
 
     // Entity reflection overlay
-    color.assign(mix(color, reflectionSample.rgb, reflectionSample.a.mul(0.3)))
+    color.assign(
+      mix(
+        color,
+        reflectionSample.rgb,
+        reflectionSample.a.mul(0.3).mul(reflectionMixScale)
+      )
+    )
 
     // Night darkening
     const nightDarken = smoothstep(float(-0.05), float(0.1), sunY)

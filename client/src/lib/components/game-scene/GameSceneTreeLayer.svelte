@@ -12,12 +12,16 @@
     terrainTiles: TerrainTile[]
     treeDataManager: TerrainTreeDataManager | null
     playerPosition: { x: number; y: number; z: number } | null
+    maxInstances?: number
+    treeCastsShadow?: boolean
   }
 
   let {
     terrainTiles,
     treeDataManager = null,
     playerPosition = null,
+    maxInstances = 1024,
+    treeCastsShadow = true,
   }: Props = $props()
 
   const treeGroup = new THREE.Group()
@@ -27,7 +31,9 @@
   }
 
   // ── Constants ──────────────────────────────────────────
-  const MAX_INSTANCES = 1024
+  function getMaxInstances(): number {
+    return Math.max(1, Math.floor(maxInstances))
+  }
 
   // ── Global meshes: one InstancedMesh per tree-type × sub-mesh ──
   interface GlobalSlot {
@@ -91,8 +97,8 @@
             const isTrunk = mesh.name.startsWith('Tw')
             if (isTrunk) mat.side = THREE.FrontSide
 
-            const im = new THREE.InstancedMesh(geo, mat, MAX_INSTANCES)
-            im.castShadow = true
+            const im = new THREE.InstancedMesh(geo, mat, getMaxInstances())
+            im.castShadow = treeCastsShadow
             im.receiveShadow = true
 
             // Ghost mesh: same geometry, semi-transparent material
@@ -101,7 +107,11 @@
             ghostMat.depthWrite = false
             ghostMat.opacity = GHOST_OPACITY
             ghostMat.alphaTest = 0
-            const ghostIm = new THREE.InstancedMesh(geo, ghostMat, MAX_INSTANCES)
+            const ghostIm = new THREE.InstancedMesh(
+              geo,
+              ghostMat,
+              getMaxInstances()
+            )
             ghostIm.castShadow = false
             ghostIm.receiveShadow = true
 
@@ -248,7 +258,13 @@
       for (const raw of allData[typeIdx]) {
         const count = raw.length / 5
         for (let i = 0; i < count; i++) {
-          if (idx >= MAX_INSTANCES && ghostIdx >= MAX_INSTANCES) break
+          const maxInstancesForSlot = mesh.instanceMatrix.count
+          const maxGhostInstancesForSlot = ghostMesh.instanceMatrix.count
+          if (
+            idx >= maxInstancesForSlot &&
+            ghostIdx >= maxGhostInstancesForSlot
+          )
+            break
           const base = i * 5
           _pos.set(raw[base], raw[base + 1], raw[base + 2])
           _quat.setFromAxisAngle(_up, raw[base + 3])
@@ -257,9 +273,10 @@
           _mat4.compose(_pos, _quat, _scale)
 
           if (doOcc && treeOccludesPlayer(raw[base], raw[base + 1], raw[base + 2], s, typeIdx, px, py, pz)) {
-            if (ghostIdx < MAX_INSTANCES) ghostMesh.setMatrixAt(ghostIdx++, _mat4)
+            if (ghostIdx < maxGhostInstancesForSlot)
+              ghostMesh.setMatrixAt(ghostIdx++, _mat4)
           } else {
-            if (idx < MAX_INSTANCES) mesh.setMatrixAt(idx++, _mat4)
+            if (idx < maxInstancesForSlot) mesh.setMatrixAt(idx++, _mat4)
           }
         }
       }

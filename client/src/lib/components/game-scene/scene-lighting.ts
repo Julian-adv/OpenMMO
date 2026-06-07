@@ -22,6 +22,7 @@ export interface SceneLightingUpdateParams {
   localCalendarDate: CalendarDate
   ambientLight: THREE.AmbientLight | undefined
   directionalLight: THREE.DirectionalLight | undefined
+  directionalShadowsEnabled: boolean
   scene: THREE.Scene
   sunLightSnapshot: SunLightSnapshot
   eclipseFactor: number
@@ -48,7 +49,9 @@ export function createSceneLightingController(): SceneLightingController {
   // the grid stable between updates. Comparison uses squared values to
   // avoid per-frame sqrt calls.
   const SHADOW_DIR_SNAP_SQ = 0.0005 * 0.0005
+  const SUN_SHADOW_ELEVATION_MIN = 0.08
   let snappedOffset: { x: number; y: number; z: number } | null = null
+  let lastDirectionalCastShadow: boolean | null = null
 
   function snapShadowDirection(offset: Vector3Like): Vector3Like {
     if (snappedOffset !== null) {
@@ -119,6 +122,17 @@ export function createSceneLightingController(): SceneLightingController {
     )
     params.directionalLight.intensity =
       directionalLightState.intensity * (1 - eclipse * 0.95)
+
+    const shouldCastSunShadow =
+      params.directionalShadowsEnabled &&
+      !directionalLightState.useMoonLight &&
+      sunLightState.direction.y >= SUN_SHADOW_ELEVATION_MIN &&
+      params.directionalLight.intensity > 0.1
+    if (lastDirectionalCastShadow !== shouldCastSunShadow) {
+      params.directionalLight.castShadow = shouldCastSunShadow
+      if (shouldCastSunShadow) params.directionalLight.shadow.needsUpdate = true
+      lastDirectionalCastShadow = shouldCastSunShadow
+    }
 
     if (directionalLightState.useMoonLight) {
       params.directionalLight.color.copy(moonLightColor)
