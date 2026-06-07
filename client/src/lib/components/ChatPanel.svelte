@@ -31,9 +31,9 @@
     }, TRANSCRIPT_FADE_DELAY_MS)
   }
 
-  // Re-reveal the transcript on tab switch or new chat/combat activity.
+  // Re-reveal the transcript on new chat/combat activity. Tab switches and
+  // input focus reveal it directly via setActiveTab().
   $effect(() => {
-    void activeTab
     void chatMessages.length
     void combatMessages.length
     revealTranscript()
