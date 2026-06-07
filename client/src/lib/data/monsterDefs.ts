@@ -4,7 +4,10 @@ export interface MonsterDefinition {
   id: string
   name: string
   model: string
-  health: number
+  health?: number
+  level: number
+  guard: number
+  attackBonus?: number
   walkSpeed: number
   runSpeed: number
   attackRange: number
@@ -13,8 +16,7 @@ export interface MonsterDefinition {
   attackImpactDelay: number
   attackDamageTextDelay: number
   behavior: string
-  damageRoll: string
-  hitThreshold: number
+  damageRoll?: string
   animIdle: string
   animWalk: string
   animRun: string

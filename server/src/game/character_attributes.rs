@@ -40,7 +40,7 @@ fn apply_class_adjustments(values: &mut [u8; 6], class: &CharacterClass, gender:
 }
 
 fn calculate_guard(dex: u8) -> u8 {
-    // D20-style baseline where dexterity shifts defense around 10.
+    // D20-style baseline where dexterity shifts guard around 10.
     let dex_mod = (i16::from(dex) - 10) / 2;
     (10 + dex_mod).clamp(MIN_GUARD, MAX_GUARD) as u8
 }

@@ -1,17 +1,9 @@
 /// Calculate XP awarded for killing a monster.
 /// Formula: 1 + level² + guard_bonus
-/// guard_bonus: 0 if guard < 8, +5 at 8, +6 at 9, 7 + 2*(guard-10) for guard >= 10
+/// guard_bonus: 2 XP per guard point above the baseline 10.
 pub fn monster_xp(level: u8, guard: u8) -> u32 {
     let base = 1u32 + (level as u32) * (level as u32);
-    let guard_bonus = if guard >= 10 {
-        7u32 + 2 * (guard as u32 - 10)
-    } else if guard == 9 {
-        6
-    } else if guard == 8 {
-        5
-    } else {
-        0
-    };
+    let guard_bonus = u32::from(guard.saturating_sub(10)) * 2;
     base + guard_bonus
 }
 
@@ -102,26 +94,25 @@ mod tests {
 
     #[test]
     fn monster_xp_no_guard_bonus() {
-        // level 3, guard 5: 1 + 9 + 0 = 10
-        assert_eq!(monster_xp(3, 5), 10);
+        // level 3, guard 10: 1 + 9 + 0 = 10
+        assert_eq!(monster_xp(3, 10), 10);
     }
 
     #[test]
-    fn monster_xp_guard_8() {
-        // level 3, guard 8: 1 + 9 + 5 = 15
-        assert_eq!(monster_xp(3, 8), 15);
+    fn monster_xp_below_baseline_guard_has_no_penalty() {
+        assert_eq!(monster_xp(3, 8), 10);
     }
 
     #[test]
-    fn monster_xp_guard_10() {
-        // level 5, guard 10: 1 + 25 + 7 = 33
-        assert_eq!(monster_xp(5, 10), 33);
+    fn monster_xp_guard_above_baseline() {
+        // level 5, guard 12: 1 + 25 + 4 = 30
+        assert_eq!(monster_xp(5, 12), 30);
     }
 
     #[test]
-    fn monster_xp_guard_13() {
-        // level 8, guard 13: 1 + 64 + (7 + 2*3) = 1 + 64 + 13 = 78
-        assert_eq!(monster_xp(8, 13), 78);
+    fn monster_xp_high_guard() {
+        // level 8, guard 13: 1 + 64 + 6 = 71
+        assert_eq!(monster_xp(8, 13), 71);
     }
 
     #[test]

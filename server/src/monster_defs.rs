@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::info;
 
+use crate::game::combat;
+
 fn default_weapon_drop_chance() -> f32 {
     1.0
 }
@@ -13,7 +15,12 @@ pub struct MonsterDefinition {
     pub id: String,
     pub name: String,
     pub model: String,
-    pub health: u32,
+    #[serde(default)]
+    pub health: Option<u32>,
+    pub level: u8,
+    pub guard: u8,
+    #[serde(rename = "attackBonus", default)]
+    pub attack_bonus: Option<i32>,
     #[serde(rename = "walkSpeed")]
     pub walk_speed: f32,
     #[serde(rename = "runSpeed")]
@@ -29,17 +36,14 @@ pub struct MonsterDefinition {
     #[serde(rename = "attackDamageTextDelay", default)]
     pub attack_damage_text_delay: u32,
     #[serde(rename = "damageRoll")]
-    pub damage_roll: String,
+    #[serde(default)]
+    pub damage_roll: Option<String>,
     #[serde(default)]
     pub weapon: Option<String>,
     #[serde(rename = "weaponDropChance", default = "default_weapon_drop_chance")]
     pub weapon_drop_chance: f32,
     #[serde(rename = "weaponBone", default)]
     pub weapon_bone: Option<String>,
-    pub level: u8,
-    pub guard: u8,
-    #[serde(rename = "hitThreshold")]
-    pub hit_threshold: u8,
     #[serde(rename = "animIdle")]
     pub anim_idle: String,
     #[serde(rename = "animWalk")]
@@ -60,6 +64,24 @@ pub struct MonsterDefinition {
     pub material: Option<String>,
 }
 
+impl MonsterDefinition {
+    pub fn max_health(&self) -> u32 {
+        self.health
+            .unwrap_or_else(|| combat::monster_max_health_for_level(self.level))
+    }
+
+    pub fn attack_bonus(&self) -> i32 {
+        self.attack_bonus
+            .unwrap_or_else(|| combat::level_attack_bonus(u32::from(self.level)))
+    }
+
+    pub fn damage_roll(&self) -> String {
+        self.damage_roll
+            .clone()
+            .unwrap_or_else(|| combat::monster_damage_roll_for_level(self.level).to_string())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct MonsterDefs {
     defs: Arc<HashMap<String, MonsterDefinition>>,
@@ -74,10 +96,10 @@ impl MonsterDefs {
         info!("Loaded {} monster definitions", defs.len());
         for (id, def) in &defs {
             info!(
-                "  {} - HP:{} walkSpeed:{} runSpeed:{} attackRange:{} chaseRange:{} cooldown:{}ms damage:{} hitThreshold:{}",
-                id, def.health, def.walk_speed, def.run_speed,
+                "  {} - level:{} HP:{} guard:{} attackBonus:{} walkSpeed:{} runSpeed:{} attackRange:{} chaseRange:{} cooldown:{}ms damage:{}",
+                id, def.level, def.max_health(), def.guard, def.attack_bonus(), def.walk_speed, def.run_speed,
                 def.attack_range, def.chase_range, def.attack_cooldown,
-                def.damage_roll, def.hit_threshold
+                def.damage_roll()
             );
         }
 

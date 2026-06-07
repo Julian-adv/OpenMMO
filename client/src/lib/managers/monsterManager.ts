@@ -146,8 +146,10 @@ class MonsterManager {
     if (this.monsters.has(id)) return
 
     const def = getMonsterDef(type)
-    const hp = health ?? def?.health ?? 10
-    const maxHp = maxHealth ?? def?.health ?? 10
+    // Server is authoritative for HP and always sends health/max_health on
+    // spawn; the constant is only a defensive fallback.
+    const hp = health ?? 10
+    const maxHp = maxHealth ?? 10
 
     this.monsters.set(id, {
       id,

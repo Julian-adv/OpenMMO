@@ -73,7 +73,7 @@ impl super::GameState {
         let id = format!("m{}_{}", owner_number, spawn_count);
 
         let def = self.monster_defs.get(&monster_type);
-        let health = def.map(|d| d.health).unwrap_or(10);
+        let health = def.map(|d| d.max_health()).unwrap_or(10);
         let monster = crate::types::Monster {
             id: id.clone(),
             monster_type: monster_type.clone(),

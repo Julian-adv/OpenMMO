@@ -184,13 +184,15 @@ max_hp += hp_gain
 ### 히트 롤 (Hit Roll)
 
 ```
-d20 굴림 > hitThreshold  →  명중
-d20 굴림 ≤ hitThreshold  →  빗나감
+d20 굴림 + attack_bonus > target_guard  →  명중
+d20 굴림 + attack_bonus ≤ target_guard  →  빗나감
 ```
 
 - d20 범위: 1~20
-- `hitThreshold`는 몬스터(또는 공격자)별로 정의
-- 예: `hitThreshold = 10` → 11 이상이면 명중 (명중 확률 50%)
+- `guard`가 곧 명중 목표값이다.
+- 기본 `attack_bonus = level / 2` (내림)
+- 플레이어 근접 공격은 STR modifier를 공격 보너스와 피해에 더한다.
+- 몬스터는 `attackBonus`가 정의되어 있으면 그 값을 쓰고, 없으면 레벨 기반 기본값을 쓴다.
 
 ### 대미지 롤 (Damage Roll)
 
@@ -209,18 +211,19 @@ d20 굴림 ≤ hitThreshold  →  빗나감
 
 ## Guard (GUARD)
 
-NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.**
+NetHack의 AC를 반전시킨 방어 수치이자 명중 목표값. **높을수록 방어력이 좋다.**
 
 - 캐릭터: 생성 시 DEX 기반 공식으로 계산 (위 섹션 참고)
 - 몬스터: `data-src/monsters.csv`에 정의하고 `data/monsters.json`으로 생성
-- 10이 기준점 (이 이상부터 XP 보너스가 가속)
+- 10이 기준점이다.
 
 | GUARD | 의미 |
 |-------|------|
-| 0~3 | 무방비 |
-| 4~7 | 약한 방어 |
-| 8~9 | 단단한 방어 |
-| 10+ | 중장갑 이상 |
+| 0~7 | 무방비 / 매우 취약 |
+| 8~9 | 약한 방어 |
+| 10 | 보통 방어 |
+| 11~13 | 단단한 방어 |
+| 14+ | 중장갑 이상 |
 
 > NetHack AC와의 대응: `GUARD = 10 − AC`
 > (NetHack AC 0 → GUARD 10, AC -5 → GUARD 15)
@@ -233,11 +236,11 @@ NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| `health` | u32 | 최대 HP |
-| `level` | u8 | 몬스터 레벨 (XP 계산에 사용) |
-| `guard` | u8 | 방어 수치 (높을수록 강함, XP 보너스에 영향) |
-| `hitThreshold` | u8 | 명중 판정 임계값 (d20 비교) |
-| `damageRoll` | string | 대미지 주사위 (예: `"1d6"`) |
+| `health` | u32? | 최대 HP override. 비우면 레벨 기반 기본값 (`level d8` 평균 반올림) |
+| `level` | u8 | 몬스터 레벨 (기본 HP/명중/피해/XP 계산에 사용) |
+| `guard` | u8 | 명중 목표값. 높을수록 맞히기 어렵고, 10 초과분은 XP 보너스에 영향 |
+| `attackBonus` | i32? | 몬스터 명중 보너스 override. 비우면 `level / 2` |
+| `damageRoll` | string? | 대미지 주사위 override. 비우면 레벨 기반 기본값 |
 | `behavior` | string | 몬스터 행동 트리 이름 (`data-src/behavior_trees.json`, 없으면 `brave` 사용) |
 | `attackRange` | f32 | 근접 공격 가능 거리 |
 | `chaseRange` | f32 | 플레이어 추적 시작 거리 |
@@ -247,15 +250,12 @@ NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.
 
 ```json
 {
-  "health": 10,
   "level": 3,
-  "guard": 5,
-  "hitThreshold": 10,
-  "damageRoll": "1d6",
+  "guard": 10,
   "behavior": "timid",
-  "attackRange": 2,
+  "attackRange": 3,
   "chaseRange": 25,
-  "attackCooldown": 1500
+  "attackCooldown": 4100
 }
 ```
 
@@ -266,7 +266,7 @@ NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.
 ### 플레이어 → 몬스터 공격
 
 1. 클라이언트가 `PlayerAttack { monster_id }` 전송
-2. 서버에서 히트 롤: `roll_attack(hitThreshold, damageRoll)`
+2. 서버에서 히트 롤: `roll_attack(player_attack_bonus, monster_guard, weapon_damage)`
 3. 결과를 전체 클라이언트에 브로드캐스트 (`PlayerAttacked`)
 4. 명중 시 몬스터 HP 차감
 5. HP가 0이 되면 `MonsterDead` 브로드캐스트, 30초 후 제거
@@ -274,7 +274,7 @@ NetHack의 AC를 반전시킨 방어 수치. **높을수록 방어력이 좋다.
 ### 몬스터 → 플레이어 공격
 
 1. 클라이언트(몬스터 owner)가 `MonsterAttack { monster_id, target_player_id }` 전송
-2. 서버에서 히트 롤: `roll_attack(hitThreshold, damageRoll)`
+2. 서버에서 히트 롤: `roll_attack(monster_attack_bonus, player_guard, monster_damage)`
 3. 결과를 전체 클라이언트에 브로드캐스트 (`MonsterAttackedPlayer`)
 4. 명중 시 플레이어 HP 차감
 5. HP가 0이 되면 `PlayerDead` 브로드캐스트
@@ -299,24 +299,22 @@ xp = 1 + level²  +  guard_bonus
 
 | GUARD | 보너스 |
 |-------|--------|
-| 0 ~ 7 | 없음 |
-| 8 | +5 |
-| 9 | +6 |
-| 10 | +7 |
-| 11 | +9 |
-| 12 | +11 |
-| 10 + i | 7 + 2i |
+| 0 ~ 10 | 없음 |
+| 11 | +2 |
+| 12 | +4 |
+| 13 | +6 |
+| 10 + i | 2i |
 
-일반 공식 (GUARD ≥ 10): `guard_bonus = 7 + 2 × (guard − 10)`
+일반 공식: `guard_bonus = max(guard - 10, 0) × 2`
 
 **예시:**
 
 | 몬스터 | level | GUARD | xp |
 |--------|-------|-------|----|
-| 약한 적 | 1 | 3 | 1 + 1 = **2** |
-| 보통 적 | 3 | 5 | 1 + 9 = **10** |
-| 강한 적 | 5 | 10 | 1 + 25 + 7 = **33** |
-| 보스 | 8 | 13 | 1 + 64 + 13 = **78** |
+| 약한 적 | 1 | 8 | 1 + 1 = **2** |
+| 보통 적 | 3 | 10 | 1 + 9 = **10** |
+| 강한 적 | 5 | 12 | 1 + 25 + 4 = **30** |
+| 보스 | 8 | 13 | 1 + 64 + 6 = **71** |
 
 ### 레벨업 필요 XP
 

@@ -59,12 +59,12 @@ impl super::GameState {
             (monster.monster_type.clone(), monster.position)
         };
 
-        let player_name = {
+        let player_snapshot = {
             let players = self.players.read().await;
-            players.get(player_id).map(|p| p.name.clone())
+            players.get(player_id).map(|p| (p.name.clone(), p.level))
         };
 
-        if let Some(player_name) = player_name {
+        if let Some((player_name, player_level)) = player_snapshot {
             info!("Player {} attacking monster {}", player_name, monster_id);
 
             // Unarmed falls back to D&D 5e improvised 1d2.
@@ -88,8 +88,9 @@ impl super::GameState {
 
             let (result_hit, result_roll, result_damage) = {
                 let def = self.monster_defs.get(&monster_type);
-                let hit_threshold = def.map(|d| d.hit_threshold).unwrap_or(10);
-                let result = combat::roll_attack(hit_threshold, &weapon_dice, str_mod);
+                let target_guard = def.map(|d| i32::from(d.guard)).unwrap_or(10);
+                let attack_bonus = combat::level_attack_bonus(player_level) + str_mod;
+                let result = combat::roll_attack(attack_bonus, target_guard, &weapon_dice, str_mod);
                 (result.hit, result.roll, result.damage)
             };
 
@@ -350,8 +351,9 @@ impl super::GameState {
                             .and_then(|weapon| self.item_defs.damage_dice_for_weapon_model(weapon));
                         monster_data = Some((
                             monster.monster_type.clone(),
-                            def.map(|d| d.hit_threshold).unwrap_or(10),
-                            def.map(|d| d.damage_roll.clone())
+                            def.map(|d| d.attack_bonus())
+                                .unwrap_or_else(|| combat::level_attack_bonus(1)),
+                            def.map(|d| d.damage_roll())
                                 .unwrap_or_else(|| "1d6".to_string()),
                             weapon_damage_roll,
                         ));
@@ -360,7 +362,7 @@ impl super::GameState {
             }
         }
 
-        let (_monster_type, hit_threshold, damage_roll, weapon_damage_roll) = match monster_data {
+        let (_monster_type, attack_bonus, damage_roll, weapon_damage_roll) = match monster_data {
             Some(data) => data,
             None => return,
         };
@@ -376,9 +378,17 @@ impl super::GameState {
                 _ => return,
             }
         }
+        let target_guard = {
+            let chars = self.player_characters.read().await;
+            chars
+                .get(target_player_id)
+                .map(|(_, _, attrs)| i32::from(attrs.guard))
+                .unwrap_or(10)
+        };
 
         let result = combat::roll_attack_with_extra_damage_roll(
-            hit_threshold,
+            attack_bonus,
+            target_guard,
             &damage_roll,
             weapon_damage_roll.as_deref(),
             0,
