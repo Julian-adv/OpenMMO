@@ -5,6 +5,7 @@ mod game;
 mod game_state;
 mod housing;
 mod item_defs;
+mod merchant_defs;
 mod monster_defs;
 mod npc_schedule;
 mod terrain;

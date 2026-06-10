@@ -80,6 +80,9 @@
     lastRegenInfo?: PlayerDamageInfo
     torchOn?: boolean
     torchEffectsDisabled?: boolean
+    /** Set for NPC remote players so canvas clicks can resolve this model
+     *  back to its player id (read from userData by the input raycast). */
+    npcPlayerId?: string
   }
 
   let {
@@ -108,6 +111,7 @@
     lastRegenInfo,
     torchOn = false,
     torchEffectsDisabled = false,
+    npcPlayerId,
   }: Props = $props()
 
   const DEFAULT_IDLE_INDICES = [
@@ -654,6 +658,18 @@
   export function getNametagGroup() {
     return nametagGroup
   }
+
+  export function getModelGroup() {
+    return modelGroup
+  }
+
+  // Tag the model group so the click raycast can resolve NPC models
+  // back to their player id.
+  $effect(() => {
+    if (modelGroup && npcPlayerId) {
+      modelGroup.userData.npcPlayerId = npcPlayerId
+    }
+  })
 
   // Function to update mixer and animation state and nametag - called from GameScene gameLoop
   export function update(deltaTime: number) {

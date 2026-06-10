@@ -464,6 +464,7 @@ async fn handle_client_message(
                     character_id,
                     character_xp,
                     selected_character.attributes.clone(),
+                    selected_character.gold,
                 )
                 .await;
 
@@ -490,6 +491,10 @@ async fn handle_client_message(
             if let Some(inv) = game_state.get_player_inventory(&id).await {
                 responses.push(ServerMessage::InventoryState { inventory: inv });
             }
+
+            responses.push(ServerMessage::GoldUpdate {
+                gold: selected_character.gold,
+            });
 
             if let Some(game_state_msg) = game_state.add_player(player).await {
                 responses.push(game_state_msg);
@@ -724,6 +729,34 @@ async fn handle_client_message(
         ClientMessage::PickupItem { instance_id } => {
             if let Some(id) = &state.player_id {
                 game_state.pickup_item(id, instance_id).await;
+            }
+        }
+
+        ClientMessage::OpenShop { merchant_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.open_shop(id, &merchant_player_id).await;
+            }
+        }
+
+        ClientMessage::BuyItem {
+            merchant_player_id,
+            item_def_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .buy_item(id, &merchant_player_id, &item_def_id)
+                    .await;
+            }
+        }
+
+        ClientMessage::SellItem {
+            merchant_player_id,
+            instance_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .sell_item(id, &merchant_player_id, instance_id)
+                    .await;
             }
         }
     }

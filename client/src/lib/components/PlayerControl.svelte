@@ -9,6 +9,7 @@
   import { combatController } from '../managers/combatController'
   import { preloadSwordHitSound, preloadSwordMissSound } from '../managers/sfxManager'
   import { inputHandler, type ClickIntent } from '../managers/inputHandler'
+  import { getMerchantByNpcName } from '../data/merchantDefs'
   import { mapEditorMode, housingEditorMode, debugSpeedMode, torchLightEnabled } from '../stores/debugStore'
   import { localTorchEquipped } from '../stores/inventoryStore'
   import {
@@ -82,12 +83,13 @@
     groundMeshes: THREE.Object3D[]
     groundItemMeshes: THREE.Object3D[]
     monsterMeshes: THREE.Group[]
+    npcMeshes?: THREE.Object3D[]
     doorMeshes: THREE.Object3D[]
     objectMeshes: THREE.Object3D[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, doorMeshes, objectMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, npcMeshes = [], doorMeshes, objectMeshes, attackCooldown }: Props = $props()
 
   let floorOffset = 0
   playerFloorOffset.subscribe((v) => (floorOffset = v))
@@ -122,6 +124,8 @@
   let currentSpeed = $state(0)
 
   const STAND_UP_DURATION = 300 // ms, matches animation crossfade duration
+  // Client-side shop range; kept below the server's 6m validation limit.
+  const NPC_TRADE_RANGE_METERS = 5
   let standUpTimer: ReturnType<typeof setTimeout> | null = null
 
   const JUMP_FEEDBACK_DURATION_MS = 1500
@@ -762,6 +766,7 @@
         inputHandler.processCanvasClick(event, {
           camera,
           monsterMeshes,
+          npcMeshes,
           doorMeshes,
           objectMeshes,
           groundItemMeshes,
@@ -802,6 +807,31 @@
       enterInteraction,
       enterPickup,
       approachAndPickup,
+      interactNpc: (intent) => {
+        const npc = get(gameStore).otherPlayers.get(intent.playerId)
+        if (!npc) return
+        // Merchant NPCs open their shop; other NPCs have no click
+        // interaction yet (planned: context menu with talk/trade).
+        if (!getMerchantByNpcName(npc.name)) return
+
+        if (intent.distance <= NPC_TRADE_RANGE_METERS) {
+          networkManager.sendOpenShop(intent.playerId)
+          return
+        }
+
+        // Too far: walk toward the merchant, stopping just short.
+        if (!currentPlayer) return
+        combatController.cancelCombat()
+        const dx = currentPlayer.position.x - intent.position.x
+        const dz = currentPlayer.position.z - intent.position.z
+        const dist = Math.sqrt(dx * dx + dz * dz) || 1
+        const stopShort = Math.min(NPC_TRADE_RANGE_METERS - 1, dist)
+        handleClickToMove({
+          x: intent.position.x + (dx / dist) * stopShort,
+          y: intent.position.y,
+          z: intent.position.z + (dz / dist) * stopShort,
+        })
+      },
       moveToGround: (position) => {
         combatController.cancelCombat()
         handleClickToMove(position)

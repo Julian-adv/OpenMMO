@@ -16,7 +16,8 @@ import { bridgeManager } from '../managers/bridgeManager'
 import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { deathDropDelayQueue } from '../managers/deathDropDelay'
-import { setInventory } from '../stores/inventoryStore'
+import { setInventory, playerGold } from '../stores/inventoryStore'
+import { shopSession } from '../stores/tradeStore'
 import { editorTreeDataManager } from '../stores/editorStore'
 import type { MonsterData } from '../types/Monster'
 import { requestCameraReset } from '../stores/cameraStore'
@@ -54,6 +55,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     gender: sp.gender,
     torchOn: sp.torch_on,
     floorLevel: sp.floor_level ?? 0,
+    isNpc: sp.is_npc ?? false,
   }
 }
 
@@ -693,6 +695,23 @@ export function handleServerMessage(
       break
 
     case 'InventoryError':
+      addChatMessage({ text: data.message, sender: 'system' })
+      break
+
+    case 'ShopState':
+      shopSession.set({
+        merchantPlayerId: data.merchant_player_id,
+        merchantName: data.merchant_name,
+        catalog: data.catalog ?? [],
+        sellRatePercent: data.sell_rate_percent,
+      })
+      break
+
+    case 'GoldUpdate':
+      playerGold.set(Number(data.gold))
+      break
+
+    case 'TradeError':
       addChatMessage({ text: data.message, sender: 'system' })
       break
 

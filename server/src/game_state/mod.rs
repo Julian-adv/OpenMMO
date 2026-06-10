@@ -53,6 +53,7 @@ mod inventory;
 mod monster;
 mod player;
 mod time;
+mod trading;
 
 #[cfg(test)]
 mod tests;
@@ -88,6 +89,9 @@ pub struct GameState {
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<ServerMessage>>>>,
     // player_id → (character_id, current_xp, attributes)
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
+    /// player_id → current gold (smallest currency unit). Kept out of the
+    /// broadcast `Player` struct: gold is private to its owner.
+    player_gold: Arc<RwLock<HashMap<PlayerId, i64>>>,
     housing_io: Arc<HousingIO>,
     /// Players whose state has changed since the last periodic save.
     dirty_players: Arc<RwLock<HashSet<PlayerId>>>,
@@ -127,6 +131,7 @@ impl GameState {
             id_state: Arc::new(RwLock::new(IdState::default())),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
             player_characters: Arc::new(RwLock::new(HashMap::new())),
+            player_gold: Arc::new(RwLock::new(HashMap::new())),
             housing_io,
             dirty_players: Arc::new(RwLock::new(HashSet::new())),
             dirty_inventories: Arc::new(RwLock::new(HashSet::new())),

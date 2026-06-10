@@ -112,6 +112,20 @@ pub enum ClientMessage {
     PickupItem {
         instance_id: u64,
     },
+    /// Ask a merchant NPC to open its shop.
+    OpenShop {
+        merchant_player_id: String,
+    },
+    /// Buy one unit of an item from a merchant's catalog at base price.
+    BuyItem {
+        merchant_player_id: String,
+        item_def_id: String,
+    },
+    /// Sell one unit of a bag item to a merchant at its sell rate.
+    SellItem {
+        merchant_player_id: String,
+        instance_id: u64,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -309,6 +323,22 @@ pub enum ServerMessage {
     },
     /// Inventory action failed.
     InventoryError {
+        message: String,
+    },
+    /// Response to OpenShop: the merchant's catalog. Display prices come from
+    /// item definitions; the server re-validates them on Buy/Sell.
+    ShopState {
+        merchant_player_id: String,
+        merchant_name: String,
+        catalog: Vec<String>,
+        sell_rate_percent: u32,
+    },
+    /// Direct message: the receiving player's current gold (smallest unit).
+    GoldUpdate {
+        gold: i64,
+    },
+    /// A shop request failed.
+    TradeError {
         message: String,
     },
 }

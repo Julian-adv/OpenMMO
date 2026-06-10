@@ -8,6 +8,7 @@ import {
 
 type InteractIntent = Extract<ClickIntent, { type: 'interact_object' }>
 type PickupIntent = Extract<ClickIntent, { type: 'pickup_ground_item' }>
+type NpcIntent = Extract<ClickIntent, { type: 'interact_npc' }>
 
 export interface CanvasClickActions {
   /** Player is at melee range — start the attack swing immediately. */
@@ -23,6 +24,7 @@ export interface CanvasClickActions {
   enterInteraction(intent: InteractIntent): void
   enterPickup(instanceId: number): void
   approachAndPickup(intent: PickupIntent): void
+  interactNpc(intent: NpcIntent): void
   moveToGround(position: Position): void
 }
 
@@ -58,6 +60,9 @@ export function dispatchCanvasClickIntent(
       } else {
         actions.approachAndPickup(intent)
       }
+      return
+    case 'interact_npc':
+      actions.interactNpc(intent)
       return
     case 'move_to_ground':
       actions.moveToGround(intent.position)

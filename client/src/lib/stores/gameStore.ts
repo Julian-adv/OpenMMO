@@ -33,6 +33,7 @@ export interface LocalPlayer extends PlayerBase {
 
 export interface RemotePlayer extends PlayerBase {
   floorLevel: number
+  isNpc: boolean
 }
 
 export interface ChatBubble {

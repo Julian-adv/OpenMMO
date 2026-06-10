@@ -184,6 +184,12 @@
     monsterMeshes={monsterModels
       .map((model) => model?.getMeshGroup())
       .filter((group) => group !== undefined) as THREE.Group[]}
+    npcMeshes={(otherPlayerModels ?? [])
+      .map((model) => model?.getModelGroup())
+      .filter(
+        (group): group is THREE.Group =>
+          group !== undefined && typeof group.userData.npcPlayerId === 'string'
+      )}
     {doorMeshes}
     {objectMeshes}
     {groundItemMeshes}
@@ -259,6 +265,7 @@
         maxHealth={player.maxHealth}
         torchOn={player.torchOn}
         {torchEffectsDisabled}
+        npcPlayerId={player.isNpc ? player.id : undefined}
       />
     {/if}
   {/each}

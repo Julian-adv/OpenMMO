@@ -13,6 +13,27 @@ function hasAncestorBridge(obj: THREE.Object3D | null): boolean {
   return false
 }
 
+/** Walk up the parent chain to the first object carrying `key` in userData. */
+function findAncestorWithUserData(
+  obj: THREE.Object3D | null,
+  key: string
+): THREE.Object3D | null {
+  for (let o = obj; o; o = o.parent) {
+    if (o.userData?.[key] != null) return o
+  }
+  return null
+}
+
+/** Entity clicks get a little slack: the click point plus 4 nearby offsets
+ *  (10px up/right/down/left) are each raycast until one resolves. */
+const CLICK_RAY_OFFSETS = [
+  { dx: 0, dy: 0 },
+  { dx: 0, dy: -10 }, // Screen coordinates: -y is up
+  { dx: 10, dy: 0 },
+  { dx: 0, dy: 10 },
+  { dx: -10, dy: 0 },
+]
+
 export type ClickIntent =
   | {
       type: 'attack_monster'
@@ -42,12 +63,19 @@ export type ClickIntent =
       position: Position
       distance: number
     }
+  | {
+      type: 'interact_npc'
+      playerId: string
+      position: Position
+      distance: number
+    }
   | { type: 'move_to_ground'; position: Position }
   | { type: 'none' }
 
 export interface RaycastContext {
   camera: THREE.Camera
   monsterMeshes: THREE.Group[]
+  npcMeshes: THREE.Object3D[]
   doorMeshes: THREE.Object3D[]
   objectMeshes: THREE.Object3D[]
   groundItemMeshes: THREE.Object3D[]
@@ -108,74 +136,101 @@ class InputHandler {
     return { x: moveX, z: moveZ }
   }
 
+  /** Cast the click ray plus the 4 offset rays against `meshes`, returning the
+   *  first non-null result of `resolve` over each ray's closest intersection. */
+  private raycastWithOffsets<T>(
+    event: MouseEvent,
+    rect: DOMRect,
+    camera: THREE.Camera,
+    meshes: THREE.Object3D[],
+    resolve: (hit: THREE.Intersection) => T | null
+  ): T | null {
+    const raycaster = new Raycaster()
+    for (const offset of CLICK_RAY_OFFSETS) {
+      const mouseNDC = new Vector2(
+        ((event.clientX - rect.left + offset.dx) / rect.width) * 2 - 1,
+        -((event.clientY - rect.top + offset.dy) / rect.height) * 2 + 1
+      )
+
+      raycaster.setFromCamera(mouseNDC, camera)
+      const hits = raycaster.intersectObjects(meshes, true)
+      if (hits.length === 0) continue
+
+      const result = resolve(hits[0])
+      if (result !== null) return result
+    }
+    return null
+  }
+
   processCanvasClick(event: MouseEvent, context: RaycastContext): ClickIntent {
     const rect = (event.target as HTMLCanvasElement).getBoundingClientRect()
 
-    // Define 5 points to raycast: center, up, right, down, left (10px offsets)
-    const offsets = [
-      { dx: 0, dy: 0 }, // Center
-      { dx: 0, dy: -10 }, // Up (Screen coordinates: -y is up)
-      { dx: 10, dy: 0 }, // Right
-      { dx: 0, dy: 10 }, // Down
-      { dx: -10, dy: 0 }, // Left
-    ]
+    // Check intersection with monsters
+    if (context.monsterMeshes.length > 0) {
+      const monsterIntent = this.raycastWithOffsets<ClickIntent>(
+        event,
+        rect,
+        context.camera,
+        context.monsterMeshes,
+        (hit) => {
+          const owner = findAncestorWithUserData(hit.object, 'monsterId')
+          if (!owner) return null
+          const monsterId = owner.userData.monsterId as string
+          if (context.isMonsterDead(monsterId)) return null // Try other rays
+
+          const hitPoint = hit.point
+          const dist = new THREE.Vector3(
+            context.playerPosition.x,
+            0,
+            context.playerPosition.z
+          ).distanceTo(new THREE.Vector3(hitPoint.x, 0, hitPoint.z))
+
+          return {
+            type: 'attack_monster',
+            monsterId,
+            hitPoint: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+            distance: dist,
+          }
+        }
+      )
+      if (monsterIntent) return monsterIntent
+    }
+
+    // Check intersection with NPC models
+    if (context.npcMeshes.length > 0) {
+      const npcIntent = this.raycastWithOffsets<ClickIntent>(
+        event,
+        rect,
+        context.camera,
+        context.npcMeshes,
+        (hit) => {
+          const owner = findAncestorWithUserData(hit.object, 'npcPlayerId')
+          if (!owner) return null
+
+          const npcPosition = new THREE.Vector3()
+          owner.getWorldPosition(npcPosition)
+          const dx = npcPosition.x - context.playerPosition.x
+          const dz = npcPosition.z - context.playerPosition.z
+          return {
+            type: 'interact_npc',
+            playerId: owner.userData.npcPlayerId as string,
+            position: {
+              x: npcPosition.x,
+              y: npcPosition.y,
+              z: npcPosition.z,
+            },
+            distance: Math.sqrt(dx * dx + dz * dz),
+          }
+        }
+      )
+      if (npcIntent) return npcIntent
+    }
 
     const raycaster = new Raycaster()
     const centerNDC = new Vector2(
       ((event.clientX - rect.left) / rect.width) * 2 - 1,
       -((event.clientY - rect.top) / rect.height) * 2 + 1
     )
-
-    // Check intersection with monsters using 5 rays
-    if (context.monsterMeshes.length > 0) {
-      for (const offset of offsets) {
-        const mouseNDC = new Vector2(
-          ((event.clientX - rect.left + offset.dx) / rect.width) * 2 - 1,
-          -((event.clientY - rect.top + offset.dy) / rect.height) * 2 + 1
-        )
-
-        raycaster.setFromCamera(mouseNDC, context.camera)
-        const monsterIntersects = raycaster.intersectObjects(
-          context.monsterMeshes,
-          true
-        )
-
-        if (monsterIntersects.length > 0) {
-          // Find the root object that has the monsterId
-          let object: THREE.Object3D | null = monsterIntersects[0].object
-          let monsterId: string | undefined
-
-          while (object) {
-            if (object.userData && object.userData.monsterId) {
-              monsterId = object.userData.monsterId
-              break
-            }
-            object = object.parent
-          }
-
-          if (monsterId) {
-            if (context.isMonsterDead(monsterId)) {
-              continue // Try other rays
-            }
-
-            const hitPoint = monsterIntersects[0].point
-            const dist = new THREE.Vector3(
-              context.playerPosition.x,
-              0,
-              context.playerPosition.z
-            ).distanceTo(new THREE.Vector3(hitPoint.x, 0, hitPoint.z))
-
-            return {
-              type: 'attack_monster',
-              monsterId,
-              hitPoint: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
-              distance: dist,
-            }
-          }
-        }
-      }
-    }
-
     raycaster.setFromCamera(centerNDC, context.camera)
 
     // Check intersection with door meshes

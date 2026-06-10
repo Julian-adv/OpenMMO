@@ -7,6 +7,7 @@
   import HousingEditorPanel from './map-editor/HousingEditorPanel.svelte'
   import CharacterPanel from './CharacterPanel.svelte'
   import InventoryPanel from './InventoryPanel.svelte'
+  import TradeWindow from './TradeWindow.svelte'
   import DragGhost from './DragGhost.svelte'
   import LoadingDialog from './LoadingDialog.svelte'
   import RespawnDialog from './RespawnDialog.svelte'
@@ -81,6 +82,7 @@
       attributes={selectedCharacter.attributes}
       onClose={() => inventoryVisible.set(false)}
     />
+    <TradeWindow />
   {/if}
 
   <div class="corner-actions">

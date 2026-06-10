@@ -33,6 +33,14 @@ export type {
   RollCharacterStatsResult,
 } from './networkTypes'
 
+// wasm-bindgen copies the serialized bytes into a fresh, exactly-sized
+// Uint8Array backed by a plain (non-shared) ArrayBuffer; its generated .d.ts
+// just types it as Uint8Array<ArrayBufferLike>, which newer lib.dom versions
+// reject for WebSocket.send. Narrow the type once at the wasm boundary.
+function serializeClientMessage(msg: ClientMessage): Uint8Array<ArrayBuffer> {
+  return serialize_client_message(msg) as Uint8Array<ArrayBuffer>
+}
+
 class NetworkManager {
   private socket: WebSocket | null = null
   private reconnectAttempts = 0
@@ -202,7 +210,7 @@ class NetworkManager {
 
   private sendMessage(msg: ClientMessage) {
     if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
-      const bytes = serialize_client_message(msg)
+      const bytes = serializeClientMessage(msg)
       this.socket.send(bytes)
     }
   }
@@ -213,7 +221,7 @@ class NetworkManager {
 
   private sendAndSerialize(msg: ClientMessage): boolean {
     if (!this.isConnected()) return false
-    const bytes = serialize_client_message(msg)
+    const bytes = serializeClientMessage(msg)
     this.socket!.send(bytes)
     return true
   }
@@ -301,7 +309,7 @@ class NetworkManager {
 
   requestRespawn() {
     if (this.isConnected()) {
-      const bytes = serialize_client_message('RequestRespawn')
+      const bytes = serializeClientMessage('RequestRespawn')
       this.socket!.send(bytes)
       this.respawnRequested.emit()
     }
@@ -423,6 +431,26 @@ class NetworkManager {
   sendPickupItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'pickup')) return
     this.sendMessage({ PickupItem: { instance_id: instanceId } })
+  }
+
+  sendOpenShop(merchantPlayerId: string) {
+    this.sendMessage({ OpenShop: { merchant_player_id: merchantPlayerId } })
+  }
+
+  sendBuyItem(merchantPlayerId: string, itemDefId: string) {
+    this.sendMessage({
+      BuyItem: { merchant_player_id: merchantPlayerId, item_def_id: itemDefId },
+    })
+  }
+
+  sendSellItem(merchantPlayerId: string, instanceId: number) {
+    if (!this.isNetworkableInstanceId(instanceId, 'sell')) return
+    this.sendMessage({
+      SellItem: {
+        merchant_player_id: merchantPlayerId,
+        instance_id: instanceId,
+      },
+    })
   }
 
   // --- Auth & character request methods ---

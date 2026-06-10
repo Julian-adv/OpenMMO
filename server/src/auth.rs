@@ -7,6 +7,12 @@ use std::collections::HashSet;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 
+/// New characters start with no gold: anything redeemable granted at creation
+/// would let abusers mint wealth by recycling characters (see doc/ECONOMY.md).
+/// Starter gear instead uses item defs without a basePrice, which merchants
+/// refuse to buy. (item_def_id, quantity, equip_slot)
+const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[("worn_iron_sword", 1, Some("main_hand"))];
+
 #[derive(Debug, Clone)]
 pub struct AuthService {
     pool: r2d2::Pool<SqliteConnectionManager>,
@@ -29,6 +35,7 @@ pub struct CharacterRecord {
     pub last_rotation: f32,
     pub health: Option<u32>,
     pub floor_level: i8,
+    pub gold: i64,
 }
 
 pub struct CharacterSaveData {
@@ -42,10 +49,11 @@ pub struct CharacterSaveData {
     pub max_hp: u32,
     pub health: u32,
     pub floor_level: i8,
+    pub gold: i64,
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -92,6 +100,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             "female" => Gender::Female,
             _ => Gender::Male,
         },
+        gold: row.get::<_, i64>(21).unwrap_or(0),
     })
 }
 
@@ -268,6 +277,7 @@ impl AuthService {
             ("health", "INTEGER".into()),
             ("floor_level", "INTEGER NOT NULL DEFAULT 0".into()),
             ("gender", "TEXT NOT NULL DEFAULT 'male'".into()),
+            ("gold", "INTEGER NOT NULL DEFAULT 0".into()),
         ];
 
         for (column_name, column_def) in &expected_columns {
@@ -460,8 +470,9 @@ impl AuthService {
                 last_x,
                 last_y,
                 last_z,
-                last_rotation
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
+                last_rotation,
+                gold
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, 0)",
             params![
                 account_name,
                 character_name,
@@ -484,6 +495,16 @@ impl AuthService {
         )?;
 
         let id = conn.last_insert_rowid();
+
+        {
+            let mut stmt = conn.prepare(
+                "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
+                 VALUES (?1, ?2, ?3, ?4)",
+            )?;
+            for (item_def_id, quantity, equip_slot) in STARTER_ITEMS {
+                stmt.execute(params![id, item_def_id, quantity, equip_slot])?;
+            }
+        }
         let created_at: i64 = conn.query_row(
             "SELECT created_at FROM characters WHERE id = ?1",
             params![id],
@@ -506,6 +527,7 @@ impl AuthService {
             last_rotation: world_config().spawn_position.rotation,
             health: None,
             floor_level: 0,
+            gold: 0,
         })
     }
 
@@ -570,7 +592,7 @@ impl AuthService {
         {
             let mut stmt = tx.prepare(
                 "UPDATE characters SET last_x = ?1, last_y = ?2, last_z = ?3, last_rotation = ?4, \
-                 xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9 WHERE id = ?10",
+                 xp = ?5, level = ?6, max_hp = ?7, health = ?8, floor_level = ?9, gold = ?10 WHERE id = ?11",
             )?;
             for d in data {
                 stmt.execute(params![
@@ -583,6 +605,7 @@ impl AuthService {
                     i64::from(d.max_hp),
                     i64::from(d.health),
                     i64::from(d.floor_level),
+                    d.gold,
                     d.character_id,
                 ])?;
             }

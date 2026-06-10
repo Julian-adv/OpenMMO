@@ -14,6 +14,9 @@ const initialState: PlayerInventory = {
 
 export const inventoryStore = writable<PlayerInventory>({ ...initialState })
 
+/** The local player's gold in the smallest currency unit (copper). */
+export const playerGold = writable(0)
+
 /** True when the local player has a torch equipped in the off-hand slot. */
 export const localTorchEquipped = derived(
   inventoryStore,
@@ -26,4 +29,5 @@ export function setInventory(inventory: PlayerInventory) {
 
 export function resetInventoryStore() {
   inventoryStore.set({ bag: [], equipped: {} })
+  playerGold.set(0)
 }

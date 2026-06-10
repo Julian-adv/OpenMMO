@@ -38,7 +38,7 @@ impl super::GameState {
     }
 
     /// D&D 5e carry weight: STR * 15.
-    async fn max_carry_weight(&self, player_id: &PlayerId) -> f32 {
+    pub(super) async fn max_carry_weight(&self, player_id: &PlayerId) -> f32 {
         let chars = self.player_characters.read().await;
         if let Some((_, _, attrs)) = chars.get(player_id) {
             attrs.r#str as f32 * 15.0
@@ -47,7 +47,7 @@ impl super::GameState {
         }
     }
 
-    fn calc_total_weight(&self, inventory: &PlayerInventory) -> f32 {
+    pub(super) fn calc_total_weight(&self, inventory: &PlayerInventory) -> f32 {
         let bag_weight: f32 = inventory
             .bag
             .iter()
@@ -161,7 +161,7 @@ impl super::GameState {
         inventories.get(player_id).cloned()
     }
 
-    async fn mark_inventory_dirty(&self, player_id: &PlayerId) {
+    pub(super) async fn mark_inventory_dirty(&self, player_id: &PlayerId) {
         let mut dirty = self.dirty_inventories.write().await;
         dirty.insert(player_id.clone());
     }

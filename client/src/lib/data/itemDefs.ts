@@ -12,6 +12,8 @@ export interface ItemDefinition {
   worldModel?: string
   damageDice?: string
   material?: string
+  /** Base price in the smallest currency unit (copper). */
+  basePrice?: number
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>

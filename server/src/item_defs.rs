@@ -21,6 +21,10 @@ pub struct ItemDefinition {
     pub damage_dice: Option<String>,
     #[serde(default)]
     pub material: Option<String>,
+    /// Base price in the smallest currency unit. Items without a price
+    /// cannot be bought or sold.
+    #[serde(rename = "basePrice")]
+    pub base_price: Option<i64>,
 }
 
 #[derive(Debug, Clone)]

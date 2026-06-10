@@ -60,6 +60,7 @@ __pycache__/
 data/*.db
 data/items.json
 data/map_labels.json
+data/merchants.json
 data/monsters.json
 data/terrain/
 data/housing/

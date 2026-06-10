@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { inventoryStore } from '../stores/inventoryStore'
+  import { inventoryStore, playerGold } from '../stores/inventoryStore'
   import type { ItemInstance } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
+  import { formatGold } from '../utils/currency'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
   import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
@@ -98,6 +99,7 @@
   >
     <div class="panel-header">
       <span class="panel-title">Inventory</span>
+      <span class="gold-display">{formatGold($playerGold)}</span>
       <span class="weight-display">
         {(currentWeight / 10).toFixed(1)} / {(maxWeight / 10).toFixed(1)} kg
       </span>
@@ -191,6 +193,12 @@
   .weight-display {
     font-size: 11px;
     color: #9fb2c3;
+  }
+
+  .gold-display {
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffd700;
   }
 
   .bag-grid {

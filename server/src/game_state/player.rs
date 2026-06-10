@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-fn build_save_data(player: &Player, character_id: i64, xp: u64) -> CharacterSaveData {
+fn build_save_data(player: &Player, character_id: i64, xp: u64, gold: i64) -> CharacterSaveData {
     CharacterSaveData {
         character_id,
         x: player.position.x,
@@ -17,6 +17,7 @@ fn build_save_data(player: &Player, character_id: i64, xp: u64) -> CharacterSave
         max_hp: player.max_health,
         health: player.health,
         floor_level: player.floor_level,
+        gold,
     }
 }
 
@@ -101,14 +102,28 @@ impl super::GameState {
         character_id: i64,
         xp: u64,
         attributes: CharacterAttributes,
+        gold: i64,
     ) {
-        let mut map = self.player_characters.write().await;
-        map.insert(player_id.clone(), (character_id, xp, attributes));
+        {
+            let mut map = self.player_characters.write().await;
+            map.insert(player_id.clone(), (character_id, xp, attributes));
+        }
+        let mut gold_map = self.player_gold.write().await;
+        gold_map.insert(player_id.clone(), gold);
     }
 
     pub async fn unregister_player_character(&self, player_id: &PlayerId) {
-        let mut map = self.player_characters.write().await;
-        map.remove(player_id);
+        {
+            let mut map = self.player_characters.write().await;
+            map.remove(player_id);
+        }
+        let mut gold_map = self.player_gold.write().await;
+        gold_map.remove(player_id);
+    }
+
+    pub async fn get_player_gold(&self, player_id: &PlayerId) -> i64 {
+        let gold_map = self.player_gold.read().await;
+        gold_map.get(player_id).copied().unwrap_or(0)
     }
 
     pub async fn kick_player_by_name(&self, name: &str) -> Option<PlayerId> {
@@ -476,13 +491,15 @@ impl super::GameState {
 
         let players = self.players.read().await;
         let player_chars = self.player_characters.read().await;
+        let gold_map = self.player_gold.read().await;
 
         let mut result = Vec::with_capacity(dirty_ids.len());
         for pid in &dirty_ids {
             if let (Some(player), Some((char_id, xp, _))) =
                 (players.get(pid), player_chars.get(pid))
             {
-                result.push(build_save_data(player, *char_id, *xp));
+                let gold = gold_map.get(pid).copied().unwrap_or(0);
+                result.push(build_save_data(player, *char_id, *xp, gold));
             }
         }
 
@@ -492,11 +509,13 @@ impl super::GameState {
     pub async fn get_player_save_data(&self, player_id: &PlayerId) -> Option<CharacterSaveData> {
         let players = self.players.read().await;
         let player_chars = self.player_characters.read().await;
+        let gold_map = self.player_gold.read().await;
 
         let player = players.get(player_id)?;
         let (char_id, xp, _) = player_chars.get(player_id)?;
+        let gold = gold_map.get(player_id).copied().unwrap_or(0);
 
-        Some(build_save_data(player, *char_id, *xp))
+        Some(build_save_data(player, *char_id, *xp, gold))
     }
 
     async fn insert_player_spatial_cell(&self, player_id: &PlayerId, position: &Position) {
