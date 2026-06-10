@@ -10,6 +10,7 @@
   import { preloadSwordHitSound, preloadSwordMissSound } from '../managers/sfxManager'
   import { inputHandler, type ClickIntent } from '../managers/inputHandler'
   import { getMerchantByNpcName } from '../data/merchantDefs'
+  import { NPC_TRADE_RANGE_METERS } from '../data/tradeConstants'
   import { mapEditorMode, housingEditorMode, debugSpeedMode, torchLightEnabled } from '../stores/debugStore'
   import { localTorchEquipped } from '../stores/inventoryStore'
   import {
@@ -124,8 +125,6 @@
   let currentSpeed = $state(0)
 
   const STAND_UP_DURATION = 300 // ms, matches animation crossfade duration
-  // Client-side shop range; kept below the server's 6m validation limit.
-  const NPC_TRADE_RANGE_METERS = 5
   let standUpTimer: ReturnType<typeof setTimeout> | null = null
 
   const JUMP_FEEDBACK_DURATION_MS = 1500

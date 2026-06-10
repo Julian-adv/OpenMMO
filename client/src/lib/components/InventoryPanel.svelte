@@ -2,7 +2,7 @@
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
   import type { ItemInstance } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
-  import { formatGold } from '../utils/currency'
+  import GoldAmount from './GoldAmount.svelte'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
   import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
@@ -99,7 +99,7 @@
   >
     <div class="panel-header">
       <span class="panel-title">Inventory</span>
-      <span class="gold-display">{formatGold($playerGold)}</span>
+      <span class="gold-display"><GoldAmount copper={$playerGold} /></span>
       <span class="weight-display">
         {(currentWeight / 10).toFixed(1)} / {(maxWeight / 10).toFixed(1)} kg
       </span>
@@ -211,11 +211,13 @@
         var(--inventory-slot-gap) * (var(--inventory-visible-rows) - 1)
     );
     overflow-y: auto;
+    overflow-x: hidden;
     overscroll-behavior: contain;
   }
 
   .grid-cell {
     position: relative;
+    box-sizing: border-box;
     width: var(--inventory-slot-size);
     height: var(--inventory-slot-size);
     display: flex;
