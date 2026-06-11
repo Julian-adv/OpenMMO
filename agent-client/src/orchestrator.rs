@@ -112,9 +112,17 @@ struct ScheduleFile {
     schedule: Vec<ScheduleEntry>,
 }
 
-/// Per-NPC configuration.
+/// Per-NPC configuration. Deployment-only values (account, llm backend,
+/// timing) live here; everything describing *who the NPC is* comes from the
+/// game-data registry via `id` and can merely be overridden here.
 #[derive(Debug, Clone, Deserialize)]
 pub struct NpcConfig {
+    /// Registry id in `data-src/npcs.csv`. When set, `character_name`,
+    /// `character_class`, the prompt files and the schedule are derived
+    /// from the registry row and the `data/npcs/{id}/` directory
+    /// convention (see `resolve_from_registry` in main.rs); the explicit
+    /// fields below act as overrides.
+    pub id: Option<String>,
     pub account: String,
     pub password: String,
     #[serde(default)]

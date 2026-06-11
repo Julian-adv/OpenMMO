@@ -1,3 +1,3 @@
-id,npcName,wishlist,wishlistRatePercent,salaryPerDay,walletCap
-rica,Rica,,,,
-karl,Karl,torch;dagger,120,5000,30000
+id,npcName,class,wishlist,wishlistRatePercent,salaryPerDay,walletCap
+rica,Rica,merchant,,,,
+karl,Karl,guard,torch;dagger,120,5000,30000

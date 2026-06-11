@@ -21,9 +21,13 @@ struct MerchantRow {
 /// One row of the NPC registry (`data/npcs.json`). The trading fields are
 /// optional — an empty wishlist means the NPC does not trade as a resident.
 #[derive(Deserialize)]
-struct NpcRow {
+pub struct NpcRow {
     #[serde(rename = "npcName")]
-    npc_name: String,
+    pub npc_name: String,
+    /// Role class: picks the prompt template and the auto-created
+    /// character's class (e.g. "guard", "merchant").
+    #[serde(default)]
+    pub class: String,
     #[serde(default)]
     wishlist: String,
     #[serde(rename = "wishlistRatePercent", default)]
@@ -32,6 +36,12 @@ struct NpcRow {
     salary_per_day: i64,
     #[serde(rename = "walletCap", default)]
     wallet_cap: i64,
+}
+
+/// Registry lookup by NPC id, for resolving `[[npcs]]` config entries that
+/// reference the registry instead of spelling every field out.
+pub fn npc_by_id(id: &str) -> Option<&'static NpcRow> {
+    npcs().get(id)
 }
 
 #[derive(Deserialize)]
@@ -192,6 +202,17 @@ mod tests {
                 quantity: 1,
             })
             .collect()
+    }
+
+    #[test]
+    fn registry_resolves_name_and_class_by_id() {
+        let karl = npc_by_id("karl").expect("karl is in the registry");
+        assert_eq!(karl.npc_name, "Karl");
+        assert_eq!(karl.class, "guard");
+        let rica = npc_by_id("rica").expect("rica is in the registry");
+        assert_eq!(rica.npc_name, "Rica");
+        assert_eq!(rica.class, "merchant");
+        assert!(npc_by_id("nobody").is_none());
     }
 
     #[test]

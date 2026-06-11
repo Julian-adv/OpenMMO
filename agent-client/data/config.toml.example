@@ -46,24 +46,31 @@ temperature = 0.7
 # Codex CLI settings (used when llm = "codex")
 # Requires `codex` CLI installed (npm i -g @openai/codex) and OPENAI_API_KEY set.
 [codex]
-model = "o4-mini"                                # Any OpenAI model ID
+model = "gpt-5.4-mini"                                # Any OpenAI model ID
 system_prompt_file = "data/system_prompt.txt"
 
 # --- Multi-NPC Orchestrator Mode ---
 # When [[npcs]] is present, legacy single-NPC fields above are ignored.
 # Each NPC gets its own WebSocket connection and LLM session.
+#
+# Who an NPC *is* lives in the game-data registry (data-src/npcs.csv) and the
+# data/npcs/{id}/ directory; this file only picks which registry NPCs run on
+# this instance and with what deployment values (account, llm, timing).
+# With `id` set, these are derived from the registry:
+#   character_name  = registry npcName
+#   character_class = registry class
+#   template_prompt = data/templates/{class}.txt
+#   instance_prompt = data/npcs/{id}/instance.txt
+#   memory_file     = data/npcs/{id}/memory.txt
+#   schedule_file   = data/npcs/{id}/schedule.json (when the file exists)
+# Any of them can still be set explicitly to override the convention, and an
+# entry without `id` keeps working fully spelled out (ad-hoc NPCs).
 
 [[npcs]]
+id = "karl"
 account = "npc_guard"
 password = ""
-character_name = "Karl"                           # Auto-creates character if account has none
-character_class = "knight"                              # Class for auto-creation (default: knight)
-llm = "openrouter"
-
-# 3-tier prompt system (overrides backend system_prompt_file when set):
-template_prompt = "data/templates/guard.txt"             # Role-specific behavior rules (shared)
-instance_prompt = "data/npcs/karl/instance.txt"         # Individual NPC personality
-memory_file = "data/npcs/karl/memory.txt"               # Accumulated experiences (auto-updated)
+llm = "codex"
 
 # Per-NPC timing overrides (optional, defaults shown above)
 # min_interval_secs = 5
@@ -72,12 +79,7 @@ memory_file = "data/npcs/karl/memory.txt"               # Accumulated experience
 # activity_window_secs = 30
 
 [[npcs]]
+id = "rica"
 account = "npc_merchant"
 password = ""
-character_name = "Rica"
-character_class = "merchant"
-llm = "openrouter"
-template_prompt = "data/templates/merchant.txt"
-instance_prompt = "data/npcs/rica/instance.txt"
-memory_file = "data/npcs/rica/memory.txt"
-# schedule_file = "data/npcs/rica/schedule.json"          # Daily schedule (time-based positioning)
+llm = "codex"

@@ -112,6 +112,7 @@ async fn main() -> anyhow::Result<()> {
     // NPCs inherit root-level backend configs when they don't override them
     let mut npcs = config.npcs;
     for npc in &mut npcs {
+        resolve_from_registry(npc)?;
         if npc.claude == claude::ClaudeConfig::default() {
             npc.claude = config.claude.clone();
         }
@@ -143,6 +144,49 @@ async fn main() -> anyhow::Result<()> {
 
 fn create_height_sampler(terrain_dir: &str) -> HeightSampler {
     HeightSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain_dir)))
+}
+
+/// Fill an `[[npcs]]` entry from the game-data registry (`data-src/npcs.csv`,
+/// the single source of truth for who an NPC is). `id` selects the registry
+/// row; the character name and class come from it, and the prompt/schedule
+/// files follow the `data/npcs/{id}/` directory convention. Explicit config
+/// fields still win, so a deployment can override any of them. Entries
+/// without `id` keep working fully spelled out (ad-hoc NPCs).
+fn resolve_from_registry(npc: &mut NpcConfig) -> anyhow::Result<()> {
+    let Some(id) = npc.id.clone() else {
+        return Ok(());
+    };
+    let row = shop_info::npc_by_id(&id).ok_or_else(|| {
+        anyhow::anyhow!("[[npcs]] id \"{id}\" is not in the NPC registry (data-src/npcs.csv)")
+    })?;
+
+    npc.character_name
+        .get_or_insert_with(|| row.npc_name.clone());
+    if npc.character_class.is_none() && !row.class.is_empty() {
+        npc.character_class = Some(row.class.clone());
+    }
+    if npc.template_prompt.is_none() {
+        let class = npc.character_class.as_deref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "registry NPC \"{id}\" has no class; add one in data-src/npcs.csv \
+                 or set character_class/template_prompt in config.toml"
+            )
+        })?;
+        npc.template_prompt = Some(format!("data/templates/{class}.txt"));
+    }
+    npc.instance_prompt
+        .get_or_insert_with(|| format!("data/npcs/{id}/instance.txt"));
+    npc.memory_file
+        .get_or_insert_with(|| format!("data/npcs/{id}/memory.txt"));
+    if npc.schedule_file.is_none() {
+        // Schedules are optional, and a missing path is logged as an error
+        // downstream — only derive it when the conventional file exists.
+        let path = format!("data/npcs/{id}/schedule.json");
+        if std::path::Path::new(&path).exists() {
+            npc.schedule_file = Some(path);
+        }
+    }
+    Ok(())
 }
 
 pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {

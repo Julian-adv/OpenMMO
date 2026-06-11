@@ -203,9 +203,17 @@ game://nearby/entities → 주변 엔티티 목록
 4. **MCP 서버 인터페이스** - LLM 연동용 tool/resource 정의
 5. **LLM 통합 테스트** - 실제 LLM으로 게임 플레이 테스트
 
-## 추후 과제 (TODO)
+## NPC 정의와 배포 설정 (source of truth)
 
-- **NPC source of truth 통일.** NPC 정의가 두 곳으로 갈라져 있다: `data-src/npcs.csv`(게임 데이터, git 추적)와 `agent-client/data/config.toml`(배포 설정, gitignore — 실제 파일은 원격 호스트에만 존재). 원래 NPC를 서버 인스턴스마다 관리자가 만들어 넣는 것으로 가정했으나, Rica/Karl 같은 기본 NPC는 게임의 구성요소이므로 git에 있어야 한다. 방향: `config.toml`의 `[[npcs]]`는 레지스트리 `id` 참조 + 배포 전용 값(계정/비밀번호, LLM 백엔드 선택, 타이밍 오버라이드)만 남기고, `character_name`/`character_class`/`template_prompt`/`instance_prompt`/`memory_file`/`schedule_file`은 `npcs.csv` 레지스트리(역할 컬럼 추가)와 디렉터리 컨벤션(`data/npcs/{id}/`)에서 파생시킨다. 어떤 NPC를 이 인스턴스에서 띄울지(enable 목록)만 배포 설정으로 남는다.
+NPC가 *누구인지*는 git 추적되는 게임 데이터가 단일 진실 소스다 (2026-06-12 통일):
+
+- **`data-src/npcs.csv`** — 전체 NPC 레지스트리. `id`, `npcName`, `class`(역할 = 프롬프트 템플릿 + 캐릭터 클래스), 선택적 거래 필드(`wishlist`, `wishlistRatePercent`, `salaryPerDay`, `walletCap`). 서버(`npc_defs.rs`), agent-client(`shop_info.rs`), 웹 클라이언트(`traderDefs.ts`)가 같은 생성물 `data/npcs.json`을 읽는다.
+- **`agent-client/data/npcs/{id}/`** — 개체 디렉터리 컨벤션: `instance.txt`(개성), `memory.txt`(런타임 누적, gitignore), `schedule.json`(선택).
+- **`agent-client/data/templates/{class}.txt`** — 역할별 행동 규칙.
+
+`agent-client/data/config.toml`(gitignore, 호스트별)은 배포 결정만 담는다: 이 인스턴스에서 어떤 레지스트리 NPC를 띄울지(`[[npcs]] id = "karl"`), 계정/비밀번호, LLM 백엔드 선택, 타이밍 오버라이드. `id`가 있으면 `character_name`/`character_class`/프롬프트·스케줄 경로가 레지스트리와 디렉터리 컨벤션에서 파생되고(`main.rs::resolve_from_registry`), 명시 필드는 오버라이드로 동작한다. `id` 없는 항목은 예전처럼 전부 명시하면 되므로 임시(ad-hoc) NPC도 가능하다. 예시는 `config.toml.example` 참고.
+
+## 추후 과제 (TODO)
 - **코드에 박힌 프롬프트 문자열을 외부 텍스트 파일로 분리.** 역할 템플릿(`data/templates/*.txt`)과 달리 일부 프롬프트는 Rust 소스에 하드코딩되어 있어 문구를 다듬을 때마다 재컴파일이 필요하다. 대상:
   - `src/shop_info.rs` — 자동 생성되는 "## Your Shop" / "## Your Personal Trading" 섹션의 고정 문구 (동적 값은 placeholder 치환으로)
   - `src/driver/execute.rs`, `src/state.rs` — `[TradeFailed]`, `[DealFailed]`, `[OpenTrade]`, `[PlayerNearby]`, `[MoveFailed]` 등 합성 agent 이벤트 문구
