@@ -50,8 +50,8 @@
     return traderId ? `/portraits/${traderId}.png` : null
   })
 
-  /** Resident traders (finite wallet, real stock) vs merchants (catalog). */
-  const isResident = $derived(session !== null && session.npcGold !== null)
+  /** Resident traders (wishlist, real stock) vs merchants (catalog). */
+  const isResident = $derived(session !== null && session.wishlist.length > 0)
 
   // The server rejects trades beyond MAX_TRADE_DISTANCE_METERS; close the
   // window at the same range so the player isn't left with a shop that only
@@ -124,15 +124,11 @@
   const sellTotal = $derived(
     cart.reduce((sum, e) => (e.kind === 'sell' ? sum + e.unitPrice * e.qty : sum), 0)
   )
-  /** Net gold the player must pay; negative means the player earns gold. */
+  /** Net gold the player must pay; negative means the player earns gold.
+   *  Residents pay sells out of a finite hidden wallet — the server rejects
+   *  the trade ("They cannot afford that right now") when it runs dry. */
   const netCost = $derived(buyTotal - sellTotal)
-  /** Residents pay sells out of a finite wallet (buys refill it). */
-  const npcCanAfford = $derived(
-    session?.npcGold == null || sellTotal - buyTotal <= session.npcGold
-  )
-  const canConfirm = $derived(
-    cart.length > 0 && netCost <= $playerGold && npcCanAfford
-  )
+  const canConfirm = $derived(cart.length > 0 && netCost <= $playerGold)
 
   function addBuy(itemDefId: string, def: ItemDefinition) {
     // The first added unit carries any haggled deal (single-use server-side).
@@ -309,12 +305,6 @@
           <span class="cart-label">Current</span>
           <GoldAmount copper={$playerGold} />
         </div>
-        {#if session.npcGold !== null}
-          <div class="cart-line cart-current" class:npc-broke={!npcCanAfford}>
-            <span class="cart-label">{session.merchantName}</span>
-            <GoldAmount copper={session.npcGold} />
-          </div>
-        {/if}
         <div class="column-title">Cart</div>
         <div class="item-list">
           {#each cart as entry (entry.kind + ':' + (entry.instanceId ?? entry.itemDefId) + (entry.dealPct ? ':deal' : ''))}
@@ -582,11 +572,6 @@
     padding-bottom: 4px;
     margin-bottom: 4px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.15);
-  }
-
-  /* The resident NPC cannot cover the cart's net payout. */
-  .npc-broke .cart-label {
-    color: #ff9a8a;
   }
 
   .cart-footer {

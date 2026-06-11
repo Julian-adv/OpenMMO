@@ -717,7 +717,6 @@ export function handleServerMessage(
             quantity: entry.quantity,
           })
         ),
-        npcGold: data.npc_gold != null ? Number(data.npc_gold) : null,
       }
       setMerchantDeals(data.merchant_player_id, data.active_deals ?? [])
       // Open directly only when the player asked for this shop (or it's a

@@ -8,8 +8,9 @@ export interface StockEntry {
 
 /** An open shop session with a trading NPC, driven by ServerMessage::ShopState.
  *  Set to a session to open the trade window, to null to close it.
- *  Merchants fill `catalog` (unlimited stock, unlimited wallet); resident
- *  traders fill `wishlist`/`stock`/`npcGold` instead. */
+ *  Merchants fill `catalog` (unlimited stock); resident traders fill
+ *  `wishlist`/`stock` instead and pay out of a finite wallet the server
+ *  keeps hidden (like another player's gold). */
 export interface ShopSession {
   merchantPlayerId: string
   merchantName: string
@@ -19,8 +20,6 @@ export interface ShopSession {
   wishlist: string[]
   /** Non-merchant real-inventory stock; merchants use `catalog`. */
   stock: StockEntry[]
-  /** Finite wallet (non-merchants); null = effectively unlimited. */
-  npcGold: number | null
 }
 
 export const shopSession = writable<ShopSession | null>(null)

@@ -730,7 +730,7 @@ async fn resident_sells_stock_but_keeps_wishlist_items() {
 }
 
 #[tokio::test]
-async fn resident_shop_state_reports_wishlist_stock_and_wallet() {
+async fn resident_shop_state_reports_wishlist_and_stock() {
     let game_state = make_test_game_state("resident_shop_state");
     setup_resident_trade(
         &game_state,
@@ -756,7 +756,6 @@ async fn resident_shop_state_reports_wishlist_stock_and_wallet() {
             sell_rate_percent,
             wishlist,
             stock,
-            npc_gold,
             ..
         }) => {
             assert_eq!(merchant_name, "Karl");
@@ -767,7 +766,6 @@ async fn resident_shop_state_reports_wishlist_stock_and_wallet() {
             assert_eq!(stock.len(), 1);
             assert_eq!(stock[0].item_def_id, "spear");
             assert_eq!(stock[0].quantity, 1);
-            assert_eq!(npc_gold, Some(4_321));
         }
         other => panic!("Expected ShopState, got {:?}", other),
     }

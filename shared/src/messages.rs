@@ -401,10 +401,6 @@ pub enum ServerMessage {
         /// price). Empty for merchants, who use `catalog`.
         #[serde(default)]
         stock: Vec<StockEntry>,
-        /// The trader's wallet when finite (non-merchants); `None` means
-        /// effectively unlimited (merchants).
-        #[serde(default)]
-        npc_gold: Option<i64>,
     },
     /// Direct message: the receiving player's current gold (smallest unit).
     GoldUpdate {

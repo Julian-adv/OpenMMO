@@ -178,7 +178,6 @@ impl super::GameState {
                 active_deals,
                 wishlist: Vec::new(),
                 stock: Vec::new(),
-                npc_gold: None,
             },
             TraderDef::Resident(def) => ServerMessage::ShopState {
                 merchant_player_id: npc_player_id.to_string(),
@@ -188,7 +187,6 @@ impl super::GameState {
                 active_deals,
                 wishlist: def.wishlist.clone(),
                 stock: self.resident_stock(npc_player_id, &def).await,
-                npc_gold: Some(self.get_player_gold(&npc_player_id.to_string()).await),
             },
         };
         self.send_direct_message(player_id, state).await;
