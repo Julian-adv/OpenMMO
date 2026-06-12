@@ -36,7 +36,11 @@ pub(super) enum AgentAction {
     },
     #[serde(rename = "move")]
     Move {
-        // Absolute coordinates (preferred)
+        // Character name: approach them and stop a polite distance short
+        // (preferred when walking up to a player or NPC)
+        #[serde(alias = "player", alias = "name", alias = "character")]
+        target: Option<String>,
+        // Absolute coordinates (preferred for places)
         x: Option<f32>,
         #[allow(dead_code)]
         y: Option<f32>,
@@ -149,12 +153,18 @@ pub(super) fn action_to_command(
             monster_id: monster_id.clone(),
         }),
         AgentAction::Move {
+            target,
             x,
             y: _,
             z,
             direction,
             distance,
         } => {
+            // Name-targeted moves need SharedState to resolve the name and
+            // run the approach loop; handled in `execute::handle_response`.
+            if target.is_some() {
+                return None;
+            }
             let (gx, gz) = resolve_move_goal(x, z, direction, distance, player_pos)?;
             let rotation = if let Some(pp) = player_pos {
                 (gx - pp.x).atan2(gz - pp.z)
@@ -195,5 +205,50 @@ fn direction_to_offset(dir: &str) -> (f32, f32) {
             warn!("Unknown direction '{dir}', defaulting to north");
             (0.0, -1.0)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_single_action(json: &str) -> AgentAction {
+        let resp = parse_agent_response(json).unwrap();
+        resp.actions.into_iter().next().unwrap()
+    }
+
+    #[test]
+    fn move_parses_character_target() {
+        let action = parse_single_action(
+            r#"{"actions": [{"type": "move", "target": "Karl"}]}"#,
+        );
+        let AgentAction::Move { target, .. } = action else {
+            panic!("expected Move");
+        };
+        assert_eq!(target.as_deref(), Some("Karl"));
+    }
+
+    #[test]
+    fn move_target_accepts_player_alias() {
+        let action = parse_single_action(
+            r#"{"actions": [{"type": "move", "player": "Karl"}]}"#,
+        );
+        let AgentAction::Move { target, .. } = action else {
+            panic!("expected Move");
+        };
+        assert_eq!(target.as_deref(), Some("Karl"));
+    }
+
+    #[test]
+    fn move_still_parses_coordinates() {
+        let action = parse_single_action(
+            r#"{"actions": [{"type": "move", "x": 10.0, "y": 0.0, "z": -5.0}]}"#,
+        );
+        let AgentAction::Move { target, x, z, .. } = action else {
+            panic!("expected Move");
+        };
+        assert_eq!(target, None);
+        assert_eq!(x, Some(10.0));
+        assert_eq!(z, Some(-5.0));
     }
 }

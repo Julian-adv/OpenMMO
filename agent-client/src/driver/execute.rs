@@ -11,7 +11,7 @@ use tracing::{debug, error, info, warn};
 use crate::state::SharedState;
 
 use super::action::{action_to_command, parse_agent_response, resolve_move_goal, AgentAction};
-use super::combat::{chase_monster, ChaseResult};
+use super::combat::{approach_player, chase_monster, ChaseResult};
 use super::movement::{execute_move, MoveResult};
 
 /// Parse and execute the agent's response.
@@ -176,6 +176,7 @@ pub(super) async fn handle_response(
 
         // Handle move actions with pathfinding
         if let AgentAction::Move {
+            target,
             x,
             y: _,
             z,
@@ -183,6 +184,52 @@ pub(super) async fn handle_response(
             distance,
         } = action
         {
+            // Name-targeted move: walk up to the character and stop a
+            // polite distance short instead of pathing onto their exact
+            // position (which would overlap the models).
+            if let Some(name) = target.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+                let target_id = {
+                    let mut s = state.lock().await;
+                    match s.resolve_nearby_player(name) {
+                        Some((id, _)) => id,
+                        None => {
+                            warn!("move: no nearby character named '{name}'");
+                            s.push_agent_event(format!(
+                                "[MoveFailed] No character named '{name}' is nearby to walk to."
+                            ));
+                            continue;
+                        }
+                    }
+                };
+                match approach_player(state, &target_id).await {
+                    ChaseResult::InRange => {
+                        info!("Agent walked up to {name}");
+                        let mut s = state.lock().await;
+                        if let Some(face_cmd) = s.face_player_command(&target_id) {
+                            if let Err(e) = s.send_command(face_cmd).await {
+                                error!("Failed to send face-character move: {e}");
+                            }
+                        }
+                        s.push_agent_event(format!(
+                            "[Arrived] You walked up to {name} and now stand right next \
+                             to them. No further movement is needed to interact."
+                        ));
+                    }
+                    ChaseResult::Lost => {
+                        warn!("move: could not reach '{name}'");
+                        let mut s = state.lock().await;
+                        s.push_agent_event(format!(
+                            "[MoveFailed] You could not reach {name} — they moved away \
+                             or out of sight."
+                        ));
+                    }
+                    ChaseResult::Error => {
+                        error!("move: error while approaching '{name}'");
+                    }
+                }
+                continue;
+            }
+
             let goal = {
                 let s = state.lock().await;
                 let pp = s.self_player.as_ref().map(|p| &p.position);

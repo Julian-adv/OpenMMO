@@ -733,13 +733,25 @@ impl SharedState {
     /// the swing animation orients toward the target. Returns `None` if
     /// either the agent or the monster isn't currently known.
     pub fn face_monster_command(&self, monster_id: &str) -> Option<ClientMessage> {
-        let monster = self.nearby_monsters.get(monster_id)?;
+        let target_pos = self.nearby_monsters.get(monster_id)?.position;
+        self.face_position_command(target_pos)
+    }
+
+    /// Like `face_monster_command`, but toward another player or NPC — a
+    /// position-sync that rotates us to face them, e.g. after walking up
+    /// to someone for a conversation.
+    pub fn face_player_command(&self, player_id: &str) -> Option<ClientMessage> {
+        let target_pos = self.nearby_players.get(player_id)?.position;
+        self.face_position_command(target_pos)
+    }
+
+    /// Position-sync at the current location, rotated to face `target_pos`.
+    fn face_position_command(&self, target_pos: Position) -> Option<ClientMessage> {
         let self_player = self.self_player.as_ref()?;
-        let to_monster =
-            crate::geom::PlanarDelta::between(&self_player.position, &monster.position);
+        let to_target = crate::geom::PlanarDelta::between(&self_player.position, &target_pos);
         Some(ClientMessage::PlayerMove {
-            position: self_player.position.clone(),
-            rotation: to_monster.rotation(),
+            position: self_player.position,
+            rotation: to_target.rotation(),
             floor_level: self.self_floor_level as i8,
         })
     }

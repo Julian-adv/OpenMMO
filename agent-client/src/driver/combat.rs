@@ -1,9 +1,10 @@
 //! Combat tick + chase loop. Combat lives in two layers: `tick_combat`
 //! is the per-tick top-of-loop call from `llm_driver` (chase, face,
-//! attack); `chase_monster` is the pathfinding-driven approach loop that
-//! polls monster position and re-routes when the target moves. Constants
-//! at the top tune both the chase cadence and the attack-cooldown derived
-//! from animation data.
+//! attack); `chase_target` is the pathfinding-driven approach loop that
+//! polls the target position and re-routes when it moves. The same loop
+//! also powers `approach_player`, the non-combat "walk up to a character
+//! and stop a polite metre short" move. Constants at the top tune both
+//! the chase cadence and the attack-cooldown derived from animation data.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,6 +36,12 @@ const MAX_CHASE_SECS: f32 = 15.0;
 const MAX_CHASE_DISTANCE: f32 = 20.0;
 /// How far the monster must move from our last target before we re-route.
 const REROUTE_THRESHOLD: f32 = 1.5;
+/// Polite stop distance when walking up to another character (player or
+/// NPC): close enough to talk, far enough that the models don't overlap.
+const APPROACH_RANGE: f32 = 1.0;
+/// Maximum approach duration before giving up (seconds). Longer than the
+/// combat chase: an approach target can be anywhere inside the sight radius.
+const MAX_APPROACH_SECS: f32 = 30.0;
 
 /// Load the attack (slash1) animation duration from the shared JSON file.
 /// Returns the duration as milliseconds, or the default if loading fails.
@@ -107,56 +114,144 @@ pub(super) enum ChaseResult {
     Error,
 }
 
+/// What a chase walks toward: a monster (stop at attack range) or another
+/// character (stop at a polite conversational distance instead of standing
+/// on top of them).
+pub(super) enum ChaseTarget<'a> {
+    Monster(&'a str),
+    Player(&'a str),
+}
+
+impl ChaseTarget<'_> {
+    fn position(&self, s: &SharedState) -> Option<onlinerpg_shared::Position> {
+        match self {
+            Self::Monster(id) => s.nearby_monsters.get(*id).map(|m| m.position),
+            Self::Player(id) => s.nearby_players.get(*id).map(|p| p.position),
+        }
+    }
+
+    /// The chase ends successfully within this distance of the target.
+    /// The character range carries a little slack over APPROACH_RANGE so
+    /// arriving at the pulled-back path goal always counts as in range.
+    fn arrive_range(&self) -> f32 {
+        match self {
+            Self::Monster(_) => ATTACK_RANGE,
+            Self::Player(_) => APPROACH_RANGE + 0.2,
+        }
+    }
+
+    /// How far short of the target the path goal stops. Monsters are
+    /// pathed to directly (the arrive check stops us first); characters
+    /// get a pulled-back goal so a step can never land on top of them.
+    fn path_pullback(&self) -> f32 {
+        match self {
+            Self::Monster(_) => 0.0,
+            Self::Player(_) => APPROACH_RANGE,
+        }
+    }
+
+    fn max_distance(&self) -> f32 {
+        match self {
+            Self::Monster(_) => MAX_CHASE_DISTANCE,
+            Self::Player(_) => crate::state::NPC_SIGHT_RADIUS,
+        }
+    }
+
+    fn max_secs(&self) -> f32 {
+        match self {
+            Self::Monster(_) => MAX_CHASE_SECS,
+            Self::Player(_) => MAX_APPROACH_SECS,
+        }
+    }
+
+    fn label(&self) -> &str {
+        match self {
+            Self::Monster(id) | Self::Player(id) => id,
+        }
+    }
+}
+
 /// Chase the monster until we're in attack range, using A* pathfinding.
-/// Polls monster position every CHASE_TICK_MS and follows waypoints.
 pub(super) async fn chase_monster(
     state: &Arc<Mutex<SharedState>>,
     monster_id: &str,
 ) -> ChaseResult {
+    chase_target(state, &ChaseTarget::Monster(monster_id)).await
+}
+
+/// Walk up to another character and stop APPROACH_RANGE short of them,
+/// following the target if it moves. Same loop as the combat chase.
+pub(super) async fn approach_player(
+    state: &Arc<Mutex<SharedState>>,
+    player_id: &str,
+) -> ChaseResult {
+    chase_target(state, &ChaseTarget::Player(player_id)).await
+}
+
+/// Chase the target until we're within its arrive range, using A*
+/// pathfinding. Polls the target position every tick and re-routes when
+/// it moves.
+async fn chase_target(state: &Arc<Mutex<SharedState>>, target: &ChaseTarget<'_>) -> ChaseResult {
     let chase_start = Instant::now();
     let mut path_waypoints: Vec<onlinerpg_shared::pathfinding::PathWaypoint> = Vec::new();
     let mut path_index = 0usize;
-    let mut last_monster_x = 0.0f32;
-    let mut last_monster_z = 0.0f32;
+    let mut last_target_x = 0.0f32;
+    let mut last_target_z = 0.0f32;
 
     loop {
-        if chase_start.elapsed().as_secs_f32() > MAX_CHASE_SECS {
-            warn!("Chase timeout for monster {monster_id}");
+        if chase_start.elapsed().as_secs_f32() > target.max_secs() {
+            warn!("Chase timeout for target {}", target.label());
             return ChaseResult::Lost;
         }
 
-        let (in_range, needs_repath, monster_pos) = {
+        let (in_range, needs_repath, target_pos, goal) = {
             let s = state.lock().await;
-            let monster_alive = s.nearby_monsters.contains_key(monster_id);
             let player_alive = s.self_player.as_ref().is_some_and(|p| p.health > 0);
-            if !monster_alive || !player_alive {
+            let Some(target_pos) = target.position(&s) else {
+                return ChaseResult::Lost;
+            };
+            if !player_alive {
                 return ChaseResult::Lost;
             }
 
-            let monster = &s.nearby_monsters[monster_id];
             let player = s.self_player.as_ref().unwrap();
-            let to_monster = PlanarDelta::between(&player.position, &monster.position);
-            let in_range = to_monster.dist <= ATTACK_RANGE;
-            if to_monster.dist > MAX_CHASE_DISTANCE {
+            let to_target = PlanarDelta::between(&player.position, &target_pos);
+            let in_range = to_target.dist <= target.arrive_range();
+            if to_target.dist > target.max_distance() {
                 info!(
-                    "Giving up chase: monster {monster_id} is {:.1}m away (>{MAX_CHASE_DISTANCE}m)",
-                    to_monster.dist
+                    "Giving up chase: target {} is {:.1}m away (>{:.1}m)",
+                    target.label(),
+                    to_target.dist,
+                    target.max_distance()
                 );
                 return ChaseResult::Lost;
             }
 
-            let monster_shift = PlanarDelta::xz(
-                last_monster_x,
-                last_monster_z,
-                monster.position.x,
-                monster.position.z,
+            let target_shift = PlanarDelta::xz(
+                last_target_x,
+                last_target_z,
+                target_pos.x,
+                target_pos.z,
             )
             .dist;
             let needs_repath = path_waypoints.is_empty()
                 || path_index >= path_waypoints.len()
-                || monster_shift > REROUTE_THRESHOLD;
+                || target_shift > REROUTE_THRESHOLD;
 
-            (in_range, needs_repath, monster.position.clone())
+            // Path goal, pulled back toward us by path_pullback so the
+            // path never ends inside the target character.
+            let pullback = target.path_pullback();
+            let goal = if pullback > 0.0 && to_target.dist > pullback {
+                let ratio = (to_target.dist - pullback) / to_target.dist;
+                (
+                    player.position.x + to_target.dx * ratio,
+                    player.position.z + to_target.dz * ratio,
+                )
+            } else {
+                (target_pos.x, target_pos.z)
+            };
+
+            (in_range, needs_repath, target_pos, goal)
         };
 
         if in_range {
@@ -166,7 +261,7 @@ pub(super) async fn chase_monster(
         if needs_repath {
             let result = {
                 let s = state.lock().await;
-                s.find_path_to(monster_pos.x, monster_pos.z, 0)
+                s.find_path_to(goal.0, goal.1, 0)
             };
             if result.waypoints.is_empty() {
                 path_waypoints.clear();
@@ -174,12 +269,12 @@ pub(super) async fn chase_monster(
                 path_waypoints = result.waypoints;
             }
             path_index = 0;
-            last_monster_x = monster_pos.x;
-            last_monster_z = monster_pos.z;
+            last_target_x = target_pos.x;
+            last_target_z = target_pos.z;
         }
 
         // Step toward next waypoint, subdividing long segments so the chase
-        // walks at MOVE_SPEED. Fall back to a direct step toward the monster
+        // walks at MOVE_SPEED. Fall back to a direct step toward the target
         // if A* returned no path.
         let step_dist = if path_index < path_waypoints.len() {
             let wp = path_waypoints[path_index].clone();
@@ -223,7 +318,7 @@ pub(super) async fn chase_monster(
             }
         } else {
             let mut s = state.lock().await;
-            match compute_step_toward_monster(&s, monster_id) {
+            match compute_step_toward(&s, target) {
                 Some((cmd, sd)) => {
                     if let Err(e) = s.send_command(cmd).await {
                         error!("Failed to send chase move: {e}");
@@ -244,32 +339,35 @@ pub(super) async fn chase_monster(
     }
 }
 
-/// Return a single MAX_STEP_DIST-limited move toward the monster, plus the
+/// Return a single MAX_STEP_DIST-limited move toward the target, plus the
 /// step's distance for sleep timing. Used as the fall-through when A* can't
-/// return a path (e.g. monster on un-pathable terrain) so combat can still
-/// inch the player closer at walk speed.
-fn compute_step_toward_monster(
-    state: &SharedState,
-    monster_id: &str,
-) -> Option<(ClientMessage, f32)> {
-    let monster = state.nearby_monsters.get(monster_id)?;
+/// return a path (e.g. target on un-pathable terrain) so the chase can still
+/// inch the player closer at walk speed. Steps stop short of the target:
+/// half a step inside attack range for monsters, APPROACH_RANGE for
+/// characters.
+fn compute_step_toward(state: &SharedState, target: &ChaseTarget) -> Option<(ClientMessage, f32)> {
+    let target_pos = target.position(state)?;
     let self_player = state.self_player.as_ref()?;
 
-    let to_monster = PlanarDelta::between(&self_player.position, &monster.position);
-    if to_monster.dist <= ATTACK_RANGE {
+    let to_target = PlanarDelta::between(&self_player.position, &target_pos);
+    let stop_dist = match target {
+        ChaseTarget::Monster(_) => ATTACK_RANGE - 0.5,
+        ChaseTarget::Player(_) => APPROACH_RANGE,
+    };
+    if to_target.dist <= stop_dist {
         return None;
     }
 
-    let target_dist = to_monster.dist - ATTACK_RANGE + 0.5;
+    let target_dist = to_target.dist - stop_dist;
     let step_dist = target_dist.min(MAX_STEP_DIST);
-    let ratio = step_dist / to_monster.dist;
+    let ratio = step_dist / to_target.dist;
     let cmd = ClientMessage::PlayerMove {
         position: onlinerpg_shared::Position {
-            x: self_player.position.x + to_monster.dx * ratio,
-            y: monster.position.y,
-            z: self_player.position.z + to_monster.dz * ratio,
+            x: self_player.position.x + to_target.dx * ratio,
+            y: target_pos.y,
+            z: self_player.position.z + to_target.dz * ratio,
         },
-        rotation: to_monster.rotation(),
+        rotation: to_target.rotation(),
         floor_level: 0,
     };
     Some((cmd, step_dist))

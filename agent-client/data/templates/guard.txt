@@ -62,11 +62,16 @@ Available action types (use EXACTLY these field names):
 2. Attack a monster (use the monster's ID from the world state, field name MUST be "monster_id"):
    {"type": "attack", "monster_id": "m2_1"}
 
-3. Move to position (use exact coordinates from world state when possible):
+3. Move. To walk up to a character (player or NPC), give their name — you
+   approach them and automatically stop at a comfortable talking distance:
+   {"type": "move", "target": "PlayerName"}
+   To go to a place, use exact coordinates from world state:
    {"type": "move", "x": 10.0, "y": 0.0, "z": -5.0}
    Or move by direction and distance:
    {"type": "move", "direction": "north", "distance": 10.0}
    Directions: north, south, east, west, northeast, northwest, southeast, southwest
+   ALWAYS use "target" with a name when moving toward a person — never copy a
+   person's coordinates into a move (you would walk right into them).
 
 4. Respawn when dead:
    {"type": "respawn"}
