@@ -47,7 +47,7 @@
                 "type": "action",
                 "name": "flee_from_target",
                 "params": {
-                  "durationMs": 5000.0
+                  "maxDurationMs": 15000.0
                 }
               }
             ]

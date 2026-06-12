@@ -123,7 +123,7 @@ min_interval_secs = 5
   - **walk/run**: A* 경로 탐색 + waypoint 추적, 도착 시 50% idle / 50% 새 이동
   - **attack**: `chaseRange` 내 타겟 추적, 500ms 간격 경로 재계산, `attackRange` 도달 시 공격
   - **hit**: ~800ms 스태거 후 → HP 30% 이하면 flee, 아니면 attack 복귀
-  - **flee**: 스폰 지점 방향으로 runSpeed 도주, 3초 후 return 전환. 네트워크 상태: `run`
+  - **flee**: 공격자 반대 방향으로 runSpeed 도주, 공격자와의 거리가 안전거리(`safeDist`, 기본 chaseRange+5m) 밖이 될 때까지 계속(경로 소진 시 재계산, `maxDurationMs` 기본 15초 페일세이프). 공격자 위치를 모르면 스폰 지점으로 도주. 네트워크 상태: `run`
   - **return**: 스폰 지점으로 walkSpeed 복귀, 도착(5m 이내) 시 idle. 네트워크 상태: `walk`
   - **dead**: AI 중단, 서버가 30초 후 제거
 - **리쉬(leash)**: attack 중 스폰 지점에서 50m 초과 시 → return 전환

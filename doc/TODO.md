@@ -4,7 +4,7 @@
 - 남녀 애니메이션을 구분한다 (walk_female, walk_male, etc)
 - [x] locomotion.glb, 등에 스킨드 메쉬를 넣어서 애니메이션을 눈으로 확인할 수 있게 한다
 - [x] 죽으면 경험치 드랍을 구현한다
-- AI NPC를 구현한다
+- [x] AI NPC를 구현한다
   - [x] 애셋을 구한다
   - 세계관을 작성한다
   - [x] LLM에 넘긴다
@@ -13,7 +13,7 @@
 - 생성형 던전 시스템을 만든다
   - 모듈형 애셋을 만든다
   - 미로를 생성하는 시스템을 만든다
-- map editor를 만든다
+- [x] map editor를 만든다
   - [x] mark monster spawn area
   - [x] edit waypoints of npcs
   - [x] edit spawn zones
@@ -38,7 +38,7 @@
 - [x] 몬스터 벽 뚫고 가지 못하게
   - [x] A* 길찾기
 - [x] npc 출퇴근
-- npc 상점
+- [x] npc 상점
 - 아이템 enchant 시스템
 - 장비한 갑옷에 따른 외형 변화
 - [x] chatting tab for combat log
@@ -50,9 +50,9 @@
 - animation for spear
 - sign of shops
 - 꽃들만 모여 있는 구역
-- 멀리 떨어진데서 아이템 클릭하면 줍는 동작은 하는데 주워지지는 않음
+- [x] 멀리 떨어진데서 아이템 클릭하면 줍는 동작은 하는데 주워지지는 않음
 - healing potion
-- 몬스터가 도망칠 때는 적어도 화면 밖까지
+- [x] 몬스터가 도망칠 때는 적어도 화면 밖까지
 
 # 폐지
 

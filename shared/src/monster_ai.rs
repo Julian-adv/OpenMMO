@@ -21,7 +21,8 @@ pub const DEFAULT_ATTACK_COOLDOWN_MS: f32 = 1500.0;
 const DEFAULT_LEASH_RANGE: f32 = 50.0;
 const DEFAULT_HIT_STAGGER_MS: f32 = 800.0;
 const DEFAULT_FLEE_HEALTH_RATIO: f32 = 0.0;
-const DEFAULT_FLEE_DURATION_MS: f32 = 0.0;
+const DEFAULT_FLEE_MAX_DURATION_MS: f32 = 15000.0;
+const FLEE_SAFE_DIST_MARGIN: f32 = 5.0;
 const DEFAULT_RETURN_ARRIVE_DIST: f32 = 5.0;
 const DEFAULT_PATH_RECALC_MS: f32 = 500.0;
 const DEFAULT_TARGET_MOVE_THRESHOLD: f32 = 3.0;
@@ -560,7 +561,7 @@ impl MonsterBrain {
             "wander" => self.bt_wander(params, commands, path_provider, rng),
             "return_to_spawn" => self.bt_return_to_spawn(params, delta_ms, commands, path_provider),
             "flee_from_target" => {
-                self.bt_flee_from_target(params, delta_ms, commands, path_provider)
+                self.bt_flee_from_target(params, delta_ms, nearby_players, commands, path_provider)
             }
             "attack_target" => self.bt_attack_target(params, nearby_players, commands),
             "chase_target" => {
@@ -631,6 +632,7 @@ impl MonsterBrain {
         &mut self,
         params: &HashMap<String, f32>,
         delta_ms: f32,
+        nearby_players: &[NearbyPlayer],
         commands: &mut Vec<AiCommand>,
         path_provider: &dyn PathProvider,
     ) -> BehaviorStatus {
@@ -638,30 +640,64 @@ impl MonsterBrain {
             return BehaviorStatus::Failure;
         }
 
-        let duration_ms = param(params, "durationMs", DEFAULT_FLEE_DURATION_MS);
+        // Flee until the threat is outside its sight range, not for a fixed time.
+        // maxDurationMs is only a failsafe against fleeing forever from a chaser.
+        let safe_dist = param(params, "safeDist", self.chase_range + FLEE_SAFE_DIST_MARGIN);
+        let max_duration_ms = param(params, "maxDurationMs", DEFAULT_FLEE_MAX_DURATION_MS);
+
+        if let Some(target) = self.current_target(nearby_players) {
+            self.last_known_target_pos = Some(target.position.clone());
+        }
+
+        if self.beyond_safe_dist(safe_dist) {
+            self.finish_flee(commands);
+            return BehaviorStatus::Success;
+        }
+
         if self.state != AiState::Flee {
-            self.transition_to_flee(commands, path_provider);
+            self.transition_to_flee(safe_dist, commands, path_provider);
             if self.state != AiState::Flee {
                 return BehaviorStatus::Failure;
             }
             return BehaviorStatus::Running;
         }
 
-        if self.state_timer_ms >= duration_ms {
-            self.target_player_id = None;
-            self.transition_to_idle(commands);
+        if self.state_timer_ms >= max_duration_ms {
+            self.finish_flee(commands);
             return BehaviorStatus::Success;
         }
 
         let reached = self.follow_path(delta_ms);
         if reached {
-            self.target_player_id = None;
-            self.transition_to_idle(commands);
-            return BehaviorStatus::Success;
+            if self.last_known_target_pos.is_none() || self.beyond_safe_dist(safe_dist) {
+                self.finish_flee(commands);
+                return BehaviorStatus::Success;
+            }
+            // Path ran out while the threat can still see us — start a new leg.
+            self.start_flee_path(safe_dist, path_provider);
+            if self.waypoints.is_empty() {
+                self.finish_flee(commands);
+                return BehaviorStatus::Success;
+            }
         }
 
         commands.push(self.make_move_cmd());
         BehaviorStatus::Running
+    }
+
+    /// True when the last known threat position is far enough away to stop
+    /// fleeing. Returns false while the threat position is unknown.
+    fn beyond_safe_dist(&self, safe_dist: f32) -> bool {
+        match &self.last_known_target_pos {
+            Some(threat) => self.position.dist_xz_sq(threat) >= safe_dist * safe_dist,
+            None => false,
+        }
+    }
+
+    fn finish_flee(&mut self, commands: &mut Vec<AiCommand>) {
+        self.target_player_id = None;
+        self.last_known_target_pos = None;
+        self.transition_to_idle(commands);
     }
 
     fn bt_attack_target(
@@ -852,15 +888,15 @@ impl MonsterBrain {
 
     fn transition_to_flee(
         &mut self,
+        safe_dist: f32,
         commands: &mut Vec<AiCommand>,
         path_provider: &dyn PathProvider,
     ) {
         self.state = AiState::Flee;
         self.state_timer_ms = 0.0;
         self.move_speed = self.run_speed;
-        self.target_position = Some(self.spawn_position.clone());
 
-        self.compute_path(self.spawn_position.x, self.spawn_position.z, path_provider);
+        self.start_flee_path(safe_dist, path_provider);
 
         if self.waypoints.is_empty() {
             self.state = AiState::Idle;
@@ -869,9 +905,46 @@ impl MonsterBrain {
             return;
         }
 
-        self.face_first_waypoint();
-
         commands.push(self.make_move_cmd());
+    }
+
+    /// Pick a flee leg pointing directly away from the last known threat
+    /// position, long enough to end up outside `safe_dist`. Falls back to the
+    /// spawn point when the threat position is unknown or the away path is
+    /// blocked. Leaves `waypoints` empty when no path is available.
+    fn start_flee_path(&mut self, safe_dist: f32, path_provider: &dyn PathProvider) {
+        if let Some(threat) = self.last_known_target_pos {
+            let dx = self.position.x - threat.x;
+            let dz = self.position.z - threat.z;
+            let dist = (dx * dx + dz * dz).sqrt();
+            if dist > f32::EPSILON {
+                let dest_x = self.position.x + dx / dist * safe_dist;
+                let dest_z = self.position.z + dz / dist * safe_dist;
+                if self.try_path_to(dest_x, dest_z, path_provider) {
+                    return;
+                }
+            }
+        }
+
+        if !self.try_path_to(self.spawn_position.x, self.spawn_position.z, path_provider) {
+            self.target_position = None;
+        }
+    }
+
+    /// Set `target_position`, path to it, and face the first waypoint.
+    /// Returns false (leaving `waypoints` empty) when no path is available.
+    fn try_path_to(&mut self, x: f32, z: f32, path_provider: &dyn PathProvider) -> bool {
+        self.target_position = Some(Position {
+            x,
+            y: self.position.y,
+            z,
+        });
+        self.compute_path(x, z, path_provider);
+        if self.waypoints.is_empty() {
+            return false;
+        }
+        self.face_first_waypoint();
+        true
     }
 
     // =========================================================================
@@ -1242,13 +1315,16 @@ mod tests {
         assert_eq!(brain.state(), AiState::Chase);
     }
 
-    #[test]
-    fn behavior_tree_flee_sends_run_target_to_spawn() {
-        let mut brain = make_brain();
-        brain.position.x = 20.0;
-        brain.target_player_id = Some("p1".into());
-        brain.health = 2;
-        let tree = BehaviorTree {
+    fn attacker_at(x: f32, z: f32) -> Vec<NearbyPlayer> {
+        vec![NearbyPlayer {
+            id: "p1".into(),
+            position: Position { x, y: 0.0, z },
+            health: 10,
+        }]
+    }
+
+    fn flee_tree() -> BehaviorTree {
+        BehaviorTree {
             description: None,
             root: BehaviorNode::Sequence {
                 children: vec![
@@ -1258,11 +1334,20 @@ mod tests {
                     },
                     BehaviorNode::Action {
                         name: "flee_from_target".into(),
-                        params: HashMap::from([("durationMs".into(), 5000.0)]),
+                        params: HashMap::new(),
                     },
                 ],
             },
-        };
+        }
+    }
+
+    #[test]
+    fn behavior_tree_flee_without_threat_position_runs_to_spawn() {
+        let mut brain = make_brain();
+        brain.position.x = 20.0;
+        brain.target_player_id = Some("p1".into());
+        brain.health = 2;
+        let tree = flee_tree();
         let mut rng = SmallRng::seed_from_u64(42);
 
         let result = brain.tick_with_behavior_tree(16.0, &[], &tree, &DirectPath, &mut rng);
@@ -1285,25 +1370,89 @@ mod tests {
     }
 
     #[test]
+    fn behavior_tree_flee_runs_away_from_attacker_beyond_sight() {
+        let mut brain = make_brain();
+        brain.target_player_id = Some("p1".into());
+        brain.health = 2;
+        let tree = flee_tree();
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        // Attacker just west of the monster — flee leg must point east, one
+        // full safe distance (chase 25 + margin 5) away.
+        let players = attacker_at(8.0, 10.0);
+
+        let result = brain.tick_with_behavior_tree(16.0, &players, &tree, &DirectPath, &mut rng);
+
+        assert_eq!(brain.state(), AiState::Flee);
+        assert!(result.commands.iter().any(|c| {
+            matches!(
+                c,
+                AiCommand::Move {
+                    state: MonsterState::Run,
+                    target_position: Position { x, z, .. },
+                    ..
+                } if (x - 40.0).abs() < 0.01 && (z - 10.0).abs() < 0.01
+            )
+        }));
+    }
+
+    #[test]
+    fn behavior_tree_flee_stops_once_beyond_safe_distance() {
+        let mut brain = make_brain();
+        brain.target_player_id = Some("p1".into());
+        brain.health = 2;
+        let tree = flee_tree();
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        let players = attacker_at(8.0, 10.0);
+
+        brain.tick_with_behavior_tree(16.0, &players, &tree, &DirectPath, &mut rng);
+        assert_eq!(brain.state(), AiState::Flee);
+
+        // Large delta covers the whole flee leg: monster ends at x=40,
+        // 32m from the attacker — beyond the 30m safe distance.
+        brain.tick_with_behavior_tree(5000.0, &players, &tree, &DirectPath, &mut rng);
+
+        assert_eq!(brain.state(), AiState::Idle);
+        assert!(brain.target_player_id.is_none());
+        assert!((brain.position.x - 40.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn behavior_tree_flee_repaths_when_attacker_keeps_chasing() {
+        let mut brain = make_brain();
+        brain.target_player_id = Some("p1".into());
+        brain.health = 2;
+        let tree = flee_tree();
+        let mut rng = SmallRng::seed_from_u64(42);
+
+        let players = attacker_at(8.0, 10.0);
+        brain.tick_with_behavior_tree(16.0, &players, &tree, &DirectPath, &mut rng);
+        assert_eq!(brain.state(), AiState::Flee);
+
+        // Attacker chased to x=35 — when the first leg ends at x=40 the
+        // monster is still within sight, so it must start another leg east.
+        let chasing = attacker_at(35.0, 10.0);
+        let result = brain.tick_with_behavior_tree(5000.0, &chasing, &tree, &DirectPath, &mut rng);
+
+        assert_eq!(brain.state(), AiState::Flee);
+        assert!(result.commands.iter().any(|c| {
+            matches!(
+                c,
+                AiCommand::Move {
+                    target_position: Position { x, .. },
+                    ..
+                } if (x - 70.0).abs() < 0.01
+            )
+        }));
+    }
+
+    #[test]
     fn behavior_tree_does_not_flee_without_target() {
         let mut brain = make_brain();
         brain.position.x = 20.0;
         brain.health = 2;
-        let tree = BehaviorTree {
-            description: None,
-            root: BehaviorNode::Sequence {
-                children: vec![
-                    BehaviorNode::Condition {
-                        name: "health_below_ratio".into(),
-                        params: HashMap::from([("ratio".into(), 0.3)]),
-                    },
-                    BehaviorNode::Action {
-                        name: "flee_from_target".into(),
-                        params: HashMap::from([("durationMs".into(), 5000.0)]),
-                    },
-                ],
-            },
-        };
+        let tree = flee_tree();
         let mut rng = SmallRng::seed_from_u64(42);
 
         let result = brain.tick_with_behavior_tree(16.0, &[], &tree, &DirectPath, &mut rng);
