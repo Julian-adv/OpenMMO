@@ -35,7 +35,7 @@ export const DUNGEON_WALL_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/medieval_blocks_03_1k'
 )
 export const DUNGEON_FLOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
-  (e) => e.glb === 'rocky_terrain_02_1k'
+  (e) => e.glb === 'housing/grey_stone_path_1k'
 )
 export const DUNGEON_VOID_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.label === 'Void'

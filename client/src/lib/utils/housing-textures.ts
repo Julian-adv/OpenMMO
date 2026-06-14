@@ -174,6 +174,14 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fallbackColor: 0x050505,
     internal: true,
   },
+  // Appended at array end to keep existing persisted texture indices stable.
+  // sortOrder places it in the stone group of the user-facing picker.
+  {
+    label: 'Stone Path',
+    glb: 'housing/grey_stone_path_1k',
+    fallbackColor: 0x888888,
+    sortOrder: 8,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
