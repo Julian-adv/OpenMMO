@@ -12,9 +12,11 @@
   import {
     currentDungeonDepth,
     currentDungeonId,
+    dungeonDoorOpen,
   } from '../../stores/dungeonStore'
   import { dungeonManager } from '../../managers/dungeonManager'
   import type { DungeonRect } from '../../managers/dungeonManager'
+  import type { DoorLeaf } from '../../utils/dungeon-geometry'
   import { networkManager } from '../../network/socket'
   import {
     buildDungeonEntranceGroup,
@@ -33,6 +35,11 @@
   let entranceGroup: THREE.Group | null = null
   /** Gravel roof sub-group of the entrance; hidden as the player nears. */
   let entranceCeiling: THREE.Object3D | null = null
+  /** Double entrance doors; swing open/shut when clicked (house-door style). */
+  let entranceDoors: DoorLeaf[] = []
+  /** Eased open fraction (0 shut → 1 fully open), lerped per frame toward the
+   *  click-toggled dungeonDoorOpen store. */
+  let doorOpenAmount = 0
   /** Cached entrance opening rect — stable at depth 0; drives the roof toggle. */
   let entranceRect: DungeonRect | null = null
   let builtKey = ''
@@ -52,7 +59,9 @@
       disposeDungeonGroup(entranceGroup)
       entranceGroup = null
       entranceCeiling = null
+      entranceDoors = []
       entranceRect = null
+      doorOpenAmount = 0
     }
   }
 
@@ -134,6 +143,10 @@
           })
           entranceGroup = built.group
           entranceCeiling = built.ceiling
+          entranceDoors = built.doors
+          doorOpenAmount = 0
+          for (const leaf of built.doors)
+            leaf.pivot.rotation.y = leaf.closedAngle
           entranceGroup.position.set(
             dungeonManager.originX,
             dungeonManager.entrancePos!.y,
@@ -199,6 +212,18 @@
       entranceCeiling.visible = !near
     }
 
+    // Swing both door leaves toward their click-toggled open/shut target
+    // (~0.35s either way at 60fps). Driven by dungeonDoorOpen, not proximity.
+    if (entranceDoors.length > 0) {
+      const target = $dungeonDoorOpen ? 1 : 0
+      doorOpenAmount += (target - doorOpenAmount) * 0.12
+      for (const leaf of entranceDoors) {
+        leaf.pivot.rotation.y =
+          leaf.closedAngle +
+          (leaf.openAngle - leaf.closedAngle) * doorOpenAmount
+      }
+    }
+
     // Final-floor treasure chest: walking up to it requests an open once
     // per approach (the server validates boss state and the cooldown).
     if (!dungeonManager.active) return
@@ -229,6 +254,18 @@
   /** Raycast targets for click-to-move while underground. */
   export function getGroundMeshes(): THREE.Object3D[] {
     return currentGroup ? [currentGroup] : []
+  }
+
+  /**
+   * Click raycast targets for the entrance doors. Only at depth 0 (where the
+   * entrance is shown) — returns [] otherwise so closed leaves underground
+   * can't intercept clicks. Reads the dungeon stores so the GameScene prop
+   * re-evaluates on enter/exit and depth change.
+   */
+  export function getDoorMeshes(): THREE.Object3D[] {
+    void $currentDungeonId
+    if ($currentDungeonDepth !== 0) return []
+    return entranceDoors.map((leaf) => leaf.pivot)
   }
 </script>
 

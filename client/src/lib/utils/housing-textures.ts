@@ -182,6 +182,15 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fallbackColor: 0x888888,
     sortOrder: 8,
   },
+  {
+    // Dungeon entrance door — mapped 0→1 across the panel (fitSegment), so the
+    // single garage-door image reads as one door rather than tiling.
+    label: 'Garage Door',
+    glb: 'wooden_garage_door_1k',
+    fallbackColor: 0x6b4a2e,
+    fitSegment: true,
+    internal: true,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */

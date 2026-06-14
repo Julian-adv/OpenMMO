@@ -11,6 +11,7 @@ function makeActions() {
     attackInRange: vi.fn(),
     chaseAndAttack: vi.fn(),
     toggleDoor: vi.fn(),
+    toggleDungeonDoor: vi.fn(),
     enterInteraction: vi.fn(),
     enterPickup: vi.fn(),
     approachAndPickup: vi.fn(),

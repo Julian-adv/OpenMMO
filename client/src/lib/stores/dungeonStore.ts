@@ -13,3 +13,10 @@ export const currentDungeonId = writable<string | null>(null)
 
 /** True while the player is below the surface (hides overworld layers). */
 export const isUnderground = derived(currentDungeonDepth, (d) => d >= 1)
+
+/**
+ * Whether the surface entrance double-doors are swung open. Client-only state
+ * (the entrance structure is purely cosmetic): toggled by clicking a door leaf,
+ * reset to shut whenever the active entrance changes.
+ */
+export const dungeonDoorOpen = writable(false)

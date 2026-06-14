@@ -1020,7 +1020,10 @@
     {terrainMeshes}
     housingGroup={housingLayerRef?.getGroup() ?? null}
     dungeonGroup={dungeonLayerRef?.getGroup() ?? null}
-    doorMeshes={housingLayerRef?.getDoorMeshes() ?? []}
+    doorMeshes={[
+      ...(housingLayerRef?.getDoorMeshes() ?? []),
+      ...(dungeonLayerRef?.getDoorMeshes() ?? []),
+    ]}
     objectMeshes={objectOverlayRef ? [objectOverlayRef.getGroup()] : []}
     groundItemMeshes={groundItemsLayerRef?.getGroup() ? [groundItemsLayerRef.getGroup()!] : []}
     {monsterModels}

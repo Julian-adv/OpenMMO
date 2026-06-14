@@ -62,6 +62,9 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
   ): boolean {
     if (housingManager.isMovementBlocked(fromX, fromZ, toX, toZ, y)) return true
     if (bridgeManager.isMovementBlocked(fromX, fromZ, toX, toZ, y)) return true
+    // Surface dungeon entrance walls (and the shut door) seal the stair hole.
+    if (dungeonManager.entranceBlocksMovement(fromX, fromZ, toX, toZ))
+      return true
     if (housingManager.isCircleBlocked(toX, toZ, PLAYER_RADIUS, y)) {
       // Allow movement when the source is already overlapping a wall (e.g.
       // spawn next to a freshly placed editor wall) so the player can escape.

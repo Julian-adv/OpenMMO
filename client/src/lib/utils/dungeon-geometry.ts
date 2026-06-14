@@ -28,7 +28,9 @@ import {
   HOUSING_TEXTURES,
   type GeoEntry,
 } from './house-geo-utils'
+import { getHousingMaterial } from './housing-textures'
 import {
+  ENTRANCE_WALL_T,
   shaftCoverRun,
   type DungeonFloorLayout,
   type DungeonShaft,
@@ -55,6 +57,17 @@ const SLAB_THICKNESS = 0.15
 /** Flat landing cells at shaft ends — must match dungeonManager.rampY. */
 const LANDING_CELLS = 1.0
 const STEP_RISE = 0.25
+
+/** Wooden garage-door texture for the entrance door (mapped 0→1 across it). */
+const DUNGEON_DOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
+  (e) => e.glb === 'wooden_garage_door_1k'
+)
+/** Door panel thickness (m). */
+const DOOR_THICKNESS = 0.12
+/** Door apex height above the entry ground (under the ABOVE=3.0 doorway). */
+const DOOR_HEIGHT = 2.85
+/** Height where the rectangular body ends and the pentagonal cap begins. */
+const DOOR_SHOULDER = 1.9
 
 export interface DungeonGeoCtx {
   grid: number
@@ -186,6 +199,146 @@ function addGableRoof(
     geo.applyMatrix4(_roofMat)
     entries.push({ geo, textureIndex: texIdx })
   }
+}
+
+/**
+ * Half-door leaf outline: the hinge-side half of the heptagon door, in the
+ * leaf's local XY plane with the hinge edge at x=0, the centre split at
+ * x=halfW, and the bottom at y=0. Five vertices — the outer (hinge) edge runs
+ * straight up to the shoulder, then a single bend climbs to the apex sitting on
+ * the centre split. Two mirrored leaves form the full heptagon:
+ *
+ *           apex      apex
+ *          /  |        |  \      ← pentagonal cap (split down the middle)
+ *      bend   |        |   bend
+ *       |     |        |     |
+ *   shoulder  |        |  shoulder ← body top
+ *       |     |        |     |    ← rectangular body
+ *    hinge -- split  split -- hinge
+ */
+function halfDoorLeafShape(
+  halfW: number,
+  h: number,
+  shoulder: number
+): THREE.Shape {
+  const s = new THREE.Shape()
+  const bendX = halfW * 0.5 // inset of the cap bend from the centre split
+  const bendY = shoulder + (h - shoulder) * 0.55
+  s.moveTo(0, 0) // bottom hinge corner
+  s.lineTo(halfW, 0) // bottom centre (split)
+  s.lineTo(halfW, h) // apex (top of split)
+  s.lineTo(halfW - bendX, bendY) // cap bend
+  s.lineTo(0, shoulder) // hinge shoulder
+  s.closePath()
+  return s
+}
+
+export interface DoorLeaf {
+  pivot: THREE.Group
+  /** rotation.y when shut (leaf flush across its half of the doorway). */
+  closedAngle: number
+  /** rotation.y when fully open (swung outward); within ±90° of closed. */
+  openAngle: number
+}
+
+/**
+ * Open angle for a leaf: closedAngle ± 90°, choosing the sign whose swing
+ * points the leaf outward (a ≤90° swing, so a linear lerp never wraps the long
+ * way round). A leaf's +x' axis points to (cosφ, 0, −sinφ) after rotation.y=φ.
+ */
+function leafOpenAngle(
+  closedAngle: number,
+  outX: number,
+  outZ: number
+): number {
+  // The two candidates are 180° apart, so their outward dot products are exact
+  // negatives — a single sign test on the +90° candidate picks the outward one.
+  const plus = closedAngle + Math.PI / 2
+  const dotPlus = Math.cos(plus) * outX - Math.sin(plus) * outZ
+  return dotPlus >= 0 ? plus : closedAngle - Math.PI / 2
+}
+
+/**
+ * Double entrance doors, split down the middle and swinging open to both sides
+ * like a house door. Two pivot Groups (each rotating about its outer hinge),
+ * each carrying a half-heptagon leaf mesh; positioned at the open (entry) end
+ * of the covered footprint, at ground level (local y=0). The two leaves' UVs
+ * map the left/right halves of the garage-door image so they reconstruct one
+ * door when shut. Caller animates each `pivot.rotation.y` between the returned
+ * closed/open angles (open swings outward, away from the deep end).
+ */
+function buildEntranceDoors(
+  entranceShaft: DungeonShaft,
+  cr: { x: number; w: number; z: number; d: number },
+  ctx: DungeonGeoCtx
+): DoorLeaf[] {
+  const halfW = ctx.shaftW / 2
+  const alongZ = entranceShaft.alongZ
+  const nonrev = !entranceShaft.reversed
+  // Outward (toward the entry/outside, away from the deep end).
+  const outX = alongZ ? 0 : nonrev ? -1 : 1
+  const outZ = alongZ ? (nonrev ? -1 : 1) : 0
+  // Entry (open) end is the low-coordinate end unless the shaft runs reversed.
+  const entryZ = nonrev ? cr.z : cr.z + cr.d
+  const entryX = nonrev ? cr.x : cr.x + cr.w
+
+  const mat = getHousingMaterial(DUNGEON_DOOR_TEXTURE_IDX)
+
+  // The two leaves hinge on opposite lateral jambs (low / high) and meet at the
+  // doorway centre. `uHinge` is the image U at the hinge edge; both leaves run
+  // to U=0.5 at the split, so the low leaf maps [0,0.5] and the high leaf [1,0.5].
+  const specs = alongZ
+    ? [
+        { hingeX: cr.x, hingeZ: entryZ, closedAngle: 0, uHinge: 0 },
+        {
+          hingeX: cr.x + cr.w,
+          hingeZ: entryZ,
+          closedAngle: Math.PI, // +x' points back toward the centre
+          uHinge: 1,
+        },
+      ]
+    : [
+        { hingeX: entryX, hingeZ: cr.z, closedAngle: -Math.PI / 2, uHinge: 0 },
+        {
+          hingeX: entryX,
+          hingeZ: cr.z + cr.d,
+          closedAngle: Math.PI / 2,
+          uHinge: 1,
+        },
+      ]
+
+  const leaves: DoorLeaf[] = []
+  for (const spec of specs) {
+    const shape = halfDoorLeafShape(halfW, DOOR_HEIGHT, DOOR_SHOULDER)
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: DOOR_THICKNESS,
+      bevelEnabled: false,
+    })
+    geo.translate(0, 0, -DOOR_THICKNESS / 2) // centre thickness on the hinge plane
+    // ExtrudeGeometry UVs are in shape (meter) coords. Map this leaf to its
+    // half of the image: u runs from uHinge (hinge edge) to 0.5 (centre split),
+    // v spans the full height. (Thin side faces get squished UVs — barely seen.)
+    const uv = geo.getAttribute('uv')
+    for (let i = 0; i < uv.count; i++) {
+      const u = spec.uHinge + (0.5 - spec.uHinge) * (uv.getX(i) / halfW)
+      uv.setXY(i, u, uv.getY(i) / DOOR_HEIGHT)
+    }
+    uv.needsUpdate = true
+
+    const pivot = new THREE.Group()
+    pivot.name = 'dungeon_entrance_door'
+    // Tag for the click raycaster (inputHandler) to recognise a dungeon door.
+    pivot.userData.dungeonDoor = true
+    pivot.position.set(spec.hingeX, 0, spec.hingeZ)
+    pivot.rotation.y = spec.closedAngle
+    pivot.add(new THREE.Mesh(geo, mat))
+    leaves.push({
+      pivot,
+      closedAngle: spec.closedAngle,
+      openAngle: leafOpenAngle(spec.closedAngle, outX, outZ),
+    })
+  }
+  return leaves
 }
 
 function shaftRect(shaft: DungeonShaft, ctx: DungeonGeoCtx) {
@@ -489,6 +642,8 @@ export function buildDungeonFloorGroup(
 export interface DungeonEntranceGroup {
   group: THREE.Group
   ceiling: THREE.Group
+  /** Double-door leaves at the entry; caller lerps each rotation.y open/shut. */
+  doors: DoorLeaf[]
 }
 
 export function buildDungeonEntranceGroup(
@@ -518,7 +673,7 @@ export function buildDungeonEntranceGroup(
   // raised parapet) and the gabled roof sits on top. The deep end clears
   // depth + ABOVE; the entry end is an ABOVE-tall doorway.
   const ABOVE = 3.0
-  const T = 0.25 // wall thickness
+  const T = ENTRANCE_WALL_T // wall thickness (shared with collision)
   const CT = 0.2 // roof slab thickness
   const OH = 0.2 // lateral roof eave overhang
   const END_OH = 0.3 // run-axis (gable end) overhang past the walls
@@ -646,12 +801,17 @@ export function buildDungeonEntranceGroup(
     false
   )
 
+  // Double doors across the open entry end (kept separate from the merged
+  // meshes so they can swing). Local to the same (origin, entranceY) frame.
+  const doors = buildEntranceDoors(entranceShaft, cr, ctx)
+
   const group = new THREE.Group()
   addMergedMeshes(group, entries)
   const ceiling = new THREE.Group()
   addMergedMeshes(ceiling, ceilingEntries)
   group.add(ceiling)
-  return { group, ceiling }
+  for (const leaf of doors) group.add(leaf.pivot)
+  return { group, ceiling, doors }
 }
 
 /** Dispose merged geometries (materials are shared — never disposed). */

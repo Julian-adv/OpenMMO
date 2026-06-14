@@ -21,6 +21,8 @@ export interface CanvasClickActions {
     wallDir: WallDirection,
     segmentIndex: number
   ): void
+  /** Open/close the (client-only) dungeon entrance doors. */
+  toggleDungeonDoor(): void
   enterInteraction(intent: InteractIntent): void
   enterPickup(instanceId: number): void
   approachAndPickup(intent: PickupIntent): void
@@ -50,6 +52,9 @@ export function dispatchCanvasClickIntent(
         intent.wallDir,
         intent.segmentIndex
       )
+      return
+    case 'toggle_dungeon_door':
+      actions.toggleDungeonDoor()
       return
     case 'interact_object':
       actions.enterInteraction(intent)

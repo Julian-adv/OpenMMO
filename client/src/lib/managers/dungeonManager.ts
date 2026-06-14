@@ -18,7 +18,11 @@ import {
   dungeon_remove_passability,
   dungeon_passability_floor_cells,
 } from '../wasm/onlinerpg_shared'
-import { currentDungeonDepth, currentDungeonId } from '../stores/dungeonStore'
+import {
+  currentDungeonDepth,
+  currentDungeonId,
+  dungeonDoorOpen,
+} from '../stores/dungeonStore'
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
 
 export interface DungeonRoom {
@@ -72,8 +76,19 @@ export interface DungeonEntrance {
 
 /** Flat landing length (in cells) at each end of a stair shaft ramp. */
 const LANDING_CELLS = 1.0
-/** Hysteresis (in run cells) around the shaft midpoint for floor switches. */
+/** Hysteresis (in run cells) around the switch point for floor switches. */
 const SWITCH_HYSTERESIS = 0.3
+/** Fraction of the shaft run at which the rendered floor switches. Low (not the
+ *  0.5 midpoint) so a short descent already reveals the floor below — and,
+ *  symmetrically, a climb keeps the lower floor visible until near the top. */
+const DEPTH_SWITCH_FRACTION = 0.3
+/** Player collision footprint radius (m) — matches player-physics. */
+const PLAYER_RADIUS = 0.3
+/** Entrance wall thickness (m). Single source of truth, shared with the mesh
+ *  builder (buildDungeonEntranceGroup imports this) so the collision line sits
+ *  on the wall's outer face — the player stops short of the *visible* wall, not
+ *  its inner footprint edge. */
+export const ENTRANCE_WALL_T = 0.25
 /** Register a registry dungeon when the player gets this close (m). */
 const ENTRANCE_REGISTER_DIST = 80
 /** Drop a surface-level dungeon registration beyond this distance (m). */
@@ -159,6 +174,56 @@ function shaftHoleRect(
   }
 }
 
+/** Squared distance from point (px,pz) to segment a→b. */
+function distSqPointToSegment(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number
+): number {
+  const dx = bx - ax
+  const dz = bz - az
+  const len2 = dx * dx + dz * dz
+  let t = len2 > 0 ? ((px - ax) * dx + (pz - az) * dz) / len2 : 0
+  t = Math.max(0, Math.min(1, t))
+  const cx = ax + t * dx
+  const cz = az + t * dz
+  const ex = px - cx
+  const ez = pz - cz
+  return ex * ex + ez * ez
+}
+
+/** True when segment p1→p2 properly crosses segment p3→p4 (touching ignored). */
+function segmentsCross(
+  p1x: number,
+  p1z: number,
+  p2x: number,
+  p2z: number,
+  p3x: number,
+  p3z: number,
+  p4x: number,
+  p4z: number
+): boolean {
+  const side = (
+    ax: number,
+    az: number,
+    bx: number,
+    bz: number,
+    cx: number,
+    cz: number
+  ) => (bx - ax) * (cz - az) - (bz - az) * (cx - ax)
+  const d1 = side(p3x, p3z, p4x, p4z, p1x, p1z)
+  const d2 = side(p3x, p3z, p4x, p4z, p2x, p2z)
+  const d3 = side(p1x, p1z, p2x, p2z, p3x, p3z)
+  const d4 = side(p1x, p1z, p2x, p2z, p4x, p4z)
+  return (
+    ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+    ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))
+  )
+}
+
 class DungeonManager {
   private id: string | null = null
   private entrance: DungeonEntrance | null = null
@@ -205,6 +270,24 @@ class DungeonManager {
   }
 
   /**
+   * A* start floor for a player standing on the up-shaft at `depth`. The shared
+   * stairwell model encodes a shaft's intermediate steps as its LOWER connected
+   * floor (surface=0 for the entrance shaft), so pathfinding must start there:
+   * starting on the upper (depth) floor, A* can only reach the shaft via its
+   * bottom landing and routes the player back DOWN the stairs before climbing
+   * out. Returns null when the position isn't on the up-shaft, or is on its
+   * bottom exit landing (which genuinely belongs to the upper/depth floor).
+   */
+  upShaftPathfindingFloor(x: number, z: number, depth: number): number | null {
+    const layout = this.layoutAt(depth)
+    if (!layout) return null
+    const t = this.shaftRunPos(layout.upShaft, x, z)
+    if (t === null) return null
+    if (t >= constants().shaftLen - 1) return null
+    return depth === 1 ? 0 : this.passabilityFloor(depth - 1)
+  }
+
+  /**
    * Debug: per-cell passability edge bits for the registered dungeon's floor
    * at the given passability floor level (see passabilityFloor). Null when no
    * dungeon is registered or the level isn't present.
@@ -233,6 +316,7 @@ class DungeonManager {
     this.id = id
     this.entrance = entrance
     currentDungeonId.set(id)
+    dungeonDoorOpen.set(false) // new entrance always starts shut
   }
 
   /** Drop dungeon state (passability included). Depth resets to surface. */
@@ -243,6 +327,7 @@ class DungeonManager {
     this.layouts = []
     currentDungeonId.set(null)
     currentDungeonDepth.set(0)
+    dungeonDoorOpen.set(false)
   }
 
   setDepth(depth: number) {
@@ -290,6 +375,92 @@ class DungeonManager {
       shaftW,
       shaftLen
     )
+  }
+
+  /**
+   * Surface entrance structure walls block movement (the player would otherwise
+   * walk straight into the open shaft). The covered footprint is a little shed
+   * around the stair hole with stone walls on its two run-axis sides and far
+   * (deep) end, and a doorway at the entry end; this seals all four so the only
+   * way in is the doorway — and that, only while the door is open.
+   *
+   * Client-only collision at surface Y (the dungeon's own stairwell walls are
+   * registered below the surface so they don't catch players walking above).
+   * Never blocks underground (depth ≥ 1) or with no dungeon registered.
+   *
+   * Per edge, mirrors housing's circle test so the player stops ~PLAYER_RADIUS
+   * short of the wall instead of burying into it: blocked if the step crosses
+   * the wall line outright (anti-tunneling), or if it brings the player within
+   * PLAYER_RADIUS of the line from farther out (the escape clause — already
+   * inside the radius doesn't block, so you can slide along it or back away).
+   */
+  entranceBlocksMovement(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number
+  ): boolean {
+    if (!this.active) return false
+    if (get(currentDungeonDepth) !== 0) return false
+    const first = this.layoutAt(1)
+    if (!first) return false
+
+    const shaft = first.upShaft
+    const { shaftW, shaftLen } = constants()
+    const { inset, coverLen } = shaftCoverRun(shaftLen, shaft.reversed)
+
+    // Covered footprint rect in world space (matches buildDungeonEntranceGroup).
+    let x0: number, x1: number, z0: number, z1: number
+    if (shaft.alongZ) {
+      x0 = this.originX + shaft.x
+      x1 = x0 + shaftW
+      z0 = this.originZ + shaft.z + inset
+      z1 = z0 + coverLen
+    } else {
+      x0 = this.originX + shaft.x + inset
+      x1 = x0 + coverLen
+      z0 = this.originZ + shaft.z
+      z1 = z0 + shaftW
+    }
+
+    // Wall edges: the two run-axis sides + the far (deep) end are always solid;
+    // the entry end is the doorway, solid only while the door is shut. Walls use
+    // their outer faces (footprint inflated by T) so the 0.3m margin keeps the
+    // player off the *visible* wall; the doorway stays on the door panel plane.
+    const T = ENTRANCE_WALL_T
+    const nonrev = !shaft.reversed
+    const doorClosed = !get(dungeonDoorOpen)
+    const edges: [number, number, number, number][] = []
+    if (shaft.alongZ) {
+      const xa = x0 - T
+      const xb = x1 + T
+      const farZ = nonrev ? z1 + T : z0 - T
+      const entryZ = nonrev ? z0 : z1
+      const sz0 = Math.min(entryZ, farZ)
+      const sz1 = Math.max(entryZ, farZ)
+      edges.push([xa, sz0, xa, sz1], [xb, sz0, xb, sz1]) // sides
+      edges.push([xa, farZ, xb, farZ]) // deep end
+      if (doorClosed) edges.push([x0, entryZ, x1, entryZ]) // doorway
+    } else {
+      const za = z0 - T
+      const zb = z1 + T
+      const farX = nonrev ? x1 + T : x0 - T
+      const entryX = nonrev ? x0 : x1
+      const sx0 = Math.min(entryX, farX)
+      const sx1 = Math.max(entryX, farX)
+      edges.push([sx0, za, sx1, za], [sx0, zb, sx1, zb]) // sides
+      edges.push([farX, za, farX, zb]) // deep end
+      if (doorClosed) edges.push([entryX, z0, entryX, z1]) // doorway
+    }
+
+    const r2 = PLAYER_RADIUS * PLAYER_RADIUS
+    for (const [ax, az, bx, bz] of edges) {
+      if (segmentsCross(fromX, fromZ, toX, toZ, ax, az, bx, bz)) return true
+      const dTo = distSqPointToSegment(toX, toZ, ax, az, bx, bz)
+      const dFrom = distSqPointToSegment(fromX, fromZ, ax, az, bx, bz)
+      if (dTo < r2 && dFrom >= r2) return true
+    }
+    return false
   }
 
   /**
@@ -456,20 +627,21 @@ class DungeonManager {
   }
 
   /**
-   * Per-frame: switch the current depth when the player walks past a
-   * shaft midpoint. Returns the new depth, or null when unchanged.
+   * Per-frame: switch the current depth when the player walks past the shaft
+   * switch point (DEPTH_SWITCH_FRACTION of the run, not the midpoint). Returns
+   * the new depth, or null when unchanged.
    */
   updateFromPlayerPosition(x: number, z: number): number | null {
     this.updateAutoRegister(x, z)
     if (!this.active) return null
     const depth = get(currentDungeonDepth)
-    const mid = constants().shaftLen / 2
+    const switchPoint = constants().shaftLen * DEPTH_SWITCH_FRACTION
 
     if (depth === 0) {
       const first = this.layouts[0]
       if (!first) return null
       const t = this.shaftRunPos(first.upShaft, x, z)
-      if (t !== null && t > mid + SWITCH_HYSTERESIS) {
+      if (t !== null && t > switchPoint + SWITCH_HYSTERESIS) {
         currentDungeonDepth.set(1)
         return 1
       }
@@ -480,14 +652,14 @@ class DungeonManager {
     if (!layout) return null
 
     const tUp = this.shaftRunPos(layout.upShaft, x, z)
-    if (tUp !== null && tUp < mid - SWITCH_HYSTERESIS) {
+    if (tUp !== null && tUp < switchPoint - SWITCH_HYSTERESIS) {
       const next = depth - 1
       currentDungeonDepth.set(next)
       return next
     }
     if (layout.downShaft) {
       const tDown = this.shaftRunPos(layout.downShaft, x, z)
-      if (tDown !== null && tDown > mid + SWITCH_HYSTERESIS) {
+      if (tDown !== null && tDown > switchPoint + SWITCH_HYSTERESIS) {
         const next = depth + 1
         currentDungeonDepth.set(next)
         return next

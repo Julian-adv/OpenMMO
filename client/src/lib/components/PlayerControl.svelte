@@ -23,7 +23,7 @@
   } from '../utils/movementUtils'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { playerFloorOffset, playerFloorLevel } from '../stores/housingStore'
-  import { currentDungeonDepth } from '../stores/dungeonStore'
+  import { currentDungeonDepth, dungeonDoorOpen } from '../stores/dungeonStore'
   import { dungeonManager } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
   import { findPath } from '../managers/pathfinding'
@@ -678,25 +678,42 @@
   /** Passability floor for path queries: dungeon depths map to 4+. */
   function currentPassabilityFloor(): number {
     const depth = get(currentDungeonDepth)
-    if (depth >= 1) return dungeonManager.passabilityFloor(depth)
+    if (depth >= 1) {
+      // On the up-shaft, start A* from the shaft's lower floor (see
+      // dungeonManager.upShaftPathfindingFloor) so a path to the surface
+      // climbs out instead of routing back down to the bottom landing.
+      const shaftFloor = currentPlayer
+        ? dungeonManager.upShaftPathfindingFloor(
+            currentPlayer.position.x,
+            currentPlayer.position.z,
+            depth
+          )
+        : null
+      return shaftFloor ?? dungeonManager.passabilityFloor(depth)
+    }
     return Math.max(0, get(playerFloorLevel))
   }
 
   /**
-   * Floor lookup for click targets. The dungeon passability grids cover
-   * their whole footprint at every depth, so on the surface a raw lookup
-   * near an entrance would return a dungeon floor index — clamp those to
-   * the surface unless we're actually underground.
+   * Floor lookup for click targets. The dungeon passability grids cover their
+   * whole footprint at every depth and there is no floor-0 grid, so a surface
+   * or entrance-shaft click resolves to the nearest *dungeon* floor — even
+   * while underground. Re-add the surface (floor 0 at the entrance Y) as a
+   * candidate: if the click sits at least as close to the surface as to that
+   * dungeon floor, treat it as the surface. This is what lets an upper-landing
+   * click while standing mid-stairs (depth ≥ 1) target floor 0 so the path
+   * climbs out instead of routing down to the bottom landing first.
    */
   function getFloorAtForClick(x: number, z: number, y: number): number {
     const floor = passability_get_floor_at(x, z, y)
-    if (
-      get(currentDungeonDepth) < 1 &&
-      floor >= dungeonManager.consts.floorIndexBase
-    ) {
-      return 0
-    }
-    return floor
+    const fib = dungeonManager.consts.floorIndexBase
+    if (floor < fib) return floor
+    const ent = dungeonManager.entrancePos
+    if (!ent) return get(currentDungeonDepth) < 1 ? 0 : floor
+    const depthOfFloor = floor - fib + 1
+    const surfaceDist = Math.abs(y - ent.y)
+    const floorDist = Math.abs(y - dungeonManager.floorY(depthOfFloor))
+    return surfaceDist <= floorDist ? 0 : floor
   }
 
   function handleClickToMove(
@@ -883,6 +900,10 @@
         const m = movingState()
         if (m) m.pendingPickupAfterMove = null
         networkManager.sendToggleDoor(houseId, roomIndex, wallDir, segmentIndex)
+      },
+      toggleDungeonDoor: () => {
+        // Client-only cosmetic state — no server round-trip.
+        dungeonDoorOpen.update((open) => !open)
       },
       enterInteraction,
       enterPickup,
