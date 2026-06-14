@@ -34,6 +34,8 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 - worn_mossy_plasterwall_1k.glb -> https://polyhaven.com/a/worn_mossy_plasterwall
 - beige_wall_001.glb -> https://polyhaven.com/a/beige_wall_001
 - rough_linen.glb -> https://polyhaven.com/a/rough_linen
+- wooden_garage_door_1k.glb -> https://polyhaven.com/a/wooden_garage_door (던전 입구 문)
+- grey_stone_path_1k.glb -> https://polyhaven.com/a/grey_stone_path (던전 바닥/계단)
 
 ## Research
 

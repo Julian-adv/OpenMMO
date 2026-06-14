@@ -11,7 +11,8 @@
  * - No ceiling on underground floors: the isometric camera looks down ~35°,
  *   any current-floor ceiling would fully occlude the player. The void reads
  *   as cave dark. (The surface entrance is the one exception — it carries a
- *   gravel roof that the layer hides as the player nears, like a house roof.)
+ *   gravel roof, always shown at depth 0; the player only descends the stairs,
+ *   never stands inside, so it never needs to hide.)
  * - Camera-facing walls (south/west boundaries — solid at z+1 / x-1) are
  *   not emitted at all, mirroring housing's hidden "front" group: the
  *   player is always inside a dungeon.
@@ -22,6 +23,7 @@
  *   shaft midpoint is seamless.
  */
 import * as THREE from 'three'
+import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import {
   addMergedMeshes,
   bakedGeo,
@@ -39,6 +41,11 @@ import {
 export const DUNGEON_WALL_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/medieval_blocks_03_1k'
 )
+/** Mossy plaster for the *surface* entrance building walls — distinct from the
+ *  underground stone walls (DUNGEON_WALL_TEXTURE_IDX). */
+export const DUNGEON_ENTRANCE_WALL_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
+  (e) => e.glb === 'housing/worn_mossy_plasterwall_1k'
+)
 export const DUNGEON_FLOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/grey_stone_path_1k'
 )
@@ -52,11 +59,20 @@ export const DUNGEON_CHEST_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
 export const DUNGEON_CEILING_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/grey_roof_tiles_02_1k'
 )
+/** Stone blocks for the decorative entrance corner pillars (accent against the
+ *  mossy-plaster entrance walls). */
+export const DUNGEON_PILLAR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
+  (e) => e.glb === 'housing/medieval_blocks_03_1k'
+)
 
 const SLAB_THICKNESS = 0.15
 /** Flat landing cells at shaft ends — must match dungeonManager.rampY. */
 const LANDING_CELLS = 1.0
 const STEP_RISE = 0.25
+/** UV scale for the dungeon floor/stairs texture: <1 enlarges the stone pattern
+ *  (one repeat spans 1/scale metres) to cut the visible tiling. Dungeon-only —
+ *  housing bakes its own UVs, so the shared texture is unaffected there. */
+const DUNGEON_FLOOR_UV_SCALE = 0.5
 
 /** Wooden garage-door texture for the entrance door (mapped 0→1 across it). */
 const DUNGEON_DOOR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
@@ -79,7 +95,9 @@ export interface DungeonGeoCtx {
   shaftLen: number
 }
 
-/** Box with housing-style face UVs derived from final (baked) position. */
+/** Box with housing-style face UVs derived from final (baked) position.
+ *  `uvScale` <1 enlarges the texture pattern (fewer repeats); callers pass it
+ *  for the floor/stairs, everything else tiles 1:1 in metres. */
 function addBox(
   entries: GeoEntry[],
   textureIndex: number,
@@ -88,7 +106,8 @@ function addBox(
   d: number,
   cx: number,
   cy: number,
-  cz: number
+  cz: number,
+  uvScale: number = 1
 ) {
   const geo = new THREE.BoxGeometry(w, h, d)
   const uv = geo.getAttribute('uv')
@@ -106,7 +125,11 @@ function addBox(
       uv.setXY(vi, px, py) // ±Z faces
     }
   }
-  entries.push({ geo: bakedGeo(geo, cx, cy, cz, 0, 1, 1), textureIndex })
+  // bakedGeo applies uvScale to every UV (its uvScaleX/Y params).
+  entries.push({
+    geo: bakedGeo(geo, cx, cy, cz, 0, uvScale, uvScale),
+    textureIndex,
+  })
 }
 
 const _roofMat = new THREE.Matrix4()
@@ -117,6 +140,8 @@ const _roofMat = new THREE.Matrix4()
  * slopes face the lateral (`latW`) sides and a triangular gable closes each
  * run-axis end. Eaves overhang by `oh` on the lateral sides and by `endOh`
  * past each gable end. Pushes GeoEntry slabs for the caller to merge.
+ * `omitEndSign` (−1/+1) skips that run-axis end's gable triangle — used at the
+ * entry end, where the front wall supplies the gable instead.
  */
 function addGableRoof(
   entries: GeoEntry[],
@@ -130,7 +155,8 @@ function addGableRoof(
   rise: number,
   oh: number,
   endOh: number,
-  thick: number
+  thick: number,
+  omitEndSign: number = 0
 ) {
   const halfLat = latW / 2
   const ridgeLen = runLen + endOh * 2
@@ -181,6 +207,7 @@ function addGableRoof(
 
   // Triangular gable wall at each run-axis end (base at baseY, apex at ridge).
   for (const endSign of [-1, 1] as const) {
+    if (endSign === omitEndSign) continue
     const shape = new THREE.Shape()
     shape.moveTo(-halfLat, 0)
     shape.lineTo(halfLat, 0)
@@ -202,35 +229,125 @@ function addGableRoof(
 }
 
 /**
- * Half-door leaf outline: the hinge-side half of the heptagon door, in the
- * leaf's local XY plane with the hinge edge at x=0, the centre split at
- * x=halfW, and the bottom at y=0. Five vertices — the outer (hinge) edge runs
- * straight up to the shoulder, then a single bend climbs to the apex sitting on
- * the centre split. Two mirrored leaves form the full heptagon:
+ * Half-door leaf outline: the hinge-side half of the door, in the leaf's local
+ * XY plane with the hinge edge at x=0, the centre split at x=halfW, and the
+ * bottom at y=0. The outer (hinge) edge runs straight up to the shoulder, then
+ * a two-segment arc (bend1 lower, bend2 upper) on a quarter-ellipse curves over
+ * to the apex on the centre split — giving a rounded dome rather than a steep
+ * pointed gable. Two mirrored leaves form the full door:
  *
- *           apex      apex
- *          /  |        |  \      ← pentagonal cap (split down the middle)
- *      bend   |        |   bend
- *       |     |        |     |
- *   shoulder  |        |  shoulder ← body top
- *       |     |        |     |    ← rectangular body
- *    hinge -- split  split -- hinge
+ *          _apex_      _apex_
+ *        bend2  |      |  bend2   ← rounded cap (split down the middle)
+ *       bend1   |      |   bend1
+ *   shoulder    |      |    shoulder ← body top
+ *       |       |      |       |    ← rectangular body
+ *    hinge --- split  split --- hinge
  */
+/**
+ * Intermediate angles (deg) of the cap arc between the shoulder (0°) and the
+ * apex (90°). Shared by the door leaves and the entrance arch so their curves
+ * coincide exactly.
+ */
+const DOOR_CAP_ANGLES_DEG = [30, 60]
+
+/**
+ * A point on the cap's quarter-ellipse measured from the outer edge: x =
+ * halfW·(1−cosθ) runs 0→halfW, y = shoulder + capH·sinθ runs shoulder→shoulder+capH.
+ */
+function capArcPoint(
+  halfW: number,
+  capH: number,
+  shoulder: number,
+  deg: number
+): { x: number; y: number } {
+  const t = (deg * Math.PI) / 180
+  return { x: halfW * (1 - Math.cos(t)), y: shoulder + capH * Math.sin(t) }
+}
+
 function halfDoorLeafShape(
   halfW: number,
   h: number,
   shoulder: number
 ): THREE.Shape {
   const s = new THREE.Shape()
-  const bendX = halfW * 0.5 // inset of the cap bend from the centre split
-  const bendY = shoulder + (h - shoulder) * 0.55
+  const capH = h - shoulder
+  const bend1 = capArcPoint(halfW, capH, shoulder, DOOR_CAP_ANGLES_DEG[0])
+  const bend2 = capArcPoint(halfW, capH, shoulder, DOOR_CAP_ANGLES_DEG[1])
   s.moveTo(0, 0) // bottom hinge corner
   s.lineTo(halfW, 0) // bottom centre (split)
   s.lineTo(halfW, h) // apex (top of split)
-  s.lineTo(halfW - bendX, bendY) // cap bend
+  s.lineTo(bend2.x, bend2.y) // upper cap bend
+  s.lineTo(bend1.x, bend1.y) // lower cap bend
   s.lineTo(0, shoulder) // hinge shoulder
   s.closePath()
   return s
+}
+
+/**
+ * Front entrance wall filling the entry opening above the door's rounded cap.
+ * Built as an extruded shape, bottom→top: the dome curve (matching the door cap
+ * exactly) as its arched underside, vertical sides up to the wall top, then a
+ * gabled peak rising `gableRise` to the roof ridge — so this single wall fills
+ * both the arch spandrel and the front gable triangle (which the roof therefore
+ * omits), all in the wall texture. Rotated/translated onto the entry plane and
+ * pushed as a wall-textured GeoEntry to merge with the other entrance walls.
+ * `entryLow` = the entry sits at the low-coordinate end.
+ */
+function addEntranceArch(
+  entries: GeoEntry[],
+  alongZ: boolean,
+  cr: { x: number; w: number; z: number; d: number },
+  entryLow: boolean,
+  ctx: DungeonGeoCtx,
+  top: number,
+  gableRise: number
+) {
+  const W = ctx.shaftW
+  const halfW = W / 2
+  const shoulder = DOOR_SHOULDER
+  const capH = DOOR_HEIGHT - shoulder
+  const p1 = capArcPoint(halfW, capH, shoulder, DOOR_CAP_ANGLES_DEG[0])
+  const p2 = capArcPoint(halfW, capH, shoulder, DOOR_CAP_ANGLES_DEG[1])
+  const T = ENTRANCE_WALL_T
+
+  // Trace the gabled top + sides, then the dome underside right→left.
+  const shape = new THREE.Shape()
+  shape.moveTo(0, shoulder)
+  shape.lineTo(0, top)
+  shape.lineTo(halfW, top + gableRise) // gable apex (roof ridge)
+  shape.lineTo(W, top)
+  shape.lineTo(W, shoulder)
+  shape.lineTo(W - p1.x, p1.y) // right lower bend
+  shape.lineTo(W - p2.x, p2.y) // right upper bend
+  shape.lineTo(halfW, DOOR_HEIGHT) // apex
+  shape.lineTo(p2.x, p2.y) // left upper bend
+  shape.lineTo(p1.x, p1.y) // left lower bend
+  shape.closePath()
+
+  // ExtrudeGeometry is non-indexed; the other entrance walls (Box/Shape) are
+  // indexed, and mergeGeometries needs all-or-none indexed. mergeVertices
+  // returns an indexed copy so the arch merges with them.
+  const raw = new THREE.ExtrudeGeometry(shape, {
+    depth: T,
+    bevelEnabled: false,
+  })
+  const geo = mergeVertices(raw)
+  raw.dispose()
+  const m = new THREE.Matrix4()
+  if (alongZ) {
+    // shapeX→X (lateral), shapeY→Y, thickness→Z, centred on the entry plane.
+    const entryZ = entryLow ? cr.z : cr.z + cr.d
+    m.makeTranslation(cr.x, 0, entryZ - T / 2)
+    geo.applyMatrix4(m)
+  } else {
+    // Rotate so shapeX→+Z (lateral), thickness→−X; then place on the entry plane.
+    m.makeRotationY(-Math.PI / 2)
+    geo.applyMatrix4(m)
+    const entryX = entryLow ? cr.x : cr.x + cr.w
+    m.makeTranslation(entryX + T / 2, 0, cr.z)
+    geo.applyMatrix4(m)
+  }
+  entries.push({ geo, textureIndex: DUNGEON_ENTRANCE_WALL_TEXTURE_IDX })
 }
 
 export interface DoorLeaf {
@@ -416,7 +533,8 @@ function collectShaftStairs(
         runLenAbs,
         latCenter,
         cy,
-        runC
+        runC,
+        DUNGEON_FLOOR_UV_SCALE
       )
     } else {
       addBox(
@@ -427,7 +545,8 @@ function collectShaftStairs(
         ctx.shaftW,
         runC,
         cy,
-        latCenter
+        latCenter,
+        DUNGEON_FLOOR_UV_SCALE
       )
     }
   }
@@ -529,7 +648,8 @@ export function buildDungeonFloorGroup(
           1,
           runStart + len / 2,
           -SLAB_THICKNESS / 2,
-          z + 0.5
+          z + 0.5,
+          DUNGEON_FLOOR_UV_SCALE
         )
         runStart = -1
       }
@@ -634,14 +754,11 @@ export function buildDungeonFloorGroup(
  * on the shaft midpoint, where the depth-0↔1 swap hides this group anyway). The
  * anchored inset depends on `reversed` (which end is the entry).
  *
- * The returned `ceiling` is a sub-group the layer hides as the player nears
- * (an iso-camera ceiling would otherwise occlude them on the upper stairs —
- * see GameSceneDungeonLayer); it's already parented to `group`. Caller renders
- * this only at depth 0. Local to (originX, entranceY, originZ) like floors.
+ * The whole group (roof included) is shown only at depth 0 via group
+ * visibility. Local to (originX, entranceY, originZ) like floors.
  */
 export interface DungeonEntranceGroup {
   group: THREE.Group
-  ceiling: THREE.Group
   /** Double-door leaves at the entry; caller lerps each rotation.y open/shut. */
   doors: DoorLeaf[]
 }
@@ -651,7 +768,6 @@ export function buildDungeonEntranceGroup(
   ctx: DungeonGeoCtx
 ): DungeonEntranceGroup {
   const entries: GeoEntry[] = []
-  const ceilingEntries: GeoEntry[] = []
   const r = shaftRect(entranceShaft, ctx)
 
   // Covered footprint: anchored at the entry (shallow) end with a one-cell
@@ -675,8 +791,8 @@ export function buildDungeonEntranceGroup(
   const ABOVE = 3.0
   const T = ENTRANCE_WALL_T // wall thickness (shared with collision)
   const CT = 0.2 // roof slab thickness
-  const OH = 0.2 // lateral roof eave overhang
-  const END_OH = 0.3 // run-axis (gable end) overhang past the walls
+  const OH = 0.5 // lateral roof eave overhang (past the ~0.35m corner pillars)
+  const END_OH = 0.5 // run-axis (gable end) overhang past the corner pillars
   const RIDGE_RISE = 1.0 // gable peak height above the walls
 
   // Dark floor at the bottom of the visible shaft (backs the open pit so it
@@ -692,17 +808,19 @@ export function buildDungeonEntranceGroup(
     cr.z + cr.d / 2
   )
 
-  // Stone walls on the two run-axis sides and the far (deep) end, spanning
-  // [−depth, +ABOVE]. The entry end stays open. Slight outset so walking the
-  // shaft never clips them.
+  // Mossy-plaster walls on the two run-axis sides and the far (deep) end,
+  // spanning [−depth, +ABOVE]. The entry end stays open. Slight outset so
+  // walking the shaft never clips them. (Surface building — distinct texture
+  // from the underground stone walls.)
   const wallH = depth + ABOVE
   const wallCy = (ABOVE - depth) / 2 // center of the [−depth, +ABOVE] span
+  const wallTex = DUNGEON_ENTRANCE_WALL_TEXTURE_IDX
   // Deep/far end is the high-coordinate end unless the shaft runs reversed.
   const farPositive = !entranceShaft.reversed
   if (entranceShaft.alongZ) {
     addBox(
       entries,
-      DUNGEON_WALL_TEXTURE_IDX,
+      wallTex,
       T,
       wallH,
       cr.d + T,
@@ -712,7 +830,7 @@ export function buildDungeonEntranceGroup(
     )
     addBox(
       entries,
-      DUNGEON_WALL_TEXTURE_IDX,
+      wallTex,
       T,
       wallH,
       cr.d + T,
@@ -723,7 +841,7 @@ export function buildDungeonEntranceGroup(
     const farZ = farPositive ? cr.z + cr.d + T / 2 : cr.z - T / 2
     addBox(
       entries,
-      DUNGEON_WALL_TEXTURE_IDX,
+      wallTex,
       cr.w + T * 2,
       wallH,
       T,
@@ -734,7 +852,7 @@ export function buildDungeonEntranceGroup(
   } else {
     addBox(
       entries,
-      DUNGEON_WALL_TEXTURE_IDX,
+      wallTex,
       cr.w + T,
       wallH,
       T,
@@ -744,7 +862,7 @@ export function buildDungeonEntranceGroup(
     )
     addBox(
       entries,
-      DUNGEON_WALL_TEXTURE_IDX,
+      wallTex,
       cr.w + T,
       wallH,
       T,
@@ -755,7 +873,7 @@ export function buildDungeonEntranceGroup(
     const farX = farPositive ? cr.x + cr.w + T / 2 : cr.x - T / 2
     addBox(
       entries,
-      DUNGEON_WALL_TEXTURE_IDX,
+      wallTex,
       T,
       wallH,
       cr.d + T * 2,
@@ -765,15 +883,59 @@ export function buildDungeonEntranceGroup(
     )
   }
 
+  // Front wall over the door: fills the entry opening above the rounded cap
+  // plus the front gable triangle (so the doorway reads as a fitted arch under
+  // a gabled wall, all stone). entryLow = entry at the low-coord end.
+  addEntranceArch(
+    entries,
+    entranceShaft.alongZ,
+    cr,
+    farPositive,
+    ctx,
+    ABOVE,
+    RIDGE_RISE
+  )
+
+  // Decorative stone square pillars at the four footprint corners, protruding
+  // PILLAR_PROTRUDE proud of the wall outer faces (centre offset diagonally
+  // outward = wall outset + protrusion − half the pillar). Plain boxes from
+  // the ground to just under the roof.
+  const PILLAR_SIZE = 0.3
+  const PILLAR_PROTRUDE = 0.1
+  const pillarOff = T + PILLAR_PROTRUDE - PILLAR_SIZE / 2
+  const pillarBase = -0.3 // sink slightly so it never floats over dipping terrain
+  const pillarTop = ABOVE - 0.07 // stop short of the roof eaves
+  const pillarH = pillarTop - pillarBase
+  const pillarCy = (pillarTop + pillarBase) / 2
+  for (const sx of [-1, 1] as const) {
+    for (const sz of [-1, 1] as const) {
+      const cornerX = sx < 0 ? cr.x : cr.x + cr.w
+      const cornerZ = sz < 0 ? cr.z : cr.z + cr.d
+      addBox(
+        entries,
+        DUNGEON_PILLAR_TEXTURE_IDX,
+        PILLAR_SIZE,
+        pillarH,
+        PILLAR_SIZE,
+        cornerX + sx * pillarOff,
+        pillarCy,
+        cornerZ + sz * pillarOff
+      )
+    }
+  }
+
   // Gabled gravel-stone roof on top, ridge along the run axis. The gable
   // planes are the doorway edge (entry) and the far wall's *outer* face — so
   // END_OH overhangs past the actual walls on both ends, not the footprint
   // (the far wall is outset by T, which would otherwise eat the overhang).
+  // The entry-end gable triangle is omitted — the front wall above supplies it.
   const roofShift = farPositive ? T / 2 : -T / 2
   const alongZ = entranceShaft.alongZ
   const [runDim, latDim] = alongZ ? [cr.d, cr.w] : [cr.w, cr.d]
+  // Entry gable is the low-coord end when farPositive, else the high-coord end.
+  const entryGableSign = farPositive ? -1 : 1
   addGableRoof(
-    ceilingEntries,
+    entries,
     DUNGEON_CEILING_TEXTURE_IDX,
     alongZ,
     cr.x + cr.w / 2 + (alongZ ? 0 : roofShift),
@@ -784,7 +946,8 @@ export function buildDungeonEntranceGroup(
     RIDGE_RISE,
     OH,
     END_OH,
-    CT
+    CT,
+    entryGableSign
   )
 
   // Descending stairs (no side wall — the walls above supply the sides; no
@@ -807,11 +970,8 @@ export function buildDungeonEntranceGroup(
 
   const group = new THREE.Group()
   addMergedMeshes(group, entries)
-  const ceiling = new THREE.Group()
-  addMergedMeshes(ceiling, ceilingEntries)
-  group.add(ceiling)
   for (const leaf of doors) group.add(leaf.pivot)
-  return { group, ceiling, doors }
+  return { group, doors }
 }
 
 /** Dispose merged geometries (materials are shared — never disposed). */

@@ -15,7 +15,6 @@
     dungeonDoorOpen,
   } from '../../stores/dungeonStore'
   import { dungeonManager } from '../../managers/dungeonManager'
-  import type { DungeonRect } from '../../managers/dungeonManager'
   import type { DoorLeaf } from '../../utils/dungeon-geometry'
   import { networkManager } from '../../network/socket'
   import {
@@ -33,15 +32,11 @@
   const root = new THREE.Group()
   let currentGroup: THREE.Group | null = null
   let entranceGroup: THREE.Group | null = null
-  /** Gravel roof sub-group of the entrance; hidden as the player nears. */
-  let entranceCeiling: THREE.Object3D | null = null
   /** Double entrance doors; swing open/shut when clicked (house-door style). */
   let entranceDoors: DoorLeaf[] = []
   /** Eased open fraction (0 shut → 1 fully open), lerped per frame toward the
    *  click-toggled dungeonDoorOpen store. */
   let doorOpenAmount = 0
-  /** Cached entrance opening rect — stable at depth 0; drives the roof toggle. */
-  let entranceRect: DungeonRect | null = null
   let builtKey = ''
   let entranceKey = ''
 
@@ -58,9 +53,7 @@
       root.remove(entranceGroup)
       disposeDungeonGroup(entranceGroup)
       entranceGroup = null
-      entranceCeiling = null
       entranceDoors = []
-      entranceRect = null
       doorOpenAmount = 0
     }
   }
@@ -142,7 +135,6 @@
             shaftLen: c.shaftLen,
           })
           entranceGroup = built.group
-          entranceCeiling = built.ceiling
           entranceDoors = built.doors
           doorOpenAmount = 0
           for (const leaf of built.doors)
@@ -152,7 +144,6 @@
             dungeonManager.entrancePos!.y,
             dungeonManager.originZ
           )
-          entranceRect = dungeonManager.entranceHoleRect()
           root.add(entranceGroup)
         }
       }
@@ -198,19 +189,7 @@
   export function update(playerX: number, playerZ: number) {
     dungeonManager.updateFromPlayerPosition(playerX, playerZ)
 
-    // Hide the gravel roof as the player nears/descends the entrance so it
-    // doesn't occlude them on the upper stairs (house-roof style). Only at
-    // depth 0 — underground the whole entrance group is already hidden. Uses
-    // the cached rect (stable at depth 0) to avoid per-frame allocation.
-    if (entranceCeiling && entranceRect && entranceGroup?.visible) {
-      const m = 2.5
-      const near =
-        playerX >= entranceRect.minX - m &&
-        playerX <= entranceRect.maxX + m &&
-        playerZ >= entranceRect.minZ - m &&
-        playerZ <= entranceRect.maxZ + m
-      entranceCeiling.visible = !near
-    }
+    // (The entrance roof has no proximity hide — it's always shown at depth 0.)
 
     // Swing both door leaves toward their click-toggled open/shut target
     // (~0.35s either way at 60fps). Driven by dungeonDoorOpen, not proximity.
