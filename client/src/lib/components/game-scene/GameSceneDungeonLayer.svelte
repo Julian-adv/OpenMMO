@@ -47,30 +47,37 @@
     }
   }
 
-  // Entrance structure (pit cap + parapet) exists whenever a dungeon is
-  // registered, regardless of depth.
+  // Surface entrance structure (descending stairs + pit walls). The geometry
+  // depends only on the dungeon id, so it's built once per dungeon and only
+  // its visibility tracks depth: shown at depth 0, hidden underground where
+  // the floor group owns the shaft (rendering both would z-fight).
   $effect(() => {
     const id = $currentDungeonId
-    if ((id ?? '') === entranceKey) return
-    entranceKey = id ?? ''
-    clearEntranceGroup()
-    if (!id) return
-    const first = dungeonManager.layoutAt(1)
-    if (!first) return
-    const c = dungeonManager.consts
-    entranceGroup = buildDungeonEntranceGroup(first.upShaft, {
-      grid: c.grid,
-      wallHeight: c.wallHeight,
-      floorHeight: c.floorHeight,
-      shaftW: c.shaftW,
-      shaftLen: c.shaftLen,
-    })
-    entranceGroup.position.set(
-      dungeonManager.originX,
-      dungeonManager.entrancePos!.y,
-      dungeonManager.originZ
-    )
-    root.add(entranceGroup)
+    const depth = $currentDungeonDepth
+    if ((id ?? '') !== entranceKey) {
+      entranceKey = id ?? ''
+      clearEntranceGroup()
+      if (id) {
+        const first = dungeonManager.layoutAt(1)
+        if (first) {
+          const c = dungeonManager.consts
+          entranceGroup = buildDungeonEntranceGroup(first.upShaft, {
+            grid: c.grid,
+            wallHeight: c.wallHeight,
+            floorHeight: c.floorHeight,
+            shaftW: c.shaftW,
+            shaftLen: c.shaftLen,
+          })
+          entranceGroup.position.set(
+            dungeonManager.originX,
+            dungeonManager.entrancePos!.y,
+            dungeonManager.originZ
+          )
+          root.add(entranceGroup)
+        }
+      }
+    }
+    if (entranceGroup) entranceGroup.visible = depth === 0
   })
 
   $effect(() => {

@@ -132,7 +132,8 @@ function collectShaftStairs(
   topY: number,
   bottomY: number,
   includeTopLanding: boolean,
-  includeBottomLanding: boolean
+  includeBottomLanding: boolean,
+  includeWall = true
 ) {
   const rise = topY - bottomY
   const runStart = LANDING_CELLS
@@ -183,14 +184,17 @@ function collectShaftStairs(
 
   // Shaft side walls (back-facing side only, camera rule as for walls):
   // along-Z shafts keep the east side (faces west), along-X the north
-  // side (faces south). Vertical span covers the full descent.
-  const wallTex = DUNGEON_WALL_TEXTURE_IDX
-  const wallH = topY - bottomY + ctx.wallHeight
-  const wallCy = bottomY + wallH / 2
-  if (shaft.alongZ) {
-    addBox(entries, wallTex, 0.1, wallH, r.d, r.x + r.w + 0.05, wallCy, r.z + r.d / 2)
-  } else {
-    addBox(entries, wallTex, r.w, wallH, 0.1, r.x + r.w / 2, wallCy, r.z - 0.05)
+  // side (faces south). Vertical span covers the full descent. Skipped for
+  // the surface entrance, which supplies its own non-protruding pit walls.
+  if (includeWall) {
+    const wallTex = DUNGEON_WALL_TEXTURE_IDX
+    const wallH = topY - bottomY + ctx.wallHeight
+    const wallCy = bottomY + wallH / 2
+    if (shaft.alongZ) {
+      addBox(entries, wallTex, 0.1, wallH, r.d, r.x + r.w + 0.05, wallCy, r.z + r.d / 2)
+    } else {
+      addBox(entries, wallTex, r.w, wallH, 0.1, r.x + r.w / 2, wallCy, r.z - 0.05)
+    }
   }
 }
 
@@ -325,12 +329,17 @@ export function buildDungeonFloorGroup(
 }
 
 /**
- * Above-ground entrance structure: a stone parapet around the shaft
- * opening plus a near-black cap floating just above the terrain so the
- * opening reads as a pit (the terrain mesh itself has no hole — the
- * actual shaft below only becomes visible in underground render mode).
- * The parapet leaves the entry end open; descending players sink behind
- * the side walls. Local to (originX, entranceY, originZ) like floors.
+ * Surface entrance structure, rendered at depth 0 so the terrain hole over
+ * the shaft reads as a stairwell pit. Renders the descending stairs (so the
+ * player visibly walks down the upper half before the floor-1 group takes
+ * over at the shaft midpoint) plus stone pit walls on the two run-axis sides
+ * and the far (deep) end, spanning from a dark pit floor one floor down
+ * (−floorHeight) up to a low parapet lip (+H). The below-ground span is what
+ * shows through the terrain hole; the above-ground span is the lip. The entry
+ * end stays open. The stairs match the floor-1 up-shaft in world space, so
+ * the depth-0↔1 swap at the midpoint is seamless. Caller renders this only at
+ * depth 0 (the floor-1 group owns the shaft underground). Local to (originX,
+ * entranceY, originZ) like floors.
  */
 export function buildDungeonEntranceGroup(
   entranceShaft: DungeonShaft,
@@ -339,7 +348,11 @@ export function buildDungeonEntranceGroup(
   const entries: GeoEntry[] = []
   const r = shaftRect(entranceShaft, ctx)
 
-  // Pit cap slightly above the terrain surface.
+  // How far the pit walls descend — matches the up-shaft drop to floor 1.
+  const depth = ctx.floorHeight
+
+  // Dark floor at the bottom of the visible shaft (backs the open pit so it
+  // doesn't show through to the sky).
   addBox(
     entries,
     DUNGEON_VOID_TEXTURE_IDX,
@@ -347,27 +360,35 @@ export function buildDungeonEntranceGroup(
     0.05,
     r.d,
     r.x + r.w / 2,
-    0.06,
+    -depth + 0.025,
     r.z + r.d / 2
   )
 
-  // Parapet: low stone walls on the two run-axis sides and the far
-  // (deep) end; the entry end stays open. Slight outset so walking the
-  // shaft never clips them.
+  // Pit walls: stone walls on the two run-axis sides and the far (deep) end,
+  // spanning [−depth, +H]. The entry end stays open. Slight outset so walking
+  // the shaft never clips them.
   const H = 1.0
   const T = 0.25
-  const entry = shaftStepCell(entranceShaft, ctx, 0, 0)
+  const wallH = depth + H
+  const wallCy = (H - depth) / 2 // center of the [−depth, +H] span
+  // Deep/far end is the high-coordinate end unless the shaft runs reversed.
+  const farPositive = !entranceShaft.reversed
   if (entranceShaft.alongZ) {
-    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, T, H, r.d + T, r.x - T / 2, H / 2, r.z + r.d / 2)
-    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, T, H, r.d + T, r.x + r.w + T / 2, H / 2, r.z + r.d / 2)
-    const farZ = entry.z === r.z ? r.z + r.d + T / 2 : r.z - T / 2
-    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, r.w + T * 2, H, T, r.x + r.w / 2, H / 2, farZ)
+    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, T, wallH, r.d + T, r.x - T / 2, wallCy, r.z + r.d / 2)
+    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, T, wallH, r.d + T, r.x + r.w + T / 2, wallCy, r.z + r.d / 2)
+    const farZ = farPositive ? r.z + r.d + T / 2 : r.z - T / 2
+    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, r.w + T * 2, wallH, T, r.x + r.w / 2, wallCy, farZ)
   } else {
-    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, r.w + T, H, T, r.x + r.w / 2, H / 2, r.z - T / 2)
-    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, r.w + T, H, T, r.x + r.w / 2, H / 2, r.z + r.d + T / 2)
-    const farX = entry.x === r.x ? r.x + r.w + T / 2 : r.x - T / 2
-    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, T, H, r.d + T * 2, farX, H / 2, r.z + r.d / 2)
+    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, r.w + T, wallH, T, r.x + r.w / 2, wallCy, r.z - T / 2)
+    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, r.w + T, wallH, T, r.x + r.w / 2, wallCy, r.z + r.d + T / 2)
+    const farX = farPositive ? r.x + r.w + T / 2 : r.x - T / 2
+    addBox(entries, DUNGEON_WALL_TEXTURE_IDX, T, wallH, r.d + T * 2, farX, wallCy, r.z + r.d / 2)
   }
+
+  // Descending stairs (no side wall — the pit walls above supply the sides;
+  // no landings — terrain covers the entry row, the dark pit floor backs the
+  // deep end). Same world-space geometry as the floor-1 up-shaft.
+  collectShaftStairs(entries, entranceShaft, ctx, 0, -depth, false, false, false)
 
   const group = new THREE.Group()
   addMergedMeshes(group, entries)
