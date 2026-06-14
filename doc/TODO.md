@@ -15,6 +15,7 @@
   - [x] 미로를 생성하는 시스템을 만든다 (시드 결정적, 입구별 고정, 최대 20층)
   - 던전 디테일: 횃불/소품, 보스 전용 모델, 상자 열림 연출
   - 추가 입구 배치 (현재 old_crypt 1개, data-src/dungeons.csv)
+  - 바닥에 물 웅덩이
 - [x] map editor를 만든다
   - [x] mark monster spawn area
   - [x] edit waypoints of npcs
@@ -55,6 +56,7 @@
 - [x] 멀리 떨어진데서 아이템 클릭하면 줍는 동작은 하는데 주워지지는 않음
 - healing potion
 - [x] 몬스터가 도망칠 때는 적어도 화면 밖까지
+- 상인에게 판 물건 되사기
 
 # 폐지
 
