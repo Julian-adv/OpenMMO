@@ -419,9 +419,15 @@ pub fn monster_level_for_depth(def_level: u8, depth: u8) -> u8 {
     }
 }
 
-/// Edge-bitmask cells for one floor, derived from its carved mask plus
-/// explicit side walls along stair shafts (so descending players can't
-/// step sideways off the stairs into a flush room).
+/// Edge-bitmask cells for one floor, derived from its carved mask plus walls
+/// turning each stair shaft into a dead-end whose only opening on this floor is
+/// the landing this floor stands on. The shaft footprint sits inside a room, so
+/// without the far landing's run-end walled, A* treats it as a cut-through and
+/// marches a same-floor monster across it onto steps that render at the *other*
+/// floor's height; the side walls also keep a descending player from stepping
+/// sideways off the stairs mid-run. The steps themselves stay open along the run
+/// so a descending player (collision-checked against this floor once their Y
+/// drops into range) still walks through.
 pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
     let mut cells = vec![0u8; (GRID * GRID) as usize];
 
@@ -446,46 +452,86 @@ pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
         }
     }
 
-    let mut wall_shaft_sides = |shaft: &StairShaft| {
+    // Wall a shaft so its footprint is a dead-end on this floor, opening only
+    // at the landing this floor stands on. `legit_is_exit` is true for the
+    // up-shaft (you arrive at and step off its deep/exit landing) and false for
+    // the down-shaft (you step onto its shallow/entry landing to descend).
+    //   * lateral side walls keep a descending player from sidestepping off the
+    //     run into a flush room — the up-shaft exit landing is the only row left
+    //     open sideways, so you can step out at the bottom;
+    //   * the *far* landing (the one belonging to the other floor) gets its
+    //     room-facing run-end walled too. That's the one new opening the old
+    //     code left, and it let same-floor A* march a monster straight across
+    //     the footprint and onto steps that render at the other floor's height.
+    // The steps in between stay open along the run on purpose: a descending
+    // player is collision-checked against *this* floor's grid once their Y
+    // drops into its range (~a quarter of the way down, see `is_movement_blocked`
+    // floor selection), so the run must stay walkable. Cross-floor pathfinding
+    // is unaffected either way — it walks the shaft via the stairwell expansion,
+    // which ignores these edge bits.
+    let mut wall_shaft = |shaft: &StairShaft, legit_is_exit: bool| {
         let r = shaft.rect();
         let set = |cells: &mut Vec<u8>, x: i32, z: i32, bit: u8| {
             if x >= 0 && x < GRID && z >= 0 && z < GRID {
                 cells[(x + z * GRID) as usize] |= bit;
             }
         };
-        // Skip the deep (lower) landing's run cell: it sits at floor level
-        // inside the room that wraps the shaft, so the arriving player steps
-        // sideways off the stairs there. Walling it (like the steps above)
-        // would trap them at the bottom. The shallow end and all steps stay
-        // walled so descending players can't step into a flush room mid-run.
         if shaft.along_z {
-            let exit_z = if shaft.reversed { r.z } else { r.z + r.d - 1 };
+            let exit_z = shaft.exit_cell().1;
+            let far_z = if legit_is_exit {
+                shaft.entry_cell().1
+            } else {
+                exit_z
+            };
             for z in r.z..r.z + r.d {
-                if z == exit_z {
-                    continue;
+                if !(legit_is_exit && z == exit_z) {
+                    set(&mut cells, r.x, z, EDGE_W);
+                    set(&mut cells, r.x - 1, z, EDGE_E);
+                    set(&mut cells, r.x + r.w - 1, z, EDGE_E);
+                    set(&mut cells, r.x + r.w, z, EDGE_W);
                 }
-                set(&mut cells, r.x, z, EDGE_W);
-                set(&mut cells, r.x - 1, z, EDGE_E);
-                set(&mut cells, r.x + r.w - 1, z, EDGE_E);
-                set(&mut cells, r.x + r.w, z, EDGE_W);
+            }
+            // Far landing's outer run-end (points away from the steps, into the
+            // wrapping room).
+            for x in r.x..r.x + r.w {
+                if far_z == r.z {
+                    set(&mut cells, x, far_z, EDGE_N);
+                    set(&mut cells, x, far_z - 1, EDGE_S);
+                } else {
+                    set(&mut cells, x, far_z, EDGE_S);
+                    set(&mut cells, x, far_z + 1, EDGE_N);
+                }
             }
         } else {
-            let exit_x = if shaft.reversed { r.x } else { r.x + r.w - 1 };
+            let exit_x = shaft.exit_cell().0;
+            let far_x = if legit_is_exit {
+                shaft.entry_cell().0
+            } else {
+                exit_x
+            };
             for x in r.x..r.x + r.w {
-                if x == exit_x {
-                    continue;
+                if !(legit_is_exit && x == exit_x) {
+                    set(&mut cells, x, r.z, EDGE_N);
+                    set(&mut cells, x, r.z - 1, EDGE_S);
+                    set(&mut cells, x, r.z + r.d - 1, EDGE_S);
+                    set(&mut cells, x, r.z + r.d, EDGE_N);
                 }
-                set(&mut cells, x, r.z, EDGE_N);
-                set(&mut cells, x, r.z - 1, EDGE_S);
-                set(&mut cells, x, r.z + r.d - 1, EDGE_S);
-                set(&mut cells, x, r.z + r.d, EDGE_N);
+            }
+            for z in r.z..r.z + r.d {
+                if far_x == r.x {
+                    set(&mut cells, far_x, z, EDGE_W);
+                    set(&mut cells, far_x - 1, z, EDGE_E);
+                } else {
+                    set(&mut cells, far_x, z, EDGE_E);
+                    set(&mut cells, far_x + 1, z, EDGE_W);
+                }
             }
         }
     };
 
-    wall_shaft_sides(&layout.up_shaft);
+    wall_shaft(&layout.up_shaft, true);
     if let Some(ref down) = layout.down_shaft {
-        wall_shaft_sides(down);
+        wall_shaft(down, false);
     }
 
     cells

@@ -224,6 +224,91 @@ fn full_descent_path_through_passability() {
     }
 }
 
+/// Each stair shaft must be a dead-end on its floor: the only shaft cells that
+/// open onto a room cell are this floor's own landing. Otherwise same-floor A*
+/// treats the footprint (which sits inside a room) as a cut-through and marches
+/// a monster across it onto steps that render at the adjacent floor's height.
+/// The steps must *also* stay open along the run, or a descending player —
+/// collision-checked against this floor once their Y drops into its range —
+/// gets stuck mid-stairs. This guards both failure modes.
+#[test]
+fn shaft_opens_to_room_only_at_its_landing() {
+    use super::{EDGE_E, EDGE_N, EDGE_S, EDGE_W};
+    const EDGES: [(i32, i32, u8, u8); 4] = [
+        (0, -1, EDGE_N, EDGE_S),
+        (0, 1, EDGE_S, EDGE_N),
+        (1, 0, EDGE_E, EDGE_W),
+        (-1, 0, EDGE_W, EDGE_E),
+    ];
+
+    for seed in 0..60u64 {
+        let floors = generate_dungeon(seed);
+        for layout in &floors {
+            let cells = floor_passability_cells(layout);
+            let blocked = |x: i32, z: i32, leave: u8, nx: i32, nz: i32, enter: u8| {
+                cells[(x + z * GRID) as usize] & leave != 0
+                    || cells[(nx + nz * GRID) as usize] & enter != 0
+            };
+
+            // Footprint of every shaft on this floor and the live landing rows
+            // (SHAFT_W wide) it legitimately stands on.
+            let mut shaft = std::collections::HashSet::new();
+            let mut landings = std::collections::HashSet::new();
+            for (x, z) in shaft_footprint(&layout.up_shaft) {
+                shaft.insert((x, z));
+            }
+            for w in 0..SHAFT_W {
+                landings.insert(layout.up_shaft.step_cell(SHAFT_LEN - 1, w));
+            }
+            if let Some(ref d) = layout.down_shaft {
+                for (x, z) in shaft_footprint(d) {
+                    shaft.insert((x, z));
+                }
+                for w in 0..SHAFT_W {
+                    landings.insert(d.step_cell(0, w));
+                }
+            }
+
+            // A shaft cell may open onto a carved room cell only if it is a live
+            // landing — that single opening is the one way onto the stairs.
+            for &(x, z) in &shaft {
+                for (dx, dz, leave, enter) in EDGES {
+                    let (nx, nz) = (x + dx, z + dz);
+                    if nx < 0 || nx >= GRID || nz < 0 || nz >= GRID {
+                        continue;
+                    }
+                    if !layout.carved[(nx + nz * GRID) as usize] || shaft.contains(&(nx, nz)) {
+                        continue; // wall or another shaft cell — not a room opening
+                    }
+                    if !blocked(x, z, leave, nx, nz, enter) {
+                        assert!(
+                            landings.contains(&(x, z)),
+                            "seed {seed} depth {}: non-landing shaft cell ({x},{z}) \
+                             opens into room cell ({nx},{nz})",
+                            layout.depth
+                        );
+                    }
+                }
+            }
+
+            // Steps must stay walkable along the run, or descent breaks: the
+            // up-shaft exit landing must connect to the step just above it.
+            let exit = layout.up_shaft.exit_cell();
+            let step = layout.up_shaft.step_cell(SHAFT_LEN - 2, 0);
+            let delta = (step.0 - exit.0, step.1 - exit.1);
+            let &(_, _, leave, enter) = EDGES
+                .iter()
+                .find(|&&(dx, dz, _, _)| (dx, dz) == delta)
+                .expect("adjacent steps differ by one cell");
+            assert!(
+                !blocked(exit.0, exit.1, leave, step.0, step.1, enter),
+                "seed {seed} depth {}: up-shaft exit landing sealed off from its steps",
+                layout.depth
+            );
+        }
+    }
+}
+
 #[test]
 fn passability_floor_mapping() {
     assert_eq!(passability_floor_for_depth(1), 4);
