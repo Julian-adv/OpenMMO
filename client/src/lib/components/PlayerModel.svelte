@@ -496,8 +496,11 @@
     if (currentAction && newAction !== currentAction) {
       const crossfadeDuration = 0.3 // 300ms crossfade
 
-      // Use THREE.js built-in crossfade
-      newAction.crossFadeFrom(currentAction, crossfadeDuration, true)
+      // Use THREE.js built-in crossfade. warp=false: do NOT time-scale the
+      // incoming clip to match the outgoing clip's length — that made a long
+      // idle ("look around") whip past at several-times speed when blending in
+      // from a short walk/attack clip.
+      newAction.crossFadeFrom(currentAction, crossfadeDuration, false)
     }
 
     // Play the new action
