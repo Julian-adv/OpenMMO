@@ -95,7 +95,8 @@ mod tests {
     use super::smooth::is_line_passable;
     use super::*;
 
-    fn make_rect_room(width: u8, depth: u8) -> (String, RuntimePassability) {
+    /// Edge-bitmask cells for a `width`×`depth` grid walled on its outer rim.
+    fn perimeter_walls(width: u8, depth: u8) -> Vec<u8> {
         let w = width as usize;
         let d = depth as usize;
         let mut cells = vec![0u8; w * d];
@@ -107,6 +108,11 @@ mod tests {
             cells[z * w] |= EDGE_W;
             cells[z * w + w - 1] |= EDGE_E;
         }
+        cells
+    }
+
+    fn make_rect_room(width: u8, depth: u8) -> (String, RuntimePassability) {
+        let cells = perimeter_walls(width, depth);
         let rp = RuntimePassability {
             house_origin_x: 10.0,
             house_origin_z: 10.0,
@@ -310,6 +316,96 @@ mod tests {
                 .iter()
                 .map(|w| (w.x, w.z))
                 .collect::<Vec<_>>()
+        );
+    }
+
+    /// Two single-row floors joined by one stairwell column:
+    ///   floor 0 (lower): world cells (0..3, z=0)
+    ///   floor 1 (upper): world cells (0..3, z=3)
+    ///   stairwell: x=0, z=0..4, connecting lower landing (0,0) to upper (0,3).
+    /// House origin is (0,0); both rows are open in X with perimeter walls.
+    fn make_two_floor_stairwell() -> (String, RuntimePassability) {
+        // 3x1 open row walled on its rim: [W|N|S, N|S, E|N|S].
+        let row = || perimeter_walls(3, 1);
+        let rp = RuntimePassability {
+            house_origin_x: 0.0,
+            house_origin_z: 0.0,
+            min_x: 0.0,
+            max_x: 3.0,
+            min_z: 0.0,
+            max_z: 4.0,
+            floors: vec![
+                RuntimeFloorGrid {
+                    floor_level: 0,
+                    origin_x: 0,
+                    origin_z: 0,
+                    width: 3,
+                    depth: 1,
+                    y_base: 0.0,
+                    wall_height: 3.0,
+                    cells: row(),
+                },
+                RuntimeFloorGrid {
+                    floor_level: 1,
+                    origin_x: 0,
+                    origin_z: 3,
+                    width: 3,
+                    depth: 1,
+                    y_base: 3.1,
+                    wall_height: 3.0,
+                    cells: row(),
+                },
+            ],
+            stairwells: vec![StairwellInfo {
+                local_min_x: 0,
+                local_min_z: 0,
+                local_max_x: 1,
+                local_max_z: 4,
+                lower_floor: 0,
+                upper_floor: 1,
+                along_z: true,
+                reversed: false,
+            }],
+        };
+        ("two_floor".to_string(), rp)
+    }
+
+    #[test]
+    fn cross_floor_query_descends_the_stairwell() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Start on the upper floor (1), goal on the lower floor (0): differing
+        // floors, so the stairwell is traversed.
+        let result = find_path(2.5, 3.5, 1, 2.5, 0.5, 0, &cache, 500);
+        assert!(result.found, "cross-floor path should be found");
+        assert!(
+            result.waypoints.iter().any(|w| w.floor == 0),
+            "cross-floor path must reach the lower floor: {:?}",
+            result.waypoints
+        );
+    }
+
+    #[test]
+    fn same_floor_query_never_leaves_its_floor() {
+        let (id, rp) = make_two_floor_stairwell();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // Same start, but request the goal on the START floor (1). The target
+        // cell only exists on floor 0, so without confinement A* would dive
+        // down the stairwell to approach it. Confinement keeps every waypoint
+        // on floor 1 — the fix that stops dungeon monsters using stairs.
+        let result = find_path(2.5, 3.5, 1, 0.5, 0.5, 1, &cache, 500);
+        assert!(
+            !result.waypoints.is_empty(),
+            "confined partial path should still advance along its own floor"
+        );
+        assert!(
+            result.waypoints.iter().all(|w| w.floor == 1),
+            "confined path must never descend the stairwell: {:?}",
+            result.waypoints
         );
     }
 }

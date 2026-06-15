@@ -77,6 +77,18 @@ pub fn find_path(
         };
     }
 
+    // Confine the search to a single floor when start and goal share it: a
+    // same-floor goal is always reachable without leaving the floor, so the
+    // stairwell is never a legitimate shortcut. This keeps dungeon monsters —
+    // which always query their own `path_floor` for both ends — from wandering
+    // (or chasing) down the stairs onto a floor they don't belong to, where
+    // they'd render at the wrong floor's height and clip through walls. Cross-
+    // floor navigation (the player descending via click-to-move) passes
+    // differing floors and still traverses stairwells. The stairwell *interior*
+    // stays blocked either way (see `is_stair_interior` below), so confinement
+    // doesn't let a monster step into the open shaft.
+    let confine_to_floor = start_floor == goal_floor;
+
     let stair_cells = build_stair_cells(cache);
 
     // Build set of (x, z, real_floor) for stairwell cells.
@@ -119,24 +131,28 @@ pub fn find_path(
 
     // If start is on a stairwell intermediate cell, also seed that key
     // so the player doesn't have to walk back to entry landing first.
-    for &key in stair_cells.keys() {
-        let (kx, kz, kfk) = key;
-        if kx == sx && kz == sz && key_to_floor(kfk) == start_floor && kfk != start_fk {
-            let sh = h(sx, sz, kfk);
-            open.push(Reverse(AStarNode {
-                x: sx,
-                z: sz,
-                fk: kfk,
-                g: 0,
-                f: sh,
-            }));
-            closed.insert(
-                key,
-                ClosedEntry {
+    // Skipped under floor confinement: those seeds only exist to start a
+    // cross-floor climb/descent.
+    if !confine_to_floor {
+        for &key in stair_cells.keys() {
+            let (kx, kz, kfk) = key;
+            if kx == sx && kz == sz && key_to_floor(kfk) == start_floor && kfk != start_fk {
+                let sh = h(sx, sz, kfk);
+                open.push(Reverse(AStarNode {
+                    x: sx,
+                    z: sz,
+                    fk: kfk,
                     g: 0,
-                    parent: start_key,
-                },
-            );
+                    f: sh,
+                }));
+                closed.insert(
+                    key,
+                    ClosedEntry {
+                        g: 0,
+                        parent: start_key,
+                    },
+                );
+            }
         }
     }
 
@@ -225,33 +241,38 @@ pub fn find_path(
         }
 
         // --- Stairwell axis expansion (prev/next along stairwell) ---
-        if let Some(sc) = stair_cells.get(&cur_key) {
-            for neighbor in [&sc.prev, &sc.next].into_iter().flatten() {
-                let new_g = cur.g + 1;
-                let nkey: AStarKey = (neighbor.x, neighbor.z, neighbor.fk);
-                if let Some(existing) = closed.get(&nkey) {
-                    if existing.g <= new_g {
-                        continue;
+        // Disabled under floor confinement so the search never leaves
+        // start_floor via the stairs; the bool short-circuits the per-node
+        // stair-cell lookup on that (dungeon-monster) hot path.
+        if !confine_to_floor {
+            if let Some(sc) = stair_cells.get(&cur_key) {
+                for neighbor in [&sc.prev, &sc.next].into_iter().flatten() {
+                    let new_g = cur.g + 1;
+                    let nkey: AStarKey = (neighbor.x, neighbor.z, neighbor.fk);
+                    if let Some(existing) = closed.get(&nkey) {
+                        if existing.g <= new_g {
+                            continue;
+                        }
                     }
-                }
-                closed.insert(
-                    nkey,
-                    ClosedEntry {
+                    closed.insert(
+                        nkey,
+                        ClosedEntry {
+                            g: new_g,
+                            parent: cur_key,
+                        },
+                    );
+                    let nh = h(neighbor.x, neighbor.z, neighbor.fk);
+                    open.push(Reverse(AStarNode {
+                        x: neighbor.x,
+                        z: neighbor.z,
+                        fk: neighbor.fk,
                         g: new_g,
-                        parent: cur_key,
-                    },
-                );
-                let nh = h(neighbor.x, neighbor.z, neighbor.fk);
-                open.push(Reverse(AStarNode {
-                    x: neighbor.x,
-                    z: neighbor.z,
-                    fk: neighbor.fk,
-                    g: new_g,
-                    f: new_g + nh,
-                }));
-                if nh < best_h {
-                    best_h = nh;
-                    best_key = nkey;
+                        f: new_g + nh,
+                    }));
+                    if nh < best_h {
+                        best_h = nh;
+                        best_key = nkey;
+                    }
                 }
             }
         }
