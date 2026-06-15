@@ -276,6 +276,7 @@ impl super::GameState {
         source_monster_id: Option<String>,
     ) {
         let position = ground_item.position;
+        let floor_level = ground_item.floor_level;
         {
             let mut ground_items = self.ground_items.write().await;
             ground_items.insert(
@@ -288,6 +289,7 @@ impl super::GameState {
         }
         self.send_direct_message_to_players_within_position(
             &position,
+            floor_level,
             super::AGENT_EVENT_DELIVERY_RADIUS,
             ServerMessage::GroundItemSpawned {
                 item: ground_item,
@@ -468,6 +470,7 @@ impl super::GameState {
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.send_direct_message_to_players_within_position(
             &item_position,
+            player_floor,
             super::AGENT_EVENT_DELIVERY_RADIUS,
             ServerMessage::GroundItemRemoved { instance_id },
             None,
@@ -496,14 +499,19 @@ impl super::GameState {
             let mut ground_items = self.ground_items.write().await;
             to_remove
                 .iter()
-                .filter_map(|id| ground_items.remove(id).map(|sgi| (*id, sgi.item.position)))
+                .filter_map(|id| {
+                    ground_items
+                        .remove(id)
+                        .map(|sgi| (*id, sgi.item.position, sgi.item.floor_level))
+                })
                 .collect::<Vec<_>>()
         };
 
         info!("Despawned {} ground item(s)", removed_items.len());
-        for (id, position) in removed_items {
+        for (id, position, floor_level) in removed_items {
             self.send_direct_message_to_players_within_position(
                 &position,
+                floor_level,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::GroundItemRemoved { instance_id: id },
                 None,

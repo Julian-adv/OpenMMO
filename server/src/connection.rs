@@ -650,7 +650,7 @@ async fn handle_client_message(
                 let rotation = game_state
                     .get_player_position(id)
                     .await
-                    .map(|(_, rot)| rot)
+                    .map(|(_, rot, _)| rot)
                     .unwrap_or(0.0);
                 // Debug teleports can land inside a dungeon; infer the
                 // floor from the target Y instead of trusting the old one.
@@ -740,10 +740,13 @@ async fn handle_client_message(
                     .toggle_door(pid, &house_id, room_index, wall_dir, segment_index)
                     .await;
                 if let Some(is_open) = toggled {
-                    if let Some((position, _)) = game_state.get_player_position(pid).await {
+                    if let Some((position, _, floor_level)) =
+                        game_state.get_player_position(pid).await
+                    {
                         game_state
                             .send_direct_message_to_players_within_position(
                                 &position,
+                                floor_level,
                                 crate::game_state::AGENT_EVENT_DELIVERY_RADIUS,
                                 ServerMessage::DoorToggled {
                                     house_id,

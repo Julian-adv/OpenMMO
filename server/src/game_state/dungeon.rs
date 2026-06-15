@@ -197,6 +197,7 @@ impl GameState {
         );
         self.send_direct_message_to_players_within_position(
             &player_pos,
+            player_floor,
             super::AGENT_EVENT_DELIVERY_RADIUS,
             ServerMessage::DungeonChestOpened {
                 entrance_id: entrance_id.to_string(),
@@ -429,6 +430,7 @@ impl GameState {
                 for monster in removed {
                     self.send_direct_message_to_players_within_position(
                         &monster.position,
+                        monster.floor_level,
                         super::AGENT_EVENT_DELIVERY_RADIUS,
                         ServerMessage::MonsterRemoved {
                             monster_id: monster.id,

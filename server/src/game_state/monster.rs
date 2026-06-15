@@ -118,6 +118,7 @@ impl super::GameState {
 
         self.send_direct_message_to_players_within_position(
             &monster.position,
+            monster.floor_level,
             super::AGENT_EVENT_DELIVERY_RADIUS,
             ServerMessage::MonsterSpawned {
                 monster: monster.clone(),
@@ -175,14 +176,25 @@ impl super::GameState {
         update_msg: ServerMessage,
         skip_player_id: Option<&String>,
     ) {
+        // Monsters never change floor mid-life (dungeon monsters are confined
+        // to their floor), so both the old and new visibility sets gate on the
+        // monster's own floor.
         let old_visible: HashSet<_> = self
-            .player_ids_within_position(&old_position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .player_ids_within_position(
+                &old_position,
+                monster.floor_level,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
+            )
             .await
             .into_iter()
             .filter(|id| skip_player_id.map_or(true, |skip_id| skip_id != id))
             .collect();
         let new_visible: HashSet<_> = self
-            .player_ids_within_position(&monster.position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .player_ids_within_position(
+                &monster.position,
+                monster.floor_level,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
+            )
             .await
             .into_iter()
             .filter(|id| skip_player_id.map_or(true, |skip_id| skip_id != id))
@@ -232,6 +244,7 @@ impl super::GameState {
             );
             self.send_direct_message_to_players_within_position(
                 &monster.position,
+                monster.floor_level,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::MonsterRemoved {
                     monster_id: monster.id,

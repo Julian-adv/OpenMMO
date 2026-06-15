@@ -84,14 +84,23 @@ impl super::GameState {
         }
     }
 
+    /// Deliver `msg` to every player within `radius` (XZ) of `position` that
+    /// is also on `floor_level`. The floor gate keeps events from leaking
+    /// between stacked floors that share the same XZ footprint (a dungeon
+    /// depth sits directly under the overworld, house upper floors over the
+    /// ground floor), so e.g. a surface guard never perceives — and never
+    /// reacts to — monsters fighting on the dungeon floor beneath it.
     pub async fn send_direct_message_to_players_within_position(
         &self,
         position: &Position,
+        floor_level: i8,
         radius: f32,
         msg: ServerMessage,
         skip_player_id: Option<&PlayerId>,
     ) {
-        let player_ids = self.player_ids_within_position(position, radius).await;
+        let player_ids = self
+            .player_ids_within_position(position, floor_level, radius)
+            .await;
         self.send_direct_message_to_players_except(&player_ids, msg, skip_player_id)
             .await;
     }
@@ -158,6 +167,7 @@ impl super::GameState {
         let player_name = player.name.clone();
         let player_number = self.get_or_assign_player_number(&player_id).await;
         let player_position = player.position.clone();
+        let player_floor = player.floor_level;
 
         {
             let mut players = self.players.write().await;
@@ -198,8 +208,9 @@ impl super::GameState {
             .await
             .iter()
             .filter(|(_, monster)| {
-                monster.position.dist_xz_sq(&player_position)
-                    <= super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS
+                monster.floor_level == player_floor
+                    && monster.position.dist_xz_sq(&player_position)
+                        <= super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS
             })
             .map(|(id, monster)| (id.clone(), monster.clone()))
             .collect();
@@ -209,8 +220,9 @@ impl super::GameState {
             .await
             .values()
             .filter(|sgi| {
-                sgi.item.position.dist_xz_sq(&player_position)
-                    <= super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS
+                sgi.item.floor_level == player_floor
+                    && sgi.item.position.dist_xz_sq(&player_position)
+                        <= super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS
             })
             .map(|sgi| sgi.item.clone())
             .collect();
@@ -342,6 +354,7 @@ impl super::GameState {
         self.fanout_player_position_update(
             player_id,
             &old_position,
+            current_floor,
             &moved_player,
             ServerMessage::PlayerMoved {
                 player_id: player_id.clone(),
@@ -394,6 +407,7 @@ impl super::GameState {
             self.fanout_player_position_update(
                 player_id,
                 &old_position,
+                old_floor,
                 &moved_player,
                 ServerMessage::PlayerTeleported {
                     player_id: player_id.clone(),
@@ -455,6 +469,7 @@ impl super::GameState {
             self.fanout_player_position_update(
                 player_id,
                 &old_position,
+                old_floor,
                 &player,
                 ServerMessage::PlayerRespawned {
                     player: player.clone(),
@@ -466,11 +481,11 @@ impl super::GameState {
         }
     }
 
-    pub async fn get_player_position(&self, player_id: &PlayerId) -> Option<(Position, f32)> {
+    pub async fn get_player_position(&self, player_id: &PlayerId) -> Option<(Position, f32, i8)> {
         let players = self.players.read().await;
         players
             .get(player_id)
-            .map(|p| (p.position.clone(), p.rotation))
+            .map(|p| (p.position, p.rotation, p.floor_level))
     }
 
     pub async fn toggle_player_torch(&self, player_id: &PlayerId, enabled: bool) {
@@ -478,15 +493,16 @@ impl super::GameState {
             let mut players = self.players.write().await;
             if let Some(player) = players.get_mut(player_id) {
                 player.torch_on = enabled;
-                Some(player.position)
+                Some((player.position, player.floor_level))
             } else {
                 None
             }
         };
 
-        if let Some(position) = position {
+        if let Some((position, floor_level)) = position {
             self.send_direct_message_to_players_within_position(
                 &position,
+                floor_level,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::PlayerTorchToggled {
                     player_id: player_id.clone(),
@@ -517,7 +533,7 @@ impl super::GameState {
             } else if let Some(player) = players.get_mut(player_id) {
                 player.object_type = object_type.clone();
                 player.object_id = object_id;
-                Ok(Some(player.position))
+                Ok(Some((player.position, player.floor_level)))
             } else {
                 Ok(None)
             }
@@ -531,9 +547,10 @@ impl super::GameState {
                 },
             )
             .await;
-        } else if let Ok(Some(position)) = rejected_or_position {
+        } else if let Ok(Some((position, floor_level))) = rejected_or_position {
             self.send_direct_message_to_players_within_position(
                 &position,
+                floor_level,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::PlayerInteractionChanged {
                     player_id: player_id.clone(),
@@ -648,17 +665,28 @@ impl super::GameState {
         &self,
         player_id: &PlayerId,
         old_position: &Position,
+        old_floor: i8,
         player: &Player,
         update_msg: ServerMessage,
     ) {
+        // Visibility is per-floor: the old set is who could see the player on
+        // the floor it left, the new set is who can see it on the floor it is
+        // on now. For a same-floor move both use the same floor; for a stair /
+        // teleport / respawn floor change the diff naturally turns into
+        // disappear-from-old-floor + appear-on-new-floor.
+        let new_floor = player.floor_level;
         let old_visible: HashSet<PlayerId> = self
-            .player_ids_within_position(old_position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .player_ids_within_position(old_position, old_floor, super::AGENT_EVENT_DELIVERY_RADIUS)
             .await
             .into_iter()
             .filter(|id| id != player_id)
             .collect();
         let new_visible: HashSet<PlayerId> = self
-            .player_ids_within_position(&player.position, super::AGENT_EVENT_DELIVERY_RADIUS)
+            .player_ids_within_position(
+                &player.position,
+                new_floor,
+                super::AGENT_EVENT_DELIVERY_RADIUS,
+            )
             .await
             .into_iter()
             .filter(|id| id != player_id)
@@ -715,12 +743,18 @@ impl super::GameState {
             let radius_sq = super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS;
             let old_monsters: HashSet<_> = monsters
                 .iter()
-                .filter(|(_, monster)| old_position.dist_xz_sq(&monster.position) <= radius_sq)
+                .filter(|(_, monster)| {
+                    monster.floor_level == old_floor
+                        && old_position.dist_xz_sq(&monster.position) <= radius_sq
+                })
                 .map(|(id, _)| id.clone())
                 .collect();
             let new_monsters: HashSet<_> = monsters
                 .iter()
-                .filter(|(_, monster)| player.position.dist_xz_sq(&monster.position) <= radius_sq)
+                .filter(|(_, monster)| {
+                    monster.floor_level == new_floor
+                        && player.position.dist_xz_sq(&monster.position) <= radius_sq
+                })
                 .map(|(id, _)| id.clone())
                 .collect();
 
@@ -749,12 +783,18 @@ impl super::GameState {
             let radius_sq = super::AGENT_EVENT_DELIVERY_RADIUS * super::AGENT_EVENT_DELIVERY_RADIUS;
             let old_items: HashSet<_> = ground_items
                 .iter()
-                .filter(|(_, sgi)| old_position.dist_xz_sq(&sgi.item.position) <= radius_sq)
+                .filter(|(_, sgi)| {
+                    sgi.item.floor_level == old_floor
+                        && old_position.dist_xz_sq(&sgi.item.position) <= radius_sq
+                })
                 .map(|(id, _)| *id)
                 .collect();
             let new_items: HashSet<_> = ground_items
                 .iter()
-                .filter(|(_, sgi)| player.position.dist_xz_sq(&sgi.item.position) <= radius_sq)
+                .filter(|(_, sgi)| {
+                    sgi.item.floor_level == new_floor
+                        && player.position.dist_xz_sq(&sgi.item.position) <= radius_sq
+                })
                 .map(|(id, _)| *id)
                 .collect();
 
@@ -787,6 +827,7 @@ impl super::GameState {
     pub async fn player_ids_within_position(
         &self,
         position: &Position,
+        floor_level: i8,
         radius: f32,
     ) -> Vec<PlayerId> {
         let center_cell = super::SpatialCell::from_position(position);
@@ -812,7 +853,9 @@ impl super::GameState {
                         continue;
                     };
 
-                    if position.dist_xz_sq(&player.position) <= radius_sq {
+                    if player.floor_level == floor_level
+                        && position.dist_xz_sq(&player.position) <= radius_sq
+                    {
                         player_ids.push(player_id.clone());
                     }
                 }
@@ -823,15 +866,16 @@ impl super::GameState {
     }
 
     pub async fn player_ids_within(&self, player_id: &PlayerId, radius: f32) -> Vec<PlayerId> {
-        let position = {
+        let (position, floor_level) = {
             let players = self.players.read().await;
             let Some(player) = players.get(player_id) else {
                 return Vec::new();
             };
-            player.position
+            (player.position, player.floor_level)
         };
 
-        self.player_ids_within_position(&position, radius).await
+        self.player_ids_within_position(&position, floor_level, radius)
+            .await
     }
 
     #[allow(dead_code)]

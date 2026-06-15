@@ -199,6 +199,9 @@ async fn delete_house(
                 .game_state
                 .send_direct_message_to_players_within_position(
                     &h.origin,
+                    // Houses are surface structures: only floor-0 players see
+                    // house changes (dungeon players never should).
+                    0,
                     AGENT_EVENT_DELIVERY_RADIUS,
                     ServerMessage::HouseRemoved { house_id },
                     None,
@@ -258,6 +261,9 @@ async fn broadcast_house_change(
     game_state
         .send_direct_message_to_players_within_position(
             &house.origin,
+            // Houses live on the surface (floor 0); dungeon players are never
+            // recipients of house or terrain changes.
+            0,
             AGENT_EVENT_DELIVERY_RADIUS,
             house_msg,
             None,
@@ -268,6 +274,7 @@ async fn broadcast_house_change(
         game_state
             .send_direct_message_to_players_within_position(
                 &house.origin,
+                0,
                 AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::TreeTilesInvalidated {
                     tiles: changed_tree_tiles.to_vec(),

@@ -66,10 +66,20 @@ impl super::GameState {
 
         let player_snapshot = {
             let players = self.players.read().await;
-            players.get(player_id).map(|p| (p.name.clone(), p.level))
+            players
+                .get(player_id)
+                .map(|p| (p.name.clone(), p.level, p.floor_level))
         };
 
-        if let Some((player_name, player_level)) = player_snapshot {
+        if let Some((player_name, player_level, player_floor)) = player_snapshot {
+            // Attacker and target must share a floor. Delivery filtering keeps
+            // a player from ever learning about monsters on another floor, but
+            // reject here too so a stale monster id can't drive a cross-floor
+            // hit (e.g. the original bug: a surface guard striking a monster on
+            // the dungeon floor directly beneath it).
+            if player_floor != monster_floor_level {
+                return;
+            }
             info!("Player {} attacking monster {}", player_name, monster_id);
 
             // Unarmed falls back to D&D 5e improvised 1d2.
@@ -115,6 +125,7 @@ impl super::GameState {
             // Send attack result
             self.send_direct_message_to_players_within_position(
                 &monster_position,
+                monster_floor_level,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 ServerMessage::PlayerAttacked {
                     player_id: player_id.clone(),
@@ -162,6 +173,7 @@ impl super::GameState {
                     info!("Monster {} died, broadcasting dead state", monster_id);
                     self.send_direct_message_to_players_within_position(
                         &monster_position,
+                        monster_floor_level,
                         super::AGENT_EVENT_DELIVERY_RADIUS,
                         ServerMessage::MonsterDead {
                             monster_id: monster_id.clone(),
@@ -315,12 +327,14 @@ impl super::GameState {
                         if let Some(monster) = monsters.get(&id_to_remove) {
                             if monster.state == MonsterState::Dead {
                                 let monster_position = monster.position;
+                                let monster_floor = monster.floor_level;
                                 monsters.remove(&id_to_remove);
                                 drop(monsters);
                                 info!("Monster {} removed after 30s corpse time", id_to_remove);
                                 game_state
                                     .send_direct_message_to_players_within_position(
                                         &monster_position,
+                                        monster_floor,
                                         super::AGENT_EVENT_DELIVERY_RADIUS,
                                         ServerMessage::MonsterRemoved {
                                             monster_id: id_to_remove,
@@ -429,7 +443,7 @@ impl super::GameState {
         // Update player HP and combat timestamp
         let mut did_die = false;
         let mut current_health = 0;
-        let mut target_position = None;
+        let mut target_loc: Option<(Position, i8)> = None;
 
         {
             let mut players = self.players.write().await;
@@ -447,7 +461,7 @@ impl super::GameState {
                     }
                 }
                 current_health = player.health;
-                target_position = Some(player.position);
+                target_loc = Some((player.position, player.floor_level));
             }
         }
 
@@ -464,9 +478,10 @@ impl super::GameState {
             damage: result.damage,
             current_health,
         };
-        if let Some(target_position) = target_position {
+        if let Some((target_position, target_floor)) = target_loc {
             self.send_direct_message_to_players_within_position(
                 &target_position,
+                target_floor,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 attack_msg,
                 None,
@@ -480,9 +495,10 @@ impl super::GameState {
         if did_die {
             let dead_player_id = target_player_id.to_string();
             self.apply_player_death_penalty(&dead_player_id).await;
-            if let Some(target_position) = target_position {
+            if let Some((target_position, target_floor)) = target_loc {
                 self.send_direct_message_to_players_within_position(
                     &target_position,
+                    target_floor,
                     super::AGENT_EVENT_DELIVERY_RADIUS,
                     ServerMessage::PlayerDead {
                         player_id: dead_player_id,
@@ -540,8 +556,10 @@ impl super::GameState {
                         if player.health != old_health {
                             regen_dirty.push(player_id.clone());
                             let position = player.position;
+                            let floor_level = player.floor_level;
                             regen_messages.push((
                                 position,
+                                floor_level,
                                 ServerMessage::PlayerHealthUpdate {
                                     player_id: player_id.clone(),
                                     health: player.health,
@@ -553,9 +571,10 @@ impl super::GameState {
                 }
             }
         }
-        for (position, msg) in regen_messages {
+        for (position, floor_level, msg) in regen_messages {
             self.send_direct_message_to_players_within_position(
                 &position,
+                floor_level,
                 super::AGENT_EVENT_DELIVERY_RADIUS,
                 msg,
                 None,

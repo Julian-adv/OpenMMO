@@ -29,6 +29,22 @@ fn make_player(id: &str, x: f32, z: f32) -> Player {
     }
 }
 
+fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::Monster {
+    crate::types::Monster {
+        id: id.to_string(),
+        monster_type: "test_monster".to_string(),
+        position,
+        rotation: 0.0,
+        state: MonsterState::Idle,
+        owner_id: None,
+        health: 10,
+        max_health: 10,
+        floor_level,
+        level_override: None,
+        last_attack_at: 0,
+    }
+}
+
 fn make_test_game_state(test_name: &str) -> GameState {
     let housing_dir = std::env::temp_dir().join(format!(
         "onlinerpg_{test_name}_housing_{}",
@@ -239,19 +255,7 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
         let mut monsters = game_state.monsters.write().await;
         monsters.insert(
             "monster_a".to_string(),
-            crate::types::Monster {
-                id: "monster_a".to_string(),
-                monster_type: "test_monster".to_string(),
-                position: entity_position,
-                rotation: 0.0,
-                state: MonsterState::Idle,
-                owner_id: None,
-                health: 10,
-                max_health: 10,
-                floor_level: 0,
-                level_override: None,
-                last_attack_at: 0,
-            },
+            make_monster("monster_a", entity_position, 0),
         );
     }
 
@@ -303,6 +307,116 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
             "Expected self PlayerMoved after AOI snapshot, got {:?}",
             other
         ),
+    }
+}
+
+#[tokio::test]
+async fn monster_events_do_not_cross_floors() {
+    let game_state = make_test_game_state("monster_floor_segregation");
+
+    // A surface guard and a dungeon delver share the exact XZ footprint: the
+    // guard stands directly above the dungeon floor the delver is on.
+    let mut guard = make_player("guard", 0.0, 0.0);
+    guard.floor_level = 0;
+    let mut delver = make_player("delver", 0.0, 0.0);
+    delver.floor_level = -1;
+    game_state.add_player(guard).await;
+    game_state.add_player(delver).await;
+
+    // Channels registered after join so the AOI snapshots don't pollute them.
+    let mut guard_rx = game_state
+        .register_direct_channel(&"guard".to_string())
+        .await;
+    let mut delver_rx = game_state
+        .register_direct_channel(&"delver".to_string())
+        .await;
+
+    let monster_pos = Position {
+        x: 0.0,
+        y: -40.0,
+        z: 0.0,
+    };
+    {
+        let mut monsters = game_state.monsters.write().await;
+        monsters.insert(
+            "dungeon_monster".to_string(),
+            make_monster("dungeon_monster", monster_pos, -1),
+        );
+    }
+
+    game_state
+        .update_monster_position(
+            "dungeon_monster".to_string(),
+            monster_pos,
+            0.0,
+            MonsterState::Walk,
+            monster_pos,
+        )
+        .await;
+
+    // Same-floor delver sees the movement; the surface guard above never does.
+    match delver_rx.try_recv() {
+        Ok(ServerMessage::MonsterMoved { monster_id, .. }) => {
+            assert_eq!(monster_id, "dungeon_monster");
+        }
+        other => panic!(
+            "Expected MonsterMoved for same-floor delver, got {:?}",
+            other
+        ),
+    }
+    match guard_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!(
+            "Surface guard must not receive dungeon monster events, got {:?}",
+            other
+        ),
+    }
+}
+
+#[tokio::test]
+async fn cross_floor_player_attack_is_rejected() {
+    let game_state = make_test_game_state("cross_floor_attack");
+
+    let mut guard = make_player("guard", 0.0, 0.0);
+    guard.floor_level = 0;
+    game_state.add_player(guard).await;
+    let mut guard_rx = game_state
+        .register_direct_channel(&"guard".to_string())
+        .await;
+
+    {
+        let mut monsters = game_state.monsters.write().await;
+        monsters.insert(
+            "dungeon_monster".to_string(),
+            make_monster(
+                "dungeon_monster",
+                Position {
+                    x: 0.0,
+                    y: -40.0,
+                    z: 0.0,
+                },
+                -1,
+            ),
+        );
+    }
+
+    game_state
+        .broadcast_player_attack(&"guard".to_string(), "dungeon_monster".to_string())
+        .await;
+
+    // The attack is dropped server-side: the monster keeps full HP and the
+    // attacker gets no PlayerAttacked echo.
+    let health = game_state
+        .monsters
+        .read()
+        .await
+        .get("dungeon_monster")
+        .map(|m| m.health)
+        .unwrap();
+    assert_eq!(health, 10, "cross-floor attack must not damage the monster");
+    match guard_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Expected no attack echo across floors, got {:?}", other),
     }
 }
 
