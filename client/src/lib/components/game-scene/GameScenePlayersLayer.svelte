@@ -16,7 +16,7 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
 
-  import { applyTorchFlickerWorld, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION, TORCH_SHADOW_FAR } from '../../utils/torchFlicker'
+  import { applyTorchFlickerWorld, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION, TORCH_SHADOW_FAR, TORCH_SHADOW_MAP_SIZE, TORCH_SHADOW_BIAS } from '../../utils/torchFlicker'
   import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
   import { dungeonManager } from '../../managers/dungeonManager'
@@ -299,11 +299,11 @@
       distance={TORCH_BASE_DISTANCE}
       decay={TORCH_BASE_DECAY}
       castShadow={torchLightCastsShadow}
-      shadow.mapSize.width={512}
-      shadow.mapSize.height={512}
+      shadow.mapSize.width={TORCH_SHADOW_MAP_SIZE}
+      shadow.mapSize.height={TORCH_SHADOW_MAP_SIZE}
       shadow.camera.near={1.5}
       shadow.camera.far={TORCH_SHADOW_FAR}
-      shadow.bias={-0.001}
+      shadow.bias={TORCH_SHADOW_BIAS}
       shadow.normalBias={0.005}
       shadow.radius={2}
     />

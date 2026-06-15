@@ -364,11 +364,7 @@ impl SharedState {
             ServerMessage::ChatMessage { player_id, .. } => {
                 if self_id == Some(player_id.as_str()) {
                     EventUrgency::Noise
-                } else if self
-                    .nearby_players
-                    .get(player_id)
-                    .is_some_and(|p| p.is_npc)
-                {
+                } else if self.nearby_players.get(player_id).is_some_and(|p| p.is_npc) {
                     EventUrgency::Routine
                 } else {
                     EventUrgency::Urgent

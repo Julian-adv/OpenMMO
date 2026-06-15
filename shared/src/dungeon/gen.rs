@@ -100,12 +100,21 @@ fn try_generate_floor(
         let hosts_shaft = rooms.len() == room_count - 1;
         let (w, d) = if hosts_shaft {
             if down_along_z {
-                (rng.gen_range(ROOM_MIN..=ROOM_MAX), rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX))
+                (
+                    rng.gen_range(ROOM_MIN..=ROOM_MAX),
+                    rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
+                )
             } else {
-                (rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX), rng.gen_range(ROOM_MIN..=ROOM_MAX))
+                (
+                    rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
+                    rng.gen_range(ROOM_MIN..=ROOM_MAX),
+                )
             }
         } else {
-            (rng.gen_range(ROOM_MIN..=ROOM_MAX), rng.gen_range(ROOM_MIN..=ROOM_MAX))
+            (
+                rng.gen_range(ROOM_MIN..=ROOM_MAX),
+                rng.gen_range(ROOM_MIN..=ROOM_MAX),
+            )
         };
         let room = place_room_free(rng, w, d, &rooms, &up_shaft)?;
         rooms.push(room);
@@ -115,7 +124,11 @@ fn try_generate_floor(
     let down_shaft = if is_last {
         None
     } else {
-        Some(place_shaft_in_room(rng, rooms.last().unwrap(), down_along_z))
+        Some(place_shaft_in_room(
+            rng,
+            rooms.last().unwrap(),
+            down_along_z,
+        ))
     };
 
     // Carve rooms, shafts, then room-chain corridors.
@@ -160,9 +173,15 @@ fn try_generate_floor(
 fn place_room_around_shaft(rng: &mut ChaCha8Rng, shaft: &StairShaft) -> Option<Room> {
     let r = shaft.rect();
     let (w, d) = if shaft.along_z {
-        (rng.gen_range(ROOM_MIN..=ROOM_MAX), rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX))
+        (
+            rng.gen_range(ROOM_MIN..=ROOM_MAX),
+            rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
+        )
     } else {
-        (rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX), rng.gen_range(ROOM_MIN..=ROOM_MAX))
+        (
+            rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
+            rng.gen_range(ROOM_MIN..=ROOM_MAX),
+        )
     };
 
     let x = range_pick(rng, (r.x + r.w + 1 - w).max(1), (r.x - 1).min(GRID - 1 - w))?;
@@ -271,7 +290,11 @@ fn floor_is_connected(layout: &FloorLayout) -> bool {
         if let Some(ref down) = layout.down_shaft {
             if down.contains(x, z) {
                 let entry = down.entry_cell();
-                let on_entry_row = if down.along_z { z == entry.1 } else { x == entry.0 };
+                let on_entry_row = if down.along_z {
+                    z == entry.1
+                } else {
+                    x == entry.0
+                };
                 if !on_entry_row {
                     return true;
                 }

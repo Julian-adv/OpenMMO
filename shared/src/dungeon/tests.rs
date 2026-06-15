@@ -33,7 +33,10 @@ fn test_entrance() -> Position {
 fn depth_in_range() {
     for seed in 0..500u64 {
         let d = dungeon_depth(seed);
-        assert!((MIN_DEPTH..=MAX_DEPTH).contains(&d), "seed {seed}: depth {d}");
+        assert!(
+            (MIN_DEPTH..=MAX_DEPTH).contains(&d),
+            "seed {seed}: depth {d}"
+        );
     }
 }
 
@@ -92,7 +95,8 @@ fn structure_invariants_many_seeds() {
                     "seed {seed}: down shaft on final floor {depth}"
                 );
                 assert_eq!(
-                    floors[i + 1].up_shaft, down,
+                    floors[i + 1].up_shaft,
+                    down,
                     "seed {seed} depth {depth}: shaft misaligned"
                 );
             } else {
@@ -110,24 +114,30 @@ fn structure_invariants_many_seeds() {
                 shaft_cells.extend(shaft_footprint(d));
             }
             for (x, z) in &shaft_cells {
-                assert!(f.is_carved(*x, *z), "seed {seed} depth {depth}: shaft cell uncarved");
+                assert!(
+                    f.is_carved(*x, *z),
+                    "seed {seed} depth {depth}: shaft cell uncarved"
+                );
             }
 
             // Spawns on carved, non-shaft cells.
             for s in &f.spawns {
-                assert!(f.is_carved(s.x, s.z), "seed {seed} depth {depth}: spawn off-grid");
+                assert!(
+                    f.is_carved(s.x, s.z),
+                    "seed {seed} depth {depth}: spawn off-grid"
+                );
                 if !s.is_boss {
                     assert!(
                         !f.up_shaft.contains(s.x, s.z)
-                            && !f.down_shaft.as_ref().is_some_and(|sh| sh.contains(s.x, s.z)),
+                            && !f
+                                .down_shaft
+                                .as_ref()
+                                .is_some_and(|sh| sh.contains(s.x, s.z)),
                         "seed {seed} depth {depth}: spawn in shaft"
                     );
                 }
             }
-            assert!(
-                !f.spawns.is_empty(),
-                "seed {seed} depth {depth}: no spawns"
-            );
+            assert!(!f.spawns.is_empty(), "seed {seed} depth {depth}: no spawns");
         }
 
         // First floor's up shaft entry lands on the grid center (entrance).
@@ -199,7 +209,11 @@ fn full_descent_path_through_passability() {
                 res.found,
                 "seed {seed} depth {}: arrival → {} unreachable",
                 f.depth,
-                if f.down_shaft.is_some() { "down stairs" } else { "chest" }
+                if f.down_shaft.is_some() {
+                    "down stairs"
+                } else {
+                    "chest"
+                }
             );
         }
     }

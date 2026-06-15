@@ -237,8 +237,8 @@ mod tests {
 
         // Owning a torch removes it from the wants; owning both removes the
         // whole section — the temptation disappears from the prompt.
-        let section = resident_trade_prompt_for("Karl", &bag(&["torch"]))
-            .expect("Karl still wants a dagger");
+        let section =
+            resident_trade_prompt_for("Karl", &bag(&["torch"])).expect("Karl still wants a dagger");
         assert!(!section.contains("torch ("));
         assert!(section.contains("dagger"));
         assert!(resident_trade_prompt_for("Karl", &bag(&["torch", "dagger"])).is_none());

@@ -545,7 +545,9 @@ async fn sell_item_applies_deal_bonus() {
         .await;
 
     // Sell rate 40% with a +25% bonus: 10000 * 0.4 * 1.25 = 5000.
-    game_state.sell_item(&"buyer".to_string(), "npc_rica", 7).await;
+    game_state
+        .sell_item(&"buyer".to_string(), "npc_rica", 7)
+        .await;
     assert_eq!(
         game_state.get_player_gold(&"buyer".to_string()).await,
         5_000
@@ -608,16 +610,12 @@ async fn setup_resident_trade(
 #[tokio::test]
 async fn resident_buys_wishlist_item_at_premium_from_wallet() {
     let game_state = make_test_game_state("resident_sell");
-    setup_resident_trade(
-        &game_state,
-        10_000,
-        vec![],
-        vec![bag_item(7, "torch", 1)],
-    )
-    .await;
+    setup_resident_trade(&game_state, 10_000, vec![], vec![bag_item(7, "torch", 1)]).await;
 
     // Torch base 50 at Karl's 120% wishlist rate → 60.
-    game_state.sell_item(&"seller".to_string(), "npc_karl", 7).await;
+    game_state
+        .sell_item(&"seller".to_string(), "npc_karl", 7)
+        .await;
     assert_eq!(game_state.get_player_gold(&"seller".to_string()).await, 60);
     assert_eq!(
         game_state.get_player_gold(&"npc_karl".to_string()).await,
@@ -645,7 +643,9 @@ async fn resident_rejects_items_off_the_wishlist() {
         .register_direct_channel(&"seller".to_string())
         .await;
 
-    game_state.sell_item(&"seller".to_string(), "npc_karl", 7).await;
+    game_state
+        .sell_item(&"seller".to_string(), "npc_karl", 7)
+        .await;
 
     assert_eq!(game_state.get_player_gold(&"seller".to_string()).await, 0);
     match seller_rx.try_recv() {
@@ -667,10 +667,15 @@ async fn resident_wallet_caps_purchases() {
         .register_direct_channel(&"seller".to_string())
         .await;
 
-    game_state.sell_item(&"seller".to_string(), "npc_karl", 7).await;
+    game_state
+        .sell_item(&"seller".to_string(), "npc_karl", 7)
+        .await;
 
     assert_eq!(game_state.get_player_gold(&"seller".to_string()).await, 0);
-    assert_eq!(game_state.get_player_gold(&"npc_karl".to_string()).await, 59);
+    assert_eq!(
+        game_state.get_player_gold(&"npc_karl".to_string()).await,
+        59
+    );
     match seller_rx.try_recv() {
         Ok(ServerMessage::TradeError { message }) => {
             assert!(message.contains("afford"), "got: {message}")
@@ -706,7 +711,10 @@ async fn resident_sells_stock_but_keeps_wishlist_items() {
         game_state.get_player_gold(&"seller".to_string()).await,
         6_500
     );
-    assert_eq!(game_state.get_player_gold(&"npc_karl".to_string()).await, 3_500);
+    assert_eq!(
+        game_state.get_player_gold(&"npc_karl".to_string()).await,
+        3_500
+    );
     {
         let inventories = game_state.inventories.read().await;
         assert_eq!(inventories["seller"].bag.len(), 1);
@@ -750,7 +758,9 @@ async fn resident_shop_state_reports_wishlist_and_stock() {
         .register_direct_channel(&"seller".to_string())
         .await;
 
-    game_state.open_shop(&"seller".to_string(), "npc_karl").await;
+    game_state
+        .open_shop(&"seller".to_string(), "npc_karl")
+        .await;
 
     match seller_rx.try_recv() {
         Ok(ServerMessage::ShopState {

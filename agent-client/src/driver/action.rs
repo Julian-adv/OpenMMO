@@ -62,11 +62,7 @@ pub(super) enum AgentAction {
         /// "buy" (player buys from you, default) or "sell" (player sells to you).
         #[serde(default)]
         kind: Option<String>,
-        #[serde(
-            alias = "modifier",
-            alias = "modifier_percent",
-            alias = "discount_pct"
-        )]
+        #[serde(alias = "modifier", alias = "modifier_percent", alias = "discount_pct")]
         modifier_pct: i32,
         #[serde(default)]
         reason: Option<String>,
@@ -219,9 +215,7 @@ mod tests {
 
     #[test]
     fn move_parses_character_target() {
-        let action = parse_single_action(
-            r#"{"actions": [{"type": "move", "target": "Karl"}]}"#,
-        );
+        let action = parse_single_action(r#"{"actions": [{"type": "move", "target": "Karl"}]}"#);
         let AgentAction::Move { target, .. } = action else {
             panic!("expected Move");
         };
@@ -230,9 +224,7 @@ mod tests {
 
     #[test]
     fn move_target_accepts_player_alias() {
-        let action = parse_single_action(
-            r#"{"actions": [{"type": "move", "player": "Karl"}]}"#,
-        );
+        let action = parse_single_action(r#"{"actions": [{"type": "move", "player": "Karl"}]}"#);
         let AgentAction::Move { target, .. } = action else {
             panic!("expected Move");
         };

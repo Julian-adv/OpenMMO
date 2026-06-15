@@ -232,11 +232,7 @@ impl super::GameState {
     /// wishlist. Wishlist purchases are kept (never resold) so the
     /// buy/sell item sets stay disjoint — no money pump is possible even
     /// though the wishlist rate exceeds the sale price.
-    async fn resident_stock(
-        &self,
-        npc_player_id: &str,
-        def: &NpcDefinition,
-    ) -> Vec<StockEntry> {
+    async fn resident_stock(&self, npc_player_id: &str, def: &NpcDefinition) -> Vec<StockEntry> {
         let inventories = self.inventories.read().await;
         let Some(inv) = inventories.get(npc_player_id) else {
             return Vec::new();
@@ -459,8 +455,14 @@ impl super::GameState {
             self.send_gold_update(&npc_player_id.to_string()).await;
         }
         let player_name = self.player_name_of(player_id).await;
-        self.send_trade_notice(npc_player_id, player_name, item_def_id, DealKind::Buy, price)
-            .await;
+        self.send_trade_notice(
+            npc_player_id,
+            player_name,
+            item_def_id,
+            DealKind::Buy,
+            price,
+        )
+        .await;
     }
 
     /// Sell one unit of a bag item to a trading NPC. Merchants pay
@@ -515,7 +517,11 @@ impl super::GameState {
         let deal = self
             .take_deal(player_id, &npc_name, &item_def_id, DealKind::Sell)
             .await;
-        let payout = sell_payout(base_price, rate, deal.as_ref().map_or(0, |d| d.modifier_pct));
+        let payout = sell_payout(
+            base_price,
+            rate,
+            deal.as_ref().map_or(0, |d| d.modifier_pct),
+        );
 
         let item_weight = self.item_defs.weight(&item_def_id);
         let npc_max_weight = self.max_carry_weight(&npc_player_id.to_string()).await;
@@ -526,7 +532,14 @@ impl super::GameState {
             if !gold_map.contains_key(player_id) {
                 drop(gold_map);
                 return self
-                    .fail_trade(player_id, &npc_name, &item_def_id, DealKind::Sell, deal, None)
+                    .fail_trade(
+                        player_id,
+                        &npc_name,
+                        &item_def_id,
+                        DealKind::Sell,
+                        deal,
+                        None,
+                    )
                     .await;
             }
             // Residents pay out of a real wallet; merchants out of thin air.
@@ -573,7 +586,14 @@ impl super::GameState {
                     drop(inventories);
                     drop(gold_map);
                     return self
-                        .fail_trade(player_id, &npc_name, &item_def_id, DealKind::Sell, deal, None)
+                        .fail_trade(
+                            player_id,
+                            &npc_name,
+                            &item_def_id,
+                            DealKind::Sell,
+                            deal,
+                            None,
+                        )
                         .await;
                 };
                 if self.calc_total_weight(npc_inv) + item_weight > npc_max_weight {

@@ -76,11 +76,13 @@ impl GameState {
             layouts.len()
         );
         let mut dungeons = self.dungeons.write().await;
-        dungeons.entry(entrance_id.to_string()).or_insert(DungeonRuntime {
-            layouts,
-            floors: HashMap::new(),
-            chest_opened_at: HashMap::new(),
-        });
+        dungeons
+            .entry(entrance_id.to_string())
+            .or_insert(DungeonRuntime {
+                layouts,
+                floors: HashMap::new(),
+                chest_opened_at: HashMap::new(),
+            });
     }
 
     /// Open the final-floor treasure chest: requires standing next to it
@@ -123,15 +125,11 @@ impl GameState {
                 let dz = player_pos.z - chest_pos.z;
                 if dx * dx + dz * dz > CHEST_INTERACT_RANGE * CHEST_INTERACT_RANGE {
                     Some("Too far from the chest")
-                } else if rt
-                    .floors
-                    .get(&total)
-                    .is_some_and(|fr| {
-                        fr.slots
-                            .iter()
-                            .any(|s| s.is_boss && s.alive_monster_id.as_ref().is_some_and(|id| !id.is_empty()))
+                } else if rt.floors.get(&total).is_some_and(|fr| {
+                    fr.slots.iter().any(|s| {
+                        s.is_boss && s.alive_monster_id.as_ref().is_some_and(|id| !id.is_empty())
                     })
-                {
+                }) {
                     Some("The guardian still lives")
                 } else if rt
                     .chest_opened_at
@@ -168,7 +166,9 @@ impl GameState {
             use rand::seq::SliceRandom;
             use rand::Rng;
             let mut rng = rand::thread_rng();
-            let mut pool = self.item_defs.equipment_ids_with_min_price(CHEST_ITEM_MIN_PRICE);
+            let mut pool = self
+                .item_defs
+                .equipment_ids_with_min_price(CHEST_ITEM_MIN_PRICE);
             pool.shuffle(&mut rng);
             let count = rng.gen_range(2..=3).min(pool.len());
             let items: Vec<String> = pool.into_iter().take(count).collect();
@@ -402,10 +402,7 @@ impl GameState {
                     out
                 };
                 for monster in reassigned {
-                    info!(
-                        "Dungeon monster {} reassigned to {}",
-                        monster.id, new_owner
-                    );
+                    info!("Dungeon monster {} reassigned to {}", monster.id, new_owner);
                     self.send_direct_message(
                         &new_owner,
                         ServerMessage::MonsterAssigned { monster },
@@ -462,7 +459,8 @@ impl GameState {
                 .collect()
         };
         for (entrance_id, depth, owner) in occupied {
-            self.populate_dungeon_floor(&entrance_id, depth, &owner).await;
+            self.populate_dungeon_floor(&entrance_id, depth, &owner)
+                .await;
         }
     }
 

@@ -227,13 +227,8 @@ async fn chase_target(state: &Arc<Mutex<SharedState>>, target: &ChaseTarget<'_>)
                 return ChaseResult::Lost;
             }
 
-            let target_shift = PlanarDelta::xz(
-                last_target_x,
-                last_target_z,
-                target_pos.x,
-                target_pos.z,
-            )
-            .dist;
+            let target_shift =
+                PlanarDelta::xz(last_target_x, last_target_z, target_pos.x, target_pos.z).dist;
             let needs_repath = path_waypoints.is_empty()
                 || path_index >= path_waypoints.len()
                 || target_shift > REROUTE_THRESHOLD;

@@ -35,9 +35,14 @@ impl super::GameState {
                 .values()
                 .filter(|p| p.is_npc)
                 .filter_map(|p| {
-                    npc_defs()
-                        .get_trader_by_npc_name(&p.name)
-                        .map(|def| (p.id.clone(), p.name.clone(), def.salary_per_day, def.wallet_cap))
+                    npc_defs().get_trader_by_npc_name(&p.name).map(|def| {
+                        (
+                            p.id.clone(),
+                            p.name.clone(),
+                            def.salary_per_day,
+                            def.wallet_cap,
+                        )
+                    })
                 })
                 .collect()
         };

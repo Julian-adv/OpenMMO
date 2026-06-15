@@ -10,6 +10,14 @@ export const TORCH_BASE_DECAY = 1.2
  *  precision, which lets the shadow bias stay small and avoids peter-panning
  *  (shadows floating off the floor). */
 export const TORCH_SHADOW_FAR = 25
+/** Per-face resolution of the torch point light's cube shadow map. 1024 keeps
+ *  the far-plane texel (~2·far/res) small enough that contact shadows don't drop
+ *  out at range; raising it costs ~4× the per-frame depth pass (6 cube faces). */
+export const TORCH_SHADOW_MAP_SIZE = 1024
+/** Depth bias for the torch shadow. Kept tiny because the tight TORCH_SHADOW_FAR
+ *  and the dungeon geometry's own thickness already suppress acne; a larger
+ *  magnitude reintroduces peter-panning. */
+export const TORCH_SHADOW_BIAS = -0.0001
 export const TORCH_BASE_POSITION = { x: -0.5, y: 3.0, z: 0.3 } as const
 
 export interface TorchFlickerState {

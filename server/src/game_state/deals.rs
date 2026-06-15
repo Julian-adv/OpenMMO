@@ -254,7 +254,10 @@ impl super::GameState {
                     return reject("haggling cooldown is active for this player").await;
                 }
             }
-            let npc_granted = ledgers.npc_granted.entry(merchant_name.clone()).or_default();
+            let npc_granted = ledgers
+                .npc_granted
+                .entry(merchant_name.clone())
+                .or_default();
             if *npc_granted + cost > MERCHANT_DAILY_DISCOUNT_BUDGET {
                 drop(ledgers);
                 return reject("your discount budget for today is exhausted").await;
@@ -266,7 +269,10 @@ impl super::GameState {
                 .or_default();
             if *player_received + cost > PLAYER_DAILY_DISCOUNT_CAP {
                 // Roll back the merchant ledger we just charged.
-                *ledgers.npc_granted.entry(merchant_name.clone()).or_default() -= cost;
+                *ledgers
+                    .npc_granted
+                    .entry(merchant_name.clone())
+                    .or_default() -= cost;
                 drop(ledgers);
                 return reject("this player has reached today's discount limit").await;
             }

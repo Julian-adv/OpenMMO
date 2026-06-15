@@ -65,6 +65,17 @@ export const DUNGEON_PILLAR_TEXTURE_IDX = HOUSING_TEXTURES.findIndex(
   (e) => e.glb === 'housing/medieval_blocks_03_1k'
 )
 
+// Dungeon stone needs no explicit shadowSide: the housing materials are
+// `side: FrontSide`, so three.js derives BackSide, and each solid's own thickness
+// (0.15m slab, 0.1m walls) self-biases away acne. (FrontSide was tried to anchor
+// contact shadows but acned the walls.) BackSide records the far face, so where a
+// caster's bottom sits exactly at floor level the shadow peter-pans (no contact
+// darkening); lifting the caster a hair pulls that recorded depth above the floor.
+/** Vertical lift (m) off the floor for floor-contacting dungeon casters (stair
+ *  prisms, back walls). The base seam is sub-texel under PCF, and behind a back
+ *  wall is uncarved rock, so the gap reveals only void, never lit floor. */
+const SHADOW_CONTACT_LIFT = 0.02
+
 /** Name of the up-shaft stairs sub-group inside a floor group; the dungeon
  *  layer looks it up to fade it to a ghost when it occludes the player. */
 export const UP_SHAFT_GROUP_NAME = 'upShaftStairs'
@@ -813,7 +824,7 @@ export function buildDungeonFloorGroup(
           ctx.wallHeight,
           0.1,
           runStart + len / 2,
-          ctx.wallHeight / 2,
+          ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT,
           z - 0.05
         )
         runStart = -1
@@ -835,7 +846,7 @@ export function buildDungeonFloorGroup(
           ctx.wallHeight,
           len,
           x + 1 + 0.05,
-          ctx.wallHeight / 2,
+          ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT,
           runStart + len / 2
         )
         runStart = -1
@@ -854,7 +865,9 @@ export function buildDungeonFloorGroup(
     addBox(entries, DUNGEON_FLOOR_TEXTURE_IDX, 0.98, 0.04, 0.1, x, 0.45, z)
   }
 
-  // --- Down shaft (0 → -floorHeight) merges with the floor geometry.
+  // --- Down shaft (0 → -floorHeight) merges with the floor geometry, so it
+  // shares the slab's y=0 and isn't lifted for shadow contact like the up-shaft;
+  // any peter-panning at the hole's top edge is deferred (split it out to fix).
   if (down) {
     collectShaftStairs(entries, down, ctx, 0, -ctx.floorHeight, false, true)
   }
@@ -882,6 +895,9 @@ export function buildDungeonFloorGroup(
   )
   const upGroup = new THREE.Group()
   upGroup.name = UP_SHAFT_GROUP_NAME
+  // Lift off the floor (SHADOW_CONTACT_LIFT); collision uses the server ramp Y, so
+  // the sub-centimetre visual shift doesn't affect it.
+  upGroup.position.y = SHADOW_CONTACT_LIFT
   addMergedMeshes(upGroup, upEntries)
   group.add(upGroup)
 

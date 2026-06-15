@@ -142,11 +142,7 @@ impl StairShaft {
 
     /// Cell at run position `i` (0 = entry end), lateral offset `w`.
     pub fn step_cell(&self, i: i32, w: i32) -> (i32, i32) {
-        let run = if self.reversed {
-            SHAFT_LEN - 1 - i
-        } else {
-            i
-        };
+        let run = if self.reversed { SHAFT_LEN - 1 - i } else { i };
         if self.along_z {
             (self.x + w, self.z + run)
         } else {
@@ -257,12 +253,7 @@ pub fn spawn_table(depth: u8) -> &'static [(&'static str, u32)] {
     match depth {
         1..=2 => &[("kobold", 1)],
         3..=4 => &[("kobold", 2), ("goblin", 3)],
-        5..=8 => &[
-            ("goblin", 3),
-            ("scp939", 2),
-            ("orc", 2),
-            ("orc_female", 1),
-        ],
+        5..=8 => &[("goblin", 3), ("scp939", 2), ("orc", 2), ("orc_female", 1)],
         _ => &[("orc", 3), ("orc_female", 2), ("scp939", 1)],
     }
 }

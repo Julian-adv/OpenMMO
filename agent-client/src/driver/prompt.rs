@@ -311,8 +311,7 @@ fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
             match kind {
                 onlinerpg_shared::messages::DealKind::Buy =>
                     format!("bought {item_def_id} from you"),
-                onlinerpg_shared::messages::DealKind::Sell =>
-                    format!("sold you {item_def_id}"),
+                onlinerpg_shared::messages::DealKind::Sell => format!("sold you {item_def_id}"),
             },
             crate::shop_info::format_price(*price),
             crate::shop_info::format_price(*npc_gold),
