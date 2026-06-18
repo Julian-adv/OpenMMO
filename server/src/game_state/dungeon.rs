@@ -236,84 +236,21 @@ impl GameState {
         depth: u8,
         prop_id: u32,
     ) {
-        if depth == 0 {
-            return;
-        }
-        let Some(entrance) = self.dungeon_defs.get(entrance_id).cloned() else {
-            return;
-        };
-        self.ensure_dungeon_runtime(entrance_id).await;
-
-        let (player_pos, player_floor) = {
-            let players = self.players.read().await;
-            match players.get(player_id) {
-                Some(p) if p.health > 0 => (p.position.clone(), p.floor_level),
-                _ => return,
-            }
-        };
-
-        // Validate against the layout + claim the break under the dungeon lock.
-        // `Some(Err)` → reject with a reason, `Some(Ok)` → newly broken,
-        // `None` → already broken (silent no-op).
-        let outcome: Option<Result<(), &str>> = {
-            let mut dungeons = self.dungeons.write().await;
-            let Some(rt) = dungeons.get_mut(entrance_id) else {
-                return;
-            };
-            let prop = match rt
-                .layouts
-                .get((depth - 1) as usize)
-                .and_then(|l| l.props.get(prop_id as usize))
-            {
-                Some(p) => *p,
-                None => return,
-            };
-            // Only barrels and crates are destructible (chests are not).
-            if !matches!(prop.kind, PropKind::Barrel | PropKind::Crate) {
-                return;
-            }
-            if player_floor != -(depth as i8) {
-                Some(Err("You must be on the prop's floor"))
-            } else {
-                let prop_pos = cell_center(&entrance.position(), depth, (prop.x, prop.z));
-                let dx = player_pos.x - prop_pos.x;
-                let dz = player_pos.z - prop_pos.z;
-                if dx * dx + dz * dz > PROP_INTERACT_RANGE * PROP_INTERACT_RANGE {
-                    Some(Err("Too far from the prop"))
-                } else if rt.broken_props.entry(depth).or_default().insert(prop_id) {
-                    Some(Ok(()))
-                } else {
-                    None
-                }
-            }
-        };
-
-        match outcome {
-            Some(Err(reason)) => {
-                self.send_direct_message(
-                    player_id,
-                    ServerMessage::InteractionRejected {
-                        reason: reason.to_string(),
-                    },
-                )
-                .await;
-            }
-            Some(Ok(())) => {
-                self.send_direct_message_to_players_within_position(
-                    &player_pos,
-                    player_floor,
-                    super::AGENT_EVENT_DELIVERY_RADIUS,
-                    ServerMessage::DungeonPropBroken {
-                        entrance_id: entrance_id.to_string(),
-                        depth,
-                        prop_id,
-                    },
-                    None,
-                )
-                .await;
-            }
-            None => {}
-        }
+        self.interact_with_dungeon_prop(
+            player_id,
+            entrance_id,
+            depth,
+            prop_id,
+            "prop",
+            |kind| matches!(kind, PropKind::Barrel | PropKind::Crate),
+            |rt| &mut rt.broken_props,
+            ServerMessage::DungeonPropBroken {
+                entrance_id: entrance_id.to_string(),
+                depth,
+                prop_id,
+            },
+        )
+        .await;
     }
 
     /// Open an interactive chest prop: requires standing next to it on its
@@ -327,6 +264,42 @@ impl GameState {
         entrance_id: &str,
         depth: u8,
         prop_id: u32,
+    ) {
+        self.interact_with_dungeon_prop(
+            player_id,
+            entrance_id,
+            depth,
+            prop_id,
+            "chest",
+            |kind| matches!(kind, PropKind::Chest),
+            |rt| &mut rt.opened_props,
+            ServerMessage::DungeonPropOpened {
+                entrance_id: entrance_id.to_string(),
+                depth,
+                prop_id,
+            },
+        )
+        .await;
+    }
+
+    /// Shared handler for a click-to-interact dungeon prop (break a barrel/crate
+    /// or open a chest). Validates the prop's kind, the player's floor and
+    /// proximity to it, then claims the interaction in the runtime set chosen by
+    /// `select_state`. On a fresh claim it broadcasts `on_success` to nearby
+    /// players (the actor included); a failed check rejects the actor with a
+    /// reason built from `noun`. Silent no-op for a missing dungeon/prop/player,
+    /// the wrong prop kind, or an already-claimed prop.
+    #[allow(clippy::too_many_arguments)]
+    async fn interact_with_dungeon_prop(
+        &self,
+        player_id: &PlayerId,
+        entrance_id: &str,
+        depth: u8,
+        prop_id: u32,
+        noun: &str,
+        is_kind: impl Fn(PropKind) -> bool,
+        select_state: impl Fn(&mut DungeonRuntime) -> &mut HashMap<u8, HashSet<u32>>,
+        on_success: ServerMessage,
     ) {
         if depth == 0 {
             return;
@@ -344,10 +317,10 @@ impl GameState {
             }
         };
 
-        // Validate against the layout + claim the open under the dungeon lock.
-        // `Some(Err)` → reject with a reason, `Some(Ok)` → newly opened,
-        // `None` → already open (silent no-op).
-        let outcome: Option<Result<(), &str>> = {
+        // Validate against the layout + claim the interaction under the dungeon
+        // lock. `Some(Err)` → reject with a reason, `Some(Ok)` → newly claimed,
+        // `None` → already claimed (silent no-op).
+        let outcome: Option<Result<(), String>> = {
             let mut dungeons = self.dungeons.write().await;
             let Some(rt) = dungeons.get_mut(entrance_id) else {
                 return;
@@ -360,19 +333,18 @@ impl GameState {
                 Some(p) => *p,
                 None => return,
             };
-            // Only chests are openable (barrels/crates break instead).
-            if !matches!(prop.kind, PropKind::Chest) {
+            if !is_kind(prop.kind) {
                 return;
             }
             if player_floor != -(depth as i8) {
-                Some(Err("You must be on the chest's floor"))
+                Some(Err(format!("You must be on the {noun}'s floor")))
             } else {
                 let prop_pos = cell_center(&entrance.position(), depth, (prop.x, prop.z));
                 let dx = player_pos.x - prop_pos.x;
                 let dz = player_pos.z - prop_pos.z;
                 if dx * dx + dz * dz > PROP_INTERACT_RANGE * PROP_INTERACT_RANGE {
-                    Some(Err("Too far from the chest"))
-                } else if rt.opened_props.entry(depth).or_default().insert(prop_id) {
+                    Some(Err(format!("Too far from the {noun}")))
+                } else if select_state(rt).entry(depth).or_default().insert(prop_id) {
                     Some(Ok(()))
                 } else {
                     None
@@ -382,29 +354,57 @@ impl GameState {
 
         match outcome {
             Some(Err(reason)) => {
-                self.send_direct_message(
-                    player_id,
-                    ServerMessage::InteractionRejected {
-                        reason: reason.to_string(),
-                    },
-                )
-                .await;
+                self.send_direct_message(player_id, ServerMessage::InteractionRejected { reason })
+                    .await;
             }
             Some(Ok(())) => {
                 self.send_direct_message_to_players_within_position(
                     &player_pos,
                     player_floor,
                     super::AGENT_EVENT_DELIVERY_RADIUS,
-                    ServerMessage::DungeonPropOpened {
-                        entrance_id: entrance_id.to_string(),
-                        depth,
-                        prop_id,
-                    },
+                    on_success,
                     None,
                 )
                 .await;
             }
             None => {}
+        }
+    }
+
+    /// Debug helper: reset all destructible/openable prop state for a dungeon
+    /// instance and push empty snapshots to players currently on its floors.
+    pub async fn debug_reset_dungeon_props(&self, entrance_id: &str) {
+        if self.dungeon_defs.get(entrance_id).is_none() {
+            return;
+        }
+        self.ensure_dungeon_runtime(entrance_id).await;
+        let floor_players: Vec<(u8, Vec<PlayerId>)> = {
+            let mut dungeons = self.dungeons.write().await;
+            let Some(rt) = dungeons.get_mut(entrance_id) else {
+                return;
+            };
+            rt.broken_props.clear();
+            rt.opened_props.clear();
+            rt.floors
+                .iter()
+                .map(|(depth, floor)| (*depth, floor.players.iter().cloned().collect()))
+                .collect()
+        };
+
+        for (depth, players) in floor_players {
+            if players.is_empty() {
+                continue;
+            }
+            self.send_direct_message_to_players(
+                &players,
+                ServerMessage::DungeonPropsState {
+                    entrance_id: entrance_id.to_string(),
+                    depth,
+                    broken: Vec::new(),
+                    opened: Vec::new(),
+                },
+            )
+            .await;
         }
     }
 

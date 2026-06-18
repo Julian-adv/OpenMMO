@@ -143,6 +143,7 @@ export type ClientMessage =
   | { DebugTeleport: { position: Position } }
   | { DebugDropItem: { item_def_id: string } }
   | { DebugSetTime: { hour: number; minute: number } }
+  | { DebugResetDungeonProps: { entrance_id: string } }
   | { TorchToggle: { enabled: boolean } }
   | {
       ToggleDoor: {

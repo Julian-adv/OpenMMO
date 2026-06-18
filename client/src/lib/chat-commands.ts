@@ -85,6 +85,23 @@ const commands: Record<string, CommandHandler> = {
       return
     }
 
+    if (arg === 'resetprops' || arg === 'reset-props') {
+      const entranceId = dungeonManager.dungeonId
+      if (!entranceId) {
+        addChatMessage({
+          text: 'Dungeon props: no active dungeon',
+          sender: 'system',
+        })
+        return
+      }
+      networkManager.sendDebugResetDungeonProps(entranceId)
+      addChatMessage({
+        text: 'Dungeon props: reset requested',
+        sender: 'system',
+      })
+      return
+    }
+
     const requested = Math.max(1, parseInt(arg || '1', 10) || 1)
     if (!dungeonManager.active) {
       // Debug dungeon anchored at the player's current position.

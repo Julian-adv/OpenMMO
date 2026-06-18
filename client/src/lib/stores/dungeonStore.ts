@@ -28,3 +28,11 @@ export const dungeonDoorOpen = writable(false)
  * on `dungeonManager.brokenPropsForDepth(depth)`.
  */
 export const dungeonPropsRevision = writable(0)
+
+/**
+ * Bumped when an authoritative prop snapshot removes already-known broken/open
+ * state, e.g. the debug reset command. The render layer must rebuild props in
+ * that case because broken debris/open chest poses cannot be reconciled
+ * backwards in place.
+ */
+export const dungeonPropsResetRevision = writable(0)

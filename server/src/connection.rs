@@ -719,6 +719,14 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::DebugResetDungeonProps { entrance_id } => {
+            if state.player_id.is_some() {
+                game_state.debug_reset_dungeon_props(&entrance_id).await;
+            } else {
+                warn!("Received debug dungeon prop reset from client that is not in game");
+            }
+        }
+
         ClientMessage::TorchToggle { enabled } => {
             if let Some(id) = &state.player_id {
                 game_state.toggle_player_torch(id, enabled).await;

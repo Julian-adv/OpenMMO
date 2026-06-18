@@ -23,6 +23,7 @@ import {
   currentDungeonDepth,
   currentDungeonId,
   dungeonDoorOpen,
+  dungeonPropsResetRevision,
   dungeonPropsRevision,
 } from '../stores/dungeonStore'
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
@@ -120,6 +121,15 @@ const ENTRANCE_UNREGISTER_DIST = 120
 
 /** Shared immutable empty set returned for floors with no broken props. */
 const EMPTY_BROKEN: ReadonlySet<number> = new Set<number>()
+
+/** True if `prev` holds any member missing from `next` (the set shrank). */
+function hasRemovedMember(
+  prev: ReadonlySet<number>,
+  next: ReadonlySet<number>
+): boolean {
+  for (const id of prev) if (!next.has(id)) return true
+  return false
+}
 
 let consts: DungeonConstants | null = null
 
@@ -405,9 +415,17 @@ class DungeonManager {
     opened: number[]
   ) {
     if (entranceId !== this.id) return
-    this.brokenProps.set(depth, new Set(broken))
-    this.openedProps.set(depth, new Set(opened))
+    const previousBroken = this.brokenProps.get(depth) ?? EMPTY_BROKEN
+    const previousOpened = this.openedProps.get(depth) ?? EMPTY_BROKEN
+    const nextBroken = new Set(broken)
+    const nextOpened = new Set(opened)
+    const removedState =
+      hasRemovedMember(previousBroken, nextBroken) ||
+      hasRemovedMember(previousOpened, nextOpened)
+    this.brokenProps.set(depth, nextBroken)
+    this.openedProps.set(depth, nextOpened)
     this.applyBrokenPassability(depth)
+    if (removedState) dungeonPropsResetRevision.update((n) => n + 1)
     dungeonPropsRevision.update((n) => n + 1)
   }
 

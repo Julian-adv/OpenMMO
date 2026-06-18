@@ -130,6 +130,9 @@ pub enum ClientMessage {
         hour: u8,
         minute: u8,
     },
+    DebugResetDungeonProps {
+        entrance_id: String,
+    },
     TorchToggle {
         enabled: bool,
     },

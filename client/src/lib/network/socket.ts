@@ -436,6 +436,10 @@ class NetworkManager {
     this.sendMessage({ DebugSetTime: { hour, minute } })
   }
 
+  sendDebugResetDungeonProps(entranceId: string) {
+    this.sendMessage({ DebugResetDungeonProps: { entrance_id: entranceId } })
+  }
+
   // Item instance ids are assigned by the server, so invalid ids must never
   // be sent back over inventory-related messages.
   private isNetworkableInstanceId(

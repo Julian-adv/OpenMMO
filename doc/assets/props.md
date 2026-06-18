@@ -12,6 +12,7 @@
 - bridge_wood_long.glb https://sketchfab.com/3d-models/wooden-bridge-deep-27b22af7020c4755b5cb788d75db8ee7
 - signpost.glb https://sketchfab.com/3d-models/road-sign-blacksmiths-workshop-assets-3a230f0520034890931c32539955223a
 - dungeon objects https://sketchfab.com/3d-models/fps-dungeon-extras-87425249dded42aa891516c31a5b94cf
+- coins https://sketchfab.com/3d-models/coins-7367feabcd4c4b30a7ba64b95b76bee0
 
 ## House
 
