@@ -681,6 +681,14 @@ export function handleServerMessage(
       break
     }
 
+    case 'DungeonPropsState':
+      dungeonManager.setBrokenProps(data.entrance_id, data.depth, data.broken)
+      break
+
+    case 'DungeonPropBroken':
+      dungeonManager.markPropBroken(data.entrance_id, data.depth, data.prop_id)
+      break
+
     case 'HouseSpawned':
       housingManager.handleRemoteHouseSpawned(data.house)
       break

@@ -17,11 +17,13 @@ import {
   dungeon_add_passability,
   dungeon_remove_passability,
   dungeon_passability_floor_cells,
+  dungeon_apply_broken_props,
 } from '../wasm/onlinerpg_shared'
 import {
   currentDungeonDepth,
   currentDungeonId,
   dungeonDoorOpen,
+  dungeonPropsRevision,
 } from '../stores/dungeonStore'
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
 
@@ -56,6 +58,14 @@ export interface DungeonProp {
   stack: number
   /** Yaw in whole degrees (0..360). */
   rotation: number
+}
+
+/** A pending click-to-break: which prop, and the world XZ to close in on. */
+export interface PendingPropBreak {
+  depth: number
+  propId: number
+  x: number
+  z: number
 }
 
 export interface DungeonFloorLayout {
@@ -106,6 +116,9 @@ export const ENTRANCE_WALL_T = 0.25
 const ENTRANCE_REGISTER_DIST = 80
 /** Drop a surface-level dungeon registration beyond this distance (m). */
 const ENTRANCE_UNREGISTER_DIST = 120
+
+/** Shared immutable empty set returned for floors with no broken props. */
+const EMPTY_BROKEN: ReadonlySet<number> = new Set<number>()
 
 let consts: DungeonConstants | null = null
 
@@ -243,6 +256,13 @@ class DungeonManager {
   private layouts: DungeonFloorLayout[] = []
   /** Cached surface-opening rects per entrance id (see allEntranceHoleRects). */
   private entranceRectCache = new Map<string, DungeonRect>()
+  /** Broken props per depth (indices into that floor's `props`). Server-driven;
+   *  cleared on enter/exit since it's scoped to the active dungeon instance. */
+  private brokenProps = new Map<number, Set<number>>()
+  /** A barrel/crate the player clicked and is walking toward; the dungeon layer
+   *  fires the break once the player is within range (see GameSceneDungeonLayer
+   *  update). Cleared on arrival, a new movement click, or leaving the dungeon. */
+  private pendingBreakState: PendingPropBreak | null = null
 
   get active(): boolean {
     return this.id !== null
@@ -326,6 +346,7 @@ class DungeonManager {
     if (this.id) this.exit()
     this.layouts = dungeon_layout(id) as DungeonFloorLayout[]
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
+    this.brokenProps.clear()
     this.id = id
     this.entrance = entrance
     currentDungeonId.set(id)
@@ -338,9 +359,64 @@ class DungeonManager {
     this.id = null
     this.entrance = null
     this.layouts = []
+    this.brokenProps.clear()
+    this.pendingBreakState = null
     currentDungeonId.set(null)
     currentDungeonDepth.set(0)
     dungeonDoorOpen.set(false)
+  }
+
+  /** Prop indices broken on a floor (empty set when none/unknown). */
+  brokenPropsForDepth(depth: number): ReadonlySet<number> {
+    return this.brokenProps.get(depth) ?? EMPTY_BROKEN
+  }
+
+  /**
+   * Replace the broken-prop set for a floor from the server's on-entry
+   * snapshot, refresh that floor's passability and signal the render layer.
+   */
+  setBrokenProps(entranceId: string, depth: number, broken: number[]) {
+    if (entranceId !== this.id) return
+    this.brokenProps.set(depth, new Set(broken))
+    this.applyBrokenPassability(depth)
+    dungeonPropsRevision.update((n) => n + 1)
+  }
+
+  /**
+   * Record a single newly-broken prop (live break broadcast). No-op if already
+   * known broken, so a re-broadcast won't thrash the render layer.
+   */
+  markPropBroken(entranceId: string, depth: number, propId: number) {
+    if (entranceId !== this.id) return
+    let set = this.brokenProps.get(depth)
+    if (!set) {
+      set = new Set()
+      this.brokenProps.set(depth, set)
+    }
+    if (set.has(propId)) return
+    set.add(propId)
+    this.applyBrokenPassability(depth)
+    dungeonPropsRevision.update((n) => n + 1)
+  }
+
+  /** Rebuild a floor's wasm passability with its current broken set applied. */
+  private applyBrokenPassability(depth: number) {
+    if (!this.id) return
+    const set = this.brokenProps.get(depth)
+    const ids = set && set.size ? Uint32Array.from(set) : new Uint32Array(0)
+    dungeon_apply_broken_props(this.id, depth, ids)
+  }
+
+  get pendingBreak(): PendingPropBreak | null {
+    return this.pendingBreakState
+  }
+
+  setPendingBreak(pending: PendingPropBreak) {
+    this.pendingBreakState = pending
+  }
+
+  clearPendingBreak() {
+    this.pendingBreakState = null
   }
 
   setDepth(depth: number) {

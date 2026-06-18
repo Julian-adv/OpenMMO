@@ -134,6 +134,9 @@ export type ClientMessage =
   | { MonsterAttack: { monster_id: string; target_player_id: string } }
   | 'RequestRespawn'
   | { OpenDungeonChest: { entrance_id: string } }
+  | {
+      BreakDungeonProp: { entrance_id: string; depth: number; prop_id: number }
+    }
   | { DebugTeleport: { position: Position } }
   | { DebugDropItem: { item_def_id: string } }
   | { DebugSetTime: { hour: number; minute: number } }

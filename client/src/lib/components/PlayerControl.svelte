@@ -73,6 +73,7 @@
     ensureAttackState,
     transitionAttackToIdle,
   } from './player-control/fsm/combat'
+  import { buildAttackState } from './player-control/player-state-builders'
   import type {
     MovingControlState,
     PickingUpControlState,
@@ -90,10 +91,16 @@
     npcMeshes?: THREE.Object3D[]
     doorMeshes: THREE.Object3D[]
     objectMeshes: THREE.Object3D[]
+    propMeshes: THREE.Object3D[]
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, npcMeshes = [], doorMeshes, objectMeshes, attackCooldown }: Props = $props()
+  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, npcMeshes = [], doorMeshes, objectMeshes, propMeshes, attackCooldown }: Props = $props()
+
+  /** How far from a clicked barrel/crate the player stops while walking up to
+   *  break it — comfortably inside the layer's break trigger and the server's
+   *  range, and clear of the prop's solid cell. */
+  const PROP_APPROACH_STOP = 1.6
 
   let floorOffset = 0
   playerFloorOffset.subscribe((v) => (floorOffset = v))
@@ -139,6 +146,27 @@
     if (!jumpFeedbackTimer) return
     clearTimeout(jumpFeedbackTimer)
     jumpFeedbackTimer = null
+  }
+
+  // Prop-break swing: when the player reaches a clicked barrel/crate, swing the
+  // sword once and break it at the contact frame, then drop back to idle after
+  // the follow-through. Its own impact delay (a touch later than the monster
+  // flinch's 540ms) so the prop shatters right as the blade lands.
+  const PROP_SWING_IMPACT_MS = 660
+  const PROP_SWING_RETURN_MS = 1000
+  let propSwingCounter = 0
+  let propBreakTimer: ReturnType<typeof setTimeout> | null = null
+  let propSwingIdleTimer: ReturnType<typeof setTimeout> | null = null
+
+  function clearPropSwingTimers() {
+    if (propBreakTimer) {
+      clearTimeout(propBreakTimer)
+      propBreakTimer = null
+    }
+    if (propSwingIdleTimer) {
+      clearTimeout(propSwingIdleTimer)
+      propSwingIdleTimer = null
+    }
   }
 
   function enqueuePlayerControlEvent(event: PlayerControlEvent) {
@@ -720,6 +748,9 @@
     clickPosition: Position,
     options: { pickupAfterArrival?: number | null } = {}
   ) {
+    // Any fresh movement cancels a pending prop break (breakProp re-arms it
+    // after its own walk-up call below).
+    dungeonManager.clearPendingBreak()
     const pickupAfterArrival = options.pickupAfterArrival ?? null
 
     runMoveRequest({
@@ -824,6 +855,73 @@
     })
   }
 
+  /** Click a barrel/crate: walk up to it (if needed), then arm the break.
+   *  The dungeon layer fires it via the server once the player is in range. */
+  function breakProp(intent: Extract<ClickIntent, { type: 'break_prop' }>) {
+    if (!currentPlayer) return
+    combatController.cancelCombat()
+    const dx = currentPlayer.position.x - intent.position.x
+    const dz = currentPlayer.position.z - intent.position.z
+    const dist = Math.sqrt(dx * dx + dz * dz)
+    if (dist > PROP_APPROACH_STOP) {
+      // Walk toward the prop, stopping just short of it (it's a solid pillar).
+      const d = dist || 1
+      handleClickToMove({
+        x: intent.position.x + (dx / d) * PROP_APPROACH_STOP,
+        y: intent.position.y,
+        z: intent.position.z + (dz / d) * PROP_APPROACH_STOP,
+      })
+    }
+    dungeonManager.setPendingBreak({
+      depth: intent.depth,
+      propId: intent.propId,
+      x: intent.position.x,
+      z: intent.position.z,
+    })
+  }
+
+  /** The player has walked up to a clicked barrel/crate: swing the sword once
+   *  and break it at the contact frame. Called from the dungeon layer the frame
+   *  the player comes into range (see GameSceneDungeonLayer onPropReady). */
+  export function swingAndBreakProp(
+    entranceId: string,
+    depth: number,
+    propId: number,
+    x: number,
+    z: number
+  ) {
+    if (!currentPlayer) return
+    // Don't interrupt an in-flight swing (the layer can fire across frames).
+    if (playerState.state === 'attack' && propBreakTimer) return
+    combatController.cancelCombat()
+    clearPropSwingTimers()
+
+    // Face the prop, stop, and play one slash. State 'attack' selects the slash
+    // clip; a changed attackCounter re-triggers it (our own counter since this
+    // swing isn't combat-driven). currentSpeed 0 keeps the movement tick from
+    // projecting the state back to idle while we hold the swing.
+    const dx = x - currentPlayer.position.x
+    const dz = z - currentPlayer.position.z
+    if (dx !== 0 || dz !== 0) playerRotation = Math.atan2(dx, dz)
+    currentSpeed = 0
+    propSwingCounter += 1
+    setPlayerState({
+      ...buildAttackState(playerState, playerRotation),
+      attackCounter: propSwingCounter,
+    })
+    transitionTo('attacking')
+    sendPlayerMove(currentPlayer.position, playerRotation) // others see the facing
+
+    propBreakTimer = setTimeout(() => {
+      propBreakTimer = null
+      networkManager.sendBreakDungeonProp(entranceId, depth, propId)
+    }, PROP_SWING_IMPACT_MS)
+    propSwingIdleTimer = setTimeout(() => {
+      propSwingIdleTimer = null
+      if (playerState.state === 'attack') transitionToIdle()
+    }, PROP_SWING_RETURN_MS)
+  }
+
   function processClickIntent(event: MouseEvent): ClickIntent {
     return inputHandler.processCanvasClick(event, {
       camera,
@@ -831,6 +929,7 @@
       npcMeshes,
       doorMeshes,
       objectMeshes,
+      propMeshes,
       groundItemMeshes,
       groundMeshes,
       playerPosition: {
@@ -920,6 +1019,7 @@
           requestChatFocus()
         }
       },
+      breakProp,
       moveToGround: (position) => {
         combatController.cancelCombat()
         handleClickToMove(position)
@@ -1046,6 +1146,7 @@
       playerControlMachine.dispose()
       if (standUpTimer) clearTimeout(standUpTimer)
       clearJumpFeedbackTimer()
+      clearPropSwingTimers()
     }
   })
 </script>

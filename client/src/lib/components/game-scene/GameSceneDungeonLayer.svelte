@@ -15,6 +15,7 @@
     currentDungeonDepth,
     currentDungeonId,
     dungeonDoorOpen,
+    dungeonPropsRevision,
   } from '../../stores/dungeonStore'
   import {
     dungeonManager,
@@ -37,17 +38,56 @@
   import { passabilityDebugVisible } from '../../stores/debugStore'
   import { pushPassabilityEdges } from '../../utils/passability-wireframe'
 
+  interface Props {
+    /** Fired the frame the player comes into range of a clicked barrel/crate,
+     *  handing off to the player swing that breaks it at the contact frame. */
+    onPropReady?: (
+      entranceId: string,
+      depth: number,
+      propId: number,
+      x: number,
+      z: number
+    ) => void
+  }
+  let { onPropReady }: Props = $props()
+
   /** Walk-up-to-open range for the treasure chest (matches the server). */
   const CHEST_OPEN_RANGE = 1.8
   let chestRequested = false
+
+  /** Once the player walking up to a clicked prop is within this range, the
+   *  break is requested. Kept inside the server's 2.5m so a borderline float
+   *  position never gets rejected. */
+  const PROP_BREAK_TRIGGER_RANGE = 2.0
+  /** Catalog id of the broken variant rendered when a prop is destroyed. */
+  const BROKEN_VARIANT: Record<string, string> = {
+    barrel: 'barrel_broken',
+    crate: 'crate_pieces',
+  }
+  const isBreakable = (kind: string) => kind in BROKEN_VARIANT
+
+  /** One placed prop, tracked so a live break can swap just it (not rebuild the
+   *  whole floor). `cellX/cellZ` locate the broken debris at the cell center. */
+  interface PropEntry {
+    clones: THREE.Object3D[]
+    kind: string
+    cellX: number
+    cellZ: number
+    rotationDeg: number
+    broken: boolean
+  }
+  let propEntries = new Map<number, PropEntry>()
 
   const root = new THREE.Group()
   let currentGroup: THREE.Group | null = null
   let entranceGroup: THREE.Group | null = null
   /** Decorative room clutter (barrel/crate/chest GLBs) for the current floor,
    *  kept in its own group on `root` — never inside currentGroup, whose
-   *  disposer would otherwise dispose these shared cached GLB resources. */
-  let propsGroup: THREE.Group | null = null
+   *  disposer would otherwise dispose these shared cached GLB resources.
+   *  Stable reference (created once, children swapped per floor) so the array
+   *  handed to click raycasting via getPropMeshes never goes stale. */
+  const propsGroup = new THREE.Group()
+  root.add(propsGroup)
   /** Per-kind metrics measured once per GLB: base-seat offset (−bbox.min.y),
    *  height, and horizontal half-extents (hx/hz) — used to seat the model, to
    *  align a chest's long side to its wall, and to inset a boxy prop off it. */
@@ -119,16 +159,203 @@
    *  drop the clones and let GC reclaim them — disposing would corrupt the
    *  cache and every other instance. */
   function clearProps() {
-    if (propsGroup) {
-      root.remove(propsGroup)
-      propsGroup = null
+    for (const c of [...propsGroup.children]) propsGroup.remove(c)
+    propEntries = new Map()
+  }
+
+  /** Measure (and cache) a model's seat offset, height and half-extents. */
+  function measureProp(kind: string, template: THREE.Object3D) {
+    let m = propMetrics.get(kind)
+    if (!m) {
+      template.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(template)
+      const size = box.getSize(new THREE.Vector3())
+      m = {
+        seatY: -box.min.y,
+        height: Math.max(0.1, size.y),
+        hx: size.x / 2,
+        hz: size.z / 2,
+      }
+      propMetrics.set(kind, m)
     }
+    return m
+  }
+
+  /** Strip shadows on, raycast off for a decorative (non-interactive) clone. */
+  function tagDecorative(clone: THREE.Object3D) {
+    clone.traverse((o) => {
+      if (o instanceof THREE.Mesh) {
+        o.castShadow = true
+        o.receiveShadow = true
+        o.raycast = () => {} // never intercept click-to-move
+      }
+    })
+  }
+
+  /**
+   * Build one normal (un-broken) prop into `group`/`entries`. Barrels and crates
+   * are tagged interactive (clickable to break); chests stay decorative. The
+   * per-kind yaw + cell-inset tuning is unchanged from the original placement.
+   */
+  async function addNormalProp(
+    group: THREE.Group,
+    entries: Map<number, PropEntry>,
+    index: number,
+    prop: DungeonFloorLayout['props'][number],
+    key: string,
+    depth: number,
+    carvedAt: (x: number, z: number) => boolean
+  ) {
+    const def = objectManager.getCatalogEntry(prop.kind)
+    if (!def) return
+    let template: THREE.Object3D
+    try {
+      template = (await loadGLB(`/models/objects/${def.model}`)).scene
+    } catch {
+      return
+    }
+    if (key !== builtKey) return // floor changed mid-load — abandon
+    const m = measureProp(prop.kind, template)
+
+    // Chests lie flat against a wall, long side parallel to it. Read the
+    // bordering wall from the carved grid (X-running wall preferred in a
+    // corner) and snap the model's long axis onto it.
+    let chestYawDeg = 0
+    if (prop.kind === 'chest') {
+      const wallAlongX = !carvedAt(prop.x, prop.z - 1) || !carvedAt(prop.x, prop.z + 1)
+      const wallAlongZ = !carvedAt(prop.x - 1, prop.z) || !carvedAt(prop.x + 1, prop.z)
+      const targetAxisX = wallAlongX || !wallAlongZ
+      const longAxisX = m.hx >= m.hz
+      chestYawDeg = longAxisX === targetAxisX ? 0 : 90
+    }
+
+    const breakable = isBreakable(prop.kind)
+    const clones: THREE.Object3D[] = []
+    const count = Math.max(1, prop.stack)
+    for (let i = 0; i < count; i++) {
+      const clone = template.clone()
+
+      // Yaw per kind:
+      //  • chest — wall-aligned (computed above).
+      //  • crate — square box: snap to 90° so it sits flush, but leave the
+      //    occasional one crooked; quarter-turn each stacked tier.
+      //  • barrel — cylindrical, footprint is rotation-invariant: free yaw +
+      //    small per-tier twist.
+      let yawDeg: number
+      if (prop.kind === 'chest') {
+        yawDeg = chestYawDeg
+      } else if (prop.kind === 'crate') {
+        const quarter = Math.round(prop.rotation / 90)
+        const dev = prop.rotation - quarter * 90 // −45..45, uniform
+        const tiltDeg =
+          Math.abs(dev) > CRATE_ASKEW_THRESH ? dev * CRATE_ASKEW_SCALE : 0
+        yawDeg = quarter * 90 + tiltDeg + i * 90
+      } else {
+        yawDeg = prop.rotation + i * 23
+      }
+
+      // Keep boxy props inside their cell: push a chest/crate off any
+      // bordering wall by however far its rotated footprint overhangs the cell
+      // edge — a long chest tucked in a corner, or a tilted crate. Flush
+      // (axis-aligned, ≤1m) props get zero inset; barrels are round and small,
+      // so they stay centered.
+      let px = prop.x + 0.5
+      let pz = prop.z + 0.5
+      if (prop.kind !== 'barrel') {
+        const aabb = rotatedRectAabb(-m.hx, m.hx, -m.hz, m.hz, (yawDeg * Math.PI) / 180)
+        const insetX = Math.max(0, aabb.maxX - 0.5)
+        const insetZ = Math.max(0, aabb.maxZ - 0.5)
+        if (!carvedAt(prop.x - 1, prop.z)) px += insetX
+        else if (!carvedAt(prop.x + 1, prop.z)) px -= insetX
+        if (!carvedAt(prop.x, prop.z - 1)) pz += insetZ
+        else if (!carvedAt(prop.x, prop.z + 1)) pz -= insetZ
+      }
+
+      clone.position.set(px, m.seatY + i * m.height * PROP_STACK_NEST, pz)
+      clone.rotation.y = (yawDeg * Math.PI) / 180
+      if (breakable) {
+        // Clicked → walk up → break. Read by inputHandler's prop raycast pass.
+        clone.userData.dungeonProp = true
+        clone.userData.propBreakable = true
+        clone.userData.propId = index
+        clone.userData.propKind = prop.kind
+        clone.userData.propDepth = depth
+        clone.userData.propEntranceId = dungeonManager.dungeonId
+      }
+      clone.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.castShadow = true
+          o.receiveShadow = true
+          if (!breakable) o.raycast = () => {} // chests: decorative only
+        }
+      })
+      group.add(clone)
+      clones.push(clone)
+    }
+    entries.set(index, {
+      clones,
+      kind: prop.kind,
+      cellX: prop.x,
+      cellZ: prop.z,
+      rotationDeg: prop.rotation,
+      broken: false,
+    })
+  }
+
+  /** Load + seat a kind's broken-debris variant (single, cell-centered) clone.
+   *  Returns null if the variant is missing, the GLB fails to load, or the floor
+   *  changed mid-load. Shared by the initial build and the live swap. */
+  async function buildBrokenClone(
+    kind: string,
+    cellX: number,
+    cellZ: number,
+    rotationDeg: number,
+    key: string
+  ): Promise<THREE.Object3D | null> {
+    const variantId = BROKEN_VARIANT[kind]
+    const def = variantId ? objectManager.getCatalogEntry(variantId) : null
+    if (!def) return null
+    let template: THREE.Object3D
+    try {
+      template = (await loadGLB(`/models/objects/${def.model}`)).scene
+    } catch {
+      return null
+    }
+    if (key !== builtKey) return null
+    const m = measureProp(variantId, template)
+    const clone = template.clone()
+    clone.position.set(cellX + 0.5, m.seatY, cellZ + 0.5)
+    clone.rotation.y = (rotationDeg * Math.PI) / 180
+    tagDecorative(clone)
+    return clone
+  }
+
+  /** Place a prop's debris variant into `group`/`entries` (already broken at load). */
+  async function addBrokenProp(
+    group: THREE.Group,
+    entries: Map<number, PropEntry>,
+    index: number,
+    prop: DungeonFloorLayout['props'][number],
+    key: string
+  ) {
+    const clone = await buildBrokenClone(prop.kind, prop.x, prop.z, prop.rotation, key)
+    if (!clone) return
+    group.add(clone)
+    entries.set(index, {
+      clones: [clone],
+      kind: prop.kind,
+      cellX: prop.x,
+      cellZ: prop.z,
+      rotationDeg: prop.rotation,
+      broken: true,
+    })
   }
 
   /**
    * Async-load and place the floor's decorative props. The dungeon-extras GLBs
    * are authored at world scale, XZ-centered with their base at Y=0, so they
-   * only need seating + the cell-center offset. Committed only if the floor is
+   * only need seating + the cell-center offset. Props already broken (per the
+   * server snapshot) render as debris directly. Committed only if the floor is
    * still current — depth/dungeon can change across the awaits; `key` is the
    * builtKey snapshot taken when the build started.
    */
@@ -148,105 +375,60 @@
       dungeonManager.floorY(depth),
       dungeonManager.originZ
     )
+    const entries = new Map<number, PropEntry>()
 
     const grid = dungeonManager.consts.grid
     const carvedAt = (x: number, z: number) =>
       x >= 0 && x < grid && z >= 0 && z < grid && layout.carved[x + z * grid]
+    const broken = dungeonManager.brokenPropsForDepth(depth)
 
-    for (const prop of specs) {
-      const def = objectManager.getCatalogEntry(prop.kind)
-      if (!def) continue
-      let template: THREE.Object3D
-      try {
-        template = (await loadGLB(`/models/objects/${def.model}`)).scene
-      } catch {
-        continue
+    for (let index = 0; index < specs.length; index++) {
+      const prop = specs[index]
+      if (broken.has(index) && isBreakable(prop.kind)) {
+        await addBrokenProp(group, entries, index, prop, key)
+      } else {
+        await addNormalProp(group, entries, index, prop, key, depth, carvedAt)
       }
       if (key !== builtKey) return // floor changed mid-load — abandon
-
-      let m = propMetrics.get(prop.kind)
-      if (!m) {
-        template.updateMatrixWorld(true)
-        const box = new THREE.Box3().setFromObject(template)
-        const size = box.getSize(new THREE.Vector3())
-        m = {
-          seatY: -box.min.y,
-          height: Math.max(0.1, size.y),
-          hx: size.x / 2,
-          hz: size.z / 2,
-        }
-        propMetrics.set(prop.kind, m)
-      }
-
-      // Chests lie flat against a wall, long side parallel to it. Read the
-      // bordering wall from the carved grid (X-running wall preferred in a
-      // corner) and snap the model's long axis onto it.
-      let chestYawDeg = 0
-      if (prop.kind === 'chest') {
-        const wallAlongX = !carvedAt(prop.x, prop.z - 1) || !carvedAt(prop.x, prop.z + 1)
-        const wallAlongZ = !carvedAt(prop.x - 1, prop.z) || !carvedAt(prop.x + 1, prop.z)
-        const targetAxisX = wallAlongX || !wallAlongZ
-        const longAxisX = m.hx >= m.hz
-        chestYawDeg = longAxisX === targetAxisX ? 0 : 90
-      }
-
-      const count = Math.max(1, prop.stack)
-      for (let i = 0; i < count; i++) {
-        const clone = template.clone()
-
-        // Yaw per kind:
-        //  • chest — wall-aligned (computed above).
-        //  • crate — square box: snap to 90° so it sits flush, but leave the
-        //    occasional one crooked; quarter-turn each stacked tier.
-        //  • barrel — cylindrical, footprint is rotation-invariant: free yaw +
-        //    small per-tier twist.
-        let yawDeg: number
-        if (prop.kind === 'chest') {
-          yawDeg = chestYawDeg
-        } else if (prop.kind === 'crate') {
-          const quarter = Math.round(prop.rotation / 90)
-          const dev = prop.rotation - quarter * 90 // −45..45, uniform
-          const tiltDeg =
-            Math.abs(dev) > CRATE_ASKEW_THRESH ? dev * CRATE_ASKEW_SCALE : 0
-          yawDeg = quarter * 90 + tiltDeg + i * 90
-        } else {
-          yawDeg = prop.rotation + i * 23
-        }
-
-        // Keep boxy props inside their cell: push a chest/crate off any
-        // bordering wall by however far its rotated footprint overhangs the cell
-        // edge — a long chest tucked in a corner, or a tilted crate. Flush
-        // (axis-aligned, ≤1m) props get zero inset; barrels are round and small,
-        // so they stay centered.
-        let px = prop.x + 0.5
-        let pz = prop.z + 0.5
-        if (prop.kind !== 'barrel') {
-          const aabb = rotatedRectAabb(-m.hx, m.hx, -m.hz, m.hz, (yawDeg * Math.PI) / 180)
-          const insetX = Math.max(0, aabb.maxX - 0.5)
-          const insetZ = Math.max(0, aabb.maxZ - 0.5)
-          if (!carvedAt(prop.x - 1, prop.z)) px += insetX
-          else if (!carvedAt(prop.x + 1, prop.z)) px -= insetX
-          if (!carvedAt(prop.x, prop.z - 1)) pz += insetZ
-          else if (!carvedAt(prop.x, prop.z + 1)) pz -= insetZ
-        }
-
-        clone.position.set(px, m.seatY + i * m.height * PROP_STACK_NEST, pz)
-        clone.rotation.y = (yawDeg * Math.PI) / 180
-        clone.traverse((o) => {
-          if (o instanceof THREE.Mesh) {
-            o.castShadow = true
-            o.receiveShadow = true
-            o.raycast = () => {} // decorative: never intercept click-to-move
-          }
-        })
-        group.add(clone)
-      }
     }
 
     if (key !== builtKey) return
     clearProps()
-    propsGroup = group
-    root.add(group)
+    // Move the freshly built clones into the stable props group, matching its
+    // offset to the temp group's so world positions are preserved.
+    propsGroup.position.copy(group.position)
+    while (group.children.length) propsGroup.add(group.children[0])
+    propEntries = entries
+    // Catch any breaks that landed while the GLBs were loading.
+    reconcileBrokenProps(depth, key)
+  }
+
+  /** Swap every prop the server says is broken but that's still rendered whole. */
+  function reconcileBrokenProps(depth: number, key: string) {
+    if (key !== builtKey) return
+    const broken = dungeonManager.brokenPropsForDepth(depth)
+    for (const index of broken) {
+      const entry = propEntries.get(index)
+      if (entry && !entry.broken) void swapPropToBroken(index, key)
+    }
+  }
+
+  /** Replace one prop's whole-model clones with its broken debris variant. */
+  async function swapPropToBroken(index: number, key: string) {
+    const entry = propEntries.get(index)
+    if (!entry || entry.broken || !isBreakable(entry.kind)) return
+    entry.broken = true // claim before the await so a re-run won't double-swap
+    const clone = await buildBrokenClone(
+      entry.kind,
+      entry.cellX,
+      entry.cellZ,
+      entry.rotationDeg,
+      key
+    )
+    if (!clone) return
+    for (const c of entry.clones) propsGroup.remove(c)
+    propsGroup.add(clone)
+    entry.clones = [clone]
   }
 
   /** Cache the up-shaft sub-group's meshes + world AABB for the fade pass.
@@ -437,6 +619,13 @@
     void buildProps(layout, key, depth)
   })
 
+  // Reconcile prop meshes with the server's broken set whenever it changes
+  // (live break broadcast, or the on-entry snapshot arriving after the build).
+  $effect(() => {
+    void $dungeonPropsRevision
+    reconcileBrokenProps($currentDungeonDepth, builtKey)
+  })
+
   onDestroy(() => {
     clearGroup()
     clearEntranceGroup()
@@ -494,6 +683,27 @@
     // per approach (the server validates boss state and the cooldown).
     if (!dungeonManager.active) return
     const depth = $currentDungeonDepth
+
+    // Pending prop break: the player walked up to a barrel/crate they clicked —
+    // request the break once within range. The server validates and broadcasts;
+    // the visual swap happens on receipt (handles other players' breaks too).
+    const pending = dungeonManager.pendingBreak
+    if (pending && depth === pending.depth) {
+      const pdx = playerX - pending.x
+      const pdz = playerZ - pending.z
+      if (
+        pdx * pdx + pdz * pdz <=
+        PROP_BREAK_TRIGGER_RANGE * PROP_BREAK_TRIGGER_RANGE
+      ) {
+        // Reached the prop — hand off to the player swing, which breaks it at the
+        // contact frame. Clear pending first so this fires once.
+        const id = dungeonManager.dungeonId!
+        const { depth: d, propId, x, z } = pending
+        dungeonManager.clearPendingBreak()
+        onPropReady?.(id, d, propId, x, z)
+      }
+    }
+
     const layout = depth >= 1 ? dungeonManager.layoutAt(depth) : null
     const chest = layout?.chest ?? null
     if (!chest) {
@@ -520,6 +730,12 @@
   /** Raycast targets for click-to-move while underground. */
   export function getGroundMeshes(): THREE.Object3D[] {
     return currentGroup ? [currentGroup] : []
+  }
+
+  /** Raycast targets for clicking breakable props (barrels/crates). Only the
+   *  breakable clones have raycast enabled, so chests/debris won't intercept. */
+  export function getPropMeshes(): THREE.Object3D[] {
+    return [propsGroup]
   }
 
   /**

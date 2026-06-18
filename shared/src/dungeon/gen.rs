@@ -440,7 +440,11 @@ fn roll_spawns(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<SpawnSpec> {
     };
 
     for _ in 0..count.min(candidates.len()) {
-        let idx = rng.gen_range(0..candidates.len());
+        // `as u32`: `usize` is u32 on wasm32 but u64 on native, and
+        // `gen_range` over each width consumes a different amount of the RNG
+        // stream — desyncing client (wasm) from server (native) here, and in
+        // every draw after. Fixed-width keeps the layout identical on both.
+        let idx = rng.gen_range(0..candidates.len() as u32) as usize;
         let (x, z) = candidates.swap_remove(idx);
         let mut roll = rng.gen_range(0..total_weight);
         let mut chosen = &table[0];
@@ -609,7 +613,11 @@ fn roll_props(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
             if pool.is_empty() {
                 break;
             }
-            let (x, z) = pool.swap_remove(rng.gen_range(0..pool.len()));
+            // `as u32`: see roll_spawns — `gen_range` over `usize` (u32 on
+            // wasm, u64 on native) draws differently per platform, desyncing the
+            // RNG. This is the draw whose divergence shows up as props sitting in
+            // different cells on the client vs the server.
+            let (x, z) = pool.swap_remove(rng.gen_range(0..pool.len() as u32) as usize);
             let idx = (x + z * GRID) as usize;
             taken[idx] = true;
 

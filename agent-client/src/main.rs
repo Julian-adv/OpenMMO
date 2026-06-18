@@ -206,6 +206,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerMoved { .. } => "PlayerMoved",
         ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
         ServerMessage::DungeonChestOpened { .. } => "DungeonChestOpened",
+        ServerMessage::DungeonPropBroken { .. } => "DungeonPropBroken",
+        ServerMessage::DungeonPropsState { .. } => "DungeonPropsState",
         ServerMessage::ChatMessage { .. } => "ChatMessage",
         ServerMessage::GameState { .. } => "GameState",
         ServerMessage::GameTimeSync { .. } => "GameTimeSync",

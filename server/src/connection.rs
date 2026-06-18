@@ -653,6 +653,20 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::BreakDungeonProp {
+            entrance_id,
+            depth,
+            prop_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .break_dungeon_prop(id, &entrance_id, depth, prop_id)
+                    .await;
+            } else {
+                warn!("Received prop break from client that is not in game");
+            }
+        }
+
         ClientMessage::DebugTeleport { position } => {
             if let Some(id) = &state.player_id {
                 let rotation = game_state

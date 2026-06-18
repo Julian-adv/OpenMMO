@@ -245,6 +245,30 @@ pub fn dungeon_remove_passability(entrance_id: &str) {
     with_cache_mut(|c| c.remove(&crate::dungeon::dungeon_cache_key(entrance_id)));
 }
 
+/// Rebuild one dungeon floor's passability with `broken` props (indices into
+/// that floor's `props`) destroyed, opening their cells for movement. Called
+/// whenever the client's broken-prop set for a floor changes — both the
+/// on-entry snapshot and live breaks route through here with the full set.
+#[wasm_bindgen]
+pub fn dungeon_apply_broken_props(entrance_id: &str, depth: u8, broken: &[u32]) {
+    if depth == 0 {
+        return;
+    }
+    let floors = crate::dungeon::generate_dungeon(crate::dungeon::dungeon_seed(entrance_id));
+    let Some(layout) = floors.get((depth - 1) as usize) else {
+        return;
+    };
+    let new_cells = crate::dungeon::floor_passability_cells_with_broken(layout, broken);
+    let floor_level = crate::dungeon::passability_floor_for_depth(depth);
+    with_cache_mut(|c| {
+        if let Some(rp) = c.get_mut(&crate::dungeon::dungeon_cache_key(entrance_id)) {
+            if let Some(f) = rp.floors.iter_mut().find(|f| f.floor_level == floor_level) {
+                f.cells = new_cells;
+            }
+        }
+    });
+}
+
 /// Debug: dump one floor's per-cell edge bitmask (N=1, E=2, S=4, W=8) plus
 /// its world min-corner origin and Y, so the client can draw a passability
 /// wireframe. Returns null when the dungeon isn't registered or the floor

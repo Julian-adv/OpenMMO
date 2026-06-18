@@ -73,8 +73,11 @@ fn golden_layout_hash() {
 // Re-blessed again when decorative room clutter (`props`) was added: roll_props
 // draws RNG after roll_spawns on every floor (spawns themselves are unchanged),
 // and the new field widens the Debug-hashed layout. Re-blessed again when the
-// per-room prop count range was raised from 2..=4 to 5..=10.
-const GOLDEN_OLD_CRYPT_HASH: u64 = 0xece4_b368_f4fb_c0b9;
+// per-room prop count range was raised from 2..=4 to 5..=10. Re-blessed again
+// when the spawn/prop cell picks switched from `gen_range(0..len())` (usize:
+// u64 native vs u32 wasm — drew differently per platform, desyncing client
+// from server) to a fixed-width `as u32` draw.
+const GOLDEN_OLD_CRYPT_HASH: u64 = 0xe0b0_1a6c_687d_1e2d;
 
 #[test]
 fn structure_invariants_many_seeds() {

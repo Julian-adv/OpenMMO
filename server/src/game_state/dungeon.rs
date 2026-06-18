@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 use onlinerpg_shared::dungeon::{
     cell_center, dungeon_seed, floor_world_y, generate_dungeon, monster_level_for_depth,
-    FloorLayout,
+    FloorLayout, PropKind,
 };
 use onlinerpg_shared::{Position, ServerMessage};
 use tracing::{info, warn};
@@ -31,6 +31,8 @@ const SPAWN_RETRY_MS: u64 = 10 * 1000;
 const CHEST_COOLDOWN_MS: u64 = 60 * 60 * 1000;
 const CHEST_INTERACT_RANGE: f32 = 2.5;
 const CHEST_ITEM_MIN_PRICE: i64 = 2000;
+/// How close a player must stand to a barrel/crate to break it.
+const PROP_BREAK_RANGE: f32 = 2.5;
 
 pub(super) struct DungeonRuntime {
     pub layouts: Vec<FloorLayout>,
@@ -39,6 +41,12 @@ pub(super) struct DungeonRuntime {
     pub floors: HashMap<u8, FloorRuntime>,
     /// Per-player chest open timestamps (ms).
     pub chest_opened_at: HashMap<PlayerId, u64>,
+    /// Broken props per depth (indices into that floor's `props`). Shared across
+    /// the instance, persists across re-entry; resets on server restart. Kept on
+    /// the dungeon (not the per-floor runtime) so a break still records even if
+    /// the floor's `FloorRuntime` hasn't been created (e.g. a relog rehydrate
+    /// that didn't replay the floor-entry transition).
+    pub broken_props: HashMap<u8, HashSet<u32>>,
 }
 
 pub(super) struct FloorRuntime {
@@ -82,6 +90,7 @@ impl GameState {
                 layouts,
                 floors: HashMap::new(),
                 chest_opened_at: HashMap::new(),
+                broken_props: HashMap::new(),
             });
     }
 
@@ -210,6 +219,97 @@ impl GameState {
         .await;
     }
 
+    /// Break a destructible dungeon prop (barrel/crate): requires standing
+    /// next to it on its floor. Records the break for the instance, makes the
+    /// cell walkable (client-side, on receipt) and broadcasts it to nearby
+    /// players (the breaker included). No-op if it's already broken.
+    pub async fn break_dungeon_prop(
+        &self,
+        player_id: &PlayerId,
+        entrance_id: &str,
+        depth: u8,
+        prop_id: u32,
+    ) {
+        if depth == 0 {
+            return;
+        }
+        let Some(entrance) = self.dungeon_defs.get(entrance_id).cloned() else {
+            return;
+        };
+        self.ensure_dungeon_runtime(entrance_id).await;
+
+        let (player_pos, player_floor) = {
+            let players = self.players.read().await;
+            match players.get(player_id) {
+                Some(p) if p.health > 0 => (p.position.clone(), p.floor_level),
+                _ => return,
+            }
+        };
+
+        // Validate against the layout + claim the break under the dungeon lock.
+        // `Some(Err)` → reject with a reason, `Some(Ok)` → newly broken,
+        // `None` → already broken (silent no-op).
+        let outcome: Option<Result<(), &str>> = {
+            let mut dungeons = self.dungeons.write().await;
+            let Some(rt) = dungeons.get_mut(entrance_id) else {
+                return;
+            };
+            let prop = match rt
+                .layouts
+                .get((depth - 1) as usize)
+                .and_then(|l| l.props.get(prop_id as usize))
+            {
+                Some(p) => *p,
+                None => return,
+            };
+            // Only barrels and crates are destructible (chests are not).
+            if !matches!(prop.kind, PropKind::Barrel | PropKind::Crate) {
+                return;
+            }
+            if player_floor != -(depth as i8) {
+                Some(Err("You must be on the prop's floor"))
+            } else {
+                let prop_pos = cell_center(&entrance.position(), depth, (prop.x, prop.z));
+                let dx = player_pos.x - prop_pos.x;
+                let dz = player_pos.z - prop_pos.z;
+                if dx * dx + dz * dz > PROP_BREAK_RANGE * PROP_BREAK_RANGE {
+                    Some(Err("Too far from the prop"))
+                } else if rt.broken_props.entry(depth).or_default().insert(prop_id) {
+                    Some(Ok(()))
+                } else {
+                    None
+                }
+            }
+        };
+
+        match outcome {
+            Some(Err(reason)) => {
+                self.send_direct_message(
+                    player_id,
+                    ServerMessage::InteractionRejected {
+                        reason: reason.to_string(),
+                    },
+                )
+                .await;
+            }
+            Some(Ok(())) => {
+                self.send_direct_message_to_players_within_position(
+                    &player_pos,
+                    player_floor,
+                    super::AGENT_EVENT_DELIVERY_RADIUS,
+                    ServerMessage::DungeonPropBroken {
+                        entrance_id: entrance_id.to_string(),
+                        depth,
+                        prop_id,
+                    },
+                    None,
+                )
+                .await;
+            }
+            None => {}
+        }
+    }
+
     /// Track floor occupancy and monster lifecycles across dungeon floor
     /// changes (stairs, death respawn, disconnect, login rehydrate).
     /// `old_pos`/`new_pos` locate the dungeon for each side — on respawn
@@ -241,7 +341,7 @@ impl GameState {
 
     async fn enter_dungeon_floor(&self, player_id: &PlayerId, entrance_id: &str, depth: u8) {
         self.ensure_dungeon_runtime(entrance_id).await;
-        {
+        let broken: Vec<u32> = {
             let mut dungeons = self.dungeons.write().await;
             let Some(rt) = dungeons.get_mut(entrance_id) else {
                 return;
@@ -258,12 +358,31 @@ impl GameState {
                     is_boss: s.is_boss,
                 })
                 .collect();
-            let fr = rt.floors.entry(depth).or_insert_with(|| FloorRuntime {
-                slots,
-                players: HashSet::new(),
-            });
-            fr.players.insert(player_id.clone());
-        }
+            rt.floors
+                .entry(depth)
+                .or_insert_with(|| FloorRuntime {
+                    slots,
+                    players: HashSet::new(),
+                })
+                .players
+                .insert(player_id.clone());
+            rt.broken_props
+                .get(&depth)
+                .map(|s| s.iter().copied().collect())
+                .unwrap_or_default()
+        };
+        // Tell the arriving player which props are already broken so they
+        // render the broken variant and walk through those cells from the
+        // start (sent even when empty so re-entries reset cleanly).
+        self.send_direct_message(
+            player_id,
+            ServerMessage::DungeonPropsState {
+                entrance_id: entrance_id.to_string(),
+                depth,
+                broken,
+            },
+        )
+        .await;
         self.populate_dungeon_floor(entrance_id, depth, player_id)
             .await;
     }

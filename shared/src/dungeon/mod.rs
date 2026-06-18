@@ -461,6 +461,19 @@ pub(crate) const EDGE_ALL: u8 = EDGE_N | EDGE_E | EDGE_S | EDGE_W;
 /// so a descending player (collision-checked against this floor once their Y
 /// drops into range) still walks through.
 pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
+    floor_passability_cells_inner(layout, &[])
+}
+
+/// Like [`floor_passability_cells`] but leaves the cells of broken props open.
+/// `broken` holds indices into `layout.props` whose 1×1 collision pillar has
+/// been destroyed, restoring movement through them. Recomputing from the carved
+/// mask (rather than clearing the cell's edges) keeps any genuine wall the prop
+/// sat against intact. Used to rebuild a floor's passability after a prop breaks.
+pub fn floor_passability_cells_with_broken(layout: &FloorLayout, broken: &[u32]) -> Vec<u8> {
+    floor_passability_cells_inner(layout, broken)
+}
+
+fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8> {
     let mut cells = vec![0u8; (GRID * GRID) as usize];
 
     for z in 0..GRID {
@@ -573,7 +586,10 @@ pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
     // landings, but those local rules can't guarantee global connectivity on
     // their own, so `roll_props` runs a reachability backstop (with each prop's
     // seal applied here) and rejects any prop that would close a route.
-    for p in &layout.props {
+    for (i, p) in layout.props.iter().enumerate() {
+        if broken.contains(&(i as u32)) {
+            continue;
+        }
         if p.x >= 0 && p.x < GRID && p.z >= 0 && p.z < GRID {
             cells[(p.x + p.z * GRID) as usize] |= EDGE_ALL;
         }

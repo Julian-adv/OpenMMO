@@ -944,7 +944,11 @@
   />
 {/if}
 
-<GameSceneDungeonLayer bind:this={dungeonLayerRef} />
+<GameSceneDungeonLayer
+  bind:this={dungeonLayerRef}
+  onPropReady={(entranceId, depth, propId, x, z) =>
+    playerControl?.swingAndBreakProp(entranceId, depth, propId, x, z)}
+/>
 
 {#if graphicsPreset.enableGrassLayer}
   <GameSceneGrassLayer
@@ -1029,6 +1033,7 @@
       ...(dungeonLayerRef?.getDoorMeshes() ?? []),
     ]}
     objectMeshes={objectOverlayRef ? [objectOverlayRef.getGroup()] : []}
+    propMeshes={dungeonLayerRef?.getPropMeshes() ?? []}
     groundItemMeshes={groundItemsLayerRef?.getGroup() ? [groundItemsLayerRef.getGroup()!] : []}
     {monsterModels}
     {playerAttackDuration}

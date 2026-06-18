@@ -70,6 +70,13 @@ export type ClickIntent =
       position: Position
       distance: number
     }
+  | {
+      type: 'break_prop'
+      entranceId: string
+      depth: number
+      propId: number
+      position: Position
+    }
   | { type: 'move_to_ground'; position: Position }
   | { type: 'none' }
 
@@ -79,6 +86,9 @@ export interface RaycastContext {
   npcMeshes: THREE.Object3D[]
   doorMeshes: THREE.Object3D[]
   objectMeshes: THREE.Object3D[]
+  /** Breakable dungeon props (barrels/crates). Clicked from any range — the
+   *  player walks up before the break fires. */
+  propMeshes: THREE.Object3D[]
   groundItemMeshes: THREE.Object3D[]
   groundMeshes: THREE.Object3D[]
   playerPosition: Position
@@ -319,6 +329,29 @@ class InputHandler {
           return {
             type: 'move_to_ground',
             position: { x: hitPoint.x, y: hitPoint.y, z: hitPoint.z },
+          }
+        }
+      }
+    }
+
+    // Check intersection with breakable dungeon props. No distance gate: the
+    // player walks up to the prop and the break fires on arrival.
+    if (context.propMeshes.length > 0) {
+      const propHits = raycaster.intersectObjects(context.propMeshes, true)
+      if (propHits.length > 0) {
+        const owner = findAncestorWithUserData(
+          propHits[0].object,
+          'propBreakable'
+        )
+        if (owner) {
+          const wp = new THREE.Vector3()
+          owner.getWorldPosition(wp)
+          return {
+            type: 'break_prop',
+            entranceId: owner.userData.propEntranceId as string,
+            depth: owner.userData.propDepth as number,
+            propId: owner.userData.propId as number,
+            position: { x: wp.x, y: wp.y, z: wp.z },
           }
         }
       }

@@ -16,6 +16,7 @@ function makeActions() {
     enterPickup: vi.fn(),
     approachAndPickup: vi.fn(),
     interactNpc: vi.fn(),
+    breakProp: vi.fn(),
     moveToGround: vi.fn(),
   } satisfies CanvasClickActions
 }

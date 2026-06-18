@@ -352,6 +352,16 @@ class NetworkManager {
     this.sendMessage({ OpenDungeonChest: { entrance_id: entranceId } })
   }
 
+  sendBreakDungeonProp(entranceId: string, depth: number, propId: number) {
+    this.sendMessage({
+      BreakDungeonProp: {
+        entrance_id: entranceId,
+        depth,
+        prop_id: propId,
+      },
+    })
+  }
+
   sendTorchToggle(enabled: boolean) {
     this.sendMessage({ TorchToggle: { enabled } })
   }

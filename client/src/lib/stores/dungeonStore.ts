@@ -20,3 +20,11 @@ export const isUnderground = derived(currentDungeonDepth, (d) => d >= 1)
  * reset to shut whenever the active entrance changes.
  */
 export const dungeonDoorOpen = writable(false)
+
+/**
+ * Bumped whenever the set of broken props on any floor changes (server snapshot
+ * on entry, or a live break broadcast). The dungeon render layer watches this to
+ * reconcile prop meshes with their broken variants; the authoritative set lives
+ * on `dungeonManager.brokenPropsForDepth(depth)`.
+ */
+export const dungeonPropsRevision = writable(0)

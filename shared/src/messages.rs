@@ -103,6 +103,14 @@ pub enum ClientMessage {
     OpenDungeonChest {
         entrance_id: String,
     },
+    /// Break a destructible dungeon prop (barrel/crate). The server validates
+    /// floor, proximity and prop kind, records the break for the dungeon
+    /// instance, opens the cell for movement and broadcasts it nearby.
+    BreakDungeonProp {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+    },
     DebugTeleport {
         position: Position,
     },
@@ -244,6 +252,22 @@ pub enum ServerMessage {
         player_id: String,
         item_def_ids: Vec<String>,
         gold: i64,
+    },
+    /// A destructible dungeon prop was broken: swap it to its broken variant
+    /// and open its cell for movement. Broadcast to nearby players (the
+    /// breaker included).
+    DungeonPropBroken {
+        entrance_id: String,
+        depth: u8,
+        prop_id: u32,
+    },
+    /// Snapshot of which props on a floor are already broken, sent directly to
+    /// a player as they enter that dungeon floor so late arrivals render the
+    /// current state.
+    DungeonPropsState {
+        entrance_id: String,
+        depth: u8,
+        broken: Vec<u32>,
     },
     ChatMessage {
         player_id: String,
