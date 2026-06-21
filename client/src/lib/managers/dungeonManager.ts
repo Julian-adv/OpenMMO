@@ -54,7 +54,7 @@ export interface DungeonSpawn {
 export interface DungeonProp {
   x: number
   z: number
-  kind: 'barrel' | 'crate' | 'chest'
+  kind: 'barrel' | 'crate' | 'chest' | 'torch_wall'
   /** Vertical stack count (1 or 2); chests are always 1. */
   stack: number
   /** Yaw in whole degrees (0..360). */

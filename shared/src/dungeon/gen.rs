@@ -178,6 +178,7 @@ fn try_generate_floor(
 
     layout.spawns = roll_spawns(rng, &layout);
     layout.props = roll_props(rng, &layout);
+    layout.props.extend(roll_wall_torches(rng, &layout));
     Some(layout)
 }
 
@@ -528,6 +529,83 @@ fn prop_cell_ok(
     true
 }
 
+/// Stair-landing cells to keep clear of props: this floor's up-shaft exit row
+/// and the down-shaft entry row. A prop dropped in front of one would wall off
+/// the stairs.
+fn collect_landing_cells(layout: &FloorLayout) -> Vec<(i32, i32)> {
+    let mut landings: Vec<(i32, i32)> = Vec::new();
+    for w in 0..SHAFT_W {
+        landings.push(layout.up_shaft.step_cell(SHAFT_LEN - 1, w));
+    }
+    if let Some(ref down) = layout.down_shaft {
+        for w in 0..SHAFT_W {
+            landings.push(down.step_cell(0, w));
+        }
+    }
+    landings
+}
+
+/// Hang at most one wall torch per room at the centre of its north or east wall,
+/// the side chosen at random. Purely cosmetic like [`roll_props`] — the torch
+/// sits high on the wall and is never added to the passability grid. It still
+/// honours the same clutter placement rules ([`prop_cell_ok`]: clear of the
+/// chest/spawns/shafts, never choking a corridor mouth or stair landing, and one
+/// prop per cell — `taken` is seeded with the clutter already placed), plus a
+/// solid cell on the chosen side to actually mount on. The `rotation` field
+/// carries the room-facing yaw the client renders with (north wall → 0°, east
+/// wall → 270°). Deterministic: rooms visited in order, exactly one integer draw
+/// each (the `as u32` cast keeps wasm and native in lockstep — see `roll_props`).
+fn roll_wall_torches(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
+    let landings = collect_landing_cells(layout);
+    // Seed `taken` with the clutter already placed so a torch never shares a cell.
+    let mut taken = vec![false; (GRID * GRID) as usize];
+    for p in &layout.props {
+        taken[(p.x + p.z * GRID) as usize] = true;
+    }
+
+    let mut torches = Vec::new();
+    for room in &layout.rooms {
+        // North wall centre: top (−Z) row, mid-width. East wall centre: right
+        // (+X) column, mid-depth. A side works only when the cell is a sound prop
+        // spot and the cell just outside it is solid (a real wall to hang on).
+        let (nx, nz) = (room.x + room.w / 2, room.z);
+        let (ex, ez) = (room.x + room.w - 1, room.z + room.d / 2);
+        // (valid?, x, z, room-facing yaw) for each candidate wall.
+        let sides = [
+            (
+                !layout.is_carved(nx, nz - 1) && prop_cell_ok(layout, &landings, &taken, nx, nz),
+                nx,
+                nz,
+                0u16,
+            ),
+            (
+                !layout.is_carved(ex + 1, ez) && prop_cell_ok(layout, &landings, &taken, ex, ez),
+                ex,
+                ez,
+                270u16,
+            ),
+        ];
+        // Take the first valid side, north-first or east-first per the coin flip.
+        let north_first = rng.gen_range(0..2u32) == 0;
+        let pick = if north_first {
+            sides.iter().find(|s| s.0)
+        } else {
+            sides.iter().rev().find(|s| s.0)
+        };
+        if let Some(&(_, x, z, rotation)) = pick {
+            taken[(x + z * GRID) as usize] = true;
+            torches.push(PropSpec {
+                x,
+                z,
+                kind: PropKind::TorchWall,
+                stack: 1,
+                rotation,
+            });
+        }
+    }
+    torches
+}
+
 fn pick_prop_kind(rng: &mut ChaCha8Rng) -> PropKind {
     // Barrels and crates are the common dungeon clutter; chests are the rare
     // find. Weighted 5 : 4 : 2 over a draw of 11.
@@ -549,15 +627,7 @@ fn pick_prop_kind(rng: &mut ChaCha8Rng) -> PropKind {
 fn roll_props(rng: &mut ChaCha8Rng, layout: &FloorLayout) -> Vec<PropSpec> {
     // Landing cells (this floor's own up-shaft exit row + the down-shaft entry
     // row): the spots a prop in front of would wall off the stairs.
-    let mut landings: Vec<(i32, i32)> = Vec::new();
-    for w in 0..SHAFT_W {
-        landings.push(layout.up_shaft.step_cell(SHAFT_LEN - 1, w));
-    }
-    if let Some(ref down) = layout.down_shaft {
-        for w in 0..SHAFT_W {
-            landings.push(down.step_cell(0, w));
-        }
-    }
+    let landings = collect_landing_cells(layout);
 
     let mut taken = vec![false; (GRID * GRID) as usize];
     let mut props = Vec::new();
@@ -739,5 +809,6 @@ fn fallback_floor(
     };
     layout.spawns = roll_spawns(rng, &layout);
     layout.props = roll_props(rng, &layout);
+    layout.props.extend(roll_wall_torches(rng, &layout));
     layout
 }

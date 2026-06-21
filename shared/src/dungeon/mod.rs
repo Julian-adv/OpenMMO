@@ -185,14 +185,17 @@ pub struct SpawnSpec {
 /// Decorative clutter prop dropped into a room. Purely cosmetic — like the
 /// treasure chest it carries no collision (it's never added to the passability
 /// grid), so placement only has to read well, not gate movement. The string
-/// variants match the object-catalog ids (`barrel`/`crate`/`chest`) the client
-/// loads the GLB for.
+/// variants match the object-catalog ids (`barrel`/`crate`/`chest`/`torch_wall`)
+/// the client loads the GLB for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PropKind {
     Barrel,
     Crate,
     Chest,
+    /// Wall-mounted torch: hangs on a room's north or east wall (one per room).
+    /// Never spawned by [`PropKind`] clutter rolls — placed by its own pass.
+    TorchWall,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -203,7 +206,10 @@ pub struct PropSpec {
     pub kind: PropKind,
     /// How many of `kind` are stacked vertically (1 or 2). Chests never stack.
     pub stack: u8,
-    /// Yaw in whole degrees (0..360); jitters the model for variety.
+    /// Yaw in whole degrees (0..360). Meaning depends on `kind`: for clutter
+    /// (barrel/crate/chest) it's a random jitter for variety; for `TorchWall`
+    /// it's the room-facing direction the client mounts it by (north wall → 0,
+    /// east wall → 270).
     pub rotation: u16,
 }
 
@@ -590,6 +596,11 @@ fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8
     // seal applied here) and rejects any prop that would close a route.
     for (i, p) in layout.props.iter().enumerate() {
         if broken.contains(&(i as u32)) {
+            continue;
+        }
+        // Wall torches hang high on the wall, not on the floor — they're purely
+        // cosmetic and never block a player or monster.
+        if matches!(p.kind, PropKind::TorchWall) {
             continue;
         }
         if p.x >= 0 && p.x < GRID && p.z >= 0 && p.z < GRID {

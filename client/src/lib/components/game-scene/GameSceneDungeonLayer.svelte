@@ -122,6 +122,10 @@
   >()
   /** Nest a stacked prop slightly into the one below to hide the seam. */
   const PROP_STACK_NEST = 0.97
+  /** Wall torch: base height up the (3m) wall — flame sits ~2.3m. */
+  const TORCH_MOUNT_Y = 1.7
+  /** Wall torch: gap from the wall boundary so the mount sits flush, not buried. */
+  const TORCH_WALL_GAP = 0.06
   /** A crate is left crooked when its random yaw lands more than this many
    *  degrees off a right angle (≈ a quarter of crates). */
   const CRATE_ASKEW_THRESH = 34
@@ -255,6 +259,37 @@
     }
     if (key !== builtKey) return // floor changed mid-load — abandon
     const m = measureProp(prop.kind, template)
+
+    // Wall torch: hangs high on a room's north/east wall, decorative only. The
+    // model's wall side is its local −Z=0 face (the bracket back) with the torch
+    // body reaching into the room along +Z and the base at local y=0. The
+    // generator hands us the room-facing yaw (north wall → 0°, east wall → 270°);
+    // we seat the back face flush against that wall and raise it up the wall.
+    if (prop.kind === 'torch_wall') {
+      const clone = template.clone()
+      const yawDeg = prop.rotation
+      clone.rotation.y = (yawDeg * Math.PI) / 180
+      let px = prop.x + 0.5
+      let pz = prop.z + 0.5
+      // Push the back face onto the mounted wall. The generator only ever emits
+      // a north (0°) or east (270°) facing — one per room.
+      if (yawDeg === 0) pz = prop.z + TORCH_WALL_GAP // faces +Z, wall on −Z (N)
+      else if (yawDeg === 270) px = prop.x + 1 - TORCH_WALL_GAP // wall on +X (E)
+      clone.position.set(px, TORCH_MOUNT_Y, pz)
+      tagDecorative(clone)
+      group.add(clone)
+      entries.set(index, {
+        clones: [clone],
+        kind: prop.kind,
+        propId: index,
+        cellX: prop.x,
+        cellZ: prop.z,
+        rotationDeg: prop.rotation,
+        broken: false,
+        opened: false,
+      })
+      return
+    }
 
     // Chests sit with their hinge (model back, local −Z) against a wall and
     // their opening (local +Z) facing into the room. The lid swings up and back

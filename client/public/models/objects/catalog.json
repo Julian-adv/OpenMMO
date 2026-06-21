@@ -171,5 +171,10 @@
     "id": "shells",
     "name": "Shell Casings",
     "model": "shells.glb"
+  },
+  {
+    "id": "torch_wall",
+    "name": "Wall Torch",
+    "model": "torch_wall.glb"
   }
 ]
