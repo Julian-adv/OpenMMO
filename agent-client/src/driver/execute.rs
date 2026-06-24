@@ -59,17 +59,15 @@ pub(super) async fn handle_response(
     let mut last_attack_target = None;
 
     for action in &agent_resp.actions {
-        // Skip movement/attack when resting on object (schedule action active)
+        // Skip movement/attack when the NPC must stay put — resting on a
+        // scheduled object, or serving a customer with an open trade window.
         if skip_movement
             && matches!(
                 action,
                 AgentAction::Move { .. } | AgentAction::Attack { .. }
             )
         {
-            debug!(
-                "Skipping {:?} action — schedule object interaction active",
-                action
-            );
+            debug!("Skipping {:?} action — NPC is holding position", action);
             continue;
         }
 

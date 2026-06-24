@@ -137,6 +137,12 @@ pub struct GameState {
     dungeons: Arc<RwLock<HashMap<String, dungeon::DungeonRuntime>>>,
     /// monster_id → dungeon spawn slot, for respawn bookkeeping on death.
     dungeon_monsters: Arc<RwLock<HashMap<String, dungeon::DungeonMonsterRef>>>,
+    /// merchant_player_id → (customer player_id → ticks of hold remaining). A
+    /// trading NPC is held in place (its LLM movement is suppressed) while its
+    /// entry is non-empty, so it doesn't wander off mid-trade. Each hold
+    /// counts down on `tick_shop_holds` so a player can't pin an NPC forever
+    /// by keeping the window open. See `register_shop_open`/`close_shop`.
+    open_shops: Arc<RwLock<HashMap<PlayerId, HashMap<PlayerId, u8>>>>,
 }
 
 impl GameState {
@@ -179,6 +185,7 @@ impl GameState {
             dungeon_defs,
             dungeons: Arc::new(RwLock::new(HashMap::new())),
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
+            open_shops: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

@@ -161,6 +161,7 @@ export type ClientMessage =
   | { DropItem: { instance_id: number } }
   | { PickupItem: { instance_id: number } }
   | { OpenShop: { merchant_player_id: string } }
+  | { CloseShop: { merchant_player_id: string } }
   | { BuyItem: { merchant_player_id: string; item_def_id: string } }
   | { SellItem: { merchant_player_id: string; instance_id: number } }
 

@@ -104,6 +104,10 @@ pub struct SharedState {
     /// successful purchase — a satisfied shopper stops shopping for a
     /// while even if other wishes remain.
     pub trade_satiated_until: Option<std::time::Instant>,
+    /// True while at least one player has our trade window open (server
+    /// `TradeBusy`). We stay put and keep serving them — the LLM's movement
+    /// actions are suppressed — until the trade ends.
+    pub trade_busy: bool,
     /// Known nearby players
     pub nearby_players: HashMap<String, Player>,
     /// Known nearby monsters
@@ -157,6 +161,7 @@ impl SharedState {
             self_gold: None,
             self_bag: Vec::new(),
             trade_satiated_until: None,
+            trade_busy: false,
             nearby_players: HashMap::new(),
             nearby_monsters: HashMap::new(),
             events: Vec::new(),
@@ -387,7 +392,8 @@ impl SharedState {
             ServerMessage::GoldUpdate { .. }
             | ServerMessage::GoldGained { .. }
             | ServerMessage::InventoryState { .. }
-            | ServerMessage::InventoryUpdated { .. } => EventUrgency::Noise,
+            | ServerMessage::InventoryUpdated { .. }
+            | ServerMessage::TradeBusy { .. } => EventUrgency::Noise,
 
             // Urgent: another player attacks a monster (so we can join in)
             ServerMessage::PlayerAttacked { player_id, .. } => {
@@ -511,6 +517,9 @@ impl SharedState {
             }
             ServerMessage::GoldUpdate { gold } => {
                 self.self_gold = Some(*gold);
+            }
+            ServerMessage::TradeBusy { busy } => {
+                self.trade_busy = *busy;
             }
             ServerMessage::InventoryState { ref inventory }
             | ServerMessage::InventoryUpdated { ref inventory } => {
@@ -637,6 +646,9 @@ impl SharedState {
                 self.latest_player_moves.insert(player_id.clone(), msg);
                 return urgency;
             }
+            // A pure state flag; it changes movement gating but is not an LLM
+            // event in its own right.
+            ServerMessage::TradeBusy { .. } => return urgency,
             ServerMessage::GameTimeSync { datetime, is_night } => {
                 let prev_night = self.is_night;
                 let prev_hour = self.game_hour;

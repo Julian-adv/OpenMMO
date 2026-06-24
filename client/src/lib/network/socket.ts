@@ -8,7 +8,7 @@ import { monsterManager } from '../managers/monsterManager'
 import { getDefaultServerUrl } from '../utils/networkUtils'
 import { simplePasswordHash } from '../utils/authUtils'
 import { clearServerGameTime } from '../stores/timeStore'
-import { markShopRequested } from '../stores/tradeStore'
+import { markShopRequested, shopSession } from '../stores/tradeStore'
 import initWasm, {
   serialize_client_message,
   deserialize_server_message,
@@ -471,6 +471,12 @@ class NetworkManager {
     this.sendMessage({ OpenShop: { merchant_player_id: merchantPlayerId } })
   }
 
+  /** Tell the server the trade window for this merchant closed, so the NPC is
+   *  released from its in-place hold (see ServerMessage::TradeBusy). */
+  sendCloseShop(merchantPlayerId: string) {
+    this.sendMessage({ CloseShop: { merchant_player_id: merchantPlayerId } })
+  }
+
   sendBuyItem(merchantPlayerId: string, itemDefId: string) {
     this.sendMessage({
       BuyItem: { merchant_player_id: merchantPlayerId, item_def_id: itemDefId },
@@ -849,3 +855,16 @@ export const networkManager = hmrSingleton(
   'networkManager',
   () => new NetworkManager()
 )
+
+// Notify the server whenever a trade window closes (or switches merchants), so
+// the NPC it was trading with is released from its in-place hold. The window
+// is opened via an explicit OpenShop; this mirrors it with a CloseShop.
+let lastOpenMerchantId: string | null = null
+shopSession.subscribe((session) => {
+  const merchantId = session?.merchantPlayerId ?? null
+  if (merchantId === lastOpenMerchantId) return
+  if (lastOpenMerchantId !== null) {
+    networkManager.sendCloseShop(lastOpenMerchantId)
+  }
+  lastOpenMerchantId = merchantId
+})

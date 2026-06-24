@@ -152,6 +152,10 @@ async fn main() {
                 game_state_for_time_sync.tick_regeneration().await;
             }
 
+            // Count down trade-window holds; releases an NPC ~32s (4 ticks)
+            // after a customer opened its window, even if still open.
+            game_state_for_time_sync.tick_shop_holds().await;
+
             // Pay NPC trader salaries on game-day rollover (economy phase 3)
             game_state_for_time_sync.tick_npc_salaries().await;
 

@@ -256,6 +256,11 @@ impl super::GameState {
 
         self.remove_monsters_by_owner(player_id).await;
 
+        // Release any trade-window holds: this player may have been shopping
+        // with NPCs (free them if it was their last customer) or be a trading
+        // NPC itself (forget its entry).
+        self.clear_shops_for_player(player_id).await;
+
         let removed_player_number = {
             let mut id_state = self.id_state.write().await;
             let removed = id_state.player_numbers.remove(player_id);

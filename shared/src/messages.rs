@@ -175,6 +175,12 @@ pub enum ClientMessage {
     OpenShop {
         merchant_player_id: String,
     },
+    /// Tell the server the player closed a merchant's trade window. The
+    /// server tracks open windows so a trading NPC can be held in place (its
+    /// LLM movement is suppressed) while a customer is shopping with it.
+    CloseShop {
+        merchant_player_id: String,
+    },
     /// Buy one unit of an item from a merchant's catalog at base price.
     BuyItem {
         merchant_player_id: String,
@@ -482,6 +488,13 @@ pub enum ServerMessage {
         kind: DealKind,
         modifier_pct: i32,
         expires_in_secs: u32,
+    },
+    /// Direct to a trading NPC: whether at least one player currently has its
+    /// trade window open. While `busy` is true the NPC's LLM keeps its place
+    /// (movement is suppressed) so it doesn't wander off mid-trade; it can
+    /// still talk and haggle.
+    TradeBusy {
+        busy: bool,
     },
     /// Direct to a trading NPC: a player completed a buy/sell against it,
     /// so its LLM can react in conversation. `kind` is from the player's

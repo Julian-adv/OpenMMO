@@ -3,12 +3,21 @@
     pendingTradeOffer,
     acceptTradeOffer,
     declineTradeOffer,
+    type PendingTradeOffer,
   } from '../stores/tradeStore'
+  import { networkManager } from '../network/socket'
 
   /** Offers go stale fast (the NPC may wander out of trade range). */
   const OFFER_TTL_MS = 30_000
 
   const offer = $derived($pendingTradeOffer)
+
+  function accept(offer: PendingTradeOffer) {
+    acceptTradeOffer(offer)
+    // Register the open window server-side so the NPC holds position while we
+    // shop (an NPC-pushed offer doesn't register until the player opts in).
+    networkManager.sendOpenShop(offer.session.merchantPlayerId)
+  }
 
   $effect(() => {
     if (!offer) return
@@ -25,7 +34,7 @@
     <span class="offer-text">
       <strong>{offer.session.merchantName}</strong> wants to trade with you
     </span>
-    <button class="accept-btn" onclick={() => acceptTradeOffer(offer)}>Open</button>
+    <button class="accept-btn" onclick={() => accept(offer)}>Open</button>
     <button class="decline-btn" onclick={declineTradeOffer}>Not now</button>
   </div>
 {/if}

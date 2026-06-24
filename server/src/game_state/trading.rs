@@ -10,6 +10,13 @@ use super::deals::{buy_price, deal_half_band_pct, resident_half_band_pct, sell_p
 /// Maximum distance between player and trader for any shop interaction.
 const MAX_TRADE_DISTANCE: f32 = 6.0;
 
+/// How many `tick_shop_holds` ticks a single open trade window holds an NPC in
+/// place before its movement is released anyway. The tick runs on the server's
+/// 8s loop, so 4 ticks ≈ 32s. Stops a player pinning an NPC indefinitely by
+/// keeping the window open; if the NPC then wanders off the client closes the
+/// window at trade range.
+const SHOP_HOLD_TICKS: u8 = 4;
+
 /// How an NPC trades (economy phases 1–3). Merchants sell a data-defined
 /// catalog with unlimited stock and an effectively unlimited wallet;
 /// residents (non-merchants) buy only their wishlist from a finite,
@@ -163,11 +170,19 @@ impl super::GameState {
         Ok(def)
     }
 
-    pub async fn open_shop(&self, player_id: &PlayerId, npc_player_id: &str) {
+    /// `register` records this player as actively shopping with the NPC so it
+    /// stays put (see `register_shop_open`). Real window opens pass `true`;
+    /// the NPC-pushed `open_trade` passes `false` because the player only sees
+    /// an offer toast and may never accept — freezing the NPC on an ignored
+    /// offer would strand it.
+    pub async fn open_shop(&self, player_id: &PlayerId, npc_player_id: &str, register: bool) {
         let def = match self.validate_trader(player_id, npc_player_id).await {
             Ok(def) => def,
             Err(reason) => return self.send_trade_error(player_id, reason).await,
         };
+        if register {
+            self.register_shop_open(npc_player_id, player_id).await;
+        }
         let active_deals = self.active_deals_for(player_id, def.npc_name()).await;
         let state = match def {
             TraderDef::Merchant(def) => ServerMessage::ShopState {
@@ -223,9 +238,114 @@ impl super::GameState {
             return self.send_trade_error(npc_player_id, reason).await;
         }
         // open_shop re-validates with the roles in their normal order and
-        // sends ShopState + GoldUpdate to the target player.
-        self.open_shop(&target_player_id.to_string(), npc_player_id)
+        // sends ShopState + GoldUpdate to the target player. Don't register
+        // the NPC as busy yet: the player only sees an offer toast and the
+        // real window (with its own OpenShop) registers it on accept.
+        self.open_shop(&target_player_id.to_string(), npc_player_id, false)
             .await;
+    }
+
+    /// Record that `player_id` opened `merchant_id`'s trade window. When this
+    /// is the merchant's first active customer, tell its LLM to hold position
+    /// (`TradeBusy { busy: true }`) so it doesn't wander off mid-trade.
+    async fn register_shop_open(&self, merchant_id: &str, player_id: &PlayerId) {
+        let became_busy = {
+            let mut shops = self.open_shops.write().await;
+            let customers = shops.entry(merchant_id.to_string()).or_default();
+            let was_empty = customers.is_empty();
+            // or_insert (not insert): re-opening the same window doesn't
+            // refresh the hold, so it can't be gamed to last forever.
+            customers
+                .entry(player_id.clone())
+                .or_insert(SHOP_HOLD_TICKS);
+            was_empty
+        };
+        if became_busy {
+            self.send_direct_message(
+                &merchant_id.to_string(),
+                ServerMessage::TradeBusy { busy: true },
+            )
+            .await;
+        }
+    }
+
+    /// Player closed `merchant_id`'s trade window. When the merchant has no
+    /// remaining customers, release the LLM movement hold.
+    pub async fn close_shop(&self, player_id: &PlayerId, merchant_id: &str) {
+        let became_free = {
+            let mut shops = self.open_shops.write().await;
+            let Some(customers) = shops.get_mut(merchant_id) else {
+                return;
+            };
+            customers.remove(player_id);
+            let empty = customers.is_empty();
+            if empty {
+                shops.remove(merchant_id);
+            }
+            empty
+        };
+        if became_free {
+            self.send_direct_message(
+                &merchant_id.to_string(),
+                ServerMessage::TradeBusy { busy: false },
+            )
+            .await;
+        }
+    }
+
+    /// Drop a disconnecting player from all shop tracking, whether it was a
+    /// customer (release any merchants it leaves empty) or a merchant itself
+    /// (just forget its entry — it's gone).
+    pub async fn clear_shops_for_player(&self, player_id: &PlayerId) {
+        let freed_merchants = {
+            let mut shops = self.open_shops.write().await;
+            shops.remove(player_id);
+            let mut freed = Vec::new();
+            shops.retain(|merchant_id, customers| {
+                if customers.remove(player_id).is_some() && customers.is_empty() {
+                    freed.push(merchant_id.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            freed
+        };
+        self.send_direct_message_to_players(
+            &freed_merchants,
+            ServerMessage::TradeBusy { busy: false },
+        )
+        .await;
+    }
+
+    /// Count down every open trade window's hold by one tick. A window whose
+    /// hold runs out is dropped (the player keeps it open client-side, but the
+    /// NPC is free to move — if it wanders off, the client closes the window at
+    /// trade range). Merchants left with no holds are released (`TradeBusy`).
+    /// Runs on the server's 8s tick, so `SHOP_HOLD_TICKS` (4) ≈ 32s.
+    pub async fn tick_shop_holds(&self) {
+        let freed_merchants = {
+            let mut shops = self.open_shops.write().await;
+            let mut freed = Vec::new();
+            shops.retain(|merchant_id, customers| {
+                customers.retain(|_, ticks| {
+                    *ticks = ticks.saturating_sub(1);
+                    *ticks > 0
+                });
+                if customers.is_empty() {
+                    freed.push(merchant_id.clone());
+                    false
+                } else {
+                    true
+                }
+            });
+            freed
+        };
+        self.send_direct_message_to_players(
+            &freed_merchants,
+            ServerMessage::TradeBusy { busy: false },
+        )
+        .await;
     }
 
     /// A resident's purchasable stock: priced bag items that are not on its

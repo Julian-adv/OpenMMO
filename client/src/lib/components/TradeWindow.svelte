@@ -38,11 +38,18 @@
   let portraitFailed = $state(false)
   let now = $state(Date.now())
 
-  // Reset the cart whenever the shop session changes (open/close/refresh).
+  // Reset the cart only when the merchant actually changes (a different shop
+  // opens, or the window closes) — NOT on every ShopState refresh for the same
+  // merchant. An NPC can push a refresh via its own dialogue/actions/deals, and
+  // that must not wipe the items the player has staged to sell.
+  let lastMerchantId: string | null = null
   $effect(() => {
-    void session?.merchantPlayerId
-    cart = []
-    portraitFailed = false
+    const id = session?.merchantPlayerId ?? null
+    if (id !== lastMerchantId) {
+      lastMerchantId = id
+      cart = []
+      portraitFailed = false
+    }
   })
 
   const portraitSrc = $derived.by(() => {
@@ -56,7 +63,8 @@
 
   // The server rejects trades beyond MAX_TRADE_DISTANCE_METERS; close the
   // window at the same range so the player isn't left with a shop that only
-  // errors.
+  // errors. A trading NPC is held in place server-side (TradeBusy) while its
+  // window is open, so this only triggers when the *player* walks away.
   $effect(() => {
     if (!session) return
     const merchantId = session.merchantPlayerId

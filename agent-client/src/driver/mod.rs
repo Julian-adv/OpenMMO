@@ -166,8 +166,9 @@ pub async fn llm_driver(
                     let has_action = active_schedule
                         .0
                         .is_some_and(|i| schedule[i].action.is_some());
+                    let skip_movement = has_action || state.lock().await.trade_busy;
                     attack_target =
-                        handle_response(&state, &response, &memory_file, has_action).await;
+                        handle_response(&state, &response, &memory_file, skip_movement).await;
                     last_prompt_at = Instant::now();
                 }
                 Err(e) => {
@@ -223,8 +224,9 @@ pub async fn llm_driver(
             let handle = llm_in_flight.take().unwrap();
             last_prompt_at = Instant::now();
             if let Some(response) = await_llm_response(handle, &label).await {
+                let skip_movement = has_scheduled_action || state.lock().await.trade_busy;
                 let new_target =
-                    handle_response(&state, &response, &memory_file, has_scheduled_action).await;
+                    handle_response(&state, &response, &memory_file, skip_movement).await;
                 if new_target.is_some() {
                     attack_target = new_target;
                 }

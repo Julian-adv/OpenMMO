@@ -833,7 +833,13 @@ async fn handle_client_message(
 
         ClientMessage::OpenShop { merchant_player_id } => {
             if let Some(id) = &state.player_id {
-                game_state.open_shop(id, &merchant_player_id).await;
+                game_state.open_shop(id, &merchant_player_id, true).await;
+            }
+        }
+
+        ClientMessage::CloseShop { merchant_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.close_shop(id, &merchant_player_id).await;
             }
         }
 

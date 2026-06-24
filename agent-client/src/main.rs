@@ -248,5 +248,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::DealUpdated { .. } => "DealUpdated",
         ServerMessage::DealResult { .. } => "DealResult",
         ServerMessage::TradeNotice { .. } => "TradeNotice",
+        ServerMessage::TradeBusy { .. } => "TradeBusy",
     }
 }

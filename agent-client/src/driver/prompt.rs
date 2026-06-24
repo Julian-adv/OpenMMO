@@ -47,6 +47,16 @@ pub(super) fn build_prompt(
     prompt.push_str(&state.format_world_state());
     prompt.push('\n');
 
+    // A customer is mid-trade: stay put and keep helping them. Movement is
+    // suppressed server-side regardless, but telling the LLM keeps its
+    // narration consistent.
+    if state.trade_busy {
+        prompt.push_str(
+            "\nA customer is trading with you right now. Stay where you are and keep \
+             helping them — do not walk away or wander off.\n",
+        );
+    }
+
     // Resident-trader wishlist, rebuilt every turn from the live bag:
     // owned items drop out, and a fully satisfied wishlist removes the
     // section (and with it the urge to trade) entirely. It is also
