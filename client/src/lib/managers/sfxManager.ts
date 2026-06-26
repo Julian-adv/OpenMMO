@@ -1,3 +1,4 @@
+import { get, writable } from 'svelte/store'
 import {
   DEFAULT_MATERIAL_HIT_SOUND_URL,
   DEFAULT_MATERIAL_MISS_SOUND_URL,
@@ -10,6 +11,48 @@ const SWORD_MISS_VOLUME = 0.5
 const SWORD_HIT_POOL_SIZE = 4
 const SWORD_MISS_POOL_SIZE = 4
 export const SWORD_MISS_DELAY_MS = 450
+
+const STORAGE_KEY_VOLUME = 'onlinerpg_sfxVolume'
+const STORAGE_KEY_MUTED = 'onlinerpg_sfxMuted'
+const DEFAULT_SFX_VOLUME = 1
+
+function loadSfxVolume(): number {
+  if (typeof localStorage === 'undefined') return DEFAULT_SFX_VOLUME
+  const saved = localStorage.getItem(STORAGE_KEY_VOLUME)
+  if (saved !== null) {
+    const v = parseFloat(saved)
+    if (!isNaN(v)) return Math.max(0, Math.min(1, v))
+  }
+  return DEFAULT_SFX_VOLUME
+}
+
+export const sfxVolume = writable<number>(loadSfxVolume())
+export const sfxMuted = writable<boolean>(
+  typeof localStorage !== 'undefined' &&
+    localStorage.getItem(STORAGE_KEY_MUTED) === 'true'
+)
+
+let volumeSaveTimer: ReturnType<typeof setTimeout> | undefined
+
+sfxVolume.subscribe((v) => {
+  if (typeof localStorage === 'undefined') return
+  clearTimeout(volumeSaveTimer)
+  volumeSaveTimer = setTimeout(
+    () => localStorage.setItem(STORAGE_KEY_VOLUME, String(v)),
+    300
+  )
+})
+
+sfxMuted.subscribe((m) => {
+  if (typeof localStorage === 'undefined') return
+  localStorage.setItem(STORAGE_KEY_MUTED, String(m))
+})
+
+// Multiplier applied on top of each sound's baseline volume so the Settings
+// SFX slider/mute scales all effects uniformly.
+function getSfxMultiplier(): number {
+  return get(sfxMuted) ? 0 : get(sfxVolume)
+}
 
 interface AudioPool {
   audios: HTMLAudioElement[]
@@ -64,9 +107,12 @@ function playAudioFromPool(
   const audio = pool.audios[pool.index]
   pool.index = (pool.index + 1) % pool.audios.length
 
+  const effectiveVolume = volume * getSfxMultiplier()
+  if (effectiveVolume <= 0) return
+
   try {
     audio.currentTime = 0
-    audio.volume = volume
+    audio.volume = effectiveVolume
     audio.play().catch(() => {})
   } catch {
     // Browser audio policies can reject playback until the first user gesture.
