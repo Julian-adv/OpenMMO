@@ -703,6 +703,19 @@ export function handleServerMessage(
       dungeonManager.markPropOpened(data.entrance_id, data.depth, data.prop_id)
       break
 
+    case 'DungeonDoorToggled':
+      dungeonManager.applyDoorToggle(
+        data.entrance_id,
+        data.depth,
+        data.door_id,
+        data.is_open
+      )
+      break
+
+    case 'DungeonDoorsState':
+      dungeonManager.applyDoorsSnapshot(data.entrance_id, data.doors)
+      break
+
     case 'HouseSpawned':
       housingManager.handleRemoteHouseSpawned(data.house)
       break

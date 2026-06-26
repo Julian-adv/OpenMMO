@@ -48,7 +48,7 @@ export type ClickIntent =
       wallDir: WallDirection
       segmentIndex: number
     }
-  | { type: 'toggle_dungeon_door' }
+  | { type: 'toggle_dungeon_door'; depth: number; doorId: number }
   | {
       type: 'interact_object'
       objectId: number
@@ -274,8 +274,12 @@ class InputHandler {
           let obj: THREE.Object3D | null = doorHits[0].object
           while (obj) {
             const d = obj.userData
-            if (d && d.dungeonDoor) {
-              return { type: 'toggle_dungeon_door' }
+            if (d && d.dungeonDoorKey) {
+              return {
+                type: 'toggle_dungeon_door',
+                depth: d.dungeonDoorKey.depth,
+                doorId: d.dungeonDoorKey.doorId,
+              }
             }
             if (
               d &&

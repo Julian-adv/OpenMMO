@@ -140,6 +140,14 @@ export type ClientMessage =
   | {
       OpenDungeonProp: { entrance_id: string; depth: number; prop_id: number }
     }
+  | {
+      ToggleDungeonDoor: {
+        entrance_id: string
+        depth: number
+        door_id: number
+      }
+    }
+  | { RequestDungeonDoors: { entrance_id: string } }
   | { DebugTeleport: { position: Position } }
   | { DebugDropItem: { item_def_id: string } }
   | { DebugSetTime: { hour: number; minute: number } }

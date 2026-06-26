@@ -36,7 +36,11 @@ import {
 import { getHousingMaterial } from './housing-textures'
 import {
   ENTRANCE_WALL_T,
+  ENTRANCE_DOOR_DEPTH,
+  ENTRANCE_DOOR_ID,
+  encodeInteriorDoorId,
   shaftCoverRun,
+  type DungeonDoorSeg,
   type DungeonFloorLayout,
   type DungeonShaft,
 } from '../managers/dungeonManager'
@@ -322,6 +326,55 @@ function halfDoorLeafShape(
  * pushed as a wall-textured GeoEntry to merge with the other entrance walls.
  * `entryLow` = the entry sits at the low-coordinate end.
  */
+/** Append the door-cap dome underside (right→left) to an arch shape spanning
+ *  [0,W] laterally, so the rounded door cap fits exactly beneath it. */
+function traceArchDome(shape: THREE.Shape, W: number) {
+  const halfW = W / 2
+  const capH = DOOR_HEIGHT - DOOR_SHOULDER
+  const p1 = capArcPoint(halfW, capH, DOOR_SHOULDER, DOOR_CAP_ANGLES_DEG[0])
+  const p2 = capArcPoint(halfW, capH, DOOR_SHOULDER, DOOR_CAP_ANGLES_DEG[1])
+  shape.lineTo(W - p1.x, p1.y) // right lower bend
+  shape.lineTo(W - p2.x, p2.y) // right upper bend
+  shape.lineTo(halfW, DOOR_HEIGHT) // apex
+  shape.lineTo(p2.x, p2.y) // left upper bend
+  shape.lineTo(p1.x, p1.y) // left lower bend
+}
+
+/**
+ * Extrude an arch spandrel shape (laid out in lateral-X / up-Y) to thickness
+ * `T`, convert to indexed (so it merges with the indexed wall geometry), place
+ * it on the wall line and push it. `alongZ` ⇒ keep shapeX→X with thickness→Z
+ * centred at z=`wallLine`; otherwise rotate shapeX→+Z with thickness→−X centred
+ * at x=`wallLine`. `latStart` is the lateral origin (the opening's low edge).
+ */
+function extrudeAndPlaceArch(
+  entries: GeoEntry[],
+  shape: THREE.Shape,
+  alongZ: boolean,
+  latStart: number,
+  wallLine: number,
+  T: number,
+  textureIndex: number
+) {
+  const raw = new THREE.ExtrudeGeometry(shape, {
+    depth: T,
+    bevelEnabled: false,
+  })
+  const geo = mergeVertices(raw)
+  raw.dispose()
+  const m = new THREE.Matrix4()
+  if (alongZ) {
+    m.makeTranslation(latStart, 0, wallLine - T / 2)
+    geo.applyMatrix4(m)
+  } else {
+    m.makeRotationY(-Math.PI / 2)
+    geo.applyMatrix4(m)
+    m.makeTranslation(wallLine + T / 2, 0, latStart)
+    geo.applyMatrix4(m)
+  }
+  entries.push({ geo, textureIndex })
+}
+
 function addEntranceArch(
   entries: GeoEntry[],
   alongZ: boolean,
@@ -332,51 +385,25 @@ function addEntranceArch(
   gableRise: number
 ) {
   const W = ctx.shaftW
-  const halfW = W / 2
-  const shoulder = DOOR_SHOULDER
-  const capH = DOOR_HEIGHT - shoulder
-  const p1 = capArcPoint(halfW, capH, shoulder, DOOR_CAP_ANGLES_DEG[0])
-  const p2 = capArcPoint(halfW, capH, shoulder, DOOR_CAP_ANGLES_DEG[1])
-  const T = ENTRANCE_WALL_T
-
-  // Trace the gabled top + sides, then the dome underside right→left.
+  // Gabled top + sides, then the shared dome underside.
   const shape = new THREE.Shape()
-  shape.moveTo(0, shoulder)
+  shape.moveTo(0, DOOR_SHOULDER)
   shape.lineTo(0, top)
-  shape.lineTo(halfW, top + gableRise) // gable apex (roof ridge)
+  shape.lineTo(W / 2, top + gableRise) // gable apex (roof ridge)
   shape.lineTo(W, top)
-  shape.lineTo(W, shoulder)
-  shape.lineTo(W - p1.x, p1.y) // right lower bend
-  shape.lineTo(W - p2.x, p2.y) // right upper bend
-  shape.lineTo(halfW, DOOR_HEIGHT) // apex
-  shape.lineTo(p2.x, p2.y) // left upper bend
-  shape.lineTo(p1.x, p1.y) // left lower bend
+  shape.lineTo(W, DOOR_SHOULDER)
+  traceArchDome(shape, W)
   shape.closePath()
-
-  // ExtrudeGeometry is non-indexed; the other entrance walls (Box/Shape) are
-  // indexed, and mergeGeometries needs all-or-none indexed. mergeVertices
-  // returns an indexed copy so the arch merges with them.
-  const raw = new THREE.ExtrudeGeometry(shape, {
-    depth: T,
-    bevelEnabled: false,
-  })
-  const geo = mergeVertices(raw)
-  raw.dispose()
-  const m = new THREE.Matrix4()
-  if (alongZ) {
-    // shapeX→X (lateral), shapeY→Y, thickness→Z, centred on the entry plane.
-    const entryZ = entryLow ? cr.z : cr.z + cr.d
-    m.makeTranslation(cr.x, 0, entryZ - T / 2)
-    geo.applyMatrix4(m)
-  } else {
-    // Rotate so shapeX→+Z (lateral), thickness→−X; then place on the entry plane.
-    m.makeRotationY(-Math.PI / 2)
-    geo.applyMatrix4(m)
-    const entryX = entryLow ? cr.x : cr.x + cr.w
-    m.makeTranslation(entryX + T / 2, 0, cr.z)
-    geo.applyMatrix4(m)
-  }
-  entries.push({ geo, textureIndex: DUNGEON_ENTRANCE_WALL_TEXTURE_IDX })
+  // alongZ: entry plane is z; otherwise x. entryLow ⇒ the low-coordinate end.
+  extrudeAndPlaceArch(
+    entries,
+    shape,
+    alongZ,
+    alongZ ? cr.x : cr.z,
+    alongZ ? (entryLow ? cr.z : cr.z + cr.d) : entryLow ? cr.x : cr.x + cr.w,
+    ENTRANCE_WALL_T,
+    DUNGEON_ENTRANCE_WALL_TEXTURE_IDX
+  )
 }
 
 export interface DoorLeaf {
@@ -402,6 +429,87 @@ function leafOpenAngle(
   const plus = closedAngle + Math.PI / 2
   const dotPlus = Math.cos(plus) * outX - Math.sin(plus) * outZ
   return dotPlus >= 0 ? plus : closedAngle - Math.PI / 2
+}
+
+/**
+ * Build one door leaf: a half-heptagon panel extruded to DOOR_THICKNESS and
+ * hinged at its outer jamb, mapped to its half of the garage-door image (u from
+ * the hinge edge to the centre split, v over the full height). Shared by the
+ * surface entrance and the interior room doors. `outX/outZ` is the outward swing
+ * direction (the side the leaves open toward). The pivot is left pickable for
+ * the click raycaster; callers tag `pivot.userData.dungeonDoorKey` with the
+ * door's (depth, id) so a click resolves which door to toggle.
+ */
+interface DoorLeafSpec {
+  hingeX: number
+  hingeZ: number
+  closedAngle: number
+  uHinge: number
+}
+
+/**
+ * The two leaf hinge specs for a double door. `alongZ` ⇒ the door spans X at the
+ * wall line z=`line` (low/high jambs at x=`latLow`/`latHigh`); otherwise it spans
+ * Z at x=`line`. The leaves hinge on opposite jambs and meet at the centre split
+ * (uHinge 0/1 → both map to U=0.5 there). Shared by the entrance (its along-Z
+ * case ≙ a room's north wall) and the interior doors.
+ */
+function doorLeafSpecs(
+  alongZ: boolean,
+  latLow: number,
+  latHigh: number,
+  line: number
+): DoorLeafSpec[] {
+  return alongZ
+    ? [
+        { hingeX: latLow, hingeZ: line, closedAngle: 0, uHinge: 0 },
+        { hingeX: latHigh, hingeZ: line, closedAngle: Math.PI, uHinge: 1 },
+      ]
+    : [
+        { hingeX: line, hingeZ: latLow, closedAngle: -Math.PI / 2, uHinge: 0 },
+        { hingeX: line, hingeZ: latHigh, closedAngle: Math.PI / 2, uHinge: 1 },
+      ]
+}
+
+function makeDoorLeaf(
+  spec: DoorLeafSpec,
+  halfW: number,
+  outX: number,
+  outZ: number,
+  mat: THREE.Material
+): DoorLeaf {
+  const shape = halfDoorLeafShape(halfW, DOOR_HEIGHT, DOOR_SHOULDER)
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: DOOR_THICKNESS,
+    bevelEnabled: false,
+  })
+  geo.translate(0, 0, -DOOR_THICKNESS / 2) // centre thickness on the hinge plane
+  // ExtrudeGeometry UVs are in shape (meter) coords. Map this leaf to its half
+  // of the image: u runs from uHinge (hinge edge) to 0.5 (centre split), v spans
+  // the full height. (Thin side faces get squished UVs — barely seen.)
+  const uv = geo.getAttribute('uv')
+  for (let i = 0; i < uv.count; i++) {
+    const u = spec.uHinge + (0.5 - spec.uHinge) * (uv.getX(i) / halfW)
+    uv.setXY(i, u, uv.getY(i) / DOOR_HEIGHT)
+  }
+  uv.needsUpdate = true
+
+  const pivot = new THREE.Group()
+  pivot.position.set(spec.hingeX, 0, spec.hingeZ)
+  pivot.rotation.y = spec.closedAngle
+  pivot.add(new THREE.Mesh(geo, mat))
+  return {
+    pivot,
+    closedAngle: spec.closedAngle,
+    openAngle: leafOpenAngle(spec.closedAngle, outX, outZ),
+  }
+}
+
+/** Tag a door's leaves so the click raycaster knows which door to toggle. */
+function tagDoorLeaves(leaves: DoorLeaf[], depth: number, doorId: number) {
+  for (const leaf of leaves) {
+    leaf.pivot.userData.dungeonDoorKey = { depth, doorId }
+  }
 }
 
 /**
@@ -433,58 +541,118 @@ function buildEntranceDoors(
   // The two leaves hinge on opposite lateral jambs (low / high) and meet at the
   // doorway centre. `uHinge` is the image U at the hinge edge; both leaves run
   // to U=0.5 at the split, so the low leaf maps [0,0.5] and the high leaf [1,0.5].
-  const specs = alongZ
-    ? [
-        { hingeX: cr.x, hingeZ: entryZ, closedAngle: 0, uHinge: 0 },
-        {
-          hingeX: cr.x + cr.w,
-          hingeZ: entryZ,
-          closedAngle: Math.PI, // +x' points back toward the centre
-          uHinge: 1,
-        },
-      ]
-    : [
-        { hingeX: entryX, hingeZ: cr.z, closedAngle: -Math.PI / 2, uHinge: 0 },
-        {
-          hingeX: entryX,
-          hingeZ: cr.z + cr.d,
-          closedAngle: Math.PI / 2,
-          uHinge: 1,
-        },
-      ]
+  const specs = doorLeafSpecs(
+    alongZ,
+    alongZ ? cr.x : cr.z,
+    alongZ ? cr.x + cr.w : cr.z + cr.d,
+    alongZ ? entryZ : entryX
+  )
 
-  const leaves: DoorLeaf[] = []
-  for (const spec of specs) {
-    const shape = halfDoorLeafShape(halfW, DOOR_HEIGHT, DOOR_SHOULDER)
-    const geo = new THREE.ExtrudeGeometry(shape, {
-      depth: DOOR_THICKNESS,
-      bevelEnabled: false,
-    })
-    geo.translate(0, 0, -DOOR_THICKNESS / 2) // centre thickness on the hinge plane
-    // ExtrudeGeometry UVs are in shape (meter) coords. Map this leaf to its
-    // half of the image: u runs from uHinge (hinge edge) to 0.5 (centre split),
-    // v spans the full height. (Thin side faces get squished UVs — barely seen.)
-    const uv = geo.getAttribute('uv')
-    for (let i = 0; i < uv.count; i++) {
-      const u = spec.uHinge + (0.5 - spec.uHinge) * (uv.getX(i) / halfW)
-      uv.setXY(i, u, uv.getY(i) / DOOR_HEIGHT)
-    }
-    uv.needsUpdate = true
-
-    const pivot = new THREE.Group()
-    pivot.name = 'dungeon_entrance_door'
-    // Tag for the click raycaster (inputHandler) to recognise a dungeon door.
-    pivot.userData.dungeonDoor = true
-    pivot.position.set(spec.hingeX, 0, spec.hingeZ)
-    pivot.rotation.y = spec.closedAngle
-    pivot.add(new THREE.Mesh(geo, mat))
-    leaves.push({
-      pivot,
-      closedAngle: spec.closedAngle,
-      openAngle: leafOpenAngle(spec.closedAngle, outX, outZ),
-    })
-  }
+  const leaves = specs.map((spec) => makeDoorLeaf(spec, halfW, outX, outZ, mat))
+  for (const leaf of leaves) leaf.pivot.name = 'dungeon_entrance_door'
+  tagDoorLeaves(leaves, ENTRANCE_DOOR_DEPTH, ENTRANCE_DOOR_ID)
   return leaves
+}
+
+export interface InteriorDoor {
+  /** Synced-state key (matches the toggle packet + dungeonManager door map). */
+  depth: number
+  doorId: number
+  /** The two swinging leaves (added to a sibling group, animated by the layer). */
+  leaves: DoorLeaf[]
+  /** Doorway blocking segment in floor-local XZ (add the floor origin for world
+   *  space); the player can't cross it while the door is shut. */
+  seg: DungeonDoorSeg
+  /** Eased open fraction (0 shut .. 1 open); the layer advances it toward the
+   *  click-toggled, server-synced open state. */
+  open: number
+}
+
+/**
+ * Stone arch above an interior room door: a flat-topped wall panel spanning the
+ * opening from the door's shoulder up to the wall top, its underside the same
+ * quarter-ellipse dome as the door cap (so the rounded door fits beneath it).
+ * Room-wall texture (matching the surrounding room walls), extruded to the
+ * wall-run thickness and centred on the room↔corridor wall line. `northWall`
+ * ⇒ the door spans X (panel laid along X, thickness along Z); otherwise it spans
+ * Z (rotated so the panel lies along Z, thickness along X).
+ */
+function addInteriorDoorArch(
+  archEntries: GeoEntry[],
+  northWall: boolean,
+  lat0: number,
+  W: number,
+  wallLine: number,
+  wallTop: number
+) {
+  // Flat top + sides, then the shared dome underside.
+  const shape = new THREE.Shape()
+  shape.moveTo(0, DOOR_SHOULDER)
+  shape.lineTo(0, wallTop)
+  shape.lineTo(W, wallTop)
+  shape.lineTo(W, DOOR_SHOULDER)
+  traceArchDome(shape, W)
+  shape.closePath()
+  extrudeAndPlaceArch(
+    archEntries,
+    shape,
+    northWall,
+    lat0,
+    wallLine,
+    0.1, // matches the wall-run thickness
+    DUNGEON_WALL_TEXTURE_IDX
+  )
+}
+
+/**
+ * One interior room door across a corridor mouth: a pair of swinging leaves
+ * (same half-heptagon shape as the surface entrance doors) plus a stone arch
+ * filling the wall above the rounded cap. `northWall` ⇒ the mouth is in the
+ * room's north wall (door spans X, opens south into the room); otherwise it is
+ * the east wall (door spans Z, opens west into the room). `lat0`/`len` are the
+ * opening's start cell and width along the wall; `wallLine` is the room↔corridor
+ * grid line. Arch quads go to `archEntries` (room-wall texture, merged
+ * statically); the returned leaves are added to the floor group and animated.
+ */
+function buildInteriorDoor(
+  depth: number,
+  northWall: boolean,
+  lat0: number,
+  len: number,
+  wallLine: number,
+  wallTop: number,
+  mat: THREE.Material,
+  archEntries: GeoEntry[]
+): InteriorDoor {
+  const halfW = len / 2
+  // Swing into the room: south (+Z) for a north wall, west (−X) for an east one.
+  const outX = northWall ? 0 : -1
+  const outZ = northWall ? 1 : 0
+  // north wall ≙ the entrance's along-Z case (door spans X at z=wallLine).
+  const specs = doorLeafSpecs(northWall, lat0, lat0 + len, wallLine)
+  const leaves = specs.map((s) => makeDoorLeaf(s, halfW, outX, outZ, mat))
+  const doorId = encodeInteriorDoorId(northWall, lat0, wallLine)
+  tagDoorLeaves(leaves, depth, doorId)
+  addInteriorDoorArch(archEntries, northWall, lat0, len, wallLine, wallTop)
+  // Blocking segment along the wall line (floor-local; the layer adds origin).
+  const seg: DungeonDoorSeg = northWall
+    ? { doorId, ax: lat0, az: wallLine, bx: lat0 + len, bz: wallLine }
+    : { doorId, ax: wallLine, az: lat0, bx: wallLine, bz: lat0 + len }
+  return { depth, doorId, leaves, seg, open: 0 }
+}
+
+/** Percent chance a qualifying corridor mouth gets a door. */
+const INTERIOR_DOOR_PCT = 30
+
+/** Stable [0,1) hash of four small ints — picks which corridor mouths get a
+ *  door, deterministically per layout so every re-render matches (geometry is
+ *  generated, never transmitted, so this needs no server agreement). */
+function doorHash(a: number, b: number, c: number, d: number): number {
+  let h = 2166136261
+  for (const v of [a, b, c, d]) {
+    h = Math.imul(h ^ (v >>> 0), 16777619)
+  }
+  return ((h >>> 0) % 1000) / 1000
 }
 
 function shaftRect(shaft: DungeonShaft, ctx: DungeonGeoCtx) {
@@ -787,6 +955,9 @@ export interface DungeonFloorGroup {
   upShaftAABB: THREE.Box3
   /** Per-side wall runs (all four directions), faded individually on occlusion. */
   wallRuns: WallRun[]
+  /** Interior room doors (corridor mouths in north/east room walls), opened by
+   *  the layer on player proximity. */
+  doors: InteriorDoor[]
 }
 
 /**
@@ -1029,6 +1200,87 @@ export function buildDungeonFloorGroup(
   }
   group.add(wallRunGroup)
 
+  // --- Interior room doors: a corridor mouth in a room's north or east wall
+  // gets a double door (same shape as the surface entrance) with a 30% chance.
+  // Placement is hashed from the opening's coordinates so it's stable across
+  // re-renders and matches the door-id the toggle packet uses. The arch above
+  // (room-wall texture) merges statically; the swinging leaves are returned so
+  // the layer can open them on click and the manager can block them when shut.
+  const isCorridor = (x: number, z: number) =>
+    carvedAt(x, z) && !roomAt(x, z) && !inAnyShaft(x, z)
+  const doorMat = getHousingMaterial(DUNGEON_DOOR_TEXTURE_IDX)
+  const archEntries: GeoEntry[] = []
+  const doors: InteriorDoor[] = []
+  const tryDoorway = (
+    northWall: boolean,
+    lat0: number,
+    len: number,
+    wallLine: number
+  ) => {
+    if (
+      doorHash(layout.depth, northWall ? 0 : 1, lat0, wallLine) * 100 >=
+      INTERIOR_DOOR_PCT
+    )
+      return
+    doors.push(
+      buildInteriorDoor(
+        layout.depth,
+        northWall,
+        lat0,
+        len,
+        wallLine,
+        ctx.wallHeight,
+        doorMat,
+        archEntries
+      )
+    )
+  }
+  for (const room of layout.rooms) {
+    // North wall (z = room.z): scan its row for maximal runs of cells whose
+    // north neighbour is a corridor — the corridor mouth, i.e. a doorway gap.
+    {
+      const zr = room.z
+      let start = -1
+      for (let x = room.x; x <= room.x + room.w; x++) {
+        const open =
+          x < room.x + room.w && carvedAt(x, zr) && isCorridor(x, zr - 1)
+        if (open && start < 0) start = x
+        if (!open && start >= 0) {
+          tryDoorway(true, start, x - start, zr)
+          start = -1
+        }
+      }
+    }
+    // East wall (cells x = room.x + room.w − 1; wall line one cell further):
+    // scan its column for runs whose east neighbour is a corridor.
+    {
+      const xr = room.x + room.w - 1
+      const wallLine = room.x + room.w
+      let start = -1
+      for (let z = room.z; z <= room.z + room.d; z++) {
+        const open =
+          z < room.z + room.d && carvedAt(xr, z) && isCorridor(xr + 1, z)
+        if (open && start < 0) start = z
+        if (!open && start >= 0) {
+          tryDoorway(false, start, z - start, wallLine)
+          start = -1
+        }
+      }
+    }
+  }
+  // Arches merge into the floor group but stay non-pickable, so a ground click
+  // near a doorway falls through to the floor. The door leaves are NOT added
+  // here — the layer parents them to a separate pickable group (so the door
+  // click raycast can hit them without them intercepting click-to-move).
+  if (archEntries.length > 0) {
+    const archGroup = new THREE.Group()
+    addMergedMeshes(archGroup, archEntries)
+    archGroup.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.raycast = () => {}
+    })
+    group.add(archGroup)
+  }
+
   // Local-space occlusion AABB: the shaft footprint from this floor (y=0) up to
   // the floor above. The layer adds the group's world position before testing.
   const ur = shaftRect(layout.upShaft, ctx)
@@ -1036,7 +1288,7 @@ export function buildDungeonFloorGroup(
     new THREE.Vector3(ur.x, 0, ur.z),
     new THREE.Vector3(ur.x + ur.w, ctx.floorHeight, ur.z + ur.d)
   )
-  return { group, upShaftAABB, wallRuns }
+  return { group, upShaftAABB, wallRuns, doors }
 }
 
 /**

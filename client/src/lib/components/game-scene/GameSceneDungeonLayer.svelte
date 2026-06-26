@@ -9,23 +9,23 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { onDestroy } from 'svelte'
-  import { get } from 'svelte/store'
   import { SvelteMap } from 'svelte/reactivity'
   import {
     currentDungeonDepth,
     currentDungeonId,
-    dungeonDoorOpen,
     dungeonPropsResetRevision,
     dungeonPropsRevision,
   } from '../../stores/dungeonStore'
   import {
     dungeonManager,
+    ENTRANCE_DOOR_DEPTH,
+    ENTRANCE_DOOR_ID,
     type DungeonFloorLayout,
   } from '../../managers/dungeonManager'
   import { objectManager } from '../../managers/objectManager'
   import { loadGLB } from '../../utils/gltfCache'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
-  import type { DoorLeaf } from '../../utils/dungeon-geometry'
+  import type { DoorLeaf, InteriorDoor } from '../../utils/dungeon-geometry'
   import { networkManager } from '../../network/socket'
   import {
     buildDungeonEntranceGroup,
@@ -145,7 +145,7 @@
   /** Double entrance doors; swing open/shut when clicked (house-door style). */
   let entranceDoors: DoorLeaf[] = []
   /** Eased open fraction (0 shut → 1 fully open), lerped per frame toward the
-   *  click-toggled dungeonDoorOpen store. */
+   *  entrance door's synced open/shut state (door key 0/0). */
   let doorOpenAmount = 0
   /** Whether the surface entrance is currently shown (depth 0). Tracked so we
    *  can reconcile the door visual to the store on the hidden→shown edge. */
@@ -182,6 +182,16 @@
   let wallRuns: WallRunFade[] = []
   const WALL_RUN_MIN_OCCLUSION = 0.05
 
+  // ── Interior room doors ──────────────────────────────────
+  // Double doors across corridor mouths in room north/east walls. Click to
+  // open/close (server-synced, like the entrance door); a shut door blocks its
+  // corridor mouth (dungeonManager.interiorDoorBlocksMovement). The leaves live
+  // in their own pickable group (not the floor click group), positioned at the
+  // floor origin and replaced on every floor (re)build.
+  let interiorDoors: InteriorDoor[] = []
+  const interiorDoorGroup = new THREE.Group()
+  root.add(interiorDoorGroup)
+
   function clearGroup() {
     if (currentGroup) {
       root.remove(currentGroup)
@@ -193,6 +203,16 @@
     upShaftAABB = null
     upShaftOccluded = false
     wallRuns = []
+    // Door leaves live in this persistent sibling group, so disposeDungeonGroup
+    // (which only walks currentGroup) won't reach them — dispose here. Materials
+    // are shared (never disposed), like disposeDungeonGroup.
+    for (const c of [...interiorDoorGroup.children]) {
+      c.traverse((o) => {
+        if (o instanceof THREE.Mesh) o.geometry.dispose()
+      })
+      interiorDoorGroup.remove(c)
+    }
+    interiorDoors = []
   }
 
   /** Detach the current floor's props. Their GLB geometry/materials are shared
@@ -737,6 +757,10 @@
           )
           root.add(entranceGroup)
         }
+        // Pull the current open/closed state of every door in this dungeon
+        // (entrance + interior, all depths) so doors others left open render
+        // correctly. Live toggles arrive via DungeonDoorToggled broadcasts.
+        networkManager.sendRequestDungeonDoors(id)
       }
     }
     if (entranceGroup) {
@@ -744,10 +768,15 @@
       if (showEntrance && !entranceVisible) {
         // The surface entrance just (re)appeared — returning to the surface
         // after a respawn/teleport reuses this group without a rebuild. Snap
-        // the door visual to the live open/shut store so a stale open angle
+        // the door visual to the live open/shut state so a stale open angle
         // can't linger while collision (entranceBlocksMovement) treats it as
         // shut, which would look open but block the player from descending.
-        doorOpenAmount = get(dungeonDoorOpen) ? 1 : 0
+        doorOpenAmount = dungeonManager.isDoorOpen(
+          ENTRANCE_DOOR_DEPTH,
+          ENTRANCE_DOOR_ID
+        )
+          ? 1
+          : 0
         applyDoorRotation()
       }
       entranceVisible = showEntrance
@@ -783,6 +812,23 @@
     root.add(currentGroup)
     cacheUpShaft(currentGroup, built.upShaftAABB)
     cacheWallRuns(currentGroup, built.wallRuns)
+
+    // Interior doors: parent the leaves to the door group (same origin as the
+    // floor) and register their world-space blocking segments for collision.
+    interiorDoors = built.doors
+    interiorDoorGroup.position.copy(currentGroup.position)
+    for (const door of built.doors)
+      for (const leaf of door.leaves) interiorDoorGroup.add(leaf.pivot)
+    dungeonManager.registerDoorSegs(
+      depth,
+      built.doors.map((d) => ({
+        doorId: d.doorId,
+        ax: dungeonManager.originX + d.seg.ax,
+        az: dungeonManager.originZ + d.seg.az,
+        bx: dungeonManager.originX + d.seg.bx,
+        bz: dungeonManager.originZ + d.seg.bz,
+      }))
+    )
     void buildProps(layout, key, depth)
   })
 
@@ -882,12 +928,30 @@
       }
     }
 
-    // Swing both door leaves toward their click-toggled open/shut target
-    // (~0.35s either way at 60fps). Driven by dungeonDoorOpen, not proximity.
+    // Swing both door leaves toward their click-toggled, server-synced target
+    // (~0.35s either way at 60fps). Driven by the door state, not proximity.
     if (entranceDoors.length > 0) {
-      const target = $dungeonDoorOpen ? 1 : 0
+      const target = dungeonManager.isDoorOpen(
+        ENTRANCE_DOOR_DEPTH,
+        ENTRANCE_DOOR_ID
+      )
+        ? 1
+        : 0
       doorOpenAmount += (target - doorOpenAmount) * 0.12
       applyDoorRotation()
+    }
+
+    // Interior room doors swing toward their server-synced open/shut state
+    // (set by click toggles, same ease as the entrance door). Settled doors
+    // (the common case) snap and skip, so we don't re-write rotations forever.
+    for (const door of interiorDoors) {
+      const target = dungeonManager.isDoorOpen(door.depth, door.doorId) ? 1 : 0
+      if (door.open === target) continue
+      door.open += (target - door.open) * 0.12
+      if (Math.abs(target - door.open) < 1e-3) door.open = target
+      for (const leaf of door.leaves)
+        leaf.pivot.rotation.y =
+          leaf.closedAngle + (leaf.openAngle - leaf.closedAngle) * door.open
     }
 
     // Final-floor treasure chest: walking up to it requests an open once
@@ -975,15 +1039,16 @@
   }
 
   /**
-   * Click raycast targets for the entrance doors. Only at depth 0 (where the
-   * entrance is shown) — returns [] otherwise so closed leaves underground
-   * can't intercept clicks. Reads the dungeon stores so the GameScene prop
-   * re-evaluates on enter/exit and depth change.
+   * Click raycast targets for the dungeon doors: the entrance doors at depth 0
+   * (where the entrance is shown), and the interior room doors underground.
+   * Reads the dungeon stores so the GameScene prop re-evaluates on enter/exit
+   * and depth change.
    */
   export function getDoorMeshes(): THREE.Object3D[] {
     void $currentDungeonId
-    if ($currentDungeonDepth !== 0) return []
-    return entranceDoors.map((leaf) => leaf.pivot)
+    if ($currentDungeonDepth === 0)
+      return entranceDoors.map((leaf) => leaf.pivot)
+    return interiorDoors.flatMap((door) => door.leaves.map((l) => l.pivot))
   }
 </script>
 

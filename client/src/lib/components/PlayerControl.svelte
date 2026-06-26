@@ -23,7 +23,7 @@
   } from '../utils/movementUtils'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { playerFloorOffset, playerFloorLevel } from '../stores/housingStore'
-  import { currentDungeonDepth, dungeonDoorOpen } from '../stores/dungeonStore'
+  import { currentDungeonDepth } from '../stores/dungeonStore'
   import { dungeonManager } from '../managers/dungeonManager'
   import { housingManager } from '../managers/housingManager'
   import { findPath } from '../managers/pathfinding'
@@ -1054,9 +1054,12 @@
         if (m) m.pendingPickupAfterMove = null
         networkManager.sendToggleDoor(houseId, roomIndex, wallDir, segmentIndex)
       },
-      toggleDungeonDoor: () => {
-        // Client-only cosmetic state — no server round-trip.
-        dungeonDoorOpen.update((open) => !open)
+      toggleDungeonDoor: (depth, doorId) => {
+        // Server flips and broadcasts the new state; the DungeonDoorToggled
+        // handler applies it (entrance store + interior door map), so the swing
+        // syncs to everyone nearby.
+        const id = dungeonManager.dungeonId
+        if (id) networkManager.sendToggleDungeonDoor(id, depth, doorId)
       },
       enterInteraction,
       enterPickup,

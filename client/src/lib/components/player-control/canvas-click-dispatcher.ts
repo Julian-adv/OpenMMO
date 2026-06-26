@@ -23,8 +23,9 @@ export interface CanvasClickActions {
     wallDir: WallDirection,
     segmentIndex: number
   ): void
-  /** Open/close the (client-only) dungeon entrance doors. */
-  toggleDungeonDoor(): void
+  /** Open/close a dungeon door (entrance at depth 0, or an interior room door)
+   *  via the server, so the swing syncs to other players. */
+  toggleDungeonDoor(depth: number, doorId: number): void
   enterInteraction(intent: InteractIntent): void
   enterPickup(instanceId: number): void
   approachAndPickup(intent: PickupIntent): void
@@ -60,7 +61,7 @@ export function dispatchCanvasClickIntent(
       )
       return
     case 'toggle_dungeon_door':
-      actions.toggleDungeonDoor()
+      actions.toggleDungeonDoor(intent.depth, intent.doorId)
       return
     case 'interact_object':
       actions.enterInteraction(intent)

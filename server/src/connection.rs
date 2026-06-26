@@ -681,6 +681,50 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::ToggleDungeonDoor {
+            entrance_id,
+            depth,
+            door_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                if let Some(is_open) = game_state
+                    .toggle_dungeon_door(&entrance_id, depth, door_id)
+                    .await
+                {
+                    if let Some((position, _, floor_level)) =
+                        game_state.get_player_position(id).await
+                    {
+                        game_state
+                            .send_direct_message_to_players_within_position(
+                                &position,
+                                floor_level,
+                                crate::game_state::AGENT_EVENT_DELIVERY_RADIUS,
+                                ServerMessage::DungeonDoorToggled {
+                                    entrance_id,
+                                    depth,
+                                    door_id,
+                                    is_open,
+                                },
+                                None,
+                            )
+                            .await;
+                    }
+                }
+            }
+        }
+
+        ClientMessage::RequestDungeonDoors { entrance_id } => {
+            if let Some(id) = &state.player_id {
+                let doors = game_state.dungeon_open_doors(&entrance_id).await;
+                game_state
+                    .send_direct_message(
+                        id,
+                        ServerMessage::DungeonDoorsState { entrance_id, doors },
+                    )
+                    .await;
+            }
+        }
+
         ClientMessage::DebugTeleport { position } => {
             if let Some(id) = &state.player_id {
                 let rotation = game_state

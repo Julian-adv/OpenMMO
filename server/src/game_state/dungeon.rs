@@ -56,6 +56,10 @@ pub(super) struct DungeonRuntime {
     /// lifetime/scope as `broken_props`; chests stay solid when opened (only the
     /// lid animates), so this drives no passability change.
     pub opened_props: HashMap<u8, HashSet<u32>>,
+    /// Open doors per depth (depth 0 = the surface entrance door; ≥1 = interior
+    /// room doors). `door_id` is opaque to the server — the client derives it
+    /// from the door's geometry. Same lifetime as `broken_props`.
+    pub open_doors: HashMap<u8, HashSet<u32>>,
 }
 
 pub(super) struct FloorRuntime {
@@ -117,7 +121,49 @@ impl GameState {
                 chest_opened_at: HashMap::new(),
                 broken_props: HashMap::new(),
                 opened_props: HashMap::new(),
+                open_doors: HashMap::new(),
             });
+    }
+
+    /// Toggle a dungeon door's open state and return the new state. `door_id`
+    /// is opaque to the server (the client derives it from the door geometry);
+    /// we just flip membership and let the connection layer broadcast. No
+    /// proximity check — doors are cosmetic and the client gates the click by
+    /// interaction range, mirroring the original client-only entrance door.
+    pub async fn toggle_dungeon_door(
+        &self,
+        entrance_id: &str,
+        depth: u8,
+        door_id: u32,
+    ) -> Option<bool> {
+        if self.dungeon_defs.get(entrance_id).is_none() {
+            return None;
+        }
+        self.ensure_dungeon_runtime(entrance_id).await;
+        let mut dungeons = self.dungeons.write().await;
+        let rt = dungeons.get_mut(entrance_id)?;
+        let set = rt.open_doors.entry(depth).or_default();
+        let is_open = if set.remove(&door_id) {
+            false
+        } else {
+            set.insert(door_id);
+            true
+        };
+        Some(is_open)
+    }
+
+    /// Every currently-open door in a dungeon as (depth, door_id) pairs, for the
+    /// RequestDungeonDoors snapshot. Reads without creating the runtime — an
+    /// untouched dungeon simply has no open doors.
+    pub async fn dungeon_open_doors(&self, entrance_id: &str) -> Vec<(u8, u32)> {
+        let dungeons = self.dungeons.read().await;
+        let Some(rt) = dungeons.get(entrance_id) else {
+            return Vec::new();
+        };
+        rt.open_doors
+            .iter()
+            .flat_map(|(depth, ids)| ids.iter().map(move |id| (*depth, *id)))
+            .collect()
     }
 
     /// Open the final-floor treasure chest: requires standing next to it

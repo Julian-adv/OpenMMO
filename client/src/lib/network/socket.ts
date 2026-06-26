@@ -372,6 +372,24 @@ class NetworkManager {
     })
   }
 
+  /** Toggle a dungeon door (entrance at depth 0, or an interior room door at
+   *  depth ≥1). The server flips and broadcasts the new state to nearby players. */
+  sendToggleDungeonDoor(entranceId: string, depth: number, doorId: number) {
+    this.sendMessage({
+      ToggleDungeonDoor: {
+        entrance_id: entranceId,
+        depth,
+        door_id: doorId,
+      },
+    })
+  }
+
+  /** Ask the server for the current open/closed state of all of a dungeon's
+   *  doors (sent on registering the dungeon, so others' open doors render). */
+  sendRequestDungeonDoors(entranceId: string) {
+    this.sendMessage({ RequestDungeonDoors: { entrance_id: entranceId } })
+  }
+
   sendTorchToggle(enabled: boolean) {
     this.sendMessage({ TorchToggle: { enabled } })
   }

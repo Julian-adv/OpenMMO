@@ -22,7 +22,6 @@ import {
 import {
   currentDungeonDepth,
   currentDungeonId,
-  dungeonDoorOpen,
   dungeonPropsResetRevision,
   dungeonPropsRevision,
 } from '../stores/dungeonStore'
@@ -68,6 +67,32 @@ export interface PendingPropBreak {
   propId: number
   x: number
   z: number
+}
+
+/** Depth/id under which the surface entrance door's open state is keyed in the
+ *  synced door map (depth 0 is the surface; interior doors live at depth ≥1). */
+export const ENTRANCE_DOOR_DEPTH = 0
+export const ENTRANCE_DOOR_ID = 0
+
+/** Opaque, stable door id for an interior room door, derived from its geometry
+ *  (wall side + opening start cell + wall line). Both the renderer and the
+ *  toggle packet use this, and the grid is < 256 cells so the parts pack into a
+ *  u32 without overlap. North/east only (the only walls that get doors). */
+export function encodeInteriorDoorId(
+  northWall: boolean,
+  lat0: number,
+  wallLine: number
+): number {
+  return (northWall ? 0 : 0x10000) + lat0 * 0x100 + wallLine
+}
+
+/** One interior door's blocking segment in world XZ (a shut door blocks it). */
+export interface DungeonDoorSeg {
+  doorId: number
+  ax: number
+  az: number
+  bx: number
+  bz: number
 }
 
 export interface DungeonFloorLayout {
@@ -264,6 +289,27 @@ function segmentsCross(
   )
 }
 
+/** Whether stepping from→to is blocked by the wall/door segment a→b: it crosses
+ *  the line outright (anti-tunneling), or it brings the player within
+ *  PLAYER_RADIUS of it from farther out (so you can slide along or back away).
+ *  Shared by the entrance shed and interior door collision. */
+function segmentBlocksMovement(
+  fromX: number,
+  fromZ: number,
+  toX: number,
+  toZ: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number
+): boolean {
+  if (segmentsCross(fromX, fromZ, toX, toZ, ax, az, bx, bz)) return true
+  const r2 = PLAYER_RADIUS * PLAYER_RADIUS
+  const dTo = distSqPointToSegment(toX, toZ, ax, az, bx, bz)
+  const dFrom = distSqPointToSegment(fromX, fromZ, ax, az, bx, bz)
+  return dTo < r2 && dFrom >= r2
+}
+
 class DungeonManager {
   private id: string | null = null
   private entrance: DungeonEntrance | null = null
@@ -285,6 +331,13 @@ class DungeonManager {
    *  the open once the player is within range. Same lifecycle as
    *  `pendingBreakState`. */
   private pendingOpenState: PendingPropBreak | null = null
+  /** Open doors by depth → set of door ids, synced from the server. depth 0 is
+   *  the surface entrance door; ≥1 are interior room doors. Cleared on
+   *  enter/exit; (re)populated by the snapshot + live toggle broadcasts. */
+  private openDoors = new Map<number, Set<number>>()
+  /** Interior door collision segments by depth (world XZ), registered by the
+   *  render layer when a floor builds. A shut door blocks its segment. */
+  private doorSegs = new Map<number, DungeonDoorSeg[]>()
 
   get active(): boolean {
     return this.id !== null
@@ -423,10 +476,12 @@ class DungeonManager {
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
     this.brokenProps.clear()
     this.openedProps.clear()
+    this.openDoors.clear()
+    this.doorSegs.clear()
     this.id = id
     this.entrance = entrance
     currentDungeonId.set(id)
-    dungeonDoorOpen.set(false) // new entrance always starts shut
+    // Doors start shut (openDoors cleared above); the snapshot reply corrects them.
   }
 
   /** Drop dungeon state (passability included). Depth resets to surface. */
@@ -437,11 +492,12 @@ class DungeonManager {
     this.layouts = []
     this.brokenProps.clear()
     this.openedProps.clear()
+    this.openDoors.clear()
+    this.doorSegs.clear()
     this.pendingBreakState = null
     this.pendingOpenState = null
     currentDungeonId.set(null)
     currentDungeonDepth.set(0)
-    dungeonDoorOpen.set(false)
   }
 
   /** Prop indices broken on a floor (empty set when none/unknown). */
@@ -650,7 +706,7 @@ class DungeonManager {
     // player off the *visible* wall; the doorway stays on the door panel plane.
     const T = ENTRANCE_WALL_T
     const nonrev = !shaft.reversed
-    const doorClosed = !get(dungeonDoorOpen)
+    const doorClosed = !this.isDoorOpen(ENTRANCE_DOOR_DEPTH, ENTRANCE_DOOR_ID)
     const edges: [number, number, number, number][] = []
     if (shaft.alongZ) {
       const xa = x0 - T
@@ -674,12 +730,75 @@ class DungeonManager {
       if (doorClosed) edges.push([entryX, z0, entryX, z1]) // doorway
     }
 
-    const r2 = PLAYER_RADIUS * PLAYER_RADIUS
     for (const [ax, az, bx, bz] of edges) {
-      if (segmentsCross(fromX, fromZ, toX, toZ, ax, az, bx, bz)) return true
-      const dTo = distSqPointToSegment(toX, toZ, ax, az, bx, bz)
-      const dFrom = distSqPointToSegment(fromX, fromZ, ax, az, bx, bz)
-      if (dTo < r2 && dFrom >= r2) return true
+      if (segmentBlocksMovement(fromX, fromZ, toX, toZ, ax, az, bx, bz))
+        return true
+    }
+    return false
+  }
+
+  /** Whether a door (depth, id) is currently open (default shut). */
+  isDoorOpen(depth: number, doorId: number): boolean {
+    return this.openDoors.get(depth)?.has(doorId) ?? false
+  }
+
+  private setDoorOpen(depth: number, doorId: number, open: boolean) {
+    let set = this.openDoors.get(depth)
+    if (!set) {
+      set = new Set()
+      this.openDoors.set(depth, set)
+    }
+    if (open) set.add(doorId)
+    else set.delete(doorId)
+  }
+
+  /** Apply a server door-toggle broadcast (entrance at depth 0, or an interior
+   *  room door). The rendered swing + collision both read the door map. */
+  applyDoorToggle(
+    entranceId: string,
+    depth: number,
+    doorId: number,
+    isOpen: boolean
+  ) {
+    if (entranceId !== this.id) return
+    this.setDoorOpen(depth, doorId, isOpen)
+  }
+
+  /** Replace the whole open-door set from the server snapshot (reply to a
+   *  RequestDungeonDoors). */
+  applyDoorsSnapshot(entranceId: string, doors: [number, number][]) {
+    if (entranceId !== this.id) return
+    this.openDoors.clear()
+    for (const [depth, doorId] of doors) this.setDoorOpen(depth, doorId, true)
+  }
+
+  /** Register a floor's interior-door collision segments (world XZ), called by
+   *  the render layer when that floor's geometry is built. */
+  registerDoorSegs(depth: number, segs: DungeonDoorSeg[]) {
+    this.doorSegs.set(depth, segs)
+  }
+
+  /**
+   * Shut interior room doors block movement on the current underground floor
+   * (client-side, like the entrance door). Mirrors entranceBlocksMovement's
+   * crossing + radius test per shut door; open doors are skipped.
+   */
+  interiorDoorBlocksMovement(
+    fromX: number,
+    fromZ: number,
+    toX: number,
+    toZ: number
+  ): boolean {
+    if (!this.active) return false
+    const depth = get(currentDungeonDepth)
+    if (depth < 1) return false
+    const segs = this.doorSegs.get(depth)
+    if (!segs || segs.length === 0) return false
+    const openSet = this.openDoors.get(depth)
+    for (const s of segs) {
+      if (openSet?.has(s.doorId)) continue
+      if (segmentBlocksMovement(fromX, fromZ, toX, toZ, s.ax, s.az, s.bx, s.bz))
+        return true
     }
     return false
   }
@@ -834,9 +953,9 @@ class DungeonManager {
       if (this.active) {
         currentDungeonDepth.set(0)
         // Surfacing via a server sync (respawn/teleport) shuts the entrance
-        // door, mirroring enter()/exit(). Without this the door keeps its
-        // pre-death open state, desyncing from the collision that re-shuts it.
-        dungeonDoorOpen.set(false)
+        // door locally, mirroring enter()/exit() (the snapshot reply corrects
+        // it to the authoritative state if someone left it open).
+        this.setDoorOpen(ENTRANCE_DOOR_DEPTH, ENTRANCE_DOOR_ID, false)
       }
       return
     }
