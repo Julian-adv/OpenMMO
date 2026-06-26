@@ -117,6 +117,10 @@ const DOOR_THICKNESS = 0.12
 const DOOR_HEIGHT = 2.85
 /** Height where the rectangular body ends and the pentagonal cap begins. */
 const DOOR_SHOULDER = 1.9
+/** Thickness of a dungeon wall-run mesh; its plane sits half this past the cell
+ *  face it guards (a north wall at z − HALF, an east wall at x + 1 + HALF). */
+const WALL_THICKNESS = 0.1
+const WALL_HALF_THICKNESS = WALL_THICKNESS / 2
 
 export interface DungeonGeoCtx {
   grid: number
@@ -599,7 +603,7 @@ function addInteriorDoorArch(
     northWall,
     lat0,
     wallLine,
-    0.1, // matches the wall-run thickness
+    WALL_THICKNESS,
     DUNGEON_WALL_TEXTURE_IDX
   )
 }
@@ -628,12 +632,18 @@ function buildInteriorDoor(
   // Swing into the room: south (+Z) for a north wall, west (−X) for an east one.
   const outX = northWall ? 0 : -1
   const outZ = northWall ? 1 : 0
-  // north wall ≙ the entrance's along-Z case (door spans X at z=wallLine).
-  const specs = doorLeafSpecs(northWall, lat0, lat0 + len, wallLine)
+  // The room wall run sits half its thickness outside the room boundary (a north
+  // wall at z = line − HALF, an east wall at x = line + HALF), so place the
+  // visible leaves and arch on that plane to keep them flush with the wall.
+  // The door id and the blocking segment stay on the integer grid line.
+  const wallPlane =
+    wallLine + (northWall ? -WALL_HALF_THICKNESS : WALL_HALF_THICKNESS)
+  // north wall ≙ the entrance's along-Z case (door spans X at z=wallPlane).
+  const specs = doorLeafSpecs(northWall, lat0, lat0 + len, wallPlane)
   const leaves = specs.map((s) => makeDoorLeaf(s, halfW, outX, outZ, mat))
   const doorId = encodeInteriorDoorId(northWall, lat0, wallLine)
   tagDoorLeaves(leaves, depth, doorId)
-  addInteriorDoorArch(archEntries, northWall, lat0, len, wallLine, wallTop)
+  addInteriorDoorArch(archEntries, northWall, lat0, len, wallPlane, wallTop)
   // Blocking segment along the wall line (floor-local; the layer adds origin).
   const seg: DungeonDoorSeg = northWall
     ? { doorId, ax: lat0, az: wallLine, bx: lat0 + len, bz: wallLine }
@@ -1101,8 +1111,27 @@ export function buildDungeonFloorGroup(
     layout.rooms.some((r) => rectContains(r, x, z))
   const wallTexAt = (x: number, z: number) =>
     roomAt(x, z) ? DUNGEON_WALL_TEXTURE_IDX : DUNGEON_CORRIDOR_WALL_TEXTURE_IDX
+  // Pull a corridor run in by the wall thickness at each end where a perpendicular
+  // room wall crosses, so the two coplanar faces don't z-fight (the room wall keeps
+  // the corner). `diagLo`/`diagHi` are the cells just past each end on the wall
+  // side; a room cell there means a room wall crosses. Colinear continuations and
+  // corridor↔corridor corners have a solid/corridor cell there, so they stay
+  // full-length (no gap). Returns the trimmed run span [lo, hi].
+  const trimCorridorRun = (
+    tex: number,
+    lo: number,
+    hi: number,
+    diagLo: [number, number],
+    diagHi: [number, number]
+  ): [number, number] =>
+    tex !== DUNGEON_CORRIDOR_WALL_TEXTURE_IDX
+      ? [lo, hi]
+      : [
+          roomAt(diagLo[0], diagLo[1]) ? lo + WALL_THICKNESS : lo,
+          roomAt(diagHi[0], diagHi[1]) ? hi - WALL_THICKNESS : hi,
+        ]
   // North/south edges merge into x-runs (one wall per row); the wall sits just
-  // past the carved cell's north (z − 0.05) or south (z + 1 + 0.05) face.
+  // past the carved cell's north (z − HALF) or south (z + 1 + HALF) face.
   for (let z = 0; z < grid; z++) {
     let northStart = -1
     let northTex = -1
@@ -1115,15 +1144,22 @@ export function buildDungeonFloorGroup(
       const tex = carved ? wallTexAt(x, z) : -1
       // Close a run at a gap, corner, or where room↔corridor texture flips.
       if (northStart >= 0 && (!north || tex !== northTex)) {
-        const len = x - northStart
+        const [lo, hi] = trimCorridorRun(
+          northTex,
+          northStart,
+          x,
+          [northStart - 1, z - 1],
+          [x, z - 1]
+        )
+        const len = hi - lo
         addWallRun(
           northTex,
           len,
           ctx.wallHeight,
-          0.1,
-          northStart + len / 2,
+          WALL_THICKNESS,
+          lo + len / 2,
           ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT,
-          z - 0.05
+          z - WALL_HALF_THICKNESS
         )
         northStart = -1
       }
@@ -1132,15 +1168,22 @@ export function buildDungeonFloorGroup(
         northTex = tex
       }
       if (southStart >= 0 && (!south || tex !== southTex)) {
-        const len = x - southStart
+        const [lo, hi] = trimCorridorRun(
+          southTex,
+          southStart,
+          x,
+          [southStart - 1, z + 1],
+          [x, z + 1]
+        )
+        const len = hi - lo
         addWallRun(
           southTex,
           len,
           ctx.wallHeight,
-          0.1,
-          southStart + len / 2,
+          WALL_THICKNESS,
+          lo + len / 2,
           ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT,
-          z + 1 + 0.05
+          z + 1 + WALL_HALF_THICKNESS
         )
         southStart = -1
       }
@@ -1151,7 +1194,7 @@ export function buildDungeonFloorGroup(
     }
   }
   // East/west edges merge into z-runs; the wall sits just past the carved cell's
-  // east (x + 1 + 0.05) or west (x − 0.05) face.
+  // east (x + 1 + HALF) or west (x − HALF) face.
   for (let x = 0; x < grid; x++) {
     let eastStart = -1
     let eastTex = -1
@@ -1163,15 +1206,22 @@ export function buildDungeonFloorGroup(
       const west = carved && !carvedAt(x - 1, z)
       const tex = carved ? wallTexAt(x, z) : -1
       if (eastStart >= 0 && (!east || tex !== eastTex)) {
-        const len = z - eastStart
+        const [lo, hi] = trimCorridorRun(
+          eastTex,
+          eastStart,
+          z,
+          [x + 1, eastStart - 1],
+          [x + 1, z]
+        )
+        const len = hi - lo
         addWallRun(
           eastTex,
-          0.1,
+          WALL_THICKNESS,
           ctx.wallHeight,
           len,
-          x + 1 + 0.05,
+          x + 1 + WALL_HALF_THICKNESS,
           ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT,
-          eastStart + len / 2
+          lo + len / 2
         )
         eastStart = -1
       }
@@ -1180,15 +1230,22 @@ export function buildDungeonFloorGroup(
         eastTex = tex
       }
       if (westStart >= 0 && (!west || tex !== westTex)) {
-        const len = z - westStart
+        const [lo, hi] = trimCorridorRun(
+          westTex,
+          westStart,
+          z,
+          [x - 1, westStart - 1],
+          [x - 1, z]
+        )
+        const len = hi - lo
         addWallRun(
           westTex,
-          0.1,
+          WALL_THICKNESS,
           ctx.wallHeight,
           len,
-          x - 0.05,
+          x - WALL_HALF_THICKNESS,
           ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT,
-          westStart + len / 2
+          lo + len / 2
         )
         westStart = -1
       }
