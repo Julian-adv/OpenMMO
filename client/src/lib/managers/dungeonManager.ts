@@ -17,7 +17,7 @@ import {
   dungeon_add_passability,
   dungeon_remove_passability,
   dungeon_passability_floor_cells,
-  dungeon_apply_broken_props,
+  dungeon_rebuild_floor,
 } from '../wasm/onlinerpg_shared'
 import {
   currentDungeonDepth,
@@ -536,7 +536,7 @@ class DungeonManager {
       hasRemovedMember(previousOpened, nextOpened)
     this.brokenProps.set(depth, nextBroken)
     this.openedProps.set(depth, nextOpened)
-    this.applyBrokenPassability(depth)
+    this.rebuildFloorPassability(depth)
     if (removedState) dungeonPropsResetRevision.update((n) => n + 1)
     dungeonPropsRevision.update((n) => n + 1)
   }
@@ -554,7 +554,7 @@ class DungeonManager {
     }
     if (set.has(propId)) return
     set.add(propId)
-    this.applyBrokenPassability(depth)
+    this.rebuildFloorPassability(depth)
     dungeonPropsRevision.update((n) => n + 1)
   }
 
@@ -575,12 +575,33 @@ class DungeonManager {
     dungeonPropsRevision.update((n) => n + 1)
   }
 
-  /** Rebuild a floor's wasm passability with its current broken set applied. */
-  private applyBrokenPassability(depth: number) {
-    if (!this.id) return
-    const set = this.brokenProps.get(depth)
-    const ids = set && set.size ? Uint32Array.from(set) : new Uint32Array(0)
-    dungeon_apply_broken_props(this.id, depth, ids)
+  /**
+   * Rebuild a floor's wasm passability from its current dynamic state — broken
+   * props (open their cells) plus shut interior doors (seal the corridor mouth).
+   * Both must go through one call: the wasm side regenerates the floor from the
+   * layout each time, so applying one set alone would drop the other. Door segs
+   * are stored in world XZ; passability wants floor-local grid lines, so we
+   * subtract the dungeon origin. No-op for floors whose geometry hasn't built
+   * yet (no door segs registered) — broken-only floors still rebuild correctly.
+   */
+  private rebuildFloorPassability(depth: number) {
+    if (!this.id || depth < 1) return
+    const broken = Uint32Array.from(this.brokenProps.get(depth) ?? [])
+    const segs = this.doorSegs.get(depth)
+    const openSet = this.openDoors.get(depth)
+    const closed: number[] = []
+    if (segs) {
+      for (const s of segs) {
+        if (openSet?.has(s.doorId)) continue
+        closed.push(
+          Math.round(s.ax - this.originX),
+          Math.round(s.az - this.originZ),
+          Math.round(s.bx - this.originX),
+          Math.round(s.bz - this.originZ)
+        )
+      }
+    }
+    dungeon_rebuild_floor(this.id, depth, broken, Int32Array.from(closed))
   }
 
   get pendingBreak(): PendingPropBreak | null {
@@ -762,6 +783,9 @@ class DungeonManager {
   ) {
     if (entranceId !== this.id) return
     this.setDoorOpen(depth, doorId, isOpen)
+    // Reflect the new open/shut state into pathfinding so monster AI stops
+    // walking through (or now routes around) the door.
+    this.rebuildFloorPassability(depth)
   }
 
   /** Replace the whole open-door set from the server snapshot (reply to a
@@ -770,12 +794,20 @@ class DungeonManager {
     if (entranceId !== this.id) return
     this.openDoors.clear()
     for (const [depth, doorId] of doors) this.setDoorOpen(depth, doorId, true)
+    // Re-seal pathfinding for every floor whose geometry is already built; the
+    // snapshot may touch several depths at once.
+    for (const depth of this.doorSegs.keys())
+      this.rebuildFloorPassability(depth)
   }
 
   /** Register a floor's interior-door collision segments (world XZ), called by
    *  the render layer when that floor's geometry is built. */
   registerDoorSegs(depth: number, segs: DungeonDoorSeg[]) {
     this.doorSegs.set(depth, segs)
+    // Geometry (and thus door positions) is now known for this floor — seal any
+    // currently-shut doors into pathfinding. Doors default shut until the
+    // snapshot reply opens them, so this is also the correct initial state.
+    this.rebuildFloorPassability(depth)
   }
 
   /**

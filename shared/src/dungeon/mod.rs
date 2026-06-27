@@ -469,19 +469,41 @@ pub(crate) const EDGE_ALL: u8 = EDGE_N | EDGE_E | EDGE_S | EDGE_W;
 /// so a descending player (collision-checked against this floor once their Y
 /// drops into range) still walks through.
 pub fn floor_passability_cells(layout: &FloorLayout) -> Vec<u8> {
-    floor_passability_cells_inner(layout, &[])
+    floor_passability_cells_inner(layout, &[], &[])
 }
 
-/// Like [`floor_passability_cells`] but leaves the cells of broken props open.
-/// `broken` holds indices into `layout.props` whose 1×1 collision pillar has
-/// been destroyed, restoring movement through them. Recomputing from the carved
-/// mask (rather than clearing the cell's edges) keeps any genuine wall the prop
-/// sat against intact. Used to rebuild a floor's passability after a prop breaks.
-pub fn floor_passability_cells_with_broken(layout: &FloorLayout, broken: &[u32]) -> Vec<u8> {
-    floor_passability_cells_inner(layout, broken)
+/// OR an edge bit into a floor cell, ignoring out-of-grid coordinates. Shared by
+/// the shaft-walling and door-sealing passes, both of which seal grid boundaries.
+fn or_edge_bit(cells: &mut [u8], x: i32, z: i32, bit: u8) {
+    if x >= 0 && x < GRID && z >= 0 && z < GRID {
+        cells[(x + z * GRID) as usize] |= bit;
+    }
 }
 
-fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8> {
+/// Like [`floor_passability_cells`] but leaves the cells of broken props open
+/// and seals shut interior doors. `broken` holds indices into `layout.props`
+/// whose 1×1 collision pillar has been destroyed, restoring movement through
+/// them (recomputing from the carved mask, rather than clearing the cell's
+/// edges, keeps any genuine wall the prop sat against intact).
+/// `closed_door_segs` is a flat list of floor-local grid quads
+/// `(ax, az, bx, bz)`, one per *closed* corridor-mouth door, matching the
+/// client's `DungeonDoorSeg` (open doors are omitted by the caller). A
+/// horizontal run (`az == bz`) is a north-wall door; a vertical run
+/// (`ax == bx`) an east-wall door. Used to rebuild a floor's passability so
+/// pathfinding (and thus monster AI) treats a shut door as a wall.
+pub fn floor_passability_cells_full(
+    layout: &FloorLayout,
+    broken: &[u32],
+    closed_door_segs: &[i32],
+) -> Vec<u8> {
+    floor_passability_cells_inner(layout, broken, closed_door_segs)
+}
+
+fn floor_passability_cells_inner(
+    layout: &FloorLayout,
+    broken: &[u32],
+    closed_door_segs: &[i32],
+) -> Vec<u8> {
     let mut cells = vec![0u8; (GRID * GRID) as usize];
 
     for z in 0..GRID {
@@ -524,11 +546,6 @@ fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8
     // which ignores these edge bits.
     let mut wall_shaft = |shaft: &StairShaft, legit_is_exit: bool| {
         let r = shaft.rect();
-        let set = |cells: &mut Vec<u8>, x: i32, z: i32, bit: u8| {
-            if x >= 0 && x < GRID && z >= 0 && z < GRID {
-                cells[(x + z * GRID) as usize] |= bit;
-            }
-        };
         if shaft.along_z {
             let exit_z = shaft.exit_cell().1;
             let far_z = if legit_is_exit {
@@ -538,21 +555,21 @@ fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8
             };
             for z in r.z..r.z + r.d {
                 if !(legit_is_exit && z == exit_z) {
-                    set(&mut cells, r.x, z, EDGE_W);
-                    set(&mut cells, r.x - 1, z, EDGE_E);
-                    set(&mut cells, r.x + r.w - 1, z, EDGE_E);
-                    set(&mut cells, r.x + r.w, z, EDGE_W);
+                    or_edge_bit(&mut cells, r.x, z, EDGE_W);
+                    or_edge_bit(&mut cells, r.x - 1, z, EDGE_E);
+                    or_edge_bit(&mut cells, r.x + r.w - 1, z, EDGE_E);
+                    or_edge_bit(&mut cells, r.x + r.w, z, EDGE_W);
                 }
             }
             // Far landing's outer run-end (points away from the steps, into the
             // wrapping room).
             for x in r.x..r.x + r.w {
                 if far_z == r.z {
-                    set(&mut cells, x, far_z, EDGE_N);
-                    set(&mut cells, x, far_z - 1, EDGE_S);
+                    or_edge_bit(&mut cells, x, far_z, EDGE_N);
+                    or_edge_bit(&mut cells, x, far_z - 1, EDGE_S);
                 } else {
-                    set(&mut cells, x, far_z, EDGE_S);
-                    set(&mut cells, x, far_z + 1, EDGE_N);
+                    or_edge_bit(&mut cells, x, far_z, EDGE_S);
+                    or_edge_bit(&mut cells, x, far_z + 1, EDGE_N);
                 }
             }
         } else {
@@ -564,19 +581,19 @@ fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8
             };
             for x in r.x..r.x + r.w {
                 if !(legit_is_exit && x == exit_x) {
-                    set(&mut cells, x, r.z, EDGE_N);
-                    set(&mut cells, x, r.z - 1, EDGE_S);
-                    set(&mut cells, x, r.z + r.d - 1, EDGE_S);
-                    set(&mut cells, x, r.z + r.d, EDGE_N);
+                    or_edge_bit(&mut cells, x, r.z, EDGE_N);
+                    or_edge_bit(&mut cells, x, r.z - 1, EDGE_S);
+                    or_edge_bit(&mut cells, x, r.z + r.d - 1, EDGE_S);
+                    or_edge_bit(&mut cells, x, r.z + r.d, EDGE_N);
                 }
             }
             for z in r.z..r.z + r.d {
                 if far_x == r.x {
-                    set(&mut cells, far_x, z, EDGE_W);
-                    set(&mut cells, far_x - 1, z, EDGE_E);
+                    or_edge_bit(&mut cells, far_x, z, EDGE_W);
+                    or_edge_bit(&mut cells, far_x - 1, z, EDGE_E);
                 } else {
-                    set(&mut cells, far_x, z, EDGE_E);
-                    set(&mut cells, far_x + 1, z, EDGE_W);
+                    or_edge_bit(&mut cells, far_x, z, EDGE_E);
+                    or_edge_bit(&mut cells, far_x + 1, z, EDGE_W);
                 }
             }
         }
@@ -605,6 +622,34 @@ fn floor_passability_cells_inner(layout: &FloorLayout, broken: &[u32]) -> Vec<u8
         }
         if p.x >= 0 && p.x < GRID && p.z >= 0 && p.z < GRID {
             cells[(p.x + p.z * GRID) as usize] |= EDGE_ALL;
+        }
+    }
+
+    // Seal shut interior doors at corridor mouths. The carve pass above leaves a
+    // mouth fully open (both the room cell and the corridor cell are carved), so
+    // a closed door has to *add* the boundary's edge bits — the inverse of a
+    // housing door, which is shut by default and clears bits when opened. Each
+    // quad mirrors `buildInteriorDoor`'s seg: a north-wall door seals EDGE_N on
+    // the room cell and EDGE_S on the corridor cell across the opening; an
+    // east-wall door seals EDGE_E / EDGE_W across the two columns. ORing both
+    // cells' bits is what `is_*_blocked` checks, so sealing one side suffices,
+    // but we seal both for symmetry with the carve pass.
+    for q in closed_door_segs.chunks_exact(4) {
+        let (ax, az, bx, bz) = (q[0], q[1], q[2], q[3]);
+        if az == bz {
+            // North-wall door: opening spans x in [ax, bx) on wall line z = az.
+            let z = az;
+            for x in ax..bx {
+                or_edge_bit(&mut cells, x, z, EDGE_N);
+                or_edge_bit(&mut cells, x, z - 1, EDGE_S);
+            }
+        } else if ax == bx {
+            // East-wall door: opening spans z in [az, bz) on wall line x = ax.
+            let x = ax;
+            for z in az..bz {
+                or_edge_bit(&mut cells, x - 1, z, EDGE_E);
+                or_edge_bit(&mut cells, x, z, EDGE_W);
+            }
         }
     }
 
