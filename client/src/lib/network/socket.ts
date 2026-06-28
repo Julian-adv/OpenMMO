@@ -484,6 +484,11 @@ class NetworkManager {
     this.sendMessage({ PickupItem: { instance_id: instanceId } })
   }
 
+  sendUseItem(instanceId: number) {
+    if (!this.isNetworkableInstanceId(instanceId, 'use')) return
+    this.sendMessage({ UseItem: { instance_id: instanceId } })
+  }
+
   sendOpenShop(merchantPlayerId: string) {
     markShopRequested(merchantPlayerId)
     this.sendMessage({ OpenShop: { merchant_player_id: merchantPlayerId } })

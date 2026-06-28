@@ -875,6 +875,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::UseItem { instance_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.use_item(id, instance_id).await;
+            }
+        }
+
         ClientMessage::OpenShop { merchant_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state.open_shop(id, &merchant_player_id, true).await;

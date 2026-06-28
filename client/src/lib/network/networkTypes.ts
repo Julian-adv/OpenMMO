@@ -168,6 +168,7 @@ export type ClientMessage =
   | { UnequipItem: { slot: EquipSlot } }
   | { DropItem: { instance_id: number } }
   | { PickupItem: { instance_id: number } }
+  | { UseItem: { instance_id: number } }
   | { OpenShop: { merchant_player_id: string } }
   | { CloseShop: { merchant_player_id: string } }
   | { BuyItem: { merchant_player_id: string; item_def_id: string } }

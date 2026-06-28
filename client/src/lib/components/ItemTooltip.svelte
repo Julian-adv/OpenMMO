@@ -29,8 +29,10 @@
     {#if def.equipSlot}
       <span>Slot: {def.equipSlot.replace(/_/g, ' ')}</span>
     {/if}
-    {#if def.damageDice}
-      <span>Damage: {def.damageDice}</span>
+    {#if def.category === 'weapon' && def.dice}
+      <span>Damage: {def.dice}</span>
+    {:else if def.category === 'healing_potion' && def.dice}
+      <span>Heals: {def.dice}</span>
     {/if}
   </div>
 </div>

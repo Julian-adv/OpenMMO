@@ -1,7 +1,7 @@
 <script lang="ts">
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
   import type { ItemInstance } from '../stores/inventoryStore'
-  import { getItemDef } from '../data/itemDefs'
+  import { getItemDef, isConsumable } from '../data/itemDefs'
   import GoldAmount from './GoldAmount.svelte'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
@@ -53,6 +53,8 @@
     const def = getItemDef(slot.item_def_id)
     if (def?.equipSlot) {
       networkManager.sendEquipItem(slot.instance_id)
+    } else if (def && isConsumable(def)) {
+      networkManager.sendUseItem(slot.instance_id)
     }
   }
 

@@ -89,7 +89,7 @@ impl super::GameState {
                     .get(player_id)
                     .and_then(|inv| inv.equipped.get(&EquipSlot::MainHand))
                     .and_then(|item| self.item_defs.get(&item.item_def_id))
-                    .and_then(|def| def.damage_dice.clone())
+                    .and_then(|def| def.damage_dice().map(str::to_string))
                     .unwrap_or_else(|| "1d2".to_string())
             };
 

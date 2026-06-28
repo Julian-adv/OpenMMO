@@ -11,7 +11,10 @@ export interface ItemDefinition {
   stackable: boolean
   icon: string
   worldModel?: string
-  damageDice?: string
+  /** Item kind that decides how `dice` is read: "weapon" → damage, "consumable" → healing. */
+  category?: string
+  /** Dice notation (e.g. "1d8", "6d4") whose meaning depends on `category`. */
+  dice?: string
   material?: string
   /** Base price in the smallest currency unit (copper). */
   basePrice?: number
@@ -21,6 +24,13 @@ const itemDefs = itemsJson as Record<string, ItemDefinition>
 
 export function getItemDef(itemDefId: string): ItemDefinition | undefined {
   return itemDefs[itemDefId]
+}
+
+/** Categories that can be drunk/used from the bag. Extend as potions are added. */
+const CONSUMABLE_CATEGORIES = new Set(['healing_potion'])
+
+export function isConsumable(def: ItemDefinition): boolean {
+  return def.category !== undefined && CONSUMABLE_CATEGORIES.has(def.category)
 }
 
 export default itemDefs

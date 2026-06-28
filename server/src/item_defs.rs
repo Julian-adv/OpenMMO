@@ -17,14 +17,45 @@ pub struct ItemDefinition {
     pub stackable: bool,
     #[serde(rename = "worldModel")]
     pub world_model: Option<String>,
-    #[serde(rename = "damageDice")]
-    pub damage_dice: Option<String>,
+    /// Item kind that decides how `dice` is interpreted ("weapon" → damage,
+    /// "consumable" → healing) plus broad classification (armor, accessory,
+    /// currency).
+    #[serde(default)]
+    pub category: Option<String>,
+    /// Dice notation (e.g. "1d8", "6d4") whose meaning depends on `category`.
+    /// Read it through `damage_dice()` / `heal_dice()` rather than directly.
+    #[serde(default)]
+    pub dice: Option<String>,
     #[serde(default)]
     pub material: Option<String>,
     /// Base price in the smallest currency unit. Items without a price
     /// cannot be bought or sold.
     #[serde(rename = "basePrice")]
     pub base_price: Option<i64>,
+}
+
+impl ItemDefinition {
+    pub fn is_weapon(&self) -> bool {
+        self.category.as_deref() == Some("weapon")
+    }
+
+    /// Damage dice if this item is a weapon, else `None`.
+    pub fn damage_dice(&self) -> Option<&str> {
+        if self.is_weapon() {
+            self.dice.as_deref()
+        } else {
+            None
+        }
+    }
+
+    /// HP-restore dice if this item is a healing potion, else `None`.
+    pub fn heal_dice(&self) -> Option<&str> {
+        if self.category.as_deref() == Some("healing_potion") {
+            self.dice.as_deref()
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -76,7 +107,7 @@ impl ItemDefs {
     pub fn damage_dice_for_weapon_model(&self, weapon_model: &str) -> Option<String> {
         self.item_def_id_for_weapon_ref(weapon_model)
             .and_then(|item_id| self.defs.get(&item_id))
-            .and_then(|def| def.damage_dice.clone())
+            .and_then(|def| def.damage_dice().map(str::to_string))
     }
 
     /// Equippable items at or above a price floor — the dungeon treasure

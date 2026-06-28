@@ -267,6 +267,105 @@ impl super::GameState {
         self.send_inventory_snapshot(player_id, snapshot).await;
     }
 
+    /// Consume a usable item from the bag (e.g. drink a healing potion):
+    /// roll its heal dice, restore HP capped at max, decrement the stack and
+    /// broadcast the new health to nearby players.
+    pub async fn use_item(&self, player_id: &PlayerId, instance_id: u64) {
+        // Resolve the item's heal dice before mutating anything.
+        let heal_dice = {
+            let inventories = self.inventories.read().await;
+            let inv = match inventories.get(player_id) {
+                Some(inv) => inv,
+                None => return,
+            };
+            let item = match inv.bag.iter().find(|i| i.instance_id == instance_id) {
+                Some(item) => item,
+                None => {
+                    drop(inventories);
+                    self.send_inventory_error(player_id, "Item not found in bag")
+                        .await;
+                    return;
+                }
+            };
+            match self
+                .item_defs
+                .get(&item.item_def_id)
+                .and_then(|d| d.heal_dice().map(str::to_string))
+            {
+                Some(dice) => dice,
+                None => {
+                    drop(inventories);
+                    self.send_inventory_error(player_id, "This item cannot be used")
+                        .await;
+                    return;
+                }
+            }
+        };
+
+        // Apply healing to the player, capped at max health. Refuse if the
+        // player is defeated or already at full HP (and keep the potion).
+        let (health, max_health, position, floor_level) = {
+            let mut players = self.players.write().await;
+            let player = match players.get_mut(player_id) {
+                Some(player) => player,
+                None => return,
+            };
+            if player.health == 0 {
+                drop(players);
+                self.send_inventory_error(player_id, "You can't drink while defeated")
+                    .await;
+                return;
+            }
+            if player.health >= player.max_health {
+                drop(players);
+                self.send_inventory_error(player_id, "You are already at full health")
+                    .await;
+                return;
+            }
+            let amount = crate::game::combat::roll_dice(&heal_dice);
+            player.health = (player.health + amount).min(player.max_health);
+            (
+                player.health,
+                player.max_health,
+                player.position,
+                player.floor_level,
+            )
+        };
+
+        // Consume one from the stack, removing the instance when it hits zero.
+        let snapshot = {
+            let mut inventories = self.inventories.write().await;
+            let inv = match inventories.get_mut(player_id) {
+                Some(inv) => inv,
+                None => return,
+            };
+            if let Some(idx) = inv.bag.iter().position(|i| i.instance_id == instance_id) {
+                if inv.bag[idx].quantity > 1 {
+                    inv.bag[idx].quantity -= 1;
+                } else {
+                    inv.bag.remove(idx);
+                }
+            }
+            inv.clone()
+        };
+
+        self.mark_dirty(player_id).await;
+        self.mark_inventory_dirty(player_id).await;
+        self.send_inventory_snapshot(player_id, snapshot).await;
+        self.send_direct_message_to_players_within_position(
+            &position,
+            floor_level,
+            super::AGENT_EVENT_DELIVERY_RADIUS,
+            ServerMessage::PlayerHealthUpdate {
+                player_id: player_id.clone(),
+                health,
+                max_health,
+            },
+            None,
+        )
+        .await;
+    }
+
     /// Insert a ground item into the world and announce it to nearby players.
     /// `source_monster_id` is set when the item was dropped by a dying monster
     /// so the client can hold the drop until that monster's death plays out.

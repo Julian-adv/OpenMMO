@@ -18,6 +18,18 @@ fn parse_damage_roll(damage_roll: &str) -> (u32, u32) {
     }
 }
 
+/// Roll dice notation like "6d4" and return the summed total (minimum 1).
+/// Used for consumable healing where there's no attack roll, just the dice.
+pub fn roll_dice(notation: &str) -> u32 {
+    let (count, sides) = parse_damage_roll(notation);
+    let mut rng = rand::thread_rng();
+    let mut total: u32 = 0;
+    for _ in 0..count {
+        total += rng.gen_range(1..=sides);
+    }
+    total.max(1)
+}
+
 pub fn ability_modifier(score: u8) -> i32 {
     (i32::from(score) - 10).div_euclid(2)
 }
