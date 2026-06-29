@@ -140,7 +140,11 @@
       {#each chatMessages as entry, index (index)}
         <div class="message">
           {#if entry.name}
-            <span class="name" class:local={entry.sender === 'local'} class:remote={entry.sender === 'remote'}>{entry.name}:</span>
+            <span
+              class="name"
+              class:local={entry.sender === 'local'}
+              class:remote={entry.sender === 'remote'}>{entry.name}:</span
+            >
             {entry.text}
           {:else}
             <span class="system">{entry.text}</span>
@@ -151,8 +155,15 @@
       {#each combatMessages as entry, index (index)}
         <div class="message combat">
           {#if entry.name}
-            <span class="name" class:local={entry.sender === 'local'} class:remote={entry.sender === 'remote'}>{entry.name}:</span>
-            <span class:hit={entry.hit === true} class:miss={entry.hit === false}>{entry.text}</span>
+            <span
+              class="name"
+              class:local={entry.sender === 'local'}
+              class:remote={entry.sender === 'remote'}>{entry.name}:</span
+            >
+            <span
+              class:hit={entry.hit === true}
+              class:miss={entry.hit === false}>{entry.text}</span
+            >
           {:else}
             {entry.text}
           {/if}
@@ -184,8 +195,8 @@
 <style>
   .chat-panel {
     position: fixed;
-    bottom: 20px;
-    left: 20px;
+    bottom: 9px;
+    left: 9px;
     width: 350px;
     height: 300px;
     background: rgba(0, 0, 0, 0.8);
@@ -227,7 +238,9 @@
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    transition: color 0.15s, background 0.15s;
+    transition:
+      color 0.15s,
+      background 0.15s;
     border-radius: 8px 8px 0 0;
   }
 
@@ -368,11 +381,40 @@
     border-radius: 3px;
   }
 
+  /* Narrow: the quickslot bar wraps to two rows and is half as wide (~226px),
+     so the chat stays at the bottom-left (base position) instead of being lifted
+     above the bar. Cap the width so its right edge clears the centred bar.
+     (These constants mirror the bar/menu dimensions owned by QuickslotBar and
+     GameHud; if those change, re-derive the caps here.) */
+  @media (max-width: 1200px) {
+    .chat-panel {
+      width: min(350px, calc(50vw - 130px));
+    }
+  }
+
+  /* Desktop-narrow: the quickslot bar is tucked to the right against the menu
+     buttons, so the chat fills the left side. Cap clears the bar's left edge:
+     387 = menu(124) + 9 screen-margin + 16 gap + bar(217) + 12 gap + 9 left. */
+  @media (min-width: 601px) and (max-width: 999.98px) and (pointer: fine) {
+    .chat-panel {
+      width: min(450px, calc(100vw - 387px));
+    }
+  }
+
+  /* 1000–1200px: the bar is a right-aligned single row (~444px) reaching further
+     left, so the chat gets less room: 702 = menu(212) + 9 + 16 + bar(444) + 12 + 9. */
+  @media (min-width: 1000px) and (max-width: 1200px) {
+    .chat-panel {
+      width: min(450px, calc(100vw - 702px));
+    }
+  }
+
   @media (max-width: 600px), (pointer: coarse) and (max-width: 900px) {
     .chat-panel {
-      left: max(8px, env(safe-area-inset-left));
-      bottom: calc(max(8px, env(safe-area-inset-bottom)) + 44px);
-      width: min(300px, calc(100vw - 96px - env(safe-area-inset-left) - env(safe-area-inset-right)));
+      left: max(9px, env(safe-area-inset-left));
+      bottom: max(9px, env(safe-area-inset-bottom));
+      /* Clear the centred two-row quickslot bar (gets quite narrow on phones). */
+      width: min(300px, calc(50vw - 120px));
       height: min(124px, 22dvh);
       box-sizing: border-box;
       border-radius: 6px;

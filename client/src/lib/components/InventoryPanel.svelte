@@ -5,7 +5,8 @@
   import GoldAmount from './GoldAmount.svelte'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
-  import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
+  import { dragMeta, startDrag, isSlotCompatible, pointInRect, inflateRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
+  import { assignQuickslot } from '../stores/quickslotStore'
   import { itemTooltip } from '../actions/itemTooltip'
 
   interface Props {
@@ -72,6 +73,25 @@
         icon: def?.icon ?? FALLBACK_ICON,
       },
       (x, y) => {
+        const qsEls = [...document.querySelectorAll<HTMLElement>('[data-quickslot]')]
+        const bar = qsEls[0]?.parentElement
+        // Treat the whole bar (incl. gaps, with a little vertical slack) as one
+        // drop zone and snap to the nearest slot by pointer X, so the player
+        // doesn't have to land precisely inside a single small slot.
+        if (bar && pointInRect(x, y, inflateRect(bar.getBoundingClientRect(), 12))) {
+          let best = qsEls[0]
+          let bestDist = Infinity
+          for (const el of qsEls) {
+            const r = el.getBoundingClientRect()
+            const dist = Math.abs((r.left + r.right) / 2 - x)
+            if (dist < bestDist) {
+              bestDist = dist
+              best = el
+            }
+          }
+          assignQuickslot(Number(best.dataset.quickslot), slot.item_def_id)
+          return
+        }
         for (const slotEl of document.querySelectorAll<HTMLElement>('[data-equip-slot]')) {
           if (pointInRect(x, y, slotEl.getBoundingClientRect())) {
             const targetSlot = slotEl.dataset.equipSlot as EquipSlot
@@ -135,7 +155,7 @@
     --inventory-slot-gap: 6px;
     --inventory-visible-rows: 10;
     position: fixed;
-    right: 16px;
+    right: 9px;
     top: 45%;
     transform: translateY(-50%);
     z-index: 40;

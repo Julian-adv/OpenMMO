@@ -27,6 +27,11 @@ export function pointInRect(x: number, y: number, r: DOMRect): boolean {
   return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom
 }
 
+/** Grow a rect outward by `m` px on every side (for forgiving hit-testing). */
+export function inflateRect(r: DOMRect, m: number): DOMRect {
+  return new DOMRect(r.x - m, r.y - m, r.width + 2 * m, r.height + 2 * m)
+}
+
 export function isOverAnyDialog(x: number, y: number): boolean {
   for (const dialog of document.querySelectorAll('[role="dialog"]')) {
     if (pointInRect(x, y, dialog.getBoundingClientRect())) return true

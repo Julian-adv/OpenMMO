@@ -7,6 +7,7 @@
   import HousingEditorPanel from './map-editor/HousingEditorPanel.svelte'
   import CharacterPanel from './CharacterPanel.svelte'
   import InventoryPanel from './InventoryPanel.svelte'
+  import QuickslotBar from './QuickslotBar.svelte'
   import TradeWindow from './TradeWindow.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
   import NpcContextMenu from './NpcContextMenu.svelte'
@@ -87,6 +88,7 @@
     <TradeWindow />
     <TradeOfferToast />
     <NpcContextMenu />
+    <QuickslotBar characterId={selectedCharacter.id} />
   {/if}
 
   <div class="corner-actions">
@@ -131,6 +133,14 @@
     inset: 0;
     z-index: 1;
     pointer-events: none;
+    /* Corner menu-button dimensions, defined here (not on .corner-actions) so
+       the sibling quickslot bar can position itself beside the menu block from
+       the same source of truth. --menu-block-* are the rendered block widths:
+       3 buttons wide when the row wraps (two-row block), 5 wide when it doesn't. */
+    --corner-btn-size: 36px;
+    --corner-gap: 8px;
+    --menu-block-2row: calc(3 * var(--corner-btn-size) + 2 * var(--corner-gap));
+    --menu-block-1row: calc(5 * var(--corner-btn-size) + 4 * var(--corner-gap));
   }
 
   /* Allow pointer events on interactive HUD children */
@@ -140,13 +150,19 @@
 
   .corner-actions {
     position: absolute;
-    right: 16px;
-    bottom: 16px;
+    right: 9px;
+    bottom: 9px;
     z-index: 30;
     display: flex;
+    /* Right-aligned wrapping row capped at the two-row block width, so the 5
+       menu buttons wrap to 3+2 and the block stays narrow enough to clear the
+       centred quickslot bar. Collapses to a single row at >=1000px below. */
     flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: var(--menu-block-2row);
     align-items: center;
-    gap: 8px;
+    gap: var(--corner-gap);
   }
 
   .respawn-reopen,
@@ -169,6 +185,10 @@
     background: #e2b93b;
     color: #1a1a1a;
     font-weight: 700;
+    /* Always sit alone on its own top row so the other buttons keep the
+       same 3+2 wrap layout whether or not Revive is present. */
+    order: -1;
+    flex-basis: 100%;
   }
 
   .corner-btn {
@@ -183,13 +203,27 @@
     color: #fff;
   }
 
-  @media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+  /* Wide enough (>=1000px) to clear the centred quickslot bar (~444px), so
+     collapse the wrapping row into a single row. */
+  @media (min-width: 1000px) {
     .corner-actions {
-      right: max(12px, env(safe-area-inset-right));
-      bottom: max(12px, env(safe-area-inset-bottom));
-      flex-direction: row;
-      align-items: center;
-      gap: 5px;
+      flex-wrap: nowrap;
+      max-width: none;
+    }
+  }
+
+  @media (max-width: 768px), (max-height: 520px) and (pointer: coarse) {
+    /* Smaller buttons and gap on touch/narrow screens; still 3 per row. Set on
+       .game-hud (not .corner-actions) so the quickslot bar reads the same
+       values when it positions itself beside the menu block. */
+    .game-hud {
+      --corner-btn-size: 32px;
+      --corner-gap: 5px;
+    }
+
+    .corner-actions {
+      right: max(9px, env(safe-area-inset-right));
+      bottom: max(9px, env(safe-area-inset-bottom));
     }
 
     .respawn-reopen {

@@ -364,8 +364,8 @@
 <style>
   .time-widget {
     position: fixed;
-    top: 10px;
-    right: 10px;
+    top: 9px;
+    right: 9px;
     z-index: 1000;
     pointer-events: none;
     background: rgba(0, 0, 0, 0.8);
@@ -382,7 +382,9 @@
   .time-widget.compact {
     background: transparent;
     box-shadow: none;
-    padding: 5px;
+    /* No background box in compact mode, so drop the padding that would
+       otherwise push the visible sky-track past the 9px edge margin. */
+    padding: 0;
     border-radius: 0;
     width: auto;
   }
