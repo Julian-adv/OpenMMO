@@ -76,18 +76,23 @@
 
 <div class="login-container">
   <div class="login-wrapper">
-    <svg class="arch-title" viewBox="-100 -80 1000 500" xmlns="http://www.w3.org/2000/svg">
+    <svg
+      class="arch-title"
+      viewBox="-160 -80 1320 500"
+      xmlns="http://www.w3.org/2000/svg"
+    >
       <defs>
-        <path id="archPath" d="M 40,320 Q 400,0 760,320" fill="none" />
-        <pattern id="flowerPattern" patternUnits="userSpaceOnUse" width="256" height="256">
+        <path id="archPath" d="M -20,360 Q 500,90 1020,360" fill="none" />
+        <pattern
+          id="flowerPattern"
+          patternUnits="userSpaceOnUse"
+          width="256"
+          height="256"
+        >
           <image href="/textures/flowerx4.png" width="256" height="256" />
         </pattern>
       </defs>
-      <text
-        stroke="white"
-        stroke-width="3"
-        paint-order="stroke"
-      >
+      <text stroke="white" stroke-width="3" paint-order="stroke">
         <textPath
           href="#archPath"
           startOffset="50%"
@@ -95,62 +100,63 @@
           dominant-baseline="auto"
           fill="url(#flowerPattern)"
           font-family="'Black Han Sans', sans-serif"
-          font-size="260"
-        >봇들필드</textPath>
+          font-size="200">Open<tspan dx="40">MMO</tspan></textPath
+        >
       </text>
     </svg>
-    <h1 class="title">BotdleField</h1>
+    <h1 class="title">OpenMMO</h1>
 
-  <div class="login-panel">
-
-    {#if kickedMessage}
-      <div class="kicked-message">{kickedMessage}</div>
-    {/if}
-
-    <form onsubmit={handleSubmit}>
-      <div class="form-group">
-        <label for="playerName">Account Name</label>
-        <input
-          type="text"
-          id="playerName"
-          bind:value={accountName}
-          placeholder="Enter your account"
-          disabled={isConnecting}
-        />
-      </div>
-
-      <div class="form-group">
-        <label for="password">Password</label>
-        <input
-          type="password"
-          id="password"
-          bind:value={password}
-          placeholder="Enter password"
-          disabled={isConnecting}
-        />
-      </div>
-
-      {#if errorMessage}
-        <div class="error-message">{errorMessage}</div>
+    <div class="login-panel">
+      {#if kickedMessage}
+        <div class="kicked-message">{kickedMessage}</div>
       {/if}
 
-      <div class="button-row">
-        <button type="submit" class="login-button" disabled={isConnecting}>
-          {isConnecting && pendingAction === 'login' ? 'Connecting...' : 'Login'}
-        </button>
-        <button
-          type="button"
-          class="create-button"
-          disabled={isConnecting}
-          onclick={() => void submit(true)}
-        >
-          {isConnecting && pendingAction === 'create'
-            ? 'Creating...'
-            : 'Create Account'}
-        </button>
-      </div>
-    </form>
-  </div>
+      <form onsubmit={handleSubmit}>
+        <div class="form-group">
+          <label for="playerName">Account Name</label>
+          <input
+            type="text"
+            id="playerName"
+            bind:value={accountName}
+            placeholder="Enter your account"
+            disabled={isConnecting}
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            bind:value={password}
+            placeholder="Enter password"
+            disabled={isConnecting}
+          />
+        </div>
+
+        {#if errorMessage}
+          <div class="error-message">{errorMessage}</div>
+        {/if}
+
+        <div class="button-row">
+          <button type="submit" class="login-button" disabled={isConnecting}>
+            {isConnecting && pendingAction === 'login'
+              ? 'Connecting...'
+              : 'Login'}
+          </button>
+          <button
+            type="button"
+            class="create-button"
+            disabled={isConnecting}
+            onclick={() => void submit(true)}
+          >
+            {isConnecting && pendingAction === 'create'
+              ? 'Creating...'
+              : 'Create Account'}
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 
@@ -163,7 +169,8 @@
     max-width: 100vw;
     height: 100vh;
     height: 100dvh;
-    padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
+    padding: max(14px, env(safe-area-inset-top))
+      max(14px, env(safe-area-inset-right))
       max(58px, calc(env(safe-area-inset-bottom) + 58px))
       max(14px, env(safe-area-inset-left));
     overflow-x: hidden;
@@ -189,7 +196,7 @@
   .arch-title {
     width: min(800px, 100%);
     height: auto;
-    aspect-ratio: 800 / 350;
+    aspect-ratio: 1320 / 500;
     margin-bottom: -20px;
     filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.6));
   }
@@ -368,7 +375,8 @@
 
   @media (max-width: 600px), (max-height: 700px) {
     .login-container {
-      padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+      padding: max(10px, env(safe-area-inset-top))
+        max(10px, env(safe-area-inset-right))
         max(52px, calc(env(safe-area-inset-bottom) + 52px))
         max(10px, env(safe-area-inset-left));
     }
