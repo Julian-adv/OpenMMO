@@ -134,15 +134,45 @@ pub fn is_movement_blocked(
 
 /// Check if a circle of radius `r` at `(x, z)` overlaps any blocking wall
 /// edge. Used to enforce player thickness so the character stops short of
-/// walls instead of embedding into them.
+/// walls instead of embedding into them. Selects floors by Y height — for a
+/// floor-level-keyed check (e.g. path smoothing) see `is_circle_blocked_on_floor`.
 pub fn is_circle_blocked(cache: &PassabilityCache, x: f32, z: f32, r: f32, y: f32) -> bool {
+    circle_blocked(cache, x, z, r, |floor| {
+        y >= floor.y_base - 0.5 && y < floor.y_base + floor.wall_height
+    })
+}
+
+/// Like `is_circle_blocked` but selects floors by `floor_level` instead of Y.
+/// Path smoothing works in floor-level space (no Y), so this mirrors the
+/// runtime circle test the continuous mover applies at each step, letting the
+/// smoother reject diagonals whose interior would clip a wall corner the body
+/// radius can't clear.
+pub fn is_circle_blocked_on_floor(
+    cache: &PassabilityCache,
+    x: f32,
+    z: f32,
+    r: f32,
+    floor_level: u8,
+) -> bool {
+    circle_blocked(cache, x, z, r, |floor| floor.floor_level == floor_level)
+}
+
+/// Shared body of the circle-vs-wall test, parameterised by how floors are
+/// matched (by Y range or by floor level).
+fn circle_blocked(
+    cache: &PassabilityCache,
+    x: f32,
+    z: f32,
+    r: f32,
+    floor_matches: impl Fn(&RuntimeFloorGrid) -> bool,
+) -> bool {
     let r2 = r * r;
     for rp in cache.values() {
         if x + r < rp.min_x || x - r > rp.max_x || z + r < rp.min_z || z - r > rp.max_z {
             continue;
         }
         for floor in &rp.floors {
-            if y < floor.y_base - 0.5 || y >= floor.y_base + floor.wall_height {
+            if !floor_matches(floor) {
                 continue;
             }
             let local_x = x - rp.house_origin_x - floor.origin_x as f32;

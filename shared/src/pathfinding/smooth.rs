@@ -7,8 +7,13 @@
 //! so the path stays cardinal across the seam.
 
 use super::astar::find_path;
-use super::query::is_cardinal_move_blocked;
+use super::query::{is_cardinal_move_blocked, is_circle_blocked_on_floor};
 use super::{PassabilityCache, PathResult, PathWaypoint};
+
+/// Player collision half-width, mirroring the client's `PLAYER_RADIUS` used by
+/// the continuous mover (`player-physics.ts`). Smoothing rejects any diagonal
+/// whose interior would bring a body of this radius into a wall.
+const PLAYER_RADIUS: f32 = 0.3;
 
 /// Greedy line-of-sight path smoothing. Only smooths within the same floor level.
 fn smooth_path(waypoints: &[PathWaypoint], cache: &PassabilityCache) -> Vec<PathWaypoint> {
@@ -56,6 +61,45 @@ pub(super) fn is_line_passable(
     to: &PathWaypoint,
     cache: &PassabilityCache,
 ) -> bool {
+    if !cells_line_passable(from, to, cache) {
+        return false;
+    }
+    // Cell-edge traversal permits diagonals whose interior grazes a convex wall
+    // corner within the body radius — the continuous mover then refuses to
+    // cross, stranding anything without a wall-slide fallback (monsters, agents).
+    // Reject such a segment ONLY when it's a genuine mid-path "notch": both
+    // endpoints clear of walls but the interior isn't. Endpoints near a wall are
+    // left passable — a near-wall start/goal is expected, and the mover just
+    // stops short there rather than getting stuck mid-run.
+    !body_clips_wall(from, to, cache)
+}
+
+/// Sample the segment interior for a wall the body radius can't clear, guarded
+/// by both endpoints being clear so wall-hugging and near-wall goals still smooth.
+fn body_clips_wall(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityCache) -> bool {
+    let floor = from.floor;
+    let r = PLAYER_RADIUS;
+    if is_circle_blocked_on_floor(cache, from.x, from.z, r, floor)
+        || is_circle_blocked_on_floor(cache, to.x, to.z, r, floor)
+    {
+        return false;
+    }
+    let dx = to.x - from.x;
+    let dz = to.z - from.z;
+    let len = (dx * dx + dz * dz).sqrt();
+    // Step finer than the radius so a corner notch can't slip between samples.
+    let steps = (len / (r * 0.5)).ceil() as i32;
+    for i in 1..steps {
+        let t = i as f32 / steps as f32;
+        if is_circle_blocked_on_floor(cache, from.x + dx * t, from.z + dz * t, r, floor) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Bresenham cell-edge line-of-sight: the original point-thickness check.
+fn cells_line_passable(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityCache) -> bool {
     let floor = from.floor;
     let x0 = from.x.floor() as i32;
     let z0 = from.z.floor() as i32;

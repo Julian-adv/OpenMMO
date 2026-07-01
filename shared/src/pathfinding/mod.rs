@@ -139,6 +139,78 @@ mod tests {
         make_rect_room(3, 3)
     }
 
+    /// 8×5 room with a short interior wall stub jutting from the interior: an
+    /// `EDGE_S` segment on the two cells at local (3,1) and (4,1), i.e. a wall
+    /// along the z=12 line for world x∈[13,15]. Its tips are convex corners a
+    /// body must give a wide berth even though a point-sized line can hug them.
+    fn make_room_with_wall_stub() -> (String, RuntimePassability) {
+        let (id, mut rp) = make_rect_room(8, 5);
+        let cells = &mut rp.floors[0].cells;
+        let w = 8usize;
+        cells[3 + 1 * w] |= EDGE_S;
+        cells[4 + 1 * w] |= EDGE_S;
+        (id, rp)
+    }
+
+    #[test]
+    fn line_alongside_wall_stub_blocked_by_body_radius() {
+        let (id, rp) = make_room_with_wall_stub();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        // A line skimming z=12.2 runs 0.2 alongside the stub (z=12) — the
+        // point-sized cell check clears it, but the 0.3 body radius clips the
+        // wall, so smoothing must reject it (both endpoints are well clear).
+        let clip_from = PathWaypoint {
+            x: 11.5,
+            z: 12.2,
+            floor: 0,
+        };
+        let clip_to = PathWaypoint {
+            x: 16.5,
+            z: 12.2,
+            floor: 0,
+        };
+        assert!(
+            !is_line_passable(&clip_from, &clip_to, &cache),
+            "line grazing the stub within body radius must not be passable"
+        );
+
+        // Same line pulled back to z=12.35 (0.35 > radius) clears the stub —
+        // isolates the radius as the sole reason the first line is rejected.
+        let clear_from = PathWaypoint {
+            x: 11.5,
+            z: 12.35,
+            floor: 0,
+        };
+        let clear_to = PathWaypoint {
+            x: 16.5,
+            z: 12.35,
+            floor: 0,
+        };
+        assert!(
+            is_line_passable(&clear_from, &clear_to, &cache),
+            "line clearing the stub by more than the body radius stays passable"
+        );
+
+        // Endpoint sitting against the stub stays passable — a near-wall goal is
+        // expected and the mover just stops short, so smoothing shouldn't refuse it.
+        let end_from = PathWaypoint {
+            x: 13.5,
+            z: 12.2,
+            floor: 0,
+        };
+        let end_to = PathWaypoint {
+            x: 16.5,
+            z: 12.2,
+            floor: 0,
+        };
+        assert!(
+            is_line_passable(&end_from, &end_to, &cache),
+            "a near-wall endpoint must not block smoothing"
+        );
+    }
+
     #[test]
     fn cardinal_move_blocked_by_wall() {
         let (id, rp) = make_simple_house();
