@@ -53,9 +53,9 @@ fn smooth_path(waypoints: &[PathWaypoint], cache: &PassabilityCache) -> Vec<Path
     result
 }
 
-/// Cell-based line-of-sight check using Bresenham grid traversal.
-/// For diagonal cell transitions, BOTH L-shaped paths must be clear
-/// (the player has thickness and can't squeeze through a corner gap).
+/// Line-of-sight check for path smoothing: the point-thickness Bresenham cell
+/// walk, plus a body-radius sweep that rejects diagonals whose interior would
+/// clip a convex wall corner the player's body can't clear.
 pub(super) fn is_line_passable(
     from: &PathWaypoint,
     to: &PathWaypoint,
@@ -68,22 +68,22 @@ pub(super) fn is_line_passable(
     // corner within the body radius — the continuous mover then refuses to
     // cross, stranding anything without a wall-slide fallback (monsters, agents).
     // Reject such a segment ONLY when it's a genuine mid-path "notch": both
-    // endpoints clear of walls but the interior isn't. Endpoints near a wall are
-    // left passable — a near-wall start/goal is expected, and the mover just
-    // stops short there rather than getting stuck mid-run.
+    // endpoints clear of walls but the interior isn't. When an endpoint sits
+    // against a wall, a near-wall start/goal is expected and the mover just
+    // stops short there, so leave the segment passable.
+    let r = PLAYER_RADIUS;
+    if is_circle_blocked_on_floor(cache, from.x, from.z, r, from.floor)
+        || is_circle_blocked_on_floor(cache, to.x, to.z, r, from.floor)
+    {
+        return true;
+    }
     !body_clips_wall(from, to, cache)
 }
 
-/// Sample the segment interior for a wall the body radius can't clear, guarded
-/// by both endpoints being clear so wall-hugging and near-wall goals still smooth.
+/// Sample the segment interior for a wall the body radius can't clear.
 fn body_clips_wall(from: &PathWaypoint, to: &PathWaypoint, cache: &PassabilityCache) -> bool {
     let floor = from.floor;
     let r = PLAYER_RADIUS;
-    if is_circle_blocked_on_floor(cache, from.x, from.z, r, floor)
-        || is_circle_blocked_on_floor(cache, to.x, to.z, r, floor)
-    {
-        return false;
-    }
     let dx = to.x - from.x;
     let dz = to.z - from.z;
     let len = (dx * dx + dz * dz).sqrt();
