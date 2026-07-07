@@ -1057,7 +1057,17 @@
         if (id) networkManager.sendToggleDungeonDoor(id, depth, doorId)
       },
       enterInteraction,
-      enterPickup,
+      enterPickup: (intent) => {
+        // Mid-interaction (pickup or object anim), re-entering picking_up would
+        // overwrite the owned id and strand the grabbed item on the hand bone
+        // (finishPickup never runs) — approach instead, which settles the
+        // interaction and re-enters the pickup on arrival.
+        if (getInteractionExitKind(playerState) !== 'none') {
+          approachAndPickup(intent)
+          return
+        }
+        enterPickup(intent.instanceId)
+      },
       approachAndPickup,
       interactNpc: (intent) => {
         const npc = get(gameStore).otherPlayers.get(intent.playerId)

@@ -27,7 +27,7 @@ export interface CanvasClickActions {
    *  via the server, so the swing syncs to other players. */
   toggleDungeonDoor(depth: number, doorId: number): void
   enterInteraction(intent: InteractIntent): void
-  enterPickup(instanceId: number): void
+  enterPickup(intent: PickupIntent): void
   approachAndPickup(intent: PickupIntent): void
   interactNpc(intent: NpcIntent): void
   /** Walk up to a clicked barrel/crate, breaking it on arrival. */
@@ -68,7 +68,7 @@ export function dispatchCanvasClickIntent(
       return
     case 'pickup_ground_item':
       if (intent.distance <= PLAYER_PICKUP_RANGE_METERS) {
-        actions.enterPickup(intent.instanceId)
+        actions.enterPickup(intent)
       } else {
         actions.approachAndPickup(intent)
       }

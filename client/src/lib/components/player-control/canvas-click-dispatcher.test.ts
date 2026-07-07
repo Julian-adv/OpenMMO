@@ -68,7 +68,7 @@ describe('dispatchCanvasClickIntent pickup handling', () => {
 
     dispatchCanvasClickIntent(intent, false, actions)
 
-    expect(actions.enterPickup).toHaveBeenCalledWith(42)
+    expect(actions.enterPickup).toHaveBeenCalledWith(intent)
     expect(actions.approachAndPickup).not.toHaveBeenCalled()
   })
 
