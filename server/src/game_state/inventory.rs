@@ -13,16 +13,26 @@ const GROUND_ITEM_LIFETIME_MS: u64 = 5 * 60 * 1000;
 
 const MAX_PICKUP_DISTANCE: f32 = 2.5;
 
-/// Enchanting a weapon below this level always succeeds; at or beyond it,
-/// each further scroll risks destroying the weapon outright (NetHack's
-/// over-enchanting gamble).
-const ENCHANT_SAFE_LIMIT: i32 = 5;
+/// Enchant odds are expressed in basis points (1/100 of a percent) out of
+/// this scale; the handler's roll must use the same bound.
+const ENCHANT_BP_SCALE: u32 = 10_000;
 
-/// Chance (percent) that enchanting a weapon currently at `enchant` destroys
-/// it: +4 and below are safe, then the risk climbs 25 points per level —
-/// +5 → 25%, +6 → 50%, +7 → 75%, +8 and beyond → certain destruction.
-fn enchant_destruction_percent(enchant: i32) -> i32 {
-    ((enchant - ENCHANT_SAFE_LIMIT + 1) * 25).clamp(0, 100)
+/// Success chance, in basis points, of enchanting a weapon currently at
+/// `enchant`. Guaranteed through +4, then the over-enchanting gamble:
+/// 75/50/25% at +5/+6/+7, halving each level from +8 until the 1% floor at
+/// +12 — the ladder never closes entirely, it just gets very expensive.
+fn enchant_success_bp(enchant: i32) -> u32 {
+    match enchant {
+        ..=4 => ENCHANT_BP_SCALE,
+        5 => 7_500,
+        6 => 5_000,
+        7 => 2_500,
+        8 => 1_250,
+        9 => 625,
+        10 => 312,
+        11 => 156,
+        _ => 100, // the 1% floor
+    }
 }
 
 /// Remove one unit of `instance_id` from the bag, dropping the instance when
@@ -428,8 +438,8 @@ impl super::GameState {
 
     /// Read a scroll of enchant weapon: +1 to the wielded weapon's
     /// enchantment, which is added to attack and damage rolls. NetHack-style
-    /// over-enchanting gamble: past +{ENCHANT_SAFE_LIMIT - 1} each further
-    /// reading risks destroying the weapon (see `enchant_destruction_percent`).
+    /// over-enchanting gamble: past +4 each further reading risks destroying
+    /// the weapon (see `enchant_success_bp` for the odds ladder).
     /// Refuses — keeping the scroll — while defeated or with nothing wielded.
     async fn use_enchant_weapon_scroll(&self, player_id: &PlayerId, instance_id: u64) {
         if self
@@ -439,8 +449,9 @@ impl super::GameState {
             return;
         }
 
-        // Roll before taking the lock; unused when the weapon is still safe.
-        let destroy_roll = rand::thread_rng().gen_range(0..100);
+        // Roll before taking the lock; a no-op while the weapon is still in
+        // the guaranteed range.
+        let roll_bp = rand::thread_rng().gen_range(0..ENCHANT_BP_SCALE);
 
         let (snapshot, message) = {
             let mut inventories = self.inventories.write().await;
@@ -471,13 +482,13 @@ impl super::GameState {
                 .get_mut(&EquipSlot::MainHand)
                 .expect("checked above");
             let name = self.item_name(&weapon.item_def_id);
-            let message = if destroy_roll < enchant_destruction_percent(weapon.enchant) {
+            let message = if roll_bp >= enchant_success_bp(weapon.enchant) {
                 inv.equipped.remove(&EquipSlot::MainHand);
-                format!("Your {name} glows brightly, shudders violently... and evaporates!")
+                format!("The runes flare out of control — your {name} bursts into glittering dust!")
             } else {
                 weapon.enchant += 1;
                 format!(
-                    "Your {name} glows blue for a moment. It is now +{}.",
+                    "The runes sink into your {name}, honing its edge. (+{})",
                     weapon.enchant
                 )
             };
@@ -906,5 +917,30 @@ impl super::GameState {
         let (char_id, _, _) = player_chars.get(player_id)?;
 
         Some((*char_id, serialize_inventory(inv)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn enchant_success_ladder_halves_past_seven_with_one_percent_floor() {
+        // Guaranteed range.
+        assert_eq!(enchant_success_bp(0), 10_000);
+        assert_eq!(enchant_success_bp(4), 10_000);
+        // Classic gamble steps.
+        assert_eq!(enchant_success_bp(5), 7_500);
+        assert_eq!(enchant_success_bp(6), 5_000);
+        assert_eq!(enchant_success_bp(7), 2_500);
+        // Halving ladder from +8.
+        assert_eq!(enchant_success_bp(8), 1_250);
+        assert_eq!(enchant_success_bp(9), 625);
+        assert_eq!(enchant_success_bp(10), 312);
+        assert_eq!(enchant_success_bp(11), 156);
+        // 1% floor: 78bp would be below it, and it never drops further.
+        assert_eq!(enchant_success_bp(12), 100);
+        assert_eq!(enchant_success_bp(50), 100);
+        assert_eq!(enchant_success_bp(i32::MAX), 100);
     }
 }

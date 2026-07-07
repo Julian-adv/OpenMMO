@@ -1041,6 +1041,7 @@ async fn salary_pays_once_per_day_rollover_up_to_cap() {
 async fn setup_enchant_reader(
     game_state: &GameState,
     weapon: Option<(&str, i32)>,
+    scrolls: u32,
 ) -> tokio::sync::mpsc::UnboundedReceiver<ServerMessage> {
     game_state.add_player(make_player("reader", 0.0, 0.0)).await;
     let rx = game_state
@@ -1059,7 +1060,8 @@ async fn setup_enchant_reader(
             },
         );
     }
-    inv.bag.push(bag_item(2, "scroll_of_enchant_weapon", 1));
+    inv.bag
+        .push(bag_item(2, "scroll_of_enchant_weapon", scrolls));
     game_state
         .inventories
         .write()
@@ -1071,7 +1073,7 @@ async fn setup_enchant_reader(
 #[tokio::test]
 async fn enchant_scroll_enchants_wielded_weapon() {
     let game_state = make_test_game_state("enchant_ok");
-    let _rx = setup_enchant_reader(&game_state, Some(("iron_sword", 0))).await;
+    let _rx = setup_enchant_reader(&game_state, Some(("iron_sword", 0)), 1).await;
 
     game_state.use_item(&"reader".to_string(), 2).await;
 
@@ -1087,7 +1089,7 @@ async fn enchant_scroll_enchants_wielded_weapon() {
 #[tokio::test]
 async fn enchant_scroll_requires_wielded_weapon() {
     let game_state = make_test_game_state("enchant_no_weapon");
-    let mut rx = setup_enchant_reader(&game_state, None).await;
+    let mut rx = setup_enchant_reader(&game_state, None, 1).await;
 
     game_state.use_item(&"reader".to_string(), 2).await;
 
@@ -1110,18 +1112,18 @@ async fn enchant_scroll_requires_wielded_weapon() {
 #[tokio::test]
 async fn enchant_scroll_destroys_over_enchanted_weapon() {
     let game_state = make_test_game_state("enchant_boom");
-    // +8 is past the safe limit far enough that destruction is certain.
-    let _rx = setup_enchant_reader(&game_state, Some(("iron_sword", 8))).await;
+    // At +12 the success floor is 1%, so each read is a 99% destruction
+    // roll. 100 scrolls make survival odds ~1e-200: the loop below is
+    // deterministic for all practical purposes.
+    let _rx = setup_enchant_reader(&game_state, Some(("iron_sword", 12)), 100).await;
 
-    game_state.use_item(&"reader".to_string(), 2).await;
-
-    let inv = game_state
-        .get_player_inventory(&"reader".to_string())
-        .await
-        .unwrap();
-    assert!(
-        !inv.equipped.contains_key(&EquipSlot::MainHand),
-        "the weapon should have evaporated"
-    );
-    assert!(inv.bag.is_empty(), "the scroll should be consumed");
+    let reader = "reader".to_string();
+    for _ in 0..100 {
+        game_state.use_item(&reader, 2).await;
+        let inv = game_state.get_player_inventory(&reader).await.unwrap();
+        if !inv.equipped.contains_key(&EquipSlot::MainHand) {
+            return; // evaporated, as expected
+        }
+    }
+    panic!("the weapon should have evaporated within 100 reads at 99% odds");
 }
