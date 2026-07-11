@@ -14,8 +14,10 @@ import {
   mix,
   clamp,
   pow,
+  floor,
   fract,
   max,
+  min,
   abs,
   length,
   exp,
@@ -132,6 +134,92 @@ const NOISE_PERIODS = 64
  *  desyncs from the visible wave. */
 const SHORE_WAVE_SPEED = 0.012
 
+/** Shore-swell shape: crests spawn at `SWELL_SPAWN_DEPTH` (m) and run up
+ *  to `SWELL_SHORE_DEPTH` (≈ the waterline); the hump is asymmetric — a
+ *  steep shoreward face (`SWELL_FRONT_W`, depth-space m) and a long back
+ *  slope. */
+const SWELL_SPAWN_DEPTH = 1.5
+const SWELL_SHORE_DEPTH = 0.03
+const SWELL_AMP = 0.35
+const SWELL_FRONT_W = 0.18
+const SWELL_BACK_W = 0.55
+
+/** DEBUG: paint the broken-wave residue red (instead of the normal white)
+ *  so its lifetime/extent can be judged in isolation. */
+const RESIDUE_DEBUG = false
+
+/** Depth + static world-space noise — the coordinate the shore bands and
+ *  swell live in; the noise bends straight depth contours into a ragged
+ *  natural wave front. Must stay identical between vertex (swell
+ *  displacement) and fragment (foam) or the whitecap slides off the
+ *  geometric crest. */
+function buildNoisyDepth(depth: N, worldXZ: N, sampleNoise: (c: N) => N): N {
+  return depth
+    .add(sampleNoise(worldXZ.mul(0.3)).mul(0.15))
+    .add(sampleNoise(worldXZ.mul(0.15)).mul(0.1))
+    .add(sampleNoise(worldXZ.mul(0.2)).mul(0.3))
+    .toVar()
+}
+
+/** One traveling shore-wave phase. `move` runs the crest from spawn depth
+ *  to the waterline over the first 60% of the cycle; `brk` is breaking
+ *  progress — the swell collapses and the whitecap blooms as it → 1.
+ *  `fade` kills the swell and its foam right after landfall, so the
+ *  backwash is bare water — only the anchored residue (see
+ *  `buildPhaseFoam`) stays behind. `seed` is a per-wave constant that
+ *  decorrelates each wave's residue pattern. Two half-offset phases give
+ *  a continuous wave train. */
+function buildShoreWavePhase(uTime: N, offset: number) {
+  const cycle = fract(uTime.mul(SHORE_WAVE_SPEED).add(offset)).toVar()
+  const move = smoothstep(float(0), float(0.6), cycle).toVar()
+  const center = mix(
+    float(SWELL_SPAWN_DEPTH),
+    float(SWELL_SHORE_DEPTH),
+    move
+  ).toVar()
+  const fade = smoothstep(float(0), float(0.1), cycle)
+    .mul(float(1).sub(smoothstep(float(0.62), float(0.72), cycle)))
+    .toVar()
+  const brk = smoothstep(float(0.62), float(0.88), move).toVar()
+  const seed = fract(
+    floor(uTime.mul(SHORE_WAVE_SPEED).add(offset)).mul(0.618034)
+  ).toVar()
+  // Backwash progress: 0 until landfall, → 1 as the sheet finishes
+  // draining. Drives the swash-sheet edge, the residue's seaward drag
+  // and dimming, and the receding-edge foam line.
+  const receded = smoothstep(float(0.64), float(0.9), cycle).toVar()
+  return { cycle, move, center, fade, brk, seed, receded }
+}
+
+/** Swell displacement of one phase at `noisyD`: the asymmetric hump grows
+ *  approaching the shore (shoaling) and collapses once it breaks. `prof`
+ *  is the raw 0–1 shape, reused by the fragment as the whitecap mask. */
+function buildSwell(
+  noisyD: N,
+  depth: N,
+  phase: ReturnType<typeof buildShoreWavePhase>
+) {
+  const s = noisyD.sub(phase.center)
+  // Near-triangular profile: linear faces keep a sharp crest kink right
+  // on the foam line (smoothstep faces rounded it into a soft mound);
+  // the mild pow tightens the toes without softening the peak.
+  const prof = pow(
+    clamp(
+      min(s.div(SWELL_FRONT_W).add(1), float(1).sub(s.div(SWELL_BACK_W))),
+      0.0,
+      1.0
+    ),
+    float(1.3)
+  ).toVar()
+  const amp = float(SWELL_AMP)
+    .mul(phase.fade)
+    .mul(float(0.55).add(phase.move.mul(0.45)))
+    .mul(float(1).sub(phase.brk.mul(0.95)))
+  // Feather at the true waterline so the crest never lifts dry sand.
+  const height = prof.mul(amp).mul(smoothstep(float(0.03), float(0.18), depth))
+  return { height, prof }
+}
+
 /** Animated receding-wave shore mask (shared with the wetness capture
  *  material). `holeAlpha` ≈ 1 in the water body, dipping toward 0 inside
  *  the wave-synced noise holes near the waterline; `holeEdge` /
@@ -242,6 +330,7 @@ export function createWaterFieldMaterial(
   const vWaveHeight = varying(float(0), 'v_waveHeight')
   const vClipPos = varying(vec4(0), 'v_clipPos')
   const vUv = varying(vec2(0), 'v_uv')
+  const vBedGrad = varying(vec2(0), 'v_bedGrad')
 
   const sampleNoise = (noiseCoord: N) =>
     noiseTex.sample(noiseCoord.div(NOISE_PERIODS)).r
@@ -260,8 +349,24 @@ export function createWaterFieldMaterial(
 
     const p = worldPos.xyz
     const hUV = toHeightmapUV(vUv)
+    // Bed gradient for the fragment swell normal. The heightmap is static
+    // (65 texels over 64 m ⇒ ~1 m per texel), so central differences are
+    // per-vertex work, not per-fragment fetches. +v is −z in world
+    // (PlaneGeometry uv under rotateX(-π/2)).
+    const HM_TEXEL = float(1.0 / 65.0)
+    vBedGrad.assign(
+      vec2(
+        heightmapTex
+          .sample(hUV.add(vec2(HM_TEXEL, 0)))
+          .r.sub(heightmapTex.sample(hUV.sub(vec2(HM_TEXEL, 0))).r),
+        heightmapTex
+          .sample(hUV.sub(vec2(0, HM_TEXEL)))
+          .r.sub(heightmapTex.sample(hUV.add(vec2(0, HM_TEXEL))).r)
+      ).mul(0.5)
+    )
     const vtxTerrainH = heightmapTex.sample(hUV).r
-    const vtxRiverness = waterFieldTex.sample(hUV).a
+    const vtxField = waterFieldTex.sample(hUV)
+    const vtxRiverness = vtxField.a
     const vtxDepth = max(float(0), p.y.sub(vtxTerrainH))
     // Cubic ease keeps endpoints fixed but compresses the shallow half so
     // the emerald band stays calm — a plain smoothstep read as choppy
@@ -276,6 +381,24 @@ export function createWaterFieldMaterial(
       .add(gerstnerWave(uWaveC, p, uTime))
       .mul(waveDamping)
       .toVar()
+
+    // Shore swell: traveling breaker humps in the shallow band the
+    // Gerstner damping just flattened — same phases/coordinate as the
+    // fragment foam so the whitecap sits on the geometric crest. Gated
+    // like seaFxGate: no swell inside rivers or across the estuary.
+    const vtxSeaness = float(1).sub(vtxRiverness)
+    const vtxSwellGate = vtxSeaness
+      .mul(vtxSeaness)
+      .mul(
+        float(1).sub(smoothstep(float(0.02), float(0.2), length(vtxField.gb)))
+      )
+    const vtxNoisyD = buildNoisyDepth(vtxDepth, p.xz, sampleNoise)
+    const vtxPhaseA = buildShoreWavePhase(uTime, 0)
+    const vtxPhaseB = buildShoreWavePhase(uTime, 0.5)
+    const swellY = buildSwell(vtxNoisyD, vtxDepth, vtxPhaseA)
+      .height.add(buildSwell(vtxNoisyD, vtxDepth, vtxPhaseB).height)
+      .mul(vtxSwellGate)
+    offset.addAssign(vec3(0, swellY, 0))
 
     worldPos.xyz.addAssign(offset)
     vWaveHeight.assign(offset.y)
@@ -317,6 +440,56 @@ export function createWaterFieldMaterial(
     const depthFactorRiver = clamp(depth.div(uRiverMaxDepth), 0.0, 1.0)
     const depthFactor = mix(depthFactorSea, depthFactorRiver, riverness)
 
+    // ── Shore swell (fragment recompute of the vertex displacement) ──
+    // Same phases as the foam bands below so the whitecap sits on the
+    // geometric crest. The depth-space slope (finite difference) times
+    // the bed gradient gives the world-space slope for the normal.
+    const noisyD = buildNoisyDepth(depth, vOrigWorldPos.xz, sampleNoise)
+    const phaseA = buildShoreWavePhase(uTime, 0)
+    const phaseB = buildShoreWavePhase(uTime, 0.5)
+    const swellA = buildSwell(noisyD, depth, phaseA)
+    const swellB = buildSwell(noisyD, depth, phaseB)
+    const SWELL_EPS = 0.08
+    const swellSlopeD = buildSwell(noisyD.add(SWELL_EPS), depth, phaseA)
+      .height.add(buildSwell(noisyD.add(SWELL_EPS), depth, phaseB).height)
+      .sub(swellA.height.add(swellB.height))
+      .div(SWELL_EPS)
+    // Depth grows where the bed drops (d·depth/dx = −gradBed.x), so the
+    // heightfield normal (−dh/dx, 1, −dh/dz) reduces to +slope × gradBed
+    // (bed gradient interpolated from the vertex stage).
+    const swellN = vec3(
+      swellSlopeD.mul(vBedGrad.x),
+      float(0),
+      swellSlopeD.mul(vBedGrad.y)
+    )
+
+    // ── Swash transparency ──
+    // The swash strip only holds water while a wave is in. The sheet's
+    // seaward edge is a depth threshold per phase: it follows the
+    // incoming crest down to the waterline, then recedes back out to
+    // SWASH_MAX_DEPTH as the backwash drains — everything shallower is
+    // fully transparent (bare wet sand) until the next wave. min() of
+    // the two phases: either phase's water covers the strip.
+    const SWASH_MAX_DEPTH = 0.4
+    const swashThreshold = (phase: ReturnType<typeof buildShoreWavePhase>) => {
+      const landed = smoothstep(float(0.58), float(0.62), phase.cycle)
+      return mix(
+        min(phase.center, float(SWASH_MAX_DEPTH)),
+        phase.receded.mul(SWASH_MAX_DEPTH),
+        landed
+      )
+    }
+    const swashThr = min(swashThreshold(phaseA), swashThreshold(phaseB)).toVar()
+    const swashWaterGate = mix(
+      float(1),
+      smoothstep(swashThr, swashThr.add(0.12), noisyD),
+      seaFxGate
+    ).toVar()
+    // Unit landward direction (the bed gradient points uphill). Sampling
+    // the foam pattern landward of the fragment makes the pattern appear
+    // to drift seaward — the backwash drag on the swash-zone foam.
+    const landwardDir = vBedGrad.div(max(length(vBedGrad), float(0.02))).toVar()
+
     // ── Per-pixel view distance through water (depth buffer) ──
     // Orthographic camera: NDC z is already linear in [near, far] and the
     // depth attachment stores it raw, so the water column the view ray
@@ -356,7 +529,9 @@ export function createWaterFieldMaterial(
       uWaveC
     )
     const seaN = normalize(
-      gerstnerN.add(rippleNoise.xzy.mul(vec3(1.5, 0.0, 1.5)))
+      gerstnerN
+        .add(rippleNoise.xzy.mul(vec3(1.5, 0.0, 1.5)))
+        .add(swellN.mul(float(1.8).mul(seaFxGate)))
     )
 
     // River ripples: two-phase wrapped flowmap. Unbounded `flow × time`
@@ -710,75 +885,103 @@ export function createWaterFieldMaterial(
 
     // ── Shore wash + foam bands (sea side) ──
     const shore = buildShoreMaskNodes(depth, vOrigWorldPos, uTime, sampleNoise)
-    const cycle1 = fract(uTime.mul(SHORE_WAVE_SPEED))
-    const cycle2 = fract(uTime.mul(SHORE_WAVE_SPEED).add(0.5))
-    const move1 = smoothstep(float(0), float(0.7), cycle1)
-    const move2 = smoothstep(float(0), float(0.7), cycle2)
-
-    const noisyD = depth
-      .add(sampleNoise(vOrigWorldPos.xz.mul(0.3)).mul(0.15))
-      .add(sampleNoise(vOrigWorldPos.xz.mul(0.15)).mul(0.1))
-      .add(sampleNoise(vOrigWorldPos.xz.mul(0.2)).mul(0.3))
-    const spawnDepth = float(1.5)
-    const shoreDepth = float(0.15)
-    const center1 = mix(spawnDepth, shoreDepth, move1)
-    const center2 = mix(spawnDepth, shoreDepth, move2)
-    const fade1 = smoothstep(float(0), float(0.1), cycle1).mul(
-      float(1).sub(smoothstep(float(0.9), float(1), cycle1))
-    )
-    const fade2 = smoothstep(float(0), float(0.1), cycle2).mul(
-      float(1).sub(smoothstep(float(0.9), float(1), cycle2))
-    )
-    const bw1 = float(0.04).add(float(0.1).mul(move1))
-    const bw2 = float(0.04).add(float(0.1).mul(move2))
-    const band1 = smoothstep(center1.sub(bw1), center1, noisyD)
-      .mul(float(1).sub(smoothstep(center1, center1.add(bw1), noisyD)))
-      .mul(fade1)
-      .mul(
-        smoothstep(
-          float(0.2),
-          float(0.5),
-          sampleNoise(vOrigWorldPos.xz.mul(0.15).add(center1.mul(1.5)))
+    // One phase's wave foam, following the real surf lifecycle:
+    //  1. approach — a moderate foam line rides the traveling crest,
+    //  2. breaking — the whitecap (prof², crest-weighted) blooms as
+    //     `brk` → 1 and the run-up carries it to the waterline,
+    //  3. backwash — `fade` has already killed band+crest, so the
+    //     receding water is bare; what stays is the residue: foam
+    //     anchored to the ground (static per-wave UV, not drifting with
+    //     the water) over the swash zone, dissolving into patches as a
+    //     rising threshold eats the foam texture.
+    const buildPhaseFoam = (
+      phase: ReturnType<typeof buildShoreWavePhase>,
+      swell: ReturnType<typeof buildSwell>
+    ) => {
+      const bw = float(0.04).add(float(0.1).mul(phase.move))
+      const band = smoothstep(phase.center.sub(bw), phase.center, noisyD)
+        .mul(
+          float(1).sub(smoothstep(phase.center, phase.center.add(bw), noisyD))
         )
-      )
-    const band2 = smoothstep(center2.sub(bw2), center2, noisyD)
-      .mul(float(1).sub(smoothstep(center2, center2.add(bw2), noisyD)))
-      .mul(fade2)
-      .mul(
-        smoothstep(
-          float(0.2),
-          float(0.5),
-          sampleNoise(vOrigWorldPos.xz.mul(0.15).add(center2.mul(1.5)))
+        .mul(phase.fade)
+        .mul(
+          smoothstep(
+            float(0.2),
+            float(0.5),
+            sampleNoise(vOrigWorldPos.xz.mul(0.15).add(phase.center.mul(1.5)))
+          )
         )
-      )
-    const shoreDayNight = smoothstep(float(-0.05), float(0.1), sunY)
-    const shoreBase = shore.holeEdge.mul(
-      mix(float(0.5), float(1.4), shoreDayNight)
-    )
-    const foamGlow = float(1)
-      .sub(smoothstep(float(0), float(0.4), depth))
-      .mul(0.15)
-    const foamTex1 = foamMapTex.sample(
-      vOrigWorldPos.xz.mul(0.4).add(cycle1.mul(0.3))
-    ).r
-    const foamTex2 = foamMapTex.sample(
-      vOrigWorldPos.xz.mul(0.4).add(cycle2.mul(0.3))
-    ).r
-    const shoreFoamTex = max(
-      foamMapTex.sample(
-        vOrigWorldPos.xz.mul(0.5).add(vec2(uTime.mul(0.006), uTime.mul(0.004)))
-      ).r,
-      foamMapTex.sample(
-        vOrigWorldPos.xz.mul(0.35).sub(vec2(uTime.mul(0.003), uTime.mul(0.005)))
+      const crest = swell.prof.mul(swell.prof).mul(phase.brk).mul(phase.fade)
+      const foamTex = foamMapTex.sample(
+        vOrigWorldPos.xz.mul(0.4).add(phase.cycle.mul(0.3))
       ).r
-    )
-    const shoreBaseTex = shoreBase.mul(shoreFoamTex)
-    const waveFoam = max(band1.mul(foamTex1), band2.mul(foamTex2))
-    const foamWithTex = clamp(
-      max(max(waveFoam, shoreBaseTex), foamGlow),
-      0.0,
-      1.0
-    )
+      const liveFoam = max(
+        band.mul(mix(float(0.3), float(1.0), phase.brk)),
+        crest
+      ).mul(foamTex)
+
+      const resSpatial = float(1).sub(
+        smoothstep(float(0.3), float(0.6), noisyD)
+      )
+      // Residue must be gone by ~0.85: the OTHER phase (offset 0.5) has
+      // visibly re-entered the swash zone by cycle ≈ 0.87, and a fresh
+      // wave washing over the previous wave's leftovers reads wrong.
+      const resTime = smoothstep(float(0.52), float(0.6), phase.cycle).mul(
+        float(1).sub(smoothstep(float(0.72), float(0.86), phase.cycle))
+      )
+      const dissolve = smoothstep(float(0.6), float(0.84), phase.cycle)
+      // Backwash drag: the pattern is sampled landward of the fragment
+      // by a growing offset, so the leftover foam visibly slides seaward
+      // with the receding sheet…
+      const resTex = foamMapTex.sample(
+        vOrigWorldPos.xz
+          .add(landwardDir.mul(phase.receded.mul(2.0)))
+          .mul(0.4)
+          .add(vec2(phase.seed.mul(7.3), phase.seed.mul(4.1)))
+      ).r
+      const resThr = mix(float(0.35), float(0.8), dissolve)
+      const residue = resSpatial
+        .mul(resTime)
+        .mul(smoothstep(resThr, resThr.add(0.2), resTex))
+        .mul(0.55)
+      // …and dims as it goes (color only — `residue` keeps the alpha).
+      const residueLit = residue.mul(mix(float(1), float(0.35), phase.receded))
+
+      return { live: liveFoam, residue, residueLit }
+    }
+    const shoreDayNight = smoothstep(float(-0.05), float(0.1), sunY)
+    const foamA = buildPhaseFoam(phaseA, swellA)
+    const foamB = buildPhaseFoam(phaseB, swellB)
+    const residueFoam = max(foamA.residue, foamB.residue).toVar()
+    const residueLitFoam = max(foamA.residueLit, foamB.residueLit).toVar()
+    // Residue is NOT folded into the water foam: it composites as an
+    // independent layer after the alpha, so it stays visible on the bare
+    // sand once the swash water has drained out from under it.
+    const waveFoam = max(foamA.live, foamB.live)
+
+    // Receding-waterline foam: a dim ragged line riding the sheet's
+    // seaward-moving edge through the backwash, gone once the strip has
+    // fully drained. Its texture shares the backwash drag so the streaks
+    // pull seaward with the edge.
+    const recedeFadeOut = (phase: ReturnType<typeof buildShoreWavePhase>) =>
+      phase.receded.mul(
+        float(1).sub(smoothstep(float(0.86), float(0.93), phase.cycle))
+      )
+    const recedeAct = max(recedeFadeOut(phaseA), recedeFadeOut(phaseB))
+    const recededMax = max(phaseA.receded, phaseB.receded)
+    const recedeEdgeFoam = smoothstep(swashThr.sub(0.06), swashThr, noisyD)
+      .mul(
+        float(1).sub(smoothstep(swashThr.add(0.03), swashThr.add(0.16), noisyD))
+      )
+      .mul(recedeAct)
+      .mul(
+        foamMapTex.sample(
+          vOrigWorldPos.xz.add(landwardDir.mul(recededMax.mul(2.0))).mul(0.45)
+        ).r
+      )
+      .mul(seaFxGate)
+      .toVar()
+    const foamWithTex = clamp(waveFoam, 0.0, 1.0)
     const foamDepthMask = float(1)
       .sub(smoothstep(float(0.3), float(0.7), depthFactorSea))
       .mul(0.7)
@@ -801,11 +1004,22 @@ export function createWaterFieldMaterial(
     const edgeNoise = sampleNoise(
       vOrigWorldPos.xz.mul(0.35).add(uTime.mul(0.05))
     )
+    // No standing contact foam on the beach waterline: the shore's
+    // boundary foam is owned entirely by the wave cycle (whitecap →
+    // residue → receding edge line). Contact lines in deeper water —
+    // rocks, players' legs — keep it.
+    const swashEdgeSuppress = float(1).sub(
+      float(1)
+        .sub(smoothstep(float(0.45), float(0.6), noisyD))
+        .mul(seaFxGate)
+    )
     const foamEdge = foamEdgeMask
       .mul(edgeFoamTex)
       .mul(smoothstep(float(0.25), float(0.7), edgeNoise).mul(0.7).add(0.3))
       .mul(mix(float(0.3), float(1.0), shoreDayNight))
       .mul(mix(float(0.25), float(1.0), seaFxGate))
+      .mul(swashWaterGate)
+      .mul(swashEdgeSuppress)
       .toVar()
 
     // ── Torch reflection (was river-only; depth-gated so it stays subtle) ──
@@ -907,7 +1121,6 @@ export function createWaterFieldMaterial(
     )
     colorSea.mulAssign(nightDarken.mul(nightExtra))
     colorSea.addAssign(foamAdd.mul(seaFxGate))
-    colorSea.addAssign(vec3(1, 1, 1).mul(shoreBaseTex.mul(0.4).mul(seaFxGate)))
 
     // ── River composite ──
     const riverFresnel = pow(float(1).sub(NdotV), float(2)).mul(0.5)
@@ -948,6 +1161,21 @@ export function createWaterFieldMaterial(
     const color = mix(colorSea, colorRiver, riverness).toVar()
     color.addAssign(torchReflection)
     color.addAssign(vec3(1, 1, 1).mul(foamEdge.mul(0.8)))
+    const residueTint = RESIDUE_DEBUG
+      ? vec3(1.5, 0, 0)
+      : vec3(1, 1, 1).mul(foamAddStrength)
+    color.addAssign(
+      residueTint
+        .mul(RESIDUE_DEBUG ? residueFoam : residueLitFoam)
+        .mul(seaFxGate)
+    )
+    // Receding edge line: darker than the live foam — thin dirty water,
+    // not fresh whitewash.
+    color.addAssign(
+      vec3(0.5, 0.52, 0.55)
+        .mul(recedeEdgeFoam)
+        .mul(mix(float(0.15), float(0.6), shoreDayNight))
+    )
 
     // ── Alpha ──
     // Sea: high floor (the bed shows through the refraction color, not
@@ -979,6 +1207,8 @@ export function createWaterFieldMaterial(
     seaAlpha.mulAssign(
       float(1).sub(float(1).sub(nightDarken).mul(veryShallowWeight).mul(0.35))
     )
+    // Fully drain the swash strip between waves (bare wet sand shows).
+    seaAlpha.mulAssign(swashWaterGate)
 
     // River: bank-to-body ramp; deep water goes opaque at night so a
     // torch-lit bed doesn't bleed through the last few percent.
@@ -993,6 +1223,8 @@ export function createWaterFieldMaterial(
 
     const alpha = mix(seaAlpha, riverAlpha, riverness)
       .add(foamEdge.mul(0.6))
+      .add(residueFoam.mul(seaFxGate))
+      .add(recedeEdgeFoam.mul(0.5))
       .min(1.0)
       .toVar()
 
