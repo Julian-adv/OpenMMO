@@ -202,7 +202,7 @@ impl GameState {
                 Some("You must be on the deepest floor")
             } else {
                 let chest_pos = cell_center(&entrance.position(), total, chest);
-                let dx = player_pos.x - chest_pos.x;
+                let dx = onlinerpg_shared::shortest_world_delta_x(chest_pos.x, player_pos.x);
                 let dz = player_pos.z - chest_pos.z;
                 if dx * dx + dz * dz > CHEST_INTERACT_RANGE * CHEST_INTERACT_RANGE {
                     Some("Too far from the chest")
@@ -490,7 +490,7 @@ impl GameState {
                 Some(Err(format!("You must be on the {noun}'s floor")))
             } else {
                 let prop_pos = cell_center(&entrance.position(), depth, (prop.x, prop.z));
-                let dx = player_pos.x - prop_pos.x;
+                let dx = onlinerpg_shared::shortest_world_delta_x(prop_pos.x, player_pos.x);
                 let dz = player_pos.z - prop_pos.z;
                 if dx * dx + dz * dz > PROP_INTERACT_RANGE * PROP_INTERACT_RANGE {
                     Some(Err(format!("Too far from the {noun}")))

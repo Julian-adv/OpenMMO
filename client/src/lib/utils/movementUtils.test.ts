@@ -10,6 +10,7 @@ import {
   type MovementConfig,
   type Position,
 } from './movementUtils'
+import { WORLD_MAX_X, WORLD_MIN_X } from '../terrain/world-wrap'
 
 describe('getMovementMode', () => {
   it('returns walk for short distance without torch', () => {
@@ -98,6 +99,14 @@ describe('initMovementState', () => {
     target.x = 999
     expect(state.startPos.x).toBe(1)
     expect(state.targetPos.x).toBe(4)
+  })
+
+  it('measures the short distance across the X seam', () => {
+    const state = initMovementState(
+      { x: WORLD_MAX_X - 1, y: 0, z: 0 },
+      { x: WORLD_MIN_X + 1, y: 0, z: 0 }
+    )
+    expect(state.totalDistance).toBe(2)
   })
 })
 
@@ -220,6 +229,19 @@ describe('calculateMovementStep', () => {
     expect(result.newPos.x).toBeCloseTo(10.3)
     expect(result.newPos.z).toBeCloseTo(0)
     expect(result.newPos.y).toBe(5) // Y preserved
+  })
+
+  it('continues through the X seam instead of reversing across the world', () => {
+    const start: Position = { x: WORLD_MAX_X - 1, y: 5, z: 0 }
+    const target: Position = { x: WORLD_MIN_X + 1, y: 0, z: 0 }
+    const state = initMovementState(start, target)
+    state.currentSpeed = cfg.maxSpeed
+
+    const result = calculateMovementStep(start, state, cfg, 0.1)
+
+    expect(result.arrived).toBe(false)
+    expect(result.newPos.x).toBeCloseTo(start.x + 0.3)
+    expect(result.rotation).toBeCloseTo(Math.PI / 2)
   })
 
   it('preserves Y from currentPos (terrain handles Y)', () => {

@@ -5,6 +5,34 @@
 
 use serde::{Deserialize, Serialize};
 
+/// East-west circumference of the baked world, in meters.
+pub const WORLD_WIDTH_X: f32 = 32_768.0;
+/// West edge of the first baked terrain tile. Tile -256 is centered at
+/// -16,384 and extends another half tile west.
+pub const WORLD_MIN_X: f32 = -16_416.0;
+/// East edge of the last baked terrain tile. This edge is the same periodic
+/// location as `WORLD_MIN_X` and therefore belongs to the wrapped interval's
+/// exclusive end.
+pub const WORLD_MAX_X: f32 = WORLD_MIN_X + WORLD_WIDTH_X;
+
+/// Normalize a world X coordinate into the terrain's canonical baked range.
+#[inline]
+pub fn wrap_world_x(x: f32) -> f32 {
+    (x - WORLD_MIN_X).rem_euclid(WORLD_WIDTH_X) + WORLD_MIN_X
+}
+
+/// Shortest signed X offset from `from_x` to `to_x` on the cylindrical world.
+#[inline]
+pub fn shortest_world_delta_x(from_x: f32, to_x: f32) -> f32 {
+    let raw_delta = to_x - from_x;
+    let half_width = WORLD_WIDTH_X * 0.5;
+    if raw_delta >= -half_width && raw_delta < half_width {
+        raw_delta
+    } else {
+        (raw_delta + half_width).rem_euclid(WORLD_WIDTH_X) - half_width
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
@@ -13,12 +41,56 @@ pub struct Position {
 }
 
 impl Position {
-    /// Squared distance in the X-Z (ground) plane, ignoring height. Squared
-    /// to avoid a `sqrt` when callers only compare against a radius.
+    /// Return this position with X normalized across the cylindrical world
+    /// seam. Y and Z are unchanged.
+    pub fn wrapped_x(mut self) -> Self {
+        self.x = wrap_world_x(self.x);
+        self
+    }
+
+    /// Squared shortest-periodic distance in the X-Z ground plane, ignoring
+    /// height. X wraps around the world; Z remains bounded.
     pub fn dist_xz_sq(&self, other: &Position) -> f32 {
-        let dx = self.x - other.x;
+        let dx = shortest_world_delta_x(self.x, other.x);
         let dz = self.z - other.z;
         dx * dx + dz * dz
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn world_x_wraps_at_baked_terrain_edges() {
+        assert_eq!(wrap_world_x(WORLD_MIN_X), WORLD_MIN_X);
+        assert_eq!(wrap_world_x(WORLD_MAX_X), WORLD_MIN_X);
+        assert_eq!(wrap_world_x(WORLD_MAX_X + 0.25), WORLD_MIN_X + 0.25);
+        assert_eq!(wrap_world_x(WORLD_MIN_X - 0.25), WORLD_MAX_X - 0.25);
+    }
+
+    #[test]
+    fn world_x_distance_uses_short_path_across_seam() {
+        assert_eq!(
+            shortest_world_delta_x(WORLD_MAX_X - 1.0, WORLD_MIN_X + 1.0),
+            2.0
+        );
+        assert_eq!(
+            shortest_world_delta_x(WORLD_MIN_X + 1.0, WORLD_MAX_X - 1.0),
+            -2.0
+        );
+
+        let east = Position {
+            x: WORLD_MAX_X - 1.0,
+            y: 0.0,
+            z: 4.0,
+        };
+        let west = Position {
+            x: WORLD_MIN_X + 1.0,
+            y: 99.0,
+            z: 7.0,
+        };
+        assert_eq!(east.dist_xz_sq(&west), 13.0);
     }
 }
 

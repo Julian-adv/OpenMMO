@@ -409,6 +409,62 @@ pub fn river_segments_near_tile(
     out
 }
 
+/// X-periodic counterpart to `river_segments_near_tile`. Matching segments
+/// are translated into the query tile's local circumference while retaining
+/// their per-vertex flow, width, and bed-floor metadata.
+pub fn river_segments_near_tile_wrap_x(
+    polylines: &[RiverWorldPolyline],
+    tile_min_x: f32,
+    tile_min_z: f32,
+    tile_max_x: f32,
+    tile_max_z: f32,
+    margin: f32,
+    world_size: f32,
+) -> Vec<RiverSegment> {
+    debug_assert!(world_size > 0.0);
+    let qx0 = tile_min_x - margin;
+    let qx1 = tile_max_x + margin;
+    let qz0 = tile_min_z - margin;
+    let qz1 = tile_max_z + margin;
+    let mut out = Vec::new();
+    for poly in polylines {
+        if poly.points.len() < 2 {
+            continue;
+        }
+        for i in 0..poly.points.len() - 1 {
+            let a = poly.points[i];
+            let b = poly.points[i + 1];
+            let sz0 = a[1].min(b[1]);
+            let sz1 = a[1].max(b[1]);
+            if sz1 < qz0 || sz0 > qz1 {
+                continue;
+            }
+            for shift_x in [-world_size, 0.0, world_size] {
+                let ax = a[0] + shift_x;
+                let bx = b[0] + shift_x;
+                let sx0 = ax.min(bx);
+                let sx1 = ax.max(bx);
+                if sx1 < qx0 || sx0 > qx1 {
+                    continue;
+                }
+                out.push(RiverSegment {
+                    ax,
+                    az: a[1],
+                    bx,
+                    bz: b[1],
+                    flow_norm_a: poly.flow_norm[i],
+                    flow_norm_b: poly.flow_norm[i + 1],
+                    width_a: poly.width[i],
+                    width_b: poly.width[i + 1],
+                    bed_floor_a: poly.bed_floor[i],
+                    bed_floor_b: poly.bed_floor[i + 1],
+                });
+            }
+        }
+    }
+    out
+}
+
 /// Nearest-river-segment query. Returns `(distance_m, seg_idx, t)` where
 /// `t ∈ [0, 1]` is the projection parameter along the nearest segment —
 /// the caller uses it to linearly interpolate per-vertex width / flow_norm
@@ -819,6 +875,32 @@ mod tests {
         let east_sd = signed_min_distance_to_segments(50.0, 0.0, &east).unwrap();
         let west_sd = signed_min_distance_to_segments(-50.0, 0.0, &west).unwrap();
         assert!((east_sd - west_sd).abs() < 1e-6, "{east_sd} vs {west_sd}");
+    }
+
+    #[test]
+    fn river_segments_near_tile_wrap_x_preserves_metadata() {
+        let polys = vec![RiverWorldPolyline {
+            points: vec![[46.0, -10.0], [46.0, 10.0]],
+            flow_norm: vec![0.25, 0.75],
+            width: vec![4.0, 8.0],
+            bed_floor: vec![-1.0, -2.0],
+        }];
+        let west = river_segments_near_tile_wrap_x(&polys, -50.0, -1.0, -49.0, 1.0, 8.0, 100.0);
+        assert_eq!(west.len(), 1);
+        let seg = west[0];
+        assert_eq!(
+            (seg.ax, seg.az, seg.bx, seg.bz),
+            (-54.0, -10.0, -54.0, 10.0)
+        );
+        assert_eq!((seg.flow_norm_a, seg.flow_norm_b), (0.25, 0.75));
+        assert_eq!((seg.width_a, seg.width_b), (4.0, 8.0));
+        assert_eq!((seg.bed_floor_a, seg.bed_floor_b), (-1.0, -2.0));
+
+        let east = river_segments_near_tile_wrap_x(&polys, 50.0, 0.0, 50.0, 0.0, 8.0, 100.0);
+        let east_nearest = nearest_river_segment(50.0, 0.0, &east).unwrap();
+        let west_nearest = nearest_river_segment(-50.0, 0.0, &west).unwrap();
+        assert!((east_nearest.0 - west_nearest.0).abs() < 1e-6);
+        assert!((east_nearest.2 - west_nearest.2).abs() < 1e-6);
     }
 
     #[test]

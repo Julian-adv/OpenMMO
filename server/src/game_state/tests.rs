@@ -241,6 +241,34 @@ async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
 }
 
 #[tokio::test]
+async fn player_aoi_crosses_world_x_seam() {
+    let game_state = make_test_game_state("player_aoi_x_wrap");
+    let east_id = "east_player".to_string();
+    let west_id = "west_player".to_string();
+
+    game_state
+        .add_player(make_player(
+            &east_id,
+            onlinerpg_shared::WORLD_MAX_X - 1.0,
+            0.0,
+        ))
+        .await;
+    game_state
+        .add_player(make_player(
+            &west_id,
+            onlinerpg_shared::WORLD_MIN_X + 1.0,
+            0.0,
+        ))
+        .await;
+
+    let nearby = game_state
+        .player_ids_within(&east_id, onlinerpg_shared::NPC_SIGHT_RADIUS)
+        .await;
+    assert!(nearby.contains(&east_id));
+    assert!(nearby.contains(&west_id));
+}
+
+#[tokio::test]
 async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
     let game_state = make_test_game_state("movement_world_entity_aoi");
     let player_id = "walker".to_string();
@@ -312,6 +340,44 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
             "Expected self PlayerMoved after AOI snapshot, got {:?}",
             other
         ),
+    }
+}
+
+#[tokio::test]
+async fn player_movement_wraps_across_east_world_edge() {
+    let game_state = make_test_game_state("movement_x_wrap");
+    let player_id = "world_wrap_walker".to_string();
+    game_state
+        .add_player(make_player(
+            &player_id,
+            onlinerpg_shared::WORLD_MAX_X - 0.25,
+            0.0,
+        ))
+        .await;
+    let mut direct_rx = game_state.register_direct_channel(&player_id).await;
+
+    game_state
+        .update_player_position(
+            &player_id,
+            Position {
+                x: onlinerpg_shared::WORLD_MAX_X + 0.25,
+                y: 12.0,
+                z: 3.0,
+            },
+            0.5,
+            0,
+        )
+        .await;
+
+    let players = game_state.get_all_players().await;
+    let wrapped = &players[&player_id];
+    assert_eq!(wrapped.position.x, onlinerpg_shared::WORLD_MIN_X + 0.25);
+
+    match direct_rx.try_recv() {
+        Ok(ServerMessage::PlayerMoved { position, .. }) => {
+            assert_eq!(position.x, onlinerpg_shared::WORLD_MIN_X + 0.25);
+        }
+        other => panic!("Expected wrapped self PlayerMoved, got {other:?}"),
     }
 }
 

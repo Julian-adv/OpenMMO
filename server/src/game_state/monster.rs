@@ -378,7 +378,7 @@ impl super::GameState {
                 None => return false,
             }
         };
-        let dx = position.x - player_pos.x;
+        let dx = onlinerpg_shared::shortest_world_delta_x(player_pos.x, position.x);
         let dz = position.z - player_pos.z;
         let max = rule.max_distance + 10.0; // tolerance
         dx * dx + dz * dz <= max * max

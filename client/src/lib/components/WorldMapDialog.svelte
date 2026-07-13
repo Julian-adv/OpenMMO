@@ -67,6 +67,7 @@
   import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
   import { networkManager } from '../network/socket'
   import { graphicsQuality, getEffectivePreset } from '../stores/graphicsSettings'
+  import { wrapWorldX } from '../terrain/world-wrap'
 
   const graphicsPreset = $derived(getEffectivePreset($graphicsQuality))
   const mobileMapBudget = $derived(graphicsPreset.renderBudget === 'mobile')
@@ -104,7 +105,7 @@
   let containerW = $state(0)
   let containerH = $state(0)
 
-  let playerX = $derived($gameStore.currentPlayer?.position.x ?? 0)
+  let playerX = $derived(wrapWorldX($gameStore.currentPlayer?.position.x ?? 0))
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
 
   // --- Camera state (world coordinates of view center) ---
@@ -457,7 +458,7 @@
     const angle = Math.PI / 4
     const cosA = Math.cos(angle)
     const sinA = Math.sin(angle)
-    const worldX = camX + (sx * cosA - sz * sinA)
+    const worldX = wrapWorldX(camX + (sx * cosA - sz * sinA))
     const worldZ = camZ + (sx * sinA + sz * cosA)
 
     const position = { x: worldX, y: 0, z: worldZ }

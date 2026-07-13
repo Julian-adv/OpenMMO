@@ -26,7 +26,10 @@ pub use messages::{
     deserialize_client_msg, deserialize_server_msg, serialize_client_msg, serialize_server_msg,
     ActiveDeal, ClientMessage, DealKind, PlayerId, ServerMessage,
 };
-pub use world::{GameDateTime, NoSpawnZone, Position, NPC_SIGHT_RADIUS};
+pub use world::{
+    shortest_world_delta_x, wrap_world_x, GameDateTime, NoSpawnZone, Position, NPC_SIGHT_RADIUS,
+    WORLD_MAX_X, WORLD_MIN_X, WORLD_WIDTH_X,
+};
 
 #[cfg(test)]
 mod tests {

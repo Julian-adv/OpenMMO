@@ -6,6 +6,7 @@ import {
   isSlopeTooSteepUphill,
   SLOPE_LOOKAHEAD_DISTANCE,
 } from '../../utils/movementUtils'
+import { wrapWorldX } from '../../terrain/world-wrap'
 
 export interface PlayerPhysicsDeps {
   /** Live read — heightManager is a Svelte prop and may change identity. */
@@ -37,6 +38,7 @@ export interface PlayerPhysics {
 
 export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
   function sampleHeight(x: number, z: number): number {
+    x = wrapWorldX(x)
     // Dungeon floors and stair-shaft ramps replace terrain entirely while
     // underground (and on the surface entrance ramp).
     const dungeonY = dungeonManager.sampleHeightAt(x, z)

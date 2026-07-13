@@ -147,7 +147,7 @@ pub(super) fn probe_point_impl(
     wx: f32,
     wz: f32,
 ) -> super::PointProbe {
-    use super::super::vector_features::river_segments_near_tile;
+    use super::super::vector_features::river_segments_near_tile_wrap_x;
 
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
@@ -159,7 +159,15 @@ pub(super) fn probe_point_impl(
 
     let coast_segs = coast_segments_near(ctx, world_size, wx, wz, wx, wz, 0.0);
     let natural = sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc, &coast_segs);
-    let segs = river_segments_near_tile(&ctx.rivers_world, wx, wz, wx, wz, super::river_margin_m());
+    let segs = river_segments_near_tile_wrap_x(
+        &ctx.rivers_world,
+        wx,
+        wz,
+        wx,
+        wz,
+        super::river_margin_m(),
+        world_size,
+    );
     let river = carve_at_point_detailed(wx, wz, natural, &segs);
     let carve = river.map(|n| n.carve).unwrap_or(0.0);
     let final_height = (natural - carve).clamp(-HEIGHT_BIAS, cfg.max_elevation_m);

@@ -80,6 +80,7 @@
     PlayerControlStateName,
   } from './player-control/fsm/control-state'
   import { createLocalPlayerControlMachine } from './player-control/fsm/state-definitions'
+  import { wrapWorldX } from '../terrain/world-wrap'
 
   interface Props {
     onStateChange: (state: PlayerState) => void
@@ -309,16 +310,18 @@
   // Wire format: dungeon depth d is floor_level -d; housing floors stay
   // 0..3 (client-internal -1 "outdoors" is clamped to 0).
   function sendPlayerMove(position: Position, rotation: number) {
-    lastSentPosition = { ...position }
+    const wrappedPosition = { ...position, x: wrapWorldX(position.x) }
+    lastSentPosition = wrappedPosition
     const depth = get(currentDungeonDepth)
     const floorLevel = depth >= 1 ? -depth : Math.max(0, get(playerFloorLevel))
-    networkManager.sendPlayerMove(position, rotation, floorLevel)
+    networkManager.sendPlayerMove(wrappedPosition, rotation, floorLevel)
   }
 
   function writePlayerPosition(position: Position, rotation: number) {
+    const wrappedX = wrapWorldX(position.x)
     gameStore.update((state) => {
       if (state.currentPlayer) {
-        state.currentPlayer.position.set(position.x, position.y, position.z)
+        state.currentPlayer.position.set(wrappedX, position.y, position.z)
         state.currentPlayer.rotation = rotation
       }
       return state

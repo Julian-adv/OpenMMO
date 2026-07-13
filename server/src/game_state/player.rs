@@ -162,7 +162,10 @@ impl super::GameState {
         old_player_id
     }
 
-    pub async fn add_player(&self, player: Player) -> Option<ServerMessage> {
+    pub async fn add_player(&self, mut player: Player) -> Option<ServerMessage> {
+        // Normalize persisted legacy positions before they enter the spatial
+        // index or are sent to clients.
+        player.position.x = onlinerpg_shared::wrap_world_x(player.position.x);
         let player_id = player.id.clone();
         let player_name = player.name.clone();
         let player_number = self.get_or_assign_player_number(&player_id).await;
@@ -305,10 +308,11 @@ impl super::GameState {
     pub async fn update_player_position(
         &self,
         player_id: &PlayerId,
-        new_position: Position,
+        mut new_position: Position,
         new_rotation: f32,
         floor_level: i8,
     ) {
+        new_position.x = onlinerpg_shared::wrap_world_x(new_position.x);
         // Dungeon floors (negative) are validated against the entrance
         // registry and the floor's expected world Y before being stored.
         let current_floor = {
@@ -374,10 +378,11 @@ impl super::GameState {
     pub async fn teleport_player(
         &self,
         player_id: &PlayerId,
-        new_position: Position,
+        mut new_position: Position,
         new_rotation: f32,
         new_floor_level: i8,
     ) {
+        new_position.x = onlinerpg_shared::wrap_world_x(new_position.x);
         let moved = {
             let mut players = self.players.write().await;
             if let Some(player) = players.get_mut(player_id) {
@@ -831,39 +836,52 @@ impl super::GameState {
         floor_level: i8,
         radius: f32,
     ) -> Vec<PlayerId> {
-        let center_cell = super::SpatialCell::from_position(position);
         let cell_radius = (radius / super::PLAYER_SPATIAL_CELL_SIZE).ceil() as i32;
         let radius_sq = radius * radius;
         let players = self.players.read().await;
         let cells = self.player_spatial_cells.read().await;
-        let mut player_ids = Vec::new();
+        let mut player_ids = HashSet::new();
 
-        for cell_x in (center_cell.x - cell_radius)..=(center_cell.x + cell_radius) {
-            for cell_z in (center_cell.z - cell_radius)..=(center_cell.z + cell_radius) {
-                let cell = super::SpatialCell {
-                    x: cell_x,
-                    z: cell_z,
-                };
+        // The spatial hash itself stores canonical positions. Near either X
+        // edge, query translated copies one circumference away so cells from
+        // the opposite edge participate in the same periodic neighborhood.
+        for shift_x in [
+            -onlinerpg_shared::WORLD_WIDTH_X,
+            0.0,
+            onlinerpg_shared::WORLD_WIDTH_X,
+        ] {
+            let shifted = Position {
+                x: position.x + shift_x,
+                ..*position
+            };
+            let shifted_center = super::SpatialCell::from_position(&shifted);
+            for cell_x in (shifted_center.x - cell_radius)..=(shifted_center.x + cell_radius) {
+                for cell_z in (shifted_center.z - cell_radius)..=(shifted_center.z + cell_radius) {
+                    let cell = super::SpatialCell {
+                        x: cell_x,
+                        z: cell_z,
+                    };
 
-                let Some(cell_player_ids) = cells.get(&cell) else {
-                    continue;
-                };
-
-                for player_id in cell_player_ids {
-                    let Some(player) = players.get(player_id) else {
+                    let Some(cell_player_ids) = cells.get(&cell) else {
                         continue;
                     };
 
-                    if player.floor_level == floor_level
-                        && position.dist_xz_sq(&player.position) <= radius_sq
-                    {
-                        player_ids.push(player_id.clone());
+                    for player_id in cell_player_ids {
+                        let Some(player) = players.get(player_id) else {
+                            continue;
+                        };
+
+                        if player.floor_level == floor_level
+                            && position.dist_xz_sq(&player.position) <= radius_sq
+                        {
+                            player_ids.insert(player_id.clone());
+                        }
                     }
                 }
             }
         }
 
-        player_ids
+        player_ids.into_iter().collect()
     }
 
     pub async fn player_ids_within(&self, player_id: &PlayerId, radius: f32) -> Vec<PlayerId> {

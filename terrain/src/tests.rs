@@ -20,6 +20,23 @@ fn tile_to_region_negative() {
 }
 
 #[test]
+fn tile_x_wraps_across_baked_file_range() {
+    assert_eq!(coords::wrap_tile_x(-256), -256);
+    assert_eq!(coords::wrap_tile_x(255), 255);
+    assert_eq!(coords::wrap_tile_x(256), -256);
+    assert_eq!(coords::wrap_tile_x(-257), 255);
+    assert_eq!(coords::wrap_tile_x(768), -256);
+}
+
+#[test]
+fn region_x_wraps_across_baked_file_range() {
+    assert_eq!(coords::wrap_region_x(-16), -16);
+    assert_eq!(coords::wrap_region_x(15), 15);
+    assert_eq!(coords::wrap_region_x(16), -16);
+    assert_eq!(coords::wrap_region_x(-17), 15);
+}
+
+#[test]
 fn heightmap_path_positive() {
     let p = coords::heightmap_path(Path::new("terrain"), 5, 3);
     assert_eq!(
@@ -41,6 +58,48 @@ fn heightmap_path_negative() {
 fn splatmap_path_format() {
     let p = coords::splatmap_path(Path::new("t"), 0, 0);
     assert_eq!(p.to_str().unwrap(), "t/splat/r+00_+00/s_+0000_+0000.bin");
+}
+
+#[test]
+fn periodic_tile_paths_alias_opposite_world_edge() {
+    let base = Path::new("terrain");
+    assert_eq!(
+        coords::heightmap_path(base, -257, 3),
+        coords::heightmap_path(base, 255, 3)
+    );
+    assert_eq!(
+        coords::splatmap_path(base, 256, -2),
+        coords::splatmap_path(base, -256, -2)
+    );
+    assert_eq!(
+        coords::grass_path(base, -257, 4),
+        coords::grass_path(base, 255, 4)
+    );
+    assert_eq!(
+        coords::tree_path(base, 256, 5),
+        coords::tree_path(base, -256, 5)
+    );
+    assert_eq!(
+        coords::river_field_path(base, -257, 6),
+        coords::river_field_path(base, 255, 6)
+    );
+    assert_eq!(
+        coords::water_field_path(base, 256, 7),
+        coords::water_field_path(base, -256, 7)
+    );
+}
+
+#[test]
+fn periodic_minimap_path_aliases_opposite_world_edge() {
+    let base = Path::new("terrain");
+    assert_eq!(
+        coords::minimap_path(base, -17, 0),
+        coords::minimap_path(base, 15, 0)
+    );
+    assert_eq!(
+        coords::minimap_path(base, 16, 0),
+        coords::minimap_path(base, -16, 0)
+    );
 }
 
 #[test]
@@ -107,6 +166,29 @@ async fn heightmap_write_read_roundtrip() {
     io.write_heightmap(0, 0, &data).await.unwrap();
     let read_back = io.read_heightmap(0, 0).await.unwrap();
     assert_eq!(read_back, data);
+
+    let _ = tokio::fs::remove_dir_all(&dir).await;
+}
+
+#[tokio::test]
+async fn heightmap_read_uses_periodic_x_tile_alias() {
+    let dir = std::env::temp_dir().join("_onlinerpg_test_periodic_height_alias");
+    let _ = tokio::fs::remove_dir_all(&dir).await;
+
+    let io = crate::io::TerrainIO::new(dir.clone());
+    let mut east_data = defaults::default_heightmap();
+    east_data[0..2].copy_from_slice(&12_345u16.to_le_bytes());
+    io.write_heightmap(255, 3, &east_data).await.unwrap();
+
+    let west_render_copy = io.read_heightmap(-257, 3).await.unwrap();
+    assert_eq!(west_render_copy, east_data);
+
+    let mut west_data = defaults::default_heightmap();
+    west_data[0..2].copy_from_slice(&23_456u16.to_le_bytes());
+    io.write_heightmap(-256, 3, &west_data).await.unwrap();
+
+    let east_render_copy = io.read_heightmap(256, 3).await.unwrap();
+    assert_eq!(east_render_copy, west_data);
 
     let _ = tokio::fs::remove_dir_all(&dir).await;
 }

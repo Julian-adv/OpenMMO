@@ -5,6 +5,7 @@ import {
   type MovementState,
   type Position,
 } from '../../../utils/movementUtils'
+import { shortestWrappedDeltaX } from '../../../terrain/world-wrap'
 
 export interface PathWaypoint {
   x: number
@@ -165,7 +166,7 @@ export function stepMovementSubstrate({
         z: nextWp.z,
       }
 
-      const ndx = wpPos.x - movementTarget.x
+      const ndx = shortestWrappedDeltaX(movementTarget.x, wpPos.x)
       const ndz = wpPos.z - movementTarget.z
       const nextRotation = Math.atan2(ndx, ndz)
       const nextMovementState = initMovementState(

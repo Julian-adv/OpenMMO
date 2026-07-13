@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 
 use super::global_map::GlobalMap;
 use super::vector_features::{
-    river_segments_near_tile, segments_near_tile, segments_near_tile_wrap_x,
+    river_segments_near_tile_wrap_x, segments_near_tile, segments_near_tile_wrap_x,
 };
 
 pub use constants::{
@@ -148,13 +148,14 @@ pub fn bake_tile_with_bridges(
     let tile_max_z = tile_min_z + TILE_DIM as f32;
 
     let river_margin = river_margin_m();
-    let river_segs = river_segments_near_tile(
+    let river_segs = river_segments_near_tile_wrap_x(
         &ctx.rivers_world,
         tile_min_x,
         tile_min_z,
         tile_max_x,
         tile_max_z,
         river_margin,
+        map.config.world_size_m as f32,
     );
     // `* 2.0`: the plain branch reads road distance up to HALF + FADE*2 via
     // `road_fade`. Shrinking the margin would desynchronize the fade across

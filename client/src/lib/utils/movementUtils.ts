@@ -1,5 +1,7 @@
 // Common movement calculation utilities shared between local and remote players
 
+import { shortestWrappedDeltaX, unwrapWorldXNear } from '../terrain/world-wrap'
+
 export type MovementMode = 'walk' | 'jog' | 'run'
 
 export interface Position {
@@ -140,14 +142,18 @@ export function calculateMovementStep(
   const decelDistance = getDecelDistance(config)
 
   // Calculate remaining distance on XZ plane (Y is handled by terrain)
-  const dx = targetPos.x - currentPos.x
+  const dx = shortestWrappedDeltaX(currentPos.x, targetPos.x)
   const dz = targetPos.z - currentPos.z
   const remainingDistance = Math.sqrt(dx * dx + dz * dz)
 
   // Check if arrived
   if (remainingDistance <= config.arrivalThreshold) {
     return {
-      newPos: { x: targetPos.x, y: currentPos.y, z: targetPos.z },
+      newPos: {
+        x: unwrapWorldXNear(currentPos.x, targetPos.x),
+        y: currentPos.y,
+        z: targetPos.z,
+      },
       newSpeed: 0,
       rotation: Math.atan2(dx, dz),
       arrived: true,
@@ -182,7 +188,11 @@ export function calculateMovementStep(
   let newPos: Position
   if (moveDistance >= remainingDistance || newSpeed <= 0.001) {
     // Arrived at destination
-    newPos = { x: targetPos.x, y: currentPos.y, z: targetPos.z }
+    newPos = {
+      x: unwrapWorldXNear(currentPos.x, targetPos.x),
+      y: currentPos.y,
+      z: targetPos.z,
+    }
     return {
       newPos,
       newSpeed: 0,
@@ -221,7 +231,7 @@ export function initMovementState(
   targetPos: Position,
   currentSpeed: number = 0
 ): MovementState {
-  const dx = targetPos.x - currentPos.x
+  const dx = shortestWrappedDeltaX(currentPos.x, targetPos.x)
   const dz = targetPos.z - currentPos.z
   const totalDistance = Math.sqrt(dx * dx + dz * dz)
 

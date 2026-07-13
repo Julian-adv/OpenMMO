@@ -316,7 +316,7 @@ fn is_player_near_door(
     let world_z = house_origin.z + door_z;
 
     // XZ distance check
-    let dx = player_pos.x - world_x;
+    let dx = onlinerpg_shared::shortest_world_delta_x(world_x, player_pos.x);
     let dz = player_pos.z - world_z;
     let dist_sq = dx * dx + dz * dz;
     if dist_sq > MAX_DOOR_DISTANCE * MAX_DOOR_DISTANCE {

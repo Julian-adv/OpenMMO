@@ -179,7 +179,7 @@ impl super::GameState {
                     .await;
             }
 
-            let dx = npc.position.x - target.position.x;
+            let dx = onlinerpg_shared::shortest_world_delta_x(target.position.x, npc.position.x);
             let dz = npc.position.z - target.position.z;
             if dx * dx + dz * dz > NPC_SIGHT_RADIUS * NPC_SIGHT_RADIUS {
                 return self

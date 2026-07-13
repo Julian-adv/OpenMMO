@@ -22,6 +22,11 @@
   import { dungeonManager } from '../../managers/dungeonManager'
   import { housingManager } from '../../managers/housingManager'
   import { bridgeManager } from '../../managers/bridgeManager'
+  import {
+    shortestWrappedDeltaX,
+    unwrapWorldXNear,
+    wrapWorldX,
+  } from '../../terrain/world-wrap'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import { torchLightEnabled } from '../../stores/debugStore'
   import { localTorchEquipped } from '../../stores/inventoryStore'
@@ -200,7 +205,7 @@
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
       if (!player.torchOn || !rp || !remoteVisibility.get(id)) continue
-      const dx = rp.position.x - playerPos.x
+      const dx = shortestWrappedDeltaX(playerPos.x, rp.position.x)
       const dz = rp.position.z - playerPos.z
       const dist = dx * dx + dz * dz
       if (dist < bestDist) {
@@ -224,8 +229,14 @@
       return { target: _unifiedTorchTmp.copy(wallPositions[bestWallIdx]), wallIdx: bestWallIdx }
     }
     if (bestRp) {
+      const displayX = unwrapWorldXNear(playerPos.x, bestRp.position.x)
       return {
-        target: setTorchTargetFromPose(bestRp.position.x, bestRp.position.z, bestRp.position.y, bestRp.rotation),
+        target: setTorchTargetFromPose(
+          displayX,
+          bestRp.position.z,
+          bestRp.position.y,
+          bestRp.rotation
+        ),
         wallIdx: -1,
       }
     }
@@ -363,15 +374,22 @@
     {@const remotePlayer = remotePlayers.get(player.id)}
     {#if remotePlayer}
       {@const visible = remoteVisibility.get(player.id) ?? false}
+      {@const displayX = currentPlayer
+        ? unwrapWorldXNear(currentPlayer.position.x, remotePlayer.position.x)
+        : remotePlayer.position.x}
       {@const baseY = player.floorLevel > 0 || player.floorLevel < 0
         ? remotePlayer.position.y
-        : (bridgeManager.findDeckYAt(remotePlayer.position.x, remotePlayer.position.z, null)
-            ?? heightManager.getHeightAtWorldPosition(remotePlayer.position.x, remotePlayer.position.z)
+        : (bridgeManager.findDeckYAt(
+            wrapWorldX(displayX),
+            remotePlayer.position.z,
+            null
+          )
+            ?? heightManager.getHeightAtWorldPosition(displayX, remotePlayer.position.z)
             ?? remotePlayer.position.y)}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(
-          remotePlayer.position.x,
+          displayX,
           visible ? baseY : OFFSCREEN_Y,
           remotePlayer.position.z
         )}
