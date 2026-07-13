@@ -227,6 +227,36 @@ pub(super) const COAST_FADE_SPAN_M: f32 = 16.0;
 /// emits axis-aligned segments at 8 m cell spacing; two rounds soften
 /// those into a curve at 1 m tile resolution, matching rivers/roads.
 pub(super) const COAST_CHAIKIN_ITERATIONS: u32 = 2;
+/// Half-width (m) of the shoreline height-blend band around the smoothed
+/// coast polyline. Within this signed distance the baked base elevation
+/// blends from a canonical beach profile — 0 m exactly on the polyline —
+/// out to the natural bicubic-sampled terrain, so the visible waterline
+/// (the heightmap's sea-level contour) follows the smoothed curve instead
+/// of the 8 m land-mask lattice, which read as scalloped stair-steps.
+/// Must exceed the max deviation between the smoothed polyline and the
+/// raw mask contour (≈ half a cell + Chaikin drift ≈ 5–6 m), or the blend
+/// reconnects to terrain still on the wrong side of sea level.
+pub(super) const COAST_HEIGHT_BLEND_M: f32 = 16.0;
+/// Beach profile slope (m per m) on the land side of the coast polyline.
+/// Note this intentionally undercuts `LAND_BASE_MIN_Y_M` near the
+/// waterline — inside the blend band the profile owns the land floor, and
+/// coastal detail noise (±0.2 m worst case) may wobble the waterline a
+/// couple of meters, which reads as organic shore variation.
+pub(super) const COAST_PROFILE_LAND_SLOPE: f32 = 0.10;
+/// Beach profile slope (m per m) on the sea side. Slightly steeper than
+/// the land side so the profile meets the offshore bathymetry curve
+/// (−0.5 m at the first sea cell, deepening 0.25 m per cell) without a
+/// shelf at the blend's outer edge.
+pub(super) const COAST_PROFILE_SEA_SLOPE: f32 = 0.12;
+/// Seaward distance (m) from the coast polyline at which the blend starts
+/// re-admitting the raw bicubic terrain (full weight at
+/// `COAST_HEIGHT_BLEND_M`). Inside this hold distance the profile owns the
+/// height outright: under tall coastal terrain the raw field's sea-level
+/// contour sits near the sea-cell CENTERS (≈ half a cell past the mask
+/// boundary), so any raw weight there would poke dry land through the
+/// water and re-expose the 8 m lattice. Must exceed polyline↔mask-boundary
+/// deviation (~3 m) + half a cell (4 m) with slack.
+pub(super) const COAST_SEA_BLEND_START_M: f32 = 10.0;
 /// Distance (m) past the river sand band over which plain dirt fades in.
 /// Matches the river carve taper so slope returns to plain baseline right
 /// as the fade completes.

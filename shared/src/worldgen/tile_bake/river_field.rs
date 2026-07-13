@@ -31,7 +31,7 @@
 
 use super::super::global_map::GlobalMap;
 use super::super::noise::smoothstep;
-use super::super::vector_features::{project_point_to_segment, RiverSegment};
+use super::super::vector_features::{project_point_to_segment, RiverSegment, Segment};
 use super::constants::{
     HEIGHT_BIAS, HEIGHT_STEP, RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M,
     RIVER_DEPTH_OFFSET_M, RIVER_OFF_CHANNEL_SAFETY_M, VERTS_PER_SIDE,
@@ -59,6 +59,23 @@ pub fn bake_river_field(
     if river_segs.is_empty() {
         return None;
     }
+
+    // Coast segments for `sample_carved_bed`'s shoreline height blend. A
+    // pixel's centerline projection can sit up to `river_margin_m()`
+    // outside the tile bbox (delta wedges), so extend the filter by that
+    // much — the bed sampled here must byte-match what the projection's
+    // owning tile baked into its own heightmap.
+    let tile_max_x = tile_origin_x + (VERTS_PER_SIDE as f32 - 1.0);
+    let tile_max_z = tile_origin_z + (VERTS_PER_SIDE as f32 - 1.0);
+    let coast_segs = super::heightmap::coast_segments_near(
+        ctx,
+        map.config.world_size_m as f32,
+        tile_origin_x,
+        tile_origin_z,
+        tile_max_x,
+        tile_max_z,
+        super::river_margin_m(),
+    );
 
     // Unit tangent per segment — used by every pixel's flow accumulation,
     // so amortize the sqrt over the tile instead of paying it per pixel.
@@ -90,8 +107,16 @@ pub fn bake_river_field(
             let wx = tile_origin_x + i as f32;
             let wz = tile_origin_z + j as f32;
             let bed_y = heights[j * VERTS_PER_SIDE + i];
-            let (surface_y, flow_x, flow_z) =
-                compute_pixel(wx, wz, bed_y, map, ctx, river_segs, &seg_tangents);
+            let (surface_y, flow_x, flow_z) = compute_pixel(
+                wx,
+                wz,
+                bed_y,
+                map,
+                ctx,
+                river_segs,
+                &seg_tangents,
+                &coast_segs,
+            );
             let v = ((surface_y + HEIGHT_BIAS) / HEIGHT_STEP)
                 .round()
                 .clamp(0.0, 65535.0) as u16;
@@ -194,6 +219,7 @@ fn compute_pixel(
     ctx: &BakeContext,
     river_segs: &[RiverSegment],
     seg_tangents: &[(f32, f32)],
+    coast_segs: &[Segment],
 ) -> (f32, f32, f32) {
     let Some((flow_x, flow_z, idx, t, dist)) =
         weighted_flow_and_nearest(wx, wz, river_segs, seg_tangents)
@@ -208,7 +234,7 @@ fn compute_pixel(
     // the projection can fall outside the tile being baked.
     let proj_x = lerp(seg.ax, seg.bx, t);
     let proj_z = lerp(seg.az, seg.bz, t);
-    let bed_at_proj = sample_carved_bed(map, ctx, proj_x, proj_z, river_segs);
+    let bed_at_proj = sample_carved_bed(map, ctx, proj_x, proj_z, river_segs, coast_segs);
     let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
     let width = lerp(seg.width_a, seg.width_b, t);
     let half_width = width * 0.5;

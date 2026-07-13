@@ -33,7 +33,9 @@ mod water_field;
 use serde::{Deserialize, Serialize};
 
 use super::global_map::GlobalMap;
-use super::vector_features::{river_segments_near_tile, segments_near_tile};
+use super::vector_features::{
+    river_segments_near_tile, segments_near_tile, segments_near_tile_wrap_x,
+};
 
 pub use constants::{
     HEIGHT_BIAS, HEIGHT_STEP, PAL_CLIFF, PAL_DIRT, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND,
@@ -82,9 +84,9 @@ pub fn probe_point(map: &GlobalMap, ctx: &BakeContext, wx: f32, wz: f32) -> Poin
 }
 
 use constants::{
-    COAST_FADE_SPAN_M, COAST_SAND_M, RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M,
-    RIVER_FADE_SPAN_M, RIVER_MOUTH_FAN_EXTRA, RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M,
-    ROAD_HALF_WIDTH_M,
+    COAST_FADE_SPAN_M, COAST_HEIGHT_BLEND_M, COAST_SAND_M, RIVER_CARVE_TAPER_EXTRA_M,
+    RIVER_CARVE_TAPER_MIN_M, RIVER_FADE_SPAN_M, RIVER_MOUTH_FAN_EXTRA, RIVER_SAND_WIDTH_MULT,
+    ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M,
 };
 use heightmap::{apply_river_carve_to_tile, encode_heightmap, sample_tile_heights_no_carve};
 use splatmap::bake_splatmap;
@@ -171,14 +173,21 @@ pub fn bake_tile_with_bridges(
     // COAST_SAND_M + COAST_FADE_SPAN_M. A cell within the fade span that
     // doesn't see the segment would otherwise reach `min_distance_to_segments
     // = INFINITY` and resolve to full-dirt, popping at the tile boundary.
-    let coast_margin = COAST_SAND_M + COAST_FADE_SPAN_M;
-    let coast_segs = segments_near_tile(
+    // The splat `is_sea` gate additionally reads the polyline side within
+    // COAST_HEIGHT_BLEND_M of the shore, so the filter must reach at least
+    // that far too — otherwise a near-edge pixel inside the blend band would
+    // see no segment and fall back to the 8 m land_mask, re-popping the
+    // staircase the height blend removes. (`.max` is a no-op today since the
+    // sand reach is wider, but keeps the two coupled if either constant moves.)
+    let coast_margin = (COAST_SAND_M + COAST_FADE_SPAN_M).max(COAST_HEIGHT_BLEND_M);
+    let coast_segs = segments_near_tile_wrap_x(
         &ctx.coasts_world,
         tile_min_x,
         tile_min_z,
         tile_max_x,
         tile_max_z,
         coast_margin,
+        map.config.world_size_m as f32,
     );
 
     // Order: natural surface → settlement pad → river carve → bridge deck.
@@ -323,6 +332,57 @@ mod tests {
         assert!(
             any_below,
             "expected some sub-zero vertices in an offshore tile"
+        );
+    }
+
+    #[test]
+    fn shoreline_hugs_smoothed_coast_polyline() {
+        // The visible waterline is the heightmap's sea-level contour. With
+        // the shoreline blend it must sit on the smoothed coast polyline:
+        // sample segments across every chain and check (a) the natural
+        // height ON the polyline is ~0 (detail noise wobbles it a few tens
+        // of cm), and (b) 6 m to the oriented left is above water while
+        // 6 m to the right is below. Cliffy coasts legitimately bend the
+        // profile (the natural terrain blends back in), so this is a
+        // large-majority check, not a per-point one.
+        let (map, ctx) = build_context();
+        let mut total = 0u32;
+        let mut on_line_ok = 0u32;
+        let mut sides_ok = 0u32;
+        for poly in &ctx.coasts_world {
+            if poly.points.len() < 2 {
+                continue;
+            }
+            for i in (0..poly.points.len() - 1).step_by(7) {
+                let a = poly.points[i];
+                let b = poly.points[i + 1];
+                let (dx, dz) = (b[0] - a[0], b[1] - a[1]);
+                let len = (dx * dx + dz * dz).sqrt();
+                if len < 1e-3 {
+                    continue;
+                }
+                let (nx, nz) = (-dz / len, dx / len);
+                let (mx, mz) = ((a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5);
+                total += 1;
+                let on_line = probe_point(&map, &ctx, mx, mz).natural_height;
+                if on_line.abs() < 0.35 {
+                    on_line_ok += 1;
+                }
+                let land = probe_point(&map, &ctx, mx + nx * 6.0, mz + nz * 6.0).natural_height;
+                let sea = probe_point(&map, &ctx, mx - nx * 6.0, mz - nz * 6.0).natural_height;
+                if land > 0.0 && sea < 0.0 {
+                    sides_ok += 1;
+                }
+            }
+        }
+        assert!(total >= 20, "expected a real coastline to sample: {total}");
+        assert!(
+            on_line_ok * 10 >= total * 9,
+            "waterline off the polyline too often: {on_line_ok}/{total}"
+        );
+        assert!(
+            sides_ok * 10 >= total * 9,
+            "land/sea sides wrong too often: {sides_ok}/{total}"
         );
     }
 

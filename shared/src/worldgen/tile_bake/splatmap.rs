@@ -5,17 +5,18 @@ use super::super::global_map::GlobalMap;
 use super::super::grass_patches::PatchSample;
 use super::super::noise::{fbm_wrap_x, smoothstep};
 use super::super::vector_features::{
-    min_distance_to_segments, nearest_river_segment, RiverSegment, Segment,
+    min_distance_to_segments, nearest_river_segment, signed_min_distance_to_segments, RiverSegment,
+    Segment,
 };
 use super::constants::{
     CLIFF_BLEND_CORE_M, CLIFF_FADE_START, CLIFF_PROXIMITY_RADIUS_M, CLIFF_PROXIMITY_SEARCH_CELLS,
-    CLIFF_SLOPE_THRESHOLD, COAST_FADE_SPAN_M, COAST_SAND_M, DETAIL_GAIN, DETAIL_LACUNARITY,
-    GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND, PAL_SNOW,
-    RIVER_BAND_NOISE_AMP, RIVER_BAND_NOISE_FREQ, RIVER_BAND_NOISE_OCTAVES, RIVER_FADE_SPAN_M,
-    RIVER_FAN_SAND_BASE_WIDTH_M, RIVER_FAN_SAND_FADE_M, RIVER_FOAM_SUPPRESS_RADIUS_M,
-    RIVER_MOUTH_BRANCH_SAND_MARGIN_M, RIVER_SAND_WIDTH_MULT, ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M,
-    SEA_MAX_DEPTH_FOR_BLEND, SLOPE_CLIFF_FULL, SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM,
-    VERTS_PER_SIDE,
+    CLIFF_SLOPE_THRESHOLD, COAST_FADE_SPAN_M, COAST_HEIGHT_BLEND_M, COAST_SAND_M, DETAIL_GAIN,
+    DETAIL_LACUNARITY, GRASS_FALLOFF_ELEVATION_M, PAL_CLIFF, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD,
+    PAL_SAND, PAL_SNOW, RIVER_BAND_NOISE_AMP, RIVER_BAND_NOISE_FREQ, RIVER_BAND_NOISE_OCTAVES,
+    RIVER_FADE_SPAN_M, RIVER_FAN_SAND_BASE_WIDTH_M, RIVER_FAN_SAND_FADE_M,
+    RIVER_FOAM_SUPPRESS_RADIUS_M, RIVER_MOUTH_BRANCH_SAND_MARGIN_M, RIVER_SAND_WIDTH_MULT,
+    ROAD_FADE_SPAN_M, ROAD_HALF_WIDTH_M, SEA_MAX_DEPTH_FOR_BLEND, SLOPE_CLIFF_FULL,
+    SNOW_ELEVATION_M, SNOW_FULL_SPAN_M, TILE_DIM, VERTS_PER_SIDE,
 };
 use super::context::BakeContext;
 use super::heightmap::{containing_cell_index, lerp};
@@ -195,12 +196,38 @@ pub(super) fn bake_splatmap(
                     })
                     .unwrap_or((f32::INFINITY, 0.0, 1.0, 0.0));
 
+            // Sea/land side for the priority ladder. Near the shoreline the
+            // 8 m land_mask disagrees with the heightmap's polyline-pinned
+            // waterline in cell-sized blocks, and the mask-driven sea branch
+            // zeroes vegetation — grass used to end in an axis-aligned 8 m
+            // staircase along every beach. Within the height blend band the
+            // polyline side (positive = inland) is the source of truth; past
+            // it the mask is unambiguous (the polyline never strays more
+            // than a few meters from the mask contour it was traced from).
+            let coast_sd = signed_min_distance_to_segments(wx, wz, coast_segs);
+            let coast_d_m = coast_sd.map_or(f32::INFINITY, f32::abs);
+            let is_sea = match coast_sd {
+                // Sea side by the polyline — but the heights here are
+                // post-flatten (settlement pads, bridge decks applied before
+                // the splat), so a mask-land cell that a flatten holds above
+                // the waterline must not bake as sea. Without this rescue the
+                // deleted `land_mask == 0` guard's protection of dry flattened
+                // ground is lost and the pad edge paints sand / strips grass.
+                // Natural sea-side cells (mask sea, or submerged by the blend)
+                // keep `h_center <= 0` and stay sea, so the anti-staircase
+                // behavior on the land side is untouched.
+                Some(sd) if sd.abs() < COAST_HEIGHT_BLEND_M => {
+                    sd < 0.0 && !(map.land_mask[gi] == 1 && h_center > 0.0)
+                }
+                _ => map.land_mask[gi] == 0,
+            };
+
             // `classify_splat` only consumes the patch sample in its plain
             // branch; passing a closure skips the warp + Voronoi query on
             // every sea / road / river / cliff / alpine / coast cell.
             let (primary, secondary, blend, veg) = classify_splat(
                 SplatInputs {
-                    is_sea: map.land_mask[gi] == 0,
+                    is_sea,
                     river_d_m,
                     river_width_m,
                     river_band_scale,
@@ -208,7 +235,7 @@ pub(super) fn bake_splatmap(
                     road_d_m: min_distance_to_segments(wx, wz, road_segs),
                     h_center,
                     slope,
-                    coast_d_m: min_distance_to_segments(wx, wz, coast_segs),
+                    coast_d_m,
                     cliff_proximity_m,
                 },
                 || ctx.grass_patches.sample(wx, wz),
@@ -412,8 +439,9 @@ fn classify_splat(inputs: SplatInputs, patch: impl FnOnce() -> PatchSample) -> (
         // uniform green ring against patchy plain just past the band.
         // (`!is_sea` guard: distance alone has no sign, so a sea cell inside
         // a narrow inlet that's <COAST_SAND_M from the coast line would
-        // otherwise compete for the sand band — land_mask is the source of
-        // truth for the side.)
+        // otherwise compete for the sand band. `is_sea` carries the side:
+        // polyline-signed near the shore, land_mask farther out — see
+        // `bake_splatmap`.)
         let t = (coast_d_m / COAST_SAND_M).clamp(0.0, 1.0);
         let blend_f = t * t;
         // Gate skips the warped-Voronoi query at the water line (t=0) —

@@ -2,12 +2,16 @@
 
 use super::super::global_map::GlobalMap;
 use super::super::noise::{fbm_wrap_x, smoothstep};
-use super::super::vector_features::{nearest_river_segment, RiverSegment};
+use super::super::vector_features::{
+    nearest_river_segment, segments_near_tile_wrap_x, signed_min_distance_to_segments,
+    RiverSegment, Segment,
+};
 use super::constants::{
-    DETAIL_COAST_DAMP, DETAIL_FREQUENCY, DETAIL_GAIN, DETAIL_LACUNARITY, DETAIL_MAX_AMPLITUDE,
-    DETAIL_MIN_AMPLITUDE, DETAIL_OCTAVES, HEIGHT_BIAS, HEIGHT_STEP, HILLS_AMPLITUDE_M,
-    HILLS_COASTAL_FADE_M, HILLS_FREQUENCY, HILLS_GAIN, HILLS_OCTAVES, LAND_BASE_MIN_Y_M,
-    RIVER_CARVE_DEPTH_EXTRA_M, RIVER_CARVE_DEPTH_MIN_M, RIVER_CARVE_MIN_BED_Y_M,
+    COAST_HEIGHT_BLEND_M, COAST_PROFILE_LAND_SLOPE, COAST_PROFILE_SEA_SLOPE,
+    COAST_SEA_BLEND_START_M, DETAIL_COAST_DAMP, DETAIL_FREQUENCY, DETAIL_GAIN, DETAIL_LACUNARITY,
+    DETAIL_MAX_AMPLITUDE, DETAIL_MIN_AMPLITUDE, DETAIL_OCTAVES, HEIGHT_BIAS, HEIGHT_STEP,
+    HILLS_AMPLITUDE_M, HILLS_COASTAL_FADE_M, HILLS_FREQUENCY, HILLS_GAIN, HILLS_OCTAVES,
+    LAND_BASE_MIN_Y_M, RIVER_CARVE_DEPTH_EXTRA_M, RIVER_CARVE_DEPTH_MIN_M, RIVER_CARVE_MIN_BED_Y_M,
     RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_MAX_WIDTH_M,
     RIVER_MOUTH_BRANCH_BED_Y_M, RIVER_MOUTH_BRANCH_TAPER_M, RIVER_MOUTH_FAN_BED_DROP_M,
     RIVER_MOUTH_FAN_EXTRA, TILE_DIM, VERTS_PER_SIDE,
@@ -36,16 +40,60 @@ pub(super) fn sample_tile_heights_no_carve(
 
     let tile_origin_x = tx as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
     let tile_origin_z = tz as f32 * TILE_DIM as f32 - TILE_DIM as f32 * 0.5;
+    let coast_segs = coast_segments_near(
+        ctx,
+        world_size,
+        tile_origin_x,
+        tile_origin_z,
+        tile_origin_x + TILE_DIM as f32,
+        tile_origin_z + TILE_DIM as f32,
+        0.0,
+    );
 
     for j in 0..VERTS_PER_SIDE {
         for i in 0..VERTS_PER_SIDE {
             let world_x = tile_origin_x + i as f32;
             let world_z = tile_origin_z + j as f32;
-            heights[j * VERTS_PER_SIDE + i] =
-                sample_elevation_no_carve(map, ctx, world_x, world_z, world_size, inv_mpc);
+            heights[j * VERTS_PER_SIDE + i] = sample_elevation_no_carve(
+                map,
+                ctx,
+                world_x,
+                world_z,
+                world_size,
+                inv_mpc,
+                &coast_segs,
+            );
         }
     }
     heights
+}
+
+/// Coast segments that can influence the shoreline height blend anywhere
+/// inside the given bbox expanded by `extra_margin`. The filter margin is
+/// `COAST_HEIGHT_BLEND_M` past the query area, so every point inside sees
+/// the full set of segments within its blend radius — two tiles (or a tile
+/// and a single-point probe) evaluating the same world position always
+/// agree on the nearest coast, keeping shared-edge vertices identical. X
+/// candidates include translated periodic copies so this contract also holds
+/// between the two physically adjacent edges of the cylindrical world.
+pub(super) fn coast_segments_near(
+    ctx: &BakeContext,
+    world_size: f32,
+    min_x: f32,
+    min_z: f32,
+    max_x: f32,
+    max_z: f32,
+    extra_margin: f32,
+) -> Vec<Segment> {
+    segments_near_tile_wrap_x(
+        &ctx.coasts_world,
+        min_x,
+        min_z,
+        max_x,
+        max_z,
+        COAST_HEIGHT_BLEND_M + extra_margin,
+        world_size,
+    )
 }
 
 /// Per-vertex river carve subtraction. Runs after settlement flattening
@@ -89,7 +137,8 @@ pub(super) fn sample_natural_height_single(
 ) -> f32 {
     let world_size = map.config.world_size_m as f32;
     let inv_mpc = 1.0 / map.config.meters_per_cell();
-    sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc)
+    let coast_segs = coast_segments_near(ctx, world_size, wx, wz, wx, wz, 0.0);
+    sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc, &coast_segs)
 }
 
 pub(super) fn probe_point_impl(
@@ -108,7 +157,8 @@ pub(super) fn probe_point_impl(
     let gy = (((wz + world_size * 0.5) * inv_mpc).floor() as i32).clamp(0, res - 1);
     let cell_idx = gy as usize * res as usize + gx as usize;
 
-    let natural = sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc);
+    let coast_segs = coast_segments_near(ctx, world_size, wx, wz, wx, wz, 0.0);
+    let natural = sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc, &coast_segs);
     let segs = river_segments_near_tile(&ctx.rivers_world, wx, wz, wx, wz, super::river_margin_m());
     let river = carve_at_point_detailed(wx, wz, natural, &segs);
     let carve = river.map(|n| n.carve).unwrap_or(0.0);
@@ -149,6 +199,7 @@ fn sample_elevation_no_carve(
     world_z: f32,
     world_size: f32,
     inv_mpc: f32,
+    coast_segs: &[Segment],
 ) -> f32 {
     let base_raw = catmull_rom_wrap_x(map, world_x, world_z, world_size, inv_mpc, |i| {
         cell_elevation_m(map, &ctx.dist_to_land, i)
@@ -157,11 +208,8 @@ fn sample_elevation_no_carve(
     // negative bathymetry into a vertex inside a land cell, so use the
     // cell-center mask query — not `base_raw >= 0` — as the land test.
     let mi = containing_cell_index(map, world_x, world_z, world_size, inv_mpc);
-    let base = if map.land_mask[mi] == 1 {
-        base_raw.max(LAND_BASE_MIN_Y_M)
-    } else {
-        base_raw
-    };
+    let mask_land = map.land_mask[mi] == 1;
+    let base = coast_blended_base(base_raw, mask_land, world_x, world_z, coast_segs);
     let max_elev = map.config.max_elevation_m.max(1.0);
     let amp_t = (base.max(0.0) / max_elev).clamp(0.0, 1.0);
     let amp = DETAIL_MIN_AMPLITUDE + (DETAIL_MAX_AMPLITUDE - DETAIL_MIN_AMPLITUDE) * amp_t;
@@ -202,6 +250,66 @@ fn sample_elevation_no_carve(
     (base + detail + hills).clamp(-HEIGHT_BIAS, max_cap)
 }
 
+/// Base elevation with the shoreline blend applied. Far from any coast
+/// polyline (or with an empty segment list) this is the legacy behavior:
+/// the raw bicubic sample, floored at `LAND_BASE_MIN_Y_M` when the
+/// containing 8 m cell is land. Within ±`COAST_HEIGHT_BLEND_M` of the
+/// smoothed coast polyline the height instead blends toward a canonical
+/// beach profile that crosses 0 exactly on the polyline, so the visible
+/// waterline (the heightmap's sea-level contour) follows the smoothed
+/// curve rather than the 8 m land-mask lattice, whose bicubic zero-contour
+/// rendered as scalloped 8 m stair-steps along every diagonal coast.
+///
+/// Inside the band the land floor is gated by polyline side (`sd >= 0`)
+/// instead of the cell mask — the mask edge otherwise leaves a
+/// blend-weighted step along every cell boundary that crosses the band.
+/// At the band edge the two gates agree because the polyline never
+/// deviates more than a few meters from the mask contour it was traced
+/// from.
+#[inline]
+fn coast_blended_base(
+    base_raw: f32,
+    mask_land: bool,
+    wx: f32,
+    wz: f32,
+    coast_segs: &[Segment],
+) -> f32 {
+    // Beach floor shared by both gates below — the only difference between
+    // `legacy` and `natural` is which side test admits it (cell mask vs
+    // polyline side), so compute the floored value once.
+    let floored = base_raw.max(LAND_BASE_MIN_Y_M);
+    let legacy = if mask_land { floored } else { base_raw };
+    let Some(sd) = signed_min_distance_to_segments(wx, wz, coast_segs) else {
+        return legacy;
+    };
+    if sd.abs() >= COAST_HEIGHT_BLEND_M {
+        return legacy;
+    }
+    // Asymmetric reconnection to the natural terrain. Land side: ramp from
+    // the polyline outward, with the raw sample floored at
+    // LAND_BASE_MIN_Y_M so the beach stays above water. Sea side: hold the
+    // pure profile out to COAST_SEA_BLEND_START_M before ramping — under
+    // tall coastal terrain the raw bicubic stays above sea level for most
+    // of the first sea cell (its zero-contour gets pushed out to the
+    // sea-cell centers, the worst lattice scalloping of all), so giving it
+    // any weight near the line would bulge dry land past the waterline.
+    // Past the hold distance the raw field is reliably submerged (at or
+    // beyond the sea-cell centers) and can take over.
+    let (shore, w) = if sd >= 0.0 {
+        (
+            sd * COAST_PROFILE_LAND_SLOPE,
+            smoothstep(0.0, COAST_HEIGHT_BLEND_M, sd),
+        )
+    } else {
+        (
+            sd * COAST_PROFILE_SEA_SLOPE,
+            smoothstep(COAST_SEA_BLEND_START_M, COAST_HEIGHT_BLEND_M, -sd),
+        )
+    };
+    let natural = if sd >= 0.0 { floored } else { base_raw };
+    shore + (natural - shore) * w
+}
+
 /// Carved bed elevation at `(wx, wz)` using the caller's pre-filtered
 /// river-segment list — same formula that produced the tile heightmap.
 /// `river_field` calls this for each centerline projection so the value
@@ -214,15 +322,19 @@ pub(super) fn sample_carved_bed(
     wx: f32,
     wz: f32,
     river_segs: &[RiverSegment],
+    coast_segs: &[Segment],
 ) -> f32 {
     let world_size = map.config.world_size_m as f32;
     let inv_mpc = 1.0 / map.config.meters_per_cell();
-    sample_elevation_m(map, ctx, wx, wz, world_size, inv_mpc, river_segs)
+    sample_elevation_m(
+        map, ctx, wx, wz, world_size, inv_mpc, river_segs, coast_segs,
+    )
 }
 
 /// Bilinear-sample the global elevation at a world position, convert sea
 /// cells into a shallow bathymetry curve, add high-frequency detail, and
 /// subtract a polyline-distance river carve.
+#[allow(clippy::too_many_arguments)]
 fn sample_elevation_m(
     map: &GlobalMap,
     ctx: &BakeContext,
@@ -231,8 +343,10 @@ fn sample_elevation_m(
     world_size: f32,
     inv_mpc: f32,
     river_segs: &[RiverSegment],
+    coast_segs: &[Segment],
 ) -> f32 {
-    let natural = sample_elevation_no_carve(map, ctx, world_x, world_z, world_size, inv_mpc);
+    let natural =
+        sample_elevation_no_carve(map, ctx, world_x, world_z, world_size, inv_mpc, coast_segs);
     let carve = carve_at_point(world_x, world_z, natural, river_segs);
     let max_cap = map.config.max_elevation_m;
     (natural - carve).clamp(-HEIGHT_BIAS, max_cap)
@@ -669,6 +783,88 @@ mod tests {
             (left_slope - right_slope).abs() < 1e-2,
             "c1 slope mismatch: left={left_slope} right={right_slope}"
         );
+    }
+
+    /// One straight west→east coast segment: land on the left (+z).
+    fn straight_coast() -> Vec<Segment> {
+        vec![[-100.0, 0.0, 100.0, 0.0]]
+    }
+
+    #[test]
+    fn coast_blend_pins_waterline_to_polyline() {
+        // Exactly on the polyline the blended base must be 0 — that's the
+        // whole point: the heightmap's sea-level contour lands on the
+        // smoothed curve, not the 8 m mask lattice.
+        let h = coast_blended_base(5.0, true, 0.0, 0.0, &straight_coast());
+        assert!(h.abs() < 1e-5, "on-polyline base must be sea level: {h}");
+    }
+
+    #[test]
+    fn coast_blend_reaches_legacy_outside_band() {
+        let segs = straight_coast();
+        // 20 m inland (> COAST_HEIGHT_BLEND_M): untouched land sample.
+        let inland = coast_blended_base(5.0, true, 0.0, 20.0, &segs);
+        assert!((inland - 5.0).abs() < 1e-5);
+        // 20 m seaward: untouched bathymetry.
+        let offshore = coast_blended_base(-0.75, false, 0.0, -20.0, &segs);
+        assert!((offshore + 0.75).abs() < 1e-5);
+        // No coast segments at all: legacy land floor applies.
+        let floored = coast_blended_base(-0.3, true, 0.0, 0.0, &[]);
+        assert!((floored - 0.2).abs() < 1e-5, "mask-land floor: {floored}");
+    }
+
+    #[test]
+    fn coast_blend_interpolates_beach_profile() {
+        let segs = straight_coast();
+        // 8 m inland: shore = 0.8, w = smoothstep(0,16,8) = 0.5 exactly.
+        let land = coast_blended_base(5.0, true, 0.0, 8.0, &segs);
+        assert!((land - (0.8 + 0.5 * (5.0 - 0.8))).abs() < 1e-4, "{land}");
+        // 13 m seaward with natural bathymetry −0.6: sea-side weight is
+        // smoothstep(10, 16, 13) = 0.5 exactly.
+        let sea = coast_blended_base(-0.6, false, 0.0, -13.0, &segs);
+        assert!((sea - (-1.56 + 0.5 * (-0.6 + 1.56))).abs() < 1e-4, "{sea}");
+        assert!(sea < 0.0, "sea side of the polyline stays submerged");
+    }
+
+    #[test]
+    fn coast_blend_sea_side_holds_profile_under_cliff_terrain() {
+        // Under tall coastal terrain the raw bicubic is still far above
+        // sea level well past the polyline (its zero-contour rides the
+        // sea-cell centers). Within the seaward hold distance the profile
+        // must own the height outright — no cliff bleed-through poking
+        // dry land into the water.
+        let segs = straight_coast();
+        for sd in [-1.0f32, -4.0, -6.0, -9.0] {
+            let h = coast_blended_base(190.0, false, 0.0, sd, &segs);
+            let shore = sd * 0.12;
+            assert!(
+                (h - shore).abs() < 1e-4,
+                "hold zone at sd={sd}: got {h}, want pure profile {shore}"
+            );
+        }
+        // And even through the ramp the result must stay submerged once
+        // the raw field has gone negative (undershoot past the sea-cell
+        // centers) — spot-check a plausible cliff-coast raw of −12 m.
+        let ramp = coast_blended_base(-12.0, false, 0.0, -13.0, &segs);
+        assert!(ramp < 0.0, "{ramp}");
+    }
+
+    #[test]
+    fn coast_blend_gates_land_floor_by_polyline_side() {
+        let segs = straight_coast();
+        // 4 m inland inside a mask-SEA cell (polyline deviates from the
+        // lattice): the land floor must still apply — gate by side, not
+        // by the 8 m mask, or the blend re-exposes the cell boundary.
+        let raw = -0.5;
+        let land = coast_blended_base(raw, false, 0.0, 4.0, &segs);
+        let w = 0.15625; // smoothstep(0, 16, 4)
+        let expected = 0.4 + w * (0.2 - 0.4);
+        assert!((land - expected).abs() < 1e-4, "{land} vs {expected}");
+        // Mirror case: 4 m seaward inside a mask-LAND cell must NOT get
+        // the floor — inside the seaward hold zone the profile owns the
+        // height regardless of the mask.
+        let sea = coast_blended_base(raw, true, 0.0, -4.0, &segs);
+        assert!((sea + 0.48).abs() < 1e-4, "{sea}");
     }
 
     #[test]

@@ -10,8 +10,9 @@
 //!
 //! X-axis wrap: the world is cylindrical in X, so polyline segments whose
 //! endpoints wrap across the seam are split into two half-segments ending at
-//! the ±world/2 edges. Per-tile query code does not do wrap-aware distance;
-//! visible glitches exactly at the seam are acceptable for now.
+//! the ±world/2 edges. Callers whose result must remain continuous across
+//! that seam use `segments_near_tile_wrap_x`, which returns translated
+//! periodic copies in the query's local coordinate frame.
 
 use super::config::WorldGenConfig;
 
@@ -68,7 +69,8 @@ pub struct RiverSegment {
 ///
 /// The closure form unifies cell-index polylines (rivers/roads, where
 /// `to_cell = |(x,y)| [x+0.5, y+0.5]`) with cell-edge half-integer
-/// polylines (coasts, where `to_cell = |p| *p`).
+/// polylines (coasts, where `to_cell = cell_node_to_center` adds the same
+/// half-cell so both land in the cell-center frame).
 pub fn polyline_to_world<P, F>(points: &[P], cfg: &WorldGenConfig, to_cell: F) -> Vec<WorldPolyline>
 where
     F: Fn(&P) -> [f32; 2],
@@ -89,7 +91,20 @@ where
             if (p[0] - last[0]).abs() > half {
                 let edge_last = if last[0] > 0.0 { half } else { -half };
                 let edge_p = -edge_last;
-                current.push([edge_last, last[1]]);
+                // Interpolate the actual crossing in the unwrapped frame.
+                // Reusing `last.z` on one edge and `p.z` on the other leaves
+                // diagonal crossings as two open endpoints at different Z,
+                // which makes signed-distance queries grow a false side
+                // wedge between them.
+                let world_size = half * 2.0;
+                let p_unwrapped_x = if edge_last > 0.0 {
+                    p[0] + world_size
+                } else {
+                    p[0] - world_size
+                };
+                let t = ((edge_last - last[0]) / (p_unwrapped_x - last[0])).clamp(0.0, 1.0);
+                let edge_z = last[1] + (p[1] - last[1]) * t;
+                current.push([edge_last, edge_z]);
                 if current.len() >= 2 {
                     out.push(WorldPolyline {
                         points: std::mem::take(&mut current),
@@ -97,7 +112,7 @@ where
                 } else {
                     current.clear();
                 }
-                current.push([edge_p, p[1]]);
+                current.push([edge_p, edge_z]);
             }
         }
         current.push(p);
@@ -117,24 +132,55 @@ pub fn cell_index_to_center(p: &(u32, u32)) -> [f32; 2] {
     [p.0 as f32 + 0.5, p.1 as f32 + 0.5]
 }
 
-/// Identity mapping for polylines whose vertices already live in cell-coord
-/// half-integer space (e.g. `coasts::extract_coasts` output, where
-/// vertices sit on cell-edge midpoints).
+/// Shift a marching-squares coast vertex into the cell-center coordinate
+/// frame. `coasts::extract_coasts` emits vertices in the mask's grid-node
+/// frame — mask cell `(gx, gy)` is treated as a point at the integer node
+/// `(gx, gy)`, so an edge midpoint lands at e.g. `(gx+0.5, gy)`. Every other
+/// consumer (the bicubic elevation sampler, `cell_index_to_center` for
+/// rivers/roads) places cell `(gx, gy)` at its center `(gx+0.5, gy+0.5)`.
+/// Adding half a cell reconciles the two, so the shoreline height blend pins
+/// the waterline to the same contour the raw field crosses zero at instead of
+/// half a cell (`meters_per_cell * 0.5`) diagonally off it.
 #[inline]
-pub fn cell_coord_passthrough(p: &[f32; 2]) -> [f32; 2] {
-    *p
+pub fn cell_node_to_center(p: &[f32; 2]) -> [f32; 2] {
+    [p[0] + 0.5, p[1] + 0.5]
 }
 
-/// Chaikin corner-cutting for open polylines. First and last vertices are
-/// preserved; every interior edge contributes two points at 25% and 75%.
+/// Chaikin corner-cutting for open and closed polylines. Open polylines keep
+/// their first and last vertices. Closed polylines are identified by a
+/// repeated first/last vertex and treat the join as an ordinary cyclic edge,
+/// so no single raw corner remains pinned in the smoothed loop. The repeated
+/// closing vertex is restored in the result.
+///
 /// After `iterations` rounds, the line reads as a smooth curve — two rounds
 /// are enough for 8 m source spacing to look visually curved at 1 m cells.
 pub fn chaikin_smooth(poly: &WorldPolyline, iterations: u32) -> WorldPolyline {
     let mut pts = poly.points.clone();
+    let closed = pts.len() >= 4 && pts.first() == pts.last();
+    if closed {
+        // Work on unique loop vertices. Preserving the duplicate endpoints
+        // would make their shared raw lattice corner the only corner not cut.
+        pts.pop();
+    }
+
     for _ in 0..iterations {
         if pts.len() < 3 {
             break;
         }
+        if closed {
+            let mut next: Vec<[f32; 2]> = Vec::with_capacity(pts.len() * 2);
+            for i in 0..pts.len() {
+                let a = pts[i];
+                let b = pts[(i + 1) % pts.len()];
+                let q = [0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]];
+                let r = [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]];
+                next.push(q);
+                next.push(r);
+            }
+            pts = next;
+            continue;
+        }
+
         let mut next: Vec<[f32; 2]> = Vec::with_capacity(pts.len() * 2);
         next.push(pts[0]);
         for w in pts.windows(2) {
@@ -147,6 +193,10 @@ pub fn chaikin_smooth(poly: &WorldPolyline, iterations: u32) -> WorldPolyline {
         }
         next.push(*pts.last().unwrap());
         pts = next;
+    }
+
+    if closed {
+        pts.push(pts[0]);
     }
     WorldPolyline { points: pts }
 }
@@ -415,6 +465,53 @@ pub fn segments_near_tile(
     out
 }
 
+/// Wrap-aware counterpart to `segments_near_tile` for the cylindrical X
+/// axis. Each source segment is considered at x offsets `-world_size`, `0`,
+/// and `+world_size`; matching segments are returned with that offset already
+/// applied, so ordinary Euclidean distance queries measure the shortest
+/// periodic distance near the world seam.
+///
+/// Tile/sample coordinates are expected to stay within one circumference of
+/// the canonical world range, as all current bake callers do.
+pub fn segments_near_tile_wrap_x(
+    polylines: &[WorldPolyline],
+    tile_min_x: f32,
+    tile_min_z: f32,
+    tile_max_x: f32,
+    tile_max_z: f32,
+    margin: f32,
+    world_size: f32,
+) -> Vec<Segment> {
+    debug_assert!(world_size > 0.0);
+    let qx0 = tile_min_x - margin;
+    let qx1 = tile_max_x + margin;
+    let qz0 = tile_min_z - margin;
+    let qz1 = tile_max_z + margin;
+    let mut out = Vec::new();
+    for poly in polylines {
+        for w in poly.points.windows(2) {
+            let a = w[0];
+            let b = w[1];
+            let sz0 = a[1].min(b[1]);
+            let sz1 = a[1].max(b[1]);
+            if sz1 < qz0 || sz0 > qz1 {
+                continue;
+            }
+            for shift_x in [-world_size, 0.0, world_size] {
+                let ax = a[0] + shift_x;
+                let bx = b[0] + shift_x;
+                let sx0 = ax.min(bx);
+                let sx1 = ax.max(bx);
+                if sx1 < qx0 || sx0 > qx1 {
+                    continue;
+                }
+                out.push([ax, a[1], bx, b[1]]);
+            }
+        }
+    }
+    out
+}
+
 /// Project (px, pz) onto segment (ax,az)-(bx,bz) and return `(d_sq, t)`
 /// where `t ∈ [0, 1]` is the clamped projection parameter. Shared by the
 /// scalar distance helpers and the river-aware `nearest_river_segment`,
@@ -453,6 +550,54 @@ pub fn point_segment_distance_sq(px: f32, pz: f32, seg: &Segment) -> f32 {
 #[inline]
 pub fn point_segment_distance(px: f32, pz: f32, seg: &Segment) -> f32 {
     point_segment_distance_sq(px, pz, seg).sqrt()
+}
+
+/// Signed minimum distance from (px, pz) to `segs`. Positive means the
+/// point lies on the LEFT of the nearest segment's a→b direction (cross
+/// product `dir × (p − a) ≥ 0`). Coast polylines are oriented land-left
+/// (see `BakeContext`), so positive = inland, negative = seaward.
+///
+/// At shared polyline endpoints two adjacent segments tie on distance but
+/// can disagree on sign (the corner wedge); ties are resolved toward the
+/// candidate whose projection is more perpendicular (larger |cross| per
+/// unit length), which gives the wedge a stable, correct side. Returns
+/// `None` when `segs` is empty.
+pub fn signed_min_distance_to_segments(px: f32, pz: f32, segs: &[Segment]) -> Option<f32> {
+    if segs.is_empty() {
+        return None;
+    }
+    // m² slack for "same distance": shared-endpoint ties are exact in
+    // arithmetic but drift a hair once the two projections are computed
+    // through different segment endpoints.
+    const TIE_EPS_SQ: f32 = 1e-3;
+    let mut best_sq = f32::INFINITY;
+    let mut best_perp = -1.0f32;
+    let mut best_sign = 1.0f32;
+    for seg in segs {
+        let (d_sq, _t) = project_point_to_segment(px, pz, seg[0], seg[1], seg[2], seg[3]);
+        if d_sq > best_sq + TIE_EPS_SQ {
+            continue;
+        }
+        let dx = seg[2] - seg[0];
+        let dz = seg[3] - seg[1];
+        let len_sq = dx * dx + dz * dz;
+        // A zero-length segment (duplicate consecutive vertices) has no
+        // defined side; its perpendicular would be float noise amplified by
+        // the 1/len division and could win the tie-break below and flip the
+        // returned sign. Skip it — a real neighbor segment carries the
+        // distance. (`orient_coasts_land_left`'s sibling vote skips the same.)
+        if len_sq < 1e-12 {
+            continue;
+        }
+        let len = len_sq.sqrt();
+        let perp = (dx * (pz - seg[1]) - dz * (px - seg[0])) / len;
+        if d_sq < best_sq - TIE_EPS_SQ || perp.abs() > best_perp {
+            best_sq = best_sq.min(d_sq);
+            best_perp = perp.abs();
+            best_sign = if perp >= 0.0 { 1.0 } else { -1.0 };
+        }
+    }
+    Some(best_sign * best_sq.sqrt())
 }
 
 /// Minimum distance from (px, pz) to any segment in `segs`, or `f32::INFINITY`
@@ -496,6 +641,39 @@ mod tests {
         assert_eq!(smoothed.points.first().unwrap(), &[0.0, 0.0]);
         assert_eq!(smoothed.points.last().unwrap(), &[20.0, 10.0]);
         assert!(smoothed.points.len() > poly.points.len());
+    }
+
+    #[test]
+    fn chaikin_smooths_closed_loop_join_cyclically() {
+        let raw_vertices = [[0.0, 0.0], [8.0, 0.0], [8.0, 8.0], [0.0, 8.0]];
+        let poly = WorldPolyline {
+            points: vec![
+                raw_vertices[0],
+                raw_vertices[1],
+                raw_vertices[2],
+                raw_vertices[3],
+                raw_vertices[0],
+            ],
+        };
+
+        let smoothed = chaikin_smooth(&poly, 1);
+
+        assert_eq!(smoothed.points.first(), smoothed.points.last());
+        assert_eq!(smoothed.points.len(), 9, "8 cut points plus loop closure");
+        for raw in raw_vertices {
+            assert!(
+                !smoothed.points[..smoothed.points.len() - 1].contains(&raw),
+                "closed Chaikin must cut raw corner {raw:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn chaikin_zero_iterations_preserves_closed_loop() {
+        let poly = WorldPolyline {
+            points: vec![[0.0, 0.0], [4.0, 0.0], [2.0, 4.0], [0.0, 0.0]],
+        };
+        assert_eq!(chaikin_smooth(&poly, 0).points, poly.points);
     }
 
     #[test]
@@ -566,6 +744,38 @@ mod tests {
     }
 
     #[test]
+    fn signed_distance_sign_follows_segment_side() {
+        // Segment pointing +x: left side is +z.
+        let segs: Vec<Segment> = vec![[0.0, 0.0, 10.0, 0.0]];
+        let left = signed_min_distance_to_segments(5.0, 3.0, &segs).unwrap();
+        let right = signed_min_distance_to_segments(5.0, -3.0, &segs).unwrap();
+        assert!((left - 3.0).abs() < 1e-4, "left side positive: {left}");
+        assert!((right + 3.0).abs() < 1e-4, "right side negative: {right}");
+        assert!(signed_min_distance_to_segments(0.0, 0.0, &[]).is_none());
+    }
+
+    #[test]
+    fn signed_distance_corner_wedge_takes_stable_side() {
+        // Two segments forming an L (both directed so the concave side is
+        // left): a→(0,0)→b along +x then turning +z. A point in the convex
+        // wedge outside the corner ties on distance to both segments; the
+        // sign must resolve to negative (right side of both), not flip
+        // depending on iteration order.
+        let segs: Vec<Segment> = vec![[-10.0, 0.0, 0.0, 0.0], [0.0, 0.0, 0.0, 10.0]];
+        let fwd = signed_min_distance_to_segments(2.0, -2.0, &segs).unwrap();
+        let rev: Vec<Segment> = segs.iter().rev().copied().collect();
+        let bwd = signed_min_distance_to_segments(2.0, -2.0, &rev).unwrap();
+        assert!(fwd < 0.0, "convex wedge point must be right-side: {fwd}");
+        assert!(
+            (fwd - bwd).abs() < 1e-4,
+            "sign must not depend on segment order: {fwd} vs {bwd}"
+        );
+        // And a point clearly inside the L (concave side) reads positive.
+        let inside = signed_min_distance_to_segments(-3.0, 2.0, &segs).unwrap();
+        assert!(inside > 0.0, "concave side must be left/positive: {inside}");
+    }
+
+    #[test]
     fn segments_near_tile_filters_by_bbox() {
         let polys = vec![WorldPolyline {
             points: vec![[0.0, 0.0], [100.0, 0.0]],
@@ -595,6 +805,23 @@ mod tests {
     }
 
     #[test]
+    fn segments_near_tile_wrap_x_returns_translated_periodic_copy() {
+        let polys = vec![WorldPolyline {
+            // A coast 4 m inside the east edge of a 100 m world.
+            points: vec![[46.0, -10.0], [46.0, 10.0]],
+        }];
+        let west = segments_near_tile_wrap_x(&polys, -50.0, -1.0, -49.0, 1.0, 8.0, 100.0);
+        assert_eq!(west, vec![[-54.0, -10.0, -54.0, 10.0]]);
+
+        // The translated segment gives the same signed distance at the two
+        // coordinate representations of the seam itself.
+        let east = segments_near_tile_wrap_x(&polys, 50.0, 0.0, 50.0, 0.0, 8.0, 100.0);
+        let east_sd = signed_min_distance_to_segments(50.0, 0.0, &east).unwrap();
+        let west_sd = signed_min_distance_to_segments(-50.0, 0.0, &west).unwrap();
+        assert!((east_sd - west_sd).abs() < 1e-6, "{east_sd} vs {west_sd}");
+    }
+
+    #[test]
     fn polyline_to_world_converts_cell_centers_to_meters() {
         // 64 m world, 8 cells → 8 m/cell. Cell (0,0) center at world
         // (-32 + 4, -32 + 4) = (-28, -28); cell (4,4) at (+4, +4). The
@@ -613,17 +840,35 @@ mod tests {
 
     #[test]
     fn polyline_to_world_handles_half_integer_vertices() {
-        // Coast vertices live on cell-edge midpoints — half-integer in cell
-        // coords. Vertex (0.5, 0.0) sits between cells (0,0) and (1,0)
-        // along their shared top edge: world x = 0.5 * 8 - 32 = -28.
+        // polyline_to_world applies `c * mpc - half` to whatever cell-coord
+        // the mapping returns; half-integer inputs (as coast edge-midpoints
+        // produce) must transform without rounding. Identity mapping isolates
+        // the transform math: (0.5, 0.0) → 0.5 * 8 - 32 = -28.
         let cfg = test_config(8, 64);
         let points: Vec<[f32; 2]> = vec![[0.5, 0.0], [1.5, 0.0], [1.5, 1.0]];
-        let out = polyline_to_world(&points, &cfg, cell_coord_passthrough);
+        let out = polyline_to_world(&points, &cfg, |p: &[f32; 2]| *p);
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].points.len(), 3);
         assert!((out[0].points[0][0] - -28.0).abs() < 1e-4);
         assert!((out[0].points[1][0] - -20.0).abs() < 1e-4);
         assert!((out[0].points[2][1] - -24.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn cell_node_to_center_aligns_coast_with_cell_frame() {
+        // A marching-squares coast vertex on the top edge of the window at
+        // mask cell (gx, gy) is emitted at grid-node coord (gx+0.5, gy). After
+        // recentering it must sit at (gx+1, gy+0.5) — the midpoint between the
+        // cell-center-frame positions of cells (gx, gy) and (gx+1, gy), which
+        // is where the bicubic field's zero-contour lives. For gx=gy=0 that is
+        // (1.0, 0.5); the same half-cell `cell_index_to_center` adds to an
+        // integer index.
+        let node = cell_node_to_center(&[0.5, 0.0]);
+        assert!((node[0] - 1.0).abs() < 1e-6, "{node:?}");
+        assert!((node[1] - 0.5).abs() < 1e-6, "{node:?}");
+        // Consistent with the river/road mapping's frame: index (0,0) and the
+        // recentered node both add +0.5 to reach the center frame.
+        assert_eq!(cell_index_to_center(&(0, 0)), [0.5, 0.5]);
     }
 
     #[test]
@@ -637,5 +882,23 @@ mod tests {
         assert!((first_end[0] - half).abs() < 1e-3);
         let second_start = out[1].points.first().unwrap();
         assert!((second_start[0] + half).abs() < 1e-3);
+    }
+
+    #[test]
+    fn polyline_to_world_diagonal_seam_split_shares_crossing_z() {
+        let cfg = test_config(8, 64);
+        let points: Vec<(u32, u32)> = vec![(7, 2), (0, 3)];
+        let out = polyline_to_world(&points, &cfg, cell_index_to_center);
+        assert_eq!(out.len(), 2);
+        let east = out[0].points.last().unwrap();
+        let west = out[1].points.first().unwrap();
+        assert!(
+            (east[1] - west[1]).abs() < 1e-6,
+            "split endpoints must represent one cylindrical point: {east:?} vs {west:?}"
+        );
+        assert!(
+            (east[1] - -8.0).abs() < 1e-6,
+            "crossing z must be interpolated halfway: {east:?}"
+        );
     }
 }

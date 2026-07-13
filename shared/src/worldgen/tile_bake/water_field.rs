@@ -61,7 +61,8 @@
 use super::super::global_map::GlobalMap;
 use super::super::noise::{fbm2, smoothstep, PerlinNoise};
 use super::super::vector_features::{
-    min_distance_to_segments, project_point_to_segment, segments_near_tile, RiverSegment, Segment,
+    min_distance_to_segments, project_point_to_segment, segments_near_tile_wrap_x, RiverSegment,
+    Segment,
 };
 use super::constants::{
     HEIGHT_BIAS, HEIGHT_STEP, RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M,
@@ -198,13 +199,14 @@ pub fn bake_water_field(
     // that matters, keeping the field seam-consistent.
     let tile_max_x = tile_origin_x + (VERTS_PER_SIDE as f32 - 1.0);
     let tile_max_z = tile_origin_z + (VERTS_PER_SIDE as f32 - 1.0);
-    let coast_segs = segments_near_tile(
+    let coast_segs = segments_near_tile_wrap_x(
         &ctx.coasts_world,
         tile_origin_x,
         tile_origin_z,
         tile_max_x,
         tile_max_z,
         ESTUARY_COAST_FAR_M + super::river_margin_m(),
+        map.config.world_size_m as f32,
     );
 
     // Bank-bump noise is seeded from the world seed alone (world-space
@@ -372,7 +374,7 @@ fn compute_pixel(
     // the projection can fall outside the tile being baked.
     let proj_x = lerp(seg.ax, seg.bx, t);
     let proj_z = lerp(seg.az, seg.bz, t);
-    let bed_at_proj = sample_carved_bed(map, ctx, proj_x, proj_z, river_segs);
+    let bed_at_proj = sample_carved_bed(map, ctx, proj_x, proj_z, river_segs, coast_segs);
     let flow_norm = lerp(seg.flow_norm_a, seg.flow_norm_b, t);
     let width = lerp(seg.width_a, seg.width_b, t);
     let half_width = width * 0.5;
@@ -440,6 +442,7 @@ fn compute_pixel(
                             lerp(s2.ax, s2.bx, t2),
                             lerp(s2.az, s2.bz, t2),
                             river_segs,
+                            coast_segs,
                         )
                     })
             };
@@ -657,13 +660,14 @@ mod tests {
         // the coastline distance at the centerline projection — a
         // property of the generated test world, not of the inputs above.
         // Derive the expectation from the same query the bake used.
-        let coast_segs = segments_near_tile(
+        let coast_segs = segments_near_tile_wrap_x(
             &ctx.coasts_world,
             -32.0,
             -32.0,
             32.0,
             32.0,
             ESTUARY_COAST_FAR_M + crate::worldgen::tile_bake::river_margin_m(),
+            map.config.world_size_m as f32,
         );
         let coast_dist = min_distance_to_segments(0.0, 0.0, &coast_segs);
         let gate = smoothstep(ESTUARY_COAST_NEAR_M, ESTUARY_COAST_FAR_M, coast_dist);

@@ -14,7 +14,7 @@ use super::super::noise::{smoothstep, PerlinNoise3D};
 use super::super::rivers::RiverMap;
 use super::super::roads::RoadNetwork;
 use super::super::vector_features::{
-    cell_coord_passthrough, cell_index_to_center, chaikin_smooth, polyline_to_world,
+    cell_index_to_center, cell_node_to_center, chaikin_smooth, polyline_to_world,
     river_chaikin_smooth, river_polyline_to_world, RiverWorldPolyline, WorldPolyline,
 };
 use super::constants::{
@@ -61,6 +61,9 @@ pub struct BakeContext {
     /// distance against these to draw the sand band, replacing the prior
     /// bilinear-sampled `dist_to_sea` field whose 8 m lattice showed
     /// through as axis-aligned staircase artifacts at the shoreline.
+    /// Oriented land-on-the-LEFT of each chain's direction, so
+    /// `signed_min_distance_to_segments` reads positive inland / negative
+    /// seaward — the heightmap's shoreline blend depends on this.
     pub coasts_world: Vec<WorldPolyline>,
 }
 
@@ -92,12 +95,13 @@ impl BakeContext {
             ROAD_CHAIKIN_ITERATIONS,
             cell_index_to_center,
         );
-        let coasts_world = smooth_polylines(
+        let mut coasts_world = smooth_polylines(
             coasts.iter().map(|c| c.points.as_slice()),
             &map.config,
             COAST_CHAIKIN_ITERATIONS,
-            cell_coord_passthrough,
+            cell_node_to_center,
         );
+        orient_coasts_land_left(&mut coasts_world, map, &dist_to_land);
 
         let detail_noise = PerlinNoise3D::new(map.config.seed ^ 0xD1EA_C17E_0000_0007);
         let grass_patches = GrassPatchField::new(map.config.seed, map.config.world_size_m as f32);
@@ -109,6 +113,53 @@ impl BakeContext {
             rivers_world,
             roads_world,
             coasts_world,
+        }
+    }
+}
+
+/// Ensure every coast polyline runs with land on its LEFT, so the
+/// heightmap's `signed_min_distance_to_segments` query reads positive
+/// inland and negative seaward. Marching squares + chain tracing emit
+/// chains in arbitrary direction, but a marching-squares contour of a
+/// binary mask keeps land on one consistent side along its whole length
+/// (the curve separates land from sea and never self-intersects — saddles
+/// are resolved disjoint), so one land-side vote per chain suffices; the
+/// vote still averages up to 16 segments to shrug off locally ambiguous
+/// spots like river mouths and narrow spits. Each sampled segment offsets
+/// its midpoint by ±half a cell along the left normal and compares
+/// interpolated base elevation — the land side reads higher.
+fn orient_coasts_land_left(coasts: &mut [WorldPolyline], map: &GlobalMap, dist_to_land: &[u16]) {
+    let probe_m = map.config.meters_per_cell() * 0.5;
+    for poly in coasts.iter_mut() {
+        let n = poly.points.len();
+        if n < 2 {
+            continue;
+        }
+        let step = ((n - 1) / 16).max(1);
+        let mut score = 0.0f64;
+        for i in (0..n - 1).step_by(step) {
+            let a = poly.points[i];
+            let b = poly.points[i + 1];
+            let dx = b[0] - a[0];
+            let dz = b[1] - a[1];
+            let len = (dx * dx + dz * dz).sqrt();
+            if len < 1e-3 {
+                continue;
+            }
+            // Left normal of a→b (positive-cross side, matching the sign
+            // convention in `signed_min_distance_to_segments`).
+            let nx = -dz / len;
+            let nz = dx / len;
+            let mx = (a[0] + b[0]) * 0.5;
+            let mz = (a[1] + b[1]) * 0.5;
+            let left =
+                sample_base_elevation(map, dist_to_land, mx + nx * probe_m, mz + nz * probe_m);
+            let right =
+                sample_base_elevation(map, dist_to_land, mx - nx * probe_m, mz - nz * probe_m);
+            score += (left - right) as f64;
+        }
+        if score < 0.0 {
+            poly.points.reverse();
         }
     }
 }
@@ -432,7 +483,7 @@ const RIVER_MOUTH_BRANCH_WIDTH_RAMP_T: f32 = 0.25;
 /// splitting at the X seam and Chaikin-smoothing each resulting piece.
 /// `to_cell` maps each input vertex to its cell-coord position (see
 /// `vector_features::polyline_to_world`); pass `cell_index_to_center` for
-/// `(u32, u32)` rivers/roads, `cell_coord_passthrough` for `[f32; 2]`
+/// `(u32, u32)` rivers/roads, `cell_node_to_center` for `[f32; 2]`
 /// coasts.
 fn smooth_polylines<'a, P, I, F>(
     polylines: I,
