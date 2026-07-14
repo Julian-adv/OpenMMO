@@ -18,7 +18,9 @@
 
   // Floor filter: dungeon items only show on their depth, surface items
   // only above ground (matches the monster/player visibility rules).
-  let viewerFloor = $derived($currentDungeonDepth >= 1 ? -$currentDungeonDepth : 0)
+  let viewerFloor = $derived(
+    $currentDungeonDepth >= 1 ? -$currentDungeonDepth : 0
+  )
   const itemEntries = $derived(
     [...groundItemManager.items].filter(([, data]) =>
       viewerFloor < 0 ? data.floorLevel === viewerFloor : data.floorLevel >= 0

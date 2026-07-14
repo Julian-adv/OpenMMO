@@ -15,8 +15,16 @@
     compact?: boolean
   }
 
-  let { character, selected, positionX, positionZ, camera, onclick, ondblclick, compact = false }: Props =
-    $props()
+  let {
+    character,
+    selected,
+    positionX,
+    positionZ,
+    camera,
+    onclick,
+    ondblclick,
+    compact = false,
+  }: Props = $props()
 
   const PANEL_Y = -0.9
   const CORNER_RADIUS = 0.08
@@ -91,9 +99,7 @@
   })
 </script>
 
-<T.Group
-  bind:ref={labelGroup}
->
+<T.Group bind:ref={labelGroup}>
   <!-- Background (click target) -->
   <T.Mesh renderOrder={0} {onclick} {ondblclick}>
     <T.ShapeGeometry args={[panelShape]} />
@@ -138,14 +144,7 @@
         depthOffset={-1}
       />
 
-      {#each [
-        { label: 'STR', value: character.attributes.str, col: 0, row: 0 },
-        { label: 'DEX', value: character.attributes.dex, col: 1, row: 0 },
-        { label: 'CON', value: character.attributes.con, col: 0, row: 1 },
-        { label: 'INT', value: character.attributes.int, col: 1, row: 1 },
-        { label: 'WIS', value: character.attributes.wis, col: 0, row: 2 },
-        { label: 'CHA', value: character.attributes.cha, col: 1, row: 2 },
-      ] as stat (stat.label)}
+      {#each [{ label: 'STR', value: character.attributes.str, col: 0, row: 0 }, { label: 'DEX', value: character.attributes.dex, col: 1, row: 0 }, { label: 'CON', value: character.attributes.con, col: 0, row: 1 }, { label: 'INT', value: character.attributes.int, col: 1, row: 1 }, { label: 'WIS', value: character.attributes.wis, col: 0, row: 2 }, { label: 'CHA', value: character.attributes.cha, col: 1, row: 2 }] as stat (stat.label)}
         {@const colX = stat.col === 0 ? -STAT_COL_GAP : 0.02}
         {@const rowY = STATS_START_Y + (2 - stat.row) * STAT_ROW_GAP}
         <TextLabel

@@ -65,14 +65,22 @@
     camera: THREE.Camera
   ) {
     // 1. Spawn a floating text for each source whose trigger advanced.
-    lastDamageTrigger = emitIfTriggered(lastDamageInfo, lastDamageTrigger, (i) => ({
-      text: i.hit ? `${i.damage}` : 'Miss',
-      color: i.hit ? '#ff4d4d' : '#a0aec0',
-    }))
-    lastRegenTrigger = emitIfTriggered(lastRegenInfo, lastRegenTrigger, (i) => ({
-      text: `+${i.damage}`,
-      color: '#48bb78', // Green
-    }))
+    lastDamageTrigger = emitIfTriggered(
+      lastDamageInfo,
+      lastDamageTrigger,
+      (i) => ({
+        text: i.hit ? `${i.damage}` : 'Miss',
+        color: i.hit ? '#ff4d4d' : '#a0aec0',
+      })
+    )
+    lastRegenTrigger = emitIfTriggered(
+      lastRegenInfo,
+      lastRegenTrigger,
+      (i) => ({
+        text: `+${i.damage}`,
+        color: '#48bb78', // Green
+      })
+    )
     lastGoldTrigger = emitIfTriggered(lastGoldInfo, lastGoldTrigger, (i) => ({
       text: `+${i.amount} copper`,
       color: '#f6c453',

@@ -13,7 +13,11 @@
     noSpawnFormLabel,
   } from '../../stores/editorStore'
   import type { ZoneSubTool } from '../../stores/editorStore'
-  import type { ZoneData, NoSpawnZone, MonsterSpawnZone } from '../../managers/zoneManager'
+  import type {
+    ZoneData,
+    NoSpawnZone,
+    MonsterSpawnZone,
+  } from '../../managers/zoneManager'
   import { get } from 'svelte/store'
 
   let subTool = $state<ZoneSubTool>('noSpawn')
@@ -63,14 +67,22 @@
     currentZoneData.set(updated)
   }
 
-  async function deleteZone(key: 'noSpawnZones' | 'monsterSpawns', index: number) {
+  async function deleteZone(
+    key: 'noSpawnZones' | 'monsterSpawns',
+    index: number
+  ) {
     const arr = [...(zoneData[key] ?? [])]
     arr.splice(index, 1)
     await saveAndUpdate({ ...zoneData, [key]: arr })
   }
 
   /** Called from MapEditorCursor when the user finishes drawing a rectangle. */
-  export async function addNoSpawnZone(minX: number, minZ: number, maxX: number, maxZ: number) {
+  export async function addNoSpawnZone(
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number
+  ) {
     const zone: NoSpawnZone = { minX, minZ, maxX, maxZ }
     if (noSpawnLabel.trim()) zone.label = noSpawnLabel.trim()
     const zones = [...(zoneData.noSpawnZones ?? []), zone]
@@ -78,13 +90,21 @@
     noSpawnFormLabel.set('')
   }
 
-  export async function addSpawnZone(minX: number, minZ: number, maxX: number, maxZ: number) {
+  export async function addSpawnZone(
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number
+  ) {
     const zone: MonsterSpawnZone = {
       monsterType: spawnMonsterType,
       maxPerPlayer: spawnMaxPerPlayer,
       maxTotal: spawnMaxTotal,
       spawnIntervalSecs: spawnIntervalSecs,
-      minX, minZ, maxX, maxZ,
+      minX,
+      minZ,
+      maxX,
+      maxZ,
     }
     const spawns = [...(zoneData.monsterSpawns ?? []), zone]
     await saveAndUpdate({ ...zoneData, monsterSpawns: spawns })
@@ -102,13 +122,13 @@
     <button
       class="sub-tab"
       class:active={subTool === 'noSpawn'}
-      onclick={() => selectSubTool('noSpawn')}
-    >No-Spawn</button>
+      onclick={() => selectSubTool('noSpawn')}>No-Spawn</button
+    >
     <button
       class="sub-tab"
       class:active={subTool === 'spawn'}
-      onclick={() => selectSubTool('spawn')}
-    >Spawn</button>
+      onclick={() => selectSubTool('spawn')}>Spawn</button
+    >
   </div>
 
   {#if subTool === 'noSpawn'}
@@ -118,13 +138,19 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="zone-item no-spawn"
-          onmouseenter={() => hoveredZoneIndex.set({ type: 'noSpawn', index: i })}
+          onmouseenter={() =>
+            hoveredZoneIndex.set({ type: 'noSpawn', index: i })}
           onmouseleave={() => hoveredZoneIndex.set(null)}
         >
           <span class="zone-info">
-            {zone.label || 'Zone'} ({formatCoord(zone.minX)},{formatCoord(zone.minZ)}) - ({formatCoord(zone.maxX)},{formatCoord(zone.maxZ)})
+            {zone.label || 'Zone'} ({formatCoord(zone.minX)},{formatCoord(
+              zone.minZ
+            )}) - ({formatCoord(zone.maxX)},{formatCoord(zone.maxZ)})
           </span>
-          <button class="delete-btn" onclick={() => deleteZone('noSpawnZones', i)}>x</button>
+          <button
+            class="delete-btn"
+            onclick={() => deleteZone('noSpawnZones', i)}>x</button
+          >
         </div>
       {/each}
       {#if (zoneData.noSpawnZones ?? []).length === 0}
@@ -135,11 +161,20 @@
     <div class="section-label">New Zone</div>
     <div class="control-row">
       <label for="zone-label">Label</label>
-      <input id="zone-label" type="text" value={noSpawnLabel} oninput={(e) => noSpawnFormLabel.set((e.target as HTMLInputElement).value)} placeholder="e.g. Town" />
+      <input
+        id="zone-label"
+        type="text"
+        value={noSpawnLabel}
+        oninput={(e) =>
+          noSpawnFormLabel.set((e.target as HTMLInputElement).value)}
+        placeholder="e.g. Town"
+      />
     </div>
     <div class="draw-hint">
       {#if drawStart}
-        Click second corner to finish ({formatCoord(drawStart.x)}, {formatCoord(drawStart.z)})
+        Click second corner to finish ({formatCoord(drawStart.x)}, {formatCoord(
+          drawStart.z
+        )})
       {:else}
         Click on map to set first corner
       {/if}
@@ -155,9 +190,14 @@
           onmouseleave={() => hoveredZoneIndex.set(null)}
         >
           <span class="zone-info">
-            {zone.monsterType} ({formatCoord(zone.minX)},{formatCoord(zone.minZ)}) - ({formatCoord(zone.maxX)},{formatCoord(zone.maxZ)})
+            {zone.monsterType} ({formatCoord(zone.minX)},{formatCoord(
+              zone.minZ
+            )}) - ({formatCoord(zone.maxX)},{formatCoord(zone.maxZ)})
           </span>
-          <button class="delete-btn" onclick={() => deleteZone('monsterSpawns', i)}>x</button>
+          <button
+            class="delete-btn"
+            onclick={() => deleteZone('monsterSpawns', i)}>x</button
+          >
         </div>
       {/each}
       {#if (zoneData.monsterSpawns ?? []).length === 0}
@@ -168,23 +208,61 @@
     <div class="section-label">New Spawn Zone</div>
     <div class="control-row">
       <label for="spawn-type">Monster</label>
-      <input id="spawn-type" type="text" value={spawnMonsterType} oninput={(e) => spawnFormMonsterType.set((e.target as HTMLInputElement).value)} />
+      <input
+        id="spawn-type"
+        type="text"
+        value={spawnMonsterType}
+        oninput={(e) =>
+          spawnFormMonsterType.set((e.target as HTMLInputElement).value)}
+      />
     </div>
     <div class="control-row">
       <label for="spawn-max-player">Per Player</label>
-      <input id="spawn-max-player" type="number" min="1" max="50" value={spawnMaxPerPlayer} oninput={(e) => spawnFormMaxPerPlayer.set(parseInt((e.target as HTMLInputElement).value) || 1)} />
+      <input
+        id="spawn-max-player"
+        type="number"
+        min="1"
+        max="50"
+        value={spawnMaxPerPlayer}
+        oninput={(e) =>
+          spawnFormMaxPerPlayer.set(
+            parseInt((e.target as HTMLInputElement).value) || 1
+          )}
+      />
     </div>
     <div class="control-row">
       <label for="spawn-max-total">Max Total</label>
-      <input id="spawn-max-total" type="number" min="1" max="200" value={spawnMaxTotal} oninput={(e) => spawnFormMaxTotal.set(parseInt((e.target as HTMLInputElement).value) || 1)} />
+      <input
+        id="spawn-max-total"
+        type="number"
+        min="1"
+        max="200"
+        value={spawnMaxTotal}
+        oninput={(e) =>
+          spawnFormMaxTotal.set(
+            parseInt((e.target as HTMLInputElement).value) || 1
+          )}
+      />
     </div>
     <div class="control-row">
       <label for="spawn-interval">Interval(s)</label>
-      <input id="spawn-interval" type="number" min="1" max="600" value={spawnIntervalSecs} oninput={(e) => spawnFormIntervalSecs.set(parseInt((e.target as HTMLInputElement).value) || 1)} />
+      <input
+        id="spawn-interval"
+        type="number"
+        min="1"
+        max="600"
+        value={spawnIntervalSecs}
+        oninput={(e) =>
+          spawnFormIntervalSecs.set(
+            parseInt((e.target as HTMLInputElement).value) || 1
+          )}
+      />
     </div>
     <div class="draw-hint">
       {#if drawStart}
-        Click second corner to finish ({formatCoord(drawStart.x)}, {formatCoord(drawStart.z)})
+        Click second corner to finish ({formatCoord(drawStart.x)}, {formatCoord(
+          drawStart.z
+        )})
       {:else}
         Click on map to set first corner
       {/if}
@@ -231,7 +309,9 @@
     font-family: inherit;
     font-size: 11px;
     font-weight: bold;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .sub-tab:hover {

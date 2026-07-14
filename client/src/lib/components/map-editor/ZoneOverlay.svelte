@@ -32,7 +32,9 @@
   let cursorPos = $state<{ worldX: number; worldZ: number } | null>(null)
   let tool = $state('')
   let heightMgr = $state<TerrainHeightManager | null>(null)
-  let hovered = $state<{ type: 'noSpawn' | 'spawn'; index: number } | null>(null)
+  let hovered = $state<{ type: 'noSpawn' | 'spawn'; index: number } | null>(
+    null
+  )
 
   editorTool.subscribe((v) => (tool = v))
   zoneDrawStart.subscribe((v) => (drawStart = v))
@@ -47,7 +49,10 @@
 
   function buildFillGeometry(
     mgr: TerrainHeightManager,
-    minX: number, minZ: number, maxX: number, maxZ: number
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number
   ): THREE.BufferGeometry | null {
     const cellMinX = Math.floor(minX)
     const cellMinZ = Math.floor(minZ)
@@ -79,8 +84,12 @@
         const tr = tl + 1
         const bl = (r + 1) * vertCols + c
         const br = bl + 1
-        indices[ii++] = tl; indices[ii++] = bl; indices[ii++] = tr
-        indices[ii++] = tr; indices[ii++] = bl; indices[ii++] = br
+        indices[ii++] = tl
+        indices[ii++] = bl
+        indices[ii++] = tr
+        indices[ii++] = tr
+        indices[ii++] = bl
+        indices[ii++] = br
       }
     }
 
@@ -92,7 +101,10 @@
 
   function buildBorderGeometry(
     mgr: TerrainHeightManager,
-    minX: number, minZ: number, maxX: number, maxZ: number
+    minX: number,
+    minZ: number,
+    maxX: number,
+    maxZ: number
   ): THREE.BufferGeometry | null {
     const points: number[] = []
     const yOff = Y_OFFSET + 0.05
@@ -117,7 +129,10 @@
 
     if (points.length === 0) return null
     const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(points), 3))
+    geo.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(new Float32Array(points), 3)
+    )
     return geo
   }
 
@@ -256,7 +271,11 @@
   {#if previewMesh.border}
     <T.LineLoop renderOrder={999} frustumCulled={false}>
       <T is={previewMesh.border} />
-      <T.LineBasicMaterial color={PREVIEW_COLOR} linewidth={2} depthWrite={false} />
+      <T.LineBasicMaterial
+        color={PREVIEW_COLOR}
+        linewidth={2}
+        depthWrite={false}
+      />
     </T.LineLoop>
   {/if}
 {/if}

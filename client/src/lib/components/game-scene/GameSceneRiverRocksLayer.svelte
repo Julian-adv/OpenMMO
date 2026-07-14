@@ -194,11 +194,7 @@
       // Depth filter and the water layer's wake mask use the same centre.
       const rock = new THREE.Mesh(v.geometry, v.material)
       // Seat the base ROCK_SINK of the silhouette below the surface.
-      rock.position.set(
-        p.x,
-        p.y - p.height * ROCK_SINK - v.minY * scale,
-        p.z
-      )
+      rock.position.set(p.x, p.y - p.height * ROCK_SINK - v.minY * scale, p.z)
       rock.scale.setScalar(scale)
       rock.rotation.y = p.rotY
       rock.castShadow = false
@@ -249,8 +245,7 @@
     // Terrain height is therefore required: without it we cannot safely
     // distinguish a submerged post from a dry one.
     const hm = heightManager
-    if (!waterFieldManager || !hm || !foamMap || !ensureEffects())
-      return
+    if (!waterFieldManager || !hm || !foamMap || !ensureEffects()) return
 
     for (const p of placements) {
       if (p.type !== 'bridge_wood_long' || p.floorLevel !== 0) continue
@@ -276,27 +271,59 @@
           if (!field || !heightsOk) continue
           const originX = tileX * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
           const originZ = tileZ * TERRAIN_TILE_SIZE - TERRAIN_TILE_SIZE / 2
-          const i = Math.max(0, Math.min(WATER_FIELD_GRID - 1, Math.round(x - originX)))
-          const j = Math.max(0, Math.min(WATER_FIELD_GRID - 1, Math.round(z - originZ)))
+          const i = Math.max(
+            0,
+            Math.min(WATER_FIELD_GRID - 1, Math.round(x - originX))
+          )
+          const j = Math.max(
+            0,
+            Math.min(WATER_FIELD_GRID - 1, Math.round(z - originZ))
+          )
           const idx = j * WATER_FIELD_GRID + i
           const fx = field.flowX[idx]
           const fz = field.flowZ[idx]
           const speed = Math.hypot(fx, fz)
-          if (field.riverness[idx] < BRIDGE_MIN_RIVERNESS || speed < 0.1) continue
+          if (field.riverness[idx] < BRIDGE_MIN_RIVERNESS || speed < 0.1)
+            continue
           const flowX = fx / speed
           const flowZ = fz / speed
-          const probeI = Math.max(0, Math.min(WATER_FIELD_GRID - 1, i + Math.round(flowX * 3)))
-          const probeJ = Math.max(0, Math.min(WATER_FIELD_GRID - 1, j + Math.round(flowZ * 3)))
+          const probeI = Math.max(
+            0,
+            Math.min(WATER_FIELD_GRID - 1, i + Math.round(flowX * 3))
+          )
+          const probeJ = Math.max(
+            0,
+            Math.min(WATER_FIELD_GRID - 1, j + Math.round(flowZ * 3))
+          )
           const probeDist = Math.hypot(probeI - i, probeJ - j)
-          const drop = probeDist > 0
-            ? Math.max(0, (field.surfaceY[idx] - field.surfaceY[probeJ * WATER_FIELD_GRID + probeI]) / probeDist)
-            : 0
+          const drop =
+            probeDist > 0
+              ? Math.max(
+                  0,
+                  (field.surfaceY[idx] -
+                    field.surfaceY[probeJ * WATER_FIELD_GRID + probeI]) /
+                    probeDist
+                )
+              : 0
           const y = field.surfaceY[idx]
           const bedY = hm.getHeightAtWorldPosition(x, z)
           if (y - bedY < MIN_ROCK_DEPTH_M) continue
-          tg.add(collars!.createMesh(x, y + 0.03, z, BRIDGE_POST_RADIUS, flowX, flowZ))
+          tg.add(
+            collars!.createMesh(
+              x,
+              y + 0.03,
+              z,
+              BRIDGE_POST_RADIUS,
+              flowX,
+              flowZ
+            )
+          )
           emitters.push({
-            x, y, z, flowX, flowZ,
+            x,
+            y,
+            z,
+            flowX,
+            flowZ,
             sprayYOffset: BRIDGE_SPRAY_Y_OFFSET,
             radius: BRIDGE_POST_RADIUS,
             // Bridge posts are deliberate obstructions, so they should emit

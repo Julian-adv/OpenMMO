@@ -49,7 +49,10 @@
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
 
   import type { CharacterClass, Gender } from '../network/networkTypes'
-  import { type MovementMode, type PlayerStateName } from '../utils/movementUtils'
+  import {
+    type MovementMode,
+    type PlayerStateName,
+  } from '../utils/movementUtils'
   import { TorchFireParticles } from '../effects/torch-fire-particles'
   import ChatBubble from './ChatBubble.svelte'
   import DamageText from './DamageText.svelte'
@@ -170,13 +173,30 @@
   const defaultWeaponModel = getDefaultWeaponModel(characterClass)
   // svelte-ignore state_referenced_locally
   const modelPath = getCharacterModelPath(characterClass, gender)
-  const modelPromise = loadGLB(modelPath).then((g) => { activeGltfData = g })
-  const locomotionPromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
-  const combatMeleePromise = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
+  const modelPromise = loadGLB(modelPath).then((g) => {
+    activeGltfData = g
+  })
+  const locomotionPromise = loadGLB(
+    CHARACTER_ANIMATION_PACK_PATHS.locomotion
+  ).then((g) => {
+    locomotionGltfData = g
+  })
+  const combatMeleePromise = loadGLB(
+    CHARACTER_ANIMATION_PACK_PATHS.combatMelee
+  ).then((g) => {
+    combatMeleeGltfData = g
+  })
   const weaponPromise = defaultWeaponModel
-    ? loadGLB(getWeaponModelPath(defaultWeaponModel)).then((g) => { weaponGltfData = g })
+    ? loadGLB(getWeaponModelPath(defaultWeaponModel)).then((g) => {
+        weaponGltfData = g
+      })
     : Promise.resolve()
-  const glbReady = Promise.all([modelPromise, locomotionPromise, combatMeleePromise, weaponPromise])
+  const glbReady = Promise.all([
+    modelPromise,
+    locomotionPromise,
+    combatMeleePromise,
+    weaponPromise,
+  ])
 
   // Animation system - following gpt-all-in-one.html approach
   let mixer = $state<THREE.AnimationMixer | null>(null)
@@ -184,15 +204,12 @@
   let modelRoot = $state<THREE.Group | null>(null)
   let modelGroup = $state<THREE.Group | undefined>(undefined)
 
-
   let clonedScene: THREE.Object3D | null = null
   let validAnimations = $state<THREE.AnimationClip[]>([])
   let offhandClips = new SvelteMap<string, THREE.AnimationClip>()
   let socialClipsByName = new SvelteMap<string, THREE.AnimationClip>()
   let socialLoading = false
-  let lastPlayerState = $state<
-    PlayerStateName | undefined
-  >(undefined)
+  let lastPlayerState = $state<PlayerStateName | undefined>(undefined)
   let lastAttackCounter = $state(0)
   let dyingFinishedNotified = $state(false)
   let interactionFinishedNotified = $state(false)
@@ -219,15 +236,19 @@
     return primarySkinnedMesh
   }
 
-  function findBoneByName(root: THREE.Object3D, name: string): THREE.Bone | undefined {
+  function findBoneByName(
+    root: THREE.Object3D,
+    name: string
+  ): THREE.Bone | undefined {
     const primarySkinnedMesh = findPrimarySkinnedMesh(root)
     if (!primarySkinnedMesh) return undefined
-    return primarySkinnedMesh.skeleton.bones.find(
-      (bone) => bone.name === name
-    )
+    return primarySkinnedMesh.skeleton.bones.find((bone) => bone.name === name)
   }
 
-  function attachWeaponModel(gltfScene: THREE.Object3D, characterRoot: THREE.Object3D): boolean {
+  function attachWeaponModel(
+    gltfScene: THREE.Object3D,
+    characterRoot: THREE.Object3D
+  ): boolean {
     const rightHandBone = findBoneByName(characterRoot, 'RightHand')
     if (!rightHandBone) {
       console.warn('Could not find right hand bone for weapon attachment')
@@ -259,7 +280,10 @@
   let torchTipNode: THREE.Object3D | null = null
   const FALLBACK_TORCH_TIP_LOCAL_OFFSET = new THREE.Vector3(0.6, 0, 0)
 
-  function attachOffhandModel(gltfScene: THREE.Object3D, characterRoot: THREE.Object3D): boolean {
+  function attachOffhandModel(
+    gltfScene: THREE.Object3D,
+    characterRoot: THREE.Object3D
+  ): boolean {
     const leftHandBone = findBoneByName(characterRoot, 'LeftHand')
     if (!leftHandBone) {
       console.warn('Could not find left hand bone for off-hand attachment')
@@ -323,8 +347,11 @@
     torchEffectsDisabled
       ? null
       : isCurrentPlayer
-        ? ($inventoryStore.equipped.off_hand?.item_def_id ?? ($torchLightEnabled ? 'torch' : null))
-        : (torchOn ? 'torch' : null)
+        ? ($inventoryStore.equipped.off_hand?.item_def_id ??
+          ($torchLightEnabled ? 'torch' : null))
+        : torchOn
+          ? 'torch'
+          : null
   )
 
   let attachedOffhandItemId: string | null = null
@@ -442,12 +469,18 @@
           )
         )
       : undefined
-    const torchWalk = hasTorch ? offhandClips.get(OffhandAnimationName.TORCH_WALK) : undefined
-    const torchRun = hasTorch ? offhandClips.get(OffhandAnimationName.TORCH_RUN) : undefined
+    const torchWalk = hasTorch
+      ? offhandClips.get(OffhandAnimationName.TORCH_WALK)
+      : undefined
+    const torchRun = hasTorch
+      ? offhandClips.get(OffhandAnimationName.TORCH_RUN)
+      : undefined
     let clip: THREE.AnimationClip | undefined
     if (playerState === 'idle') {
       currentMovementAnimationIndex = undefined
-      clip = torchIdle ?? pickRandom(DEFAULT_IDLE_INDICES.map((i) => validAnimations[i]))
+      clip =
+        torchIdle ??
+        pickRandom(DEFAULT_IDLE_INDICES.map((i) => validAnimations[i]))
     } else if (playerState === 'moving') {
       if (currentMovementAnimationIndex === undefined) {
         currentMovementAnimationIndex = selectMovementAnimation(movementMode)
@@ -534,7 +567,9 @@
       const combatMeleeAnimations = getGltfAnimations(combatMeleeGltfData)
 
       console.log(`Found ${baseAnimations.length} base animation clips`)
-      console.log(`Found ${locomotionAnimations.length} locomotion animation clips`)
+      console.log(
+        `Found ${locomotionAnimations.length} locomotion animation clips`
+      )
       console.log(
         `Found ${combatMeleeAnimations.length} combat melee animation clips`
       )
@@ -565,7 +600,9 @@
 
       for (const selection of orderedSelections) {
         if (selection.fromFallback) {
-          console.log(`❌ Missing animation: ${selection.name} (using fallback)`)
+          console.log(
+            `❌ Missing animation: ${selection.name} (using fallback)`
+          )
         } else {
           const source =
             selection.source === 'locomotion'
@@ -791,11 +828,7 @@
     if (playerState !== 'interact') {
       interactionFinishedNotified = false
       pickupGrabNotified = false
-    } else if (
-      isCurrentPlayer &&
-      currentAction &&
-      interactionAnim
-    ) {
+    } else if (isCurrentPlayer && currentAction && interactionAnim) {
       const clip = currentAction.getClip()
       if (clip.name === interactionAnim) {
         if (
@@ -849,7 +882,7 @@
 
 <!-- Character Model -->
 {#if modelRoot}
-<T.Group
+  <T.Group
     bind:ref={modelGroup}
     position={[position.x, position.y, position.z]}
     rotation={[0, rotation, 0]}

@@ -22,22 +22,31 @@
     type RoomTemplate,
     type HousingEditorTool,
   } from '../../stores/housingEditorStore'
-  import type { HouseData, RoofRidgeDir, RoofType, RoomData, RoomType } from '../../types/housing'
-  import { HOUSING_TEXTURES, initHousingTextures, getTexturePreviewUrls } from '../../utils/housing-textures'
+  import type {
+    HouseData,
+    RoofRidgeDir,
+    RoofType,
+    RoomData,
+    RoomType,
+  } from '../../types/housing'
+  import {
+    HOUSING_TEXTURES,
+    initHousingTextures,
+    getTexturePreviewUrls,
+  } from '../../utils/housing-textures'
   import { housingManager } from '../../managers/housingManager'
   import { MAX_FLOOR_LEVEL } from '../../utils/house-geo-utils'
 
   const FLOOR_LEVELS = Array.from({ length: MAX_FLOOR_LEVEL + 1 }, (_, i) => i)
 
   const toCSS = (c: number) => `#${c.toString(16).padStart(6, '0')}`
-  const TEX_ENTRIES = HOUSING_TEXTURES
-    .map((t, i) => ({
-      idx: i,
-      label: t.label,
-      color: toCSS(t.fallbackColor),
-      sortOrder: t.sortOrder ?? i,
-      internal: t.internal ?? false,
-    }))
+  const TEX_ENTRIES = HOUSING_TEXTURES.map((t, i) => ({
+    idx: i,
+    label: t.label,
+    color: toCSS(t.fallbackColor),
+    sortOrder: t.sortOrder ?? i,
+    internal: t.internal ?? false,
+  }))
     .filter((t) => !t.internal)
     .sort((a, b) => a.sortOrder - b.sortOrder)
 
@@ -167,7 +176,12 @@
   }
 
   function onEditTextureChange(kind: 'wall' | 'floor' | 'roof', idx: number) {
-    const store = kind === 'wall' ? wallTextureIndex : kind === 'floor' ? floorTextureIndex : roofTextureIndex
+    const store =
+      kind === 'wall'
+        ? wallTextureIndex
+        : kind === 'floor'
+          ? floorTextureIndex
+          : roofTextureIndex
     store.set(idx)
     applyRoomEdit((room) => {
       if (kind === 'wall') {
@@ -206,28 +220,37 @@
   <div class="panel">
     <div class="section-title">Tools</div>
     <div class="tool-row">
-      <button class="tool-btn" class:active={tool === 'place'} onclick={() => setTool('place')}>
+      <button
+        class="tool-btn"
+        class:active={tool === 'place'}
+        onclick={() => setTool('place')}
+      >
         Place
       </button>
-      <button class="tool-btn tool-select" class:active={tool === 'select'} onclick={() => setTool('select')}>
+      <button
+        class="tool-btn tool-select"
+        class:active={tool === 'select'}
+        onclick={() => setTool('select')}
+      >
         Select
       </button>
       {#if tool === 'select' && editHouseId != null && editRoomIdx != null}
         {#if editRoom && editRoom.floorLevel === 0 && editRoom.roomType !== 'stairwell'}
           <button
             class="tool-btn tool-flatten"
-            onclick={() => flattenSelectedRoomTerrain?.()}
-          >Flatten</button>
+            onclick={() => flattenSelectedRoomTerrain?.()}>Flatten</button
+          >
         {/if}
         <button
           class="tool-btn tool-reinstall"
           onclick={onReinstallHouse}
           disabled={reinstalling}
-        >{reinstalling ? 'Reinstalling...' : 'Reinstall'}</button>
+          >{reinstalling ? 'Reinstalling...' : 'Reinstall'}</button
+        >
         <button
           class="tool-btn tool-delete"
-          onclick={() => deleteSelectedRoom?.()}
-        >Delete</button>
+          onclick={() => deleteSelectedRoom?.()}>Delete</button
+        >
       {/if}
     </div>
 
@@ -236,16 +259,23 @@
         <img class="tex-swatch" src={texPreviews[texIdx]} alt="" />
       {:else}
         {@const entry = TEX_ENTRIES.find((e) => e.idx === texIdx)}
-        <span class="tex-swatch" style="background: {entry?.color ?? '#888'}"></span>
+        <span class="tex-swatch" style="background: {entry?.color ?? '#888'}"
+        ></span>
       {/if}
     {/snippet}
 
-    {#snippet texturePicker(title: string, activeIdx: number, onChange: (idx: number) => void)}
+    {#snippet texturePicker(
+      title: string,
+      activeIdx: number,
+      onChange: (idx: number) => void
+    )}
       <div class="section-title">{title}</div>
       <div class="tex-dropdown">
         <button
           class="tex-dropdown-btn"
-          onclick={() => { openDropdown = openDropdown === title ? null : title }}
+          onclick={() => {
+            openDropdown = openDropdown === title ? null : title
+          }}
         >
           {@render texSwatch(activeIdx)}
           <span>{TEX_ENTRIES.find((e) => e.idx === activeIdx)?.label}</span>
@@ -257,7 +287,10 @@
               <button
                 class="tex-dropdown-item"
                 class:active={activeIdx === entry.idx}
-                onclick={() => { onChange(entry.idx); openDropdown = null }}
+                onclick={() => {
+                  onChange(entry.idx)
+                  openDropdown = null
+                }}
               >
                 {@render texSwatch(entry.idx)}
                 <span>{entry.label}</span>
@@ -274,14 +307,14 @@
         class="tool-btn"
         class:active={roomType === 'normal'}
         disabled={tool !== 'place'}
-        onclick={() => placementRoomType.set('normal')}
-      >Room</button>
+        onclick={() => placementRoomType.set('normal')}>Room</button
+      >
       <button
         class="tool-btn"
         class:active={roomType === 'stairwell'}
         disabled={tool !== 'place'}
-        onclick={() => placementRoomType.set('stairwell')}
-      >Stairs</button>
+        onclick={() => placementRoomType.set('stairwell')}>Stairs</button
+      >
     </div>
 
     <div class="section-title">Floor</div>
@@ -291,14 +324,16 @@
           class="tool-btn"
           class:active={floorLvl === fl}
           disabled={tool !== 'place'}
-          onclick={() => placementFloorLevel.set(fl)}
-        >{fl + 1}F</button>
+          onclick={() => placementFloorLevel.set(fl)}>{fl + 1}F</button
+        >
       {/each}
     </div>
 
-    <div class="section-title">{roomType === 'stairwell' ? 'Stairs' : 'Room'}</div>
+    <div class="section-title">
+      {roomType === 'stairwell' ? 'Stairs' : 'Room'}
+    </div>
     <div class="room-row">
-      {#each (roomType === 'stairwell' ? STAIR_TEMPLATES : ROOM_TEMPLATES) as t (t.label)}
+      {#each roomType === 'stairwell' ? STAIR_TEMPLATES : ROOM_TEMPLATES as t (t.label)}
         <button
           class="room-btn"
           class:active={selected?.label === t.label && tool === 'place'}
@@ -311,11 +346,22 @@
     </div>
 
     <div class="section-title">Rotate <span class="hint">(R)</span></div>
-    <button class="rotate-btn" disabled={tool !== 'place'} onclick={rotate}>{rotation}°</button>
+    <button class="rotate-btn" disabled={tool !== 'place'} onclick={rotate}
+      >{rotation}°</button
+    >
 
-    {@render texturePicker('Wall', wallTex, (i) => { if (tool === 'select') onEditTextureChange('wall', i); else wallTextureIndex.set(i) })}
-    {@render texturePicker('Floor', floorTex, (i) => { if (tool === 'select') onEditTextureChange('floor', i); else floorTextureIndex.set(i) })}
-    {@render texturePicker('Roof', roofTex, (i) => { if (tool === 'select') onEditTextureChange('roof', i); else roofTextureIndex.set(i) })}
+    {@render texturePicker('Wall', wallTex, (i) => {
+      if (tool === 'select') onEditTextureChange('wall', i)
+      else wallTextureIndex.set(i)
+    })}
+    {@render texturePicker('Floor', floorTex, (i) => {
+      if (tool === 'select') onEditTextureChange('floor', i)
+      else floorTextureIndex.set(i)
+    })}
+    {@render texturePicker('Roof', roofTex, (i) => {
+      if (tool === 'select') onEditTextureChange('roof', i)
+      else roofTextureIndex.set(i)
+    })}
 
     <div class="section-title">Roof Shape</div>
     <div class="tool-row">
@@ -325,9 +371,12 @@
           class:active={roofType === type}
           onclick={() => {
             placementRoofType.set(type as RoofType)
-            if (tool === 'select') applyRoomEdit((room) => { room.roofType = type as RoofType })
-          }}
-        >{label}</button>
+            if (tool === 'select')
+              applyRoomEdit((room) => {
+                room.roofType = type as RoofType
+              })
+          }}>{label}</button
+        >
       {/each}
     </div>
 
@@ -339,15 +388,19 @@
             class="tool-btn"
             class:active={(editRoom.roofRidgeDir ?? 'auto') === dir}
             onclick={() => {
-              applyRoomEdit((room) => { room.roofRidgeDir = dir as RoofRidgeDir })
-            }}
-          >{label}</button>
+              applyRoomEdit((room) => {
+                room.roofRidgeDir = dir as RoofRidgeDir
+              })
+            }}>{label}</button
+          >
         {/each}
       </div>
     {/if}
 
     {#if tool === 'select' && editRoom && editRoomIdx != null}
-      <div class="section-title">Editing Room {editRoomIdx + 1} ({editRoom.sizeX}×{editRoom.sizeZ})</div>
+      <div class="section-title">
+        Editing Room {editRoomIdx + 1} ({editRoom.sizeX}×{editRoom.sizeZ})
+      </div>
 
       {#each WALL_DIRS as dir (dir.wallKey)}
         {@const wall = editRoom[dir.wallKey]}
@@ -359,11 +412,13 @@
               disabled={seg.variant === 'open'}
               title="Seg {segIdx + 1}: {seg.variant}"
               onclick={() => cycleSegmentVariant(dir.wallKey, segIdx)}
-            >{seg.variant === 'open' ? '−' : VARIANT_LABELS[seg.variant]}</button>
+              >{seg.variant === 'open'
+                ? '−'
+                : VARIANT_LABELS[seg.variant]}</button
+            >
           {/each}
         </div>
       {/each}
-
     {:else if tool === 'select'}
       <div class="info-text">Click a house to select a room</div>
     {:else}
@@ -451,7 +506,9 @@
     cursor: pointer;
     font-family: 'Courier New', monospace;
     font-size: 11px;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .tool-btn:hover {
@@ -530,7 +587,9 @@
     font-family: 'Courier New', monospace;
     font-size: 11px;
     font-weight: bold;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .room-btn:hover {
@@ -559,7 +618,6 @@
     background: rgba(255, 255, 255, 0.1);
   }
 
-
   .variant-btn {
     width: 26px;
     height: 26px;
@@ -572,14 +630,15 @@
     font-size: 12px;
     text-align: center;
     line-height: 26px;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .variant-btn:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.1);
     color: #ddd;
   }
-
 
   .variant-btn:disabled {
     opacity: 0.3;

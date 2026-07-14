@@ -3,9 +3,20 @@
   import type { EquipSlot } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
-  import type { CharacterAttributes, CharacterClass, Gender } from '../network/networkTypes'
+  import type {
+    CharacterAttributes,
+    CharacterClass,
+    Gender,
+  } from '../network/networkTypes'
   import { xp_for_level } from '../wasm/onlinerpg_shared'
-  import { dragMeta, startDrag, isSlotCompatible, pointInRect, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
+  import {
+    dragMeta,
+    startDrag,
+    isSlotCompatible,
+    pointInRect,
+    isOverAnyDialog,
+    FALLBACK_ICON,
+  } from '../stores/dragStore'
   import { itemTooltip } from '../actions/itemTooltip'
 
   interface Props {
@@ -21,7 +32,18 @@
     onClose: () => void
   }
 
-  let { visible, name, characterClass, gender, level, currentXp, currentHp, maxHp, attributes, onClose }: Props = $props()
+  let {
+    visible,
+    name,
+    characterClass,
+    gender,
+    level,
+    currentXp,
+    currentHp,
+    maxHp,
+    attributes,
+    onClose,
+  }: Props = $props()
 
   const FEMALE_EQUIP_BG: Partial<Record<CharacterClass, string>> = {
     caveman: '/character_concepts/cavewoman.png',
@@ -78,7 +100,6 @@
     { slot: 'boots', top: 88, left: 50 },
   ]
 
-
   const levelStartXp = $derived(xp_for_level(level))
   const nextLevelXp = $derived(xp_for_level(level + 1))
   const neededXp = $derived(Math.max(1, nextLevelXp - levelStartXp))
@@ -92,7 +113,11 @@
     networkManager.sendUnequipItem(slot)
   }
 
-  function onEquipPointerDown(e: PointerEvent, slot: EquipSlot, item: { instance_id: number; item_def_id: string }) {
+  function onEquipPointerDown(
+    e: PointerEvent,
+    slot: EquipSlot,
+    item: { instance_id: number; item_def_id: string }
+  ) {
     if (e.button !== 0) return
     e.preventDefault()
     const def = getItemDef(item.item_def_id)
@@ -114,7 +139,7 @@
         if (!isOverAnyDialog(x, y)) {
           networkManager.sendDropItem(item.instance_id)
         }
-      },
+      }
     )
   }
 </script>
@@ -172,8 +197,17 @@
           <span class="stat-label exp-label">Exp</span>
           <span class="exp-text">{gainedXp}/{neededXp} ({expPercent}%)</span>
         </div>
-        <div class="exp-track" role="progressbar" aria-valuemin={0} aria-valuemax={neededXp} aria-valuenow={gainedXp}>
-          <span class="exp-fill" style={`width: ${Math.min(100, expProgress * 100)}%`}></span>
+        <div
+          class="exp-track"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={neededXp}
+          aria-valuenow={gainedXp}
+        >
+          <span
+            class="exp-fill"
+            style={`width: ${Math.min(100, expProgress * 100)}%`}
+          ></span>
         </div>
       </div>
     </div>
@@ -183,7 +217,8 @@
       {#each SLOT_POSITIONS as { slot, top, left } (slot)}
         {@const item = $inventoryStore.equipped[slot]}
         {@const def = item ? getItemDef(item.item_def_id) : null}
-        {@const isDropTarget = $dragMeta && isSlotCompatible($dragMeta.equipSlot, slot)}
+        {@const isDropTarget =
+          $dragMeta && isSlotCompatible($dragMeta.equipSlot, slot)}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="equip-slot"
@@ -191,12 +226,23 @@
           style="top:{top}%;left:{left}%"
           title={item ? undefined : EQUIP_SLOT_LABELS[slot]}
           data-equip-slot={slot}
-          use:itemTooltip={item && def ? { def, item, side: left > 50 ? 'left' : 'right' } : null}
-          ondblclick={() => { if (item) unequip(slot) }}
-          onpointerdown={(e: PointerEvent) => { if (item) onEquipPointerDown(e, slot, item) }}
+          use:itemTooltip={item && def
+            ? { def, item, side: left > 50 ? 'left' : 'right' }
+            : null}
+          ondblclick={() => {
+            if (item) unequip(slot)
+          }}
+          onpointerdown={(e: PointerEvent) => {
+            if (item) onEquipPointerDown(e, slot, item)
+          }}
         >
           {#if def}
-            <img class="equip-icon" src="/items/{def.icon}" alt={def.name} draggable="false" />
+            <img
+              class="equip-icon"
+              src="/items/{def.icon}"
+              alt={def.name}
+              draggable="false"
+            />
           {/if}
           {#if item && item.enchant > 0}
             <span class="item-enchant">+{item.enchant}</span>
@@ -420,14 +466,27 @@
 
   @media (max-width: 600px), (pointer: coarse) {
     .character-panel {
-      --character-panel-width: min(292px, calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)));
-      --equip-section-height: min(330px, calc(100dvh - 228px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+      --character-panel-width: min(
+        292px,
+        calc(
+          100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)
+        )
+      );
+      --equip-section-height: min(
+        330px,
+        calc(
+          100dvh - 228px - env(safe-area-inset-top) -
+            env(safe-area-inset-bottom)
+        )
+      );
       --equip-slot-size: 44px;
       --equip-icon-size: 38px;
       left: calc(8px + env(safe-area-inset-left));
       top: calc(8px + env(safe-area-inset-top));
       transform: none;
-      max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      max-height: calc(
+        100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+      );
       padding: 8px;
       border-radius: 8px;
       overflow-y: auto;
@@ -503,7 +562,13 @@
 
   @media (max-width: 340px) {
     .character-panel {
-      --equip-section-height: min(300px, calc(100dvh - 220px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+      --equip-section-height: min(
+        300px,
+        calc(
+          100dvh - 220px - env(safe-area-inset-top) -
+            env(safe-area-inset-bottom)
+        )
+      );
       --equip-slot-size: 40px;
       --equip-icon-size: 34px;
     }

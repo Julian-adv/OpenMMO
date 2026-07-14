@@ -81,7 +81,7 @@
   function wrapText(
     inputText: string,
     maxWidthPx: number | undefined,
-    breakWord: boolean,
+    breakWord: boolean
   ): string[] {
     const paragraphs = inputText.split('\n')
     if (!maxWidthPx || whiteSpace === 'nowrap') {
@@ -248,7 +248,7 @@
 
 <T.Mesh
   bind:ref={meshRef}
-  renderOrder={renderOrder}
+  {renderOrder}
   position={[
     (position[0] ?? 0) + anchorOffsetX,
     (positionY ?? position[1] ?? 0) + anchorOffsetY,

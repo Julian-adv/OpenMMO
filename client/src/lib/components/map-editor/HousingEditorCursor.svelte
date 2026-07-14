@@ -33,13 +33,23 @@
     WallVariant,
   } from '../../types/housing'
   import { housingManager } from '../../managers/housingManager'
-  import { buildHouseGroup, disposeHouseGroup, DEFAULT_WALL_HEIGHT, FLOOR_THICKNESS, floorOverhang, floorYBase } from '../../utils/house-geometry'
+  import {
+    buildHouseGroup,
+    disposeHouseGroup,
+    DEFAULT_WALL_HEIGHT,
+    FLOOR_THICKNESS,
+    floorOverhang,
+    floorYBase,
+  } from '../../utils/house-geometry'
   import { editorPanOffset } from '../../stores/editorStore'
   import { ORTHOGRAPHIC_FRUSTUM_HEIGHT } from '../game-scene/camera-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainGrassDataManager } from '../../managers/terrainGrassDataManager'
   import { removeGrassInRect } from '../../utils/grass-data'
-  import { TERRAIN_TILE_SIZE, worldRectToTileBounds } from '../game-scene/terrain-utils'
+  import {
+    TERRAIN_TILE_SIZE,
+    worldRectToTileBounds,
+  } from '../game-scene/terrain-utils'
 
   interface Props {
     camera: THREE.OrthographicCamera | undefined
@@ -49,8 +59,13 @@
     housingGroup: THREE.Group | null
   }
 
-  let { camera, terrainMeshes, heightManager, grassDataManager, housingGroup }: Props =
-    $props()
+  let {
+    camera,
+    terrainMeshes,
+    heightManager,
+    grassDataManager,
+    housingGroup,
+  }: Props = $props()
 
   const { renderer } = useThrelte()
   const canvas = renderer.domElement
@@ -114,14 +129,21 @@
         if (exclude?.(h, r)) continue
         const rx = h.origin.x + r.localX
         const rz = h.origin.z + r.localZ
-        rects.push({ minX: rx, minZ: rz, maxX: rx + r.sizeX, maxZ: rz + r.sizeZ })
+        rects.push({
+          minX: rx,
+          minZ: rz,
+          maxX: rx + r.sizeX,
+          maxZ: rz + r.sizeZ,
+        })
       }
     }
     return rects
   }
 
   function isInAnyRect(rects: Rect[], wx: number, wz: number): boolean {
-    return rects.some((r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ)
+    return rects.some(
+      (r) => wx >= r.minX && wx <= r.maxX && wz >= r.minZ && wz <= r.maxZ
+    )
   }
 
   // Middle-button camera panning
@@ -188,7 +210,8 @@
     geo.dispose()
     highlightEdges = new THREE.LineSegments(edgesGeo, highlightEdgeMat)
     highlightEdges.renderOrder = 999
-    const yBase = floorYBase(room.floorLevel, room.wallHeight) + FLOOR_THICKNESS / 2
+    const yBase =
+      floorYBase(room.floorLevel, room.wallHeight) + FLOOR_THICKNESS / 2
     highlightEdges.position.set(
       house.origin.x + room.localX + room.sizeX / 2,
       house.origin.y + yBase + room.wallHeight / 2,
@@ -246,9 +269,7 @@
 
   function raycastTerrain(event: MouseEvent): THREE.Intersection | null {
     if (!updateRaycaster(event)) return null
-    const meshes = terrainMeshes.filter(
-      (m): m is THREE.Mesh => m !== undefined
-    )
+    const meshes = terrainMeshes.filter((m): m is THREE.Mesh => m !== undefined)
     if (meshes.length === 0) return null
     const intersects = raycaster.intersectObjects(meshes, false)
     return intersects.length > 0 ? intersects[0] : null
@@ -387,7 +408,6 @@
     } else if (previewMesh) {
       previewMesh.visible = false
     }
-
   }
 
   function handleMouseDown(event: MouseEvent) {
@@ -424,7 +444,10 @@
   /** Rooms orphaned by removing seedIdx: upper floors without support, and
    *  stairwells missing a regular room on either their entry or exit floor.
    *  Fixpoint loop handles chain reactions (F1 falls → F2 falls → stair orphaned). */
-  function computeCascadeDelete(house: HouseData, seedIdx: number): Set<number> {
+  function computeCascadeDelete(
+    house: HouseData,
+    seedIdx: number
+  ): Set<number> {
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const toDelete = new Set<number>([seedIdx])
     let changed = true
@@ -445,8 +468,12 @@
         const room = house.rooms[i]
 
         if (room.roomType === 'stairwell') {
-          if (!regularByFloor.has(room.floorLevel) || !regularByFloor.has(room.floorLevel + 1)) {
-            toDelete.add(i); changed = true
+          if (
+            !regularByFloor.has(room.floorLevel) ||
+            !regularByFloor.has(room.floorLevel + 1)
+          ) {
+            toDelete.add(i)
+            changed = true
           }
           continue
         }
@@ -462,17 +489,25 @@
               const other = house.rooms[j]
               if (other.floorLevel !== supportLevel) continue
               if (
-                x >= other.localX && x < other.localX + other.sizeX &&
-                z >= other.localZ && z < other.localZ + other.sizeZ
+                x >= other.localX &&
+                x < other.localX + other.sizeX &&
+                z >= other.localZ &&
+                z < other.localZ + other.sizeZ
               ) {
                 supported = true
                 break
               }
             }
-            if (!supported) { allCellsSupported = false; break outer }
+            if (!supported) {
+              allCellsSupported = false
+              break outer
+            }
           }
         }
-        if (!allCellsSupported) { toDelete.add(i); changed = true }
+        if (!allCellsSupported) {
+          toDelete.add(i)
+          changed = true
+        }
       }
     }
     return toDelete
@@ -491,7 +526,11 @@
     const toDelete = computeCascadeDelete(house, roomIdx)
     if (toDelete.size > 1) {
       const extra = toDelete.size - 1
-      if (!confirm(`이 방을 지우면 연관된 방 ${extra}개도 함께 삭제됩니다. 계속하시겠습니까?`)) {
+      if (
+        !confirm(
+          `이 방을 지우면 연관된 방 ${extra}개도 함께 삭제됩니다. 계속하시겠습니까?`
+        )
+      ) {
         return
       }
     }
@@ -546,9 +585,16 @@
             rmz + BLEND_RADIUS < restoreMinZ
           )
             continue
-          const protectedRects = buildGroundFloorRects((ph, pr) => pr === room && ph.id === h.id)
+          const protectedRects = buildGroundFloorRects(
+            (ph, pr) => pr === room && ph.id === h.id
+          )
           heightManager.flattenArea(
-            rx, rz, rmx, rmz, h.origin.y, BLEND_RADIUS,
+            rx,
+            rz,
+            rmx,
+            rmz,
+            h.origin.y,
+            BLEND_RADIUS,
             (wx, wz) => isInAnyRect(protectedRects, wx, wz)
           )
         }
@@ -587,8 +633,12 @@
         // Re-remove grass under remaining 1F rooms
         for (const h of housingManager.getAllHouses()) {
           for (const room of groundFloorRooms(h)) {
-            const { minX: rMinX, minZ: rMinZ, maxX: rMaxX, maxZ: rMaxZ } =
-              roomGrassRect(h, room)
+            const {
+              minX: rMinX,
+              minZ: rMinZ,
+              maxX: rMaxX,
+              maxZ: rMaxZ,
+            } = roomGrassRect(h, room)
             // Only process if overlapping the restored grass area
             if (
               rMinX > grassMaxX ||
@@ -630,12 +680,17 @@
 
     const roomWorldX = house.origin.x + room.localX
     const roomWorldZ = house.origin.z + room.localZ
-    const protectedRects = buildGroundFloorRects((ph, pr) => pr === room && ph.id === house.id)
+    const protectedRects = buildGroundFloorRects(
+      (ph, pr) => pr === room && ph.id === house.id
+    )
 
     heightManager.flattenArea(
-      roomWorldX, roomWorldZ,
-      roomWorldX + room.sizeX, roomWorldZ + room.sizeZ,
-      house.origin.y, BLEND_RADIUS,
+      roomWorldX,
+      roomWorldZ,
+      roomWorldX + room.sizeX,
+      roomWorldZ + room.sizeZ,
+      house.origin.y,
+      BLEND_RADIUS,
       (wx, wz) => isInAnyRect(protectedRects, wx, wz)
     )
     heightManager.saveAllDirty()
@@ -663,7 +718,10 @@
     if (!gm || rects.length === 0) return
 
     // eslint-disable-next-line svelte/prefer-svelte-reactivity
-    const tileBuckets = new Map<string, { tx: number; tz: number; rects: Rect[] }>()
+    const tileBuckets = new Map<
+      string,
+      { tx: number; tz: number; rects: Rect[] }
+    >()
     for (const rect of rects) {
       const { tileMinX, tileMaxX, tileMinZ, tileMaxZ } = worldRectToTileBounds(
         rect.minX,
@@ -686,7 +744,8 @@
 
     await Promise.all(
       [...tileBuckets.values()].map(async ({ tx, tz, rects }) => {
-        let data = gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
+        let data =
+          gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
         if (!data) return
 
         gm.ensureOriginalGrass(tx, tz)
@@ -745,7 +804,9 @@
     }
   }
 
-  function applyRoomSelection(results: { house: HouseData; roomIndex: number }[]) {
+  function applyRoomSelection(
+    results: { house: HouseData; roomIndex: number }[]
+  ) {
     let idx = 0
     if (results.length > 1) {
       const currentIdx = results.findIndex(
@@ -764,7 +825,9 @@
 
   /** Find rooms containing a world point. When checkY is true, validates Y range too. */
   function findRoomsAtPoint(
-    px: number, py: number, pz: number,
+    px: number,
+    py: number,
+    pz: number,
     checkY: boolean,
     seen: Set<string>,
     out: { house: HouseData; roomIndex: number }[]
@@ -777,10 +840,14 @@
         if (px < rx || px > rx + room.sizeX) continue
         if (pz < rz || pz > rz + room.sizeZ) continue
         if (checkY) {
-          const ryBase = house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
-          const yTop = room.roomType === 'stairwell'
-            ? house.origin.y + floorYBase(room.floorLevel + 1, room.wallHeight) + room.wallHeight
-            : ryBase + room.wallHeight
+          const ryBase =
+            house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
+          const yTop =
+            room.roomType === 'stairwell'
+              ? house.origin.y +
+                floorYBase(room.floorLevel + 1, room.wallHeight) +
+                room.wallHeight
+              : ryBase + room.wallHeight
           if (py < ryBase - 0.5 || py > yTop + 0.5) continue
         }
         const key = `${house.id}:${i}`
@@ -828,7 +895,8 @@
     const { sx, sz } = getRotatedSize()
 
     const newRoom = buildRoomData(sx, sz)
-    const shouldFlattenTerrain = currentFloorLevel === 0 && currentRoomType !== 'stairwell'
+    const shouldFlattenTerrain =
+      currentFloorLevel === 0 && currentRoomType !== 'stairwell'
 
     // Build protected rects BEFORE saving (so the new room isn't included)
     const protectedRects = shouldFlattenTerrain ? buildGroundFloorRects() : []
@@ -899,8 +967,12 @@
     // Skip terrain flatten and grass removal for 2F rooms and stairwells
     if (shouldFlattenTerrain) {
       heightManager.flattenArea(
-        pos.x, pos.z, pos.x + sx, pos.z + sz,
-        targetHeight, BLEND_RADIUS,
+        pos.x,
+        pos.z,
+        pos.x + sx,
+        pos.z + sz,
+        targetHeight,
+        BLEND_RADIUS,
         (wx, wz) => isInAnyRect(protectedRects, wx, wz)
       )
       heightManager.saveAllDirty()
@@ -934,9 +1006,17 @@
     }
   }
 
-  function fillWall(count: number, variant: WallVariant, texture: number): WallConfig[] {
-    const base: WallVariant = variant === 'door' || variant === 'window' ? 'solid' : variant
-    const segs: WallConfig[] = Array.from({ length: count }, () => ({ variant: base, texture }))
+  function fillWall(
+    count: number,
+    variant: WallVariant,
+    texture: number
+  ): WallConfig[] {
+    const base: WallVariant =
+      variant === 'door' || variant === 'window' ? 'solid' : variant
+    const segs: WallConfig[] = Array.from({ length: count }, () => ({
+      variant: base,
+      texture,
+    }))
     if (variant === 'door' || variant === 'window') {
       segs[Math.floor(count / 2)] = { variant, texture }
     }

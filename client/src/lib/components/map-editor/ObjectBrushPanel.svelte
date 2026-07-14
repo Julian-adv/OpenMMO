@@ -18,9 +18,15 @@
     ObjectSubTool,
   } from '../../stores/editorStore'
   import { objectManager } from '../../managers/objectManager'
-  import { rotatedRectAabb, type FootprintRect } from '../../utils/objectFootprint'
+  import {
+    rotatedRectAabb,
+    type FootprintRect,
+  } from '../../utils/objectFootprint'
   import { removeGrassInRect } from '../../utils/grass-data'
-  import { worldToTileCoord, tileKey } from '../../managers/terrain-height-types'
+  import {
+    worldToTileCoord,
+    tileKey,
+  } from '../../managers/terrain-height-types'
   import { playerFloorLevel } from '../../stores/housingStore'
   import { currentEditorRegion } from '../../stores/editorStore'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
@@ -151,7 +157,8 @@
       const fp = await objectManager.fetchFootprint(p.type)
       if (!fp || fp.rects.length === 0) return
 
-      const buryDepth = objectManager.getCatalogEntry(p.type)?.flattenBuryDepth ?? 0
+      const buryDepth =
+        objectManager.getCatalogEntry(p.type)?.flattenBuryDepth ?? 0
       const targetY = p.y + fp.minLocalY + buryDepth
       // Flatten using the local rect + placement rotation so footprints rotated
       // off-axis (e.g. 45°) carve the right oriented region instead of bleeding
@@ -189,7 +196,10 @@
       if (!gm) return
 
       // eslint-disable-next-line svelte/prefer-svelte-reactivity
-      const tileBuckets = new Map<string, { tx: number; tz: number; rects: FootprintRect[] }>()
+      const tileBuckets = new Map<
+        string,
+        { tx: number; tz: number; rects: FootprintRect[] }
+      >()
       for (const wr of worldRects) {
         const txMin = worldToTileCoord(wr.minX)
         const txMax = worldToTileCoord(wr.maxX)
@@ -210,7 +220,8 @@
 
       await Promise.all(
         [...tileBuckets.values()].map(async ({ tx, tz, rects }) => {
-          let data = gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
+          let data =
+            gm.getCachedGrassData(tx, tz) ?? (await gm.loadGrassData(tx, tz))
           if (!data) return
           let changed = false
           for (const r of rects) {
@@ -265,13 +276,13 @@
     <button
       class="sub-tool-btn"
       class:active={subTool === 'place'}
-      onclick={() => setSubTool('place')}
-    >Place</button>
+      onclick={() => setSubTool('place')}>Place</button
+    >
     <button
       class="sub-tool-btn"
       class:active={subTool === 'select'}
-      onclick={() => setSubTool('select')}
-    >Select</button>
+      onclick={() => setSubTool('select')}>Select</button
+    >
   </div>
 
   {#if subTool === 'place'}
@@ -296,7 +307,9 @@
         <span class="rotation-hint">Press R to rotate</span>
       </div>
       <div class="rotation-display" style="margin-top: 2px">
-        <span class="rotation-value">{floor < 0 ? 'Outside' : `${floor + 1}F`}</span>
+        <span class="rotation-value"
+          >{floor < 0 ? 'Outside' : `${floor + 1}F`}</span
+        >
         <span class="rotation-hint">Follow player floor</span>
       </div>
     {:else}
@@ -347,8 +360,7 @@
               placeholder="Shown on hover…"
               bind:value={textDraft}
               onchange={flushTextDraft}
-              onblur={flushTextDraft}
-            ></textarea>
+              onblur={flushTextDraft}></textarea>
           </div>
         {/if}
         <button
@@ -369,10 +381,7 @@
     <div class="section-label">Placed ({placements.length})</div>
     <div class="placement-list">
       {#each placements as p (p.id)}
-        <div
-          class="placement-row"
-          class:active={p.id === selectedPlacementId}
-        >
+        <div class="placement-row" class:active={p.id === selectedPlacementId}>
           <span class="placement-type">{p.type}</span>
           <span class="placement-pos">{formatPos(p)}</span>
         </div>

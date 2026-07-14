@@ -473,7 +473,8 @@
 
   <T.Group bind:ref={terrainAlignedRef}>
     <T.Group
-      rotation.y={data.restingRotationY + (worldModelScene || data.spawnAnimation ? 0 : rotation)}
+      rotation.y={data.restingRotationY +
+        (worldModelScene || data.spawnAnimation ? 0 : rotation)}
       rotation.z={spawnTransform?.spinZ ?? 0}
     >
       <T.Group bind:ref={groundParentRef} />

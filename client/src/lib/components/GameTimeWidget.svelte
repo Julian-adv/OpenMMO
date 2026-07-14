@@ -149,12 +149,19 @@
     )
     let eclipseFactor = 0
     if (isDaylight && isVisible && phaseFactor > 0) {
-      const moonDir = getMoonDirection(phaseState, SUN_LATITUDE_DEG, absoluteDayIndex)
+      const moonDir = getMoonDirection(
+        phaseState,
+        SUN_LATITUDE_DEG,
+        absoluteDayIndex
+      )
       const sunDir = getSunDirection({ hour, month, day })
       const dot =
         moonDir.x * sunDir.x + moonDir.y * sunDir.y + moonDir.z * sunDir.z
       const angularSep = Math.acos(Math.max(-1, Math.min(1, dot)))
-      const directionFactor = Math.max(0, 1 - angularSep / ECLIPSE_ANGLE_THRESHOLD_RAD)
+      const directionFactor = Math.max(
+        0,
+        1 - angularSep / ECLIPSE_ANGLE_THRESHOLD_RAD
+      )
       eclipseFactor = directionFactor * phaseFactor
     }
 
@@ -163,10 +170,15 @@
       isDaylight && isVisible
         ? Math.max(
             0,
-            1 - Math.abs(xPercent - sunXPercent) / ECLIPSE_X_OVERLAP_THRESHOLD_PERCENT
+            1 -
+              Math.abs(xPercent - sunXPercent) /
+                ECLIPSE_X_OVERLAP_THRESHOLD_PERCENT
           )
         : 0
-    const visibilityModifier = Math.min(1, Math.max(0, 1 - xOverlapFactor + eclipseFactor))
+    const visibilityModifier = Math.min(
+      1,
+      Math.max(0, 1 - xOverlapFactor + eclipseFactor)
+    )
     const eclipseBoost = eclipseFactor * (1 - visibilityScale)
     const opacity = isVisible
       ? visibilityScale * visibilityModifier + eclipseBoost
@@ -191,7 +203,10 @@
     }
   }
 
-  function getMoonGlowFilter(moon: MoonVisualState, isDaylight: boolean): string {
+  function getMoonGlowFilter(
+    moon: MoonVisualState,
+    isDaylight: boolean
+  ): string {
     if (moon.eclipseFactor > 0.05) {
       const e = moon.eclipseFactor
       const innerR = Math.round(2 + e * 5)
@@ -207,7 +222,8 @@
 
   function formatGameDate() {
     const monthName =
-      MONTH_NAMES[gameTimeState.date.month - 1] ?? `Month ${gameTimeState.date.month}`
+      MONTH_NAMES[gameTimeState.date.month - 1] ??
+      `Month ${gameTimeState.date.month}`
     const day = gameTimeState.date.day.toString().padStart(2, '0')
     return `${gameTimeState.date.year} ${monthName} ${day}`
   }
@@ -227,7 +243,11 @@
     })
   }
 
-  function getSunVisualState(hour: number, sunriseHour: number, sunsetHour: number) {
+  function getSunVisualState(
+    hour: number,
+    sunriseHour: number,
+    sunsetHour: number
+  ) {
     const trackState = getSunTrackState({
       hour,
       sunriseHour,
@@ -286,7 +306,10 @@
   )
 
   $effect(() => {
-    eclipseState.factor = Math.max(0, ...moonVisuals.map((m) => m.eclipseFactor))
+    eclipseState.factor = Math.max(
+      0,
+      ...moonVisuals.map((m) => m.eclipseFactor)
+    )
   })
 </script>
 
@@ -303,7 +326,8 @@
     {:else}
       <div
         class="night-sky"
-        style="background-position-x: {nightSkyOffsetPx()}px; opacity: {1 - dayFactor}"
+        style="background-position-x: {nightSkyOffsetPx()}px; opacity: {1 -
+          dayFactor}"
       ></div>
       <img
         class="horizon"
@@ -408,13 +432,12 @@
     height: 36px;
     border-radius: 8px;
     overflow: hidden;
-    background:
-      linear-gradient(
-        180deg,
-        rgba(130, 210, 255, 0.82) 0%,
-        rgba(85, 170, 230, 0.72) 55%,
-        rgba(22, 43, 74, 0.5) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      rgba(130, 210, 255, 0.82) 0%,
+      rgba(85, 170, 230, 0.72) 55%,
+      rgba(22, 43, 74, 0.5) 100%
+    );
   }
 
   .night-sky {
@@ -461,9 +484,7 @@
     top: var(--moon-y);
     transform: translate(-50%, -50%);
     opacity: var(--moon-opacity);
-    filter:
-      saturate(var(--moon-saturation))
-      hue-rotate(var(--moon-hue))
+    filter: saturate(var(--moon-saturation)) hue-rotate(var(--moon-hue))
       var(--moon-glow);
     z-index: 2;
   }

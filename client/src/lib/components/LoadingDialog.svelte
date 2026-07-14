@@ -4,7 +4,6 @@
   }
 
   let { message = 'Loading...' }: Props = $props()
-
 </script>
 
 <div class="loading-backdrop">

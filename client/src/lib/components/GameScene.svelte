@@ -75,11 +75,24 @@
     reflectionEnabled,
     housingEditorMode,
   } from '../stores/debugStore'
-  import { editorPanOffset, editorHeightManager, editorSplatManager, editorGrassDataManager, editorTreeDataManager, editorZoneManager, terrainForceRebuild, currentObjectData } from '../stores/editorStore'
+  import {
+    editorPanOffset,
+    editorHeightManager,
+    editorSplatManager,
+    editorGrassDataManager,
+    editorTreeDataManager,
+    editorZoneManager,
+    terrainForceRebuild,
+    currentObjectData,
+  } from '../stores/editorStore'
   import { ZoneManager } from '../managers/zoneManager'
   import { initFpsCounting, tickFps } from './FPSCounter.svelte'
   import { tickWavePhase } from './WavePhaseDebug.svelte'
-  import { eclipseState, setGameDate, setGameHour } from './GameTimeWidget.svelte'
+  import {
+    eclipseState,
+    setGameDate,
+    setGameHour,
+  } from './GameTimeWidget.svelte'
   import {
     DEFAULT_CAMERA_OFFSET,
     INITIAL_DISTANCE,
@@ -94,8 +107,14 @@
   import { type TerrainTile } from './game-scene/terrain-utils'
   import { createLoopProfiler } from './game-scene/loop-profiler'
   import { createRenderProfiler } from './game-scene/render-profiler'
-  import { setupCsmShadow, applyGraphicsPreset } from './game-scene/renderer-quality'
-  import { runRenderPasses, recordRenderProfilerStats } from './game-scene/render-passes'
+  import {
+    setupCsmShadow,
+    applyGraphicsPreset,
+  } from './game-scene/renderer-quality'
+  import {
+    runRenderPasses,
+    recordRenderProfilerStats,
+  } from './game-scene/render-passes'
   import { createSceneLightingController } from './game-scene/scene-lighting'
   import { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { TerrainSplatManager } from '../managers/terrainSplatManager'
@@ -108,7 +127,10 @@
   import { initScene } from './game-scene/scene-init'
   import { createMultiPassRenderer } from './game-scene/multi-pass-rendering'
   import { OFFSCREEN_Y } from '../utils/house-geo-utils'
-  import { graphicsQuality, getEffectivePreset } from '../stores/graphicsSettings'
+  import {
+    graphicsQuality,
+    getEffectivePreset,
+  } from '../stores/graphicsSettings'
 
   interface Props {
     serverUrl: string
@@ -117,7 +139,12 @@
     isSceneCompiling?: boolean
   }
 
-  let { serverUrl, onCurrentPlayerDyingFinished, isCurrentPlayerLoading = $bindable(false), isSceneCompiling = $bindable(true) }: Props = $props()
+  let {
+    serverUrl,
+    onCurrentPlayerDyingFinished,
+    isCurrentPlayerLoading = $bindable(false),
+    isSceneCompiling = $bindable(true),
+  }: Props = $props()
 
   let currentPlayer = $state<LocalPlayer | null>(null)
   let otherPlayers = $state<Map<string, RemotePlayer>>(new Map())
@@ -134,8 +161,12 @@
   let terrainCenterChunk = $state({ x: 0, z: 0 })
   const terrainHeightManager = new TerrainHeightManager()
   const terrainSplatManager = new TerrainSplatManager()
-  const terrainGrassDataManager = new TerrainGrassDataManager(terrainHeightManager)
-  const terrainTreeDataManager = new TerrainTreeDataManager(terrainHeightManager)
+  const terrainGrassDataManager = new TerrainGrassDataManager(
+    terrainHeightManager
+  )
+  const terrainTreeDataManager = new TerrainTreeDataManager(
+    terrainHeightManager
+  )
   const waterFieldManager = new WaterFieldManager()
   monsterManager.heightManager = terrainHeightManager
   monsterManager.splatManager = terrainSplatManager
@@ -162,12 +193,18 @@
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let dungeonLayerRef = $state<GameSceneDungeonLayer | undefined>(undefined)
-  let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(undefined)
+  let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(
+    undefined
+  )
   let objectOverlayRef = $state<ObjectOverlay | undefined>(undefined)
   let signpostBubbleRef = $state<SignpostBubble | undefined>(undefined)
   let signpostBubblePos = $derived(
     $hoveredSignpost
-      ? new THREE.Vector3($hoveredSignpost.x, $hoveredSignpost.y, $hoveredSignpost.z)
+      ? new THREE.Vector3(
+          $hoveredSignpost.x,
+          $hoveredSignpost.y,
+          $hoveredSignpost.z
+        )
       : new THREE.Vector3()
   )
   let entityClipGroup = $state<ClippingGroup | undefined>(undefined)
@@ -180,9 +217,13 @@
   })()
   const waterSunDirTmp = new THREE.Vector3()
   const waterCamDirTmp = new THREE.Vector3()
-  let refractionManager = $state<import('../managers/refractionRenderManager').RefractionRenderManager | null>(null)
+  let refractionManager = $state<
+    import('../managers/refractionRenderManager').RefractionRenderManager | null
+  >(null)
   let refractionTexture = $state<THREE.Texture | null>(null)
-  let reflectionManager = $state<import('../managers/reflectionRenderManager').ReflectionRenderManager | null>(null)
+  let reflectionManager = $state<
+    import('../managers/reflectionRenderManager').ReflectionRenderManager | null
+  >(null)
   let reflectionTexture = $state<THREE.Texture | null>(null)
   let cameraInitialized = $state(false)
   let playerAttackDuration = $state(1.533) // Default from slash1 animation (data/animation_durations.json)
@@ -198,7 +239,6 @@
   const SMOOTH_FRAME_THRESHOLD = 3 // consecutive smooth frames to consider ready
   const SMOOTH_FRAME_TIME_MS = 100 // frame must be under this to count
 
-
   // Camera follow system
   let cameraTarget = $state<[number, number, number]>([0, 0, 0])
 
@@ -207,9 +247,12 @@
   const renderer = _renderer as unknown as WebGPURenderer
   let viewportSize = $state({ width: 1, height: 1 })
 
-  const CAMERA_OFFSET = import.meta.hot?.data?.cameraOffset ?? { ...DEFAULT_CAMERA_OFFSET }
+  const CAMERA_OFFSET = import.meta.hot?.data?.cameraOffset ?? {
+    ...DEFAULT_CAMERA_OFFSET,
+  }
   let _hmrCameraZoom: number | null = import.meta.hot?.data?.cameraZoom ?? null
-  let _hmrCameraInitialized: boolean = import.meta.hot?.data?.cameraInitialized ?? false
+  let _hmrCameraInitialized: boolean =
+    import.meta.hot?.data?.cameraInitialized ?? false
 
   if (import.meta.hot) {
     import.meta.hot.dispose((data) => {
@@ -247,7 +290,10 @@
     const currentRotation = $cameraRotationEnabled
 
     // Reset if debug mode was turned off OR rotation was just disabled
-    if ((prevDebugVisible && !currentDebug) || (prevRotationEnabled && !currentRotation)) {
+    if (
+      (prevDebugVisible && !currentDebug) ||
+      (prevRotationEnabled && !currentRotation)
+    ) {
       resetCameraRotation()
     }
 
@@ -318,7 +364,9 @@
     onDateChanged: setGameDate,
   })
 
-  let latestServerGameTime: import('../stores/timeStore').ServerGameTime | null = null
+  let latestServerGameTime:
+    | import('../stores/timeStore').ServerGameTime
+    | null = null
   let latestSunTimeScale = 1
 
   // Game loop
@@ -362,9 +410,13 @@
 
   const tileManager = createTerrainTileManager({
     getTiles: () => terrainTiles,
-    setTiles: (tiles) => { terrainTiles = tiles },
+    setTiles: (tiles) => {
+      terrainTiles = tiles
+    },
     getCenterChunk: () => terrainCenterChunk,
-    setCenterChunk: (chunk) => { terrainCenterChunk = chunk },
+    setCenterChunk: (chunk) => {
+      terrainCenterChunk = chunk
+    },
   })
 
   // Force terrain rebuild when requested (e.g. after region delete/generate)
@@ -433,24 +485,38 @@
         })
       }
       tileManager.updateFromPlayerPosition(currentPlayer?.position ?? null)
-      if (terrainTiles.length < graphicsPreset.terrainQueueDrainTilesBeforeStagger) {
+      if (
+        terrainTiles.length < graphicsPreset.terrainQueueDrainTilesBeforeStagger
+      ) {
         tileManager.drainQueue()
       }
       drainTileWork(graphicsPreset.terrainTileWorkPerFrame)
       syncTileMeshes()
       // Finalize teleport once full 3x3 heightmap grid is loaded.
       // Underground the dungeon owns Y — never snap to terrain height.
-      if ($teleportLoading && currentPlayer &&
-          terrainHeightManager.hasHeightDataForGrid(currentPlayer.position.x, currentPlayer.position.z)) {
+      if (
+        $teleportLoading &&
+        currentPlayer &&
+        terrainHeightManager.hasHeightDataForGrid(
+          currentPlayer.position.x,
+          currentPlayer.position.z
+        )
+      ) {
         if (!$isUnderground) {
-          currentPlayer.position.y = terrainHeightManager.getHeightAtWorldPosition(
-            currentPlayer.position.x, currentPlayer.position.z)
+          currentPlayer.position.y =
+            terrainHeightManager.getHeightAtWorldPosition(
+              currentPlayer.position.x,
+              currentPlayer.position.z
+            )
         }
         teleportLoading.set(false)
         resetCameraToInitialState()
         cameraOffset = { ...CAMERA_OFFSET }
       }
-      loopProfiler.record('playerControl', performance.now() - playerControlStart)
+      loopProfiler.record(
+        'playerControl',
+        performance.now() - playerControlStart
+      )
 
       // Update remote player interpolation
       const remoteInterpolationStart = performance.now()
@@ -503,7 +569,10 @@
           monsterModel.update(deltaTime / 1000, camera) // Convert ms to seconds for THREE.AnimationMixer
         }
       }
-      loopProfiler.record('monsterAnimation', performance.now() - monsterAnimationStart)
+      loopProfiler.record(
+        'monsterAnimation',
+        performance.now() - monsterAnimationStart
+      )
 
       // Update monster spawning logic
       const monsterLogicStart = performance.now()
@@ -559,7 +628,8 @@
         const windStart = performance.now()
         const windState = grassLayerRef?.getWindState()
         const grassCount = grassLayerRef?.getPlayerChunkGrassCount() ?? 0
-        if (windState) windParticlesRef?.update(deltaTime, camera, windState, grassCount)
+        if (windState)
+          windParticlesRef?.update(deltaTime, camera, windState, grassCount)
         loopProfiler.record('windParticles', performance.now() - windStart)
       }
 
@@ -585,12 +655,17 @@
       tickWavePhase(waterTime)
       // Shore-spray pulses ride the same swell clock as the water shader.
       shoreSprayRef?.update(deltaTime, camera, waterTime)
-      waterSunDirTmp.set(sunSnapshot.direction.x, sunSnapshot.direction.y, sunSnapshot.direction.z)
+      waterSunDirTmp.set(
+        sunSnapshot.direction.x,
+        sunSnapshot.direction.y,
+        sunSnapshot.direction.z
+      )
       waterSunDir = waterSunDirTmp.clone()
       if (directionalLight) {
         waterSunColor = directionalLight.color.clone()
         // Moon brightness: use directional light intensity when sun is below horizon
-        waterMoonBrightness = waterSunDirTmp.y <= 0 ? directionalLight.intensity : 0
+        waterMoonBrightness =
+          waterSunDirTmp.y <= 0 ? directionalLight.intensity : 0
       }
       if (camera) {
         camera.getWorldDirection(waterCamDirTmp)
@@ -686,7 +761,10 @@
       // so we must not feed back the computed offset which includes the pan).
       if (camera.zoom < 1) {
         const maxBelow = INITIAL_DISTANCE / Math.SQRT2
-        const scale = Math.max(1, (ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2) / (camera.zoom * maxBelow))
+        const scale = Math.max(
+          1,
+          ORTHOGRAPHIC_FRUSTUM_HEIGHT / 2 / (camera.zoom * maxBelow)
+        )
         cameraTarget = applyCameraOffset(camera, panPos, {
           x: CAMERA_OFFSET.x * scale,
           y: CAMERA_OFFSET.y * scale,
@@ -710,7 +788,10 @@
     cameraDistance.set(camera.zoom)
   }
 
-  function updateLightPosition(sunLightSnapshot: SunLightSnapshot, calDate: CalendarDate) {
+  function updateLightPosition(
+    sunLightSnapshot: SunLightSnapshot,
+    calDate: CalendarDate
+  ) {
     sceneLighting.update({
       currentPlayerPosition: currentPlayer?.position ?? null,
       localCalendarDate: calDate,
@@ -740,7 +821,9 @@
     const cleanupDebugConsole = registerDebugConsole(() => ({
       loopProfiler,
       getLoopProfileEnabled: () => loopProfileEnabled,
-      setLoopProfileEnabled: (v) => { loopProfileEnabled = v },
+      setLoopProfileEnabled: (v) => {
+        loopProfileEnabled = v
+      },
       renderer,
       scene,
       getGrassGroup: () => grassLayerRef?.getGroup(),
@@ -749,7 +832,10 @@
       refractionEnabled,
       reflectionEnabled,
       splatManager: terrainSplatManager,
-      getPlayerPos: () => currentPlayer ? { x: currentPlayer.position.x, z: currentPlayer.position.z } : null,
+      getPlayerPos: () =>
+        currentPlayer
+          ? { x: currentPlayer.position.x, z: currentPlayer.position.z }
+          : null,
     }))
     {
       const initHour = calendarSystem.getGameHour()
@@ -758,14 +844,20 @@
 
     const unsubscribeServerGameTime = serverGameTime.subscribe((gameTime) => {
       latestServerGameTime = gameTime
-      calendarSystem.applyServerTimeIfAllowed(latestServerGameTime, latestSunTimeScale)
+      calendarSystem.applyServerTimeIfAllowed(
+        latestServerGameTime,
+        latestSunTimeScale
+      )
     })
 
     const unsubscribeSunTimeScale = sunTimeScale.subscribe((scale) => {
       const wasFastSun = latestSunTimeScale > 1
       latestSunTimeScale = scale
       if (wasFastSun && scale <= 1) {
-        calendarSystem.applyServerTimeIfAllowed(latestServerGameTime, latestSunTimeScale)
+        calendarSystem.applyServerTimeIfAllowed(
+          latestServerGameTime,
+          latestSunTimeScale
+        )
       }
     })
 
@@ -785,14 +877,24 @@
       }
     })
 
-    const sceneRes = initScene(renderer, scene, viewportSize.width, viewportSize.height, {
-      skipWaterLayer: !graphicsPreset.enableWaterLayer,
-      skipWaterEffects: !graphicsPreset.enableWaterEffects,
-    })
+    const sceneRes = initScene(
+      renderer,
+      scene,
+      viewportSize.width,
+      viewportSize.height,
+      {
+        skipWaterLayer: !graphicsPreset.enableWaterLayer,
+        skipWaterEffects: !graphicsPreset.enableWaterEffects,
+      }
+    )
     terrainGeometry = sceneRes.terrainGeometry
     waterNormalMap = sceneRes.waterNormalMap
-    sceneRes.waterFoamMapPromise.then((tex) => { waterFoamMap = tex })
-    sceneRes.waterCausticsMapPromise.then((tex) => { waterCausticsMap = tex })
+    sceneRes.waterFoamMapPromise.then((tex) => {
+      waterFoamMap = tex
+    })
+    sceneRes.waterCausticsMapPromise.then((tex) => {
+      waterCausticsMap = tex
+    })
     refractionManager = sceneRes.refractionManager
     refractionTexture = sceneRes.refractionTexture
     reflectionManager = sceneRes.reflectionManager
@@ -814,8 +916,12 @@
       terrainTiles,
       heightManager: terrainHeightManager,
       playerPosition: currentPlayer?.position ?? null,
-      grassLayerRef: graphicsPreset.enableGrassLayer ? grassLayerRef : undefined,
-      housingLayerRef: graphicsPreset.enableHousingLayer ? housingLayerRef : undefined,
+      grassLayerRef: graphicsPreset.enableGrassLayer
+        ? grassLayerRef
+        : undefined,
+      housingLayerRef: graphicsPreset.enableHousingLayer
+        ? housingLayerRef
+        : undefined,
       graphicsPreset,
     }).then(() => {
       // Mark data as ready. Threlte's render loop compiles WebGPU pipelines
@@ -891,7 +997,9 @@
   zoom={ORTHOGRAPHIC_DEFAULT_ZOOM}
 >
   <OrbitControls
-    enableRotate={$mapEditorMode || $housingEditorMode ? false : $cameraRotationEnabled}
+    enableRotate={$mapEditorMode || $housingEditorMode
+      ? false
+      : $cameraRotationEnabled}
     enablePan={false}
     enableZoom={!$mapEditorMode && !$housingEditorMode}
     enabled={!$mapEditorMode && !$housingEditorMode}
@@ -940,9 +1048,9 @@
 <GameSceneTerrainLayer
   {terrainGeometry}
   {terrainTiles}
-  bind:terrainMeshes={terrainMeshes}
-  bind:terrainGroup={terrainGroup}
-  bind:syncTileMeshes={syncTileMeshes}
+  bind:terrainMeshes
+  bind:terrainGroup
+  bind:syncTileMeshes
   heightManager={terrainHeightManager}
   splatManager={terrainSplatManager}
   terrainMaterialPrecompilePoolSize={graphicsPreset.terrainMaterialPrecompilePoolSize}
@@ -1008,7 +1116,7 @@
     refractionMap={refractionTexture}
     reflectionMap={reflectionTexture}
     torchLight={waterTorchLight}
-    bind:waterGroup={waterGroup}
+    bind:waterGroup
   />
   <GameSceneRiverRocksLayer
     bind:this={riverRocksRef}
@@ -1050,7 +1158,9 @@
     ]}
     objectMeshes={objectOverlayRef ? [objectOverlayRef.getGroup()] : []}
     propMeshes={dungeonLayerRef?.getPropMeshes() ?? []}
-    groundItemMeshes={groundItemsLayerRef?.getGroup() ? [groundItemsLayerRef.getGroup()!] : []}
+    groundItemMeshes={groundItemsLayerRef?.getGroup()
+      ? [groundItemsLayerRef.getGroup()!]
+      : []}
     {monsterModels}
     {playerAttackDuration}
     torchEffectsDisabled={!graphicsPreset.enableTorchEffects}
@@ -1061,15 +1171,15 @@
     onPlayerControlEvent={enqueuePlayerControlEvent}
     onAttackDuration={(duration) => (playerAttackDuration = duration)}
     {onCurrentPlayerDyingFinished}
-    bind:isCurrentPlayerLoading={isCurrentPlayerLoading}
-    bind:playerControl={playerControl}
-    bind:currentPlayerModel={currentPlayerModel}
-    bind:otherPlayerModels={otherPlayerModels}
+    bind:isCurrentPlayerLoading
+    bind:playerControl
+    bind:currentPlayerModel
+    bind:otherPlayerModels
   />
 
   <GameSceneMonstersLayer
     monsters={monsterManager.monsters}
-    bind:monsterModels={monsterModels}
+    bind:monsterModels
   />
 
   <GameSceneGroundItemsLayer
@@ -1079,7 +1189,14 @@
 </T>
 
 {#if $mapEditorMode}
-  <MapEditorCursor {camera} {terrainMeshes} {terrainTiles} heightManager={terrainHeightManager} splatManager={terrainSplatManager} grassDataManager={terrainGrassDataManager} />
+  <MapEditorCursor
+    {camera}
+    {terrainMeshes}
+    {terrainTiles}
+    heightManager={terrainHeightManager}
+    splatManager={terrainSplatManager}
+    grassDataManager={terrainGrassDataManager}
+  />
   <ZoneOverlay />
   <RoadOverlay />
   <NpcWaypointOverlay />
@@ -1096,5 +1213,11 @@
 {/if}
 
 {#if $housingEditorMode}
-  <HousingEditorCursor {camera} {terrainMeshes} heightManager={terrainHeightManager} grassDataManager={terrainGrassDataManager} housingGroup={housingLayerRef?.getGroup() ?? null} />
+  <HousingEditorCursor
+    {camera}
+    {terrainMeshes}
+    heightManager={terrainHeightManager}
+    grassDataManager={terrainGrassDataManager}
+    housingGroup={housingLayerRef?.getGroup() ?? null}
+  />
 {/if}

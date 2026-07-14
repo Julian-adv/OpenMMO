@@ -1,7 +1,11 @@
 <script lang="ts">
   import { bgmVolume, bgmMuted } from '../managers/bgmManager'
   import { sfxVolume, sfxMuted } from '../managers/sfxManager'
-  import { graphicsQuality, reloadNeeded, type QualityLevel } from '../stores/graphicsSettings'
+  import {
+    graphicsQuality,
+    reloadNeeded,
+    type QualityLevel,
+  } from '../stores/graphicsSettings'
   import VolumeControl from './VolumeControl.svelte'
 
   interface Props {
@@ -42,7 +46,9 @@
       {#if $reloadNeeded}
         <div class="reload-notice">
           <span>Antialiasing changes require restart</span>
-          <button class="reload-btn" onclick={() => location.reload()}>Restart</button>
+          <button class="reload-btn" onclick={() => location.reload()}
+            >Restart</button
+          >
         </div>
       {/if}
     </div>
@@ -50,11 +56,21 @@
     <div class="divider"></div>
 
     <div class="setting-row">
-      <VolumeControl id="bgm-volume" label="BGM Volume" volume={bgmVolume} muted={bgmMuted} />
+      <VolumeControl
+        id="bgm-volume"
+        label="BGM Volume"
+        volume={bgmVolume}
+        muted={bgmMuted}
+      />
     </div>
 
     <div class="setting-row sfx-row">
-      <VolumeControl id="sfx-volume" label="Sound Effects" volume={sfxVolume} muted={sfxMuted} />
+      <VolumeControl
+        id="sfx-volume"
+        label="Sound Effects"
+        volume={sfxVolume}
+        muted={sfxMuted}
+      />
     </div>
   </div>
 </div>
@@ -90,7 +106,8 @@
     margin: 0;
     color: #edf2f7;
     font-size: 18px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .close-btn {
@@ -127,7 +144,8 @@
     color: #a0aec0;
     font-size: 13px;
     font-weight: 500;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .quality-row {
@@ -146,9 +164,12 @@
     border: none;
     font-size: 13px;
     font-weight: 500;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     cursor: pointer;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .quality-btn:not(:last-child) {
@@ -176,7 +197,8 @@
     border-radius: 6px;
     font-size: 12px;
     color: #ecc94b;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .reload-btn {
@@ -186,7 +208,8 @@
     border-radius: 4px;
     padding: 3px 10px;
     font-size: 12px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     cursor: pointer;
     transition: background 150ms ease;
     flex-shrink: 0;

@@ -19,7 +19,10 @@
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import type { TerrainSplatManager } from '../../managers/terrainSplatManager'
-  import { loadSplatLayers, buildSplatAtlas } from '../../utils/splatLayerLoader'
+  import {
+    loadSplatLayers,
+    buildSplatAtlas,
+  } from '../../utils/splatLayerLoader'
   import type { SplatAtlasSet } from '../../utils/splatLayerLoader'
   import { mapEditorMode, gridVisible } from '../../stores/debugStore'
   import {
@@ -71,7 +74,7 @@
     1,
     1,
     THREE.RGBAFormat,
-    THREE.UnsignedByteType,
+    THREE.UnsignedByteType
   )
   defaultSplat.wrapS = defaultSplat.wrapT = THREE.ClampToEdgeWrapping
   defaultSplat.minFilter = THREE.LinearFilter
@@ -93,7 +96,12 @@
   const holeUnsub = currentDungeonId.subscribe((id) => {
     const rect = id ? dungeonManager.entranceHoleRect() : null
     if (rect) {
-      holeUniforms.holeRect.value.set(rect.minX, rect.minZ, rect.maxX, rect.maxZ)
+      holeUniforms.holeRect.value.set(
+        rect.minX,
+        rect.minZ,
+        rect.maxX,
+        rect.maxZ
+      )
       holeUniforms.holeActive.value = 1.0
     } else {
       holeUniforms.holeActive.value = 0.0
@@ -177,7 +185,13 @@
   }
 
   $effect(() => {
-    if (materialsReady && renderer && camera && terrainGeometry && !poolPrecompiled) {
+    if (
+      materialsReady &&
+      renderer &&
+      camera &&
+      terrainGeometry &&
+      !poolPrecompiled
+    ) {
       preseedAndPrecompilePool()
     }
   })
@@ -258,7 +272,9 @@
     const geo = geometryPool.pop()
     if (geo && templatePositions && templateNormals) {
       // Fast memcpy reset to flat plane — avoids full clone cost
-      ;(geo.getAttribute('position').array as Float32Array).set(templatePositions)
+      ;(geo.getAttribute('position').array as Float32Array).set(
+        templatePositions
+      )
       geo.getAttribute('position').needsUpdate = true
       ;(geo.getAttribute('normal').array as Float32Array).set(templateNormals)
       geo.getAttribute('normal').needsUpdate = true
@@ -308,8 +324,7 @@
     }
 
     function sync() {
-      brushUniforms.gridVisible.value =
-        editorActive || gridOn ? 1.0 : 0.0
+      brushUniforms.gridVisible.value = editorActive || gridOn ? 1.0 : 0.0
       if (editorActive && pos) {
         brushUniforms.brushActive.value = 1.0
         brushUniforms.brushCenter.value.set(pos.x, pos.z)
@@ -347,7 +362,7 @@
       editorTool.subscribe((v) => {
         tool = v
         sync()
-      }),
+      })
     )
   }
 

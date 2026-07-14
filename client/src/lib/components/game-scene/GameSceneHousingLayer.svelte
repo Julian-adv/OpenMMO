@@ -36,8 +36,15 @@
     TERRAIN_TILE_SIZE,
     getTerrainChunkFromPosition,
   } from './terrain-utils'
-  import { playerFloorOffset, playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
-  import { debugVisible, passabilityDebugVisible } from '../../stores/debugStore'
+  import {
+    playerFloorOffset,
+    playerFloorLevel,
+    playerInsideHouseId,
+  } from '../../stores/housingStore'
+  import {
+    debugVisible,
+    passabilityDebugVisible,
+  } from '../../stores/debugStore'
   import { pushPassabilityEdges } from '../../utils/passability-wireframe'
   import { get } from 'svelte/store'
 
@@ -193,15 +200,21 @@
     }
   }
 
-  const isOpenReplacer = (_k: string, v: unknown) => _k === 'isOpen' ? undefined : v
+  const isOpenReplacer = (_k: string, v: unknown) =>
+    _k === 'isOpen' ? undefined : v
 
   /** Returns true if the only changes were door isOpen flags (no geometry rebuild needed). */
-  function syncDoorStates(existing: HouseGroupResult, data: HouseData, newHash: string): boolean {
+  function syncDoorStates(
+    existing: HouseGroupResult,
+    data: HouseData,
+    newHash: string
+  ): boolean {
     // Compare geometry excluding isOpen — both sides stripped from their full hashes
     if (
       JSON.stringify(JSON.parse(newHash), isOpenReplacer) !==
       JSON.stringify(JSON.parse(existing.roomsHash), isOpenReplacer)
-    ) return false
+    )
+      return false
 
     for (const door of existing.doors) {
       const room = data.rooms[door.roomIndex]
@@ -252,7 +265,8 @@
         playerPosition.x > result.aabb.max.x ||
         playerPosition.z < result.aabb.min.z ||
         playerPosition.z > result.aabb.max.z
-      ) continue
+      )
+        continue
 
       // Try all floor levels to find matching rooms
       _allRooms.length = 0
@@ -277,10 +291,10 @@
       // stairwells at the same XZ — the player smoothly transitions
       // onto the nearest one rather than jumping to a distant floor.
       const currentFL = Math.max(0, playerInsideFloor)
-      let stairResult: typeof _allRooms[0] | null = null
+      let stairResult: (typeof _allRooms)[0] | null = null
       let bestStairDist = Infinity
       let bestStairOffset = 0
-      let floorResult: typeof _allRooms[0] | null = null
+      let floorResult: (typeof _allRooms)[0] | null = null
       for (const roomResult of _allRooms) {
         if (roomResult.house.id !== id) continue
         const room = roomResult.house.rooms[roomResult.roomIndex]
@@ -292,7 +306,8 @@
             playerInsideFloor >= 0 &&
             (playerInsideFloor > room.floorLevel + 1 ||
               playerInsideFloor < room.floorLevel)
-          ) continue
+          )
+            continue
           const offset = getStairwellYOffset(
             room,
             roomResult.house.origin.x,
@@ -324,11 +339,13 @@
         newOffset = terrainComp + bestStairOffset
         const entryFloor = room.floorLevel
         const exitFloor = room.floorLevel + 1
-        const entryFloorY = terrainComp + floorYBase(entryFloor, room.wallHeight)
+        const entryFloorY =
+          terrainComp + floorYBase(entryFloor, room.wallHeight)
         // Hysteresis: transition at 95% of stairwell rise to avoid flickering
         const exitThreshold =
           entryFloorY +
-          (terrainComp + floorYBase(exitFloor, room.wallHeight) - entryFloorY) * 0.95
+          (terrainComp + floorYBase(exitFloor, room.wallHeight) - entryFloorY) *
+            0.95
         if (playerInsideFloor <= entryFloor) {
           effectiveFloor = newOffset >= exitThreshold ? exitFloor : entryFloor
         } else {
@@ -399,7 +416,14 @@
     // Mark-and-sweep to avoid per-frame Set allocation
     for (const [id, result] of houses) {
       if (id === currentInsideHouseId) continue
-      if (houseOccludesPlayer(result.roomAABBs, playerPosition.x, playerPosition.y, playerPosition.z)) {
+      if (
+        houseOccludesPlayer(
+          result.roomAABBs,
+          playerPosition.x,
+          playerPosition.y,
+          playerPosition.z
+        )
+      ) {
         if (!occludedHouseIds.has(id)) {
           occludedHouseIds.add(id)
           applyOcclusionVisibility(result)
@@ -417,10 +441,7 @@
    * Higher floors: hide front, back, and floor; keep stair visible
    * Lower floors: fully visible
    */
-  function applyFloorVisibility(
-    result: HouseGroupResult,
-    floor: number
-  ) {
+  function applyFloorVisibility(result: HouseGroupResult, floor: number) {
     for (const [fl, groups] of result.floorGroups) {
       if (fl === floor) {
         groups.front.position.y = OFFSCREEN_Y
@@ -557,8 +578,10 @@
       warmupGroup.add(mesh)
     }
 
-    for (let i = 0; i < HOUSING_TEXTURES.length; i++) addDummy(getHousingMaterial(i))
-    for (const idx of [WOOD_TEXTURE_IDX, SHUTTER_PANEL_TEXTURE_IDX]) addDummy(getGhostHousingMaterial(idx))
+    for (let i = 0; i < HOUSING_TEXTURES.length; i++)
+      addDummy(getHousingMaterial(i))
+    for (const idx of [WOOD_TEXTURE_IDX, SHUTTER_PANEL_TEXTURE_IDX])
+      addDummy(getGhostHousingMaterial(idx))
 
     housingGroup.add(warmupGroup)
 

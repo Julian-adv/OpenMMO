@@ -164,11 +164,10 @@
   <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent />
 </T.Mesh>
 
-<T.Mesh
-  position={[0, PLATFORM_Y, CHARACTER_Z]}
-  receiveShadow
->
-  <T.CylinderGeometry args={[PLATFORM_RADIUS, PLATFORM_RADIUS, PLATFORM_THICKNESS, 40]} />
+<T.Mesh position={[0, PLATFORM_Y, CHARACTER_Z]} receiveShadow>
+  <T.CylinderGeometry
+    args={[PLATFORM_RADIUS, PLATFORM_RADIUS, PLATFORM_THICKNESS, 40]}
+  />
   <T.MeshStandardMaterial color="#2f3f52" opacity={1.0} transparent />
 </T.Mesh>
 

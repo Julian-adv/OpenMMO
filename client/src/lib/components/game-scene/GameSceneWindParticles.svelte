@@ -99,12 +99,12 @@
   function createParticleMesh(
     material: THREE.Material,
     width: number,
-    height: number,
+    height: number
   ): THREE.InstancedMesh {
     const geom = new THREE.PlaneGeometry(width, height)
     geom.setAttribute(
       PARTICLE_OPACITY_ATTR,
-      new THREE.InstancedBufferAttribute(new Float32Array(MAX_PER_TYPE), 1),
+      new THREE.InstancedBufferAttribute(new Float32Array(MAX_PER_TYPE), 1)
     )
 
     const mesh = new THREE.InstancedMesh(geom, material, MAX_PER_TYPE)
@@ -128,17 +128,17 @@
     dandelionMesh = createParticleMesh(
       createWindParticleMaterial(dandelionTex),
       1,
-      1,
+      1
     )
     grassLeafMesh = createParticleMesh(
       createWindParticleMaterial(grassLeafTex),
       0.4,
-      1,
+      1
     )
     petalMesh = createParticleMesh(
       createWindParticleMaterial(petalTex),
       0.5,
-      0.7,
+      0.7
     )
 
     initialized = true
@@ -168,7 +168,7 @@
     px: number,
     py: number,
     pz: number,
-    type: ParticleType,
+    type: ParticleType
   ) {
     const slot = pool.findIndex((p) => !p.alive)
     if (slot === -1) return
@@ -237,10 +237,10 @@
     mesh: THREE.InstancedMesh,
     dt: number,
     windState: WindState,
-    type: ParticleType,
+    type: ParticleType
   ): number {
     const opacityAttr = mesh.geometry.getAttribute(
-      PARTICLE_OPACITY_ATTR,
+      PARTICLE_OPACITY_ATTR
     ) as THREE.InstancedBufferAttribute
     const opacityArr = opacityAttr.array as Float32Array
     let alive = 0
@@ -351,7 +351,7 @@
   function syncMeshToScene(
     mesh: THREE.InstancedMesh,
     prevAlive: number,
-    nowAlive: number,
+    nowAlive: number
   ) {
     if (nowAlive > 0) {
       if (mesh.parent) particleGroup.remove(mesh)
@@ -366,7 +366,7 @@
     deltaTime: number,
     camera: THREE.Camera | undefined,
     windState: WindState | undefined,
-    nearbyGrassCount = 0,
+    nearbyGrassCount = 0
   ) {
     if (!windState || !camera) return
 
@@ -427,22 +427,16 @@
       dandelionMesh!,
       dt,
       windState,
-      'dandelion',
+      'dandelion'
     )
     grassLeafAlive = updatePool(
       grassLeafPool,
       grassLeafMesh!,
       dt,
       windState,
-      'grass',
+      'grass'
     )
-    petalAlive = updatePool(
-      petalPool,
-      petalMesh!,
-      dt,
-      windState,
-      'petal',
-    )
+    petalAlive = updatePool(petalPool, petalMesh!, dt, windState, 'petal')
 
     // Only touch scene graph for meshes that need GPU re-upload
     syncMeshToScene(dandelionMesh!, prevDandelion, dandelionAlive)

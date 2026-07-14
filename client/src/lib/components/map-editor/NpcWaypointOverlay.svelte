@@ -46,10 +46,32 @@
 
   // Shared circle geometry and materials
   const circleGeo = new THREE.CircleGeometry(CIRCLE_RADIUS, 32)
-  const homeMat = new THREE.MeshBasicMaterial({ color: HOME_COLOR, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
-  const waypointMat = new THREE.MeshBasicMaterial({ color: WAYPOINT_COLOR, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
-  const dragMat = new THREE.MeshBasicMaterial({ color: DRAG_COLOR, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
-  const lineMat = new THREE.LineBasicMaterial({ color: LINE_COLOR, linewidth: 2, depthWrite: false })
+  const homeMat = new THREE.MeshBasicMaterial({
+    color: HOME_COLOR,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+  const waypointMat = new THREE.MeshBasicMaterial({
+    color: WAYPOINT_COLOR,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+  const dragMat = new THREE.MeshBasicMaterial({
+    color: DRAG_COLOR,
+    transparent: true,
+    opacity: 0.7,
+    side: THREE.DoubleSide,
+    depthWrite: false,
+  })
+  const lineMat = new THREE.LineBasicMaterial({
+    color: LINE_COLOR,
+    linewidth: 2,
+    depthWrite: false,
+  })
 
   // Label sprite cache — plain Map because getLabelMaterial is called from
   // template expressions, and SvelteMap.set() triggers state_unsafe_mutation.
@@ -72,7 +94,11 @@
     ctx.fillText(text, 32, 32)
 
     const texture = new THREE.CanvasTexture(canvas)
-    mat = new THREE.SpriteMaterial({ map: texture, depthWrite: false, depthTest: false })
+    mat = new THREE.SpriteMaterial({
+      map: texture,
+      depthWrite: false,
+      depthTest: false,
+    })
     labelTextures.set(text, mat)
     return mat
   }
@@ -133,11 +159,18 @@
     }
     // Close the loop back to home
     const home = markers[0]
-    points.push(home.x, mgr.getHeightAtWorldPosition(home.x, home.z) + lineYOff, home.z)
+    points.push(
+      home.x,
+      mgr.getHeightAtWorldPosition(home.x, home.z) + lineYOff,
+      home.z
+    )
 
     prevLineGeo?.dispose()
     const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(points), 3))
+    geo.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(new Float32Array(points), 3)
+    )
     prevLineGeo = geo
     return geo
   })

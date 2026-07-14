@@ -16,7 +16,8 @@
 </script>
 
 <span class="gold-amount"
-  >{display.negative ? '-' : ''}{#each display.segments as seg, i (seg.cls)}{i > 0
+  >{display.negative ? '-' : ''}{#each display.segments as seg, i (seg.cls)}{i >
+    0
       ? ' '
       : ''}<span class={seg.cls}>{seg.text}</span>{/each}</span
 >

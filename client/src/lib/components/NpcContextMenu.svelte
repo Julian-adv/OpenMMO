@@ -12,7 +12,10 @@
   const menuStyle = $derived.by(() => {
     if (!menu) return ''
     const x = Math.min(menu.screenX, window.innerWidth - 150)
-    const y = Math.min(menu.screenY, window.innerHeight - 40 * (menu.entries.length + 1))
+    const y = Math.min(
+      menu.screenY,
+      window.innerHeight - 40 * (menu.entries.length + 1)
+    )
     return `left: ${x}px; top: ${y}px;`
   })
 </script>
@@ -27,10 +30,19 @@
     onpointerdown={closeNpcContextMenu}
     oncontextmenu={(e) => e.preventDefault()}
   ></div>
-  <div class="npc-menu" style={menuStyle} role="menu" aria-label="{menu.npcName} actions">
+  <div
+    class="npc-menu"
+    style={menuStyle}
+    role="menu"
+    aria-label="{menu.npcName} actions"
+  >
     <div class="menu-title">{menu.npcName}</div>
     {#each menu.entries as entry (entry.label)}
-      <button class="menu-entry" role="menuitem" onclick={() => runEntry(entry.action)}>
+      <button
+        class="menu-entry"
+        role="menuitem"
+        onclick={() => runEntry(entry.action)}
+      >
         {entry.label}
       </button>
     {/each}

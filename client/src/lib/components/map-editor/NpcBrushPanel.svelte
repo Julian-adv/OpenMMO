@@ -97,7 +97,9 @@
       <div class="section-label">Known NPCs</div>
       <div class="npc-list">
         {#each names as name (name)}
-          <button class="npc-name-btn" onclick={() => selectNpcByName(name)}>{name}</button>
+          <button class="npc-name-btn" onclick={() => selectNpcByName(name)}
+            >{name}</button
+          >
         {/each}
       </div>
     {/if}
@@ -137,7 +139,9 @@
             <div class="coord-row waypoint">
               <span class="wp-num">#{i + 1}</span>
               <span class="coord-text">{formatPos(wp)}</span>
-              <button class="delete-btn" onclick={() => removeWaypoint(i)}>x</button>
+              <button class="delete-btn" onclick={() => removeWaypoint(i)}
+                >x</button
+              >
             </div>
           {/each}
           {#if entry.waypoints.length === 0}
@@ -151,7 +155,13 @@
       </button>
     {/if}
 
-    <button class="deselect-btn" onclick={() => { selectedNpc.set(null); selectedNpcSchedule.set(null) }}>
+    <button
+      class="deselect-btn"
+      onclick={() => {
+        selectedNpc.set(null)
+        selectedNpcSchedule.set(null)
+      }}
+    >
       Deselect
     </button>
   {/if}

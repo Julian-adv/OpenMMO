@@ -1,5 +1,9 @@
 <script lang="ts">
-  import { hoveredCell, editorTool, currentEditorRegion } from '../../stores/editorStore'
+  import {
+    hoveredCell,
+    editorTool,
+    currentEditorRegion,
+  } from '../../stores/editorStore'
   import HeightBrushPanel from './HeightBrushPanel.svelte'
   import SplatBrushPanel from './SplatBrushPanel.svelte'
   import ZoneBrushPanel from './ZoneBrushPanel.svelte'
@@ -11,8 +15,7 @@
   MAP EDITOR{#if $hoveredCell}
     <span class="cell-info">
       {#if $currentEditorRegion}R({$currentEditorRegion.rx}, {$currentEditorRegion.rz}){/if}
-      T({$hoveredCell.tileX}, {$hoveredCell.tileZ})
-      C({$hoveredCell.cellX}, {$hoveredCell.cellZ})
+      T({$hoveredCell.tileX}, {$hoveredCell.tileZ}) C({$hoveredCell.cellX}, {$hoveredCell.cellZ})
     </span>
   {/if}
 </div>
@@ -21,33 +24,33 @@
     <button
       class="tool-tab"
       class:active={$editorTool === 'height'}
-      onclick={() => editorTool.set('height')}
-    >Height</button>
+      onclick={() => editorTool.set('height')}>Height</button
+    >
     <button
       class="tool-tab"
       class:active={$editorTool === 'splat'}
-      onclick={() => editorTool.set('splat')}
-    >Splat</button>
+      onclick={() => editorTool.set('splat')}>Splat</button
+    >
     <button
       class="tool-tab"
       class:active={$editorTool === 'road'}
-      onclick={() => editorTool.set('road')}
-    >Road</button>
+      onclick={() => editorTool.set('road')}>Road</button
+    >
     <button
       class="tool-tab"
       class:active={$editorTool === 'zone'}
-      onclick={() => editorTool.set('zone')}
-    >Zone</button>
+      onclick={() => editorTool.set('zone')}>Zone</button
+    >
     <button
       class="tool-tab"
       class:active={$editorTool === 'npc'}
-      onclick={() => editorTool.set('npc')}
-    >NPC</button>
+      onclick={() => editorTool.set('npc')}>NPC</button
+    >
     <button
       class="tool-tab"
       class:active={$editorTool === 'object'}
-      onclick={() => editorTool.set('object')}
-    >Object</button>
+      onclick={() => editorTool.set('object')}>Object</button
+    >
   </div>
   {#if $editorTool === 'height'}
     <HeightBrushPanel />
@@ -121,7 +124,9 @@
     font-size: 12px;
     font-weight: bold;
     letter-spacing: 0.5px;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .tool-tab:hover {

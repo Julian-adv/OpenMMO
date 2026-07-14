@@ -1,8 +1,48 @@
 <script lang="ts">
   import * as THREE from 'three'
   import { onMount } from 'svelte'
-  import { hoveredCell, brushSize, brushStrength, brushRaiseMode, brushMode, brushWorldPos, cursorHeight, editorTool, splatLayer, editorPanOffset, currentEditorRegion, editorHeightManager, editorSplatManager, zoneDrawStart, zoneSubTool, editorZoneManager, currentZoneData, spawnFormMonsterType, spawnFormMaxPerPlayer, spawnFormMaxTotal, spawnFormIntervalSecs, noSpawnFormLabel, npcNames, selectedNpc, selectedNpcSchedule, selectedScheduleIndex, draggingWaypointIndex, selectedObjectType, objectRotation, currentObjectData, selectedObjectPlacementId, objectPreviewPos, objectSubTool, roadDrawStart } from '../../stores/editorStore'
-  import type { EditorTool, ZoneSubTool, ObjectSubTool, ObjectRegionData } from '../../stores/editorStore'
+  import {
+    hoveredCell,
+    brushSize,
+    brushStrength,
+    brushRaiseMode,
+    brushMode,
+    brushWorldPos,
+    cursorHeight,
+    editorTool,
+    splatLayer,
+    editorPanOffset,
+    currentEditorRegion,
+    editorHeightManager,
+    editorSplatManager,
+    zoneDrawStart,
+    zoneSubTool,
+    editorZoneManager,
+    currentZoneData,
+    spawnFormMonsterType,
+    spawnFormMaxPerPlayer,
+    spawnFormMaxTotal,
+    spawnFormIntervalSecs,
+    noSpawnFormLabel,
+    npcNames,
+    selectedNpc,
+    selectedNpcSchedule,
+    selectedScheduleIndex,
+    draggingWaypointIndex,
+    selectedObjectType,
+    objectRotation,
+    currentObjectData,
+    selectedObjectPlacementId,
+    objectPreviewPos,
+    objectSubTool,
+    roadDrawStart,
+  } from '../../stores/editorStore'
+  import type {
+    EditorTool,
+    ZoneSubTool,
+    ObjectSubTool,
+    ObjectRegionData,
+  } from '../../stores/editorStore'
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
   import { objectManager } from '../../managers/objectManager'
@@ -33,7 +73,14 @@
     grassDataManager: TerrainGrassDataManager | null
   }
 
-  let { camera, terrainMeshes, terrainTiles: _terrainTiles, heightManager, splatManager, grassDataManager = null }: Props = $props()
+  let {
+    camera,
+    terrainMeshes,
+    terrainTiles: _terrainTiles,
+    heightManager,
+    splatManager,
+    grassDataManager = null,
+  }: Props = $props()
 
   let isPainting = $state(false)
   let isPanning = $state(false)
@@ -145,8 +192,14 @@
     const localX = hit.point.x - mesh.position.x
     const localZ = hit.point.z - mesh.position.z
 
-    const cellX = Math.max(0, Math.min(63, Math.floor(localX + TERRAIN_TILE_SIZE / 2)))
-    const cellZ = Math.max(0, Math.min(63, Math.floor(localZ + TERRAIN_TILE_SIZE / 2)))
+    const cellX = Math.max(
+      0,
+      Math.min(63, Math.floor(localX + TERRAIN_TILE_SIZE / 2))
+    )
+    const cellZ = Math.max(
+      0,
+      Math.min(63, Math.floor(localZ + TERRAIN_TILE_SIZE / 2))
+    )
 
     const tileX = Math.round(mesh.position.x / TERRAIN_TILE_SIZE)
     const tileZ = Math.round(mesh.position.z / TERRAIN_TILE_SIZE)
@@ -168,7 +221,9 @@
     }
 
     if (heightManager) {
-      cursorHeight.set(heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ))
+      cursorHeight.set(
+        heightManager.getHeightAtCell(tileX, tileZ, cellX, cellZ)
+      )
     }
 
     // Track which region the cursor is in so panels / objects can react.
@@ -197,7 +252,12 @@
     minZ: number,
     maxZ: number
   ): ((wx: number, wz: number) => boolean) | undefined {
-    const aabbs = housingManager.collectRoomAABBsInRegion(minX, maxX, minZ, maxZ)
+    const aabbs = housingManager.collectRoomAABBsInRegion(
+      minX,
+      maxX,
+      minZ,
+      maxZ
+    )
     if (aabbs.length === 0) return undefined
     return (wx, wz) => {
       for (const a of aabbs) {
@@ -237,7 +297,10 @@
         const cx = Math.floor(x - tileMinX)
         const cz = Math.floor(z - tileMinZ)
         if (cx < 0 || cx >= TILE_DIM || cz < 0 || cz >= TILE_DIM) return false
-        return splatData[(cz * TILE_DIM + cx) * SPLAT_CHANNELS + 3] < SHORT_GRASS_R_MIN
+        return (
+          splatData[(cz * TILE_DIM + cx) * SPLAT_CHANNELS + 3] <
+          SHORT_GRASS_R_MIN
+        )
       }
 
       if (grassDataManager) {
@@ -341,7 +404,11 @@
 
     updateCursorFromHit(hit)
 
-    if (currentTool === 'object' && currentObjectSubTool === 'place' && currentObjectType) {
+    if (
+      currentTool === 'object' &&
+      currentObjectSubTool === 'place' &&
+      currentObjectType
+    ) {
       const snapped = snapXZ(hit.point.x, hit.point.z)
       const terrainY = heightManager
         ? heightManager.getHeightAtWorldPosition(snapped.x, snapped.z)
@@ -399,7 +466,11 @@
     return bestIdx
   }
 
-  function findClosestNpc(worldX: number, worldZ: number, threshold: number): string | null {
+  function findClosestNpc(
+    worldX: number,
+    worldZ: number,
+    threshold: number
+  ): string | null {
     const state = get(gameStore)
     const names = currentNpcNames
     if (names.length === 0) return null
@@ -473,7 +544,7 @@
         if (currentDragWaypoint === -1) {
           newEntry.pos = [worldX, y, worldZ]
         } else {
-          newEntry.waypoints = [...(s.waypoints)]
+          newEntry.waypoints = [...s.waypoints]
           newEntry.waypoints[currentDragWaypoint!] = [worldX, y, worldZ]
         }
         return newEntry
@@ -580,7 +651,14 @@
         Math.min(z1, z2) - margin,
         Math.max(z1, z2) + margin
       )
-      heightManager.applyFlattenLine(x1, z1, x2, z2, currentBrushSize, protectHouses)
+      heightManager.applyFlattenLine(
+        x1,
+        z1,
+        x2,
+        z2,
+        currentBrushSize,
+        protectHouses
+      )
     }
     if (splatManager) {
       const strength = Math.max(0.1, currentBrushStrength / 10)
@@ -620,13 +698,19 @@
           const zones = [...(zoneData.noSpawnZones ?? []), zone]
           updated = { ...zoneData, noSpawnZones: zones }
         } else {
-          const spawns = [...(zoneData.monsterSpawns ?? []), {
-            monsterType: get(spawnFormMonsterType),
-            maxPerPlayer: get(spawnFormMaxPerPlayer),
-            maxTotal: get(spawnFormMaxTotal),
-            spawnIntervalSecs: get(spawnFormIntervalSecs),
-            minX, minZ, maxX, maxZ,
-          }]
+          const spawns = [
+            ...(zoneData.monsterSpawns ?? []),
+            {
+              monsterType: get(spawnFormMonsterType),
+              maxPerPlayer: get(spawnFormMaxPerPlayer),
+              maxTotal: get(spawnFormMaxTotal),
+              spawnIntervalSecs: get(spawnFormIntervalSecs),
+              minX,
+              minZ,
+              maxX,
+              maxZ,
+            },
+          ]
           updated = { ...zoneData, monsterSpawns: spawns }
         }
         await mgr.saveZone(region.rx, region.rz, updated)

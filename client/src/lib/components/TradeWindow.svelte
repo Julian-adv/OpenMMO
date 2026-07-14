@@ -128,10 +128,16 @@
   }
 
   const buyTotal = $derived(
-    cart.reduce((sum, e) => (e.kind === 'buy' ? sum + e.unitPrice * e.qty : sum), 0)
+    cart.reduce(
+      (sum, e) => (e.kind === 'buy' ? sum + e.unitPrice * e.qty : sum),
+      0
+    )
   )
   const sellTotal = $derived(
-    cart.reduce((sum, e) => (e.kind === 'sell' ? sum + e.unitPrice * e.qty : sum), 0)
+    cart.reduce(
+      (sum, e) => (e.kind === 'sell' ? sum + e.unitPrice * e.qty : sum),
+      0
+    )
   )
   /** Net gold the player must pay; negative means the player earns gold.
    *  Residents pay sells out of a finite hidden wallet — the server rejects
@@ -161,7 +167,12 @@
     if (existing) {
       existing.qty += 1
     } else {
-      cart.push({ kind: 'buy', itemDefId, qty: 1, unitPrice: def.basePrice ?? 0 })
+      cart.push({
+        kind: 'buy',
+        itemDefId,
+        qty: 1,
+        unitPrice: def.basePrice ?? 0,
+      })
     }
   }
 
@@ -182,7 +193,8 @@
       return
     }
     const existing = cart.find(
-      (e) => e.kind === 'sell' && e.instanceId === item.instance_id && !e.dealPct
+      (e) =>
+        e.kind === 'sell' && e.instanceId === item.instance_id && !e.dealPct
     )
     if (existing) {
       if (reservedQty(item.instance_id) < item.quantity) existing.qty += 1
@@ -259,9 +271,13 @@
     {/if}
     <div class="panel-header">
       <span class="panel-title">
-        {isResident ? `Trade with ${session.merchantName}` : `${session.merchantName}'s Shop`}
+        {isResident
+          ? `Trade with ${session.merchantName}`
+          : `${session.merchantName}'s Shop`}
       </span>
-      <button class="close-btn" onclick={() => shopSession.set(null)}>&times;</button>
+      <button class="close-btn" onclick={() => shopSession.set(null)}
+        >&times;</button
+      >
     </div>
 
     <div class="trade-columns">
@@ -277,12 +293,21 @@
                 onclick={() => addBuy(itemDefId, def)}
                 use:itemTooltip={{ def, side: 'left' }}
               >
-                <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+                <img
+                  class="item-icon"
+                  src="/items/{def.icon}"
+                  alt=""
+                  draggable="false"
+                />
                 <span class="item-name">{def.name}</span>
                 {#if pct !== 0}
-                  <span class="deal-badge" class:markup={isMarkup('buy', pct)}>{pct > 0 ? '+' : ''}{pct}%</span>
+                  <span class="deal-badge" class:markup={isMarkup('buy', pct)}
+                    >{pct > 0 ? '+' : ''}{pct}%</span
+                  >
                 {/if}
-                <span class="item-price"><GoldAmount copper={buyPrice(def, pct)} /></span>
+                <span class="item-price"
+                  ><GoldAmount copper={buyPrice(def, pct)} /></span
+                >
               </button>
             {/if}
           {/each}
@@ -296,14 +321,23 @@
                 onclick={() => addBuy(entry.itemDefId, def)}
                 use:itemTooltip={{ def, side: 'left' }}
               >
-                <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+                <img
+                  class="item-icon"
+                  src="/items/{def.icon}"
+                  alt=""
+                  draggable="false"
+                />
                 <span class="item-name">
                   {def.name}{entry.quantity > 1 ? ` ×${entry.quantity}` : ''}
                 </span>
                 {#if pct !== 0}
-                  <span class="deal-badge" class:markup={isMarkup('buy', pct)}>{pct > 0 ? '+' : ''}{pct}%</span>
+                  <span class="deal-badge" class:markup={isMarkup('buy', pct)}
+                    >{pct > 0 ? '+' : ''}{pct}%</span
+                  >
                 {/if}
-                <span class="item-price"><GoldAmount copper={buyPrice(def, pct)} /></span>
+                <span class="item-price"
+                  ><GoldAmount copper={buyPrice(def, pct)} /></span
+                >
               </button>
             {/if}
           {:else}
@@ -332,12 +366,20 @@
                 <span class="cart-kind {entry.kind}">
                   {entry.kind === 'buy' ? 'B' : 'S'}
                 </span>
-                <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+                <img
+                  class="item-icon"
+                  src="/items/{def.icon}"
+                  alt=""
+                  draggable="false"
+                />
                 <span class="item-name">
                   {def.name}{entry.qty > 1 ? ` ×${entry.qty}` : ''}
                 </span>
                 {#if entry.dealPct}
-                  <span class="deal-badge" class:markup={isMarkup(entry.kind, entry.dealPct)}>
+                  <span
+                    class="deal-badge"
+                    class:markup={isMarkup(entry.kind, entry.dealPct)}
+                  >
                     {entry.dealPct > 0 ? '+' : ''}{entry.dealPct}%
                   </span>
                 {/if}
@@ -365,7 +407,11 @@
             <span class="cart-label">After</span>
             <GoldAmount copper={$playerGold - netCost} />
           </div>
-          <button class="confirm-btn" disabled={!canConfirm} onclick={onConfirm}>
+          <button
+            class="confirm-btn"
+            disabled={!canConfirm}
+            onclick={onConfirm}
+          >
             Confirm
           </button>
         </div>
@@ -383,14 +429,23 @@
               onclick={() => addSell(item, def)}
               use:itemTooltip={{ def, item, side: 'right' }}
             >
-              <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+              <img
+                class="item-icon"
+                src="/items/{def.icon}"
+                alt=""
+                draggable="false"
+              />
               <span class="item-name">
                 {def.name}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
               </span>
               {#if pct !== 0}
-                <span class="deal-badge" class:markup={isMarkup('sell', pct)}>{pct > 0 ? '+' : ''}{pct}%</span>
+                <span class="deal-badge" class:markup={isMarkup('sell', pct)}
+                  >{pct > 0 ? '+' : ''}{pct}%</span
+                >
               {/if}
-              <span class="item-price"><GoldAmount copper={sellPrice(def, pct)} /></span>
+              <span class="item-price"
+                ><GoldAmount copper={sellPrice(def, pct)} /></span
+              >
             </button>
           {:else}
             <div class="empty-note">Nothing to sell</div>
@@ -518,7 +573,9 @@
     text-align: left;
     cursor: pointer;
     flex-shrink: 0;
-    transition: background 150ms ease, border-color 150ms ease;
+    transition:
+      background 150ms ease,
+      border-color 150ms ease;
   }
 
   .item-row:hover:not(:disabled) {
@@ -635,7 +692,9 @@
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .confirm-btn:hover:not(:disabled) {

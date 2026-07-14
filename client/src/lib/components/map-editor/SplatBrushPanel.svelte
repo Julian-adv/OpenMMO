@@ -11,10 +11,8 @@
     title?: string
     hint?: string
   }
-  let {
-    title = 'Splat Brush',
-    hint = '(click to select slot)',
-  }: Props = $props()
+  let { title = 'Splat Brush', hint = '(click to select slot)' }: Props =
+    $props()
 
   const THUMB_SIZE = 64
 
@@ -221,7 +219,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
 
   .control-row {
     display: flex;

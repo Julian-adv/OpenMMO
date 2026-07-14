@@ -24,7 +24,10 @@
   import { worldToTileCell } from './game-scene/terrain-utils'
   import { tileToRegion } from '../terrain/terrain-constants'
   import { timeScale, sunTimeScale, sunDebugOffset } from '../stores/timeStore'
-  import { findTwilightOnsetHour, SUN_DAY_DURATION_SECONDS } from '../utils/celestialSimulation'
+  import {
+    findTwilightOnsetHour,
+    SUN_DAY_DURATION_SECONDS,
+  } from '../utils/celestialSimulation'
   import { gameTimeState } from './GameTimeWidget.svelte'
   import {
     debugVisible,
@@ -49,7 +52,6 @@
     const degrees = (radians * 180) / Math.PI
     return ((degrees % 360) + 360) % 360
   }
-
 
   function isGameKey(event: KeyboardEvent): boolean {
     if (event.ctrlKey || event.altKey || event.metaKey) return false
@@ -93,10 +95,16 @@
       sunTimeScale.set(1.0)
       sunDebugOffset.set(targetHour - gameTimeState.serverHour)
     } else if (value === 'sunrise' || value === 'sunset') {
-      const twilightOnset = findTwilightOnsetHour(value, gameTimeState.date.month, gameTimeState.date.day)
+      const twilightOnset = findTwilightOnsetHour(
+        value,
+        gameTimeState.date.month,
+        gameTimeState.date.day
+      )
       const prerollHours = (10 / SUN_DAY_DURATION_SECONDS) * 24
       sunTimeScale.set(1.0)
-      sunDebugOffset.set(twilightOnset - prerollHours - gameTimeState.serverHour)
+      sunDebugOffset.set(
+        twilightOnset - prerollHours - gameTimeState.serverHour
+      )
     } else {
       sunDebugOffset.set(0)
       sunTimeScale.set(Number(value))
@@ -151,15 +159,40 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if !$debugVisible}
-  <button class="debug-toggle-btn" onclick={() => debugVisible.set(true)} title="Show Debug Panel (Ctrl+D)">
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v1h4" /><path d="M18 8h-2V6a4 4 0 0 0-4-4" /><path d="M20 10a2 2 0 0 0-2-2" /><path d="M2 13h4" /><path d="M18 13h4" /><path d="M6 18H4a2 2 0 0 1-2-2" /><path d="M20 18h2" /><path d="M6 8v10a6 6 0 0 0 12 0V8" /><path d="M2 10h4" /><path d="M18 10h4" />
+  <button
+    class="debug-toggle-btn"
+    onclick={() => debugVisible.set(true)}
+    title="Show Debug Panel (Ctrl+D)"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+    >
+      <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v1h4" /><path
+        d="M18 8h-2V6a4 4 0 0 0-4-4"
+      /><path d="M20 10a2 2 0 0 0-2-2" /><path d="M2 13h4" /><path
+        d="M18 13h4"
+      /><path d="M6 18H4a2 2 0 0 1-2-2" /><path d="M20 18h2" /><path
+        d="M6 8v10a6 6 0 0 0 12 0V8"
+      /><path d="M2 10h4" /><path d="M18 10h4" />
     </svg>
   </button>
 {:else}
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<div class="hud-container" role="button" tabindex="-1" onclick={() => debugVisible.set(false)}>
-  <div class="hud-box">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <div
+    class="hud-container"
+    role="button"
+    tabindex="-1"
+    onclick={() => debugVisible.set(false)}
+  >
+    <div class="hud-box">
       <div class="stats-text">
         <span class="fps-text">
           FPS: {currentFps} | ZOOM: {$cameraDistance.toFixed(1)}
@@ -168,7 +201,10 @@
           <span class="bgm-text">♫ {$currentBgmTrack}</span>
         {/if}
         {#if $playerDebugInfo}
-          {@const tc = worldToTileCell($playerDebugInfo.position.x, $playerDebugInfo.position.z)}
+          {@const tc = worldToTileCell(
+            $playerDebugInfo.position.x,
+            $playerDebugInfo.position.z
+          )}
           <span class="player-text">
             POS: ({$playerDebugInfo.position.x.toFixed(2)},
             {$playerDebugInfo.position.y.toFixed(2)},
@@ -176,152 +212,152 @@
             {toDegrees($playerDebugInfo.rotation).toFixed(1)}°
           </span>
           <span class="player-text">
-            RGN: ({tileToRegion(tc.tileX)}, {tileToRegion(tc.tileZ)}) | TILE: ({tc.tileX}, {tc.tileZ}) | CELL: ({tc.cellX}, {tc.cellZ})
+            RGN: ({tileToRegion(tc.tileX)}, {tileToRegion(tc.tileZ)}) | TILE: ({tc.tileX},
+            {tc.tileZ}) | CELL: ({tc.cellX}, {tc.cellZ})
           </span>
         {:else}
           <span class="player-text">POS: (-, -, -) | ROT: -</span>
         {/if}
       </div>
 
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="button-rows" onclick={(e) => e.stopPropagation()}>
-      <div class="button-group">
-        <button
-          class="action-btn slow-btn"
-          class:active={$timeScale < 1.0}
-          onclick={toggleSlowMode}
-          title="Toggle Slow Motion"
-        >
-          SLOW TIME
-        </button>
-
-        <div class="seg-group" title="Sun Control">
-          <span class="seg-label">SUN</span>
-          <select
-            class="sun-select"
-            value={sunMode}
-            onchange={(e) => setSunMode(e.currentTarget.value)}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="button-rows" onclick={(e) => e.stopPropagation()}>
+        <div class="button-group">
+          <button
+            class="action-btn slow-btn"
+            class:active={$timeScale < 1.0}
+            onclick={toggleSlowMode}
+            title="Toggle Slow Motion"
           >
-            <option value="1">Normal</option>
-            <option value="60">Fast 3m</option>
-            <option value="600">Fast 18s</option>
-            <option value="sunrise">Sunrise</option>
-            <option value="noon">Noon</option>
-            <option value="sunset">Sunset</option>
-            <option value="midnight">Midnight</option>
-          </select>
+            SLOW TIME
+          </button>
+
+          <div class="seg-group" title="Sun Control">
+            <span class="seg-label">SUN</span>
+            <select
+              class="sun-select"
+              value={sunMode}
+              onchange={(e) => setSunMode(e.currentTarget.value)}
+            >
+              <option value="1">Normal</option>
+              <option value="60">Fast 3m</option>
+              <option value="600">Fast 18s</option>
+              <option value="sunrise">Sunrise</option>
+              <option value="noon">Noon</option>
+              <option value="sunset">Sunset</option>
+              <option value="midnight">Midnight</option>
+            </select>
+          </div>
+
+          <button
+            class="action-btn"
+            class:active={$cameraRotationEnabled}
+            onclick={toggleCameraRotation}
+            title="Toggle Camera Rotation"
+          >
+            CAM ROT
+          </button>
+
+          <button
+            class="action-btn cal-btn"
+            class:active={$calendarVisible}
+            onclick={toggleCalendar}
+            title="Toggle Calendar Display"
+          >
+            CAL
+          </button>
         </div>
 
-        <button
-          class="action-btn"
-          class:active={$cameraRotationEnabled}
-          onclick={toggleCameraRotation}
-          title="Toggle Camera Rotation"
-        >
-          CAM ROT
-        </button>
-
-        <button
-          class="action-btn cal-btn"
-          class:active={$calendarVisible}
-          onclick={toggleCalendar}
-          title="Toggle Calendar Display"
-        >
-          CAL
-        </button>
-      </div>
-
-      <div class="button-group">
-        <button
-          class="action-btn orbits-btn"
-          class:active={$celestialDebugVisible}
-          onclick={toggleCelestialDebug}
-          title="Toggle Celestial Orbits Debug"
-        >
-          ORBITS
-        </button>
-
-        {#if !$mapEditorMode}
+        <div class="button-group">
           <button
-            class="action-btn grid-btn"
-            class:active={$gridVisible}
-            onclick={toggleGrid}
-            title="Toggle Terrain Grid"
+            class="action-btn orbits-btn"
+            class:active={$celestialDebugVisible}
+            onclick={toggleCelestialDebug}
+            title="Toggle Celestial Orbits Debug"
           >
-            GRID
+            ORBITS
           </button>
-        {/if}
 
-        <button
-          class="action-btn map-editor-btn"
-          class:active={$mapEditorMode}
-          onclick={toggleMapEditor}
-          title="Toggle Map Editor (Ctrl+M)"
-        >
-          MAP EDIT
-        </button>
+          {#if !$mapEditorMode}
+            <button
+              class="action-btn grid-btn"
+              class:active={$gridVisible}
+              onclick={toggleGrid}
+              title="Toggle Terrain Grid"
+            >
+              GRID
+            </button>
+          {/if}
 
-        <button
-          class="action-btn"
-          class:active={$housingEditorMode}
-          onclick={() => housingEditorMode.update((v) => !v)}
-          title="Toggle Housing Editor"
-        >
-          HOUSE
-        </button>
+          <button
+            class="action-btn map-editor-btn"
+            class:active={$mapEditorMode}
+            onclick={toggleMapEditor}
+            title="Toggle Map Editor (Ctrl+M)"
+          >
+            MAP EDIT
+          </button>
 
-        <button
-          class="action-btn debug-speed-btn"
-          class:active={$debugSpeedMode}
-          onclick={toggleDebugSpeed}
-          title="Debug Mode: 10x Speed + Extended Zoom"
-        >
-          FAST MOVE
-        </button>
+          <button
+            class="action-btn"
+            class:active={$housingEditorMode}
+            onclick={() => housingEditorMode.update((v) => !v)}
+            title="Toggle Housing Editor"
+          >
+            HOUSE
+          </button>
 
-      </div>
+          <button
+            class="action-btn debug-speed-btn"
+            class:active={$debugSpeedMode}
+            onclick={toggleDebugSpeed}
+            title="Debug Mode: 10x Speed + Extended Zoom"
+          >
+            FAST MOVE
+          </button>
+        </div>
 
-      <div class="button-group">
-        <button
-          class="action-btn refraction-btn"
-          class:active={$refractionEnabled}
-          onclick={toggleRefraction}
-          title="Toggle Water Refraction"
-        >
-          REFRACT
-        </button>
+        <div class="button-group">
+          <button
+            class="action-btn refraction-btn"
+            class:active={$refractionEnabled}
+            onclick={toggleRefraction}
+            title="Toggle Water Refraction"
+          >
+            REFRACT
+          </button>
 
-        <button
-          class="action-btn reflection-btn"
-          class:active={$reflectionEnabled}
-          onclick={toggleReflection}
-          title="Toggle Water Reflection"
-        >
-          REFLECT
-        </button>
+          <button
+            class="action-btn reflection-btn"
+            class:active={$reflectionEnabled}
+            onclick={toggleReflection}
+            title="Toggle Water Reflection"
+          >
+            REFLECT
+          </button>
 
-        <button
-          class="action-btn torch-btn"
-          class:active={$torchLightEnabled}
-          onclick={toggleTorchLight}
-          title="Toggle Torch Point Light"
-        >
-          TORCH
-        </button>
+          <button
+            class="action-btn torch-btn"
+            class:active={$torchLightEnabled}
+            onclick={toggleTorchLight}
+            title="Toggle Torch Point Light"
+          >
+            TORCH
+          </button>
 
-        <button
-          class="action-btn wind-btn"
-          class:active={$windDebugVisible}
-          onclick={toggleWindDebug}
-          title="Toggle Wind Direction Arrow"
-        >
-          WIND
-        </button>
+          <button
+            class="action-btn wind-btn"
+            class:active={$windDebugVisible}
+            onclick={toggleWindDebug}
+            title="Toggle Wind Direction Arrow"
+          >
+            WIND
+          </button>
+        </div>
       </div>
     </div>
   </div>
-</div>
 {/if}
 
 <style>

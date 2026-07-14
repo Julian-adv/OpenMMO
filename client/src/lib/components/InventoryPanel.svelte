@@ -5,7 +5,15 @@
   import GoldAmount from './GoldAmount.svelte'
   import { networkManager } from '../network/socket'
   import type { CharacterAttributes, EquipSlot } from '../network/networkTypes'
-  import { dragMeta, startDrag, isSlotCompatible, pointInRect, quickslotAt, isOverAnyDialog, FALLBACK_ICON } from '../stores/dragStore'
+  import {
+    dragMeta,
+    startDrag,
+    isSlotCompatible,
+    pointInRect,
+    quickslotAt,
+    isOverAnyDialog,
+    FALLBACK_ICON,
+  } from '../stores/dragStore'
   import { assignQuickslot } from '../stores/quickslotStore'
   import { itemTooltip } from '../actions/itemTooltip'
 
@@ -78,7 +86,9 @@
           assignQuickslot(qsIndex, slot.item_def_id)
           return
         }
-        for (const slotEl of document.querySelectorAll<HTMLElement>('[data-equip-slot]')) {
+        for (const slotEl of document.querySelectorAll<HTMLElement>(
+          '[data-equip-slot]'
+        )) {
           if (pointInRect(x, y, slotEl.getBoundingClientRect())) {
             const targetSlot = slotEl.dataset.equipSlot as EquipSlot
             if (isSlotCompatible(def?.equipSlot ?? null, targetSlot)) {
@@ -87,10 +97,14 @@
             }
           }
         }
-        if (panelEl && !pointInRect(x, y, panelEl.getBoundingClientRect()) && !isOverAnyDialog(x, y)) {
+        if (
+          panelEl &&
+          !pointInRect(x, y, panelEl.getBoundingClientRect()) &&
+          !isOverAnyDialog(x, y)
+        ) {
           networkManager.sendDropItem(slot.instance_id)
         }
-      },
+      }
     )
   }
 </script>
@@ -119,12 +133,21 @@
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           class="grid-cell"
-          use:itemTooltip={def && slot ? { def, item: slot, side: 'left' } : null}
+          use:itemTooltip={def && slot
+            ? { def, item: slot, side: 'left' }
+            : null}
           ondblclick={() => onDblClick(slot)}
-          onpointerdown={(e: PointerEvent) => { if (slot) onPointerDown(e, slot) }}
+          onpointerdown={(e: PointerEvent) => {
+            if (slot) onPointerDown(e, slot)
+          }}
         >
           {#if def}
-            <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+            <img
+              class="item-icon"
+              src="/items/{def.icon}"
+              alt=""
+              draggable="false"
+            />
           {/if}
           {#if slot && slot.enchant > 0}
             <span class="item-enchant">+{slot.enchant}</span>

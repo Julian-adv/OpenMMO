@@ -57,7 +57,10 @@
         fillIndices[ii++] = a + 2
         fillIndices[ii++] = a + 3
       }
-      fillGeo.setAttribute('position', new THREE.BufferAttribute(fillPositions, 3))
+      fillGeo.setAttribute(
+        'position',
+        new THREE.BufferAttribute(fillPositions, 3)
+      )
       fillGeo.setIndex(new THREE.BufferAttribute(fillIndices, 1))
       borderGeo.setAttribute(
         'position',
@@ -116,7 +119,12 @@
   }
 
   let visible = $derived.by(() => {
-    if ($editorTool !== 'road' || !$editorHeightManager || !$roadDrawStart || !$hoveredCell) {
+    if (
+      $editorTool !== 'road' ||
+      !$editorHeightManager ||
+      !$roadDrawStart ||
+      !$hoveredCell
+    ) {
       return false
     }
     return updateStrip(
@@ -148,6 +156,10 @@
   </T.Mesh>
   <T.LineLoop renderOrder={999} frustumCulled={false}>
     <T is={borderGeo} />
-    <T.LineBasicMaterial color={PREVIEW_COLOR} linewidth={2} depthWrite={false} />
+    <T.LineBasicMaterial
+      color={PREVIEW_COLOR}
+      linewidth={2}
+      depthWrite={false}
+    />
   </T.LineLoop>
 {/if}

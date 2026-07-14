@@ -35,17 +35,24 @@
 
   // Seasonal markers on Earth's orbit ring
   // SPRING_EQUINOX_DAY_INDEX=90 (from celestialDirection.ts), so each event is 90 days apart
-  const SEASON_MARKERS: { angle: number; label: string; anchor: string; dy: number }[] = [
-    { angle: TAU / 4,    label: 'WS', anchor: 'middle', dy: 18  }, // bottom (dayOfYear=0,   Winter Solstice)
-    { angle: 0,          label: 'SE', anchor: 'start',  dy: 0   }, // right  (dayOfYear=90,  Spring Equinox)
-    { angle: -TAU / 4,   label: 'SS', anchor: 'middle', dy: -12 }, // top    (dayOfYear=180, Summer Solstice)
-    { angle: -TAU / 2,   label: 'AE', anchor: 'end',    dy: 0   }, // left   (dayOfYear=270, Autumn Equinox)
+  const SEASON_MARKERS: {
+    angle: number
+    label: string
+    anchor: string
+    dy: number
+  }[] = [
+    { angle: TAU / 4, label: 'WS', anchor: 'middle', dy: 18 }, // bottom (dayOfYear=0,   Winter Solstice)
+    { angle: 0, label: 'SE', anchor: 'start', dy: 0 }, // right  (dayOfYear=90,  Spring Equinox)
+    { angle: -TAU / 4, label: 'SS', anchor: 'middle', dy: -12 }, // top    (dayOfYear=180, Summer Solstice)
+    { angle: -TAU / 2, label: 'AE', anchor: 'end', dy: 0 }, // left   (dayOfYear=270, Autumn Equinox)
   ]
 
   // Earth orbital position (one revolution per 360 game days, starting from top)
   // Counterclockwise in screen (y↓): decreasing angle as dayOfYear increases — matches real astronomy
   const absoluteDayIndex = $derived(getGameCalendarDayIndex(gameTimeState.date))
-  const dayOfYear = $derived((gameTimeState.date.month - 1) * 30 + (gameTimeState.date.day - 1))
+  const dayOfYear = $derived(
+    (gameTimeState.date.month - 1) * 30 + (gameTimeState.date.day - 1)
+  )
 
   // Canvas action: polar UV mapping of panorama onto the ring
   // For each of 512 angular segments, column i of the panorama maps to angle i/512 * TAU.
@@ -79,9 +86,14 @@
         // Panorama top (y=0) → outer edge, bottom → inner edge
         ctx.drawImage(
           img,
-          (i + N - 128) % N, 0, 1, img.naturalHeight || 512,
-          -arcWidth / 2, -NIGHT_SKY_RING_OUTER_R,
-          arcWidth, NIGHT_SKY_RING_HEIGHT,
+          (i + N - 128) % N,
+          0,
+          1,
+          img.naturalHeight || 512,
+          -arcWidth / 2,
+          -NIGHT_SKY_RING_OUTER_R,
+          arcWidth,
+          NIGHT_SKY_RING_HEIGHT
         )
         ctx.restore()
       }
@@ -94,7 +106,9 @@
   const earthY = $derived(C + EARTH_ORBIT_R * Math.sin(earthAngle))
 
   // Sun direction vector from Earth (normalized)
-  const earthDist = $derived(Math.max(1, Math.sqrt((C - earthX) ** 2 + (C - earthY) ** 2)))
+  const earthDist = $derived(
+    Math.max(1, Math.sqrt((C - earthX) ** 2 + (C - earthY) ** 2))
+  )
   const sunDirX = $derived((C - earthX) / earthDist)
   const sunDirY = $derived((C - earthY) / earthDist)
   // Perpendicular to sun direction in screen space (rotate 90° CCW in screen → perpX=-sunDirY, perpY=sunDirX)
@@ -116,8 +130,14 @@
 
   // Builds an SVG arc path for the lit portion of a circle of radius r, with chord offset d along sunDir.
   function litChordPath(
-    cx: number, cy: number, r: number, d: number,
-    sdx: number, sdy: number, px: number, py: number
+    cx: number,
+    cy: number,
+    r: number,
+    d: number,
+    sdx: number,
+    sdy: number,
+    px: number,
+    py: number
   ) {
     const clampedD = Math.max(-(r - 0.5), Math.min(r - 0.5, d))
     const half = Math.sqrt(Math.max(0, r * r - clampedD * clampedD))
@@ -131,16 +151,36 @@
 
   // SVG path: lit arc on the sun-facing portion of Earth (chord offset shifts with season)
   const litHalfPath = $derived(
-    litChordPath(earthX, earthY, EARTH_DISPLAY_R, chordOffset, sunDirX, sunDirY, perpX, perpY)
+    litChordPath(
+      earthX,
+      earthY,
+      EARTH_DISPLAY_R,
+      chordOffset,
+      sunDirX,
+      sunDirY,
+      perpX,
+      perpY
+    )
   )
   const cloudHighlightPath = $derived(
-    litChordPath(earthX, earthY, EARTH_DISPLAY_R - 4, chordOffset, sunDirX, sunDirY, perpX, perpY)
+    litChordPath(
+      earthX,
+      earthY,
+      EARTH_DISPLAY_R - 4,
+      chordOffset,
+      sunDirX,
+      sunDirY,
+      perpX,
+      perpY
+    )
   )
 
   // Observer (player) on Earth's surface
   // At hour 12 (noon): observer faces Sun → angle = earthToSunAngle
   // Earth rotates CCW in screen: angle decreases as hour increases past noon
-  const observerAngle = $derived(earthToSunAngle - (gameTimeState.hour - 12) * (TAU / 24))
+  const observerAngle = $derived(
+    earthToSunAngle - (gameTimeState.hour - 12) * (TAU / 24)
+  )
   const obsX = $derived(earthX + EARTH_DISPLAY_R * Math.cos(observerAngle))
   const obsY = $derived(earthY + EARTH_DISPLAY_R * Math.sin(observerAngle))
   const obsOutX = $derived(
@@ -160,23 +200,43 @@
   )
   const sunPeriod = $derived(getSunPeriodFromElevation(sunElevation))
   const indicatorColor = $derived(
-    sunPeriod === 'day' ? '#ffdd44' : sunPeriod === 'twilight' ? '#ff9944' : '#8899dd'
+    sunPeriod === 'day'
+      ? '#ffdd44'
+      : sunPeriod === 'twilight'
+        ? '#ff9944'
+        : '#8899dd'
   )
   const timeOfDayLabel = $derived(
-    sunPeriod === 'day' ? 'Day' : sunPeriod === 'twilight' ? 'Twilight' : 'Night'
+    sunPeriod === 'day'
+      ? 'Day'
+      : sunPeriod === 'twilight'
+        ? 'Twilight'
+        : 'Night'
   )
 
   // Moon orbital positions
   const elderPhase = $derived(
-    getMoonPhaseState(ELDER_MOON_DEFINITION, absoluteDayIndex, gameTimeState.hour)
+    getMoonPhaseState(
+      ELDER_MOON_DEFINITION,
+      absoluteDayIndex,
+      gameTimeState.hour
+    )
   )
   const swiftPhase = $derived(
-    getMoonPhaseState(SWIFT_MOON_DEFINITION, absoluteDayIndex, gameTimeState.hour)
+    getMoonPhaseState(
+      SWIFT_MOON_DEFINITION,
+      absoluteDayIndex,
+      gameTimeState.hour
+    )
   )
   // orbitalProgress=0 → new moon (toward Sun), 0.5 → full moon (away from Sun)
   // Counterclockwise in screen: subtract progress — consistent with Earth orbit and real astronomy
-  const elderAngle = $derived(earthToSunAngle - elderPhase.orbitalProgress * TAU)
-  const swiftAngle = $derived(earthToSunAngle - swiftPhase.orbitalProgress * TAU)
+  const elderAngle = $derived(
+    earthToSunAngle - elderPhase.orbitalProgress * TAU
+  )
+  const swiftAngle = $derived(
+    earthToSunAngle - swiftPhase.orbitalProgress * TAU
+  )
   const elderX = $derived(earthX + ELDER_MOON_ORBIT_R * Math.cos(elderAngle))
   const elderY = $derived(earthY + ELDER_MOON_ORBIT_R * Math.sin(elderAngle))
   const swiftX = $derived(earthX + SWIFT_MOON_ORBIT_R * Math.cos(swiftAngle))
@@ -202,7 +262,8 @@
 
     <div class="diagram" style="width:{D}px; height:{D}px">
       <!-- Night sky ring: polar UV mapped panorama on canvas (static, behind SVG) -->
-      <canvas class="night-sky-ring" width={D} height={D} use:nightSkyRingAction></canvas>
+      <canvas class="night-sky-ring" width={D} height={D} use:nightSkyRingAction
+      ></canvas>
 
       <!-- All static geometry + Earth + Sun in SVG -->
       <svg width={D} height={D} class="diagram-svg">
@@ -242,8 +303,8 @@
             dominant-baseline="middle"
             font-size="10"
             font-family="Courier New, monospace"
-            fill="rgba(170,185,230,0.75)"
-          >{m.label}</text>
+            fill="rgba(170,185,230,0.75)">{m.label}</text
+          >
         {/each}
 
         <!-- Moon orbit rings (centered on Earth) -->
@@ -267,8 +328,18 @@
         />
 
         <!-- Sun corona glow (behind image) -->
-        <circle cx={C} cy={C} r={SUN_SIZE * 0.85} fill="rgba(255,210,60,0.07)" />
-        <circle cx={C} cy={C} r={SUN_SIZE * 0.60} fill="rgba(255,230,100,0.11)" />
+        <circle
+          cx={C}
+          cy={C}
+          r={SUN_SIZE * 0.85}
+          fill="rgba(255,210,60,0.07)"
+        />
+        <circle
+          cx={C}
+          cy={C}
+          r={SUN_SIZE * 0.6}
+          fill="rgba(255,230,100,0.11)"
+        />
 
         <!-- Earth: night side (dark navy circle) -->
         <circle cx={earthX} cy={earthY} r={EARTH_DISPLAY_R} fill="#081830" />
@@ -299,7 +370,13 @@
 
         <!-- Observer indicator (stick person standing on Earth's surface) -->
         <!-- Base dot: standing point on Earth's surface -->
-        <circle cx={obsX} cy={obsY} r="2.5" fill={indicatorColor} opacity="0.85" />
+        <circle
+          cx={obsX}
+          cy={obsY}
+          r="2.5"
+          fill={indicatorColor}
+          opacity="0.85"
+        />
         <!-- Body: line extending radially outward -->
         <line
           x1={obsX}
@@ -362,19 +439,25 @@
       </div>
       <div class="info-row">
         <span class="info-label">Status</span>
-        <span class="info-value" style="color:{indicatorColor}">{timeOfDayLabel}</span>
+        <span class="info-value" style="color:{indicatorColor}"
+          >{timeOfDayLabel}</span
+        >
       </div>
       <div class="info-divider"></div>
       <div class="info-row">
         <span class="info-label elder-label">Eldor</span>
         <span class="info-value elder-val"
-          >{elderPhaseLabel} ({Math.round(elderPhase.illumination * 100)}%)</span
+          >{elderPhaseLabel} ({Math.round(
+            elderPhase.illumination * 100
+          )}%)</span
         >
       </div>
       <div class="info-row">
         <span class="info-label swift-label">Serin</span>
         <span class="info-value swift-val"
-          >{swiftPhaseLabel} ({Math.round(swiftPhase.illumination * 100)}%)</span
+          >{swiftPhaseLabel} ({Math.round(
+            swiftPhase.illumination * 100
+          )}%)</span
         >
       </div>
     </div>

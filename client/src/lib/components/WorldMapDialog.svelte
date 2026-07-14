@@ -17,7 +17,7 @@
     z: number
   }
   const MAP_LABELS: MapLabel[] = Object.values(
-    mapLabelsJson as unknown as Record<string, MapLabel>,
+    mapLabelsJson as unknown as Record<string, MapLabel>
   )
 
   // Per-kind zoom visibility: shown when min <= zoomSpan <= max (zoomSpan = regions
@@ -66,7 +66,10 @@
   import { minimapVersion } from '../stores/editorStore'
   import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
   import { networkManager } from '../network/socket'
-  import { graphicsQuality, getEffectivePreset } from '../stores/graphicsSettings'
+  import {
+    graphicsQuality,
+    getEffectivePreset,
+  } from '../stores/graphicsSettings'
   import { wrapWorldX } from '../terrain/world-wrap'
 
   const graphicsPreset = $derived(getEffectivePreset($graphicsQuality))
@@ -75,7 +78,10 @@
   const maxZoomSpan = $derived(graphicsPreset.worldMapMaxZoomSpan)
   const imageCacheLimit = $derived(graphicsPreset.worldMapImageCacheLimit)
 
-  function loadRegionImage(rx: number, rz: number): Promise<HTMLImageElement | null> {
+  function loadRegionImage(
+    rx: number,
+    rz: number
+  ): Promise<HTMLImageElement | null> {
     const key = `${rx},${rz}`
     if (imageCache.has(key)) return Promise.resolve(imageCache.get(key)!)
     if (pendingLoads.has(key)) return pendingLoads.get(key)!
@@ -197,10 +203,18 @@
     const expandedViewLeft = cx - expandedViewWorldW / 2
     const expandedViewTop = cz - expandedViewWorldH / 2
 
-    const expRegionMinRx = Math.floor((expandedViewLeft + TILE_DIM / 2) / REGION_PX)
-    const expRegionMaxRx = Math.floor((expandedViewLeft + expandedViewWorldW + TILE_DIM / 2) / REGION_PX)
-    const expRegionMinRz = Math.floor((expandedViewTop + TILE_DIM / 2) / REGION_PX)
-    const expRegionMaxRz = Math.floor((expandedViewTop + expandedViewWorldH + TILE_DIM / 2) / REGION_PX)
+    const expRegionMinRx = Math.floor(
+      (expandedViewLeft + TILE_DIM / 2) / REGION_PX
+    )
+    const expRegionMaxRx = Math.floor(
+      (expandedViewLeft + expandedViewWorldW + TILE_DIM / 2) / REGION_PX
+    )
+    const expRegionMinRz = Math.floor(
+      (expandedViewTop + TILE_DIM / 2) / REGION_PX
+    )
+    const expRegionMaxRz = Math.floor(
+      (expandedViewTop + expandedViewWorldH + TILE_DIM / 2) / REGION_PX
+    )
 
     const promises: Promise<void>[] = []
     for (let rz = expRegionMinRz; rz <= expRegionMaxRz; rz++) {
@@ -293,7 +307,13 @@
       const left = ox * COS_R - oy * SIN_R + cw / 2
       const top = ox * SIN_R + oy * COS_R + ch / 2
 
-      if (left < -margin || left > cw + margin || top < -margin || top > ch + margin) continue
+      if (
+        left < -margin ||
+        left > cw + margin ||
+        top < -margin ||
+        top > ch + margin
+      )
+        continue
       out.push({ name: label.name, kind: label.kind, left, top })
     }
     return out
@@ -358,7 +378,10 @@
     // Rotate mouse delta by +45 degrees to undo the canvas rotation
     const rawDx = event.clientX - dragStartMouseX
     const rawDz = event.clientY - dragStartMouseZ
-    if (!suppressNextClick && rawDx * rawDx + rawDz * rawDz > DRAG_THRESHOLD_PX2) {
+    if (
+      !suppressNextClick &&
+      rawDx * rawDx + rawDz * rawDz > DRAG_THRESHOLD_PX2
+    ) {
       suppressNextClick = true
     }
     const dx = rawDx / scale
@@ -376,7 +399,9 @@
 
   $effect(() => {
     if (!isDragging) return
-    window.addEventListener('pointermove', handlePointerMove, { passive: false })
+    window.addEventListener('pointermove', handlePointerMove, {
+      passive: false,
+    })
     window.addEventListener('pointerup', handlePointerUp)
     window.addEventListener('pointercancel', handlePointerUp)
     return () => {
@@ -494,20 +519,31 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div class="backdrop" onclick={handleBackdropClick}>
-  <div class="dialog" class:mobile-map-budget={mobileMapBudget} role="dialog" aria-modal="true">
+  <div
+    class="dialog"
+    class:mobile-map-budget={mobileMapBudget}
+    role="dialog"
+    aria-modal="true"
+  >
     <div class="header">
       <h2>World Map</h2>
       <div class="controls">
         <button class="ctrl-btn" onclick={zoomIn} title="Zoom In">+</button>
-        <button class="ctrl-btn" onclick={zoomOut} title="Zoom Out">&minus;</button>
-        <button class="ctrl-btn" onclick={zoomReset} title="Reset Zoom">Reset</button>
-        <button class="ctrl-btn" onclick={resetCamera} title="Center on Player">&#8982;</button>
+        <button class="ctrl-btn" onclick={zoomOut} title="Zoom Out"
+          >&minus;</button
+        >
+        <button class="ctrl-btn" onclick={zoomReset} title="Reset Zoom"
+          >Reset</button
+        >
+        <button class="ctrl-btn" onclick={resetCamera} title="Center on Player"
+          >&#8982;</button
+        >
         <button
           class="ctrl-btn"
           class:active={teleportMode}
           onclick={() => (teleportMode = !teleportMode)}
-          title="Teleport Mode"
-        >TP</button>
+          title="Teleport Mode">TP</button
+        >
       </div>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>
@@ -531,7 +567,9 @@
         {#each visibleLabels as label (label.name)}
           <div
             class="map-label {label.kind}"
-            class:area={label.kind === 'continent' || label.kind === 'sea' || label.kind === 'island'}
+            class:area={label.kind === 'continent' ||
+              label.kind === 'sea' ||
+              label.kind === 'island'}
             style="left: {label.left}px; top: {label.top}px;"
           >
             {#if label.kind !== 'continent' && label.kind !== 'sea' && label.kind !== 'island'}
@@ -569,10 +607,16 @@
   }
 
   .dialog.mobile-map-budget {
-    width: calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    width: calc(
+      100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)
+    );
     height: min(
-      calc(100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom)),
-      calc(100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right))
+      calc(
+        100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom)
+      ),
+      calc(
+        100vw - 16px - env(safe-area-inset-left) - env(safe-area-inset-right)
+      )
     );
     max-width: 440px;
     max-height: 440px;
@@ -760,5 +804,4 @@
     background: #f5d250;
     border: 2px solid #287832;
   }
-
 </style>

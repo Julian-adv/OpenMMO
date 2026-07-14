@@ -114,7 +114,9 @@
     return geometry
   }
 
-  const bubbleWidth = $derived(Math.min(textBounds.width + PADDING_X, MAX_BUBBLE_WIDTH))
+  const bubbleWidth = $derived(
+    Math.min(textBounds.width + PADDING_X, MAX_BUBBLE_WIDTH)
+  )
   const bubbleHeight = $derived(textBounds.height + PADDING_Y)
   const cornerRadius = 0.1
   const bubbleShape = $derived(
@@ -123,7 +125,9 @@
   const bubbleBorderGeometry = $derived(createBorderGeometry(bubbleShape))
   const bubbleCenterY = $derived(cornerRadius + bubbleHeight / 2)
   const displayText = $derived(
-    message.length > MAX_DISPLAY_CHARS ? message.slice(0, MAX_DISPLAY_CHARS) + '...' : message
+    message.length > MAX_DISPLAY_CHARS
+      ? message.slice(0, MAX_DISPLAY_CHARS) + '...'
+      : message
   )
 </script>
 
@@ -131,11 +135,19 @@
 <T.Group bind:ref={bubbleGroup}>
   <T.Mesh position={[0, cornerRadius, 0]} renderOrder={OVERLAY_RENDER_ORDER}>
     <T.ShapeGeometry args={[bubbleShape]} />
-    <T.MeshBasicMaterial color="#000000" opacity={0.7} transparent={true} depthTest={false} />
+    <T.MeshBasicMaterial
+      color="#000000"
+      opacity={0.7}
+      transparent={true}
+      depthTest={false}
+    />
   </T.Mesh>
 
   <!-- Chat bubble border (white line) -->
-  <T.Line position={[0, cornerRadius, 0.001]} renderOrder={OVERLAY_RENDER_ORDER}>
+  <T.Line
+    position={[0, cornerRadius, 0.001]}
+    renderOrder={OVERLAY_RENDER_ORDER}
+  >
     <T is={bubbleBorderGeometry} />
     <T.LineBasicMaterial color="#ffffff" depthTest={false} />
   </T.Line>

@@ -24,10 +24,15 @@
     characters: AccountCharacter[]
     selectedCharacterId: number | null
     onSlotClick: (slotIndex: number) => void
-  onSlotDoubleClick: (slotIndex: number) => void
+    onSlotDoubleClick: (slotIndex: number) => void
   }
 
-  let { characters, selectedCharacterId, onSlotClick, onSlotDoubleClick }: Props = $props()
+  let {
+    characters,
+    selectedCharacterId,
+    onSlotClick,
+    onSlotDoubleClick,
+  }: Props = $props()
 
   const SLOT_SPACING = 1.8
   const SLOT_POSITIONS = [-SLOT_SPACING, 0, SLOT_SPACING]
@@ -48,7 +53,8 @@
     PLATFORM_MARGIN_Z_FRONT + PLATFORM_MARGIN_Z_BACK + SLOT_DEPTH
   const PLATFORM_WIDTH = BASE_PLATFORM_WIDTH * PLATFORM_SCALE
   const PLATFORM_DEPTH = BASE_PLATFORM_DEPTH * PLATFORM_SCALE
-  const PLATFORM_CENTER_Z = (SLOT_DEPTH + PLATFORM_MARGIN_Z_FRONT - PLATFORM_MARGIN_Z_BACK) / 2
+  const PLATFORM_CENTER_Z =
+    (SLOT_DEPTH + PLATFORM_MARGIN_Z_FRONT - PLATFORM_MARGIN_Z_BACK) / 2
   const CAMERA_FOV = 45
   const CAMERA_POSITION_Y = 1.5
   const CAMERA_LOOK_AT_Y = 0.8
@@ -154,14 +160,19 @@
 
     const halfSpanX = SLOT_SPACING + CHARACTER_HALF_WIDTH
     const fitDistanceByWidth = halfSpanX / Math.tan(halfHorizontalFov)
-    const fitDistanceByHeight = CHARACTER_HALF_HEIGHT / Math.tan(halfVerticalFov)
-    const offsetZ = Math.max(fitDistanceByWidth, fitDistanceByHeight) * CAMERA_FIT_PADDING
+    const fitDistanceByHeight =
+      CHARACTER_HALF_HEIGHT / Math.tan(halfVerticalFov)
+    const offsetZ =
+      Math.max(fitDistanceByWidth, fitDistanceByHeight) * CAMERA_FIT_PADDING
 
     return SLOT_DEPTH + offsetZ
   }
 
   $effect(() => {
-    cameraPositionZ = calculateCameraPositionZ(viewportSize.width, viewportSize.height)
+    cameraPositionZ = calculateCameraPositionZ(
+      viewportSize.width,
+      viewportSize.height
+    )
 
     if (cameraRef) {
       cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, SLOT_DEPTH)
@@ -236,7 +247,13 @@
   receiveShadow
 >
   <T.PlaneGeometry args={[PLATFORM_WIDTH, PLATFORM_DEPTH]} />
-  <T.MeshStandardMaterial color="#1a2535" opacity={0.6} transparent depthWrite={false} envMapIntensity={0} />
+  <T.MeshStandardMaterial
+    color="#1a2535"
+    opacity={0.6}
+    transparent
+    depthWrite={false}
+    envMapIntensity={0}
+  />
 </T.Mesh>
 
 {#each [0, 1, 2] as slotIndex (slotIndex)}

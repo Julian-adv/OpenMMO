@@ -10,13 +10,17 @@
     monsterModels?: (Monster | undefined)[]
   }
 
-  let { monsters, monsterModels = $bindable<(Monster | undefined)[]>([]) }: Props =
-    $props()
+  let {
+    monsters,
+    monsterModels = $bindable<(Monster | undefined)[]>([]),
+  }: Props = $props()
 
   // Floor filter: underground shows only same-depth monsters; on the
   // surface dungeon monsters are hidden. Mismatches are parked at
   // OFFSCREEN_Y instead of unmounted (no pipeline churn, indices stable).
-  let viewerFloor = $derived($currentDungeonDepth >= 1 ? -$currentDungeonDepth : 0)
+  let viewerFloor = $derived(
+    $currentDungeonDepth >= 1 ? -$currentDungeonDepth : 0
+  )
   const HIDDEN_POS = { x: 0, y: OFFSCREEN_Y, z: 0 }
 
   function isOnViewerFloor(monster: MonsterData): boolean {

@@ -1,5 +1,11 @@
 <script lang="ts">
-  import { brushSize, brushStrength, brushRaiseMode, brushMode, cursorHeight } from '../../stores/editorStore'
+  import {
+    brushSize,
+    brushStrength,
+    brushRaiseMode,
+    brushMode,
+    cursorHeight,
+  } from '../../stores/editorStore'
   import type { BrushMode } from '../../stores/editorStore'
 
   let size = $state(3)
@@ -61,10 +67,22 @@
   </div>
 
   <div class="control-row">
-    <button class="mode-btn" class:raise={mode === 'raise'} class:lower={mode === 'lower'} class:flatten={mode === 'flatten'} onclick={toggleMode}>
+    <button
+      class="mode-btn"
+      class:raise={mode === 'raise'}
+      class:lower={mode === 'lower'}
+      class:flatten={mode === 'flatten'}
+      onclick={toggleMode}
+    >
       {mode === 'flatten' ? 'Flatten' : mode === 'raise' ? 'Raise' : 'Lower'}
     </button>
-    <span class="hint">{mode === 'flatten' ? 'Ctrl held' : (mode === 'raise') !== raise ? 'Shift held' : 'Shift to invert'}</span>
+    <span class="hint"
+      >{mode === 'flatten'
+        ? 'Ctrl held'
+        : (mode === 'raise') !== raise
+          ? 'Shift held'
+          : 'Shift to invert'}</span
+    >
   </div>
 
   {#if height !== null}

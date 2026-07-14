@@ -16,8 +16,19 @@
   import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
   import { remotePlayerManager } from '../../managers/remotePlayerManager'
 
-  import { applyTorchFlickerWorld, TORCH_BASE_DISTANCE, TORCH_BASE_DECAY, TORCH_BASE_POSITION, TORCH_SHADOW_FAR, TORCH_SHADOW_MAP_SIZE, TORCH_SHADOW_BIAS } from '../../utils/torchFlicker'
-  import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
+  import {
+    applyTorchFlickerWorld,
+    TORCH_BASE_DISTANCE,
+    TORCH_BASE_DECAY,
+    TORCH_BASE_POSITION,
+    TORCH_SHADOW_FAR,
+    TORCH_SHADOW_MAP_SIZE,
+    TORCH_SHADOW_BIAS,
+  } from '../../utils/torchFlicker'
+  import {
+    playerFloorLevel,
+    playerInsideHouseId,
+  } from '../../stores/housingStore'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
   import { dungeonManager } from '../../managers/dungeonManager'
   import { housingManager } from '../../managers/housingManager'
@@ -31,7 +42,11 @@
   import { torchLightEnabled } from '../../stores/debugStore'
   import { localTorchEquipped } from '../../stores/inventoryStore'
 
-  const TORCH_OFFSET = new THREE.Vector3(TORCH_BASE_POSITION.x, TORCH_BASE_POSITION.y, TORCH_BASE_POSITION.z)
+  const TORCH_OFFSET = new THREE.Vector3(
+    TORCH_BASE_POSITION.x,
+    TORCH_BASE_POSITION.y,
+    TORCH_BASE_POSITION.z
+  )
   const Y_AXIS = new THREE.Vector3(0, 1, 0)
 
   interface Props {
@@ -109,7 +124,10 @@
   let localDungeonDepth = $derived($currentDungeonDepth)
   let isUnderground = $derived(localDungeonDepth >= 1)
 
-  function isRemotePlayerVisible(remoteFloorLevel: number, pos: { x: number; y: number; z: number }): boolean {
+  function isRemotePlayerVisible(
+    remoteFloorLevel: number,
+    pos: { x: number; y: number; z: number }
+  ): boolean {
     // Dungeon: only players on the same depth are visible; from the
     // surface, underground players are hidden (and vice versa).
     if (localDungeonDepth >= 1) {
@@ -118,7 +136,9 @@
     if (remoteFloorLevel < 0) return false
     const remoteHouse = housingManager.findHouseAtPoint(pos.x, pos.y, pos.z)
     if (localHouseId) {
-      return remoteFloorLevel === localFloorLevel && remoteHouse?.id === localHouseId
+      return (
+        remoteFloorLevel === localFloorLevel && remoteHouse?.id === localHouseId
+      )
     }
     return remoteHouse == null
   }
@@ -127,7 +147,10 @@
     const map = new SvelteMap<string, boolean>()
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
-      map.set(id, rp ? isRemotePlayerVisible(player.floorLevel, rp.position) : false)
+      map.set(
+        id,
+        rp ? isRemotePlayerVisible(player.floorLevel, rp.position) : false
+      )
     }
     return map
   })
@@ -176,13 +199,22 @@
   /** Scratch reused each frame to rank wall torches by distance to the player. */
   const _wallTorchRanking: { idx: number; dist: number }[] = []
 
-  function setTorchTargetFromPose(x: number, z: number, fallbackY: number, rotation: number): THREE.Vector3 {
+  function setTorchTargetFromPose(
+    x: number,
+    z: number,
+    fallbackY: number,
+    rotation: number
+  ): THREE.Vector3 {
     const y =
       dungeonManager.sampleHeightAt(x, z) ??
       heightManager.getHeightAtWorldPosition(x, z) ??
       fallbackY
     _torchOffsetTmp.copy(TORCH_OFFSET).applyAxisAngle(Y_AXIS, rotation)
-    return _unifiedTorchTmp.set(x + _torchOffsetTmp.x, y + _torchOffsetTmp.y, z + _torchOffsetTmp.z)
+    return _unifiedTorchTmp.set(
+      x + _torchOffsetTmp.x,
+      y + _torchOffsetTmp.y,
+      z + _torchOffsetTmp.z
+    )
   }
 
   /** Pick the unified shadow light's target. Returns the world position plus, when
@@ -194,7 +226,10 @@
     if (!currentPlayer) return null
     if (get(localTorchEquipped) || get(torchLightEnabled)) {
       const p = currentPlayer.position
-      return { target: setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation), wallIdx: -1 }
+      return {
+        target: setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation),
+        wallIdx: -1,
+      }
     }
     // No lit player torch: the nearest lit source — remote torch or wall torch,
     // ranked together by distance — takes the shadow-casting light.
@@ -226,7 +261,10 @@
       }
     }
     if (bestWallIdx >= 0) {
-      return { target: _unifiedTorchTmp.copy(wallPositions[bestWallIdx]), wallIdx: bestWallIdx }
+      return {
+        target: _unifiedTorchTmp.copy(wallPositions[bestWallIdx]),
+        wallIdx: bestWallIdx,
+      }
     }
     if (bestRp) {
       const displayX = unwrapWorldXNear(playerPos.x, bestRp.position.x)
@@ -260,7 +298,8 @@
         const dx = w.x - playerPos.x
         const dz = w.z - playerPos.z
         const dist = dx * dx + dz * dz
-        if (dist <= WALL_TORCH_POOL_RANGE_SQ) _wallTorchRanking.push({ idx: i, dist })
+        if (dist <= WALL_TORCH_POOL_RANGE_SQ)
+          _wallTorchRanking.push({ idx: i, dist })
       }
       _wallTorchRanking.sort((a, b) => a.dist - b.dist)
     }
@@ -271,8 +310,13 @@
       if (ranked) {
         const w = wallPositions[ranked.idx]
         wallTorchFlickerTimes[slot] = applyTorchFlickerWorld(
-          light, wallTorchFlickerTimes[slot], deltaTime, w.x, w.y, w.z,
-          WALL_TORCH_INTENSITY_SCALE,
+          light,
+          wallTorchFlickerTimes[slot],
+          deltaTime,
+          w.x,
+          w.y,
+          w.z,
+          WALL_TORCH_INTENSITY_SCALE
         )
       } else {
         light.intensity = 0
@@ -282,16 +326,22 @@
 
   export function updateUnifiedTorchFlicker(deltaTime: number) {
     const wallPositions =
-      isUnderground && !torchEffectsDisabled ? wallTorchPositions?.() ?? [] : []
+      isUnderground && !torchEffectsDisabled
+        ? (wallTorchPositions?.() ?? [])
+        : []
     let occupiedWallIdx = -1
     if (unifiedTorchLight) {
       const result = computeUnifiedTorchTarget(wallPositions)
       if (result) {
         occupiedWallIdx = result.wallIdx
         unifiedTorchFlickerTime = applyTorchFlickerWorld(
-          unifiedTorchLight, unifiedTorchFlickerTime, deltaTime,
-          result.target.x, result.target.y, result.target.z,
-          occupiedWallIdx >= 0 ? WALL_TORCH_INTENSITY_SCALE : 1,
+          unifiedTorchLight,
+          unifiedTorchFlickerTime,
+          deltaTime,
+          result.target.x,
+          result.target.y,
+          result.target.z,
+          occupiedWallIdx >= 0 ? WALL_TORCH_INTENSITY_SCALE : 1
         )
       } else {
         unifiedTorchLight.intensity = 0
@@ -308,13 +358,15 @@
 {#if camera && currentPlayer}
   <PlayerControl
     bind:this={playerControl}
-    onStateChange={onStateChange}
+    {onStateChange}
     {camera}
     {heightManager}
     groundMeshes={localDungeonDepth >= 1 && dungeonGroup
       ? [dungeonGroup]
       : [
-          ...terrainMeshes.filter((mesh) => mesh !== undefined) as THREE.Mesh[],
+          ...(terrainMeshes.filter(
+            (mesh) => mesh !== undefined
+          ) as THREE.Mesh[]),
           ...(housingGroup ? [housingGroup] : []),
         ]}
     monsterMeshes={monsterModels
@@ -353,7 +405,7 @@
     gender={currentPlayer.gender}
     health={currentPlayer.health}
     maxHealth={currentPlayer.maxHealth}
-    onAttackDuration={onAttackDuration}
+    {onAttackDuration}
     onDyingFinished={onCurrentPlayerDyingFinished}
     onInteractionFinished={() => {
       onPlayerControlEvent?.({ type: 'anim_interaction_finished' })
@@ -377,15 +429,19 @@
       {@const displayX = currentPlayer
         ? unwrapWorldXNear(currentPlayer.position.x, remotePlayer.position.x)
         : remotePlayer.position.x}
-      {@const baseY = player.floorLevel > 0 || player.floorLevel < 0
-        ? remotePlayer.position.y
-        : (bridgeManager.findDeckYAt(
-            wrapWorldX(displayX),
-            remotePlayer.position.z,
-            null
-          )
-            ?? heightManager.getHeightAtWorldPosition(displayX, remotePlayer.position.z)
-            ?? remotePlayer.position.y)}
+      {@const baseY =
+        player.floorLevel > 0 || player.floorLevel < 0
+          ? remotePlayer.position.y
+          : (bridgeManager.findDeckYAt(
+              wrapWorldX(displayX),
+              remotePlayer.position.z,
+              null
+            ) ??
+            heightManager.getHeightAtWorldPosition(
+              displayX,
+              remotePlayer.position.z
+            ) ??
+            remotePlayer.position.y)}
       <PlayerModel
         bind:this={otherPlayerModels[index]}
         position={new THREE.Vector3(

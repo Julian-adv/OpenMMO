@@ -17,12 +17,19 @@
     selectedGender: Gender
     onClassChange: (cls: CharacterClass) => void
     onGenderChange: (gender: Gender) => void
-    onRollCharacterStats: (cls: CharacterClass, gender: Gender) => Promise<RollCharacterStatsResult>
+    onRollCharacterStats: (
+      cls: CharacterClass,
+      gender: Gender
+    ) => Promise<RollCharacterStatsResult>
     onCreateCharacter: (
       characterName: string,
       characterClass: CharacterClass,
       gender: Gender
-    ) => Promise<{ ok: boolean; message?: string; character?: AccountCharacter }>
+    ) => Promise<{
+      ok: boolean
+      message?: string
+      character?: AccountCharacter
+    }>
     onCharacterCreated: (characterId: number) => void
     onCancel: () => void
   }
@@ -110,7 +117,11 @@
 
     isCreating = true
     errorMessage = ''
-    const result = await onCreateCharacter(characterName, selectedClass, selectedGender)
+    const result = await onCreateCharacter(
+      characterName,
+      selectedClass,
+      selectedGender
+    )
     isCreating = false
 
     if (!result.ok) {
@@ -246,7 +257,15 @@
           />
         </label>
 
-        <div class="rolled-attributes" role="button" tabindex="0" onclick={handleRoll} onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleRoll() }}>
+        <div
+          class="rolled-attributes"
+          role="button"
+          tabindex="0"
+          onclick={handleRoll}
+          onkeydown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') handleRoll()
+          }}
+        >
           {#if rolledStats}
             <div class="attr">STR {rolledStats.attributes.str}</div>
             <div class="attr">DEX {rolledStats.attributes.dex}</div>
@@ -256,12 +275,19 @@
             <div class="attr">CHA {rolledStats.attributes.cha}</div>
             <div class="attr">HP {rolledStats.maxHp}</div>
           {:else}
-            <div class="roll-hint">Roll to generate attributes (4d6 drop lowest, total 72)</div>
+            <div class="roll-hint">
+              Roll to generate attributes (4d6 drop lowest, total 72)
+            </div>
           {/if}
         </div>
 
         <div class="create-actions">
-          <button type="button" class="secondary" disabled={isBusy()} onclick={handleRoll}>
+          <button
+            type="button"
+            class="secondary"
+            disabled={isBusy()}
+            onclick={handleRoll}
+          >
             {isRolling ? 'Rolling...' : 'Roll'}
           </button>
           <button
@@ -383,7 +409,10 @@
     color: #9fb0c6;
     font-size: 14px;
     cursor: pointer;
-    transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+    transition:
+      background 120ms ease,
+      color 120ms ease,
+      border-color 120ms ease;
   }
 
   .class-btn:disabled {

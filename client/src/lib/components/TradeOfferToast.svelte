@@ -72,7 +72,9 @@
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
-    transition: background 150ms ease, color 150ms ease;
+    transition:
+      background 150ms ease,
+      color 150ms ease;
   }
 
   .accept-btn {

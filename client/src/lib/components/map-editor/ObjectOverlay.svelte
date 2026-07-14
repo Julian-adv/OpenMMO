@@ -23,7 +23,10 @@
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { objectManager } from '../../managers/objectManager'
   import { bridgeManager } from '../../managers/bridgeManager'
-  import { playerFloorLevel, playerInsideHouseId } from '../../stores/housingStore'
+  import {
+    playerFloorLevel,
+    playerInsideHouseId,
+  } from '../../stores/housingStore'
   import { housingManager } from '../../managers/housingManager'
   import { loadGLB } from '../../utils/gltfCache'
   import type { Unsubscriber } from 'svelte/store'
@@ -100,7 +103,10 @@
   })
 
   const modelCache = new SvelteMap<string, THREE.Group>()
-  const modelBounds = new SvelteMap<string, { center: THREE.Vector3; size: THREE.Vector3 }>()
+  const modelBounds = new SvelteMap<
+    string,
+    { center: THREE.Vector3; size: THREE.Vector3 }
+  >()
   const loadingModels = new SvelteSet<string>()
 
   async function getModel(objectId: string): Promise<THREE.Group | null> {
@@ -190,18 +196,23 @@
     })
   }
 
-let lastBuildKey = ''
+  let lastBuildKey = ''
   const isEditing = () => isEditorMode && tool === 'object'
 
   function buildKey(p: ObjectPlacement[]): string {
     return p
-      .map((v) => `${v.id}:${v.type}:${v.x}:${v.y}:${v.z}:${v.rotation}:${v.text ?? ''}`)
+      .map(
+        (v) =>
+          `${v.id}:${v.type}:${v.x}:${v.y}:${v.z}:${v.rotation}:${v.text ?? ''}`
+      )
       .join('|')
   }
 
   function rebuild() {
     const visibleFloor = Math.max(0, currentFloor)
-    const key = buildKey(placements) + `|sel:${isEditing() ? selectedId : ''}|fl:${visibleFloor}|h:${currentHouseId ?? ''}`
+    const key =
+      buildKey(placements) +
+      `|sel:${isEditing() ? selectedId : ''}|fl:${visibleFloor}|h:${currentHouseId ?? ''}`
     if (key === lastBuildKey) return
     lastBuildKey = key
 

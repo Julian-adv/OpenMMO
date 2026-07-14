@@ -27,7 +27,15 @@
     gender?: Gender
   }
 
-  let { positionX, positionY, positionZ, rotationY = 0, selected, characterClass, gender }: Props = $props()
+  let {
+    positionX,
+    positionY,
+    positionZ,
+    rotationY = 0,
+    selected,
+    characterClass,
+    gender,
+  }: Props = $props()
 
   // Load via shared cache so GLBs persist across Canvas lifecycles
   let characterGltfData = $state<GLTF | null>(null)
@@ -35,10 +43,16 @@
   let combatMeleeGltfData = $state<GLTF | null>(null)
 
   $effect(() => {
-    loadGLB(getCharacterModelPath(characterClass, gender)).then((g) => { characterGltfData = g })
+    loadGLB(getCharacterModelPath(characterClass, gender)).then((g) => {
+      characterGltfData = g
+    })
   })
-  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => { locomotionGltfData = g })
-  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => { combatMeleeGltfData = g })
+  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.locomotion).then((g) => {
+    locomotionGltfData = g
+  })
+  loadGLB(CHARACTER_ANIMATION_PACK_PATHS.combatMelee).then((g) => {
+    combatMeleeGltfData = g
+  })
 
   let mixer = $state<THREE.AnimationMixer | null>(null)
   let currentAction = $state<THREE.AnimationAction | null>(null)
@@ -50,7 +64,9 @@
 
   const OVERLAP_BEFORE_END = 0.3
 
-  let gltfReady = $derived(!!characterGltfData && !!locomotionGltfData && !!combatMeleeGltfData)
+  let gltfReady = $derived(
+    !!characterGltfData && !!locomotionGltfData && !!combatMeleeGltfData
+  )
 
   function playIdleAnimation() {
     if (!mixer || validAnimations.length === 0) return
@@ -62,7 +78,8 @@
       AnimationIndex.IDLE4,
       AnimationIndex.IDLE5,
     ]
-    const idleIndex = idleIndices[Math.floor(Math.random() * idleIndices.length)]
+    const idleIndex =
+      idleIndices[Math.floor(Math.random() * idleIndices.length)]
     const clip = validAnimations[idleIndex]
     if (!clip) return
 
@@ -91,11 +108,18 @@
   }
 
   export function setup(): void {
-    if (setupDone || !characterGltfData || !locomotionGltfData || !combatMeleeGltfData) return
+    if (
+      setupDone ||
+      !characterGltfData ||
+      !locomotionGltfData ||
+      !combatMeleeGltfData
+    )
+      return
     setupDone = true
 
     const sourceScene = characterGltfData.scene
-    const { clonedScene: newClonedScene, modelRoot: newModelRoot } = createCharacterModelRoot(sourceScene)
+    const { clonedScene: newClonedScene, modelRoot: newModelRoot } =
+      createCharacterModelRoot(sourceScene)
 
     const orderedAnims = selectOrderedCharacterAnimations(
       getGltfAnimations(characterGltfData),
@@ -103,15 +127,11 @@
       getGltfAnimations(combatMeleeGltfData)
     )
 
-    retargetOrderedCharacterAnimationsForModel(
-      newModelRoot,
-      orderedAnims,
-      {
-        base: sourceScene,
-        locomotion: locomotionGltfData.scene,
-        combatMelee: combatMeleeGltfData.scene,
-      }
-    ).then((clips) => {
+    retargetOrderedCharacterAnimationsForModel(newModelRoot, orderedAnims, {
+      base: sourceScene,
+      locomotion: locomotionGltfData.scene,
+      combatMelee: combatMeleeGltfData.scene,
+    }).then((clips) => {
       validAnimations = clips
 
       if (validAnimations.length > 0) {

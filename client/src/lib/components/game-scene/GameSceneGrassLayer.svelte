@@ -27,7 +27,10 @@
     type WindState,
   } from '../../shaders/grass-material'
   import { GUST_WAVE_COUNT } from '../../shaders/grass-shared'
-  import { createBladeGeometry, createStarGeometry } from '../../shaders/grass-blade-geometry'
+  import {
+    createBladeGeometry,
+    createStarGeometry,
+  } from '../../shaders/grass-blade-geometry'
   import {
     createBladeMaterial,
     createSharedComputeUniforms,
@@ -61,7 +64,12 @@
   // All geometry is created synchronously; only flower texture is async
   const _shortGrassGeometry: THREE.BufferGeometry = createBladeGeometry(5)
   const _tallGrassGeometry: THREE.BufferGeometry = createBladeGeometry(10)
-  const _flowerGeometry: THREE.BufferGeometry = createStarGeometry(3, 0.35, 0.7, 1.0)
+  const _flowerGeometry: THREE.BufferGeometry = createStarGeometry(
+    3,
+    0.35,
+    0.7,
+    1.0
+  )
   let _flowerCfg: GrassMaterialConfig | null = null
   // Shared compute uniforms (one set per grass type)
   let shortComputeUniforms: GrassComputeUniforms | null = null
@@ -106,8 +114,13 @@
     const dummyRot = new Float32Array([0])
     const dummyScale = new Float32Array([1])
     const warmupSlots: BladeSlot[] = []
-    const warmupAllSlots = (slots: (BladeSlot | null)[], geom: THREE.BufferGeometry,
-      uniforms: GrassComputeUniforms, cfg?: GrassMaterialConfig, capacity = MESH_CAPACITY) => {
+    const warmupAllSlots = (
+      slots: (BladeSlot | null)[],
+      geom: THREE.BufferGeometry,
+      uniforms: GrassComputeUniforms,
+      cfg?: GrassMaterialConfig,
+      capacity = MESH_CAPACITY
+    ) => {
       for (let i = 0; i < GRID_COUNT; i++) {
         const slot = ensureBladeSlot(slots, i, geom, uniforms, cfg, capacity)
         writeBladeData(slot.ctx, dummyXZ, dummyY, dummyRot, dummyScale, 1)
@@ -125,8 +138,19 @@
       }
     }
     warmupAllSlots(shortSlots, _shortGrassGeometry, shortComputeUniforms!)
-    warmupAllSlots(tallSlots, _tallGrassGeometry, tallComputeUniforms!, TALL_GRASS_CONFIG)
-    warmupAllSlots(flowerSlots, _flowerGeometry, flowerComputeUniforms!, _flowerCfg!, FLOWER_MESH_CAPACITY)
+    warmupAllSlots(
+      tallSlots,
+      _tallGrassGeometry,
+      tallComputeUniforms!,
+      TALL_GRASS_CONFIG
+    )
+    warmupAllSlots(
+      flowerSlots,
+      _flowerGeometry,
+      flowerComputeUniforms!,
+      _flowerCfg!,
+      FLOWER_MESH_CAPACITY
+    )
 
     // After a few frames, cull/silence the dummy slots. They stay allocated so
     // writeBladeSlotData() can reassign them to real sub-chunks instantly, but
@@ -142,7 +166,9 @@
         slot.ctx.count = 0
         slot.mesh.frustumCulled = true
         slot.mesh.boundingSphere = new THREE.Sphere(
-          new THREE.Vector3(0, -100000, 0), 1)
+          new THREE.Vector3(0, -100000, 0),
+          1
+        )
       }
       // Warmup overwrites any real data that was already loaded into slots.
       // Clear slot assignments so the next rebuild re-writes real data.
@@ -160,9 +186,18 @@
     ctx: GrassComputeContext
     capacity: number
   }
-  let shortSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
-  let tallSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
-  let flowerSlots: (BladeSlot | null)[] = Array.from({ length: GRID_COUNT }, () => null)
+  let shortSlots: (BladeSlot | null)[] = Array.from(
+    { length: GRID_COUNT },
+    () => null
+  )
+  let tallSlots: (BladeSlot | null)[] = Array.from(
+    { length: GRID_COUNT },
+    () => null
+  )
+  let flowerSlots: (BladeSlot | null)[] = Array.from(
+    { length: GRID_COUNT },
+    () => null
+  )
 
   // Load flower texture asynchronously (geometry is now procedural)
   let _flowerColorMap: THREE.Texture | null = null
@@ -174,7 +209,8 @@
 
   /** Create shared compute uniforms for all grass types on first use. */
   function ensureMaterials(): boolean {
-    if (shortComputeUniforms && tallComputeUniforms && flowerComputeUniforms) return true
+    if (shortComputeUniforms && tallComputeUniforms && flowerComputeUniforms)
+      return true
     if (!_flowerColorMap) return false
 
     shortComputeUniforms = createSharedComputeUniforms()
@@ -189,7 +225,7 @@
     baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     cfg?: GrassMaterialConfig,
-    capacity = MESH_CAPACITY,
+    capacity = MESH_CAPACITY
   ): BladeSlot {
     const ctx = createGrassComputeContext(capacity, uniforms)
     const mat = createBladeMaterial(ctx, cfg)
@@ -210,7 +246,7 @@
     baseGeometry: THREE.BufferGeometry,
     uniforms: GrassComputeUniforms,
     cfg?: GrassMaterialConfig,
-    capacity = MESH_CAPACITY,
+    capacity = MESH_CAPACITY
   ): BladeSlot {
     if (!slots[index]) {
       slots[index] = createBladeSlot(baseGeometry, uniforms, cfg, capacity)
@@ -235,7 +271,7 @@
     3,
     WIND_ARROW_COLOR,
     0.6,
-    0.3,
+    0.3
   )
   windArrow.visible = false
 
@@ -260,14 +296,19 @@
     new THREE.Vector4(0.31, 0.8, 1.6, 0.87),
     new THREE.Vector4(0.39, 1.5, 1.7, 0.95),
   ]
-  const wavePhases: ('hold' | 'fade-out' | 'fade-in')[] = ['hold', 'hold', 'hold']
+  const wavePhases: ('hold' | 'fade-out' | 'fade-in')[] = [
+    'hold',
+    'hold',
+    'hold',
+  ]
   const waveTimers = Array.from({ length: GUST_WAVE_COUNT }, () => 0)
   const waveDurations = Array.from({ length: GUST_WAVE_COUNT }, () => 0)
 
   function startWaveHold(i: number) {
     wavePhases[i] = 'hold'
     waveAmplitudes[i] = 1
-    waveDurations[i] = WAVE_HOLD_MIN + Math.random() * (WAVE_HOLD_MAX - WAVE_HOLD_MIN)
+    waveDurations[i] =
+      WAVE_HOLD_MIN + Math.random() * (WAVE_HOLD_MAX - WAVE_HOLD_MIN)
     waveTimers[i] = waveDurations[i]
   }
 
@@ -302,7 +343,8 @@
   }
 
   function pickStrengthTransition() {
-    windStrengthTarget = WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
+    windStrengthTarget =
+      WIND_STR_MIN + Math.random() * (WIND_STR_MAX - WIND_STR_MIN)
     windStrengthDuration = 4 + Math.random() * 8
     windStrengthTimer = windStrengthDuration
     windStrengthStart = windStrengthMul
@@ -323,7 +365,7 @@
   let windDirTimer = 15 + Math.random() * 25 // first change in 15~40s
 
   function triggerWindDirectionChange() {
-    const shift = (Math.PI / 6) + Math.random() * (Math.PI / 3) // ±30°~90°
+    const shift = Math.PI / 6 + Math.random() * (Math.PI / 3) // ±30°~90°
     pendingWindAngle = windAngle + (Math.random() < 0.5 ? shift : -shift)
     windDirPhase = 'fading-out'
     windDirFadeTimer = WIND_DIR_FADE_OUT_DURATION
@@ -387,7 +429,9 @@
           break
         }
         case 'fade-in': {
-          waveAmplitudes[wi] = smoothstep(1 - waveTimers[wi] / waveDurations[wi])
+          waveAmplitudes[wi] = smoothstep(
+            1 - waveTimers[wi] / waveDurations[wi]
+          )
           if (waveTimers[wi] <= 0) startWaveHold(wi)
           break
         }
@@ -403,7 +447,9 @@
     } else if (windDirPhase === 'fading-out') {
       windDirFadeTimer -= dt
       // Fade wind strength toward 0
-      const t = smoothstep(Math.min(1, 1 - windDirFadeTimer / WIND_DIR_FADE_OUT_DURATION))
+      const t = smoothstep(
+        Math.min(1, 1 - windDirFadeTimer / WIND_DIR_FADE_OUT_DURATION)
+      )
       windStrengthMul = windStrengthBeforeFade * (1 - t)
       // Wait for both strength ~0 and all waves ~0
       const allFaded = waveAmplitudes.every((a) => a < 0.01)
@@ -419,7 +465,9 @@
       }
     } else if (windDirPhase === 'fading-in') {
       windDirFadeTimer -= dt
-      const t = smoothstep(Math.min(1, 1 - windDirFadeTimer / WIND_DIR_FADE_IN_DURATION))
+      const t = smoothstep(
+        Math.min(1, 1 - windDirFadeTimer / WIND_DIR_FADE_IN_DURATION)
+      )
       windStrengthMul = windStrengthBeforeFade * t
       if (windDirFadeTimer <= 0) {
         windStrengthMul = windStrengthBeforeFade
@@ -436,8 +484,11 @@
     if (windDirPhase === 'steady') {
       windStrengthTimer -= dt
       if (windStrengthDuration > 0) {
-        const t = smoothstep(Math.min(1, 1 - windStrengthTimer / windStrengthDuration))
-        windStrengthMul = windStrengthStart + (windStrengthTarget - windStrengthStart) * t
+        const t = smoothstep(
+          Math.min(1, 1 - windStrengthTimer / windStrengthDuration)
+        )
+        windStrengthMul =
+          windStrengthStart + (windStrengthTarget - windStrengthStart) * t
       }
       if (windStrengthTimer <= 0) {
         windStrengthMul = windStrengthTarget
@@ -474,13 +525,15 @@
 
     // Apply windStrengthMul to base wind strengths
     if (shortComputeUniforms) {
-      shortComputeUniforms.uWindStrength.value = (0.06) * windStrengthMul
+      shortComputeUniforms.uWindStrength.value = 0.06 * windStrengthMul
     }
     if (tallComputeUniforms) {
-      tallComputeUniforms.uWindStrength.value = (TALL_GRASS_CONFIG.windStrength ?? 0.12) * windStrengthMul
+      tallComputeUniforms.uWindStrength.value =
+        (TALL_GRASS_CONFIG.windStrength ?? 0.12) * windStrengthMul
     }
     if (flowerComputeUniforms) {
-      flowerComputeUniforms.uWindStrength.value = (FLOWER_CONFIG.windStrength ?? 0.04) * windStrengthMul
+      flowerComputeUniforms.uWindStrength.value =
+        (FLOWER_CONFIG.windStrength ?? 0.04) * windStrengthMul
     }
 
     // ── Dispatch compute shaders for active blade slots (every other frame) ──
@@ -490,7 +543,8 @@
         for (const slot of slots) {
           if (slot && slot.ctx.count > 0) {
             // Dispatch only for actual blade count, not full capacity (131K)
-            ;(slot.ctx.computeUpdate as { count: number }).count = slot.ctx.count
+            ;(slot.ctx.computeUpdate as { count: number }).count =
+              slot.ctx.count
             renderer.compute(slot.ctx.computeUpdate)
           }
         }
@@ -502,7 +556,11 @@
     if (showArrow && playerPosition) {
       const arrowLen = 1.5 + windStrengthMul * 3.5
       windArrowDir.set(cachedWindDirX, 0, cachedWindDirZ)
-      windArrow.position.set(playerPosition.x, playerPosition.y + 3, playerPosition.z)
+      windArrow.position.set(
+        playerPosition.x,
+        playerPosition.y + 3,
+        playerPosition.z
+      )
       windArrow.setDirection(windArrowDir)
       windArrow.setLength(arrowLen, arrowLen * 0.2, arrowLen * 0.1)
       windArrow.setColor(WIND_ARROW_COLOR)
@@ -524,7 +582,13 @@
     flower: SubChunkData
   }
 
-  const EMPTY_SUB_CHUNK: SubChunkData = { worldXZ: new Float32Array(0), worldY: new Float32Array(0), rotations: new Float32Array(0), scales: new Float32Array(0), count: 0 }
+  const EMPTY_SUB_CHUNK: SubChunkData = {
+    worldXZ: new Float32Array(0),
+    worldY: new Float32Array(0),
+    rotations: new Float32Array(0),
+    scales: new Float32Array(0),
+    count: 0,
+  }
 
   // Non-reactive internal caches — intentionally plain Map/Set for performance
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -536,7 +600,9 @@
   let needsRebuild = false
 
   // ── Partition raw instance data into sub-chunks ──────────
-  function partitionIntoSubChunks(rawData: Float32Array): Map<string, SubChunkData> {
+  function partitionIntoSubChunks(
+    rawData: Float32Array
+  ): Map<string, SubChunkData> {
     const count = rawData.length / 5
     if (count === 0) return new Map()
 
@@ -596,10 +662,33 @@
 
     const wantedKeys = new Set(getActiveSubChunkKeys())
 
-    rebuildBladeType(shortSlots, _shortGrassGeometry, shortComputeUniforms!, shortKeyToSlot, wantedKeys, (c) => c?.short)
-    rebuildBladeType(tallSlots, _tallGrassGeometry, tallComputeUniforms!, tallKeyToSlot, wantedKeys, (c) => c?.tall, TALL_GRASS_CONFIG)
-    rebuildBladeType(flowerSlots, _flowerGeometry!, flowerComputeUniforms!, flowerKeyToSlot, wantedKeys, (c) => c?.flower,
-      _flowerCfg!, FLOWER_MESH_CAPACITY)
+    rebuildBladeType(
+      shortSlots,
+      _shortGrassGeometry,
+      shortComputeUniforms!,
+      shortKeyToSlot,
+      wantedKeys,
+      (c) => c?.short
+    )
+    rebuildBladeType(
+      tallSlots,
+      _tallGrassGeometry,
+      tallComputeUniforms!,
+      tallKeyToSlot,
+      wantedKeys,
+      (c) => c?.tall,
+      TALL_GRASS_CONFIG
+    )
+    rebuildBladeType(
+      flowerSlots,
+      _flowerGeometry!,
+      flowerComputeUniforms!,
+      flowerKeyToSlot,
+      wantedKeys,
+      (c) => c?.flower,
+      _flowerCfg!,
+      FLOWER_MESH_CAPACITY
+    )
     dirtySubChunks.clear()
   }
 
@@ -612,7 +701,7 @@
     wantedKeys: Set<string>,
     getData: (cached: SubChunkBundle | undefined) => SubChunkData | undefined,
     cfg?: GrassMaterialConfig,
-    capacity = MESH_CAPACITY,
+    capacity = MESH_CAPACITY
   ) {
     const freeSlots: number[] = []
     for (const [key, slot] of keyToSlot) {
@@ -650,7 +739,14 @@
       if (freeSlots.length === 0) continue
       const slot = freeSlots.pop()!
 
-      const bladeSlot = ensureBladeSlot(slots, slot, baseGeometry, uniforms, cfg, capacity)
+      const bladeSlot = ensureBladeSlot(
+        slots,
+        slot,
+        baseGeometry,
+        uniforms,
+        cfg,
+        capacity
+      )
       writeBladeSlotData(bladeSlot, data, key)
       keyToSlot.set(key, slot)
     }
@@ -662,7 +758,7 @@
   function setBoundingSphere(
     mesh: THREE.InstancedMesh,
     subChunkKey: string,
-    data: SubChunkData,
+    data: SubChunkData
   ) {
     const [scx, scz] = subChunkKey.split(',').map(Number)
     // Pull the Y center from actual blade positions: a fixed Y=0 leaves the
@@ -684,24 +780,35 @@
     const centerY = (minY + maxY) / 2
     const halfY = (maxY - minY) / 2 + GRASS_Y_MARGIN
     const radius = Math.sqrt(
-      SUB_CHUNK_SIZE * SUB_CHUNK_SIZE * 0.5 + halfY * halfY,
+      SUB_CHUNK_SIZE * SUB_CHUNK_SIZE * 0.5 + halfY * halfY
     )
     mesh.boundingSphere = new THREE.Sphere(
       new THREE.Vector3(
         (scx + 0.5) * SUB_CHUNK_SIZE,
         centerY,
-        (scz + 0.5) * SUB_CHUNK_SIZE,
+        (scz + 0.5) * SUB_CHUNK_SIZE
       ),
-      radius,
+      radius
     )
   }
 
   /** Write blade data to a compute slot's buffers + set up the mesh. */
-  function writeBladeSlotData(slot: BladeSlot, data: SubChunkData, subChunkKey: string) {
+  function writeBladeSlotData(
+    slot: BladeSlot,
+    data: SubChunkData,
+    subChunkKey: string
+  ) {
     const count = Math.min(data.count, slot.capacity)
 
     // Write placement data into compute bladeData + bladeScale buffers
-    writeBladeData(slot.ctx, data.worldXZ, data.worldY, data.rotations, data.scales, count)
+    writeBladeData(
+      slot.ctx,
+      data.worldXZ,
+      data.worldY,
+      data.rotations,
+      data.scales,
+      count
+    )
 
     // instanceMatrix: not used for position (all in bladeData), but InstancedMesh
     // requires it. Leave as default identity matrices.
@@ -712,7 +819,6 @@
     if (slot.mesh.parent) slot.mesh.parent.remove(slot.mesh)
     grassGroup.add(slot.mesh)
   }
-
 
   /** Strip grass that falls inside any dungeon entrance opening, so the
    *  punched terrain hole isn't covered by blades. Entrances are static, so
@@ -735,7 +841,12 @@
     const tMaxZ = tileZ * TERRAIN_TILE_SIZE + half
     let out = data
     for (const r of dungeonManager.allEntranceHoleRects()) {
-      if (r.minX > tMaxX || r.maxX < tMinX || r.minZ > tMaxZ || r.maxZ < tMinZ) {
+      if (
+        r.minX > tMaxX ||
+        r.maxX < tMinX ||
+        r.minZ > tMaxZ ||
+        r.maxZ < tMinZ
+      ) {
         continue
       }
       const filtered = removeGrassInRect(out, r.minX, r.minZ, r.maxX, r.maxZ)
@@ -768,16 +879,26 @@
             ? applyDungeonExclusions(rawGrassData, tileX, tileZ)
             : rawGrassData
           if (grassData) {
-            const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
-            const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
-            const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
+            const shortChunks = partitionIntoSubChunks(
+              getThinnedInstanceData(grassData, 'short')
+            )
+            const tallChunks = partitionIntoSubChunks(
+              getThinnedInstanceData(grassData, 'tall')
+            )
+            const flowerChunks = partitionIntoSubChunks(
+              getThinnedInstanceData(grassData, 'flower')
+            )
 
             // Only cache sub-chunks within this tile's spatial range.
             // Grass placement jitter can push instances across tile boundaries;
             // those spillover instances must be ignored so a later-loading tile
             // doesn't overwrite a neighbor's dense data with a handful of strays.
             const tileRange = tileSubChunkRange(tileX, tileZ)
-            const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
+            const allKeys = new Set([
+              ...shortChunks.keys(),
+              ...tallChunks.keys(),
+              ...flowerChunks.keys(),
+            ])
             for (const key of allKeys) {
               if (!isKeyInTileRange(key, tileRange)) continue
               subChunkCache.set(key, {
@@ -838,11 +959,21 @@
       clearSubChunksForTile(tileX, tileZ)
 
       // Re-partition updated data
-      const shortChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'short'))
-      const tallChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'tall'))
-      const flowerChunks = partitionIntoSubChunks(getThinnedInstanceData(grassData, 'flower'))
+      const shortChunks = partitionIntoSubChunks(
+        getThinnedInstanceData(grassData, 'short')
+      )
+      const tallChunks = partitionIntoSubChunks(
+        getThinnedInstanceData(grassData, 'tall')
+      )
+      const flowerChunks = partitionIntoSubChunks(
+        getThinnedInstanceData(grassData, 'flower')
+      )
 
-      const allKeys = new Set([...shortChunks.keys(), ...tallChunks.keys(), ...flowerChunks.keys()])
+      const allKeys = new Set([
+        ...shortChunks.keys(),
+        ...tallChunks.keys(),
+        ...flowerChunks.keys(),
+      ])
       for (const key of allKeys) {
         subChunkCache.set(key, {
           short: shortChunks.get(key) ?? EMPTY_SUB_CHUNK,

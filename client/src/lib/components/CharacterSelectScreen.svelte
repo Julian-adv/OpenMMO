@@ -5,7 +5,9 @@
     accountName: string
     characters: AccountCharacter[]
     selectedCharacterId: number | null
-    onStartGame: (characterId: number) => Promise<{ ok: boolean; message?: string }>
+    onStartGame: (
+      characterId: number
+    ) => Promise<{ ok: boolean; message?: string }>
     onDeleteCharacter: (
       characterId: number
     ) => Promise<{ ok: boolean; message?: string }>
@@ -84,19 +86,13 @@
       <div class="info-main">
         <span class="info-name">{selectedCharacter.name}</span>
         <span class="info-meta">
-          Lv. {selectedCharacter.level} {formatCharacterClass(selectedCharacter.class)} · HP {selectedCharacter.max_hp}
+          Lv. {selectedCharacter.level}
+          {formatCharacterClass(selectedCharacter.class)} · HP {selectedCharacter.max_hp}
         </span>
       </div>
 
       <div class="info-stats">
-        {#each [
-          ['STR', selectedCharacter.attributes.str],
-          ['DEX', selectedCharacter.attributes.dex],
-          ['CON', selectedCharacter.attributes.con],
-          ['INT', selectedCharacter.attributes.int],
-          ['WIS', selectedCharacter.attributes.wis],
-          ['CHA', selectedCharacter.attributes.cha],
-        ] as stat (stat[0])}
+        {#each [['STR', selectedCharacter.attributes.str], ['DEX', selectedCharacter.attributes.dex], ['CON', selectedCharacter.attributes.con], ['INT', selectedCharacter.attributes.int], ['WIS', selectedCharacter.attributes.wis], ['CHA', selectedCharacter.attributes.cha]] as stat (stat[0])}
           <div class="info-stat">
             <span>{stat[0]}</span>
             <strong>{stat[1]}</strong>

@@ -63,7 +63,8 @@
     const inst = $inventoryStore.bag.find((b) => b.item_def_id === entry.defId)
     if (!inst) return // none left in bag
     if (slot) networkManager.sendEquipItem(inst.instance_id)
-    else if (isConsumable(entry.def)) networkManager.sendUseItem(inst.instance_id)
+    else if (isConsumable(entry.def))
+      networkManager.sendUseItem(inst.instance_id)
   }
 
   // Digit1..Digit9 → slots 0..8, Digit0 → slot 9.

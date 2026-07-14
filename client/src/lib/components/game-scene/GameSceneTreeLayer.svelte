@@ -4,7 +4,10 @@
   import type { TerrainTile } from './terrain-utils'
   import { TERRAIN_TILE_SIZE } from './terrain-utils'
   import type { TerrainTreeDataManager } from '../../managers/terrainTreeDataManager'
-  import { getTreeInstanceData, type TreePlacementData } from '../../utils/tree-data'
+  import {
+    getTreeInstanceData,
+    type TreePlacementData,
+  } from '../../utils/tree-data'
   import { loadGLB } from '../../utils/gltfCache'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 
@@ -70,17 +73,13 @@
         for (let t = 0; t < 2; t++) {
           const scene = t === 0 ? gltf1.scene : gltf2.scene
           scene.updateMatrixWorld(true)
-          const sceneInv = new THREE.Matrix4()
-            .copy(scene.matrixWorld)
-            .invert()
+          const sceneInv = new THREE.Matrix4().copy(scene.matrixWorld).invert()
 
           scene.traverse((child) => {
             if (!(child as THREE.Mesh).isMesh) return
             const mesh = child as THREE.Mesh
             const srcMat = (
-              Array.isArray(mesh.material)
-                ? mesh.material[0]
-                : mesh.material
+              Array.isArray(mesh.material) ? mesh.material[0] : mesh.material
             ) as THREE.MeshStandardMaterial
 
             // Bake sub-mesh local transform into geometry so instanceMatrix
@@ -156,9 +155,14 @@
    * Ray from player toward camera: R(s) = (px − s, py + s, pz + s), s >= 0.
    */
   function treeOccludesPlayer(
-    tx: number, ty: number, tz: number,
-    scale: number, typeIdx: number,
-    px: number, py: number, pz: number,
+    tx: number,
+    ty: number,
+    tz: number,
+    scale: number,
+    typeIdx: number,
+    px: number,
+    py: number,
+    pz: number
   ): boolean {
     const h = TREE_OCCLUDE_HEIGHT[typeIdx] * scale
     const hw = TREE_OCCLUDE_HALF_W[typeIdx] * scale
@@ -181,18 +185,26 @@
     for (const raw of instances) total += raw.length / 5
     if (total === 0) return new THREE.Sphere(new THREE.Vector3(), 0)
 
-    let minX = Infinity, maxX = -Infinity
-    let minY = Infinity, maxY = -Infinity
-    let minZ = Infinity, maxZ = -Infinity
+    let minX = Infinity,
+      maxX = -Infinity
+    let minY = Infinity,
+      maxY = -Infinity
+    let minZ = Infinity,
+      maxZ = -Infinity
 
     for (const raw of instances) {
       const count = raw.length / 5
       for (let i = 0; i < count; i++) {
         const base = i * 5
-        const x = raw[base], y = raw[base + 1], z = raw[base + 2]
-        if (x < minX) minX = x; if (x > maxX) maxX = x
-        if (y < minY) minY = y; if (y > maxY) maxY = y
-        if (z < minZ) minZ = z; if (z > maxZ) maxZ = z
+        const x = raw[base],
+          y = raw[base + 1],
+          z = raw[base + 2]
+        if (x < minX) minX = x
+        if (x > maxX) maxX = x
+        if (y < minY) minY = y
+        if (y > maxY) maxY = y
+        if (z < minZ) minZ = z
+        if (z > maxZ) maxZ = z
       }
     }
 
@@ -200,7 +212,7 @@
     const center = new THREE.Vector3(
       (minX + maxX) / 2,
       (minY + maxY) / 2 + TREE_MARGIN / 2,
-      (minZ + maxZ) / 2,
+      (minZ + maxZ) / 2
     )
     const dx = maxX - minX + TREE_MARGIN * 2
     const dy = maxY - minY + TREE_MARGIN * 2
@@ -272,7 +284,19 @@
           _scale.set(s, s, s)
           _mat4.compose(_pos, _quat, _scale)
 
-          if (doOcc && treeOccludesPlayer(raw[base], raw[base + 1], raw[base + 2], s, typeIdx, px, py, pz)) {
+          if (
+            doOcc &&
+            treeOccludesPlayer(
+              raw[base],
+              raw[base + 1],
+              raw[base + 2],
+              s,
+              typeIdx,
+              px,
+              py,
+              pz
+            )
+          ) {
             if (ghostIdx < maxGhostInstancesForSlot)
               ghostMesh.setMatrixAt(ghostIdx++, _mat4)
           } else {
@@ -334,9 +358,17 @@
         for (let i = 0; i < count; i++) {
           const base = i * 5
           const occ: number = treeOccludesPlayer(
-            raw[base], raw[base + 1], raw[base + 2], raw[base + 4],
-            t, px, py, pz,
-          ) ? 1 : 0
+            raw[base],
+            raw[base + 1],
+            raw[base + 2],
+            raw[base + 4],
+            t,
+            px,
+            py,
+            pz
+          )
+            ? 1
+            : 0
           if (occBits[idx] !== occ) {
             occBits[idx] = occ
             changed = true
@@ -400,7 +432,10 @@
           if (!pendingTiles.has(tk)) return
           pendingTiles.delete(tk)
 
-          if (treeData && (treeData.tree1Count > 0 || treeData.tree2Count > 0)) {
+          if (
+            treeData &&
+            (treeData.tree1Count > 0 || treeData.tree2Count > 0)
+          ) {
             tileTreeDataCache.set(tk, treeData)
           }
           fetchedTiles.add(tk)

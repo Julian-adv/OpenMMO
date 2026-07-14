@@ -2,17 +2,29 @@
   import { onMount } from 'svelte'
   import { useThrelte } from '@threlte/core'
   import * as THREE from 'three'
-  import { gameStore, hoveredSignpost, type LocalPlayer } from '../stores/gameStore'
+  import {
+    gameStore,
+    hoveredSignpost,
+    type LocalPlayer,
+  } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { monsterManager } from '../managers/monsterManager'
   import { groundItemManager } from '../managers/groundItemManager'
   import { combatController } from '../managers/combatController'
-  import { preloadSwordHitSound, preloadSwordMissSound } from '../managers/sfxManager'
+  import {
+    preloadSwordHitSound,
+    preloadSwordMissSound,
+  } from '../managers/sfxManager'
   import { inputHandler, type ClickIntent } from '../managers/inputHandler'
   import { getNpcCapabilities } from '../data/traderDefs'
   import { NPC_TRADE_RANGE_METERS } from '../data/tradeConstants'
   import { npcContextMenu, requestChatFocus } from '../stores/npcMenuStore'
-  import { mapEditorMode, housingEditorMode, debugSpeedMode, torchLightEnabled } from '../stores/debugStore'
+  import {
+    mapEditorMode,
+    housingEditorMode,
+    debugSpeedMode,
+    torchLightEnabled,
+  } from '../stores/debugStore'
   import { localTorchEquipped } from '../stores/inventoryStore'
   import {
     DEFAULT_MOVEMENT_CONFIG,
@@ -96,7 +108,19 @@
     attackCooldown?: number
   }
 
-  let { onStateChange, camera, heightManager, groundMeshes, groundItemMeshes, monsterMeshes, npcMeshes = [], doorMeshes, objectMeshes, propMeshes, attackCooldown }: Props = $props()
+  let {
+    onStateChange,
+    camera,
+    heightManager,
+    groundMeshes,
+    groundItemMeshes,
+    monsterMeshes,
+    npcMeshes = [],
+    doorMeshes,
+    objectMeshes,
+    propMeshes,
+    attackCooldown,
+  }: Props = $props()
 
   /** How far from a clicked barrel/crate the player stops while walking up to
    *  break it — comfortably inside the layer's break trigger and the server's
@@ -127,8 +151,10 @@
   let MOVEMENT_CONFIG = $derived<MovementConfig>({
     ...DEFAULT_MOVEMENT_CONFIG,
     maxSpeed: DEFAULT_MOVEMENT_CONFIG.maxSpeed * ($debugSpeedMode ? 10 : 1),
-    acceleration: DEFAULT_MOVEMENT_CONFIG.acceleration * ($debugSpeedMode ? 10 : 1),
-    deceleration: DEFAULT_MOVEMENT_CONFIG.deceleration * ($debugSpeedMode ? 10 : 1),
+    acceleration:
+      DEFAULT_MOVEMENT_CONFIG.acceleration * ($debugSpeedMode ? 10 : 1),
+    deceleration:
+      DEFAULT_MOVEMENT_CONFIG.deceleration * ($debugSpeedMode ? 10 : 1),
   })
 
   // Character rotation and current speed
@@ -284,7 +310,9 @@
   // Explicitly drive the machine's owned state to a data-less state. The machine
   // no longer derives its state name from flags — callers transition at the real
   // decision points. Stateful transitions (moving/picking_up) carry their data.
-  function transitionTo(name: Exclude<PlayerControlStateName, 'moving' | 'picking_up'>) {
+  function transitionTo(
+    name: Exclude<PlayerControlStateName, 'moving' | 'picking_up'>
+  ) {
     playerControlMachine.transition({ name })
   }
 
@@ -465,7 +493,12 @@
       findNearestDoor: (x, z, y, range) =>
         housingManager.findNearestDoor(x, z, y, range),
       sendToggleDoor: (houseId, roomIndex, wallDir, segmentIndex) =>
-        networkManager.sendToggleDoor(houseId, roomIndex, wallDir, segmentIndex),
+        networkManager.sendToggleDoor(
+          houseId,
+          roomIndex,
+          wallDir,
+          segmentIndex
+        ),
     })
   }
 
@@ -807,7 +840,9 @@
     })
   }
 
-  function enterInteraction(intent: Extract<ClickIntent, { type: 'interact_object' }>) {
+  function enterInteraction(
+    intent: Extract<ClickIntent, { type: 'interact_object' }>
+  ) {
     if (getInteractionExitKind(playerState) === 'pickup') {
       finishPendingPickup()
     }
@@ -854,7 +889,9 @@
     })
   }
 
-  function approachAndPickup(intent: Extract<ClickIntent, { type: 'pickup_ground_item' }>) {
+  function approachAndPickup(
+    intent: Extract<ClickIntent, { type: 'pickup_ground_item' }>
+  ) {
     const decision = decidePickupApproach({
       playerState,
       intent,
@@ -869,7 +906,9 @@
   }
 
   /** Open a trading NPC's window, walking into range first if needed. */
-  function approachAndTrade(intent: Extract<ClickIntent, { type: 'interact_npc' }>) {
+  function approachAndTrade(
+    intent: Extract<ClickIntent, { type: 'interact_npc' }>
+  ) {
     if (intent.distance <= NPC_TRADE_RANGE_METERS) {
       networkManager.sendOpenShop(intent.playerId)
       return
@@ -894,7 +933,12 @@
    *  `setPending` so the dungeon layer fires the break/open on arrival. */
   function approachProp(
     intent: { depth: number; propId: number; position: Position },
-    setPending: (p: { depth: number; propId: number; x: number; z: number }) => void
+    setPending: (p: {
+      depth: number
+      propId: number
+      x: number
+      z: number
+    }) => void
   ) {
     if (!currentPlayer) return
     combatController.cancelCombat()
@@ -1143,7 +1187,12 @@
     lastHoverKey = key
     hoveredSignpost.set(
       hit
-        ? { x: hit.position.x, y: hit.position.y, z: hit.position.z, text: hit.text }
+        ? {
+            x: hit.position.x,
+            y: hit.position.y,
+            z: hit.position.z,
+            text: hit.text,
+          }
         : null
     )
   }

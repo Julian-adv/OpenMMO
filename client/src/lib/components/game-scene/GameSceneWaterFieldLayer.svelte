@@ -317,7 +317,13 @@
 
   // ── Tile list changes ──
   $effect(() => {
-    if (!heightManager || !waterFieldManager || !normalMap || !foamMap || !causticsMap)
+    if (
+      !heightManager ||
+      !waterFieldManager ||
+      !normalMap ||
+      !foamMap ||
+      !causticsMap
+    )
       return
 
     const currentIds = new Set(terrainTiles.map((t) => t.id))

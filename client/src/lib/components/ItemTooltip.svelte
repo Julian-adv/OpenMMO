@@ -15,15 +15,21 @@
 
   let height = $state(0)
 
-  const top = $derived(Math.max(8, Math.min(anchor.top, window.innerHeight - height - 8)))
+  const top = $derived(
+    Math.max(8, Math.min(anchor.top, window.innerHeight - height - 8))
+  )
   const horizontal = $derived(
     side === 'left'
       ? `right: ${window.innerWidth - anchor.left + 8}px;`
-      : `left: ${anchor.right + 8}px;`,
+      : `left: ${anchor.right + 8}px;`
   )
 </script>
 
-<div class="tooltip" style="top: {top}px; {horizontal}" bind:clientHeight={height}>
+<div
+  class="tooltip"
+  style="top: {top}px; {horizontal}"
+  bind:clientHeight={height}
+>
   <div class="tooltip-name">{enchant > 0 ? `+${enchant} ` : ''}{def.name}</div>
   <div class="tooltip-desc">{def.description}</div>
   <div class="tooltip-stats">

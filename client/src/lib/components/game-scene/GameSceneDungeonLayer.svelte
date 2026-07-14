@@ -344,9 +344,12 @@
     let chestYawDeg = 0
     let chestBackWall: 'N' | 'S' | 'W' | 'E' | null = null
     if (prop.kind === 'chest') {
-      if (!carvedAt(prop.x, prop.z - 1)) chestBackWall = 'N' // wall on −Z
-      else if (!carvedAt(prop.x, prop.z + 1)) chestBackWall = 'S' // wall on +Z
-      else if (!carvedAt(prop.x - 1, prop.z)) chestBackWall = 'W' // wall on −X
+      if (!carvedAt(prop.x, prop.z - 1))
+        chestBackWall = 'N' // wall on −Z
+      else if (!carvedAt(prop.x, prop.z + 1))
+        chestBackWall = 'S' // wall on +Z
+      else if (!carvedAt(prop.x - 1, prop.z))
+        chestBackWall = 'W' // wall on −X
       else if (!carvedAt(prop.x + 1, prop.z)) chestBackWall = 'E' // wall on +X
       // Map the model's back (local −Z) onto the chosen wall.
       chestYawDeg = chestBackWall ? CHEST_BACK_WALL_YAW[chestBackWall] : 0
@@ -387,13 +390,22 @@
       // Barrels are round and small, so they stay centered; chests and crates
       // need their rotated footprint kept inside the cell.
       if (prop.kind !== 'barrel') {
-        const aabb = rotatedRectAabb(-m.hx, m.hx, -m.hz, m.hz, (yawDeg * Math.PI) / 180)
+        const aabb = rotatedRectAabb(
+          -m.hx,
+          m.hx,
+          -m.hz,
+          m.hz,
+          (yawDeg * Math.PI) / 180
+        )
         const insetX = Math.max(0, aabb.maxX - 0.5)
         const insetZ = Math.max(0, aabb.maxZ - 0.5)
         if (prop.kind === 'chest') {
           // Push off the back wall so the open lid clears it; tuck the long ends
           // off any perpendicular (corner) wall on the other axis.
-          const backPush = Math.max(0, CHEST_LID_BACK_REACH + CHEST_LID_WALL_GAP - 0.5)
+          const backPush = Math.max(
+            0,
+            CHEST_LID_BACK_REACH + CHEST_LID_WALL_GAP - 0.5
+          )
           if (chestBackWall === 'N' || chestBackWall === 'S') {
             pz += chestBackWall === 'N' ? backPush : -backPush
             if (!carvedAt(prop.x - 1, prop.z)) px += insetX
@@ -485,7 +497,13 @@
     prop: DungeonFloorLayout['props'][number],
     key: string
   ) {
-    const clone = await buildBrokenClone(prop.kind, prop.x, prop.z, prop.rotation, key)
+    const clone = await buildBrokenClone(
+      prop.kind,
+      prop.x,
+      prop.z,
+      prop.rotation,
+      key
+    )
     if (!clone) return
     group.add(clone)
     entries.set(index, {
@@ -536,7 +554,16 @@
       if (broken.has(index) && isBreakable(prop.kind)) {
         await addBrokenProp(group, entries, index, prop, key)
       } else {
-        await addNormalProp(group, entries, index, prop, key, depth, carvedAt, torchPositions)
+        await addNormalProp(
+          group,
+          entries,
+          index,
+          prop,
+          key,
+          depth,
+          carvedAt,
+          torchPositions
+        )
       }
       if (key !== builtKey) return // floor changed mid-load — abandon
     }
@@ -976,7 +1003,10 @@
     // the open once within range. The server validates and broadcasts; the lid
     // animation plays on receipt (handles other players' opens too).
     const pendingOpen = dungeonManager.pendingOpen
-    if (pendingOpen && pendingPropReached(pendingOpen, depth, playerX, playerZ)) {
+    if (
+      pendingOpen &&
+      pendingPropReached(pendingOpen, depth, playerX, playerZ)
+    ) {
       const id = dungeonManager.dungeonId!
       const { depth: d, propId } = pendingOpen
       dungeonManager.clearPendingOpen()
