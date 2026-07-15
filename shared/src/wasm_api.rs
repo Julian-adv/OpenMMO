@@ -14,6 +14,7 @@ use std::collections::HashMap;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+use crate::furniture;
 use crate::housing;
 use crate::messages::{deserialize_server_msg, serialize_client_msg, ClientMessage};
 use crate::monster_ai::{self, BehaviorTree, MonsterBrain, NearbyPlayer};
@@ -79,6 +80,67 @@ pub fn passability_add_house(val: JsValue) -> Result<(), JsError> {
 #[wasm_bindgen]
 pub fn passability_remove_house(house_id: &str) {
     with_cache_mut(|c| c.remove(house_id));
+}
+
+/// One sealed furniture piece, returned to the client for debug visualisation.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FurnitureDebugPieceJs {
+    cells: Vec<(i32, i32)>,
+    y_base: f32,
+}
+
+/// Region object placements (the client's `ObjectPlacement[]`) → the shared
+/// `FurniturePlacement`, which deserialises the wire shape directly.
+fn to_placements(val: JsValue) -> Result<Vec<furniture::FurniturePlacement>, JsError> {
+    serde_wasm_bindgen::from_value(val)
+        .map_err(|e| JsError::new(&format!("Invalid furniture placements: {e}")))
+}
+
+/// Register (or replace) a region's solid furniture under `key` in the same
+/// passability cache houses and dungeons use. Takes the raw region object
+/// placements; solidity and footprint cells are resolved by `furniture` (shared
+/// with the agent-client and server). Movement collision and click-to-move A*
+/// then both treat the sealed cells as impassable — a character can neither walk
+/// through the furniture nor path through it. A region with no solid furniture
+/// removes the entry. Returns the sealed pieces (cells + floor Y) for the debug
+/// overlay.
+#[wasm_bindgen]
+pub fn passability_set_furniture(key: &str, val: JsValue) -> Result<JsValue, JsError> {
+    let placements = to_placements(val)?;
+    let pieces = furniture::furniture_pieces(&placements);
+    let debug: Vec<FurnitureDebugPieceJs> = pieces
+        .iter()
+        .map(|p| FurnitureDebugPieceJs {
+            cells: p.cells.clone(),
+            y_base: p.y_base,
+        })
+        .collect();
+    with_cache_mut(
+        |c| match pathfinding::build_furniture_passability(&pieces) {
+            Some(rp) => {
+                c.insert(key.to_string(), rp);
+            }
+            None => {
+                c.remove(key);
+            }
+        },
+    );
+    to_js(&debug)
+}
+
+#[wasm_bindgen]
+pub fn passability_remove_furniture(key: &str) {
+    with_cache_mut(|c| {
+        c.remove(key);
+    });
+}
+
+/// Whether an object type is solid furniture (blocks movement). The editor uses
+/// this to snap solid furniture to 90° yaw so its footprint lands on whole cells.
+#[wasm_bindgen]
+pub fn furniture_is_solid(type_id: &str) -> bool {
+    furniture::is_solid(type_id)
 }
 
 #[wasm_bindgen]

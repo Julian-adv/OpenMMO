@@ -34,7 +34,9 @@ use crate::state::SharedState;
 
 use combat::{load_attack_cooldown, tick_combat};
 use execute::handle_response;
-use movement::{check_schedule_transition, fetch_houses_for_schedule};
+use movement::{
+    check_schedule_transition, fetch_furniture_for_schedule, fetch_houses_for_schedule,
+};
 use prompt::build_prompt;
 
 /// Trait for LLM backends that can send a prompt and return a text response.
@@ -131,9 +133,11 @@ pub async fn llm_driver(
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
-        // Fetch housing data so pathfinding avoids buildings
+        // Fetch housing + furniture data so pathfinding avoids buildings and
+        // solid props the same way the browser client does.
         let world_cache = { Arc::clone(&state.lock().await.world_cache) };
         fetch_houses_for_schedule(&world_cache, &schedule, &api_base_url, &label).await;
+        fetch_furniture_for_schedule(&world_cache, &schedule, &api_base_url, &label).await;
 
         active_schedule =
             check_schedule_transition(&state, &schedule, active_schedule, &label).await;

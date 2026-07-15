@@ -18,6 +18,7 @@
     ObjectSubTool,
   } from '../../stores/editorStore'
   import { objectManager } from '../../managers/objectManager'
+  import { furnitureManager } from '../../managers/furnitureManager'
   import {
     rotatedRectAabb,
     type FootprintRect,
@@ -117,9 +118,18 @@
     if (selectedPlacementId === null) return null
     const data = get(currentObjectData)
     const updated: ObjectRegionData = {
-      placements: data.placements.map((p) =>
-        p.id === selectedPlacementId ? { ...p, ...patch } : p
-      ),
+      placements: data.placements.map((p) => {
+        if (p.id !== selectedPlacementId) return p
+        const merged = { ...p, ...patch }
+        // Solid furniture stays on 90° yaw so its footprint lands on whole cells.
+        if (patch.rotation !== undefined) {
+          merged.rotation = furnitureManager.snapRotation(
+            merged.type,
+            merged.rotation
+          )
+        }
+        return merged
+      }),
     }
     currentObjectData.set(updated)
     return updated
@@ -186,8 +196,12 @@
     )
     if (!p) return
     const dir = e.deltaY < 0 ? 1 : -1
+    // Solid furniture yaw steps by 90° so each notch moves a full cell-aligned
+    // turn (applyPatch would otherwise snap a sub-90° nudge back to the same value).
+    const effStep =
+      field === 'rotation' && furnitureManager.isSolid(p.type) ? 90 : step
     const cur = p[field] ?? 0
-    let next = Math.round((cur + dir * step) / step) * step
+    let next = Math.round((cur + dir * effStep) / effStep) * effStep
     if (field === 'rotation' || field === 'rotationX') {
       next = ((next % 360) + 360) % 360
     }

@@ -698,7 +698,7 @@
   }
 
   // ── Passability debug overlay (red wireframe on blocked cell edges) ──
-  // Shares the `__togglePassability` toggle with the housing overlay so one
+  // Shares the `/passability` toggle with the housing overlay so one
   // command shows blocked edges everywhere. Draws the floor whose shaft the
   // player is on (the entry shaft lives in floor 1, hence Math.max(1, depth)).
   const debugPassGroup = new THREE.Group()

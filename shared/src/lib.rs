@@ -7,6 +7,7 @@
 pub mod character;
 pub mod dungeon;
 pub mod entity;
+pub mod furniture;
 pub mod housing;
 pub mod inventory;
 pub mod messages;

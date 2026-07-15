@@ -6,8 +6,10 @@ use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 
+use onlinerpg_shared::furniture::FurniturePlacement;
 use onlinerpg_shared::housing::HouseData;
 use onlinerpg_shared::ClientMessage;
+use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
@@ -227,6 +229,65 @@ pub(super) async fn execute_move(
     }
 
     MoveResult::Arrived
+}
+
+/// Raw region object placements, as served by `/api/terrain/objects/{rx}/{rz}`.
+#[derive(serde::Deserialize)]
+struct RegionObjects {
+    #[serde(default)]
+    placements: Vec<FurniturePlacement>,
+}
+
+/// Insert the region (16×16 tiles) containing a world position into the set.
+fn insert_region(regions: &mut HashSet<(i32, i32)>, x: f32, z: f32) {
+    regions.insert((
+        tile_to_region(world_to_tile(x)),
+        tile_to_region(world_to_tile(z)),
+    ));
+}
+
+/// Fetch region object placements for the schedule's regions and register their
+/// solid furniture in the passability cache, so the bot paths around furniture
+/// exactly like the browser client (both go through the shared `furniture`
+/// resolution). A region is ~1024m, so the schedule usually touches one or two.
+pub(super) async fn fetch_furniture_for_schedule(
+    world_cache: &Arc<std::sync::RwLock<crate::state::WorldCache>>,
+    schedule: &[ScheduleEntry],
+    api_base_url: &str,
+    label: &str,
+) {
+    let mut regions = HashSet::new();
+    for entry in schedule {
+        insert_region(&mut regions, entry.pos[0], entry.pos[2]);
+        for wp in &entry.waypoints {
+            insert_region(&mut regions, wp[0], wp[2]);
+        }
+    }
+
+    let client = reqwest::Client::new();
+    let fetches = regions.iter().map(|&(rx, rz)| {
+        let client = &client;
+        let url = format!("{api_base_url}/api/terrain/objects/{rx}/{rz}");
+        async move {
+            let resp = match client.get(&url).send().await {
+                Ok(resp) if resp.status().is_success() => resp.json::<RegionObjects>().await.ok(),
+                _ => None,
+            };
+            (rx, rz, resp)
+        }
+    });
+    let results = futures_util::future::join_all(fetches).await;
+
+    let mut world = world_cache.write().unwrap();
+    let mut synced_regions = 0usize;
+    for (rx, rz, resp) in results {
+        let Some(resp) = resp else { continue };
+        world.sync_furniture(rx, rz, &resp.placements);
+        synced_regions += 1;
+    }
+    if synced_regions > 0 {
+        debug!("[{label}] Synced furniture for {synced_regions} region(s)");
+    }
 }
 
 /// Insert a position's chunk and its 8 neighbors into the set.

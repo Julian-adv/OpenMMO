@@ -23,6 +23,7 @@
   import { TERRAIN_TILE_SIZE } from '../game-scene/terrain-utils'
   import { objectManager } from '../../managers/objectManager'
   import { bridgeManager } from '../../managers/bridgeManager'
+  import { furnitureManager } from '../../managers/furnitureManager'
   import {
     playerFloorLevel,
     playerInsideHouseId,
@@ -53,14 +54,24 @@
 
   let catalogById = new Map<string, ObjectDef>()
 
+  let lastLoadedRegion = { rx: NaN, rz: NaN }
+
   const unsubs: Unsubscriber[] = [
     editorTool.subscribe((v) => (tool = v)),
     currentObjectData.subscribe((v) => {
       placements = v.placements
-      // Re-sync bridgeManager so newly placed/edited bridges become walkable
-      // immediately. Guard for the initial empty-state fire before catalog loads.
+      // Re-sync bridge + furniture collision so newly placed/edited objects
+      // take effect immediately. Guard for the initial empty-state fire before
+      // catalog loads (and before any region has been loaded).
       if (catalogById.size > 0) {
         bridgeManager.syncRegion(v.placements, catalogById)
+      }
+      if (!Number.isNaN(lastLoadedRegion.rx)) {
+        furnitureManager.syncRegion(
+          lastLoadedRegion.rx,
+          lastLoadedRegion.rz,
+          v.placements
+        )
       }
     }),
     objectCatalog.subscribe((v) => {
@@ -79,8 +90,6 @@
   ]
   onDestroy(() => unsubs.forEach((u) => u()))
 
-  let lastLoadedRegion = { rx: NaN, rz: NaN }
-
   async function loadRegionObject(rx: number, rz: number) {
     if (rx === lastLoadedRegion.rx && rz === lastLoadedRegion.rz) return
     lastLoadedRegion = { rx, rz }
@@ -91,6 +100,14 @@
     }
 
     const data = await objectManager.fetchObject(rx, rz)
+    // A newer region load may have superseded this one while awaiting (fast
+    // region crossing with out-of-order fetch resolution). If so, drop this
+    // stale result: otherwise currentObjectData.set fires the subscription,
+    // which syncs furniture for the *current* lastLoadedRegion — mis-keying
+    // this region's cells under the wrong region — and shows stale objects.
+    if (rx !== lastLoadedRegion.rx || rz !== lastLoadedRegion.rz) return
+    // currentObjectData.set fires the subscription above synchronously, which
+    // syncs furniture for lastLoadedRegion (== rx,rz here) — no direct call needed.
     currentObjectData.set(data)
     bridgeManager.syncRegion(data.placements, catalogById)
   }

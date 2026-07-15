@@ -157,6 +157,10 @@ export interface ObjectDef {
   textLabel?: boolean
   kind?: 'bridge'
   bridge?: BridgeMeta
+  /** Marks solid furniture. Authoring flag read by
+   *  `tools/measure-furniture-footprints.mjs` to generate the footprint table;
+   *  runtime solidity/collision is decided in shared Rust from that table. */
+  solid?: boolean
 }
 
 export interface ObjectPlacement {

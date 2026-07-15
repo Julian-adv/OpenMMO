@@ -32,6 +32,7 @@
   } from '../../utils/house-geo-utils'
   import { getWallByDir } from '../../managers/housingManager'
   import { housingManager } from '../../managers/housingManager'
+  import { furnitureManager } from '../../managers/furnitureManager'
   import {
     TERRAIN_TILE_SIZE,
     getTerrainChunkFromPosition,
@@ -77,12 +78,33 @@
   housingGroup.add(debugPassGroup)
 
   const debugLineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
+  // Furniture cells drawn in orange to distinguish them from house walls (red).
+  const debugFurnitureMaterial = new THREE.LineBasicMaterial({
+    color: 0xffaa00,
+  })
   let debugPassDirty = false
 
   const unsubPassDebug = passabilityDebugVisible.subscribe((v) => {
     debugPassGroup.visible = v
     if (v) debugPassDirty = true
   })
+
+  // Furniture collision is synced separately (per region) from ObjectOverlay;
+  // rebuild the overlay when it changes so newly placed furniture shows up.
+  const unsubFurniture = furnitureManager.onChanged(() => {
+    if (debugPassGroup.visible) debugPassDirty = true
+  })
+
+  /** Build a LineSegments from flat xyz verts and add it to the debug group.
+   *  No-op when there are no verts. */
+  function addDebugLines(verts: number[], material: THREE.LineBasicMaterial) {
+    if (verts.length === 0) return
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+    const lines = new THREE.LineSegments(geo, material)
+    lines.frustumCulled = false
+    debugPassGroup.add(lines)
+  }
 
   function rebuildPassabilityDebug() {
     // Clear old
@@ -112,17 +134,27 @@
         )
       }
 
-      if (vertices.length > 0) {
-        const geo = new THREE.BufferGeometry()
-        geo.setAttribute(
-          'position',
-          new THREE.Float32BufferAttribute(vertices, 3)
+      addDebugLines(vertices, debugLineMaterial)
+    }
+
+    // Solid furniture: each sealed cell is drawn as a full box (all four edges),
+    // matching how EDGE_ALL is stored in the cache.
+    const EDGE_ALL = 15
+    const furnitureVerts: number[] = []
+    for (const piece of furnitureManager.getDebugPieces()) {
+      for (const [cellX, cellZ] of piece.cells) {
+        pushPassabilityEdges(
+          furnitureVerts,
+          [EDGE_ALL],
+          1,
+          1,
+          cellX,
+          cellZ,
+          piece.yBase
         )
-        const lines = new THREE.LineSegments(geo, debugLineMaterial)
-        lines.frustumCulled = false
-        debugPassGroup.add(lines)
       }
     }
+    addDebugLines(furnitureVerts, debugFurnitureMaterial)
 
     debugPassDirty = false
   }
@@ -148,12 +180,14 @@
   onDestroy(() => {
     unsubHouses()
     unsubPassDebug()
+    unsubFurniture()
     for (const [, result] of houses) {
       disposeHouseGroup(result.houseGroup)
     }
     houses.clear()
     disposeHousingMaterials()
     debugLineMaterial.dispose()
+    debugFurnitureMaterial.dispose()
   })
 
   function syncHouses(allHouses: HouseData[]) {

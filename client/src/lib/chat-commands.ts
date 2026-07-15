@@ -11,6 +11,7 @@ import {
 import {
   riverWireframeVisible,
   shoreWaveDebugVisible,
+  passabilityDebugVisible,
 } from './stores/debugStore'
 import { computeGrassPlacement, regenerateVegMeta } from './utils/grass-data'
 import { dungeonManager } from './managers/dungeonManager'
@@ -147,6 +148,15 @@ const commands: Record<string, CommandHandler> = {
     shoreWaveDebugVisible.set(next)
     addChatMessage({
       text: `Shore wave debug: ${next ? 'on' : 'off'}`,
+      sender: 'system',
+    })
+  },
+
+  '/passability': () => {
+    const next = !get(passabilityDebugVisible)
+    passabilityDebugVisible.set(next)
+    addChatMessage({
+      text: `Passability debug: ${next ? 'on' : 'off'} (walls red, furniture orange)`,
       sender: 'system',
     })
   },

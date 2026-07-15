@@ -1,0 +1,56 @@
+{
+  "bed": {
+    "minX": -0.642,
+    "maxX": 0.625,
+    "minZ": -2.282,
+    "maxZ": 0.3
+  },
+  "barrel": {
+    "minX": -0.433,
+    "maxX": 0.433,
+    "minZ": -0.433,
+    "maxZ": 0.433
+  },
+  "crate": {
+    "minX": -0.564,
+    "maxX": 0.564,
+    "minZ": -0.564,
+    "maxZ": 0.564
+  },
+  "chest": {
+    "minX": -0.738,
+    "maxX": 0.738,
+    "minZ": -0.308,
+    "maxZ": 0.308
+  },
+  "chest_animated": {
+    "minX": -0.738,
+    "maxX": 0.738,
+    "minZ": -0.308,
+    "maxZ": 0.308
+  },
+  "chair": {
+    "minX": -0.294,
+    "maxX": 0.294,
+    "minZ": -0.325,
+    "maxZ": 0.325
+  },
+  "table": {
+    "minX": -0.797,
+    "maxX": 0.797,
+    "minZ": -0.487,
+    "maxZ": 0.487
+  },
+  "ammobox": {
+    "minX": -0.3,
+    "maxX": 0.3,
+    "minZ": -0.215,
+    "maxZ": 0.215
+  },
+  "healthbox": {
+    "minX": -0.3,
+    "maxX": 0.3,
+    "minZ": -0.215,
+    "maxZ": 0.215
+  }
+}

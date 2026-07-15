@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::monster_ai::MonsterAiManager;
+use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::{HouseData, WallDirection};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
 use onlinerpg_shared::{Character, ClientMessage, Monster, Player, ServerMessage};
@@ -61,6 +62,22 @@ impl WorldCache {
     pub fn remove_house(&mut self, house_id: &str) {
         self.houses.remove(house_id);
         self.passability_cache.remove(house_id);
+    }
+
+    /// Register (or replace) a region's solid furniture in the passability cache
+    /// so the bot paths around it, mirroring the browser's
+    /// `passability_set_furniture` (same `furniture:rx,rz` key + shared
+    /// `furniture` resolution). Empty/non-solid regions clear the entry.
+    pub fn sync_furniture(&mut self, rx: i32, rz: i32, placements: &[FurniturePlacement]) {
+        let key = format!("furniture:{rx},{rz}");
+        match furniture::build_furniture_passability_for_placements(placements) {
+            Some(rp) => {
+                self.passability_cache.insert(key, rp);
+            }
+            None => {
+                self.passability_cache.remove(&key);
+            }
+        }
     }
 
     pub fn update_door(

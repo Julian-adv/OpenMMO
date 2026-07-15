@@ -8,7 +8,8 @@
       "x": 0,
       "y": 0.78,
       "z": 0
-    }
+    },
+    "solid": true
   },
   {
     "id": "stone_bridge",
@@ -127,7 +128,8 @@
   {
     "id": "barrel",
     "name": "Barrel",
-    "model": "objects/barrel.glb"
+    "model": "objects/barrel.glb",
+    "solid": true
   },
   {
     "id": "barrel_broken",
@@ -137,7 +139,8 @@
   {
     "id": "crate",
     "name": "Crate",
-    "model": "objects/crate.glb"
+    "model": "objects/crate.glb",
+    "solid": true
   },
   {
     "id": "crate_pieces",
@@ -147,32 +150,38 @@
   {
     "id": "chest",
     "name": "Chest",
-    "model": "objects/chest.glb"
+    "model": "objects/chest.glb",
+    "solid": true
   },
   {
     "id": "chest_animated",
     "name": "Chest (Animated)",
-    "model": "objects/chest_animated.glb"
+    "model": "objects/chest_animated.glb",
+    "solid": true
   },
   {
     "id": "chair",
     "name": "Chair",
-    "model": "objects/chair.glb"
+    "model": "objects/chair.glb",
+    "solid": true
   },
   {
     "id": "table",
     "name": "Table",
-    "model": "objects/table.glb"
+    "model": "objects/table.glb",
+    "solid": true
   },
   {
     "id": "ammobox",
     "name": "Ammo Box",
-    "model": "objects/ammobox.glb"
+    "model": "objects/ammobox.glb",
+    "solid": true
   },
   {
     "id": "healthbox",
     "name": "Health Box",
-    "model": "objects/healthbox.glb"
+    "model": "objects/healthbox.glb",
+    "solid": true
   },
   {
     "id": "shells",

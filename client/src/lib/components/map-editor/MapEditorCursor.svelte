@@ -46,6 +46,7 @@
   import { NpcScheduleManager } from '../../managers/npcScheduleManager'
   import type { NpcScheduleData } from '../../managers/npcScheduleManager'
   import { objectManager } from '../../managers/objectManager'
+  import { furnitureManager } from '../../managers/furnitureManager'
   import { findAncestorWithUserData } from '../../managers/inputHandler'
   import { housingManager } from '../../managers/housingManager'
   import { playerFloorLevel } from '../../stores/housingStore'
@@ -631,7 +632,10 @@
         x: snapped.x,
         y,
         z: snapped.z,
-        rotation: currentObjectRot,
+        rotation: furnitureManager.snapRotation(
+          currentObjectType,
+          currentObjectRot
+        ),
         floorLevel: floor,
       }
       const updated: ObjectRegionData = {
@@ -871,7 +875,13 @@
     }
     if (currentTool === 'object') {
       if (event.key === 'r' || event.key === 'R') {
-        objectRotation.update((r) => (r + 45) % 360)
+        // Solid furniture rotates in 90° steps so its footprint lands on whole
+        // cells; other objects keep the finer 45° step.
+        const step =
+          currentObjectType && furnitureManager.isSolid(currentObjectType)
+            ? 90
+            : 45
+        objectRotation.update((r) => (r + step) % 360)
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         handleObjectDelete()

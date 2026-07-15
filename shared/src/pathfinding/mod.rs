@@ -23,7 +23,10 @@ mod smooth;
 mod stair;
 
 pub use astar::{find_path, DEFAULT_MAX_NODES};
-pub use cache::{apply_door_overlays, build_runtime_passability, update_door_edge};
+pub use cache::{
+    apply_door_overlays, build_furniture_passability, build_runtime_passability, update_door_edge,
+    FurniturePiece,
+};
 pub use query::{
     get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked, is_circle_blocked,
     is_movement_blocked,
@@ -208,6 +211,50 @@ mod tests {
         assert!(
             is_line_passable(&end_from, &end_to, &cache),
             "a near-wall endpoint must not block smoothing"
+        );
+    }
+
+    #[test]
+    fn furniture_cell_blocks_movement_and_pathing() {
+        // A single solid furniture cell at world (5,5) on floor 0, blocking the
+        // realistic low-obstacle Y band (furniture::FURNITURE_BLOCK_HEIGHT = 1.0).
+        let rp = build_furniture_passability(&[FurniturePiece {
+            cells: vec![(5, 5)],
+            floor_level: 0,
+            y_base: 0.0,
+            wall_height: crate::furniture::FURNITURE_BLOCK_HEIGHT,
+        }])
+        .expect("one cell should yield a passability entry");
+        let mut cache = PassabilityCache::new();
+        cache.insert("furniture:test".to_string(), rp);
+
+        // Walking into the sealed cell from the north is blocked...
+        assert!(is_movement_blocked(&cache, 5.5, 4.5, 5.5, 5.5, 0.0));
+        // ...and from the west, too.
+        assert!(is_movement_blocked(&cache, 4.5, 5.5, 5.5, 5.5, 0.0));
+        // A parallel move that never enters the cell is allowed.
+        assert!(!is_movement_blocked(&cache, 0.5, 0.5, 1.5, 0.5, 0.0));
+
+        // Body radius keeps the character from hugging the furniture.
+        assert!(is_circle_blocked(&cache, 5.5, 4.85, 0.3, 0.0));
+
+        // The Y-gate confines blocking to near the furniture's level: a player
+        // 1.5m above it — descending a stairwell whose steps pass over the
+        // furniture, or standing a floor up — passes freely.
+        assert!(!is_movement_blocked(&cache, 5.5, 4.5, 5.5, 5.5, 1.5));
+        assert!(!is_movement_blocked(&cache, 5.5, 4.5, 5.5, 5.5, 3.2));
+
+        // A* routes around the sealed cell instead of through it.
+        assert!(is_cardinal_move_blocked(&cache, 5, 4, 0, 1, 0));
+        let path = find_path(5.5, 3.5, 0, 5.5, 7.5, 0, &cache, 500);
+        assert!(path.found, "a path around the furniture should exist");
+        assert!(
+            !path
+                .waypoints
+                .iter()
+                .any(|w| w.x.floor() as i32 == 5 && w.z.floor() as i32 == 5 && w.floor == 0),
+            "path must not pass through the sealed cell: {:?}",
+            path.waypoints
         );
     }
 

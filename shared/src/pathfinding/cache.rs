@@ -163,6 +163,96 @@ pub fn update_door_edge(
     set_or_clear(&mut floor.cells, adj_cx, adj_cz, adj_edge);
 }
 
+/// One solid furniture piece: the world grid cells it occupies plus the floor
+/// it sits on. `cells` are integer world cell coordinates (floor of the world
+/// XZ position).
+pub struct FurniturePiece {
+    pub cells: Vec<(i32, i32)>,
+    pub floor_level: u8,
+    /// World Y of the floor the piece stands on. Used by the Y-gated movement /
+    /// circle queries to confine blocking to the piece's own floor.
+    pub y_base: f32,
+    /// Vertical extent above `y_base` within which the piece blocks — roughly
+    /// one storey so furniture on a lower floor never blocks the floor above.
+    pub wall_height: f32,
+}
+
+/// Build a standalone passability entry that seals each furniture cell on all
+/// four edges (`EDGE_ALL`), so both continuous movement collision and A*
+/// pathing treat the cell as solid. Each piece becomes its own small
+/// `RuntimeFloorGrid` (sized to that piece's footprint), so multi-region sets
+/// never overflow the `u8` grid dimensions. World cell coords map through
+/// `house_origin = 0` + `floor.origin = grid min cell`. Returns `None` when no
+/// piece contributes any cell (caller should drop/skip the cache entry).
+pub fn build_furniture_passability(pieces: &[FurniturePiece]) -> Option<RuntimePassability> {
+    let edge_all = EDGE_N | EDGE_E | EDGE_S | EDGE_W;
+    let mut floors = Vec::new();
+    let mut min_x = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut min_z = f32::INFINITY;
+    let mut max_z = f32::NEG_INFINITY;
+
+    for piece in pieces {
+        if piece.cells.is_empty() {
+            continue;
+        }
+        let mut cmin_x = i32::MAX;
+        let mut cmax_x = i32::MIN;
+        let mut cmin_z = i32::MAX;
+        let mut cmax_z = i32::MIN;
+        for &(cx, cz) in &piece.cells {
+            cmin_x = cmin_x.min(cx);
+            cmax_x = cmax_x.max(cx);
+            cmin_z = cmin_z.min(cz);
+            cmax_z = cmax_z.max(cz);
+        }
+        let width = (cmax_x - cmin_x + 1) as usize;
+        let depth = (cmax_z - cmin_z + 1) as usize;
+        // Guard against a pathological footprint overflowing the u8 grid dims.
+        if width > u8::MAX as usize || depth > u8::MAX as usize {
+            continue;
+        }
+
+        let mut cells = vec![0u8; width * depth];
+        for &(cx, cz) in &piece.cells {
+            let gx = (cx - cmin_x) as usize;
+            let gz = (cz - cmin_z) as usize;
+            cells[gx + gz * width] = edge_all;
+        }
+
+        min_x = min_x.min(cmin_x as f32);
+        max_x = max_x.max((cmax_x + 1) as f32);
+        min_z = min_z.min(cmin_z as f32);
+        max_z = max_z.max((cmax_z + 1) as f32);
+
+        floors.push(RuntimeFloorGrid {
+            floor_level: piece.floor_level,
+            origin_x: cmin_x,
+            origin_z: cmin_z,
+            width: width as u8,
+            depth: depth as u8,
+            y_base: piece.y_base,
+            wall_height: piece.wall_height,
+            cells,
+        });
+    }
+
+    if floors.is_empty() {
+        return None;
+    }
+
+    Some(RuntimePassability {
+        house_origin_x: 0.0,
+        house_origin_z: 0.0,
+        min_x,
+        max_x,
+        min_z,
+        max_z,
+        floors,
+        stairwells: Vec::new(),
+    })
+}
+
 /// Apply open-door overlays from a HouseData to its runtime passability cache entry.
 /// Should be called after build_runtime_passability to reflect doors that are already open.
 pub fn apply_door_overlays(cache: &mut PassabilityCache, house: &HouseData) {
