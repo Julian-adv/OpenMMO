@@ -20,3 +20,5 @@
 - kobold https://create.verse8.io/ 에서 2d -> 3d 생성함
   - 원화는 chatgpt.com에서 다음 프롬프트로 생성함
     > d&d 혹은 nethack에 나오는 kobold를 3d로 제작할 수 있게 T자형 포즈로 그려줘
+
+    ![원화](../images/kobold-concept.png)
