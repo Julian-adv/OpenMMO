@@ -1,0 +1,2 @@
+- Avoid comments in code where possible; only write them when truly necessary, keeping them short and concise.
+- If you find long or verbose comments in existing code, rewrite them to be short and concise, or remove them where possible.
