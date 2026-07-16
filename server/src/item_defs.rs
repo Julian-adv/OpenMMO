@@ -32,6 +32,10 @@ pub struct ItemDefinition {
     /// cannot be bought or sold.
     #[serde(rename = "basePrice")]
     pub base_price: Option<i64>,
+    /// Guard (AC) bonus granted while this item is equipped. Summed across all
+    /// equipped items and added to the wearer's base guard when attacked.
+    #[serde(default)]
+    pub guard: Option<i32>,
 }
 
 /// The effect produced by consuming a usable item via `use_item`, decided by

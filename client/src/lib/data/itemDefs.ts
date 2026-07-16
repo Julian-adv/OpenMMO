@@ -18,6 +18,8 @@ export interface ItemDefinition {
   material?: string
   /** Base price in the smallest currency unit (copper). */
   basePrice?: number
+  /** Guard (AC) bonus granted while equipped. Summed across equipped items. */
+  guard?: number
 }
 
 const itemDefs = itemsJson as Record<string, ItemDefinition>

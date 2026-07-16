@@ -1,6 +1,6 @@
 use crate::game::{character_hp, combat};
 use crate::types::{MonsterState, PlayerId, Position, ServerMessage};
-use onlinerpg_shared::inventory::{EquipSlot, GroundItem};
+use onlinerpg_shared::inventory::{EquipSlot, GroundItem, PlayerInventory};
 use onlinerpg_shared::xp;
 use rand::Rng;
 use std::f32::consts::TAU;
@@ -47,6 +47,39 @@ mod tests {
 }
 
 impl super::GameState {
+    /// Sum of the guard bonuses from every equipped item — the single place
+    /// that maps equipped gear to a guard number. Pure over the loaded item
+    /// definitions; `effective_guard` adds it to the base attribute.
+    fn equipped_guard_bonus(&self, inv: &PlayerInventory) -> i32 {
+        inv.equipped
+            .values()
+            .filter_map(|item| self.item_defs.get(&item.item_def_id))
+            .filter_map(|def| def.guard)
+            .sum()
+    }
+
+    /// A player's effective guard: base attribute plus equipped-gear bonuses.
+    /// This is exactly the target number an attacker must beat to land a hit,
+    /// and the value reported to the client so it never has to recompute the
+    /// formula itself.
+    pub async fn effective_guard(&self, player_id: &str) -> i32 {
+        let base = {
+            let chars = self.player_characters.read().await;
+            chars
+                .get(player_id)
+                .map(|(_, _, attrs)| i32::from(attrs.guard))
+                .unwrap_or(10)
+        };
+        let bonus = {
+            let inventories = self.inventories.read().await;
+            inventories
+                .get(player_id)
+                .map(|inv| self.equipped_guard_bonus(inv))
+                .unwrap_or(0)
+        };
+        base + bonus
+    }
+
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
         // 1. Check if monster exists and is alive first, get its type
         let (monster_type, monster_position, monster_floor_level, monster_level_override) = {
@@ -446,13 +479,7 @@ impl super::GameState {
                 _ => return,
             }
         }
-        let target_guard = {
-            let chars = self.player_characters.read().await;
-            chars
-                .get(target_player_id)
-                .map(|(_, _, attrs)| i32::from(attrs.guard))
-                .unwrap_or(10)
-        };
+        let target_guard = self.effective_guard(target_player_id).await;
 
         let result = combat::roll_attack_with_extra_damage_roll(
             attack_bonus,

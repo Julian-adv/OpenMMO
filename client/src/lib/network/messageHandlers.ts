@@ -17,7 +17,7 @@ import { objectManager } from '../managers/objectManager'
 import { groundItemManager } from '../managers/groundItemManager'
 import { dungeonManager } from '../managers/dungeonManager'
 import { deathDropDelayQueue } from '../managers/deathDropDelay'
-import { setInventory, playerGold } from '../stores/inventoryStore'
+import { setInventory, playerGold, playerGuard } from '../stores/inventoryStore'
 import {
   shopSession,
   applyDealUpdate,
@@ -812,6 +812,10 @@ export function handleServerMessage(
 
     case 'GoldUpdate':
       playerGold.set(Number(data.gold))
+      break
+
+    case 'GuardUpdated':
+      playerGuard.set(Number(data.guard))
       break
 
     case 'GoldGained': {

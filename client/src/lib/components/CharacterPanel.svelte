@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { inventoryStore } from '../stores/inventoryStore'
+  import { inventoryStore, playerGuard } from '../stores/inventoryStore'
   import type { EquipSlot } from '../stores/inventoryStore'
   import { getItemDef } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
@@ -53,6 +53,14 @@
     (gender === 'female' && FEMALE_EQUIP_BG[characterClass]) ||
       '/character_concepts/female_priest.png'
   )
+
+  // Effective guard is computed server-side (base attribute + equipped-gear
+  // bonuses) — the exact value combat uses — and pushed via GuardUpdated. We
+  // display that rather than recomputing it here so the number can never drift
+  // from the server's formula. Falls back to the base attribute until the
+  // first update arrives. The bonus is derived only for the "(+N)" hint.
+  const effectiveGuard = $derived($playerGuard ?? attributes.guard)
+  const equipGuardBonus = $derived(effectiveGuard - attributes.guard)
 
   const CLASS_LABELS: Record<CharacterClass, string> = {
     knight: 'Knight',
@@ -165,7 +173,11 @@
         </div>
         <div class="stat-row">
           <span class="stat-label">Guard</span>
-          <span class="stat-value guard-value">{attributes.guard}</span>
+          <span class="stat-value guard-value"
+            >{effectiveGuard}{equipGuardBonus > 0
+              ? ` (+${equipGuardBonus})`
+              : ''}</span
+          >
         </div>
         <div class="stat-row">
           <span class="stat-label">Str</span>

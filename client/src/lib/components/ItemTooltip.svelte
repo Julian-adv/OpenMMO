@@ -42,6 +42,9 @@
     {:else if def.category === 'healing_potion' && def.dice}
       <span>Heals: {def.dice}</span>
     {/if}
+    {#if def.guard}
+      <span>Guard: +{def.guard}</span>
+    {/if}
   </div>
 </div>
 
