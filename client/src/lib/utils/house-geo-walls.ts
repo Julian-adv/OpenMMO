@@ -500,10 +500,6 @@ export function collectWallSegments(
 
       // Shared panel setup for door / window hinged panels
       if (seg.variant === 'door' || seg.variant === 'window') {
-        // Interior-face Z offset (consistent across all wall directions)
-        const panelZ =
-          (dirInfo.isFront === dirInfo.isNS ? -1 : 1) * (WALL_THICKNESS / 4)
-        const closedAngle = dirInfo.isNS ? 0 : Math.PI / 2
         const panelMat = getHousingMaterial(
           DOOR_TEXTURE_IDX >= 0 ? DOOR_TEXTURE_IDX : texIdx
         )
@@ -520,6 +516,10 @@ export function collectWallSegments(
             WALL_THICKNESS
           )
           const panel = new THREE.Mesh(panelGeo, panelMat)
+          // Interior-face offset
+          const panelZ = (dirInfo.isFront ? -1 : 1) * (WALL_THICKNESS / 4)
+          // E/W closes at -PI/2: panel local +X -> world +Z fills the opening
+          const closedAngle = dirInfo.isNS ? 0 : -Math.PI / 2
           panel.position.set(DOOR_WIDTH / 2 - inset, doorPanelH / 2, panelZ)
 
           const pivot = new THREE.Group()
@@ -531,13 +531,10 @@ export function collectWallSegments(
             pivot.position.set(x + hingeOffset, yBase, z)
           } else {
             pivot.position.set(x, yBase, z + hingeOffset)
-            pivot.rotation.y = Math.PI / 2
           }
+          pivot.rotation.y = isOpen ? openAngle : closedAngle
 
           pivot.add(panel)
-          if (isOpen) {
-            pivot.rotation.y = openAngle
-          }
 
           doors.push({
             pivot,
@@ -551,6 +548,10 @@ export function collectWallSegments(
           })
         } else {
           // Two hinged shutters per window: single box with composite texture
+          // Interior-face Z offset
+          const panelZ =
+            (dirInfo.isFront === dirInfo.isNS ? -1 : 1) * (WALL_THICKNESS / 4)
+          const closedAngle = dirInfo.isNS ? 0 : Math.PI / 2
           const halfW = WINDOW_WIDTH / 2
           const outwardSign = dirInfo.isFront ? 1 : -1
 
@@ -594,13 +595,10 @@ export function collectWallSegments(
               pivot.position.set(x + hingeOffset, yBase + WINDOW_BOTTOM, z)
             } else {
               pivot.position.set(x, yBase + WINDOW_BOTTOM, z + hingeOffset)
-              pivot.rotation.y = Math.PI / 2
             }
+            pivot.rotation.y = isOpen ? openAngle : closedAngle
 
             pivot.add(shutter)
-            if (isOpen) {
-              pivot.rotation.y = openAngle
-            }
 
             doors.push({
               pivot,
