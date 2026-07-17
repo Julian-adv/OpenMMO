@@ -13,19 +13,24 @@ const MAX_MOVE_TARGET_DISTANCE: f32 = 60.0;
 
 /// Client-requested destination the server walks the player toward at capped
 /// speed. Replaced wholesale by each new PlayerMove.
+#[derive(Clone)]
 pub(super) struct MoveIntent {
     target: Position,
     rotation: f32,
     floor_level: i8,
+    /// NPC connections are exempt: schedule force-moves may legitimately
+    /// cross closed doors.
+    check_collision: bool,
 }
 
-impl MoveIntent {
-    fn matches(&self, target: &Position, rotation: f32, floor_level: i8) -> bool {
-        self.target.x == target.x
-            && self.target.y == target.y
-            && self.target.z == target.z
-            && self.rotation == rotation
-            && self.floor_level == floor_level
+impl PartialEq for MoveIntent {
+    fn eq(&self, other: &Self) -> bool {
+        self.target.x == other.target.x
+            && self.target.y == other.target.y
+            && self.target.z == other.target.z
+            && self.rotation == other.rotation
+            && self.floor_level == other.floor_level
+            && self.check_collision == other.check_collision
     }
 }
 
@@ -340,6 +345,7 @@ impl super::GameState {
         new_rotation: f32,
         floor_level: i8,
         trusted: bool,
+        is_npc: bool,
     ) {
         if !(new_position.x.is_finite()
             && new_position.y.is_finite()
@@ -402,6 +408,7 @@ impl super::GameState {
                 target: new_position,
                 rotation: new_rotation,
                 floor_level,
+                check_collision: !is_npc,
             },
         );
     }
@@ -409,11 +416,11 @@ impl super::GameState {
     /// Advance every pending MoveIntent by `dt` seconds of walking and
     /// broadcast the results. Finished intents are dropped.
     pub async fn tick_player_movement(&self, dt: f32) {
-        let intents: Vec<(PlayerId, Position, f32, i8)> = {
+        let intents: Vec<(PlayerId, MoveIntent)> = {
             let intents = self.movement_intents.read().await;
             intents
                 .iter()
-                .map(|(id, i)| (id.clone(), i.target, i.rotation, i.floor_level))
+                .map(|(id, intent)| (id.clone(), intent.clone()))
                 .collect()
         };
         if intents.is_empty() {
@@ -422,11 +429,13 @@ impl super::GameState {
 
         let max_step = PLAYER_MOVE_SPEED * MOVE_SPEED_SLACK * dt.max(0.0);
         let mut moved: Vec<(&PlayerId, Position, i8, Player)> = Vec::new();
-        let mut finished: Vec<&(PlayerId, Position, f32, i8)> = Vec::new();
+        let mut finished: Vec<&(PlayerId, MoveIntent)> = Vec::new();
         {
             let mut players = self.players.write().await;
+            let cache = self.passability_read();
             for entry in &intents {
-                let (player_id, target, rotation, target_floor) = entry;
+                let (player_id, intent) = entry;
+                let target = &intent.target;
                 let Some(player) = players.get_mut(player_id) else {
                     finished.push(entry);
                     continue;
@@ -442,8 +451,8 @@ impl super::GameState {
                 if old_position.x == target.x
                     && old_position.y == target.y
                     && old_position.z == target.z
-                    && old_floor == *target_floor
-                    && player.rotation == *rotation
+                    && old_floor == intent.floor_level
+                    && player.rotation == intent.rotation
                 {
                     finished.push(entry);
                     continue;
@@ -452,30 +461,59 @@ impl super::GameState {
                 let dx = shortest_world_delta_x(old_position.x, target.x);
                 let dz = target.z - old_position.z;
                 let dist = (dx * dx + dz * dz).sqrt();
-                if dist <= max_step {
-                    player.position = *target;
-                    player.floor_level = *target_floor;
+                let snap = dist <= max_step;
+                // Step in unwrapped X so a seam-crossing move stays a short
+                // local sweep for the collision query.
+                let (step_x, step_y, step_z) = if snap {
+                    (old_position.x + dx, target.y, target.z)
                 } else {
                     let t = max_step / dist;
+                    (
+                        old_position.x + dx * t,
+                        old_position.y + (target.y - old_position.y) * t,
+                        old_position.z + dz * t,
+                    )
+                };
+                // Edge-crossing query also used by the client's continuous
+                // mover (at the mover's current Y). A blocked step stops the
+                // player at the wall and drops the intent.
+                if intent.check_collision
+                    && super::passability::is_wrapped_movement_blocked(
+                        &cache,
+                        old_position.x,
+                        old_position.z,
+                        step_x,
+                        step_z,
+                        old_position.y,
+                    )
+                {
+                    warn!(
+                        "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) y={:.1}",
+                        player_id, old_position.x, old_position.z, step_x, step_z, old_position.y
+                    );
+                    finished.push(entry);
+                    continue;
+                }
+                if snap {
+                    player.position = *target;
+                    player.floor_level = intent.floor_level;
+                } else {
                     player.position = Position {
-                        x: wrap_world_x(old_position.x + dx * t),
-                        y: old_position.y + (target.y - old_position.y) * t,
-                        z: old_position.z + dz * t,
+                        x: wrap_world_x(step_x),
+                        y: step_y,
+                        z: step_z,
                     };
                 }
-                player.rotation = *rotation;
+                player.rotation = intent.rotation;
                 moved.push((player_id, old_position, old_floor, player.clone()));
             }
         }
 
         if !finished.is_empty() {
             let mut intents_map = self.movement_intents.write().await;
-            for (player_id, target, rotation, floor_level) in finished {
+            for (player_id, intent) in finished {
                 // Keep intents that were replaced since the snapshot.
-                if intents_map
-                    .get(player_id)
-                    .is_some_and(|i| i.matches(target, *rotation, *floor_level))
-                {
+                if intents_map.get(player_id) == Some(intent) {
                     intents_map.remove(player_id);
                 }
             }

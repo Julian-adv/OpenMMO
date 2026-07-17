@@ -228,7 +228,50 @@ impl HousingIO {
 
     /// Read all houses in a chunk.
     pub async fn read_chunk(&self, cx: i32, cz: i32) -> std::io::Result<Vec<HouseData>> {
-        let dir = self.chunk_dir(cx, cz);
+        Self::read_house_dir(self.chunk_dir(cx, cz)).await
+    }
+
+    /// Every house across all chunk directories (boot-time cache build).
+    pub async fn read_all_houses(&self) -> Vec<HouseData> {
+        let mut entries = match fs::read_dir(&self.base_dir).await {
+            Ok(e) => e,
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    error!("Failed to read housing base dir: {}", e);
+                }
+                return Vec::new();
+            }
+        };
+
+        let mut houses = Vec::new();
+        loop {
+            let entry = match entries.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(e) => {
+                    error!("Failed to enumerate housing base dir: {}", e);
+                    break;
+                }
+            };
+            let is_dir = match entry.file_type().await {
+                Ok(file_type) => file_type.is_dir(),
+                Err(e) => {
+                    error!("Failed to inspect housing entry {:?}: {}", entry.path(), e);
+                    continue;
+                }
+            };
+            if !is_dir {
+                continue;
+            }
+            match Self::read_house_dir(entry.path()).await {
+                Ok(mut chunk) => houses.append(&mut chunk),
+                Err(e) => error!("Failed to read housing dir {:?}: {}", entry.path(), e),
+            }
+        }
+        houses
+    }
+
+    async fn read_house_dir(dir: PathBuf) -> std::io::Result<Vec<HouseData>> {
         let mut entries = match fs::read_dir(&dir).await {
             Ok(e) => e,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(vec![]),

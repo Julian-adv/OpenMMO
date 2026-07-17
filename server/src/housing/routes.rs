@@ -96,6 +96,7 @@ async fn create_house(
             "Internal server error".to_string(),
         )
     })?;
+    state.game_state.passability_add_house(&house).await;
     let tree_stats = remove_house_trees(&state.terrain, &house).await?;
     broadcast_house_change(
         &state.game_state,
@@ -132,6 +133,7 @@ async fn update_house(
             "Internal server error".to_string(),
         )
     })?;
+    state.game_state.passability_add_house(&house).await;
     let tree_stats = remove_house_trees(&state.terrain, &house).await?;
     broadcast_house_change(
         &state.game_state,
@@ -206,6 +208,7 @@ async fn delete_house(
                     error!("Failed to delete house {}: {}", house_id, e);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
+            state.game_state.passability_remove_house(&house_id);
             state
                 .game_state
                 .send_direct_message_to_players_within_position(

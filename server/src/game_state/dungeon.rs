@@ -324,6 +324,8 @@ impl GameState {
             .await;
 
         if let Some(prop_pos) = broken_at {
+            self.rebuild_dungeon_floor_passability(entrance_id, depth)
+                .await;
             if rand::thread_rng().gen_bool(BROKEN_PROP_COIN_DROP_CHANCE) {
                 let drop_pos = self
                     .prop_wall_opposite_drop_position(entrance_id, depth, prop_id, prop_pos)
@@ -526,18 +528,26 @@ impl GameState {
             return;
         }
         self.ensure_dungeon_runtime(entrance_id).await;
-        let floor_players: Vec<(u8, Vec<PlayerId>)> = {
+        let (total_depths, floor_players): (u8, Vec<(u8, Vec<PlayerId>)>) = {
             let mut dungeons = self.dungeons.write().await;
             let Some(rt) = dungeons.get_mut(entrance_id) else {
                 return;
             };
             rt.broken_props.clear();
             rt.opened_props.clear();
-            rt.floors
-                .iter()
-                .map(|(depth, floor)| (*depth, floor.players.iter().cloned().collect()))
-                .collect()
+            (
+                rt.layouts.len() as u8,
+                rt.floors
+                    .iter()
+                    .map(|(depth, floor)| (*depth, floor.players.iter().cloned().collect()))
+                    .collect(),
+            )
         };
+
+        for depth in 1..=total_depths {
+            self.rebuild_dungeon_floor_passability(entrance_id, depth)
+                .await;
+        }
 
         for (depth, players) in floor_players {
             if players.is_empty() {

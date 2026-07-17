@@ -7,11 +7,29 @@ use axum::{
     Json, Router,
 };
 use std::sync::Arc;
-use tracing::error;
+use tracing::{error, warn};
 
 use super::io::TerrainIO;
+use crate::game_state::GameState;
 
-pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
+/// The objects route also feeds the game state's furniture passability,
+/// so it carries both IO and game state.
+#[derive(Clone)]
+struct ObjectsState {
+    terrain: Arc<TerrainIO>,
+    game_state: Arc<GameState>,
+}
+
+pub fn terrain_router(terrain_io: Arc<TerrainIO>, game_state: Arc<GameState>) -> Router {
+    let objects_router = Router::new()
+        .route(
+            "/api/terrain/objects/{rx}/{rz}",
+            get(get_object).put(put_object),
+        )
+        .with_state(ObjectsState {
+            terrain: Arc::clone(&terrain_io),
+            game_state,
+        });
     Router::new()
         .route(
             "/api/terrain/height/{x}/{z}",
@@ -54,14 +72,11 @@ pub fn terrain_router(terrain_io: Arc<TerrainIO>) -> Router {
         .route("/api/terrain/river-field/{x}/{z}", get(get_river_field))
         .route("/api/terrain/water-field/{x}/{z}", get(get_water_field))
         .route(
-            "/api/terrain/objects/{rx}/{rz}",
-            get(get_object).put(put_object),
-        )
-        .route(
             "/api/terrain/region/{rx}/{rz}",
             delete(delete_region_handler),
         )
         .with_state(terrain_io)
+        .merge(objects_router)
 }
 
 async fn get_heightmap(
@@ -314,9 +329,9 @@ async fn put_zone(
 
 async fn get_object(
     Path((rx, rz)): Path<(i32, i32)>,
-    State(terrain): State<Arc<TerrainIO>>,
+    State(state): State<ObjectsState>,
 ) -> Result<Response, StatusCode> {
-    let data = terrain.read_object(rx, rz).await.map_err(|e| {
+    let data = state.terrain.read_object(rx, rz).await.map_err(|e| {
         error!("Failed to read object ({}, {}): {}", rx, rz, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -325,16 +340,28 @@ async fn get_object(
 
 async fn put_object(
     Path((rx, rz)): Path<(i32, i32)>,
-    State(terrain): State<Arc<TerrainIO>>,
+    State(state): State<ObjectsState>,
     Json(body): Json<serde_json::Value>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    terrain.write_object(rx, rz, &body).await.map_err(|e| {
-        error!("Failed to write object ({}, {}): {}", rx, rz, e);
+    let placements = GameState::parse_region_furniture(&body).map_err(|e| {
+        warn!("Invalid region objects ({rx},{rz}): {e}");
         (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "Internal server error".to_string(),
+            StatusCode::BAD_REQUEST,
+            "Invalid region object data".to_string(),
         )
     })?;
+    state
+        .terrain
+        .write_object(rx, rz, &body)
+        .await
+        .map_err(|e| {
+            error!("Failed to write object ({}, {}): {}", rx, rz, e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Internal server error".to_string(),
+            )
+        })?;
+    state.game_state.sync_region_furniture(rx, rz, &placements);
     Ok(StatusCode::NO_CONTENT)
 }
 

@@ -271,6 +271,9 @@ async fn main() {
         no_spawn_zones,
         dungeon_defs::DungeonDefs::load(),
     ));
+    // Server-side collision data for the movement sim: houses, solid
+    // furniture and dungeon layouts, mirroring what clients build.
+    game_state.init_passability(&args.terrain_dir).await;
     // Player movement simulation: walks pending move intents toward their
     // targets at capped speed (server-authoritative positions, F-006).
     let game_state_for_movement = Arc::clone(&game_state);
@@ -360,7 +363,7 @@ async fn main() {
     // Start terrain REST API server. No CORS layer on purpose: browsers only
     // reach this API same-origin through the vite proxy.
     let terrain_port = args.terrain_port.unwrap_or(args.port + 1);
-    let terrain_app = terrain_router(Arc::clone(&terrain_io))
+    let terrain_app = terrain_router(Arc::clone(&terrain_io), Arc::clone(&game_state))
         .merge(housing_router(
             Arc::clone(&housing_io),
             terrain_io,

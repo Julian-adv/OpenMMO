@@ -1,0 +1,232 @@
+//! Server-side passability cache: the same shared `PassabilityCache` the
+//! browser (wasm) and agent-client build, fed from the server's own data
+//! (housing files, region objects, dungeon layouts). `tick_player_movement`
+//! checks untrusted simulated steps against it so players can't walk
+//! through walls. Dungeon interior doors are always treated as open — the
+//! server can't map their opaque ids to grid segments, and open only errs
+//! permissive.
+
+use std::path::Path;
+
+use onlinerpg_shared::dungeon::{
+    dungeon_cache_key, dungeon_passability, dungeon_seed, floor_passability_cells_full,
+    generate_dungeon, passability_floor_for_depth,
+};
+use onlinerpg_shared::furniture::{self, FurniturePlacement};
+use onlinerpg_shared::housing::HouseData;
+use onlinerpg_shared::pathfinding;
+use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X, WORLD_WIDTH_X};
+use serde::Deserialize;
+use tracing::{info, warn};
+
+/// Region object file shape (`data/terrain/objects/r{rx}_{rz}.json`).
+#[derive(Deserialize)]
+struct RegionObjects {
+    #[serde(default)]
+    placements: Vec<FurniturePlacement>,
+}
+
+/// Query a short local movement sweep on both representations of the wrapped
+/// X seam. The player's stored position is canonical, while a seam-crossing
+/// step is deliberately left unwrapped so it remains a short segment. Shifting
+/// that segment by one world width lets it see passability near the destination
+/// edge as well as the source edge.
+pub(super) fn is_wrapped_movement_blocked(
+    cache: &pathfinding::PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    y: f32,
+) -> bool {
+    if pathfinding::is_movement_blocked(cache, from_x, from_z, to_x, to_z, y) {
+        return true;
+    }
+
+    let seam_offset = if to_x >= WORLD_MAX_X {
+        -WORLD_WIDTH_X
+    } else if to_x < WORLD_MIN_X {
+        WORLD_WIDTH_X
+    } else {
+        return false;
+    };
+    pathfinding::is_movement_blocked(
+        cache,
+        from_x + seam_offset,
+        from_z,
+        to_x + seam_offset,
+        to_z,
+        y,
+    )
+}
+
+impl super::GameState {
+    /// Cache guards recover from poisoning: a panic mid-update at worst
+    /// leaves one stale entry, which must not take down the movement tick.
+    pub(super) fn passability_read(
+        &self,
+    ) -> std::sync::RwLockReadGuard<'_, pathfinding::PassabilityCache> {
+        self.passability.read().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub(super) fn passability_write(
+        &self,
+    ) -> std::sync::RwLockWriteGuard<'_, pathfinding::PassabilityCache> {
+        self.passability.write().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// Build the boot-time cache: every house, every region's solid
+    /// furniture and every dungeon layout.
+    pub async fn init_passability(&self, terrain_dir: &str) {
+        let houses = self.housing_io.read_all_houses().await;
+        for house in &houses {
+            self.passability_add_house(house).await;
+        }
+        let regions = self.load_region_furniture(terrain_dir).await;
+        let mut dungeons = 0usize;
+        for def in self.dungeon_defs.all() {
+            let layouts = generate_dungeon(dungeon_seed(&def.id));
+            let rp = dungeon_passability(&def.position(), &layouts);
+            self.passability_write()
+                .insert(dungeon_cache_key(&def.id), rp);
+            dungeons += 1;
+        }
+        info!(
+            "Passability cache ready: {} houses, {} furniture regions, {} dungeons",
+            houses.len(),
+            regions,
+            dungeons
+        );
+    }
+
+    async fn load_region_furniture(&self, terrain_dir: &str) -> usize {
+        let dir = Path::new(terrain_dir).join("objects");
+        let mut entries = match tokio::fs::read_dir(&dir).await {
+            Ok(e) => e,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return 0,
+            Err(e) => {
+                warn!("Failed to read region objects dir {:?}: {e}", dir);
+                return 0;
+            }
+        };
+        let mut count = 0;
+        loop {
+            let entry = match entries.next_entry().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(e) => {
+                    warn!("Failed to enumerate region objects: {e}");
+                    break;
+                }
+            };
+            let path = entry.path();
+            if path.extension().is_none_or(|e| e != "json") {
+                continue;
+            }
+            let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let Some((rx, rz)) = crate::housing::parse_chunk_from_id(stem) else {
+                warn!("Skipping region objects file with odd name: {:?}", path);
+                continue;
+            };
+            match tokio::fs::read_to_string(&path).await {
+                Ok(content) => match serde_json::from_str::<RegionObjects>(&content) {
+                    Ok(objs) => {
+                        self.sync_region_furniture(rx, rz, &objs.placements);
+                        count += 1;
+                    }
+                    Err(e) => warn!("Bad region objects file {:?}: {}", path, e),
+                },
+                Err(e) => warn!("Failed to read region objects {:?}: {}", path, e),
+            }
+        }
+        count
+    }
+
+    /// Insert or replace a house's cache entry: base grids, persisted door
+    /// overlays, then this server's in-memory open-door state.
+    pub async fn passability_add_house(&self, house: &HouseData) {
+        let open_doors: Vec<_> = {
+            let doors = self.open_doors.read().await;
+            doors
+                .iter()
+                .filter(|k| k.house_id == house.id)
+                .map(|k| (k.room_index, k.wall_dir, k.segment_index))
+                .collect()
+        };
+        let rp = pathfinding::build_runtime_passability(house);
+        let mut cache = self.passability_write();
+        cache.insert(house.id.clone(), rp);
+        pathfinding::apply_door_overlays(&mut cache, house);
+        for (room_index, wall_dir, segment_index) in open_doors {
+            if let Some(room) = house.rooms.get(room_index as usize) {
+                pathfinding::update_door_edge(
+                    &mut cache,
+                    &house.id,
+                    room,
+                    wall_dir,
+                    segment_index as usize,
+                    true,
+                );
+            }
+        }
+    }
+
+    pub fn passability_remove_house(&self, house_id: &str) {
+        self.passability_write().remove(house_id);
+    }
+
+    /// Mirror of the client's `passability_set_furniture` for one region:
+    /// solid placements become sealed cells, empty regions clear the entry.
+    pub fn sync_region_furniture(&self, rx: i32, rz: i32, placements: &[FurniturePlacement]) {
+        let key = format!("furniture:{rx},{rz}");
+        let mut cache = self.passability_write();
+        match furniture::build_furniture_passability_for_placements(placements) {
+            Some(rp) => {
+                cache.insert(key, rp);
+            }
+            None => {
+                cache.remove(&key);
+            }
+        }
+    }
+
+    /// Validate the map editor's region-object payload before it is persisted,
+    /// returning only the fields needed by collision caching.
+    pub(crate) fn parse_region_furniture(
+        body: &serde_json::Value,
+    ) -> Result<Vec<FurniturePlacement>, serde_json::Error> {
+        RegionObjects::deserialize(body).map(|objects| objects.placements)
+    }
+
+    /// Re-derive one dungeon floor's cells from its current broken-prop set
+    /// (doors stay open, see module docs).
+    pub(super) async fn rebuild_dungeon_floor_passability(&self, entrance_id: &str, depth: u8) {
+        if depth == 0 {
+            return;
+        }
+        let cells = {
+            let dungeons = self.dungeons.read().await;
+            let Some(rt) = dungeons.get(entrance_id) else {
+                return;
+            };
+            let Some(layout) = rt.layouts.get((depth - 1) as usize) else {
+                return;
+            };
+            let broken: Vec<u32> = rt
+                .broken_props
+                .get(&depth)
+                .map(|s| s.iter().copied().collect())
+                .unwrap_or_default();
+            floor_passability_cells_full(layout, &broken, &[])
+        };
+        let floor_level = passability_floor_for_depth(depth);
+        let mut cache = self.passability_write();
+        if let Some(rp) = cache.get_mut(&dungeon_cache_key(entrance_id)) {
+            if let Some(f) = rp.floors.iter_mut().find(|f| f.floor_level == floor_level) {
+                f.cells = cells;
+            }
+        }
+    }
+}

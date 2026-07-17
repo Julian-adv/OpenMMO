@@ -722,7 +722,14 @@ async fn handle_client_message(
         } => {
             if let Some(id) = &state.player_id {
                 game_state
-                    .update_player_position(id, position, rotation, floor_level, state.is_admin)
+                    .update_player_position(
+                        id,
+                        position,
+                        rotation,
+                        floor_level,
+                        state.is_admin,
+                        state.is_npc,
+                    )
                     .await;
             } else {
                 warn!("Received move from client that is not in game");

@@ -68,6 +68,10 @@ impl DungeonDefs {
         self.defs.get(id)
     }
 
+    pub fn all(&self) -> impl Iterator<Item = &DungeonEntranceDef> {
+        self.defs.values()
+    }
+
     /// Entrance whose grid footprint contains the given XZ position.
     pub fn entrance_at(&self, x: f32, z: f32) -> Option<&DungeonEntranceDef> {
         self.defs.values().find(|d| d.footprint_contains(x, z))

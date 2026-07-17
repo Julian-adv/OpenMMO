@@ -54,6 +54,7 @@ pub(crate) use deals::band_invariant_holds;
 mod dungeon;
 mod inventory;
 mod monster;
+mod passability;
 mod player;
 mod salary;
 mod time;
@@ -120,6 +121,10 @@ pub struct GameState {
     dirty_inventories: Arc<RwLock<HashSet<PlayerId>>>,
     /// In-memory set of currently open doors.
     open_doors: Arc<RwLock<HashSet<DoorKey>>>,
+    /// Shared-crate passability cache mirroring what clients build (houses,
+    /// solid furniture, dungeons), used to collision-check simulated player
+    /// movement. std RwLock: accesses are sync and short.
+    passability: Arc<std::sync::RwLock<onlinerpg_shared::pathfinding::PassabilityCache>>,
     /// No-spawn zones (towns, safe areas) from region zone files.
     no_spawn_zones: Vec<NoSpawnZone>,
     /// Player inventories (bag + equipment), keyed by player_id.
@@ -182,6 +187,9 @@ impl GameState {
             dirty_players: Arc::new(RwLock::new(HashSet::new())),
             dirty_inventories: Arc::new(RwLock::new(HashSet::new())),
             open_doors: Arc::new(RwLock::new(HashSet::new())),
+            passability: Arc::new(std::sync::RwLock::new(
+                onlinerpg_shared::pathfinding::PassabilityCache::new(),
+            )),
             no_spawn_zones,
             inventories: Arc::new(RwLock::new(HashMap::new())),
             ground_items: Arc::new(RwLock::new(HashMap::new())),
@@ -267,14 +275,28 @@ impl GameState {
             wall_dir,
             segment_index,
         };
-        let mut open_doors = self.open_doors.write().await;
-        let is_open = if open_doors.contains(&key) {
-            open_doors.remove(&key);
-            false
-        } else {
-            open_doors.insert(key);
-            true
+        let is_open = {
+            let mut open_doors = self.open_doors.write().await;
+            if open_doors.contains(&key) {
+                open_doors.remove(&key);
+                false
+            } else {
+                open_doors.insert(key);
+                true
+            }
         };
+
+        {
+            let mut cache = self.passability_write();
+            onlinerpg_shared::pathfinding::update_door_edge(
+                &mut cache,
+                house_id,
+                room,
+                wall_dir,
+                segment_index as usize,
+                is_open,
+            );
+        }
 
         Some(is_open)
     }

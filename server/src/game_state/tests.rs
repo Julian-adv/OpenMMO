@@ -309,7 +309,7 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
     }
 
     game_state
-        .update_player_position(&player_id, entity_position, 0.0, 0, false)
+        .update_player_position(&player_id, entity_position, 0.0, 0, false, false)
         .await;
     game_state.tick_player_movement(60.0).await;
 
@@ -368,6 +368,7 @@ async fn player_movement_wraps_across_east_world_edge() {
             0.5,
             0,
             false,
+            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
@@ -382,6 +383,45 @@ async fn player_movement_wraps_across_east_world_edge() {
         }
         other => panic!("Expected wrapped self PlayerMoved, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn seam_crossing_movement_checks_destination_edge_collision() {
+    let game_state = make_test_game_state("movement_seam_collision");
+    let player_id = "seam_walker".to_string();
+    game_state
+        .add_player(make_player(
+            &player_id,
+            onlinerpg_shared::WORLD_MAX_X - 0.5,
+            5.5,
+        ))
+        .await;
+    game_state.sync_region_furniture(
+        -16,
+        0,
+        &[table_placement(onlinerpg_shared::WORLD_MIN_X + 0.5, 5.5)],
+    );
+
+    game_state
+        .update_player_position(
+            &player_id,
+            Position {
+                x: onlinerpg_shared::WORLD_MIN_X + 1.5,
+                y: 0.0,
+                z: 5.5,
+            },
+            0.0,
+            0,
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+
+    assert_eq!(
+        player_xz(&game_state, &player_id).await,
+        (onlinerpg_shared::WORLD_MAX_X - 0.5, 5.5)
+    );
 }
 
 async fn player_x(game_state: &GameState, player_id: &str) -> f32 {
@@ -401,7 +441,7 @@ async fn server_caps_player_movement_speed() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(50.0), 0.0, 0, false)
+        .update_player_position(&player_id, pos(50.0), 0.0, 0, false, false)
         .await;
 
     assert_eq!(player_x(&game_state, &player_id).await, 0.0);
@@ -424,7 +464,7 @@ async fn non_finite_move_is_rejected() {
 
     for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
         game_state
-            .update_player_position(&player_id, pos(bad), 0.0, 0, false)
+            .update_player_position(&player_id, pos(bad), 0.0, 0, false, false)
             .await;
     }
     game_state.tick_player_movement(60.0).await;
@@ -440,7 +480,7 @@ async fn far_move_target_is_rejected() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(100.0), 0.0, 0, false)
+        .update_player_position(&player_id, pos(100.0), 0.0, 0, false, false)
         .await;
     game_state.tick_player_movement(600.0).await;
     assert_eq!(player_x(&game_state, &player_id).await, 0.0);
@@ -455,7 +495,7 @@ async fn admin_move_applies_immediately() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(100.0), 0.0, 0, true)
+        .update_player_position(&player_id, pos(100.0), 0.0, 0, true, false)
         .await;
     assert_eq!(player_x(&game_state, &player_id).await, 100.0);
 }
@@ -469,7 +509,7 @@ async fn teleport_clears_pending_move_intent() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(50.0), 0.0, 0, false)
+        .update_player_position(&player_id, pos(50.0), 0.0, 0, false, false)
         .await;
     game_state
         .teleport_player(
@@ -1298,4 +1338,123 @@ async fn enchant_scroll_destroys_over_enchanted_weapon() {
         }
     }
     panic!("the weapon should have evaporated within 100 reads at 99% odds");
+}
+
+fn table_placement(x: f32, z: f32) -> onlinerpg_shared::furniture::FurniturePlacement {
+    onlinerpg_shared::furniture::FurniturePlacement {
+        type_id: "table".to_string(),
+        x,
+        y: 0.0,
+        z,
+        rotation_deg: 0.0,
+        floor_level: 0,
+    }
+}
+
+async fn player_xz(game_state: &GameState, player_id: &str) -> (f32, f32) {
+    let p = &game_state.get_all_players().await[player_id];
+    (p.position.x, p.position.z)
+}
+
+#[tokio::test]
+async fn simulated_movement_is_blocked_by_solid_furniture() {
+    let game_state = make_test_game_state("movement_furniture_block");
+    let player_id = "wallwalker".to_string();
+    game_state
+        .add_player(make_player(&player_id, 0.5, 4.5))
+        .await;
+    // A table centred on cell (0, 5) seals it (EDGE_ALL).
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+
+    // Straight through the sealed cell: the sim must stop at the wall.
+    game_state
+        .update_player_position(
+            &player_id,
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 6.5,
+            },
+            0.0,
+            0,
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+
+    // A move that never touches the sealed cell still goes through.
+    game_state
+        .update_player_position(
+            &player_id,
+            Position {
+                x: 3.5,
+                y: 0.0,
+                z: 4.5,
+            },
+            0.0,
+            0,
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (3.5, 4.5));
+}
+
+#[tokio::test]
+async fn npc_movement_is_exempt_from_collision() {
+    let game_state = make_test_game_state("movement_npc_exempt");
+    let player_id = "npc_bot".to_string();
+    game_state
+        .add_player(make_player(&player_id, 0.5, 4.5))
+        .await;
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+
+    game_state
+        .update_player_position(
+            &player_id,
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 6.5,
+            },
+            0.0,
+            0,
+            false,
+            true,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 6.5));
+}
+
+#[tokio::test]
+async fn furniture_removal_reopens_blocked_cells() {
+    let game_state = make_test_game_state("movement_furniture_removed");
+    let player_id = "returner".to_string();
+    game_state
+        .add_player(make_player(&player_id, 0.5, 4.5))
+        .await;
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    // The map editor clearing the region must unblock movement again.
+    game_state.sync_region_furniture(0, 0, &[]);
+
+    game_state
+        .update_player_position(
+            &player_id,
+            Position {
+                x: 0.5,
+                y: 0.0,
+                z: 6.5,
+            },
+            0.0,
+            0,
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 6.5));
 }
