@@ -1,7 +1,7 @@
 <script lang="ts">
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
-  import { handleCommand, commandNames } from '../chat-commands'
+  import { handleCommand, visibleCommandNames } from '../chat-commands'
   import { chatFocusRequest } from '../stores/npcMenuStore'
 
   type Tab = 'say' | 'combat'
@@ -68,7 +68,9 @@
       messageInput = tabCycle.matches[tabCycle.index]
       return
     }
-    const matches = commandNames.filter((n) => n.startsWith(messageInput))
+    const matches = visibleCommandNames().filter((n) =>
+      n.startsWith(messageInput)
+    )
     if (matches.length === 0) return
     tabCycle = { matches, index: 0 }
     messageInput = matches[0]

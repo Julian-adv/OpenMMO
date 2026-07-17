@@ -61,7 +61,7 @@
 </script>
 
 <script lang="ts">
-  import { gameStore } from '../stores/gameStore'
+  import { gameStore, isAdminUser } from '../stores/gameStore'
   import { worldMapVisible, teleportLoading } from '../stores/debugStore'
   import { minimapVersion } from '../stores/editorStore'
   import { regionMinimapServerUrl } from '../terrain/regionMinimapGenerator'
@@ -357,7 +357,7 @@
 
   // --- Drag to pan ---
   function handlePointerDown(event: PointerEvent) {
-    if (event.ctrlKey) return // let Ctrl+click through for teleport
+    if (event.ctrlKey && $isAdminUser) return // let Ctrl+click through for teleport
     if (event.pointerType === 'mouse' && event.button !== 0) return
     event.preventDefault()
     isDragging = true
@@ -450,7 +450,7 @@
       event.stopPropagation()
       return
     }
-    const teleportRequested = event.ctrlKey || teleportMode
+    const teleportRequested = (event.ctrlKey || teleportMode) && $isAdminUser
     if (!teleportRequested) return
     event.preventDefault()
     event.stopPropagation()
@@ -460,13 +460,14 @@
   // macOS turns Ctrl+click into a contextmenu event (no click fires at all),
   // so the teleport shortcut must be caught here too.
   function handleMapContextMenu(event: MouseEvent) {
-    if (!event.ctrlKey) return
+    if (!event.ctrlKey || !$isAdminUser) return
     event.preventDefault()
     event.stopPropagation()
     teleportAt(event.clientX, event.clientY)
   }
 
   function teleportAt(clientX: number, clientY: number) {
+    if (!$isAdminUser) return
     if (!containerEl || containerW <= 0 || containerH <= 0) return
 
     const rect = containerEl.getBoundingClientRect()
@@ -538,12 +539,14 @@
         <button class="ctrl-btn" onclick={resetCamera} title="Center on Player"
           >&#8982;</button
         >
-        <button
-          class="ctrl-btn"
-          class:active={teleportMode}
-          onclick={() => (teleportMode = !teleportMode)}
-          title="Teleport Mode">TP</button
-        >
+        {#if $isAdminUser}
+          <button
+            class="ctrl-btn"
+            class:active={teleportMode}
+            onclick={() => (teleportMode = !teleportMode)}
+            title="Teleport Mode">TP</button
+          >
+        {/if}
       </div>
       <button class="close-btn" onclick={close}>&times;</button>
     </div>

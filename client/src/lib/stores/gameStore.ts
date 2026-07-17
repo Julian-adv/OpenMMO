@@ -88,12 +88,16 @@ export interface HoveredSignpost {
 }
 export const hoveredSignpost = writable<HoveredSignpost | null>(null)
 
+/** Set from JoinSuccess; unlocks debug/cheat UI (server re-validates). */
+export const isAdminUser = writable(false)
+
 export const resetGameStore = () => {
   gameStore.set({
     ...initialGameState,
     otherPlayers: new SvelteMap(),
     chatBubbles: new Map(),
   })
+  isAdminUser.set(false)
   resetInventoryStore()
   groundItemManager.reset()
 }

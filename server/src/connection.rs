@@ -31,6 +31,19 @@ pub struct AuthContext {
     pub admin_emails: Vec<String>,
 }
 
+impl AuthContext {
+    /// Verified-email allowlist check shared by REST writes and in-game
+    /// debug/cheat commands.
+    pub fn is_admin(&self, claims: &crate::google_auth::GoogleClaims) -> bool {
+        claims.email_verified == Some(true)
+            && claims.email.as_deref().is_some_and(|email| {
+                self.admin_emails
+                    .iter()
+                    .any(|a| a.eq_ignore_ascii_case(email))
+            })
+    }
+}
+
 /// Constant-time equality so the NPC token can't be probed byte by byte.
 pub fn token_matches(provided: &str, expected: &str) -> bool {
     provided.len() == expected.len()
@@ -67,6 +80,10 @@ struct ConnectionState {
     connected_at: std::time::Instant,
     last_heartbeat: std::time::Instant,
     is_npc: bool,
+    /// Account email is on the admin allowlist.
+    admin_eligible: bool,
+    /// admin_eligible && the entered character's admin_role > 0.
+    is_admin: bool,
 }
 
 impl ConnectionState {
@@ -79,6 +96,8 @@ impl ConnectionState {
             connected_at: std::time::Instant::now(),
             last_heartbeat: std::time::Instant::now(),
             is_npc: false,
+            admin_eligible: false,
+            is_admin: false,
         }
     }
 
@@ -345,6 +364,19 @@ fn finish_auth(
     }]
 }
 
+/// Debug/cheat messages every new Debug* variant must be added to; anything
+/// listed here is dropped before dispatch unless the connection is admin.
+fn requires_admin(msg: &ClientMessage) -> bool {
+    match msg {
+        ClientMessage::DebugTeleport { .. }
+        | ClientMessage::DebugDropItem { .. }
+        | ClientMessage::DebugSetTime { .. }
+        | ClientMessage::DebugResetDungeonProps { .. } => true,
+        ClientMessage::ChatMessage { message } => message.starts_with("/give "),
+        _ => false,
+    }
+}
+
 async fn handle_client_message(
     message: &[u8],
     game_state: &Arc<GameState>,
@@ -363,6 +395,20 @@ async fn handle_client_message(
         return Ok(vec![ServerMessage::AuthError {
             message: "Already authenticated".to_string(),
         }]);
+    }
+
+    if requires_admin(&client_msg) && !state.is_admin {
+        warn!(
+            "Admin-only message rejected for account {:?}",
+            state.account_name
+        );
+        return Ok(match &state.player_id {
+            Some(id) => vec![ServerMessage::ChatMessage {
+                player_id: id.clone(),
+                message: "Admin only".to_string(),
+            }],
+            None => vec![],
+        });
     }
 
     match client_msg {
@@ -395,6 +441,7 @@ async fn handle_client_message(
             };
             info!("Google sub '{}' -> account '{}'", claims.sub, account_name);
 
+            state.admin_eligible = auth_ctx.is_admin(&claims);
             return Ok(finish_auth(auth_service, state, account_name, false));
         }
 
@@ -550,6 +597,14 @@ async fn handle_client_message(
                     }
                 };
 
+            state.is_admin = state.admin_eligible && selected_character.admin_role > 0;
+            if state.is_admin {
+                info!(
+                    "Account '{}' entering as admin character '{}' (role {})",
+                    authed_account_name, selected_character.name, selected_character.admin_role
+                );
+            }
+
             // Enforced unique character names allow name-based session replacement.
             game_state
                 .kick_player_by_name(&selected_character.name)
@@ -607,6 +662,7 @@ async fn handle_client_message(
 
             let mut responses = vec![ServerMessage::JoinSuccess {
                 player: player.clone(),
+                is_admin: state.is_admin,
             }];
             let datetime = game_state.current_game_datetime();
             responses.push(ServerMessage::GameTimeSync {
@@ -1099,5 +1155,28 @@ fn default_character_max_hp(
             );
             FALLBACK_DEFAULT_MAX_HP
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn requires_admin_classifies_cheat_messages() {
+        assert!(requires_admin(&ClientMessage::DebugSetTime {
+            hour: 0,
+            minute: 0
+        }));
+        assert!(requires_admin(&ClientMessage::DebugDropItem {
+            item_def_id: "x".into()
+        }));
+        assert!(requires_admin(&ClientMessage::ChatMessage {
+            message: "/give sword".into()
+        }));
+        assert!(!requires_admin(&ClientMessage::ChatMessage {
+            message: "hello".into()
+        }));
+        assert!(!requires_admin(&ClientMessage::Heartbeat));
     }
 }

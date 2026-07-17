@@ -459,7 +459,7 @@ impl SharedState {
     pub fn push_event(&mut self, msg: ServerMessage) -> EventUrgency {
         // Update tracked state from certain messages
         match &msg {
-            ServerMessage::JoinSuccess { player } => {
+            ServerMessage::JoinSuccess { player, .. } => {
                 self.in_game = true;
                 self.self_player_id = Some(player.id.clone());
                 self.self_player = Some(player.clone());

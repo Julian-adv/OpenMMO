@@ -6,6 +6,7 @@ import {
   addCombatMessage,
   addChatBubble,
   resetGameStore,
+  isAdminUser,
 } from '../stores/gameStore'
 import type { GameState, LocalPlayer, RemotePlayer } from '../stores/gameStore'
 import { Vector3 } from 'three'
@@ -177,6 +178,7 @@ export function handleServerMessage(
     case 'JoinSuccess': {
       const serverPlayer: ServerPlayer = data.player
       console.log('Join successful, received player data:', serverPlayer)
+      isAdminUser.set(data.is_admin === true)
       const player = toLocalPlayer(serverPlayer)
       gameStore.update((state) => ({
         ...state,

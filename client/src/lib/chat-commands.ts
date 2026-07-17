@@ -1,6 +1,6 @@
 import { MathUtils } from 'three'
 import { get } from 'svelte/store'
-import { gameStore, addChatMessage } from './stores/gameStore'
+import { gameStore, addChatMessage, isAdminUser } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
 import { networkManager } from './network/socket'
 import {
@@ -17,6 +17,8 @@ import { computeGrassPlacement, regenerateVegMeta } from './utils/grass-data'
 import { dungeonManager } from './managers/dungeonManager'
 
 type CommandHandler = (args: string) => void
+
+const ADMIN_COMMANDS = new Set(['/drop', '/time', '/dungeon'])
 
 const commands: Record<string, CommandHandler> = {
   '/pos': () => {
@@ -229,16 +231,24 @@ const commands: Record<string, CommandHandler> = {
   },
 }
 
-export const commandNames = Object.keys(commands).sort()
+const commandNames = Object.keys(commands).sort()
+
+/** Command names for autocomplete; hides admin commands from non-admins. */
+export function visibleCommandNames(): string[] {
+  if (get(isAdminUser)) return commandNames
+  return commandNames.filter((n) => !ADMIN_COMMANDS.has(n))
+}
 
 export function handleCommand(input: string): boolean {
   const spaceIndex = input.indexOf(' ')
   const name = spaceIndex === -1 ? input : input.slice(0, spaceIndex)
   const args = spaceIndex === -1 ? '' : input.slice(spaceIndex + 1)
   const handler = commands[name]
-  if (handler) {
-    handler(args)
+  if (!handler) return false
+  if (ADMIN_COMMANDS.has(name) && !get(isAdminUser)) {
+    addChatMessage({ text: `${name}: admin only`, sender: 'system' })
     return true
   }
-  return false
+  handler(args)
+  return true
 }

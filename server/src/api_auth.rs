@@ -43,13 +43,7 @@ pub async fn require_admin_for_writes(
         unauthorized()
     })?;
 
-    let is_admin = claims.email_verified == Some(true)
-        && claims.email.as_deref().is_some_and(|email| {
-            auth.admin_emails
-                .iter()
-                .any(|a| a.eq_ignore_ascii_case(email))
-        });
-    if !is_admin {
+    if !auth.is_admin(&claims) {
         warn!(
             "REST write rejected: {} is not an admin",
             claims.email.as_deref().unwrap_or("<no email>")

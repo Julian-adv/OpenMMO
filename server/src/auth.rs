@@ -49,6 +49,8 @@ pub struct CharacterRecord {
     pub health: Option<u32>,
     pub floor_level: i8,
     pub gold: i64,
+    /// Nonzero unlocks admin for ADMIN_EMAILS-allowlisted accounts (tiers reserved).
+    pub admin_role: i64,
 }
 
 pub struct CharacterSaveData {
@@ -66,7 +68,7 @@ pub struct CharacterSaveData {
 }
 
 /// Column list shared between queries that return full CharacterRecord rows.
-const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold";
+const CHARACTER_COLUMNS: &str = "id, character_name, created_at, level, xp, max_hp, attr_str, attr_dex, attr_con, attr_int, attr_wis, attr_cha, attr_guard, class, last_x, last_y, last_z, last_rotation, health, floor_level, gender, gold, admin_role";
 
 fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterRecord> {
     Ok(CharacterRecord {
@@ -114,6 +116,7 @@ fn character_record_from_row(row: &rusqlite::Row) -> rusqlite::Result<CharacterR
             _ => Gender::Male,
         },
         gold: row.get::<_, i64>(21).unwrap_or(0),
+        admin_role: row.get::<_, i64>(22).unwrap_or(0),
     })
 }
 
@@ -326,6 +329,7 @@ impl AuthService {
             ("floor_level", "INTEGER NOT NULL DEFAULT 0".into()),
             ("gender", "TEXT NOT NULL DEFAULT 'male'".into()),
             ("gold", "INTEGER NOT NULL DEFAULT 0".into()),
+            ("admin_role", "INTEGER NOT NULL DEFAULT 0".into()),
         ];
 
         for (column_name, column_def) in &expected_columns {
@@ -592,6 +596,7 @@ impl AuthService {
             health: None,
             floor_level: 0,
             gold: 0,
+            admin_role: 0,
         })
     }
 
@@ -767,5 +772,49 @@ impl AuthService {
 
         tx.commit()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admin_role_defaults_to_zero_and_loads_after_update() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_admin_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        let account = auth.login_npc("npc_admin_role_test").unwrap();
+
+        let attributes = CharacterAttributes {
+            r#str: 12,
+            dex: 12,
+            con: 12,
+            int: 12,
+            wis: 12,
+            cha: 12,
+            guard: 10,
+        };
+        let record = auth
+            .create_character(
+                &account,
+                "AdminRoleTest",
+                &attributes,
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+            .unwrap();
+        assert_eq!(record.admin_role, 0);
+
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute(
+            "UPDATE characters SET admin_role = 2 WHERE id = ?1",
+            params![record.id],
+        )
+        .unwrap();
+
+        let loaded = auth.get_character_for_account(&account, record.id).unwrap();
+        assert_eq!(loaded.admin_role, 2);
     }
 }

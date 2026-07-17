@@ -244,6 +244,8 @@ pub enum ServerMessage {
     },
     JoinSuccess {
         player: Player,
+        /// Unlocks debug/cheat UI; resolved per character at EnterGame.
+        is_admin: bool,
     },
     AuthError {
         message: String,

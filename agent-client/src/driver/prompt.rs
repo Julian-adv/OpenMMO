@@ -106,7 +106,7 @@ pub(super) fn build_prompt(
 /// Returns `None` for events that should not be forwarded to the LLM.
 fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
     match msg {
-        ServerMessage::JoinSuccess { player } => Some(format!(
+        ServerMessage::JoinSuccess { player, .. } => Some(format!(
             "[Join] You joined as {} at ({:.1}, {:.1}, {:.1})",
             player.name, player.position.x, player.position.y, player.position.z
         )),
