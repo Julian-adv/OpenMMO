@@ -386,6 +386,12 @@ pub enum ServerMessage {
         roll: u8,
         damage: u32,
     },
+    /// A valid attack attempt made outside melee range. No attack roll or
+    /// damage is applied, but the managed monster should acquire the player.
+    MonsterProvoked {
+        player_id: String,
+        monster_id: String,
+    },
     MonsterAttackedPlayer {
         monster_id: String,
         player_id: String,

@@ -202,7 +202,13 @@ impl MonsterBrain {
             self.state_timer_ms = 0.0;
             vec![self.make_move_cmd()]
         } else {
-            vec![]
+            // A miss (and the server's out-of-range provoke event) still
+            // acquires the attacker. Cancel any in-progress wander so the
+            // next AI tick evaluates the combat branches immediately instead
+            // of finishing the old patrol path first.
+            let mut commands = Vec::new();
+            self.transition_to_idle(&mut commands);
+            commands
         }
     }
 

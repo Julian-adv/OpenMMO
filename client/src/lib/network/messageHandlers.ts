@@ -504,6 +504,10 @@ export function handleServerMessage(
       break
     }
 
+    case 'MonsterProvoked':
+      monsterManager.handleMonsterProvoked(data.monster_id, data.player_id)
+      break
+
     case 'MonsterAttackedPlayer': {
       const gameState = get(gameStore)
       const isCurrentPlayer = gameState.currentPlayer?.id === data.player_id

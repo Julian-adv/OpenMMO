@@ -420,6 +420,7 @@ impl SharedState {
                     EventUrgency::Routine
                 }
             }
+            ServerMessage::MonsterProvoked { .. } => EventUrgency::Routine,
 
             // Routine: world state changes
             ServerMessage::JoinSuccess { .. }
@@ -453,6 +454,29 @@ impl SharedState {
             // Auth/character events: routine (handled before game entry)
             _ => EventUrgency::Routine,
         }
+    }
+
+    fn handle_managed_monster_hit(
+        &mut self,
+        monster_id: &str,
+        player_id: &str,
+        hit: bool,
+        damage: u32,
+    ) {
+        if !self.monster_ai.manages(monster_id) {
+            return;
+        }
+
+        let world = self.world_cache.read().unwrap();
+        let commands = self.monster_ai.handle_monster_hit(
+            monster_id,
+            player_id,
+            hit,
+            damage,
+            world.passability_cache(),
+        );
+        drop(world);
+        self.pending_commands.extend(commands);
     }
 
     /// Push an event and update tracked state. Returns the urgency of the event.
@@ -614,18 +638,13 @@ impl SharedState {
                 damage,
                 ..
             } => {
-                if self.monster_ai.manages(monster_id) {
-                    let world = self.world_cache.read().unwrap();
-                    let cmds = self.monster_ai.handle_monster_hit(
-                        monster_id,
-                        player_id,
-                        *hit,
-                        *damage,
-                        world.passability_cache(),
-                    );
-                    drop(world);
-                    self.pending_commands.extend(cmds);
-                }
+                self.handle_managed_monster_hit(monster_id, player_id, *hit, *damage);
+            }
+            ServerMessage::MonsterProvoked {
+                player_id,
+                monster_id,
+            } => {
+                self.handle_managed_monster_hit(monster_id, player_id, false, 0);
             }
             _ => {}
         }

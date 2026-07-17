@@ -234,6 +234,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::MonsterRemoved { .. } => "MonsterRemoved",
         ServerMessage::MonsterDead { .. } => "MonsterDead",
         ServerMessage::PlayerAttacked { .. } => "PlayerAttacked",
+        ServerMessage::MonsterProvoked { .. } => "MonsterProvoked",
         ServerMessage::MonsterAttackedPlayer { .. } => "MonsterAttackedPlayer",
         ServerMessage::PlayerDead { .. } => "PlayerDead",
         ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",

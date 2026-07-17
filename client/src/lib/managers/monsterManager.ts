@@ -418,6 +418,17 @@ class MonsterManager {
     this.monsters.set(monsterId, { ...monster })
   }
 
+  handleMonsterProvoked(monsterId: string, playerId: string) {
+    const monster = this.monsters.get(monsterId)
+    if (!monster || monster.state === 'dead') return
+
+    monster.targetPlayerId = playerId
+    if (monster.ownerId === get(gameStore).currentPlayer?.id) {
+      const commands = ai_handle_hit(monster.id, playerId, false, 0) ?? []
+      this.processAiCommands(monster, commands)
+    }
+  }
+
   handleMonsterAttackStarted(monsterId: string, dedupeWindowMs = 0) {
     const monster = this.monsters.get(monsterId)
     if (!monster || monster.state === 'dead') return

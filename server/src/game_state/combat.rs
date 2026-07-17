@@ -7,6 +7,12 @@ use std::f32::consts::TAU;
 use tracing::{info, warn};
 
 const WEAPON_DROP_OFFSET_METERS: f32 = 2.0;
+// Mirrors the web and agent clients' 2m melee reach. This server-side check is
+// authoritative: clients may request an attack directly without chasing.
+const PLAYER_MELEE_ATTACK_RANGE_METERS: f32 = 2.0;
+// Out-of-range swings may still pull aggro when the monster is plausibly
+// nearby, but farther requests are ignored to prevent remote provocation.
+pub(super) const PLAYER_ATTACK_PROVOKE_RANGE_METERS: f32 = 10.0;
 
 fn dropped_weapon_position(monster_position: Position) -> Position {
     let angle = rand::thread_rng().gen_range(0.0..TAU);
@@ -57,7 +63,13 @@ impl super::GameState {
 
     pub async fn broadcast_player_attack(&self, player_id: &PlayerId, monster_id: String) {
         // 1. Check if monster exists and is alive first, get its type
-        let (monster_type, monster_position, monster_floor_level, monster_level_override) = {
+        let (
+            monster_type,
+            monster_position,
+            monster_floor_level,
+            monster_level_override,
+            monster_owner_id,
+        ) = {
             let monsters = self.monsters.read().await;
             let monster = match monsters.get(&monster_id) {
                 Some(m) if m.state != MonsterState::Dead => m,
@@ -68,6 +80,7 @@ impl super::GameState {
                 monster.position,
                 monster.floor_level,
                 monster.level_override,
+                monster.owner_id.clone(),
             )
         };
 
@@ -75,16 +88,36 @@ impl super::GameState {
             let players = self.players.read().await;
             players
                 .get(player_id)
-                .map(|p| (p.name.clone(), p.level, p.floor_level))
+                .map(|p| (p.name.clone(), p.level, p.floor_level, p.position))
         };
 
-        if let Some((player_name, player_level, player_floor)) = player_snapshot {
+        if let Some((player_name, player_level, player_floor, player_position)) = player_snapshot {
             // Attacker and target must share a floor. Delivery filtering keeps
             // a player from ever learning about monsters on another floor, but
             // reject here too so a stale monster id can't drive a cross-floor
             // hit (e.g. the original bug: a surface guard striking a monster on
             // the dungeon floor directly beneath it).
             if player_floor != monster_floor_level {
+                return;
+            }
+
+            let distance_sq = player_position.dist_xz_sq(&monster_position);
+            if !distance_sq.is_finite() {
+                return;
+            }
+            if distance_sq > PLAYER_MELEE_ATTACK_RANGE_METERS.powi(2) {
+                if distance_sq <= PLAYER_ATTACK_PROVOKE_RANGE_METERS.powi(2) {
+                    if let Some(owner_id) = monster_owner_id {
+                        self.send_direct_message(
+                            &owner_id,
+                            ServerMessage::MonsterProvoked {
+                                player_id: player_id.clone(),
+                                monster_id,
+                            },
+                        )
+                        .await;
+                    }
+                }
                 return;
             }
             info!("Player {} attacking monster {}", player_name, monster_id);

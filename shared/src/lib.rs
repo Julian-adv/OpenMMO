@@ -297,6 +297,10 @@ mod tests {
                 roll: 18,
                 damage: 5,
             },
+            ServerMessage::MonsterProvoked {
+                player_id: "p1".to_string(),
+                monster_id: "m1".to_string(),
+            },
             ServerMessage::Kicked {
                 player_id: "p1".to_string(),
                 reason: "test".to_string(),

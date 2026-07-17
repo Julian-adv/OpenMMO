@@ -520,6 +520,30 @@ fn behavior_tree_requires_existing_target_before_attacking() {
 }
 
 #[test]
+fn provocation_interrupts_an_in_progress_wander() {
+    let mut brain = make_brain();
+    let mut commands = Vec::new();
+    let mut rng = SmallRng::seed_from_u64(42);
+
+    brain.transition_to_move(&mut commands, 10.0, 11.0, &DirectPath, &mut rng);
+    assert!(matches!(brain.state(), AiState::Walk | AiState::Run));
+
+    let provoke_commands = brain.handle_hit_with_behavior_tree("p1", false, 0);
+
+    assert_eq!(brain.state(), AiState::Idle);
+    assert_eq!(brain.target_player_id.as_deref(), Some("p1"));
+    assert!(brain.target_position.is_none());
+    assert!(brain.waypoints.is_empty());
+    assert!(provoke_commands.iter().any(|command| matches!(
+        command,
+        AiCommand::Move {
+            state: MonsterState::Idle,
+            ..
+        }
+    )));
+}
+
+#[test]
 fn attack_chases_nearby_player() {
     let mut brain = make_brain();
     let tree = BehaviorTree {

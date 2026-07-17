@@ -674,6 +674,144 @@ async fn cross_floor_player_attack_is_rejected() {
     }
 }
 
+#[tokio::test]
+async fn out_of_range_player_attack_only_provokes_monster() {
+    let game_state = make_test_game_state("out_of_range_attack");
+    let player_id = "attacker".to_string();
+    let controller_id = "monster_controller".to_string();
+
+    game_state
+        .add_player(make_player(&player_id, 0.0, 0.0))
+        .await;
+    let mut attacker_rx = game_state.register_direct_channel(&player_id).await;
+    let mut controller_rx = game_state.register_direct_channel(&controller_id).await;
+
+    {
+        let mut monsters = game_state.monsters.write().await;
+        let mut monster = make_monster("distant_monster", pos(2.01), 0);
+        monster.owner_id = Some(controller_id);
+        monsters.insert("distant_monster".to_string(), monster);
+    }
+
+    game_state
+        .broadcast_player_attack(&player_id, "distant_monster".to_string())
+        .await;
+
+    let monsters = game_state.monsters.read().await;
+    assert_eq!(
+        monsters["distant_monster"].health, 10,
+        "an out-of-range attack must not damage the monster"
+    );
+    drop(monsters);
+    assert_eq!(
+        game_state.players.read().await[&player_id].last_combat_at,
+        0,
+        "a rejected attack must not enter combat"
+    );
+    match controller_rx.try_recv() {
+        Ok(ServerMessage::MonsterProvoked {
+            player_id: actual_player_id,
+            monster_id,
+        }) => {
+            assert_eq!(actual_player_id, player_id);
+            assert_eq!(monster_id, "distant_monster");
+        }
+        other => panic!("Expected only an aggro event outside melee range, got {other:?}"),
+    }
+    match attacker_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Expected no rejected attack echo, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn player_attack_beyond_provoke_range_is_fully_rejected() {
+    let game_state = make_test_game_state("beyond_provoke_range_attack");
+    let player_id = "attacker".to_string();
+    let controller_id = "monster_controller".to_string();
+
+    game_state
+        .add_player(make_player(&player_id, 0.0, 0.0))
+        .await;
+    let mut attacker_rx = game_state.register_direct_channel(&player_id).await;
+    let mut controller_rx = game_state.register_direct_channel(&controller_id).await;
+
+    {
+        let mut monster = make_monster(
+            "remote_monster",
+            pos(super::combat::PLAYER_ATTACK_PROVOKE_RANGE_METERS + 0.01),
+            0,
+        );
+        monster.owner_id = Some(controller_id);
+        game_state
+            .monsters
+            .write()
+            .await
+            .insert("remote_monster".to_string(), monster);
+    }
+
+    game_state
+        .broadcast_player_attack(&player_id, "remote_monster".to_string())
+        .await;
+
+    assert_eq!(
+        game_state.monsters.read().await["remote_monster"].health,
+        10
+    );
+    assert_eq!(
+        game_state.players.read().await[&player_id].last_combat_at,
+        0
+    );
+    match controller_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Expected no provoke event beyond 10m, got {other:?}"),
+    }
+    match attacker_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Expected no attack event beyond 10m, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn player_attack_at_melee_range_is_allowed() {
+    let game_state = make_test_game_state("melee_range_attack");
+    let player_id = "attacker".to_string();
+
+    game_state
+        .add_player(make_player(&player_id, 0.0, 0.0))
+        .await;
+    let mut attacker_rx = game_state.register_direct_channel(&player_id).await;
+
+    {
+        let mut monsters = game_state.monsters.write().await;
+        monsters.insert(
+            "nearby_monster".to_string(),
+            make_monster("nearby_monster", pos(2.0), 0),
+        );
+    }
+
+    game_state
+        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .await;
+
+    match attacker_rx.try_recv() {
+        Ok(ServerMessage::PlayerAttacked {
+            player_id: actual_player_id,
+            monster_id,
+            ..
+        }) => {
+            assert_eq!(actual_player_id, player_id);
+            assert_eq!(monster_id, "nearby_monster");
+        }
+        other => panic!("Expected an attack echo at melee range, got {other:?}"),
+    }
+    assert_ne!(
+        game_state.players.read().await[&player_id].last_combat_at,
+        0,
+        "an allowed attack must enter combat"
+    );
+}
+
 // --- Haggling (economy phase 2) ---
 
 fn make_merchant_npc(id: &str, x: f32, z: f32) -> Player {
