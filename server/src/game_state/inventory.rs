@@ -639,7 +639,7 @@ impl super::GameState {
                     .find(|(_, item)| item.instance_id == instance_id)
                     .map(|(slot, _)| *slot)
                 {
-                    inv.equipped.remove(&slot).unwrap()
+                    inv.equipped.remove(&slot).expect("checked above")
                 } else {
                     drop(inventories);
                     self.send_inventory_error(player_id, "Item not found").await;

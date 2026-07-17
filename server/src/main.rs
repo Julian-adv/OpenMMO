@@ -20,6 +20,7 @@ mod world_drop_defs;
 use auth::AuthService;
 use clap::Parser;
 use connection::{handle_connection, AuthContext};
+use futures_util::FutureExt;
 use game_state::GameState;
 use google_auth::GoogleAuthVerifier;
 use housing::routes::housing_router;
@@ -33,6 +34,77 @@ use tokio::net::TcpListener;
 use tokio::time::Duration;
 use tower_http::compression::CompressionLayer;
 use tracing::{error, info, warn};
+
+/// Catches and logs a panic from one tick round so the loop task survives.
+async fn guard_tick(name: &str, tick: impl std::future::Future<Output = ()>) {
+    if std::panic::AssertUnwindSafe(tick)
+        .catch_unwind()
+        .await
+        .is_err()
+    {
+        error!("{name} tick panicked; loop continues");
+    }
+}
+
+async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>, tick_count: u64) {
+    // Regenerate player health every 2 ticks (16 seconds)
+    if tick_count.is_multiple_of(2) {
+        game_state.tick_regeneration().await;
+    }
+
+    // Count down trade-window holds; releases an NPC ~32s (4 ticks)
+    // after a customer opened its window, even if still open.
+    game_state.tick_shop_holds().await;
+
+    // Pay NPC trader salaries on game-day rollover (economy phase 3)
+    game_state.tick_npc_salaries().await;
+
+    // Batch-save dirty character states every 4 ticks (32 seconds)
+    if tick_count.is_multiple_of(4) {
+        let dirty_states = game_state.collect_dirty_character_states().await;
+        if !dirty_states.is_empty() {
+            let count = dirty_states.len();
+            let auth = Arc::clone(auth_service);
+            let handle = tokio::task::spawn_blocking(move || {
+                if let Err(e) = auth.save_characters_batch(&dirty_states) {
+                    warn!("Failed to batch-save character states: {}", e);
+                } else {
+                    info!("Batch-saved {} character state(s)", count);
+                }
+            });
+            tokio::spawn(async move {
+                if let Err(e) = handle.await {
+                    error!("Batch save task panicked: {}", e);
+                }
+            });
+        }
+
+        // Batch-save dirty inventories
+        let dirty_inventories = game_state.collect_dirty_inventory_states().await;
+        if !dirty_inventories.is_empty() {
+            let count = dirty_inventories.len();
+            let auth = Arc::clone(auth_service);
+            let handle = tokio::task::spawn_blocking(move || {
+                for (char_id, items) in &dirty_inventories {
+                    if let Err(e) = auth.save_inventory(*char_id, items) {
+                        warn!("Failed to save inventory for character {}: {}", char_id, e);
+                    }
+                }
+                info!("Batch-saved {} inventory/inventories", count);
+            });
+            tokio::spawn(async move {
+                if let Err(e) = handle.await {
+                    error!("Inventory batch save task panicked: {}", e);
+                }
+            });
+        }
+    }
+
+    let datetime = game_state.broadcast_game_time();
+    if let Err(err) = auth_service.save_world_time(&datetime) {
+        warn!("Failed to persist game time: {}", err);
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(name = "onlinerpg-server")]
@@ -206,7 +278,7 @@ async fn main() {
         let mut interval = tokio::time::interval(Duration::from_secs(10));
         loop {
             interval.tick().await;
-            game_state_for_spawns.tick_monster_spawns().await;
+            guard_tick("monster spawn", game_state_for_spawns.tick_monster_spawns()).await;
         }
     });
 
@@ -216,7 +288,7 @@ async fn main() {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             interval.tick().await;
-            game_state_for_dungeons.tick_dungeons().await;
+            guard_tick("dungeon refill", game_state_for_dungeons.tick_dungeons()).await;
         }
     });
 
@@ -226,7 +298,11 @@ async fn main() {
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             interval.tick().await;
-            game_state_for_ground.tick_ground_item_despawn().await;
+            guard_tick(
+                "ground item despawn",
+                game_state_for_ground.tick_ground_item_despawn(),
+            )
+            .await;
         }
     });
 
@@ -238,68 +314,15 @@ async fn main() {
         loop {
             interval.tick().await;
             tick_count = tick_count.wrapping_add(1);
-
-            // Regenerate player health every 2 ticks (16 seconds)
-            if tick_count.is_multiple_of(2) {
-                game_state_for_time_sync.tick_regeneration().await;
-            }
-
-            // Count down trade-window holds; releases an NPC ~32s (4 ticks)
-            // after a customer opened its window, even if still open.
-            game_state_for_time_sync.tick_shop_holds().await;
-
-            // Pay NPC trader salaries on game-day rollover (economy phase 3)
-            game_state_for_time_sync.tick_npc_salaries().await;
-
-            // Batch-save dirty character states every 4 ticks (32 seconds)
-            if tick_count.is_multiple_of(4) {
-                let dirty_states = game_state_for_time_sync
-                    .collect_dirty_character_states()
-                    .await;
-                if !dirty_states.is_empty() {
-                    let count = dirty_states.len();
-                    let auth = Arc::clone(&auth_service_for_time_sync);
-                    let handle = tokio::task::spawn_blocking(move || {
-                        if let Err(e) = auth.save_characters_batch(&dirty_states) {
-                            warn!("Failed to batch-save character states: {}", e);
-                        } else {
-                            info!("Batch-saved {} character state(s)", count);
-                        }
-                    });
-                    tokio::spawn(async move {
-                        if let Err(e) = handle.await {
-                            error!("Batch save task panicked: {}", e);
-                        }
-                    });
-                }
-
-                // Batch-save dirty inventories
-                let dirty_inventories = game_state_for_time_sync
-                    .collect_dirty_inventory_states()
-                    .await;
-                if !dirty_inventories.is_empty() {
-                    let count = dirty_inventories.len();
-                    let auth = Arc::clone(&auth_service_for_time_sync);
-                    let handle = tokio::task::spawn_blocking(move || {
-                        for (char_id, items) in &dirty_inventories {
-                            if let Err(e) = auth.save_inventory(*char_id, items) {
-                                warn!("Failed to save inventory for character {}: {}", char_id, e);
-                            }
-                        }
-                        info!("Batch-saved {} inventory/inventories", count);
-                    });
-                    tokio::spawn(async move {
-                        if let Err(e) = handle.await {
-                            error!("Inventory batch save task panicked: {}", e);
-                        }
-                    });
-                }
-            }
-
-            let datetime = game_state_for_time_sync.broadcast_game_time();
-            if let Err(err) = auth_service_for_time_sync.save_world_time(&datetime) {
-                warn!("Failed to persist game time: {}", err);
-            }
+            guard_tick(
+                "time sync",
+                time_sync_tick(
+                    &game_state_for_time_sync,
+                    &auth_service_for_time_sync,
+                    tick_count,
+                ),
+            )
+            .await;
         }
     });
 
@@ -367,5 +390,13 @@ async fn main() {
                 error!("Failed to accept connection: {}", e);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn guard_tick_swallows_panic() {
+        super::guard_tick("test", async { panic!("boom") }).await;
     }
 }

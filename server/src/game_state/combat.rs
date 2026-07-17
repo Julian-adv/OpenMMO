@@ -59,11 +59,10 @@ impl super::GameState {
         // 1. Check if monster exists and is alive first, get its type
         let (monster_type, monster_position, monster_floor_level, monster_level_override) = {
             let monsters = self.monsters.read().await;
-            let monster = monsters.get(&monster_id);
-            if monster.is_none() || monster.unwrap().state == MonsterState::Dead {
-                return;
-            }
-            let monster = monster.unwrap();
+            let monster = match monsters.get(&monster_id) {
+                Some(m) if m.state != MonsterState::Dead => m,
+                _ => return,
+            };
             (
                 monster.monster_type.clone(),
                 monster.position,

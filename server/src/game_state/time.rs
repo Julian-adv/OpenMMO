@@ -69,7 +69,7 @@ impl super::GameState {
     }
 
     pub fn current_total_game_seconds(&self) -> i64 {
-        let clock = self.game_clock.read().unwrap();
+        let clock = self.game_clock.read().expect("game clock lock poisoned");
         let elapsed_real_seconds = clock.start_real.elapsed().as_secs_f64();
         let elapsed_game_seconds =
             (elapsed_real_seconds * GAME_SECONDS_PER_REAL_SECOND).floor() as i64;
@@ -93,7 +93,7 @@ impl super::GameState {
         // The write guard must drop before broadcast_game_time, which
         // re-acquires the clock lock for reading.
         {
-            let mut clock = self.game_clock.write().unwrap();
+            let mut clock = self.game_clock.write().expect("game clock lock poisoned");
             clock.start_real = std::time::Instant::now();
             clock.start_game_seconds = target;
         }
