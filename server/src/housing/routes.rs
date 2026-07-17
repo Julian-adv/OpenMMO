@@ -18,7 +18,7 @@ use tracing::{error, info};
 
 use super::{
     is_valid_house_id, next_house_id, validate_house, validate_house_neighbors, world_to_chunk,
-    HousingIO, CHUNK_SIZE,
+    HousingIO, CHUNK_SIZE, MAX_NEIGHBOR_CHUNK_SPAN,
 };
 
 #[derive(Clone)]
@@ -82,17 +82,13 @@ async fn create_house(
     Json(mut house): Json<HouseData>,
 ) -> Result<(StatusCode, Json<HouseData>), (StatusCode, String)> {
     // Shape/bounds validation must precede the neighbor chunk scan (F-010)
-    if let Err(msg) = validate_house(&house) {
-        return Err((StatusCode::BAD_REQUEST, msg));
-    }
+    validate_house(&house).map_err(|msg| (StatusCode::BAD_REQUEST, msg))?;
 
     let neighbors = load_neighbors(&state.housing, &house).await?;
     let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
     house.id = next_house_id(cx, cz, &neighbors);
 
-    if let Err(msg) = validate_house_neighbors(&house, &neighbors) {
-        return Err((StatusCode::BAD_REQUEST, msg));
-    }
+    validate_house_neighbors(&house, &neighbors).map_err(|msg| (StatusCode::BAD_REQUEST, msg))?;
 
     state.housing.write_house(&house).await.map_err(|e| {
         error!("Failed to write house {}: {}", house.id, e);
@@ -125,15 +121,11 @@ async fn update_house(
     }
     house.id = house_id;
 
-    if let Err(msg) = validate_house(&house) {
-        return Err((StatusCode::BAD_REQUEST, msg));
-    }
+    validate_house(&house).map_err(|msg| (StatusCode::BAD_REQUEST, msg))?;
 
     let neighbors = load_neighbors(&state.housing, &house).await?;
 
-    if let Err(msg) = validate_house_neighbors(&house, &neighbors) {
-        return Err((StatusCode::BAD_REQUEST, msg));
-    }
+    validate_house_neighbors(&house, &neighbors).map_err(|msg| (StatusCode::BAD_REQUEST, msg))?;
 
     state.housing.write_house(&house).await.map_err(|e| {
         error!("Failed to write house {}: {}", house.id, e);
@@ -176,6 +168,15 @@ async fn load_neighbors(
     let c_max_x = ((max_x - 0.01) / CHUNK_SIZE).floor() as i32;
     let c_min_z = (min_z / CHUNK_SIZE).floor() as i32;
     let c_max_z = ((max_z - 0.01) / CHUNK_SIZE).floor() as i32;
+
+    // Defense-in-depth: bounds validation keeps a real house within a few
+    // chunks, so refuse to scan a large grid even if we were reached without it.
+    if (c_max_x - c_min_x + 1).max(c_max_z - c_min_z + 1) > MAX_NEIGHBOR_CHUNK_SPAN {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "house spans too many chunks".to_string(),
+        ));
+    }
 
     let mut neighbors = Vec::new();
     for cz in c_min_z..=c_max_z {

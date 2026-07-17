@@ -9,6 +9,9 @@ use tracing::{error, info};
 const MIN_ROOM_SIZE: u8 = 3;
 const MAX_ROOM_SIZE: u8 = 6;
 const MAX_ROOMS: usize = 32;
+/// Max room distance from house origin. Kept near `CHUNK_SIZE` so a validated
+/// house straddles only a handful of chunks — this is what bounds the
+/// `load_neighbors` scan (F-010). See `MAX_NEIGHBOR_CHUNK_SPAN`.
 const MAX_ROOM_OFFSET: i32 = 64;
 
 /// Validate house shape and coordinates. Must run before `load_neighbors`,
@@ -22,15 +25,12 @@ pub fn validate_house(house: &HouseData) -> Result<(), String> {
     }
 
     let origin = &house.origin;
-    if !origin.x.is_finite() || !origin.y.is_finite() || !origin.z.is_finite() {
+    if !origin.is_finite() {
         return Err("House origin must be finite".into());
     }
     // Z shares the world's square extent even though only X wraps
-    if origin.x < WORLD_MIN_X
-        || origin.x >= WORLD_MAX_X
-        || origin.z < WORLD_MIN_X
-        || origin.z >= WORLD_MAX_X
-    {
+    let in_world = |v: f32| v >= WORLD_MIN_X && v < WORLD_MAX_X;
+    if !in_world(origin.x) || !in_world(origin.z) {
         return Err("House origin out of world bounds".into());
     }
 
@@ -190,6 +190,15 @@ pub struct HousingIO {
 
 /// Chunk size in world units — matches terrain tile size.
 pub(crate) const CHUNK_SIZE: f32 = 64.0;
+
+/// Per-axis chunk-scan cap for `load_neighbors`, derived from the room
+/// offset/size caps so it tracks them automatically. A validated house reaches
+/// at most `MAX_ROOM_OFFSET + MAX_ROOM_SIZE` from its origin, spanning only a
+/// few chunks; `load_neighbors` enforces this directly (defense-in-depth for
+/// F-010) so the scan stays bounded even if it is ever reached without
+/// `validate_house`.
+pub(crate) const MAX_NEIGHBOR_CHUNK_SPAN: i32 =
+    2 * (MAX_ROOM_OFFSET + MAX_ROOM_SIZE as i32) / CHUNK_SIZE as i32 + 4;
 
 fn chunk_prefix(cx: i32, cz: i32) -> String {
     format!("r{:+03}_{:+03}", cx, cz)

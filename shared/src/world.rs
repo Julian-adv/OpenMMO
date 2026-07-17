@@ -48,6 +48,11 @@ impl Position {
         self
     }
 
+    /// True when every component is a finite number (no NaN/±∞).
+    pub fn is_finite(&self) -> bool {
+        self.x.is_finite() && self.y.is_finite() && self.z.is_finite()
+    }
+
     /// Squared shortest-periodic distance in the X-Z ground plane, ignoring
     /// height. X wraps around the world; Z remains bounded.
     pub fn dist_xz_sq(&self, other: &Position) -> f32 {

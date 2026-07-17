@@ -347,11 +347,7 @@ impl super::GameState {
         trusted: bool,
         is_npc: bool,
     ) {
-        if !(new_position.x.is_finite()
-            && new_position.y.is_finite()
-            && new_position.z.is_finite()
-            && new_rotation.is_finite())
-        {
+        if !(new_position.is_finite() && new_rotation.is_finite()) {
             warn!("Rejected non-finite move from player {}", player_id);
             return;
         }
