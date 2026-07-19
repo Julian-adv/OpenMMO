@@ -378,11 +378,9 @@ impl HousingIO {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{is_valid_house_id, validate_house, HousingIO, MAX_ROOMS, MAX_ROOM_OFFSET};
+pub(crate) mod test_fixtures {
     use onlinerpg_shared::housing::{HouseData, RoomData, WallConfig, WallVariant};
     use onlinerpg_shared::Position;
-    use std::path::PathBuf;
 
     fn walls(n: usize) -> Vec<WallConfig> {
         vec![
@@ -395,7 +393,7 @@ mod tests {
         ]
     }
 
-    fn room_at(local_x: i32, local_z: i32) -> RoomData {
+    pub(crate) fn room_at(local_x: i32, local_z: i32) -> RoomData {
         RoomData {
             room_type: Default::default(),
             roof_type: Default::default(),
@@ -416,7 +414,7 @@ mod tests {
         }
     }
 
-    fn house_at(x: f32, z: f32, rooms: Vec<RoomData>) -> HouseData {
+    pub(crate) fn house_at(x: f32, z: f32, rooms: Vec<RoomData>) -> HouseData {
         HouseData {
             id: "r+00_+00_1".into(),
             owner_id: "test".into(),
@@ -425,6 +423,13 @@ mod tests {
             passability: vec![],
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::test_fixtures::{house_at, room_at};
+    use super::{is_valid_house_id, validate_house, HousingIO, MAX_ROOMS, MAX_ROOM_OFFSET};
+    use std::path::PathBuf;
 
     #[test]
     fn accepts_valid_house() {

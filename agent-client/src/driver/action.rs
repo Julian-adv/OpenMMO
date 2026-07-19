@@ -167,16 +167,15 @@ pub(super) fn action_to_command(
             } else {
                 0.0
             };
-            Some(ClientMessage::PlayerMove {
-                position: onlinerpg_shared::Position {
+            Some(ClientMessage::player_move(
+                onlinerpg_shared::Position {
                     x: gx,
                     y: player_pos.map(|p| p.y).unwrap_or(0.0),
                     z: gz,
                 },
                 rotation,
-                floor_level: 0,
-                append: false,
-            })
+                0,
+            ))
         }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
         // Need player-name → id resolution from SharedState; handled in

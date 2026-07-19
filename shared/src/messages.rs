@@ -242,6 +242,18 @@ pub enum ClientMessage {
     },
 }
 
+impl ClientMessage {
+    /// A queue-replacing PlayerMove (`append: false`), the common case.
+    pub fn player_move(position: Position, rotation: f32, floor_level: i8) -> Self {
+        Self::PlayerMove {
+            position,
+            rotation,
+            floor_level,
+            append: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerMessage {
     AuthSuccess {

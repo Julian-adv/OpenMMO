@@ -295,16 +295,15 @@ async fn chase_target(state: &Arc<Mutex<SharedState>>, target: &ChaseTarget<'_>)
                         MAX_STEP_DIST,
                     )
                 };
-                let cmd = ClientMessage::PlayerMove {
-                    position: onlinerpg_shared::Position {
+                let cmd = ClientMessage::player_move(
+                    onlinerpg_shared::Position {
                         x: step_x,
                         y: player.position.y,
                         z: step_z,
                     },
-                    rotation: to_wp.rotation(),
-                    floor_level: wp.floor as i8,
-                    append: false,
-                };
+                    to_wp.rotation(),
+                    wp.floor as i8,
+                );
                 s.self_floor_level = wp.floor;
                 if let Err(e) = s.send_command(cmd).await {
                     error!("Failed to send chase move: {e}");
@@ -357,15 +356,14 @@ fn compute_step_toward(state: &SharedState, target: &ChaseTarget) -> Option<(Cli
     let target_dist = to_target.dist - stop_dist;
     let step_dist = target_dist.min(MAX_STEP_DIST);
     let ratio = step_dist / to_target.dist;
-    let cmd = ClientMessage::PlayerMove {
-        position: onlinerpg_shared::Position {
+    let cmd = ClientMessage::player_move(
+        onlinerpg_shared::Position {
             x: self_player.position.x + to_target.dx * ratio,
             y: target_pos.y,
             z: self_player.position.z + to_target.dz * ratio,
         },
-        rotation: to_target.rotation(),
-        floor_level: 0,
-        append: false,
-    };
+        to_target.rotation(),
+        0,
+    );
     Some((cmd, step_dist))
 }

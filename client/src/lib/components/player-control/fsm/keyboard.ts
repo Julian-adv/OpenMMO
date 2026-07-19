@@ -1,6 +1,7 @@
 import type { MovementConfig, Position } from '../../../utils/movementUtils'
 import { shortestWrappedDeltaX } from '../../../terrain/world-wrap'
 import type { InteractionExitKind } from './interaction'
+import type { SendPlayerMove } from './movement-substrate'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Throttled move sender (server needs ~5Hz waypoints, not 3cm per-frame steps)
@@ -22,7 +23,7 @@ export interface KeyboardMoveSender {
 }
 
 export function createKeyboardMoveSender(
-  send: (position: Position, rotation: number, append: boolean) => void
+  send: SendPlayerMove
 ): KeyboardMoveSender {
   let lastSent: Position | null = null
   let lastRotation = 0
@@ -66,28 +67,22 @@ export function createKeyboardMoveSender(
 export const KEYBOARD_TAP_STEP = 0.5
 
 export interface KeyboardTapTracker {
-  /** Feed every frame. Returns a glide target (XZ) exactly once when a
-   *  released session moved but stayed under the step distance; null
-   *  otherwise. */
-  frame(
-    pressed: boolean,
-    position: Position | null,
-    direction: KeyboardDirection | null
-  ): { x: number; z: number } | null
+  /** Feed every pressed frame to record the session start and direction. */
+  track(position: Position, direction: KeyboardDirection | null): void
+  /** End the session. Returns a glide target (XZ) when the session moved but
+   *  stayed under the step distance; null otherwise. */
+  release(position: Position | null): { x: number; z: number } | null
 }
 
 export function createKeyboardTapTracker(): KeyboardTapTracker {
   let start: Position | null = null
   let lastDir: KeyboardDirection | null = null
   return {
-    frame(pressed, position, direction) {
-      if (pressed) {
-        if (position) {
-          if (start === null) start = { ...position }
-          if (direction) lastDir = direction
-        }
-        return null
-      }
+    track(position, direction) {
+      if (start === null) start = { ...position }
+      if (direction) lastDir = direction
+    },
+    release(position) {
       const s = start
       const d = lastDir
       start = null
@@ -301,11 +296,7 @@ export function runKeyboardFrame({
   actions,
 }: RunKeyboardFrameInput) {
   if (!currentPlayer || !hasKeysPressed) {
-    const tapTarget = tapTracker.frame(
-      false,
-      currentPlayer?.position ?? null,
-      null
-    )
+    const tapTarget = tapTracker.release(currentPlayer?.position ?? null)
     // Session over: a click-path or combat chase owns the movement queue now
     // (their replace supersedes us), so hand off without sending.
     if (!currentPlayer || hasMovementTarget || isInCombat) {
@@ -323,7 +314,7 @@ export function runKeyboardFrame({
     return
   }
 
-  tapTracker.frame(true, currentPlayer.position, direction)
+  tapTracker.track(currentPlayer.position, direction)
 
   if (interactionExit !== 'none') {
     if (interactionExit === 'pickup') {

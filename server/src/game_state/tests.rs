@@ -346,7 +346,7 @@ async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
     }
 
     game_state
-        .update_player_position(&player_id, entity_position, 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(entity_position, false), false, false)
         .await;
     game_state.tick_player_movement(60.0).await;
 
@@ -397,14 +397,16 @@ async fn player_movement_wraps_across_east_world_edge() {
     game_state
         .update_player_position(
             &player_id,
-            Position {
-                x: onlinerpg_shared::WORLD_MAX_X + 0.25,
-                y: 12.0,
-                z: 3.0,
+            MoveCommand {
+                position: Position {
+                    x: onlinerpg_shared::WORLD_MAX_X + 0.25,
+                    y: 12.0,
+                    z: 3.0,
+                },
+                rotation: 0.5,
+                floor_level: 0,
+                append: false,
             },
-            0.5,
-            0,
-            false,
             false,
             false,
         )
@@ -443,14 +445,14 @@ async fn seam_crossing_movement_checks_destination_edge_collision() {
     game_state
         .update_player_position(
             &player_id,
-            Position {
-                x: onlinerpg_shared::WORLD_MIN_X + 1.5,
-                y: 0.0,
-                z: 5.5,
-            },
-            0.0,
-            0,
-            false,
+            move_cmd(
+                Position {
+                    x: onlinerpg_shared::WORLD_MIN_X + 1.5,
+                    y: 0.0,
+                    z: 5.5,
+                },
+                false,
+            ),
             false,
             false,
         )
@@ -471,6 +473,15 @@ fn pos(x: f32) -> Position {
     Position { x, y: 0.0, z: 0.0 }
 }
 
+fn move_cmd(position: Position, append: bool) -> MoveCommand {
+    MoveCommand {
+        position,
+        rotation: 0.0,
+        floor_level: 0,
+        append,
+    }
+}
+
 #[tokio::test]
 async fn server_caps_player_movement_speed() {
     let game_state = make_test_game_state("movement_speed_cap");
@@ -480,7 +491,7 @@ async fn server_caps_player_movement_speed() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(50.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(50.0), false), false, false)
         .await;
 
     assert_eq!(player_x(&game_state, &player_id).await, 0.0);
@@ -502,11 +513,11 @@ async fn one_tick_budget_spans_queued_legs() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(1.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(1.0), false), false, false)
         .await;
     for x in [2.0, 3.0] {
         game_state
-            .update_player_position(&player_id, pos(x), 0.0, 0, false, false, true)
+            .update_player_position(&player_id, move_cmd(pos(x), true), false, false)
             .await;
     }
 
@@ -529,15 +540,15 @@ async fn append_distance_guard_measures_from_queue_tail() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(50.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(50.0), false), false, false)
         .await;
     // 100 is >60m from the player but only 50m from the queue tail: accepted.
     game_state
-        .update_player_position(&player_id, pos(100.0), 0.0, 0, false, false, true)
+        .update_player_position(&player_id, move_cmd(pos(100.0), true), false, false)
         .await;
     // 70m from the new tail: rejected.
     game_state
-        .update_player_position(&player_id, pos(170.0), 0.0, 0, false, false, true)
+        .update_player_position(&player_id, move_cmd(pos(170.0), true), false, false)
         .await;
 
     game_state.tick_player_movement(600.0).await;
@@ -553,13 +564,13 @@ async fn replace_drops_queued_waypoints() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(10.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(10.0), false), false, false)
         .await;
     game_state
-        .update_player_position(&player_id, pos(20.0), 0.0, 0, false, false, true)
+        .update_player_position(&player_id, move_cmd(pos(20.0), true), false, false)
         .await;
     game_state
-        .update_player_position(&player_id, pos(5.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(5.0), false), false, false)
         .await;
 
     game_state.tick_player_movement(60.0).await;
@@ -575,11 +586,11 @@ async fn full_waypoint_queue_drops_oldest_leg() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(1.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(1.0), false), false, false)
         .await;
     for i in 2..=40 {
         game_state
-            .update_player_position(&player_id, pos(i as f32), 0.0, 0, false, false, true)
+            .update_player_position(&player_id, move_cmd(pos(i as f32), true), false, false)
             .await;
     }
 
@@ -600,7 +611,7 @@ async fn non_finite_move_is_rejected() {
 
     for bad in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
         game_state
-            .update_player_position(&player_id, pos(bad), 0.0, 0, false, false, false)
+            .update_player_position(&player_id, move_cmd(pos(bad), false), false, false)
             .await;
     }
     game_state.tick_player_movement(60.0).await;
@@ -616,7 +627,7 @@ async fn far_move_target_is_rejected() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(100.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(100.0), false), false, false)
         .await;
     game_state.tick_player_movement(600.0).await;
     assert_eq!(player_x(&game_state, &player_id).await, 0.0);
@@ -631,7 +642,7 @@ async fn admin_move_applies_immediately() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(100.0), 0.0, 0, true, false, false)
+        .update_player_position(&player_id, move_cmd(pos(100.0), false), true, false)
         .await;
     assert_eq!(player_x(&game_state, &player_id).await, 100.0);
 }
@@ -645,7 +656,7 @@ async fn teleport_clears_pending_move_intent() {
         .await;
 
     game_state
-        .update_player_position(&player_id, pos(50.0), 0.0, 0, false, false, false)
+        .update_player_position(&player_id, move_cmd(pos(50.0), false), false, false)
         .await;
     game_state
         .teleport_player(
@@ -1708,14 +1719,14 @@ async fn simulated_movement_is_blocked_by_solid_furniture() {
     game_state
         .update_player_position(
             &player_id,
-            Position {
-                x: 0.5,
-                y: 0.0,
-                z: 6.5,
-            },
-            0.0,
-            0,
-            false,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                false,
+            ),
             false,
             false,
         )
@@ -1727,14 +1738,14 @@ async fn simulated_movement_is_blocked_by_solid_furniture() {
     game_state
         .update_player_position(
             &player_id,
-            Position {
-                x: 3.5,
-                y: 0.0,
-                z: 4.5,
-            },
-            0.0,
-            0,
-            false,
+            move_cmd(
+                Position {
+                    x: 3.5,
+                    y: 0.0,
+                    z: 4.5,
+                },
+                false,
+            ),
             false,
             false,
         )
@@ -1760,12 +1771,9 @@ async fn queued_waypoints_route_around_furniture() {
         game_state
             .update_player_position(
                 &player_id,
-                Position { x, y: 0.0, z },
-                0.0,
-                0,
+                move_cmd(Position { x, y: 0.0, z }, append),
                 false,
                 false,
-                append,
             )
             .await;
     }
@@ -1790,12 +1798,9 @@ async fn blocked_leg_drops_remaining_queue() {
         game_state
             .update_player_position(
                 &player_id,
-                Position { x, y: 0.0, z },
-                0.0,
-                0,
+                move_cmd(Position { x, y: 0.0, z }, append),
                 false,
                 false,
-                append,
             )
             .await;
     }
@@ -1818,16 +1823,16 @@ async fn npc_movement_is_exempt_from_collision() {
     game_state
         .update_player_position(
             &player_id,
-            Position {
-                x: 0.5,
-                y: 0.0,
-                z: 6.5,
-            },
-            0.0,
-            0,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                false,
+            ),
             false,
             true,
-            false,
         )
         .await;
     game_state.tick_player_movement(60.0).await;
@@ -1848,14 +1853,14 @@ async fn furniture_removal_reopens_blocked_cells() {
     game_state
         .update_player_position(
             &player_id,
-            Position {
-                x: 0.5,
-                y: 0.0,
-                z: 6.5,
-            },
-            0.0,
-            0,
-            false,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                false,
+            ),
             false,
             false,
         )
@@ -1937,4 +1942,52 @@ async fn kick_flushes_dropped_inventory_before_replacement_load() {
     // replacement load reads zero swords (no dupe) instead of a stale one.
     assert_eq!(auth.load_inventory(char_id).unwrap().len(), 0);
     assert!(game_state.get_player_inventory(&a).await.is_none());
+}
+
+fn make_door_test_house() -> onlinerpg_shared::housing::HouseData {
+    use crate::housing::test_fixtures::{house_at, room_at};
+    let mut house = house_at(10.0, 10.0, vec![room_at(0, 0)]);
+    house.rooms[0].wall_north[0].variant = onlinerpg_shared::housing::WallVariant::WithDoor;
+    house
+}
+
+#[tokio::test]
+async fn open_door_state_is_stamped_onto_served_house_data() {
+    let game_state = make_test_game_state("door_state_stamp");
+    let house = make_door_test_house();
+    game_state.housing_io.write_house(&house).await.unwrap();
+
+    // Door world position: origin + (segment 0 center, north edge) = (10.5, 10)
+    let toggler = "toggler".to_string();
+    game_state
+        .add_player(make_player(&toggler, 10.5, 10.5))
+        .await;
+
+    let toggled = game_state
+        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
+        .await;
+    assert_eq!(toggled, Some(true));
+
+    // A reconnecting client re-fetches the house from disk (is_open false there);
+    // the stamp overlays the in-memory open state.
+    let mut served = vec![house.clone()];
+    game_state.apply_open_door_state(&mut served).await;
+    assert!(served[0].rooms[0].wall_north[0].is_open);
+
+    // Closing the door clears the stamp.
+    game_state
+        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
+        .await;
+    let mut served = vec![house.clone()];
+    game_state.apply_open_door_state(&mut served).await;
+    assert!(!served[0].rooms[0].wall_north[0].is_open);
+
+    // A house edit (passability reinstall) forgets its open doors.
+    game_state
+        .toggle_door(&toggler, &house.id, 0, WallDirection::North, 0)
+        .await;
+    game_state.passability_add_house(&house).await;
+    let mut served = vec![house.clone()];
+    game_state.apply_open_door_state(&mut served).await;
+    assert!(!served[0].rooms[0].wall_north[0].is_open);
 }

@@ -3,7 +3,7 @@ use crate::item_defs::ItemDefs;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{CharacterAttributes, Player, PlayerId, ServerMessage};
 use bytes::Bytes;
-use onlinerpg_shared::housing::{RoomData, WallDirection, WallVariant};
+use onlinerpg_shared::housing::{HouseData, RoomData, WallDirection};
 use onlinerpg_shared::inventory::PlayerInventory;
 use onlinerpg_shared::serialize_server_msg;
 use onlinerpg_shared::NoSpawnZone;
@@ -56,6 +56,7 @@ mod inventory;
 mod monster;
 mod passability;
 mod player;
+pub(crate) use player::MoveCommand;
 mod salary;
 mod time;
 mod trading;
@@ -252,7 +253,7 @@ impl GameState {
 
         // Validate door exists
         let seg = room.wall(wall_dir).get(segment_index as usize)?;
-        if seg.variant != WallVariant::WithDoor && seg.variant != WallVariant::WithWindow {
+        if !seg.variant.is_openable() {
             return None;
         }
 
@@ -299,6 +300,50 @@ impl GameState {
         }
 
         Some(is_open)
+    }
+
+    /// Stamp in-memory open-door state onto house data before sending it to a
+    /// client, so reconnecting players see doors others left open.
+    pub async fn apply_open_door_state(&self, houses: &mut [HouseData]) {
+        let open_doors = self.open_doors.read().await;
+        if open_doors.is_empty() {
+            return;
+        }
+        let mut keys_by_house: HashMap<&str, Vec<&DoorKey>> = HashMap::new();
+        for key in open_doors.iter() {
+            keys_by_house
+                .entry(key.house_id.as_str())
+                .or_default()
+                .push(key);
+        }
+        for house in houses.iter_mut() {
+            let Some(keys) = keys_by_house.get(house.id.as_str()) else {
+                continue;
+            };
+            for key in keys {
+                let Some(room) = house.rooms.get_mut(key.room_index as usize) else {
+                    continue;
+                };
+                let Some(seg) = room
+                    .wall_mut(key.wall_dir)
+                    .get_mut(key.segment_index as usize)
+                else {
+                    continue;
+                };
+                if seg.variant.is_openable() {
+                    seg.is_open = true;
+                }
+            }
+        }
+    }
+
+    /// Forget open-door state for a house whose passability entry is being
+    /// installed or removed; stale keys must not outlive the segment layout.
+    pub(crate) async fn clear_open_doors_for_house(&self, house_id: &str) {
+        self.open_doors
+            .write()
+            .await
+            .retain(|k| k.house_id != house_id);
     }
 }
 

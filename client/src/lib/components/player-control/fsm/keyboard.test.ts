@@ -49,7 +49,7 @@ function frameActions() {
 }
 
 function makeTapTracker(target: { x: number; z: number } | null = null) {
-  return { frame: vi.fn(() => target) }
+  return { track: vi.fn(), release: vi.fn(() => target) }
 }
 
 function makeMoveSender() {
@@ -385,24 +385,24 @@ describe('createKeyboardTapTracker', () => {
     const tracker = createKeyboardTapTracker()
     const dir = { x: 1, z: 0 }
 
-    expect(tracker.frame(true, { x: 0, y: 0, z: 0 }, dir)).toBeNull()
-    expect(tracker.frame(true, { x: 0.05, y: 0, z: 0 }, dir)).toBeNull()
+    tracker.track({ x: 0, y: 0, z: 0 }, dir)
+    tracker.track({ x: 0.05, y: 0, z: 0 }, dir)
 
-    const target = tracker.frame(false, { x: 0.05, y: 0, z: 0 }, null)
+    const target = tracker.release({ x: 0.05, y: 0, z: 0 })
     expect(target).not.toBeNull()
     expect(target!.x).toBeCloseTo(KEYBOARD_TAP_STEP)
     expect(target!.z).toBeCloseTo(0)
 
-    expect(tracker.frame(false, { x: 0.05, y: 0, z: 0 }, null)).toBeNull()
+    expect(tracker.release({ x: 0.05, y: 0, z: 0 })).toBeNull()
   })
 
   it('normalizes diagonal directions to the step distance', () => {
     const tracker = createKeyboardTapTracker()
     const dir = { x: 1, z: 1 }
 
-    tracker.frame(true, { x: 0, y: 0, z: 0 }, dir)
-    tracker.frame(true, { x: 0.02, y: 0, z: 0.02 }, dir)
-    const target = tracker.frame(false, { x: 0.02, y: 0, z: 0.02 }, null)
+    tracker.track({ x: 0, y: 0, z: 0 }, dir)
+    tracker.track({ x: 0.02, y: 0, z: 0.02 }, dir)
+    const target = tracker.release({ x: 0.02, y: 0, z: 0.02 })
 
     expect(target).not.toBeNull()
     const dx = target!.x
@@ -414,18 +414,18 @@ describe('createKeyboardTapTracker', () => {
     const tracker = createKeyboardTapTracker()
     const dir = { x: 1, z: 0 }
 
-    tracker.frame(true, { x: 0, y: 0, z: 0 }, dir)
-    tracker.frame(true, { x: 0.8, y: 0, z: 0 }, dir)
+    tracker.track({ x: 0, y: 0, z: 0 }, dir)
+    tracker.track({ x: 0.8, y: 0, z: 0 }, dir)
 
-    expect(tracker.frame(false, { x: 0.8, y: 0, z: 0 }, null)).toBeNull()
+    expect(tracker.release({ x: 0.8, y: 0, z: 0 })).toBeNull()
   })
 
   it('does not glide when the session never moved', () => {
     const tracker = createKeyboardTapTracker()
 
-    tracker.frame(true, { x: 3, y: 0, z: 4 }, { x: 0, z: 1 })
-    tracker.frame(true, { x: 3, y: 0, z: 4 }, { x: 0, z: 1 })
+    tracker.track({ x: 3, y: 0, z: 4 }, { x: 0, z: 1 })
+    tracker.track({ x: 3, y: 0, z: 4 }, { x: 0, z: 1 })
 
-    expect(tracker.frame(false, { x: 3, y: 0, z: 4 }, null)).toBeNull()
+    expect(tracker.release({ x: 3, y: 0, z: 4 })).toBeNull()
   })
 })

@@ -53,10 +53,11 @@ async fn get_houses_in_chunk(
     Path((cx, cz)): Path<(i32, i32)>,
     State(state): State<HousingRouteState>,
 ) -> Result<Json<Vec<HouseData>>, StatusCode> {
-    let houses = state.housing.read_chunk(cx, cz).await.map_err(|e| {
+    let mut houses = state.housing.read_chunk(cx, cz).await.map_err(|e| {
         error!("Failed to read housing chunk ({}, {}): {}", cx, cz, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    state.game_state.apply_open_door_state(&mut houses).await;
     Ok(Json(houses))
 }
 
@@ -72,7 +73,13 @@ async fn get_house(
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     match house {
-        Some(h) => Ok(Json(h)),
+        Some(mut h) => {
+            state
+                .game_state
+                .apply_open_door_state(std::slice::from_mut(&mut h))
+                .await;
+            Ok(Json(h))
+        }
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -218,7 +225,7 @@ async fn delete_house(
                     error!("Failed to delete house {}: {}", house_id, e);
                     StatusCode::INTERNAL_SERVER_ERROR
                 })?;
-            state.game_state.passability_remove_house(&house_id);
+            state.game_state.passability_remove_house(&house_id).await;
             state
                 .game_state
                 .send_direct_message_to_players_within_position(

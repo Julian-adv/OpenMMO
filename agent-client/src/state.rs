@@ -286,7 +286,10 @@ impl SharedState {
     pub async fn send_command(&mut self, msg: ClientMessage) -> anyhow::Result<()> {
         let msg = match msg {
             ClientMessage::PlayerMove {
-                position, rotation, ..
+                position,
+                rotation,
+                append,
+                ..
             } => {
                 let position = if self.self_floor_level == 0 {
                     self.snap_position_to_ground(position, "PlayerMove").await
@@ -302,7 +305,7 @@ impl SharedState {
                     position,
                     rotation,
                     floor_level: self.self_floor_level as i8,
-                    append: false,
+                    append,
                 }
             }
             ClientMessage::RequestSpawnMonster {
@@ -353,13 +356,8 @@ impl SharedState {
         };
         let pos = p.position;
         let rotation = p.rotation;
-        self.send_command(ClientMessage::PlayerMove {
-            position: pos,
-            rotation,
-            floor_level: 0,
-            append: false,
-        })
-        .await
+        self.send_command(ClientMessage::player_move(pos, rotation, 0))
+            .await
     }
 
     /// Classify how urgent a server event is for LLM processing.
@@ -796,12 +794,11 @@ impl SharedState {
     fn face_position_command(&self, target_pos: Position) -> Option<ClientMessage> {
         let self_player = self.self_player.as_ref()?;
         let to_target = crate::geom::PlanarDelta::between(&self_player.position, &target_pos);
-        Some(ClientMessage::PlayerMove {
-            position: self_player.position,
-            rotation: to_target.rotation(),
-            floor_level: self.self_floor_level as i8,
-            append: false,
-        })
+        Some(ClientMessage::player_move(
+            self_player.position,
+            to_target.rotation(),
+            self.self_floor_level as i8,
+        ))
     }
 
     /// Pick a spawn position 20–25m around the bot's own player, rejecting

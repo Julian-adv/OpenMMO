@@ -29,12 +29,14 @@ pub(super) struct MoveIntent {
 /// FIFO of client-validated legs. `append: false` PlayerMoves replace the
 /// whole queue; `append: true` extends it so the server walks the client's
 /// polyline instead of beelining (and corner-cutting) to the newest target.
-#[derive(Default)]
-pub(super) struct MoveQueue {
-    /// Bumped on every replace; an in-flight tick only pops waypoints it
-    /// consumed when the generation still matches.
-    generation: u64,
-    waypoints: VecDeque<MoveIntent>,
+pub(super) type MoveQueue = VecDeque<MoveIntent>;
+
+/// Wire fields of a client PlayerMove (see shared messages).
+pub(crate) struct MoveCommand {
+    pub(crate) position: Position,
+    pub(crate) rotation: f32,
+    pub(crate) floor_level: i8,
+    pub(crate) append: bool,
 }
 
 /// Run a blocking DB save on the blocking pool and await it, logging a join
@@ -389,17 +391,19 @@ impl super::GameState {
     /// Handle a client PlayerMove. The client sends destinations (waypoints),
     /// so the position becomes a MoveIntent that `tick_player_movement` walks
     /// toward; trusted (admin) connections apply immediately.
-    #[allow(clippy::too_many_arguments)]
     pub async fn update_player_position(
         &self,
         player_id: &PlayerId,
-        mut new_position: Position,
-        new_rotation: f32,
-        floor_level: i8,
+        cmd: MoveCommand,
         trusted: bool,
         is_npc: bool,
-        append: bool,
     ) {
+        let MoveCommand {
+            position: mut new_position,
+            rotation: new_rotation,
+            floor_level,
+            append,
+        } = cmd;
         if !(new_position.is_finite() && new_rotation.is_finite()) {
             warn!("Rejected non-finite move from player {}", player_id);
             return;
@@ -447,7 +451,7 @@ impl super::GameState {
         let leg_start = if append {
             queues
                 .get(player_id)
-                .and_then(|q| q.waypoints.back())
+                .and_then(|q| q.back())
                 .map(|w| w.target)
                 .unwrap_or(current_position)
         } else {
@@ -463,22 +467,20 @@ impl super::GameState {
             return;
         }
         let queue = queues.entry(player_id.clone()).or_default();
-        if append && queue.waypoints.len() >= MAX_QUEUED_WAYPOINTS {
+        if !append {
+            queue.clear();
+        } else if queue.len() >= MAX_QUEUED_WAYPOINTS {
             // Drop the oldest leg, not the newest: losing path fidelity in the
             // middle beats never reaching where the client actually is. The
             // resulting current-position→new-head beeline is the same risk as
             // a replace and is still collision-checked while walking.
-            queue.waypoints.pop_front();
+            queue.pop_front();
             warn!(
                 "Waypoint queue full for player {}, dropped oldest",
                 player_id
             );
         }
-        if !append {
-            queue.generation = queue.generation.wrapping_add(1);
-            queue.waypoints.clear();
-        }
-        queue.waypoints.push_back(MoveIntent {
+        queue.push_back(MoveIntent {
             target: new_position,
             rotation: new_rotation,
             floor_level,
@@ -488,45 +490,32 @@ impl super::GameState {
 
     /// Advance every pending move queue by `dt` seconds of walking and
     /// broadcast the results. A tick's budget can span several short legs;
-    /// consumed waypoints are popped, finished queues dropped.
+    /// consumed waypoints are popped in place, finished queues dropped.
     pub async fn tick_player_movement(&self, dt: f32) {
-        let queues: Vec<(PlayerId, u64, VecDeque<MoveIntent>)> = {
-            let queues = self.movement_intents.read().await;
-            queues
-                .iter()
-                .filter(|(_, q)| !q.waypoints.is_empty())
-                .map(|(id, q)| (id.clone(), q.generation, q.waypoints.clone()))
-                .collect()
-        };
-        if queues.is_empty() {
-            return;
-        }
-
         let max_step = PLAYER_MOVE_SPEED * MOVE_SPEED_SLACK * dt.max(0.0);
-        let mut moved: Vec<(&PlayerId, Position, i8, Player)> = Vec::new();
-        // (player, generation, waypoints consumed, drop the rest)
-        let mut outcomes: Vec<(&PlayerId, u64, usize, bool)> = Vec::new();
+        let mut moved: Vec<(PlayerId, Position, i8, Player)> = Vec::new();
         {
+            let mut queues = self.movement_intents.write().await;
+            if queues.is_empty() {
+                return;
+            }
             let mut players = self.players.write().await;
             let cache = self.passability_read();
-            for (player_id, generation, waypoints) in &queues {
+            queues.retain(|player_id, waypoints| {
                 let Some(player) = players.get_mut(player_id) else {
-                    outcomes.push((player_id, *generation, 0, true));
-                    continue;
+                    return false;
                 };
                 // Backstop: combat clears the queue on death.
                 if player.health == 0 {
-                    outcomes.push((player_id, *generation, 0, true));
-                    continue;
+                    return false;
                 }
 
                 let old_position = player.position;
                 let old_floor = player.floor_level;
                 let old_rotation = player.rotation;
                 let mut budget = max_step;
-                let mut consumed = 0usize;
                 let mut blocked = false;
-                for intent in waypoints {
+                while let Some(intent) = waypoints.front() {
                     let target = &intent.target;
                     let dx = shortest_world_delta_x(player.position.x, target.x);
                     let dz = target.z - player.position.z;
@@ -574,7 +563,7 @@ impl super::GameState {
                         player.position = *target;
                         player.floor_level = intent.floor_level;
                         budget -= dist;
-                        consumed += 1;
+                        waypoints.pop_front();
                     } else {
                         player.position = Position {
                             x: wrap_world_x(step_x),
@@ -584,12 +573,6 @@ impl super::GameState {
                         break;
                     }
                 }
-                // Steady-state mid-leg progress needs no queue mutation; only
-                // record outcomes that do, so the write-lock pass below can
-                // skip entirely on quiet ticks.
-                if consumed > 0 || blocked {
-                    outcomes.push((player_id, *generation, consumed, blocked));
-                }
                 let position_changed = player.position.x != old_position.x
                     || player.position.y != old_position.y
                     || player.position.z != old_position.z;
@@ -597,30 +580,10 @@ impl super::GameState {
                     || player.floor_level != old_floor
                     || player.rotation != old_rotation
                 {
-                    moved.push((player_id, old_position, old_floor, player.clone()));
+                    moved.push((player_id.clone(), old_position, old_floor, player.clone()));
                 }
-            }
-        }
-
-        if !outcomes.is_empty() {
-            let mut queues_map = self.movement_intents.write().await;
-            for (player_id, generation, consumed, drop_rest) in outcomes {
-                let Some(queue) = queues_map.get_mut(player_id) else {
-                    continue;
-                };
-                // A replace since the snapshot owns the queue now.
-                if queue.generation != generation {
-                    continue;
-                }
-                if drop_rest {
-                    queue.waypoints.clear();
-                } else {
-                    queue.waypoints.drain(..consumed.min(queue.waypoints.len()));
-                }
-                if queue.waypoints.is_empty() {
-                    queues_map.remove(player_id);
-                }
-            }
+                !blocked && !waypoints.is_empty()
+            });
         }
 
         for (player_id, old_position, old_floor, moved_player) in moved {
@@ -631,7 +594,7 @@ impl super::GameState {
                 floor_level: moved_player.floor_level,
             };
             self.finish_position_update(
-                player_id,
+                &player_id,
                 old_position,
                 old_floor,
                 moved_player,

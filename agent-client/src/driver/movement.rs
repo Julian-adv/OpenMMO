@@ -146,12 +146,11 @@ async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &Schedule
         let rot_rad = entry.rotation.to_radians();
         let mut s = state.lock().await;
         s.self_floor_level = entry.floor_level;
-        let cmd = ClientMessage::PlayerMove {
-            position: onlinerpg_shared::Position { x, y, z },
-            rotation: rot_rad,
-            floor_level: entry.floor_level as i8,
-            append: false,
-        };
+        let cmd = ClientMessage::player_move(
+            onlinerpg_shared::Position { x, y, z },
+            rot_rad,
+            entry.floor_level as i8,
+        );
         if let Err(e) = s.send_command(cmd).await {
             error!("Failed to send schedule move: {e}");
         }
@@ -207,16 +206,15 @@ pub(super) async fn execute_move(
                     )
                 };
 
-                let cmd = ClientMessage::PlayerMove {
-                    position: onlinerpg_shared::Position {
+                let cmd = ClientMessage::player_move(
+                    onlinerpg_shared::Position {
                         x: step_x,
                         y: player.position.y,
                         z: step_z,
                     },
-                    rotation: to_wp.rotation(),
-                    floor_level: wp.floor as i8,
-                    append: false,
-                };
+                    to_wp.rotation(),
+                    wp.floor as i8,
+                );
                 s.self_floor_level = wp.floor;
                 if let Err(e) = s.send_command(cmd).await {
                     error!("Failed to send move waypoint: {e}");

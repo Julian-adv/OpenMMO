@@ -65,6 +65,13 @@ pub enum WallVariant {
     Open,
 }
 
+impl WallVariant {
+    /// Segments players can toggle open/closed (doors and window shutters).
+    pub fn is_openable(self) -> bool {
+        matches!(self, WallVariant::WithDoor | WallVariant::WithWindow)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WallConfig {
@@ -111,6 +118,15 @@ impl RoomData {
             WallDirection::South => &self.wall_south,
             WallDirection::East => &self.wall_east,
             WallDirection::West => &self.wall_west,
+        }
+    }
+
+    pub fn wall_mut(&mut self, dir: WallDirection) -> &mut [WallConfig] {
+        match dir {
+            WallDirection::North => &mut self.wall_north,
+            WallDirection::South => &mut self.wall_south,
+            WallDirection::East => &mut self.wall_east,
+            WallDirection::West => &mut self.wall_west,
         }
     }
 }

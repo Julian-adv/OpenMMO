@@ -133,10 +133,6 @@ export function stepMovementSubstrate({
   const currentSpeed = result.newSpeed
   const playerRotation = result.rotation
 
-  // Stop-sync: replace the server's queue with the stop point so it doesn't
-  // keep walking to an already-sent waypoint.
-  const sendStopSync = () => sendPlayerMove(currentPos, playerRotation)
-
   if (result.arrived) {
     if (
       isMovementBlocked(
@@ -147,7 +143,9 @@ export function stepMovementSubstrate({
         currentPos.y
       )
     ) {
-      sendStopSync()
+      // Blocked stops replace the server's queue with the stop point so it
+      // doesn't keep walking to an already-sent waypoint.
+      sendPlayerMove(currentPos, playerRotation)
       return { kind: 'blocked' }
     }
 
@@ -216,7 +214,7 @@ export function stepMovementSubstrate({
   ) {
     const slid = resolveWallSlide(currentPos, stepPos, isMovementBlocked)
     if (!slid) {
-      sendStopSync()
+      sendPlayerMove(currentPos, playerRotation)
       return { kind: 'blocked' }
     }
     stepPos = slid
@@ -225,7 +223,7 @@ export function stepMovementSubstrate({
   const dirX = Math.sin(result.rotation)
   const dirZ = Math.cos(result.rotation)
   if (isUphillTooSteep(currentPos.x, currentPos.z, currentPos.y, dirX, dirZ)) {
-    sendStopSync()
+    sendPlayerMove(currentPos, playerRotation)
     return { kind: 'slope_blocked' }
   }
 

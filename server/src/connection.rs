@@ -708,12 +708,14 @@ async fn handle_client_message(
                 game_state
                     .update_player_position(
                         id,
-                        position,
-                        rotation,
-                        floor_level,
+                        crate::game_state::MoveCommand {
+                            position,
+                            rotation,
+                            floor_level,
+                            append,
+                        },
                         state.is_admin,
                         state.is_npc,
-                        append,
                     )
                     .await;
             } else {

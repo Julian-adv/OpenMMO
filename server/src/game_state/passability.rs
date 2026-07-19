@@ -144,36 +144,19 @@ impl super::GameState {
         count
     }
 
-    /// Insert or replace a house's cache entry: base grids, persisted door
-    /// overlays, then this server's in-memory open-door state.
+    /// Insert or replace a house's cache entry: base grids plus the door
+    /// overlays persisted in its data. The in-memory open-door state for the
+    /// house is reset — the incoming data is authoritative after an edit.
     pub async fn passability_add_house(&self, house: &HouseData) {
-        let open_doors: Vec<_> = {
-            let doors = self.open_doors.read().await;
-            doors
-                .iter()
-                .filter(|k| k.house_id == house.id)
-                .map(|k| (k.room_index, k.wall_dir, k.segment_index))
-                .collect()
-        };
+        self.clear_open_doors_for_house(&house.id).await;
         let rp = pathfinding::build_runtime_passability(house);
         let mut cache = self.passability_write();
         cache.insert(house.id.clone(), rp);
         pathfinding::apply_door_overlays(&mut cache, house);
-        for (room_index, wall_dir, segment_index) in open_doors {
-            if let Some(room) = house.rooms.get(room_index as usize) {
-                pathfinding::update_door_edge(
-                    &mut cache,
-                    &house.id,
-                    room,
-                    wall_dir,
-                    segment_index as usize,
-                    true,
-                );
-            }
-        }
     }
 
-    pub fn passability_remove_house(&self, house_id: &str) {
+    pub async fn passability_remove_house(&self, house_id: &str) {
+        self.clear_open_doors_for_house(house_id).await;
         self.passability_write().remove(house_id);
     }
 
