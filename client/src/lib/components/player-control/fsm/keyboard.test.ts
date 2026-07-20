@@ -4,6 +4,7 @@ import {
   applyKeyboardMovement,
   applyKeyboardMovementOutcome,
   createKeyboardMoveSender,
+  createKeyboardSpeedRamp,
   createKeyboardTapTracker,
   runKeyboardFrame,
   KEYBOARD_TAP_STEP,
@@ -17,6 +18,7 @@ function makeInput() {
     direction: { x: 1, z: 0 },
     config: DEFAULT_MOVEMENT_CONFIG,
     deltaTimeSeconds: 1 / 64,
+    speedRamp: makeSpeedRamp(),
     sampleHeight: vi.fn((x: number, z: number) => x + z),
     isMovementBlocked: vi.fn(() => false),
     isUphillTooSteep: vi.fn(() => false),
@@ -57,6 +59,10 @@ function makeMoveSender() {
   return { step: vi.fn(), flush: vi.fn(), reset: vi.fn() }
 }
 
+function makeSpeedRamp(speed = 3) {
+  return { advance: vi.fn(() => speed), reset: vi.fn() }
+}
+
 const movementDeps = {
   config: {
     maxSpeed: 3,
@@ -71,6 +77,7 @@ const movementDeps = {
   isUphillTooSteep: () => false,
   writePlayerPosition: vi.fn(),
   tapTracker: makeTapTracker(),
+  speedRamp: makeSpeedRamp(),
 }
 
 describe('applyKeyboardMovement', () => {
@@ -103,6 +110,18 @@ describe('applyKeyboardMovement', () => {
     )
   })
 
+  it('advances the speed ramp with the clamped frame delta', () => {
+    const input = makeInput()
+    input.deltaTimeSeconds = 1
+
+    applyKeyboardMovement(input)
+
+    expect(input.speedRamp.advance).toHaveBeenCalledExactlyOnceWith(
+      DEFAULT_MOVEMENT_CONFIG,
+      0.1
+    )
+  })
+
   it('blocks movement before writing or sending', () => {
     const input = makeInput()
     input.isMovementBlocked.mockReturnValue(true)
@@ -123,6 +142,25 @@ describe('applyKeyboardMovement', () => {
     expect(outcome.kind).toBe('slope_blocked')
     expect(input.writePlayerPosition).not.toHaveBeenCalled()
     expect(input.sendPlayerMove).not.toHaveBeenCalled()
+  })
+})
+
+describe('createKeyboardSpeedRamp', () => {
+  it('accelerates to maxSpeed and restarts after reset', () => {
+    const ramp = createKeyboardSpeedRamp()
+    const config = {
+      maxSpeed: 3,
+      acceleration: 6,
+      deceleration: 6,
+      arrivalThreshold: 0.05,
+    }
+
+    expect(ramp.advance(config, 0.25)).toBeCloseTo(1.5)
+    expect(ramp.advance(config, 0.25)).toBeCloseTo(3)
+    expect(ramp.advance(config, 0.25)).toBeCloseTo(3)
+
+    ramp.reset()
+    expect(ramp.advance(config, 0.25)).toBeCloseTo(1.5)
   })
 })
 

@@ -61,6 +61,7 @@
   } from './player-control/fsm/move-request'
   import {
     createKeyboardMoveSender,
+    createKeyboardSpeedRamp,
     createKeyboardTapTracker,
     runKeyboardFrame,
   } from './player-control/fsm/keyboard'
@@ -381,6 +382,7 @@
 
   const keyboardMoveSender = createKeyboardMoveSender(sendPlayerMove)
   const keyboardTapTracker = createKeyboardTapTracker()
+  const keyboardSpeedRamp = createKeyboardSpeedRamp()
 
   function writePlayerPosition(position: Position, rotation: number) {
     const wrappedX = wrapWorldX(position.x)
@@ -746,6 +748,7 @@
       writePlayerPosition,
       moveSender: keyboardMoveSender,
       tapTracker: keyboardTapTracker,
+      speedRamp: keyboardSpeedRamp,
       actions: keyboardFrameActions,
     })
   }
