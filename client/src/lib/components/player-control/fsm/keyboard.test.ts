@@ -65,6 +65,7 @@ const movementDeps = {
     arrivalThreshold: 0.05,
   },
   deltaTimeSeconds: 1 / 64,
+  isKeyboardMoving: false,
   sampleHeight: () => 0,
   isMovementBlocked: () => false,
   isUphillTooSteep: () => false,
@@ -269,6 +270,48 @@ describe('runKeyboardFrame', () => {
 
     expect(moveSender.flush).toHaveBeenCalledExactlyOnceWith(position)
     expect(moveSender.reset).not.toHaveBeenCalled()
+  })
+
+  it('settles keyboard_moving to idle on release without a tap target', () => {
+    const a = frameActions()
+    const moveSender = makeMoveSender()
+    const position = { x: 3, y: 0, z: 4 }
+
+    runKeyboardFrame({
+      currentPlayer: { position },
+      hasKeysPressed: false,
+      interactionExit: 'none',
+      hasMovementTarget: false,
+      isInCombat: false,
+      direction: null,
+      actions: a,
+      ...movementDeps,
+      isKeyboardMoving: true,
+      moveSender,
+    })
+
+    expect(a.setKeyboardIdleRuntime).toHaveBeenCalledOnce()
+    expect(a.emitKeyboardPlayerState).toHaveBeenCalledOnce()
+    expect(moveSender.flush).toHaveBeenCalledExactlyOnceWith(position)
+  })
+
+  it('does not force idle from other states on idle frames', () => {
+    const a = frameActions()
+
+    runKeyboardFrame({
+      currentPlayer: { position: { x: 3, y: 0, z: 4 } },
+      hasKeysPressed: false,
+      interactionExit: 'none',
+      hasMovementTarget: false,
+      isInCombat: false,
+      direction: null,
+      actions: a,
+      ...movementDeps,
+      moveSender: makeMoveSender(),
+    })
+
+    expect(a.setKeyboardIdleRuntime).not.toHaveBeenCalled()
+    expect(a.emitKeyboardPlayerState).not.toHaveBeenCalled()
   })
 
   it('resets without sending when a click path owns the movement queue', () => {

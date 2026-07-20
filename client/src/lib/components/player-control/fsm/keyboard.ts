@@ -258,6 +258,7 @@ interface RunKeyboardFrameInput {
   hasKeysPressed: boolean
   interactionExit: InteractionExitKind
   hasMovementTarget: boolean
+  isKeyboardMoving: boolean
   isInCombat: boolean
   direction: KeyboardDirection | null
   config: MovementConfig
@@ -288,6 +289,7 @@ export function runKeyboardFrame({
   hasKeysPressed,
   interactionExit,
   hasMovementTarget,
+  isKeyboardMoving,
   isInCombat,
   direction,
   config,
@@ -315,6 +317,12 @@ export function runKeyboardFrame({
       actions.requestMove(tapTarget)
     } else {
       moveSender.flush(currentPlayer.position)
+      // Long-hold release has no glide arrival to settle the machine, so it
+      // must leave keyboard_moving itself or the run animation loops forever.
+      if (isKeyboardMoving) {
+        actions.setKeyboardIdleRuntime()
+        actions.emitKeyboardPlayerState()
+      }
     }
     return
   }

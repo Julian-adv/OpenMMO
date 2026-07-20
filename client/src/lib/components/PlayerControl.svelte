@@ -733,6 +733,7 @@
     runKeyboardFrame({
       currentPlayer,
       hasKeysPressed: inputHandler.hasKeysPressed,
+      isKeyboardMoving: playerControlMachine.stateName === 'keyboard_moving',
       interactionExit: getInteractionExitKind(playerState),
       hasMovementTarget: movingState() !== null,
       isInCombat: combatController.isInCombat,
