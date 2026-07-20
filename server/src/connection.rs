@@ -9,7 +9,6 @@ use crate::types::{
 };
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
-use onlinerpg_shared::inventory::EquipSlot;
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
 use std::sync::Arc;
 use tokio::net::TcpStream;
@@ -644,9 +643,7 @@ async fn handle_client_message(
             // The equipped off-hand is the authoritative carried-torch state.
             // Resolve it before add_player builds the late-join GameState snapshot.
             let inventory = game_state.get_player_inventory(&id).await;
-            player.torch_on = inventory
-                .as_ref()
-                .is_some_and(|inv| inv.has_equipped_item(EquipSlot::OffHand, "torch"));
+            player.torch_on = inventory.as_ref().is_some_and(|inv| inv.is_torch_lit());
 
             let mut responses = vec![ServerMessage::JoinSuccess {
                 player: player.clone(),

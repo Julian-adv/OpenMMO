@@ -101,7 +101,17 @@ impl PlayerInventory {
             .get(&slot)
             .is_some_and(|item| item.item_def_id == item_def_id)
     }
+
+    /// Any torch variant in the off-hand lights the player.
+    pub fn is_torch_lit(&self) -> bool {
+        self.equipped
+            .get(&EquipSlot::OffHand)
+            .is_some_and(|item| TORCH_ITEM_IDS.contains(&item.item_def_id.as_str()))
+    }
 }
+
+/// Item defs that act as a carried light source.
+pub const TORCH_ITEM_IDS: &[&str] = &["torch", "worn_torch"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroundItem {

@@ -310,8 +310,7 @@ impl super::GameState {
             if let Some(old_item) = inv.equipped.insert(target_slot, item) {
                 inv.bag.push(old_item);
             }
-            let torch_on = (target_slot == EquipSlot::OffHand)
-                .then(|| inv.has_equipped_item(EquipSlot::OffHand, "torch"));
+            let torch_on = (target_slot == EquipSlot::OffHand).then(|| inv.is_torch_lit());
             (inv.clone(), torch_on)
         };
 

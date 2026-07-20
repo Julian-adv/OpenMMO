@@ -16,6 +16,7 @@ goblin_sword,Goblin Sword,A crude short blade favored by goblins and orcs.,2,mai
 small_sword,Small Sword,A compact crude blade sized for small fighters.,1.5,main_hand,false,small_sword.png,weapons/small_sword.glb,weapon,1d4,metal,2000
 chain_mail,Chain Mail,Interlocking metal rings forming armor.,55,chest,false,sword.png,,armor,,metal,25000
 torch,Torch,A flickering wooden torch.,1,off_hand,false,torch.png,weapons/torch.glb,weapon,1d4,wood,50
+worn_torch,Worn Torch,A stubby half-burnt torch. Merchants won't pay for it.,1,off_hand,false,torch.png,weapons/torch.glb,weapon,1d4,wood,
 spear,Spear,A long wooden-shafted spear tipped with iron.,4,main_hand,false,spear_icon.png,weapons/spear.glb,weapon,1d6,metal,3500
 coin_pile,Coin Pile,A small heap of loose copper coins.,0,,false,sword.png,objects/coin_pile_spill.glb,currency,,,
 healing_potion,Healing Potion,A crimson brew that knits wounds and restores vitality.,0.5,,true,healing_potion.png,objects/health_potion.glb,healing_potion,6d4,,500

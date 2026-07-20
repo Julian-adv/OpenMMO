@@ -22,11 +22,14 @@ export const playerGold = writable(0)
  *  `null` until the first GuardUpdated arrives. */
 export const playerGuard = writable<number | null>(null)
 
+/** Item defs that act as a carried light source (mirrors shared TORCH_ITEM_IDS). */
+const TORCH_ITEM_IDS = ['torch', 'worn_torch']
+
 /** True when the local player has a torch equipped in the off-hand slot. */
-export const localTorchEquipped = derived(
-  inventoryStore,
-  (inv) => inv.equipped.off_hand?.item_def_id === 'torch'
-)
+export const localTorchEquipped = derived(inventoryStore, (inv) => {
+  const id = inv.equipped.off_hand?.item_def_id
+  return id !== undefined && TORCH_ITEM_IDS.includes(id)
+})
 
 export function setInventory(inventory: PlayerInventory) {
   inventoryStore.set(inventory)

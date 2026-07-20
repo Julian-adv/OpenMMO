@@ -11,7 +11,10 @@ use std::path::PathBuf;
 /// would let abusers mint wealth by recycling characters (see doc/ECONOMY.md).
 /// Starter gear instead uses item defs without a basePrice, which merchants
 /// refuse to buy. (item_def_id, quantity, equip_slot)
-const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[("worn_iron_sword", 1, Some("main_hand"))];
+const STARTER_ITEMS: &[(&str, u32, Option<&str>)] = &[
+    ("worn_iron_sword", 1, Some("main_hand")),
+    ("worn_torch", 1, None),
+];
 
 /// Reserved account-name prefix for headless NPC/bot accounts.
 pub const NPC_ACCOUNT_PREFIX: &str = "npc_";
