@@ -22,6 +22,13 @@ export interface PlayerPhysicsDeps {
 
 export interface PlayerPhysics {
   sampleHeight(x: number, z: number): number
+  /**
+   * Ground Y at a point the player has not reached yet. `sampleHeight` can't
+   * answer this — its house term is the scalar offset for where the player
+   * stands *now*, so on a stairwell ramp it is off by up to a storey, and the
+   * server trusts waypoint Y as the authoritative collision height.
+   */
+  waypointHeight(floor: number, x: number, z: number): number
   isMovementBlocked(
     fromX: number,
     fromZ: number,
@@ -55,6 +62,21 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
       deps.getHeightManager().getHeightAtWorldPosition(x, z) +
       deps.getFloorOffset()
     )
+  }
+
+  function waypointHeight(floor: number, x: number, z: number): number {
+    x = wrapWorldX(x)
+    const dungeonY = dungeonManager.sampleHeightAt(x, z)
+    if (dungeonY !== null) return dungeonY
+    // Floor-keyed, so the stairwell ramp resolves per position instead of
+    // riding the player's current offset.
+    const houseY = housingManager.floorHeightAt(floor, x, z)
+    if (houseY !== null) return houseY
+    const deckY = bridgeManager.findDeckYAt(x, z, deps.getCurrentPlayerY())
+    if (deckY !== null) return deckY
+    // No floor offset here: a point outside every house sits on the terrain,
+    // whatever storey the player happens to be standing on.
+    return deps.getHeightManager().getHeightAtWorldPosition(x, z)
   }
 
   // Half-width of the player's collision footprint. Cylinder-vs-wall check
@@ -111,5 +133,5 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
     return !housingManager.isPointUnderHouseXZ(wrapWorldX(fromX), fromZ)
   }
 
-  return { sampleHeight, isMovementBlocked, isUphillTooSteep }
+  return { sampleHeight, waypointHeight, isMovementBlocked, isUphillTooSteep }
 }

@@ -134,6 +134,7 @@ interface RunMovementFrameInput {
   config: MovementConfig
   deltaTimeSeconds: number
   sampleHeight: (x: number, z: number) => number
+  waypointHeight: (floor: number, x: number, z: number) => number
   isMovementBlocked: (
     fromX: number,
     fromZ: number,
@@ -186,6 +187,7 @@ interface RunPlayerMovementTickInput {
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
   sampleHeight: (x: number, z: number) => number
+  waypointHeight: (floor: number, x: number, z: number) => number
   hasHeightData: (x: number, z: number) => boolean
   isMovementBlocked: (
     fromX: number,
@@ -231,6 +233,7 @@ export function runPlayerMovementTick({
   getMonsterInfo,
   findMonsterPosition,
   sampleHeight,
+  waypointHeight,
   hasHeightData,
   isMovementBlocked,
   isUphillTooSteep,
@@ -295,6 +298,7 @@ export function runPlayerMovementTick({
     config,
     deltaTimeSeconds: deltaTime / 1000,
     sampleHeight,
+    waypointHeight,
     isMovementBlocked,
     isUphillTooSteep,
     getFloorLevel,

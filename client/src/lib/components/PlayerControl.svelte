@@ -169,7 +169,8 @@
     getFloorOffset: () => floorOffset,
     getPassabilityFloor: currentPassabilityFloor,
   })
-  const { sampleHeight, isMovementBlocked, isUphillTooSteep } = physics
+  const { sampleHeight, waypointHeight, isMovementBlocked, isUphillTooSteep } =
+    physics
 
   // Movement data (target, integrator, A* waypoints, far-pickup target) lives
   // inside the machine's `moving` state — see movingState(). Leaving the moving
@@ -709,6 +710,7 @@
       findMonsterPosition: (monsterId) =>
         monsterManager.findMeshPosition(monsterId, monsterMeshes),
       sampleHeight,
+      waypointHeight,
       hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
       isMovementBlocked,
       isUphillTooSteep,
@@ -884,7 +886,7 @@
       currentFloor: currentPassabilityFloor(),
       getFloorAt: getFloorAtForClick,
       findPath,
-      sampleHeight,
+      waypointHeight,
       sendPlayerMove,
       actions: createMoveRequestActions(
         clickPosition,

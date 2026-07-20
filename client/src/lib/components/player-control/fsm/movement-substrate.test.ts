@@ -22,6 +22,7 @@ function makeBaseInput(
     config: DEFAULT_MOVEMENT_CONFIG,
     deltaTimeSeconds: 0.1,
     sampleHeight: vi.fn((x: number, z: number) => x + z),
+    waypointHeight: vi.fn((_f: number, x: number, z: number) => x + z),
     isMovementBlocked: vi.fn(() => false),
     isUphillTooSteep: vi.fn(() => false),
     getFloorLevel: vi.fn(() => floor),
@@ -91,6 +92,9 @@ describe('stepMovementSubstrate', () => {
       expect.any(Number),
       true
     )
+    // Keyed to the waypoint's own floor: the walker's floor lags a stairwell
+    // climb, and the server trusts this Y for collision height.
+    expect(input.waypointHeight).toHaveBeenCalledWith(3, 2, 0)
   })
 
   it('sends the stop position as a replace when a step is blocked', () => {

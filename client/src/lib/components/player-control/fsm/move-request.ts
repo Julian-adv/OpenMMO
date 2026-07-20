@@ -88,7 +88,7 @@ interface StartClickMovementInput {
     goalZ: number,
     goalFloor: number
   ) => { waypoints: PathWaypoint[] }
-  sampleHeight: (x: number, z: number) => number
+  waypointHeight: (floor: number, x: number, z: number) => number
   sendPlayerMove: SendPlayerMove
 }
 
@@ -108,7 +108,7 @@ export function startClickMovement({
   currentFloor,
   getFloorAt,
   findPath,
-  sampleHeight,
+  waypointHeight,
   sendPlayerMove,
 }: StartClickMovementInput): StartedClickMovement {
   const goalFloor = getFloorAt(
@@ -132,7 +132,7 @@ export function startClickMovement({
   const firstWp = pathWaypoints[0]
   const wpPos: Position = {
     x: firstWp.x,
-    y: sampleHeight(firstWp.x, firstWp.z),
+    y: waypointHeight(firstWp.floor, firstWp.x, firstWp.z),
     z: firstWp.z,
   }
 
@@ -188,7 +188,7 @@ interface RunMoveRequestInput {
     goalZ: number,
     goalFloor: number
   ) => { waypoints: PathWaypoint[] }
-  sampleHeight: (x: number, z: number) => number
+  waypointHeight: (floor: number, x: number, z: number) => number
   sendPlayerMove: SendPlayerMove
   actions: MoveRequestActions
 }
@@ -203,7 +203,7 @@ export function runMoveRequest({
   currentFloor,
   getFloorAt,
   findPath,
-  sampleHeight,
+  waypointHeight,
   sendPlayerMove,
   actions,
 }: RunMoveRequestInput) {
@@ -247,7 +247,7 @@ export function runMoveRequest({
       currentFloor,
       getFloorAt,
       findPath,
-      sampleHeight,
+      waypointHeight,
       sendPlayerMove,
     })
   )

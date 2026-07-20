@@ -100,7 +100,7 @@ describe('startClickMovement', () => {
       findPath: vi.fn(() => ({
         waypoints: [{ x: 2, z: 3, floor: 1 }],
       })),
-      sampleHeight: vi.fn((x: number, z: number) => x + z),
+      waypointHeight: vi.fn((_f: number, x: number, z: number) => x + z),
       sendPlayerMove,
     })
 
@@ -114,6 +114,27 @@ describe('startClickMovement', () => {
     )
   })
 
+  // The sent Y is the server's authoritative collision height. Deriving it
+  // from the walker's current floor put a climber's waypoint a storey low and
+  // sealed them under furniture on the floor below, so it must key off the
+  // waypoint's own floor.
+  it("resolves the waypoint's height on the waypoint's floor, not the walker's", () => {
+    const waypointHeight = vi.fn(() => 7)
+
+    startClickMovement({
+      currentPos,
+      clickPosition,
+      pickupAfterArrival: null,
+      currentFloor: 0,
+      getFloorAt: vi.fn(() => 1),
+      findPath: vi.fn(() => ({ waypoints: [{ x: 2, z: 3, floor: 1 }] })),
+      waypointHeight,
+      sendPlayerMove: vi.fn(),
+    })
+
+    expect(waypointHeight).toHaveBeenCalledWith(1, 2, 3)
+  })
+
   it('falls back to a direct waypoint when pathfinding returns no path', () => {
     const sendPlayerMove = vi.fn()
 
@@ -124,7 +145,7 @@ describe('startClickMovement', () => {
       currentFloor: 0,
       getFloorAt: vi.fn(() => 2),
       findPath: vi.fn(() => ({ waypoints: [] })),
-      sampleHeight: vi.fn((x: number, z: number) => x + z),
+      waypointHeight: vi.fn((_f: number, x: number, z: number) => x + z),
       sendPlayerMove,
     })
 
@@ -147,7 +168,7 @@ const deps = {
   currentFloor: 0,
   getFloorAt: () => 0,
   findPath: () => ({ waypoints: [] }),
-  sampleHeight: () => 0,
+  waypointHeight: () => 0,
   sendPlayerMove: vi.fn(),
 }
 

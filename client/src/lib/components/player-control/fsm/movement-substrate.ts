@@ -30,6 +30,7 @@ interface MovementSubstrateInput {
   config: MovementConfig
   deltaTimeSeconds: number
   sampleHeight: (x: number, z: number) => number
+  waypointHeight: (floor: number, x: number, z: number) => number
   isMovementBlocked: (
     fromX: number,
     fromZ: number,
@@ -115,6 +116,7 @@ export function stepMovementSubstrate({
   config,
   deltaTimeSeconds,
   sampleHeight,
+  waypointHeight,
   isMovementBlocked,
   isUphillTooSteep,
   getFloorLevel,
@@ -173,7 +175,7 @@ export function stepMovementSubstrate({
 
       const wpPos: Position = {
         x: nextWp.x,
-        y: sampleHeight(nextWp.x, nextWp.z),
+        y: waypointHeight(nextWp.floor, nextWp.x, nextWp.z),
         z: nextWp.z,
       }
 
