@@ -100,31 +100,52 @@ pub fn is_movement_blocked(
     floor_level: u8,
     y: Option<f32>,
 ) -> bool {
+    blocking_entry(cache, from_x, from_z, to_x, to_z, floor_level, y).is_some()
+}
+
+/// Why a move was refused: which cache entry, and whether the stairwell
+/// two-floor consult decided it. A stairwell refusal with `consulted == 1`
+/// means the "block only when all refuse" rule came down to a single grid —
+/// the one sealing the end the mover stands on — which is how a stairwell
+/// traps someone rather than merely blocking them.
+#[derive(Debug, Clone, Copy)]
+pub struct BlockInfo<'a> {
+    pub key: &'a str,
+    pub stairwell: bool,
+    pub consulted: usize,
+}
+
+/// Same check as [`is_movement_blocked`], but reports what refused the move.
+/// Diagnostics only — the hot path uses the bool wrapper.
+pub fn blocking_entry<'a>(
+    cache: &'a PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> Option<BlockInfo<'a>> {
     let min_x = from_x.min(to_x);
     let max_x = from_x.max(to_x);
     let min_z = from_z.min(to_z);
     let max_z = from_z.max(to_z);
 
-    for rp in cache.values() {
+    for (key, rp) in cache.iter() {
         if max_x < rp.min_x || min_x > rp.max_x || max_z < rp.min_z || min_z > rp.max_z {
             continue;
         }
 
-        // A stairwell is stored in *both* connected floors' grids with opposite
-        // ends sealed, so whichever grid the mover is keyed to seals the end
-        // they are standing on. Consult both and block only when both refuse.
         let stair_mask = stairwell_floor_mask(rp, min_x, max_x, min_z, max_z, floor_level);
         if stair_mask != 0 {
-            let mut connected = rp
-                .floors
-                .iter()
-                .filter(|f| stair_mask & floor_bit(f.floor_level) != 0)
-                .filter(|f| obstacle_reaches_y(f, y))
-                .peekable();
-            if connected.peek().is_some()
-                && connected.all(|f| move_blocked_on_floor(rp, f, from_x, from_z, to_x, to_z))
-            {
-                return true;
+            if let Some(consulted) = stairwell_consult(rp, stair_mask, |f| {
+                move_blocked_on_floor(rp, f, from_x, from_z, to_x, to_z)
+            }) {
+                return Some(BlockInfo {
+                    key,
+                    stairwell: true,
+                    consulted,
+                });
             }
             continue;
         }
@@ -134,11 +155,15 @@ pub fn is_movement_blocked(
                 continue;
             }
             if move_blocked_on_floor(rp, floor, from_x, from_z, to_x, to_z) {
-                return true;
+                return Some(BlockInfo {
+                    key,
+                    stairwell: false,
+                    consulted: 1,
+                });
             }
         }
     }
-    false
+    None
 }
 
 #[inline]
@@ -163,6 +188,37 @@ fn obstacle_reaches_y(floor: &RuntimeFloorGrid, y: Option<f32>) -> bool {
         Some(y) => y < floor.y_base + floor.wall_height,
         None => true,
     }
+}
+
+/// Run the stairwell two-floor consult: block only when every connected floor
+/// refuses. Returns how many floors were consulted, or `None` if any allowed
+/// the move. Both the edge check and the body-radius check route through here
+/// so the rule cannot be fixed in one and left stale in the other.
+///
+/// Deliberately no `obstacle_reaches_y` filter: it is a *height* test, and
+/// dropping either partner leaves the survivor — the grid sealing the end
+/// underfoot — deciding alone, which traps the mover for good. Near the top of
+/// a flight the lower floor's walls already fall below the mover, so the filter
+/// would drop exactly the partner that grants passage. Furniture lives in its
+/// own cache entry with no stairwells, so it still gets the height test on the
+/// non-stairwell path.
+fn stairwell_consult(
+    rp: &super::RuntimePassability,
+    stair_mask: u32,
+    mut blocked_on: impl FnMut(&RuntimeFloorGrid) -> bool,
+) -> Option<usize> {
+    let mut consulted = 0usize;
+    for f in rp
+        .floors
+        .iter()
+        .filter(|f| stair_mask & floor_bit(f.floor_level) != 0)
+    {
+        consulted += 1;
+        if !blocked_on(f) {
+            return None;
+        }
+    }
+    (consulted > 0).then_some(consulted)
 }
 
 /// Bitmask of floor levels connected by a stairwell this move touches that the
@@ -250,14 +306,8 @@ pub fn is_circle_blocked_on_floor(
         // itself off from the floor keyed to the far end.
         let stair_mask = stairwell_floor_mask(rp, x - r, x + r, z - r, z + r, floor_level);
         if stair_mask != 0 {
-            let mut connected = rp
-                .floors
-                .iter()
-                .filter(|f| stair_mask & floor_bit(f.floor_level) != 0)
-                .filter(|f| obstacle_reaches_y(f, y))
-                .peekable();
-            if connected.peek().is_some()
-                && connected.all(|f| circle_blocked_on_grid(rp, f, x, z, r))
+            if stairwell_consult(rp, stair_mask, |f| circle_blocked_on_grid(rp, f, x, z, r))
+                .is_some()
             {
                 return true;
             }

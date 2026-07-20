@@ -551,28 +551,37 @@ impl super::GameState {
                     // Edge-crossing subset of the client's continuous-mover
                     // check (no body radius, on the leg's own floor). A
                     // blocked step stops the player and drops the queue.
-                    if intent.check_collision
-                        && super::passability::is_wrapped_movement_blocked(
+                    if intent.check_collision {
+                        let step_floor =
+                            super::passability::authoritative_floor(&cache, &player.position);
+                        if let Some(info) = super::passability::wrapped_block_info(
                             &cache,
                             player.position.x,
                             player.position.z,
                             step_x,
                             step_z,
-                            super::passability::authoritative_floor(&cache, &player.position),
+                            step_floor,
                             player.position.y,
-                        )
-                    {
-                        warn!(
-                            "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) y={:.1}",
+                        ) {
+                            warn!(
+                            "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) y={:.1}->{:.1} \
+                             floor={} (intent {}) by {} stairwell={} consulted={}",
                             player_id,
                             player.position.x,
                             player.position.z,
                             step_x,
                             step_z,
-                            player.position.y
-                        );
-                        blocked = true;
-                        break;
+                            player.position.y,
+                            step_y,
+                            step_floor,
+                            intent.floor_level,
+                            info.key,
+                            info.stairwell,
+                            info.consulted
+                            );
+                            blocked = true;
+                            break;
+                        }
                     }
                     player.rotation = intent.rotation;
                     if snap {

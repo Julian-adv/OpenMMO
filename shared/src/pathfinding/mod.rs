@@ -28,8 +28,8 @@ pub use cache::{
     FurniturePiece,
 };
 pub use query::{
-    get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked, is_circle_blocked_on_floor,
-    is_movement_blocked,
+    blocking_entry, get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked,
+    is_circle_blocked_on_floor, is_movement_blocked, BlockInfo,
 };
 pub use smooth::find_and_smooth_path;
 
@@ -786,6 +786,24 @@ mod real_house_repro {
         }
     }
 
+    /// Descending 2F→1F, a player stalled on the stairwell at y=4.2 and every
+    /// retry re-blocked, so B saw them frozen on the landing while A's own
+    /// client walked on. floor 0's walls top out at y_base+wall_height=4.06,
+    /// so the height filter dropped it from the two-floor consult and left
+    /// floor 1 — the grid sealing this very exit — to decide alone.
+    #[test]
+    fn stairwell_exit_near_the_top_of_the_flight_is_not_trapped() {
+        let (id, rp) = real_house();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        assert!(
+            !query::is_movement_blocked(&cache, -1466.5, 4735.5, -1467.2, 4735.5, 1, Some(4.2)),
+            "stepping west off the stairwell must stay open even where the \
+             lower floor's walls no longer reach the mover"
+        );
+    }
+
     /// `old_crypt`, whose AABB is an 80 m square swallowing a whole block of
     /// Aldermark — including the house above. Every cell walls off every side,
     /// and one of its stairwells sits directly under the house. Its floors carry
@@ -866,6 +884,23 @@ mod real_house_repro {
         assert!(
             query::is_circle_blocked_on_floor(&cache, -1466.1, 4735.5, 0.3, 1, None),
             "a wall both connected floors agree on must still block the body"
+        );
+    }
+
+    /// The body-radius check runs the same two-floor consult as the edge check
+    /// and must not trap the mover either: near the top of the flight floor 0's
+    /// walls fall below y=4.2, and dropping that partner leaves floor 1 — which
+    /// seals this end — deciding alone.
+    #[test]
+    fn body_radius_near_the_top_of_the_flight_is_not_trapped() {
+        let (id, rp) = real_house();
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+
+        assert!(
+            !query::is_circle_blocked_on_floor(&cache, -1467.1, 4735.5, 0.3, 1, Some(4.2)),
+            "the body radius must clear the stairwell where the lower floor's \
+             walls no longer reach the mover"
         );
     }
 

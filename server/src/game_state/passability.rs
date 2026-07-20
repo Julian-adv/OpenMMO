@@ -31,17 +31,19 @@ struct RegionObjects {
 /// step is deliberately left unwrapped so it remains a short segment. Shifting
 /// that segment by one world width lets it see passability near the destination
 /// edge as well as the source edge.
-pub(super) fn is_wrapped_movement_blocked(
-    cache: &pathfinding::PassabilityCache,
+pub(super) fn wrapped_block_info<'a>(
+    cache: &'a pathfinding::PassabilityCache,
     from_x: f32,
     from_z: f32,
     to_x: f32,
     to_z: f32,
     floor_level: u8,
     y: f32,
-) -> bool {
-    if pathfinding::is_movement_blocked(cache, from_x, from_z, to_x, to_z, floor_level, Some(y)) {
-        return true;
+) -> Option<pathfinding::BlockInfo<'a>> {
+    if let Some(info) =
+        pathfinding::blocking_entry(cache, from_x, from_z, to_x, to_z, floor_level, Some(y))
+    {
+        return Some(info);
     }
 
     let seam_offset = if to_x >= WORLD_MAX_X {
@@ -49,9 +51,9 @@ pub(super) fn is_wrapped_movement_blocked(
     } else if to_x < WORLD_MIN_X {
         WORLD_WIDTH_X
     } else {
-        return false;
+        return None;
     };
-    pathfinding::is_movement_blocked(
+    pathfinding::blocking_entry(
         cache,
         from_x + seam_offset,
         from_z,
