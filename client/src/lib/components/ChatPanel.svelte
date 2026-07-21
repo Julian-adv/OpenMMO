@@ -2,6 +2,7 @@
   import { gameStore } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
   import { handleCommand, visibleCommandNames } from '../chat-commands'
+  import { chatInputKeyIntent } from '../chat-input-keys'
   import { chatFocusRequest } from '../stores/npcMenuStore'
 
   type Tab = 'say' | 'combat'
@@ -89,12 +90,11 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Tab') {
+    const intent = chatInputKeyIntent(event)
+    if (intent === 'complete-command') {
       event.preventDefault()
       completeCommand()
-      return
-    }
-    if (event.key === 'Enter') {
+    } else if (intent === 'send') {
       event.preventDefault()
       sendMessage()
     }
