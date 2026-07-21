@@ -1,6 +1,6 @@
 use crate::types::{MonsterState, PlayerId, Position, ServerMessage};
 use std::collections::HashSet;
-use tracing::{info, warn};
+use tracing::{debug, warn};
 
 /// Keep spawns this many meters clear of every no-spawn zone (towns), so the
 /// area *around* a town stays empty too. Mirrors the client's TOWN_MARGIN.
@@ -112,7 +112,7 @@ impl super::GameState {
             .values()
             .filter(|m| m.state != MonsterState::Dead)
             .count();
-        info!(
+        debug!(
             "Spawned monster {} [owner #{}, spawn #{}] (Alive: {})",
             id, owner_number, spawn_count, alive
         );
@@ -240,7 +240,7 @@ impl super::GameState {
         };
 
         for monster in removed_monsters {
-            info!(
+            debug!(
                 "Removed monster {} (owner {} disconnected)",
                 monster.id, owner_id
             );

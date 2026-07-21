@@ -4,7 +4,7 @@ use crate::world_config::world_config;
 use onlinerpg_shared::{shortest_world_delta_x, wrap_world_x, PLAYER_MOVE_SPEED};
 use std::collections::{HashMap, HashSet, VecDeque};
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 /// Headroom over walk speed so the sim absorbs network jitter and catches up.
 const MOVE_SPEED_SLACK: f32 = 1.15;
@@ -474,7 +474,7 @@ impl super::GameState {
         };
         let dist_sq = leg_start.dist_xz_sq(&new_position);
         if dist_sq > MAX_MOVE_TARGET_DISTANCE * MAX_MOVE_TARGET_DISTANCE {
-            warn!(
+            debug!(
                 "Rejected move target {:.0}m away from player {}",
                 dist_sq.sqrt(),
                 self.player_name_of(player_id).await
@@ -490,7 +490,7 @@ impl super::GameState {
             // resulting current-position→new-head beeline is the same risk as
             // a replace and is still collision-checked while walking.
             queue.pop_front();
-            warn!(
+            debug!(
                 "Waypoint queue full for player {}, dropped oldest",
                 self.player_name_of(player_id).await
             );
@@ -563,7 +563,7 @@ impl super::GameState {
                             step_floor,
                             player.position.y,
                         ) {
-                            warn!(
+                            debug!(
                             "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) y={:.1}->{:.1} \
                              floor={} (intent {}) by {} stairwell={} consulted={}",
                             player_id,

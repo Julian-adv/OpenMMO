@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use crate::driver::LlmBackend;
 
@@ -121,7 +121,7 @@ impl OpenRouterInvoker {
 #[async_trait]
 impl LlmBackend for OpenRouterInvoker {
     async fn send_message(&self, content: &str) -> anyhow::Result<String> {
-        info!(">>> TO OPENROUTER ({} bytes):\n{}", content.len(), content);
+        debug!(">>> TO OPENROUTER ({} bytes):\n{}", content.len(), content);
 
         let mut messages = self.messages.lock().await;
 
@@ -196,7 +196,7 @@ impl LlmBackend for OpenRouterInvoker {
             content: result.clone(),
         });
 
-        info!("<<< FROM OPENROUTER ({} bytes):\n{}", result.len(), result);
+        debug!("<<< FROM OPENROUTER ({} bytes):\n{}", result.len(), result);
         Ok(result)
     }
 }

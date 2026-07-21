@@ -4,7 +4,7 @@ use onlinerpg_shared::inventory::{EquipSlot, GroundItem, PlayerInventory};
 use onlinerpg_shared::xp;
 use rand::Rng;
 use std::f32::consts::TAU;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 const WEAPON_DROP_OFFSET_METERS: f32 = 2.0;
 // Mirrors the web and agent clients' 2m melee reach. This server-side check is
@@ -137,7 +137,7 @@ impl super::GameState {
                 }
                 return;
             }
-            info!("Player {} attacking monster {}", player_name, monster_id);
+            debug!("Player {} attacking monster {}", player_name, monster_id);
 
             // Unarmed falls back to D&D 5e improvised 1d2. An enchanted
             // weapon (+N) adds its enchant to attack and damage rolls.
@@ -177,7 +177,7 @@ impl super::GameState {
                 (result.hit, result.roll, result.damage)
             };
 
-            info!(
+            debug!(
                 "Dice roll: {}, Hit: {}, Damage: {}",
                 result_roll, result_hit, result_damage
             );
@@ -216,7 +216,7 @@ impl super::GameState {
                     }
 
                     monster.health = monster.health.saturating_sub(result_damage);
-                    info!(
+                    debug!(
                         "Monster {} HP: {}/{}",
                         monster_id, monster.health, monster.max_health
                     );
@@ -238,7 +238,7 @@ impl super::GameState {
                         .and_then(|def| def.weapon.as_deref())
                         .and_then(|weapon| self.item_defs.item_def_id_for_weapon_ref(weapon));
 
-                    info!("Monster {} died, broadcasting dead state", monster_id);
+                    debug!("Monster {} died, broadcasting dead state", monster_id);
                     self.send_direct_message_to_players_within_position(
                         &monster_position,
                         monster_floor_level,
@@ -391,7 +391,7 @@ impl super::GameState {
                             )
                             .await;
 
-                            info!(
+                            debug!(
                                 "Player {} gained {} XP (total: {}, level: {}{})",
                                 player_name,
                                 xp_amount,
@@ -414,7 +414,7 @@ impl super::GameState {
                                 let monster_floor = monster.floor_level;
                                 monsters.remove(&id_to_remove);
                                 drop(monsters);
-                                info!("Monster {} removed after 30s corpse time", id_to_remove);
+                                debug!("Monster {} removed after 30s corpse time", id_to_remove);
                                 game_state
                                     .send_direct_message_to_players_within_position(
                                         &monster_position,
@@ -529,7 +529,7 @@ impl super::GameState {
         };
         let max_range = monster_attack_range + MONSTER_ATTACK_RANGE_TOLERANCE_METERS;
         if distance_sq > max_range.powi(2) {
-            warn!(
+            debug!(
                 "Rejected monster attack {:.0}m away: monster {} -> player {}",
                 distance_sq.sqrt(),
                 monster_id,
@@ -547,7 +547,7 @@ impl super::GameState {
             0,
         );
 
-        info!(
+        debug!(
             "Monster {} attacks player {}: Roll {}, Hit: {}, Damage: {}",
             monster_id, target_player_name, result.roll, result.hit, result.damage
         );
