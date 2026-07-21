@@ -130,6 +130,16 @@ impl ChaseTarget<'_> {
         }
     }
 
+    /// Passability floor index to path toward, converted from the target's
+    /// wire `floor_level`.
+    fn floor(&self, s: &SharedState) -> u8 {
+        let level = match self {
+            Self::Monster(id) => s.nearby_monsters.get(*id).map(|m| m.floor_level),
+            Self::Player(id) => s.nearby_players.get(*id).map(|p| p.floor_level),
+        };
+        onlinerpg_shared::dungeon::passability_floor_for_level(level.unwrap_or(0))
+    }
+
     /// The chase ends successfully within this distance of the target.
     /// The character range carries a little slack over APPROACH_RANGE so
     /// arriving at the pulled-back path goal always counts as in range.
@@ -209,7 +219,7 @@ async fn chase_target(state: &Arc<Mutex<SharedState>>, target: &ChaseTarget<'_>)
             return ChaseResult::Lost;
         }
 
-        let (in_range, needs_repath, target_pos, goal) = {
+        let (in_range, needs_repath, target_pos, target_floor, goal) = {
             let s = state.lock().await;
             let player_alive = s.self_player.as_ref().is_some_and(|p| p.health > 0);
             let Some(target_pos) = target.position(&s) else {
@@ -251,7 +261,7 @@ async fn chase_target(state: &Arc<Mutex<SharedState>>, target: &ChaseTarget<'_>)
                 (target_pos.x, target_pos.z)
             };
 
-            (in_range, needs_repath, target_pos, goal)
+            (in_range, needs_repath, target_pos, target.floor(&s), goal)
         };
 
         if in_range {
@@ -261,7 +271,7 @@ async fn chase_target(state: &Arc<Mutex<SharedState>>, target: &ChaseTarget<'_>)
         if needs_repath {
             let result = {
                 let s = state.lock().await;
-                s.find_path_to(goal.0, goal.1, 0)
+                s.find_path_to(goal.0, goal.1, target_floor)
             };
             if result.waypoints.is_empty() {
                 path_waypoints.clear();

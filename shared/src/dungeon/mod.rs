@@ -334,6 +334,17 @@ pub fn passability_floor_for_depth(depth: u8) -> u8 {
     DUNGEON_FLOOR_INDEX_BASE + depth - 1
 }
 
+/// Map an entity's wire `floor_level` onto its passability floor index.
+/// The wire encodes dungeons as negative depth, while the passability cache
+/// stacks them above housing — so the two disagree exactly underground.
+pub fn passability_floor_for_level(floor_level: i8) -> u8 {
+    if floor_level < 0 {
+        passability_floor_for_depth(floor_level.unsigned_abs())
+    } else {
+        floor_level as u8
+    }
+}
+
 pub fn floor_world_y(entrance_y: f32, depth: u8) -> f32 {
     entrance_y - depth as f32 * DUNGEON_FLOOR_HEIGHT
 }

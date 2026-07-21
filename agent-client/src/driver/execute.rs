@@ -228,13 +228,18 @@ pub(super) async fn handle_response(
                 continue;
             }
 
-            let goal = {
+            // A bare coordinate carries no floor, so stay on the one we're on
+            // rather than dropping to the ground floor.
+            let (goal, floor) = {
                 let s = state.lock().await;
                 let pp = s.self_player.as_ref().map(|p| &p.position);
-                resolve_move_goal(x, z, direction, distance, pp)
+                (
+                    resolve_move_goal(x, z, direction, distance, pp),
+                    s.self_floor_level,
+                )
             };
             if let Some((gx, gz)) = goal {
-                match execute_move(state, gx, gz, 0).await {
+                match execute_move(state, gx, gz, floor).await {
                     MoveResult::Arrived => {
                         info!("Agent arrived at ({gx:.1}, {gz:.1})");
                     }

@@ -426,6 +426,24 @@ fn passability_floor_mapping() {
     assert_eq!(floor_world_y(10.0, 20), -70.0);
 }
 
+/// Wire `floor_level` and passability floor index agree above ground and
+/// diverge below it — housing must never land on a dungeon index.
+#[test]
+fn wire_floor_level_maps_onto_passability_index() {
+    use crate::dungeon::passability_floor_for_level;
+    use crate::housing::MAX_FLOOR_LEVEL;
+
+    for level in 0..=MAX_FLOOR_LEVEL {
+        assert_eq!(passability_floor_for_level(level as i8), level);
+    }
+    assert_eq!(passability_floor_for_level(-1), DUNGEON_FLOOR_INDEX_BASE);
+    assert_eq!(
+        passability_floor_for_level(-(MAX_DEPTH as i8)),
+        DUNGEON_FLOOR_INDEX_BASE + MAX_DEPTH - 1
+    );
+    assert!(passability_floor_for_level(-1) > MAX_FLOOR_LEVEL);
+}
+
 #[test]
 fn monster_level_scaling() {
     assert_eq!(monster_level_for_depth(1, 1), 1);
