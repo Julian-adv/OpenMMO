@@ -5,7 +5,7 @@
   import { chatFocusRequest } from '../stores/npcMenuStore'
 
   type Tab = 'say' | 'combat'
-  const TRANSCRIPT_FADE_DELAY_MS = 10_000
+  const TRANSCRIPT_FADE_DELAY_MS = 20_000
 
   let activeTab = $state<Tab>('say')
   let chatMessages = $derived($gameStore.chatMessages)
@@ -14,6 +14,8 @@
   let messageInput = $state('')
   let chatContainer = $state<HTMLDivElement>()
   let transcriptVisible = $state(true)
+  let inputFocused = $state(false)
+  let hovering = $state(false)
   let fadeTimer: number | undefined
 
   $effect(() => {
@@ -24,26 +26,26 @@
     }
   })
 
-  function revealTranscript() {
-    transcriptVisible = true
-    window.clearTimeout(fadeTimer)
-    fadeTimer = window.setTimeout(() => {
-      transcriptVisible = false
-    }, TRANSCRIPT_FADE_DELAY_MS)
-  }
+  // Focus and hover hold the transcript open; leaving either restarts the countdown.
+  let interacting = $derived(inputFocused || hovering)
 
-  // Re-reveal the transcript on new chat/combat activity. Tab switches and
-  // input focus reveal it directly via setActiveTab().
   $effect(() => {
     void chatMessages.length
     void combatMessages.length
-    revealTranscript()
+    void activeTab
+    void interacting
+    transcriptVisible = true
+    window.clearTimeout(fadeTimer)
+    if (!interacting) {
+      fadeTimer = window.setTimeout(() => {
+        transcriptVisible = false
+      }, TRANSCRIPT_FADE_DELAY_MS)
+    }
     return () => window.clearTimeout(fadeTimer)
   })
 
-  function setActiveTab(tab: Tab) {
-    activeTab = tab
-    revealTranscript()
+  function setHovering(value: boolean) {
+    hovering = value
   }
 
   function sendMessage() {
@@ -119,25 +121,32 @@
 
 <svelte:window onkeydown={handleGlobalKeydown} />
 
-<div class="chat-panel" class:transcript-faded={!transcriptVisible}>
+<!-- Hover only pauses the fade; keyboard users get the same pause via input focus. -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="chat-panel"
+  class:transcript-faded={!transcriptVisible}
+  onmouseenter={() => setHovering(true)}
+  onmouseleave={() => setHovering(false)}
+>
   <div class="tabs">
     <button
       class="tab"
       class:active={activeTab === 'say'}
-      onclick={() => setActiveTab('say')}
+      onclick={() => (activeTab = 'say')}
     >
       Chat
     </button>
     <button
       class="tab"
       class:active={activeTab === 'combat'}
-      onclick={() => setActiveTab('combat')}
+      onclick={() => (activeTab = 'combat')}
     >
       Combat
     </button>
   </div>
 
-  <div class="chat-messages" bind:this={chatContainer}>
+  <div class="chat-messages" bind:this={chatContainer} role="log">
     {#if activeTab === 'say'}
       {#each chatMessages as entry, index (index)}
         <div class="message">
@@ -180,8 +189,14 @@
       bind:this={chatInput}
       bind:value={messageInput}
       onkeydown={handleKeyDown}
-      onfocus={() => setActiveTab('say')}
-      onblur={restoreViewportAfterKeyboard}
+      onfocus={() => {
+        inputFocused = true
+        activeTab = 'say'
+      }}
+      onblur={() => {
+        inputFocused = false
+        restoreViewportAfterKeyboard()
+      }}
       placeholder="Type a message..."
       disabled={!isConnected}
     />
