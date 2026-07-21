@@ -232,7 +232,7 @@ const commands: Record<string, CommandHandler> = {
 }
 
 /** Handled by the server (`game_state::chat`); listed only for autocomplete. */
-const SERVER_COMMANDS = ['/escape']
+const SERVER_COMMANDS = ['/escape', '/who']
 
 const commandNames = [...Object.keys(commands), ...SERVER_COMMANDS].sort()
 

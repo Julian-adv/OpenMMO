@@ -9,6 +9,29 @@ impl super::GameState {
             return;
         }
 
+        if message.trim() == "/who" {
+            let (humans, npcs) =
+                {
+                    let players = self.players.read().await;
+                    players.values().fold((0u32, 0u32), |(h, n), p| {
+                        if p.is_npc {
+                            (h, n + 1)
+                        } else {
+                            (h + 1, n)
+                        }
+                    })
+                };
+            self.send_direct_message(
+                player_id,
+                ServerMessage::ChatMessage {
+                    player_id: *player_id,
+                    message: format!("Online: {} ({} human, {} NPC)", humans + npcs, humans, npcs),
+                },
+            )
+            .await;
+            return;
+        }
+
         // Handle /give command
         if let Some(item_id) = message.strip_prefix("/give ") {
             let item_id = item_id.trim();

@@ -299,6 +299,40 @@ async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
 }
 
 #[tokio::test]
+async fn who_command_reports_online_counts_only_to_the_requester() {
+    let game_state = make_test_game_state("who_command");
+    let asker_id = pid("asker");
+    let bystander_id = pid("bystander");
+    game_state.add_player(make_player("asker", 0.0, 0.0)).await;
+    game_state
+        .add_player(make_player("bystander", 5.0, 0.0))
+        .await;
+    let mut npc = make_player("npc_karl", 10.0, 0.0);
+    npc.is_npc = true;
+    game_state.add_player(npc).await;
+
+    let mut asker_rx = game_state.register_direct_channel(&asker_id).await;
+    let mut bystander_rx = game_state.register_direct_channel(&bystander_id).await;
+
+    game_state
+        .send_chat_message(&asker_id, "/who".to_string())
+        .await;
+
+    match asker_rx.try_recv() {
+        Ok(ServerMessage::ChatMessage { player_id, message }) => {
+            assert_eq!(player_id, asker_id);
+            assert_eq!(message, "Online: 3 (2 human, 1 NPC)");
+        }
+        other => panic!("Expected online count reply, got {:?}", other),
+    }
+
+    match bystander_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("/who must not be relayed as chat, got {:?}", other),
+    }
+}
+
+#[tokio::test]
 async fn escape_command_returns_a_stuck_player_to_spawn() {
     let game_state = make_test_game_state("escape_to_spawn");
     let stuck_id = pid("stuck");
