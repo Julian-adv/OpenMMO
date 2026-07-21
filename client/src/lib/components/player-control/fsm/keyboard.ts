@@ -399,7 +399,9 @@ export function runKeyboardFrame({
     const keyboardApplication = applyKeyboardMovementOutcome(outcome, actions)
     if (keyboardApplication.kind === 'handled') {
       // Blocked against a wall or slope: sync the stop point so the server
-      // doesn't keep walking to a stale sample.
+      // doesn't keep walking to a stale sample. Reset the ramp too, or holding
+      // into an obstacle charges it to full and the next clear step launches.
+      speedRamp.reset()
       moveSender.flush(currentPlayer.position)
       return
     }

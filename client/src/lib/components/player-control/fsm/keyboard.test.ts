@@ -289,6 +289,29 @@ describe('runKeyboardFrame', () => {
     expect(moveSender.flush).toHaveBeenCalledExactlyOnceWith(position)
   })
 
+  it.each([
+    ['blocked', { isMovementBlocked: () => true }],
+    ['slope-blocked', { isUphillTooSteep: () => true }],
+  ])('resets the speed ramp on %s frames', (_label, blocker) => {
+    const speedRamp = makeSpeedRamp()
+
+    runKeyboardFrame({
+      currentPlayer: { position: { x: 0, y: 0, z: 0 } },
+      hasKeysPressed: true,
+      interactionExit: 'none',
+      hasMovementTarget: false,
+      isInCombat: false,
+      direction: { x: 1, z: 0 },
+      actions: frameActions(),
+      ...movementDeps,
+      moveSender: makeMoveSender(),
+      speedRamp,
+      ...blocker,
+    })
+
+    expect(speedRamp.reset).toHaveBeenCalledOnce()
+  })
+
   it('flushes the resting position on key release without a click target', () => {
     const a = frameActions()
     const moveSender = makeMoveSender()
