@@ -1,8 +1,8 @@
 //! Small grid-topology helpers shared across worldgen phases.
 //!
-//! The global map is X-periodic (wraps east-west) but Y is bounded, so all
-//! neighborhood operations need this asymmetric treatment. Keeping these
-//! helpers in one place avoids subtle divergence between phases.
+//! The global map is a torus — both axes wrap — so every neighborhood
+//! operation treats X and Y symmetrically. Keeping these helpers in one
+//! place avoids subtle divergence between phases.
 
 use std::cmp::Ordering;
 use std::collections::VecDeque;
@@ -29,12 +29,12 @@ impl PartialOrd for MinF32 {
     }
 }
 
-/// Fold a raw X delta into the shorter wrap direction (≤ res/2 in magnitude).
-/// Used wherever cell-coord polylines or maps span the X-wrapping seam and
-/// callers need a signed displacement that doesn't read as a world-spanning
-/// jump.
+/// Fold a raw axis delta into the shorter wrap direction (≤ res/2 in
+/// magnitude). Used wherever cell-coord polylines or maps span a wrapping
+/// seam and callers need a signed displacement that doesn't read as a
+/// world-spanning jump.
 #[inline]
-pub(crate) fn fold_x_delta(mut d: i32, res_i: i32) -> i32 {
+pub(crate) fn fold_delta(mut d: i32, res_i: i32) -> i32 {
     if d > res_i / 2 {
         d -= res_i;
     } else if d < -res_i / 2 {
@@ -43,9 +43,9 @@ pub(crate) fn fold_x_delta(mut d: i32, res_i: i32) -> i32 {
     d
 }
 
-/// Floating-point counterpart of `fold_x_delta`.
+/// Floating-point counterpart of `fold_delta`.
 #[inline]
-pub(crate) fn fold_x_delta_f32(d: f32, res_f: f32) -> f32 {
+pub(crate) fn fold_delta_f32(d: f32, res_f: f32) -> f32 {
     if d > res_f * 0.5 {
         d - res_f
     } else if d < -res_f * 0.5 {
@@ -56,7 +56,7 @@ pub(crate) fn fold_x_delta_f32(d: f32, res_f: f32) -> f32 {
 }
 
 /// Multi-source 4-connected BFS over a binary mask, returning the cell-
-/// distance from every cell to the nearest source cell. X wraps, Y doesn't.
+/// distance from every cell to the nearest source cell. Both axes wrap.
 /// Source cells (where `mask[i] == source_val`) have distance 0. Distances
 /// are saturated to `u16::MAX`. Pass `Some(passable)` to constrain expansion
 /// to cells where `passable[n] == 1` (e.g. land-only walking distance);
@@ -124,13 +124,11 @@ fn propagate_bfs(
                 queue.push_back(n);
             }
         };
+        let up = if y == 0 { res - 1 } else { y - 1 };
+        let down = if y + 1 == res { 0 } else { y + 1 };
         visit(y * res + left);
         visit(y * res + right);
-        if y > 0 {
-            visit((y - 1) * res + x);
-        }
-        if y + 1 < res {
-            visit((y + 1) * res + x);
-        }
+        visit(up * res + x);
+        visit(down * res + x);
     }
 }

@@ -1,5 +1,8 @@
 import type { MovementConfig, Position } from '../../../utils/movementUtils'
-import { shortestWrappedDeltaX } from '../../../terrain/world-wrap'
+import {
+  shortestWrappedDeltaX,
+  shortestWrappedDeltaZ,
+} from '../../../terrain/world-wrap'
 import type { InteractionExitKind } from './interaction'
 import type { SendPlayerMove } from './movement-substrate'
 
@@ -36,7 +39,7 @@ export function createKeyboardMoveSender(
         return
       }
       const dx = shortestWrappedDeltaX(lastSent.x, position.x)
-      const dz = position.z - lastSent.z
+      const dz = shortestWrappedDeltaZ(lastSent.z, position.z)
       if (
         dx * dx + dz * dz >=
         KEYBOARD_SEND_INTERVAL * KEYBOARD_SEND_INTERVAL
@@ -89,7 +92,7 @@ export function createKeyboardTapTracker(): KeyboardTapTracker {
       lastDir = null
       if (!s || !d || !position) return null
       const dx = shortestWrappedDeltaX(s.x, position.x)
-      const dz = position.z - s.z
+      const dz = shortestWrappedDeltaZ(s.z, position.z)
       const moved = Math.hypot(dx, dz)
       // No actual step (blocked at a wall, interaction-exit tap): don't
       // conjure movement the player never started.

@@ -9,7 +9,7 @@
 //! the chosen crossing lands upstream of the visible fan.
 
 use super::super::global_map::GlobalMap;
-use super::super::grid::fold_x_delta_f32;
+use super::super::grid::fold_delta_f32;
 use super::super::rivers::{Polyline, RiverMap};
 use super::constants::{
     RIVER_CARVE_TAPER_EXTRA_M, RIVER_CARVE_TAPER_MIN_M, RIVER_MAX_WIDTH_M, RIVER_MIN_WIDTH_M,
@@ -132,8 +132,8 @@ pub fn polyline_arc_lengths_cells(pts: &[(u32, u32)], res_f: f32) -> Vec<f32> {
     for i in 1..n {
         let (px, py) = pts[i - 1];
         let (qx, qy) = pts[i];
-        let dx = fold_x_delta_f32(qx as f32 - px as f32, res_f);
-        let dy = qy as f32 - py as f32;
+        let dx = fold_delta_f32(qx as f32 - px as f32, res_f);
+        let dy = fold_delta_f32(qy as f32 - py as f32, res_f);
         cumulative += (dx * dx + dy * dy).sqrt();
         lens.push(cumulative);
     }

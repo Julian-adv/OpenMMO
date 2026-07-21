@@ -4,10 +4,10 @@
 //! keeps callers focused on WHY they care about distance, not HOW it's
 //! derived.
 
-use onlinerpg_shared::Position;
+use onlinerpg_shared::{shortest_world_delta_x, shortest_world_delta_z, Position};
 
-/// Planar (X-Z) displacement and Euclidean distance from `from` to `to`.
-/// Y is ignored.
+/// Planar (X-Z) displacement and shortest-periodic distance from `from` to
+/// `to` on the toroidal world. Y is ignored.
 pub struct PlanarDelta {
     pub dx: f32,
     pub dz: f32,
@@ -24,8 +24,8 @@ impl PlanarDelta {
     }
 
     pub fn xz(from_x: f32, from_z: f32, to_x: f32, to_z: f32) -> Self {
-        let dx = to_x - from_x;
-        let dz = to_z - from_z;
+        let dx = shortest_world_delta_x(from_x, to_x);
+        let dz = shortest_world_delta_z(from_z, to_z);
         Self {
             dx,
             dz,

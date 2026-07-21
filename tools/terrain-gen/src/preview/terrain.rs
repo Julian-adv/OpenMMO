@@ -66,11 +66,11 @@ pub(super) fn write_potential_png(map: &GlobalMap, path: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Horizontally-shifted version of the land/sea map: the right half of the
-/// map is moved to the left. If the X-wrap is working, the resulting image
-/// has its seam *inside* (where the original left/right edges used to be),
-/// so any discontinuity at the original wrap boundary becomes visible as a
-/// line down the middle. A clean output = seamless wrap.
+/// Half-world-shifted version of the land/sea map on both axes. If the
+/// torus wrap is working, the resulting image has both seams *inside*
+/// (where the original edges used to be), so any discontinuity at either
+/// wrap boundary becomes visible as a line through the middle — a cross
+/// of artifacts marks a broken wrap. A clean output = seamless torus.
 pub(super) fn write_land_sea_shifted_png(
     map: &GlobalMap,
     coast_dist: &[u16],
@@ -81,9 +81,10 @@ pub(super) fn write_land_sea_shifted_png(
 
     let mut img = ImageBuffer::<Rgb<u8>, Vec<u8>>::new(n as u32, n as u32);
     for y in 0..n {
+        let src_y = (y + half) % n;
         for x in 0..n {
             let src_x = (x + half) % n;
-            let i = y * n + src_x;
+            let i = src_y * n + src_x;
             let px = shade_cell(map, coast_dist, i);
             img.put_pixel(x as u32, y as u32, px);
         }
@@ -162,7 +163,7 @@ fn land_color(height: f32) -> Rgb<u8> {
 
 /// Multi-source BFS distance field: distance (in cells) from each cell to
 /// the nearest cell of the *opposite* type (sea→land coast = distance to
-/// nearest land; land→coast = distance to nearest sea). X wraps; Y doesn't.
+/// nearest land; land→coast = distance to nearest sea). Both axes wrap.
 /// The returned Vec contains the same value for sea and land cells — for
 /// sea cells it's distance-to-nearest-land, for land it's distance-to-sea.
 /// Capped at u16 max for memory compactness.
@@ -179,22 +180,18 @@ pub(super) fn coast_distance(land_mask: &[u8], res: usize) -> Vec<u16> {
         let here = land_mask[i];
         let left = if x == 0 { res - 1 } else { x - 1 };
         let right = if x + 1 == res { 0 } else { x + 1 };
+        let up = if y == 0 { res - 1 } else { y - 1 };
+        let down = if y + 1 == res { 0 } else { y + 1 };
         let mut touches_opposite = false;
         for &n in &[
-            Some(y * res + left),
-            Some(y * res + right),
-            if y > 0 { Some((y - 1) * res + x) } else { None },
-            if y + 1 < res {
-                Some((y + 1) * res + x)
-            } else {
-                None
-            },
+            y * res + left,
+            y * res + right,
+            up * res + x,
+            down * res + x,
         ] {
-            if let Some(n) = n {
-                if land_mask[n] != here {
-                    touches_opposite = true;
-                    break;
-                }
+            if land_mask[n] != here {
+                touches_opposite = true;
+                break;
             }
         }
         if touches_opposite {
@@ -209,21 +206,17 @@ pub(super) fn coast_distance(land_mask: &[u8], res: usize) -> Vec<u16> {
         let here = land_mask[i];
         let left = if x == 0 { res - 1 } else { x - 1 };
         let right = if x + 1 == res { 0 } else { x + 1 };
+        let up = if y == 0 { res - 1 } else { y - 1 };
+        let down = if y + 1 == res { 0 } else { y + 1 };
         for &n in &[
-            Some(y * res + left),
-            Some(y * res + right),
-            if y > 0 { Some((y - 1) * res + x) } else { None },
-            if y + 1 < res {
-                Some((y + 1) * res + x)
-            } else {
-                None
-            },
+            y * res + left,
+            y * res + right,
+            up * res + x,
+            down * res + x,
         ] {
-            if let Some(n) = n {
-                if land_mask[n] == here && dist[n] > d.saturating_add(1) {
-                    dist[n] = d.saturating_add(1);
-                    queue.push_back(n);
-                }
+            if land_mask[n] == here && dist[n] > d.saturating_add(1) {
+                dist[n] = d.saturating_add(1);
+                queue.push_back(n);
             }
         }
     }

@@ -656,3 +656,44 @@ fn attack_command_uses_monster_cooldown() {
         .iter()
         .any(|c| matches!(c, AiCommand::Attack { .. })));
 }
+
+/// PathProvider that records the goal it was asked for.
+struct RecordingPath(std::cell::Cell<(f32, f32)>);
+impl PathProvider for RecordingPath {
+    fn find_path(&self, _sx: f32, _sz: f32, _sf: u8, gx: f32, gz: f32, gf: u8) -> PathResult {
+        self.0.set((gx, gz));
+        PathResult {
+            waypoints: vec![PathWaypoint {
+                x: gx,
+                z: gz,
+                floor: gf,
+            }],
+            found: true,
+        }
+    }
+}
+
+#[test]
+fn compute_path_unwraps_goal_across_z_seam() {
+    use crate::{WORLD_MAX_Z, WORLD_MIN_Z};
+    let mut brain = make_brain();
+    brain.position.z = WORLD_MAX_Z - 2.0;
+    // Goal canonically sits just across the Z seam — a few meters away on
+    // the torus, half a world away in raw coordinates.
+    let goal_z = WORLD_MIN_Z + 2.0;
+    let recorder = RecordingPath(std::cell::Cell::new((0.0, 0.0)));
+    brain.compute_path(brain.position.x, goal_z, &recorder);
+    let (_, asked_z) = recorder.0.get();
+    assert!(
+        (asked_z - (WORLD_MAX_Z + 2.0)).abs() < 1e-3,
+        "goal must be unwrapped next to the monster, got z={asked_z}"
+    );
+    // Following the path snaps onto the wrapped canonical position.
+    let done = brain.follow_path(10_000_000.0);
+    assert!(done);
+    assert!(
+        (brain.position.z - goal_z).abs() < 1e-3,
+        "snapped position must be canonical, got z={}",
+        brain.position.z
+    );
+}

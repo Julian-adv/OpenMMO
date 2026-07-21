@@ -15,7 +15,9 @@ use onlinerpg_shared::dungeon::{
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::HouseData;
 use onlinerpg_shared::pathfinding;
-use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X, WORLD_WIDTH_X};
+use onlinerpg_shared::{
+    WORLD_MAX_X, WORLD_MAX_Z, WORLD_MIN_X, WORLD_MIN_Z, WORLD_WIDTH_X, WORLD_WIDTH_Z,
+};
 use serde::Deserialize;
 use tracing::{info, warn};
 
@@ -26,14 +28,9 @@ struct RegionObjects {
     placements: Vec<FurniturePlacement>,
 }
 
-/// Query a short local movement sweep on both representations of the wrapped
-/// X seam. The player's stored position is canonical, while a seam-crossing
-/// step is deliberately left unwrapped so it remains a short segment. Shifting
-/// that segment by one world width lets it see passability near the destination
-/// edge as well as the source edge.
-///
-/// See `pathfinding::blocking_entry_for_mover` for why a sealed-in player is
-/// let out.
+/// Query a short movement sweep at each toroidal representation. Stored
+/// positions are canonical, while shifted copies cover X, Z, and corner seams.
+/// `blocking_entry_for_mover` also lets a sealed-in player move out.
 pub(super) fn wrapped_block_info<'a>(
     cache: &'a pathfinding::PassabilityCache,
     from_x: f32,
@@ -43,34 +40,48 @@ pub(super) fn wrapped_block_info<'a>(
     floor_level: u8,
     y: f32,
 ) -> Option<pathfinding::BlockInfo<'a>> {
-    if let Some(info) = pathfinding::blocking_entry_for_mover(
-        cache,
-        from_x,
-        from_z,
-        to_x,
-        to_z,
-        floor_level,
-        Some(y),
-    ) {
-        return Some(info);
-    }
-
-    let seam_offset = if to_x >= WORLD_MAX_X {
+    let off_x = if to_x >= WORLD_MAX_X {
         -WORLD_WIDTH_X
     } else if to_x < WORLD_MIN_X {
         WORLD_WIDTH_X
     } else {
-        return None;
+        0.0
     };
-    pathfinding::blocking_entry_for_mover(
-        cache,
-        from_x + seam_offset,
-        from_z,
-        to_x + seam_offset,
-        to_z,
-        floor_level,
-        Some(y),
-    )
+    let off_z = if to_z >= WORLD_MAX_Z {
+        -WORLD_WIDTH_Z
+    } else if to_z < WORLD_MIN_Z {
+        WORLD_WIDTH_Z
+    } else {
+        0.0
+    };
+    let mut shifts: [(f32, f32); 4] = [(0.0, 0.0); 4];
+    let mut n = 1;
+    if off_x != 0.0 {
+        shifts[n] = (off_x, 0.0);
+        n += 1;
+    }
+    if off_z != 0.0 {
+        shifts[n] = (0.0, off_z);
+        n += 1;
+    }
+    if off_x != 0.0 && off_z != 0.0 {
+        shifts[n] = (off_x, off_z);
+        n += 1;
+    }
+    for &(sx, sz) in &shifts[..n] {
+        if let Some(info) = pathfinding::blocking_entry_for_mover(
+            cache,
+            from_x + sx,
+            from_z + sz,
+            to_x + sx,
+            to_z + sz,
+            floor_level,
+            Some(y),
+        ) {
+            return Some(info);
+        }
+    }
+    None
 }
 
 /// Cache floor index for a player, derived from the server's own position

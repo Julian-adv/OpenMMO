@@ -70,7 +70,12 @@
     graphicsQuality,
     getEffectivePreset,
   } from '../stores/graphicsSettings'
-  import { wrapWorldX } from '../terrain/world-wrap'
+  import {
+    unwrapWorldXNear,
+    unwrapWorldZNear,
+    wrapWorldX,
+    wrapWorldZ,
+  } from '../terrain/world-wrap'
 
   const graphicsPreset = $derived(getEffectivePreset($graphicsQuality))
   const mobileMapBudget = $derived(graphicsPreset.renderBudget === 'mobile')
@@ -112,7 +117,7 @@
   let containerH = $state(0)
 
   let playerX = $derived(wrapWorldX($gameStore.currentPlayer?.position.x ?? 0))
-  let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
+  let playerZ = $derived(wrapWorldZ($gameStore.currentPlayer?.position.z ?? 0))
 
   // --- Camera state (world coordinates of view center) ---
   let camX = $state(0)
@@ -248,8 +253,8 @@
       if (gen !== renderGeneration) return
 
       // Player marker (also rotated with the map)
-      const playerCanvasX = (px - viewLeft) * scale
-      const playerCanvasZ = (pz - viewTop) * scale
+      const playerCanvasX = (unwrapWorldXNear(cx, px) - viewLeft) * scale
+      const playerCanvasZ = (unwrapWorldZNear(cz, pz) - viewTop) * scale
 
       ctx.save()
       ctx.translate(cw / 2, ch / 2)
@@ -299,8 +304,8 @@
       if (zoomSpan < tier.min || zoomSpan > tier.max) continue
 
       // World -> pre-rotation canvas coords (matches the player marker).
-      const lx = (label.x - viewLeft) * scale
-      const ly = (label.z - viewTop) * scale
+      const lx = (unwrapWorldXNear(camX, label.x) - viewLeft) * scale
+      const ly = (unwrapWorldZNear(camZ, label.z) - viewTop) * scale
       // Rotate around canvas center to match ctx.rotate(ROTATE_ANGLE).
       const ox = lx - cw / 2
       const oy = ly - ch / 2
@@ -485,7 +490,7 @@
     const cosA = Math.cos(angle)
     const sinA = Math.sin(angle)
     const worldX = wrapWorldX(camX + (sx * cosA - sz * sinA))
-    const worldZ = camZ + (sx * sinA + sz * cosA)
+    const worldZ = wrapWorldZ(camZ + (sx * sinA + sz * cosA))
 
     const position = { x: worldX, y: 0, z: worldZ }
 

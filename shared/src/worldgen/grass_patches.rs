@@ -7,18 +7,18 @@
 //! stronger patch wins (ties broken to primary).
 //!
 //! Seeds are derived on demand from `(master_seed, layer_salt, gx, gz)` via
-//! `SmallRng` — no seed table. The X axis wraps (`rem_euclid` on the grid
-//! index, wrap-aware Euclidean distance); Z does not.
+//! `SmallRng` — no seed table. Both axes wrap (`rem_euclid` on the grid
+//! indices, wrap-aware Euclidean distance) to match the toroidal world.
 
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 
-use super::noise::{fbm_wrap_x, smoothstep, PerlinNoise3D};
+use super::noise::{fbm_wrap_xy, smoothstep, PerlinNoise4D};
 
 #[derive(Clone, Copy)]
 struct LayerCfg {
     /// Target grid spacing (m). World width is rounded to an integer count
-    /// of cells so the X-wrap seam lands on a cell edge.
+    /// of cells so the wrap seams land on cell edges.
     target_grid_m: f32,
     radius_mean_m: f32,
     /// `actual_radius = mean * (1 + jitter * R)`, R uniform in [-1, 1].
@@ -94,8 +94,8 @@ impl LayerGrid {
 }
 
 pub struct GrassPatchField {
-    warp_x: PerlinNoise3D,
-    warp_y: PerlinNoise3D,
+    warp_x: PerlinNoise4D,
+    warp_y: PerlinNoise4D,
     world_size_m: f32,
     world_half: f32,
     master_seed: u64,
@@ -106,8 +106,8 @@ pub struct GrassPatchField {
 impl GrassPatchField {
     pub fn new(master_seed: u64, world_size_m: f32) -> Self {
         Self {
-            warp_x: PerlinNoise3D::new(master_seed ^ 0x6B61_7373_0001_0001),
-            warp_y: PerlinNoise3D::new(master_seed ^ 0x6B61_7373_0001_0002),
+            warp_x: PerlinNoise4D::new(master_seed ^ 0x6B61_7373_0001_0001),
+            warp_y: PerlinNoise4D::new(master_seed ^ 0x6B61_7373_0001_0002),
             world_size_m,
             world_half: world_size_m * 0.5,
             master_seed,
@@ -122,8 +122,8 @@ impl GrassPatchField {
         let nz = wz + self.world_half;
         // Shared warp coords; only the noise field differs between axes. The
         // fBm calls are the dominant per-cell cost.
-        let warp = |field: &PerlinNoise3D| {
-            fbm_wrap_x(
+        let warp = |field: &PerlinNoise4D| {
+            fbm_wrap_xy(
                 field,
                 nx,
                 nz,
@@ -160,18 +160,16 @@ impl GrassPatchField {
         for ogz in -1..=1 {
             for ogx in -1..=1 {
                 let sgx = (gx0 + ogx).rem_euclid(layer.grid_count);
-                let sgz = gz0 + ogz;
-                if sgz < 0 || sgz >= layer.grid_count {
-                    continue;
-                }
+                let sgz = (gz0 + ogz).rem_euclid(layer.grid_count);
                 let Some(seed) = self.seed_at(layer, grid_m, sgx, sgz) else {
                     continue;
                 };
 
                 let dx_raw = (qx - seed.wx).abs();
                 let dx_w = dx_raw.min(self.world_size_m - dx_raw);
-                let ddz = qz - seed.wz;
-                let d_sq = dx_w * dx_w + ddz * ddz;
+                let dz_raw = (qz - seed.wz).abs();
+                let dz_w = dz_raw.min(self.world_size_m - dz_raw);
+                let d_sq = dx_w * dx_w + dz_w * dz_w;
 
                 if d_sq >= seed.radius * seed.radius {
                     continue;
@@ -314,6 +312,26 @@ mod tests {
                 right.strength
             );
             assert_eq!(left.is_tall, right.is_tall);
+        }
+    }
+
+    #[test]
+    fn z_wrap_continuity() {
+        // The world is toroidal — the Z seam must not show a discontinuity
+        // either.
+        let world = 1024.0;
+        let field = GrassPatchField::new(42, world);
+        for i in 0..16 {
+            let x = (i as f32 - 8.0) * 50.0;
+            let north = field.sample(x, -world * 0.5);
+            let south = field.sample(x, world * 0.5);
+            assert!(
+                (north.strength - south.strength).abs() < 1e-4,
+                "z-seam discontinuity at x={x}: {} vs {}",
+                north.strength,
+                south.strength
+            );
+            assert_eq!(north.is_tall, south.is_tall);
         }
     }
 

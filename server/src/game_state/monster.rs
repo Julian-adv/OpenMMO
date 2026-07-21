@@ -139,6 +139,8 @@ impl super::GameState {
         state: MonsterState,
         target_position: Position,
     ) {
+        let new_position = new_position.wrapped_xz();
+        let target_position = target_position.wrapped_xz();
         let (old_position, owner_id, monster) = {
             let mut monsters = self.monsters.write().await;
 
@@ -377,7 +379,7 @@ impl super::GameState {
             }
         };
         let dx = onlinerpg_shared::shortest_world_delta_x(player_pos.x, position.x);
-        let dz = position.z - player_pos.z;
+        let dz = onlinerpg_shared::shortest_world_delta_z(player_pos.z, position.z);
         let max = rule.max_distance + 10.0; // tolerance
         dx * dx + dz * dz <= max * max
     }

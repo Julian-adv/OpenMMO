@@ -154,7 +154,7 @@ impl super::GameState {
         let def = trader_def_by_name(&npc.name).ok_or("This NPC does not trade")?;
 
         let dx = onlinerpg_shared::shortest_world_delta_x(npc.position.x, player.position.x);
-        let dz = player.position.z - npc.position.z;
+        let dz = onlinerpg_shared::shortest_world_delta_z(npc.position.z, player.position.z);
         if dx * dx + dz * dz > MAX_TRADE_DISTANCE * MAX_TRADE_DISTANCE {
             return Err("Too far away to trade");
         }
@@ -217,7 +217,8 @@ impl super::GameState {
                 (Some(npc), Some(target)) => {
                     let dx =
                         onlinerpg_shared::shortest_world_delta_x(target.position.x, npc.position.x);
-                    let dz = npc.position.z - target.position.z;
+                    let dz =
+                        onlinerpg_shared::shortest_world_delta_z(target.position.z, npc.position.z);
                     if dx * dx + dz * dz > MAX_TRADE_DISTANCE * MAX_TRADE_DISTANCE {
                         Err("the player is too far away to trade — ask them to come closer")
                     } else {

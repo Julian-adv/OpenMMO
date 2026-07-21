@@ -6,7 +6,7 @@
 //! First/last index of each polyline is preserved so settlement /
 //! river-source / river-mouth anchors don't drift.
 
-use super::super::grid::fold_x_delta;
+use super::super::grid::fold_delta;
 use super::super::rivers::RiverMap;
 use super::axis::{pick_river_axis, SnapAxis};
 use super::RoadNetwork;
@@ -106,8 +106,8 @@ fn local_dir(points: &[(u32, u32)], idx: usize, half_w: usize, res: usize) -> (i
     let (px, py) = points[i_lo];
     let (qx, qy) = points[i_hi];
     let res_i = res as i32;
-    let dx = fold_x_delta(qx as i32 - px as i32, res_i);
-    let dy = qy as i32 - py as i32;
+    let dx = fold_delta(qx as i32 - px as i32, res_i);
+    let dy = fold_delta(qy as i32 - py as i32, res_i);
     (dx, dy)
 }
 
@@ -162,10 +162,10 @@ fn snap_polyline_window(
     };
     let (x_lo, y_lo) = points[i_start - 1];
     let (x_hi, y_hi) = points[hi_idx];
-    let dx_lo = fold_x_delta(x_lo as i32 - cx_i, res_i);
-    let dy_lo = y_lo as i32 - cy_i;
-    let dx_hi = fold_x_delta(x_hi as i32 - cx_i, res_i);
-    let dy_hi = y_hi as i32 - cy_i;
+    let dx_lo = fold_delta(x_lo as i32 - cx_i, res_i);
+    let dy_lo = fold_delta(y_lo as i32 - cy_i, res_i);
+    let dx_hi = fold_delta(x_hi as i32 - cx_i, res_i);
+    let dy_hi = fold_delta(y_hi as i32 - cy_i, res_i);
     let inv_len_sq = 1.0 / len_sq as f32;
     let s_lo = (dx_lo * ux + dy_lo * uy) as f32 * inv_len_sq;
     let s_hi = (dx_hi * ux + dy_hi * uy) as f32 * inv_len_sq;
@@ -173,7 +173,7 @@ fn snap_polyline_window(
         let t = (k as f32 + 1.0) / span;
         let s = (s_lo + (s_hi - s_lo) * t).round() as i32;
         let x = (cx_i + s * ux).rem_euclid(res_i) as u32;
-        let y = (cy_i + s * uy).clamp(0, res_i - 1) as u32;
+        let y = (cy_i + s * uy).rem_euclid(res_i) as u32;
         points[i_start + k] = (x, y);
     }
     i_end

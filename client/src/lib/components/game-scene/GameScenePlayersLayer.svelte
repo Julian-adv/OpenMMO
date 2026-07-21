@@ -35,6 +35,7 @@
   import {
     shortestWrappedDeltaX,
     unwrapWorldXNear,
+    unwrapWorldZNear,
   } from '../../terrain/world-wrap'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import { torchLightEnabled } from '../../stores/debugStore'
@@ -268,10 +269,11 @@
     }
     if (bestRp) {
       const displayX = unwrapWorldXNear(playerPos.x, bestRp.position.x)
+      const displayZ = unwrapWorldZNear(playerPos.z, bestRp.position.z)
       return {
         target: setTorchTargetFromPose(
           displayX,
-          bestRp.position.z,
+          displayZ,
           bestRp.position.y,
           bestRp.rotation
         ),
@@ -429,6 +431,9 @@
       {@const displayX = currentPlayer
         ? unwrapWorldXNear(currentPlayer.position.x, remotePlayer.position.x)
         : remotePlayer.position.x}
+      {@const displayZ = currentPlayer
+        ? unwrapWorldZNear(currentPlayer.position.z, remotePlayer.position.z)
+        : remotePlayer.position.z}
       <!-- position.y is ground-resampled per tick by remotePlayerManager -->
       {@const baseY = remotePlayer.position.y}
       <PlayerModel
@@ -436,7 +441,7 @@
         position={new THREE.Vector3(
           displayX,
           visible ? baseY : OFFSCREEN_Y,
-          remotePlayer.position.z
+          displayZ
         )}
         name={player.name}
         isCurrentPlayer={false}

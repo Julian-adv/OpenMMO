@@ -12,7 +12,7 @@
 use super::config::WorldGenConfig;
 use super::global_map::GlobalMap;
 use super::growth;
-use super::noise::{fbm_wrap_x, PerlinNoise3D};
+use super::noise::{fbm_wrap_xy, PerlinNoise4D};
 
 const CONTINENT_LACUNARITY: f32 = 2.0;
 
@@ -21,8 +21,8 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
     let res = config.global_res as usize;
     let total = res * res;
 
-    let noise = PerlinNoise3D::new(config.seed ^ 0xC00C_00C0_0C00_u64);
-    let channel_noise = PerlinNoise3D::new(config.seed ^ 0x5EAC_5EAC_5EAC_u64);
+    let noise = PerlinNoise4D::new(config.seed ^ 0xC00C_00C0_0C00_u64);
+    let channel_noise = PerlinNoise4D::new(config.seed ^ 0x5EAC_5EAC_5EAC_u64);
     let world_width = config.global_res as f32;
     let base_freq = config.scaled_freq(config.continent_frequency);
     let channel_freq = config.scaled_freq(1.0 / config.sea_channel_wavelength.max(1.0));
@@ -33,7 +33,7 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
         let yf = y as f32;
         for x in 0..res {
             let xf = x as f32;
-            let base = fbm_wrap_x(
+            let base = fbm_wrap_xy(
                 &noise,
                 xf,
                 yf,
@@ -48,7 +48,7 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
             // to a power narrows the ridge so channels feel more stroke-like
             // than blob-like.
             let ridge_bias = if channel_strength > 0.0 {
-                let n = fbm_wrap_x(
+                let n = fbm_wrap_xy(
                     &channel_noise,
                     xf,
                     yf,
@@ -118,10 +118,10 @@ pub fn generate_continent_mask(config: &WorldGenConfig) -> GlobalMap {
     }
 }
 
-/// 4-connected flood fill (X-periodic) that drops land components smaller
-/// than `min_cells`. X wrap matters here: a continent that straddles the
-/// x=0/x=res-1 boundary is a single component in a toroidal-in-X world, and
-/// must be treated as such so it doesn't get mistakenly split and culled.
+/// 4-connected flood fill on the torus that drops land components smaller
+/// than `min_cells`. Wrapping matters here: a continent that straddles a
+/// world seam is a single component and must be treated as such so it
+/// doesn't get mistakenly split and culled.
 fn remove_small_islands(mask: &mut [u8], res: usize, min_cells: usize) {
     let total = res * res;
     let mut visited = vec![false; total];
@@ -141,22 +141,19 @@ fn remove_small_islands(mask: &mut [u8], res: usize, min_cells: usize) {
             component.push(i);
             let x = i % res;
             let y = i / res;
-            // 4-connected neighbors, with X wrapped.
+            // 4-connected neighbors, both axes wrapped.
             let left = if x == 0 { res - 1 } else { x - 1 };
             let right = if x + 1 == res { 0 } else { x + 1 };
+            let up = if y == 0 { res - 1 } else { y - 1 };
+            let down = if y + 1 == res { 0 } else { y + 1 };
             let neighbors = [
                 y * res + left,
                 y * res + right,
-                if y > 0 { Some((y - 1) * res + x) } else { None }.unwrap_or(usize::MAX),
-                if y + 1 < res {
-                    Some((y + 1) * res + x)
-                } else {
-                    None
-                }
-                .unwrap_or(usize::MAX),
+                up * res + x,
+                down * res + x,
             ];
             for &n in &neighbors {
-                if n != usize::MAX && mask[n] == 1 && !visited[n] {
+                if mask[n] == 1 && !visited[n] {
                     visited[n] = true;
                     stack.push(n);
                 }
@@ -175,10 +172,7 @@ fn remove_small_islands(mask: &mut [u8], res: usize, min_cells: usize) {
 /// dilate by `radius`. Removes land features narrower than `2 * radius`
 /// while preserving thicker land's shape and coastline.
 ///
-/// X-axis wraps (consistent with the world's east-west periodicity).
-/// Y-axis does not wrap; out-of-bounds cells are treated as sea during
-/// erosion (so land touching the N/S border gets eroded along that edge,
-/// which is fine — Phase 2 turns those into mountain walls anyway).
+/// Both axes wrap (the world is a torus).
 ///
 /// Separable (row pass then column pass) for O(radius · res²) per erosion
 /// or dilation instead of O(radius² · res²).
@@ -204,19 +198,14 @@ fn erode_box(mask: &[u8], res: usize, radius: usize) -> Vec<u8> {
             h[y * res + x] = if ok { 1 } else { 0 };
         }
     }
-    // Column pass on h (Y does not wrap). Out-of-bounds Y is treated as
-    // LAND so that land adjacent to the north/south border isn't falsely
-    // eroded — those cells are expected to become Phase 2 mountain walls.
+    // Column pass on h (Y wraps).
     let mut v = vec![0u8; mask.len()];
     for y in 0..res {
         for x in 0..res {
             let mut ok = true;
             for dy in -(radius as isize)..=(radius as isize) {
-                let yy = y as isize + dy;
-                if yy < 0 || yy >= res as isize {
-                    continue;
-                }
-                if h[(yy as usize) * res + x] == 0 {
+                let yy = (y as isize + dy).rem_euclid(res as isize) as usize;
+                if h[yy * res + x] == 0 {
                     ok = false;
                     break;
                 }
@@ -243,17 +232,14 @@ fn dilate_box(mask: &[u8], res: usize, radius: usize) -> Vec<u8> {
             h[y * res + x] = if any { 1 } else { 0 };
         }
     }
-    // Column pass on h (Y does not wrap; out-of-bounds contributes nothing).
+    // Column pass on h (Y wraps).
     let mut v = vec![0u8; mask.len()];
     for y in 0..res {
         for x in 0..res {
             let mut any = false;
             for dy in -(radius as isize)..=(radius as isize) {
-                let yy = y as isize + dy;
-                if yy < 0 || yy >= res as isize {
-                    continue;
-                }
-                if h[(yy as usize) * res + x] == 1 {
+                let yy = (y as isize + dy).rem_euclid(res as isize) as usize;
+                if h[yy * res + x] == 1 {
                     any = true;
                     break;
                 }
@@ -446,8 +432,6 @@ mod tests {
             small_island_count: 0,
             small_island_radius_cells: 0,
             small_island_min_clearance_cells: 0,
-            y_border_wall_cells: 0,
-            y_border_wall_height_m: 0.0,
             river_gap_max_m: 0.0,
             ..Default::default()
         }
@@ -566,12 +550,12 @@ mod tests {
         // the world seamlessly connects east-to-west. We test this via the
         // noise function directly since the stored grid only covers
         // [0, res-1]; x=res would be written as x=0.
-        use super::super::noise::{fbm_wrap_x, PerlinNoise3D};
+        use super::super::noise::{fbm_wrap_xy, PerlinNoise4D};
         let cfg = test_config(64, 0.4);
-        let noise = PerlinNoise3D::new(cfg.seed ^ 0xC00C_00C0_0C00_u64);
+        let noise = PerlinNoise4D::new(cfg.seed ^ 0xC00C_00C0_0C00_u64);
         let world_width = cfg.global_res as f32;
         for y in 0..cfg.global_res {
-            let a = fbm_wrap_x(
+            let a = fbm_wrap_xy(
                 &noise,
                 0.0,
                 y as f32,
@@ -581,7 +565,7 @@ mod tests {
                 CONTINENT_LACUNARITY,
                 cfg.continent_gain,
             );
-            let b = fbm_wrap_x(
+            let b = fbm_wrap_xy(
                 &noise,
                 world_width,
                 y as f32,

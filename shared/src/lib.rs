@@ -32,9 +32,9 @@ pub use messages::{
     ActiveDeal, ClientMessage, DealKind, ServerMessage,
 };
 pub use world::{
-    shortest_world_delta_x, wrap_world_x, GameDateTime, NoSpawnZone, Position,
-    EVENT_DELIVERY_RADIUS, NPC_SIGHT_RADIUS, PLAYER_MOVE_SPEED, WORLD_MAX_X, WORLD_MIN_X,
-    WORLD_WIDTH_X,
+    shortest_world_delta_x, shortest_world_delta_z, wrap_world_x, wrap_world_z, GameDateTime,
+    NoSpawnZone, Position, EVENT_DELIVERY_RADIUS, NPC_SIGHT_RADIUS, PLAYER_MOVE_SPEED, WORLD_MAX_X,
+    WORLD_MAX_Z, WORLD_MIN_X, WORLD_MIN_Z, WORLD_WIDTH_X, WORLD_WIDTH_Z,
 };
 
 #[cfg(test)]

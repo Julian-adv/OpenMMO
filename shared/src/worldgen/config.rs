@@ -166,15 +166,6 @@ pub struct WorldGenConfig {
     /// classic red-noise mountain ranges.
     pub initial_relief_gain: f32,
 
-    /// Number of cells of the north/south border where land is boosted
-    /// toward `max_elevation_m` to form an impassable mountain wall (since
-    /// Y doesn't wrap). 0 = disabled.
-    pub y_border_wall_cells: u32,
-
-    /// Peak height of the Y-border mountain wall, in meters. Typically
-    /// close to `max_elevation_m` so the wall reliably blocks traversal.
-    pub y_border_wall_height_m: f32,
-
     // --- Phase 3: hydraulic erosion (dandrino simulation) ----------------
     // Faithful port of https://github.com/dandrino/terrain-erosion-3-ways
     // simulation.py. Terrain is internally normalized to [0, 1] (= [0,
@@ -396,13 +387,6 @@ pub struct WorldGenConfig {
     /// so islands and along-road villages aren't starved.
     pub settlement_phase_a_spacing_mult: f32,
 
-    /// Settlements within this distance (meters) of the south map edge are
-    /// rejected. The southern strip is dominated by the Y-border wall and
-    /// reads as polar terrain; villages clustered there look out of place.
-    /// 0 = disabled. North edge is unaffected (the wall ramp on the north
-    /// side currently blocks placement on its own).
-    pub settlement_south_edge_exclusion_m: f32,
-
     /// Maximum allowable distance (meters) from any habitable cell to its
     /// nearest settlement. After Phases A-C run, a coverage-fill pass adds
     /// settlements at the most isolated habitable cells until every cell
@@ -475,8 +459,6 @@ impl Default for WorldGenConfig {
             initial_relief_wavelength_cells: 700.0,
             initial_relief_octaves: 6,
             initial_relief_gain: 0.5,
-            y_border_wall_cells: 16,
-            y_border_wall_height_m: 2200.0,
             // Erosion: dandrino simulation.py defaults. sim_res 1024 keeps
             // a single preview under ~1 min on a typical workstation while
             // matching dandrino's visual style.
@@ -553,7 +535,6 @@ impl Default for WorldGenConfig {
             settlement_coastal_spacing_mult: 1.6,
             settlement_mouth_count: 500,
             settlement_phase_a_spacing_mult: 2.0,
-            settlement_south_edge_exclusion_m: 1700.0,
             settlement_max_gap_m: 4000.0,
             river_gap_max_m: 3500.0,
             road_extra_neighbors: 5,
@@ -589,7 +570,7 @@ impl WorldGenConfig {
     }
 
     /// Convert a frequency declared in cycles-per-reference-cell to the
-    /// per-actual-cell frequency consumed by `fbm_wrap_x` etc.
+    /// per-actual-cell frequency consumed by `fbm_wrap_xy` etc.
     pub fn scaled_freq(&self, ref_freq: f32) -> f32 {
         ref_freq / self.res_scale()
     }

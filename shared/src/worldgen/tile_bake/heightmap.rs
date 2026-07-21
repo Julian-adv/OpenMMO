@@ -1,9 +1,9 @@
 //! 65×65 heightmap sampling, encoding, and river-carve geometry.
 
 use super::super::global_map::GlobalMap;
-use super::super::noise::{fbm_wrap_x, smoothstep};
+use super::super::noise::{fbm_wrap_xy, smoothstep};
 use super::super::vector_features::{
-    nearest_river_segment, segments_near_tile_wrap_x, signed_min_distance_to_segments,
+    nearest_river_segment, segments_near_tile_wrap_xy, signed_min_distance_to_segments,
     RiverSegment, Segment,
 };
 use super::constants::{
@@ -85,7 +85,7 @@ pub(super) fn coast_segments_near(
     max_z: f32,
     extra_margin: f32,
 ) -> Vec<Segment> {
-    segments_near_tile_wrap_x(
+    segments_near_tile_wrap_xy(
         &ctx.coasts_world,
         min_x,
         min_z,
@@ -147,19 +147,19 @@ pub(super) fn probe_point_impl(
     wx: f32,
     wz: f32,
 ) -> super::PointProbe {
-    use super::super::vector_features::river_segments_near_tile_wrap_x;
+    use super::super::vector_features::river_segments_near_tile_wrap_xy;
 
     let cfg = &map.config;
     let world_size = cfg.world_size_m as f32;
     let inv_mpc = 1.0 / cfg.meters_per_cell();
     let res = cfg.global_res as i32;
     let gx = (((wx + world_size * 0.5) * inv_mpc).floor() as i32).rem_euclid(res);
-    let gy = (((wz + world_size * 0.5) * inv_mpc).floor() as i32).clamp(0, res - 1);
+    let gy = (((wz + world_size * 0.5) * inv_mpc).floor() as i32).rem_euclid(res);
     let cell_idx = gy as usize * res as usize + gx as usize;
 
     let coast_segs = coast_segments_near(ctx, world_size, wx, wz, wx, wz, 0.0);
     let natural = sample_elevation_no_carve(map, ctx, wx, wz, world_size, inv_mpc, &coast_segs);
-    let segs = river_segments_near_tile_wrap_x(
+    let segs = river_segments_near_tile_wrap_xy(
         &ctx.rivers_world,
         wx,
         wz,
@@ -209,7 +209,7 @@ fn sample_elevation_no_carve(
     inv_mpc: f32,
     coast_segs: &[Segment],
 ) -> f32 {
-    let base_raw = catmull_rom_wrap_x(map, world_x, world_z, world_size, inv_mpc, |i| {
+    let base_raw = catmull_rom_wrap_xy(map, world_x, world_z, world_size, inv_mpc, |i| {
         cell_elevation_m(map, &ctx.dist_to_land, i)
     });
     // Catmull-Rom across the coast can overshoot the adjacent sea cell's
@@ -227,7 +227,7 @@ fn sample_elevation_no_carve(
     } else {
         DETAIL_COAST_DAMP + (1.0 - DETAIL_COAST_DAMP) * inland_t
     };
-    let n = fbm_wrap_x(
+    let n = fbm_wrap_xy(
         &ctx.detail_noise,
         world_x + world_size * 0.5,
         world_z + world_size * 0.5,
@@ -239,7 +239,7 @@ fn sample_elevation_no_carve(
     );
     let detail = n * amp * underwater_damp;
     let hills = if base >= 0.0 {
-        let hn = fbm_wrap_x(
+        let hn = fbm_wrap_xy(
             &ctx.detail_noise,
             world_x + world_size * 0.5,
             world_z + world_size * 0.5,
@@ -490,7 +490,7 @@ pub(super) fn containing_cell_index(
 ) -> usize {
     let res = map.config.global_res as i32;
     let gx = (((world_x + world_size * 0.5) * inv_mpc).floor() as i32).rem_euclid(res);
-    let gy = (((world_z + world_size * 0.5) * inv_mpc).floor() as i32).clamp(0, res - 1);
+    let gy = (((world_z + world_size * 0.5) * inv_mpc).floor() as i32).rem_euclid(res);
     gy as usize * res as usize + gx as usize
 }
 
@@ -647,11 +647,11 @@ fn catmull_rom_1d(p0: f32, p1: f32, p2: f32, p3: f32, t: f32) -> f32 {
 
 /// Fractional global-cell coordinates for world position `(wx, wz)`: the
 /// integer cell that contains it plus the sub-cell fractions `fx, fy ∈ [0, 1]`.
-/// Y is clamped to `[0, res-1]` so top/bottom borders stay on-grid; X is
-/// returned as a raw (possibly negative) `i32` since callers wrap it into the
-/// cell array themselves via `rem_euclid(res)`. Shared by every fractional
-/// sampler so the two must stay in lockstep — diverging on `- 0.5` or the
-/// clamp between bilinear and bicubic would desync elevation from splat.
+/// Both components are returned as raw (possibly negative or ≥ res) `i32`
+/// since callers wrap them into the cell array themselves via
+/// `rem_euclid(res)`. Shared by every fractional sampler so the two must
+/// stay in lockstep — diverging on `- 0.5` between bilinear and bicubic
+/// would desync elevation from splat.
 #[inline]
 fn fractional_cell_coords(
     map: &GlobalMap,
@@ -661,19 +661,17 @@ fn fractional_cell_coords(
     inv_mpc: f32,
 ) -> (i32, i32, i32, f32, f32) {
     let res = map.config.global_res as i32;
-    let res_f = res as f32;
     let gx_f = (wx + world_size * 0.5) * inv_mpc - 0.5;
-    let gy_f = ((wz + world_size * 0.5) * inv_mpc - 0.5).clamp(0.0, res_f - 1.0);
+    let gy_f = (wz + world_size * 0.5) * inv_mpc - 0.5;
     let gx0 = gx_f.floor() as i32;
     let gy0 = gy_f.floor() as i32;
     (res, gx0, gy0, gx_f - gx0 as f32, gy_f - gy0 as f32)
 }
 
-/// Catmull-Rom bicubic sample of a cell-indexed scalar field. X wraps,
-/// Z clamps. Reads a 4×4 neighborhood around the fractional position, so
-/// Y-border cells collapse shoulders onto the clamped row (still smooth,
-/// degrades toward linear near the top/bottom edge of the world).
-fn catmull_rom_wrap_x<F: Fn(usize) -> f32>(
+/// Catmull-Rom bicubic sample of a cell-indexed scalar field. Both axes
+/// wrap: the 4×4 neighborhood reads periodic cells across either world
+/// seam, so interpolation quality is uniform everywhere on the torus.
+fn catmull_rom_wrap_xy<F: Fn(usize) -> f32>(
     map: &GlobalMap,
     wx: f32,
     wz: f32,
@@ -683,7 +681,7 @@ fn catmull_rom_wrap_x<F: Fn(usize) -> f32>(
 ) -> f32 {
     let (res, gx0, gy0, fx, fy) = fractional_cell_coords(map, wx, wz, world_size, inv_mpc);
     let ix = |x: i32| x.rem_euclid(res) as usize;
-    let iy = |y: i32| y.clamp(0, res - 1) as usize;
+    let iy = |y: i32| y.rem_euclid(res) as usize;
     let idx = |x: usize, y: usize| y * res as usize + x;
     let sample = |ox: i32, oy: i32| f(idx(ix(gx0 + ox), iy(gy0 + oy)));
 

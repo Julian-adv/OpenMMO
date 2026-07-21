@@ -11,7 +11,7 @@
 //! X-axis wrap: the world is cylindrical in X, so polyline segments whose
 //! endpoints wrap across the seam are split into two half-segments ending at
 //! the ±world/2 edges. Callers whose result must remain continuous across
-//! that seam use `segments_near_tile_wrap_x`, which returns translated
+//! that seam use `segments_near_tile_wrap_xy`, which returns translated
 //! periodic copies in the query's local coordinate frame.
 
 use super::config::WorldGenConfig;
@@ -61,11 +61,11 @@ pub struct RiverSegment {
 /// Convert a polyline to world-space meters by mapping each input point
 /// through `to_cell` (returning cell-coord units, where (gx+0.5, gy+0.5) is
 /// the center of cell (gx, gy)) and then applying the world transform
-/// `pos * mpc - half`. Segments whose endpoints straddle the X seam are
-/// split so each output polyline stays on one side of the seam. Source
+/// `pos * mpc - half`. Segments whose endpoints straddle a world seam (X
+/// or Z) are split so each output polyline stays on one side. Source
 /// vertices are assumed to be ≤ 1 cell apart in each axis — that's how
-/// the seam-split detection (|dx| > half world width) distinguishes a wrap
-/// from a long jump.
+/// the seam-split detection (|delta| > half world size) distinguishes a
+/// wrap from a long jump.
 ///
 /// The closure form unifies cell-index polylines (rivers/roads, where
 /// `to_cell = |(x,y)| [x+0.5, y+0.5]`) with cell-edge half-integer
@@ -77,6 +77,16 @@ where
 {
     let mpc = cfg.meters_per_cell();
     let half = cfg.world_size_m as f32 * 0.5;
+    let world_size = half * 2.0;
+    let fold = |d: f32| {
+        if d > half {
+            d - world_size
+        } else if d < -half {
+            d + world_size
+        } else {
+            d
+        }
+    };
     let to_world = |p: &P| -> [f32; 2] {
         let c = to_cell(p);
         [c[0] * mpc - half, c[1] * mpc - half]
@@ -88,23 +98,46 @@ where
     for raw in points {
         let p = to_world(raw);
         if let Some(&last) = current.last() {
-            if (p[0] - last[0]).abs() > half {
-                let edge_last = if last[0] > 0.0 { half } else { -half };
-                let edge_p = -edge_last;
-                // Interpolate the actual crossing in the unwrapped frame.
-                // Reusing `last.z` on one edge and `p.z` on the other leaves
-                // diagonal crossings as two open endpoints at different Z,
-                // which makes signed-distance queries grow a false side
-                // wedge between them.
-                let world_size = half * 2.0;
-                let p_unwrapped_x = if edge_last > 0.0 {
-                    p[0] + world_size
-                } else {
-                    p[0] - world_size
+            // Walk the segment in the unwrapped frame next to `last`,
+            // splitting at every seam plane it crosses (a corner crossing
+            // splits twice). Interpolating the crossing keeps diagonal
+            // splits from leaving two open endpoints at different
+            // coordinates, which would grow a false side wedge in
+            // signed-distance queries.
+            let mut a = last;
+            let mut bx = last[0] + fold(p[0] - last[0]);
+            let mut bz = last[1] + fold(p[1] - last[1]);
+            loop {
+                // Strict comparisons: a vertex exactly ON a seam plane
+                // (marching-squares midpoints at ±half) is kept in place
+                // rather than split — a segment lying inside the plane
+                // would otherwise divide 0/0.
+                let cross = |av: f32, bv: f32| -> Option<(f32, f32)> {
+                    if bv > half {
+                        Some((((half - av) / (bv - av)).clamp(0.0, 1.0), -world_size))
+                    } else if bv < -half {
+                        Some((((-half - av) / (bv - av)).clamp(0.0, 1.0), world_size))
+                    } else {
+                        None
+                    }
                 };
-                let t = ((edge_last - last[0]) / (p_unwrapped_x - last[0])).clamp(0.0, 1.0);
-                let edge_z = last[1] + (p[1] - last[1]) * t;
-                current.push([edge_last, edge_z]);
+                let tx = cross(a[0], bx);
+                let tz = cross(a[1], bz);
+                let (t, shift_x, shift_z) = match (tx, tz) {
+                    (None, None) => break,
+                    (Some((t, s)), None) => (t, s, 0.0),
+                    (None, Some((t, s))) => (t, 0.0, s),
+                    (Some((tx, sx)), Some((tz, sz))) => {
+                        if tx <= tz {
+                            (tx, sx, 0.0)
+                        } else {
+                            (tz, 0.0, sz)
+                        }
+                    }
+                };
+                let cx = a[0] + (bx - a[0]) * t;
+                let cz = a[1] + (bz - a[1]) * t;
+                current.push([cx, cz]);
                 if current.len() >= 2 {
                     out.push(WorldPolyline {
                         points: std::mem::take(&mut current),
@@ -112,7 +145,10 @@ where
                 } else {
                     current.clear();
                 }
-                current.push([edge_p, edge_z]);
+                a = [cx + shift_x, cz + shift_z];
+                bx += shift_x;
+                bz += shift_z;
+                current.push(a);
             }
         }
         current.push(p);
@@ -208,12 +244,12 @@ pub type Segment = [f32; 4];
 /// Convert a cell-coord river polyline (+ per-vertex flow values) into one
 /// or more world-space polylines with normalized flow and per-vertex width.
 ///
-/// Seam splitting follows `polyline_to_world`: when an edge crosses the ±X
-/// seam, the sequence is cut and a synthetic endpoint is inserted at ±half
-/// world-width. The synthetic endpoint inherits its scalar values (flow,
-/// width) from the vertex on the same side of the seam it was inserted for
-/// — visual seam artifacts on the cylindrical world are acceptable for
-/// now.
+/// Seam splitting follows `polyline_to_world`: when an edge crosses a
+/// world seam (X or Z; a corner crossing splits twice), the sequence is
+/// cut and a synthetic endpoint is inserted on the seam plane. Synthetic
+/// endpoints carry scalars (flow, width, bed floor) linearly interpolated
+/// at the crossing parameter, so both sides of the seam meet with the
+/// same channel profile.
 ///
 /// `flow_raw` must have the same length as `points`. `max_flow` is the
 /// world-wide maximum used to normalize; any value ≤ 0 degrades the output
@@ -257,6 +293,17 @@ pub fn river_polyline_to_world(
         ]
     };
 
+    let world_size = half * 2.0;
+    let fold = |d: f32| {
+        if d > half {
+            d - world_size
+        } else if d < -half {
+            d + world_size
+        } else {
+            d
+        }
+    };
+
     let mut out: Vec<RiverWorldPolyline> = Vec::new();
     let mut current = RiverWorldPolyline::default();
 
@@ -265,29 +312,66 @@ pub fn river_polyline_to_world(
         let fn_v = flow_to_norm(fraw);
         let w_v = norm_to_width(fn_v);
         if let Some(&last) = current.points.last() {
-            if (p[0] - last[0]).abs() > half {
-                let edge_last = if last[0] > 0.0 { half } else { -half };
-                let edge_p = -edge_last;
-                // Close current at the seam with the previous vertex's
-                // scalar values.
-                let last_fn = *current.flow_norm.last().unwrap();
-                let last_w = *current.width.last().unwrap();
-                let last_bed = *current.bed_floor.last().unwrap();
-                current.points.push([edge_last, last[1]]);
-                current.flow_norm.push(last_fn);
-                current.width.push(last_w);
-                current.bed_floor.push(last_bed);
+            // Walk the segment in the unwrapped frame next to `last`,
+            // splitting at every seam plane it crosses. Strict comparisons
+            // keep a vertex exactly ON a seam plane in place (a segment
+            // lying inside the plane would otherwise divide 0/0). Scalars
+            // at a crossing are lerped between the segment endpoints via
+            // the accumulated global parameter.
+            let last_fn = *current.flow_norm.last().unwrap();
+            let last_w = *current.width.last().unwrap();
+            let last_bed = *current.bed_floor.last().unwrap();
+            let mut a = last;
+            let mut bx = last[0] + fold(p[0] - last[0]);
+            let mut bz = last[1] + fold(p[1] - last[1]);
+            let mut t_glob = 0.0f32;
+            loop {
+                let cross = |av: f32, bv: f32| -> Option<(f32, f32)> {
+                    if bv > half {
+                        Some((((half - av) / (bv - av)).clamp(0.0, 1.0), -world_size))
+                    } else if bv < -half {
+                        Some((((-half - av) / (bv - av)).clamp(0.0, 1.0), world_size))
+                    } else {
+                        None
+                    }
+                };
+                let tx = cross(a[0], bx);
+                let tz = cross(a[1], bz);
+                let (t, shift_x, shift_z) = match (tx, tz) {
+                    (None, None) => break,
+                    (Some((t, s)), None) => (t, s, 0.0),
+                    (None, Some((t, s))) => (t, 0.0, s),
+                    (Some((tx, sx)), Some((tz, sz))) => {
+                        if tx <= tz {
+                            (tx, sx, 0.0)
+                        } else {
+                            (tz, 0.0, sz)
+                        }
+                    }
+                };
+                let cx = a[0] + (bx - a[0]) * t;
+                let cz = a[1] + (bz - a[1]) * t;
+                t_glob += (1.0 - t_glob) * t;
+                let lerp = |s0: f32, s1: f32| s0 + (s1 - s0) * t_glob;
+                let cross_fn = lerp(last_fn, fn_v);
+                let cross_w = lerp(last_w, w_v);
+                let cross_bed = lerp(last_bed, 0.0);
+                current.points.push([cx, cz]);
+                current.flow_norm.push(cross_fn);
+                current.width.push(cross_w);
+                current.bed_floor.push(cross_bed);
                 if current.points.len() >= 2 {
                     out.push(std::mem::take(&mut current));
                 } else {
                     current = RiverWorldPolyline::default();
                 }
-                // Start a fresh polyline on the other side with the new
-                // vertex's values.
-                current.points.push([edge_p, p[1]]);
-                current.flow_norm.push(fn_v);
-                current.width.push(w_v);
-                current.bed_floor.push(0.0);
+                a = [cx + shift_x, cz + shift_z];
+                bx += shift_x;
+                bz += shift_z;
+                current.points.push(a);
+                current.flow_norm.push(cross_fn);
+                current.width.push(cross_w);
+                current.bed_floor.push(cross_bed);
             }
         }
         current.points.push(p);
@@ -409,10 +493,10 @@ pub fn river_segments_near_tile(
     out
 }
 
-/// X-periodic counterpart to `river_segments_near_tile`. Matching segments
-/// are translated into the query tile's local circumference while retaining
-/// their per-vertex flow, width, and bed-floor metadata.
-pub fn river_segments_near_tile_wrap_x(
+/// Torus-periodic counterpart to `river_segments_near_tile`. Matching
+/// segments are translated into the query tile's local frame while
+/// retaining their per-vertex flow, width, and bed-floor metadata.
+pub fn river_segments_near_tile_wrap_xy(
     polylines: &[RiverWorldPolyline],
     tile_min_x: f32,
     tile_min_z: f32,
@@ -434,31 +518,35 @@ pub fn river_segments_near_tile_wrap_x(
         for i in 0..poly.points.len() - 1 {
             let a = poly.points[i];
             let b = poly.points[i + 1];
-            let sz0 = a[1].min(b[1]);
-            let sz1 = a[1].max(b[1]);
-            if sz1 < qz0 || sz0 > qz1 {
-                continue;
-            }
-            for shift_x in [-world_size, 0.0, world_size] {
-                let ax = a[0] + shift_x;
-                let bx = b[0] + shift_x;
-                let sx0 = ax.min(bx);
-                let sx1 = ax.max(bx);
-                if sx1 < qx0 || sx0 > qx1 {
+            for shift_z in [-world_size, 0.0, world_size] {
+                let az = a[1] + shift_z;
+                let bz = b[1] + shift_z;
+                let sz0 = az.min(bz);
+                let sz1 = az.max(bz);
+                if sz1 < qz0 || sz0 > qz1 {
                     continue;
                 }
-                out.push(RiverSegment {
-                    ax,
-                    az: a[1],
-                    bx,
-                    bz: b[1],
-                    flow_norm_a: poly.flow_norm[i],
-                    flow_norm_b: poly.flow_norm[i + 1],
-                    width_a: poly.width[i],
-                    width_b: poly.width[i + 1],
-                    bed_floor_a: poly.bed_floor[i],
-                    bed_floor_b: poly.bed_floor[i + 1],
-                });
+                for shift_x in [-world_size, 0.0, world_size] {
+                    let ax = a[0] + shift_x;
+                    let bx = b[0] + shift_x;
+                    let sx0 = ax.min(bx);
+                    let sx1 = ax.max(bx);
+                    if sx1 < qx0 || sx0 > qx1 {
+                        continue;
+                    }
+                    out.push(RiverSegment {
+                        ax,
+                        az,
+                        bx,
+                        bz,
+                        flow_norm_a: poly.flow_norm[i],
+                        flow_norm_b: poly.flow_norm[i + 1],
+                        width_a: poly.width[i],
+                        width_b: poly.width[i + 1],
+                        bed_floor_a: poly.bed_floor[i],
+                        bed_floor_b: poly.bed_floor[i + 1],
+                    });
+                }
             }
         }
     }
@@ -521,15 +609,15 @@ pub fn segments_near_tile(
     out
 }
 
-/// Wrap-aware counterpart to `segments_near_tile` for the cylindrical X
-/// axis. Each source segment is considered at x offsets `-world_size`, `0`,
-/// and `+world_size`; matching segments are returned with that offset already
-/// applied, so ordinary Euclidean distance queries measure the shortest
-/// periodic distance near the world seam.
+/// Wrap-aware counterpart to `segments_near_tile` for the torus. Each
+/// source segment is considered at the 3×3 grid of `±world_size` offsets;
+/// matching segments are returned with the offset already applied, so
+/// ordinary Euclidean distance queries measure the shortest periodic
+/// distance near either world seam.
 ///
 /// Tile/sample coordinates are expected to stay within one circumference of
 /// the canonical world range, as all current bake callers do.
-pub fn segments_near_tile_wrap_x(
+pub fn segments_near_tile_wrap_xy(
     polylines: &[WorldPolyline],
     tile_min_x: f32,
     tile_min_z: f32,
@@ -548,20 +636,24 @@ pub fn segments_near_tile_wrap_x(
         for w in poly.points.windows(2) {
             let a = w[0];
             let b = w[1];
-            let sz0 = a[1].min(b[1]);
-            let sz1 = a[1].max(b[1]);
-            if sz1 < qz0 || sz0 > qz1 {
-                continue;
-            }
-            for shift_x in [-world_size, 0.0, world_size] {
-                let ax = a[0] + shift_x;
-                let bx = b[0] + shift_x;
-                let sx0 = ax.min(bx);
-                let sx1 = ax.max(bx);
-                if sx1 < qx0 || sx0 > qx1 {
+            for shift_z in [-world_size, 0.0, world_size] {
+                let az = a[1] + shift_z;
+                let bz = b[1] + shift_z;
+                let sz0 = az.min(bz);
+                let sz1 = az.max(bz);
+                if sz1 < qz0 || sz0 > qz1 {
                     continue;
                 }
-                out.push([ax, a[1], bx, b[1]]);
+                for shift_x in [-world_size, 0.0, world_size] {
+                    let ax = a[0] + shift_x;
+                    let bx = b[0] + shift_x;
+                    let sx0 = ax.min(bx);
+                    let sx1 = ax.max(bx);
+                    if sx1 < qx0 || sx0 > qx1 {
+                        continue;
+                    }
+                    out.push([ax, az, bx, bz]);
+                }
             }
         }
     }
@@ -861,31 +953,31 @@ mod tests {
     }
 
     #[test]
-    fn segments_near_tile_wrap_x_returns_translated_periodic_copy() {
+    fn segments_near_tile_wrap_xy_returns_translated_periodic_copy() {
         let polys = vec![WorldPolyline {
             // A coast 4 m inside the east edge of a 100 m world.
             points: vec![[46.0, -10.0], [46.0, 10.0]],
         }];
-        let west = segments_near_tile_wrap_x(&polys, -50.0, -1.0, -49.0, 1.0, 8.0, 100.0);
+        let west = segments_near_tile_wrap_xy(&polys, -50.0, -1.0, -49.0, 1.0, 8.0, 100.0);
         assert_eq!(west, vec![[-54.0, -10.0, -54.0, 10.0]]);
 
         // The translated segment gives the same signed distance at the two
         // coordinate representations of the seam itself.
-        let east = segments_near_tile_wrap_x(&polys, 50.0, 0.0, 50.0, 0.0, 8.0, 100.0);
+        let east = segments_near_tile_wrap_xy(&polys, 50.0, 0.0, 50.0, 0.0, 8.0, 100.0);
         let east_sd = signed_min_distance_to_segments(50.0, 0.0, &east).unwrap();
         let west_sd = signed_min_distance_to_segments(-50.0, 0.0, &west).unwrap();
         assert!((east_sd - west_sd).abs() < 1e-6, "{east_sd} vs {west_sd}");
     }
 
     #[test]
-    fn river_segments_near_tile_wrap_x_preserves_metadata() {
+    fn river_segments_near_tile_wrap_xy_preserves_metadata() {
         let polys = vec![RiverWorldPolyline {
             points: vec![[46.0, -10.0], [46.0, 10.0]],
             flow_norm: vec![0.25, 0.75],
             width: vec![4.0, 8.0],
             bed_floor: vec![-1.0, -2.0],
         }];
-        let west = river_segments_near_tile_wrap_x(&polys, -50.0, -1.0, -49.0, 1.0, 8.0, 100.0);
+        let west = river_segments_near_tile_wrap_xy(&polys, -50.0, -1.0, -49.0, 1.0, 8.0, 100.0);
         assert_eq!(west.len(), 1);
         let seg = west[0];
         assert_eq!(
@@ -896,7 +988,7 @@ mod tests {
         assert_eq!((seg.width_a, seg.width_b), (4.0, 8.0));
         assert_eq!((seg.bed_floor_a, seg.bed_floor_b), (-1.0, -2.0));
 
-        let east = river_segments_near_tile_wrap_x(&polys, 50.0, 0.0, 50.0, 0.0, 8.0, 100.0);
+        let east = river_segments_near_tile_wrap_xy(&polys, 50.0, 0.0, 50.0, 0.0, 8.0, 100.0);
         let east_nearest = nearest_river_segment(50.0, 0.0, &east).unwrap();
         let west_nearest = nearest_river_segment(-50.0, 0.0, &west).unwrap();
         assert!((east_nearest.0 - west_nearest.0).abs() < 1e-6);
@@ -964,6 +1056,62 @@ mod tests {
         assert!((first_end[0] - half).abs() < 1e-3);
         let second_start = out[1].points.first().unwrap();
         assert!((second_start[0] + half).abs() < 1e-3);
+    }
+
+    #[test]
+    fn polyline_to_world_splits_across_z_seam() {
+        let cfg = test_config(8, 64);
+        let half = (cfg.world_size_m as f32) * 0.5;
+        let points: Vec<(u32, u32)> = vec![(3, 6), (3, 7), (3, 0), (3, 1)];
+        let out = polyline_to_world(&points, &cfg, cell_index_to_center);
+        assert_eq!(out.len(), 2, "z-seam-crossing polyline splits into 2");
+        let first_end = out[0].points.last().unwrap();
+        assert!((first_end[1] - half).abs() < 1e-3);
+        let second_start = out[1].points.first().unwrap();
+        assert!((second_start[1] + half).abs() < 1e-3);
+    }
+
+    #[test]
+    fn river_polyline_to_world_splits_across_z_seam_with_lerped_scalars() {
+        let cfg = test_config(8, 64);
+        let half = (cfg.world_size_m as f32) * 0.5;
+        // Straight north-south river crossing the Z seam; flow doubles at
+        // the far vertex so the seam crossing must carry an interpolated
+        // value strictly between the two endpoint norms.
+        let points: Vec<(u32, u32)> = vec![(3, 6), (3, 7), (3, 0), (3, 1)];
+        let flow: Vec<f32> = vec![4.0, 4.0, 16.0, 16.0];
+        let out = river_polyline_to_world(&points, &flow, 16.0, 2.0, 10.0, &cfg);
+        assert_eq!(out.len(), 2, "z-seam-crossing river splits into 2");
+        for poly in &out {
+            assert_eq!(poly.points.len(), poly.flow_norm.len());
+            assert_eq!(poly.points.len(), poly.width.len());
+            assert_eq!(poly.points.len(), poly.bed_floor.len());
+            for w in poly.points.windows(2) {
+                let dz = (w[1][1] - w[0][1]).abs();
+                assert!(
+                    dz < half,
+                    "no segment may span the world: {:?} -> {:?}",
+                    w[0],
+                    w[1]
+                );
+            }
+        }
+        let first_end = out[0].points.last().unwrap();
+        let second_start = out[1].points.first().unwrap();
+        assert!((first_end[1] - half).abs() < 1e-3);
+        assert!((second_start[1] + half).abs() < 1e-3);
+        let fn_end = *out[0].flow_norm.last().unwrap();
+        let fn_start = *out[1].flow_norm.first().unwrap();
+        assert!(
+            (fn_end - fn_start).abs() < 1e-6,
+            "both seam endpoints carry the same lerped flow"
+        );
+        let fn_lo = flow[1].log2() / 16.0f32.log2();
+        let fn_hi = 1.0;
+        assert!(
+            fn_end > fn_lo && fn_end < fn_hi,
+            "seam flow must be strictly between endpoint norms: {fn_end} vs ({fn_lo}, {fn_hi})"
+        );
     }
 
     #[test]

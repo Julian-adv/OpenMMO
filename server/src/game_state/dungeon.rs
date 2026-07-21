@@ -248,7 +248,7 @@ impl GameState {
             } else {
                 let chest_pos = cell_center(&entrance.position(), total, chest);
                 let dx = onlinerpg_shared::shortest_world_delta_x(chest_pos.x, player_pos.x);
-                let dz = player_pos.z - chest_pos.z;
+                let dz = onlinerpg_shared::shortest_world_delta_z(chest_pos.z, player_pos.z);
                 if dx * dx + dz * dz > CHEST_INTERACT_RANGE * CHEST_INTERACT_RANGE {
                     Some("Too far from the chest")
                 } else if rt.floors.get(&total).is_some_and(|fr| {
@@ -539,7 +539,7 @@ impl GameState {
             } else {
                 let prop_pos = cell_center(&entrance.position(), depth, (prop.x, prop.z));
                 let dx = onlinerpg_shared::shortest_world_delta_x(prop_pos.x, player_pos.x);
-                let dz = player_pos.z - prop_pos.z;
+                let dz = onlinerpg_shared::shortest_world_delta_z(prop_pos.z, player_pos.z);
                 if dx * dx + dz * dz > PROP_INTERACT_RANGE * PROP_INTERACT_RANGE {
                     Some(Err(format!("Too far from the {noun}")))
                 } else if select_state(rt).entry(depth).or_default().insert(prop_id) {

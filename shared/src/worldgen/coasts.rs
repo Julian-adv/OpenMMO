@@ -4,15 +4,14 @@
 //! Each 2×2 cell window of the land mask is classified into one of 16
 //! Marching Squares cases, emitting 0–2 line segments inside the window.
 //! Adjacent segments share endpoints exactly (cell-edge midpoints), so
-//! chaining them by endpoint yields closed loops (around islands and
-//! continents) and open polylines (those whose endpoints touch the world's
-//! Y border, which doesn't wrap).
+//! chaining them by endpoint yields closed loops. On the torus every
+//! contour closes — there is no world border for a chain to terminate at.
 //!
 //! Output vertex coordinates are in **cell-coord half-integer space** —
 //! every vertex sits on the midpoint between two adjacent cell centers, so
-//! its X or Y component is always either an integer or `n + 0.5`. X is
-//! wrap-aware: a polyline edge whose two endpoints differ by more than
-//! `res/2` in X crosses the world's east-west seam (downstream consumers
+//! its X or Y component is always either an integer or `n + 0.5`. Both
+//! axes are wrap-aware: a polyline edge whose two endpoints differ by more
+//! than `res/2` in X or Y crosses a world seam (downstream consumers
 //! handle the seam-split themselves).
 //!
 //! Saddle cases (5, 10) are resolved as **disjoint** contours — the two
@@ -28,8 +27,9 @@ use std::collections::HashMap;
 pub struct CoastPolyline {
     pub points: Vec<[f32; 2]>,
     /// `true` if the chain is a closed loop (e.g. an island), in which case
-    /// `points.first() == points.last()`. `false` for open chains terminating
-    /// at the world's Y border.
+    /// `points.first() == points.last()`. On the torus every well-formed
+    /// contour closes; `false` survives only as a defensive marker for
+    /// degenerate input.
     pub closed: bool,
 }
 
@@ -92,10 +92,9 @@ fn trace_chain(
 
 /// Extract coastline polylines from a binary land mask.
 ///
-/// `land_mask[y * res + x]` is `1` for land, `0` for sea. X wraps; Y doesn't.
-/// Returns one `CoastPolyline` per maximal chain of segments. Closed loops
-/// surround islands or continents (not touching the Y border); open
-/// polylines start and end at the top or bottom edge of the world.
+/// `land_mask[y * res + x]` is `1` for land, `0` for sea. Both axes wrap.
+/// Returns one `CoastPolyline` per maximal chain of segments; every chain
+/// is a closed loop around an island, a continent, or the world itself.
 pub fn extract_coasts(land_mask: &[u8], res: usize) -> Vec<CoastPolyline> {
     if res < 2 {
         return Vec::new();
@@ -105,22 +104,32 @@ pub fn extract_coasts(land_mask: &[u8], res: usize) -> Vec<CoastPolyline> {
     let mut segs: Vec<[i64; 2]> = Vec::new();
     let mut adj: HashMap<i64, Vec<u32>> = HashMap::new();
 
-    for gy in 0..(res - 1) {
+    for gy in 0..res {
         let gy_i = gy as i32;
+        let gy1 = if gy + 1 == res { 0 } else { gy + 1 };
         for gx in 0..res {
             let gx_i = gx as i32;
             let gx1 = if gx + 1 == res { 0 } else { gx + 1 };
             let tl = land_mask[gy * res + gx] & 1;
             let tr = land_mask[gy * res + gx1] & 1;
-            let bl = land_mask[(gy + 1) * res + gx] & 1;
-            let br = land_mask[(gy + 1) * res + gx1] & 1;
+            let bl = land_mask[gy1 * res + gx] & 1;
+            let br = land_mask[gy1 * res + gx1] & 1;
             let case = (tl << 3) | (tr << 2) | (br << 1) | bl;
 
-            // Edge midpoint vertex keys (vx_2x, vy_2x), X wrapped.
+            // Edge midpoint vertex keys (vx_2x, vy_2x), both axes wrapped.
             let v_t = vkey((gx_i * 2 + 1).rem_euclid(two_res), gy_i * 2);
-            let v_r = vkey((gx_i * 2 + 2).rem_euclid(two_res), gy_i * 2 + 1);
-            let v_b = vkey((gx_i * 2 + 1).rem_euclid(two_res), gy_i * 2 + 2);
-            let v_l = vkey((gx_i * 2).rem_euclid(two_res), gy_i * 2 + 1);
+            let v_r = vkey(
+                (gx_i * 2 + 2).rem_euclid(two_res),
+                (gy_i * 2 + 1).rem_euclid(two_res),
+            );
+            let v_b = vkey(
+                (gx_i * 2 + 1).rem_euclid(two_res),
+                (gy_i * 2 + 2).rem_euclid(two_res),
+            );
+            let v_l = vkey(
+                (gx_i * 2).rem_euclid(two_res),
+                (gy_i * 2 + 1).rem_euclid(two_res),
+            );
 
             match case {
                 0 | 15 => {}
@@ -154,10 +163,10 @@ pub fn extract_coasts(land_mask: &[u8], res: usize) -> Vec<CoastPolyline> {
     let mut visited = vec![false; segs.len()];
     let mut out: Vec<CoastPolyline> = Vec::new();
 
-    // 1) Open chains first: start at any vertex with valence 1 (only one
-    // segment touches it), which only happens at the Y border where the
-    // marching-squares scan stops short. Sort the start keys for
-    // determinism — HashMap iteration order is otherwise hash-randomized.
+    // 1) Open chains first: start at any vertex with valence 1. On the
+    // torus this shouldn't occur (every contour closes), but the pass stays
+    // as a cheap defensive net for degenerate input. Sort the start keys
+    // for determinism — HashMap iteration is otherwise hash-randomized.
     let mut open_starts: Vec<i64> = adj
         .iter()
         .filter_map(|(&k, v)| if v.len() == 1 { Some(k) } else { None })
@@ -231,13 +240,13 @@ mod tests {
         );
     }
 
-    /// Open chain at the Y border:
+    /// A block touching row res-1 wraps around to row 0's sea and closes:
     ///   . . . .
     ///   . . . .
     ///   . # # .
-    ///   . # # .   <-- bottom row touches Y=res-1, so the chain is open
+    ///   . # # .   <-- bottom row wraps to the top row's sea
     #[test]
-    fn block_against_y_border_opens_chain() {
+    fn block_at_y_seam_still_closes() {
         let res = 4;
         #[rustfmt::skip]
         let mask: Vec<u8> = vec![
@@ -250,9 +259,37 @@ mod tests {
         assert_eq!(coasts.len(), 1);
         let poly = &coasts[0];
         assert!(
-            !poly.closed,
-            "block touching Y border must produce an open chain"
+            poly.closed,
+            "block at the Y seam must close across the wrap"
         );
+        assert_eq!(
+            poly.points.first(),
+            poly.points.last(),
+            "closed loop must start == end"
+        );
+    }
+
+    /// Y-wrap: a vertical land strip wrapping the seam should produce two
+    /// closed loops (left and right edges of the strip), each going around
+    /// the world in Y.
+    #[test]
+    fn y_wrap_strip_closes_around_world() {
+        let res = 4;
+        // Middle two columns are all land; left and right columns all sea.
+        #[rustfmt::skip]
+        let mask: Vec<u8> = vec![
+            0,1,1,0,
+            0,1,1,0,
+            0,1,1,0,
+            0,1,1,0,
+        ];
+        let coasts = extract_coasts(&mask, res);
+        assert_eq!(coasts.len(), 2, "vertical strip → 2 closed loops");
+        for poly in &coasts {
+            assert!(poly.closed);
+            // 4 segments around the world (one per Y cell), closed → 5 points.
+            assert_eq!(poly.points.len(), 5);
+        }
     }
 
     /// X-wrap: a horizontal land strip wrapping the seam should produce two

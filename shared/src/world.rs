@@ -5,7 +5,8 @@
 
 use serde::{Deserialize, Serialize};
 
-/// East-west circumference of the baked world, in meters.
+/// East-west circumference of the baked world, in meters. The world is a
+/// torus: the north-south circumference is identical.
 pub const WORLD_WIDTH_X: f32 = 32_768.0;
 /// West edge of the first baked terrain tile. Tile -256 is centered at
 /// -16,384 and extends another half tile west.
@@ -14,6 +15,10 @@ pub const WORLD_MIN_X: f32 = -16_416.0;
 /// location as `WORLD_MIN_X` and therefore belongs to the wrapped interval's
 /// exclusive end.
 pub const WORLD_MAX_X: f32 = WORLD_MIN_X + WORLD_WIDTH_X;
+/// North-south circumference and edges — same values as X (square torus).
+pub const WORLD_WIDTH_Z: f32 = WORLD_WIDTH_X;
+pub const WORLD_MIN_Z: f32 = WORLD_MIN_X;
+pub const WORLD_MAX_Z: f32 = WORLD_MIN_Z + WORLD_WIDTH_Z;
 
 /// Normalize a world X coordinate into the terrain's canonical baked range.
 #[inline]
@@ -21,7 +26,13 @@ pub fn wrap_world_x(x: f32) -> f32 {
     (x - WORLD_MIN_X).rem_euclid(WORLD_WIDTH_X) + WORLD_MIN_X
 }
 
-/// Shortest signed X offset from `from_x` to `to_x` on the cylindrical world.
+/// Z counterpart of `wrap_world_x`.
+#[inline]
+pub fn wrap_world_z(z: f32) -> f32 {
+    (z - WORLD_MIN_Z).rem_euclid(WORLD_WIDTH_Z) + WORLD_MIN_Z
+}
+
+/// Shortest signed X offset from `from_x` to `to_x` on the toroidal world.
 #[inline]
 pub fn shortest_world_delta_x(from_x: f32, to_x: f32) -> f32 {
     let raw_delta = to_x - from_x;
@@ -33,6 +44,18 @@ pub fn shortest_world_delta_x(from_x: f32, to_x: f32) -> f32 {
     }
 }
 
+/// Z counterpart of `shortest_world_delta_x`.
+#[inline]
+pub fn shortest_world_delta_z(from_z: f32, to_z: f32) -> f32 {
+    let raw_delta = to_z - from_z;
+    let half_width = WORLD_WIDTH_Z * 0.5;
+    if raw_delta >= -half_width && raw_delta < half_width {
+        raw_delta
+    } else {
+        (raw_delta + half_width).rem_euclid(WORLD_WIDTH_Z) - half_width
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct Position {
     pub x: f32,
@@ -41,10 +64,11 @@ pub struct Position {
 }
 
 impl Position {
-    /// Return this position with X normalized across the cylindrical world
-    /// seam. Y and Z are unchanged.
-    pub fn wrapped_x(mut self) -> Self {
+    /// Return this position with X and Z normalized across the world seams.
+    /// Y (height) is unchanged.
+    pub fn wrapped_xz(mut self) -> Self {
         self.x = wrap_world_x(self.x);
+        self.z = wrap_world_z(self.z);
         self
     }
 
@@ -54,10 +78,10 @@ impl Position {
     }
 
     /// Squared shortest-periodic distance in the X-Z ground plane, ignoring
-    /// height. X wraps around the world; Z remains bounded.
+    /// height. Both ground axes wrap around the torus.
     pub fn dist_xz_sq(&self, other: &Position) -> f32 {
         let dx = shortest_world_delta_x(self.x, other.x);
-        let dz = self.z - other.z;
+        let dz = shortest_world_delta_z(self.z, other.z);
         dx * dx + dz * dz
     }
 }
@@ -72,6 +96,33 @@ mod tests {
         assert_eq!(wrap_world_x(WORLD_MAX_X), WORLD_MIN_X);
         assert_eq!(wrap_world_x(WORLD_MAX_X + 0.25), WORLD_MIN_X + 0.25);
         assert_eq!(wrap_world_x(WORLD_MIN_X - 0.25), WORLD_MAX_X - 0.25);
+    }
+
+    #[test]
+    fn world_z_wraps_at_baked_terrain_edges() {
+        assert_eq!(wrap_world_z(WORLD_MIN_Z), WORLD_MIN_Z);
+        assert_eq!(wrap_world_z(WORLD_MAX_Z), WORLD_MIN_Z);
+        assert_eq!(wrap_world_z(WORLD_MAX_Z + 0.25), WORLD_MIN_Z + 0.25);
+        assert_eq!(wrap_world_z(WORLD_MIN_Z - 0.25), WORLD_MAX_Z - 0.25);
+    }
+
+    #[test]
+    fn world_z_distance_uses_short_path_across_seam() {
+        assert_eq!(
+            shortest_world_delta_z(WORLD_MAX_Z - 1.0, WORLD_MIN_Z + 1.0),
+            2.0
+        );
+        let north = Position {
+            x: 4.0,
+            y: 0.0,
+            z: WORLD_MIN_Z + 1.0,
+        };
+        let south = Position {
+            x: 7.0,
+            y: 99.0,
+            z: WORLD_MAX_Z - 1.0,
+        };
+        assert_eq!(north.dist_xz_sq(&south), 13.0);
     }
 
     #[test]
@@ -129,17 +180,20 @@ pub struct NoSpawnZone {
 }
 
 impl NoSpawnZone {
+    /// Periodic containment: the query point is folded relative to the
+    /// rect's min corner, so a zone whose unwrapped extent crosses a world
+    /// seam (max stored past min by the true width) still matches points
+    /// on the far side.
     pub fn contains(&self, x: f32, z: f32) -> bool {
-        x >= self.min_x && x <= self.max_x && z >= self.min_z && z <= self.max_z
+        self.contains_with_margin(x, z, 0.0)
     }
 
     /// Like `contains`, but with the rectangle expanded by `margin` on all
     /// sides — used to keep spawns clear of the area *around* a town too.
     pub fn contains_with_margin(&self, x: f32, z: f32, margin: f32) -> bool {
-        x >= self.min_x - margin
-            && x <= self.max_x + margin
-            && z >= self.min_z - margin
-            && z <= self.max_z + margin
+        let lx = (x - (self.min_x - margin)).rem_euclid(WORLD_WIDTH_X);
+        let lz = (z - (self.min_z - margin)).rem_euclid(WORLD_WIDTH_Z);
+        lx <= self.max_x - self.min_x + margin * 2.0 && lz <= self.max_z - self.min_z + margin * 2.0
     }
 }
 

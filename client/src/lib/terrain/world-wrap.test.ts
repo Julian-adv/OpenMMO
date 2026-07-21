@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   WORLD_MAX_X,
+  WORLD_MAX_Z,
   WORLD_MIN_X,
+  WORLD_MIN_Z,
   shortestWrappedDeltaX,
+  shortestWrappedDeltaZ,
   unwrapWorldXNear,
+  unwrapWorldZNear,
   wrapWorldX,
+  wrapWorldZ,
 } from './world-wrap'
 
 describe('wrapWorldX', () => {
@@ -25,6 +30,28 @@ describe('shortestWrappedDeltaX', () => {
   it('unwraps a canonical coordinate next to a local reference', () => {
     expect(unwrapWorldXNear(WORLD_MAX_X - 1, WORLD_MIN_X + 1)).toBe(
       WORLD_MAX_X + 1
+    )
+  })
+})
+
+describe('wrapWorldZ', () => {
+  it('wraps across the baked north and south terrain edges', () => {
+    expect(wrapWorldZ(WORLD_MIN_Z)).toBe(WORLD_MIN_Z)
+    expect(wrapWorldZ(WORLD_MAX_Z)).toBe(WORLD_MIN_Z)
+    expect(wrapWorldZ(WORLD_MAX_Z + 0.25)).toBe(WORLD_MIN_Z + 0.25)
+    expect(wrapWorldZ(WORLD_MIN_Z - 0.25)).toBe(WORLD_MAX_Z - 0.25)
+  })
+})
+
+describe('shortestWrappedDeltaZ', () => {
+  it('uses the short path across both world edges', () => {
+    expect(shortestWrappedDeltaZ(WORLD_MAX_Z - 1, WORLD_MIN_Z + 1)).toBe(2)
+    expect(shortestWrappedDeltaZ(WORLD_MIN_Z + 1, WORLD_MAX_Z - 1)).toBe(-2)
+  })
+
+  it('unwraps a canonical coordinate next to a local reference', () => {
+    expect(unwrapWorldZNear(WORLD_MAX_Z - 1, WORLD_MIN_Z + 1)).toBe(
+      WORLD_MAX_Z + 1
     )
   })
 })

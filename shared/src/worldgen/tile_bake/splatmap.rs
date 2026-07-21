@@ -3,7 +3,7 @@
 
 use super::super::global_map::GlobalMap;
 use super::super::grass_patches::PatchSample;
-use super::super::noise::{fbm_wrap_x, smoothstep};
+use super::super::noise::{fbm_wrap_xy, smoothstep};
 use super::super::vector_features::{
     min_distance_to_segments, nearest_river_segment, signed_min_distance_to_segments, RiverSegment,
     Segment,
@@ -177,7 +177,7 @@ pub(super) fn bake_splatmap(
                         let s = &river_segs[idx];
                         let px = lerp(s.ax, s.bx, t);
                         let pz = lerp(s.az, s.bz, t);
-                        let n = fbm_wrap_x(
+                        let n = fbm_wrap_xy(
                             &ctx.detail_noise,
                             px + world_size * 0.5,
                             pz + world_size * 0.5,

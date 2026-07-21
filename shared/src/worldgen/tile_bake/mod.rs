@@ -33,9 +33,7 @@ mod water_field;
 use serde::{Deserialize, Serialize};
 
 use super::global_map::GlobalMap;
-use super::vector_features::{
-    river_segments_near_tile_wrap_x, segments_near_tile, segments_near_tile_wrap_x,
-};
+use super::vector_features::{river_segments_near_tile_wrap_xy, segments_near_tile_wrap_xy};
 
 pub use constants::{
     HEIGHT_BIAS, HEIGHT_STEP, PAL_CLIFF, PAL_DIRT, PAL_GROUND, PAL_RIVER_BED, PAL_ROAD, PAL_SAND,
@@ -148,7 +146,7 @@ pub fn bake_tile_with_bridges(
     let tile_max_z = tile_min_z + TILE_DIM as f32;
 
     let river_margin = river_margin_m();
-    let river_segs = river_segments_near_tile_wrap_x(
+    let river_segs = river_segments_near_tile_wrap_xy(
         &ctx.rivers_world,
         tile_min_x,
         tile_min_z,
@@ -161,13 +159,14 @@ pub fn bake_tile_with_bridges(
     // `road_fade`. Shrinking the margin would desynchronize the fade across
     // tile boundaries.
     let road_margin = ROAD_HALF_WIDTH_M + ROAD_FADE_SPAN_M * 2.0;
-    let road_segs = segments_near_tile(
+    let road_segs = segments_near_tile_wrap_xy(
         &ctx.roads_world,
         tile_min_x,
         tile_min_z,
         tile_max_x,
         tile_max_z,
         road_margin,
+        map.config.world_size_m as f32,
     );
     // Coast margin must reach as far as any classification branch consults
     // it: sand-dominant out to COAST_SAND_M, then a slope-dirt fade out to
@@ -181,7 +180,7 @@ pub fn bake_tile_with_bridges(
     // staircase the height blend removes. (`.max` is a no-op today since the
     // sand reach is wider, but keeps the two coupled if either constant moves.)
     let coast_margin = (COAST_SAND_M + COAST_FADE_SPAN_M).max(COAST_HEIGHT_BLEND_M);
-    let coast_segs = segments_near_tile_wrap_x(
+    let coast_segs = segments_near_tile_wrap_xy(
         &ctx.coasts_world,
         tile_min_x,
         tile_min_z,
@@ -203,11 +202,18 @@ pub fn bake_tile_with_bridges(
             tile_min_z,
             settlement_flattens,
             &ctx.detail_noise,
+            map.config.world_size_m as f32,
         );
     }
     apply_river_carve_to_tile(&mut heights, map, tile_min_x, tile_min_z, &river_segs);
     if !bridge_flattens.is_empty() {
-        bridges::apply_bridge_flatten(&mut heights, tile_min_x, tile_min_z, bridge_flattens);
+        bridges::apply_bridge_flatten(
+            &mut heights,
+            tile_min_x,
+            tile_min_z,
+            bridge_flattens,
+            map.config.world_size_m as f32,
+        );
     }
     let river_field = bake_river_field(map, ctx, &heights, tile_min_x, tile_min_z, &river_segs);
     let water_field = bake_water_field(map, ctx, &heights, tile_min_x, tile_min_z, &river_segs);
@@ -239,6 +245,14 @@ pub(super) fn world_to_tile(wx: f32) -> i32 {
     ((wx + TILE_DIM as f32 * 0.5) / TILE_DIM as f32).floor() as i32
 }
 
+/// Wrap a signed tile index (either axis) into the canonical baked range
+/// for a world of `world_size` meters — e.g. -256..=255 at 32,768 m.
+#[inline]
+pub(super) fn wrap_tile(t: i32, world_size: f32) -> i32 {
+    let n = (world_size / TILE_DIM as f32).round() as i32;
+    (t + n / 2).rem_euclid(n) - n / 2
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::{continent, elevation, rivers, roads, settlements};
@@ -267,8 +281,6 @@ mod tests {
             settlement_inland_buffer_cells: 0,
             settlement_river_flow_threshold: 20.0,
             settlement_along_road_count: 0,
-            y_border_wall_cells: 0,
-            y_border_wall_height_m: 0.0,
             ..WorldGenConfig::default()
         }
     }
@@ -313,12 +325,23 @@ mod tests {
 
     #[test]
     fn sea_tiles_encode_below_sea_level() {
-        // Pick a tile far inside the sea (corner of the small test world) and
-        // verify the uint16 values decode to negative meters.
+        // Find the sea cell farthest from land (deep ocean on any seed —
+        // on the torus no fixed corner is guaranteed to be offshore), bake
+        // its tile, and verify the uint16 values decode to negative meters.
         let (map, ctx) = build_context();
-        let world_size = map.config.world_size_m as i32;
-        let tile_edge = world_size / (TILE_DIM as i32) / 2 - 1;
-        let baked = bake_tile(&map, &ctx, tile_edge, tile_edge);
+        let res = map.config.global_res as usize;
+        let dist_to_land = crate::worldgen::grid::bfs_distance_from(&map.land_mask, res, 1, None);
+        let (deep_idx, _) = dist_to_land
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| map.land_mask[*i] == 0)
+            .max_by_key(|(_, &d)| d)
+            .expect("test world has no sea");
+        let mpc = map.config.meters_per_cell();
+        let half = map.config.world_size_m as f32 * 0.5;
+        let wx = ((deep_idx % res) as f32 + 0.5) * mpc - half;
+        let wz = ((deep_idx / res) as f32 + 0.5) * mpc - half;
+        let baked = bake_tile(&map, &ctx, world_to_tile(wx), world_to_tile(wz));
         let mut any_below = false;
         for chunk in baked.heightmap.chunks_exact(2) {
             let v = u16::from_le_bytes([chunk[0], chunk[1]]);
@@ -328,11 +351,9 @@ mod tests {
                 break;
             }
         }
-        // Not every seed puts sea at the edge, but for this config we expect
-        // at least some sub-zero vertices in the ocean corner tile.
         assert!(
             any_below,
-            "expected some sub-zero vertices in an offshore tile"
+            "expected some sub-zero vertices in the deep-ocean tile"
         );
     }
 

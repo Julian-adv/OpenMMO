@@ -409,16 +409,13 @@ fn best_mouth_cell(
     let my = (mouth / res) as i32;
     let mut best: Option<(usize, f32)> = None;
     for dy in -SEARCH_RADIUS..=SEARCH_RADIUS {
-        let ny = my + dy;
-        if ny < 0 || ny >= res as i32 {
-            continue;
-        }
+        let ny = (my + dy).rem_euclid(res as i32) as usize;
         for dx in -SEARCH_RADIUS..=SEARCH_RADIUS {
             if dx * dx + dy * dy > SEARCH_RADIUS * SEARCH_RADIUS {
                 continue;
             }
             let nx = (mx + dx).rem_euclid(res as i32) as usize;
-            let ni = (ny as usize) * res + nx;
+            let ni = ny * res + nx;
             if !habitable(ni, map, slope, ctx) {
                 continue;
             }
@@ -466,11 +463,7 @@ fn habitable(i: usize, map: &GlobalMap, slope: &[f32], ctx: &FitnessCtx) -> bool
     if map.land_mask[i] != 1 || map.elevation_m[i] > ctx.max_elev || slope[i] > ctx.max_slope {
         return false;
     }
-    if ctx.wide_river[i] {
-        return false;
-    }
-    let cy = i / map.config.global_res as usize;
-    cy <= ctx.max_cy
+    !ctx.wide_river[i]
 }
 
 struct SpacingCtx<'a> {
@@ -498,7 +491,8 @@ fn try_place(idx: usize, score: f32, res: usize, sp: &SpacingCtx, kept: &mut Vec
         };
         let dx_raw = (s.cell_x as f32 - x).abs();
         let dx = dx_raw.min(sp.res_f - dx_raw);
-        let dy = s.cell_y as f32 - y;
+        let dy_raw = (s.cell_y as f32 - y).abs();
+        let dy = dy_raw.min(sp.res_f - dy_raw);
         dx * dx + dy * dy >= required_sq
     });
     if ok {
@@ -538,23 +532,11 @@ struct FitnessCtx<'a> {
     wide_river: &'a [bool],
     max_slope: f32,
     max_elev: f32,
-    /// Largest cell-y (inclusive) that passes habitability. Cells with
-    /// `cy > max_cy` are inside the south-edge exclusion band. `usize::MAX`
-    /// disables the check.
-    max_cy: usize,
 }
 
 impl FitnessCtx<'_> {
     fn from_config<'a>(map: &'a GlobalMap, fields: &'a HabitabilityFields) -> FitnessCtx<'a> {
         let cfg = &map.config;
-        let max_cy = if cfg.settlement_south_edge_exclusion_m > 0.0 {
-            let res = cfg.global_res as usize;
-            let excl_cells =
-                (cfg.settlement_south_edge_exclusion_m / cfg.meters_per_cell()).ceil() as usize;
-            res.saturating_sub(excl_cells + 1)
-        } else {
-            usize::MAX
-        };
         FitnessCtx {
             elev: &map.elevation_m,
             coast_dist: &fields.coast_dist,
@@ -563,7 +545,6 @@ impl FitnessCtx<'_> {
             wide_river: &fields.wide_river,
             max_slope: cfg.settlement_max_slope,
             max_elev: cfg.settlement_max_elevation_m,
-            max_cy,
         }
     }
 }
@@ -739,7 +720,8 @@ mod tests {
             for b in &settlements[i + 1..] {
                 let dx_raw = (a.cell_x as f32 - b.cell_x as f32).abs();
                 let dx = dx_raw.min(res_f - dx_raw);
-                let dy = a.cell_y as f32 - b.cell_y as f32;
+                let dy_raw = (a.cell_y as f32 - b.cell_y as f32).abs();
+                let dy = dy_raw.min(res_f - dy_raw);
                 let d2 = dx * dx + dy * dy;
                 assert!(
                     d2 >= min_sp_sq,

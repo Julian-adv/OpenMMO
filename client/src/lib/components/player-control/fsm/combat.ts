@@ -9,7 +9,10 @@ import {
   type PlayerStateName,
   type Position,
 } from '../../../utils/movementUtils'
-import { shortestWrappedDeltaX } from '../../../terrain/world-wrap'
+import {
+  shortestWrappedDeltaX,
+  shortestWrappedDeltaZ,
+} from '../../../terrain/world-wrap'
 import {
   buildAttackState,
   buildIdleAfterAttack,
@@ -55,7 +58,7 @@ export function applyChaseTargetUpdate({
   if (!changed) return { kind: 'unchanged' }
 
   const dx = shortestWrappedDeltaX(currentPos.x, newTarget.x)
-  const dz = newTarget.z - currentPos.z
+  const dz = shortestWrappedDeltaZ(currentPos.z, newTarget.z)
   const nextMovementState =
     movementState ??
     initMovementState(

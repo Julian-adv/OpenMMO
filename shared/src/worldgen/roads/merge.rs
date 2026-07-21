@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use super::super::grid::fold_x_delta;
+use super::super::grid::fold_delta;
 use super::RoadNetwork;
 
 /// Cell-distance threshold for treating two road points as "co-located"
@@ -397,9 +397,9 @@ fn match_prefix_lengths(
 
 #[inline]
 fn cell_dist_sq(a: (u32, u32), b: (u32, u32), res_i: i32) -> f32 {
-    let dx = fold_x_delta(a.0 as i32 - b.0 as i32, res_i) as f32;
-    let dy = a.1 as i32 - b.1 as i32;
-    dx * dx + (dy as f32).powi(2)
+    let dx = fold_delta(a.0 as i32 - b.0 as i32, res_i) as f32;
+    let dy = fold_delta(a.1 as i32 - b.1 as i32, res_i) as f32;
+    dx * dx + dy * dy
 }
 
 /// True if either polyline endpoint of `a` coincides with either endpoint

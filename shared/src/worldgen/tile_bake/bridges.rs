@@ -33,10 +33,10 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use super::super::global_map::GlobalMap;
-use super::super::grid::fold_x_delta_f32;
+use super::super::grid::fold_delta_f32;
 use super::super::rivers::RiverMap;
 use super::super::roads::RoadNetwork;
-use super::super::vector_features::{nearest_river_segment, river_segments_near_tile};
+use super::super::vector_features::{nearest_river_segment, river_segments_near_tile_wrap_xy};
 use super::constants::{TILE_DIM, VERTS_PER_SIDE};
 use super::context::BakeContext;
 use super::heightmap::{sample_natural_height_single, segment_carve_taper_at};
@@ -294,13 +294,14 @@ pub fn detect_bridges(
             // Width at the projection point — pull only segments inside a
             // small local AABB so the nearest_river_segment search stays cheap.
             let probe_margin = TILE_DIM as f32 * 0.5;
-            let local_segs = river_segments_near_tile(
+            let local_segs = river_segments_near_tile_wrap_xy(
                 &ctx.rivers_world,
                 wx - probe_margin,
                 wz - probe_margin,
                 wx + probe_margin,
                 wz + probe_margin,
                 0.0,
+                map_config.world_size_m as f32,
             );
             // Visible water width = baked + taper. See the module doc for
             // why the taper enters once (smoothstep boundary, not
@@ -333,6 +334,7 @@ pub fn detect_bridges(
                     sample_natural_height_single(map, ctx, x, z),
                     settlement_directives,
                     &ctx.detail_noise,
+                    map.config.world_size_m as f32,
                 )
             };
             let h_a = probe(
@@ -381,7 +383,7 @@ fn canonical_deck_angle(theta: f32) -> f32 {
 
 /// Convert a polyline cell-coord direction at index `pi` to a world unit
 /// tangent. Uses central differencing (one-sided at endpoints) and folds
-/// the X-wrap so polyline pieces that span the seam don't read as a
+/// both axes so polyline pieces that span a seam don't read as a
 /// world-spanning jump.
 fn river_world_tangent(
     points: &[(u32, u32)],
@@ -396,8 +398,8 @@ fn river_world_tangent(
         points[pi + 1]
     };
     let res = cfg.global_res as f32;
-    let dx = fold_x_delta_f32(next.0 as f32 - prev.0 as f32, res);
-    let dy = next.1 as f32 - prev.1 as f32;
+    let dx = fold_delta_f32(next.0 as f32 - prev.0 as f32, res);
+    let dy = fold_delta_f32(next.1 as f32 - prev.1 as f32, res);
     let mpc = cfg.meters_per_cell();
     let wx = dx * mpc;
     let wz = dy * mpc;
@@ -412,6 +414,7 @@ fn river_world_tangent(
 pub fn group_flattens_by_tile(
     placements: &[BridgePlacement],
     catalog: &BridgeCatalog,
+    world_size: f32,
 ) -> HashMap<(i32, i32), Vec<BridgeFlatten>> {
     let mut out: HashMap<(i32, i32), Vec<BridgeFlatten>> = HashMap::new();
     for p in placements {
@@ -469,7 +472,11 @@ pub fn group_flattens_by_tile(
         };
         for tz in tile_min_z..=tile_max_z {
             for tx in tile_min_x..=tile_max_x {
-                out.entry((tx, tz)).or_default().push(directive.clone());
+                let key = (
+                    super::wrap_tile(tx, world_size),
+                    super::wrap_tile(tz, world_size),
+                );
+                out.entry(key).or_default().push(directive.clone());
             }
         }
     }
@@ -489,12 +496,19 @@ pub(super) fn apply_bridge_flatten(
     tile_origin_x: f32,
     tile_origin_z: f32,
     flattens: &[BridgeFlatten],
+    world_size: f32,
 ) {
     let last = (VERTS_PER_SIDE - 1) as i32;
     for fl in flattens {
         let cos = fl.rot_rad.cos();
         let sin = fl.rot_rad.sin();
         let blend = BRIDGE_FLATTEN_BLEND_M;
+        // World-shift that brings a seam-straddling directive next to this
+        // tile (one of -W / 0 / +W per axis).
+        let sx =
+            fold_delta_f32(fl.center_x - tile_origin_x, world_size) - (fl.center_x - tile_origin_x);
+        let sz =
+            fold_delta_f32(fl.center_z - tile_origin_z, world_size) - (fl.center_z - tile_origin_z);
         // Two foot rects: one at each deck end, `foot_length_z` long along
         // local Z, full deck width along local X.
         let foot_a_lo = fl.deck_min_z;
@@ -503,16 +517,16 @@ pub(super) fn apply_bridge_flatten(
         let foot_b_hi = fl.deck_max_z;
         // Restrict the per-vertex sweep to the rotated-rect AABB; outside
         // that band the blend evaluates to zero and the loop is wasted.
-        let i0 = ((fl.world_min_x - tile_origin_x).floor() as i32).clamp(0, last) as usize;
-        let i1 = ((fl.world_max_x - tile_origin_x).ceil() as i32).clamp(0, last) as usize;
-        let j0 = ((fl.world_min_z - tile_origin_z).floor() as i32).clamp(0, last) as usize;
-        let j1 = ((fl.world_max_z - tile_origin_z).ceil() as i32).clamp(0, last) as usize;
+        let i0 = ((fl.world_min_x + sx - tile_origin_x).floor() as i32).clamp(0, last) as usize;
+        let i1 = ((fl.world_max_x + sx - tile_origin_x).ceil() as i32).clamp(0, last) as usize;
+        let j0 = ((fl.world_min_z + sz - tile_origin_z).floor() as i32).clamp(0, last) as usize;
+        let j1 = ((fl.world_max_z + sz - tile_origin_z).ceil() as i32).clamp(0, last) as usize;
         for j in j0..=j1 {
             for i in i0..=i1 {
                 let wx = tile_origin_x + i as f32;
                 let wz = tile_origin_z + j as f32;
-                let dx = wx - fl.center_x;
-                let dz = wz - fl.center_z;
+                let dx = wx - (fl.center_x + sx);
+                let dz = wz - (fl.center_z + sz);
                 // World→local with three.js's positive-Y rotation
                 // (matches `flattenRotatedRect`'s lx/lz formulae).
                 let lx = dx * cos - dz * sin;

@@ -1,7 +1,9 @@
 use crate::auth::{AuthError, AuthService, CharacterSaveData};
 use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
 use crate::world_config::world_config;
-use onlinerpg_shared::{shortest_world_delta_x, wrap_world_x, PLAYER_MOVE_SPEED};
+use onlinerpg_shared::{
+    shortest_world_delta_x, shortest_world_delta_z, wrap_world_x, wrap_world_z, PLAYER_MOVE_SPEED,
+};
 use std::collections::{HashMap, HashSet, VecDeque};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
@@ -257,6 +259,7 @@ impl super::GameState {
         // Normalize persisted legacy positions before they enter the spatial
         // index or are sent to clients.
         player.position.x = onlinerpg_shared::wrap_world_x(player.position.x);
+        player.position.z = onlinerpg_shared::wrap_world_z(player.position.z);
         let player_id = player.id;
         let player_name = player.name.clone();
         let player_number = self.get_or_assign_player_number(&player_id).await;
@@ -421,6 +424,7 @@ impl super::GameState {
             return;
         }
         new_position.x = wrap_world_x(new_position.x);
+        new_position.z = wrap_world_z(new_position.z);
         // Dungeon floors (negative) are validated against the entrance
         // registry and the floor's expected world Y before being stored.
         // Deliberately does not carry the name out: this runs for every move
@@ -533,13 +537,13 @@ impl super::GameState {
                 while let Some(intent) = waypoints.front() {
                     let target = &intent.target;
                     let dx = shortest_world_delta_x(player.position.x, target.x);
-                    let dz = target.z - player.position.z;
+                    let dz = shortest_world_delta_z(player.position.z, target.z);
                     let dist = (dx * dx + dz * dz).sqrt();
                     let snap = dist <= budget;
-                    // Step in unwrapped X so a seam-crossing move stays a
+                    // Step in unwrapped X/Z so a seam-crossing move stays a
                     // short local sweep for the collision query.
                     let (step_x, step_y, step_z) = if snap {
-                        (player.position.x + dx, target.y, target.z)
+                        (player.position.x + dx, target.y, player.position.z + dz)
                     } else {
                         let t = budget / dist;
                         (
@@ -593,7 +597,7 @@ impl super::GameState {
                         player.position = Position {
                             x: wrap_world_x(step_x),
                             y: step_y,
-                            z: step_z,
+                            z: wrap_world_z(step_z),
                         };
                         break;
                     }
@@ -755,6 +759,7 @@ impl super::GameState {
         new_floor_level: i8,
     ) {
         new_position.x = wrap_world_x(new_position.x);
+        new_position.z = wrap_world_z(new_position.z);
         self.apply_player_position(
             player_id,
             new_position,
@@ -1163,39 +1168,49 @@ impl super::GameState {
         let cells = self.player_spatial_cells.read().await;
         let mut player_ids = HashSet::new();
 
-        // The spatial hash itself stores canonical positions. Near either X
-        // edge, query translated copies one circumference away so cells from
-        // the opposite edge participate in the same periodic neighborhood.
-        for shift_x in [
-            -onlinerpg_shared::WORLD_WIDTH_X,
+        // The spatial hash itself stores canonical positions. Near a world
+        // edge, query translated copies one circumference away on each axis
+        // (3×3 grid) so cells from the opposite edge participate in the
+        // same periodic neighborhood.
+        for shift_z in [
+            -onlinerpg_shared::WORLD_WIDTH_Z,
             0.0,
-            onlinerpg_shared::WORLD_WIDTH_X,
+            onlinerpg_shared::WORLD_WIDTH_Z,
         ] {
-            let shifted = Position {
-                x: position.x + shift_x,
-                ..*position
-            };
-            let shifted_center = super::SpatialCell::from_position(&shifted);
-            for cell_x in (shifted_center.x - cell_radius)..=(shifted_center.x + cell_radius) {
-                for cell_z in (shifted_center.z - cell_radius)..=(shifted_center.z + cell_radius) {
-                    let cell = super::SpatialCell {
-                        x: cell_x,
-                        z: cell_z,
-                    };
+            for shift_x in [
+                -onlinerpg_shared::WORLD_WIDTH_X,
+                0.0,
+                onlinerpg_shared::WORLD_WIDTH_X,
+            ] {
+                let shifted = Position {
+                    x: position.x + shift_x,
+                    z: position.z + shift_z,
+                    ..*position
+                };
+                let shifted_center = super::SpatialCell::from_position(&shifted);
+                for cell_x in (shifted_center.x - cell_radius)..=(shifted_center.x + cell_radius) {
+                    for cell_z in
+                        (shifted_center.z - cell_radius)..=(shifted_center.z + cell_radius)
+                    {
+                        let cell = super::SpatialCell {
+                            x: cell_x,
+                            z: cell_z,
+                        };
 
-                    let Some(cell_player_ids) = cells.get(&cell) else {
-                        continue;
-                    };
-
-                    for player_id in cell_player_ids {
-                        let Some(player) = players.get(player_id) else {
+                        let Some(cell_player_ids) = cells.get(&cell) else {
                             continue;
                         };
 
-                        if player.floor_level == floor_level
-                            && position.dist_xz_sq(&player.position) <= radius_sq
-                        {
-                            player_ids.insert(*player_id);
+                        for player_id in cell_player_ids {
+                            let Some(player) = players.get(player_id) else {
+                                continue;
+                            };
+
+                            if player.floor_level == floor_level
+                                && position.dist_xz_sq(&player.position) <= radius_sq
+                            {
+                                player_ids.insert(*player_id);
+                            }
                         }
                     }
                 }

@@ -6,8 +6,6 @@
 //! else stays out of the way:
 //!
 //! * Sea cells are pinned at 0 m.
-//! * The Y-border wall (since Y doesn't wrap) is added as a max-blend
-//!   ramp toward `y_border_wall_height_m`.
 //! * Config-driven `elevation_hotspots` and `river_carve_paths` are
 //!   applied here so that art-directed peaks/channels are present in the
 //!   pre-erosion clay (and thus get eroded into shape rather than appearing
@@ -15,8 +13,8 @@
 
 use super::config::{ElevationHotspot, WorldGenConfig};
 use super::global_map::GlobalMap;
-use super::grid::{bfs_distance_extend_from_cell, bfs_distance_from, fold_x_delta_f32};
-use super::noise::{fbm_wrap_x, smoothstep, PerlinNoise, PerlinNoise3D};
+use super::grid::{bfs_distance_extend_from_cell, bfs_distance_from, fold_delta_f32};
+use super::noise::{fbm_wrap_xy, PerlinNoise, PerlinNoise4D};
 use super::rivers::{RiverMap, RIVER_PEAK_ELEVATION_FRAC};
 use super::vector_features::project_point_to_segment;
 
@@ -29,7 +27,7 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     let world_width = res as f32;
 
     let seed = map.config.seed;
-    let noise = PerlinNoise3D::new(seed ^ 0xE1EE_1EE1_EE1E_u64);
+    let noise = PerlinNoise4D::new(seed ^ 0xE1EE_1EE1_EE1E_u64);
     let base_freq = map
         .config
         .scaled_freq(1.0 / map.config.initial_relief_wavelength_cells.max(1.0));
@@ -39,10 +37,6 @@ pub fn generate_elevation(map: &mut GlobalMap) {
     let max_h = map.config.max_elevation_m.max(1.0);
     let base_h = map.config.base_elevation_m.clamp(0.0, max_h);
     let relief = (map.config.initial_relief_amp.max(0.0)) * max_h;
-    let wall_cells = map
-        .config
-        .scaled_cells_usize(map.config.y_border_wall_cells);
-    let wall_h = map.config.y_border_wall_height_m;
 
     let mut elevation = vec![0.0f32; total];
     for y in 0..res {
@@ -51,7 +45,7 @@ pub fn generate_elevation(map: &mut GlobalMap) {
             if map.land_mask[i] == 0 {
                 continue;
             }
-            let n = fbm_wrap_x(
+            let n = fbm_wrap_xy(
                 &noise,
                 x as f32,
                 y as f32,
@@ -61,22 +55,7 @@ pub fn generate_elevation(map: &mut GlobalMap) {
                 LACUNARITY,
                 gain,
             );
-            let mut h = base_h + n * relief;
-
-            // Y-border mountain wall: max-blend a ramp toward `wall_h` so
-            // the impassable wall reads as a range that subsequent erosion
-            // can carve into rather than a sheer cliff.
-            if wall_cells > 0 {
-                let d_border = y.min(res - 1 - y);
-                if d_border < wall_cells {
-                    let t = 1.0 - (d_border as f32 / wall_cells as f32);
-                    let wall = smoothstep(0.0, 1.0, t) * wall_h;
-                    if wall > h {
-                        h = wall;
-                    }
-                }
-            }
-
+            let h = base_h + n * relief;
             elevation[i] = h.clamp(0.0, max_h);
         }
     }
@@ -169,12 +148,16 @@ pub(crate) fn apply_hotspots_to(
         let detail_freq = HOTSPOT_DETAIL_LOBES / r_cells;
         let r_max = r_cells * (1.0 + HOTSPOT_RADIUS_PERTURB);
         let pad = r_max.ceil() as i32 + 1;
-        let y_min = ((cy as i32) - pad).max(0) as usize;
-        let y_max = ((cy as i32) + pad).min(res as i32 - 1) as usize;
+        let y_min_i = (cy as i32) - pad;
+        let y_max_i = (cy as i32) + pad;
         let x_min_i = (cx as i32) - pad;
         let x_max_i = (cx as i32) + pad;
 
-        for y in y_min..=y_max {
+        // Unwrapped loop coords, wrapped array indices: the disk is evaluated
+        // in one continuous pass, so its local noise stays seam-free without
+        // needing periodicity.
+        for yi in y_min_i..=y_max_i {
+            let y = yi.rem_euclid(res as i32) as usize;
             for xi in x_min_i..=x_max_i {
                 let x = xi.rem_euclid(res as i32) as usize;
                 let i = y * res + x;
@@ -182,19 +165,20 @@ pub(crate) fn apply_hotspots_to(
                     continue;
                 }
                 let dx = xi as f32 - cx;
-                let dy = y as f32 - cy;
+                let dy = yi as f32 - cy;
                 let d_sq = dx * dx + dy * dy;
                 if d_sq >= r_max * r_max {
                     continue;
                 }
-                let s = shape_noise.sample(x as f32 * shape_freq, y as f32 * shape_freq);
+                let s = shape_noise.sample(xi as f32 * shape_freq, yi as f32 * shape_freq);
                 let eff_r = r_cells * (1.0 + HOTSPOT_RADIUS_PERTURB * s);
                 if d_sq >= eff_r * eff_r {
                     continue;
                 }
                 let t = 1.0 - d_sq.sqrt() / eff_r;
                 let falloff = t * t;
-                let n_detail = detail_noise.sample(x as f32 * detail_freq, y as f32 * detail_freq);
+                let n_detail =
+                    detail_noise.sample(xi as f32 * detail_freq, yi as f32 * detail_freq);
                 let modulation = 1.0 + HOTSPOT_DETAIL_AMPLITUDE * n_detail * t;
                 let boost = spot.peak_m * falloff * modulation;
                 if boost > 0.0 {
@@ -247,10 +231,6 @@ pub fn seed_river_gap_mountains(
     let max_gap_cells = (max_gap_m / mpc).round() as u16;
     let peak_m = map.config.max_elevation_m * RIVER_GAP_PEAK_FRAC;
     let lowland_thresh = map.config.max_elevation_m * RIVER_GAP_LOWLAND_FRAC;
-    let wall_margin = map
-        .config
-        .scaled_cells_usize(map.config.y_border_wall_cells)
-        * 2;
     let mut river_mask = vec![0u8; total];
     for poly in &river_map.rivers {
         for &(x, y) in &poly.points {
@@ -271,10 +251,6 @@ pub fn seed_river_gap_mountains(
             continue;
         }
         if map.elevation_m[i] >= lowland_thresh {
-            continue;
-        }
-        let iy = i / res;
-        if iy < wall_margin || iy + wall_margin >= res {
             continue;
         }
         if coast_dist[i] < coast_buffer_cells {
@@ -425,7 +401,7 @@ pub fn seed_small_island_hills(map: &mut GlobalMap) -> SmallIslandHillsOut {
         let mut max_d: u16 = 0;
         for &i in &component {
             island_cells.push(i as u32);
-            sum_dx += fold_x_delta_f32((i % res) as f32 - anchor_x, res_f);
+            sum_dx += fold_delta_f32((i % res) as f32 - anchor_x, res_f);
             sum_dy += (i / res) as f32 - anchor_y;
             let d = coast_dist[i];
             if d != u16::MAX && d > max_d {
@@ -478,8 +454,6 @@ mod tests {
             target_continent_count: 3,
             continent_gap_cells: 10,
             small_island_count: 0,
-            y_border_wall_cells: 8,
-            y_border_wall_height_m: 2200.0,
             river_gap_max_m: 0.0,
             initial_relief_wavelength_cells: (res as f32 / 4.0).max(8.0),
             ..Default::default()
@@ -512,32 +486,6 @@ mod tests {
                 "elevation {e} out of range"
             );
         }
-    }
-
-    #[test]
-    fn y_border_land_reaches_wall_height() {
-        let mut cfg = test_config(128);
-        cfg.sea_ratio = 0.1;
-        cfg.continent_gap_cells = 0;
-        cfg.target_continent_count = 1;
-        cfg.continent_seed_count = 2;
-        let mut map = continent::generate_continent_mask(&cfg);
-        generate_elevation(&mut map);
-        let res = cfg.global_res as usize;
-        let margin = cfg.y_border_wall_cells as usize;
-        let mut max_at_border = 0.0f32;
-        for y in 0..margin {
-            for x in 0..res {
-                let i = y * res + x;
-                if map.land_mask[i] == 1 && map.elevation_m[i] > max_at_border {
-                    max_at_border = map.elevation_m[i];
-                }
-            }
-        }
-        assert!(
-            max_at_border > cfg.y_border_wall_height_m * 0.5,
-            "border wall not reaching height: max {max_at_border}"
-        );
     }
 
     #[test]

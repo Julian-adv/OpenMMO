@@ -1,6 +1,11 @@
 // Common movement calculation utilities shared between local and remote players
 
-import { shortestWrappedDeltaX, unwrapWorldXNear } from '../terrain/world-wrap'
+import {
+  shortestWrappedDeltaX,
+  shortestWrappedDeltaZ,
+  unwrapWorldXNear,
+  unwrapWorldZNear,
+} from '../terrain/world-wrap'
 
 export type MovementMode = 'walk' | 'jog' | 'run'
 
@@ -143,7 +148,7 @@ export function calculateMovementStep(
 
   // Calculate remaining distance on XZ plane (Y is handled by terrain)
   const dx = shortestWrappedDeltaX(currentPos.x, targetPos.x)
-  const dz = targetPos.z - currentPos.z
+  const dz = shortestWrappedDeltaZ(currentPos.z, targetPos.z)
   const remainingDistance = Math.sqrt(dx * dx + dz * dz)
 
   // Check if arrived
@@ -152,7 +157,7 @@ export function calculateMovementStep(
       newPos: {
         x: unwrapWorldXNear(currentPos.x, targetPos.x),
         y: currentPos.y,
-        z: targetPos.z,
+        z: unwrapWorldZNear(currentPos.z, targetPos.z),
       },
       newSpeed: 0,
       rotation: Math.atan2(dx, dz),
@@ -191,7 +196,7 @@ export function calculateMovementStep(
     newPos = {
       x: unwrapWorldXNear(currentPos.x, targetPos.x),
       y: currentPos.y,
-      z: targetPos.z,
+      z: unwrapWorldZNear(currentPos.z, targetPos.z),
     }
     return {
       newPos,
@@ -232,7 +237,7 @@ export function initMovementState(
   currentSpeed: number = 0
 ): MovementState {
   const dx = shortestWrappedDeltaX(currentPos.x, targetPos.x)
-  const dz = targetPos.z - currentPos.z
+  const dz = shortestWrappedDeltaZ(currentPos.z, targetPos.z)
   const totalDistance = Math.sqrt(dx * dx + dz * dz)
 
   return {

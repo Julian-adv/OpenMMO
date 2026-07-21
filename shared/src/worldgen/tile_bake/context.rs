@@ -10,7 +10,7 @@ use super::super::config::WorldGenConfig;
 use super::super::global_map::GlobalMap;
 use super::super::grass_patches::GrassPatchField;
 use super::super::grid::bfs_distance_from;
-use super::super::noise::{smoothstep, PerlinNoise3D};
+use super::super::noise::{smoothstep, PerlinNoise4D};
 use super::super::rivers::RiverMap;
 use super::super::roads::RoadNetwork;
 use super::super::vector_features::{
@@ -31,7 +31,7 @@ use super::heightmap::cell_elevation_m;
 
 pub struct BakeContext {
     /// Deterministic detail-noise source seeded off the master seed.
-    pub detail_noise: PerlinNoise3D,
+    pub detail_noise: PerlinNoise4D,
     /// Warped-Voronoi patch field that gates grass coverage. Each seed claims
     /// a circular territory (~22 m radius, jittered) with a per-patch tall/
     /// short flag; a domain warp gives the territories organic shapes. Cells
@@ -103,7 +103,7 @@ impl BakeContext {
         );
         orient_coasts_land_left(&mut coasts_world, map, &dist_to_land);
 
-        let detail_noise = PerlinNoise3D::new(map.config.seed ^ 0xD1EA_C17E_0000_0007);
+        let detail_noise = PerlinNoise4D::new(map.config.seed ^ 0xD1EA_C17E_0000_0007);
         let grass_patches = GrassPatchField::new(map.config.seed, map.config.world_size_m as f32);
 
         Self {
@@ -179,7 +179,7 @@ fn sample_base_elevation(map: &GlobalMap, dist_to_land: &[u16], wx: f32, wz: f32
     let tz = fz - iz0 as f32;
     let sample = |ix: i32, iz: i32| -> f32 {
         let cx = ix.rem_euclid(res) as usize;
-        let cz = iz.clamp(0, res - 1) as usize;
+        let cz = iz.rem_euclid(res) as usize;
         cell_elevation_m(map, dist_to_land, cz * res as usize + cx)
     };
     let e00 = sample(ix0, iz0);

@@ -43,7 +43,7 @@ use rand::{Rng, SeedableRng};
 
 use super::global_map::GlobalMap;
 use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, smoothstep, PerlinNoise3D};
+use super::noise::{fbm_wrap_xy, smoothstep, PerlinNoise4D};
 
 const SLIPPAGE_BLUR_SIGMA: f32 = 1.5;
 /// Subsystem salt mixed into the sim RNG so erosion's stream is independent
@@ -147,7 +147,7 @@ fn apply_min_land_floor(map: &mut GlobalMap) {
         .scaled_cells(cfg.min_land_height_noise_wavelength_cells)
         .max(1.0);
     let freq = 1.0 / wavelength;
-    let noise = PerlinNoise3D::new(cfg.seed ^ MIN_LAND_FLOOR_NOISE_SALT);
+    let noise = PerlinNoise4D::new(cfg.seed ^ MIN_LAND_FLOOR_NOISE_SALT);
 
     let res = cfg.global_res as usize;
     let world_width = res as f32;
@@ -159,7 +159,7 @@ fn apply_min_land_floor(map: &mut GlobalMap) {
             }
             // Half-amplitude noise in [-1, 1] → modulation in [-amp/2, +amp/2]
             // so peak-to-peak is `amp` as documented.
-            let n = fbm_wrap_x(&noise, x as f32, y as f32, world_width, freq, 1, 2.0, 0.5);
+            let n = fbm_wrap_xy(&noise, x as f32, y as f32, world_width, freq, 1, 2.0, 0.5);
             let floor = min_h + n * amp * 0.5;
             if map.elevation_m[i] < floor {
                 map.elevation_m[i] = floor;
@@ -231,7 +231,7 @@ fn apply_coast_beach_ramp(map: &mut GlobalMap) {
 
     let res = cfg.global_res as usize;
     let dist = bfs_distance_from(&map.land_mask, res, 0, None);
-    let cliff_noise = PerlinNoise3D::new(cfg.seed ^ COAST_CLIFF_NOISE_SALT);
+    let cliff_noise = PerlinNoise4D::new(cfg.seed ^ COAST_CLIFF_NOISE_SALT);
     let world_width = res as f32;
 
     for y in 0..res {
@@ -247,7 +247,7 @@ fn apply_coast_beach_ramp(map: &mut GlobalMap) {
             // Slow X-wrapped noise on the world grid: clusters adjacent
             // coast cells into homogenous beach- or cliff-classified
             // stretches, so the pattern doesn't dither cell-by-cell.
-            let n = fbm_wrap_x(
+            let n = fbm_wrap_xy(
                 &cliff_noise,
                 x as f32,
                 y as f32,
@@ -434,7 +434,7 @@ fn compute_gradient(
     }
 }
 
-/// Central-difference of `field` at `(x, y)`, X-wrapping, Y-clamping.
+/// Central-difference of `field` at `(x, y)`, both axes wrapping.
 /// Returns the unscaled `(left-right, up-down)/2` so callers apply their
 /// own per-cell-width or normalization step.
 #[inline]
@@ -443,8 +443,8 @@ fn central_diff(field: &[f32], res: usize, x: usize, y: usize) -> (f32, f32) {
     let last = res - 1;
     let xl = ((x as i32 - 1).rem_euclid(res_i)) as usize;
     let xr = ((x as i32 + 1).rem_euclid(res_i)) as usize;
-    let yu = if y == 0 { 0 } else { y - 1 };
-    let yd = if y == last { last } else { y + 1 };
+    let yu = if y == 0 { last } else { y - 1 };
+    let yd = if y == last { 0 } else { y + 1 };
     let dx = 0.5 * (field[y * res + xl] - field[y * res + xr]);
     let dy = 0.5 * (field[yu * res + x] - field[yd * res + x]);
     (dx, dy)
@@ -517,8 +517,8 @@ fn displace(src: &[f32], gx: &[f32], gy: &[f32], res: usize, dst: &mut [f32]) {
     let res_i = res as i32;
     let last = res - 1;
     for y in 0..res {
-        let ym = if y == 0 { 0 } else { y - 1 };
-        let yp = if y == last { last } else { y + 1 };
+        let ym = if y == 0 { last } else { y - 1 };
+        let yp = if y == last { 0 } else { y + 1 };
         for x in 0..res {
             let i = y * res + x;
             let v = src[i];
@@ -656,8 +656,8 @@ fn bilinear_sample(field: &[f32], res: usize, fx: f32, fy: f32) -> f32 {
     let res_i = res as i32;
     let ix0 = ix.rem_euclid(res_i) as usize;
     let ix1 = (ix + 1).rem_euclid(res_i) as usize;
-    let iy0 = iy.clamp(0, res_i - 1) as usize;
-    let iy1 = (iy + 1).clamp(0, res_i - 1) as usize;
+    let iy0 = iy.rem_euclid(res_i) as usize;
+    let iy1 = (iy + 1).rem_euclid(res_i) as usize;
     let v00 = field[iy0 * res + ix0];
     let v10 = field[iy0 * res + ix1];
     let v01 = field[iy1 * res + ix0];
@@ -701,13 +701,13 @@ fn gaussian_blur(src: &[f32], res: usize, kernel: &[f32], tmp: &mut [f32], dst: 
             tmp[row + x] = s;
         }
     }
-    // Vertical pass (Y clamps).
+    // Vertical pass (Y wraps).
     for y in 0..res {
         for x in 0..res {
             let mut s = 0.0f32;
             for (k_idx, &w) in kernel.iter().enumerate() {
                 let dy = k_idx as i32 - radius as i32;
-                let yi = (y as i32 + dy).clamp(0, res_i - 1) as usize;
+                let yi = (y as i32 + dy).rem_euclid(res_i) as usize;
                 s += w * tmp[yi * res + x];
             }
             dst[y * res + x] = s;
@@ -835,8 +835,6 @@ mod tests {
             target_continent_count: 1,
             continent_gap_cells: 0,
             small_island_count: 0,
-            y_border_wall_cells: 0,
-            y_border_wall_height_m: 0.0,
             // Run the sim at the test resolution (skip downsample) and use a
             // small iteration count so the test finishes quickly.
             erosion_sim_res: res,
@@ -941,12 +939,6 @@ mod tests {
         let mut gx = vec![0.0f32; total];
         let mut gy = vec![0.0f32; total];
         for i in 0..total {
-            // Restrict gradients to interior cells so Y-boundary clamping
-            // doesn't spuriously dump mass on the edges.
-            let y = i / res;
-            if y == 0 || y + 1 >= res {
-                continue;
-            }
             let a = rng.gen::<f32>() * std::f32::consts::TAU;
             gx[i] = a.cos() * 0.7;
             gy[i] = a.sin() * 0.7;

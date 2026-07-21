@@ -396,6 +396,34 @@ async fn player_aoi_crosses_world_x_seam() {
 }
 
 #[tokio::test]
+async fn player_aoi_crosses_world_z_seam() {
+    let game_state = make_test_game_state("player_aoi_z_wrap");
+    let south_id = pid("south_player");
+    let north_id = pid("north_player");
+
+    game_state
+        .add_player(make_player(
+            "south_player",
+            0.0,
+            onlinerpg_shared::WORLD_MAX_Z - 1.0,
+        ))
+        .await;
+    game_state
+        .add_player(make_player(
+            "north_player",
+            0.0,
+            onlinerpg_shared::WORLD_MIN_Z + 1.0,
+        ))
+        .await;
+
+    let nearby = game_state
+        .player_ids_within(&south_id, onlinerpg_shared::NPC_SIGHT_RADIUS)
+        .await;
+    assert!(nearby.contains(&south_id));
+    assert!(nearby.contains(&north_id));
+}
+
+#[tokio::test]
 async fn movement_into_aoi_sends_existing_monsters_and_ground_items() {
     let game_state = make_test_game_state("movement_world_entity_aoi");
     let player_id = pid("walker");

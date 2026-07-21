@@ -13,7 +13,8 @@ use std::collections::HashMap;
 
 use super::super::config::WorldGenConfig;
 use super::super::global_map::GlobalMap;
-use super::super::noise::{smoothstep, PerlinNoise3D};
+use super::super::grid::fold_delta_f32;
+use super::super::noise::{fbm_wrap_xy, smoothstep, PerlinNoise4D};
 use super::super::settlements::Settlement;
 use super::constants::VERTS_PER_SIDE;
 use super::context::BakeContext;
@@ -83,9 +84,12 @@ pub fn build_directives(
 
 /// Bucket pre-built directives by tile. A settlement gets cloned into
 /// every tile its (radius + blend) reach overlaps; tiles without any
-/// settlement reach receive nothing.
+/// settlement reach receive nothing. Tile keys are wrapped into the
+/// canonical baked range so pads straddling a world seam land in the
+/// tiles the bake actually enumerates.
 pub fn group_flattens_by_tile(
     directives: &[SettlementFlatten],
+    world_size: f32,
 ) -> HashMap<(i32, i32), Vec<SettlementFlatten>> {
     let mut out: HashMap<(i32, i32), Vec<SettlementFlatten>> = HashMap::new();
     for d in directives {
@@ -95,7 +99,11 @@ pub fn group_flattens_by_tile(
         let tile_max_z = super::world_to_tile(d.center_z + REACH_M);
         for tz in tile_min_z..=tile_max_z {
             for tx in tile_min_x..=tile_max_x {
-                out.entry((tx, tz)).or_default().push(d.clone());
+                let key = (
+                    super::wrap_tile(tx, world_size),
+                    super::wrap_tile(tz, world_size),
+                );
+                out.entry(key).or_default().push(d.clone());
             }
         }
     }
@@ -111,11 +119,12 @@ pub fn flatten_height_at(
     wz: f32,
     natural: f32,
     directives: &[SettlementFlatten],
-    detail_noise: &PerlinNoise3D,
+    detail_noise: &PerlinNoise4D,
+    world_size: f32,
 ) -> f32 {
     let mut h = natural;
     for fl in directives {
-        h = apply_one(h, wx, wz, fl, detail_noise);
+        h = apply_one(h, wx, wz, fl, detail_noise, world_size);
     }
     h
 }
@@ -129,10 +138,11 @@ fn apply_one(
     wx: f32,
     wz: f32,
     fl: &SettlementFlatten,
-    detail_noise: &PerlinNoise3D,
+    detail_noise: &PerlinNoise4D,
+    world_size: f32,
 ) -> f32 {
-    let dx = wx - fl.center_x;
-    let dz = wz - fl.center_z;
+    let dx = fold_delta_f32(wx - fl.center_x, world_size);
+    let dz = fold_delta_f32(wz - fl.center_z, world_size);
     let dist_sq = dx * dx + dz * dz;
     if dist_sq >= OUTER_SQ {
         return h;
@@ -140,7 +150,18 @@ fn apply_one(
     if dist_sq <= INNER_SQ {
         return fl.target_y;
     }
-    let n = detail_noise.sample(wx * BOUNDARY_NOISE_FREQ, wz * BOUNDARY_NOISE_FREQ, 0.5);
+    // Torus-periodic wobble so a pad straddling a world seam reads the same
+    // boundary noise from both sides.
+    let n = fbm_wrap_xy(
+        detail_noise,
+        wx,
+        wz,
+        world_size,
+        BOUNDARY_NOISE_FREQ,
+        1,
+        2.0,
+        0.5,
+    );
     let dist = dist_sq.sqrt();
     let edge = dist + n * BOUNDARY_NOISE_AMP_M - SETTLEMENT_FLAT_RADIUS_M;
     if edge <= 0.0 {
@@ -161,20 +182,25 @@ pub(super) fn apply_settlement_flatten(
     tile_origin_x: f32,
     tile_origin_z: f32,
     flattens: &[SettlementFlatten],
-    detail_noise: &PerlinNoise3D,
+    detail_noise: &PerlinNoise4D,
+    world_size: f32,
 ) {
     let last = (VERTS_PER_SIDE - 1) as i32;
     for fl in flattens {
-        let i0 = ((fl.center_x - REACH_M - tile_origin_x).floor() as i32).clamp(0, last) as usize;
-        let i1 = ((fl.center_x + REACH_M - tile_origin_x).ceil() as i32).clamp(0, last) as usize;
-        let j0 = ((fl.center_z - REACH_M - tile_origin_z).floor() as i32).clamp(0, last) as usize;
-        let j1 = ((fl.center_z + REACH_M - tile_origin_z).ceil() as i32).clamp(0, last) as usize;
+        // Unwrap the pad center next to this tile so the vertex bounding box
+        // works even when the pad sits across a world seam from the tile.
+        let cx = tile_origin_x + fold_delta_f32(fl.center_x - tile_origin_x, world_size);
+        let cz = tile_origin_z + fold_delta_f32(fl.center_z - tile_origin_z, world_size);
+        let i0 = ((cx - REACH_M - tile_origin_x).floor() as i32).clamp(0, last) as usize;
+        let i1 = ((cx + REACH_M - tile_origin_x).ceil() as i32).clamp(0, last) as usize;
+        let j0 = ((cz - REACH_M - tile_origin_z).floor() as i32).clamp(0, last) as usize;
+        let j1 = ((cz + REACH_M - tile_origin_z).ceil() as i32).clamp(0, last) as usize;
         for j in j0..=j1 {
             for i in i0..=i1 {
                 let wx = tile_origin_x + i as f32;
                 let wz = tile_origin_z + j as f32;
                 let idx = j * VERTS_PER_SIDE + i;
-                heights[idx] = apply_one(heights[idx], wx, wz, fl, detail_noise);
+                heights[idx] = apply_one(heights[idx], wx, wz, fl, detail_noise, world_size);
             }
         }
     }

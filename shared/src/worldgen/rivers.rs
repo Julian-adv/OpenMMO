@@ -14,7 +14,7 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::global_map::GlobalMap;
-use super::grid::{fold_x_delta, MinF32};
+use super::grid::{fold_delta, MinF32};
 
 /// Peak elevation threshold (as a fraction of `max_elevation_m`) for
 /// `extract_rivers` to treat a local maximum as a river source. Shared
@@ -82,9 +82,10 @@ struct MergeClaim {
 }
 
 /// Priority-queue-based pit fill (Barnes et al. 2014). Starting from the
-/// sea / Y-border cells, flood inward; each cell is raised just above the
-/// highest point on the least-costly path back to an outlet, guaranteeing
-/// that every land cell has a downhill path to the boundary.
+/// sea cells, flood inward; each cell is raised just above the highest
+/// point on the least-costly path back to an outlet, guaranteeing that
+/// every land cell has a downhill path to the sea. On the closed torus
+/// the sea is the only outlet — there is no map border to drain off.
 fn fill_pits(elev: &[f32], mask: &[u8], res: usize) -> Vec<f32> {
     let total = res * res;
     let mut filled = elev.to_vec();
@@ -92,9 +93,7 @@ fn fill_pits(elev: &[f32], mask: &[u8], res: usize) -> Vec<f32> {
     let mut pq: BinaryHeap<MinF32> = BinaryHeap::new();
 
     for i in 0..total {
-        let y = i / res;
-        let is_border = y == 0 || y == res - 1;
-        if mask[i] == 0 || is_border {
+        if mask[i] == 0 {
             pq.push(MinF32(filled[i], i as u32));
             visited[i] = true;
         }
@@ -110,11 +109,8 @@ fn fill_pits(elev: &[f32], mask: &[u8], res: usize) -> Vec<f32> {
                     continue;
                 }
                 let nx = (x + dx).rem_euclid(res as i32) as usize;
-                let ny = y + dy;
-                if ny < 0 || ny >= res as i32 {
-                    continue;
-                }
-                let ni = ny as usize * res + nx;
+                let ny = (y + dy).rem_euclid(res as i32) as usize;
+                let ni = ny * res + nx;
                 if visited[ni] {
                     continue;
                 }
@@ -136,8 +132,8 @@ fn parallel_merge_radius_cells(res: usize) -> i32 {
 }
 
 fn step_dir(from: (u32, u32), to: (u32, u32), res: usize) -> Option<(i8, i8)> {
-    let dx = fold_x_delta(to.0 as i32 - from.0 as i32, res as i32);
-    let dy = to.1 as i32 - from.1 as i32;
+    let dx = fold_delta(to.0 as i32 - from.0 as i32, res as i32);
+    let dy = fold_delta(to.1 as i32 - from.1 as i32, res as i32);
     if dx == 0 && dy == 0 {
         None
     } else {
@@ -215,16 +211,16 @@ fn cumulative_lengths_cells(points: &[(u32, u32)], res: usize) -> Vec<f32> {
     lengths.push(0.0);
     let res_i = res as i32;
     for i in 1..points.len() {
-        let dx = fold_x_delta(points[i].0 as i32 - points[i - 1].0 as i32, res_i) as f32;
-        let dy = points[i].1 as f32 - points[i - 1].1 as f32;
+        let dx = fold_delta(points[i].0 as i32 - points[i - 1].0 as i32, res_i) as f32;
+        let dy = fold_delta(points[i].1 as i32 - points[i - 1].1 as i32, res_i) as f32;
         lengths.push(lengths[i - 1] + (dx * dx + dy * dy).sqrt());
     }
     lengths
 }
 
 /// Windowed unit tangent at vertex `i` from the cell-coordinate polyline.
-/// Symmetric `±window` window when not near an endpoint; X-folded so a
-/// segment that crosses the world wrap doesn't return a backward tangent.
+/// Symmetric `±window` window when not near an endpoint; both axes folded
+/// so a segment that crosses a world seam doesn't return a backward tangent.
 fn windowed_tangent_cells(
     points: &[(u32, u32)],
     i: usize,
@@ -237,8 +233,8 @@ fn windowed_tangent_cells(
     if lo == hi {
         return None;
     }
-    let dx = fold_x_delta(points[hi].0 as i32 - points[lo].0 as i32, res_i) as f32;
-    let dy = points[hi].1 as f32 - points[lo].1 as f32;
+    let dx = fold_delta(points[hi].0 as i32 - points[lo].0 as i32, res_i) as f32;
+    let dy = fold_delta(points[hi].1 as i32 - points[lo].1 as i32, res_i) as f32;
     let len = (dx * dx + dy * dy).sqrt();
     if len < 1e-6 {
         return None;
@@ -286,8 +282,8 @@ fn append_wrapped_line(
     flow_to: f32,
     res: usize,
 ) {
-    let dx = fold_x_delta(to.0 as i32 - from.0 as i32, res as i32);
-    let dy = to.1 as i32 - from.1 as i32;
+    let dx = fold_delta(to.0 as i32 - from.0 as i32, res as i32);
+    let dy = fold_delta(to.1 as i32 - from.1 as i32, res as i32);
     let steps = dx.abs().max(dy.abs()) as usize;
     if steps == 0 {
         return;
@@ -295,7 +291,7 @@ fn append_wrapped_line(
     for step in 1..=steps {
         let t = step as f32 / steps as f32;
         let x = (from.0 as i32 + (dx as f32 * t).round() as i32).rem_euclid(res as i32) as u32;
-        let y = (from.1 as i32 + (dy as f32 * t).round() as i32).clamp(0, res as i32 - 1) as u32;
+        let y = (from.1 as i32 + (dy as f32 * t).round() as i32).rem_euclid(res as i32) as u32;
         let p = (x, y);
         let f = flow_from + (flow_to - flow_from) * t;
         if points.last().copied() == Some(p) {
@@ -450,13 +446,8 @@ fn naturalize_river_meanders(map: &GlobalMap, rivers: &mut [Polyline]) {
             for scale in [1.0f32, 0.5] {
                 let cand_x = target_x[i] + nx * offset * scale;
                 let cand_y = target_y[i] + ny * offset * scale;
-                let cell_x_i = cand_x.round() as i32;
-                let cell_y_i = cand_y.round() as i32;
-                if cell_y_i < 0 || cell_y_i >= res_i {
-                    continue;
-                }
-                let cell_x = cell_x_i.rem_euclid(res_i) as usize;
-                let cell_y = cell_y_i as usize;
+                let cell_x = (cand_x.round() as i32).rem_euclid(res_i) as usize;
+                let cell_y = (cand_y.round() as i32).rem_euclid(res_i) as usize;
                 if map.land_mask[cell_y * res + cell_x] != 1 {
                     continue;
                 }
@@ -470,14 +461,14 @@ fn naturalize_river_meanders(map: &GlobalMap, rivers: &mut [Polyline]) {
         let mut new_flow: Vec<f32> = Vec::with_capacity(n);
         let p0 = (
             (target_x[0].round() as i32).rem_euclid(res_i) as u32,
-            target_y[0].round().clamp(0.0, (res_i - 1) as f32) as u32,
+            (target_y[0].round() as i32).rem_euclid(res_i) as u32,
         );
         new_points.push(p0);
         new_flow.push(poly.flow[0]);
         for i in 1..n {
             let pi = (
                 (target_x[i].round() as i32).rem_euclid(res_i) as u32,
-                target_y[i].round().clamp(0.0, (res_i - 1) as f32) as u32,
+                (target_y[i].round() as i32).rem_euclid(res_i) as u32,
             );
             let last = *new_points.last().unwrap();
             let last_flow = *new_flow.last().unwrap();
@@ -516,17 +507,14 @@ fn add_parallel_merge_claims(
         };
 
         for dy in -radius..=radius {
-            let ny = y as i32 + dy;
-            if ny < 0 || ny >= res as i32 {
-                continue;
-            }
+            let ny = (y as i32 + dy).rem_euclid(res as i32) as usize;
             for dx in -radius..=radius {
                 let dist_sq = dx * dx + dy * dy;
                 if dist_sq > radius_sq {
                     continue;
                 }
                 let nx = (x as i32 + dx).rem_euclid(res as i32) as usize;
-                let ni = ny as usize * res + nx;
+                let ni = ny * res + nx;
                 let claim = MergeClaim {
                     target: cell as u32,
                     dir_x,
@@ -654,11 +642,8 @@ pub fn compute_flow(map: &GlobalMap) -> RiverMap {
         let mut best_land: Option<u32> = None;
         for &(dx, dy, dist) in &OFFSETS {
             let nx = (x + dx).rem_euclid(res as i32) as usize;
-            let ny = y + dy;
-            if ny < 0 || ny >= res as i32 {
-                continue;
-            }
-            let ni = ny as usize * res + nx;
+            let ny = (y + dy).rem_euclid(res as i32) as usize;
+            let ni = ny * res + nx;
             let dh = h - elev[ni];
             if dh <= 0.0 {
                 continue;
@@ -743,21 +728,9 @@ pub fn extract_rivers(
     // threshold. Candidates are filtered by a minimum-spacing pass so the
     // resulting river network has a handful of main stems rather than one
     // "river" per every rocky bump.
-    // Exclude ~2× the wall band from peak candidacy. The wall's uniform
-    // southward slope generates parallel peaks that trace as straight-line
-    // rivers; the 2× cushion catches peaks just past the wall where the
-    // wall-to-natural-terrain transition still produces a uniform gradient.
-    let wall_margin = map
-        .config
-        .scaled_cells_usize(map.config.y_border_wall_cells)
-        * 2;
     let mut candidates: Vec<(u32, f32)> = Vec::new();
     for i in 0..total {
         if mask[i] == 0 || elev[i] < min_peak_elevation {
-            continue;
-        }
-        let iy = i / res;
-        if iy < wall_margin || iy + wall_margin >= res {
             continue;
         }
         let x = (i % res) as i32;
@@ -770,11 +743,8 @@ pub fn extract_rivers(
                     continue;
                 }
                 let nx = (x + dx).rem_euclid(res as i32) as usize;
-                let ny = y + dy;
-                if ny < 0 || ny >= res as i32 {
-                    continue;
-                }
-                let ni = ny as usize * res + nx;
+                let ny = (y + dy).rem_euclid(res as i32) as usize;
+                let ni = ny * res + nx;
                 if elev[ni] >= h {
                     is_peak = false;
                     break;
@@ -920,11 +890,8 @@ pub fn extract_small_island_rivers(
                     continue;
                 }
                 let nx = (x + dx).rem_euclid(res_i) as usize;
-                let ny = y + dy;
-                if ny < 0 || ny >= res_i {
-                    continue;
-                }
-                let ni = ny as usize * res + nx;
+                let ny = (y + dy).rem_euclid(res_i) as usize;
+                let ni = ny * res + nx;
                 if elev[ni] >= h {
                     is_peak = false;
                     break 'outer;
@@ -1101,13 +1068,10 @@ fn merge_overlapping_polylines(map: &GlobalMap, rivers: &mut Vec<Polyline>) {
         'outer: for i in lo..hi {
             let (x, y) = rivers[ri].points[i];
             for ddy in -MERGE_PROXIMITY_RADIUS_CELLS..=MERGE_PROXIMITY_RADIUS_CELLS {
-                let cy = y as i32 + ddy;
-                if cy < 0 || cy >= res_i {
-                    continue;
-                }
+                let cy = (y as i32 + ddy).rem_euclid(res_i) as usize;
                 for ddx in -MERGE_PROXIMITY_RADIUS_CELLS..=MERGE_PROXIMITY_RADIUS_CELLS {
                     let cx = (x as i32 + ddx).rem_euclid(res_i);
-                    let cell = cy as usize * res + cx as usize;
+                    let cell = cy * res + cx as usize;
                     let owner = claimer[cell];
                     if owner != u32::MAX && owner as usize != ri {
                         truncate_at = Some(i);
@@ -1157,8 +1121,6 @@ mod tests {
             target_continent_count: 1,
             continent_gap_cells: 0,
             small_island_count: 0,
-            y_border_wall_cells: 0,
-            y_border_wall_height_m: 0.0,
             river_gap_max_m: 0.0,
             // Default wavelength is sized for a 4096-cell production map; in
             // the small test resolutions a 700-cell wavelength is wider than

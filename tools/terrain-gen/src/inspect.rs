@@ -302,6 +302,7 @@ pub fn probe(config: &WorldGenConfig, points: &[(f32, f32)]) -> Result<()> {
                 p.natural_height,
                 &pad_directives,
                 &ctx.detail_noise,
+                map.config.world_size_m as f32,
             );
             println!(
                 "  height AFTER settlement flatten (pre-carve): {:+.3}m",

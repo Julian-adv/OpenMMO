@@ -202,8 +202,10 @@ pub fn run(
     let t = Instant::now();
     let settlement_directives =
         tile_bake::settlement_flatten::build_directives(&settlements_list, &map.config, &map, &ctx);
-    let settlement_flattens =
-        tile_bake::settlement_flatten::group_flattens_by_tile(&settlement_directives);
+    let settlement_flattens = tile_bake::settlement_flatten::group_flattens_by_tile(
+        &settlement_directives,
+        map.config.world_size_m as f32,
+    );
     eprintln!(
         "  Phase 7 pads:        {:.2}s  ({} settlements across {} tiles)",
         t.elapsed().as_secs_f32(),
@@ -226,7 +228,11 @@ pub fn run(
         &bridge_catalog,
         &settlement_directives,
     );
-    let bridge_flattens = bridges::group_flattens_by_tile(&bridge_placements, &bridge_catalog);
+    let bridge_flattens = bridges::group_flattens_by_tile(
+        &bridge_placements,
+        &bridge_catalog,
+        map.config.world_size_m as f32,
+    );
     eprintln!(
         "  Phase 7 bridges:     {:.2}s  ({} bridges across {} tiles)",
         t.elapsed().as_secs_f32(),

@@ -1,11 +1,15 @@
 use std::path::{Path, PathBuf};
 
-/// Full baked X circumference in terrain tiles. The canonical files cover
-/// tile X -256 through 255; runtime render grids may request one tile beyond
-/// either edge and must read the periodic tile from the opposite side.
+/// Full baked circumference in terrain tiles, per axis (the world is a
+/// torus). The canonical files cover tile -256 through 255 on both axes;
+/// runtime render grids may request one tile beyond either edge and must
+/// read the periodic tile from the opposite side.
 pub const WORLD_TILES_X: i32 = 512;
 pub const WORLD_MIN_TILE_X: i32 = -256;
 pub const WORLD_MAX_TILE_X: i32 = WORLD_MIN_TILE_X + WORLD_TILES_X;
+pub const WORLD_TILES_Z: i32 = WORLD_TILES_X;
+pub const WORLD_MIN_TILE_Z: i32 = WORLD_MIN_TILE_X;
+pub const WORLD_MAX_TILE_Z: i32 = WORLD_MIN_TILE_Z + WORLD_TILES_Z;
 
 /// Normalize a render/data tile X into the canonical baked file range.
 #[inline]
@@ -13,10 +17,22 @@ pub fn wrap_tile_x(tile_x: i32) -> i32 {
     (tile_x - WORLD_MIN_TILE_X).rem_euclid(WORLD_TILES_X) + WORLD_MIN_TILE_X
 }
 
+/// Z counterpart of `wrap_tile_x`.
+#[inline]
+pub fn wrap_tile_z(tile_z: i32) -> i32 {
+    (tile_z - WORLD_MIN_TILE_Z).rem_euclid(WORLD_TILES_Z) + WORLD_MIN_TILE_Z
+}
+
 /// Region equivalent of `wrap_tile_x` for the 32 baked X regions.
 #[inline]
 pub fn wrap_region_x(region_x: i32) -> i32 {
     (region_x + 16).rem_euclid(32) - 16
+}
+
+/// Region equivalent of `wrap_tile_z` for the 32 baked Z regions.
+#[inline]
+pub fn wrap_region_z(region_z: i32) -> i32 {
+    (region_z + 16).rem_euclid(32) - 16
 }
 
 /// Convert tile coordinate to region coordinate (floor division).
@@ -39,6 +55,7 @@ fn region_dir_name(rx: i32, rz: i32) -> String {
 /// Build filesystem path for a heightmap tile file.
 pub fn heightmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     height_region_dir(base, rx, rz).join(format!("h_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -46,6 +63,7 @@ pub fn heightmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
 /// Build filesystem path for a splatmap tile file.
 pub fn splatmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     splat_region_dir(base, rx, rz).join(format!("s_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -63,6 +81,7 @@ pub fn splat_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// Build filesystem path for a grass placement data file.
 pub fn grass_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     grass_region_dir(base, rx, rz).join(format!("g_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -75,6 +94,7 @@ pub fn grass_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// Build filesystem path for an original (pre-housing) heightmap tile file.
 pub fn original_heightmap_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     original_height_region_dir(base, rx, rz).join(format!("o_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -87,6 +107,7 @@ pub fn original_height_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// Build filesystem path for an original (pre-housing) grass placement data file.
 pub fn original_grass_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     original_grass_region_dir(base, rx, rz).join(format!("g_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -98,12 +119,16 @@ pub fn original_grass_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
 
 /// Build filesystem path for a region zone JSON file.
 pub fn zone_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    let rx = wrap_region_x(rx);
+    let rz = wrap_region_z(rz);
     base.join("zones")
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
 
 /// Build filesystem path for a region object JSON file.
 pub fn object_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    let rx = wrap_region_x(rx);
+    let rz = wrap_region_z(rz);
     base.join("objects")
         .join(format!("r{:+03}_{:+03}.json", rx, rz))
 }
@@ -111,6 +136,7 @@ pub fn object_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// Build filesystem path for a tree placement data file.
 pub fn tree_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     tree_region_dir(base, rx, rz).join(format!("t_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -123,6 +149,7 @@ pub fn tree_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// Build filesystem path for a region minimap PNG file.
 pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     let rx = wrap_region_x(rx);
+    let rz = wrap_region_z(rz);
     base.join("minimap")
         .join(format!("r{:+03}_{:+03}.png", rx, rz))
 }
@@ -132,6 +159,7 @@ pub fn minimap_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// quad-mesh river renderer. See `shared/src/worldgen/tile_bake/river_field.rs`.
 pub fn river_field_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     river_field_region_dir(base, rx, rz).join(format!("rf_{:+05}_{:+05}.bin", tx, tz))
 }
@@ -147,6 +175,7 @@ pub fn river_field_region_dir(base: &Path, rx: i32, rz: i32) -> PathBuf {
 /// `shared/src/worldgen/tile_bake/water_field.rs`.
 pub fn water_field_path(base: &Path, tx: i32, tz: i32) -> PathBuf {
     let tx = wrap_tile_x(tx);
+    let tz = wrap_tile_z(tz);
     let (rx, rz) = (tile_to_region(tx), tile_to_region(tz));
     water_field_region_dir(base, rx, rz).join(format!("wf_{:+05}_{:+05}.bin", tx, tz))
 }

@@ -9,7 +9,7 @@
 use std::collections::BinaryHeap;
 
 use super::super::global_map::GlobalMap;
-use super::super::grid::{fold_x_delta_f32, MinF32};
+use super::super::grid::{fold_delta_f32, MinF32};
 use super::super::rivers::RiverMap;
 use super::super::tile_bake::river_geom::{
     flow_log_inv, polyline_arcs, predicted_visible_width, BRIDGE_MAX_VISIBLE_WIDTH_M,
@@ -122,8 +122,8 @@ impl RiverField {
                 let idx = (y as usize) * res + (x as usize);
                 let prev = if i == 0 { pts[i] } else { pts[i - 1] };
                 let next = if i + 1 >= n { pts[i] } else { pts[i + 1] };
-                let dx = fold_x_delta_f32(next.0 as f32 - prev.0 as f32, res_f);
-                let dy = next.1 as f32 - prev.1 as f32;
+                let dx = fold_delta_f32(next.0 as f32 - prev.0 as f32, res_f);
+                let dy = fold_delta_f32(next.1 as f32 - prev.1 as f32, res_f);
                 let len = (dx * dx + dy * dy).sqrt().max(1e-6);
                 tangent[idx] = (dx / len, dy / len);
                 axis[idx] = pick_river_axis(dx / len, dy / len);
@@ -176,7 +176,7 @@ impl RiverField {
 
 /// One-step Chebyshev (8-connected) dilation of `mask`. Output `out[i] != 0`
 /// iff some 8-neighbour of cell `i` is set in `mask`, with `i` itself
-/// excluded. X-wraps; Y is bounded. Used to build the river-buffer flag —
+/// excluded. Both axes wrap. Used to build the river-buffer flag —
 /// a "right next to the river but not on it" mask.
 fn chebyshev_dilate(mask: &[u8], res: usize) -> Vec<u8> {
     let total = res * res;
@@ -194,11 +194,8 @@ fn chebyshev_dilate(mask: &[u8], res: usize) -> Vec<u8> {
                     continue;
                 }
                 let nx = (cx + dx).rem_euclid(res_i) as usize;
-                let ny = cy + dy;
-                if ny < 0 || ny >= res_i {
-                    continue;
-                }
-                let ni = (ny as usize) * res + nx;
+                let ny = (cy + dy).rem_euclid(res_i) as usize;
+                let ni = ny * res + nx;
                 if mask[ni] == 0 {
                     out[ni] = 1;
                 }
@@ -298,11 +295,8 @@ pub(super) fn a_star(
                     continue;
                 }
                 let nx = (cx + dx).rem_euclid(res_i) as usize;
-                let ny = cy + dy;
-                if ny < 0 || ny >= res_i {
-                    continue;
-                }
-                let ni = ny as usize * res + nx;
+                let ny = (cy + dy).rem_euclid(res_i) as usize;
+                let ni = ny * res + nx;
                 if mask[ni] == 0 || scratch.closed[ni] {
                     continue;
                 }
@@ -329,7 +323,7 @@ pub(super) fn a_star(
                     // Pure-land diagonal: reject corner-cuts where a
                     // shoulder is river (would skim past a 1-cell channel).
                     let sh1 = (cy as usize) * res + (cx + dx).rem_euclid(res_i) as usize;
-                    let sh2 = (cy + dy) as usize * res + cx as usize;
+                    let sh2 = (cy + dy).rem_euclid(res_i) as usize * res + cx as usize;
                     if river_field.mask[sh1] != 0 || river_field.mask[sh2] != 0 {
                         continue;
                     }
@@ -369,7 +363,7 @@ pub(super) fn a_star(
                     scratch.touch_if_new(ni);
                     scratch.g_score[ni] = tentative;
                     scratch.came_from[ni] = cur;
-                    let f = tentative + heuristic(nx, ny as usize, gx, gy, res);
+                    let f = tentative + heuristic(nx, ny, gx, gy, res);
                     scratch.open.push(MinF32(f, ni as u32));
                 }
             }
@@ -400,6 +394,7 @@ fn reconstruct(came_from: &[u32], start: usize, goal: usize, res: usize) -> Vec<
 fn heuristic(sx: usize, sy: usize, gx: usize, gy: usize, res: usize) -> f32 {
     let dx_raw = (sx as f32 - gx as f32).abs();
     let dx = dx_raw.min(res as f32 - dx_raw);
-    let dy = sy as f32 - gy as f32;
+    let dy_raw = (sy as f32 - gy as f32).abs();
+    let dy = dy_raw.min(res as f32 - dy_raw);
     (dx * dx + dy * dy).sqrt()
 }

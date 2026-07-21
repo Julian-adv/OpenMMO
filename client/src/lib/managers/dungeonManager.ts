@@ -27,7 +27,10 @@ import {
   dungeonPropsRevision,
 } from '../stores/dungeonStore'
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
-import { shortestWrappedDeltaX } from '../terrain/world-wrap'
+import {
+  shortestWrappedDeltaX,
+  shortestWrappedDeltaZ,
+} from '../terrain/world-wrap'
 import type { DungeonWall } from '../utils/dungeon-geo-constants'
 
 export interface DungeonRoom {
@@ -916,7 +919,7 @@ class DungeonManager {
     if (!this.active) {
       for (const e of DUNGEON_ENTRANCES) {
         const dx = shortestWrappedDeltaX(e.x, x)
-        const dz = z - e.z
+        const dz = shortestWrappedDeltaZ(e.z, z)
         if (dx * dx + dz * dz < r * r) {
           this.enter(e.id, { x: e.x, y: e.y, z: e.z })
           return
@@ -926,7 +929,7 @@ class DungeonManager {
     }
     if (get(currentDungeonDepth) === 0 && this.entrance) {
       const dx = shortestWrappedDeltaX(this.entrance.x, x)
-      const dz = z - this.entrance.z
+      const dz = shortestWrappedDeltaZ(this.entrance.z, z)
       const d2 = dx * dx + dz * dz
       const inside = d2 < r * r
       if (inside && !this.doorSyncInside) this.doorSnapshotRequest = this.id

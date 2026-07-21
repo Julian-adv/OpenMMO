@@ -6,7 +6,7 @@
 
 use std::collections::HashSet;
 
-use super::super::grid::fold_x_delta_f32;
+use super::super::grid::fold_delta_f32;
 use super::super::settlements::Settlement;
 
 /// Cosine threshold above which two incident edges at the same vertex are
@@ -149,15 +149,16 @@ pub(super) fn prim_mst(settlements: &[Settlement], res_f: f32) -> Vec<(usize, us
 pub(super) fn euclidean_sq(a: &Settlement, b: &Settlement, res_f: f32) -> f32 {
     let dx_raw = (a.cell_x as f32 - b.cell_x as f32).abs();
     let dx = dx_raw.min(res_f - dx_raw);
-    let dy = a.cell_y as f32 - b.cell_y as f32;
+    let dy_raw = (a.cell_y as f32 - b.cell_y as f32).abs();
+    let dy = dy_raw.min(res_f - dy_raw);
     dx * dx + dy * dy
 }
 
-/// Unit direction vector from `a` to `b`, with X-wrap handled by picking
-/// the shorter horizontal side.
+/// Unit direction vector from `a` to `b`, both axes folded onto the
+/// shorter wrapped side.
 fn direction(a: &Settlement, b: &Settlement, res_f: f32) -> (f32, f32) {
-    let dx = fold_x_delta_f32(b.cell_x as f32 - a.cell_x as f32, res_f);
-    let dy = b.cell_y as f32 - a.cell_y as f32;
+    let dx = fold_delta_f32(b.cell_x as f32 - a.cell_x as f32, res_f);
+    let dy = fold_delta_f32(b.cell_y as f32 - a.cell_y as f32, res_f);
     let len = (dx * dx + dy * dy).sqrt().max(1e-6);
     (dx / len, dy / len)
 }

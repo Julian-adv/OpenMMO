@@ -8,6 +8,7 @@ use super::{
     DEFAULT_LEASH_RANGE, DEFAULT_MAX_MOVE_DIST, DEFAULT_MIN_MOVE_DIST, DEFAULT_PATH_RECALC_MS,
     DEFAULT_RETURN_ARRIVE_DIST, DEFAULT_TARGET_MOVE_THRESHOLD, FLEE_SAFE_DIST_MARGIN,
 };
+use crate::world::{shortest_world_delta_x, shortest_world_delta_z};
 use crate::MonsterState;
 use rand::Rng;
 use std::collections::HashMap;
@@ -85,8 +86,8 @@ impl MonsterBrain {
             }
             "is_beyond_leash" => {
                 let range = param(params, "range", DEFAULT_LEASH_RANGE);
-                let dx = self.position.x - self.spawn_position.x;
-                let dz = self.position.z - self.spawn_position.z;
+                let dx = shortest_world_delta_x(self.spawn_position.x, self.position.x);
+                let dz = shortest_world_delta_z(self.spawn_position.z, self.position.z);
                 (self.state == AiState::Return || dx * dx + dz * dz > range * range).into()
             }
             "health_below_ratio" => {
@@ -171,8 +172,8 @@ impl MonsterBrain {
         path_provider: &dyn PathProvider,
     ) -> BehaviorStatus {
         let arrive_dist = param(params, "arriveDist", DEFAULT_RETURN_ARRIVE_DIST);
-        let dx = self.spawn_position.x - self.position.x;
-        let dz = self.spawn_position.z - self.position.z;
+        let dx = shortest_world_delta_x(self.position.x, self.spawn_position.x);
+        let dz = shortest_world_delta_z(self.position.z, self.spawn_position.z);
         if dx * dx + dz * dz <= arrive_dist * arrive_dist {
             self.transition_to_idle(commands);
             return BehaviorStatus::Success;
@@ -279,8 +280,8 @@ impl MonsterBrain {
             None => return BehaviorStatus::Failure,
         };
 
-        let dx = target.position.x - self.position.x;
-        let dz = target.position.z - self.position.z;
+        let dx = shortest_world_delta_x(self.position.x, target.position.x);
+        let dz = shortest_world_delta_z(self.position.z, target.position.z);
         let range = param(params, "range", self.attack_range);
         if dx * dx + dz * dz > range * range {
             return BehaviorStatus::Failure;

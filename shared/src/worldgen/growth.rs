@@ -2,10 +2,10 @@
 //!
 //! Algorithm:
 //!   1. Scatter K seed points across the map (Poisson-disk-style rejection
-//!      for minimum spacing; X wraps).
+//!      for minimum spacing; both axes wrap).
 //!   2. For each cell, perturb its coordinates with a 2-component noise
 //!      warp (fBm_x, fBm_y), then find the nearest seed to the warped point
-//!      (X-wrapped distance). This gives each seed an organic-shaped
+//!      (torus distance). This gives each seed an organic-shaped
 //!      "territory" instead of a straight-edged Voronoi cell.
 //!   3. Record each cell's distance to its assigned seed.
 //!   4. Threshold at the (1 - sea_ratio) quantile: cells closer than the
@@ -23,7 +23,7 @@ use rand::{Rng, SeedableRng};
 
 use super::config::WorldGenConfig;
 use super::grid::bfs_distance_from;
-use super::noise::{fbm_wrap_x, PerlinNoise3D};
+use super::noise::{fbm_wrap_xy, PerlinNoise4D};
 
 /// Warp noise parameters — tuned so the warped-Voronoi boundaries look
 /// organic without being chaotic. Both values are in *reference cells*;
@@ -54,8 +54,8 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
     let n_groups = (config.target_continent_count.max(1) as usize).min(seeds.len());
     let seed_group = cluster_seeds(&seeds, n_groups, world_width, &mut rng);
 
-    let noise_x = PerlinNoise3D::new(config.seed ^ 0x7AA7_AA7A_A7AA_u64);
-    let noise_y = PerlinNoise3D::new(config.seed ^ 0x7BB7_BB7B_B7BB_u64);
+    let noise_x = PerlinNoise4D::new(config.seed ^ 0x7AA7_AA7A_A7AA_u64);
+    let noise_y = PerlinNoise4D::new(config.seed ^ 0x7BB7_BB7B_B7BB_u64);
     let warp_freq = config.scaled_freq(1.0 / WARP_WAVELENGTH);
     let warp_strength = config.scaled_cells(WARP_STRENGTH);
 
@@ -76,7 +76,7 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
 
     for y in 0..res {
         for x in 0..res {
-            let wx_off = fbm_wrap_x(
+            let wx_off = fbm_wrap_xy(
                 &noise_x,
                 x as f32,
                 y as f32,
@@ -86,7 +86,7 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
                 2.0,
                 0.5,
             ) * warp_strength;
-            let wy_off = fbm_wrap_x(
+            let wy_off = fbm_wrap_xy(
                 &noise_y,
                 x as f32,
                 y as f32,
@@ -103,7 +103,8 @@ pub fn growth_mask(config: &WorldGenConfig) -> Vec<u8> {
             for (id, &(sx, sy)) in seeds.iter().enumerate() {
                 let dx_raw = (wx - sx as f32).abs();
                 let dx = dx_raw.min(world_width - dx_raw);
-                let dy = wy - sy as f32;
+                let dy_raw = (wy - sy as f32).abs();
+                let dy = dy_raw.min(world_width - dy_raw);
                 let d = dx * dx + dy * dy;
                 let g = seed_group[id] as usize;
                 if d < best_group_d[g] {
@@ -187,7 +188,7 @@ fn scatter_small_islands(
     count: usize,
     mean_radius: f32,
     min_clearance: usize,
-    noise: &PerlinNoise3D,
+    noise: &PerlinNoise4D,
     world_width: f32,
     rng: &mut SmallRng,
 ) {
@@ -227,7 +228,8 @@ fn scatter_small_islands(
         let too_close_to_other = placed.iter().any(|&(px, py, pr)| {
             let dx_raw = (px as f32 - cx as f32).abs();
             let dx = dx_raw.min(world_width - dx_raw);
-            let dy = py as f32 - cy as f32;
+            let dy_raw = (py as f32 - cy as f32).abs();
+            let dy = dy_raw.min(world_width - dy_raw);
             let d = (dx * dx + dy * dy).sqrt();
             d < pr + radius + min_clearance as f32
         });
@@ -241,21 +243,21 @@ fn scatter_small_islands(
         let noise_strength = radius * 0.35;
         let bb = (radius + noise_strength + 2.0).ceil() as i32;
         for dy in -bb..=bb {
-            let ny = cy as i32 + dy;
-            if ny < 0 || ny >= res as i32 {
-                continue;
-            }
+            let ny = (cy as i32 + dy).rem_euclid(res as i32) as usize;
             for dx in -bb..=bb {
                 let nx = (cx as i32 + dx).rem_euclid(res as i32) as usize;
                 let dist_from_center = ((dx * dx + dy * dy) as f32).sqrt();
+                // Unwrapped coords: the blob is evaluated in one continuous
+                // pass, so the noise needs no periodicity of its own.
                 let n = noise.sample(
                     (cx as f32 + dx as f32) * noise_scale,
                     (cy as f32 + dy as f32) * noise_scale,
                     0.0,
+                    0.0,
                 );
                 let effective_radius = radius + n * noise_strength;
                 if dist_from_center < effective_radius {
-                    mask[ny as usize * res + nx] = 1;
+                    mask[ny * res + nx] = 1;
                 }
             }
         }
@@ -264,9 +266,9 @@ fn scatter_small_islands(
     }
 }
 
-/// Simple k-means clustering on 2D seed positions with X-wrap awareness
-/// (circular mean in X, regular mean in Y). Returns group id [0, n_groups)
-/// for each seed.
+/// Simple k-means clustering on 2D seed positions with torus awareness
+/// (circular mean on both axes). Returns group id [0, n_groups) for each
+/// seed.
 fn cluster_seeds(
     seeds: &[(usize, usize)],
     n_groups: usize,
@@ -295,7 +297,7 @@ fn cluster_seeds(
 
     let mut assignment = vec![0u8; seeds.len()];
     for _ in 0..30 {
-        // Assign each seed to the closest centroid (X-wrap distance).
+        // Assign each seed to the closest centroid (torus distance).
         let mut changed = false;
         for (i, &(sx, sy)) in seeds.iter().enumerate() {
             let mut best_d = f32::INFINITY;
@@ -303,7 +305,8 @@ fn cluster_seeds(
             for (c, &(cx, cy)) in centroids.iter().enumerate() {
                 let dx_raw = (sx as f32 - cx).abs();
                 let dx = dx_raw.min(world_width - dx_raw);
-                let dy = sy as f32 - cy;
+                let dy_raw = (sy as f32 - cy).abs();
+                let dy = dy_raw.min(world_width - dy_raw);
                 let d = dx * dx + dy * dy;
                 if d < best_d {
                     best_d = d;
@@ -326,19 +329,23 @@ fn cluster_seeds(
             if members.is_empty() {
                 continue;
             }
-            // Circular mean in X (so wrap-adjacent seeds cluster together).
+            // Circular mean on both axes (so wrap-adjacent seeds cluster
+            // together).
+            let tau = 2.0 * std::f32::consts::PI;
             let (mut sx_sin, mut sx_cos) = (0.0f32, 0.0f32);
-            let mut sy_sum = 0.0f32;
+            let (mut sy_sin, mut sy_cos) = (0.0f32, 0.0f32);
             for &&(x, y) in &members {
-                let a = 2.0 * std::f32::consts::PI * (x as f32) / world_width;
-                sx_sin += a.sin();
-                sx_cos += a.cos();
-                sy_sum += y as f32;
+                let ax = tau * (x as f32) / world_width;
+                sx_sin += ax.sin();
+                sx_cos += ax.cos();
+                let ay = tau * (y as f32) / world_width;
+                sy_sin += ay.sin();
+                sy_cos += ay.cos();
             }
-            let angle = sx_sin.atan2(sx_cos);
-            let cx = ((angle / (2.0 * std::f32::consts::PI)) * world_width + world_width)
-                .rem_euclid(world_width);
-            let cy = sy_sum / members.len() as f32;
+            let cx =
+                ((sx_sin.atan2(sx_cos) / tau) * world_width + world_width).rem_euclid(world_width);
+            let cy =
+                ((sy_sin.atan2(sy_cos) / tau) * world_width + world_width).rem_euclid(world_width);
             *centroid = (cx, cy);
         }
         if !changed {
@@ -348,8 +355,8 @@ fn cluster_seeds(
     assignment
 }
 
-/// Flood-fill connected components (4-connected, X-wrap), keep the `n`
-/// largest by cell count, convert the rest to sea.
+/// Flood-fill connected components (4-connected on the torus), keep the
+/// `n` largest by cell count, convert the rest to sea.
 fn keep_top_components(mask: &mut [u8], res: usize, n: usize) {
     let total = res * res;
     let mut label = vec![0u32; total]; // 0 = unvisited or sea
@@ -371,20 +378,18 @@ fn keep_top_components(mask: &mut [u8], res: usize, n: usize) {
             let y = i / res;
             let left = if x == 0 { res - 1 } else { x - 1 };
             let right = if x + 1 == res { 0 } else { x + 1 };
+            let up = if y == 0 { res - 1 } else { y - 1 };
+            let down = if y + 1 == res { 0 } else { y + 1 };
             let cands = [
-                Some(y * res + left),
-                Some(y * res + right),
-                if y > 0 { Some((y - 1) * res + x) } else { None },
-                if y + 1 < res {
-                    Some((y + 1) * res + x)
-                } else {
-                    None
-                },
+                y * res + left,
+                y * res + right,
+                up * res + x,
+                down * res + x,
             ];
-            for c in cands.iter().flatten() {
-                if mask[*c] == 1 && label[*c] == 0 {
-                    label[*c] = next_label;
-                    stack.push(*c);
+            for &c in &cands {
+                if mask[c] == 1 && label[c] == 0 {
+                    label[c] = next_label;
+                    stack.push(c);
                 }
             }
         }
@@ -424,7 +429,8 @@ fn place_seeds(
             let ok = seeds.iter().all(|&(px, py)| {
                 let dx = (sx as i64 - px as i64).abs();
                 let dx = dx.min(res_i - dx);
-                let dy = sy as i64 - py as i64;
+                let dy = (sy as i64 - py as i64).abs();
+                let dy = dy.min(res_i - dy);
                 dx * dx + dy * dy >= min_dist_sq
             });
             if ok {
@@ -530,20 +536,11 @@ mod tests {
                 let y = i / n;
                 let left = if x == 0 { n - 1 } else { x - 1 };
                 let right = if x + 1 == n { 0 } else { x + 1 };
-                for &nb in &[
-                    Some(y * n + left),
-                    Some(y * n + right),
-                    if y > 0 { Some((y - 1) * n + x) } else { None },
-                    if y + 1 < n {
-                        Some((y + 1) * n + x)
-                    } else {
-                        None
-                    },
-                ] {
-                    if let Some(nb) = nb {
-                        if mask[nb] == 1 && !visited[nb] {
-                            stack.push(nb);
-                        }
+                let up = if y == 0 { n - 1 } else { y - 1 };
+                let down = if y + 1 == n { 0 } else { y + 1 };
+                for &nb in &[y * n + left, y * n + right, up * n + x, down * n + x] {
+                    if mask[nb] == 1 && !visited[nb] {
+                        stack.push(nb);
                     }
                 }
             }

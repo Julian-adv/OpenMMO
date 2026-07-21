@@ -4,7 +4,10 @@ import {
   type Position,
 } from '../../../utils/movementUtils'
 import type { InteractionExitKind } from './interaction'
-import { shortestWrappedDeltaX } from '../../../terrain/world-wrap'
+import {
+  shortestWrappedDeltaX,
+  shortestWrappedDeltaZ,
+} from '../../../terrain/world-wrap'
 import type { PathWaypoint, SendPlayerMove } from './movement-substrate'
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -137,7 +140,7 @@ export function startClickMovement({
   }
 
   const dx = shortestWrappedDeltaX(currentPos.x, wpPos.x)
-  const dz = wpPos.z - currentPos.z
+  const dz = shortestWrappedDeltaZ(currentPos.z, wpPos.z)
   const playerRotation = Math.atan2(dx, dz)
   const movementState = initMovementState(currentPos, wpPos, 0)
 

@@ -752,7 +752,7 @@ impl super::GameState {
         };
 
         let dx = onlinerpg_shared::shortest_world_delta_x(ground_item.position.x, player_pos.x);
-        let dz = player_pos.z - ground_item.position.z;
+        let dz = onlinerpg_shared::shortest_world_delta_z(ground_item.position.z, player_pos.z);
         if dx * dx + dz * dz > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE {
             self.send_inventory_error(player_id, "Too far away").await;
             return;

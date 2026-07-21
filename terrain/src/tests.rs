@@ -37,6 +37,40 @@ fn region_x_wraps_across_baked_file_range() {
 }
 
 #[test]
+fn tile_z_wraps_across_baked_file_range() {
+    assert_eq!(coords::wrap_tile_z(-256), -256);
+    assert_eq!(coords::wrap_tile_z(255), 255);
+    assert_eq!(coords::wrap_tile_z(256), -256);
+    assert_eq!(coords::wrap_tile_z(-257), 255);
+    assert_eq!(coords::wrap_tile_z(768), -256);
+}
+
+#[test]
+fn region_z_wraps_across_baked_file_range() {
+    assert_eq!(coords::wrap_region_z(-16), -16);
+    assert_eq!(coords::wrap_region_z(15), 15);
+    assert_eq!(coords::wrap_region_z(16), -16);
+    assert_eq!(coords::wrap_region_z(-17), 15);
+}
+
+#[test]
+fn tile_paths_wrap_z_to_opposite_edge() {
+    let base = std::path::Path::new("/data");
+    assert_eq!(
+        coords::heightmap_path(base, 0, 256),
+        coords::heightmap_path(base, 0, -256)
+    );
+    assert_eq!(
+        coords::zone_path(base, 3, 16),
+        coords::zone_path(base, 3, -16)
+    );
+    assert_eq!(
+        coords::object_path(base, 16, -17),
+        coords::object_path(base, -16, 15)
+    );
+}
+
+#[test]
 fn heightmap_path_positive() {
     let p = coords::heightmap_path(Path::new("terrain"), 5, 3);
     assert_eq!(

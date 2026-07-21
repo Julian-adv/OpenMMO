@@ -59,9 +59,9 @@
 //! exactly what this bake would emit there.
 
 use super::super::global_map::GlobalMap;
-use super::super::noise::{fbm2, smoothstep, PerlinNoise};
+use super::super::noise::{fbm_wrap_xy, smoothstep, PerlinNoise4D};
 use super::super::vector_features::{
-    min_distance_to_segments, project_point_to_segment, segments_near_tile_wrap_x, RiverSegment,
+    min_distance_to_segments, project_point_to_segment, segments_near_tile_wrap_xy, RiverSegment,
     Segment,
 };
 use super::constants::{
@@ -199,7 +199,7 @@ pub fn bake_water_field(
     // that matters, keeping the field seam-consistent.
     let tile_max_x = tile_origin_x + (VERTS_PER_SIDE as f32 - 1.0);
     let tile_max_z = tile_origin_z + (VERTS_PER_SIDE as f32 - 1.0);
-    let coast_segs = segments_near_tile_wrap_x(
+    let coast_segs = segments_near_tile_wrap_xy(
         &ctx.coasts_world,
         tile_origin_x,
         tile_origin_z,
@@ -210,8 +210,9 @@ pub fn bake_water_field(
     );
 
     // Bank-bump noise is seeded from the world seed alone (world-space
-    // coordinates, no tile inputs), so seam tiles sample identical values.
-    let turb_noise = PerlinNoise::new(map.config.seed ^ TURB_NOISE_SALT);
+    // coordinates, no tile inputs) and torus-periodic, so seam tiles
+    // sample identical values across either world seam.
+    let turb_noise = PerlinNoise4D::new(map.config.seed ^ TURB_NOISE_SALT);
 
     let mut out = Vec::with_capacity(WATER_FIELD_TOTAL_SIZE);
     out.extend_from_slice(WATER_FIELD_BIN_MAGIC);
@@ -349,7 +350,7 @@ fn compute_pixel(
     river_segs: &[RiverSegment],
     seg_tangents: &[(f32, f32)],
     coast_segs: &[Segment],
-    turb_noise: &PerlinNoise,
+    turb_noise: &PerlinNoise4D,
 ) -> WaterPixel {
     let Some((flow_x, flow_z, idx, t, dist)) =
         weighted_flow_and_nearest(wx, wz, river_segs, seg_tangents)
@@ -474,10 +475,12 @@ fn compute_pixel(
         //    uneven bank chops the passing current.
         let bank_band = smoothstep(0.55 * half_width, 0.9 * half_width, dist)
             * (1.0 - smoothstep(0.95 * half_width, bank_end, dist));
-        let bumps = fbm2(
+        let bumps = fbm_wrap_xy(
             turb_noise,
-            wx * TURB_BANK_NOISE_FREQ,
-            wz * TURB_BANK_NOISE_FREQ,
+            wx,
+            wz,
+            map.config.world_size_m as f32,
+            TURB_BANK_NOISE_FREQ,
             2,
             2.0,
             0.5,
@@ -660,7 +663,7 @@ mod tests {
         // the coastline distance at the centerline projection — a
         // property of the generated test world, not of the inputs above.
         // Derive the expectation from the same query the bake used.
-        let coast_segs = segments_near_tile_wrap_x(
+        let coast_segs = segments_near_tile_wrap_xy(
             &ctx.coasts_world,
             -32.0,
             -32.0,

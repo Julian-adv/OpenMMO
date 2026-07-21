@@ -1,4 +1,4 @@
-import { wrapWorldX } from '../terrain/world-wrap'
+import { wrapWorldX, wrapWorldZ } from '../terrain/world-wrap'
 import { bridgeManager } from './bridgeManager'
 import { dungeonManager } from './dungeonManager'
 import { housingManager } from './housingManager'
@@ -19,28 +19,29 @@ export function entityGroundY(
   fallbackY: number
 ): number {
   const wx = wrapWorldX(x)
+  const wz = wrapWorldZ(z)
 
   if (floorLevel < 0) {
-    return dungeonManager.floorHeightAt(-floorLevel, wx, z) ?? fallbackY
+    return dungeonManager.floorHeightAt(-floorLevel, wx, wz) ?? fallbackY
   }
   if (floorLevel > 0) {
-    return housingManager.floorHeightAt(floorLevel, wx, z) ?? fallbackY
+    return housingManager.floorHeightAt(floorLevel, wx, wz) ?? fallbackY
   }
 
   // Floor 0 still checks both structures: the dungeon entrance ramp and a
   // house stairwell (which spans floors 0..1) are both reported as floor 0
   // until the climber crosses into the floor above.
-  const rampY = dungeonManager.entranceRampHeightAt(wx, z)
+  const rampY = dungeonManager.entranceRampHeightAt(wx, wz)
   if (rampY !== null) return rampY
-  const houseY = housingManager.floorHeightAt(0, wx, z)
+  const houseY = housingManager.floorHeightAt(0, wx, wz)
   if (houseY !== null) return houseY
-  const deckY = bridgeManager.findDeckYAt(wx, z, null)
+  const deckY = bridgeManager.findDeckYAt(wx, wz, null)
   if (deckY !== null) return deckY
 
   // getHeightAtWorldPosition returns 0 for unloaded tiles rather than null,
   // so the guard is what keeps an entity from snapping to sea level.
-  if (heightManager?.hasHeightDataForGrid(wx, z)) {
-    return heightManager.getHeightAtWorldPosition(wx, z)
+  if (heightManager?.hasHeightDataForGrid(wx, wz)) {
+    return heightManager.getHeightAtWorldPosition(wx, wz)
   }
   return fallbackY
 }

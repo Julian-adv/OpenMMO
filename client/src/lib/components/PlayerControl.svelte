@@ -100,7 +100,7 @@
     PlayerControlStateName,
   } from './player-control/fsm/control-state'
   import { createLocalPlayerControlMachine } from './player-control/fsm/state-definitions'
-  import { wrapWorldX } from '../terrain/world-wrap'
+  import { wrapWorldX, wrapWorldZ } from '../terrain/world-wrap'
 
   interface Props {
     onStateChange: (state: PlayerState) => void
@@ -373,7 +373,11 @@
     rotation: number,
     append = false
   ) {
-    const wrappedPosition = { ...position, x: wrapWorldX(position.x) }
+    const wrappedPosition = {
+      ...position,
+      x: wrapWorldX(position.x),
+      z: wrapWorldZ(position.z),
+    }
     lastSentPosition = wrappedPosition
     const floorLevel = wireFloorLevel()
     lastSentFloorLevel = floorLevel
@@ -385,9 +389,10 @@
 
   function writePlayerPosition(position: Position, rotation: number) {
     const wrappedX = wrapWorldX(position.x)
+    const wrappedZ = wrapWorldZ(position.z)
     gameStore.update((state) => {
       if (state.currentPlayer) {
-        state.currentPlayer.position.set(wrappedX, position.y, position.z)
+        state.currentPlayer.position.set(wrappedX, position.y, wrappedZ)
         state.currentPlayer.rotation = rotation
       }
       return state
@@ -677,7 +682,8 @@
     },
     requestMove: (target: { x: number; z: number }) => {
       const tx = wrapWorldX(target.x)
-      handleClickToMove({ x: tx, y: sampleHeight(tx, target.z), z: target.z })
+      const tz = wrapWorldZ(target.z)
+      handleClickToMove({ x: tx, y: sampleHeight(tx, tz), z: tz })
     },
   }
 
