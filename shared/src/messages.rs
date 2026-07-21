@@ -217,6 +217,10 @@ pub enum ClientMessage {
     DropItem {
         instance_id: u64,
     },
+    /// The pickup crouch started. Sent at the clip's first frame, whereas
+    /// `PickupItem` waits for the grab moment ~35% in, so nearby players see
+    /// the whole animation instead of joining it late.
+    PickupStarted,
     PickupItem {
         instance_id: u64,
     },

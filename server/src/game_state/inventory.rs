@@ -3,7 +3,6 @@ use crate::item_defs::UseEffect;
 use crate::types::{PlayerId, ServerMessage};
 use crate::world_config::world_config;
 use onlinerpg_shared::inventory::{EquipSlot, GroundItem, ItemInstance, PlayerInventory};
-use onlinerpg_shared::Position;
 use rand::Rng;
 use tracing::{info, warn};
 
@@ -829,29 +828,34 @@ impl super::GameState {
             None,
         )
         .await;
-        self.broadcast_pickup_animation(player_id, &item_position, player_floor)
-            .await;
     }
 
-    /// Show the pickup crouch on nearby clients. Transient: it bypasses the
-    /// player's stored `object_type`, so no `StopInteraction` follows and a
-    /// late joiner never sees a held pickup pose — remotes end the clip on
-    /// their own.
-    async fn broadcast_pickup_animation(
-        &self,
-        player_id: &PlayerId,
-        position: &Position,
-        floor_level: i8,
-    ) {
+    /// Show the pickup crouch on nearby clients. Driven by `PickupStarted` at
+    /// the clip's first frame, so remotes play it from the top rather than
+    /// joining at the grab moment and finishing a third of a clip late.
+    ///
+    /// Transient: it bypasses the player's stored `object_type`, so no
+    /// `StopInteraction` follows and a late joiner never sees a held pickup
+    /// pose — remotes end the clip on their own. Not gated on the pickup
+    /// succeeding: the player performed the motion either way, and the
+    /// animation carries no item.
+    pub async fn broadcast_pickup_animation(&self, player_id: &PlayerId) {
+        let (position, floor_level) = {
+            let players = self.players.read().await;
+            match players.get(player_id) {
+                Some(p) => (p.position, p.floor_level),
+                None => return,
+            }
+        };
         self.send_direct_message_to_players_within_position(
-            position,
+            &position,
             floor_level,
             super::EVENT_DELIVERY_RADIUS,
             ServerMessage::PlayerInteractionChanged {
                 player_id: *player_id,
                 object_type: Some("pickup".to_string()),
             },
-            None,
+            Some(player_id),
         )
         .await;
     }
@@ -903,8 +907,6 @@ impl super::GameState {
             None,
         )
         .await;
-        self.broadcast_pickup_animation(player_id, &ground_item.position, player_floor)
-            .await;
     }
 
     pub async fn tick_ground_item_despawn(&self) {

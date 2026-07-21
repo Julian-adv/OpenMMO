@@ -1180,8 +1180,11 @@ async fn pickup_broadcasts_the_pickup_animation() {
         );
     }
     let mut watcher_rx = game_state.register_direct_channel(&pid("watcher")).await;
+    let mut picker_rx = game_state.register_direct_channel(&pid("picker")).await;
 
-    game_state.pickup_item(&pid("picker"), 42).await;
+    // Driven by PickupStarted at the clip's first frame, not by the pickup
+    // itself — which lands a third of a clip later, at the grab moment.
+    game_state.broadcast_pickup_animation(&pid("picker")).await;
 
     let mut saw_animation = false;
     while let Ok(msg) = watcher_rx.try_recv() {
@@ -1199,6 +1202,43 @@ async fn pickup_broadcasts_the_pickup_animation() {
         saw_animation,
         "nearby players must see the pickup animation"
     );
+
+    // The picker already plays it locally, so it is excluded from the fan-out.
+    while let Ok(msg) = picker_rx.try_recv() {
+        assert!(
+            !matches!(msg, ServerMessage::PlayerInteractionChanged { .. }),
+            "the picker must not receive its own pickup broadcast"
+        );
+    }
+
+    // The pickup itself no longer carries the animation.
+    game_state.pickup_item(&pid("picker"), 42).await;
+    while let Ok(msg) = watcher_rx.try_recv() {
+        assert!(
+            !matches!(msg, ServerMessage::PlayerInteractionChanged { .. }),
+            "pickup_item must not broadcast the animation a second time"
+        );
+    }
+}
+
+#[tokio::test]
+async fn pickup_animation_is_not_sent_beyond_the_delivery_radius() {
+    let game_state = make_test_game_state("pickup_anim_radius");
+    game_state.add_player(make_player("picker", 0.0, 0.0)).await;
+    let far = super::EVENT_DELIVERY_RADIUS + 10.0;
+    game_state
+        .add_player(make_player("distant", far, 0.0))
+        .await;
+    let mut distant_rx = game_state.register_direct_channel(&pid("distant")).await;
+
+    game_state.broadcast_pickup_animation(&pid("picker")).await;
+
+    while let Ok(msg) = distant_rx.try_recv() {
+        assert!(
+            !matches!(msg, ServerMessage::PlayerInteractionChanged { .. }),
+            "the crouch must not reach players outside the delivery radius"
+        );
+    }
 }
 
 // --- Haggling (economy phase 2) ---

@@ -487,6 +487,12 @@ class NetworkManager {
     this.sendMessage({ DropItem: { instance_id: instanceId } })
   }
 
+  /// Sent at the pickup clip's first frame so nearby players see the crouch
+  /// from the top; `sendPickupItem` follows at the grab moment.
+  sendPickupStarted() {
+    this.sendMessage('PickupStarted')
+  }
+
   sendPickupItem(instanceId: number) {
     if (!this.isNetworkableInstanceId(instanceId, 'pickup')) return
     this.sendMessage({ PickupItem: { instance_id: instanceId } })

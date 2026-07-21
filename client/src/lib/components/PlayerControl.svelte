@@ -943,6 +943,7 @@
     // The picking_up state OWNS the instance id being grabbed; entering it drops
     // any moving data (the far-pickup approach that led here).
     currentSpeed = 0
+    networkManager.sendPickupStarted()
     setPlayerState(result.nextPlayerState)
     playerControlMachine.transition({
       name: 'picking_up',

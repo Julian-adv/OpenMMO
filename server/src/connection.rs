@@ -1030,6 +1030,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::PickupStarted => {
+            if let Some(id) = &state.player_id {
+                game_state.broadcast_pickup_animation(id).await;
+            }
+        }
+
         ClientMessage::PickupItem { instance_id } => {
             if let Some(id) = &state.player_id {
                 game_state.pickup_item(id, instance_id).await;
