@@ -1,5 +1,73 @@
 # Runtime Performance Optimization (60fps)
 
+## Passability cache: spatial index investigated, not built (2026-07-21)
+
+### Question
+
+`PassabilityCache` is a `HashMap<String, RuntimePassability>` with no spatial
+index (`shared/src/pathfinding/mod.rs`). Every collision query iterates **all**
+entries and AABB-rejects each. With a 5,000-concurrent-user target, does this
+need a region-bucketed index?
+
+### Answer: no. Do not build one yet.
+
+### Findings
+
+**The cache holds 9 entries, not ~170.**
+
+| Source | Files on disk | Cache entries |
+|---|---|---|
+| `data/terrain/objects/*.json` | 162 | **3** |
+| `data/housing/*/*.json` | 5 | **5** |
+| `data/dungeons.json` | 1 | **1** |
+
+A region file only leaves an entry if it holds *solid* furniture — 9 types have
+footprints (`data/furniture_footprints.json`); everything else is decorative and
+`sync_region_furniture` removes the key. Measured: 282 placements across all 162
+files, of which **10 are solid, in 3 regions**.
+
+> The boot log used to report *files parsed* (`162 furniture regions`),
+> overstating the cache 54× and misleading this very investigation. Fixed to
+> count entries.
+
+**Entry count does not scale with players.** All three sources are
+admin-authored: housing REST writes go through `require_admin_for_writes`
+(`server/src/main.rs`), furniture regions come from map-editor saves, dungeons
+from `data/dungeons.csv`. 5,000 users produce the same 9 entries.
+
+**The server never runs A\*.** Zero `find_path` call sites in `server/src`.
+Monster AI is owner-authoritative and runs client-side
+(`monsterManager.ai_tick_brain`), so each browser pathfinds only for its own
+handful of monsters. The "up to 8,000 cache scans per path query" cost of A\*
+(2,000 nodes × 4 neighbours) lands on individual tabs, never on the server.
+
+**Server cost is small.** `tick_player_movement` runs at 5 Hz
+(`server/src/main.rs`), skips non-moving players, and costs ~2–4 scans of 9
+entries per moving player per tick. 5,000 simultaneous movers ≈ under 1M float
+comparisons/sec total.
+
+### Revisit when any of these becomes true
+
+1. **More furniture types get footprints.** A furniture entry's AABB is the
+   union of every solid piece across a **1024 m** region. Today that spans ≤14 m,
+   so AABB rejection works. Marking common decorative objects solid inflates
+   those AABBs toward full-region size and **AABB rejection stops rejecting** —
+   this is the real trigger, and it is a content decision, not a load one.
+2. **Housing opens to player building.** Houses are one entry each and are
+   currently admin-gated with no per-player cap. Removing the gate makes entry
+   count grow with player count — the only unbounded axis.
+3. **Dungeon count grows a lot.** Each entry is 80×80 m with 5–20 floors of
+   6,400 cells (up to ~128 KB). One shared instance per entrance, so players
+   don't multiply them; authored content does.
+
+### Related fix
+
+The browser loads one furniture region at a time and never dropped the rest, so
+its cache grew per region visited. `furnitureManager.evictDistant` now keeps the
+current region **plus its 8 neighbours** — evicting the region just crossed out
+of would drop collision for furniture right across a boundary that the server
+still blocks, desyncing prediction at region seams.
+
 ## Round 2 (2026-04-09)
 
 ### Problem

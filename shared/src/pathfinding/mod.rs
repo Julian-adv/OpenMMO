@@ -104,6 +104,12 @@ pub struct PathResult {
 }
 
 /// Type alias for the passability cache used throughout the API.
+///
+/// Deliberately unindexed: every query walks all entries and AABB-rejects.
+/// The entry count is content-authored (houses, furniture regions, dungeons),
+/// not player-driven, and sits in the single digits — see
+/// `doc/RUNTIME_PERFORMANCE.md` for the measurements and for the conditions
+/// under which a spatial index becomes worth building.
 pub type PassabilityCache = HashMap<String, RuntimePassability>;
 
 #[cfg(test)]
