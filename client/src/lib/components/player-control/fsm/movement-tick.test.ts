@@ -6,6 +6,7 @@ import {
   syncPlayerTerrainHeight,
   type MovementOutcomeActions,
 } from './movement-tick'
+import { directPathing } from './pathing.fixture'
 
 function actions(): MovementOutcomeActions {
   return {
@@ -204,6 +205,8 @@ function baseInput() {
       update: vi.fn(),
     },
     cooldownMs: 1500,
+    chaseGoal: null,
+    chasePathing: directPathing(),
     getMonsterInfo: vi.fn(),
     findMonsterPosition: vi.fn(),
     sampleHeight: () => 0,

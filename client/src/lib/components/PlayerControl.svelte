@@ -8,6 +8,7 @@
     type LocalPlayer,
   } from '../stores/gameStore'
   import { networkManager } from '../network/socket'
+  import type { PositionCorrection } from '../network/networkTypes'
   import { monsterManager } from '../managers/monsterManager'
   import { groundItemManager } from '../managers/groundItemManager'
   import { combatController } from '../managers/combatController'
@@ -93,7 +94,9 @@
     beginAttack,
     ensureAttackState,
     transitionAttackToIdle,
+    type ChaseMovement,
   } from './player-control/fsm/combat'
+  import type { Pathing } from './player-control/fsm/movement-substrate'
   import { buildAttackState } from './player-control/player-state-builders'
   import type {
     MovingControlState,
@@ -396,6 +399,21 @@
     })
   }
 
+  // The server refused a step, so we are somewhere it cannot follow. Snap to
+  // its copy and drop the path that walked us out of sync — keeping it would
+  // just march us back into the same refusal. Combat is left alone on purpose:
+  // dropping the moving state drops the chase goal with it, so the next tick
+  // re-routes from where we now actually are.
+  function applyPositionCorrection(correction: PositionCorrection) {
+    stopMovement()
+    playerRotation = correction.rotation
+    playerFloorLevel.set(correction.floorLevel)
+    writePlayerPosition(
+      { x: correction.x, y: correction.y, z: correction.z },
+      correction.rotation
+    )
+  }
+
   // Current player state
   let playerState = $state<PlayerState>({
     state: 'idle',
@@ -565,27 +583,27 @@
       updatePlayerState()
     },
     beginAttack: initiateAttack,
-    setChasingMovement: (
-      nextMovementTarget: Position,
-      nextMovementState: MovementState,
-      nextRotation: number
-    ) => {
-      playerRotation = nextRotation
+    setChasingMovement: (chase: ChaseMovement) => {
+      playerRotation = chase.playerRotation
       // Chase reports as 'moving' (playerState stays 'moving' while pathing to
-      // the monster); 'attacking' is reserved for in-range swinging. Update the
-      // live moving state in place (preserving its A* path), or — when chase
-      // resumes from the attacking state — start a fresh pathless moving state.
+      // the monster); 'attacking' is reserved for in-range swinging. Install the
+      // freshly routed path on the live moving state, or — when chase resumes
+      // from the attacking state — start a new moving state around it.
       const m = movingState()
       if (m) {
-        m.target = nextMovementTarget
-        m.movementState = nextMovementState
+        m.target = chase.movementTarget
+        m.movementState = chase.movementState
+        m.waypoints = chase.pathWaypoints
+        m.waypointIndex = 0
+        m.chaseGoal = chase.chaseGoal
       } else {
         playerControlMachine.transition({
           name: 'moving',
-          target: nextMovementTarget,
-          movementState: nextMovementState,
-          waypoints: [],
+          target: chase.movementTarget,
+          movementState: chase.movementState,
+          waypoints: chase.pathWaypoints,
           waypointIndex: 0,
+          chaseGoal: chase.chaseGoal,
           pendingPickupAfterMove: null,
         })
       }
@@ -603,6 +621,17 @@
       updatePlayerState()
       transitionTo('attacking')
     },
+  }
+
+  // Hoisted like the action bags above: this is rebuilt every frame otherwise,
+  // and `currentFloor` is a store read chase consumes at most ~1Hz.
+  const chasePathing: Pathing = {
+    get currentFloor() {
+      return currentPassabilityFloor()
+    },
+    getFloorAt: getFloorAtForClick,
+    findPath,
+    waypointHeight,
   }
 
   const movementTickActions = {
@@ -696,10 +725,12 @@
       movementState: m?.movementState ?? null,
       pathWaypoints: m?.waypoints ?? [],
       currentWaypointIndex: m?.waypointIndex ?? 0,
+      chaseGoal: m?.chaseGoal ?? null,
       config: MOVEMENT_CONFIG,
       isInCombat: combatController.isInCombat,
       combatController,
       cooldownMs: attackCooldown ? attackCooldown * 1000 : 1500,
+      chasePathing,
       getMonsterInfo: (monsterId) => {
         const monsterData = monsterManager.monsters.get(monsterId)
         return monsterData
@@ -792,6 +823,7 @@
           movementState: started.movementState,
           waypoints: started.pathWaypoints,
           waypointIndex: started.currentWaypointIndex,
+          chaseGoal: null,
           pendingPickupAfterMove: started.pendingPickupAfterMoveInstanceId,
         })
         updatePlayerState(started.movementState.totalDistance)
@@ -1308,6 +1340,7 @@
       isCurrentPlayer: (id) => !!currentPlayer && currentPlayer.id === id,
       isInteracting: () => playerState.state === 'interact',
       onRespawned: transitionToRespawned,
+      onPositionCorrected: applyPositionCorrection,
       onInteractionRejected: () =>
         enqueuePlayerControlEvent({ type: 'network_interaction_rejected' }),
     })

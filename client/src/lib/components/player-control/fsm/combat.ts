@@ -14,78 +14,82 @@ import {
   buildAttackState,
   buildIdleAfterAttack,
 } from '../player-state-builders'
+import {
+  routeFirstLeg,
+  type Pathing,
+  type RoutedLeg,
+  type SendPlayerMove,
+} from './movement-substrate'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Chase target update
 // ───────────────────────────────────────────────────────────────────────────
 
+/** How far the monster must drift from the goal the live path was routed to
+ *  before routing again is worth it. `CombatController` already throttles chase
+ *  updates to ~1Hz; this drops the ones where it is only milling about. */
+const CHASE_REPATH_DISTANCE = 1.5
+
 interface ApplyChaseTargetInput {
   currentPos: Position
   newTarget?: Position
-  movementTarget: Position | null
+  /** Monster position the live path was routed to, or null when there is none. */
+  chaseGoal: Position | null
   movementState: MovementState | null
   currentSpeed: number
-  sendPlayerMove: (position: Position, rotation: number) => void
+  pathing: Pathing
+  sendPlayerMove: SendPlayerMove
+}
+
+/** A freshly routed chase leg, ready to install on the moving state. */
+export interface ChaseMovement extends RoutedLeg {
+  movementState: MovementState
+  chaseGoal: Position
 }
 
 export type ChaseTargetOutcome =
   | { kind: 'unchanged' }
-  | {
-      kind: 'updated'
-      movementTarget: Position
-      movementState: MovementState
-      playerRotation: number
-    }
+  | ({ kind: 'updated' } & ChaseMovement)
 
 export function applyChaseTargetUpdate({
   currentPos,
   newTarget,
-  movementTarget,
+  chaseGoal,
   movementState,
   currentSpeed,
+  pathing,
   sendPlayerMove,
 }: ApplyChaseTargetInput): ChaseTargetOutcome {
   if (!newTarget) return { kind: 'unchanged' }
 
-  const changed =
-    !movementTarget ||
-    Math.abs(movementTarget.x - newTarget.x) > 0.1 ||
-    Math.abs(movementTarget.z - newTarget.z) > 0.1
-
-  if (!changed) return { kind: 'unchanged' }
-
-  const dx = shortestWrappedDeltaX(currentPos.x, newTarget.x)
-  const dz = newTarget.z - currentPos.z
-  const nextMovementState =
-    movementState ??
-    initMovementState(
-      {
-        x: currentPos.x,
-        y: currentPos.y,
-        z: currentPos.z,
-      },
-      newTarget,
-      currentSpeed
-    )
-
-  if (movementState) {
-    nextMovementState.targetPos = { ...newTarget }
-    nextMovementState.totalDistance = Math.sqrt(dx * dx + dz * dz)
-    nextMovementState.startPos = {
-      x: currentPos.x,
-      y: currentPos.y,
-      z: currentPos.z,
-    }
+  if (
+    chaseGoal &&
+    Math.abs(shortestWrappedDeltaX(chaseGoal.x, newTarget.x)) <=
+      CHASE_REPATH_DISTANCE &&
+    Math.abs(chaseGoal.z - newTarget.z) <= CHASE_REPATH_DISTANCE
+  ) {
+    return { kind: 'unchanged' }
   }
 
-  const playerRotation = Math.atan2(dx, dz)
-  sendPlayerMove(newTarget, playerRotation)
+  const leg = routeFirstLeg(currentPos, newTarget, pathing, sendPlayerMove)
+
+  // Unlike a click, chase retargets a live integrator rather than starting one.
+  const start = { x: currentPos.x, y: currentPos.y, z: currentPos.z }
+  const nextMovementState =
+    movementState ?? initMovementState(start, leg.movementTarget, currentSpeed)
+  if (movementState) {
+    const dx = shortestWrappedDeltaX(currentPos.x, leg.movementTarget.x)
+    const dz = leg.movementTarget.z - currentPos.z
+    nextMovementState.targetPos = { ...leg.movementTarget }
+    nextMovementState.totalDistance = Math.sqrt(dx * dx + dz * dz)
+    nextMovementState.startPos = start
+  }
 
   return {
     kind: 'updated',
-    movementTarget: newTarget,
+    ...leg,
     movementState: nextMovementState,
-    playerRotation,
+    chaseGoal: { ...newTarget },
   }
 }
 
@@ -113,12 +117,13 @@ export interface TickCombatInput {
   playerStateName: PlayerStateName
   isMoving: boolean
   currentSpeed: number
-  movementTarget: Position | null
+  chaseGoal: Position | null
   movementState: MovementState | null
   cooldownMs: number
+  pathing: Pathing
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
-  sendPlayerMove: (position: Position, rotation: number) => void
+  sendPlayerMove: SendPlayerMove
 }
 
 export type CombatTickOutcome =
@@ -126,12 +131,7 @@ export type CombatTickOutcome =
   | { kind: 'idle' }
   | { kind: 'reached_attack_range'; monsterId: string }
   | { kind: 'chasing_unchanged' }
-  | {
-      kind: 'chasing_updated'
-      movementTarget: Position
-      movementState: MovementState
-      playerRotation: number
-    }
+  | ({ kind: 'chasing_updated' } & ChaseMovement)
   | { kind: 'attacking'; playerRotation: number }
   | {
       kind: 'attack_cycle'
@@ -146,9 +146,10 @@ export function tickCombat({
   playerStateName,
   isMoving,
   currentSpeed,
-  movementTarget,
+  chaseGoal,
   movementState,
   cooldownMs,
+  pathing,
   getMonsterInfo,
   findMonsterPosition,
   sendPlayerMove,
@@ -177,19 +178,15 @@ export function tickCombat({
       const chase = applyChaseTargetUpdate({
         currentPos: playerPos,
         newTarget: result.newTarget,
-        movementTarget,
+        chaseGoal,
         movementState,
         currentSpeed,
+        pathing,
         sendPlayerMove,
       })
 
       if (chase.kind === 'unchanged') return { kind: 'chasing_unchanged' }
-      return {
-        kind: 'chasing_updated',
-        movementTarget: chase.movementTarget,
-        movementState: chase.movementState,
-        playerRotation: chase.playerRotation,
-      }
+      return { ...chase, kind: 'chasing_updated' }
     }
     case 'attacking':
       return { kind: 'attacking', playerRotation: result.rotation }
@@ -218,11 +215,7 @@ export interface CombatOutcomeActions {
   stopMovingToIdle: () => void
   prepareReachedAttackRange: () => void
   beginAttack: (monsterId: string) => void
-  setChasingMovement: (
-    movementTarget: Position,
-    movementState: MovementState,
-    playerRotation: number
-  ) => void
+  setChasingMovement: (chase: ChaseMovement) => void
   showAttackState: (playerRotation: number) => void
   sendAttackCycle: (monsterId: string, playerRotation: number) => void
 }
@@ -241,13 +234,13 @@ export function applyCombatTickOutcome(
       actions.beginAttack(outcome.monsterId)
       return { kind: 'handled' }
 
-    case 'chasing_updated':
-      actions.setChasingMovement(
-        outcome.movementTarget,
-        outcome.movementState,
-        outcome.playerRotation
-      )
-      return { kind: 'continue_movement' }
+    case 'chasing_updated': {
+      const { kind: _kind, ...chase } = outcome
+      actions.setChasingMovement(chase)
+      // The caller's movement locals still describe the path we just replaced,
+      // so skip this frame's step rather than walk a stale waypoint list.
+      return { kind: 'handled' }
+    }
 
     case 'chasing_unchanged':
     case 'none':
@@ -284,12 +277,13 @@ interface RunCombatFrameInput {
   playerStateName: PlayerStateName
   isMoving: boolean
   currentSpeed: number
-  movementTarget: Position | null
+  chaseGoal: Position | null
   movementState: MovementState | null
   cooldownMs: number
+  pathing: Pathing
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
-  sendPlayerMove: (position: Position, rotation: number) => void
+  sendPlayerMove: SendPlayerMove
   actions: CombatOutcomeActions
 }
 
@@ -301,9 +295,10 @@ export function runCombatFrame({
   playerStateName,
   isMoving,
   currentSpeed,
-  movementTarget,
+  chaseGoal,
   movementState,
   cooldownMs,
+  pathing,
   getMonsterInfo,
   findMonsterPosition,
   sendPlayerMove,
@@ -322,9 +317,10 @@ export function runCombatFrame({
     playerStateName,
     isMoving,
     currentSpeed,
-    movementTarget,
+    chaseGoal,
     movementState,
     cooldownMs,
+    pathing,
     getMonsterInfo,
     findMonsterPosition,
     sendPlayerMove,

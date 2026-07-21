@@ -1,4 +1,4 @@
-import type { Position } from './networkTypes'
+import type { Position, PositionCorrection } from './networkTypes'
 import { hmrSingleton } from '../utils/hmr'
 import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
@@ -71,6 +71,7 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  readonly positionCorrected = createEvent<(c: PositionCorrection) => void>()
 
   private get messageEvents() {
     return {
@@ -84,6 +85,7 @@ class NetworkManager {
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
+      positionCorrected: this.positionCorrected,
     }
   }
 

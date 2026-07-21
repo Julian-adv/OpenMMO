@@ -644,6 +644,18 @@ pub enum ServerMessage {
         applied_modifier_pct: i32,
         message: String,
     },
+    /// Direct to one player: the movement sim refused a step, so the client has
+    /// walked somewhere the server cannot follow. Snap back to the server's copy
+    /// and drop the path that led there — keeping it would just walk into the
+    /// same refusal again. Carries no `player_id`: it only ever goes to the
+    /// player it corrects. Not a relocation, so no camera reset or dungeon
+    /// resync the way `PlayerTeleported` does.
+    PositionCorrected {
+        position: Position,
+        rotation: f32,
+        #[serde(default)]
+        floor_level: i8,
+    },
 }
 
 pub use crate::entity::PlayerId;

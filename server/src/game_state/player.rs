@@ -14,6 +14,11 @@ const MAX_MOVE_TARGET_DISTANCE: f32 = 60.0;
 /// Most queued waypoints per player; legit smoothed paths stay well under.
 const MAX_QUEUED_WAYPOINTS: usize = 32;
 
+/// Least time between `PositionCorrected` snaps for one player. Long enough
+/// that a client which cannot act on them is not yanked repeatedly, short
+/// enough that a real desync is pulled back before it skews AOI or attack range.
+const POSITION_CORRECTION_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(2);
+
 /// Client-requested destination the server walks the player toward at capped
 /// speed.
 #[derive(Clone)]
@@ -509,6 +514,7 @@ impl super::GameState {
     pub async fn tick_player_movement(&self, dt: f32) {
         let max_step = PLAYER_MOVE_SPEED * MOVE_SPEED_SLACK * dt.max(0.0);
         let mut moved: Vec<(PlayerId, Position, i8, Player)> = Vec::new();
+        let mut refused: Vec<(PlayerId, ServerMessage)> = Vec::new();
         {
             let mut queues = self.movement_intents.write().await;
             if queues.is_empty() {
@@ -549,12 +555,13 @@ impl super::GameState {
                         )
                     };
                     // Edge-crossing subset of the client's continuous-mover
-                    // check (no body radius, on the leg's own floor). A
-                    // blocked step stops the player and drops the queue.
+                    // check (no body radius, on the leg's own floor), including
+                    // its wall slide. Only a step both axes refuse stops the
+                    // player and drops the queue.
                     if intent.check_collision {
                         let step_floor =
                             super::passability::authoritative_floor(&cache, &player.position);
-                        if let Some(info) = super::passability::wrapped_block_info(
+                        match super::passability::resolve_step(
                             &cache,
                             player.position.x,
                             player.position.z,
@@ -563,27 +570,42 @@ impl super::GameState {
                             step_floor,
                             player.position.y,
                         ) {
-                            // Stays at warn: the server's check is a subset of
-                            // the client's, so a hit means the two disagree —
-                            // a bug signal, not an expected outcome.
-                            warn!(
-                            "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) y={:.1}->{:.1} \
-                             floor={} (intent {}) by {} stairwell={} consulted={}",
-                            player_id,
-                            player.position.x,
-                            player.position.z,
-                            step_x,
-                            step_z,
-                            player.position.y,
-                            step_y,
-                            step_floor,
-                            intent.floor_level,
-                            info.key,
-                            info.stairwell,
-                            info.consulted
-                            );
-                            blocked = true;
-                            break;
+                            super::passability::StepOutcome::Clear => {}
+                            super::passability::StepOutcome::Slid(slid_x, slid_z) => {
+                                // The leg is unfinished: keep it queued so the
+                                // next tick resumes from the slid position.
+                                player.rotation = intent.rotation;
+                                player.position = Position {
+                                    x: wrap_world_x(slid_x),
+                                    y: step_y,
+                                    z: slid_z,
+                                };
+                                break;
+                            }
+                            super::passability::StepOutcome::Blocked(info) => {
+                                // Stays at warn: with the slide in place a hit
+                                // means client and server disagree — a bug
+                                // signal, not an expected outcome.
+                                warn!(
+                                    "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) \
+                                     y={:.1}->{:.1} floor={} (intent {}) by {} stairwell={} \
+                                     consulted={}",
+                                    player_id,
+                                    player.position.x,
+                                    player.position.z,
+                                    step_x,
+                                    step_z,
+                                    player.position.y,
+                                    step_y,
+                                    step_floor,
+                                    intent.floor_level,
+                                    info.key,
+                                    info.stairwell,
+                                    info.consulted
+                                );
+                                blocked = true;
+                                break;
+                            }
                         }
                     }
                     player.rotation = intent.rotation;
@@ -610,9 +632,21 @@ impl super::GameState {
                 {
                     moved.push((*player_id, old_position, old_floor, player.clone()));
                 }
+                if blocked {
+                    refused.push((
+                        *player_id,
+                        ServerMessage::PositionCorrected {
+                            position: player.position,
+                            rotation: player.rotation,
+                            floor_level: player.floor_level,
+                        },
+                    ));
+                }
                 !blocked && !waypoints.is_empty()
             });
         }
+
+        self.correct_refused_positions(refused).await;
 
         for (player_id, old_position, old_floor, moved_player) in moved {
             let update_msg = ServerMessage::PlayerMoved {
@@ -629,6 +663,37 @@ impl super::GameState {
                 update_msg,
             )
             .await;
+        }
+    }
+
+    /// Tell players whose step was refused where the server actually has them.
+    /// Nothing else reconciles the two sims — the client ignores its own
+    /// `PlayerMoved` — so a refusal would otherwise strand the two apart.
+    async fn correct_refused_positions(&self, refused: Vec<(PlayerId, ServerMessage)>) {
+        if refused.is_empty() {
+            return;
+        }
+        let now = std::time::Instant::now();
+        let due: Vec<_> = {
+            let mut last = self.last_position_correction.write().await;
+            last.retain(|_, at| now.duration_since(*at) < POSITION_CORRECTION_COOLDOWN);
+            // Expired entries are gone, so a survivor means the cooldown is
+            // still running. Not re-stamped when it suppresses a refusal: that
+            // would hold a player who blocks every tick past the cooldown
+            // forever, and they are exactly who needs the next snap.
+            refused
+                .into_iter()
+                .filter(|(player_id, _)| {
+                    let due = !last.contains_key(player_id);
+                    if due {
+                        last.insert(*player_id, now);
+                    }
+                    due
+                })
+                .collect()
+        };
+        for (player_id, msg) in due {
+            self.send_direct_message(&player_id, msg).await;
         }
     }
 

@@ -4,8 +4,12 @@ import {
   type Position,
 } from '../../../utils/movementUtils'
 import type { InteractionExitKind } from './interaction'
-import { shortestWrappedDeltaX } from '../../../terrain/world-wrap'
-import type { PathWaypoint, SendPlayerMove } from './movement-substrate'
+import {
+  routeFirstLeg,
+  type Pathing,
+  type PathWaypoint,
+  type SendPlayerMove,
+} from './movement-substrate'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Move-request decision (click → start / exit-interaction / ignore)
@@ -74,21 +78,10 @@ export function decideMoveRequest({
 // Path-based click movement initialization
 // ───────────────────────────────────────────────────────────────────────────
 
-interface StartClickMovementInput {
+interface StartClickMovementInput extends Pathing {
   currentPos: Position
   clickPosition: Position
   pickupAfterArrival: number | null
-  currentFloor: number
-  getFloorAt: (x: number, z: number, y: number) => number
-  findPath: (
-    startX: number,
-    startZ: number,
-    startFloor: number,
-    goalX: number,
-    goalZ: number,
-    goalFloor: number
-  ) => { waypoints: PathWaypoint[] }
-  waypointHeight: (floor: number, x: number, z: number) => number
   sendPlayerMove: SendPlayerMove
 }
 
@@ -105,52 +98,14 @@ export function startClickMovement({
   currentPos,
   clickPosition,
   pickupAfterArrival,
-  currentFloor,
-  getFloorAt,
-  findPath,
-  waypointHeight,
   sendPlayerMove,
+  ...pathing
 }: StartClickMovementInput): StartedClickMovement {
-  const goalFloor = getFloorAt(
-    clickPosition.x,
-    clickPosition.z,
-    clickPosition.y
-  )
-  const result = findPath(
-    currentPos.x,
-    currentPos.z,
-    currentFloor,
-    clickPosition.x,
-    clickPosition.z,
-    goalFloor
-  )
-  const pathWaypoints =
-    result.waypoints.length > 0
-      ? result.waypoints
-      : [{ x: clickPosition.x, z: clickPosition.z, floor: goalFloor }]
-
-  const firstWp = pathWaypoints[0]
-  const wpPos: Position = {
-    x: firstWp.x,
-    y: waypointHeight(firstWp.floor, firstWp.x, firstWp.z),
-    z: firstWp.z,
-  }
-
-  const dx = shortestWrappedDeltaX(currentPos.x, wpPos.x)
-  const dz = wpPos.z - currentPos.z
-  const playerRotation = Math.atan2(dx, dz)
-  const movementState = initMovementState(currentPos, wpPos, 0)
-
-  // A fresh path replaces the server's waypoint queue; the substrate then
-  // appends the following legs.
-  sendPlayerMove(wpPos, playerRotation, false)
-
+  const leg = routeFirstLeg(currentPos, clickPosition, pathing, sendPlayerMove)
   return {
-    pathWaypoints,
+    ...leg,
     currentWaypointIndex: 0,
-    movementState,
-    movementTarget: wpPos,
-    playerRotation,
+    movementState: initMovementState(currentPos, leg.movementTarget, 0),
     pendingPickupAfterMoveInstanceId: pickupAfterArrival,
   }
 }
@@ -171,24 +126,13 @@ export interface MoveRequestActions {
   applyStartedMovement: (started: StartedClickMovement) => void
 }
 
-interface RunMoveRequestInput {
+interface RunMoveRequestInput extends Pathing {
   clickPosition: Position
   pickupAfterArrival: number | null
   currentPlayer: MoveRequestPlayer | null
   interactionExit: InteractionExitKind
   isMoving: boolean
   hasKeyboardInput: boolean
-  currentFloor: number
-  getFloorAt: (x: number, z: number, y: number) => number
-  findPath: (
-    startX: number,
-    startZ: number,
-    startFloor: number,
-    goalX: number,
-    goalZ: number,
-    goalFloor: number
-  ) => { waypoints: PathWaypoint[] }
-  waypointHeight: (floor: number, x: number, z: number) => number
   sendPlayerMove: SendPlayerMove
   actions: MoveRequestActions
 }

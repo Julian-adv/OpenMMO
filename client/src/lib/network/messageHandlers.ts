@@ -38,6 +38,7 @@ import type {
   CharacterAttributes,
   CharacterRollResult,
   ServerGroundItem,
+  PositionCorrection,
   ServerMonster,
   ServerPlayer,
 } from './networkTypes'
@@ -172,6 +173,7 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
+  positionCorrected: NetworkEvent<(c: PositionCorrection) => void>
 }
 
 export function handleServerMessage(
@@ -328,6 +330,18 @@ export function handleServerMessage(
       if (existing && existing.floorLevel !== data.floor_level) {
         updatePlayer(data.player_id, { floorLevel: data.floor_level })
       }
+      break
+    }
+
+    case 'PositionCorrected': {
+      // No id to match: it only ever goes to the player it corrects.
+      events.positionCorrected.emit({
+        x: data.position.x,
+        y: data.position.y,
+        z: data.position.z,
+        rotation: data.rotation,
+        floorLevel: data.floor_level ?? 0,
+      })
       break
     }
 

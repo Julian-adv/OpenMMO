@@ -13,6 +13,7 @@ import {
 import {
   stepMovementSubstrate,
   type MovementSubstrateOutcome,
+  type Pathing,
   type PathWaypoint,
   type SendPlayerMove,
 } from './movement-substrate'
@@ -180,10 +181,12 @@ interface RunPlayerMovementTickInput {
   movementState: MovementState | null
   pathWaypoints: PathWaypoint[]
   currentWaypointIndex: number
+  chaseGoal: Position | null
   config: MovementConfig
   isInCombat: boolean
   combatController: CombatControllerLike
   cooldownMs: number
+  chasePathing: Pathing
   getMonsterInfo: (monsterId: string) => MonsterInfo | undefined
   findMonsterPosition: (monsterId: string) => Position | undefined
   sampleHeight: (x: number, z: number) => number
@@ -226,10 +229,12 @@ export function runPlayerMovementTick({
   movementState,
   pathWaypoints,
   currentWaypointIndex,
+  chaseGoal,
   config,
   isInCombat,
   combatController,
   cooldownMs,
+  chasePathing,
   getMonsterInfo,
   findMonsterPosition,
   sampleHeight,
@@ -267,15 +272,18 @@ export function runPlayerMovementTick({
     playerStateName,
     isMoving,
     currentSpeed,
-    movementTarget,
+    chaseGoal,
     movementState,
     cooldownMs,
+    pathing: chasePathing,
     getMonsterInfo,
     findMonsterPosition,
     sendPlayerMove,
     actions: actions.combat,
   })
 
+  // A re-routed chase rewrote the moving state's target and path; the locals
+  // destructured above are now stale, so let the next frame walk the new one.
   if (combatApplication.kind === 'handled') return
 
   if (!isMoving || !movementTarget || !currentPlayer || !movementState) {

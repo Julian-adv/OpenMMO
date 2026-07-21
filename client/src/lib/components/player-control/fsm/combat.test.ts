@@ -17,6 +17,7 @@ import {
   type CombatOutcomeActions,
   type CombatTickOutcome,
 } from './combat'
+import { directPathing } from './pathing.fixture'
 
 function actions(): CombatOutcomeActions {
   return {
@@ -58,9 +59,10 @@ describe('applyChaseTargetUpdate', () => {
 
     const outcome = applyChaseTargetUpdate({
       currentPos,
-      movementTarget: null,
+      chaseGoal: null,
       movementState: null,
       currentSpeed: 0,
+      pathing: directPathing(),
       sendPlayerMove,
     })
 
@@ -68,41 +70,57 @@ describe('applyChaseTargetUpdate', () => {
     expect(sendPlayerMove).not.toHaveBeenCalled()
   })
 
-  it('ignores tiny target changes', () => {
+  it('keeps the live path while the monster mills around its goal', () => {
     const sendPlayerMove = vi.fn()
+    const pathing = directPathing()
 
     const outcome = applyChaseTargetUpdate({
       currentPos,
-      newTarget: { x: 1.05, y: 0, z: 1.05 },
-      movementTarget: { x: 1, y: 0, z: 1 },
+      newTarget: { x: 1.4, y: 0, z: 1.4 },
+      chaseGoal: { x: 1, y: 0, z: 1 },
       movementState: initMovementState(currentPos, { x: 1, y: 0, z: 1 }),
       currentSpeed: 0,
+      pathing,
       sendPlayerMove,
     })
 
     expect(outcome.kind).toBe('unchanged')
+    expect(pathing.findPath).not.toHaveBeenCalled()
     expect(sendPlayerMove).not.toHaveBeenCalled()
   })
 
-  it('initializes chase movement and sends the retarget packet', () => {
+  it('routes around walls and replaces the server queue with the first leg', () => {
     const sendPlayerMove = vi.fn()
-    const newTarget = { x: 3, y: 0, z: 4 }
+    // A detour: the direct line to (3,4) is walled, so A* returns a corner.
+    const pathing = directPathing([
+      { x: 3, z: 0, floor: 0 },
+      { x: 3, z: 4, floor: 0 },
+    ])
 
     const outcome = applyChaseTargetUpdate({
       currentPos,
-      newTarget,
-      movementTarget: null,
+      newTarget: { x: 3, y: 0, z: 4 },
+      chaseGoal: null,
       movementState: null,
       currentSpeed: 1.25,
+      pathing,
       sendPlayerMove,
     })
 
     expect(outcome.kind).toBe('updated')
     if (outcome.kind !== 'updated') return
-    expect(outcome.movementTarget).toBe(newTarget)
+    // The player heads for the detour corner, not straight at the monster.
+    expect(outcome.movementTarget).toEqual({ x: 3, y: 0, z: 0 })
+    expect(outcome.pathWaypoints).toHaveLength(2)
+    expect(outcome.chaseGoal).toEqual({ x: 3, y: 0, z: 4 })
     expect(outcome.movementState.currentSpeed).toBe(1.25)
-    expect(outcome.movementState.totalDistance).toBe(5)
-    expect(sendPlayerMove).toHaveBeenCalledWith(newTarget, Math.atan2(3, 4))
+    // append=false: a fresh path replaces the queue rather than detouring
+    // through whatever the server was still walking toward.
+    expect(sendPlayerMove).toHaveBeenCalledWith(
+      { x: 3, y: 0, z: 0 },
+      Math.atan2(3, 0),
+      false
+    )
   })
 
   it('updates existing movement state in place for chase retargets', () => {
@@ -113,9 +131,10 @@ describe('applyChaseTargetUpdate', () => {
     const outcome = applyChaseTargetUpdate({
       currentPos,
       newTarget,
-      movementTarget: { x: 1, y: 0, z: 1 },
+      chaseGoal: { x: 1, y: 0, z: 1 },
       movementState,
       currentSpeed: 0,
+      pathing: directPathing(),
       sendPlayerMove,
     })
 
@@ -124,6 +143,24 @@ describe('applyChaseTargetUpdate', () => {
     expect(outcome.movementState).toBe(movementState)
     expect(movementState.targetPos).toEqual(newTarget)
     expect(movementState.totalDistance).toBe(10)
+  })
+
+  it('falls back to the monster itself when no path is found', () => {
+    const sendPlayerMove = vi.fn()
+
+    const outcome = applyChaseTargetUpdate({
+      currentPos,
+      newTarget: { x: 3, y: 0, z: 4 },
+      chaseGoal: null,
+      movementState: null,
+      currentSpeed: 0,
+      pathing: directPathing([]),
+      sendPlayerMove,
+    })
+
+    expect(outcome.kind).toBe('updated')
+    if (outcome.kind !== 'updated') return
+    expect(outcome.pathWaypoints).toEqual([{ x: 3, z: 4, floor: 0 }])
   })
 })
 
@@ -141,9 +178,10 @@ describe('tickCombat', () => {
       playerStateName: 'idle',
       isMoving: false,
       currentSpeed: 0,
-      movementTarget: null,
+      chaseGoal: null,
       movementState: null,
       cooldownMs: 1500,
+      pathing: directPathing(),
       getMonsterInfo: vi.fn(),
       findMonsterPosition: vi.fn(),
       sendPlayerMove: vi.fn(),
@@ -167,9 +205,10 @@ describe('tickCombat', () => {
       playerStateName: 'attack',
       isMoving: false,
       currentSpeed: 0,
-      movementTarget: null,
+      chaseGoal: null,
       movementState: null,
       cooldownMs: 1500,
+      pathing: directPathing(),
       getMonsterInfo: vi.fn(() => ({ state: 'idle' })),
       findMonsterPosition: vi.fn(() => ({ x: 1, y: 0, z: 0 })),
       sendPlayerMove: vi.fn(),
@@ -196,9 +235,10 @@ describe('tickCombat', () => {
       playerStateName: 'moving',
       isMoving: true,
       currentSpeed: 0.5,
-      movementTarget: null,
+      chaseGoal: null,
       movementState: null,
       cooldownMs: 1500,
+      pathing: directPathing(),
       getMonsterInfo: vi.fn(() => ({ state: 'idle' })),
       findMonsterPosition: vi.fn(() => ({ x: 3, y: 0, z: 4 })),
       sendPlayerMove,
@@ -207,7 +247,8 @@ describe('tickCombat', () => {
     expect(outcome.kind).toBe('chasing_updated')
     expect(sendPlayerMove).toHaveBeenCalledWith(
       { x: 3, y: 0, z: 4 },
-      Math.atan2(3, 4)
+      Math.atan2(3, 4),
+      false
     )
   })
 })
@@ -236,7 +277,7 @@ describe('applyCombatTickOutcome', () => {
     expect(a.beginAttack).toHaveBeenCalledWith('m1')
   })
 
-  it('continues into movement after chase updates', () => {
+  it('installs the re-routed chase path and skips the stale frame', () => {
     const a = actions()
     const movementTarget = { x: 1, y: 2, z: 3 }
     const movementState = {
@@ -245,24 +286,32 @@ describe('applyCombatTickOutcome', () => {
       targetPos: movementTarget,
       totalDistance: 10,
     }
+    const pathWaypoints = [{ x: 1, z: 3, floor: 0 }]
+    const chaseGoal = { x: 9, y: 0, z: 9 }
 
+    // 'handled', not 'continue_movement': the caller's waypoint locals describe
+    // the path this outcome just replaced.
     expect(
       applyCombatTickOutcome(
         {
           kind: 'chasing_updated',
+          pathWaypoints,
           movementTarget,
           movementState,
           playerRotation: 0.5,
+          chaseGoal,
         },
         a
       )
-    ).toEqual({ kind: 'continue_movement' })
+    ).toEqual({ kind: 'handled' })
 
-    expect(a.setChasingMovement).toHaveBeenCalledWith(
+    expect(a.setChasingMovement).toHaveBeenCalledWith({
+      pathWaypoints,
       movementTarget,
       movementState,
-      0.5
-    )
+      playerRotation: 0.5,
+      chaseGoal,
+    })
   })
 
   it('continues movement for no-op combat outcomes', () => {
@@ -309,9 +358,10 @@ describe('runCombatFrame', () => {
         playerStateName: 'moving',
         isMoving: true,
         currentSpeed: 1,
-        movementTarget: null,
+        chaseGoal: null,
         movementState: null,
         cooldownMs: 1500,
+        pathing: directPathing(),
         getMonsterInfo: vi.fn(),
         findMonsterPosition: vi.fn(),
         sendPlayerMove: vi.fn(),
@@ -334,9 +384,10 @@ describe('runCombatFrame', () => {
         playerStateName: 'moving',
         isMoving: true,
         currentSpeed: 1,
-        movementTarget: null,
+        chaseGoal: null,
         movementState: null,
         cooldownMs: 1500,
+        pathing: directPathing(),
         getMonsterInfo: vi.fn(),
         findMonsterPosition: vi.fn(),
         sendPlayerMove: vi.fn(),

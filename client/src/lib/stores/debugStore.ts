@@ -26,3 +26,14 @@ export interface PlayerDebugInfo {
 }
 
 export const playerDebugInfo = writable<PlayerDebugInfo | null>(null)
+
+/** Flags with gameplay or server reach, reset when the character is not an
+ *  admin. debugSpeedMode is the one that bites: it runs the client at 10x while
+ *  the server stays capped at walk speed, so the two sims drift apart while it
+ *  is set. Purely visual flags are deliberately left alone. */
+export function resetPrivilegedDebugFlags() {
+  debugVisible.set(false)
+  debugSpeedMode.set(false)
+  mapEditorMode.set(false)
+  housingEditorMode.set(false)
+}

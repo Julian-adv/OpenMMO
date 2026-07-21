@@ -2411,10 +2411,182 @@ async fn blocked_leg_drops_remaining_queue() {
             .await;
     }
 
+    // The diagonal into the table grazes it, so the leg slides along X the way
+    // the client does instead of stalling — but it stays unfinished.
     game_state.tick_player_movement(60.0).await;
-    assert_eq!(player_xz(&game_state, &player_id).await, (1.5, 4.5));
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+    // Resuming it walks straight at the sealed cell, which neither axis can
+    // save: the queue drops and the clear third leg is never walked.
     game_state.tick_player_movement(60.0).await;
-    assert_eq!(player_xz(&game_state, &player_id).await, (1.5, 4.5));
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+}
+
+#[tokio::test]
+async fn grazing_corner_slides_instead_of_stalling() {
+    let game_state = make_test_game_state("movement_corner_slide");
+    let player_id = pid("slider");
+    game_state.add_player(make_player("slider", 1.5, 4.5)).await;
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+
+    // A diagonal clipping the sealed cell's corner. The client slides around
+    // it, so a stalling server would strand its shadow a cell behind and refuse
+    // every later leg the client sent from the far side.
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 5.5,
+                },
+                false,
+            ),
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+}
+
+#[tokio::test]
+async fn repeated_beeline_past_a_wall_does_not_pin_the_shadow() {
+    let game_state = make_test_game_state("movement_no_pin");
+    let player_id = pid("chaser");
+    game_state.add_player(make_player("chaser", 2.5, 4.5)).await;
+    // A wall of sealed cells along z=5, open past x=3.
+    let wall = [
+        table_placement(0.5, 5.5),
+        table_placement(1.5, 5.5),
+        table_placement(2.5, 5.5),
+    ];
+    game_state.sync_region_furniture(0, 0, &wall);
+
+    // Combat chase sends the monster's raw position, not a pathfound leg, so
+    // every packet is a fresh beeline through the wall. A shadow that stalls on
+    // those never reaches the far side and refuses each later packet forever —
+    // the production symptom this guards.
+    for _ in 0..4 {
+        game_state
+            .update_player_position(
+                &player_id,
+                move_cmd(
+                    Position {
+                        x: 3.5,
+                        y: 0.0,
+                        z: 6.5,
+                    },
+                    false,
+                ),
+                false,
+                false,
+            )
+            .await;
+        game_state.tick_player_movement(1.0).await;
+    }
+
+    assert_eq!(player_xz(&game_state, &player_id).await, (3.5, 6.5));
+}
+
+/// Drain a direct channel and return the first `PositionCorrected` in it.
+fn first_correction(
+    rx: &mut mpsc::UnboundedReceiver<ServerMessage>,
+) -> Option<(Position, f32, i8)> {
+    std::iter::from_fn(|| rx.try_recv().ok()).find_map(|msg| match msg {
+        ServerMessage::PositionCorrected {
+            position,
+            rotation,
+            floor_level,
+        } => Some((position, rotation, floor_level)),
+        _ => None,
+    })
+}
+
+#[tokio::test]
+async fn a_refused_step_snaps_the_client_back_to_the_server() {
+    let game_state = make_test_game_state("movement_correction");
+    let player_id = pid("desynced");
+    game_state
+        .add_player(make_player("desynced", 0.5, 4.5))
+        .await;
+    let mut rx = game_state.register_direct_channel(&player_id).await;
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+
+    // Straight into the sealed cell: neither axis can save it, so the server
+    // stops and must say where it actually has the player.
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                false,
+            ),
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+
+    let (position, _, _) = first_correction(&mut rx).expect("a refused step is corrected");
+    assert_eq!((position.x, position.z), (0.5, 4.5));
+
+    // Throttled: a client that cannot act on the snap must not be yanked every
+    // tick, so an immediate second refusal stays silent.
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                false,
+            ),
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+    assert!(first_correction(&mut rx).is_none());
+}
+
+#[tokio::test]
+async fn a_slid_step_is_not_corrected() {
+    let game_state = make_test_game_state("movement_slide_no_correction");
+    let player_id = pid("grazer");
+    game_state.add_player(make_player("grazer", 1.5, 4.5)).await;
+    let mut rx = game_state.register_direct_channel(&player_id).await;
+    game_state.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+
+    // Grazing the corner slides; the client did the same, so there is nothing
+    // to reconcile and yanking it here would be a visible false positive.
+    game_state
+        .update_player_position(
+            &player_id,
+            move_cmd(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 5.5,
+                },
+                false,
+            ),
+            false,
+            false,
+        )
+        .await;
+    game_state.tick_player_movement(60.0).await;
+
+    assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 4.5));
+    assert!(first_correction(&mut rx).is_none());
 }
 
 #[tokio::test]

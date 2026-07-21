@@ -219,3 +219,12 @@ export type AuthSuccessPayload = {
   accountName: string
   characters: AccountCharacter[]
 }
+
+/** Where the server actually has the local player after refusing a step. */
+export type PositionCorrection = {
+  x: number
+  y: number
+  z: number
+  rotation: number
+  floorLevel: number
+}

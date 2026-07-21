@@ -21,6 +21,71 @@ export type SendPlayerMove = (
   append?: boolean
 ) => void
 
+/** Everything routing a leg needs, shared by click-to-move and combat chase. */
+export interface Pathing {
+  currentFloor: number
+  getFloorAt: (x: number, z: number, y: number) => number
+  findPath: (
+    startX: number,
+    startZ: number,
+    startFloor: number,
+    goalX: number,
+    goalZ: number,
+    goalFloor: number
+  ) => { waypoints: PathWaypoint[] }
+  waypointHeight: (floor: number, x: number, z: number) => number
+}
+
+export interface RoutedLeg {
+  pathWaypoints: PathWaypoint[]
+  movementTarget: Position
+  playerRotation: number
+}
+
+/**
+ * Route to `goal` and hand the first leg to the server, replacing its queue.
+ *
+ * The single place a fresh path is built. The server replays every leg it is
+ * sent as a straight line, so a goal it cannot walk to directly strands its copy
+ * of the player behind geometry the client walked around — routing here, rather
+ * than beelining at the goal, is what keeps the two simulations together. The
+ * substrate appends the remaining waypoints as each is reached.
+ */
+export function routeFirstLeg(
+  currentPos: Position,
+  goal: Position,
+  pathing: Pathing,
+  sendPlayerMove: SendPlayerMove
+): RoutedLeg {
+  const goalFloor = pathing.getFloorAt(goal.x, goal.z, goal.y)
+  const result = pathing.findPath(
+    currentPos.x,
+    currentPos.z,
+    pathing.currentFloor,
+    goal.x,
+    goal.z,
+    goalFloor
+  )
+  const pathWaypoints =
+    result.waypoints.length > 0
+      ? result.waypoints
+      : [{ x: goal.x, z: goal.z, floor: goalFloor }]
+
+  const firstWp = pathWaypoints[0]
+  const movementTarget: Position = {
+    x: firstWp.x,
+    y: pathing.waypointHeight(firstWp.floor, firstWp.x, firstWp.z),
+    z: firstWp.z,
+  }
+  const playerRotation = Math.atan2(
+    shortestWrappedDeltaX(currentPos.x, movementTarget.x),
+    movementTarget.z - currentPos.z
+  )
+  sendPlayerMove(movementTarget, playerRotation, false)
+
+  return { pathWaypoints, movementTarget, playerRotation }
+}
+
 interface MovementSubstrateInput {
   currentPos: Position
   movementTarget: Position

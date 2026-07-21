@@ -42,11 +42,13 @@
     inventoryVisible,
     characterPanelVisible,
     debugSpeedMode,
+    resetPrivilegedDebugFlags,
     refractionEnabled,
     reflectionEnabled,
     torchLightEnabled,
     windDebugVisible,
   } from '../stores/debugStore'
+  import { isAdminUser } from '../stores/gameStore'
 
   function toDegrees(radians: number) {
     const degrees = (radians * 180) / Math.PI
@@ -60,11 +62,13 @@
   }
 
   function handleKeydown(event: KeyboardEvent) {
-    if (event.ctrlKey && event.key === 'd') {
+    // Debug shortcuts follow the panel; M/I/C below are ordinary gameplay keys,
+    // which is why this component still renders for non-admins.
+    if ($isAdminUser && event.ctrlKey && event.key === 'd') {
       event.preventDefault()
       debugVisible.update((v) => !v)
     }
-    if (event.ctrlKey && event.key === 'm') {
+    if ($isAdminUser && event.ctrlKey && event.key === 'm') {
       event.preventDefault()
       mapEditorMode.update((v) => !v)
     }
@@ -154,11 +158,21 @@
   function toggleWindDebug() {
     windDebugVisible.update((v) => !v)
   }
+
+  // Hiding the buttons is not enough: a flag left on by an admin character
+  // survives the switch to a non-admin one, and the panel that turns it back
+  // off is gone.
+  $effect(() => {
+    if ($isAdminUser) return
+    resetPrivilegedDebugFlags()
+    // Routed through the toggle so the server is told the torch went out.
+    if ($torchLightEnabled) toggleTorchLight()
+  })
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
-{#if !$debugVisible}
+{#if $isAdminUser && !$debugVisible}
   <button
     class="debug-toggle-btn"
     onclick={() => debugVisible.set(true)}
@@ -184,7 +198,7 @@
       /><path d="M2 10h4" /><path d="M18 10h4" />
     </svg>
   </button>
-{:else}
+{:else if $isAdminUser}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
     class="hud-container"

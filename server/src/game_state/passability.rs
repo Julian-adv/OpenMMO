@@ -73,6 +73,52 @@ pub(super) fn wrapped_block_info<'a>(
     )
 }
 
+/// What the movement sim may do with one step.
+pub(super) enum StepOutcome<'a> {
+    Clear,
+    /// Diagonal refused, one axis still open — the destination to take instead.
+    Slid(f32, f32),
+    Blocked(pathfinding::BlockInfo<'a>),
+}
+
+/// Resolve one step, falling back to a single axis when the diagonal is refused.
+///
+/// The axis fallback mirrors the client's `resolveWallSlide`
+/// (`client/src/lib/components/player-control/fsm/movement-substrate.ts`),
+/// including its `dx >= dz` tie-break. Without it the server refuses corner
+/// grazes the client walks through, and the two simulations drift apart.
+pub(super) fn resolve_step<'a>(
+    cache: &'a pathfinding::PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: f32,
+) -> StepOutcome<'a> {
+    const EPS: f32 = 1e-6;
+    let Some(info) = wrapped_block_info(cache, from_x, from_z, to_x, to_z, floor_level, y) else {
+        return StepOutcome::Clear;
+    };
+    let clear =
+        |tx, tz| wrapped_block_info(cache, from_x, from_z, tx, tz, floor_level, y).is_none();
+    let (dx, dz) = ((to_x - from_x).abs(), (to_z - from_z).abs());
+    let x_ok = dx > EPS && clear(to_x, from_z);
+    // Both axes open means only the exact diagonal grazed a corner tip; keep the
+    // one making more progress. Testing X first lets the common case skip the
+    // second sweep, which scans the whole cache.
+    if x_ok && dx >= dz {
+        return StepOutcome::Slid(to_x, from_z);
+    }
+    if dz > EPS && clear(from_x, to_z) {
+        return StepOutcome::Slid(from_x, to_z);
+    }
+    if x_ok {
+        return StepOutcome::Slid(to_x, from_z);
+    }
+    StepOutcome::Blocked(info)
+}
+
 /// Cache floor index for a player, derived from the server's own position
 /// rather than the floor the client reported.
 ///

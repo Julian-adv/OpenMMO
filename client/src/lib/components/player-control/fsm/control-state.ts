@@ -28,6 +28,10 @@ export interface MovingStateData {
   /** Full A* path; `target` is `waypoints[waypointIndex]`. */
   waypoints: PathWaypoint[]
   waypointIndex: number
+  /** Monster position this path was routed to, when it came from a chase.
+   *  Lives here so leaving the state — or a click starting a new path —
+   *  invalidates it, the way the rest of this data works. */
+  chaseGoal: Position | null
   /** Item instance to pick up once this move arrives (far-pickup approach). */
   pendingPickupAfterMove: number | null
 }
