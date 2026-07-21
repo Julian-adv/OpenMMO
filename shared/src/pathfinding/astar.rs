@@ -10,9 +10,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::query::is_cardinal_move_blocked;
 use super::stair::{build_stair_cells, floor_to_key, is_regular_key, key_to_floor, AStarKey};
-use super::{PassabilityCache, PathResult, PathWaypoint};
-
-const DIRS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+use super::{PassabilityCache, PathResult, PathWaypoint, DIRS};
 
 /// Default max nodes for A* expansion. Sized for multi-floor house traversal.
 pub const DEFAULT_MAX_NODES: usize = 2000;

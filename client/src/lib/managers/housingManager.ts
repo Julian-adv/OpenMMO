@@ -255,7 +255,8 @@ export class HousingManager {
   /**
    * Check if movement from→to crosses any blocked cell edge. `floorLevel` is
    * the passability floor index (see `dungeonManager.passabilityFloor`), not
-   * the wire floor.
+   * the wire floor. A player furniture has sealed in gets one step out; walls
+   * still refuse.
    */
   isMovementBlocked(
     fromX: number,

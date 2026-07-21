@@ -730,5 +730,6 @@ pub fn dungeon_passability(entrance: &Position, layouts: &[FloorLayout]) -> Runt
         max_z: oz + GRID as f32,
         floors,
         stairwells,
+        yields_to_trapped_mover: false,
     }
 }

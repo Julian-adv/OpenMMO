@@ -299,6 +299,75 @@ async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
 }
 
 #[tokio::test]
+async fn escape_command_returns_a_stuck_player_to_spawn() {
+    let game_state = make_test_game_state("escape_to_spawn");
+    let stuck_id = pid("stuck");
+    let bystander_id = pid("bystander");
+    game_state.add_player(make_player("stuck", 0.0, 0.0)).await;
+    game_state
+        .add_player(make_player("bystander", 5.0, 0.0))
+        .await;
+    let mut bystander_rx = game_state.register_direct_channel(&bystander_id).await;
+
+    game_state
+        .send_chat_message(&stuck_id, "/escape".to_string())
+        .await;
+
+    let spawn = &world_config().spawn_position;
+    let (position, _, floor_level) = game_state
+        .get_player_position(&stuck_id)
+        .await
+        .expect("player should still exist");
+    // Approximate: the teleport runs the X through `wrap_world_x`, which is a
+    // no-op away from the seam but not bit-exact.
+    let expected = spawn.position();
+    assert!(
+        (position.x - expected.x).abs() < 0.01
+            && (position.y - expected.y).abs() < 0.01
+            && (position.z - expected.z).abs() < 0.01,
+        "expected spawn {expected:?}, got {position:?}"
+    );
+    // Escaping a dungeon has to land on the surface, not carry its floor along.
+    assert_eq!(floor_level, 0);
+
+    // The command is consumed, never relayed as chat to anyone nearby. The
+    // bystander does still get the movement traffic the teleport generates.
+    while let Ok(msg) = bystander_rx.try_recv() {
+        assert!(
+            !matches!(msg, ServerMessage::ChatMessage { .. }),
+            "/escape must not be echoed as chat: {msg:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn escape_command_refused_while_in_combat() {
+    let game_state = make_test_game_state("escape_in_combat");
+    let fighter_id = pid("fighter");
+    game_state
+        .add_player(make_player("fighter", 20.0, 30.0))
+        .await;
+    {
+        let mut players = game_state.players.write().await;
+        players.get_mut(&fighter_id).unwrap().last_combat_at = GameState::now_ms();
+    }
+
+    game_state
+        .send_chat_message(&fighter_id, "/escape".to_string())
+        .await;
+
+    let (position, _, _) = game_state
+        .get_player_position(&fighter_id)
+        .await
+        .expect("player should still exist");
+    assert_eq!(
+        (position.x, position.z),
+        (20.0, 30.0),
+        "/escape must not double as a combat disengage"
+    );
+}
+
+#[tokio::test]
 async fn player_aoi_crosses_world_x_seam() {
     let game_state = make_test_game_state("player_aoi_x_wrap");
     let east_id = pid("east_player");

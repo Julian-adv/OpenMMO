@@ -94,6 +94,7 @@ pub fn build_runtime_passability(house: &HouseData) -> RuntimePassability {
         max_z,
         floors,
         stairwells,
+        yields_to_trapped_mover: false,
     }
 }
 
@@ -250,6 +251,9 @@ pub fn build_furniture_passability(pieces: &[FurniturePiece]) -> Option<RuntimeP
         max_z,
         floors,
         stairwells: Vec::new(),
+        // The only builder that seals every side of a cell, and the only
+        // obstacle that can land on top of a standing player.
+        yields_to_trapped_mover: true,
     })
 }
 

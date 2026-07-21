@@ -31,6 +31,9 @@ struct RegionObjects {
 /// step is deliberately left unwrapped so it remains a short segment. Shifting
 /// that segment by one world width lets it see passability near the destination
 /// edge as well as the source edge.
+///
+/// See `pathfinding::blocking_entry_for_mover` for why a sealed-in player is
+/// let out.
 pub(super) fn wrapped_block_info<'a>(
     cache: &'a pathfinding::PassabilityCache,
     from_x: f32,
@@ -40,9 +43,15 @@ pub(super) fn wrapped_block_info<'a>(
     floor_level: u8,
     y: f32,
 ) -> Option<pathfinding::BlockInfo<'a>> {
-    if let Some(info) =
-        pathfinding::blocking_entry(cache, from_x, from_z, to_x, to_z, floor_level, Some(y))
-    {
+    if let Some(info) = pathfinding::blocking_entry_for_mover(
+        cache,
+        from_x,
+        from_z,
+        to_x,
+        to_z,
+        floor_level,
+        Some(y),
+    ) {
         return Some(info);
     }
 
@@ -53,7 +62,7 @@ pub(super) fn wrapped_block_info<'a>(
     } else {
         return None;
     };
-    pathfinding::blocking_entry(
+    pathfinding::blocking_entry_for_mover(
         cache,
         from_x + seam_offset,
         from_z,
@@ -181,7 +190,7 @@ impl super::GameState {
     /// Mirror of the client's `passability_set_furniture` for one region:
     /// solid placements become sealed cells, empty regions clear the entry.
     pub fn sync_region_furniture(&self, rx: i32, rz: i32, placements: &[FurniturePlacement]) {
-        let key = format!("furniture:{rx},{rz}");
+        let key = furniture::region_cache_key(rx, rz);
         let mut cache = self.passability_write();
         match furniture::build_furniture_passability_for_placements(placements) {
             Some(rp) => {

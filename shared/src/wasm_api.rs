@@ -204,6 +204,9 @@ pub fn passability_find_path(
     })
 }
 
+/// The browser's only movement check, so it uses the mover variant: a player
+/// furniture has sealed in can step back out. Pathfinding and smoothing run
+/// entirely Rust-side and never come through here.
 #[wasm_bindgen]
 pub fn passability_is_movement_blocked(
     from_x: f32,
@@ -214,7 +217,15 @@ pub fn passability_is_movement_blocked(
     y: f32,
 ) -> bool {
     with_cache(|c| {
-        pathfinding::is_movement_blocked(c, from_x, from_z, to_x, to_z, floor_level, Some(y))
+        pathfinding::is_movement_blocked_for_mover(
+            c,
+            from_x,
+            from_z,
+            to_x,
+            to_z,
+            floor_level,
+            Some(y),
+        )
     })
 }
 

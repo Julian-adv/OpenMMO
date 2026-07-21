@@ -53,6 +53,13 @@ fn footprints() -> &'static HashMap<String, OccupancyRect> {
 /// freeing anyone more than 1m above it (i.e. up on the stairs).
 pub const FURNITURE_BLOCK_HEIGHT: f32 = 1.0;
 
+/// Cache key for one region's furniture. Purely a name — collision policy comes
+/// from `RuntimePassability::yields_to_trapped_mover`, not from the key — so the
+/// client's own `furnitureManager.cacheKey` need only agree with itself.
+pub fn region_cache_key(rx: i32, rz: i32) -> String {
+    format!("furniture:{rx},{rz}")
+}
+
 /// Local footprint of a solid furniture type, or `None` for decorative types
 /// (scrolls, coins, wall torches, …) that never block. Looked up in the embedded
 /// footprint table.

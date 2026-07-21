@@ -69,7 +69,7 @@ impl WorldCache {
     /// `passability_set_furniture` (same `furniture:rx,rz` key + shared
     /// `furniture` resolution). Empty/non-solid regions clear the entry.
     pub fn sync_furniture(&mut self, rx: i32, rz: i32, placements: &[FurniturePlacement]) {
-        let key = format!("furniture:{rx},{rz}");
+        let key = furniture::region_cache_key(rx, rz);
         match furniture::build_furniture_passability_for_placements(placements) {
             Some(rp) => {
                 self.passability_cache.insert(key, rp);

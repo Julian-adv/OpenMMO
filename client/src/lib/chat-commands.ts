@@ -231,7 +231,10 @@ const commands: Record<string, CommandHandler> = {
   },
 }
 
-const commandNames = Object.keys(commands).sort()
+/** Handled by the server (`game_state::chat`); listed only for autocomplete. */
+const SERVER_COMMANDS = ['/escape']
+
+const commandNames = [...Object.keys(commands), ...SERVER_COMMANDS].sort()
 
 /** Command names for autocomplete; hides admin commands from non-admins. */
 export function visibleCommandNames(): string[] {

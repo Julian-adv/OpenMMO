@@ -28,12 +28,17 @@ pub use cache::{
     FurniturePiece,
 };
 pub use query::{
-    blocking_entry, get_floor_at_position, get_floor_y_base, is_cardinal_move_blocked,
-    is_circle_blocked_on_floor, is_movement_blocked, BlockInfo,
+    blocking_entry, blocking_entry_for_mover, get_floor_at_position, get_floor_y_base,
+    is_cardinal_move_blocked, is_circle_blocked_on_floor, is_movement_blocked,
+    is_movement_blocked_for_mover, BlockInfo,
 };
 pub use smooth::find_and_smooth_path;
 
 use std::collections::HashMap;
+
+/// The four cardinal neighbours, shared by A* expansion and the trapped-mover
+/// seal check so the two cannot disagree about which cells adjoin.
+pub(super) const DIRS: [(i32, i32); 4] = [(1, 0), (-1, 0), (0, 1), (0, -1)];
 
 // Edge bitmask constants (matches TypeScript EDGE_N/E/S/W)
 pub(super) const EDGE_N: u8 = 1; // -Z edge
@@ -75,6 +80,14 @@ pub struct RuntimePassability {
     pub max_z: f32,
     pub floors: Vec<RuntimeFloorGrid>,
     pub stairwells: Vec<StairwellInfo>,
+    /// Whether this obstacle lets a mover it has sealed in step back out.
+    ///
+    /// True only for furniture, which is the one kind that can appear on top of
+    /// a standing player — dropped by the editor, or synced in as the region
+    /// streams to someone already there. A building's shell never yields, so a
+    /// sealed mover walks out across the furniture and stops at the walls.
+    /// See `query::blocking_entry_for_mover`.
+    pub yields_to_trapped_mover: bool,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -95,6 +108,7 @@ pub type PassabilityCache = HashMap<String, RuntimePassability>;
 
 #[cfg(test)]
 mod tests {
+    use super::query::is_cell_sealed;
     use super::smooth::is_line_passable;
     use super::*;
 
@@ -134,6 +148,7 @@ mod tests {
                 cells,
             }],
             stairwells: vec![],
+            yields_to_trapped_mover: false,
         };
         ("house".to_string(), rp)
     }
@@ -218,15 +233,7 @@ mod tests {
     fn furniture_cell_blocks_movement_and_pathing() {
         // A single solid furniture cell at world (5,5) on floor 0, blocking the
         // realistic low-obstacle Y band (furniture::FURNITURE_BLOCK_HEIGHT = 1.0).
-        let rp = build_furniture_passability(&[FurniturePiece {
-            cells: vec![(5, 5)],
-            floor_level: 0,
-            y_base: 0.0,
-            wall_height: crate::furniture::FURNITURE_BLOCK_HEIGHT,
-        }])
-        .expect("one cell should yield a passability entry");
-        let mut cache = PassabilityCache::new();
-        cache.insert("furniture:test".to_string(), rp);
+        let cache = furniture_cache(vec![(5, 5)]);
 
         // Walking into the sealed cell from the north is blocked...
         assert!(is_movement_blocked(&cache, 5.5, 4.5, 5.5, 5.5, 0, None));
@@ -273,6 +280,102 @@ mod tests {
             "path must not pass through the sealed cell: {:?}",
             path.waypoints
         );
+    }
+
+    /// Cache entry for solid furniture on the given cells, keyed like a real
+    /// region so `blocking_entry_for_mover` recognises it as furniture.
+    fn furniture_cache(cells: Vec<(i32, i32)>) -> PassabilityCache {
+        let rp = build_furniture_passability(&[FurniturePiece {
+            cells,
+            floor_level: 0,
+            y_base: 0.0,
+            wall_height: crate::furniture::FURNITURE_BLOCK_HEIGHT,
+        }])
+        .expect("cells should yield a passability entry");
+        let mut cache = PassabilityCache::new();
+        cache.insert(crate::furniture::region_cache_key(0, 0), rp);
+        cache
+    }
+
+    #[test]
+    fn furniture_sealed_player_can_step_out() {
+        // A bed's footprint seals every edge of the cells it covers, so a player
+        // standing where one is placed has no legal step in any direction.
+        let cache = furniture_cache(vec![(5, 5)]);
+        let y = Some(0.5);
+        assert!(is_cell_sealed(&cache, 5.5, 5.5, 0, y));
+
+        // Every way out is refused by the plain check — that is the trap.
+        for (tx, tz) in [(6.5, 5.5), (4.5, 5.5), (5.5, 6.5), (5.5, 4.5)] {
+            assert!(is_movement_blocked(&cache, 5.5, 5.5, tx, tz, 0, y));
+            assert!(
+                !is_movement_blocked_for_mover(&cache, 5.5, 5.5, tx, tz, 0, y),
+                "a sealed-in mover must be let out towards ({tx}, {tz})"
+            );
+        }
+
+        // The waiver is only for getting out. Walking back in still blocks, so
+        // the cell doesn't become freely passable for everyone else.
+        assert!(is_movement_blocked_for_mover(
+            &cache, 5.5, 4.5, 5.5, 5.5, 0, y
+        ));
+
+        // And it ends at the neighbouring cell: one long sweep can't ride the
+        // waiver across a second piece of furniture.
+        let cache = furniture_cache(vec![(5, 5), (5, 7)]);
+        assert!(is_cell_sealed(&cache, 5.5, 5.5, 0, y));
+        assert!(is_movement_blocked_for_mover(
+            &cache, 5.5, 5.5, 5.5, 7.5, 0, y
+        ));
+    }
+
+    #[test]
+    fn sealed_mover_cannot_walk_through_walls() {
+        // Furniture filling a 3×3 room's centre leaves the player sealed by a
+        // mix of furniture and the room's own walls. The furniture sides yield;
+        // the house shell must not, or this becomes a wall hack.
+        let (id, rp) = make_rect_room(3, 3);
+        let mut cache = furniture_cache(vec![(11, 10), (10, 11), (11, 12), (12, 11)]);
+        cache.insert(id, rp);
+        let y = Some(0.5);
+
+        // Player at the room's centre cell (11,11): furniture on all four sides.
+        assert!(is_cell_sealed(&cache, 11.5, 11.5, 0, y));
+        assert!(!is_movement_blocked_for_mover(
+            &cache, 11.5, 11.5, 12.5, 11.5, 0, y
+        ));
+
+        // From a corner furniture cell the outward side is the room's wall.
+        // Sealed or not, that wall keeps refusing.
+        assert!(is_cell_sealed(&cache, 10.5, 11.5, 0, y));
+        assert!(
+            is_movement_blocked_for_mover(&cache, 10.5, 11.5, 9.5, 11.5, 0, y),
+            "the house wall must refuse even a sealed-in mover"
+        );
+        // Its furniture-blocked side, back towards the centre, does yield.
+        assert!(!is_movement_blocked_for_mover(
+            &cache, 10.5, 11.5, 10.5, 10.5, 0, y
+        ));
+    }
+
+    #[test]
+    fn open_floor_is_not_sealed() {
+        // Sanity: the waiver must never fire for an ordinary player standing
+        // next to a wall, or walls stop working entirely.
+        let (id, rp) = make_rect_room(3, 3);
+        let mut cache = PassabilityCache::new();
+        cache.insert(id, rp);
+        assert!(!is_cell_sealed(&cache, 11.5, 11.5, 0, Some(0.5)));
+        assert!(!is_cell_sealed(&cache, 10.5, 10.5, 0, Some(0.5)));
+        assert!(is_movement_blocked_for_mover(
+            &cache,
+            10.5,
+            10.5,
+            9.5,
+            10.5,
+            0,
+            Some(0.5)
+        ));
     }
 
     #[test]
@@ -502,6 +605,7 @@ mod tests {
                 along_z: true,
                 reversed: false,
             }],
+            yields_to_trapped_mover: false,
         };
         ("two_floor".to_string(), rp)
     }
@@ -663,6 +767,7 @@ mod tests {
                 along_z: true,
                 reversed: false,
             }],
+            yields_to_trapped_mover: false,
         };
         ("house".to_string(), rp)
     }
@@ -760,6 +865,7 @@ mod real_house_repro {
                 along_z: true,
                 reversed: true,
             }],
+            yields_to_trapped_mover: false,
         };
         ("r-23_+73_1".to_string(), rp)
     }
@@ -842,6 +948,7 @@ mod real_house_repro {
                 along_z: true,
                 reversed: false,
             }],
+            yields_to_trapped_mover: false,
         };
         ("dungeon:old_crypt".to_string(), rp)
     }

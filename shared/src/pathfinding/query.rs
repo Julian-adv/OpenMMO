@@ -126,44 +126,144 @@ pub fn blocking_entry<'a>(
     floor_level: u8,
     y: Option<f32>,
 ) -> Option<BlockInfo<'a>> {
+    blocking_entries(cache, from_x, from_z, to_x, to_z, floor_level, y)
+        .next()
+        .map(|(_, info)| info)
+}
+
+/// Every cache entry that refuses this move, paired with its verdict.
+/// Lazy, so a caller wanting only the first pays for only the first.
+fn blocking_entries<'a>(
+    cache: &'a PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> impl Iterator<Item = (&'a super::RuntimePassability, BlockInfo<'a>)> {
     let min_x = from_x.min(to_x);
     let max_x = from_x.max(to_x);
     let min_z = from_z.min(to_z);
     let max_z = from_z.max(to_z);
 
-    for (key, rp) in cache.iter() {
+    cache.iter().filter_map(move |(key, rp)| {
         if max_x < rp.min_x || min_x > rp.max_x || max_z < rp.min_z || min_z > rp.max_z {
-            continue;
+            return None;
         }
 
         let stair_mask = stairwell_floor_mask(rp, min_x, max_x, min_z, max_z, floor_level);
         if stair_mask != 0 {
-            if let Some(consulted) = stairwell_consult(rp, stair_mask, |f| {
+            let consulted = stairwell_consult(rp, stair_mask, |f| {
                 move_blocked_on_floor(rp, f, from_x, from_z, to_x, to_z)
-            }) {
-                return Some(BlockInfo {
-                    key,
-                    stairwell: true,
-                    consulted,
-                });
-            }
-            continue;
+            })?;
+            let info = BlockInfo {
+                key,
+                stairwell: true,
+                consulted,
+            };
+            return Some((rp, info));
         }
 
-        for floor in &rp.floors {
-            if floor.floor_level != floor_level || !obstacle_reaches_y(floor, y) {
-                continue;
-            }
-            if move_blocked_on_floor(rp, floor, from_x, from_z, to_x, to_z) {
-                return Some(BlockInfo {
+        rp.floors
+            .iter()
+            .find(|floor| {
+                floor.floor_level == floor_level
+                    && obstacle_reaches_y(floor, y)
+                    && move_blocked_on_floor(rp, floor, from_x, from_z, to_x, to_z)
+            })
+            .map(|_| {
+                let info = BlockInfo {
                     key,
                     stairwell: false,
                     consulted: 1,
-                });
-            }
+                };
+                (rp, info)
+            })
+    })
+}
+
+/// Whether the cell holding `(x, z)` is walled in on all four sides, leaving a
+/// mover inside it no legal step out.
+///
+/// Each direction is asked through the full [`is_movement_blocked`] path rather
+/// than read off one grid's bits, because a seal is usually a mix of entries —
+/// a bed's own cells on three sides and the room's wall on the fourth.
+pub(crate) fn is_cell_sealed(
+    cache: &PassabilityCache,
+    x: f32,
+    z: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> bool {
+    let cx = x.floor() + 0.5;
+    let cz = z.floor() + 0.5;
+    super::DIRS.iter().all(|&(dx, dz)| {
+        is_movement_blocked(
+            cache,
+            cx,
+            cz,
+            cx + dx as f32,
+            cz + dz as f32,
+            floor_level,
+            y,
+        )
+    })
+}
+
+/// [`blocking_entry`], minus refusals that would trap a mover for good.
+///
+/// Furniture seals the cells it covers, and nothing stops a piece from being
+/// placed over a standing player — a bed swallows its whole footprint this way.
+/// When every side of the mover's cell is blocked, one step across an obstacle
+/// flagged `yields_to_trapped_mover` is waived so they can walk out.
+///
+/// Anything that does not yield is settled first, so this cannot sink a mover
+/// through a building's shell: park furniture on yourself against an outer wall
+/// and the wall side stays solid while the other three let you out. Stopping at
+/// the first hit would not be enough — a corner is refused by both, and whichever
+/// entry the cache happened to yield first would decide.
+///
+/// The waiver stops at the neighbouring cell. Steps are fractions of a metre, so
+/// bounding it there costs a trapped mover nothing while keeping a single long
+/// sweep from riding it across anything further.
+pub fn blocking_entry_for_mover<'a>(
+    cache: &'a PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> Option<BlockInfo<'a>> {
+    let mut yielding = None;
+    for (rp, info) in blocking_entries(cache, from_x, from_z, to_x, to_z, floor_level, y) {
+        if !rp.yields_to_trapped_mover {
+            return Some(info);
         }
+        yielding.get_or_insert(info);
     }
-    None
+
+    let info = yielding?;
+    let one_cell = (to_x.floor() - from_x.floor()).abs() <= 1.0
+        && (to_z.floor() - from_z.floor()).abs() <= 1.0;
+    if one_cell && is_cell_sealed(cache, from_x, from_z, floor_level, y) {
+        return None;
+    }
+    Some(info)
+}
+
+/// Bool wrapper over [`blocking_entry_for_mover`] for continuous movement.
+pub fn is_movement_blocked_for_mover(
+    cache: &PassabilityCache,
+    from_x: f32,
+    from_z: f32,
+    to_x: f32,
+    to_z: f32,
+    floor_level: u8,
+    y: Option<f32>,
+) -> bool {
+    blocking_entry_for_mover(cache, from_x, from_z, to_x, to_z, floor_level, y).is_some()
 }
 
 #[inline]
