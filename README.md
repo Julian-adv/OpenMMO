@@ -198,3 +198,38 @@ cd tools/glb-editor
 npm install
 npm run dev -- --port 10005
 ```
+
+## Production Deployment
+
+Prod runs both binaries as systemd units (`tools/systemd/`), with the client bundle served statically from `/var/www/openmmo`.
+
+| Unit | Binary | Syslog identifier |
+|------|--------|-------------------|
+| `openmmo-server` | `onlinerpg-server` | `openmmo` |
+| `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
+
+Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, publishes the static files, then restarts both units.
+
+### Logs
+
+Both units log to journald (`StandardOutput=journal`); there are no separate log files.
+
+```bash
+journalctl -u openmmo-server -f              # follow the game server
+journalctl -u openmmo-agent-client -f        # follow the NPC agent client
+journalctl -u openmmo-server -n 200 --no-pager   # recent history
+journalctl -u openmmo-server --since "1 hour ago" -p err   # errors only
+```
+
+Both binaries build their subscriber from `RUST_LOG`, defaulting to `info` when it is unset or unparseable. Per-action detail — monster spawn/despawn, combat dice/HP/XP rolls — sits at `debug` to keep the journal rate sane at high player counts, so raise the level to see it:
+
+```bash
+sudo systemctl edit openmmo-server   # or write /etc/openmmo/server.env
+# [Service]
+# Environment=RUST_LOG=debug
+sudo systemctl restart openmmo-server
+```
+
+Each unit reads `EnvironmentFile=-/etc/openmmo/{server,agent-client}.env`, so `RUST_LOG` can go there instead. Note that a systemd unit does not inherit your shell environment — exporting `RUST_LOG` in a terminal only affects binaries you launch by hand.
+
+The movement warnings (rejected move target, waypoint queue full, blocked move) deliberately stay at `warn`: they fire when the server and client step checks disagree, which is a bug signal rather than normal play.
