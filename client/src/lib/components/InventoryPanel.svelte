@@ -10,11 +10,9 @@
     startDrag,
     isSlotCompatible,
     pointInRect,
-    quickslotAt,
     isOverAnyDialog,
     FALLBACK_ICON,
   } from '../stores/dragStore'
-  import { assignQuickslot } from '../stores/quickslotStore'
   import { itemTooltip } from '../actions/itemTooltip'
 
   interface Props {
@@ -76,16 +74,12 @@
       e,
       {
         instanceId: slot.instance_id,
+        defId: slot.item_def_id,
         equipSlot: def?.equipSlot ?? null,
         source: { type: 'bag' },
         icon: def?.icon ?? FALLBACK_ICON,
       },
       (x, y) => {
-        const qsIndex = quickslotAt(x, y)
-        if (qsIndex >= 0) {
-          assignQuickslot(qsIndex, slot.item_def_id)
-          return
-        }
         for (const slotEl of document.querySelectorAll<HTMLElement>(
           '[data-equip-slot]'
         )) {

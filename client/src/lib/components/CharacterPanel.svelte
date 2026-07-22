@@ -134,6 +134,7 @@
       e,
       {
         instanceId: item.instance_id,
+        defId: item.item_def_id,
         equipSlot: def?.equipSlot ?? null,
         source: { type: 'equipped', slot },
         icon: def?.icon ?? FALLBACK_ICON,

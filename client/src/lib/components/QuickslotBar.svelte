@@ -40,10 +40,10 @@
     })
   )
 
-  // While a bag item is dragged, the slot it would drop into (-1 otherwise).
+  // While an item is dragged, the slot it would drop into (-1 otherwise).
   // Uses the same snap logic as the drop handler so highlight and drop agree.
   const dropIndex = $derived(
-    $dragMeta?.source.type === 'bag' ? quickslotAt($dragPos.x, $dragPos.y) : -1
+    $dragMeta ? quickslotAt($dragPos.x, $dragPos.y) : -1
   )
 
   /**
@@ -153,8 +153,7 @@
     backdrop-filter: blur(4px);
   }
 
-  /* Highlight only the slot a dragged bag item would drop into. Outline keeps
-     the slot's box (and the bar's alignment) unchanged. */
+  /* Outline keeps the slot's box (and the bar's alignment) unchanged. */
   .quickslot.drop-target {
     border-color: rgba(88, 255, 88, 0.7);
     outline: 2px solid rgba(88, 255, 88, 0.7);

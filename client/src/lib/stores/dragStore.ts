@@ -1,10 +1,12 @@
 import { writable } from 'svelte/store'
 import type { EquipSlot } from '../network/networkTypes'
+import { assignQuickslot } from './quickslotStore'
 
 export const FALLBACK_ICON = 'icon_frame.png'
 
 export type DragMeta = {
   instanceId: number
+  defId: string
   equipSlot: EquipSlot | null
   source: { type: 'bag' } | { type: 'equipped'; slot: EquipSlot }
   icon: string
@@ -39,8 +41,10 @@ export function inflateRect(r: DOMRect, m: number): DOMRect {
  * column. Shared by the drag highlight and the drop handler so they agree.
  */
 export function quickslotAt(x: number, y: number): number {
-  const els = [...document.querySelectorAll<HTMLElement>('[data-quickslot]')]
-  const bar = els[0]?.parentElement
+  // Rect-test the bar before listing the slots: this runs on every pointermove
+  // and usually misses.
+  const bar =
+    document.querySelector<HTMLElement>('[data-quickslot]')?.parentElement
   if (
     !bar ||
     !pointInRect(x, y, inflateRect(bar.getBoundingClientRect(), 12))
@@ -49,7 +53,7 @@ export function quickslotAt(x: number, y: number): number {
   }
   let best = -1
   let bestDist = Infinity
-  for (const el of els) {
+  for (const el of bar.querySelectorAll<HTMLElement>('[data-quickslot]')) {
     const r = el.getBoundingClientRect()
     const dx = (r.left + r.right) / 2 - x
     const dy = (r.top + r.bottom) / 2 - y
@@ -110,7 +114,12 @@ export function startDrag(
       target.releasePointerCapture(ue.pointerId)
     }
     if (started && ue.type !== 'pointercancel') {
-      onDrop(ue.clientX, ue.clientY)
+      // Quickslot drops work from every drag source and win over the source's
+      // own targets, so resolve them here — the bar's highlight uses the same
+      // test, and no call site can implement (or forget) it differently.
+      const qsIndex = quickslotAt(ue.clientX, ue.clientY)
+      if (qsIndex >= 0) assignQuickslot(qsIndex, meta.defId)
+      else onDrop(ue.clientX, ue.clientY)
     }
     dragMeta.set(null)
   }
