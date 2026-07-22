@@ -73,6 +73,12 @@ const UNAUTH_MAX_MESSAGE_BYTES: usize = 8 * 1024;
 const UNAUTH_MAX_MESSAGES: u32 = 30;
 
 struct ConnectionState {
+    /// Client program reported in `ClientInfo` ("web" / "cli"). `None` until
+    /// the handshake arrives, which is what gates every other message.
+    client_kind: Option<String>,
+    /// Set when the connection must be dropped right after its pending
+    /// responses are flushed (protocol mismatch).
+    must_close: bool,
     account_name: Option<String>,
     player_id: Option<PlayerId>,
     /// Entered character's name, kept here so disconnect-path logs can name the
@@ -92,6 +98,8 @@ struct ConnectionState {
 impl ConnectionState {
     fn new() -> Self {
         Self {
+            client_kind: None,
+            must_close: false,
             account_name: None,
             player_id: None,
             character_name: None,
@@ -218,6 +226,10 @@ pub async fn handle_connection(
                                         }
                                         Err(e) => error!("Serialization failed: {}", e),
                                     }
+                                }
+                                if state.must_close {
+                                    info!("Closing connection: failed protocol handshake");
+                                    break;
                                 }
                             }
                             Err(e) => {
@@ -356,6 +368,75 @@ fn requires_admin(msg: &ClientMessage) -> bool {
     }
 }
 
+/// Where to point a refused client. Kept in the rejection text because that
+/// message is the only thing an outdated agent-client can still show.
+const CLIENT_UPDATE_HINT: &str = "update your client (https://github.com/Julian-adv/OnlineRPG)";
+
+/// Known client programs; anything else is bucketed so a hostile client
+/// cannot make the `/who` breakdown grow unbounded labels.
+fn normalize_client_kind(reported: &str) -> &'static str {
+    match reported {
+        "web" => "web",
+        "cli" => "cli",
+        _ => "other",
+    }
+}
+
+/// Protocol handshake gate, run before every other message.
+///
+/// `ClientInfo` must be the first message on a connection and must carry this
+/// server's exact `PROTOCOL_VERSION`; anything else is refused with an
+/// `AuthError` naming the mismatch, and the connection is closed. Deliberately
+/// strict: version-straddling code is the kind that only breaks on the clients
+/// we cannot redeploy. See `doc/REMOTE_AGENT_CLIENT.md`.
+///
+/// Returns `Some(responses)` when the message was consumed (handshake or
+/// rejection), `None` when the caller should keep handling it.
+fn handle_handshake(
+    client_msg: &ClientMessage,
+    state: &mut ConnectionState,
+) -> Option<Vec<ServerMessage>> {
+    if let ClientMessage::ClientInfo {
+        protocol_version,
+        client_kind,
+        client_version,
+    } = client_msg
+    {
+        if state.client_kind.is_some() {
+            warn!("Duplicate ClientInfo ignored");
+            return Some(vec![]);
+        }
+        if *protocol_version != onlinerpg_shared::PROTOCOL_VERSION {
+            warn!(
+                "Refusing client: protocol v{} (server speaks v{})",
+                protocol_version,
+                onlinerpg_shared::PROTOCOL_VERSION
+            );
+            state.must_close = true;
+            return Some(vec![ServerMessage::AuthError {
+                message: format!(
+                    "Protocol v{} required, you sent v{} — {CLIENT_UPDATE_HINT}",
+                    onlinerpg_shared::PROTOCOL_VERSION,
+                    protocol_version
+                ),
+            }]);
+        }
+        let kind = normalize_client_kind(client_kind);
+        info!("Client handshake: kind={kind} version={client_version}");
+        state.client_kind = Some(kind.to_string());
+        return Some(vec![]);
+    }
+
+    if state.client_kind.is_none() {
+        warn!("Refusing client: message arrived before ClientInfo");
+        state.must_close = true;
+        return Some(vec![ServerMessage::AuthError {
+            message: format!("Send ClientInfo first — {CLIENT_UPDATE_HINT}"),
+        }]);
+    }
+    None
+}
+
 async fn handle_client_message(
     message: &[u8],
     game_state: &Arc<GameState>,
@@ -364,6 +445,10 @@ async fn handle_client_message(
     state: &mut ConnectionState,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
     let client_msg: ClientMessage = deserialize_client_msg(message)?;
+
+    if let Some(responses) = handle_handshake(&client_msg, state) {
+        return Ok(responses);
+    }
 
     if matches!(
         client_msg,
@@ -1119,6 +1204,9 @@ async fn handle_client_message(
                 game_state.open_trade(id, &target_player_id).await;
             }
         }
+
+        // Consumed by `handle_handshake` above; a repeat never reaches here.
+        ClientMessage::ClientInfo { .. } => {}
     }
 
     Ok(vec![])
@@ -1167,6 +1255,77 @@ mod tests {
         assert!(!token_matches("secret-token", "secret-tokeN"));
         assert!(!token_matches("secret", "secret-token"));
         assert!(!token_matches("", "secret-token"));
+    }
+
+    fn client_info(protocol_version: u32, kind: &str) -> ClientMessage {
+        ClientMessage::ClientInfo {
+            protocol_version,
+            client_kind: kind.to_string(),
+            client_version: "test".to_string(),
+        }
+    }
+
+    fn is_auth_error(responses: &Option<Vec<ServerMessage>>) -> bool {
+        matches!(
+            responses.as_deref(),
+            Some([ServerMessage::AuthError { .. }])
+        )
+    }
+
+    #[test]
+    fn handshake_accepts_matching_protocol_version() {
+        let mut state = ConnectionState::new();
+        let responses = handle_handshake(
+            &client_info(onlinerpg_shared::PROTOCOL_VERSION, "cli"),
+            &mut state,
+        );
+
+        assert!(responses.is_some_and(|r| r.is_empty()));
+        assert_eq!(state.client_kind.as_deref(), Some("cli"));
+        assert!(!state.must_close);
+        // Later messages pass through once the handshake is done.
+        assert!(handle_handshake(&ClientMessage::Heartbeat, &mut state).is_none());
+    }
+
+    #[test]
+    fn handshake_refuses_other_protocol_versions() {
+        for version in [
+            onlinerpg_shared::PROTOCOL_VERSION - 1,
+            onlinerpg_shared::PROTOCOL_VERSION + 1,
+        ] {
+            let mut state = ConnectionState::new();
+            let responses = handle_handshake(&client_info(version, "cli"), &mut state);
+
+            assert!(is_auth_error(&responses), "v{version} should be refused");
+            assert!(state.must_close);
+            assert!(state.client_kind.is_none());
+        }
+    }
+
+    #[test]
+    fn handshake_refuses_messages_sent_before_client_info() {
+        let mut state = ConnectionState::new();
+        let responses = handle_handshake(
+            &ClientMessage::AuthenticateNpc {
+                account_name: "npc_x".into(),
+                npc_token: "t".into(),
+            },
+            &mut state,
+        );
+
+        assert!(is_auth_error(&responses));
+        assert!(state.must_close);
+    }
+
+    #[test]
+    fn handshake_buckets_unknown_client_kinds() {
+        let mut state = ConnectionState::new();
+        handle_handshake(
+            &client_info(onlinerpg_shared::PROTOCOL_VERSION, "totally-made-up"),
+            &mut state,
+        );
+
+        assert_eq!(state.client_kind.as_deref(), Some("other"));
     }
 
     #[test]

@@ -62,6 +62,21 @@ pub struct BuybackEntry {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
+    /// Mandatory first message: protocol check plus who is connecting. The
+    /// server refuses anything else until it arrives, and refuses the
+    /// connection outright when `protocol_version` differs from its own.
+    ///
+    /// This shape is frozen. Together with `ServerMessage::AuthError` it is
+    /// the only channel that can tell an out-of-date client why it was
+    /// refused, so extra data goes in a new message, never in here.
+    ClientInfo {
+        protocol_version: u32,
+        /// Which client program: "web" (browser) or "cli" (agent-client).
+        /// Self-reported, used only for the `/who` breakdown — never for
+        /// permissions, or clients would have a reason to lie.
+        client_kind: String,
+        client_version: String,
+    },
     /// Browser login: a Google ID token, verified server-side. The account is
     /// looked up (or created) by the token's `sub` claim.
     Authenticate {

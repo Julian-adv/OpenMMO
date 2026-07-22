@@ -15,6 +15,7 @@ import { markShopRequested, shopSession } from '../stores/tradeStore'
 import initWasm, {
   serialize_client_message,
   deserialize_server_message,
+  protocol_version,
 } from '../wasm/onlinerpg_shared'
 import { createEvent } from './networkEvents'
 import { handleServerMessage } from './messageHandlers'
@@ -121,6 +122,10 @@ class NetworkManager {
 
     this.socket.onopen = () => {
       console.log('Connected to server')
+      // Mandatory first message: the server refuses everything else until it
+      // arrives, and refuses the connection when the version differs (a stale
+      // cached bundle gets a clear "reload" AuthError instead of odd failures).
+      void this.ensureWasm().then(() => this.sendClientInfo())
       gameStore.update((state) => ({ ...state, isConnected: true }))
       clearServerGameTime()
       this.reconnectAttempts = 0
@@ -539,6 +544,16 @@ class NetworkManager {
   }
 
   // --- Auth & character request methods ---
+
+  private sendClientInfo() {
+    this.sendMessage({
+      ClientInfo: {
+        protocol_version: protocol_version(),
+        client_kind: 'web',
+        client_version: __APP_VERSION__,
+      },
+    })
+  }
 
   private authenticateWithGoogle(googleIdToken: string): boolean {
     setApiAuthToken(googleIdToken)

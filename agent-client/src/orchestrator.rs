@@ -211,6 +211,12 @@ async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResource
                 );
             }
             Err(e) => {
+                // A refused login stays refused: reconnecting would just spin
+                // and bury the reason (e.g. "protocol vN required, update").
+                if let Some(rejection) = e.downcast_ref::<ws::AuthRejected>() {
+                    error!("[{}] {rejection} — giving up", npc.account);
+                    return;
+                }
                 warn!(
                     "[{}] Session failed: {e}. Reconnecting in {}s...",
                     npc.account,
@@ -230,6 +236,8 @@ async fn run_npc_session(
 ) -> anyhow::Result<()> {
     let ws_stream = ws::connect_ws(server_url, &npc.account).await;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
+
+    ws::send_client_info(&mut ws_tx).await?;
 
     // --- Authentication (server auto-creates the account on first use) ---
     ws::send(

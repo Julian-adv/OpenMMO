@@ -39,6 +39,35 @@ pub async fn connect_ws(
     }
 }
 
+/// Server refused the connection (bad protocol version, bad token, unusable
+/// account). Retrying cannot fix any of those, so the session loop gives up
+/// instead of reconnecting forever.
+#[derive(Debug)]
+pub struct AuthRejected(pub String);
+
+impl std::fmt::Display for AuthRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for AuthRejected {}
+
+/// Announce the protocol version and which client this is. Must be the first
+/// message on the connection; the server refuses everything else until it
+/// arrives (see `doc/REMOTE_AGENT_CLIENT.md`).
+pub async fn send_client_info(tx: &mut WsTx) -> anyhow::Result<()> {
+    send(
+        tx,
+        &ClientMessage::ClientInfo {
+            protocol_version: onlinerpg_shared::PROTOCOL_VERSION,
+            client_kind: "cli".to_string(),
+            client_version: env!("CARGO_PKG_VERSION").to_string(),
+        },
+    )
+    .await
+}
+
 /// Wait for AuthSuccess, returning the character list.
 pub async fn wait_for_auth(
     ws_rx: &mut WsRx,
@@ -60,7 +89,7 @@ pub async fn wait_for_auth(
                 return Ok(characters);
             }
             ServerMessage::AuthError { message } => {
-                anyhow::bail!("[{label}] Auth failed: {message}");
+                return Err(AuthRejected(format!("Auth failed: {message}")).into());
             }
             other => {
                 warn!(

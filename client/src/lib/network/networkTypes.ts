@@ -94,6 +94,13 @@ export type RollCharacterStatsResult =
 // Serde externally tagged enum shapes
 export type ClientMessage =
   | {
+      ClientInfo: {
+        protocol_version: number
+        client_kind: string
+        client_version: string
+      }
+    }
+  | {
       Authenticate: {
         google_id_token: string
       }

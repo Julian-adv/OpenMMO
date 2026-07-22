@@ -43,6 +43,14 @@ pub fn deserialize_server_message(bytes: &[u8]) -> Result<JsValue, JsError> {
     to_js(&msg)
 }
 
+/// Wire protocol version the bundled wasm was built against; the web client
+/// puts it in its `ClientInfo` so a stale cached bundle is refused with a
+/// "reload" notice instead of failing later on some other message.
+#[wasm_bindgen]
+pub fn protocol_version() -> u32 {
+    crate::PROTOCOL_VERSION
+}
+
 /// XP threshold for a given level, as an f64 for JS interop.
 /// Saturates at Number.MAX_SAFE_INTEGER for levels beyond safe integer range.
 #[wasm_bindgen]
