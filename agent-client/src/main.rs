@@ -2,6 +2,7 @@ mod claude;
 mod codex;
 mod driver;
 mod geom;
+mod google_auth;
 mod llm_scheduler;
 mod monster_ai;
 mod openrouter;
@@ -15,9 +16,9 @@ use std::sync::Arc;
 
 use onlinerpg_terrain::height::HeightSampler;
 use onlinerpg_terrain::io::TerrainIO;
-use orchestrator::{NpcConfig, SharedResources};
+use orchestrator::{AuthSource, NpcConfig, SharedResources};
 use serde::Deserialize;
-use tracing::info;
+use tracing::{info, warn};
 
 /// Which LLM backend to use for the agent driver.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -89,6 +90,9 @@ pub enum AuthMode {
 struct AuthConfig {
     #[serde(default)]
     mode: AuthMode,
+    /// Google OAuth settings; used when `mode = "google"`.
+    #[serde(default, flatten)]
+    google: google_auth::GoogleAuthConfig,
 }
 
 fn default_terrain() -> String {
@@ -165,10 +169,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     if config.auth.mode == AuthMode::Google {
-        anyhow::bail!(
-            "[auth] mode = \"google\" is not implemented yet \
-             (see doc/REMOTE_AGENT_CLIENT.md, Phase 2)"
-        );
+        check_google_mode_config(&config.npcs)?;
     }
 
     // NPCs inherit root-level backend configs when they don't override them
@@ -202,10 +203,49 @@ async fn main() -> anyhow::Result<()> {
         type_mapping: Arc::new(type_mapping),
         movement_speeds: Arc::new(movement_speeds),
         scheduler: llm_scheduler::LlmScheduler::new(config.max_concurrent),
-        npc_token: resolve_npc_token(config.npc_token)?,
+        auth: match config.auth.mode {
+            AuthMode::NpcToken => AuthSource::NpcToken(resolve_npc_token(config.npc_token)?),
+            AuthMode::Google => {
+                AuthSource::Google(google_auth::GoogleAuth::sign_in(config.auth.google).await?)
+            }
+        },
     });
 
     orchestrator::run_orchestrator(config.server, npcs, shared).await
+}
+
+/// Classes reserved for operator-run NPCs. Rejected here so a misconfigured
+/// run fails at startup with a readable message; the server enforces the same
+/// rule, which is what actually matters.
+const OPERATOR_ONLY_CLASSES: [&str; 2] = ["merchant", "guard"];
+
+/// Guard rails for `mode = "google"`: this client speaks for a person's own
+/// account, so it must not impersonate a registry NPC or take a class the
+/// game does not offer players (`doc/REMOTE_AGENT_CLIENT.md`).
+fn check_google_mode_config(npcs: &[NpcConfig]) -> anyhow::Result<()> {
+    for npc in npcs {
+        if let Some(id) = &npc.id {
+            anyhow::bail!(
+                "[[npcs]] id = \"{id}\" is an operator NPC and cannot run under \
+                 [auth] mode = \"google\"; give character_name/character_class instead"
+            );
+        }
+        if let Some(class) = &npc.character_class {
+            if OPERATOR_ONLY_CLASSES.contains(&class.as_str()) {
+                anyhow::bail!("character_class = \"{class}\" is not selectable by players");
+            }
+        }
+        if npc.character_name.is_none() {
+            anyhow::bail!("[auth] mode = \"google\" needs a character_name in every [[npcs]]");
+        }
+        if npc.account.is_some() {
+            warn!(
+                "Ignoring account = {:?}: the Google account decides who you are",
+                npc.account
+            );
+        }
+    }
+    Ok(())
 }
 
 fn create_height_sampler(terrain: &str, cache_dir: &str) -> HeightSampler {
@@ -328,5 +368,94 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::DealResult { .. } => "DealResult",
         ServerMessage::TradeNotice { .. } => "TradeNotice",
         ServerMessage::TradeBusy { .. } => "TradeBusy",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(config: &str) -> Config {
+        toml::from_str(config).expect("config should parse")
+    }
+
+    const GOOGLE_BASE: &str = r#"
+server = "wss://example.test/ws"
+[auth]
+mode = "google"
+"#;
+
+    #[test]
+    fn auth_defaults_to_the_npc_token_flow() {
+        let config = parse("server = \"ws://127.0.0.1:10006\"\n");
+        assert_eq!(config.auth.mode, AuthMode::NpcToken);
+        assert_eq!(config.auth.google.client_id, google_auth::DEFAULT_CLIENT_ID);
+        assert_eq!(config.terrain, default_terrain());
+    }
+
+    #[test]
+    fn google_auth_settings_sit_in_the_auth_table() {
+        let config = parse(
+            r#"
+server = "wss://example.test/ws"
+
+[auth]
+mode = "google"
+client_id = "custom.apps.googleusercontent.com"
+token_cache = "/tmp/creds.json"
+"#,
+        );
+        assert_eq!(config.auth.mode, AuthMode::Google);
+        assert_eq!(
+            config.auth.google.client_id,
+            "custom.apps.googleusercontent.com"
+        );
+        assert_eq!(
+            config.auth.google.token_cache.as_deref(),
+            Some("/tmp/creds.json")
+        );
+    }
+
+    #[test]
+    fn terrain_dir_still_parses_as_an_alias() {
+        let config = parse("server = \"ws://x\"\nterrain_dir = \"/data/terrain\"\n");
+        assert_eq!(config.terrain, "/data/terrain");
+        assert!(!is_http_source(&config.terrain));
+        assert!(is_http_source("https://example.test"));
+    }
+
+    #[test]
+    fn google_mode_rejects_registry_npcs() {
+        let config = parse(&format!("{GOOGLE_BASE}\n[[npcs]]\nid = \"karl\"\n"));
+        let err = check_google_mode_config(&config.npcs)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("karl"), "{err}");
+    }
+
+    #[test]
+    fn google_mode_rejects_operator_only_classes() {
+        for class in OPERATOR_ONLY_CLASSES {
+            let config = parse(&format!(
+                "{GOOGLE_BASE}\n[[npcs]]\ncharacter_name = \"A\"\ncharacter_class = \"{class}\"\n"
+            ));
+            assert!(check_google_mode_config(&config.npcs).is_err(), "{class}");
+        }
+    }
+
+    #[test]
+    fn google_mode_accepts_a_plain_player_agent() {
+        let config = parse(&format!(
+            "{GOOGLE_BASE}\n[[npcs]]\ncharacter_name = \"Jake's Agent\"\ncharacter_class = \"ranger\"\n"
+        ));
+        assert!(check_google_mode_config(&config.npcs).is_ok());
+    }
+
+    #[test]
+    fn google_mode_needs_a_character_name() {
+        let config = parse(&format!(
+            "{GOOGLE_BASE}\n[[npcs]]\ncharacter_class = \"ranger\"\n"
+        ));
+        assert!(check_google_mode_config(&config.npcs).is_err());
     }
 }

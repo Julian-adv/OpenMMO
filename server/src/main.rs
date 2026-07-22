@@ -138,6 +138,11 @@ struct Args {
     #[arg(long, env = "GOOGLE_CLIENT_ID")]
     google_client_id: Option<String>,
 
+    /// Google OAuth client ID for headless sign-in (agent-client's device
+    /// flow). Separate client, so its tokens carry a different `aud`.
+    #[arg(long, env = "GOOGLE_CLI_CLIENT_ID")]
+    google_cli_client_id: Option<String>,
+
     /// Shared secret for headless NPC clients (default: data/npc_token,
     /// generated on first run)
     #[arg(long, env = "NPC_AUTH_TOKEN")]
@@ -196,12 +201,20 @@ async fn main() {
         }
     };
 
-    let google = match &args.google_client_id {
-        Some(client_id) => Some(GoogleAuthVerifier::new(client_id.clone())),
-        None => {
-            warn!("No --google-client-id / GOOGLE_CLIENT_ID set: browser sign-in disabled");
-            None
-        }
+    let google_client_ids: Vec<String> = [&args.google_client_id, &args.google_cli_client_id]
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect();
+    let google = if google_client_ids.is_empty() {
+        warn!("No --google-client-id / GOOGLE_CLIENT_ID set: Google sign-in disabled");
+        None
+    } else {
+        info!(
+            "Google sign-in accepts {} client id(s)",
+            google_client_ids.len()
+        );
+        Some(GoogleAuthVerifier::new(google_client_ids))
     };
     let npc_token = match args.npc_token.clone() {
         Some(token) => token,

@@ -18,6 +18,7 @@ use tracing::{error, info, warn};
 use crate::claude::{self, ClaudeConfig};
 use crate::codex::{self, CodexConfig};
 use crate::driver;
+use crate::google_auth::GoogleAuth;
 use crate::llm_scheduler::LlmScheduler;
 use crate::openrouter::{self, OpenRouterConfig};
 use crate::state::{SharedState, WorldCache};
@@ -123,7 +124,9 @@ pub struct NpcConfig {
     /// convention (see `resolve_from_registry` in main.rs); the explicit
     /// fields below act as overrides.
     pub id: Option<String>,
-    pub account: String,
+    /// NPC account name; required for `npc_token` auth, ignored (and better
+    /// omitted) under Google sign-in, where the token decides the account.
+    pub account: Option<String>,
     #[serde(default)]
     pub llm: LlmType,
     #[serde(default = "super::default_min_interval_secs")]
@@ -159,6 +162,16 @@ pub struct NpcConfig {
     pub schedule_file: Option<String>,
 }
 
+impl NpcConfig {
+    /// Log label: the account when there is one, else the character it plays.
+    fn label(&self) -> &str {
+        self.account
+            .as_deref()
+            .or(self.character_name.as_deref())
+            .unwrap_or("agent")
+    }
+}
+
 /// Resources shared across all NPC connections.
 pub struct SharedResources {
     pub height_sampler: Arc<HeightSampler>,
@@ -167,7 +180,31 @@ pub struct SharedResources {
     pub type_mapping: Arc<HashMap<String, String>>,
     pub movement_speeds: Arc<HashMap<String, crate::monster_ai::MonsterMovement>>,
     pub scheduler: LlmScheduler,
-    pub npc_token: String,
+    pub auth: AuthSource,
+}
+
+/// How sessions prove who they are. Operator NPCs share one secret; a
+/// user-run agent signs in as its own Google account and mints a fresh ID
+/// token per connection (they expire in an hour, sessions outlive that).
+pub enum AuthSource {
+    NpcToken(String),
+    Google(GoogleAuth),
+}
+
+impl AuthSource {
+    async fn authenticate_message(&self, account: Option<&str>) -> anyhow::Result<ClientMessage> {
+        match self {
+            AuthSource::NpcToken(token) => Ok(ClientMessage::AuthenticateNpc {
+                account_name: account
+                    .ok_or_else(|| anyhow::anyhow!("[[npcs]] account is required"))?
+                    .to_string(),
+                npc_token: token.clone(),
+            }),
+            AuthSource::Google(google) => Ok(ClientMessage::Authenticate {
+                google_id_token: google.id_token().await?,
+            }),
+        }
+    }
 }
 
 /// Run the orchestrator: spawn all NPC sessions in parallel.
@@ -186,7 +223,7 @@ pub async fn run_orchestrator(
         let url = server_url.clone();
         let shared = Arc::clone(&shared);
         let handle = tokio::spawn(async move {
-            info!("[NPC {}] Starting session loop for '{}'", i, npc.account);
+            info!("[NPC {}] Starting session loop for '{}'", i, npc.label());
             run_npc_loop(&url, &npc, &shared).await;
         });
         handles.push(handle);
@@ -201,12 +238,13 @@ pub async fn run_orchestrator(
 
 /// Reconnect loop for a single NPC.
 async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResources) {
+    let label = npc.label();
     loop {
         match run_npc_session(server_url, npc, shared).await {
             Ok(()) => {
                 info!(
                     "[{}] Session ended cleanly. Reconnecting in {}s...",
-                    npc.account,
+                    label,
                     RECONNECT_DELAY.as_secs()
                 );
             }
@@ -214,12 +252,12 @@ async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResource
                 // A refused login stays refused: reconnecting would just spin
                 // and bury the reason (e.g. "protocol vN required, update").
                 if let Some(rejection) = e.downcast_ref::<ws::AuthRejected>() {
-                    error!("[{}] {rejection} — giving up", npc.account);
+                    error!("[{label}] {rejection} — giving up");
                     return;
                 }
                 warn!(
                     "[{}] Session failed: {e}. Reconnecting in {}s...",
-                    npc.account,
+                    label,
                     RECONNECT_DELAY.as_secs()
                 );
             }
@@ -234,22 +272,20 @@ async fn run_npc_session(
     npc: &NpcConfig,
     shared: &SharedResources,
 ) -> anyhow::Result<()> {
-    let ws_stream = ws::connect_ws(server_url, &npc.account).await;
+    let label = npc.label();
+    let ws_stream = ws::connect_ws(server_url, label).await;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
     ws::send_client_info(&mut ws_tx).await?;
 
     // --- Authentication (server auto-creates the account on first use) ---
-    ws::send(
-        &mut ws_tx,
-        &ClientMessage::AuthenticateNpc {
-            account_name: npc.account.clone(),
-            npc_token: shared.npc_token.clone(),
-        },
-    )
-    .await?;
+    let auth = shared
+        .auth
+        .authenticate_message(npc.account.as_deref())
+        .await?;
+    ws::send(&mut ws_tx, &auth).await?;
 
-    let mut characters = ws::wait_for_auth(&mut ws_rx, &npc.account).await?;
+    let mut characters = ws::wait_for_auth(&mut ws_rx, label).await?;
 
     // --- Delete characters whose class or name doesn't match config ---
     let desired_class = npc
@@ -257,10 +293,7 @@ async fn run_npc_session(
         .as_deref()
         .map(|c| {
             c.parse::<onlinerpg_shared::CharacterClass>().map_err(|_| {
-                anyhow::anyhow!(
-                    "invalid character_class {c:?} in config for [{}]",
-                    npc.account
-                )
+                anyhow::anyhow!("invalid character_class {c:?} in config for [{}]", label)
             })
         })
         .transpose()?;
@@ -274,14 +307,14 @@ async fn run_npc_session(
     for c in characters.iter().filter(|c| should_delete(c)) {
         info!(
             "[{}] Deleting character '{}' (id={}, {:?}) — mismatch (want name={:?}, class={:?})",
-            npc.account, c.name, c.id, c.class, desired_name, desired_class
+            label, c.name, c.id, c.class, desired_name, desired_class
         );
         ws::send(
             &mut ws_tx,
             &ClientMessage::DeleteCharacter { character_id: c.id },
         )
         .await?;
-        ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterDeleted", |msg| {
+        ws::wait_for_msg(&mut ws_rx, &label, "CharacterDeleted", |msg| {
             matches!(
                 msg,
                 ServerMessage::CharacterDeleted { .. } | ServerMessage::CharacterError { .. }
@@ -298,7 +331,7 @@ async fn run_npc_session(
 
             info!(
                 "[{}] No characters found. Creating '{}' ({:?})...",
-                npc.account, char_name, class
+                label, char_name, class
             );
 
             // Roll stats
@@ -310,7 +343,7 @@ async fn run_npc_session(
                 },
             )
             .await?;
-            ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterStatsRolled", |msg| {
+            ws::wait_for_msg(&mut ws_rx, &label, "CharacterStatsRolled", |msg| {
                 matches!(msg, ServerMessage::CharacterStatsRolled { .. })
             })
             .await?;
@@ -325,7 +358,7 @@ async fn run_npc_session(
                 },
             )
             .await?;
-            let created = ws::wait_for_msg(&mut ws_rx, &npc.account, "CharacterCreated", |msg| {
+            let created = ws::wait_for_msg(&mut ws_rx, &label, "CharacterCreated", |msg| {
                 matches!(
                     msg,
                     ServerMessage::CharacterCreated { .. } | ServerMessage::CharacterError { .. }
@@ -336,12 +369,12 @@ async fn run_npc_session(
                 ServerMessage::CharacterCreated { character } => {
                     info!(
                         "[{}] Created character '{}' (id={}, {:?})",
-                        npc.account, character.name, character.id, character.class
+                        label, character.name, character.id, character.class
                     );
                     characters.push(character);
                 }
                 ServerMessage::CharacterError { message } => {
-                    anyhow::bail!("[{}] Failed to create character: {message}", npc.account);
+                    anyhow::bail!("[{}] Failed to create character: {message}", label);
                 }
                 _ => unreachable!(),
             }
@@ -363,10 +396,7 @@ async fn run_npc_session(
             },
         )
         .await?;
-        info!(
-            "[{}] Entering game with character {char_id}...",
-            npc.account
-        );
+        info!("[{}] Entering game with character {char_id}...", label);
     }
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
@@ -377,7 +407,7 @@ async fn run_npc_session(
         Arc::clone(&shared.world_cache),
     )));
 
-    let account_for_tx = npc.account.clone();
+    let account_for_tx = label.to_string();
     let tx_task = tokio::spawn(async move {
         while let Some(msg) = cmd_rx.recv().await {
             if let Err(e) = ws::send(&mut ws_tx, &msg).await {
@@ -388,7 +418,7 @@ async fn run_npc_session(
     });
 
     let state_for_rx = Arc::clone(&state);
-    let account_for_rx = npc.account.clone();
+    let account_for_rx = label.to_string();
     let rx_task = tokio::spawn(async move {
         loop {
             match ws::recv(&mut ws_rx).await {
@@ -478,9 +508,9 @@ async fn run_npc_session(
     });
 
     if llm_enabled {
-        info!("[{}] Running in LLM-driven mode", npc.account);
+        info!("[{}] Running in LLM-driven mode", label);
     } else {
-        info!("[{}] Running in direct mode", npc.account);
+        info!("[{}] Running in direct mode", label);
     }
 
     // Wait until the WebSocket reader dies (connection lost)
@@ -512,6 +542,7 @@ impl NpcConfig {
 /// If `template_prompt` is set, uses the 3-tier system (template + instance + memory).
 /// Otherwise falls back to the backend-specific `system_prompt_file`.
 fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
+    let label = npc.label();
     if let Some(ref template_path) = npc.template_prompt {
         let mut parts = vec![driver::load_system_prompt(template_path)?];
         if let Some(ref instance_path) = npc.instance_prompt {
@@ -540,7 +571,7 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
         }
         info!(
             "[{}] Using 3-tier prompt: template={template_path}{}{}",
-            npc.account,
+            label,
             npc.instance_prompt
                 .as_deref()
                 .map(|p| format!(", instance={p}"))
@@ -566,6 +597,7 @@ fn spawn_llm_task(
     scheduler: &LlmScheduler,
     server_url: &str,
 ) -> Option<tokio::task::JoinHandle<()>> {
+    let label = npc.label();
     let min_interval = Duration::from_secs(npc.min_interval_secs);
     let debounce = Duration::from_secs(npc.debounce_secs);
     let idle_interval = Duration::from_secs(npc.idle_interval_secs);
@@ -574,7 +606,7 @@ fn spawn_llm_task(
     let system_prompt = match build_system_prompt(npc) {
         Ok(p) => p,
         Err(e) => {
-            error!("[{}] Failed to build system prompt: {e}", npc.account);
+            error!("[{}] Failed to build system prompt: {e}", label);
             return None;
         }
     };
@@ -583,12 +615,12 @@ fn spawn_llm_task(
         LlmType::Claude => {
             info!(
                 "[{}] Claude CLI integration enabled (model={})",
-                npc.account, npc.claude.model
+                label, npc.claude.model
             );
             match claude::ClaudeInvoker::new(&npc.claude, system_prompt) {
                 Ok(inv) => Arc::new(inv),
                 Err(e) => {
-                    error!("[{}] Failed to create Claude invoker: {e}", npc.account);
+                    error!("[{}] Failed to create Claude invoker: {e}", label);
                     return None;
                 }
             }
@@ -596,12 +628,12 @@ fn spawn_llm_task(
         LlmType::Openrouter => {
             info!(
                 "[{}] OpenRouter API integration enabled (model={})",
-                npc.account, npc.openrouter.model
+                label, npc.openrouter.model
             );
             match openrouter::OpenRouterInvoker::new(&npc.openrouter, system_prompt) {
                 Ok(inv) => Arc::new(inv),
                 Err(e) => {
-                    error!("[{}] Failed to create OpenRouter invoker: {e}", npc.account);
+                    error!("[{}] Failed to create OpenRouter invoker: {e}", label);
                     return None;
                 }
             }
@@ -609,12 +641,12 @@ fn spawn_llm_task(
         LlmType::Codex => {
             info!(
                 "[{}] Codex CLI integration enabled (model={})",
-                npc.account, npc.codex.model
+                label, npc.codex.model
             );
             match codex::CodexInvoker::new(&npc.codex, system_prompt) {
                 Ok(inv) => Arc::new(inv),
                 Err(e) => {
-                    error!("[{}] Failed to create Codex invoker: {e}", npc.account);
+                    error!("[{}] Failed to create Codex invoker: {e}", label);
                     return None;
                 }
             }
@@ -632,14 +664,14 @@ fn spawn_llm_task(
                     let mut valid = true;
                     for entry in &mut f.schedule {
                         if let Err(e) = entry.parse_condition() {
-                            error!("[{}] Schedule entry error: {e}", npc.account);
+                            error!("[{}] Schedule entry error: {e}", label);
                             valid = false;
                         }
                     }
                     if valid {
                         info!(
                             "[{}] Loaded {} schedule entries from {path}",
-                            npc.account,
+                            label,
                             f.schedule.len()
                         );
                         f.schedule
@@ -648,15 +680,12 @@ fn spawn_llm_task(
                     }
                 }
                 Err(e) => {
-                    error!(
-                        "[{}] Failed to parse schedule file {path}: {e}",
-                        npc.account
-                    );
+                    error!("[{}] Failed to parse schedule file {path}: {e}", label);
                     Vec::new()
                 }
             },
             Err(e) => {
-                error!("[{}] Failed to read schedule file {path}: {e}", npc.account);
+                error!("[{}] Failed to read schedule file {path}: {e}", label);
                 Vec::new()
             }
         }
@@ -683,7 +712,7 @@ fn spawn_llm_task(
     };
 
     let driver_config = driver::DriverConfig {
-        label: npc.account.clone(),
+        label: label.to_string(),
         memory_file: npc.memory_file.clone(),
         min_interval,
         debounce,

@@ -164,6 +164,12 @@ to the server (`GOOGLE_CLIENT_ID` env / `--google-client-id`) and the client
 browser logins. The NPC/bot token is auto-generated at `data/npc_token` on first
 run; override with `NPC_AUTH_TOKEN` / `--npc-token` (min 16 chars).
 
+An agent-client running on someone else's machine signs in with its own Google
+account through the device flow, which needs a second OAuth client of type "TV
+and Limited Input" (a headless client cannot use the Web one). Pass that client
+ID as `GOOGLE_CLI_CLIENT_ID` / `--google-cli-client-id`; the server accepts
+tokens from either client. See [doc/REMOTE_AGENT_CLIENT.md](doc/REMOTE_AGENT_CLIENT.md).
+
 
 ### 4. Running the Client
 

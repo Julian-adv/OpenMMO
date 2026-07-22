@@ -41,9 +41,13 @@ max_concurrent = 2                          # Max simultaneous LLM calls (defaul
 
 # How this client authenticates to the game server.
 #   npc_token — shared secret from the server's data/npc_token (default)
-#   google    — the runner's own Google account (not implemented yet)
+#   google    — the runner's own Google account, via the device flow: the
+#               client prints a URL and a code to enter in any browser
 [auth]
 mode = "npc_token"
+# client_id = "...apps.googleusercontent.com"  # defaults to the built-in CLI client
+# client_secret = "..."                        # or GOOGLE_CLI_CLIENT_SECRET
+# token_cache = "~/.config/onlinerpg/google.json"  # refresh token lives here (0600)
 
 # Claude CLI settings (used when llm = "claude")
 [claude]

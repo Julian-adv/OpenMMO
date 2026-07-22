@@ -30,15 +30,18 @@ pub struct GoogleClaims {
 }
 
 pub struct GoogleAuthVerifier {
-    client_id: String,
+    /// Accepted `aud` values. The browser and the CLI sign in through
+    /// different OAuth clients (a headless client cannot use the browser
+    /// one), so tokens from either are valid here.
+    client_ids: Vec<String>,
     http: reqwest::Client,
     jwks: RwLock<Option<(Instant, Jwks)>>,
 }
 
 impl GoogleAuthVerifier {
-    pub fn new(client_id: String) -> Self {
+    pub fn new(client_ids: Vec<String>) -> Self {
         Self {
-            client_id,
+            client_ids,
             http: reqwest::Client::new(),
             jwks: RwLock::new(None),
         }
@@ -50,7 +53,7 @@ impl GoogleAuthVerifier {
         let key = self.decoding_key(&kid).await?;
 
         let mut validation = Validation::new(Algorithm::RS256);
-        validation.set_audience(&[&self.client_id]);
+        validation.set_audience(&self.client_ids);
         validation.set_issuer(&["https://accounts.google.com", "accounts.google.com"]);
 
         decode::<GoogleClaims>(id_token, &key, &validation)

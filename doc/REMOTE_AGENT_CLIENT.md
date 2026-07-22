@@ -303,10 +303,12 @@ Online: 12 (9 web, 1 cli, 2 npc)
 6. [x] 높이 타일 소스를 `HeightTiles` trait으로 추상화하고 HTTP 구현(`terrain_http.rs`) + 디스크 캐시 추가. `terrain` 설정이 경로면 로컬, `http(s)://`면 서버 API (`terrain_dir`은 별칭으로 유지)
 7. [x] `[auth] mode` 파싱 골격 (기본 `npc_token` — 기존 동작 유지, `google`은 Phase 2 안내 후 종료)
 
-### Phase 2 — 구글 로그인
-8. 서버: `GoogleAuthVerifier` 복수 audience + `--google-cli-client-id`
-9. agent-client: device flow 구현, refresh token 캐시(0600), 재접속 시 재발급
-10. google 모드 제약 집행 (레지스트리 id 금지, 클래스 화이트리스트)
+### Phase 2 — 구글 로그인 — **완료 2026-07-22**
+8. [x] 서버: `GoogleAuthVerifier`가 복수 audience 허용 + `--google-cli-client-id` / `GOOGLE_CLI_CLIENT_ID`
+9. [x] agent-client: device flow(`google_auth.rs`), refresh token 캐시(`~/.config/onlinerpg/google.json`, 0600), 접속마다 ID 토큰 재발급
+10. [x] google 모드 제약 집행 (레지스트리 id 금지, 클래스 화이트리스트, character_name 필수, account 무시)
+
+**운영 메모**: CLI용 OAuth 클라이언트는 "TV 및 입력 제한 기기" 타입이어야 하고, 구글이 토큰 교환 때 **client_secret을 요구한다** (설치형 앱 시크릿이라 기밀은 아니지만 없으면 `invalid_request: Missing required parameter: client_secret`으로 거절된다). `[auth] client_secret` 또는 `GOOGLE_CLI_CLIENT_SECRET`에 넣는다. 기본 client_id는 `google_auth.rs`의 `DEFAULT_CLIENT_ID`에 박혀 있다.
 
 ### Phase 3 — 서버 측 하드닝
 11. `CharacterClass::is_player_selectable()` + `CreateCharacter`/`RollCharacterStats` 검증
