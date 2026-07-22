@@ -10,14 +10,8 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
-use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 use tracing::{error, warn};
-
-/// Re-scan the directory at most this often: the response is identical for
-/// every visitor, so the login screen of 5,000 users maps to one disk scan
-/// per interval, not one per request.
-const CACHE_TTL: Duration = Duration::from_secs(10);
 
 /// Newest N are served; older ones stay on disk but off the login screen.
 const MAX_ANNOUNCEMENTS: usize = 50;
@@ -39,58 +33,46 @@ struct Translation {
 pub struct Announcement {
     id: String,
     date: String,
+    #[serde(skip)]
+    time_secs: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     category: Option<String>,
     /// locale code -> localized content; always has at least one entry.
     translations: BTreeMap<String, Translation>,
 }
 
-struct CacheInner {
-    body: Bytes,
-    fetched_at: Option<Instant>,
-}
-
 pub struct AnnouncementStore {
     dir: PathBuf,
-    cache: Mutex<CacheInner>,
+    body: OnceCell<Bytes>,
 }
 
 impl AnnouncementStore {
     pub fn new(dir: PathBuf) -> Self {
         Self {
             dir,
-            cache: Mutex::new(CacheInner {
-                body: Bytes::from_static(b"[]"),
-                fetched_at: None,
-            }),
+            body: OnceCell::new(),
         }
     }
 
-    /// Prime the cache so the first visitors after a restart get an instant hit.
     pub async fn warm(&self) {
         let _ = self.body().await;
     }
 
-    /// Serialized JSON response body. Shared as `Bytes` so each of the (many)
-    /// callers on the login screen clones a refcount, not the whole payload.
     async fn body(&self) -> Bytes {
-        let mut cache = self.cache.lock().await;
-        let fresh = cache.fetched_at.is_some_and(|t| t.elapsed() < CACHE_TTL);
-        if fresh {
-            return cache.body.clone();
-        }
-
         let dir = self.dir.clone();
-        let list = tokio::task::spawn_blocking(move || load_announcements(&dir))
+        self.body
+            .get_or_init(|| async move {
+                let list = tokio::task::spawn_blocking(move || load_announcements(&dir))
+                    .await
+                    .unwrap_or_else(|e| {
+                        error!("announcement load task panicked: {e}");
+                        Vec::new()
+                    });
+                let json = serde_json::to_string(&list).unwrap_or_else(|_| "[]".to_string());
+                Bytes::from(json)
+            })
             .await
-            .unwrap_or_else(|e| {
-                error!("announcement load task panicked: {e}");
-                Vec::new()
-            });
-        let json = serde_json::to_string(&list).unwrap_or_else(|_| "[]".to_string());
-        cache.body = Bytes::from(json);
-        cache.fetched_at = Some(Instant::now());
-        cache.body.clone()
+            .clone()
     }
 }
 
@@ -141,10 +123,14 @@ fn load_announcements(dir: &Path) -> Vec<Announcement> {
         }
     }
 
-    // Newest first; break ties on id so the order is stable across scans.
-    out.sort_by(|a, b| b.date.cmp(&a.date).then_with(|| b.id.cmp(&a.id)));
+    out.sort_by(newest_first);
     out.truncate(MAX_ANNOUNCEMENTS);
     out
+}
+
+/// Id tiebreak keeps the order stable across scans.
+fn newest_first(a: &Announcement, b: &Announcement) -> std::cmp::Ordering {
+    (&b.date, b.time_secs, &b.id).cmp(&(&a.date, a.time_secs, &a.id))
 }
 
 /// A file with no resolvable date is skipped (returns None), which is how
@@ -156,6 +142,7 @@ fn parse_announcement(stem: &str, raw: &str) -> Option<Announcement> {
     // `title_<locale>` per-language titles.
     let mut titles: BTreeMap<String, String> = BTreeMap::new();
     let mut date = None;
+    let mut time_secs = None;
     let mut category = None;
     for line in front.lines() {
         let line = line.trim();
@@ -169,6 +156,7 @@ fn parse_announcement(stem: &str, raw: &str) -> Option<Announcement> {
         let key = key.trim().to_ascii_lowercase();
         match key.as_str() {
             "date" if is_iso_date(val) => date = Some(val.to_string()),
+            "time" => time_secs = parse_time_secs(val).or(time_secs),
             "category" if !val.is_empty() => category = Some(val.to_string()),
             "title" if !val.is_empty() => {
                 titles.insert(DEFAULT_LOCALE.to_string(), val.to_string());
@@ -194,6 +182,7 @@ fn parse_announcement(stem: &str, raw: &str) -> Option<Announcement> {
     Some(Announcement {
         id: stem.to_string(),
         date,
+        time_secs,
         category,
         translations,
     })
@@ -333,6 +322,26 @@ fn is_iso_date(s: &str) -> bool {
         && b[8..10].iter().all(u8::is_ascii_digit)
 }
 
+/// Two ASCII digits, below `max`.
+fn time_part(s: &str, max: u32) -> Option<u32> {
+    if s.len() != 2 || !s.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    s.parse().ok().filter(|v| *v < max)
+}
+
+/// `HH:MM` or `HH:MM:SS` as seconds since midnight; a sort key, never served.
+fn parse_time_secs(s: &str) -> Option<u32> {
+    let mut parts = s.split(':');
+    let hour = time_part(parts.next()?, 24)?;
+    let minute = time_part(parts.next()?, 60)?;
+    let second = parts.next().map_or(Some(0), |p| time_part(p, 60))?;
+    parts
+        .next()
+        .is_none()
+        .then_some(hour * 3600 + minute * 60 + second)
+}
+
 fn date_from_stem(stem: &str) -> Option<String> {
     let prefix: String = stem.chars().take(10).collect();
     is_iso_date(&prefix).then_some(prefix)
@@ -393,6 +402,53 @@ mod tests {
         let raw = "---\ndate: 2026-05-05\n---\nbody";
         let a = parse_announcement("2020-01-01-old", raw).expect("parsed");
         assert_eq!(a.date, "2026-05-05");
+    }
+
+    #[test]
+    fn parses_time_as_seconds() {
+        let raw = "---\ndate: 2026-07-22\ntime: 14:19\n---\nbody";
+        let a = parse_announcement("x", raw).expect("parsed");
+        assert_eq!(a.time_secs, Some(14 * 3600 + 19 * 60));
+    }
+
+    #[test]
+    fn rejects_invalid_time() {
+        for val in ["24:00", "12:60", "14-30", "9:00", "14:30:", "14:30:00:00"] {
+            let raw = format!("---\ndate: 2026-07-22\ntime: {val}\n---\nbody");
+            let a = parse_announcement("x", &raw).expect("parsed");
+            assert!(a.time_secs.is_none(), "{val} should be rejected");
+        }
+    }
+
+    #[test]
+    fn sorts_same_day_by_latest_time() {
+        let mut list = [
+            parse_announcement("2026-07-22-z", "---\ntime: 09:00\n---\nold").expect("parsed"),
+            parse_announcement("2026-07-22-a", "---\ntime: 14:00\n---\nnew").expect("parsed"),
+        ];
+
+        list.sort_by(newest_first);
+
+        assert_eq!(list[0].id, "2026-07-22-a");
+    }
+
+    #[tokio::test]
+    async fn store_loads_announcements_only_once() {
+        let dir =
+            std::env::temp_dir().join(format!("onlinerpg-announcements-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&dir).expect("created temp directory");
+        let path = dir.join("2026-07-22-notice.md");
+        std::fs::write(&path, "first body").expect("wrote first announcement");
+        let store = AnnouncementStore::new(dir.clone());
+
+        store.warm().await;
+        let first = store.body().await;
+        std::fs::write(&path, "second body").expect("updated announcement");
+        let second = store.body().await;
+
+        std::fs::remove_dir_all(dir).expect("removed temp directory");
+        assert_eq!(first, second);
+        assert!(String::from_utf8_lossy(&second).contains("first body"));
     }
 
     #[test]
