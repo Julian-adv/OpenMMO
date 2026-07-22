@@ -43,13 +43,33 @@ The script builds everything before it touches live state (rsync + restarts at t
 very end), so an interruption before that leaves the old bundle and old server
 running as a matched pair — never a half-deploy.
 
-## 3. Watch it to completion
+## 3. Watch it to completion — with a monitor that ends itself
 
-Monitor `~/deploy-latest.log`. Use the Monitor tool with a filter that catches
-both the success marker and failure signatures, e.g. grep for
-`==> deployed|error|Error|error\[|failed|FAILED|panic|Killed|No space|fatal|is not running`.
-The log ends at `==> deployed <commit>`. A typical run is a few minutes (two
-release builds + wasm + Vite bundle).
+The log ends at `==> deployed <commit>`, and that marker is the script's **last**
+line. So a plain `tail -f` never terminates: nothing is written after the marker,
+so even a `grep`/`awk` that exits on it leaves `tail` blocked on the file with no
+SIGPIPE to kill it, and the monitor lingers until timeout. Don't use `tail -f`.
+
+Poll the log on prod instead and `exit` when the marker lands, so the monitor
+closes itself. Pass this to the Monitor tool (single ssh, streams progress +
+failures, self-terminating):
+```bash
+ssh prod 'last=0; while :; do
+  n=$(wc -l < ~/deploy-latest.log 2>/dev/null || echo "$last")
+  if [ "$n" -gt "$last" ]; then
+    sed -n "$((last+1)),${n}p" ~/deploy-latest.log \
+      | grep -E "==>|error|Error|error\[|failed|FAILED|panic|Killed|No space|fatal"
+    last=$n
+  fi
+  tail -5 ~/deploy-latest.log | grep -q "==> deployed" && exit 0
+  sleep 3
+done'
+```
+The `==>` in the filter catches every progress marker (git pull → builds → publish
+→ restarts → deployed); the error signatures catch a build that aborts under
+`set -euo pipefail` without ever reaching the marker. A typical run is a few
+minutes (two release builds + wasm + Vite bundle). Keep the Monitor's own timeout
+as a backstop in case the deploy hangs and neither the marker nor an error appears.
 
 ## 4. Verify it came up
 
