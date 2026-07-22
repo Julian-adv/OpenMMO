@@ -64,6 +64,8 @@ fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::
         level_override: None,
         aggressive: false,
         last_attack_at: 0,
+        last_move_at: 0,
+        move_budget: 0.0,
     }
 }
 
@@ -911,6 +913,102 @@ async fn monster_move_requires_ownership() {
     );
 }
 
+/// Even the owner can't teleport a monster onto a distant victim: a move is
+/// capped to what the monster could run since its last accepted move, so an
+/// owned monster stays a melee threat only where it could actually walk.
+#[tokio::test]
+async fn monster_move_is_speed_capped() {
+    let game_state = make_test_game_state("monster_move_speed_cap");
+    let owner_id = pid("owner");
+
+    game_state.add_player(make_player("owner", 0.0, 0.0)).await;
+    // A bystander next to the monster observes fanout: the owner is skipped in
+    // the position broadcast, so it can't tell an applied move from a refused
+    // one on its own.
+    game_state
+        .add_player(make_player("observer", 0.0, 0.0))
+        .await;
+    let mut observer_rx = game_state.register_direct_channel(&pid("observer")).await;
+
+    {
+        let mut monsters = game_state.monsters.write().await;
+        let mut monster = make_monster("owned_monster", pos(0.0), 0);
+        monster.owner_id = Some(owner_id);
+        // A large elapsed budget (last_move_at = 0) still can't clear the
+        // absolute per-move cap.
+        monsters.insert("owned_monster".to_string(), monster);
+    }
+
+    // A 50m jump exceeds the absolute step cap and is refused outright.
+    game_state
+        .update_monster_position(
+            &owner_id,
+            "owned_monster".to_string(),
+            pos(50.0),
+            0.0,
+            MonsterState::Run,
+            pos(50.0),
+        )
+        .await;
+    assert_eq!(
+        game_state.monsters.read().await["owned_monster"].position.x,
+        0.0,
+        "a teleport past the step cap must not move the monster"
+    );
+    match observer_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("a rejected move must not fan out, got {other:?}"),
+    }
+
+    // A short hop within the cap still applies normally.
+    game_state
+        .update_monster_position(
+            &owner_id,
+            "owned_monster".to_string(),
+            pos(5.0),
+            0.0,
+            MonsterState::Run,
+            pos(5.0),
+        )
+        .await;
+    assert_eq!(
+        game_state.monsters.read().await["owned_monster"].position.x,
+        5.0,
+        "a move within the cap must apply"
+    );
+    match observer_rx.try_recv() {
+        Ok(ServerMessage::MonsterMoved { monster_id, .. }) => {
+            assert_eq!(monster_id, "owned_monster");
+        }
+        other => panic!("an accepted move must fan out to bystanders, got {other:?}"),
+    }
+
+    // Drain the bucket and reset its clock: an under-cap jump (8m < 15m) is now
+    // refused by the refill rate, not the cap, since no time has passed to
+    // refill it.
+    {
+        let mut monsters = game_state.monsters.write().await;
+        let monster = monsters.get_mut("owned_monster").unwrap();
+        monster.move_budget = 0.0;
+        monster.last_move_at = GameState::now_ms();
+    }
+    game_state
+        .update_monster_position(
+            &owner_id,
+            "owned_monster".to_string(),
+            pos(13.0),
+            0.0,
+            MonsterState::Run,
+            pos(13.0),
+        )
+        .await;
+    assert_eq!(
+        game_state.monsters.read().await["owned_monster"].position.x,
+        5.0,
+        "an 8m jump with an empty budget must be refused by the refill rate"
+    );
+}
+
 /// Owning a monster must not let a player damage arbitrary targets at range.
 /// Anyone can spawn a monster beside themselves and become its owner, so the
 /// ownership check alone would leave `target_player_id` as a world-wide damage
@@ -1179,6 +1277,47 @@ async fn player_attack_at_melee_range_is_allowed() {
         game_state.players.read().await[&player_id].last_combat_at,
         0,
         "an allowed attack must enter combat"
+    );
+}
+
+/// A player at 0 HP (awaiting respawn) must not be able to keep attacking.
+#[tokio::test]
+async fn dead_player_cannot_attack() {
+    let game_state = make_test_game_state("dead_player_attack");
+    let player_id = pid("attacker");
+
+    game_state
+        .add_player(make_player("attacker", 0.0, 0.0))
+        .await;
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&player_id)
+        .unwrap()
+        .health = 0;
+    let mut attacker_rx = game_state.register_direct_channel(&player_id).await;
+
+    {
+        let mut monsters = game_state.monsters.write().await;
+        monsters.insert(
+            "nearby_monster".to_string(),
+            make_monster("nearby_monster", pos(2.0), 0),
+        );
+    }
+
+    game_state
+        .broadcast_player_attack(&player_id, "nearby_monster".to_string())
+        .await;
+
+    match attacker_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("a dead player's attack must be dropped, got {other:?}"),
+    }
+    assert_eq!(
+        game_state.monsters.read().await["nearby_monster"].health,
+        10,
+        "a dead player's attack must deal no damage"
     );
 }
 

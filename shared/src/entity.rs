@@ -135,6 +135,15 @@ pub struct Monster {
     pub aggressive: bool,
     #[serde(skip)]
     pub last_attack_at: u64,
+    /// Server timestamp (ms) the movement budget was last refilled. Paired with
+    /// `move_budget` to rate-limit client-driven moves so an owned monster can't
+    /// be teleported onto a distant victim.
+    #[serde(skip)]
+    pub last_move_at: u64,
+    /// Remaining movement allowance (meters) in the monster's move token bucket,
+    /// refilled at its run speed. A move costing more than this is refused.
+    #[serde(skip)]
+    pub move_budget: f32,
 }
 
 impl Monster {
@@ -172,6 +181,8 @@ mod tests {
             level_override: None,
             aggressive: true,
             last_attack_at: 0,
+            last_move_at: 0,
+            move_budget: 0.0,
         };
         let bytes = rmp_serde::to_vec(&monster).unwrap();
         let decoded: Monster = rmp_serde::from_slice(&bytes).unwrap();

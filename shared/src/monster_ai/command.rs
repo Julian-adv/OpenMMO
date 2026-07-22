@@ -5,8 +5,9 @@ use crate::{MonsterState, PlayerId, Position};
 use serde::{Deserialize, Serialize};
 
 /// Internal behavior state (superset of network [`MonsterState`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum AiState {
+    #[default]
     Idle,
     Walk,
     Run,

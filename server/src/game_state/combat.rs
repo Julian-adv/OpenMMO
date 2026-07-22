@@ -106,10 +106,18 @@ impl super::GameState {
             let players = self.players.read().await;
             players
                 .get(player_id)
-                .map(|p| (p.name.clone(), p.level, p.floor_level, p.position))
+                .map(|p| (p.name.clone(), p.level, p.floor_level, p.position, p.health))
         };
 
-        if let Some((player_name, player_level, player_floor, player_position)) = player_snapshot {
+        if let Some((player_name, player_level, player_floor, player_position, player_health)) =
+            player_snapshot
+        {
+            // A dead attacker deals no damage. The monster-attack path already
+            // gates on the target's HP; mirror it here so a 0-HP player can't
+            // keep swinging while awaiting respawn.
+            if player_health == 0 {
+                return;
+            }
             // Delivery filtering keeps a player from ever learning about
             // monsters on another floor, but gate here too so a stale monster
             // id can't drive a cross-floor hit (the original bug: a surface

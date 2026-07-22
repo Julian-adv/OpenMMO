@@ -6,6 +6,19 @@ use tracing::{debug, warn};
 /// area *around* a town stays empty too. Mirrors the client's TOWN_MARGIN.
 const NO_SPAWN_MARGIN: f32 = 30.0;
 
+/// Headroom over a monster's run speed at which its move token bucket refills,
+/// absorbing jitter between the owner's simulation clock and packet arrival.
+const MONSTER_MOVE_SPEED_SLACK: f32 = 1.2;
+/// Capacity of a monster's move token bucket (meters). Bounds the jump an idle
+/// monster could bank up — set just above the ~10m longest legitimate wander
+/// leg (`DEFAULT_MAX_MOVE_DIST`) — while still absorbing a burst of frames that
+/// the network delivered bunched together.
+const MONSTER_MOVE_BUDGET_CAP_METERS: f32 = 12.0;
+/// Run speed assumed for a monster whose type has no definition (only test /
+/// misconfigured types). Kept just above the player's own speed so an unknown
+/// type stays tightly bounded rather than inheriting a fast monster's leeway.
+const DEFAULT_MONSTER_RUN_SPEED: f32 = 3.5;
+
 impl super::GameState {
     fn find_ambient_rule(
         monster_type: &str,
@@ -104,6 +117,11 @@ impl super::GameState {
             level_override,
             aggressive,
             last_attack_at: 0,
+            last_move_at: Self::now_ms(),
+            // Starts empty: the monster spawns beside its owner and its first
+            // reported position is the spawn point, so nothing legitimate needs
+            // budget yet. The bucket then fills as real time passes.
+            move_budget: 0.0,
         };
 
         let mut monsters = self.monsters.write().await;
@@ -139,6 +157,7 @@ impl super::GameState {
         state: MonsterState,
         target_position: Position,
     ) {
+        let now = Self::now_ms();
         let (old_position, owner_id, monster) = {
             let mut monsters = self.monsters.write().await;
 
@@ -148,6 +167,36 @@ impl super::GameState {
             if !monster.is_controllable_by(mover_id) {
                 return;
             }
+            // Rate-limit client-reported movement with a token bucket that
+            // refills at the monster's run speed. Movement is simulated by the
+            // owning client, so without this an owner could teleport the monster
+            // onto any player and use it as an unlimited-range weapon
+            // (broadcast_monster_attack's reach check only sees the post-move
+            // position). The bucket lets a legit burst of frames the network
+            // delivered bunched together spend banked allowance, while its cap
+            // bounds the jump an idle monster can bank, and its refill rate the
+            // sustained speed.
+            let run_speed = self
+                .monster_defs
+                .get(&monster.monster_type)
+                .map(|d| d.run_speed)
+                .unwrap_or(DEFAULT_MONSTER_RUN_SPEED);
+            let elapsed_s = now.saturating_sub(monster.last_move_at) as f32 / 1000.0;
+            let budget = (monster.move_budget + run_speed * MONSTER_MOVE_SPEED_SLACK * elapsed_s)
+                .min(MONSTER_MOVE_BUDGET_CAP_METERS);
+            monster.last_move_at = now;
+            let dist = monster.position.dist_xz_sq(&new_position).sqrt();
+            if dist > budget {
+                // Bank the refill so the budget keeps recovering, but don't
+                // spend it: the move stays where it was and isn't fanned out.
+                monster.move_budget = budget;
+                debug!(
+                    "Rejected monster move {:.0}m (budget {:.1}m): monster {} by {}",
+                    dist, budget, monster_id, mover_id
+                );
+                return;
+            }
+            monster.move_budget = budget - dist;
             let old_position = monster.position;
             monster.position = new_position;
             monster.rotation = rotation;

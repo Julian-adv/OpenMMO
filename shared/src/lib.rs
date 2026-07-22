@@ -128,6 +128,8 @@ mod tests {
                 level_override: None,
                 aggressive: true,
                 last_attack_at: 0,
+                last_move_at: 0,
+                move_budget: 0.0,
             },
         );
         let msg = ServerMessage::GameState {

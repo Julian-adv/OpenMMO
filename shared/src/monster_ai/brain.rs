@@ -7,6 +7,7 @@ use super::tree::BehaviorStatus;
 use super::{
     AiCommand, AiState, BehaviorTree, NearbyPlayer, PathProvider, TickResult, DEFAULT_ATTACK_RANGE,
     DEFAULT_CHASE_RANGE, DEFAULT_HIT_STAGGER_MS, DEFAULT_MAX_MOVE_DIST, DEFAULT_MIN_MOVE_DIST,
+    NETWORK_SYNC_INTERVAL_MS,
 };
 use crate::pathfinding::PathWaypoint;
 use crate::{MonsterState, PlayerId, Position};
@@ -41,6 +42,14 @@ pub struct MonsterBrain {
     /// dungeon monsters use their depth's passability floor index.
     #[serde(default)]
     pub path_floor: u8,
+    /// Time accumulated toward the next throttled network position sync while
+    /// continuously moving. See [`Self::should_sync_move`].
+    #[serde(default)]
+    pub(super) sync_elapsed_ms: f32,
+    /// Movement state at the last emitted sync, so entering a new one syncs at
+    /// once instead of waiting out the interval.
+    #[serde(default)]
+    pub(super) last_synced_state: AiState,
 }
 
 impl MonsterBrain {
@@ -90,6 +99,25 @@ impl MonsterBrain {
             spawn_position: position,
             position,
             path_floor: 0,
+            sync_elapsed_ms: 0.0,
+            last_synced_state: AiState::Idle,
+        }
+    }
+
+    /// Gate for the per-tick position emits of continuously-moving states
+    /// (chase/return/flee): true on entering a new movement state, or once
+    /// `NETWORK_SYNC_INTERVAL_MS` has elapsed. Resets the timer when it fires so
+    /// the brain simulates every frame but only syncs a couple of times a
+    /// second. Remote clients interpolate toward `target_position` between syncs.
+    pub(super) fn should_sync_move(&mut self) -> bool {
+        if self.state != self.last_synced_state
+            || self.sync_elapsed_ms >= NETWORK_SYNC_INTERVAL_MS
+        {
+            self.sync_elapsed_ms = 0.0;
+            self.last_synced_state = self.state;
+            true
+        } else {
+            false
         }
     }
 
@@ -133,6 +161,7 @@ impl MonsterBrain {
 
         self.state_timer_ms += delta_ms;
         self.path_elapsed_ms += delta_ms;
+        self.sync_elapsed_ms += delta_ms;
         let mut commands = Vec::new();
 
         if self.state == AiState::Hit {

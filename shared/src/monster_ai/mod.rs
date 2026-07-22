@@ -50,6 +50,12 @@ const FLEE_SAFE_DIST_MARGIN: f32 = 5.0;
 const DEFAULT_RETURN_ARRIVE_DIST: f32 = 5.0;
 const DEFAULT_PATH_RECALC_MS: f32 = 500.0;
 const DEFAULT_TARGET_MOVE_THRESHOLD: f32 = 3.0;
+/// Least time between network position syncs while a monster is continuously
+/// moving (chase/return/flee). The brain simulates every frame but only emits a
+/// `Move` this often, cutting ~60/s of packets to ~2/s; remote clients
+/// interpolate toward `target_position` in between, and state changes still sync
+/// immediately. Server-authoritative movement (F-006) absorbs the coarser rate.
+const NETWORK_SYNC_INTERVAL_MS: f32 = 500.0;
 pub const DEFAULT_BEHAVIOR: &str = "brave";
 /// Behavior tree used by proactive (선공형) monsters that acquire and attack
 /// targets on sight. Selected when `Monster::aggressive` is set, overriding the

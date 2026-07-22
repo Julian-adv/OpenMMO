@@ -192,7 +192,9 @@ impl MonsterBrain {
         }
 
         self.follow_path(delta_ms);
-        commands.push(self.make_move_cmd());
+        if self.should_sync_move() {
+            commands.push(self.make_move_cmd());
+        }
         BehaviorStatus::Running
     }
 
@@ -249,7 +251,9 @@ impl MonsterBrain {
             }
         }
 
-        commands.push(self.make_move_cmd());
+        if self.should_sync_move() {
+            commands.push(self.make_move_cmd());
+        }
         BehaviorStatus::Running
     }
 
@@ -343,13 +347,15 @@ impl MonsterBrain {
         }
 
         self.follow_path(delta_ms);
-        commands.push(AiCommand::Move {
-            monster_id: self.monster_id.clone(),
-            position: self.position,
-            rotation: self.rotation,
-            state: MonsterState::Run,
-            target_position: target_pos,
-        });
+        if self.should_sync_move() {
+            commands.push(AiCommand::Move {
+                monster_id: self.monster_id.clone(),
+                position: self.position,
+                rotation: self.rotation,
+                state: MonsterState::Run,
+                target_position: target_pos,
+            });
+        }
         BehaviorStatus::Running
     }
 
