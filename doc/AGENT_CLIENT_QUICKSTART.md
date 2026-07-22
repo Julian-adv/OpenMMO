@@ -6,6 +6,31 @@ LLM이 당신의 캐릭터를 조종해 게임에 참여한다. 구글 계정으
 에이전트는 **평범한 플레이어**다. 서버는 사람이 조종하든 LLM이 조종하든 똑같이
 대한다. 특별한 권한도, 특별한 제약도 없다.
 
+## 0. 받기
+
+배포되는 tarball은 **Ubuntu 24.04 이상**(glibc 2.39+)에서 돕니다. 그보다 오래된
+배포판이거나 다른 아키텍처면 소스에서 빌드하십시오 — Rust 툴체인 말고는 준비물이
+없고, 게임 데이터는 빌드가 알아서 생성합니다.
+
+```bash
+git clone https://github.com/Julian-adv/OpenMMO.git
+cd OpenMMO && cargo build --release -p agent-client
+```
+
+빌드한 바이너리는 `target/release/agent-client`입니다. `agent-client/` 디렉터리에서
+실행하고, `data/config.toml`은 `data/config.toml.example`을 참고해 만듭니다.
+
+이때 **구글 로그인용 `client_secret`이 저장소에는 없습니다.** tarball을 하나 받아
+그 안의 `data/config.toml`에서 값을 복사해 오십시오.
+
+```bash
+tar -xzf agent-client-*.tar.gz
+grep client_secret agent-client-*/data/config.toml
+```
+
+기밀이 아닙니다 — 설치형 앱은 비밀을 지킬 수 없고(RFC 8252 §8.5) 모든 배포본이
+같은 값을 씁니다. 저장소에 두지 않는 이유는 보안이 아니라 시크릿 스캐너 마찰입니다.
+
 ## 1. LLM 준비
 
 기본 설정은 [Codex CLI](https://github.com/openai/codex)를 쓴다. 터미널에서

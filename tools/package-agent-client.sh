@@ -5,11 +5,11 @@
 # animation timings) but none of the 3 GB terrain tree — that comes over HTTP.
 # Output: dist/agent-client-<commit>-<target>.tar.gz
 #
-# Defaults to a static musl build. A glibc build bakes in the build host's
-# glibc version (ours needs 2.39, i.e. Ubuntu 24.04+), which strands everyone
-# on an older distro; musl links libc in, so the binary runs anywhere x86_64.
-# Needs: rustup target add x86_64-unknown-linux-musl && apt install musl-tools
-# (ring compiles C, so a musl-targeting cc has to exist).
+# Builds natively, so the artifact inherits the build host's glibc floor
+# (currently 2.39 = Ubuntu 24.04+). That is the documented audience for the
+# download; anyone older builds from source, which needs nothing but a Rust
+# toolchain. Set TARGET to cross-compile (x86_64-unknown-linux-musl gives a
+# static binary, but ring needs a musl-targeting cc for that).
 set -euo pipefail
 
 REPO=${REPO:-$(cd "$(dirname "$0")/.." && pwd)}
@@ -29,18 +29,28 @@ if [[ -z $CLIENT_SECRET ]]; then
     exit 1
 fi
 
-TARGET=${TARGET:-x86_64-unknown-linux-musl}
+TARGET=${TARGET:-}
 
 cd "$REPO"
 commit=$(git rev-parse --short HEAD)
-name="agent-client-$commit-${TARGET%%-unknown-linux-*}-${TARGET##*-}"
+if [[ -n $TARGET ]]; then
+    cargo build --release --target "$TARGET" -p agent-client
+    binary="target/$TARGET/release/agent-client"
+    suffix=${TARGET%%-unknown-linux-*}-${TARGET##*-}
+else
+    cargo build --release -p agent-client
+    binary="target/release/agent-client"
+    # Name the glibc floor, not the build host: it is what decides whether
+    # the download runs on someone else's machine.
+    glibc=$(objdump -T "$binary" | grep -oE "GLIBC_[0-9.]+" | sort -uV | tail -1)
+    suffix="$(uname -m)-${glibc,,}"
+fi
+name="agent-client-$commit-$suffix"
 stage="$OUT_DIR/$name"
-
-cargo build --release --target "$TARGET" -p agent-client
 
 rm -rf "$stage"
 mkdir -p "$stage/data"
-cp "target/$TARGET/release/agent-client" "$stage/"
+cp "$binary" "$stage/"
 # No data/templates: those are operator NPC roles (merchant, guard). A user
 # agent has no template_prompt and falls back to data/system_prompt.txt.
 cp agent-client/data/system_prompt.txt agent-client/data/animation_durations.json "$stage/data/"
