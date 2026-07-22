@@ -8,6 +8,7 @@ mod openrouter;
 mod orchestrator;
 mod shop_info;
 mod state;
+mod terrain_http;
 mod ws;
 
 use std::sync::Arc;
@@ -16,6 +17,7 @@ use onlinerpg_terrain::height::HeightSampler;
 use onlinerpg_terrain::io::TerrainIO;
 use orchestrator::{NpcConfig, SharedResources};
 use serde::Deserialize;
+use tracing::info;
 
 /// Which LLM backend to use for the agent driver.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
@@ -40,9 +42,17 @@ struct Config {
     /// NPC auth token; defaults to reading the server-generated
     /// ../data/npc_token file (same machine).
     npc_token: Option<String>,
-    /// Path to terrain data directory (for heightmap sampling)
-    #[serde(default = "default_terrain_dir")]
-    terrain_dir: String,
+    /// Where heightmap tiles come from: a local terrain directory, or an
+    /// `http(s)://` server origin for clients running on another machine.
+    #[serde(default = "default_terrain", alias = "terrain_dir")]
+    terrain: String,
+    /// Disk cache for tiles fetched over HTTP (ignored for a local source).
+    #[serde(default = "default_terrain_cache")]
+    terrain_cache: String,
+
+    /// How this client authenticates to the game server.
+    #[serde(default)]
+    auth: AuthConfig,
 
     /// Array of NPC configurations.
     #[serde(default)]
@@ -63,8 +73,34 @@ struct Config {
     codex: codex::CodexConfig,
 }
 
-fn default_terrain_dir() -> String {
+/// How the client proves who it is to the game server.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum AuthMode {
+    /// Shared secret from the server's `data/npc_token` — operator-run NPCs
+    /// on the server machine.
+    #[default]
+    NpcToken,
+    /// The runner's own Google account (see `doc/REMOTE_AGENT_CLIENT.md`).
+    Google,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct AuthConfig {
+    #[serde(default)]
+    mode: AuthMode,
+}
+
+fn default_terrain() -> String {
     "../data/terrain".to_string()
+}
+
+fn default_terrain_cache() -> String {
+    "data/cache/height".to_string()
+}
+
+fn is_http_source(terrain: &str) -> bool {
+    terrain.starts_with("http://") || terrain.starts_with("https://")
 }
 
 pub fn default_min_interval_secs() -> u64 {
@@ -128,6 +164,13 @@ async fn main() -> anyhow::Result<()> {
         anyhow::bail!("No [[npcs]] configured in {CONFIG_PATH}");
     }
 
+    if config.auth.mode == AuthMode::Google {
+        anyhow::bail!(
+            "[auth] mode = \"google\" is not implemented yet \
+             (see doc/REMOTE_AGENT_CLIENT.md, Phase 2)"
+        );
+    }
+
     // NPCs inherit root-level backend configs when they don't override them
     let mut npcs = config.npcs;
     for npc in &mut npcs {
@@ -150,7 +193,10 @@ async fn main() -> anyhow::Result<()> {
         monster_ai::MonsterAiManager::load_monster_data(include_str!("../../data/monsters.json"));
 
     let shared = Arc::new(SharedResources {
-        height_sampler: Arc::new(create_height_sampler(&config.terrain_dir)),
+        height_sampler: Arc::new(create_height_sampler(
+            &config.terrain,
+            &config.terrain_cache,
+        )),
         world_cache: Arc::new(std::sync::RwLock::new(state::WorldCache::new())),
         behavior_trees: Arc::new(behavior_trees),
         type_mapping: Arc::new(type_mapping),
@@ -162,8 +208,15 @@ async fn main() -> anyhow::Result<()> {
     orchestrator::run_orchestrator(config.server, npcs, shared).await
 }
 
-fn create_height_sampler(terrain_dir: &str) -> HeightSampler {
-    HeightSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain_dir)))
+fn create_height_sampler(terrain: &str, cache_dir: &str) -> HeightSampler {
+    if is_http_source(terrain) {
+        info!("Heightmaps over HTTP from {terrain} (cache: {cache_dir})");
+        return HeightSampler::new(terrain_http::HttpHeightTiles::new(
+            terrain,
+            std::path::PathBuf::from(cache_dir),
+        ));
+    }
+    HeightSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain)))
 }
 
 /// Fill an `[[npcs]]` entry from the game-data registry (`data-src/npcs.csv`,

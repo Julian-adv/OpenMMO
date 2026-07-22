@@ -298,10 +298,10 @@ Online: 12 (9 web, 1 cli, 2 npc)
 3. [x] agent-client: `ClientInfo` 전송, 거절(`AuthRejected`)은 재접속하지 말고 즉시 종료
 4. [x] 웹 클라이언트도 `ClientInfo`를 보낸다 (캐시된 구버전 번들이 조용히 깨지는 것도 같이 막힌다). wasm이 `protocol_version()`을 노출해 버전 소스가 하나로 유지된다
 
-### Phase 1 — 원격 접속 (서버 변경 없음)
-5. `tokio-tungstenite`에 `rustls-tls-webpki-roots` feature 추가 → `wss://` 지원
-6. 높이 타일 소스 추상화 + HTTP 구현 + 디스크 캐시, `terrain = "https://..."` 설정 추가
-7. `[auth] mode` 파싱 골격 (기본 `npc_token` — 기존 동작 유지)
+### Phase 1 — 원격 접속 (서버 변경 없음) — **완료 2026-07-22**
+5. [x] `tokio-tungstenite`에 `rustls-tls-webpki-roots` feature 추가 → `wss://` 지원
+6. [x] 높이 타일 소스를 `HeightTiles` trait으로 추상화하고 HTTP 구현(`terrain_http.rs`) + 디스크 캐시 추가. `terrain` 설정이 경로면 로컬, `http(s)://`면 서버 API (`terrain_dir`은 별칭으로 유지)
+7. [x] `[auth] mode` 파싱 골격 (기본 `npc_token` — 기존 동작 유지, `google`은 Phase 2 안내 후 종료)
 
 ### Phase 2 — 구글 로그인
 8. 서버: `GoogleAuthVerifier` 복수 audience + `--google-cli-client-id`

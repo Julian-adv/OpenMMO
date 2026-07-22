@@ -55,21 +55,39 @@ fn get_height_at_cell(
     }
 }
 
+/// Where raw heightmap tiles come from. The local data directory when the
+/// caller sits on the game server; something else (the server's public tile
+/// API) for clients running elsewhere, which cannot carry the 3 GB tree.
+#[async_trait::async_trait]
+pub trait HeightTiles: Send + Sync {
+    /// Raw little-endian u16 heightmap for one tile, `HEIGHTMAP_SIZE` bytes.
+    /// Missing tiles yield `defaults::default_heightmap()` rather than an
+    /// error — the world is larger than the baked area.
+    async fn read_heightmap(&self, tx: i32, tz: i32) -> std::io::Result<Vec<u8>>;
+}
+
+#[async_trait::async_trait]
+impl HeightTiles for TerrainIO {
+    async fn read_heightmap(&self, tx: i32, tz: i32) -> std::io::Result<Vec<u8>> {
+        TerrainIO::read_heightmap(self, tx, tz).await
+    }
+}
+
 /// Provides terrain height sampling with an in-memory tile cache.
-/// Loads heightmap tiles on demand via `TerrainIO` and caches them.
+/// Loads heightmap tiles on demand from a `HeightTiles` source and caches them.
 ///
 /// Uses interior mutability (`tokio::sync::RwLock`) so callers only need `&self`,
 /// avoiding external mutex contention when multiple NPC connections share one sampler.
 pub struct HeightSampler {
     cache: tokio::sync::RwLock<HashMap<(i32, i32), Vec<u16>>>,
-    terrain_io: TerrainIO,
+    tiles: Box<dyn HeightTiles>,
 }
 
 impl HeightSampler {
-    pub fn new(terrain_io: TerrainIO) -> Self {
+    pub fn new(tiles: impl HeightTiles + 'static) -> Self {
         Self {
             cache: tokio::sync::RwLock::new(HashMap::new()),
-            terrain_io,
+            tiles: Box::new(tiles),
         }
     }
 
@@ -79,7 +97,7 @@ impl HeightSampler {
         if self.cache.read().await.contains_key(&tile_key(tx, tz)) {
             return Ok(());
         }
-        let raw = self.terrain_io.read_heightmap(tx, tz).await?;
+        let raw = self.tiles.read_heightmap(tx, tz).await?;
         let mut cache = self.cache.write().await;
         if cache.contains_key(&tile_key(tx, tz)) {
             return Ok(());
