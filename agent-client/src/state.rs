@@ -435,9 +435,8 @@ impl SharedState {
                     EventUrgency::Urgent
                 }
             }
-            // Urgent: a whisper is always addressed to us — the server only
-            // delivers it to the target (and echoes it to the sender, which
-            // is the Noise case).
+            // Urgent: a whisper is always addressed to us; the echo of our
+            // own outgoing whisper is the Noise case.
             ServerMessage::WhisperMessage { from, .. } => {
                 let self_name = self.self_player.as_ref().map(|p| p.name.as_str());
                 if Some(from.as_str()) == self_name {
@@ -446,7 +445,9 @@ impl SharedState {
                     EventUrgency::Urgent
                 }
             }
-
+            // Routine: feedback on our own command (/who output, whisper
+            // errors) — worth seeing, not worth an immediate wakeup.
+            ServerMessage::SystemMessage { .. } => EventUrgency::Routine,
             // Urgent: kicked
             ServerMessage::Kicked { .. } => EventUrgency::Urgent,
 

@@ -419,6 +419,12 @@ pub enum ServerMessage {
         to: String,
         message: String,
     },
+    /// Private server reply to the player's own command (`/who`, `/escape`,
+    /// whisper errors). Not `ChatMessage`: clients must render it as a system
+    /// line, not the player's own speech.
+    SystemMessage {
+        message: String,
+    },
     GameState {
         /// A list, not a map keyed by id: `PlayerId` is numeric and
         /// `wasm_api`'s `serialize_maps_as_objects` refuses non-string keys,

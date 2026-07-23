@@ -329,8 +329,7 @@ async fn who_command_reports_online_counts_only_to_the_requester() {
         .await;
 
     match asker_rx.try_recv() {
-        Ok(ServerMessage::ChatMessage { player_id, message }) => {
-            assert_eq!(player_id, asker_id);
+        Ok(ServerMessage::SystemMessage { message }) => {
             assert_eq!(message, "Online: 3 (1 web, 1 cli, 1 npc)");
         }
         other => panic!("Expected online count reply, got {:?}", other),
@@ -451,7 +450,7 @@ async fn whisper_never_falls_back_to_a_case_variant_of_another_player() {
         .send_chat_message(&sender_id, "/w RICA psst".to_string())
         .await;
     match sender_rx.try_recv() {
-        Ok(ServerMessage::ChatMessage { message, .. }) => assert_eq!(
+        Ok(ServerMessage::SystemMessage { message }) => assert_eq!(
             message,
             "Whisper: several players match RICA; spell the name exactly."
         ),
@@ -480,8 +479,7 @@ async fn whisper_errors_go_only_to_the_sender() {
 
     let expect_reply =
         |result: Result<ServerMessage, MpscTryRecvError>, expected: &str| match result {
-            Ok(ServerMessage::ChatMessage { player_id, message }) => {
-                assert_eq!(player_id, sender_id);
+            Ok(ServerMessage::SystemMessage { message }) => {
                 assert_eq!(message, expected);
             }
             other => panic!("Expected whisper error reply, got {:?}", other),
@@ -594,7 +592,10 @@ async fn escape_command_returns_a_stuck_player_to_spawn() {
     // bystander does still get the movement traffic the teleport generates.
     while let Ok(msg) = bystander_rx.try_recv() {
         assert!(
-            !matches!(msg, ServerMessage::ChatMessage { .. }),
+            !matches!(
+                msg,
+                ServerMessage::ChatMessage { .. } | ServerMessage::SystemMessage { .. }
+            ),
             "/escape must not be echoed as chat: {msg:?}"
         );
     }

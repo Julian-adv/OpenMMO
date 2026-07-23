@@ -32,6 +32,7 @@ import { editorTreeDataManager } from '../stores/editorStore'
 import type { MonsterData } from '../types/Monster'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
+import { whisperChatEntry } from '../chat-format'
 import type { NetworkEvent } from './networkEvents'
 import type {
   AccountCharacter,
@@ -391,17 +392,15 @@ export function handleServerMessage(
     }
 
     case 'WhisperMessage': {
-      // The sender gets the same message echoed back; direction decides the
-      // label. No chat bubble — a whisper is private.
+      // No chat bubble — a whisper is private.
       const own = get(gameStore).currentPlayer?.name
-      const outgoing = data.from === own
-      addChatMessage({
-        text: data.message,
-        sender: 'whisper',
-        name: outgoing ? `To ${data.to}` : `From ${data.from}`,
-      })
+      addChatMessage(whisperChatEntry(data.from, data.to, data.message, own))
       break
     }
+
+    case 'SystemMessage':
+      addChatMessage({ text: data.message, sender: 'system' })
+      break
 
     case 'GameState':
       gameStore.update((state) => {

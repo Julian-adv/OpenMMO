@@ -42,10 +42,8 @@ impl OnlineCounts {
     }
 }
 
-/// `/w <name> <message>` (or `/whisper`) asks for a private message. Returns
-/// the raw name/message parts without validating them: a malformed whisper
-/// must still be recognized as one, so it draws a usage reply instead of
-/// leaking into local chat.
+/// `/w <name> <message>` (or `/whisper`). Returns the parts unvalidated so a
+/// malformed whisper draws a usage reply instead of leaking into local chat.
 pub(crate) fn parse_whisper_command(message: &str) -> Option<(&str, &str)> {
     let trimmed = message.trim();
     let rest = ["/whisper", "/w"].iter().find_map(|prefix| {
@@ -94,8 +92,7 @@ impl super::GameState {
             };
             self.send_direct_message(
                 player_id,
-                ServerMessage::ChatMessage {
-                    player_id: *player_id,
+                ServerMessage::SystemMessage {
                     message: counts.describe(),
                 },
             )
@@ -109,8 +106,7 @@ impl super::GameState {
             if self.give_item(player_id, item_id).await {
                 self.send_direct_message(
                     player_id,
-                    ServerMessage::ChatMessage {
-                        player_id: *player_id,
+                    ServerMessage::SystemMessage {
                         message: format!("Gave item: {}", item_id),
                     },
                 )
@@ -160,10 +156,7 @@ impl super::GameState {
     /// back so the sender's client can render the outgoing line. Errors go
     /// only to the sender.
     async fn send_whisper(&self, player_id: &PlayerId, target_name: &str, message: &str) {
-        let reply = |message: String| ServerMessage::ChatMessage {
-            player_id: *player_id,
-            message,
-        };
+        let reply = |message: String| ServerMessage::SystemMessage { message };
 
         if target_name.is_empty() || message.is_empty() {
             self.send_direct_message(player_id, reply("Whisper: /w <name> <message>".into()))
@@ -174,10 +167,8 @@ impl super::GameState {
         let (sender_name, target) = {
             let players = self.players.read().await;
             let sender_name = players.get(player_id).map(|player| player.name.clone());
-            // Names are UNIQUE only case-sensitively ("Rica" and "rica" can
-            // coexist), so an exact match always wins and the case-insensitive
-            // convenience applies only while it is unambiguous — a private
-            // message must never go to a near-miss.
+            // Names are UNIQUE only case-sensitively: exact match wins, the
+            // case-insensitive convenience applies only while unambiguous.
             let target = match players.values().find(|player| player.name == target_name) {
                 Some(player) => Ok((player.id, player.name.clone())),
                 None => {
@@ -213,9 +204,7 @@ impl super::GameState {
             return;
         }
 
-        // Like regular chat, the content stays out of logs (privacy, F-012) —
-        // and so does the recipient: who talks to whom is metadata worth the
-        // same protection.
+        // Content and recipient both stay out of logs (privacy, F-012).
         info!(from = %from, len = message.len(), "whisper");
         let whisper = ServerMessage::WhisperMessage {
             from,
@@ -233,8 +222,7 @@ impl super::GameState {
     /// ones who cannot reach an admin. The combat lockout is what keeps it from
     /// doubling as a free disengage.
     async fn escape_to_spawn(&self, player_id: &PlayerId) {
-        let reply = |message: &str| ServerMessage::ChatMessage {
-            player_id: *player_id,
+        let reply = |message: &str| ServerMessage::SystemMessage {
             message: message.to_string(),
         };
 

@@ -640,8 +640,7 @@ async fn handle_client_message(
             state.account_name
         );
         return Ok(match &state.player_id {
-            Some(id) => vec![ServerMessage::ChatMessage {
-                player_id: *id,
+            Some(_) => vec![ServerMessage::SystemMessage {
                 message: "Admin only".to_string(),
             }],
             None => vec![],
