@@ -666,3 +666,80 @@ fn seed_is_stable_fnv() {
     assert_eq!(dungeon_seed(""), 0xcbf2_9ce4_8422_2325);
     assert_eq!(dungeon_seed("a"), 0xaf63_dc4c_8601_ec8c);
 }
+
+/// The surface entrance must be walkable in, and leak-proof sideways — see
+/// `surface_passability_cells`. Standing on the open ground above the dungeon
+/// must key the mover to the surface, or they collide with the walls beneath
+/// their feet.
+#[test]
+fn surface_entrance_is_walkable_but_not_leaky() {
+    use crate::pathfinding::{get_floor_at_position, is_movement_blocked_for_mover};
+
+    let entrance = test_entrance();
+    for seed in 0..60u64 {
+        let floors = generate_dungeon(seed);
+        let mut cache = PassabilityCache::new();
+        cache.insert(
+            dungeon_cache_key("t"),
+            dungeon_passability(&entrance, &floors),
+        );
+        let shaft = &floors[0].up_shaft;
+        let f1 = passability_floor_for_depth(1);
+        let at = |cell: (i32, i32)| {
+            let c = cell_center(&entrance, 0, cell);
+            (c.x, c.z)
+        };
+        let clear = |from: (f32, f32), to: (f32, f32), floor| {
+            !is_movement_blocked_for_mover(
+                &cache,
+                from.0,
+                from.1,
+                to.0,
+                to.1,
+                floor,
+                Some(entrance.y),
+            )
+        };
+
+        // In through the mouth, keyed to the surface and to floor 1 (the server
+        // derives the floor from Y, which lags a step behind).
+        let outside = at(shaft.step_cell(-1, 0));
+        let mouth = at(shaft.entry_cell());
+        for floor in [0, f1] {
+            assert!(
+                clear(outside, mouth, floor),
+                "seed {seed}: entrance mouth sealed on floor {floor}"
+            );
+        }
+
+        // Sideways off the run: blocked everywhere but the bottom landing.
+        for i in 0..SHAFT_LEN {
+            for (w, out) in [(0, -1), (SHAFT_W - 1, SHAFT_W)] {
+                let leaks = clear(at(shaft.step_cell(i, w)), at(shaft.step_cell(i, out)), f1);
+                assert_eq!(
+                    leaks,
+                    i == SHAFT_LEN - 1,
+                    "seed {seed}: run {i} lateral leak={leaks}"
+                );
+            }
+        }
+
+        // On the surface over an interior shaft: keyed to floor 0, and the
+        // walls a storey below must not block.
+        if let Some(down) = floors[0].down_shaft {
+            for i in 0..SHAFT_LEN {
+                let on = at(down.step_cell(i, 0));
+                let off = at(down.step_cell(i, -1));
+                assert_eq!(
+                    get_floor_at_position(&cache, on.0, on.1, entrance.y),
+                    0,
+                    "seed {seed}: surface over the down-shaft keys underground"
+                );
+                assert!(
+                    clear(on, off, 0),
+                    "seed {seed}: run {i} walled on the surface"
+                );
+            }
+        }
+    }
+}

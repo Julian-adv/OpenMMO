@@ -14,10 +14,11 @@
 //! centered on the dungeon entrance. Depth `d` (1-based) lives at world
 //! `y = entrance.y - d * DUNGEON_FLOOR_HEIGHT` and registers in the
 //! passability cache as floor index `passability_floor_for_depth(d)`.
-//! The offset keeps dungeon floors clear of housing floor levels 0-3 —
-//! `is_cardinal_move_blocked` matches by floor index alone, so reusing
-//! 0..3 would make dungeon walls block players walking on the surface
-//! above the dungeon footprint.
+//! The offset keeps dungeon *interior* floors clear of housing floor
+//! levels 0-3 — `is_cardinal_move_blocked` matches by floor index alone,
+//! so reusing 0..3 would make dungeon walls block players walking on the
+//! surface above the dungeon footprint. Index 0 itself is the surface
+//! (see `surface_passability_cells`), which is genuinely that floor.
 //!
 //! Floors connect through 2×`SHAFT_LEN` stair shafts that occupy the
 //! same cells on both adjacent floors; the entry landing belongs to the
@@ -674,6 +675,34 @@ fn floor_passability_cells_inner(
     cells
 }
 
+/// Floor-0 (surface) cells over the dungeon footprint: empty but for the
+/// entrance shaft's lateral side walls, which stop a player walking down from
+/// stepping off the run.
+///
+/// Mostly it just has to exist. Floor selection keys a mover to the grid whose
+/// `y_base` is nearest ([`crate::pathfinding::get_floor_at_position`]), so
+/// without a surface grid someone on the open ground above a dungeon is keyed
+/// to depth 1 and collides with the walls under their feet. The entry run-end
+/// (the mouth) stays open on purpose: it is the only way in, and the stairwell
+/// consult refuses a move only when *every* connected floor does — so depth 1's
+/// grid, which seals that same end against same-floor monsters, would otherwise
+/// decide alone and wall the dungeon shut.
+fn surface_passability_cells(up_shaft: &StairShaft) -> Vec<u8> {
+    let mut cells = vec![0u8; (GRID * GRID) as usize];
+    let (near, far) = if up_shaft.along_z {
+        (EDGE_W, EDGE_E)
+    } else {
+        (EDGE_N, EDGE_S)
+    };
+    for i in 0..SHAFT_LEN {
+        for (w, bit) in [(0, near), (SHAFT_W - 1, far)] {
+            let (x, z) = up_shaft.step_cell(i, w);
+            or_edge_bit(&mut cells, x, z, bit);
+        }
+    }
+    cells
+}
+
 /// Build the runtime passability entry covering every floor of the
 /// dungeon, including the surface-entrance stairwell (floor 0 → depth 1)
 /// and one stairwell per inter-floor shaft. Register it under
@@ -684,7 +713,7 @@ fn floor_passability_cells_inner(
 pub fn dungeon_passability(entrance: &Position, layouts: &[FloorLayout]) -> RuntimePassability {
     let (ox, oz) = dungeon_origin(entrance.x, entrance.z);
 
-    let floors: Vec<RuntimeFloorGrid> = layouts
+    let mut floors: Vec<RuntimeFloorGrid> = layouts
         .iter()
         .map(|layout| RuntimeFloorGrid {
             floor_level: passability_floor_for_depth(layout.depth),
@@ -716,6 +745,16 @@ pub fn dungeon_passability(entrance: &Position, layouts: &[FloorLayout]) -> Runt
     if let Some(first) = layouts.first() {
         // Surface (floor 0) down to depth 1. In the stairwell encoding
         // "lower" is the entry end: i=0 lands on the surface.
+        floors.push(RuntimeFloorGrid {
+            floor_level: 0,
+            origin_x: 0,
+            origin_z: 0,
+            width: GRID as u8,
+            depth: GRID as u8,
+            y_base: entrance.y,
+            wall_height: DUNGEON_WALL_HEIGHT,
+            cells: surface_passability_cells(&first.up_shaft),
+        });
         stairwells.push(shaft_info(
             &first.up_shaft,
             0,

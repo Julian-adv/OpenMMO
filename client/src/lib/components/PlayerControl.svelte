@@ -851,14 +851,13 @@
   }
 
   /**
-   * Floor lookup for click targets. The dungeon passability grids cover their
-   * whole footprint at every depth and there is no floor-0 grid, so a surface
-   * or entrance-shaft click resolves to the nearest *dungeon* floor — even
-   * while underground. Re-add the surface (floor 0 at the entrance Y) as a
-   * candidate: if the click sits at least as close to the surface as to that
-   * dungeon floor, treat it as the surface. This is what lets an upper-landing
-   * click while standing mid-stairs (depth ≥ 1) target floor 0 so the path
-   * climbs out instead of routing down to the bottom landing first.
+   * Floor lookup for click targets. The dungeon grids cover the whole
+   * footprint at every depth, so a click that lands nearer a dungeon floor's Y
+   * than the surface resolves to that floor. Re-weigh the surface (floor 0 at
+   * the entrance Y) as a candidate: if the click sits at least as close to the
+   * surface, treat it as the surface. This is what lets an upper-landing click
+   * while standing mid-stairs (depth ≥ 1) target floor 0 so the path climbs
+   * out instead of routing down to the bottom landing first.
    */
   function getFloorAtForClick(x: number, z: number, y: number): number {
     const depth = get(currentDungeonDepth)
