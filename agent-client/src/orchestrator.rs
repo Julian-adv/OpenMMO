@@ -538,6 +538,24 @@ async fn run_npc_session(
             };
 
             for cmd in commands.into_iter().chain(pending) {
+                // Self-echo: the server skips broadcasting our own monster
+                // moves back to us, so apply them locally or every owned
+                // monster stays frozen at its spawn position — and the LLM
+                // swings at coordinates the monster left long ago.
+                if let ClientMessage::MonsterMove {
+                    ref monster_id,
+                    ref position,
+                    rotation,
+                    state: monster_state,
+                    ..
+                } = cmd
+                {
+                    if let Some(m) = s.nearby_monsters.get_mut(monster_id) {
+                        m.position = *position;
+                        m.rotation = rotation;
+                        m.state = monster_state;
+                    }
+                }
                 if let Err(e) = s.send_command(cmd).await {
                     tracing::warn!("Monster AI command failed: {e}");
                     break;
