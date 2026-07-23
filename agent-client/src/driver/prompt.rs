@@ -152,6 +152,14 @@ fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
                 player_name(state, player_id)
             ))
         }
+        ServerMessage::WhisperMessage { from, message, .. } => {
+            // Skip the echo of our own outgoing whisper.
+            let self_name = state.self_player.as_ref().map(|p| p.name.as_str());
+            if Some(from.as_str()) == self_name {
+                return None;
+            }
+            Some(format!("[Whisper] {from}: {message}"))
+        }
         ServerMessage::PlayerJoined { player } => {
             if !within_event_range(state, player.position.x, player.position.z) {
                 return None;

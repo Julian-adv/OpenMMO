@@ -160,7 +160,7 @@
   <div class="chat-messages" bind:this={chatContainer} role="log">
     {#if activeTab === 'say'}
       {#each chatMessages as entry (entry.id)}
-        <div class="message">
+        <div class="message" class:whisper={entry.sender === 'whisper'}>
           {#if entry.name}
             <span
               class="name"
@@ -338,6 +338,14 @@
   .system {
     color: #a0aec0;
     font-style: italic;
+  }
+
+  .message.whisper {
+    color: #b794f4;
+  }
+
+  .message.whisper .name {
+    font-weight: 600;
   }
 
   .message.combat {

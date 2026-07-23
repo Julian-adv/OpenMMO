@@ -42,6 +42,22 @@ impl OnlineCounts {
     }
 }
 
+/// `/w <name> <message>` (or `/whisper`) asks for a private message. Returns
+/// the raw name/message parts without validating them: a malformed whisper
+/// must still be recognized as one, so it draws a usage reply instead of
+/// leaking into local chat.
+pub(crate) fn parse_whisper_command(message: &str) -> Option<(&str, &str)> {
+    let trimmed = message.trim();
+    let rest = ["/whisper", "/w"].iter().find_map(|prefix| {
+        let rest = trimmed.strip_prefix(prefix)?;
+        (rest.is_empty() || rest.starts_with(' ')).then(|| rest.trim_start())
+    })?;
+    Some(match rest.split_once(' ') {
+        Some((name, message)) => (name, message.trim()),
+        None => (rest, ""),
+    })
+}
+
 /// `/notice <message>` sets the server banner, bare `/notice` clears it.
 /// `requires_admin` gates the command through this same parser, so the syntax
 /// is defined once.
@@ -111,6 +127,11 @@ impl super::GameState {
             return;
         }
 
+        if let Some((target_name, whisper)) = parse_whisper_command(&message) {
+            self.send_whisper(player_id, target_name, whisper).await;
+            return;
+        }
+
         let player_name = {
             let players = self.players.read().await;
             players.get(player_id).map(|player| player.name.clone())
@@ -133,6 +154,76 @@ impl super::GameState {
         } else {
             warn!("Chat message from non-existent player: {}", player_id);
         }
+    }
+
+    /// Deliver a whisper to the named player, wherever they are, and echo it
+    /// back so the sender's client can render the outgoing line. Errors go
+    /// only to the sender.
+    async fn send_whisper(&self, player_id: &PlayerId, target_name: &str, message: &str) {
+        let reply = |message: String| ServerMessage::ChatMessage {
+            player_id: *player_id,
+            message,
+        };
+
+        if target_name.is_empty() || message.is_empty() {
+            self.send_direct_message(player_id, reply("Whisper: /w <name> <message>".into()))
+                .await;
+            return;
+        }
+
+        let (sender_name, target) = {
+            let players = self.players.read().await;
+            let sender_name = players.get(player_id).map(|player| player.name.clone());
+            // Names are UNIQUE only case-sensitively ("Rica" and "rica" can
+            // coexist), so an exact match always wins and the case-insensitive
+            // convenience applies only while it is unambiguous — a private
+            // message must never go to a near-miss.
+            let target = match players.values().find(|player| player.name == target_name) {
+                Some(player) => Ok((player.id, player.name.clone())),
+                None => {
+                    let mut matches = players
+                        .values()
+                        .filter(|player| player.name.eq_ignore_ascii_case(target_name));
+                    match (matches.next(), matches.next()) {
+                        (Some(player), None) => Ok((player.id, player.name.clone())),
+                        (None, _) => Err(format!("Whisper: no one called {target_name} is here.")),
+                        (Some(_), Some(_)) => Err(format!(
+                            "Whisper: several players match {target_name}; spell the name exactly."
+                        )),
+                    }
+                }
+            };
+            (sender_name, target)
+        };
+
+        let Some(from) = sender_name else {
+            warn!("Whisper from non-existent player: {}", player_id);
+            return;
+        };
+        let (target_id, to) = match target {
+            Ok(target) => target,
+            Err(message) => {
+                self.send_direct_message(player_id, reply(message)).await;
+                return;
+            }
+        };
+        if target_id == *player_id {
+            self.send_direct_message(player_id, reply("Whisper: that's you.".into()))
+                .await;
+            return;
+        }
+
+        // Like regular chat, the content stays out of logs (privacy, F-012) —
+        // and so does the recipient: who talks to whom is metadata worth the
+        // same protection.
+        info!(from = %from, len = message.len(), "whisper");
+        let whisper = ServerMessage::WhisperMessage {
+            from,
+            to,
+            message: message.to_string(),
+        };
+        self.send_direct_message(&target_id, whisper.clone()).await;
+        self.send_direct_message(player_id, whisper).await;
     }
 
     /// Last resort for a player wedged somewhere movement can't undo: return
