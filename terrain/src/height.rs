@@ -55,6 +55,28 @@ fn get_height_at_cell(
     }
 }
 
+/// Bilinear sample from an already-loaded cache. Callers must have ensured the
+/// covering tile; a miss reads as 0.0 via `get_height_at_cell`.
+fn sample_cached(cache: &HashMap<(i32, i32), Vec<u16>>, world_x: f32, world_z: f32) -> f32 {
+    let tx = world_to_tile(world_x);
+    let tz = world_to_tile(world_z);
+    let local_x = world_x - (tx as f32 * TILE_SIZE - TILE_SIZE / 2.0);
+    let local_z = world_z - (tz as f32 * TILE_SIZE - TILE_SIZE / 2.0);
+    let cell_x = local_x.floor() as i32;
+    let cell_z = local_z.floor() as i32;
+    let frac_x = local_x - local_x.floor();
+    let frac_z = local_z - local_z.floor();
+
+    let h00 = get_height_at_cell(cache, tx, tz, cell_x, cell_z);
+    let h10 = get_height_at_cell(cache, tx, tz, cell_x + 1, cell_z);
+    let h01 = get_height_at_cell(cache, tx, tz, cell_x, cell_z + 1);
+    let h11 = get_height_at_cell(cache, tx, tz, cell_x + 1, cell_z + 1);
+
+    let h0 = h00 + (h10 - h00) * frac_x;
+    let h1 = h01 + (h11 - h01) * frac_x;
+    h0 + (h1 - h0) * frac_z
+}
+
 /// Where raw heightmap tiles come from. The local data directory when the
 /// caller sits on the game server; something else (the server's public tile
 /// API) for clients running elsewhere, which cannot carry the 3 GB tree.
@@ -110,43 +132,15 @@ impl HeightSampler {
         Ok(())
     }
 
-    /// Sample terrain height at an arbitrary world position using bilinear interpolation.
-    /// Loads required tiles on demand.
+    /// Sample terrain height at an arbitrary world position using bilinear
+    /// interpolation, loading the covering tile on demand. One tile covers all
+    /// four corners: `VERTS_PER_SIDE` is `TILE_DIM + 1`, so each tile stores the
+    /// edge vertex it shares with its neighbour.
     pub async fn sample_height(&self, world_x: f32, world_z: f32) -> std::io::Result<f32> {
-        let tx = world_to_tile(world_x);
-        let tz = world_to_tile(world_z);
-
-        // Ensure the primary tile and potential neighbor tiles are loaded
-        self.ensure_tile(tx, tz).await?;
-
-        let tile_min_x = tx as f32 * TILE_SIZE - TILE_SIZE / 2.0;
-        let tile_min_z = tz as f32 * TILE_SIZE - TILE_SIZE / 2.0;
-        let local_x = world_x - tile_min_x;
-        let local_z = world_z - tile_min_z;
-
-        let cell_x = local_x.floor() as i32;
-        let cell_z = local_z.floor() as i32;
-
-        // Load neighbor tiles if we're at the edge and need cross-tile samples
-        if cell_x + 1 >= VERTS_PER_SIDE as i32 {
-            let _ = self.ensure_tile(tx + 1, tz).await;
-        }
-        if cell_z + 1 >= VERTS_PER_SIDE as i32 {
-            let _ = self.ensure_tile(tx, tz + 1).await;
-        }
-
-        let frac_x = local_x - local_x.floor();
-        let frac_z = local_z - local_z.floor();
-
+        self.ensure_tile(world_to_tile(world_x), world_to_tile(world_z))
+            .await?;
         let cache = self.cache.read().await;
-        let h00 = get_height_at_cell(&cache, tx, tz, cell_x, cell_z);
-        let h10 = get_height_at_cell(&cache, tx, tz, cell_x + 1, cell_z);
-        let h01 = get_height_at_cell(&cache, tx, tz, cell_x, cell_z + 1);
-        let h11 = get_height_at_cell(&cache, tx, tz, cell_x + 1, cell_z + 1);
-
-        let h0 = h00 + (h10 - h00) * frac_x;
-        let h1 = h01 + (h11 - h01) * frac_x;
-        Ok(h0 + (h1 - h0) * frac_z)
+        Ok(sample_cached(&cache, world_x, world_z))
     }
 
     /// Evict a tile from the cache (e.g. when moving far away).
@@ -163,6 +157,49 @@ impl HeightSampler {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    /// Tiles whose heights vary with both tile and cell index, so a grid that
+    /// mis-attributes a sample to the wrong tile or cell shows up as a mismatch.
+    struct CountingTiles(Arc<AtomicUsize>);
+
+    #[async_trait::async_trait]
+    impl HeightTiles for CountingTiles {
+        async fn read_heightmap(&self, tx: i32, tz: i32) -> std::io::Result<Vec<u8>> {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            let mut out = Vec::with_capacity(defaults::HEIGHTMAP_SIZE);
+            for cz in 0..VERTS_PER_SIDE as i32 {
+                for cx in 0..VERTS_PER_SIDE as i32 {
+                    let v = 10000 + tx * 37 + tz * 11 + cx * 3 + cz;
+                    out.extend_from_slice(&(v as u16).to_le_bytes());
+                }
+            }
+            Ok(out)
+        }
+    }
+
+    fn counting_sampler() -> (HeightSampler, Arc<AtomicUsize>) {
+        let reads = Arc::new(AtomicUsize::new(0));
+        (HeightSampler::new(CountingTiles(Arc::clone(&reads))), reads)
+    }
+
+    #[tokio::test]
+    async fn sample_height_covers_a_cell_from_one_tile() {
+        // Each tile stores VERTS_PER_SIDE = TILE_DIM + 1 vertices, so all four
+        // bilinear corners live in the covering tile — no neighbour load.
+        let (s, reads) = counting_sampler();
+        for w in [-32.0, -31.9, 0.0, 31.9, 32.0, 95.9, -1000.5, 4740.5] {
+            assert!(s.sample_height(w, w).await.is_ok());
+        }
+        // One read per distinct tile touched, never a neighbour on top.
+        let tiles: std::collections::HashSet<i32> =
+            [-32.0f32, -31.9, 0.0, 31.9, 32.0, 95.9, -1000.5, 4740.5]
+                .iter()
+                .map(|w| world_to_tile(*w))
+                .collect();
+        assert_eq!(reads.load(Ordering::Relaxed), tiles.len());
+    }
 
     #[test]
     fn decode_sea_level() {

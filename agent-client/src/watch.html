@@ -112,52 +112,58 @@ let npc = null;
 let snap = null;
 let cam = { x: 0, z: 0, ready: false };
 let scale = 4.5;
-let terrain = null;   // {x0, z0, step, res, canvas}
-let terrainReq = null;
-let lastKey = "";
+let dirty = true;
+// Baked region minimaps, keyed "rx,rz". 1024 world units per region at 1 px
+// per metre — the same PNGs the in-game world map draws.
+const REGION_PX = 1024, TILE_DIM = 64, REGION_CACHE = 12;
+const regions = new Map();
 const KINDS = [
   ["chat", "채팅"], ["combat", "전투"], ["trade", "거래"],
   ["llm", "LLM"], ["agent", "감지"], ["system", "시스템"],
 ];
 const active = new Set(KINDS.map(k => k[0]));
 
-function heightColor(h) {
-  const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
-  let c;
-  if (h < 0)        c = lerp([20, 56, 79], [74, 144, 184], Math.max(0, 1 + h / 8));
-  else if (h < 0.8) c = lerp([194, 178, 128], [168, 153, 110], h / 0.8);
-  else if (h < 15)  c = lerp([90, 132, 66], [63, 99, 48], (h - 0.8) / 14.2);
-  else if (h < 40)  c = lerp([94, 105, 78], [138, 138, 128], (h - 15) / 25);
-  else              c = [153, 153, 153];
-  return c;
+// LRU: a decoded 1024x1024 PNG is ~4 MB, so keep only what a view needs.
+function regionImage(rx, rz) {
+  const key = `${rx},${rz}`;
+  if (regions.has(key)) {
+    const hit = regions.get(key);
+    regions.delete(key);
+    regions.set(key, hit);
+    return hit;
+  }
+  const img = new Image();
+  img.onload = () => { dirty = true; };
+  img.onerror = () => { regions.set(key, null); };   // outside the baked area
+  img.src = `/api/minimap/${rx}/${rz}`;
+  regions.set(key, img);
+  while (regions.size > REGION_CACHE) regions.delete(regions.keys().next().value);
+  return img;
 }
 
-async function fetchTerrain(cx, cz, half) {
-  const key = `${Math.round(cx / 20)}:${Math.round(cz / 20)}:${Math.round(half)}`;
-  if (key === lastKey || terrainReq) return;
-  terrainReq = key;
-  try {
-    const r = await fetch(`/api/height?cx=${cx}&cz=${cz}&half=${half}&res=112`);
-    const d = await r.json();
-    const off = document.createElement("canvas");
-    off.width = d.res; off.height = d.res;
-    const octx = off.getContext("2d");
-    const img = octx.createImageData(d.res, d.res);
-    for (let i = 0; i < d.heights.length; i++) {
-      const [r0, g0, b0] = heightColor(d.heights[i]);
-      img.data[i * 4] = r0; img.data[i * 4 + 1] = g0; img.data[i * 4 + 2] = b0; img.data[i * 4 + 3] = 255;
+function drawTerrain() {
+  const px = scale * devicePixelRatio;
+  const halfW = mapC.width / (2 * px), halfH = mapC.height / (2 * px);
+  const rx0 = Math.floor((cam.x - halfW + TILE_DIM / 2) / REGION_PX);
+  const rx1 = Math.floor((cam.x + halfW + TILE_DIM / 2) / REGION_PX);
+  const rz0 = Math.floor((cam.z - halfH + TILE_DIM / 2) / REGION_PX);
+  const rz1 = Math.floor((cam.z + halfH + TILE_DIM / 2) / REGION_PX);
+  const size = REGION_PX * px;
+  for (let rz = rz0; rz <= rz1; rz++) {
+    for (let rx = rx0; rx <= rx1; rx++) {
+      const img = regionImage(rx, rz);
+      if (!img || !img.complete || !img.naturalWidth) continue;
+      const [sx, sy] = w2s(rx * REGION_PX - TILE_DIM / 2, rz * REGION_PX - TILE_DIM / 2);
+      ctx.drawImage(img, sx, sy, size, size);
     }
-    octx.putImageData(img, 0, 0);
-    terrain = { ...d, canvas: off };
-    lastKey = key;
-  } catch (e) { /* retry next poll */ }
-  terrainReq = null;
+  }
 }
 
 function resize() {
   const r = mapC.getBoundingClientRect();
   mapC.width = r.width * devicePixelRatio;
   mapC.height = r.height * devicePixelRatio;
+  dirty = true;
 }
 addEventListener("resize", resize);
 
@@ -171,6 +177,13 @@ function w2s(wx, wz) {
 function draw() {
   requestAnimationFrame(draw);
   if (!mapC.width) resize();
+  // Data arrives at 1 Hz; redrawing 60 times a second on the box that also
+  // runs the NPC fleet is the panel's largest cost. Settle, then idle.
+  const self0 = snap && snap.self;
+  const chasing = self0 && cam.ready &&
+    (Math.abs(self0.position.x - cam.x) > 0.05 || Math.abs(self0.position.z - cam.z) > 0.05);
+  if (!dirty && !chasing) return;
+  dirty = false;
   ctx.fillStyle = "#0c1219";
   ctx.fillRect(0, 0, mapC.width, mapC.height);
   if (!snap) return;
@@ -184,13 +197,7 @@ function draw() {
   }
 
   const px = scale * devicePixelRatio;
-
-  if (terrain) {
-    const [sx, sy] = w2s(terrain.x0, terrain.z0);
-    const size = terrain.res * terrain.step * px;
-    ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(terrain.canvas, sx, sy, size, size);
-  }
+  if (cam.ready) drawTerrain();
 
   for (const h of snap.houses || []) {
     for (const r of h.rooms) {
@@ -204,9 +211,9 @@ function draw() {
     }
   }
 
+  ctx.font = `${11 * devicePixelRatio}px sans-serif`;
+  ctx.textAlign = "center";
   const label = (sx, sy, text, color) => {
-    ctx.font = `${11 * devicePixelRatio}px sans-serif`;
-    ctx.textAlign = "center";
     ctx.fillStyle = "rgba(0,0,0,.55)";
     const w = ctx.measureText(text).width;
     ctx.fillRect(sx - w / 2 - 3, sy - 23 * devicePixelRatio, w + 6, 13 * devicePixelRatio);
@@ -272,11 +279,6 @@ function draw() {
     ctx.fillStyle = "rgba(20,24,70,.28)";
     ctx.fillRect(0, 0, mapC.width, mapC.height);
   }
-
-  if (cam.ready) {
-    const half = Math.max(mapC.width, mapC.height) / (2 * px) * 1.25;
-    fetchTerrain(cam.x, cam.z, Math.min(600, Math.max(60, half)));
-  }
 }
 
 function fmtTime(t) {
@@ -302,17 +304,21 @@ function renderHeader() {
 
 function feedKindGroup(k) { return k.startsWith("llm") ? "llm" : k; }
 
-let renderedCount = 0;
-let renderedFirstT = null;
+// Backend call time only; scheduler queue wait is not counted.
+function fmtDur(it) {
+  return it.d == null ? "" : ` · ${(it.d / 1000).toFixed(1)}s`;
+}
+
+const DOM_CAP = 300;
+let lastSeq = -1;
 function renderFeed() {
   const feed = snap.feed || [];
   const box = $("feed");
   const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
-  const firstT = feed.length ? feed[0].t : null;
-  if (firstT !== renderedFirstT) { box.innerHTML = ""; renderedCount = 0; renderedFirstT = firstT; }
 
-  for (let i = renderedCount; i < feed.length; i++) {
-    const it = feed[i];
+  for (const it of feed) {
+    if (it.s <= lastSeq) continue;
+    lastSeq = it.s;
     const div = document.createElement("div");
     div.className = "item " + it.k;
     div.dataset.group = feedKindGroup(it.k);
@@ -321,13 +327,12 @@ function renderFeed() {
       div.innerHTML = `${time}<details><summary>📋 프롬프트 (${it.m.length}자)</summary><pre></pre></details>`;
       div.querySelector("pre").textContent = it.m;
     } else if (it.k === "llm-response") {
-      const dur = it.d != null ? ` · ${(it.d / 1000).toFixed(1)}s` : "";
-      div.innerHTML = `${time}<details open><summary>💭 LLM 응답${dur}</summary><pre></pre></details>`;
+      div.innerHTML = `${time}<details open><summary>💭 LLM 응답${fmtDur(it)}</summary><pre></pre></details>`;
       let text = it.m;
       try { text = JSON.stringify(JSON.parse(it.m), null, 2); } catch (e) {}
       div.querySelector("pre").textContent = text;
     } else if (it.k === "llm-error") {
-      div.innerHTML = `${time}⚠️ LLM 오류: `;
+      div.innerHTML = `${time}⚠️ LLM 오류${fmtDur(it)}: `;
       div.append(it.m);
     } else if (it.k === "chat") {
       div.innerHTML = time;
@@ -339,10 +344,11 @@ function renderFeed() {
       div.innerHTML = time;
       div.append(it.m);
     }
-    div.style.display = active.has(feedKindGroup(it.k)) ? "" : "none";
+    div.style.display = active.has(div.dataset.group) ? "" : "none";
     box.append(div);
   }
-  renderedCount = feed.length;
+  // Append-only, so bound the DOM here instead of relying on a rebuild.
+  while (box.children.length > DOM_CAP) box.firstChild.remove();
   if (atBottom) box.scrollTop = box.scrollHeight;
 }
 
@@ -365,8 +371,13 @@ function buildFilters() {
 
 async function poll() {
   try {
-    const r = await fetch(`/api/state${npc ? "?npc=" + encodeURIComponent(npc) : ""}`);
+    const q = new URLSearchParams();
+    if (npc) q.set("npc", npc);
+    if (lastSeq >= 0) q.set("since", lastSeq);
+    const r = await fetch(`/api/state?${q}`);
+    if (!r.ok) throw new Error(`state ${r.status}`);
     snap = await r.json();
+    dirty = true;
     renderHeader();
     renderFeed();
   } catch (e) {
@@ -389,8 +400,8 @@ async function init() {
     npc = d.npcs[0] || null;
     sel.onchange = () => {
       npc = sel.value; snap = null; cam.ready = false;
-      terrain = null; lastKey = ""; renderedFirstT = -1;
-      $("feed").innerHTML = ""; renderedCount = 0;
+      dirty = true;
+      $("feed").innerHTML = ""; lastSeq = -1;
     };
     if (d.npcs.length < 2) sel.style.display = "none";
   } catch (e) {}
@@ -399,12 +410,12 @@ async function init() {
   draw();
 }
 
-$("zin").onclick = () => { scale = Math.min(20, scale * 1.35); lastKey = ""; };
-$("zout").onclick = () => { scale = Math.max(1.2, scale / 1.35); lastKey = ""; };
+const zoom = f => { scale = Math.min(20, Math.max(1.2, scale * f)); dirty = true; };
+$("zin").onclick = () => zoom(1.35);
+$("zout").onclick = () => zoom(1 / 1.35);
 mapC.addEventListener("wheel", e => {
   e.preventDefault();
-  scale = Math.min(20, Math.max(1.2, scale * (e.deltaY < 0 ? 1.15 : 0.87)));
-  lastKey = "";
+  zoom(e.deltaY < 0 ? 1.15 : 0.87);
 }, { passive: false });
 
 init();

@@ -75,18 +75,17 @@ impl PartialOrd for LlmRequest {
 #[derive(Clone)]
 pub struct LlmScheduler {
     request_tx: mpsc::UnboundedSender<LlmRequest>,
-    watch: Option<Arc<crate::watch::WatchHub>>,
 }
 
 impl LlmScheduler {
     /// Create a new scheduler and spawn its background task.
     ///
     /// `max_concurrent`: maximum number of simultaneous LLM calls across all NPCs.
-    pub fn new(max_concurrent: usize, watch: Option<Arc<crate::watch::WatchHub>>) -> Self {
+    pub fn new(max_concurrent: usize) -> Self {
         let (request_tx, request_rx) = mpsc::unbounded_channel();
         tokio::spawn(scheduler_loop(request_rx, max_concurrent));
         info!("LLM scheduler started (max_concurrent={})", max_concurrent);
-        Self { request_tx, watch }
+        Self { request_tx }
     }
 
     /// Submit an LLM request and wait for the response.
@@ -100,12 +99,6 @@ impl LlmScheduler {
         prompt: String,
         invoker: Arc<dyn LlmBackend>,
     ) -> anyhow::Result<String> {
-        let watch = self
-            .watch
-            .as_ref()
-            .and_then(|hub| hub.llm_prompt(label, &prompt));
-        let started = Instant::now();
-
         let (response_tx, response_rx) = oneshot::channel();
         let request = LlmRequest {
             priority,
@@ -118,18 +111,9 @@ impl LlmScheduler {
         self.request_tx
             .send(request)
             .map_err(|_| anyhow::anyhow!("LLM scheduler shut down"))?;
-        let result = response_rx
+        response_rx
             .await
-            .map_err(|_| anyhow::anyhow!("LLM scheduler dropped request"))?;
-
-        if let Some(w) = watch {
-            let elapsed = started.elapsed().as_millis() as u64;
-            match &result {
-                Ok(text) => w.push_timed("llm-response", text.clone(), Some(elapsed)),
-                Err(e) => w.push_timed("llm-error", e.to_string(), Some(elapsed)),
-            }
-        }
-        result
+            .map_err(|_| anyhow::anyhow!("LLM scheduler dropped request"))?
     }
 }
 

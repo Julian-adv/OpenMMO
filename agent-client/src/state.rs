@@ -545,20 +545,16 @@ impl SharedState {
                     }
                 }
             }
+            // Only ever sent direct to the player who earned (or lost) the XP,
+            // so this never describes anyone in `nearby_players`.
             ServerMessage::XpGained {
                 player_id,
                 new_level,
                 max_hp,
                 current_hp,
                 ..
-            } => {
-                if self.self_player_id.as_ref() == Some(player_id) {
-                    if let Some(ref mut p) = self.self_player {
-                        p.level = *new_level;
-                        p.health = *current_hp;
-                        p.max_health = *max_hp;
-                    }
-                } else if let Some(p) = self.nearby_players.get_mut(player_id) {
+            } if self.self_player_id.as_ref() == Some(player_id) => {
+                if let Some(ref mut p) = self.self_player {
                     p.level = *new_level;
                     p.health = *current_hp;
                     p.max_health = *max_hp;

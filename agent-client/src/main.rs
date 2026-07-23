@@ -65,8 +65,8 @@ struct Config {
     #[serde(default = "default_max_concurrent")]
     max_concurrent: usize,
 
-    /// Spectator panel port on 127.0.0.1 (default: 8808, 0 disables)
-    #[serde(default = "default_watch_port")]
+    /// Spectator panel port on 127.0.0.1 (default: 0, off)
+    #[serde(default)]
     watch_port: u16,
 
     /// Claude CLI integration config (shared across NPCs that don't override)
@@ -137,10 +137,6 @@ fn default_max_concurrent() -> usize {
     2
 }
 
-fn default_watch_port() -> u16 {
-    8808
-}
-
 const CONFIG_PATH: &str = "data/config.toml";
 
 fn resolve_npc_token(config_value: Option<String>) -> anyhow::Result<String> {
@@ -207,22 +203,24 @@ async fn main() -> anyhow::Result<()> {
     let (type_mapping, movement_speeds) =
         monster_ai::MonsterAiManager::load_monster_data(include_str!("../../data/monsters.json"));
 
-    let watch_hub = Arc::new(watch::WatchHub::new(
-        npcs.iter().map(|n| n.label().to_string()).collect(),
-    ));
     let height_sampler = Arc::new(create_height_sampler(
         &config.terrain,
         &config.terrain_cache,
     ));
 
-    // Start the panel before sign-in so it is reachable while waiting
-    if config.watch_port != 0 {
+    // No hub when the panel is off, so sessions record nothing for it.
+    let watch_hub = (config.watch_port != 0).then(|| {
+        let hub = Arc::new(watch::WatchHub::new(
+            npcs.iter().map(|n| n.label().to_string()).collect(),
+        ));
+        // Start before sign-in so the page is reachable while the device flow waits.
         tokio::spawn(watch::serve(
-            Arc::clone(&watch_hub),
-            Arc::clone(&height_sampler),
+            Arc::clone(&hub),
+            watch::MinimapSource::new(&config.terrain),
             config.watch_port,
         ));
-    }
+        hub
+    });
 
     let shared = Arc::new(SharedResources {
         height_sampler,
@@ -230,10 +228,7 @@ async fn main() -> anyhow::Result<()> {
         behavior_trees: Arc::new(behavior_trees),
         type_mapping: Arc::new(type_mapping),
         movement_speeds: Arc::new(movement_speeds),
-        scheduler: llm_scheduler::LlmScheduler::new(
-            config.max_concurrent,
-            Some(Arc::clone(&watch_hub)),
-        ),
+        scheduler: llm_scheduler::LlmScheduler::new(config.max_concurrent),
         auth: match config.auth.mode {
             AuthMode::NpcToken => AuthSource::NpcToken(resolve_npc_token(config.npc_token)?),
             AuthMode::Google => {

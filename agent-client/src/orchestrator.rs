@@ -185,7 +185,8 @@ pub struct SharedResources {
     pub movement_speeds: Arc<HashMap<String, crate::monster_ai::MonsterMovement>>,
     pub scheduler: LlmScheduler,
     pub auth: AuthSource,
-    pub watch: Arc<crate::watch::WatchHub>,
+    /// `None` when the spectator panel is off, so nothing is recorded for it.
+    pub watch: Option<Arc<crate::watch::WatchHub>>,
 }
 
 /// How sessions prove who they are. Operator NPCs share one secret; a
@@ -229,7 +230,7 @@ pub async fn run_orchestrator(
         let shared = Arc::clone(&shared);
         let handle = tokio::spawn(async move {
             info!("[NPC {}] Starting session loop for '{}'", i, npc.label());
-            run_npc_loop(&url, &npc, &shared).await;
+            run_npc_loop(&url, i, &npc, &shared).await;
         });
         handles.push(handle);
     }
@@ -241,12 +242,14 @@ pub async fn run_orchestrator(
     Ok(())
 }
 
-/// Reconnect loop for a single NPC.
-async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResources) {
+/// Reconnect loop for a single NPC. `index` is its position in the config,
+/// which is how the spectator panel keys feeds — labels can collide.
+async fn run_npc_loop(server_url: &str, index: usize, npc: &NpcConfig, shared: &SharedResources) {
     let label = npc.label();
+    let watch = shared.watch.as_ref().and_then(|h| h.handle_at(index));
     let mut attempt = 0u32;
     loop {
-        match run_npc_session(server_url, npc, shared).await {
+        match run_npc_session(server_url, npc, shared, watch.as_ref()).await {
             Ok(()) => {
                 // A session that ran to completion proves the server healthy,
                 // so the next retry starts over at the base delay.
@@ -258,6 +261,9 @@ async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResource
                 // and bury the reason (e.g. "protocol vN required, update").
                 if let Some(rejection) = e.downcast_ref::<ws::AuthRejected>() {
                     error!("[{label}] {rejection} — giving up");
+                    if let Some(w) = &watch {
+                        w.push("system", format!("{rejection} — giving up"));
+                    }
                     return;
                 }
                 warn!("[{label}] Session failed: {e}");
@@ -266,6 +272,15 @@ async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResource
         let delay = ws::retry_delay(attempt);
         attempt = attempt.saturating_add(1);
         info!("[{label}] Reconnecting in {:.1}s...", delay.as_secs_f32());
+        if let Some(w) = &watch {
+            w.push(
+                "system",
+                format!(
+                    "Connection lost — reconnecting in {:.1}s",
+                    delay.as_secs_f32()
+                ),
+            );
+        }
         tokio::time::sleep(delay).await;
     }
 }
@@ -275,8 +290,10 @@ async fn run_npc_session(
     server_url: &str,
     npc: &NpcConfig,
     shared: &SharedResources,
+    watch: Option<&Arc<crate::watch::NpcWatch>>,
 ) -> anyhow::Result<()> {
     let label = npc.label();
+    let watch = watch.cloned();
     let ws_stream = ws::connect_ws(server_url, label).await;
     let (mut ws_tx, mut ws_rx) = ws_stream.split();
 
@@ -349,7 +366,11 @@ async fn run_npc_session(
             // Registry NPCs are fixtures of the town with a fixed post; they
             // take the roll they are given. Only a user's own character
             // shops around for a better one.
-            let agent = npc.id.is_none().then(|| build_llm_backend(npc)).flatten();
+            let agent = npc
+                .id
+                .is_none()
+                .then(|| build_llm_backend(npc, watch.clone()))
+                .flatten();
             roll_stats_with_agent(
                 &mut ws_tx,
                 &mut ws_rx,
@@ -413,7 +434,6 @@ async fn run_npc_session(
     }
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
-    let watch = shared.watch.handle(label);
     let state = Arc::new(Mutex::new(SharedState::new(
         characters,
         cmd_tx,
@@ -475,7 +495,7 @@ async fn run_npc_session(
         }
     });
 
-    let llm_task = spawn_llm_task(npc, &state, &shared.scheduler, server_url);
+    let llm_task = spawn_llm_task(npc, &state, &shared.scheduler, server_url, watch.clone());
 
     // Monster AI tick task (1Hz)
     let state_for_ai = Arc::clone(&state);
@@ -542,13 +562,6 @@ async fn run_npc_session(
     }
     if let Some(w) = &watch {
         w.set_disconnected();
-        w.push(
-            "system",
-            format!(
-                "Connection lost — reconnecting in {}s",
-                RECONNECT_DELAY.as_secs()
-            ),
-        );
     }
 
     Ok(())
@@ -706,7 +719,10 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
 /// Build the configured LLM backend, already carrying the layered system
 /// prompt. `None` when the agent runs without an LLM, or when the provider
 /// could not be set up.
-fn build_llm_backend(npc: &NpcConfig) -> Option<Arc<dyn driver::LlmBackend>> {
+fn build_llm_backend(
+    npc: &NpcConfig,
+    watch: Option<Arc<crate::watch::NpcWatch>>,
+) -> Option<Arc<dyn driver::LlmBackend>> {
     let label = npc.label();
     let system_prompt = match build_system_prompt(npc) {
         Ok(p) => p,
@@ -741,7 +757,7 @@ fn build_llm_backend(npc: &NpcConfig) -> Option<Arc<dyn driver::LlmBackend>> {
     match invoker {
         Ok(inv) => {
             info!("[{label}] {provider} integration enabled (model={model})");
-            Some(inv)
+            Some(crate::watch::WatchedBackend::wrap(inv, watch))
         }
         Err(e) => {
             error!("[{label}] Failed to create {provider} invoker: {e}");
@@ -756,6 +772,7 @@ fn spawn_llm_task(
     state: &Arc<Mutex<SharedState>>,
     scheduler: &LlmScheduler,
     server_url: &str,
+    watch: Option<Arc<crate::watch::NpcWatch>>,
 ) -> Option<tokio::task::JoinHandle<()>> {
     let label = npc.label();
     let min_interval = Duration::from_secs(npc.min_interval_secs);
@@ -764,7 +781,7 @@ fn spawn_llm_task(
     let idle_interval = Duration::from_secs(npc.idle_interval_secs);
     let activity_window = Duration::from_secs(npc.activity_window_secs);
 
-    let invoker = build_llm_backend(npc)?;
+    let invoker = build_llm_backend(npc, watch)?;
 
     let state = Arc::clone(state);
     let scheduler = scheduler.clone();

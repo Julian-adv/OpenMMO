@@ -22,10 +22,8 @@ terrain = "../data/terrain"
 # NPC account name (must start with npc_); auto-created on first use.
 account = "npc_example"
 
-# MCP HTTP server port (default: 8808)
-# mcp_port = 8808
-
-# Spectator web panel on 127.0.0.1 (0 disables)
+# Read-only spectator web panel, bound to 127.0.0.1. Off unless set. It serves
+# the agent's map, event feed and full LLM prompts, so keep it off loopback.
 # watch_port = 8808
 
 # LLM backend to use: "none", "claude", "openrouter", "codex"
