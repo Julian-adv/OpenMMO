@@ -74,6 +74,9 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Light or extinguish the carried torch (requires one in the bag).
+    #[serde(rename = "torch", alias = "toggle_torch")]
+    Torch { enabled: bool },
     #[serde(rename = "wait", alias = "idle", alias = "observe", alias = "none")]
     Wait,
 }
@@ -182,6 +185,7 @@ pub(super) fn action_to_command(
         // `execute::handle_response`, not here.
         AgentAction::OfferDeal { .. } => None,
         AgentAction::OpenTrade { .. } => None,
+        AgentAction::Torch { enabled } => Some(ClientMessage::TorchToggle { enabled: *enabled }),
         AgentAction::Wait => None,
     }
 }
