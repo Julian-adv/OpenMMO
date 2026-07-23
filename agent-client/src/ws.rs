@@ -1,4 +1,4 @@
-//! WebSocket helpers shared between main (MCP mode) and orchestrator.
+//! WebSocket helpers: connect, authenticate, and frame the game protocol.
 
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{

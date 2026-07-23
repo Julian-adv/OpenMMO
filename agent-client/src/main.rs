@@ -26,7 +26,7 @@ use tracing::{info, warn};
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum LlmType {
-    /// No LLM driver (MCP or direct mode)
+    /// No LLM driver: schedule and monster AI drive the NPC on their own.
     #[default]
     None,
     /// Claude CLI (stdio subprocess)

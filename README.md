@@ -114,8 +114,8 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 **Agent Client:**
 - Rust
-- MCP server (rmcp)
 - Tokio + tokio-tungstenite (WebSocket)
+- Axum (local spectator panel)
 
 **Server:**
 - Rust

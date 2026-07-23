@@ -148,10 +148,10 @@ min_interval_secs = 5
 - 기존 `classify_event()` 활용한 우선순위
 - idle polling 시차 분산
 
-### Phase 4: MCP Orchestrator Endpoint
+### Phase 4: 관전 패널
 
-- MCP 서버 확장: `list_npcs`, `say_as`, `move_npc`, `get_npc_events`
-- 외부에서 모든 NPC 제어 가능
+- `agent-client/src/watch.rs` — 127.0.0.1 읽기 전용 HTTP 패널 (`watch_port`)
+- NPC별 맵/이벤트 피드/LLM 턴 관찰. 제어 경로는 두지 않는다
 
 ## 핵심 파일
 

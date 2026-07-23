@@ -31,13 +31,15 @@ LLM Agent        <-->   Agent Client (상주 프로세스)   <-->   Game Server
 ```
 OnlineRPG/
 ├── client/               # 기존 인간 클라이언트 (Svelte + Threlte)
-├── agent-client/         # agent 전용 클라이언트 (신규)
+├── agent-client/         # agent 전용 클라이언트
 │   ├── src/
-│   │   ├── connection/        # WebSocket 통신
-│   │   ├── navigation/        # A* pathfinding
-│   │   ├── state/             # 월드 상태 관리
-│   │   └── mcp/               # MCP 서버 인터페이스
-│   └── package.json
+│   │   ├── ws.rs              # WebSocket 통신
+│   │   ├── orchestrator.rs    # 다중 NPC 세션 관리
+│   │   ├── state.rs           # 월드 상태 관리
+│   │   ├── driver/            # LLM 드라이버 (프롬프트, 행동, 이동, 전투)
+│   │   ├── llm_scheduler.rs   # 우선순위 큐 + 동시 호출 제한
+│   │   └── watch.rs           # 로컬 관전 패널 (읽기 전용)
+│   └── Cargo.toml
 ├── server/               # 게임 서버
 ├── shared/               # 서버-클라이언트 공유 타입
 ├── tools/                # 개발 도구
@@ -166,43 +168,25 @@ LLM이 매 프레임 좌표를 결정하는 것은 비현실적이고 비용이 
 - 텍스트 명령 → 게임 액션 변환
 - 상태 머신 관리 (이동 중, 전투 중, 대기, 대화 중 등)
 
-## MCP 인터페이스
+## LLM 연동 방향 (MCP에서 선회)
 
-Agent client 위에 MCP(Model Context Protocol) 서버를 얹어 LLM 연동을 표준화한다.
+한때 agent client 위에 MCP 서버를 얹어(`src/mcp.rs`, `list_characters`/`create_character`/
+`enter_game`/`get_events`/`say`) 외부 LLM이 툴 호출로 에이전트를 **조종하게** 했다.
+2026-03-30에 걷어냈다.
 
-### 왜 MCP인가
+방향이 반대로 뒤집혔기 때문이다. 지금은 에이전트가 스스로 프롬프트를 만들어 백엔드
+(claude / codex / openrouter)를 **호출하러 나간다**. `driver/`가 관측을 프롬프트로 바꾸고
+`llm_scheduler.rs`가 우선순위와 동시 호출을 관리한다. 외부에서 들어오는 제어 경로가
+없으니 MCP 서버 표면도 필요 없다.
 
-- MCP 단독으로는 부족: request-response 패턴이라 실시간 게임 이벤트 수신이 어려움
-- Agent client가 실시간 WebSocket 연결 + pathfinding + 이벤트 버퍼링을 담당
-- MCP는 LLM이 agent client를 제어하는 인터페이스 역할
-
-### MCP Tool 예시
-
-```
-look_around()          → 주변 환경 텍스트 디스크립션 반환
-move_to("대장간")       → pathfinding 실행, 도착 시 결과 반환
-attack("goblin_7")     → 전투 실행, 결과 반환
-talk("player_42", "안녕") → 채팅 메시지 전송
-get_inventory()        → 인벤토리 목록 반환
-get_status()           → HP, MP, 위치, 상태 등 반환
-get_quest_log()        → 퀘스트 목록 반환
-```
-
-### MCP Resource 예시
-
-```
-game://world/map       → 월드 맵 정보
-game://player/status   → 플레이어 상태
-game://player/inventory → 인벤토리
-game://nearby/entities → 주변 엔티티 목록
-```
+관찰 용도만 `watch.rs`의 읽기 전용 관전 패널로 남겼다 — 조종은 못 하고 보기만 한다.
 
 ## 구현 우선순위
 
 1. **Agent Client 기본 구조** - 기존 binary 프로토콜로 서버에 접속하여 한 명의 PC를 조종하는 클라이언트. 서버 수정 없이 시작
 2. **클라이언트 측 텍스트 변환 레이어** - 수신한 binary 게임 상태를 LLM이 읽을 수 있는 텍스트로 변환, LLM 응답을 binary 명령으로 변환
 3. **네비게이션 시스템** - A* pathfinding, POI 매핑
-4. **MCP 서버 인터페이스** - LLM 연동용 tool/resource 정의
+4. **LLM 드라이버** - 프롬프트 생성 + 응답 파싱, 백엔드별 어댑터
 5. **LLM 통합 테스트** - 실제 LLM으로 게임 플레이 테스트
 
 ## NPC 정의와 배포 설정 (source of truth)

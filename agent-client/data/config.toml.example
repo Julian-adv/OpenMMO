@@ -29,7 +29,7 @@ account = "npc_example"
 # watch_port = 8808
 
 # LLM backend to use: "none", "claude", "openrouter", "codex"
-# - none: no LLM driver (MCP or direct mode)
+# - none: no LLM driver; schedule and monster AI drive the NPC on their own
 # - claude: Claude CLI (stdio subprocess)
 # - openrouter: OpenRouter API (HTTP, any model)
 # - codex: Codex CLI (stdio subprocess)
