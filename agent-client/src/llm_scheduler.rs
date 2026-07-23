@@ -7,13 +7,27 @@
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info};
 
 use crate::driver::LlmBackend;
 use crate::state::EventUrgency;
+
+tokio::task_local! {
+    /// How long the request waited for a slot before this task was dispatched.
+    /// Published into the dispatched task so an observer running inside it (the
+    /// spectator panel's backend wrapper) can attribute the wait without the
+    /// scheduler having to know that observer exists.
+    static QUEUE_WAIT: Duration;
+}
+
+/// Queue wait for the LLM turn running in the current task, if dispatched by
+/// the scheduler. `None` when called outside a dispatched turn.
+pub fn queue_wait() -> Option<Duration> {
+    QUEUE_WAIT.try_with(|d| *d).ok()
+}
 
 /// Priority levels for LLM requests (lower number = higher priority).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -145,11 +159,12 @@ async fn scheduler_loop(
                     queue.len()
                 );
                 let done_tx = done_tx.clone();
-                tokio::spawn(async move {
+                let waited = req.submitted_at.elapsed();
+                tokio::spawn(QUEUE_WAIT.scope(waited, async move {
                     let result = req.invoker.send_message(&req.prompt).await;
                     let _ = req.response_tx.send(result);
                     let _ = done_tx.send(());
-                });
+                }));
             } else {
                 break;
             }
@@ -178,5 +193,72 @@ async fn scheduler_loop(
             debug!("[Scheduler] Request completed ({} in flight, {} queued)", in_flight, queue.len());
           }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use std::sync::Arc;
+
+    /// A backend that sleeps, then reports the queue wait the scheduler scoped
+    /// into its task — proving the wait is readable exactly where the panel
+    /// wrapper reads it.
+    struct Probe {
+        hold: Duration,
+        seen: Arc<std::sync::Mutex<Vec<Option<Duration>>>>,
+    }
+
+    #[async_trait]
+    impl LlmBackend for Probe {
+        async fn send_message(&self, _prompt: &str) -> anyhow::Result<String> {
+            self.seen.lock().unwrap().push(queue_wait());
+            tokio::time::sleep(self.hold).await;
+            Ok(String::new())
+        }
+    }
+
+    #[tokio::test]
+    async fn queue_wait_reflects_time_spent_behind_a_full_scheduler() {
+        let sched = LlmScheduler::new(1); // one slot, so the second turn waits
+        let seen = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let backend = |hold| {
+            Arc::new(Probe {
+                hold,
+                seen: Arc::clone(&seen),
+            }) as Arc<dyn LlmBackend>
+        };
+
+        let hold = Duration::from_millis(300);
+        let a = {
+            let s = sched.clone();
+            let b = backend(hold);
+            tokio::spawn(async move { s.submit("a", LlmPriority::Routine, "p".into(), b).await })
+        };
+        tokio::time::sleep(Duration::from_millis(20)).await; // let `a` claim the slot
+        let b = {
+            let s = sched.clone();
+            let b = backend(Duration::ZERO);
+            tokio::spawn(async move { s.submit("b", LlmPriority::Routine, "p".into(), b).await })
+        };
+
+        a.await.unwrap().unwrap();
+        b.await.unwrap().unwrap();
+
+        let waits = seen.lock().unwrap().clone();
+        assert_eq!(waits.len(), 2);
+        // `a` ran first with no meaningful wait; `b` sat behind `a`'s hold.
+        assert!(waits[0].unwrap() < Duration::from_millis(100));
+        assert!(
+            waits[1].unwrap() >= Duration::from_millis(250),
+            "second turn should report the queue wait, got {:?}",
+            waits[1]
+        );
+    }
+
+    #[tokio::test]
+    async fn queue_wait_is_none_outside_a_dispatched_turn() {
+        assert!(queue_wait().is_none());
     }
 }

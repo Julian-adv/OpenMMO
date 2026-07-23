@@ -36,6 +36,10 @@ pub struct FeedItem {
     /// Backend call ms, excluding scheduler queue wait (LLM turns only).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub d: Option<u64>,
+    /// Scheduler queue wait ms — time spent waiting for a slot, so a backlog at
+    /// `max_concurrent` is not mistaken for a slow model (LLM turns only).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub q: Option<u64>,
 }
 
 fn now_ms() -> u64 {
@@ -68,7 +72,7 @@ impl NpcWatch {
     }
 
     pub fn push(&self, kind: &'static str, text: String) {
-        self.push_item(kind, text, None)
+        self.push_item(kind, text, None, None)
     }
 
     /// Truncated so one runaway prompt cannot dominate the feed's memory.
@@ -80,11 +84,11 @@ impl NpcWatch {
         self.push("llm-prompt", text);
     }
 
-    pub fn llm_result(&self, kind: &'static str, text: String, ms: u64) {
-        self.push_item(kind, text, Some(ms))
+    pub fn llm_result(&self, kind: &'static str, text: String, invoke_ms: u64, queue_ms: u64) {
+        self.push_item(kind, text, Some(invoke_ms), Some(queue_ms))
     }
 
-    fn push_item(&self, kind: &'static str, text: String, d: Option<u64>) {
+    fn push_item(&self, kind: &'static str, text: String, d: Option<u64>, q: Option<u64>) {
         let mut feed = self.feed.lock().unwrap();
         let s = feed.next_seq;
         feed.next_seq += 1;
@@ -94,6 +98,7 @@ impl NpcWatch {
             k: kind,
             m: text,
             d,
+            q,
         });
         while feed.items.len() > FEED_CAP {
             feed.items.pop_front();
@@ -151,13 +156,23 @@ impl WatchedBackend {
 #[async_trait::async_trait]
 impl crate::driver::LlmBackend for WatchedBackend {
     async fn send_message(&self, content: &str) -> anyhow::Result<String> {
+        // We run inside the task the scheduler dispatched, so the prompt lands
+        // on the feed when the model actually starts, and the queue wait it
+        // scoped in is readable here.
         self.watch.llm_prompt(content);
+        let queue_ms = crate::llm_scheduler::queue_wait()
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
         let started = std::time::Instant::now();
         let result = self.inner.send_message(content).await;
         let ms = started.elapsed().as_millis() as u64;
         match &result {
-            Ok(text) => self.watch.llm_result("llm-response", text.clone(), ms),
-            Err(e) => self.watch.llm_result("llm-error", e.to_string(), ms),
+            Ok(text) => self
+                .watch
+                .llm_result("llm-response", text.clone(), ms, queue_ms),
+            Err(e) => self
+                .watch
+                .llm_result("llm-error", e.to_string(), ms, queue_ms),
         }
         result
     }

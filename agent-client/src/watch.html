@@ -304,9 +304,12 @@ function renderHeader() {
 
 function feedKindGroup(k) { return k.startsWith("llm") ? "llm" : k; }
 
-// Backend call time only; scheduler queue wait is not counted.
+// Inference time, with scheduler queue wait called out separately — a backlog
+// at max_concurrent would otherwise read as a slow model.
 function fmtDur(it) {
-  return it.d == null ? "" : ` · ${(it.d / 1000).toFixed(1)}s`;
+  if (it.d == null) return "";
+  const wait = it.q > 100 ? ` + 대기 ${(it.q / 1000).toFixed(1)}s` : "";
+  return ` · ${(it.d / 1000).toFixed(1)}s${wait}`;
 }
 
 const DOM_CAP = 300;
