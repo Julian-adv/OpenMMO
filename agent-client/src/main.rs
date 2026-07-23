@@ -387,7 +387,6 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::GroundItemSpawned { .. } => "GroundItemSpawned",
         ServerMessage::GroundItemAppeared { .. } => "GroundItemAppeared",
         ServerMessage::GroundItemRemoved { .. } => "GroundItemRemoved",
-        ServerMessage::InventoryError { .. } => "InventoryError",
         ServerMessage::ShopState { .. } => "ShopState",
         ServerMessage::GoldUpdate { .. } => "GoldUpdate",
         ServerMessage::GuardUpdated { .. } => "GuardUpdated",

@@ -578,10 +578,6 @@ pub enum ServerMessage {
     GroundItemRemoved {
         instance_id: u64,
     },
-    /// Inventory action failed.
-    InventoryError {
-        message: String,
-    },
     /// Response to OpenShop (or pushed by an NPC's OpenTrade): the trader's
     /// goods. Display prices come from item definitions; the server
     /// re-validates them on Buy/Sell.
@@ -627,7 +623,8 @@ pub enum ServerMessage {
     GoldGained {
         amount: i64,
     },
-    /// A shop request failed.
+    /// A shop request failed. Kept distinct from `SystemMessage`: the
+    /// agent-client reacts urgently to a failed trade.
     TradeError {
         message: String,
     },

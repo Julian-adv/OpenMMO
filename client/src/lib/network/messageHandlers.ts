@@ -842,10 +842,6 @@ export function handleServerMessage(
       groundItemManager.remove(data.instance_id)
       break
 
-    case 'InventoryError':
-      addChatMessage({ text: data.message, sender: 'system' })
-      break
-
     case 'ShopState': {
       const session = {
         merchantPlayerId: data.merchant_player_id,

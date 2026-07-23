@@ -419,6 +419,7 @@ pub fn feed_kind(msg: &onlinerpg_shared::ServerMessage) -> Option<&'static str> 
         M::DealResult { .. } | M::TradeNotice { .. } | M::TradeError { .. } => "trade",
         M::JoinSuccess { .. }
         | M::Kicked { .. }
+        | M::SystemMessage { .. }
         | M::ServerNotice { .. }
         | M::PlayerJoined { .. }
         | M::PlayerLeft { .. }

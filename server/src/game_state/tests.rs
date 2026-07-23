@@ -2683,13 +2683,13 @@ async fn enchant_scroll_requires_wielded_weapon() {
         .unwrap();
     assert_eq!(inv.bag.len(), 1, "the scroll should be kept");
     match rx.try_recv() {
-        Ok(ServerMessage::InventoryError { message }) => {
+        Ok(ServerMessage::SystemMessage { message }) => {
             assert!(
                 message.contains("no weapon"),
                 "unexpected message: {message}"
             );
         }
-        other => panic!("Expected InventoryError, got {:?}", other),
+        other => panic!("Expected a system reply, got {:?}", other),
     }
 }
 

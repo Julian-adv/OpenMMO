@@ -90,13 +90,7 @@ impl super::GameState {
                 let players = self.players.read().await;
                 OnlineCounts::tally(players.values())
             };
-            self.send_direct_message(
-                player_id,
-                ServerMessage::SystemMessage {
-                    message: counts.describe(),
-                },
-            )
-            .await;
+            self.send_system_message(player_id, counts.describe()).await;
             return;
         }
 
@@ -104,21 +98,11 @@ impl super::GameState {
         if let Some(item_id) = message.strip_prefix("/give ") {
             let item_id = item_id.trim();
             if self.give_item(player_id, item_id).await {
-                self.send_direct_message(
-                    player_id,
-                    ServerMessage::SystemMessage {
-                        message: format!("Gave item: {}", item_id),
-                    },
-                )
-                .await;
+                self.send_system_message(player_id, format!("Gave item: {}", item_id))
+                    .await;
             } else {
-                self.send_direct_message(
-                    player_id,
-                    ServerMessage::InventoryError {
-                        message: format!("Unknown item: {}", item_id),
-                    },
-                )
-                .await;
+                self.send_system_message(player_id, format!("Unknown item: {}", item_id))
+                    .await;
             }
             return;
         }
@@ -156,10 +140,8 @@ impl super::GameState {
     /// back so the sender's client can render the outgoing line. Errors go
     /// only to the sender.
     async fn send_whisper(&self, player_id: &PlayerId, target_name: &str, message: &str) {
-        let reply = |message: String| ServerMessage::SystemMessage { message };
-
         if target_name.is_empty() || message.is_empty() {
-            self.send_direct_message(player_id, reply("Whisper: /w <name> <message>".into()))
+            self.send_system_message(player_id, "Whisper: /w <name> <message>")
                 .await;
             return;
         }
@@ -194,12 +176,12 @@ impl super::GameState {
         let (target_id, to) = match target {
             Ok(target) => target,
             Err(message) => {
-                self.send_direct_message(player_id, reply(message)).await;
+                self.send_system_message(player_id, message).await;
                 return;
             }
         };
         if target_id == *player_id {
-            self.send_direct_message(player_id, reply("Whisper: that's you.".into()))
+            self.send_system_message(player_id, "Whisper: that's you.")
                 .await;
             return;
         }
@@ -222,10 +204,6 @@ impl super::GameState {
     /// ones who cannot reach an admin. The combat lockout is what keeps it from
     /// doubling as a free disengage.
     async fn escape_to_spawn(&self, player_id: &PlayerId) {
-        let reply = |message: &str| ServerMessage::SystemMessage {
-            message: message.to_string(),
-        };
-
         let in_combat = {
             let players = self.players.read().await;
             let Some(player) = players.get(player_id) else {
@@ -235,7 +213,7 @@ impl super::GameState {
             Self::now_ms().saturating_sub(player.last_combat_at) < super::OUT_OF_COMBAT_MS
         };
         if in_combat {
-            self.send_direct_message(player_id, reply("Escape: not while in combat."))
+            self.send_system_message(player_id, "Escape: not while in combat.")
                 .await;
             return;
         }
@@ -248,7 +226,7 @@ impl super::GameState {
         self.teleport_player(player_id, spawn.position(), spawn.rotation, 0)
             .await;
         info!("Player {} escaped to spawn", player_id);
-        self.send_direct_message(player_id, reply("Escape: returned to the starting point."))
+        self.send_system_message(player_id, "Escape: returned to the starting point.")
             .await;
     }
 }

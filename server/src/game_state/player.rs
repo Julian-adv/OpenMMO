@@ -131,6 +131,18 @@ impl super::GameState {
         }
     }
 
+    /// Private system chat line for one player (command replies, action
+    /// feedback).
+    pub async fn send_system_message(&self, player_id: &PlayerId, message: impl Into<String>) {
+        self.send_direct_message(
+            player_id,
+            ServerMessage::SystemMessage {
+                message: message.into(),
+            },
+        )
+        .await;
+    }
+
     pub async fn send_direct_message_to_players(
         &self,
         player_ids: &[PlayerId],

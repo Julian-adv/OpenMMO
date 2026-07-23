@@ -108,17 +108,6 @@ impl super::GameState {
         bag_weight + equip_weight
     }
 
-    /// Send an inventory error message to a player.
-    async fn send_inventory_error(&self, player_id: &PlayerId, msg: &str) {
-        self.send_direct_message(
-            player_id,
-            ServerMessage::InventoryError {
-                message: msg.to_string(),
-            },
-        )
-        .await;
-    }
-
     /// Send the current inventory state directly to a player, then their
     /// refreshed guard. Every equipped-gear mutation routes through here, so
     /// pushing the guard from this one spot keeps the character sheet in sync
@@ -278,7 +267,7 @@ impl super::GameState {
                 Some(idx) => idx,
                 None => {
                     drop(inventories);
-                    self.send_inventory_error(player_id, "Item not found in bag")
+                    self.send_system_message(player_id, "Item not found in bag")
                         .await;
                     return;
                 }
@@ -289,7 +278,7 @@ impl super::GameState {
                 Some(slot) => slot,
                 None => {
                     drop(inventories);
-                    self.send_inventory_error(player_id, "This item cannot be equipped")
+                    self.send_system_message(player_id, "This item cannot be equipped")
                         .await;
                     return;
                 }
@@ -334,7 +323,7 @@ impl super::GameState {
                 }
                 None => {
                     drop(inventories);
-                    self.send_inventory_error(player_id, "No item in that slot")
+                    self.send_system_message(player_id, "No item in that slot")
                         .await;
                     return;
                 }
@@ -362,7 +351,7 @@ impl super::GameState {
                 Some(item) => item,
                 None => {
                     drop(inventories);
-                    self.send_inventory_error(player_id, "Item not found in bag")
+                    self.send_system_message(player_id, "Item not found in bag")
                         .await;
                     return;
                 }
@@ -375,7 +364,7 @@ impl super::GameState {
                 Some(effect) => effect,
                 None => {
                     drop(inventories);
-                    self.send_inventory_error(player_id, "This item cannot be used")
+                    self.send_system_message(player_id, "This item cannot be used")
                         .await;
                     return;
                 }
@@ -402,13 +391,13 @@ impl super::GameState {
             };
             if player.health == 0 {
                 drop(players);
-                self.send_inventory_error(player_id, "You can't drink while defeated")
+                self.send_system_message(player_id, "You can't drink while defeated")
                     .await;
                 return;
             }
             if player.health >= player.max_health {
                 drop(players);
-                self.send_inventory_error(player_id, "You are already at full health")
+                self.send_system_message(player_id, "You are already at full health")
                     .await;
                 return;
             }
@@ -445,7 +434,7 @@ impl super::GameState {
             None => return true,
         };
         if defeated {
-            self.send_inventory_error(player_id, message).await;
+            self.send_system_message(player_id, message).await;
         }
         defeated
     }
@@ -500,7 +489,7 @@ impl super::GameState {
             });
             if !wielding_weapon {
                 drop(inventories);
-                self.send_inventory_error(player_id, "You have no weapon wielded to enchant")
+                self.send_system_message(player_id, "You have no weapon wielded to enchant")
                     .await;
                 return;
             }
@@ -528,8 +517,7 @@ impl super::GameState {
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        // InventoryError doubles as the direct system-chat channel.
-        self.send_inventory_error(player_id, &message).await;
+        self.send_system_message(player_id, message).await;
     }
 
     /// Display name for an item def, falling back to the raw id.
@@ -664,7 +652,7 @@ impl super::GameState {
                     )
                 } else {
                     drop(inventories);
-                    self.send_inventory_error(player_id, "Item not found").await;
+                    self.send_system_message(player_id, "Item not found").await;
                     return;
                 };
 
@@ -689,7 +677,7 @@ impl super::GameState {
 
     pub async fn debug_drop_item(&self, player_id: &PlayerId, item_def_id: &str) {
         if self.item_defs.get(item_def_id).is_none() {
-            self.send_inventory_error(player_id, "Unknown item").await;
+            self.send_system_message(player_id, "Unknown item").await;
             return;
         }
 
@@ -742,7 +730,7 @@ impl super::GameState {
             match ground_items.get(&instance_id) {
                 Some(sgi) => sgi.item.clone(),
                 None => {
-                    self.send_inventory_error(player_id, "Item no longer exists")
+                    self.send_system_message(player_id, "Item no longer exists")
                         .await;
                     return;
                 }
@@ -752,7 +740,7 @@ impl super::GameState {
         let dx = onlinerpg_shared::shortest_world_delta_x(ground_item.position.x, player_pos.x);
         let dz = player_pos.z - ground_item.position.z;
         if dx * dx + dz * dz > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE {
-            self.send_inventory_error(player_id, "Too far away").await;
+            self.send_system_message(player_id, "Too far away").await;
             return;
         }
 
@@ -760,7 +748,7 @@ impl super::GameState {
         // the old "-1 matches any floor" wildcard is gone (outdoors and
         // house ground floors are both 0).
         if player_floor != ground_item.floor_level {
-            self.send_inventory_error(player_id, "Item is on a different floor")
+            self.send_system_message(player_id, "Item is on a different floor")
                 .await;
             return;
         }
@@ -781,7 +769,7 @@ impl super::GameState {
         let snapshot = {
             let mut ground_items = self.ground_items.write().await;
             if ground_items.remove(&instance_id).is_none() {
-                self.send_inventory_error(player_id, "Item no longer exists")
+                self.send_system_message(player_id, "Item no longer exists")
                     .await;
                 return;
             }
@@ -800,7 +788,7 @@ impl super::GameState {
                     );
                     drop(inventories);
                     drop(ground_items);
-                    self.send_inventory_error(player_id, "Too heavy to carry")
+                    self.send_system_message(player_id, "Too heavy to carry")
                         .await;
                     return;
                 }
@@ -873,7 +861,7 @@ impl super::GameState {
         {
             let mut ground_items = self.ground_items.write().await;
             if ground_items.remove(&instance_id).is_none() {
-                self.send_inventory_error(player_id, "Item no longer exists")
+                self.send_system_message(player_id, "Item no longer exists")
                     .await;
                 return;
             }
