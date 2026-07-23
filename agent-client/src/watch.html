@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenMMO Agent Watch</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font: 13px/1.45 -apple-system, "Segoe UI", "Noto Sans KR", sans-serif;
+    background: #0e1116; color: #d8dee6; display: flex; flex-direction: column;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 8px 14px;
+    background: #161b22; border-bottom: 1px solid #262d38; flex-wrap: wrap;
+  }
+  header .dot { width: 9px; height: 9px; border-radius: 50%; background: #e05252; }
+  header .dot.on { background: #4fc36b; box-shadow: 0 0 6px #4fc36b; }
+  header .name { font-weight: 700; font-size: 15px; color: #fff; }
+  header .sub { color: #8b98a8; }
+  .hpwrap { width: 130px; height: 12px; background: #2a1518; border-radius: 6px; overflow: hidden; }
+  .hpbar { height: 100%; background: linear-gradient(90deg, #d94f4f, #e6704f); transition: width .4s; }
+  .stat { color: #b8c2cf; }
+  .stat b { color: #ffd76a; }
+  select {
+    background: #1d242e; color: #d8dee6; border: 1px solid #313a47;
+    border-radius: 6px; padding: 3px 8px; font-size: 13px;
+  }
+  main { flex: 1; display: flex; min-height: 0; }
+  #mapbox { flex: 1.4; position: relative; min-width: 0; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #zoombox {
+    position: absolute; right: 10px; top: 10px; display: flex; flex-direction: column; gap: 4px;
+  }
+  #zoombox button {
+    width: 30px; height: 30px; border-radius: 8px; border: 1px solid #37414f;
+    background: rgba(22,27,34,.85); color: #d8dee6; font-size: 16px; cursor: pointer;
+  }
+  #legend {
+    position: absolute; left: 10px; bottom: 10px; background: rgba(14,17,22,.78);
+    border: 1px solid #262d38; border-radius: 8px; padding: 6px 10px; color: #9daab8; font-size: 12px;
+  }
+  #legend span { margin-right: 10px; }
+  #legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+  aside {
+    flex: 1; display: flex; flex-direction: column; min-width: 340px; max-width: 480px;
+    border-left: 1px solid #262d38; background: #12161c;
+  }
+  #filters { display: flex; gap: 6px; padding: 8px 10px; border-bottom: 1px solid #232a35; flex-wrap: wrap; }
+  #filters button {
+    border: 1px solid #313a47; background: #1a212b; color: #94a1b0;
+    border-radius: 20px; padding: 2px 11px; font-size: 12px; cursor: pointer;
+  }
+  #filters button.on { background: #2b3d55; color: #cfe3ff; border-color: #3d5878; }
+  #feed { flex: 1; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .item { border-radius: 8px; padding: 6px 9px; background: #1a202a; border-left: 3px solid #3a4657; word-break: break-word; }
+  .item .t { color: #6b7789; font-size: 11px; margin-right: 6px; }
+  .item.chat { border-left-color: #4fc36b; background: #16241b; }
+  .item.combat { border-left-color: #e0684f; background: #261a18; }
+  .item.trade { border-left-color: #ffd76a; background: #262115; }
+  .item.system { border-left-color: #5d8fd1; }
+  .item.agent { border-left-color: #9a7fd1; background: #1e1a28; }
+  .item.llm-prompt, .item.llm-response, .item.llm-error { border-left-color: #c07fd1; background: #221a26; }
+  .item.llm-error { border-left-color: #e05252; }
+  details summary { cursor: pointer; color: #cfa9de; }
+  details pre {
+    margin-top: 6px; padding: 8px; background: #14181f; border-radius: 6px;
+    font-size: 11.5px; white-space: pre-wrap; word-break: break-word; color: #b9c4d2; max-height: 320px; overflow-y: auto;
+  }
+  .say { color: #7fd19a; font-weight: 600; }
+</style>
+</head>
+<body>
+<header>
+  <select id="npcsel"></select>
+  <span class="dot" id="conn"></span>
+  <span class="name" id="selfname">—</span>
+  <span class="sub" id="selfsub"></span>
+  <div class="hpwrap"><div class="hpbar" id="hp" style="width:0%"></div></div>
+  <span class="stat" id="hptext"></span>
+  <span class="stat">💰 <b id="gold">—</b></span>
+  <span class="stat" id="clock">—</span>
+  <span class="stat" id="floor"></span>
+  <span class="stat" id="bag"></span>
+</header>
+<main>
+  <div id="mapbox">
+    <canvas id="map"></canvas>
+    <div id="zoombox">
+      <button id="zin">+</button>
+      <button id="zout">−</button>
+    </div>
+    <div id="legend">
+      <span><i style="background:#ffd76a"></i>에이전트</span>
+      <span><i style="background:#59c2e6"></i>플레이어</span>
+      <span><i style="background:#b48ae0"></i>NPC</span>
+      <span><i style="background:#e05252"></i>몬스터</span>
+    </div>
+  </div>
+  <aside>
+    <div id="filters"></div>
+    <div id="feed"></div>
+  </aside>
+</main>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const mapC = $("map"), ctx = mapC.getContext("2d");
+
+let npc = null;
+let snap = null;
+let cam = { x: 0, z: 0, ready: false };
+let scale = 4.5;
+let terrain = null;   // {x0, z0, step, res, canvas}
+let terrainReq = null;
+let lastKey = "";
+const KINDS = [
+  ["chat", "채팅"], ["combat", "전투"], ["trade", "거래"],
+  ["llm", "LLM"], ["agent", "감지"], ["system", "시스템"],
+];
+const active = new Set(KINDS.map(k => k[0]));
+
+function heightColor(h) {
+  const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+  let c;
+  if (h < 0)        c = lerp([20, 56, 79], [74, 144, 184], Math.max(0, 1 + h / 8));
+  else if (h < 0.8) c = lerp([194, 178, 128], [168, 153, 110], h / 0.8);
+  else if (h < 15)  c = lerp([90, 132, 66], [63, 99, 48], (h - 0.8) / 14.2);
+  else if (h < 40)  c = lerp([94, 105, 78], [138, 138, 128], (h - 15) / 25);
+  else              c = [153, 153, 153];
+  return c;
+}
+
+async function fetchTerrain(cx, cz, half) {
+  const key = `${Math.round(cx / 20)}:${Math.round(cz / 20)}:${Math.round(half)}`;
+  if (key === lastKey || terrainReq) return;
+  terrainReq = key;
+  try {
+    const r = await fetch(`/api/height?cx=${cx}&cz=${cz}&half=${half}&res=112`);
+    const d = await r.json();
+    const off = document.createElement("canvas");
+    off.width = d.res; off.height = d.res;
+    const octx = off.getContext("2d");
+    const img = octx.createImageData(d.res, d.res);
+    for (let i = 0; i < d.heights.length; i++) {
+      const [r0, g0, b0] = heightColor(d.heights[i]);
+      img.data[i * 4] = r0; img.data[i * 4 + 1] = g0; img.data[i * 4 + 2] = b0; img.data[i * 4 + 3] = 255;
+    }
+    octx.putImageData(img, 0, 0);
+    terrain = { ...d, canvas: off };
+    lastKey = key;
+  } catch (e) { /* retry next poll */ }
+  terrainReq = null;
+}
+
+function resize() {
+  const r = mapC.getBoundingClientRect();
+  mapC.width = r.width * devicePixelRatio;
+  mapC.height = r.height * devicePixelRatio;
+}
+addEventListener("resize", resize);
+
+function w2s(wx, wz) {
+  return [
+    (wx - cam.x) * scale * devicePixelRatio + mapC.width / 2,
+    (wz - cam.z) * scale * devicePixelRatio + mapC.height / 2,
+  ];
+}
+
+function draw() {
+  requestAnimationFrame(draw);
+  if (!mapC.width) resize();
+  ctx.fillStyle = "#0c1219";
+  ctx.fillRect(0, 0, mapC.width, mapC.height);
+  if (!snap) return;
+
+  const self = snap.self;
+  if (self && cam.ready) {
+    cam.x += (self.position.x - cam.x) * 0.12;
+    cam.z += (self.position.z - cam.z) * 0.12;
+  } else if (self) {
+    cam.x = self.position.x; cam.z = self.position.z; cam.ready = true;
+  }
+
+  const px = scale * devicePixelRatio;
+
+  if (terrain) {
+    const [sx, sy] = w2s(terrain.x0, terrain.z0);
+    const size = terrain.res * terrain.step * px;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(terrain.canvas, sx, sy, size, size);
+  }
+
+  for (const h of snap.houses || []) {
+    for (const r of h.rooms) {
+      if (r.floor > 0) continue;
+      const [sx, sy] = w2s(r.x, r.z);
+      ctx.fillStyle = "rgba(150,100,52,.6)";
+      ctx.strokeStyle = "rgba(220,170,110,.8)";
+      ctx.lineWidth = 1.2 * devicePixelRatio;
+      ctx.fillRect(sx, sy, r.w * px, r.d * px);
+      ctx.strokeRect(sx, sy, r.w * px, r.d * px);
+    }
+  }
+
+  const label = (sx, sy, text, color) => {
+    ctx.font = `${11 * devicePixelRatio}px sans-serif`;
+    ctx.textAlign = "center";
+    ctx.fillStyle = "rgba(0,0,0,.55)";
+    const w = ctx.measureText(text).width;
+    ctx.fillRect(sx - w / 2 - 3, sy - 23 * devicePixelRatio, w + 6, 13 * devicePixelRatio);
+    ctx.fillStyle = color;
+    ctx.fillText(text, sx, sy - 13 * devicePixelRatio);
+  };
+  const hpbar = (sx, sy, frac) => {
+    const w = 24 * devicePixelRatio;
+    ctx.fillStyle = "rgba(0,0,0,.6)";
+    ctx.fillRect(sx - w / 2, sy - 10 * devicePixelRatio, w, 3 * devicePixelRatio);
+    ctx.fillStyle = frac > 0.5 ? "#4fc36b" : frac > 0.25 ? "#ffd76a" : "#e05252";
+    ctx.fillRect(sx - w / 2, sy - 10 * devicePixelRatio, w * Math.max(0, frac), 3 * devicePixelRatio);
+  };
+
+  for (const m of snap.monsters || []) {
+    const [sx, sy] = w2s(m.position.x, m.position.z);
+    const dead = m.state === "dead";
+    ctx.beginPath();
+    ctx.arc(sx, sy, 4.5 * devicePixelRatio, 0, 7);
+    ctx.fillStyle = dead ? "#555" : (m.aggressive ? "#e05252" : "#d98a8a");
+    ctx.fill();
+    if (m.state === "attack" && !dead) {
+      ctx.strokeStyle = "#ff9d4f"; ctx.lineWidth = 2 * devicePixelRatio;
+      ctx.beginPath(); ctx.arc(sx, sy, 7.5 * devicePixelRatio, 0, 7); ctx.stroke();
+    }
+    if (!dead) {
+      hpbar(sx, sy, m.health / m.max_health);
+      label(sx, sy, m.monster_type, "#f0b9b9");
+    }
+  }
+
+  const selfId = self ? self.id : null;
+  for (const p of snap.players || []) {
+    if (selfId !== null && p.id === selfId) continue;
+    const [sx, sy] = w2s(p.position.x, p.position.z);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 5 * devicePixelRatio, 0, 7);
+    ctx.fillStyle = p.is_official_npc ? "#b48ae0" : "#59c2e6";
+    ctx.fill();
+    hpbar(sx, sy, p.health / p.max_health);
+    label(sx, sy, p.name, p.is_official_npc ? "#d7c3f2" : "#bde6f5");
+  }
+
+  if (self) {
+    const [sx, sy] = w2s(self.position.x, self.position.z);
+    ctx.beginPath();
+    ctx.arc(sx, sy, 9 * devicePixelRatio, 0, 7);
+    ctx.strokeStyle = "rgba(255,215,106,.5)"; ctx.lineWidth = 2 * devicePixelRatio;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(sx, sy, 5.5 * devicePixelRatio, 0, 7);
+    ctx.fillStyle = "#ffd76a"; ctx.fill();
+    const a = self.rotation;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + Math.sin(a) * 14 * devicePixelRatio, sy + Math.cos(a) * 14 * devicePixelRatio);
+    ctx.strokeStyle = "#ffd76a"; ctx.lineWidth = 2.5 * devicePixelRatio; ctx.stroke();
+    hpbar(sx, sy, self.health / self.max_health);
+    label(sx, sy, self.name, "#ffe9ad");
+  }
+
+  if (snap.time && snap.time.night) {
+    ctx.fillStyle = "rgba(20,24,70,.28)";
+    ctx.fillRect(0, 0, mapC.width, mapC.height);
+  }
+
+  if (cam.ready) {
+    const half = Math.max(mapC.width, mapC.height) / (2 * px) * 1.25;
+    fetchTerrain(cam.x, cam.z, Math.min(600, Math.max(60, half)));
+  }
+}
+
+function fmtTime(t) {
+  return new Date(t).toLocaleTimeString("ko-KR", { hour12: false });
+}
+
+function renderHeader() {
+  $("conn").className = "dot" + (snap.connected ? " on" : "");
+  const s = snap.self;
+  if (s) {
+    $("selfname").textContent = s.name;
+    $("selfsub").textContent = `Lv.${s.level} ${s.class}`;
+    $("hp").style.width = (100 * s.health / s.max_health) + "%";
+    $("hptext").textContent = `${s.health}/${s.max_health}`;
+  }
+  $("gold").textContent = snap.gold ?? "—";
+  const t = snap.time || {};
+  $("clock").textContent = t.hour != null
+    ? `${t.night ? "🌙" : "☀️"} ${String(t.hour).padStart(2, "0")}:${String(t.minute).padStart(2, "0")}` : "—";
+  $("floor").textContent = snap.floor > 0 ? `${snap.floor + 1}층` : "";
+  $("bag").textContent = snap.bag ? `🎒 ${snap.bag.length}` : "";
+}
+
+function feedKindGroup(k) { return k.startsWith("llm") ? "llm" : k; }
+
+let renderedCount = 0;
+let renderedFirstT = null;
+function renderFeed() {
+  const feed = snap.feed || [];
+  const box = $("feed");
+  const atBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 60;
+  const firstT = feed.length ? feed[0].t : null;
+  if (firstT !== renderedFirstT) { box.innerHTML = ""; renderedCount = 0; renderedFirstT = firstT; }
+
+  for (let i = renderedCount; i < feed.length; i++) {
+    const it = feed[i];
+    const div = document.createElement("div");
+    div.className = "item " + it.k;
+    div.dataset.group = feedKindGroup(it.k);
+    const time = `<span class="t">${fmtTime(it.t)}</span>`;
+    if (it.k === "llm-prompt") {
+      div.innerHTML = `${time}<details><summary>📋 프롬프트 (${it.m.length}자)</summary><pre></pre></details>`;
+      div.querySelector("pre").textContent = it.m;
+    } else if (it.k === "llm-response") {
+      const dur = it.d != null ? ` · ${(it.d / 1000).toFixed(1)}s` : "";
+      div.innerHTML = `${time}<details open><summary>💭 LLM 응답${dur}</summary><pre></pre></details>`;
+      let text = it.m;
+      try { text = JSON.stringify(JSON.parse(it.m), null, 2); } catch (e) {}
+      div.querySelector("pre").textContent = text;
+    } else if (it.k === "llm-error") {
+      div.innerHTML = `${time}⚠️ LLM 오류: `;
+      div.append(it.m);
+    } else if (it.k === "chat") {
+      div.innerHTML = time;
+      const span = document.createElement("span");
+      span.className = "say";
+      span.textContent = it.m.replace(/^\[Chat\]\s*/, "💬 ");
+      div.append(span);
+    } else {
+      div.innerHTML = time;
+      div.append(it.m);
+    }
+    div.style.display = active.has(feedKindGroup(it.k)) ? "" : "none";
+    box.append(div);
+  }
+  renderedCount = feed.length;
+  if (atBottom) box.scrollTop = box.scrollHeight;
+}
+
+function buildFilters() {
+  const box = $("filters");
+  for (const [key, name] of KINDS) {
+    const b = document.createElement("button");
+    b.textContent = name;
+    b.className = "on";
+    b.onclick = () => {
+      if (active.has(key)) { active.delete(key); b.classList.remove("on"); }
+      else { active.add(key); b.classList.add("on"); }
+      for (const el of $("feed").children) {
+        el.style.display = active.has(el.dataset.group) ? "" : "none";
+      }
+    };
+    box.append(b);
+  }
+}
+
+async function poll() {
+  try {
+    const r = await fetch(`/api/state${npc ? "?npc=" + encodeURIComponent(npc) : ""}`);
+    snap = await r.json();
+    renderHeader();
+    renderFeed();
+  } catch (e) {
+    $("conn").className = "dot";
+  }
+  setTimeout(poll, 1000);
+}
+
+async function init() {
+  buildFilters();
+  try {
+    const r = await fetch("/api/npcs");
+    const d = await r.json();
+    const sel = $("npcsel");
+    for (const l of d.npcs) {
+      const o = document.createElement("option");
+      o.value = o.textContent = l;
+      sel.append(o);
+    }
+    npc = d.npcs[0] || null;
+    sel.onchange = () => {
+      npc = sel.value; snap = null; cam.ready = false;
+      terrain = null; lastKey = ""; renderedFirstT = -1;
+      $("feed").innerHTML = ""; renderedCount = 0;
+    };
+    if (d.npcs.length < 2) sel.style.display = "none";
+  } catch (e) {}
+  resize();
+  poll();
+  draw();
+}
+
+$("zin").onclick = () => { scale = Math.min(20, scale * 1.35); lastKey = ""; };
+$("zout").onclick = () => { scale = Math.max(1.2, scale / 1.35); lastKey = ""; };
+mapC.addEventListener("wheel", e => {
+  e.preventDefault();
+  scale = Math.min(20, Math.max(1.2, scale * (e.deltaY < 0 ? 1.15 : 0.87)));
+  lastKey = "";
+}, { passive: false });
+
+init();
+</script>
+</body>
+</html>

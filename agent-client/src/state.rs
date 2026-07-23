@@ -52,6 +52,10 @@ impl WorldCache {
         &self.passability_cache
     }
 
+    pub fn houses(&self) -> &HashMap<String, HouseData> {
+        &self.houses
+    }
+
     pub fn add_house(&mut self, house: HouseData) {
         let rp = pathfinding::build_runtime_passability(&house);
         self.passability_cache.insert(house.id.clone(), rp);
@@ -161,6 +165,8 @@ pub struct SharedState {
     pending_commands: Vec<ClientMessage>,
     /// No-spawn zones received from server on join
     no_spawn_zones: Vec<NoSpawnZone>,
+    /// Spectator panel handle; feeds it chat/combat/system lines
+    watch: Option<Arc<crate::watch::NpcWatch>>,
 }
 
 impl SharedState {
@@ -169,6 +175,7 @@ impl SharedState {
         cmd_tx: mpsc::Sender<ClientMessage>,
         height_sampler: Arc<HeightSampler>,
         world_cache: Arc<std::sync::RwLock<WorldCache>>,
+        watch: Option<Arc<crate::watch::NpcWatch>>,
     ) -> Self {
         Self {
             characters,
@@ -198,6 +205,7 @@ impl SharedState {
             monster_ai: MonsterAiManager::new(),
             pending_commands: Vec::new(),
             no_spawn_zones: Vec::new(),
+            watch,
         }
     }
 
@@ -485,6 +493,17 @@ impl SharedState {
 
     /// Push an event and update tracked state. Returns the urgency of the event.
     pub fn push_event(&mut self, msg: ServerMessage) -> EventUrgency {
+        // Feed the spectator panel before mutating, while names still resolve
+        if let Some(watch) = self.watch.clone() {
+            if let Some(kind) = crate::watch::feed_kind(&msg) {
+                let line = crate::watch::feed_fallback(&msg)
+                    .or_else(|| crate::driver::format_event(self, &msg));
+                if let Some(line) = line {
+                    watch.push(kind, line);
+                }
+            }
+        }
+
         // Update tracked state from certain messages
         match &msg {
             ServerMessage::JoinSuccess { player, .. } => {
@@ -852,6 +871,9 @@ impl SharedState {
 
     /// Push a synthetic agent event visible to the LLM.
     pub fn push_agent_event(&mut self, event: String) {
+        if let Some(watch) = &self.watch {
+            watch.push("agent", event.clone());
+        }
         self.agent_events.push(event);
     }
 

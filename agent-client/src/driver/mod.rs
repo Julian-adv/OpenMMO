@@ -21,6 +21,8 @@ mod execute;
 mod movement;
 mod prompt;
 
+pub(crate) use prompt::format_event;
+
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 

@@ -166,7 +166,7 @@ pub struct NpcConfig {
 
 impl NpcConfig {
     /// Log label: the account when there is one, else the character it plays.
-    fn label(&self) -> &str {
+    pub fn label(&self) -> &str {
         self.account
             .as_deref()
             .or(self.character_name.as_deref())
@@ -183,6 +183,7 @@ pub struct SharedResources {
     pub movement_speeds: Arc<HashMap<String, crate::monster_ai::MonsterMovement>>,
     pub scheduler: LlmScheduler,
     pub auth: AuthSource,
+    pub watch: Arc<crate::watch::WatchHub>,
 }
 
 /// How sessions prove who they are. Operator NPCs share one secret; a
@@ -405,12 +406,18 @@ async fn run_npc_session(
     }
 
     let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
+    let watch = shared.watch.handle(label);
     let state = Arc::new(Mutex::new(SharedState::new(
         characters,
         cmd_tx,
         Arc::clone(&shared.height_sampler),
         Arc::clone(&shared.world_cache),
+        watch.clone(),
     )));
+    if let Some(w) = &watch {
+        w.set_state(Arc::clone(&state));
+        w.push("system", "Session connected".to_string());
+    }
 
     let account_for_tx = label.to_string();
     let tx_task = tokio::spawn(async move {
@@ -525,6 +532,16 @@ async fn run_npc_session(
     ai_task.abort();
     if let Some(t) = llm_task {
         t.abort();
+    }
+    if let Some(w) = &watch {
+        w.set_disconnected();
+        w.push(
+            "system",
+            format!(
+                "Connection lost — reconnecting in {}s",
+                RECONNECT_DELAY.as_secs()
+            ),
+        );
     }
 
     Ok(())

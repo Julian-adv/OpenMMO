@@ -104,7 +104,7 @@ pub(super) fn build_prompt(
 
 /// Format a server event as a human-readable line for LLM prompts.
 /// Returns `None` for events that should not be forwarded to the LLM.
-fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
+pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
     match msg {
         ServerMessage::JoinSuccess { player, .. } => Some(format!(
             "[Join] You joined as {} at ({:.1}, {:.1}, {:.1})",

@@ -25,6 +25,9 @@ account = "npc_example"
 # MCP HTTP server port (default: 8808)
 # mcp_port = 8808
 
+# Spectator web panel on 127.0.0.1 (0 disables)
+# watch_port = 8808
+
 # LLM backend to use: "none", "claude", "openrouter", "codex"
 # - none: no LLM driver (MCP or direct mode)
 # - claude: Claude CLI (stdio subprocess)
