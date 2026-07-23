@@ -26,8 +26,16 @@ use crate::ws;
 use crate::LlmType;
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
-/// How many times to reroll character stats before settling.
-const MAX_STAT_ROLLS: u32 = 12;
+
+fn default_stat_rolls() -> u32 {
+    12
+}
+fn default_stat_roll_primary() -> u8 {
+    16
+}
+fn default_stat_roll_secondary() -> u8 {
+    12
+}
 
 /// The stat a class leans on, for judging a roll's quality.
 fn primary_stat(
@@ -168,6 +176,15 @@ pub struct NpcConfig {
     pub character_class: Option<String>,
     /// Character gender for auto-creation. Defaults to male when omitted.
     pub gender: Option<Gender>,
+    /// Stat rolls to attempt at character creation; last roll wins.
+    #[serde(default = "default_stat_rolls")]
+    pub stat_rolls: u32,
+    /// Stop rolling early once the class's primary stat reaches this…
+    #[serde(default = "default_stat_roll_primary")]
+    pub stat_roll_primary: u8,
+    /// …and CON (max HP and regen for every class) reaches this.
+    #[serde(default = "default_stat_roll_secondary")]
+    pub stat_roll_secondary: u8,
 
     // --- 3-tier prompt system ---
     /// Path to template prompt file (role-specific behavior rules).
@@ -356,9 +373,10 @@ async fn run_npc_session(
                 label, char_name, class, gender
             );
 
-            // Roll stats — reroll until the class's key stat comes up strong,
-            // like a human spamming the reroll button. Last roll wins.
-            for attempt in 1..=MAX_STAT_ROLLS {
+            // Roll stats — reroll until the roll meets the configured
+            // targets, like a human spamming the reroll button. Last roll
+            // wins, same as the web client.
+            for attempt in 1..=npc.stat_rolls {
                 ws::send(
                     &mut ws_tx,
                     &ClientMessage::RollCharacterStats {
@@ -374,7 +392,9 @@ async fn run_npc_session(
                 let ServerMessage::CharacterStatsRolled { attributes, max_hp } = rolled else {
                     continue;
                 };
-                let good = primary_stat(&class, &attributes) >= 16 && attributes.guard >= 10;
+                let good = primary_stat(&class, &attributes) >= npc.stat_roll_primary
+                    && attributes.con >= npc.stat_roll_secondary
+                    && attributes.guard >= 10;
                 info!(
                     "[{label}] Stat roll {attempt}: STR {} DEX {} CON {} INT {} WIS {} CHA {} guard {} HP {}",
                     attributes.r#str,

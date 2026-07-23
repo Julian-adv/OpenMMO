@@ -100,6 +100,15 @@ llm = "codex"
 # idle_interval_secs = 3600
 # activity_window_secs = 30
 
+# Stat rolling at character creation (optional, defaults shown).
+# Rerolls until primary stat >= stat_roll_primary, CON >= stat_roll_secondary
+# and guard >= 10, or until stat_rolls attempts are spent. Last roll wins,
+# same as the web client's reroll button. Raise the targets (and attempts)
+# if you want to hold out for a near-perfect sheet.
+# stat_rolls = 12
+# stat_roll_primary = 16
+# stat_roll_secondary = 12
+
 [[npcs]]
 id = "rica"
 account = "npc_merchant"
