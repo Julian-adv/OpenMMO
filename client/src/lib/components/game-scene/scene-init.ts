@@ -27,7 +27,11 @@ export function initScene(
   scene: THREE.Scene,
   viewportWidth: number,
   viewportHeight: number,
-  options: { skipWaterLayer?: boolean; skipWaterEffects?: boolean } = {}
+  options: {
+    skipWaterLayer?: boolean
+    skipWaterEffects?: boolean
+    waterRtDivisor?: number
+  } = {}
 ): SceneInitResult {
   // Create terrain geometry
   const terrainGeometry = createTerrainGeometry(
@@ -87,13 +91,15 @@ export function initScene(
     renderer,
     scene,
     viewportWidth,
-    viewportHeight
+    viewportHeight,
+    options.waterRtDivisor
   )
   const reflectionManager = new ReflectionRenderManager(
     renderer,
     scene,
     viewportWidth,
-    viewportHeight
+    viewportHeight,
+    options.waterRtDivisor
   )
 
   return {

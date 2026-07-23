@@ -29,7 +29,10 @@
     createWetnessSystem,
     type WetnessResult,
   } from '../../shaders/wetness-compute'
-  import { getAppliedAntialias } from '../../stores/graphicsSettings'
+  import {
+    getAppliedAntialias,
+    getCurrentPreset,
+  } from '../../stores/graphicsSettings'
   import { riverWireframeVisible } from '../../stores/debugStore'
   import { enqueueTileWork } from '../../utils/tileWorkQueue'
 
@@ -70,8 +73,10 @@
   }: Props = $props()
 
   // Per-pixel depth shoreline is off when the canvas is multisampled —
-  // the viewportDepthTexture copy can't source an MSAA depth buffer.
-  const pixelDepth = !getAppliedAntialias()
+  // the viewportDepthTexture copy can't source an MSAA depth buffer — and
+  // on presets that can't afford that copy's per-frame cost.
+  const pixelDepth =
+    getCurrentPreset().waterPixelDepth && !getAppliedAntialias()
 
   const group = new THREE.Group()
   group.name = 'water'
@@ -79,6 +84,12 @@
 
   export function getGroup(): THREE.Group {
     return group
+  }
+
+  /** True when at least one streamed tile actually has water. Gates the
+   *  refraction/reflection passes — inland there is nothing to sample them. */
+  export function hasActiveWater(): boolean {
+    return matMap.size > 0
   }
 
   // ── Per-tile state ──

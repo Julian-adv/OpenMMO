@@ -7,6 +7,7 @@ export interface MultiPassRefractionDeps {
   camera: THREE.OrthographicCamera | undefined
   refractionManager: RefractionRenderManager | null
   refractionEnabled: boolean
+  hasWater: boolean
   waterGroup: THREE.Group | undefined
   terrainMeshes: (THREE.Mesh | undefined)[]
   hiddenGroups: (THREE.Group | undefined)[]
@@ -16,6 +17,7 @@ export interface MultiPassReflectionDeps {
   camera: THREE.OrthographicCamera | undefined
   reflectionManager: ReflectionRenderManager | null
   reflectionEnabled: boolean
+  hasWater: boolean
   waterGroup: THREE.Group | undefined
   terrainGroup: THREE.Group | undefined
   housingGroup: THREE.Group | undefined
@@ -37,11 +39,21 @@ export interface MultiPassRenderer {
 }
 
 const MULTI_PASS_WARMUP_FRAMES = 5
+/** Renders each pass must complete before the no-water gate may skip it, so
+ *  its pipelines are compiled during the loading dialog even when the player
+ *  spawns inland. */
+const MULTI_PASS_WARMUP_RENDERS = 2
 
 export function createMultiPassRenderer(): MultiPassRenderer {
   let ready = false
   let warmupFrames = 0
   let frameCount = 0
+  let refractionRenders = 0
+  let reflectionRenders = 0
+  // `clear()` is itself a render pass, so only issue it on the transition
+  // into the inactive state rather than every frame we stay there.
+  let refractionCleared = false
+  let reflectionCleared = false
 
   // Render refraction/reflection from the first frame so their WebGPU
   // pipelines compile while the loading dialog is still visible. Otherwise
@@ -64,10 +76,15 @@ export function createMultiPassRenderer(): MultiPassRenderer {
   ) {
     const start = performance.now()
 
-    if (deps.refractionManager && deps.refractionEnabled && ready) {
+    const gated =
+      !deps.hasWater && refractionRenders >= MULTI_PASS_WARMUP_RENDERS
+
+    if (deps.refractionManager && deps.refractionEnabled && ready && !gated) {
       // Alternate-frame: render refraction on even frames.
       // First frame (frameCount <= 1) always renders to initialize the texture.
       if (frameCount <= 1 || frameCount % 2 === 0) {
+        refractionRenders++
+        refractionCleared = false
         if (deps.camera) deps.refractionManager.setCamera(deps.camera)
         if (deps.waterGroup)
           deps.refractionManager.setWaterGroup(deps.waterGroup)
@@ -95,8 +112,9 @@ export function createMultiPassRenderer(): MultiPassRenderer {
         }
       }
       // else: skip this frame, keep previous refraction texture
-    } else if (deps.refractionManager) {
+    } else if (deps.refractionManager && !refractionCleared) {
       deps.refractionManager.clear()
+      refractionCleared = true
     }
 
     loopProfiler.record('refractionPass', performance.now() - start)
@@ -108,10 +126,15 @@ export function createMultiPassRenderer(): MultiPassRenderer {
   ) {
     const start = performance.now()
 
-    if (deps.reflectionManager && deps.reflectionEnabled && ready) {
+    const gated =
+      !deps.hasWater && reflectionRenders >= MULTI_PASS_WARMUP_RENDERS
+
+    if (deps.reflectionManager && deps.reflectionEnabled && ready && !gated) {
       // Alternate-frame: render reflection on odd frames.
       // First frame (frameCount <= 1) always renders to initialize the texture.
       if (frameCount <= 1 || frameCount % 2 === 1) {
+        reflectionRenders++
+        reflectionCleared = false
         if (deps.camera) deps.reflectionManager.setCamera(deps.camera)
         deps.reflectionManager.setTerrainGroup(deps.terrainGroup ?? null)
         if (deps.waterGroup)
@@ -130,8 +153,9 @@ export function createMultiPassRenderer(): MultiPassRenderer {
         for (const nt of nametagGroups) nt.visible = true
       }
       // else: skip this frame, keep previous reflection texture
-    } else if (deps.reflectionManager) {
+    } else if (deps.reflectionManager && !reflectionCleared) {
       deps.reflectionManager.clear()
+      reflectionCleared = true
     }
 
     loopProfiler.record('reflectionPass', performance.now() - start)

@@ -56,13 +56,14 @@ export class ReflectionRenderManager {
     renderer: WebGPURenderer,
     scene: THREE.Scene,
     width: number,
-    height: number
+    height: number,
+    private divisor = 2
   ) {
     this.renderer = renderer
     this.scene = scene
     this.target = new RenderTarget(
-      Math.max(1, Math.floor(width / 2)),
-      Math.max(1, Math.floor(height / 2)),
+      Math.max(1, Math.floor(width / divisor)),
+      Math.max(1, Math.floor(height / divisor)),
       {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
@@ -175,8 +176,8 @@ export class ReflectionRenderManager {
 
   resize(width: number, height: number) {
     this.target.setSize(
-      Math.max(1, Math.floor(width / 2)),
-      Math.max(1, Math.floor(height / 2))
+      Math.max(1, Math.floor(width / this.divisor)),
+      Math.max(1, Math.floor(height / this.divisor))
     )
   }
 

@@ -25,6 +25,7 @@ export interface RenderPassesContext {
   refractionEnabled: boolean
   reflectionEnabled: boolean
   waterGroup: THREE.Group | undefined
+  hasWater: boolean
   terrainGroup: THREE.Group | undefined
   terrainMeshes: (THREE.Mesh | undefined)[]
   entityClipGroup: THREE.Group | undefined
@@ -61,6 +62,7 @@ export function runRenderPasses(ctx: RenderPassesContext): void {
         camera: ctx.camera,
         refractionManager: ctx.refractionManager,
         refractionEnabled: ctx.refractionEnabled,
+        hasWater: ctx.hasWater,
         waterGroup: ctx.waterGroup,
         terrainMeshes: ctx.terrainMeshes,
         hiddenGroups: [
@@ -86,6 +88,7 @@ export function runRenderPasses(ctx: RenderPassesContext): void {
         camera: ctx.camera,
         reflectionManager: ctx.reflectionManager,
         reflectionEnabled: ctx.reflectionEnabled,
+        hasWater: ctx.hasWater,
         waterGroup: ctx.waterGroup,
         terrainGroup: ctx.terrainGroup,
         housingGroup: ctx.housingLayerRef?.getGroup(),

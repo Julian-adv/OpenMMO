@@ -681,6 +681,7 @@
         reflectionManager,
         refractionEnabled: $refractionEnabled && !$isUnderground,
         reflectionEnabled: $reflectionEnabled && !$isUnderground,
+        hasWater: waterLayerRef?.hasActiveWater() ?? false,
         waterGroup,
         terrainGroup,
         terrainMeshes,
@@ -886,6 +887,7 @@
       {
         skipWaterLayer: !graphicsPreset.enableWaterLayer,
         skipWaterEffects: !graphicsPreset.enableWaterEffects,
+        waterRtDivisor: graphicsPreset.waterRtDivisor,
       }
     )
     terrainGeometry = sceneRes.terrainGeometry

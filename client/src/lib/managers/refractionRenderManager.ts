@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { RenderTarget, type WebGPURenderer } from 'three/webgpu'
 
 /**
- * Renders the scene (without water) to a half-resolution render target
+ * Renders the scene (without water) to a downscaled render target
  * so the water shader can sample it as a refraction texture.
  */
 export class RefractionRenderManager {
@@ -16,14 +16,14 @@ export class RefractionRenderManager {
     renderer: WebGPURenderer,
     scene: THREE.Scene,
     width: number,
-    height: number
+    height: number,
+    private divisor = 2
   ) {
     this.renderer = renderer
     this.scene = scene
-    // Half-resolution for performance
     this.target = new RenderTarget(
-      Math.max(1, Math.floor(width / 2)),
-      Math.max(1, Math.floor(height / 2)),
+      Math.max(1, Math.floor(width / divisor)),
+      Math.max(1, Math.floor(height / divisor)),
       {
         minFilter: THREE.LinearFilter,
         magFilter: THREE.LinearFilter,
@@ -74,8 +74,8 @@ export class RefractionRenderManager {
 
   resize(width: number, height: number) {
     this.target.setSize(
-      Math.max(1, Math.floor(width / 2)),
-      Math.max(1, Math.floor(height / 2))
+      Math.max(1, Math.floor(width / this.divisor)),
+      Math.max(1, Math.floor(height / this.divisor))
     )
   }
 

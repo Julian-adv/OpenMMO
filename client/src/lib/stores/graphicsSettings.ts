@@ -12,6 +12,11 @@ export interface GraphicsPreset {
   antialias: boolean
   refraction: boolean
   reflection: boolean
+  /** Screen-size divisor for the refraction/reflection render targets. */
+  waterRtDivisor: number
+  /** Allow the per-pixel depth-buffer shoreline. Costs a full-res depth copy
+   *  every frame water is on screen; the heightmap-ramp fallback is free. */
+  waterPixelDepth: boolean
   grassDensity: number
   enableDirectionalShadows: boolean
   enableWaterLayer: boolean
@@ -62,6 +67,8 @@ const FULL_RENDER_SETTINGS = {
   | 'antialias'
   | 'refraction'
   | 'reflection'
+  | 'waterRtDivisor'
+  | 'waterPixelDepth'
   | 'grassDensity'
   | 'grassCastsShadow'
   | 'treeInstanceLimit'
@@ -79,6 +86,8 @@ const PRESETS: Record<QualityLevel, GraphicsPreset> = {
     antialias: true,
     refraction: true,
     reflection: true,
+    waterRtDivisor: 2,
+    waterPixelDepth: true,
     grassDensity: 1.0,
     grassCastsShadow: true,
     treeInstanceLimit: 1024,
@@ -94,6 +103,8 @@ const PRESETS: Record<QualityLevel, GraphicsPreset> = {
     antialias: false,
     refraction: true,
     reflection: true,
+    waterRtDivisor: 2,
+    waterPixelDepth: true,
     grassDensity: 0.7,
     grassCastsShadow: false,
     treeInstanceLimit: 768,
@@ -109,6 +120,8 @@ const PRESETS: Record<QualityLevel, GraphicsPreset> = {
     antialias: false,
     refraction: false,
     reflection: false,
+    waterRtDivisor: 3,
+    waterPixelDepth: false,
     grassDensity: 0.4,
     grassCastsShadow: false,
     treeInstanceLimit: 512,
@@ -167,6 +180,8 @@ function getMobileSafePreset(preset: GraphicsPreset): GraphicsPreset {
     antialias: false,
     refraction: false,
     reflection: false,
+    waterRtDivisor: 3,
+    waterPixelDepth: false,
     grassDensity: 0,
     enableDirectionalShadows: true,
     enableWaterLayer: true,
