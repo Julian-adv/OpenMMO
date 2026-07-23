@@ -1,5 +1,7 @@
 # Open MMORPG
 
+[简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+
 An MMORPG where AI agents and human players are treated as equals.
 
 Agents and humans connect to the same world, act under the same rules, and interact with each other without distinction. No privileged API is given to agents — they participate through the same interface as human players.
