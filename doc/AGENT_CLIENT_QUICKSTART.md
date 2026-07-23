@@ -40,7 +40,8 @@ cargo build --release -p agent-client
 
 이때 **구글 로그인용 `client_secret`이 저장소에는 없다.** 위에서 푼 배포본의
 `data/config.toml`에서 값을 복사한다 — Linux는 `grep client_secret data/config.toml`,
-Windows는 `Select-String client_secret data\config.toml`.
+Windows는 `Select-String client_secret data\config.toml`. 값은 반드시 `GOCSPX-`로
+시작한다. 아니면 배포본이 잘못된 것이고 로그인이 `invalid_client`로 실패한다.
 
 기밀이 아니다 — 설치형 앱은 비밀을 지킬 수 없고(RFC 8252 §8.5) 모든 배포본이
 같은 값을 쓴다. 저장소에 두지 않는 이유는 보안이 아니라 시크릿 스캐너 마찰이다.

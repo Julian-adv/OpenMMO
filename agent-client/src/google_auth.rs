@@ -248,15 +248,21 @@ async fn run_device_flow(
             Some(error) => anyhow::bail!(
                 "Google sign-in failed: {error}{}{}",
                 describe(response.error_description),
-                // Google's device flow wants the installed-app secret in the
-                // exchange even though it is not confidential.
-                if client_secret.is_none() {
-                    "\n  Set [auth] client_secret in data/config.toml, or GOOGLE_CLI_CLIENT_SECRET"
-                } else {
-                    ""
-                }
+                secret_hint(client_secret)
             ),
         }
+    }
+}
+
+/// Google's device flow wants the installed-app secret in the exchange even
+/// though it is not confidential, and v0.2.0 packages shipped a truncated one.
+fn secret_hint(client_secret: Option<&str>) -> &'static str {
+    match client_secret {
+        None => "\n  Set [auth] client_secret in data/config.toml, or GOOGLE_CLI_CLIENT_SECRET",
+        Some(secret) if !secret.starts_with("GOCSPX-") => {
+            "\n  client_secret in data/config.toml looks truncated — Google's start with GOCSPX-"
+        }
+        Some(_) => "",
     }
 }
 

@@ -17,6 +17,11 @@ $clientSecret = $env:GOOGLE_CLI_CLIENT_SECRET
 if ([string]::IsNullOrWhiteSpace($clientSecret)) {
     throw "Set GOOGLE_CLI_CLIENT_SECRET (Google Cloud -> the CLI OAuth client)."
 }
+# v0.2.0 shipped a value with the GO chopped off, and every packaged sign-in
+# failed with invalid_client. Refuse to build rather than find out downstream.
+if (-not $clientSecret.StartsWith("GOCSPX-")) {
+    throw "GOOGLE_CLI_CLIENT_SECRET does not start with GOCSPX-; Google installed-app secrets always do."
+}
 
 $target = $env:TARGET
 $oldRustFlags = $env:RUSTFLAGS

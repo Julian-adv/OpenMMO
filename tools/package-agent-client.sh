@@ -28,6 +28,13 @@ if [[ -z $CLIENT_SECRET ]]; then
     echo "       Without it the packaged client cannot complete Google sign-in." >&2
     exit 1
 fi
+# v0.2.0 shipped a value with the GO chopped off, and every packaged sign-in
+# failed with invalid_client. Refuse to build rather than find out downstream.
+if [[ $CLIENT_SECRET != GOCSPX-* ]]; then
+    echo "error: GOOGLE_CLI_CLIENT_SECRET does not start with GOCSPX-." >&2
+    echo "       Google installed-app secrets always do; this one is mangled." >&2
+    exit 1
+fi
 
 TARGET=${TARGET:-}
 
