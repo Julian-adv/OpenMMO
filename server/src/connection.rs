@@ -24,7 +24,7 @@ use tokio_tungstenite::{
         Message,
     },
 };
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 const FALLBACK_DEFAULT_MAX_HP: u32 = 13;
 
@@ -298,7 +298,7 @@ pub async fn handle_connection(
         return;
     }
 
-    info!("New WebSocket connection established from {client_ip}");
+    debug!("New WebSocket connection established from {client_ip}");
 
     let mut game_receiver = game_state.subscribe();
     let mut state = ConnectionState::new(client_ip);
@@ -384,7 +384,7 @@ pub async fn handle_connection(
                                     }
                                 }
                                 if state.must_close {
-                                    info!("Closing connection: failed protocol handshake");
+                                    debug!("Closing connection: failed protocol handshake");
                                     // Short reason: 123-byte cap. The full
                                     // hint went out as the AuthError above.
                                     let _ = ws_sender
@@ -476,7 +476,10 @@ pub async fn handle_connection(
         }
     }
 
-    info!("Connection handler finished");
+    match &state.character_name {
+        Some(name) => info!("Session ended for {name} ({})", state.client_ip),
+        None => debug!("Connection handler finished"),
+    }
 }
 
 /// Shared tail of both auth paths: load characters, mark the connection
@@ -586,8 +589,9 @@ fn handle_handshake(
         }
         let kind = ClientKind::from_reported(client_kind);
         info!(
-            "Client handshake: kind={} version={client_version}",
-            kind.as_str()
+            "Client handshake: kind={} version={client_version} ip={}",
+            kind.as_str(),
+            state.client_ip
         );
         state.client_kind = Some(kind);
         return Some(vec![]);
