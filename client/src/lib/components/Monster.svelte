@@ -141,7 +141,12 @@
       const newAction = mixer.clipAction(clip)
       if (newAction !== currentAction || forceRestart) {
         const isHitAnimation = monsterState === 'hit'
-        const fadeDuration = isHitAnimation ? 0.03 : 0.2
+        // Slower fade on death so the corpse settles onto the ground smoothly.
+        const fadeDuration = isHitAnimation
+          ? 0.03
+          : monsterState === 'dead'
+            ? 1.0
+            : 0.2
 
         if (currentAction && newAction !== currentAction) {
           currentAction.fadeOut(fadeDuration)
