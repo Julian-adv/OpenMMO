@@ -26,6 +26,23 @@ use crate::ws;
 use crate::LlmType;
 
 const RECONNECT_DELAY: Duration = Duration::from_secs(5);
+/// How many times to reroll character stats before settling.
+const MAX_STAT_ROLLS: u32 = 12;
+
+/// The stat a class leans on, for judging a roll's quality.
+fn primary_stat(
+    class: &onlinerpg_shared::CharacterClass,
+    a: &onlinerpg_shared::CharacterAttributes,
+) -> u8 {
+    use onlinerpg_shared::CharacterClass::*;
+    match class {
+        Ranger | Rogue | Monk => a.dex,
+        Priest | Healer => a.wis,
+        Wizard | Archaeologist => a.int,
+        Tourist => a.cha,
+        _ => a.r#str,
+    }
+}
 
 /// Parsed schedule condition (validated at load time).
 #[derive(Debug, Clone, PartialEq)]
@@ -339,19 +356,40 @@ async fn run_npc_session(
                 label, char_name, class, gender
             );
 
-            // Roll stats
-            ws::send(
-                &mut ws_tx,
-                &ClientMessage::RollCharacterStats {
-                    character_class: class.clone(),
-                    gender,
-                },
-            )
-            .await?;
-            ws::wait_for_msg(&mut ws_rx, &label, "CharacterStatsRolled", |msg| {
-                matches!(msg, ServerMessage::CharacterStatsRolled { .. })
-            })
-            .await?;
+            // Roll stats — reroll until the class's key stat comes up strong,
+            // like a human spamming the reroll button. Last roll wins.
+            for attempt in 1..=MAX_STAT_ROLLS {
+                ws::send(
+                    &mut ws_tx,
+                    &ClientMessage::RollCharacterStats {
+                        character_class: class.clone(),
+                        gender,
+                    },
+                )
+                .await?;
+                let rolled = ws::wait_for_msg(&mut ws_rx, &label, "CharacterStatsRolled", |msg| {
+                    matches!(msg, ServerMessage::CharacterStatsRolled { .. })
+                })
+                .await?;
+                let ServerMessage::CharacterStatsRolled { attributes, max_hp } = rolled else {
+                    continue;
+                };
+                let good = primary_stat(&class, &attributes) >= 16 && attributes.guard >= 10;
+                info!(
+                    "[{label}] Stat roll {attempt}: STR {} DEX {} CON {} INT {} WIS {} CHA {} guard {} HP {}",
+                    attributes.r#str,
+                    attributes.dex,
+                    attributes.con,
+                    attributes.int,
+                    attributes.wis,
+                    attributes.cha,
+                    attributes.guard,
+                    max_hp
+                );
+                if good {
+                    break;
+                }
+            }
 
             // Create character
             ws::send(

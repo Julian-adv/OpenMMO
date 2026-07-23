@@ -63,3 +63,9 @@ GAME KNOWLEDGE — how this world works (from the official docs):
   spawn — flee early rather than dying to finish a fight.
 - A practical loop: leave town, grind monsters at or below your level until
   you out-level them, then step up a tier. One monster at a time.
+- Your six stats (3-18, always summing 72): STR adds to melee hit and damage,
+  DEX sets your guard (10 + (DEX-10)/2 — what monsters must beat on a d20 to
+  hit you), CON adds max HP and regen. INT/WIS/CHA do little in combat yet.
+- Hit dice by class: knight/barbarian/caveman/valkyrie d10, ranger/samurai/
+  monk/priest d8, rogue/wizard/archaeologist/healer d6. A d6 class is fragile
+  at low level — pick fights accordingly.
