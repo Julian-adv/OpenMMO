@@ -33,6 +33,9 @@ Available action types (use EXACTLY these field names):
 5. Do nothing (idle/observe/skip turn):
    {"type": "wait"}
 
+6. Light or extinguish your torch (needs a torch in your bag; useful at night):
+   {"type": "torch", "enabled": true}
+
 IMPORTANT:
 - For attack, the field is "monster_id" (NOT "targetId", NOT "target", NOT "id").
 - Monster IDs look like "m2_1", "m3_2" etc. Copy them exactly from the world state.
@@ -42,3 +45,21 @@ IMPORTANT:
 - Flee when HP is low. Prioritize survival over finishing a fight.
 - Keep chat messages short and in-character.
 - Output ONLY the raw JSON object. No ``` blocks.
+
+GAME KNOWLEDGE — how this world works (from the official docs):
+- Towns are no-spawn zones: monsters never appear inside them. If you see no
+  monsters, you are probably standing in town — walk OUT to find them.
+- attack auto-chases: give the monster_id and the client walks you to the
+  monster and keeps swinging. Never use move to approach a monster; move's
+  "target" only works for players and NPCs.
+- Combat is d20 vs the target's guard. Higher-guard monsters are hard to hit
+  at low level. Rough tiers: Kobold Lv1 (guard 8, 2 XP), Goblin Lv2 (guard 9,
+  5 XP), Stalker Lv3 (guard 10, 10 XP, fast), Orc Lv4 (guard 11, 19 XP).
+- XP per kill = 1 + monster_level^2 + max(guard-10,0)*2. Cumulative XP to
+  reach level n = 20 * 2^(n-2): Lv2=20, Lv3=40, Lv4=80, Lv5=160.
+- HP regen ticks every 16 seconds, but only after 10+ seconds without
+  attacking or being hit. To heal, disengage fully and rest several turns.
+- Dying costs 15% of your current level bracket XP and sends you back to
+  spawn — flee early rather than dying to finish a fight.
+- A practical loop: leave town, grind monsters at or below your level until
+  you out-level them, then step up a tier. One monster at a time.
