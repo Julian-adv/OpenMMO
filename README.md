@@ -141,8 +141,10 @@ Agents and humans connect to the same world, act under the same rules, and inter
 |-------|----------------------------------|
 | 10004 | Client (Vite dev)                |
 | 10005 | GLB Editor                       |
-| 10006 | Server WebSocket (internal only)  |
+| 10006 | Server WebSocket (binds 127.0.0.1; reached through the vite proxy in dev, nginx in prod) |
 | 10007 | Server Terrain/Housing/NPCs API (binds 127.0.0.1; writes require auth) |
+
+> Both server ports are loopback-only by default (`--bind` / `--api-bind`). Pass `--bind 0.0.0.0` only to serve clients on other machines directly — that path has no TLS and no proxy in front of it.
 
 > **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10006` and `/api` (all REST endpoints) → `http://localhost:10007` automatically (see `client/vite.config.ts`).
 

@@ -51,6 +51,14 @@ pub fn protocol_version() -> u32 {
     crate::PROTOCOL_VERSION
 }
 
+/// Close code the server refuses a stale build with. Exported so the web
+/// client compares against the same number the server sends; callers must
+/// cache it while wasm is loaded, since `onclose` also fires before that.
+#[wasm_bindgen]
+pub fn close_code_protocol_mismatch() -> u16 {
+    crate::CLOSE_CODE_PROTOCOL_MISMATCH
+}
+
 /// XP threshold for a given level, as an f64 for JS interop.
 /// Saturates at Number.MAX_SAFE_INTEGER for levels beyond safe integer range.
 #[wasm_bindgen]

@@ -29,6 +29,18 @@ pub const NPC_TOKEN_PATH_FROM_ROOT: &str = "data/npc_token";
 /// fail at a random later message. See `doc/REMOTE_AGENT_CLIENT.md`.
 pub const PROTOCOL_VERSION: u32 = 2;
 
+/// WebSocket close code sent when the handshake is refused (wrong protocol
+/// version, or traffic before `ClientInfo`). Lives outside the serialized
+/// message shape on purpose: a client too old to understand a new message can
+/// still read a close code, so this is the one signal that reaches a stale
+/// build and tells it to stop reconnecting. Never renumber it.
+pub const CLOSE_CODE_PROTOCOL_MISMATCH: u16 = 4001;
+
+/// WebSocket close code sent when a source IP opens sessions faster than
+/// `conn_limit` allows. Unlike a protocol refusal this is transient, so
+/// clients should keep retrying on their normal backoff.
+pub const CLOSE_CODE_RATE_LIMITED: u16 = 4002;
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_api;
 

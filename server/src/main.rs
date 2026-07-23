@@ -2,6 +2,7 @@ mod announcements;
 mod api_auth;
 mod auth;
 mod celestial;
+mod conn_limit;
 mod connection;
 mod dungeon_defs;
 mod game;
@@ -21,7 +22,8 @@ mod world_drop_defs;
 use announcements::{announcements_router, AnnouncementStore};
 use auth::AuthService;
 use clap::Parser;
-use connection::{handle_connection, AuthContext};
+use conn_limit::ConnectLimiter;
+use connection::{handle_connection, AuthContext, ServerContext};
 use futures_util::FutureExt;
 use game_state::GameState;
 use google_auth::GoogleAuthVerifier;
@@ -152,6 +154,11 @@ struct Args {
     /// Port for terrain REST API (default: game port + 1)
     #[arg(long)]
     terrain_port: Option<u16>,
+
+    /// Bind address for the game WebSocket port. Loopback by default;
+    /// 0.0.0.0 exposes the port with no TLS and no proxy in front.
+    #[arg(long, default_value = "127.0.0.1")]
+    bind: String,
 
     /// Bind address for the REST API. Loopback by default: the vite proxy
     /// and local bots are the only intended callers.
@@ -404,7 +411,7 @@ async fn main() {
         },
     ));
 
-    let addr = format!("0.0.0.0:{}", args.port);
+    let addr = format!("{}:{}", args.bind, args.port);
     let listener = match TcpListener::bind(addr.as_str()).await {
         Ok(listener) => {
             info!("MMORPG Server listening on: {}", addr);
@@ -457,6 +464,12 @@ async fn main() {
     info!("🌐 Connect clients to: ws://{}", addr);
 
     let mut connections = JoinSet::new();
+    let conn_ctx = Arc::new(ServerContext {
+        game_state: Arc::clone(&game_state),
+        auth_service: Arc::clone(&auth_service),
+        auth_ctx: Arc::clone(&auth_ctx),
+        connect_limiter: ConnectLimiter::default(),
+    });
     let signal = shutdown_signal();
     tokio::pin!(signal);
 
@@ -472,23 +485,17 @@ async fn main() {
             }
             result = listener.accept() => match result {
                 Ok((stream, addr)) => {
-                    info!("New connection from: {}", addr);
-                    let game_state_clone = Arc::clone(&game_state);
-                    let auth_service_clone = Arc::clone(&auth_service);
-                    let auth_ctx_clone = Arc::clone(&auth_ctx);
+                    // Only bites with --bind 0.0.0.0; loopback peers are
+                    // charged after the upgrade reveals their real address.
+                    if !conn_ctx.connect_limiter.allow(addr.ip()) {
+                        continue;
+                    }
+                    let ctx = Arc::clone(&conn_ctx);
                     let shutdown_started = drain_shutdown.clone();
                     let shutdown = connection_shutdown.clone();
 
                     connections.spawn(async move {
-                        handle_connection(
-                            stream,
-                            game_state_clone,
-                            auth_service_clone,
-                            auth_ctx_clone,
-                            shutdown_started,
-                            shutdown,
-                        )
-                        .await;
+                        handle_connection(stream, addr, ctx, shutdown_started, shutdown).await;
                     });
                 }
                 Err(e) => error!("Failed to accept connection: {}", e),

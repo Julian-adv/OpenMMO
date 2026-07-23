@@ -25,8 +25,6 @@ use crate::state::{SharedState, WorldCache};
 use crate::ws;
 use crate::LlmType;
 
-const RECONNECT_DELAY: Duration = Duration::from_secs(5);
-
 /// Parsed schedule condition (validated at load time).
 #[derive(Debug, Clone, PartialEq)]
 pub enum ScheduleCondition {
@@ -241,14 +239,14 @@ pub async fn run_orchestrator(
 /// Reconnect loop for a single NPC.
 async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResources) {
     let label = npc.label();
+    let mut attempt = 0u32;
     loop {
         match run_npc_session(server_url, npc, shared).await {
             Ok(()) => {
-                info!(
-                    "[{}] Session ended cleanly. Reconnecting in {}s...",
-                    label,
-                    RECONNECT_DELAY.as_secs()
-                );
+                // A session that ran to completion proves the server healthy,
+                // so the next retry starts over at the base delay.
+                attempt = 0;
+                info!("[{label}] Session ended cleanly.");
             }
             Err(e) => {
                 // A refused login stays refused: reconnecting would just spin
@@ -257,14 +255,13 @@ async fn run_npc_loop(server_url: &str, npc: &NpcConfig, shared: &SharedResource
                     error!("[{label}] {rejection} — giving up");
                     return;
                 }
-                warn!(
-                    "[{}] Session failed: {e}. Reconnecting in {}s...",
-                    label,
-                    RECONNECT_DELAY.as_secs()
-                );
+                warn!("[{label}] Session failed: {e}");
             }
         }
-        tokio::time::sleep(RECONNECT_DELAY).await;
+        let delay = ws::retry_delay(attempt);
+        attempt = attempt.saturating_add(1);
+        info!("[{label}] Reconnecting in {:.1}s...", delay.as_secs_f32());
+        tokio::time::sleep(delay).await;
     }
 }
 
@@ -285,7 +282,12 @@ async fn run_npc_session(
         .auth
         .authenticate_message(npc.account.as_deref())
         .await?;
-    ws::send(&mut ws_tx, &auth).await?;
+
+    // Not fatal on its own: a refused handshake may already have closed us,
+    // and then the reason is waiting on the read side for `wait_for_auth`.
+    if let Err(e) = ws::send(&mut ws_tx, &auth).await {
+        warn!("[{label}] Auth send failed ({e}); reading the server's reason");
+    }
 
     let mut characters = ws::wait_for_auth(&mut ws_rx, label).await?;
 

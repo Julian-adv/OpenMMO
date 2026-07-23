@@ -16,6 +16,7 @@ import initWasm, {
   serialize_client_message,
   deserialize_server_message,
   protocol_version,
+  close_code_protocol_mismatch,
 } from '../wasm/onlinerpg_shared'
 import { createEvent } from './networkEvents'
 import { handleServerMessage } from './messageHandlers'
@@ -46,16 +47,32 @@ function serializeClientMessage(msg: ClientMessage): Uint8Array<ArrayBuffer> {
   return serialize_client_message(msg) as Uint8Array<ArrayBuffer>
 }
 
+/// Reconnect pacing: exponential with full jitter under a hard ceiling, so a
+/// server restart doesn't bring every client back as one synchronized wave.
+const RECONNECT_BASE_DELAY_MS = 1000
+const RECONNECT_MAX_DELAY_MS = 30_000
+const MAX_RECONNECT_ATTEMPTS = 10
+
+/// Cached from wasm once it loads. `onclose` also fires before that (a failed
+/// TCP connect closes with 1006), so it stays null until then — and a refusal
+/// can only reach a client that already sent a wasm-serialized message.
+let protocolMismatchCloseCode: number | null = null
+
 class NetworkManager {
   private socket: WebSocket | null = null
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private lastServerUrl: string = ''
   private lastCharacterId: number | null = null
   private wasmReady = false
   /// Reset per socket: the handshake is per connection, not per session.
   private handshakeSent = false
+  /// Server refused this build at the handshake. Reconnecting cannot fix a
+  /// stale bundle, so every path stops trying until the page is reloaded.
+  private refusedPermanently = false
+  /// Reset per socket, like `handshakeSent`: the reason belongs to the
+  /// connection that was refused, not to the session.
+  private lastAuthErrorMessage: string | null = null
 
   // Events
   readonly respawnRequested = createEvent<() => void>()
@@ -76,6 +93,17 @@ class NetworkManager {
   readonly interactionRejected = createEvent<(reason: string) => void>()
   readonly positionCorrected = createEvent<(c: PositionCorrection) => void>()
 
+  constructor() {
+    // Only a fully authenticated connection clears the counter; a socket that
+    // merely opened proves nothing, since refusals arrive after the open.
+    this.authSuccess.on(() => {
+      this.reconnectAttempts = 0
+    })
+    this.authError.on((message) => {
+      this.lastAuthErrorMessage = message
+    })
+  }
+
   private get messageEvents() {
     return {
       authSuccess: this.authSuccess,
@@ -95,11 +123,17 @@ class NetworkManager {
   async ensureWasm() {
     if (!this.wasmReady) {
       await initWasm()
+      protocolMismatchCloseCode = close_code_protocol_mismatch()
       this.wasmReady = true
     }
   }
 
   connect(serverUrl?: string) {
+    if (this.refusedPermanently) {
+      console.warn('Not connecting: the server refused this client build')
+      return
+    }
+
     if (serverUrl) {
       this.lastServerUrl = serverUrl
     } else if (!this.lastServerUrl) {
@@ -120,6 +154,7 @@ class NetworkManager {
 
     console.log('Attempting to connect to:', targetUrl)
     this.handshakeSent = false
+    this.lastAuthErrorMessage = null
     this.socket = new WebSocket(targetUrl)
     this.socket.binaryType = 'arraybuffer'
 
@@ -134,7 +169,6 @@ class NetworkManager {
       gameStore.update((state) => ({ ...state, isConnected: true }))
       serverNotice.set(null)
       clearServerGameTime()
-      this.reconnectAttempts = 0
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer)
         this.reconnectTimer = null
@@ -144,6 +178,21 @@ class NetworkManager {
     this.socket.onclose = (event) => {
       console.log('Disconnected from server', event.code, event.reason)
       gameStore.update((state) => ({ ...state, isConnected: false }))
+
+      // The refusal's own AuthError carries the full "how to fix it" hint;
+      // the close frame only has room for a short reason.
+      if (event.code === protocolMismatchCloseCode) {
+        this.refusedPermanently = true
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer)
+          this.reconnectTimer = null
+        }
+        serverNotice.set(
+          this.lastAuthErrorMessage ??
+            'This client is out of date. Please reload the page.'
+        )
+        return
+      }
 
       if (event.code !== 1000) {
         this.handleReconnect()
@@ -176,52 +225,65 @@ class NetworkManager {
     }
   }
 
+  /// Full jitter: half the capped delay plus a random half, so clients that
+  /// dropped together don't come back together.
+  private reconnectDelay(): number {
+    const capped = Math.min(
+      RECONNECT_MAX_DELAY_MS,
+      RECONNECT_BASE_DELAY_MS * 2 ** (this.reconnectAttempts - 1)
+    )
+    return Math.round(capped / 2 + Math.random() * (capped / 2))
+  }
+
   private handleReconnect() {
-    if (
-      this.reconnectAttempts < this.maxReconnectAttempts &&
-      !this.reconnectTimer
-    ) {
-      this.reconnectAttempts++
-      console.log(
-        `Reconnection attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts}`
-      )
-      this.reconnectTimer = setTimeout(async () => {
-        this.reconnectTimer = null
-        monsterManager.reset()
-        remotePlayerManager.reset()
-        this.connect()
-        const googleIdToken = getApiAuthToken()
-        if (googleIdToken && this.lastCharacterId) {
-          const opened = await this.waitForSocketOpen(5000)
-          if (opened) {
-            this.authenticateWithGoogle(googleIdToken)
-            let unsubSuccess = () => {}
-            let unsubError = () => {}
-            const cleanup = () => {
-              unsubSuccess()
-              unsubError()
-            }
-            unsubSuccess = this.authSuccess.on(() => {
-              cleanup()
-              if (this.lastCharacterId) {
-                this.sendAndSerialize({
-                  EnterGame: { character_id: this.lastCharacterId },
-                })
-              }
-            })
-            // A cached Google ID token expires ~1h after login, so a reconnect
-            // past that point fails re-auth. Surface it instead of leaving the
-            // player silently stuck on an authenticated-but-empty socket.
-            unsubError = this.authError.on((message) => {
-              cleanup()
-              console.warn('Reconnect auth failed:', message)
-              this.disconnect()
-              this.kicked.emit('Your session expired. Please sign in again.')
-            })
-          }
-        }
-      }, 2000 * this.reconnectAttempts)
+    if (this.refusedPermanently || this.reconnectTimer) return
+
+    if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+      serverNotice.set('Lost connection to the server. Please reload the page.')
+      return
     }
+
+    this.reconnectAttempts++
+    const delay = this.reconnectDelay()
+    console.log(
+      `Reconnection attempt ${this.reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} in ${delay}ms`
+    )
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null
+      monsterManager.reset()
+      remotePlayerManager.reset()
+      this.connect()
+      const googleIdToken = getApiAuthToken()
+      if (googleIdToken && this.lastCharacterId) {
+        const opened = await this.waitForSocketOpen(5000)
+        if (opened) {
+          this.authenticateWithGoogle(googleIdToken)
+          let unsubSuccess = () => {}
+          let unsubError = () => {}
+          const cleanup = () => {
+            unsubSuccess()
+            unsubError()
+          }
+          unsubSuccess = this.authSuccess.on(() => {
+            cleanup()
+            if (this.lastCharacterId) {
+              this.sendAndSerialize({
+                EnterGame: { character_id: this.lastCharacterId },
+              })
+            }
+          })
+          // A cached Google ID token expires ~1h after login, so a reconnect
+          // past that point fails re-auth. Surface it instead of leaving the
+          // player silently stuck on an authenticated-but-empty socket.
+          unsubError = this.authError.on((message) => {
+            cleanup()
+            console.warn('Reconnect auth failed:', message)
+            this.disconnect()
+            this.kicked.emit('Your session expired. Please sign in again.')
+          })
+        }
+      }
+    }, delay)
   }
 
   private sendMessage(msg: ClientMessage) {
@@ -809,6 +871,9 @@ class NetworkManager {
 
   private resetAllState() {
     this.disconnect()
+    // Both callers are user-initiated, so the backoff earned by the previous
+    // socket shouldn't be held against the new one.
+    this.reconnectAttempts = 0
     resetGameStore()
     monsterManager.reset()
     remotePlayerManager.reset()

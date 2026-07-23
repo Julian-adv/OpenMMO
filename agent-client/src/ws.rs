@@ -19,11 +19,24 @@ pub type WsRx = futures_util::stream::SplitStream<
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
 >;
 
+const RETRY_BASE_DELAY: Duration = Duration::from_secs(3);
+const RETRY_MAX_DELAY: Duration = Duration::from_secs(60);
+
+/// Exponential backoff with full jitter, so a fleet of agent-clients riding
+/// out a server restart doesn't come back as one synchronized wave. Shared by
+/// both retry loops: the inner connect loop here and `run_npc_loop`'s outer
+/// session loop, which retries for the same reason one layer up.
+pub fn retry_delay(attempt: u32) -> Duration {
+    let capped = RETRY_MAX_DELAY.min(RETRY_BASE_DELAY * (1 << attempt.min(5)));
+    capped / 2 + capped.mul_f32(rand::random::<f32>() / 2.0)
+}
+
 /// Connect to WebSocket with retry loop. `label` is used for log context.
 pub async fn connect_ws(
     url: &str,
     label: &str,
 ) -> tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>> {
+    let mut attempt = 0u32;
     loop {
         info!("[{label}] Connecting to {url}");
         match tokio_tungstenite::connect_async(url).await {
@@ -32,8 +45,13 @@ pub async fn connect_ws(
                 return stream;
             }
             Err(e) => {
-                warn!("[{label}] Connection failed: {e} -- retrying in 3s...");
-                tokio::time::sleep(Duration::from_secs(3)).await;
+                let delay = retry_delay(attempt);
+                attempt = attempt.saturating_add(1);
+                warn!(
+                    "[{label}] Connection failed: {e} -- retrying in {:.1}s...",
+                    delay.as_secs_f32()
+                );
+                tokio::time::sleep(delay).await;
             }
         }
     }
@@ -133,6 +151,17 @@ pub async fn recv(rx: &mut WsRx) -> anyhow::Result<ServerMessage> {
                 return Ok(deserialize_server_msg(&bytes)?);
             }
             Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => continue,
+            // A refusal can outrun its own AuthError; then the close code is
+            // the only reason left, and this build must not retry it forever.
+            Some(Ok(Message::Close(Some(f))))
+                if u16::from(f.code) == onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH =>
+            {
+                return Err(AuthRejected(format!(
+                    "Server refused this build: {} — update agent-client",
+                    f.reason
+                ))
+                .into())
+            }
             Some(Ok(Message::Close(_))) => anyhow::bail!("Server closed connection"),
             Some(Ok(other)) => {
                 warn!("Unexpected WS frame: {other:?}");

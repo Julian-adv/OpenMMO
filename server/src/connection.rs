@@ -1,4 +1,5 @@
 use crate::auth::AuthService;
+use crate::conn_limit::{resolve_client_ip, ConnectLimiter};
 use crate::game::character_attributes::roll_character_attributes;
 use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
 use crate::game_state::{parse_notice_command, GameState};
@@ -10,12 +11,18 @@ use crate::types::{
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use onlinerpg_shared::{deserialize_client_msg, serialize_server_msg};
-use std::sync::Arc;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, watch};
 use tokio_tungstenite::{
-    accept_async_with_config,
-    tungstenite::{protocol::WebSocketConfig, Message},
+    accept_hdr_async_with_config,
+    tungstenite::{
+        handshake::server::{ErrorResponse, Request, Response},
+        protocol::{frame::coding::CloseCode, CloseFrame, WebSocketConfig},
+        Message,
+    },
 };
 use tracing::{error, info, warn};
 
@@ -72,7 +79,63 @@ const WS_READ_BUFFER_BYTES: usize = 16 * 1024;
 const UNAUTH_MAX_MESSAGE_BYTES: usize = 8 * 1024;
 const UNAUTH_MAX_MESSAGES: u32 = 30;
 
+/// A refused client retries, so one stale build can bury the log in identical
+/// lines. Log the first of each window in full and fold the rest into its tail.
+const REFUSAL_LOG_WINDOW: Duration = Duration::from_secs(60);
+
+struct LogWindow {
+    started: Instant,
+    suppressed: u32,
+}
+
+/// One throttle per reason, so a flood of one kind can't hide the first
+/// occurrence of another.
+struct LogThrottle(Mutex<Option<LogWindow>>);
+
+impl LogThrottle {
+    const fn new() -> Self {
+        Self(Mutex::new(None))
+    }
+
+    /// `Some(suffix)` when this event should be logged — the suffix names how
+    /// many were folded in since the last line. `None` while a window is open.
+    fn claim(&self) -> Option<String> {
+        let now = Instant::now();
+        let mut guard = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        match &mut *guard {
+            Some(window) if now.duration_since(window.started) < REFUSAL_LOG_WINDOW => {
+                window.suppressed += 1;
+                None
+            }
+            slot => {
+                let suppressed = slot.as_ref().map_or(0, |w| w.suppressed);
+                *slot = Some(LogWindow {
+                    started: now,
+                    suppressed: 0,
+                });
+                Some(match suppressed {
+                    0 => String::new(),
+                    n => format!(" [+{n} more in the last {}s]", REFUSAL_LOG_WINDOW.as_secs()),
+                })
+            }
+        }
+    }
+}
+
+static PROTOCOL_REFUSAL_LOG: LogThrottle = LogThrottle::new();
+static EARLY_MESSAGE_LOG: LogThrottle = LogThrottle::new();
+static RATE_LIMIT_LOG: LogThrottle = LogThrottle::new();
+
+fn close_frame(code: u16, reason: &'static str) -> Message {
+    Message::Close(Some(CloseFrame {
+        code: CloseCode::Library(code),
+        reason: reason.into(),
+    }))
+}
+
 struct ConnectionState {
+    /// Address the client is held accountable for; see `resolve_client_ip`.
+    client_ip: IpAddr,
     /// Client program reported in `ClientInfo`. `None` until the handshake
     /// arrives, which is what gates every other message.
     client_kind: Option<ClientKind>,
@@ -96,8 +159,9 @@ struct ConnectionState {
 }
 
 impl ConnectionState {
-    fn new() -> Self {
+    fn new(client_ip: IpAddr) -> Self {
         Self {
+            client_ip,
             client_kind: None,
             must_close: false,
             account_name: None,
@@ -153,39 +217,91 @@ impl ConnectionState {
     }
 }
 
+/// Per-server services every connection needs, bundled so the accept loop
+/// clones one `Arc` per connection instead of four.
+pub struct ServerContext {
+    pub game_state: Arc<GameState>,
+    pub auth_service: Arc<AuthService>,
+    pub auth_ctx: Arc<AuthContext>,
+    pub connect_limiter: ConnectLimiter,
+}
+
+// `ErrorResponse` is a large http::Response; the shape is tungstenite's
+// handshake-callback signature, not ours.
+#[allow(clippy::result_large_err)]
 pub async fn handle_connection(
     stream: TcpStream,
-    game_state: Arc<GameState>,
-    auth_service: Arc<AuthService>,
-    auth_ctx: Arc<AuthContext>,
+    peer: SocketAddr,
+    ctx: Arc<ServerContext>,
     shutdown_started: watch::Receiver<()>,
     mut shutdown: watch::Receiver<()>,
 ) {
+    let ServerContext {
+        game_state,
+        auth_service,
+        auth_ctx,
+        connect_limiter,
+    } = &*ctx;
     let ws_config = WebSocketConfig::default()
         .max_message_size(Some(MAX_WS_MESSAGE_BYTES))
         .max_frame_size(Some(MAX_WS_MESSAGE_BYTES))
         .read_buffer_size(WS_READ_BUFFER_BYTES);
+
+    // `X-Real-IP` rides the upgrade request and is gone once the handshake
+    // future resolves, so catch it in the callback.
+    let forwarded_ip: OnceLock<IpAddr> = OnceLock::new();
+    let on_request = |req: &Request, res: Response| -> Result<Response, ErrorResponse> {
+        if let Some(ip) = req
+            .headers()
+            .get("x-real-ip")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse::<IpAddr>().ok())
+        {
+            let _ = forwarded_ip.set(ip);
+        }
+        Ok(res)
+    };
+
     let handshake = tokio::select! {
         biased;
         _ = shutdown.changed() => {
             info!("Closing pending connection for server shutdown");
             return;
         }
-        result = accept_async_with_config(stream, Some(ws_config)) => result,
+        result = accept_hdr_async_with_config(stream, on_request, Some(ws_config)) => result,
     };
     let ws_stream = match handshake {
         Ok(ws) => ws,
         Err(e) => {
-            error!("WebSocket handshake failed: {}", e);
+            error!("WebSocket handshake failed from {}: {}", peer.ip(), e);
             return;
         }
     };
 
-    info!("New WebSocket connection established");
+    let client_ip = resolve_client_ip(peer, forwarded_ip.get().copied());
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
+
+    // Charged here rather than at accept: behind nginx the peer address is
+    // useless, and this is the first point where the real one is known.
+    // Connections that skipped nginx were already charged in the accept loop.
+    if peer.ip().is_loopback() && !connect_limiter.allow(client_ip) {
+        if let Some(tail) = RATE_LIMIT_LOG.claim() {
+            warn!("Rate-limiting client {client_ip}: too many connections{tail}");
+        }
+        let _ = ws_sender
+            .send(close_frame(
+                onlinerpg_shared::CLOSE_CODE_RATE_LIMITED,
+                "too many connections",
+            ))
+            .await;
+        return;
+    }
+
+    info!("New WebSocket connection established from {client_ip}");
+
     let mut game_receiver = game_state.subscribe();
-    let mut state = ConnectionState::new();
+    let mut state = ConnectionState::new(client_ip);
 
     let mut heartbeat_check = tokio::time::interval(std::time::Duration::from_secs(10));
     let mut unauth_message_count: u32 = 0;
@@ -245,9 +361,9 @@ pub async fn handle_connection(
                     Some(Ok(Message::Binary(bytes))) => {
                         match handle_client_message(
                             &bytes,
-                            &game_state,
-                            &auth_service,
-                            &auth_ctx,
+                            game_state,
+                            auth_service,
+                            auth_ctx,
                             &mut state,
                         )
                         .await
@@ -269,6 +385,14 @@ pub async fn handle_connection(
                                 }
                                 if state.must_close {
                                     info!("Closing connection: failed protocol handshake");
+                                    // Short reason: 123-byte cap. The full
+                                    // hint went out as the AuthError above.
+                                    let _ = ws_sender
+                                        .send(close_frame(
+                                            onlinerpg_shared::CLOSE_CODE_PROTOCOL_MISMATCH,
+                                            "protocol mismatch",
+                                        ))
+                                        .await;
                                     break;
                                 }
                             }
@@ -344,9 +468,7 @@ pub async fn handle_connection(
     // no-op for that player id.
     if !shutdown_started.has_changed().unwrap_or(true) {
         if let Some(ref id) = state.player_id {
-            game_state
-                .persist_and_detach_player(id, &auth_service)
-                .await;
+            game_state.persist_and_detach_player(id, auth_service).await;
 
             game_state.unregister_direct_channel(id).await;
             game_state.unregister_player_character(id).await;
@@ -445,11 +567,14 @@ fn handle_handshake(
             return Some(vec![]);
         }
         if *protocol_version != onlinerpg_shared::PROTOCOL_VERSION {
-            warn!(
-                "Refusing client: protocol v{} (server speaks v{})",
-                protocol_version,
-                onlinerpg_shared::PROTOCOL_VERSION
-            );
+            if let Some(tail) = PROTOCOL_REFUSAL_LOG.claim() {
+                warn!(
+                    "Refusing client: protocol v{} (server speaks v{}) ip={} kind={client_kind} version={client_version}{tail}",
+                    protocol_version,
+                    onlinerpg_shared::PROTOCOL_VERSION,
+                    state.client_ip,
+                );
+            }
             state.must_close = true;
             return Some(vec![ServerMessage::AuthError {
                 message: format!(
@@ -469,7 +594,10 @@ fn handle_handshake(
     }
 
     if state.client_kind.is_none() {
-        warn!("Refusing client: message arrived before ClientInfo");
+        if let Some(tail) = EARLY_MESSAGE_LOG.claim() {
+            let ip = state.client_ip;
+            warn!("Refusing client {ip}: message arrived before ClientInfo{tail}");
+        }
         state.must_close = true;
         return Some(vec![ServerMessage::AuthError {
             message: format!("Send ClientInfo first — {CLIENT_UPDATE_HINT}"),
@@ -1302,6 +1430,7 @@ fn default_character_max_hp(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::net::Ipv4Addr;
 
     #[test]
     fn token_matches_requires_exact_token() {
@@ -1309,6 +1438,15 @@ mod tests {
         assert!(!token_matches("secret-token", "secret-tokeN"));
         assert!(!token_matches("secret", "secret-token"));
         assert!(!token_matches("", "secret-token"));
+    }
+
+    #[test]
+    fn refusal_logging_folds_repeats_into_one_line() {
+        let throttle = LogThrottle::new();
+        assert_eq!(throttle.claim(), Some(String::new()));
+        for _ in 0..5 {
+            assert_eq!(throttle.claim(), None);
+        }
     }
 
     fn client_info(protocol_version: u32, kind: &str) -> ClientMessage {
@@ -1328,7 +1466,7 @@ mod tests {
 
     #[test]
     fn handshake_accepts_matching_protocol_version() {
-        let mut state = ConnectionState::new();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
         let responses = handle_handshake(
             &client_info(onlinerpg_shared::PROTOCOL_VERSION, "cli"),
             &mut state,
@@ -1347,7 +1485,7 @@ mod tests {
             onlinerpg_shared::PROTOCOL_VERSION - 1,
             onlinerpg_shared::PROTOCOL_VERSION + 1,
         ] {
-            let mut state = ConnectionState::new();
+            let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
             let responses = handle_handshake(&client_info(version, "cli"), &mut state);
 
             assert!(is_auth_error(&responses), "v{version} should be refused");
@@ -1358,7 +1496,7 @@ mod tests {
 
     #[test]
     fn handshake_refuses_messages_sent_before_client_info() {
-        let mut state = ConnectionState::new();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
         let responses = handle_handshake(
             &ClientMessage::AuthenticateNpc {
                 account_name: "npc_x".into(),
@@ -1373,7 +1511,7 @@ mod tests {
 
     #[test]
     fn handshake_buckets_unknown_client_kinds() {
-        let mut state = ConnectionState::new();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
         handle_handshake(
             &client_info(onlinerpg_shared::PROTOCOL_VERSION, "totally-made-up"),
             &mut state,
@@ -1384,7 +1522,7 @@ mod tests {
 
     #[test]
     fn operator_only_classes_are_refused_for_players() {
-        let mut state = ConnectionState::new();
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
         assert!(state
             .require_selectable_class(&CharacterClass::Merchant)
             .is_err());
