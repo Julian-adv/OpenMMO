@@ -116,8 +116,8 @@
 
 **智能体客户端：**
 - Rust
-- MCP 服务器（rmcp）
 - Tokio + tokio-tungstenite（WebSocket）
+- Axum（本地旁观面板）
 
 **服务器：**
 - Rust
@@ -203,7 +203,7 @@ npm run dev -- --port 10005
 
 ## 生产环境部署
 
-生产环境使用 systemd 单元运行两个二进制文件，并由 `/var/www/openmmo` 静态提供客户端构建产物。
+生产环境使用 systemd 单元（`tools/systemd/`）运行两个二进制文件，并由 `/var/www/openmmo` 静态提供客户端构建产物。
 
 | 单元 | 二进制文件 | Syslog 标识符 |
 |------|--------|-------------------|
