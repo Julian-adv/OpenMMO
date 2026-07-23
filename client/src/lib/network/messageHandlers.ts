@@ -390,6 +390,19 @@ export function handleServerMessage(
       break
     }
 
+    case 'WhisperMessage': {
+      // The sender gets the same message echoed back; direction decides the
+      // label. No chat bubble — a whisper is private.
+      const own = get(gameStore).currentPlayer?.name
+      const outgoing = data.from === own
+      addChatMessage({
+        text: data.message,
+        sender: 'whisper',
+        name: outgoing ? `To ${data.to}` : `From ${data.from}`,
+      })
+      break
+    }
+
     case 'GameState':
       gameStore.update((state) => {
         state.otherPlayers.clear()

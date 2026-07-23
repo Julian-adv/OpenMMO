@@ -410,6 +410,15 @@ pub enum ServerMessage {
         player_id: PlayerId,
         message: String,
     },
+    /// A private message, delivered only to the target and echoed to the
+    /// sender. Carries names instead of ids: whisper ignores distance, so
+    /// either end may be outside the other's AOI where an id resolves to
+    /// nobody.
+    WhisperMessage {
+        from: String,
+        to: String,
+        message: String,
+    },
     GameState {
         /// A list, not a map keyed by id: `PlayerId` is numeric and
         /// `wasm_api`'s `serialize_maps_as_objects` refuses non-string keys,

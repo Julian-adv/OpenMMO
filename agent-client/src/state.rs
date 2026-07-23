@@ -435,6 +435,18 @@ impl SharedState {
                     EventUrgency::Urgent
                 }
             }
+            // Urgent: a whisper is always addressed to us — the server only
+            // delivers it to the target (and echoes it to the sender, which
+            // is the Noise case).
+            ServerMessage::WhisperMessage { from, .. } => {
+                let self_name = self.self_player.as_ref().map(|p| p.name.as_str());
+                if Some(from.as_str()) == self_name {
+                    EventUrgency::Noise
+                } else {
+                    EventUrgency::Urgent
+                }
+            }
+
             // Urgent: kicked
             ServerMessage::Kicked { .. } => EventUrgency::Urgent,
 

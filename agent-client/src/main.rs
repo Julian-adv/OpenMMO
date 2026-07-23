@@ -353,6 +353,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::DungeonDoorToggled { .. } => "DungeonDoorToggled",
         ServerMessage::DungeonDoorsState { .. } => "DungeonDoorsState",
         ServerMessage::ChatMessage { .. } => "ChatMessage",
+        ServerMessage::WhisperMessage { .. } => "WhisperMessage",
         ServerMessage::GameState { .. } => "GameState",
         ServerMessage::GameTimeSync { .. } => "GameTimeSync",
         ServerMessage::MonsterSpawned { .. } => "MonsterSpawned",

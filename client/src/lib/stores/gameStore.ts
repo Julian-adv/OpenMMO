@@ -49,7 +49,7 @@ export interface ChatBubble {
   duration: number
 }
 
-export type ChatSender = 'local' | 'remote' | 'system'
+export type ChatSender = 'local' | 'remote' | 'system' | 'whisper'
 
 export interface ChatEntry {
   text: string

@@ -343,6 +343,178 @@ async fn who_command_reports_online_counts_only_to_the_requester() {
 }
 
 #[test]
+fn whisper_command_parses_name_and_message() {
+    use super::chat::parse_whisper_command;
+
+    assert_eq!(
+        parse_whisper_command("/w Rica hello there"),
+        Some(("Rica", "hello there"))
+    );
+    assert_eq!(
+        parse_whisper_command("/whisper Rica hi"),
+        Some(("Rica", "hi"))
+    );
+    assert_eq!(
+        parse_whisper_command(" /w  Rica   hi "),
+        Some(("Rica", "hi"))
+    );
+    assert_eq!(parse_whisper_command("/w Rica"), Some(("Rica", "")));
+    assert_eq!(parse_whisper_command("/w"), Some(("", "")));
+    assert_eq!(parse_whisper_command("/who"), None);
+    assert_eq!(parse_whisper_command("hello /w Rica"), None);
+}
+
+#[tokio::test]
+async fn whisper_reaches_only_the_target_regardless_of_distance() {
+    let game_state = make_test_game_state("whisper_delivery");
+    let sender_id = pid("sender");
+    let target_id = pid("far_target");
+    let bystander_id = pid("bystander");
+    game_state.add_player(make_player("sender", 0.0, 0.0)).await;
+    game_state
+        .add_player(make_player("far_target", 500.0, 0.0))
+        .await;
+    game_state
+        .add_player(make_player("bystander", 5.0, 0.0))
+        .await;
+
+    let mut sender_rx = game_state.register_direct_channel(&sender_id).await;
+    let mut target_rx = game_state.register_direct_channel(&target_id).await;
+    let mut bystander_rx = game_state.register_direct_channel(&bystander_id).await;
+    let mut broadcast_rx = game_state.subscribe();
+
+    // Mixed case on purpose: the name must match case-insensitively and the
+    // delivered `to` must carry the canonical spelling.
+    game_state
+        .send_chat_message(&sender_id, "/w Far_Target psst".to_string())
+        .await;
+
+    for rx in [&mut target_rx, &mut sender_rx] {
+        match rx.try_recv() {
+            Ok(ServerMessage::WhisperMessage { from, to, message }) => {
+                assert_eq!(from, "sender");
+                assert_eq!(to, "far_target");
+                assert_eq!(message, "psst");
+            }
+            other => panic!("Expected whisper delivery, got {:?}", other),
+        }
+    }
+
+    match bystander_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Whisper must not reach bystanders, got {:?}", other),
+    }
+
+    match broadcast_rx.try_recv() {
+        Err(TryRecvError::Empty) => {}
+        Ok(msg) => {
+            let server_msg: ServerMessage =
+                rmp_serde::from_slice(&msg.bytes).expect("Failed to deserialize broadcast");
+            panic!("Expected no whisper broadcast, got {:?}", server_msg);
+        }
+        Err(err) => panic!("Expected empty broadcast channel, got {:?}", err),
+    }
+}
+
+#[tokio::test]
+async fn whisper_never_falls_back_to_a_case_variant_of_another_player() {
+    let game_state = make_test_game_state("whisper_case_variants");
+    let sender_id = pid("sender");
+    // Character names are UNIQUE only case-sensitively, so both can be online.
+    let lower_id = pid("rica");
+    let upper_id = pid("Rica");
+    game_state.add_player(make_player("sender", 0.0, 0.0)).await;
+    game_state.add_player(make_player("rica", 5.0, 0.0)).await;
+    game_state.add_player(make_player("Rica", 10.0, 0.0)).await;
+
+    let mut sender_rx = game_state.register_direct_channel(&sender_id).await;
+    let mut lower_rx = game_state.register_direct_channel(&lower_id).await;
+    let mut upper_rx = game_state.register_direct_channel(&upper_id).await;
+
+    // Exact spelling goes to exactly that player, never the variant.
+    game_state
+        .send_chat_message(&sender_id, "/w rica psst".to_string())
+        .await;
+    match lower_rx.try_recv() {
+        Ok(ServerMessage::WhisperMessage { to, .. }) => assert_eq!(to, "rica"),
+        other => panic!("Expected whisper for exact match, got {:?}", other),
+    }
+    match upper_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Case variant must not receive the whisper, got {:?}", other),
+    }
+    sender_rx.try_recv().expect("sender echo");
+
+    // A spelling that matches neither exactly is ambiguous — refuse rather
+    // than pick one.
+    game_state
+        .send_chat_message(&sender_id, "/w RICA psst".to_string())
+        .await;
+    match sender_rx.try_recv() {
+        Ok(ServerMessage::ChatMessage { message, .. }) => assert_eq!(
+            message,
+            "Whisper: several players match RICA; spell the name exactly."
+        ),
+        other => panic!("Expected ambiguity reply, got {:?}", other),
+    }
+    for rx in [&mut lower_rx, &mut upper_rx] {
+        match rx.try_recv() {
+            Err(MpscTryRecvError::Empty) => {}
+            other => panic!("Ambiguous whisper must not be delivered, got {:?}", other),
+        }
+    }
+}
+
+#[tokio::test]
+async fn whisper_errors_go_only_to_the_sender() {
+    let game_state = make_test_game_state("whisper_errors");
+    let sender_id = pid("sender");
+    let listener_id = pid("listener");
+    game_state.add_player(make_player("sender", 0.0, 0.0)).await;
+    game_state
+        .add_player(make_player("listener", 5.0, 0.0))
+        .await;
+
+    let mut sender_rx = game_state.register_direct_channel(&sender_id).await;
+    let mut listener_rx = game_state.register_direct_channel(&listener_id).await;
+
+    let expect_reply =
+        |result: Result<ServerMessage, MpscTryRecvError>, expected: &str| match result {
+            Ok(ServerMessage::ChatMessage { player_id, message }) => {
+                assert_eq!(player_id, sender_id);
+                assert_eq!(message, expected);
+            }
+            other => panic!("Expected whisper error reply, got {:?}", other),
+        };
+
+    game_state
+        .send_chat_message(&sender_id, "/w Nobody hi".to_string())
+        .await;
+    expect_reply(
+        sender_rx.try_recv(),
+        "Whisper: no one called Nobody is here.",
+    );
+
+    game_state
+        .send_chat_message(&sender_id, "/w listener".to_string())
+        .await;
+    expect_reply(sender_rx.try_recv(), "Whisper: /w <name> <message>");
+
+    game_state
+        .send_chat_message(&sender_id, "/w sender hi".to_string())
+        .await;
+    expect_reply(sender_rx.try_recv(), "Whisper: that's you.");
+
+    match listener_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!(
+            "Whisper errors must not leak into local chat, got {:?}",
+            other
+        ),
+    }
+}
+
+#[test]
 fn notice_command_sets_or_clears_message() {
     use super::parse_notice_command;
 
