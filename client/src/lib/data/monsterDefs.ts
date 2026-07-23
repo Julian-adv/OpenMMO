@@ -38,6 +38,12 @@ export interface MonsterDefinition {
    * (e.g. scp939's long additive stagger).
    */
   deathPlaysHit?: boolean
+  /**
+   * Cross-fade seconds into the death clip (default 0.2). Raise for monsters
+   * whose death pose is a static clip the body should settle into slowly
+   * (e.g. scp939's 939_Sleeping).
+   */
+  deathFadeSeconds?: number
   /** Optional weapon item id, or legacy model path relative to /models/. */
   weapon?: string
   /** Chance from 0-1 that the weapon is dropped on death. */
