@@ -194,6 +194,19 @@ impl super::GameState {
                     "Rejected monster move {:.0}m (budget {:.1}m): monster {} by {}",
                     dist, budget, monster_id, mover_id
                 );
+                // The owner applies its moves optimistically and the normal
+                // fanout skips it, so a silent reject would desync it until
+                // reconnect. Echo the authoritative state back to the mover.
+                let correction = ServerMessage::MonsterMoved {
+                    monster_id,
+                    position: monster.position,
+                    rotation: monster.rotation,
+                    state: monster.state,
+                    target_position: monster.position,
+                    owner_id: monster.owner_id,
+                };
+                drop(monsters);
+                self.send_direct_message(mover_id, correction).await;
                 return;
             }
             monster.move_budget = budget - dist;

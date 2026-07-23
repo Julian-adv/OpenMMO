@@ -4,7 +4,9 @@ use crate::monster_ai::MonsterAiManager;
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::{HouseData, WallDirection};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, PathResult};
-use onlinerpg_shared::{Character, ClientMessage, Monster, Player, PlayerId, ServerMessage};
+use onlinerpg_shared::{
+    Character, ClientMessage, Monster, MonsterState, Player, PlayerId, ServerMessage,
+};
 use onlinerpg_shared::{NoSpawnZone, Position};
 use onlinerpg_terrain::height::HeightSampler;
 use rand::Rng;
@@ -350,6 +352,9 @@ impl SharedState {
                     self.snap_position_to_ground(position, "MonsterMove"),
                     self.snap_position_to_ground(target_position, "MonsterMove target"),
                 );
+                // The server skips echoing our own monster moves back;
+                // mirror them locally or owned monsters freeze at spawn.
+                self.apply_monster_pose(&monster_id, position, rotation, state);
                 ClientMessage::MonsterMove {
                     monster_id,
                     position,
@@ -364,6 +369,22 @@ impl SharedState {
             .send(msg)
             .await
             .map_err(|e| anyhow::anyhow!("Command channel closed: {e}"))
+    }
+
+    /// Apply an authoritative monster pose — server fanout, a reject
+    /// correction, or the local echo of our own outgoing move.
+    fn apply_monster_pose(
+        &mut self,
+        monster_id: &str,
+        position: Position,
+        rotation: f32,
+        state: MonsterState,
+    ) {
+        if let Some(m) = self.nearby_monsters.get_mut(monster_id) {
+            m.position = position;
+            m.rotation = rotation;
+            m.state = state;
+        }
     }
 
     /// Send a position sync to correct Y to terrain height.
@@ -642,11 +663,11 @@ impl SharedState {
             ServerMessage::MonsterMoved {
                 monster_id,
                 position,
+                rotation,
+                state,
                 ..
             } => {
-                if let Some(m) = self.nearby_monsters.get_mut(monster_id) {
-                    m.position = *position;
-                }
+                self.apply_monster_pose(monster_id, *position, *rotation, *state);
             }
             ServerMessage::HouseSpawned { ref house } => {
                 self.world_cache.write().unwrap().add_house(house.clone());
@@ -1036,6 +1057,84 @@ impl SharedState {
             "No state available yet.".to_string()
         } else {
             lines.join("\n")
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct NoTiles;
+
+    #[async_trait::async_trait]
+    impl onlinerpg_terrain::height::HeightTiles for NoTiles {
+        async fn read_heightmap(&self, _tx: i32, _tz: i32) -> std::io::Result<Vec<u8>> {
+            Err(std::io::Error::other("no terrain in tests"))
+        }
+    }
+
+    fn test_state() -> (SharedState, mpsc::Receiver<ClientMessage>) {
+        let (tx, rx) = mpsc::channel(8);
+        let state = SharedState::new(
+            Vec::new(),
+            tx,
+            Arc::new(HeightSampler::new(NoTiles)),
+            Arc::new(std::sync::RwLock::new(WorldCache::new())),
+            None,
+        );
+        (state, rx)
+    }
+
+    fn p(x: f32, y: f32, z: f32) -> Position {
+        Position { x, y, z }
+    }
+
+    fn monster(id: &str) -> Monster {
+        Monster {
+            id: id.to_string(),
+            monster_type: "slime".to_string(),
+            position: p(0.0, 0.0, 0.0),
+            rotation: 0.0,
+            state: MonsterState::Idle,
+            owner_id: None,
+            health: 10,
+            max_health: 10,
+            floor_level: 0,
+            level_override: None,
+            aggressive: false,
+            last_attack_at: 0,
+            last_move_at: 0,
+            move_budget: 0.0,
+        }
+    }
+
+    /// The server never echoes our own monster moves back (the owner is
+    /// skipped in the fanout), so `send_command` must apply them locally.
+    #[tokio::test]
+    async fn outgoing_monster_move_echoes_into_local_state() {
+        let (mut s, mut rx) = test_state();
+        s.nearby_monsters.insert("m1".to_string(), monster("m1"));
+
+        s.send_command(ClientMessage::MonsterMove {
+            monster_id: "m1".to_string(),
+            position: p(3.0, 1.0, 4.0),
+            rotation: 1.5,
+            state: MonsterState::Run,
+            target_position: p(6.0, 1.0, 8.0),
+        })
+        .await
+        .unwrap();
+
+        let m = &s.nearby_monsters["m1"];
+        assert_eq!(m.position.x, 3.0);
+        assert_eq!(m.position.z, 4.0);
+        assert_eq!(m.rotation, 1.5);
+        assert_eq!(m.state, MonsterState::Run);
+
+        match rx.try_recv() {
+            Ok(ClientMessage::MonsterMove { monster_id, .. }) => assert_eq!(monster_id, "m1"),
+            other => panic!("expected MonsterMove on the wire, got {other:?}"),
         }
     }
 }

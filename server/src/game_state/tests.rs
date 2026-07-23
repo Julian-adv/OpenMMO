@@ -981,6 +981,7 @@ async fn monster_move_is_speed_capped() {
         .add_player(make_player("observer", 0.0, 0.0))
         .await;
     let mut observer_rx = game_state.register_direct_channel(&pid("observer")).await;
+    let mut owner_rx = game_state.register_direct_channel(&owner_id).await;
 
     {
         let mut monsters = game_state.monsters.write().await;
@@ -1011,6 +1012,14 @@ async fn monster_move_is_speed_capped() {
         Err(MpscTryRecvError::Empty) => {}
         other => panic!("a rejected move must not fan out, got {other:?}"),
     }
+    // The mover applies its moves optimistically, so a reject must echo the
+    // authoritative position back to it (and only to it).
+    match owner_rx.try_recv() {
+        Ok(ServerMessage::MonsterMoved { position, .. }) => {
+            assert_eq!(position.x, 0.0, "correction must carry the real position");
+        }
+        other => panic!("a rejected move must send a correction to the mover, got {other:?}"),
+    }
 
     // A short hop within the cap still applies normally.
     game_state
@@ -1033,6 +1042,10 @@ async fn monster_move_is_speed_capped() {
             assert_eq!(monster_id, "owned_monster");
         }
         other => panic!("an accepted move must fan out to bystanders, got {other:?}"),
+    }
+    match owner_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("an accepted move must not echo to the mover, got {other:?}"),
     }
 
     // Drain the bucket and reset its clock: an under-cap jump (8m < 15m) is now
@@ -1059,6 +1072,12 @@ async fn monster_move_is_speed_capped() {
         5.0,
         "an 8m jump with an empty budget must be refused by the refill rate"
     );
+    match owner_rx.try_recv() {
+        Ok(ServerMessage::MonsterMoved { position, .. }) => {
+            assert_eq!(position.x, 5.0, "correction must carry the real position");
+        }
+        other => panic!("a rate-refused move must send a correction to the mover, got {other:?}"),
+    }
 }
 
 /// Owning a monster must not let a player damage arbitrary targets at range.
