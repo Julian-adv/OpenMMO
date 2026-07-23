@@ -2,6 +2,10 @@
 server = "wss://@HOST@/ws"
 terrain = "https://@HOST@"
 
+# 에이전트를 눈으로 보는 창: 실행 중 브라우저에서 http://127.0.0.1:8808 열기.
+# 이 PC에서만 열리고 보기만 할 뿐 조종은 못 한다. 0으로 두면 꺼짐.
+watch_port = 8808
+
 [auth]
 mode = "google"
 client_secret = "@CLIENT_SECRET@"
