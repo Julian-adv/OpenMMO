@@ -80,6 +80,7 @@ fn make_test_game_state(test_name: &str) -> GameState {
     let housing_io = Arc::new(HousingIO::new(housing_dir));
     let item_defs = ItemDefs::load();
     let world_drop_defs = crate::world_drop_defs::WorldDropDefs::load(&item_defs);
+    let dungeon_defs = crate::dungeon_defs::DungeonDefs::load(&item_defs);
     GameState::new(
         MonsterDefs::load(),
         item_defs,
@@ -87,7 +88,7 @@ fn make_test_game_state(test_name: &str) -> GameState {
         GameState::default_start_datetime(),
         housing_io,
         vec![],
-        crate::dungeon_defs::DungeonDefs::load(),
+        dungeon_defs,
     )
 }
 

@@ -24,6 +24,13 @@ pub struct DungeonEntranceDef {
     #[serde(default)]
     #[allow(dead_code)]
     pub rotation: f32,
+    /// Item definition ids the final-floor treasure chest always yields.
+    #[serde(
+        rename = "chestDrops",
+        default,
+        deserialize_with = "crate::semicolon_list::deserialize"
+    )]
+    pub chest_drops: Vec<String>,
 }
 
 impl DungeonEntranceDef {
@@ -48,7 +55,10 @@ pub struct DungeonDefs {
 }
 
 impl DungeonDefs {
-    pub fn load() -> Self {
+    /// Load and validate against `item_defs`: every `chestDrops` entry must
+    /// name a real item; a typo'd entry panics at startup rather than silently
+    /// handing out a broken item (mirrors the world-drop table).
+    pub fn load(item_defs: &crate::item_defs::ItemDefs) -> Self {
         let data = include_str!("../../data/dungeons.json");
         let defs: HashMap<String, DungeonEntranceDef> =
             serde_json::from_str(data).expect("Failed to parse dungeons.json");
@@ -58,6 +68,14 @@ impl DungeonDefs {
                 "  {} \"{}\" at ({:.1}, {:.1}, {:.1})",
                 def.id, def.name, def.x, def.y, def.z
             );
+            for chest_drop in &def.chest_drops {
+                assert!(
+                    item_defs.get(chest_drop).is_some(),
+                    "dungeon '{}' chestDrops entry '{}' has no matching item definition",
+                    def.id,
+                    chest_drop
+                );
+            }
         }
         Self {
             defs: Arc::new(defs),

@@ -295,9 +295,13 @@ impl GameState {
             let mut pool = self
                 .item_defs
                 .equipment_ids_with_min_price(CHEST_ITEM_MIN_PRICE);
+            // The guaranteed signature drops lead the list; keep the random
+            // rolls distinct from them.
+            pool.retain(|id| !entrance.chest_drops.contains(id));
             pool.shuffle(&mut rng);
             let count = rng.gen_range(2..=3).min(pool.len());
-            let items: Vec<String> = pool.into_iter().take(count).collect();
+            let mut items = entrance.chest_drops.clone();
+            items.extend(pool.into_iter().take(count));
             let gold = rng.gen_range(depth * 500..=depth * 1500);
             (items, gold)
         };

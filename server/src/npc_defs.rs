@@ -1,22 +1,7 @@
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use tracing::info;
-
-/// The data file stores the wishlist as a semicolon-separated string; parse
-/// it once at load so request handlers never re-split it.
-fn parse_wishlist<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let raw = String::deserialize(deserializer)?;
-    Ok(raw
-        .split(';')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(str::to_string)
-        .collect())
-}
 
 /// One LLM NPC in the game-data registry (`data/npcs.json`). Every NPC has
 /// a row; the trading fields are optional — per `doc/ECONOMY.md`, any NPC
@@ -32,7 +17,7 @@ pub struct NpcDefinition {
     pub npc_name: String,
     /// Item def ids this NPC wants to buy from players. Empty = the NPC
     /// does not trade as a resident.
-    #[serde(default, deserialize_with = "parse_wishlist")]
+    #[serde(default, deserialize_with = "crate::semicolon_list::deserialize")]
     pub wishlist: Vec<String>,
     /// Percentage of base price paid for wishlist items. Above 100 by
     /// design: buying from a merchant and delivering here is intended

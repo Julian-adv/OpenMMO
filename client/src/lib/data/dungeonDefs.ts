@@ -13,6 +13,8 @@ export interface DungeonEntranceDef {
   y: number
   z: number
   rotation: number
+  /** Semicolon-separated item ids the final-floor chest always yields; server-side only. */
+  chestDrops?: string
 }
 
 export const DUNGEON_ENTRANCES: DungeonEntranceDef[] = Object.values(

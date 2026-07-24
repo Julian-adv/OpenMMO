@@ -14,6 +14,7 @@ mod merchant_defs;
 mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
+mod semicolon_list;
 mod terrain;
 mod types;
 mod world_config;
@@ -232,6 +233,7 @@ async fn main() {
     world_config::log_world_config();
     let monster_defs = monster_defs::MonsterDefs::load();
     let item_defs = item_defs::ItemDefs::load();
+    let dungeon_defs = dungeon_defs::DungeonDefs::load(&item_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let auth_service = match AuthService::new(AuthService::default_db_path()) {
         Ok(service) => Arc::new(service),
@@ -333,7 +335,7 @@ async fn main() {
         initial_game_time,
         Arc::clone(&housing_io),
         no_spawn_zones,
-        dungeon_defs::DungeonDefs::load(),
+        dungeon_defs,
     ));
     // Server-side collision data for the movement sim: houses, solid
     // furniture and dungeon layouts, mirroring what clients build.
