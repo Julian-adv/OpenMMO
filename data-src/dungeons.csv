@@ -1,2 +1,2 @@
-id,name,x,y,z,rotation,chestDrops
-old_crypt,Old Crypt,-1450,0.7,4720,0,raven_shield;leather_armor
+id,name,x,y,z,rotation,chestDrops,floors
+old_crypt,Old Crypt,-1450,0.7,4720,0,raven_shield;leather_armor,5

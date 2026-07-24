@@ -69,7 +69,9 @@ pub const SHAFT_W: i32 = 2;
 pub const SHAFT_LEN: i32 = 8;
 
 /// Monster type spawned on the final floor next to the treasure chest.
-pub const BOSS_MONSTER_TYPE: &str = "orc_boss";
+/// Global single-dungeon shortcut; when a second dungeon lands this belongs
+/// in dungeons.csv next to `floors` (see `FLOOR_OVERRIDES`).
+pub const BOSS_MONSTER_TYPE: &str = "goblin_boss";
 
 /// A* node budget for long in-dungeon path queries. Maze floors plus the
 /// open-surface leak through the entrance stairwell can exhaust the
@@ -321,14 +323,62 @@ pub fn dungeon_seed(entrance_id: &str) -> u64 {
 }
 
 /// Total floor count for a dungeon, 5..=20, derived from the seed.
-pub fn dungeon_depth(seed: u64) -> u8 {
+#[cfg(test)]
+pub(crate) fn dungeon_depth(seed: u64) -> u8 {
     gen::dungeon_depth(seed)
 }
 
 /// Generate every floor of the dungeon. Cheap enough (≤20 grids of 56×56
 /// cells) that callers always generate the full dungeon and index into it.
-pub fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
-    gen::generate_dungeon(seed)
+/// Test-only: real dungeons must go through `generate_dungeon_for` so the
+/// csv floor override applies; this seed-only form exists for property tests
+/// over arbitrary seeds.
+#[cfg(test)]
+pub(crate) fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
+    gen::generate_dungeon_with(seed, None)
+}
+
+/// Per-dungeon floor-count overrides from the `floors` column of
+/// data-src/dungeons.csv (blank = seed-derived 5..=20). Baked in via
+/// `include_str!` for the same reason as `SPAWN_TABLES`: both sides must
+/// agree at compile time. A tiny Vec keeps lookups deterministic-trivial.
+static FLOOR_OVERRIDES: LazyLock<Vec<(String, u8)>> =
+    LazyLock::new(|| build_floor_overrides(include_str!("../../../data-src/dungeons.csv")));
+
+fn build_floor_overrides(csv: &str) -> Vec<(String, u8)> {
+    let mut lines = csv.lines();
+    let Some(header) = lines.next() else {
+        return Vec::new();
+    };
+    let cols: Vec<&str> = header.split(',').map(str::trim).collect();
+    let id_col = cols.iter().position(|c| *c == "id");
+    let floors_col = cols.iter().position(|c| *c == "floors");
+    let (Some(id_col), Some(floors_col)) = (id_col, floors_col) else {
+        return Vec::new();
+    };
+    lines
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split(',').collect();
+            let id = fields.get(id_col)?.trim();
+            if id.is_empty() {
+                return None;
+            }
+            let floors = fields.get(floors_col)?.trim().parse::<u8>().ok()?;
+            Some((id.to_string(), floors))
+        })
+        .collect()
+}
+
+/// Generate a dungeon by entrance id: seed derived from the id, floor count
+/// from the csv override when present. This is what both the server and the
+/// wasm client use for real dungeons; `generate_dungeon` stays seed-only for
+/// property tests over arbitrary seeds.
+pub fn generate_dungeon_for(entrance_id: &str) -> Vec<FloorLayout> {
+    let floors = FLOOR_OVERRIDES
+        .iter()
+        .find(|(id, _)| id == entrance_id)
+        .map(|(_, f)| *f);
+    gen::generate_dungeon_with(dungeon_seed(entrance_id), floors)
 }
 
 pub fn passability_floor_for_depth(depth: u8) -> u8 {

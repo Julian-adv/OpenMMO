@@ -3250,14 +3250,14 @@ fn first_dungeon_door(
     u8,
     onlinerpg_shared::dungeon::InteriorDoorSpec,
 ) {
-    use onlinerpg_shared::dungeon::{dungeon_seed, generate_dungeon, interior_doors};
+    use onlinerpg_shared::dungeon::{generate_dungeon_for, interior_doors};
     let entrance = game_state
         .dungeon_defs
         .all()
         .next()
         .expect("a dungeon def")
         .clone();
-    let (depth, door) = generate_dungeon(dungeon_seed(&entrance.id))
+    let (depth, door) = generate_dungeon_for(&entrance.id)
         .iter()
         .find_map(|l| interior_doors(l).first().copied().map(|d| (l.depth, d)))
         .expect("a floor with an interior door");

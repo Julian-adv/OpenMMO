@@ -60,7 +60,7 @@ fn determinism_two_runs_identical() {
 /// together.
 #[test]
 fn golden_layout_hash() {
-    let floors = generate_dungeon(dungeon_seed("old_crypt"));
+    let floors = generate_dungeon_for("old_crypt");
     let h = layout_hash(&floors);
     assert_eq!(
         h, GOLDEN_OLD_CRYPT_HASH,
@@ -82,8 +82,11 @@ fn golden_layout_hash() {
 // u64 native vs u32 wasm — drew differently per platform, desyncing client
 // from server) to a fixed-width `as u32` draw. Re-blessed again when wall
 // torches were added (`roll_wall_torches` draws one RNG per room after
-// roll_props, and appends a `TorchWall` prop per eligible room).
-const GOLDEN_OLD_CRYPT_HASH: u64 = 0xcc52_3763_c2d7_a17d;
+// roll_props, and appends a `TorchWall` prop per eligible room). Re-blessed
+// when old_crypt was capped to 5 floors via the dungeons.csv `floors` column
+// (the hash now covers the override path, `generate_dungeon_for`) and the
+// boss became `goblin_boss` (the type string is part of the hashed layout).
+const GOLDEN_OLD_CRYPT_HASH: u64 = 0x3cee_b5b1_9cd7_a3df;
 
 #[test]
 fn structure_invariants_many_seeds() {
@@ -465,7 +468,7 @@ fn walkable_drop_keeps_a_carved_scatter_point() {
     // A scatter point that already lands on floor must be returned as-is
     // (only the Y is normalized to the floor surface).
     let entrance = test_entrance();
-    let floors = generate_dungeon(dungeon_seed("old_crypt"));
+    let floors = generate_dungeon_for("old_crypt");
     let layout = &floors[0];
     let room = layout.rooms[0];
     let death = cell_center(&entrance, layout.depth, room.center());

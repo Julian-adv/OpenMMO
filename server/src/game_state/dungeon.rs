@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_seed, floor_world_y, generate_dungeon, monster_level_for_depth,
+    cell_center, floor_world_y, generate_dungeon_for, monster_level_for_depth,
     FloorLayout, PropKind,
 };
 use onlinerpg_shared::inventory::GroundItem;
@@ -106,7 +106,7 @@ impl GameState {
                 return;
             }
         }
-        let layouts = generate_dungeon(dungeon_seed(entrance_id));
+        let layouts = generate_dungeon_for(entrance_id);
         info!(
             "Dungeon '{}' runtime created ({} floors)",
             entrance_id,

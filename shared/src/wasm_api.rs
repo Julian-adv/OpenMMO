@@ -285,11 +285,7 @@ fn dungeon_layouts(entrance_id: &str) -> Rc<Vec<crate::dungeon::FloorLayout>> {
     DUNGEON_LAYOUTS.with(|c| {
         c.borrow_mut()
             .entry(entrance_id.to_string())
-            .or_insert_with(|| {
-                Rc::new(crate::dungeon::generate_dungeon(
-                    crate::dungeon::dungeon_seed(entrance_id),
-                ))
-            })
+            .or_insert_with(|| Rc::new(crate::dungeon::generate_dungeon_for(entrance_id)))
             .clone()
     })
 }

@@ -9,8 +9,8 @@
 use std::path::Path;
 
 use onlinerpg_shared::dungeon::{
-    closed_door_segs, dungeon_cache_key, dungeon_passability, dungeon_seed,
-    floor_passability_cells_full, generate_dungeon, passability_floor_for_depth,
+    closed_door_segs, dungeon_cache_key, dungeon_passability, floor_passability_cells_full,
+    generate_dungeon_for, passability_floor_for_depth,
 };
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::HouseData;
@@ -158,7 +158,7 @@ impl super::GameState {
         let regions = self.load_region_furniture(terrain_dir).await;
         let mut dungeons = 0usize;
         for def in self.dungeon_defs.all() {
-            let layouts = generate_dungeon(dungeon_seed(&def.id));
+            let layouts = generate_dungeon_for(&def.id);
             let rp = dungeon_passability(&def.position(), &layouts);
             self.passability_write()
                 .insert(dungeon_cache_key(&def.id), rp);

@@ -33,14 +33,18 @@ const PROP_STACK_PCT: i32 = 35;
 
 const DEPTH_SALT: u64 = 0x9e37_79b9_7f4a_7c15;
 
+#[cfg(test)]
 pub fn dungeon_depth(seed: u64) -> u8 {
     let mut rng = ChaCha8Rng::seed_from_u64(seed);
     rng.gen_range(MIN_DEPTH..=MAX_DEPTH)
 }
 
-pub fn generate_dungeon(seed: u64) -> Vec<FloorLayout> {
+pub fn generate_dungeon_with(seed: u64, floors_override: Option<u8>) -> Vec<FloorLayout> {
     let mut meta = ChaCha8Rng::seed_from_u64(seed);
-    let total = meta.gen_range(MIN_DEPTH..=MAX_DEPTH);
+    // Always draw the seed-derived count so the meta stream feeding the
+    // shaft orientation below is identical with and without an override.
+    let drawn = meta.gen_range(MIN_DEPTH..=MAX_DEPTH);
+    let total = floors_override.map_or(drawn, |f| f.clamp(1, MAX_DEPTH));
     let along_z = meta.gen_range(0..2) == 1;
     let reversed = meta.gen_range(0..2) == 1;
 

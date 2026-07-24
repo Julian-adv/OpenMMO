@@ -15,6 +15,10 @@ export interface DungeonEntranceDef {
   rotation: number
   /** Semicolon-separated item ids the final-floor chest always yields; server-side only. */
   chestDrops?: string
+  /** Fixed floor count override; blank = seed-derived 5..=20. INERT here: the
+   *  shared generator reads data-src/dungeons.csv at compile time — editing
+   *  this JSON field changes nothing. Listed only to document the schema. */
+  floors?: number
 }
 
 export const DUNGEON_ENTRANCES: DungeonEntranceDef[] = Object.values(
