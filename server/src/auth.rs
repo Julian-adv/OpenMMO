@@ -285,6 +285,7 @@ impl AuthService {
         )?;
         Self::ensure_accounts_columns(&conn)?;
         Self::ensure_characters_schema(&conn)?;
+        Self::ensure_blocks_schema(&conn)?;
         Self::ensure_world_time_schema(&conn)?;
 
         Ok(Self { pool })
@@ -357,6 +358,30 @@ impl AuthService {
             [],
         )?;
 
+        Ok(())
+    }
+
+    /// `/block` lists: character → set of character names it never wants to
+    /// hear. Names rather than character ids, so a block written while the
+    /// target is offline needs no id lookup and survives the target's
+    /// character deletion (a recreated abuser keeps the same name).
+    fn ensure_blocks_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS character_blocks (
+                character_id INTEGER NOT NULL,
+                blocked_name TEXT NOT NULL,
+                PRIMARY KEY (character_id, blocked_name),
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )",
+            [],
+        )?;
+        // resolve_character_name filters COLLATE NOCASE, which the
+        // case-sensitive UNIQUE index on character_name cannot serve.
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_name_nocase \
+             ON characters(character_name COLLATE NOCASE)",
+            [],
+        )?;
         Ok(())
     }
 
@@ -561,6 +586,54 @@ impl AuthService {
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(characters)
+    }
+
+    /// Canonical spelling of an existing character name: exact match wins,
+    /// otherwise a *unique* ASCII-case-insensitive match (the in-memory
+    /// `match_name` rule in SQL — SQLite NOCASE is ASCII-only, like
+    /// `eq_ignore_ascii_case`). The ORDER BY compares with the column's
+    /// case-sensitive collation, so an exact row sorts first and survives
+    /// the LIMIT even among several case variants.
+    pub fn resolve_character_name(&self, name: &str) -> Result<Option<String>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt = conn.prepare(
+            "SELECT character_name FROM characters
+             WHERE character_name = ?1 COLLATE NOCASE
+             ORDER BY character_name = ?1 DESC LIMIT 2",
+        )?;
+        let mut matches = stmt
+            .query_map(params![name], |row| row.get::<_, String>(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        let unique = matches.first().is_some_and(|first| first == name) || matches.len() == 1;
+        Ok(unique.then(|| matches.remove(0)))
+    }
+
+    pub fn load_blocked_names(&self, character_id: i64) -> Result<Vec<String>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut stmt =
+            conn.prepare("SELECT blocked_name FROM character_blocks WHERE character_id = ?1")?;
+        let names = stmt
+            .query_map(params![character_id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(names)
+    }
+
+    pub fn add_block(&self, character_id: i64, blocked_name: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT OR IGNORE INTO character_blocks (character_id, blocked_name) VALUES (?1, ?2)",
+            params![character_id, blocked_name],
+        )?;
+        Ok(())
+    }
+
+    pub fn remove_block(&self, character_id: i64, blocked_name: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "DELETE FROM character_blocks WHERE character_id = ?1 AND blocked_name = ?2",
+            params![character_id, blocked_name],
+        )?;
+        Ok(())
     }
 
     pub fn create_character(

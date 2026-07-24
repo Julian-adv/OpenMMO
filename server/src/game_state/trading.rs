@@ -844,7 +844,7 @@ impl super::GameState {
     }
 
     /// The character behind a live player session, if any.
-    async fn character_id_of(&self, player_id: &PlayerId) -> Option<i64> {
+    pub(crate) async fn character_id_of(&self, player_id: &PlayerId) -> Option<i64> {
         let characters = self.player_characters.read().await;
         characters.get(player_id).map(|(char_id, _, _)| *char_id)
     }

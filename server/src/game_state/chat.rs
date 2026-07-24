@@ -1,6 +1,11 @@
+use crate::auth::{AuthError, AuthService};
 use crate::types::{ClientKind, Player, PlayerId, ServerMessage};
 use crate::world_config::world_config;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
+
+/// Upper bound on one character's `/block` list, so the per-recipient chat
+/// filter and the DB rows stay bounded at 5,000 concurrent users.
+const MAX_BLOCKS: usize = 100;
 
 /// `/who` breakdown. Splits by client program rather than by "human vs bot":
 /// the server cannot tell whether a person or an LLM is driving a web client,
@@ -42,17 +47,43 @@ impl OnlineCounts {
     }
 }
 
+/// `message` is `prefix` as a whole slash-command word; returns the trimmed
+/// remainder.
+fn strip_command<'a>(message: &'a str, prefix: &str) -> Option<&'a str> {
+    let rest = message.trim().strip_prefix(prefix)?;
+    (rest.is_empty() || rest.starts_with(' ')).then(|| rest.trim())
+}
+
 /// `/w <name> <message>` (or `/whisper`). Returns the parts unvalidated so a
 /// malformed whisper draws a usage reply instead of leaking into local chat.
 pub(crate) fn parse_whisper_command(message: &str) -> Option<(&str, &str)> {
-    let trimmed = message.trim();
-    let rest = ["/whisper", "/w"].iter().find_map(|prefix| {
-        let rest = trimmed.strip_prefix(prefix)?;
-        (rest.is_empty() || rest.starts_with(' ')).then(|| rest.trim_start())
-    })?;
+    let rest = ["/whisper", "/w"]
+        .iter()
+        .find_map(|prefix| strip_command(message, prefix))?;
     Some(match rest.split_once(' ') {
         Some((name, message)) => (name, message.trim()),
         None => (rest, ""),
+    })
+}
+
+/// `/block <name>` mutes a character, `/unblock <name>` undoes it, bare
+/// `/block` lists.
+#[derive(Debug, PartialEq)]
+pub(crate) enum BlockCommand<'a> {
+    List,
+    Block(&'a str),
+    Unblock(&'a str),
+}
+
+pub(crate) fn parse_block_command(message: &str) -> Option<BlockCommand<'_>> {
+    if let Some(rest) = strip_command(message, "/unblock") {
+        return Some(BlockCommand::Unblock(rest));
+    }
+    let rest = strip_command(message, "/block")?;
+    Some(if rest.is_empty() {
+        BlockCommand::List
+    } else {
+        BlockCommand::Block(rest)
     })
 }
 
@@ -60,15 +91,53 @@ pub(crate) fn parse_whisper_command(message: &str) -> Option<(&str, &str)> {
 /// `requires_admin` gates the command through this same parser, so the syntax
 /// is defined once.
 pub(crate) fn parse_notice_command(message: &str) -> Option<Option<&str>> {
-    let rest = message.trim().strip_prefix("/notice")?;
-    if !rest.is_empty() && !rest.starts_with(' ') {
-        return None;
+    let rest = strip_command(message, "/notice")?;
+    Some(Some(rest).filter(|rest| !rest.is_empty()))
+}
+
+/// How a player-typed name resolved: names are UNIQUE only case-sensitively,
+/// so an exact match wins and the case-insensitive convenience applies only
+/// while unambiguous. Shared by whisper and `/unblock`; `/block` applies the
+/// same rule in SQL (`AuthService::resolve_character_name`).
+enum NameMatch<T> {
+    None,
+    Unique(T),
+    Ambiguous,
+}
+
+fn match_name<T, I>(candidates: I, name_of: impl Fn(&T) -> &str, query: &str) -> NameMatch<T>
+where
+    I: Iterator<Item = T> + Clone,
+{
+    if let Some(exact) = candidates.clone().find(|c| name_of(c) == query) {
+        return NameMatch::Unique(exact);
     }
-    Some(Some(rest.trim()).filter(|rest| !rest.is_empty()))
+    let mut matches = candidates.filter(|c| name_of(c).eq_ignore_ascii_case(query));
+    match (matches.next(), matches.next()) {
+        (Some(only), None) => NameMatch::Unique(only),
+        (None, _) => NameMatch::None,
+        (Some(_), Some(_)) => NameMatch::Ambiguous,
+    }
+}
+
+/// Run a small auth-DB op off the async runtime (rusqlite blocks).
+async fn auth_db<T, F>(op: F) -> Result<T, AuthError>
+where
+    F: FnOnce() -> Result<T, AuthError> + Send + 'static,
+    T: Send + 'static,
+{
+    tokio::task::spawn_blocking(op)
+        .await
+        .map_err(|e| AuthError::Database(e.to_string()))?
 }
 
 impl super::GameState {
-    pub async fn send_chat_message(&self, player_id: &PlayerId, message: String) {
+    pub async fn send_chat_message(
+        &self,
+        player_id: &PlayerId,
+        message: String,
+        auth: &AuthService,
+    ) {
         if let Some(notice) = parse_notice_command(&message) {
             info!(
                 player = ?player_id,
@@ -107,6 +176,11 @@ impl super::GameState {
             return;
         }
 
+        if let Some(command) = parse_block_command(&message) {
+            self.handle_block_command(player_id, command, auth).await;
+            return;
+        }
+
         if let Some((target_name, whisper)) = parse_whisper_command(&message) {
             self.send_whisper(player_id, target_name, whisper).await;
             return;
@@ -120,9 +194,19 @@ impl super::GameState {
         if let Some(player_name) = player_name {
             // Chat content stays out of logs on purpose (privacy, F-012).
             info!(from = %player_name, len = message.len(), "chat message");
-            let recipients = self
+            let mut recipients = self
                 .player_ids_within(player_id, super::EVENT_DELIVERY_RADIUS)
                 .await;
+            {
+                let blocked = self.blocked_names.read().await;
+                if !blocked.is_empty() {
+                    recipients.retain(|id| {
+                        !blocked
+                            .get(id)
+                            .is_some_and(|names| names.contains(&player_name))
+                    });
+                }
+            }
             self.send_direct_message_to_players(
                 &recipients,
                 ServerMessage::ChatMessage {
@@ -149,22 +233,12 @@ impl super::GameState {
         let (sender_name, target) = {
             let players = self.players.read().await;
             let sender_name = players.get(player_id).map(|player| player.name.clone());
-            // Names are UNIQUE only case-sensitively: exact match wins, the
-            // case-insensitive convenience applies only while unambiguous.
-            let target = match players.values().find(|player| player.name == target_name) {
-                Some(player) => Ok((player.id, player.name.clone())),
-                None => {
-                    let mut matches = players
-                        .values()
-                        .filter(|player| player.name.eq_ignore_ascii_case(target_name));
-                    match (matches.next(), matches.next()) {
-                        (Some(player), None) => Ok((player.id, player.name.clone())),
-                        (None, _) => Err(format!("Whisper: no one called {target_name} is here.")),
-                        (Some(_), Some(_)) => Err(format!(
-                            "Whisper: several players match {target_name}; spell the name exactly."
-                        )),
-                    }
-                }
+            let target = match match_name(players.values(), |p| p.name.as_str(), target_name) {
+                NameMatch::Unique(player) => Ok((player.id, player.name.clone())),
+                NameMatch::None => Err(format!("Whisper: no one called {target_name} is here.")),
+                NameMatch::Ambiguous => Err(format!(
+                    "Whisper: several players match {target_name}; spell the name exactly."
+                )),
             };
             (sender_name, target)
         };
@@ -188,13 +262,166 @@ impl super::GameState {
 
         // Content and recipient both stay out of logs (privacy, F-012).
         info!(from = %from, len = message.len(), "whisper");
+        let suppressed = {
+            let blocked = self.blocked_names.read().await;
+            blocked
+                .get(&target_id)
+                .is_some_and(|names| names.contains(&from))
+        };
         let whisper = ServerMessage::WhisperMessage {
             from,
             to,
             message: message.to_string(),
         };
-        self.send_direct_message(&target_id, whisper.clone()).await;
+        // A blocked sender still gets the normal echo, so the block is
+        // invisible to them.
+        if !suppressed {
+            self.send_direct_message(&target_id, whisper.clone()).await;
+        }
         self.send_direct_message(player_id, whisper).await;
+    }
+
+    /// Install a character's persisted `/block` list for this session. Empty
+    /// lists are not stored, so the chat filter's `blocked.is_empty()` fast
+    /// path stays effective while nobody online has blocks.
+    pub async fn set_player_blocks(&self, player_id: &PlayerId, names: Vec<String>) {
+        if names.is_empty() {
+            return;
+        }
+        let mut blocked = self.blocked_names.write().await;
+        blocked.insert(*player_id, names.into_iter().collect());
+    }
+
+    pub(crate) async fn remove_player_blocks(&self, player_id: &PlayerId) {
+        self.blocked_names.write().await.remove(player_id);
+    }
+
+    async fn handle_block_command(
+        &self,
+        player_id: &PlayerId,
+        command: BlockCommand<'_>,
+        auth: &AuthService,
+    ) {
+        let reply = match command {
+            BlockCommand::List => self.describe_blocks(player_id).await,
+            BlockCommand::Block(name) => self.block_character(player_id, name, auth).await,
+            BlockCommand::Unblock(name) => self.unblock_character(player_id, name, auth).await,
+        };
+        self.send_system_message(player_id, reply).await;
+    }
+
+    async fn describe_blocks(&self, player_id: &PlayerId) -> String {
+        let blocked = self.blocked_names.read().await;
+        let Some(names) = blocked.get(player_id).filter(|names| !names.is_empty()) else {
+            return "Block: no one is blocked. /block <name> mutes a player.".to_string();
+        };
+        let mut names: Vec<_> = names.iter().cloned().collect();
+        names.sort();
+        format!("Blocked: {}", names.join(", "))
+    }
+
+    async fn block_character(
+        &self,
+        player_id: &PlayerId,
+        name: &str,
+        auth: &AuthService,
+    ) -> String {
+        // Resolve against the DB, not online players: blocking someone who
+        // just logged off must work, and every online character is in the DB.
+        let canonical = {
+            let auth = auth.clone();
+            let query = name.to_string();
+            match auth_db(move || auth.resolve_character_name(&query)).await {
+                Ok(Some(canonical)) => canonical,
+                Ok(None) => {
+                    return format!("Block: no character named {name}; spell the name exactly.")
+                }
+                Err(err) => {
+                    error!("Block lookup failed: {err}");
+                    return "Block: server error, try again.".to_string();
+                }
+            }
+        };
+        if self.player_name_of(player_id).await == canonical {
+            return "Block: that's you.".to_string();
+        }
+        let Some(character_id) = self.character_id_of(player_id).await else {
+            warn!("/block from player without a character: {player_id}");
+            return "Block: server error, try again.".to_string();
+        };
+
+        // Checks precede the DB write so a failure needs no rollback; a
+        // player's commands are serialized on their connection.
+        {
+            let blocked = self.blocked_names.read().await;
+            if let Some(names) = blocked.get(player_id) {
+                if names.contains(&canonical) {
+                    return format!("Block: {canonical} is already blocked.");
+                }
+                if names.len() >= MAX_BLOCKS {
+                    return format!("Block: list is full ({MAX_BLOCKS}); /unblock someone first.");
+                }
+            }
+        }
+        {
+            let auth = auth.clone();
+            let blocked_name = canonical.clone();
+            if let Err(err) = auth_db(move || auth.add_block(character_id, &blocked_name)).await {
+                error!("Failed to save block: {err}");
+                return "Block: server error, try again.".to_string();
+            }
+        }
+        self.blocked_names
+            .write()
+            .await
+            .entry(*player_id)
+            .or_default()
+            .insert(canonical.clone());
+        format!("Block: {canonical} is blocked; their chat and whispers are hidden. /unblock {canonical} undoes this.")
+    }
+
+    async fn unblock_character(
+        &self,
+        player_id: &PlayerId,
+        name: &str,
+        auth: &AuthService,
+    ) -> String {
+        if name.is_empty() {
+            return "Unblock: /unblock <name>".to_string();
+        }
+        // Match against the stored list itself, so a blocked-then-deleted
+        // character can still be unblocked.
+        let stored = {
+            let blocked = self.blocked_names.read().await;
+            let Some(names) = blocked.get(player_id) else {
+                return format!("Unblock: {name} is not blocked.");
+            };
+            match match_name(names.iter(), |stored| stored.as_str(), name) {
+                NameMatch::Unique(stored) => stored.clone(),
+                _ => return format!("Unblock: {name} is not blocked."),
+            }
+        };
+        let Some(character_id) = self.character_id_of(player_id).await else {
+            warn!("/unblock from player without a character: {player_id}");
+            return "Unblock: server error, try again.".to_string();
+        };
+        {
+            let auth = auth.clone();
+            let blocked_name = stored.clone();
+            if let Err(err) = auth_db(move || auth.remove_block(character_id, &blocked_name)).await
+            {
+                error!("Failed to remove block: {err}");
+                return "Unblock: server error, try again.".to_string();
+            }
+        }
+        let mut blocked = self.blocked_names.write().await;
+        if let Some(names) = blocked.get_mut(player_id) {
+            names.remove(&stored);
+            if names.is_empty() {
+                blocked.remove(player_id);
+            }
+        }
+        format!("Unblock: {stored} is no longer blocked.")
     }
 
     /// Last resort for a player wedged somewhere movement can't undo: return

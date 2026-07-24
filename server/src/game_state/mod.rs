@@ -181,6 +181,9 @@ pub struct GameState {
     /// uptime — nothing else ever removes a key.
     #[allow(clippy::type_complexity)]
     buybacks: Arc<RwLock<HashMap<(i64, String), Vec<StoredBuyback>>>>,
+    /// player_id → character names whose chat/whispers this player never
+    /// receives (`/block`). Loaded from the DB at login, dropped on logout.
+    blocked_names: Arc<RwLock<HashMap<PlayerId, HashSet<String>>>>,
 }
 
 impl GameState {
@@ -234,6 +237,7 @@ impl GameState {
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
             buybacks: Arc::new(RwLock::new(HashMap::new())),
+            blocked_names: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 

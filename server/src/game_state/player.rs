@@ -211,8 +211,11 @@ impl super::GameState {
             let mut map = self.player_characters.write().await;
             map.remove(player_id);
         }
-        let mut gold_map = self.player_gold.write().await;
-        gold_map.remove(player_id);
+        {
+            let mut gold_map = self.player_gold.write().await;
+            gold_map.remove(player_id);
+        }
+        self.remove_player_blocks(player_id).await;
     }
 
     pub async fn get_player_gold(&self, player_id: &PlayerId) -> i64 {

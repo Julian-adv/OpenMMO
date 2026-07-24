@@ -903,6 +903,14 @@ async fn handle_client_message(
                 )
                 .await;
 
+            match auth_service.load_blocked_names(character_id) {
+                Ok(blocked) => game_state.set_player_blocks(&id, blocked).await,
+                Err(err) => warn!(
+                    "Failed to load block list for character {}: {}",
+                    character_id, err
+                ),
+            }
+
             // Load inventory from DB
             game_state
                 .load_player_inventory(&id, character_id, auth_service)
@@ -1005,7 +1013,9 @@ async fn handle_client_message(
 
         ClientMessage::ChatMessage { message } => {
             if let Some(id) = &state.player_id {
-                game_state.send_chat_message(id, message).await;
+                game_state
+                    .send_chat_message(id, message, auth_service)
+                    .await;
             } else {
                 warn!("Received chat message from client that is not in game");
             }

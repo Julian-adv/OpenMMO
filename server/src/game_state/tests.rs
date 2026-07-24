@@ -91,6 +91,31 @@ fn make_test_game_state(test_name: &str) -> GameState {
     )
 }
 
+/// Temp-file AuthService for tests whose paths touch the auth DB.
+fn make_test_auth(test_name: &str) -> crate::auth::AuthService {
+    let db_path = std::env::temp_dir().join(format!(
+        "onlinerpg_{test_name}_auth_{}.db",
+        uuid::Uuid::new_v4()
+    ));
+    crate::auth::AuthService::new(db_path).unwrap()
+}
+
+fn create_test_character(
+    auth: &crate::auth::AuthService,
+    account: &str,
+    name: &str,
+) -> crate::auth::CharacterRecord {
+    auth.create_character(
+        account,
+        name,
+        &attrs_with_cha(12),
+        16,
+        CharacterClass::Knight,
+        Gender::Male,
+    )
+    .unwrap()
+}
+
 #[tokio::test]
 async fn equipped_torch_syncs_live_and_late_join_player_state() {
     let game_state = make_test_game_state("late_join_torch_snapshot");
@@ -250,6 +275,7 @@ async fn respawn_player_ignores_alive_player() {
 #[tokio::test]
 async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
     let game_state = make_test_game_state("chat_spatial_fanout");
+    let auth = make_test_auth("chat_spatial_fanout");
     let speaker_id = pid("speaker");
     let near_listener_id = pid("near_listener");
     let far_listener_id = pid("far_listener");
@@ -270,7 +296,7 @@ async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
 
     let mut broadcast_rx = game_state.subscribe();
     game_state
-        .send_chat_message(&speaker_id, "hello".to_string())
+        .send_chat_message(&speaker_id, "hello".to_string(), &auth)
         .await;
 
     match speaker_rx.try_recv() {
@@ -308,6 +334,7 @@ async fn chat_uses_direct_spatial_fanout_instead_of_global_broadcast() {
 #[tokio::test]
 async fn who_command_reports_online_counts_only_to_the_requester() {
     let game_state = make_test_game_state("who_command");
+    let auth = make_test_auth("who_command");
     let asker_id = pid("asker");
     let bystander_id = pid("bystander");
     let mut asker = make_player("asker", 0.0, 0.0);
@@ -325,7 +352,7 @@ async fn who_command_reports_online_counts_only_to_the_requester() {
     let mut bystander_rx = game_state.register_direct_channel(&bystander_id).await;
 
     game_state
-        .send_chat_message(&asker_id, "/who".to_string())
+        .send_chat_message(&asker_id, "/who".to_string(), &auth)
         .await;
 
     match asker_rx.try_recv() {
@@ -366,6 +393,7 @@ fn whisper_command_parses_name_and_message() {
 #[tokio::test]
 async fn whisper_reaches_only_the_target_regardless_of_distance() {
     let game_state = make_test_game_state("whisper_delivery");
+    let auth = make_test_auth("whisper_delivery");
     let sender_id = pid("sender");
     let target_id = pid("far_target");
     let bystander_id = pid("bystander");
@@ -385,7 +413,7 @@ async fn whisper_reaches_only_the_target_regardless_of_distance() {
     // Mixed case on purpose: the name must match case-insensitively and the
     // delivered `to` must carry the canonical spelling.
     game_state
-        .send_chat_message(&sender_id, "/w Far_Target psst".to_string())
+        .send_chat_message(&sender_id, "/w Far_Target psst".to_string(), &auth)
         .await;
 
     for rx in [&mut target_rx, &mut sender_rx] {
@@ -418,6 +446,7 @@ async fn whisper_reaches_only_the_target_regardless_of_distance() {
 #[tokio::test]
 async fn whisper_never_falls_back_to_a_case_variant_of_another_player() {
     let game_state = make_test_game_state("whisper_case_variants");
+    let auth = make_test_auth("whisper_case_variants");
     let sender_id = pid("sender");
     // Character names are UNIQUE only case-sensitively, so both can be online.
     let lower_id = pid("rica");
@@ -432,7 +461,7 @@ async fn whisper_never_falls_back_to_a_case_variant_of_another_player() {
 
     // Exact spelling goes to exactly that player, never the variant.
     game_state
-        .send_chat_message(&sender_id, "/w rica psst".to_string())
+        .send_chat_message(&sender_id, "/w rica psst".to_string(), &auth)
         .await;
     match lower_rx.try_recv() {
         Ok(ServerMessage::WhisperMessage { to, .. }) => assert_eq!(to, "rica"),
@@ -447,7 +476,7 @@ async fn whisper_never_falls_back_to_a_case_variant_of_another_player() {
     // A spelling that matches neither exactly is ambiguous — refuse rather
     // than pick one.
     game_state
-        .send_chat_message(&sender_id, "/w RICA psst".to_string())
+        .send_chat_message(&sender_id, "/w RICA psst".to_string(), &auth)
         .await;
     match sender_rx.try_recv() {
         Ok(ServerMessage::SystemMessage { message }) => assert_eq!(
@@ -467,6 +496,7 @@ async fn whisper_never_falls_back_to_a_case_variant_of_another_player() {
 #[tokio::test]
 async fn whisper_errors_go_only_to_the_sender() {
     let game_state = make_test_game_state("whisper_errors");
+    let auth = make_test_auth("whisper_errors");
     let sender_id = pid("sender");
     let listener_id = pid("listener");
     game_state.add_player(make_player("sender", 0.0, 0.0)).await;
@@ -486,7 +516,7 @@ async fn whisper_errors_go_only_to_the_sender() {
         };
 
     game_state
-        .send_chat_message(&sender_id, "/w Nobody hi".to_string())
+        .send_chat_message(&sender_id, "/w Nobody hi".to_string(), &auth)
         .await;
     expect_reply(
         sender_rx.try_recv(),
@@ -494,12 +524,12 @@ async fn whisper_errors_go_only_to_the_sender() {
     );
 
     game_state
-        .send_chat_message(&sender_id, "/w listener".to_string())
+        .send_chat_message(&sender_id, "/w listener".to_string(), &auth)
         .await;
     expect_reply(sender_rx.try_recv(), "Whisper: /w <name> <message>");
 
     game_state
-        .send_chat_message(&sender_id, "/w sender hi".to_string())
+        .send_chat_message(&sender_id, "/w sender hi".to_string(), &auth)
         .await;
     expect_reply(sender_rx.try_recv(), "Whisper: that's you.");
 
@@ -510,6 +540,178 @@ async fn whisper_errors_go_only_to_the_sender() {
             other
         ),
     }
+}
+
+#[test]
+fn block_command_parses_actions() {
+    use super::chat::{parse_block_command, BlockCommand};
+
+    assert_eq!(parse_block_command("/block"), Some(BlockCommand::List));
+    assert_eq!(parse_block_command(" /block  "), Some(BlockCommand::List));
+    assert_eq!(
+        parse_block_command("/block Rica"),
+        Some(BlockCommand::Block("Rica"))
+    );
+    assert_eq!(
+        parse_block_command("/unblock Rica"),
+        Some(BlockCommand::Unblock("Rica"))
+    );
+    assert_eq!(
+        parse_block_command("/unblock"),
+        Some(BlockCommand::Unblock(""))
+    );
+    assert_eq!(parse_block_command("/blocked"), None);
+    assert_eq!(parse_block_command("hello /block Rica"), None);
+}
+
+#[tokio::test]
+async fn blocked_players_chat_skips_the_blocker_only() {
+    let game_state = make_test_game_state("block_chat_filter");
+    let auth = make_test_auth("block_chat_filter");
+    let speaker_id = pid("speaker");
+    let blocker_id = pid("blocker");
+    let listener_id = pid("listener");
+    game_state
+        .add_player(make_player("speaker", 0.0, 0.0))
+        .await;
+    game_state
+        .add_player(make_player("blocker", 5.0, 0.0))
+        .await;
+    game_state
+        .add_player(make_player("listener", 10.0, 0.0))
+        .await;
+
+    let mut blocker_rx = game_state.register_direct_channel(&blocker_id).await;
+    let mut listener_rx = game_state.register_direct_channel(&listener_id).await;
+
+    game_state
+        .set_player_blocks(&blocker_id, vec!["speaker".to_string()])
+        .await;
+    game_state
+        .send_chat_message(&speaker_id, "hello".to_string(), &auth)
+        .await;
+
+    match blocker_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Blocked chat must not reach the blocker, got {:?}", other),
+    }
+    match listener_rx.try_recv() {
+        Ok(ServerMessage::ChatMessage { player_id, .. }) => assert_eq!(player_id, speaker_id),
+        other => panic!("Bystander must still get the chat, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn blocked_senders_whisper_is_suppressed_but_still_echoed() {
+    let game_state = make_test_game_state("block_whisper_filter");
+    let auth = make_test_auth("block_whisper_filter");
+    let sender_id = pid("sender");
+    let blocker_id = pid("blocker");
+    game_state.add_player(make_player("sender", 0.0, 0.0)).await;
+    game_state
+        .add_player(make_player("blocker", 5.0, 0.0))
+        .await;
+
+    let mut sender_rx = game_state.register_direct_channel(&sender_id).await;
+    let mut blocker_rx = game_state.register_direct_channel(&blocker_id).await;
+
+    game_state
+        .set_player_blocks(&blocker_id, vec!["sender".to_string()])
+        .await;
+    game_state
+        .send_chat_message(&sender_id, "/w blocker psst".to_string(), &auth)
+        .await;
+
+    match blocker_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Whisper must not reach the blocker, got {:?}", other),
+    }
+    // The echo hides the block from the sender.
+    match sender_rx.try_recv() {
+        Ok(ServerMessage::WhisperMessage { from, to, message }) => {
+            assert_eq!(from, "sender");
+            assert_eq!(to, "blocker");
+            assert_eq!(message, "psst");
+        }
+        other => panic!("Sender must still get the echo, got {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn block_command_persists_resolves_case_and_unblocks() {
+    let auth = make_test_auth("block_command_flow");
+    let account = auth.login_npc("npc_block_cmd_test").unwrap();
+    let blocker_char = create_test_character(&auth, &account, "Blocker");
+    let abuser_char = create_test_character(&auth, &account, "Abuser");
+
+    let game_state = make_test_game_state("block_command_flow");
+    let blocker_id = pid("Blocker");
+    let abuser_id = pid("Abuser");
+    game_state
+        .add_player(make_player("Blocker", 0.0, 0.0))
+        .await;
+    game_state.add_player(make_player("Abuser", 5.0, 0.0)).await;
+    game_state
+        .register_player_character(&blocker_id, blocker_char.id, 0, attrs_with_cha(12), 0)
+        .await;
+    game_state
+        .register_player_character(&abuser_id, abuser_char.id, 0, attrs_with_cha(12), 0)
+        .await;
+
+    let mut blocker_rx = game_state.register_direct_channel(&blocker_id).await;
+
+    let expect_reply =
+        |result: Result<ServerMessage, MpscTryRecvError>, expected: &str| match result {
+            Ok(ServerMessage::SystemMessage { message }) => assert_eq!(message, expected),
+            other => panic!("Expected block reply, got {:?}", other),
+        };
+    let command = |text: &str| game_state.send_chat_message(&blocker_id, text.to_string(), &auth);
+
+    // Lowercase on purpose: resolution is case-insensitive when unambiguous.
+    command("/block abuser").await;
+    expect_reply(
+        blocker_rx.try_recv(),
+        "Block: Abuser is blocked; their chat and whispers are hidden. /unblock Abuser undoes this.",
+    );
+    assert_eq!(
+        auth.load_blocked_names(blocker_char.id).unwrap(),
+        vec!["Abuser".to_string()]
+    );
+
+    game_state
+        .send_chat_message(&abuser_id, "spam".to_string(), &auth)
+        .await;
+    match blocker_rx.try_recv() {
+        Err(MpscTryRecvError::Empty) => {}
+        other => panic!("Blocked chat must not be delivered, got {:?}", other),
+    }
+
+    command("/block").await;
+    expect_reply(blocker_rx.try_recv(), "Blocked: Abuser");
+
+    command("/unblock ABUSER").await;
+    expect_reply(
+        blocker_rx.try_recv(),
+        "Unblock: Abuser is no longer blocked.",
+    );
+    assert!(auth.load_blocked_names(blocker_char.id).unwrap().is_empty());
+
+    game_state
+        .send_chat_message(&abuser_id, "hello again".to_string(), &auth)
+        .await;
+    match blocker_rx.try_recv() {
+        Ok(ServerMessage::ChatMessage { player_id, .. }) => assert_eq!(player_id, abuser_id),
+        other => panic!("Chat must flow again after unblock, got {:?}", other),
+    }
+
+    // Guard rails: no self-block, no unknown names.
+    command("/block Blocker").await;
+    expect_reply(blocker_rx.try_recv(), "Block: that's you.");
+    command("/block Nobody").await;
+    expect_reply(
+        blocker_rx.try_recv(),
+        "Block: no character named Nobody; spell the name exactly.",
+    );
 }
 
 #[test]
@@ -527,11 +729,12 @@ fn notice_command_sets_or_clears_message() {
 #[tokio::test]
 async fn server_notice_is_stored_broadcast_and_clearable() {
     let game_state = make_test_game_state("server_notice");
+    let auth = make_test_auth("server_notice");
     let player_id = pid("notice_admin");
     let mut receiver = game_state.subscribe();
 
     game_state
-        .send_chat_message(&player_id, "/notice Server maintenance".to_string())
+        .send_chat_message(&player_id, "/notice Server maintenance".to_string(), &auth)
         .await;
     assert_eq!(
         game_state.server_notice().await.as_deref(),
@@ -546,7 +749,7 @@ async fn server_notice_is_stored_broadcast_and_clearable() {
     ));
 
     game_state
-        .send_chat_message(&player_id, "/notice".to_string())
+        .send_chat_message(&player_id, "/notice".to_string(), &auth)
         .await;
     assert_eq!(game_state.server_notice().await, None);
     let message = receiver.recv().await.expect("notice clear broadcast");
@@ -559,6 +762,7 @@ async fn server_notice_is_stored_broadcast_and_clearable() {
 #[tokio::test]
 async fn escape_command_returns_a_stuck_player_to_spawn() {
     let game_state = make_test_game_state("escape_to_spawn");
+    let auth = make_test_auth("escape_to_spawn");
     let stuck_id = pid("stuck");
     let bystander_id = pid("bystander");
     game_state.add_player(make_player("stuck", 0.0, 0.0)).await;
@@ -568,7 +772,7 @@ async fn escape_command_returns_a_stuck_player_to_spawn() {
     let mut bystander_rx = game_state.register_direct_channel(&bystander_id).await;
 
     game_state
-        .send_chat_message(&stuck_id, "/escape".to_string())
+        .send_chat_message(&stuck_id, "/escape".to_string(), &auth)
         .await;
 
     let spawn = &world_config().spawn_position;
@@ -604,6 +808,7 @@ async fn escape_command_returns_a_stuck_player_to_spawn() {
 #[tokio::test]
 async fn escape_command_refused_while_in_combat() {
     let game_state = make_test_game_state("escape_in_combat");
+    let auth = make_test_auth("escape_in_combat");
     let fighter_id = pid("fighter");
     game_state
         .add_player(make_player("fighter", 20.0, 30.0))
@@ -614,7 +819,7 @@ async fn escape_command_refused_while_in_combat() {
     }
 
     game_state
-        .send_chat_message(&fighter_id, "/escape".to_string())
+        .send_chat_message(&fighter_id, "/escape".to_string(), &auth)
         .await;
 
     let (position, _, _) = game_state
@@ -3295,28 +3500,10 @@ async fn furniture_removal_reopens_blocked_cells() {
 // item survive in the DB snapshot and be picked up again (duplication).
 #[tokio::test]
 async fn kick_flushes_dropped_inventory_before_replacement_load() {
-    let db_path = std::env::temp_dir().join(format!("onlinerpg_f015_{}.db", uuid::Uuid::new_v4()));
-    let auth = crate::auth::AuthService::new(db_path).unwrap();
+    let auth = make_test_auth("f015_kick_flush");
     let account = auth.login_npc("npc_f015_account").unwrap();
-    let attributes = CharacterAttributes {
-        r#str: 12,
-        dex: 12,
-        con: 12,
-        int: 12,
-        wis: 12,
-        cha: 12,
-        guard: 10,
-    };
-    let record = auth
-        .create_character(
-            &account,
-            "Dupeknight",
-            &attributes,
-            16,
-            CharacterClass::Knight,
-            Gender::Male,
-        )
-        .unwrap();
+    let attributes = attrs_with_cha(12);
+    let record = create_test_character(&auth, &account, "Dupeknight");
     let char_id = record.id;
 
     // DB snapshot before the drop: one sword in the bag.
