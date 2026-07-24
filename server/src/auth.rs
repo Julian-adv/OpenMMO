@@ -375,13 +375,28 @@ impl AuthService {
             )",
             [],
         )?;
-        // resolve_character_name filters COLLATE NOCASE, which the
-        // case-sensitive UNIQUE index on character_name cannot serve.
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_characters_name_nocase \
+        // Names are unique ignoring ASCII case (the other allowed scripts
+        // have no case); the index also serves the COLLATE NOCASE lookups.
+        // Legacy DBs can hold case-colliding names, so fall back to the
+        // old non-unique index rather than failing startup.
+        let unique = conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_name_unique_nocase \
              ON characters(character_name COLLATE NOCASE)",
             [],
-        )?;
+        );
+        match unique {
+            Ok(_) => {
+                conn.execute("DROP INDEX IF EXISTS idx_characters_name_nocase", [])?;
+            }
+            Err(err) => {
+                tracing::warn!("characters has case-colliding names; unique index skipped: {err}");
+                conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_characters_name_nocase \
+                     ON characters(character_name COLLATE NOCASE)",
+                    [],
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -680,7 +695,8 @@ impl AuthService {
 
         let existing_character_name: Option<String> = conn
             .query_row(
-                "SELECT character_name FROM characters WHERE character_name = ?1",
+                "SELECT character_name FROM characters \
+                 WHERE character_name = ?1 COLLATE NOCASE",
                 params![character_name],
                 |row| row.get(0),
             )
@@ -972,6 +988,101 @@ mod tests {
         assert!(valid_name("ローラ"));
         assert!(valid_name("田中太郎"));
         assert!(valid_name("劍聖"));
+    }
+
+    #[test]
+    fn character_names_unique_ignoring_ascii_case() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_case_{}.db", uuid::Uuid::new_v4()));
+        let auth = AuthService::new(db_path).unwrap();
+        let account = auth.login_npc("npc_case_test").unwrap();
+
+        let attributes = CharacterAttributes {
+            r#str: 12,
+            dex: 12,
+            con: 12,
+            int: 12,
+            wis: 12,
+            cha: 12,
+            guard: 10,
+        };
+        let create = |name: &str| {
+            auth.create_character(
+                &account,
+                name,
+                &attributes,
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            )
+        };
+        assert!(create("Valkyrie").is_ok());
+        assert!(matches!(
+            create("valkyrie"),
+            Err(AuthError::CharacterNameAlreadyExists)
+        ));
+        assert!(matches!(
+            create("VALKYRIE"),
+            Err(AuthError::CharacterNameAlreadyExists)
+        ));
+    }
+
+    #[test]
+    fn startup_tolerates_legacy_case_colliding_names() {
+        let db_path =
+            std::env::temp_dir().join(format!("onlinerpg_auth_legacy_{}.db", uuid::Uuid::new_v4()));
+        {
+            let conn = Connection::open(&db_path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE characters (
+                    id INTEGER PRIMARY KEY,
+                    account_name TEXT NOT NULL,
+                    character_name TEXT NOT NULL UNIQUE,
+                    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                    level INTEGER NOT NULL DEFAULT 1,
+                    max_hp INTEGER NOT NULL DEFAULT 16,
+                    attr_str INTEGER NOT NULL DEFAULT 12,
+                    attr_dex INTEGER NOT NULL DEFAULT 12,
+                    attr_con INTEGER NOT NULL DEFAULT 12,
+                    attr_int INTEGER NOT NULL DEFAULT 12,
+                    attr_wis INTEGER NOT NULL DEFAULT 12,
+                    attr_cha INTEGER NOT NULL DEFAULT 12,
+                    attr_guard INTEGER NOT NULL DEFAULT 10
+                );
+                INSERT INTO characters (account_name, character_name)
+                VALUES ('legacy', 'Bob'), ('legacy', 'bob');",
+            )
+            .unwrap();
+        }
+
+        let auth = AuthService::new(db_path).unwrap();
+        assert_eq!(
+            auth.resolve_character_name("Bob").unwrap().as_deref(),
+            Some("Bob")
+        );
+        assert!(auth.resolve_character_name("BOB").unwrap().is_none());
+
+        let account = auth.login_npc("npc_legacy_case").unwrap();
+        let attributes = CharacterAttributes {
+            r#str: 12,
+            dex: 12,
+            con: 12,
+            int: 12,
+            wis: 12,
+            cha: 12,
+            guard: 10,
+        };
+        assert!(matches!(
+            auth.create_character(
+                &account,
+                "BOB",
+                &attributes,
+                16,
+                CharacterClass::Knight,
+                Gender::Male,
+            ),
+            Err(AuthError::CharacterNameAlreadyExists)
+        ));
     }
 
     #[test]
