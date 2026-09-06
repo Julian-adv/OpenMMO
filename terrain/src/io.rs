@@ -614,6 +614,18 @@ impl TerrainIO {
         write_terrain_file(&coords::climate_path(&self.base_dir, rx, rz), data).await
     }
 
+    pub async fn read_weather_sectors(
+        &self,
+    ) -> std::io::Result<Option<onlinerpg_shared::weather::WeatherSectors>> {
+        match fs::read(coords::weather_sectors_path(&self.base_dir)).await {
+            Ok(data) => serde_json::from_slice(&data)
+                .map(Some)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Read object data for a region. Returns empty JSON object if file not found.
     pub async fn read_object(&self, rx: i32, rz: i32) -> std::io::Result<serde_json::Value> {
         Self::read_region_json(coords::object_path(&self.base_dir, rx, rz)).await

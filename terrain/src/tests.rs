@@ -573,3 +573,145 @@ async fn climate_write_rejects_bad_size_and_bytes() {
         std::io::ErrorKind::InvalidData
     );
 }
+
+#[tokio::test]
+async fn weather_sectors_read_missing_and_present() {
+    let dir = unique_temp_dir("weather_sectors");
+    let io = crate::io::TerrainIO::new(dir.clone());
+    assert_eq!(io.read_weather_sectors().await.unwrap(), None);
+
+    let ws = onlinerpg_shared::weather::WeatherSectors {
+        version: onlinerpg_shared::weather::WEATHER_SECTORS_VERSION,
+        sectors: vec![onlinerpg_shared::weather::Sector {
+            zone: 1,
+            spots: vec![[16.0, -48.0]],
+        }],
+    };
+    tokio::fs::create_dir_all(&dir).await.unwrap();
+    tokio::fs::write(
+        coords::weather_sectors_path(&dir),
+        serde_json::to_vec(&ws).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(io.read_weather_sectors().await.unwrap(), Some(ws));
+
+    tokio::fs::write(coords::weather_sectors_path(&dir), b"not json")
+        .await
+        .unwrap();
+    assert_eq!(
+        io.read_weather_sectors().await.unwrap_err().kind(),
+        std::io::ErrorKind::InvalidData
+    );
+    let _ = tokio::fs::remove_dir_all(&dir).await;
+}
+
+/// Share of time a plot in each zone is under rain, from a real bake. Sectors
+/// are placed here from the baked climate files so schedule constants can be
+/// tuned without re-running the world sim:
+/// `WEATHER_BAKE_DIR=<dir> cargo test -p onlinerpg-terrain --release weather_zone_shares -- --ignored --nocapture`
+#[tokio::test]
+#[ignore]
+async fn weather_zone_shares_from_bake() {
+    use onlinerpg_shared::weather::{cells_at, rain_at};
+    use onlinerpg_shared::worldgen::weather_sectors::{place_sectors, ClimatePlotGrid};
+    let dir =
+        std::path::PathBuf::from(std::env::var("WEATHER_BAKE_DIR").expect("WEATHER_BAKE_DIR"));
+    let io = crate::io::TerrainIO::new(dir.clone());
+    let mut regions: Vec<(i32, i32, Vec<u8>)> = Vec::new();
+    for entry in std::fs::read_dir(dir.join("climate")).unwrap() {
+        let name = entry.unwrap().file_name().into_string().unwrap();
+        let rx: i32 = name[1..4].parse().unwrap();
+        let rz: i32 = name[5..8].parse().unwrap();
+        regions.push((rx, rz, io.read_climate(rx, rz).await.unwrap().unwrap()));
+    }
+    let rx0 = regions.iter().map(|r| r.0).min().unwrap();
+    let rz0 = regions.iter().map(|r| r.1).min().unwrap();
+    let rx1 = regions.iter().map(|r| r.0).max().unwrap();
+    let rz1 = regions.iter().map(|r| r.1).max().unwrap();
+    let plot = crate::land::PLOT_SIZE as f32;
+    let (w, h) = (
+        ((rx1 - rx0 + 1) * 32) as usize,
+        ((rz1 - rz0 + 1) * 32) as usize,
+    );
+    let (x0, z0) = crate::land::plot_origin(rx0, rz0, 0);
+    let mut grid = ClimatePlotGrid {
+        w,
+        h,
+        plot_m: plot,
+        x0: x0 as f32,
+        z0: z0 as f32,
+        zones: vec![0; w * h],
+    };
+    let mut samples: Vec<(u8, f32, f32)> = Vec::new();
+    for (rx, rz, zones) in &regions {
+        for (i, &z) in zones.iter().enumerate() {
+            let (x, zz) = crate::land::plot_origin(*rx, *rz, i);
+            let gx = ((x - x0) / crate::land::PLOT_SIZE) as usize;
+            let gz = ((zz - z0) / crate::land::PLOT_SIZE) as usize;
+            grid.zones[gz * w + gx] = z;
+            if z != 0 && i % 16 == 0 {
+                samples.push((z, x as f32 + 16.0, zz as f32 + 16.0));
+            }
+        }
+    }
+    let sectors = place_sectors(&grid, 42);
+    let mut per_zone = [0usize; 5];
+    for s in &sectors.sectors {
+        per_zone[s.zone as usize] += 1;
+    }
+
+    let mut wet = [0u64; 5];
+    // wet time by the zone of the strongest contributing cell, per sample zone
+    let mut source = [[0u64; 5]; 5];
+    let mut total = [0u64; 5];
+    let mut max_cells = 0;
+    let days = 30.0;
+    let mut t = 0.0;
+    while t < days * 1440.0 {
+        let cells = cells_at(&sectors.sectors, 42, t);
+        max_cells = max_cells.max(cells.len());
+        for &(zone, x, z) in &samples {
+            total[zone as usize] += 1;
+            if rain_at(&cells, x, z) > 0.35 {
+                wet[zone as usize] += 1;
+                let strongest = cells
+                    .iter()
+                    .max_by(|a, b| {
+                        rain_at(std::slice::from_ref(a), x, z).total_cmp(&rain_at(
+                            std::slice::from_ref(b),
+                            x,
+                            z,
+                        ))
+                    })
+                    .unwrap();
+                source[zone as usize][sectors.sectors[strongest.sector].zone as usize] += 1;
+            }
+        }
+        t += 30.0;
+    }
+    let names = ["sea", "wetCoast", "temperate", "rainShadow", "alpine"];
+    eprintln!(
+        "sectors {:?} (max live cells {max_cells}), samples {}",
+        &per_zone[1..],
+        samples.len()
+    );
+    for (zone, name) in names.iter().enumerate().skip(1) {
+        if total[zone] > 0 {
+            let by: Vec<String> = (1..5)
+                .map(|src| {
+                    format!(
+                        "{}={:.1}",
+                        names[src],
+                        100.0 * source[zone][src] as f64 / total[zone] as f64
+                    )
+                })
+                .collect();
+            eprintln!(
+                "{name:<12} wet {:5.1} %  from {}",
+                100.0 * wet[zone] as f64 / total[zone] as f64,
+                by.join(" ")
+            );
+        }
+    }
+}

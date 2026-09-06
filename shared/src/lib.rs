@@ -31,6 +31,7 @@ pub mod skills;
 pub mod stall;
 pub mod tip_hat;
 pub mod tree_format;
+pub mod weather;
 pub mod world;
 pub mod worldgen;
 pub mod xp;

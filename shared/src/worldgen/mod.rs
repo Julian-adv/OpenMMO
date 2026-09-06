@@ -25,6 +25,7 @@ pub mod settlements;
 pub mod tile_bake;
 pub mod vector_features;
 pub mod vegetation;
+pub mod weather_sectors;
 
 pub use config::WorldGenConfig;
 pub use global_map::GlobalMap;

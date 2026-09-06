@@ -47,12 +47,21 @@ grade grid (`terrain/src/land.rs`, `/api/terrain/land-grades/{rx}/{rz}`,
 
 Sea plots carry zone 0 and never host a cell.
 
+### Sectors (baked)
+
+The bake gives each zone one sector per `SECTOR_KM2` of area (wet coast 4,
+temperate 7, rain shadow 36, alpine 12 km²), spread through the zone by
+farthest-point sampling; a sector's spots are the 16 plots around its centre.
+Inland spots sit as far from the zone border as the zone allows; wet-coast
+spots hug the shoreline (within 128 m of the sea) so coastal showers spill
+seaward instead of soaking the zones behind them. Written world-wide to `data/terrain/weather-sectors.json`
+(`shared/src/worldgen/weather_sectors.rs`), a few hundred sectors, so clients
+never analyse the climate grid themselves.
+
 ### Cells (derived, never stored)
 
-Each zone is split into a few *sectors* (spawn spots spread through the zone,
-inset from its border, chosen from the seed). A sector hosts at most one cell
-at a time. For sector `s` with period `P` and lifetime range `[L0, L0 + Lv]`,
-cycle `k` yields
+A sector hosts at most one cell at a time. For sector `s` with period `P` and
+lifetime range `[L0, L0 + Lv]`, cycle `k` yields
 
 ```
 h1, h2, h3 = hash(seed, s, k)
@@ -63,29 +72,35 @@ envelope = ramp-up 25 % of life → full → ramp-down 30 % of life
 rain(x, z, t) = max over nearby cells of envelope(t) * falloff(dist / radius)
 ```
 
-Everything is a pure function of `(seed, zone grid, t)`. `t` is game time,
-already synced by `GameTimeSync`; `game_day_index` in `shared/src/moon.rs`
-gives a stable epoch. Anyone who knows the seed can evaluate any time — that is
-the forecast.
+Everything is a pure function of `(seed, sectors, t)` — `shared/src/weather.rs`.
+`t` is game minutes since the calendar epoch (`weather::game_minutes`, on top
+of `moon::game_day_index`), already synced by `GameTimeSync`. Only cycle `k`
+can be live at `t`, so the runtime cost is one hash per sector. Anyone who
+knows the seed can evaluate any time — that is the forecast.
 
 ### Schedule (game minutes; a game day is 3 real hours)
 
-| Zone | Sectors | Period | Lifetime | Chance | Radius | Real-time feel |
+| Zone | km² per sector | Period | Lifetime | Chance | Radius | Real-time feel |
 |---|---|---|---|---|---|---|
-| Wet coast | 7 | 510 (8.5 h) | 165–300 | 0.9 | 3.0–4.8 km | 21–37 min of rain every ~1 h |
-| Temperate | 5 | 2,800 (~2 d) | 120–240 | 0.8 | 3.4–5.4 km | 15–30 min every ~6 h |
-| Rain shadow | 1 | 6,800 (~5 d) | 120–180 | 0.6 | 2.6–4.0 km | 15–22 min every ~14 h |
-| Alpine | 1 | 1,260 (21 h) | 180–360 | 0.9 | 2.8–4.4 km | 22–45 min every ~2.6 h |
+| Wet coast | 4 | 510 (8.5 h) | 165–300 | 0.9 | 1.4–2.2 km | 21–37 min of rain every ~1 h |
+| Temperate | 7 | 2,000 (~1.4 d) | 120–240 | 0.8 | 3.0–4.6 km | 15–30 min every ~4 h |
+| Rain shadow | 36 | 6,800 (~5 d) | 120–180 | 0.6 | 2.6–4.0 km | 15–22 min every ~14 h |
+| Alpine | 12 | 1,260 (21 h) | 180–360 | 0.9 | 2.8–4.4 km | 22–45 min every ~2.6 h |
 
 A rain event must be felt inside a play session; 15–40 real minutes matches
 FFXIV's 23-minute weather slot. Dryness is expressed by the gap between events,
-not by shorter events. Measured share of time a spot is wet (30 game days,
-seed 42): wet coast 33 %, temperate 23 %, alpine 22 %, rain shadow 17 %. The
-continent is only 22 km wide and cells are 3–5 km, so the rain shadow is "the
-least rainy place", never bone dry.
+not by shorter events. Measured share of time a plot is wet (30 game days,
+seed 42, Valdran: 22 coastal, 15 temperate, 1 shadow, 1 alpine sector):
+wet coast 31 %, temperate 20 %, alpine 21 %, rain shadow 17 %. Cells reach
+3–5 km, so the rain shadow is "the least rainy place", never bone dry — most
+of its rain is spill from the zones around it.
 
-Sector count scales with zone area; the first cut with equal sectors made the
-narrow rain shadow wetter than the coast because neighbours spilled in.
+Two lessons from tuning on the real bake: sector count must follow zone
+area (a grid-bucket cut gave the 1 km coastal band ten times too many
+sectors), and 3–5 km coastal cells centred in that band soaked every zone
+behind it — hence the small shoreline showers. The ignored test
+`weather_zone_shares_from_bake` in `terrain/src/tests.rs` re-measures this
+from baked climate files in under a second.
 
 Derived values: `rainIntensity = rain(x, z, t)`; `cloudFactor =
 smoothstep(0.35, 0.80, rain)`. There is no separate background cloud layer:
@@ -108,7 +123,8 @@ grid when the map overlay is open. One implementation, no drift.
 - `ServerMessage::WeatherSync { seed, bias }` on connection accept and from a
   slow `run_ticks("weather", 30 s)` (same scaffolding as the time-sync tick).
 - Climate grid: baked by `terrain-gen` into `data/terrain/climate/`, served
-  like land grades. No runtime state.
+  like land grades; sectors in `data/terrain/weather-sectors.json`, served
+  once. No runtime state.
 - `PROTOCOL_VERSION` 57 → 58.
 - Load at 5,000 CCU: one tiny broadcast per 30 s, zero per-player work.
 

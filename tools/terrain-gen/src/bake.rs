@@ -10,11 +10,14 @@
 
 use crate::map_tile::{render_region_pyramid, TILES_PER_REGION};
 use anyhow::{Context, Result};
+use onlinerpg_shared::world::WORLD_MIN_X;
 use onlinerpg_shared::worldgen::{
     climate::ClimateFields,
     coasts, continent, elevation, erosion, rivers, roads, settlements,
     tile_bake::{self, bridges},
-    vegetation, GlobalMap, WorldGenConfig,
+    vegetation,
+    weather_sectors::{place_sectors, ClimatePlotGrid},
+    GlobalMap, WorldGenConfig,
 };
 use onlinerpg_terrain::coords;
 use onlinerpg_terrain::land::{plot_origin, PLOT_SIZE, REGION_PLOTS};
@@ -713,5 +716,36 @@ fn write_climate_regions(
             let path = coords::climate_path(out, rx, rz);
             std::fs::write(&path, region_climate(map, &fields, rx, rz))
                 .with_context(|| format!("write {}", path.display()))
+        })?;
+
+    // Sectors are world-wide whatever region range was baked: a cell near
+    // a range edge still needs its neighbours across it.
+    let plot_m = PLOT_SIZE as f32;
+    let n = (map.config.world_size_m as f32 / plot_m) as usize;
+    let zones: Vec<u8> = (0..n * n)
+        .into_par_iter()
+        .map(|i| {
+            let (x, z) = ((i % n) as f32, (i / n) as f32);
+            fields.climate_of_square(
+                map,
+                WORLD_MIN_X + x * plot_m,
+                WORLD_MIN_X + z * plot_m,
+                plot_m,
+            ) as u8
         })
+        .collect();
+    let grid = ClimatePlotGrid {
+        w: n,
+        h: n,
+        plot_m,
+        x0: WORLD_MIN_X,
+        z0: WORLD_MIN_X,
+        zones,
+    };
+    let sectors = place_sectors(&grid, map.config.seed);
+    let path = coords::weather_sectors_path(out);
+    std::fs::write(&path, serde_json::to_vec(&sectors)?)
+        .with_context(|| format!("write {}", path.display()))?;
+    eprintln!("Placed {} rain sectors", sectors.sectors.len());
+    Ok(())
 }
