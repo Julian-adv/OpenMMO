@@ -582,6 +582,7 @@ async fn weather_sectors_read_missing_and_present() {
 
     let ws = onlinerpg_shared::weather::WeatherSectors {
         version: onlinerpg_shared::weather::WEATHER_SECTORS_VERSION,
+        seed: 42,
         sectors: vec![onlinerpg_shared::weather::Sector {
             zone: 1,
             spots: vec![[16.0, -48.0]],

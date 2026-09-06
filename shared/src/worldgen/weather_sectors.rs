@@ -176,6 +176,7 @@ pub fn place_sectors(grid: &ClimatePlotGrid, seed: u64) -> WeatherSectors {
     }
     WeatherSectors {
         version: WEATHER_SECTORS_VERSION,
+        seed,
         sectors,
     }
 }
@@ -264,7 +265,11 @@ mod tests {
         let a = place_sectors(&g, 42);
         let b = place_sectors(&g, 43);
         assert_eq!(a.sectors.len(), b.sectors.len());
-        assert_ne!(a, b, "seed changes where the sampling starts");
+        assert_eq!((a.seed, b.seed), (42, 43));
+        assert_ne!(
+            a.sectors, b.sectors,
+            "seed changes where the sampling starts"
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-# Weather System (design, pre-implementation)
+# Weather System
 
 Status: design, implementation in progress on `feature/weather-system`; the
 proposal goes upstream once it is built and tested. Supersedes the
@@ -117,21 +117,30 @@ grid when the map overlay is open. One implementation, no drift.
 
 ## Server
 
-- `WeatherState { seed: u64, bias: f32 }` in `GameState` next to `game_clock`.
-  Seed rolled once and persisted; `bias` is a global multiplier on `chance`
-  for events/admin (`/weather` later).
-- `ServerMessage::WeatherSync { seed, bias }` on connection accept and from a
-  slow `run_ticks("weather", 30 s)` (same scaffolding as the time-sync tick).
-- Climate grid: baked by `terrain-gen` into `data/terrain/climate/`, served
-  like land grades; sectors in `data/terrain/weather-sectors.json`, served
-  once. No runtime state.
-- `PROTOCOL_VERSION` 57 → 58.
+- `WeatherState { seed: u64, bias: f32 }` in `GameState` next to `game_clock`
+  (`server/src/game_state/weather.rs`). The seed is read from
+  `weather-sectors.json` — it is the seed the sectors were placed with, so
+  the server keeps no other record of the world seed; without the file,
+  weather stays off and the server logs why. `bias` is a global multiplier on
+  `chance` for events/admin (`/weather` later).
+- `ServerMessage::WeatherSync { seed, bias }` on connection accept and from
+  `run_ticks("weather", 30 s)` (same scaffolding as the time-sync tick).
+  Seeds cross the wire as JS numbers, so they must stay below 2^53.
+- Climate grid served at `/api/terrain/climate/{rx}/{rz}` and the sector list
+  at `/api/terrain/weather-sectors`, both revalidated like tree files.
+- `PROTOCOL_VERSION` 69 → 70; agent-client 0.50.0 lists `WeatherSync` as
+  noise so it never wakes the LLM.
 - Load at 5,000 CCU: one tiny broadcast per 30 s, zero per-player work.
 
 ## Client
 
-`weatherStore.ts` (mirrors `timeStore.ts`) fed from `messageHandlers.ts`;
-`climateStore.ts` mirrors `landGradeStore.ts`. Per-frame local sample drives:
+`weatherStore.ts` (mirrors `timeStore.ts`) fed from `messageHandlers.ts`,
+fetching the sector list into wasm on the first sync; `climateStore.ts`
+mirrors `landGradeStore.ts`. The rain function is called through wasm
+(`weather_set_sectors`, `weather_game_minutes`, `weather_cells_at`,
+`weather_rain_at`, `weather_cloud_factor`) — the client never re-implements
+it, and even the game-minute conversion stays in Rust so `t` cannot drift a
+day from the server's. Per-frame local sample drives:
 
 1. **Lighting** — `cloudFactor` multiplied where `eclipseFactor` already is
    (`scene-lighting.ts`): directional `× (1 − 0.5·cf)`, ambient `× (1 −

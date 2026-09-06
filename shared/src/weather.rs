@@ -20,9 +20,12 @@ pub struct Sector {
     pub spots: Vec<[f32; 2]>,
 }
 
+/// The seed is the one the sectors were placed with, so the server needs no
+/// other record of the world seed to broadcast it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WeatherSectors {
     pub version: u32,
+    pub seed: u64,
     pub sectors: Vec<Sector>,
 }
 
@@ -94,7 +97,7 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
 /// guaranteed a dry gap between cells.
 pub const MAX_LIFE_SHARE: f64 = 0.9;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct Cell {
     pub sector: usize,
     pub x: f32,
@@ -106,7 +109,7 @@ pub struct Cell {
     pub progress: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum CellStage {
     Forming,
     Raining,
@@ -370,6 +373,7 @@ mod tests {
     fn sectors_round_trip_through_json() {
         let ws = WeatherSectors {
             version: WEATHER_SECTORS_VERSION,
+            seed: 42,
             sectors: sectors(),
         };
         let text = serde_json::to_string(&ws).unwrap();

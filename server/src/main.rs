@@ -479,6 +479,7 @@ async fn main() -> ExitCode {
         )
         .await;
     game_state.load_pricing(&auth_service).await;
+    game_state.load_weather().await;
     if let Err(err) = game_state.load_fences(&auth_service).await {
         error!("Failed to load fences: {}", err);
         return ExitCode::FAILURE;
@@ -682,6 +683,17 @@ async fn main() -> ExitCode {
                     game_state.tick_food_regeneration().await;
                 }
             }
+        },
+    ));
+
+    let game_state_for_weather = Arc::clone(&game_state);
+    background.spawn(run_ticks(
+        "weather",
+        Duration::from_secs(30),
+        drain_shutdown.clone(),
+        move || {
+            let game_state = Arc::clone(&game_state_for_weather);
+            async move { game_state.broadcast_weather() }
         },
     ));
 
