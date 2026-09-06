@@ -533,3 +533,43 @@ async fn stat_minimap_lod_matches_read_preference() {
 
     let _ = tokio::fs::remove_dir_all(&dir).await;
 }
+
+#[test]
+fn climate_path_format() {
+    let base = Path::new("/data/terrain");
+    assert_eq!(
+        coords::climate_path(base, -2, 4),
+        base.join("climate").join("r-02_+04.bin")
+    );
+}
+
+#[tokio::test]
+async fn climate_write_read_roundtrip() {
+    let dir = unique_temp_dir("climate_roundtrip");
+    let io = crate::io::TerrainIO::new(dir.clone());
+    let data: Vec<u8> = (0..crate::land::REGION_PLOTS)
+        .map(|i| (i % 5) as u8)
+        .collect();
+
+    io.write_climate(-2, 4, &data).await.unwrap();
+    assert_eq!(io.read_climate(-2, 4).await.unwrap(), Some(data));
+    assert_eq!(io.read_climate(0, 0).await.unwrap(), None);
+
+    let _ = tokio::fs::remove_dir_all(&dir).await;
+}
+
+#[tokio::test]
+async fn climate_write_rejects_bad_size_and_bytes() {
+    let io = crate::io::TerrainIO::new(unique_temp_dir("climate_invalid"));
+    let short = vec![0u8; 100];
+    assert_eq!(
+        io.write_climate(0, 0, &short).await.unwrap_err().kind(),
+        std::io::ErrorKind::InvalidData
+    );
+    let mut bad_zone = vec![2u8; crate::land::REGION_PLOTS];
+    bad_zone[7] = 9;
+    assert_eq!(
+        io.write_climate(0, 0, &bad_zone).await.unwrap_err().kind(),
+        std::io::ErrorKind::InvalidData
+    );
+}

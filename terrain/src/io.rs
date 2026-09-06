@@ -588,6 +588,32 @@ impl TerrainIO {
         write_terrain_file(&coords::land_grade_path(&self.base_dir, rx, rz), data).await
     }
 
+    pub async fn read_climate(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
+        match fs::read(coords::climate_path(&self.base_dir, rx, rz)).await {
+            Ok(data) if data.len() == crate::land::REGION_PLOTS => Ok(Some(data)),
+            Ok(_) => Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("climate ({rx}, {rz}): wrong size"),
+            )),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub async fn write_climate(&self, rx: i32, rz: i32, data: &[u8]) -> std::io::Result<()> {
+        if data.len() != crate::land::REGION_PLOTS
+            || data
+                .iter()
+                .any(|&c| onlinerpg_shared::worldgen::climate::Climate::try_from(c).is_err())
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "climate: expected one valid zone byte per plot",
+            ));
+        }
+        write_terrain_file(&coords::climate_path(&self.base_dir, rx, rz), data).await
+    }
+
     /// Read object data for a region. Returns empty JSON object if file not found.
     pub async fn read_object(&self, rx: i32, rz: i32) -> std::io::Result<serde_json::Value> {
         Self::read_region_json(coords::object_path(&self.base_dir, rx, rz)).await
