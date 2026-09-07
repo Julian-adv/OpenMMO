@@ -171,7 +171,8 @@ day from the server's. Per-frame local sample drives:
 | A | climate bake + shared cell function + WeatherSync + stores + lighting | T2 |
 | B | rain layer + preset flag + ambience (port from `experiment/rain-prototype`) | T1–T2 |
 | C | map overlay + forecast scrub | T1 |
-| D | snow on the alpine zone once a snow region is decided; lightning; wetness (campfire/hunger); fishing tables; wet/dry seasons by scaling `P` with the 360-day year in `celestial.rs`; `/weather` override | separate proposals |
+| D | storms: a rare oversized cell (10–15 km, 1–2 real hours) from its own sector so it spans zones, with slanted rain, lightning, and a wind boost — still a pure function, so the map forecasts landfall; snow on the alpine zone once a snow region is decided; wetness (campfire/hunger); fishing tables; wet/dry seasons by scaling `P` with the 360-day year in `celestial.rs`; `/weather` override | separate proposals |
+| E | river levels and flooding from accumulated rain — belongs to the water system, after the upstream water-field and erosion experiments settle; weather never touches water itself | later, with the maintainer |
 
 ## Test plan
 
