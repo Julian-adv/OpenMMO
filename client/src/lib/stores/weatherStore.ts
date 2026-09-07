@@ -12,6 +12,15 @@ export const weather = writable<ServerWeather | null>(null)
 /** True once the baked sector list is parsed into wasm. */
 export const weatherSectorsReady = writable(false)
 
+/** Rain 0..1 and light dimming 0..1 at the local player, sampled each frame. */
+export interface LocalWeather {
+  rain: number
+  cloud: number
+}
+
+export const NO_WEATHER: LocalWeather = { rain: 0, cloud: 0 }
+export const localWeather = writable<LocalWeather>(NO_WEATHER)
+
 let sectorsRequested = false
 
 export function setWeather(next: ServerWeather) {
@@ -26,6 +35,7 @@ export function setWeather(next: ServerWeather) {
  *  re-baked in between (the server revalidates it, so this is cheap). */
 export function clearWeather() {
   weather.set(null)
+  localWeather.set(NO_WEATHER)
   sectorsRequested = false
 }
 
@@ -33,7 +43,9 @@ export function clearWeather() {
  *  `WeatherSync` (every 30 s) rather than hammering the server. */
 async function loadSectors() {
   try {
-    const resp = await fetch(`${getTerrainApiUrl()}/api/terrain/weather-sectors`)
+    const resp = await fetch(
+      `${getTerrainApiUrl()}/api/terrain/weather-sectors`
+    )
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
     const count = weather_set_sectors(await resp.text())
     weatherSectorsReady.set(count > 0)

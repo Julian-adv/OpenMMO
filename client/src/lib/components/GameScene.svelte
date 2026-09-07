@@ -94,6 +94,14 @@
     serverGameTime,
   } from '../stores/timeStore'
   import {
+    localWeather,
+    NO_WEATHER,
+    weather,
+    weatherSectorsReady,
+    type LocalWeather,
+  } from '../stores/weatherStore'
+  import { sampleLocalWeather } from '../utils/weatherSample'
+  import {
     debugVisible,
     cameraRotationEnabled,
     playerDebugInfo,
@@ -919,6 +927,31 @@
     cameraDistance.set(camera.zoom)
   }
 
+  let lastLocalWeather: LocalWeather = NO_WEATHER
+
+  // Weather runs on true game time, not the debug-offset display hour, so
+  // it stays in step with the server and the map forecast.
+  function updateLocalWeather(calDate: CalendarDate): number {
+    let sample = NO_WEATHER
+    if ($weather && $weatherSectorsReady && currentPlayer && !$isUnderground) {
+      sample = sampleLocalWeather(
+        $weather.seed,
+        calDate,
+        calendarSystem.getGameHour(),
+        currentPlayer.position.x,
+        currentPlayer.position.z
+      )
+    }
+    if (
+      Math.abs(sample.rain - lastLocalWeather.rain) > 0.005 ||
+      Math.abs(sample.cloud - lastLocalWeather.cloud) > 0.005
+    ) {
+      lastLocalWeather = sample
+      localWeather.set(sample)
+    }
+    return sample.cloud
+  }
+
   function updateLightPosition(
     sunLightSnapshot: SunLightSnapshot,
     calDate: CalendarDate
@@ -932,6 +965,7 @@
       scene,
       sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
+      cloudFactor: updateLocalWeather(calDate),
       underground: $isUnderground,
     })
   }
