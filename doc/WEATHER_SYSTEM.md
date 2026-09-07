@@ -143,19 +143,26 @@ it, and even the game-minute conversion stays in Rust so `t` cannot drift a
 day from the server's. Per-frame local sample drives:
 
 1. **Lighting** — `cloudFactor` multiplied where `eclipseFactor` already is
-   (`scene-lighting.ts`): directional `× (1 − 0.5·cf)`, ambient `× (1 −
-   0.25·cf)`. Full overcast reads "cloudy afternoon", never "night".
+   (`scene-lighting.ts`): directional `× (1 − 0.5·cf)`, ambient and
+   environment `× (1 − 0.25·cf)`. Full overcast reads "cloudy afternoon",
+   never "night".
 2. **Rain particles** — `GameSceneRainLayer.svelte` from the prototype
    (instanced streaks, ground splash rings, pool ≤ 1,100, measured 66 fps /
-   0.017 ms sim on the dev machine). `enableRainParticles` preset flag. Off
+   0.017 ms sim on the dev machine), spawn rate scaled by the local sample;
+   a cell is kilometres wide, so one sample covers the whole view.
+   `enableRainParticles` preset flag (off on low and mobile). Off
    indoors/dungeons; petals stop spawning under rain.
 3. **Audio** — rain loop + distant thunder one-shots from the prototype's
-   ambience manager (CC0 assets recorded in `doc/assets/sfx.md`); ducked
-   indoors; BGM quiet zone while raining.
-4. **Map overlay** — painted in `WorldMapDialog`'s atlas pass next to
-   `drawLandPlotCells`: translucent cells by intensity, cell state labels
-   (forming / rain / clearing), a toggle, and a forecast scrub (+N game hours)
-   that re-evaluates the same function.
+   ambience manager (CC0 assets recorded in `doc/assets/sfx.md`), following
+   the SFX volume/mute settings; ducked indoors; the BGM playlist goes quiet
+   through the same quiet-zone path as bard performances, with hysteresis
+   (on above 0.35, off below 0.2) so it does not flap at a cell edge.
+4. **Map overlay** — `drawRainCells` (`utils/weatherOverlay.ts`) painted in
+   `WorldMapDialog`'s atlas pass after the house footprints: soft discs
+   whose opacity follows the cell envelope, a toggle button, and a forecast
+   slider (0 to +12 game hours in 30-minute steps) that re-evaluates the same
+   function. The clock is read untracked so the periodic time sync does not
+   redraw the atlas.
 
 ## Phases
 
