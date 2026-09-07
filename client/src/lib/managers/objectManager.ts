@@ -91,10 +91,7 @@ export class ObjectManager {
     return this.catalogCache.find((d) => d.id === objectType) ?? null
   }
 
-  /** The placement a player occupies: the one with `objectId` when the
-   *  server named it, else the nearest of that type — two chairs at one
-   *  table are closer to each other than a sitter's stored position is to
-   *  either, so distance alone seats neighbours on the same chair. */
+  /** Prefer the server's placement ID, then the nearest object of that type. */
   findNearestPlacement(
     objectType: string,
     wx: number,
@@ -105,8 +102,8 @@ export class ObjectManager {
     let bestDist = Infinity
     for (const region of this.cache.values()) {
       for (const p of region.placements) {
-        if (p.type !== objectType) continue
         if (objectId != null && p.id === objectId) return p
+        if (p.type !== objectType) continue
         const dx = p.x - wx
         const dz = p.z - wz
         const dist = dx * dx + dz * dz
@@ -119,11 +116,7 @@ export class ObjectManager {
     return best
   }
 
-  /** Like findNearestPlacement but fetches the region first if not cached. */
-  /** Resolve the pose for a player interacting with `objectType` near
-   *  (wx, wz): the clip, the seat offset, and the placement's position and
-   *  yaw. Placements store degrees while a player's rotation is radians
-   *  everywhere else (a bed at 270° once laid its sleeper out crosswise). */
+  /** Resolve the placement's animation, offset and rotation in radians. */
   async resolvePose(
     objectType: string,
     wx: number,
@@ -139,7 +132,7 @@ export class ObjectManager {
       this.fetchCatalog(),
       this.findNearestPlacementAsync(objectType, wx, wz, objectId),
     ])
-    const def = this.getCatalogEntry(objectType)
+    const def = this.getCatalogEntry(placement?.type ?? objectType)
     return {
       anim: def?.interaction ?? objectType,
       interactOffset: def?.interactOffset,
