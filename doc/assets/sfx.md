@@ -17,6 +17,15 @@ applies — never construct `Audio` elements elsewhere.
 Everything below the cast sound is CC0 as credited. All six are trimmed,
 peak-normalized to ≈ −3 dB, with a short tail fade.
 
+## Weather
+
+- rain-loop.ogg — the calmest stretch (505–545 s) of [AMB Rain Loop 2](https://opengameart.org/content/amb-rain-loop-2) by Kresiek The Furry (CC0), an outdoor GoPro rain recording; made seamlessly loopable with a 3 s self-crossfade (37 s loop)
+- thunder-distant.ogg — `sfx100v2_thunder_01` from [100 CC0 SFX #2](https://opengameart.org/content/100-cc0-sfx-2) by rubberduck (CC0), unmodified; variety comes from a randomized playback rate, low-pass cutoff, and volume
+
+Both route through `rainAmbienceManager.ts` (WebAudio for the seamless loop
+and thunder scheduling), which follows the same SFX volume/mute settings as
+`sfxManager.ts`.
+
 ## Combat
 
 - sword-leather.ogg, sword-miss3.ogg — predate this file; provenance not
