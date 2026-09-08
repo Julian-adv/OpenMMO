@@ -127,6 +127,36 @@ an escape, and a varying consolation would leak the hidden roll. Junk
 keeps the bite/struggle stakes honest without inflating income — the EV
 guardrail above counts flotsam in its average.
 
+## Bait
+
+Bait is a stackable `category: "bait"` item bought from a general merchant
+(Rica sells worms, breadcrumbs and shrimp). Using one from the bag puts it
+**on the hook** — nothing is spent yet — and from then on every cast draws one
+unit of that bait from the bag. The choice lives only in server memory
+(`GameState::armed_bait`), so a relog or a sold-off pile costs no bait; when
+the pile runs out the hook goes bare with a note.
+
+A baited cast changes the bite roll two ways (`baited_weights`):
+
+| column | meaning |
+|---|---|
+| `baitRarityMin` … `baitRarityMax` | the rarity tiers this bait speaks to |
+| `baitBoostPct` | their catch weight, as a percentage, inside the fish pool |
+
+and flotsam's share drops from `FLOTSAM_SHARE_PCT` (20%) to
+`BAIT_FLOTSAM_SHARE_PCT` (10%) — bait draws fish, not boots. The boost is
+applied *before* the fish/flotsam split, so it shifts weight between species
+without changing how often junk bites.
+
+| bait | price | window | boost |
+|---|---|---|---|
+| Breadcrumbs | 2 c | rarity 1–2 | ×2 — cheap volume fishing for minnow and perch |
+| Worm | 5 c | rarity 1–3 | ×1.5 — the all-rounder |
+| Shrimp | 20 c | rarity 3–5 | ×2 — trout, salmon and the sturgeon |
+
+Bait never touches the fight: what is on the hook decides *what* bites, the
+angler decides whether it lands.
+
 ## Skill
 
 Catches grant fishing XP: `10 × rarity²` (10 for a minnow, 250 for a golden
@@ -232,8 +262,8 @@ Trophy catches are celebrated to everyone in delivery radius via the
 
 ## Deliberate limits
 
-- No bait, no rod tiers, no designated fishing spots (any water — ocean or
-  river — works).
+- No rod tiers, no designated fishing spots (any water — ocean or river —
+  works).
 - Animations are in: a Mixamo cast plays once on `FishingCasted`, then a
   fishing idle loops until the line comes in (`fishing.glb` pack, local
   player only — remote anglers still read through the bobber). SFX are in:

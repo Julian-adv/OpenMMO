@@ -390,6 +390,9 @@ pub struct GameState {
     water_check_tick: Arc<std::sync::atomic::AtomicU64>,
     /// Mints per-cast `session_id`s (fishing.rs re-verifies them in the tick).
     next_fishing_session: Arc<std::sync::atomic::AtomicU64>,
+    /// Bait def each angler has put on the hook; a cast spends one from the
+    /// bag. Session-only — nothing is lost on relog (doc/FISHING.md Bait).
+    armed_bait: Arc<RwLock<HashMap<PlayerId, String>>>,
     /// Server-side terrain heights (tile-cached). Fishing's water check is
     /// its first gameplay consumer; sampled only in async handlers, never
     /// in ticks.
@@ -696,6 +699,7 @@ impl GameState {
             fishing_active: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             water_check_tick: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             next_fishing_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
+            armed_bait: Arc::new(RwLock::new(HashMap::new())),
             height_sampler,
             water_sampler,
             splat_sampler,

@@ -6,13 +6,14 @@
 
 use onlinerpg_shared::fishing::{
     fish_pull_ps, reel_speed_mps, stamina_drain_ps, stamina_max, FishState, FishingAction,
-    FishingOutcome, BITE_WINDOW_MS, CAST_MS, CATCH_SLACK_M, CATCH_XP_PER_RARITY_SQ, ESCAPE_XP,
-    EXHAUSTED_STEER_PER_TICK, FIGHT_TIMEOUT_MS, FISH_WANDER_RADIUS_M, FLOTSAM_SHARE_PCT,
-    GIVE_LINE_EXTRA_MPS, LATENCY_GRACE_MS, MAX_CAST_DISTANCE_METERS, MIN_FISHABLE_DEPTH_M,
-    MIN_FISH_DISTANCE_M, PANIC_BAND_M, RARITY_SKILL_BONUS_PCT, REST_MAX_MS, REST_MIN_MS,
-    RUN_MAX_MS, RUN_MAX_PER_RARITY_MS, RUN_MIN_MS, RUN_SPEED_BASE_MPS, RUN_SPEED_PER_RARITY_MPS,
-    SHORE_SAMPLE_STEP_M, STAMINA_DRAIN_MIN_TENSION, STAMINA_RECOVER_PS, TENSION_GIVE_RELIEF_PS,
-    TENSION_INITIAL, TENSION_MAX, TENSION_REEL_PS, TENSION_REST_DECAY_PS, WAIT_MAX_MS, WAIT_MIN_MS,
+    FishingOutcome, BAIT_FLOTSAM_SHARE_PCT, BITE_WINDOW_MS, CAST_MS, CATCH_SLACK_M,
+    CATCH_XP_PER_RARITY_SQ, ESCAPE_XP, EXHAUSTED_STEER_PER_TICK, FIGHT_TIMEOUT_MS,
+    FISH_WANDER_RADIUS_M, FLOTSAM_SHARE_PCT, GIVE_LINE_EXTRA_MPS, LATENCY_GRACE_MS,
+    MAX_CAST_DISTANCE_METERS, MIN_FISHABLE_DEPTH_M, MIN_FISH_DISTANCE_M, PANIC_BAND_M,
+    RARITY_SKILL_BONUS_PCT, REST_MAX_MS, REST_MIN_MS, RUN_MAX_MS, RUN_MAX_PER_RARITY_MS,
+    RUN_MIN_MS, RUN_SPEED_BASE_MPS, RUN_SPEED_PER_RARITY_MPS, SHORE_SAMPLE_STEP_M,
+    STAMINA_DRAIN_MIN_TENSION, STAMINA_RECOVER_PS, TENSION_GIVE_RELIEF_PS, TENSION_INITIAL,
+    TENSION_MAX, TENSION_REEL_PS, TENSION_REST_DECAY_PS, WAIT_MAX_MS, WAIT_MIN_MS,
     WATERLINE_MARGIN_M,
 };
 use onlinerpg_shared::inventory::EquipSlot;
@@ -272,10 +273,22 @@ pub(crate) struct FishingSession {
     pub phase: FishingPhase,
     pub rolled_fish: Option<RolledFish>,
     pub skill_level: u32,
+    /// The bait spent on this cast, if any; it shapes the bite roll.
+    pub bait: Option<BaitEffect>,
     /// Unique per cast. Tick-queued work re-verifies it, so a session that
     /// was cancelled and re-cast between scan and handler is never touched
     /// by the old session's due entries.
     pub session_id: u64,
+}
+
+/// What a bait does to the catch table: fish in `rarity_min..=rarity_max`
+/// weigh `boost_pct`/100 as much, and flotsam drops to
+/// `BAIT_FLOTSAM_SHARE_PCT`. Read off items.csv (doc/FISHING.md Bait).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BaitEffect {
+    pub rarity_min: u32,
+    pub rarity_max: u32,
+    pub boost_pct: u32,
 }
 
 /// Pure catch-table entry, split out so the weighting is unit-testable
@@ -297,7 +310,19 @@ pub(crate) struct CatchCandidate {
 ///
 /// Locked species (`min_fishing_level` above the angler's) weigh nothing;
 /// the fish pool's fixed share redistributes across whatever is unlocked.
+#[cfg(test)]
 pub(crate) fn effective_weights(candidates: &[CatchCandidate], skill_level: u32) -> Vec<u64> {
+    baited_weights(candidates, skill_level, None)
+}
+
+/// `effective_weights` with a bait on the hook: its rarity window is
+/// multiplied inside the fish pool (so the table's order can still invert
+/// only within that window), and flotsam holds `BAIT_FLOTSAM_SHARE_PCT`.
+pub(crate) fn baited_weights(
+    candidates: &[CatchCandidate],
+    skill_level: u32,
+    bait: Option<BaitEffect>,
+) -> Vec<u64> {
     let raw: Vec<u64> = candidates
         .iter()
         .map(|c| {
@@ -306,9 +331,20 @@ pub(crate) fn effective_weights(candidates: &[CatchCandidate], skill_level: u32)
             }
             let growth =
                 100 + RARITY_SKILL_BONUS_PCT * u64::from(skill_level) * u64::from(c.rarity);
-            u64::from(c.catch_weight) * growth
+            let boost = match bait {
+                Some(b) if c.rarity >= 1 && (b.rarity_min..=b.rarity_max).contains(&c.rarity) => {
+                    u64::from(b.boost_pct)
+                }
+                _ => 100,
+            };
+            u64::from(c.catch_weight) * growth * boost / 100
         })
         .collect();
+    let flotsam_share = if bait.is_some() {
+        BAIT_FLOTSAM_SHARE_PCT
+    } else {
+        FLOTSAM_SHARE_PCT
+    };
 
     let pool = |fish: bool| -> u64 {
         raw.iter()
@@ -329,9 +365,9 @@ pub(crate) fn effective_weights(candidates: &[CatchCandidate], skill_level: u32)
         .zip(candidates)
         .map(|(w, c)| {
             if c.rarity >= 1 {
-                w * flotsam_total * (100 - FLOTSAM_SHARE_PCT)
+                w * flotsam_total * (100 - flotsam_share)
             } else {
-                w * fish_total * FLOTSAM_SHARE_PCT
+                w * fish_total * flotsam_share
             }
         })
         .collect()
@@ -427,6 +463,7 @@ impl GameState {
         let reel_floor_m = self.measure_reel_floor(&player_pos, wx, target.z).await;
 
         let skill_level = self.skill_level(player_id, SkillId::Fishing).await;
+        let bait = self.spend_armed_bait(player_id).await;
         // The bobber floats on the actual water surface — sea level over the
         // ocean, but the carved channel height over a river.
         let bobber = Position {
@@ -447,6 +484,7 @@ impl GameState {
                     },
                     rolled_fish: None,
                     skill_level,
+                    bait,
                     session_id: self
                         .next_fishing_session
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -603,6 +641,74 @@ impl GameState {
             .max(MIN_FISH_DISTANCE_M)
     }
 
+    /// `use_item` on a bait: name it as the pile every cast draws from. Spends
+    /// nothing now — the hook is baited at the cast, from whatever is still in
+    /// the bag — so a relog or a sold-off pile loses no bait.
+    pub(super) async fn use_arm_bait(&self, player_id: &PlayerId, instance_id: u64) {
+        let Some((def_id, name)) = ({
+            let inventories = self.inventories.read().await;
+            inventories.get(player_id).and_then(|inv| {
+                inv.bag
+                    .iter()
+                    .find(|item| item.instance_id == instance_id)
+                    .and_then(|item| self.item_defs.get(&item.item_def_id))
+                    .filter(|def| def.is_bait())
+                    .map(|def| (def.id.clone(), def.name.clone()))
+            })
+        }) else {
+            return;
+        };
+        let already =
+            self.armed_bait.write().await.insert(*player_id, def_id) == Some(name.clone());
+        let text = if already {
+            format!("{name} is already on the hook.")
+        } else {
+            format!("{name} goes on the hook. Each cast will use one.")
+        };
+        self.send_system_message(player_id, text).await;
+    }
+
+    /// Take one unit of the armed bait out of the bag for this cast. An empty
+    /// pile disarms the hook with a note, so the angler knows the next casts
+    /// are bare.
+    async fn spend_armed_bait(&self, player_id: &PlayerId) -> Option<BaitEffect> {
+        let def_id = self.armed_bait.read().await.get(player_id).cloned()?;
+        let def = self.item_defs.get(&def_id)?;
+        let effect = def.bait_effect()?;
+        let snapshot = {
+            let mut inventories = self.inventories.write().await;
+            let inv = inventories.get_mut(player_id)?;
+            let instance_id = inv
+                .bag
+                .iter()
+                .find(|item| item.item_def_id == def_id)
+                .map(|item| item.instance_id);
+            match instance_id {
+                Some(instance_id) => {
+                    super::inventory::consume_one(inv, instance_id);
+                    Some(inv.clone())
+                }
+                None => None,
+            }
+        };
+        match snapshot {
+            Some(snapshot) => {
+                self.mark_inventory_dirty(player_id).await;
+                self.send_inventory_snapshot(player_id, snapshot).await;
+                Some(effect)
+            }
+            None => {
+                self.armed_bait.write().await.remove(player_id);
+                self.send_system_message(
+                    player_id,
+                    format!("Out of {} — casting a bare hook.", def.name),
+                )
+                .await;
+                None
+            }
+        }
+    }
+
     /// Whether the player's main hand currently holds a fishing rod — the
     /// cast precondition, also re-checked when equipment changes mid-session.
     async fn main_hand_is_rod(&self, player_id: &PlayerId) -> bool {
@@ -642,7 +748,7 @@ impl GameState {
         // under a single lock acquisition; the rest are rare transitions.
         enum Due {
             BobberLanded(PlayerId, u64, u32),
-            Bite(PlayerId, u64, u32),
+            Bite(PlayerId, u64, u32, Option<BaitEffect>),
             Expired(PlayerId, u64),
             PlayerGone(PlayerId),
         }
@@ -665,7 +771,12 @@ impl GameState {
                         due.push(Due::BobberLanded(*player_id, sid, session.skill_level));
                     }
                     FishingPhase::Waiting { bite_at } if now >= *bite_at => {
-                        due.push(Due::Bite(*player_id, sid, session.skill_level));
+                        due.push(Due::Bite(
+                            *player_id,
+                            sid,
+                            session.skill_level,
+                            session.bait,
+                        ));
                     }
                     FishingPhase::Bite { since }
                         if now
@@ -706,8 +817,8 @@ impl GameState {
                         };
                     }
                 }
-                Due::Bite(player_id, sid, skill_level) => {
-                    let rolled = self.roll_fish(skill_level);
+                Due::Bite(player_id, sid, skill_level, bait) => {
+                    let rolled = self.roll_fish(skill_level, bait);
                     let bobber = {
                         let mut sessions = self.fishing_sessions.write().await;
                         let Some(session) =
@@ -825,12 +936,12 @@ impl GameState {
 
     /// Roll species + size + trophy for a bite, from the item-def catch
     /// table (`category == "fish"`, weighted by `catchWeight`).
-    fn roll_fish(&self, skill_level: u32) -> Option<RolledFish> {
+    fn roll_fish(&self, skill_level: u32, bait: Option<BaitEffect>) -> Option<RolledFish> {
         let candidates = self.item_defs.catch_table();
         if candidates.is_empty() {
             return None;
         }
-        let weights = effective_weights(candidates, skill_level);
+        let weights = baited_weights(candidates, skill_level, bait);
         let total: u64 = weights.iter().sum();
         // All-zero weights (data-driven) would panic the gen_range below.
         if total == 0 {

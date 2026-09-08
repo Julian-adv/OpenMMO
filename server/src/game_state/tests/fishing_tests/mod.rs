@@ -9,6 +9,7 @@ use onlinerpg_shared::fishing::{
 };
 use tokio::time::{advance, Duration};
 
+mod bait_tests;
 mod economy_tests;
 mod flow_tests;
 mod interruption_tests;

@@ -115,6 +115,14 @@ pub struct ItemDefinition {
     /// Fish only — rolled length at or above this is a trophy catch.
     #[serde(rename = "trophyCm", default)]
     pub trophy_cm: Option<u32>,
+    /// Bait only — the rarity tiers (inclusive) whose catch weight this bait
+    /// multiplies by `baitBoostPct`/100 (doc/FISHING.md Bait).
+    #[serde(rename = "baitRarityMin", default)]
+    pub bait_rarity_min: Option<u32>,
+    #[serde(rename = "baitRarityMax", default)]
+    pub bait_rarity_max: Option<u32>,
+    #[serde(rename = "baitBoostPct", default)]
+    pub bait_boost_pct: Option<u32>,
     /// Equipment only — the dungeon `chestTier` (dungeons.csv) this drops at.
     /// Opt-in: absent means never in any chest pool (doc/ITEM_TIERS.md).
     #[serde(rename = "chestTier", default)]
@@ -242,6 +250,9 @@ pub enum UseEffect {
     /// Ask the client to open the colour picker. Consumes nothing — the
     /// chosen colour comes back as `DyeCape`.
     PromptCapeDye,
+    /// Put this bait on the hook: every cast from now on spends one unit of
+    /// it from the bag. Consumes nothing until the cast.
+    ArmBait,
     /// Ask the client to open the image picker. Consumes nothing — the
     /// uploaded picture's hash comes back as `ApplyCapeTexture`.
     PromptCapeTexture,
@@ -283,6 +294,22 @@ impl ItemDefinition {
     /// the bare-handed path.
     pub fn is_fishing_rod(&self) -> bool {
         self.category.as_deref() == Some("fishing_rod")
+    }
+
+    pub fn is_bait(&self) -> bool {
+        self.category.as_deref() == Some("bait")
+    }
+
+    /// What this bait does to the catch table, if it is bait at all.
+    pub fn bait_effect(&self) -> Option<crate::game_state::fishing::BaitEffect> {
+        if !self.is_bait() {
+            return None;
+        }
+        Some(crate::game_state::fishing::BaitEffect {
+            rarity_min: self.bait_rarity_min?,
+            rarity_max: self.bait_rarity_max?,
+            boost_pct: self.bait_boost_pct?,
+        })
     }
 
     pub fn is_fish(&self) -> bool {
@@ -399,6 +426,7 @@ impl ItemDefinition {
             "enchant_armor_scroll" => Some(UseEffect::EnchantArmor),
             "party_summon_scroll" => Some(UseEffect::SummonParty),
             "coin_catch" => self.dice.clone().map(UseEffect::OpenCoinPouch),
+            "bait" => Some(UseEffect::ArmBait),
             "tip_hat" => Some(UseEffect::ToggleTipHat),
             "cape_dye" => Some(UseEffect::PromptCapeDye),
             "cape_texture" => Some(UseEffect::PromptCapeTexture),
@@ -514,6 +542,17 @@ impl ItemDefs {
             assert!(
                 def.hands.is_none_or(|hands| (1..=2).contains(&hands)),
                 "item '{}': hands must be 1 or 2",
+                def.id
+            );
+            // Bait is spent a unit per cast out of the bag and needs its
+            // whole rarity window to weight anything.
+            assert!(
+                !def.is_bait()
+                    || (def.stackable
+                        && def
+                            .bait_effect()
+                            .is_some_and(|b| b.rarity_min >= 1 && b.rarity_min <= b.rarity_max)),
+                "item '{}': bait must be stackable with baitRarityMin ≤ baitRarityMax (≥ 1) and baitBoostPct",
                 def.id
             );
             // Ammunition is spent a unit at a time out of the bag and rolls

@@ -833,6 +833,7 @@ impl super::GameState {
                 self.use_coin_pouch(player_id, instance_id, &dice).await
             }
             UseEffect::ToggleTipHat => self.toggle_tip_hat(player_id).await,
+            UseEffect::ArmBait => self.use_arm_bait(player_id, instance_id).await,
             UseEffect::PromptCapeDye => {
                 self.prompt_cape_tool(
                     player_id,

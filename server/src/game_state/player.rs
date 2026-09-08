@@ -1002,6 +1002,7 @@ impl super::GameState {
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
         self.movement_intents.write().await.remove(player_id);
+        self.armed_bait.write().await.remove(player_id);
         self.music_performances.write().await.remove(player_id);
         self.remove_live_instrument(player_id).await;
         self.remove_player_stall(player_id).await;

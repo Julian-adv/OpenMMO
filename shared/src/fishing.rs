@@ -94,6 +94,9 @@ pub const LATENCY_GRACE_MS: u32 = 500;
 /// better angler, not a tidier river, so junk never thins out with level.
 pub const FLOTSAM_SHARE_PCT: u64 = 20;
 
+/// Flotsam's share when the hook is baited: bait draws fish, not boots.
+pub const BAIT_FLOTSAM_SHARE_PCT: u64 = 10;
+
 /// Percent catch-weight growth per fishing level per rarity tier.
 /// Multiplicative, so the table's order can never invert.
 pub const RARITY_SKILL_BONUS_PCT: u64 = 3;
