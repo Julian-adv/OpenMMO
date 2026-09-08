@@ -140,6 +140,9 @@ fn restore_heightmap_tile(
     changed
 }
 
+// The tile load between the check and the insert is awaited, so an `Entry`
+// cannot span it.
+#[allow(clippy::map_entry)]
 pub async fn flatten_heightmap_rects(
     terrain: &TerrainIO,
     rects: &[HeightRect],
@@ -187,6 +190,9 @@ pub async fn flatten_heightmap_rects(
         .collect())
 }
 
+// The tile load between the check and the insert is awaited, so an `Entry`
+// cannot span it.
+#[allow(clippy::map_entry)]
 pub async fn restore_heightmap_rects(
     terrain: &TerrainIO,
     rects: &[HeightRect],

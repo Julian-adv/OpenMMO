@@ -106,46 +106,6 @@ impl EstateChestIndex {
     }
 }
 
-#[cfg(test)]
-mod index_tests {
-    use super::*;
-    use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X};
-
-    fn chest(id: i64, x: f32, z: f32, floor_level: i8) -> EstateChest {
-        EstateChest {
-            id,
-            estate_id: 1,
-            owner_id: 1,
-            item_def_id: "storage_chest".to_string(),
-            position: Position { x, y: 0.0, z },
-            rotation_deg: 0.0,
-            floor_level,
-            overdue: false,
-            revision: 0,
-        }
-    }
-
-    #[test]
-    fn nearby_uses_spatial_buckets_across_the_world_seam() {
-        let mut index = EstateChestIndex::default();
-        index.insert(chest(1, WORLD_MAX_X - 2.0, 0.0, 0));
-        index.insert(chest(2, 100.0, 100.0, 0));
-        index.insert(chest(3, WORLD_MAX_X - 2.0, 0.0, 1));
-
-        let found = index.nearby(
-            &Position {
-                x: WORLD_MIN_X + 2.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            0,
-        );
-
-        assert_eq!(found.len(), 1);
-        assert_eq!(found[0].id, 1);
-    }
-}
-
 fn cache_key(key: (i32, i32)) -> String {
     format!("furniture:estate-storage:{},{}", key.0, key.1)
 }
@@ -938,5 +898,45 @@ impl GameState {
             self.send_inventory_snapshot(player_id, updated).await;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod index_tests {
+    use super::*;
+    use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X};
+
+    fn chest(id: i64, x: f32, z: f32, floor_level: i8) -> EstateChest {
+        EstateChest {
+            id,
+            estate_id: 1,
+            owner_id: 1,
+            item_def_id: "storage_chest".to_string(),
+            position: Position { x, y: 0.0, z },
+            rotation_deg: 0.0,
+            floor_level,
+            overdue: false,
+            revision: 0,
+        }
+    }
+
+    #[test]
+    fn nearby_uses_spatial_buckets_across_the_world_seam() {
+        let mut index = EstateChestIndex::default();
+        index.insert(chest(1, WORLD_MAX_X - 2.0, 0.0, 0));
+        index.insert(chest(2, 100.0, 100.0, 0));
+        index.insert(chest(3, WORLD_MAX_X - 2.0, 0.0, 1));
+
+        let found = index.nearby(
+            &Position {
+                x: WORLD_MIN_X + 2.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            0,
+        );
+
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].id, 1);
     }
 }
