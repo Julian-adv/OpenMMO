@@ -162,8 +162,8 @@
   let rainOverlayVisible = $state(true)
   const forecastAvailable = $derived($weather !== null && $weatherSectorsReady)
 
-  // The map already redraws on pan, zoom, and slider moves, so the clock is
-  // read untracked: the periodic time sync must not redraw the whole atlas.
+  // The clock is read untracked so the time sync alone never redraws the
+  // atlas; the 30 s WeatherSync write is what keeps an open map current.
   function forecastCells(offsetMinutes: number): RainCellView[] | null {
     const seed = $weather?.seed
     if (seed === undefined || !$weatherSectorsReady) return null

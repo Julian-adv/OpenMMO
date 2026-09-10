@@ -169,8 +169,8 @@ day from the server's. Per-frame local sample drives:
    `WorldMapDialog`'s atlas pass after the house footprints: soft discs
    whose opacity follows the cell envelope, a toggle button, and a forecast
    slider (0 to +12 game hours in 30-minute steps) that re-evaluates the same
-   function. The clock is read untracked so the periodic time sync does not
-   redraw the atlas.
+   function. The clock is read untracked so the time sync alone never redraws
+   the atlas; the 30 s `WeatherSync` write is what refreshes an open map.
 
 ## Phases
 
