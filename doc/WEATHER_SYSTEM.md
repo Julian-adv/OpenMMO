@@ -12,7 +12,7 @@ dimmed light, rain and sound. Players can open the world map and see where it
 rains now and where it will rain next. Tone: subtle, cozy rain that fits the
 warm quarter-view look — not a gray realism filter.
 
-Non-goals (v1): snow, lightning/thunder, wetness debuffs, weather-dependent
+Non-goals (v1): snow, lightning visuals, wetness debuffs, weather-dependent
 fishing, seasons, sky dome (quarter view — the sky is never on screen).
 
 ## Why stationary cells, not travelling clouds
@@ -200,5 +200,5 @@ day from the server's. Per-frame local sample drives:
 
 1. Existing plans for weather? Intentionally omitted?
 2. Zones baked from elevation vs hand-placed anchors like `land_grades.rs`.
-3. v1 scope confirmation (dim + rain + sound; no snow/thunder yet).
+3. v1 scope confirmation (dim + rain + sound with distant thunder; no snow or lightning visuals yet).
 4. Map exposure: world-map toggle only, or minimap too.

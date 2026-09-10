@@ -1148,8 +1148,9 @@
           class="forecast"
           onpointerdown={(e) => e.stopPropagation()}
           onpointermove={(e) => {
-            e.stopPropagation()
             hoverPointer = null
+            // A pan in flight still needs the window listener to see moves.
+            if (!isDragging) e.stopPropagation()
           }}
           onclick={(e) => e.stopPropagation()}
         >
