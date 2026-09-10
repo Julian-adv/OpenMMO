@@ -14,7 +14,11 @@ vi.mock('../wasm/onlinerpg_shared', () => ({
 }))
 
 import { weather_rain_at } from '../wasm/onlinerpg_shared'
-import { gameMinutesAt, sampleLocalWeather } from './weatherSample'
+import {
+  gameMinutesAt,
+  sampleLocalWeather,
+  weatherChanged,
+} from './weatherSample'
 
 describe('weatherSample', () => {
   it('adds the fractional game hour to the day from wasm', () => {
@@ -32,5 +36,20 @@ describe('weatherSample', () => {
     )
     expect(weather_rain_at).toHaveBeenCalledWith(42, 720, 100, -50)
     expect(sample).toEqual({ rain: 0.6, cloud: 0.3 })
+  })
+
+  it('publishes past the deadband and always lands on idle', () => {
+    expect(
+      weatherChanged({ rain: 0.5, cloud: 0 }, { rain: 0.503, cloud: 0 })
+    ).toBe(false)
+    expect(
+      weatherChanged({ rain: 0.5, cloud: 0 }, { rain: 0.51, cloud: 0 })
+    ).toBe(true)
+    expect(
+      weatherChanged({ rain: 0.004, cloud: 0 }, { rain: 0, cloud: 0 })
+    ).toBe(true)
+    expect(weatherChanged({ rain: 0, cloud: 0 }, { rain: 0, cloud: 0 })).toBe(
+      false
+    )
   })
 })

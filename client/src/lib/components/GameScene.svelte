@@ -106,7 +106,7 @@
     weatherSectorsReady,
     type LocalWeather,
   } from '../stores/weatherStore'
-  import { sampleLocalWeather } from '../utils/weatherSample'
+  import { sampleLocalWeather, weatherChanged } from '../utils/weatherSample'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -758,7 +758,7 @@
         const windStart = performance.now()
         // Petals and seeds stop spawning under rain; the live ones age out.
         const grassCount =
-          lastLocalWeather.rain > 0.2
+          localSample.rain > 0.2
             ? 0
             : (grassLayerRef?.getPlayerChunkGrassCount() ?? 0)
         if (windState)
@@ -768,7 +768,7 @@
 
       {
         const rainStart = performance.now()
-        const rain = lastLocalWeather.rain
+        const rain = localSample.rain
         const indoor = $playerInsideHouseId !== null
         rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain)
         updateRainAmbience(rain, indoor, deltaTime / 1000)
@@ -955,7 +955,8 @@
     cameraDistance.set(camera.zoom)
   }
 
-  let lastLocalWeather: LocalWeather = NO_WEATHER
+  let localSample: LocalWeather = NO_WEATHER
+  let publishedWeather: LocalWeather = NO_WEATHER
 
   // Weather runs on true game time, not the debug-offset display hour, so
   // it stays in step with the server and the map forecast.
@@ -970,11 +971,9 @@
         currentPlayer.position.z
       )
     }
-    if (
-      Math.abs(sample.rain - lastLocalWeather.rain) > 0.005 ||
-      Math.abs(sample.cloud - lastLocalWeather.cloud) > 0.005
-    ) {
-      lastLocalWeather = sample
+    localSample = sample
+    if (weatherChanged(publishedWeather, sample)) {
+      publishedWeather = sample
       localWeather.set(sample)
     }
     return sample.cloud

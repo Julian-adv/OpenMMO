@@ -728,7 +728,22 @@
   })
 
   // --- Drag to pan ---
+  // A press that started on the forecast bar must not end as a map click:
+  // the click lands on the container when the pointer is released off the bar.
+  let forecastPressed = false
+
+  function pressForecast(event: PointerEvent) {
+    event.stopPropagation()
+    forecastPressed = true
+    window.addEventListener(
+      'pointerup',
+      () => setTimeout(() => (forecastPressed = false), 0),
+      { once: true }
+    )
+  }
+
   function handlePointerDown(event: PointerEvent) {
+    forecastPressed = false
     if (event.ctrlKey && $isAdminUser) return // let Ctrl+click through for teleport
     if (event.pointerType === 'mouse' && event.button !== 0) return
     event.preventDefault()
@@ -784,6 +799,10 @@
   })
 
   function handleMapHover(event: PointerEvent) {
+    if ((event.target as Element | null)?.closest?.('.forecast')) {
+      hoverPointer = null
+      return
+    }
     hoverPointer = { x: event.clientX, y: event.clientY }
   }
 
@@ -833,6 +852,7 @@
   }
 
   function handleMapClick(event: MouseEvent) {
+    if (forecastPressed) return
     if (suppressNextClick) {
       suppressNextClick = false
       event.preventDefault()
@@ -886,6 +906,7 @@
   // macOS turns Ctrl+click into a contextmenu event (no click fires at all),
   // so the teleport shortcut must be caught here too.
   function handleMapContextMenu(event: MouseEvent) {
+    if (forecastPressed) return
     if (selectingDestination) {
       event.preventDefault()
       return
@@ -1146,13 +1167,9 @@
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <label
           class="forecast"
-          onpointerdown={(e) => e.stopPropagation()}
-          onpointermove={(e) => {
-            hoverPointer = null
-            // A pan in flight still needs the window listener to see moves.
-            if (!isDragging) e.stopPropagation()
-          }}
+          onpointerdown={pressForecast}
           onclick={(e) => e.stopPropagation()}
+          oncontextmenu={(e) => e.stopPropagation()}
         >
           <span class="forecast-title">Rain</span>
           <input
