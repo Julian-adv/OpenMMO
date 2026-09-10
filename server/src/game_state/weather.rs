@@ -2,8 +2,8 @@
 //! the seed the rain sectors were baked with; rain itself is evaluated from
 //! `onlinerpg_shared::weather` on both sides.
 
-use tracing::{info, warn};
 use onlinerpg_shared::messages::ServerMessage;
+use tracing::{info, warn};
 
 use super::GameState;
 

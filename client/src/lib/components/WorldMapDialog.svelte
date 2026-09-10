@@ -1147,6 +1147,10 @@
         <label
           class="forecast"
           onpointerdown={(e) => e.stopPropagation()}
+          onpointermove={(e) => {
+            e.stopPropagation()
+            hoverPointer = null
+          }}
           onclick={(e) => e.stopPropagation()}
         >
           <span class="forecast-title">Rain</span>
