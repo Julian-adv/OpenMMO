@@ -61,8 +61,8 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
         life_min: 165.0,
         life_var: 135.0,
         chance: 0.9,
-        radius_min_km: 1.4,
-        radius_var_km: 0.8,
+        radius_min_km: 1.6,
+        radius_var_km: 1.0,
     },
     // temperate
     ZoneSchedule {
@@ -70,8 +70,8 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
         life_min: 120.0,
         life_var: 120.0,
         chance: 0.8,
-        radius_min_km: 3.0,
-        radius_var_km: 1.6,
+        radius_min_km: 3.5,
+        radius_var_km: 1.9,
     },
     // rain shadow
     ZoneSchedule {
@@ -79,8 +79,8 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
         life_min: 120.0,
         life_var: 60.0,
         chance: 0.6,
-        radius_min_km: 2.6,
-        radius_var_km: 1.4,
+        radius_min_km: 3.0,
+        radius_var_km: 1.6,
     },
     // alpine
     ZoneSchedule {
@@ -88,8 +88,8 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
         life_min: 180.0,
         life_var: 180.0,
         chance: 0.9,
-        radius_min_km: 2.8,
-        radius_var_km: 1.6,
+        radius_min_km: 3.3,
+        radius_var_km: 1.9,
     },
 ];
 
@@ -204,19 +204,29 @@ pub fn cells_at(sectors: &[Sector], seed: u64, t_min: f64) -> Vec<Cell> {
         .collect()
 }
 
-/// Rain intensity 0..1 at a world position: a Gaussian per cell, summed and
-/// clamped. Cells further than three radii contribute nothing.
+/// Rain intensity 0..1 at a world position: the cell falloffs summed and
+/// clamped. Nothing falls outside a cell's radius.
 pub fn rain_at(cells: &[Cell], x: f32, z: f32) -> f32 {
     let mut sum = 0.0f32;
     for c in cells {
         let dx = shortest_world_delta_x(c.x, x);
         let dz = z - c.z;
-        let q = (dx * dx + dz * dz) / (c.radius_m * c.radius_m);
-        if q < 9.0 {
-            sum += c.env * (-q).exp();
+        let d2 = dx * dx + dz * dz;
+        if d2 < c.radius_m * c.radius_m {
+            sum += c.env * rain_falloff(d2.sqrt() / c.radius_m);
         }
     }
     sum.min(1.0)
+}
+
+/// Share of the radius that rains at full strength; the rest is the fade.
+pub const CELL_CORE_SHARE: f32 = 0.7;
+
+/// Flat top with a short edge: the map disc is the rain area, and a cell
+/// never soaks its neighbours from beyond its own radius. The Gaussian this
+/// replaced kept 37 % at the radius and drizzled out to twice it.
+pub fn rain_falloff(normalized_distance: f32) -> f32 {
+    1.0 - smoothstep(CELL_CORE_SHARE, 1.0, normalized_distance)
 }
 
 /// Light dimming 0..1 derived from rain; darkens before rain reaches full.
@@ -342,7 +352,10 @@ mod tests {
         };
         let cells = [cell];
         assert!((rain_at(&cells, -16_400.0, 0.0) - 1.0).abs() < 1e-6);
-        assert!(rain_at(&cells, -16_400.0, 3_000.0) < 0.4);
+        assert!((rain_at(&cells, -16_400.0, 2_100.0) - 1.0).abs() < 1e-6);
+        let mid = rain_at(&cells, -16_400.0, 2_550.0);
+        assert!((mid - 0.5).abs() < 1e-6, "{mid}");
+        assert_eq!(rain_at(&cells, -16_400.0, 3_000.0), 0.0);
         assert_eq!(rain_at(&cells, -16_400.0, 20_000.0), 0.0);
         // 100 m east of the seam is 132 m from the cell, not 32 km
         let across = rain_at(&cells, 16_300.0, 0.0);

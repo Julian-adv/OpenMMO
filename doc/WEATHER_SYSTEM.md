@@ -69,8 +69,15 @@ active   = h1 < chance
 life     = min(L0 + h3 * Lv, 0.9 * P)
 birth    = k * P + h2 * (P - life)         // the cell fits inside its cycle
 envelope = ramp-up 25 % of life → full → ramp-down 30 % of life
-rain(x, z, t) = max over nearby cells of envelope(t) * falloff(dist / radius)
+falloff(d) = 1 - smoothstep(0.7, 1.0, d)   // flat top, short edge, 0 at the radius
+rain(x, z, t) = min(1, sum over cells of envelope(t) * falloff(dist / radius))
 ```
+
+The falloff is flat to 70 % of the radius and fades to zero at the radius, so
+the disc on the map is exactly where it rains and a cell never soaks the
+next zone from beyond its own edge. A Gaussian was tried first: it still held
+37 % at the radius and drizzled out to twice it, which made the map
+over-promise and let coastal cells wet the rain shadow.
 
 Everything is a pure function of `(seed, sectors, t)` — `shared/src/weather.rs`.
 `t` is game minutes since the calendar epoch (`weather::game_minutes`, on top
@@ -82,16 +89,16 @@ knows the seed can evaluate any time — that is the forecast.
 
 | Zone | km² per sector | Period | Lifetime | Chance | Radius | Real-time feel |
 |---|---|---|---|---|---|---|
-| Wet coast | 4 | 510 (8.5 h) | 165–300 | 0.9 | 1.4–2.2 km | 21–37 min of rain every ~1 h |
-| Temperate | 7 | 2,000 (~1.4 d) | 120–240 | 0.8 | 3.0–4.6 km | 15–30 min every ~4 h |
-| Rain shadow | 36 | 6,800 (~5 d) | 120–180 | 0.6 | 2.6–4.0 km | 15–22 min every ~14 h |
-| Alpine | 12 | 1,260 (21 h) | 180–360 | 0.9 | 2.8–4.4 km | 22–45 min every ~2.6 h |
+| Wet coast | 4 | 510 (8.5 h) | 165–300 | 0.9 | 1.6–2.6 km | 21–37 min of rain every ~1 h |
+| Temperate | 7 | 2,000 (~1.4 d) | 120–240 | 0.8 | 3.5–5.4 km | 15–30 min every ~4 h |
+| Rain shadow | 36 | 6,800 (~5 d) | 120–180 | 0.6 | 3.0–4.6 km | 15–22 min every ~14 h |
+| Alpine | 12 | 1,260 (21 h) | 180–360 | 0.9 | 3.3–5.2 km | 22–45 min every ~2.6 h |
 
 A rain event must be felt inside a play session; 15–40 real minutes matches
 FFXIV's 23-minute weather slot. Dryness is expressed by the gap between events,
 not by shorter events. Measured share of time a plot is wet (30 game days,
 seed 42, Valdran: 22 coastal, 15 temperate, 1 shadow, 1 alpine sector):
-wet coast 31 %, temperate 20 %, alpine 21 %, rain shadow 17 %. Cells reach
+wet coast 30 %, temperate 20 %, alpine 22 %, rain shadow 16 %. Cells reach
 3–5 km, so the rain shadow is "the least rainy place", never bone dry — most
 of its rain is spill from the zones around it.
 

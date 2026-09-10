@@ -15,8 +15,8 @@ export const FORECAST_MAX_MINUTES = 12 * 60
 export const FORECAST_STEP_MINUTES = 30
 
 const CELL_CORE_ALPHA = 0.72
-/** Fraction of the radius that stays at full density before the fade. */
-const CELL_CORE_SHARE = 0.4
+/** Mirrors `weather::CELL_CORE_SHARE`: the disc fades exactly where the rain does. */
+const CELL_CORE_SHARE = 0.7
 
 /** Rain cells as soft discs so the map reads like a satellite cloud layer.
  *  Drawn onto the unrotated atlas: x is unwrapped toward the view centre so a
