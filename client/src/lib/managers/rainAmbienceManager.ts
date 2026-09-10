@@ -24,22 +24,29 @@ function randBetween([lo, hi]: number[]): number {
 }
 
 function init() {
-  audioCtx = new AudioContext()
-  rainGain = audioCtx.createGain()
-  rainGain.gain.value = 0
-  rainGain.connect(audioCtx.destination)
+  const ctx = new AudioContext()
+  const gain = ctx.createGain()
+  gain.gain.value = 0
+  gain.connect(ctx.destination)
+  audioCtx = ctx
+  rainGain = gain
 
+  // Stop and re-init while the files are still downloading must not leave
+  // this load attaching a second loop to the newer context.
   const load = async () => {
     const [rainData, thunderData] = await Promise.all([
       fetch(RAIN_URL).then((r) => r.arrayBuffer()),
       fetch(THUNDER_URL).then((r) => r.arrayBuffer()),
     ])
-    const rainBuffer = await audioCtx!.decodeAudioData(rainData)
-    thunderBuffer = await audioCtx!.decodeAudioData(thunderData)
-    const src = audioCtx!.createBufferSource()
+    if (audioCtx !== ctx) return
+    const rainBuffer = await ctx.decodeAudioData(rainData)
+    const thunder = await ctx.decodeAudioData(thunderData)
+    if (audioCtx !== ctx) return
+    thunderBuffer = thunder
+    const src = ctx.createBufferSource()
     src.buffer = rainBuffer
     src.loop = true
-    src.connect(rainGain!)
+    src.connect(gain)
     src.start()
   }
   // Missing audio files must never break the game loop

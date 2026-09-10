@@ -142,8 +142,9 @@ grid when the map overlay is open. One implementation, no drift.
 ## Client
 
 `weatherStore.ts` (mirrors `timeStore.ts`) fed from `messageHandlers.ts`,
-fetching the sector list into wasm on the first sync; `climateStore.ts`
-mirrors `landGradeStore.ts`. The rain function is called through wasm
+fetching the sector list into wasm on the first sync. The per-plot climate
+route has no client reader yet; a climate map layer can add one modelled on
+`landGradeStore.ts`. The rain function is called through wasm
 (`weather_set_sectors`, `weather_game_minutes`, `weather_cells_at`,
 `weather_rain_at`, `weather_cloud_factor`) — the client never re-implements
 it, and even the game-minute conversion stays in Rust so `t` cannot drift a

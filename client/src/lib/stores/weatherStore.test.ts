@@ -6,7 +6,14 @@ vi.mock('../wasm/onlinerpg_shared', () => ({
 }))
 
 import { weather_set_sectors } from '../wasm/onlinerpg_shared'
-import { clearWeather, setWeather, weather, weatherSectorsReady } from './weatherStore'
+import {
+  clearWeather,
+  localWeather,
+  resetWeatherSectors,
+  setWeather,
+  weather,
+  weatherSectorsReady,
+} from './weatherStore'
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -21,7 +28,10 @@ describe('weatherStore', () => {
   })
 
   it('stores the sync payload and loads the sector list once', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, text: async () => '{"sectors":[]}' }))
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      text: async () => '{"sectors":[]}',
+    }))
     vi.stubGlobal('fetch', fetchMock)
 
     setWeather({ seed: 42, bias: 1 })
@@ -30,7 +40,9 @@ describe('weatherStore', () => {
 
     expect(get(weather)).toEqual({ seed: 42, bias: 0.5 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/terrain\/weather-sectors$/))
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/terrain\/weather-sectors$/)
+    )
     expect(weather_set_sectors).toHaveBeenCalledWith('{"sectors":[]}')
     expect(get(weatherSectorsReady)).toBe(true)
 
@@ -54,5 +66,26 @@ describe('weatherStore', () => {
     await flush()
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(get(weatherSectorsReady)).toBe(true)
+  })
+
+  it('keeps the seed and local sample across a reconnect but re-fetches the list', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      text: async () => '{"sectors":[]}',
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    setWeather({ seed: 42, bias: 1 })
+    await flush()
+    localWeather.set({ rain: 1, cloud: 1 })
+
+    resetWeatherSectors()
+    expect(get(weather)).toEqual({ seed: 42, bias: 1 })
+    expect(get(localWeather)).toEqual({ rain: 1, cloud: 1 })
+    expect(get(weatherSectorsReady)).toBe(true)
+
+    setWeather({ seed: 42, bias: 1 })
+    await flush()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 })

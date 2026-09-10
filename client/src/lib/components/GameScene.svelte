@@ -418,6 +418,8 @@
     if (objectGroup) objectGroup.visible = !underground
     const windGroup = windParticlesRef?.getGroup?.()
     if (windGroup) windGroup.visible = !underground
+    const rainGroup = rainLayerRef?.getGroup?.()
+    if (rainGroup) rainGroup.visible = !underground
     const riverRocksGroup = riverRocksRef?.getGroup?.()
     if (riverRocksGroup) riverRocksGroup.visible = !underground
     const shoreSprayGroup = shoreSprayRef?.getGroup?.()
@@ -842,6 +844,7 @@
         grassLayerRef,
         treeLayerRef,
         windParticlesRef,
+        rainLayerRef,
         housingLayerRef,
         objectOverlayRef,
         currentPlayerModel,

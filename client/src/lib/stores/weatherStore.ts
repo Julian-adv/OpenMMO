@@ -31,11 +31,16 @@ export function setWeather(next: ServerWeather) {
   }
 }
 
-/** Disconnect: the next session re-fetches the list, which may have been
- *  re-baked in between (the server revalidates it, so this is cheap). */
 export function clearWeather() {
   weather.set(null)
   localWeather.set(NO_WEATHER)
+  resetWeatherSectors()
+}
+
+/** Reconnect: keep the last seed so rain, light, and music hold steady until
+ *  the rejoin's `WeatherSync` lands, but re-fetch the list in case the world
+ *  was re-baked in between (the server revalidates it, so this is cheap). */
+export function resetWeatherSectors() {
   sectorsRequested = false
 }
 

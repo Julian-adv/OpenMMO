@@ -27,7 +27,7 @@ import {
   setApiAuthToken,
 } from '../utils/networkUtils'
 import { clearServerGameTime } from '../stores/timeStore'
-import { clearWeather } from '../stores/weatherStore'
+import { clearWeather, resetWeatherSectors } from '../stores/weatherStore'
 import { markShopRequested, shopSession } from '../stores/tradeStore'
 import initWasm, {
   serialize_client_message,
@@ -232,7 +232,7 @@ class NetworkManager {
       gameStore.update((state) => ({ ...state, isConnected: true }))
       serverNotice.set(null)
       clearServerGameTime()
-      clearWeather()
+      resetWeatherSectors()
       if (this.reconnectTimer) {
         clearTimeout(this.reconnectTimer)
         this.reconnectTimer = null
