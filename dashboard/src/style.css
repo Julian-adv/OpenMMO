@@ -60,14 +60,22 @@ h1 > span { color: #168878; margin-left: 2px; }
 .current-card .stat-detail { color: #638879; }
 .live-tag { font-size: 9px; font-weight: 600; background: #d9eae1; border-radius: 5px; padding: 3px 7px; letter-spacing: .6px; }
 .tiny-dot { width: 4px; height: 4px; background: currentColor; border-radius: 50%; }
-.card-decoration { position: absolute; right: -4px; bottom: 24px; width: 114px; height: 76px; color: #b2d4c5; opacity: .65; }
+.connection-breakdown { margin-top: 16px; }
+.composition-bar { display: flex; height: 7px; overflow: hidden; border-radius: 4px; background: #dfe7e2; }
+.composition-bar > span { flex-shrink: 0; }
+.composition-list { display: grid; gap: 7px; list-style: none; padding: 0; margin: 12px 0 0; font-size: 10px; color: #637f72; }
+.composition-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto 42px; align-items: center; gap: 8px; }
+.composition-label { display: flex; align-items: center; gap: 6px; }
+.composition-label i { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+.composition-count, .composition-percent { text-align: right; font-variant-numeric: tabular-nums; }
+.composition-percent { color: #84958d; }
 .stat-icon { font-size: 21px; line-height: 18px; font-weight: 400; color: #a0afa7; }
 .average-icon { font-size: 25px; }
 .chart-panel { background: white; border: 1px solid #e2e9e5; border-radius: 14px; padding: 28px 28px 0; }
-.chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.chart-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .chart-heading p { margin: 6px 0 0; color: #8a9891; font-size: 11px; }
-.period-filter { display: flex; gap: 2px; padding: 4px; background: #f3f6f4; border: 1px solid #edf1ee; border-radius: 9px; }
+.period-filter { display: flex; flex-wrap: wrap; gap: 2px; padding: 4px; background: #f3f6f4; border: 1px solid #edf1ee; border-radius: 9px; }
 .period-filter button { background: transparent; border: 0; border-radius: 6px; color: #84938b; font-size: 11px; padding: 7px 17px; white-space: nowrap; }
 .period-filter button.active { background: white; color: #237963; font-weight: 600; box-shadow: 0 1px 4px #2b433510; }
 .period-filter button:hover { color: #166d5e; }
@@ -76,13 +84,17 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .chart-canvas > svg { width: 100%; overflow: visible; }
 .grid-line { stroke: #edf1ee; stroke-width: 1; stroke-dasharray: 3 4; }
 .axis-label { fill: #92a098; font: 10px 'Noto Sans KR', sans-serif; font-variant-numeric: tabular-nums; }
-.chart-tooltip { position: absolute; top: 0; pointer-events: none; display: flex; flex-direction: column; gap: 8px; width: 180px; border: 1px solid #e3ebe6; border-radius: 10px; padding: 12px 14px; background: #fffffff5; box-shadow: 0 6px 24px #214b3420; }
+.chart-tooltip { position: absolute; top: 0; pointer-events: none; display: flex; flex-direction: column; gap: 8px; width: 236px; max-width: calc(100% - 16px); border: 1px solid #e3ebe6; border-radius: 10px; padding: 12px 14px; background: #fffffff5; box-shadow: 0 6px 24px #214b3420; }
 .chart-tooltip > span { color: #809086; font-size: 10px; }
 .chart-tooltip strong { font-size: 21px; font-weight: 600; color: #167b6c; font-variant-numeric: tabular-nums; }
 .chart-tooltip small { color: #82968b; font-size: 11px; font-weight: 400; }
-.chart-controls { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0 26px; font-size: 10px; color: #84928a; }
+.chart-tooltip .connection-breakdown { margin-top: 2px; }
+.chart-tooltip .composition-list { font-size: 9px; }
+.chart-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0 26px; font-size: 10px; color: #84928a; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; }
 .legend { display: flex; align-items: center; gap: 7px; }
 .legend i { background: #168878; height: 6px; width: 6px; border-radius: 50%; }
+.legend .total-line { height: 2px; width: 12px; border-radius: 0; background: #31594f; }
 .chart-scrubber { display: flex; align-items: center; gap: 10px; }
 .chart-scrubber input { width: 90px; height: 4px; accent-color: #168878; }
 .chart-empty { min-height: 358px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px; }
@@ -127,7 +139,6 @@ h3 { margin: 1px 0 6px; font-size: 11px; font-weight: 600; color: #60796c; }
   .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
   .current-card { grid-column: 1 / -1; padding: 20px; }
   .current-card .stat-value { font-size: 46px; }
-  .card-decoration { width: 154px; height: 100px; bottom: 20px; }
   .stat-card { padding: 17px; border-radius: 12px; }
   .stat-label { font-size: 11px; }
   .stat-value { font-size: 34px; margin: 10px 0; }

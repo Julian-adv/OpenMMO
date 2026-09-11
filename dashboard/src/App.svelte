@@ -1,8 +1,10 @@
 <script lang="ts">
   import ConcurrentChart from './lib/ConcurrentChart.svelte'
-  import { formatDateTime, formatTime, parseHistory, summarize, type ConcurrentHistory, type Hours } from './lib/metrics'
+  import ConnectionBreakdown from './lib/ConnectionBreakdown.svelte'
+  import { formatDateTime, formatTime, parseHistory, periods, summarize, type ConcurrentHistory, type Hours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
+  let period = $derived(periods.find((period) => period.hours === hours)!)
   let history = $state<ConcurrentHistory | null>(null)
   let refreshing = $state(false)
   let error = $state('')
@@ -99,17 +101,17 @@
       <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : 'LIVE'}</span></div>
       <div class="stat-value">{count(history?.current.accounts)}<span>계정</span></div>
       <div class="stat-detail"><span class="tiny-dot"></span>{history ? `${formatTime(history.until)} KST 기준` : '월드에 입장한 계정 기준'}</div>
-      <svg class="card-decoration" viewBox="0 0 120 80" fill="none" aria-hidden="true"><path d="M0 64h18l13-28 14 18 20-44 16 35 13-18h26" stroke="currentColor" stroke-width="2" /></svg>
+      {#if history}<ConnectionBreakdown sample={history.current} />{/if}
     </article>
     <article class="stat-card">
       <div class="stat-label">기간 최고 접속<span class="stat-icon" aria-hidden="true">↗</span></div>
       <div class="stat-value">{count(summary.peak)}<span>계정</span></div>
-      <div class="stat-detail">{summary.peakAt !== null ? `${formatDateTime(summary.peakAt)} KST` : `최근 ${hours}시간 · 기록 대기 중`}</div>
+      <div class="stat-detail">{summary.peakAt !== null ? `${formatDateTime(summary.peakAt)} KST` : `최근 ${period.label} · 기록 대기 중`}</div>
     </article>
     <article class="stat-card">
       <div class="stat-label">기간 평균 접속<span class="stat-icon average-icon" aria-hidden="true">≈</span></div>
       <div class="stat-value">{summary.average === null ? '—' : summary.average.toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}<span>계정</span></div>
-      <div class="stat-detail">최근 {hours}시간 · 수집된 기록 기준</div>
+      <div class="stat-detail">최근 {period.label} · 수집된 기록 기준</div>
     </article>
   </section>
 
@@ -120,12 +122,12 @@
         <p>월드에 머물고 있는 계정 수의 변화</p>
       </div>
       <div class="period-filter" role="group" aria-label="조회 기간">
-        {#each [1, 6, 24] as period (period)}
-          <button class:active={hours === period} aria-pressed={hours === period} onclick={() => { hours = period as Hours }}>{period}시간</button>
+        {#each periods as option (option.hours)}
+          <button class:active={hours === option.hours} aria-pressed={hours === option.hours} onclick={() => { hours = option.hours }}>{option.label}</button>
         {/each}
       </div>
     </div>
-    <div class="chart-meta"><span>접속 계정 수</span><span>1분 간격 · 한국 시간 (KST)</span></div>
+    <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
     {#if history && history.samples.length > 0}
       <ConcurrentChart {history} />
     {:else}
@@ -136,19 +138,19 @@
       </div>
     {/if}
     <div class="chart-footer">
-      <span>{history ? `${formatDateTime(history.from)} — ${formatDateTime(history.until)}` : `최근 ${hours}시간`} <span class="timezone">KST</span></span>
-      <span>{history ? `${history.samples.length.toLocaleString('ko-KR')}개 기록` : '기록 확인 중'}</span>
+      <span>{history ? `${formatDateTime(history.from)} — ${formatDateTime(history.until)}` : `최근 ${period.label}`} <span class="timezone">KST</span></span>
+      <span>{history ? `${summary.sampleCount.toLocaleString('ko-KR')}개 기록` : '기록 확인 중'}</span>
     </div>
   </section>
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">
       <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.5" /><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
-      <div><h3>캐릭터가 아닌, 계정 기준</h3><p>게임에 입장한 계정을 한 번씩 셉니다. 공식 NPC는 제외하며, 외부 에이전트로 접속한 계정은 포함합니다.</p></div>
+      <div><h3>게임에 입장한 계정 기준</h3><p>게임에 입장한 계정을 한 번씩 세며, 공식 NPC는 제외합니다. 접속 프로그램에 따라 웹 접속과 외부 에이전트를 구분합니다. 구분 정보가 없는 과거 기록과 기타 클라이언트는 기타·미분류로 표시합니다.</p></div>
     </div>
     <div class="metric-note">
       <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" /><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
-      <div><h3>기록된 순간을 연결합니다</h3><p>최고·평균은 1분 간격의 기록으로 계산합니다. 수집 전이나 수집이 중단된 구간은 비워 두며, 평균에서도 제외합니다.</p></div>
+      <div><h3>기록된 순간을 연결합니다</h3><p>최고·평균은 1분 간격의 기록으로 계산합니다. 긴 기간의 그래프는 구간 평균으로 표시하며, 기록이 없는 구간은 평균에서 제외합니다. 1개월·6개월·1년은 최근 30일·180일·365일 기준입니다.</p></div>
     </div>
   </section>
   <footer class="site-footer"><span>OpenMMO <strong>Pulse</strong></span><span>작은 순간들이 모여, 하나의 월드가 됩니다.</span></footer>
