@@ -52,6 +52,23 @@ export interface GoldHistory extends ChartHistory<GoldHistorySample> {
   latest: GoldSample | null
 }
 
+export interface PerAccountGoldSample extends GoldSample {
+  accounts: number
+  gold_per_account: number
+}
+
+export interface PerAccountGoldHistorySample extends TimestampSample {
+  gold_per_account: number
+  peak_gold_per_account: number
+  sample_count: number
+}
+
+export interface PerAccountGoldHistory extends ChartHistory<PerAccountGoldHistorySample> {
+  window_seconds: number
+  collection_started_at: number
+  latest: PerAccountGoldSample | null
+}
+
 export const periods = [
   { hours: 1, label: '1시간', interval: 60, intervalLabel: '1분 간격' },
   { hours: 6, label: '6시간', interval: 60, intervalLabel: '1분 간격' },
@@ -163,6 +180,26 @@ export function parseUniqueHistory(value: unknown, hours: UniqueHours): UniqueHi
   return data
 }
 
+function isGoldSample(value: unknown, until: number): value is GoldSample {
+  if (!value || typeof value !== 'object') return false
+  const sample = value as GoldSample
+  return Number.isSafeInteger(sample.timestamp) && sample.timestamp >= 0 &&
+    sample.timestamp <= until && sample.timestamp % 3600 === 0 &&
+    Number.isSafeInteger(sample.total_gold) && sample.total_gold >= 0
+}
+
+function hasValidGoldSamples<T extends TimestampSample & { sample_count: number }>(
+  data: ChartHistory<T>, hours: GoldHours, validValue: (sample: T) => boolean,
+) {
+  const interval = data.sample_interval_seconds
+  return Array.isArray(data.samples) && data.samples.length <= Math.ceil(hours * 3600 / interval) + 1 &&
+    data.samples.every((sample, index) => sample && Number.isSafeInteger(sample.timestamp) &&
+      sample.timestamp >= data.from && sample.timestamp <= data.until &&
+      (sample.timestamp === data.from || sample.timestamp % interval === 0) && validValue(sample) &&
+      Number.isSafeInteger(sample.sample_count) && sample.sample_count > 0 && sample.sample_count <= interval / 3600 &&
+      (index === 0 || Math.floor(sample.timestamp / interval) > Math.floor(data.samples[index - 1].timestamp / interval)))
+}
+
 export function parseGoldHistory(value: unknown, hours: GoldHours): GoldHistory {
   if (!value || typeof value !== 'object') throw new Error('Invalid gold metrics response')
   const data = value as GoldHistory
@@ -170,17 +207,10 @@ export function parseGoldHistory(value: unknown, hours: GoldHours): GoldHistory 
   const latest = data.latest
   if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
     data.until - data.from !== hours * 3600 || data.sample_interval_seconds !== interval ||
-    (latest !== null && (!latest || !Number.isSafeInteger(latest.timestamp) || latest.timestamp < 0 ||
-      latest.timestamp > data.until || latest.timestamp % 3600 !== 0 ||
-      !Number.isSafeInteger(latest.total_gold) || latest.total_gold < 0)) ||
-    !Array.isArray(data.samples) || data.samples.length > Math.ceil(hours * 3600 / interval) + 1 ||
-    !data.samples.every((sample, index) => sample && Number.isSafeInteger(sample.timestamp) &&
-      sample.timestamp >= data.from && sample.timestamp <= data.until &&
-      (sample.timestamp === data.from || sample.timestamp % interval === 0) &&
+    (latest !== null && !isGoldSample(latest, data.until)) ||
+    !hasValidGoldSamples(data, hours, (sample) =>
       Number.isFinite(sample.total_gold) && sample.total_gold >= 0 &&
-      Number.isSafeInteger(sample.peak_gold) && sample.peak_gold >= sample.total_gold &&
-      Number.isSafeInteger(sample.sample_count) && sample.sample_count > 0 && sample.sample_count <= interval / 3600 &&
-      (index === 0 || Math.floor(sample.timestamp / interval) > Math.floor(data.samples[index - 1].timestamp / interval))) ||
+      Number.isSafeInteger(sample.peak_gold) && sample.peak_gold >= sample.total_gold) ||
     (latest !== null && latest.timestamp >= data.from
       ? data.samples.at(-1)?.timestamp !== Math.max(data.from, Math.floor(latest.timestamp / interval) * interval)
       : data.samples.length !== 0)) {
@@ -188,6 +218,34 @@ export function parseGoldHistory(value: unknown, hours: GoldHours): GoldHistory 
   }
   return data
 }
+
+export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, activeHours: UniqueHours): PerAccountGoldHistory {
+  if (!value || typeof value !== 'object') throw new Error('Invalid per-account gold metrics response')
+  const data = value as PerAccountGoldHistory
+  const interval = goldPeriods.find((period) => period.hours === hours)!.interval
+  const latest = data.latest
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 || data.sample_interval_seconds !== interval ||
+    data.window_seconds !== activeHours * 3600 ||
+    !Number.isSafeInteger(data.collection_started_at) || data.collection_started_at < 0 ||
+    (latest !== null && (!isGoldSample(latest, data.until) ||
+      kstDayStart(latest.timestamp) <= data.collection_started_at ||
+      !Number.isSafeInteger(latest.accounts) || latest.accounts <= 0 ||
+      !Number.isFinite(latest.gold_per_account) || latest.gold_per_account < 0 ||
+      Math.abs(latest.gold_per_account - latest.total_gold / latest.accounts) > Math.max(1, latest.gold_per_account) * 1e-9)) ||
+    !hasValidGoldSamples(data, hours, (sample) =>
+      Number.isFinite(sample.gold_per_account) && sample.gold_per_account >= 0 &&
+      Number.isFinite(sample.peak_gold_per_account) && sample.peak_gold_per_account >= 0 &&
+      sample.gold_per_account - sample.peak_gold_per_account <= Math.max(1, sample.peak_gold_per_account) * 1e-9) ||
+    (latest !== null && (latest.timestamp >= data.from
+      ? data.samples.at(-1)?.timestamp !== Math.max(data.from, Math.floor(latest.timestamp / interval) * interval)
+      : data.samples.length !== 0))) {
+    throw new Error('Invalid per-account gold metrics response')
+  }
+  return data
+}
+
+export const kstDayStart = (timestamp: number) => Math.floor((timestamp + 9 * 3600) / 86400) * 86400 - 9 * 3600
 
 export function splitSegments<T extends TimestampSample>(samples: T[], interval: number): T[][] {
   const segments: T[][] = []

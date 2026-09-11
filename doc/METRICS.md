@@ -108,4 +108,20 @@ GET /api/metrics/gold?hours=24
 
 응답은 `from`, `until`, `sample_interval_seconds`, `latest`, `samples`를 포함합니다. `latest`는 조회 기간과 무관하게 요청 시각 이전의 마지막 `{ timestamp, total_gold }`이며 첫 기록 전에는 `null`입니다. 각 그래프 표본은 `{ timestamp, total_gold, peak_gold, sample_count }`입니다. `total_gold`는 구간 내 실제 시간별 기록의 평균, `peak_gold`는 원본 최고값, `sample_count`는 기록 수입니다. 기록이 없는 시간을 0으로 채우지 않습니다. 구간은 Unix 초 기준으로 정렬하며, 첫 구간이 조회 시작보다 앞서면 `timestamp`를 `from`으로 표시합니다.
 
+## 활성 유저 1인당 골드 추이
+
+서버 총 골드 아래에 `시간별 서버 총 골드 ÷ 해당 날짜 자정의 활성 계정 수`를 표시합니다. 총 골드와 조회 기간을 공유하며, 별도 선택자로 분모인 직전 1일·7일·30일·180일·365일의 유니크 계정 수를 지정합니다. 기본값은 1일입니다. 총 골드는 오프라인 캐릭터와 NPC를 포함하고, 분모는 공식 NPC를 제외한 접속 계정입니다.
+
+각 골드 기록은 그날 한국 시간 자정의 `unique_account_daily_samples`와 연결합니다. 해당 자정 이전의 선택 기간에 접속한 유니크 계정 수를 사용하며, 현재 계정 수를 과거 전체에 적용하거나 날짜별 계정 수를 더하지 않습니다. 일별 집계가 없거나 계정 수가 0인 시간은 계산에서 제외합니다. 6개월·1년 그래프는 시간별로 나눗셈을 먼저 계산한 뒤 구간 평균과 최고값을 구합니다. 골드가 0이고 계정 수가 양수인 기록은 실제 0으로 유지합니다.
+
+```http
+GET /api/metrics/gold-per-account?hours=24&active_hours=168
+```
+
+`hours`의 지원 값과 그래프 간격은 총 골드 API와 같습니다. `active_hours`는 독립적으로 `24 / 168 / 720 / 4320 / 8760`을 지원합니다. 두 매개변수 모두 생략 시 `24`이며 잘못된 값은 HTTP 400입니다. DB 오류는 HTTP 503이며 성공·DB 오류 응답에 `Cache-Control: no-store`를 지정합니다.
+
+응답은 `from`, `until`, `sample_interval_seconds`, `window_seconds`, `collection_started_at`, `latest`, `samples`를 포함합니다. `window_seconds`는 활성 계정 집계 기간입니다. `latest`는 가장 최근 골드 기록에 대응하는 `{ timestamp, total_gold, accounts, gold_per_account }`이며 해당 날짜의 유효한 분모가 없으면 `null`입니다. 이때 이전 날짜의 값을 최신 값으로 대신하지 않습니다. 각 표본은 `{ timestamp, gold_per_account, peak_gold_per_account, sample_count }`이며 계산 가능한 시간별 기록만 평균·최고·기록 수에 포함합니다. 구간 정렬과 첫 부분 구간의 시각은 총 골드 API와 같습니다.
+
+화면에는 최근 계산의 분자·분모와 골드·활성 계정 집계 시각을 표시합니다. 선택한 활성 기간의 접속 이력이 충분히 쌓이지 않은 구간은 수집 시작 시각과 함께 안내합니다. 조회는 저장된 골드와 일별 집계만 읽으며 새로운 집계나 접속 이력 계산을 실행하지 않습니다.
+
 앱 실행과 독립 정적 배포 방법은 [dashboard/README.md](../dashboard/README.md)에 있습니다.

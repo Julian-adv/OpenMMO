@@ -1,13 +1,93 @@
 use super::{AuthError, AuthService};
 use crate::metrics::{
     kst_day_start, AccountActivity, ConcurrentCounts, ConcurrentHistorySample, GoldHistory,
-    GoldHistorySample, GoldSample, UniqueHistory, UniqueSample, DAY_SECONDS,
-    SAMPLE_INTERVAL_SECONDS,
+    GoldHistorySample, GoldSample, PerAccountGoldHistory, PerAccountGoldHistorySample,
+    PerAccountGoldSample, UniqueHistory, UniqueSample, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
 };
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 
+fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Error> {
+    conn.query_row(
+        "SELECT started_at FROM unique_account_collection WHERE id = 1",
+        [],
+        |row| row.get(0),
+    )
+}
+
 impl AuthService {
+    pub fn per_account_gold_history(
+        &self,
+        until: i64,
+        hours: u32,
+        interval: i64,
+        active_days: u32,
+    ) -> Result<PerAccountGoldHistory, AuthError> {
+        let from = until - i64::from(hours) * 3600;
+        let mut conn = self.open_connection()?;
+        let transaction = conn.transaction()?;
+        let collection_started_at = unique_collection_started_at(&transaction)?;
+        let joined = "WITH normalized AS (
+            SELECT g.ts, g.total_gold,
+                CASE ?1 WHEN 1 THEN u.day_accounts WHEN 7 THEN u.week_accounts
+                    WHEN 30 THEN u.month_accounts WHEN 180 THEN u.half_year_accounts
+                    WHEN 365 THEN u.year_accounts END AS accounts
+            FROM gold_snapshots g
+            JOIN unique_account_daily_samples u
+                ON u.timestamp = g.ts - (g.ts + 9 * 3600) % 86400
+            WHERE g.ts >= ?2 AND g.ts <= ?3
+        )";
+        let latest_timestamp: Option<i64> = transaction.query_row(
+            "SELECT MAX(ts) FROM gold_snapshots WHERE ts <= ?1",
+            [until],
+            |row| row.get(0),
+        )?;
+        let latest = transaction
+            .query_row(
+                &format!(
+                    "{joined}
+                SELECT ts, total_gold, accounts, total_gold * 1.0 / accounts
+                FROM normalized WHERE accounts > 0"
+                ),
+                params![active_days, latest_timestamp, latest_timestamp],
+                |row| {
+                    Ok(PerAccountGoldSample {
+                        timestamp: row.get(0)?,
+                        total_gold: row.get(1)?,
+                        accounts: row.get(2)?,
+                        gold_per_account: row.get(3)?,
+                    })
+                },
+            )
+            .optional()?;
+        let mut statement = transaction.prepare(&format!(
+            "{joined}
+            SELECT MAX((ts / ?4) * ?4, ?2), AVG(total_gold * 1.0 / accounts),
+                MAX(total_gold * 1.0 / accounts), COUNT(*)
+            FROM normalized WHERE accounts > 0
+            GROUP BY ts / ?4 ORDER BY ts / ?4"
+        ))?;
+        let samples = statement
+            .query_map(params![active_days, from, until, interval], |row| {
+                Ok(PerAccountGoldHistorySample {
+                    timestamp: row.get(0)?,
+                    gold_per_account: row.get(1)?,
+                    peak_gold_per_account: row.get(2)?,
+                    sample_count: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(PerAccountGoldHistory {
+            from,
+            until,
+            sample_interval_seconds: interval,
+            window_seconds: i64::from(active_days) * DAY_SECONDS,
+            collection_started_at,
+            latest,
+            samples,
+        })
+    }
+
     pub fn gold_history(
         &self,
         until: i64,
@@ -109,11 +189,7 @@ impl AuthService {
     pub fn backfill_daily_unique_accounts(&self, now: i64) -> Result<usize, AuthError> {
         let missing_dates: Vec<i64> = {
             let conn = self.open_connection()?;
-            let collection_started_at = conn.query_row(
-                "SELECT started_at FROM unique_account_collection WHERE id = 1",
-                [],
-                |row| row.get(0),
-            )?;
+            let collection_started_at = unique_collection_started_at(&conn)?;
             let first = kst_day_start(collection_started_at) + DAY_SECONDS;
             let until = kst_day_start(now);
             let mut statement = conn.prepare(
@@ -140,11 +216,7 @@ impl AuthService {
         let mut conn = self.open_connection()?;
         let transaction =
             conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
-        let collection_started_at: i64 = transaction.query_row(
-            "SELECT started_at FROM unique_account_collection WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )?;
+        let collection_started_at = unique_collection_started_at(&transaction)?;
         if timestamp <= collection_started_at
             || transaction.query_row(
                 "SELECT EXISTS(SELECT 1 FROM unique_account_daily_samples WHERE timestamp = ?1)",
@@ -180,11 +252,7 @@ impl AuthService {
         let from = until - window;
         let mut conn = self.open_connection()?;
         let transaction = conn.transaction()?;
-        let collection_started_at = transaction.query_row(
-            "SELECT started_at FROM unique_account_collection WHERE id = 1",
-            [],
-            |row| row.get(0),
-        )?;
+        let collection_started_at = unique_collection_started_at(&transaction)?;
         let last_aggregated_at = transaction.query_row(
             "SELECT MAX(timestamp) FROM unique_account_daily_samples WHERE timestamp <= ?1",
             [until],
@@ -364,6 +432,112 @@ mod tests {
             started_at: start,
             last_seen_at: end,
         }
+    }
+
+    #[test]
+    fn per_account_gold_uses_each_kst_days_counts_before_averaging() {
+        let midnight = 1000 * DAY_SECONDS - 9 * 3600;
+        let (auth, _) = unique_auth("per_account_gold", midnight - 365 * DAY_SECONDS);
+        let empty = auth
+            .per_account_gold_history(midnight, 24, 3600, 1)
+            .unwrap();
+        assert!(empty.samples.is_empty());
+        assert_eq!(empty.latest, None);
+        let conn = auth.open_connection().unwrap();
+        for (timestamp, multiplier) in [
+            (midnight - DAY_SECONDS, 1),
+            (midnight, 2),
+            (midnight + DAY_SECONDS, 0),
+        ] {
+            conn.execute(
+                "INSERT INTO unique_account_daily_samples VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                params![
+                    timestamp,
+                    2 * multiplier,
+                    4 * multiplier,
+                    5 * multiplier,
+                    10 * multiplier,
+                    20 * multiplier
+                ],
+            )
+            .unwrap();
+        }
+        for (timestamp, gold) in [
+            (midnight - 3600, 100),
+            (midnight, 100),
+            (midnight + 3600, 0),
+            (midnight + DAY_SECONDS, 500),
+            (midnight + 2 * DAY_SECONDS, 500),
+            (midnight + 3 * DAY_SECONDS, 900),
+        ] {
+            conn.execute(
+                "INSERT INTO gold_snapshots (ts, total_gold, characters, npc_gold, active_gold, active_characters)
+                 VALUES (?1, ?2, 0, 0, 0, 0)",
+                params![timestamp, gold],
+            ).unwrap();
+        }
+        for (days, accounts) in [(1, 4), (7, 8), (30, 10), (180, 20), (365, 40)] {
+            let history = auth
+                .per_account_gold_history(midnight, 24, 3600, days)
+                .unwrap();
+            assert_eq!(history.window_seconds, i64::from(days) * DAY_SECONDS);
+            assert_eq!(
+                history.latest,
+                Some(PerAccountGoldSample {
+                    timestamp: midnight,
+                    total_gold: 100,
+                    accounts,
+                    gold_per_account: 100.0 / f64::from(accounts),
+                })
+            );
+            assert_eq!(
+                history.samples[0].gold_per_account,
+                200.0 / f64::from(accounts)
+            );
+            assert_eq!(
+                history.samples[1].gold_per_account,
+                100.0 / f64::from(accounts)
+            );
+        }
+        for (hours, interval) in [(4320, 21600), (8760, DAY_SECONDS)] {
+            let history = auth
+                .per_account_gold_history(midnight + 3600, hours, interval, 1)
+                .unwrap();
+            assert_eq!(
+                history.samples,
+                vec![PerAccountGoldHistorySample {
+                    timestamp: (midnight - 3600) / interval * interval,
+                    gold_per_account: 25.0,
+                    peak_gold_per_account: 50.0,
+                    sample_count: 3,
+                }]
+            );
+            assert_eq!(history.latest.unwrap().gold_per_account, 0.0);
+        }
+        for until in [midnight + DAY_SECONDS, midnight + 2 * DAY_SECONDS] {
+            let history = auth.per_account_gold_history(until, 168, 3600, 1).unwrap();
+            assert_eq!(history.latest, None);
+            assert_eq!(history.samples.len(), 3);
+        }
+        let stale = auth
+            .per_account_gold_history(midnight + DAY_SECONDS - 1, 1, 3600, 1)
+            .unwrap();
+        assert!(stale.samples.is_empty());
+        assert_eq!(stale.latest.unwrap().timestamp, midnight + 3600);
+        let partial = auth
+            .per_account_gold_history(midnight + 300, 1, 3600, 1)
+            .unwrap();
+        assert_eq!(partial.samples.len(), 1);
+        assert_eq!(partial.samples[0].timestamp, midnight);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM unique_account_daily_samples",
+                [],
+                |row| row.get::<_, u32>(0)
+            )
+            .unwrap(),
+            3
+        );
     }
 
     fn unique_auth(name: &str, started_at: i64) -> (AuthService, std::path::PathBuf) {

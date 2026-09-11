@@ -3,10 +3,11 @@
   import ConnectionBreakdown from './lib/ConnectionBreakdown.svelte'
   import HistoryChart from './lib/HistoryChart.svelte'
   import GoldPanel from './lib/GoldPanel.svelte'
+  import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -16,15 +17,22 @@
   const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
   let goldHours = $state<GoldHours>(24)
   const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
+  let activeHours = $state<UniqueHours>(24)
+  const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
+    (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
+    '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
+  const resources = [concurrent, unique, gold, perAccountGold]
   let history = $derived(concurrent.history)
-  let refreshing = $derived(concurrent.refreshing || unique.refreshing || gold.refreshing)
+  let refreshing = $derived(resources.some((resource) => resource.refreshing))
+  let anyError = $derived(resources.some((resource) => resource.error))
+  let anyLoading = $derived(resources.some((resource) => resource.loading))
   let error = $derived(concurrent.error)
   let loading = $derived(concurrent.loading)
   let uniqueLatest = $derived(unique.history?.samples.at(-1))
   let uniquePeak = $derived(unique.history?.samples.length ? Math.max(...unique.history.samples.map((sample) => sample.accounts)) : null)
   let summary = $derived(summarize(history?.samples ?? []))
   const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
-  const refresh = () => { concurrent.refresh(); unique.refresh(); gold.refresh() }
+  const refresh = () => { resources.forEach((resource) => resource.refresh()) }
 </script>
 
 <svelte:head>
@@ -50,9 +58,9 @@
       <p class="page-description">지금 함께하는 플레이어와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
-      <div class:unavailable={!!error || !!unique.error || !!gold.error} class="update-status" role="status">
+      <div class:unavailable={anyError} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if error || unique.error || gold.error}연결 확인 필요{:else if loading || unique.loading || gold.loading}연결 중{:else}30초마다 업데이트{/if}
+        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}30초마다 업데이트{/if}
       </div>
       <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -147,6 +155,8 @@
   </section>
 
   <GoldPanel bind:hours={goldHours} history={gold.history} loading={gold.loading} refreshing={gold.refreshing} error={gold.error} refresh={() => gold.refresh()} />
+
+  <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours history={perAccountGold.history} loading={perAccountGold.loading} refreshing={perAccountGold.refreshing} error={perAccountGold.error} refresh={() => perAccountGold.refresh()} />
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">

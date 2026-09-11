@@ -1,5 +1,57 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGoldAxis, goldPeriods, nearestSample, parseGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGoldAxis, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+
+describe('gold per active account history', () => {
+  const midnight = 1000 * 86400 - 9 * 3600
+  const latest = { timestamp: midnight, total_gold: 100, accounts: 3, gold_per_account: 100 / 3 }
+  const sample = { timestamp: midnight, gold_per_account: 100 / 3, peak_gold_per_account: 100 / 3, sample_count: 1 }
+  const data = { from: midnight - 86400, until: midnight, sample_interval_seconds: 3600,
+    window_seconds: 86400, collection_started_at: 0, latest, samples: [sample] }
+
+  it.each(goldPeriods)('accepts each active window independently of the $label chart range', ({ hours, interval }) => {
+    for (const activePeriod of uniquePeriods) {
+      const history = { ...data, from: midnight - hours * 3600, sample_interval_seconds: interval,
+        window_seconds: activePeriod.hours * 3600,
+        samples: [{ ...sample, timestamp: Math.floor(midnight / interval) * interval }] }
+      expect(parsePerAccountGoldHistory(history, hours, activePeriod.hours)).toEqual(history)
+    }
+  })
+
+  it('keeps valid zero gold, missing denominators, gaps and stale latest observations distinct', () => {
+    const zero = { ...data, latest: { ...latest, total_gold: 0, gold_per_account: 0 },
+      samples: [{ ...sample, gold_per_account: 0, peak_gold_per_account: 0 }] }
+    expect(parsePerAccountGoldHistory(zero, 24, 24).latest?.gold_per_account).toBe(0)
+    expect(parsePerAccountGoldHistory({ ...data, latest: null }, 24, 24).samples).toEqual([sample])
+    expect(parsePerAccountGoldHistory({ ...data, latest: null, samples: [] }, 24, 24).latest).toBeNull()
+    const stale = { ...data, from: midnight + 3600, until: midnight + 7200, samples: [] }
+    expect(parsePerAccountGoldHistory(stale, 1, 24).latest).toEqual(latest)
+    const samples = [{ ...sample, timestamp: midnight - 7200 }, sample]
+    expect(splitSegments(parsePerAccountGoldHistory({ ...data, samples }, 24, 24).samples, 3600)).toHaveLength(2)
+  })
+
+  it('rejects zero denominators, mismatched windows and malformed ratios', () => {
+    for (const invalid of [{ accounts: 0 }, { accounts: -1 }, { accounts: 1.5 }, { gold_per_account: Infinity }, { gold_per_account: 99 }, { timestamp: midnight + 3600 }]) {
+      expect(() => parsePerAccountGoldHistory({ ...data, latest: { ...latest, ...invalid } }, 24, 24)).toThrow()
+    }
+    for (const invalid of [{ gold_per_account: NaN }, { gold_per_account: -1 }, { peak_gold_per_account: 0 }, { sample_count: 0 }, { sample_count: 2 }]) {
+      expect(() => parsePerAccountGoldHistory({ ...data, samples: [{ ...sample, ...invalid }] }, 24, 24)).toThrow()
+    }
+    expect(() => parsePerAccountGoldHistory(data, 24, 168)).toThrow()
+    expect(() => parsePerAccountGoldHistory({ ...data, samples: [] }, 24, 24)).toThrow()
+    expect(() => parsePerAccountGoldHistory({ ...data, samples: [sample, sample] }, 24, 24)).toThrow()
+    expect(() => parsePerAccountGoldHistory({ ...data, collection_started_at: midnight }, 24, 24)).toThrow()
+    expect(kstDayStart(midnight - 1)).toBe(midnight - 86400)
+    expect(kstDayStart(midnight)).toBe(midnight)
+    expect(kstDayStart(midnight + 86399)).toBe(midnight)
+  })
+
+  it('allows floating point rounding in bucket averages', () => {
+    const history = { ...data, from: midnight - 4320 * 3600, sample_interval_seconds: 21600,
+      samples: [{ timestamp: Math.floor(midnight / 21600) * 21600,
+        gold_per_account: 0.10000000000000002, peak_gold_per_account: 0.1, sample_count: 6 }] }
+    expect(parsePerAccountGoldHistory(history, 4320, 24)).toEqual(history)
+  })
+})
 
 describe('hourly gold history', () => {
   it.each(goldPeriods)('accepts hourly gold with the $label resolution', ({ hours, interval }) => {

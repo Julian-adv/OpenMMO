@@ -1,6 +1,7 @@
+import { SvelteURLSearchParams } from 'svelte/reactivity'
 import type { Hours } from './metrics'
 
-export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H) => T, errorLabel = '접속 현황') {
+export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H, query: Record<string, string>) => T, errorLabel = '접속 현황', getQuery: () => Record<string, string> = () => ({})) {
   let history = $state<T | null>(null)
   let refreshing = $state(false)
   let error = $state('')
@@ -8,6 +9,8 @@ export function createMetricsResource<T, H extends Hours>(getHours: () => H, end
 
   $effect(() => {
     const hours = getHours()
+    const query = getQuery()
+    const params = new SvelteURLSearchParams({ ...query, hours: String(hours) }).toString()
     let stopped = false
     let controller: AbortController | null = null
     history = null
@@ -20,9 +23,9 @@ export function createMetricsResource<T, H extends Hours>(getHours: () => H, end
       refreshing = true
       const timeout = window.setTimeout(() => request.abort(), 10000)
       try {
-        const response = await fetch(`/api/metrics/${endpoint}?hours=${hours}`, { signal: request.signal, cache: 'no-store' })
+        const response = await fetch(`/api/metrics/${endpoint}?${params}`, { signal: request.signal, cache: 'no-store' })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = parse(await response.json(), hours)
+        const data = parse(await response.json(), hours, query)
         if (!stopped) {
           history = data
           error = ''
