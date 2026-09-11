@@ -92,14 +92,11 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .chart-tooltip small { color: #82968b; font-size: 11px; font-weight: 400; }
 .chart-tooltip .connection-breakdown { margin-top: 2px; }
 .chart-tooltip .composition-list { font-size: 9px; }
-.chart-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0 26px; font-size: 10px; color: #84928a; }
-.chart-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin: 12px 0 26px; font-size: 10px; color: #84928a; }
 .legend { display: flex; align-items: center; gap: 7px; }
 .legend i { background: #168878; height: 6px; width: 6px; border-radius: 50%; }
 .legend .total-line { height: 2px; width: 12px; border-radius: 0; background: #31594f; }
 .legend .peak-line { height: 0; width: 18px; border-radius: 0; background: none; border-top: 2px dashed #b37b30; }
-.chart-scrubber { display: flex; align-items: center; gap: 10px; }
-.chart-scrubber input { width: 90px; height: 4px; accent-color: #168878; }
 .chart-empty { min-height: 358px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px; }
 .empty-illustration { color: #5e9a87; width: 64px; margin-bottom: 23px; }
 .chart-empty strong { font-size: 14px; font-weight: 500; color: #607f70; }
@@ -153,9 +150,7 @@ h3 { margin: 1px 0 6px; font-size: 11px; font-weight: 600; color: #60796c; }
   .period-filter { align-self: stretch; }
   .period-filter button { flex: 1; padding: 7px 12px; }
   .chart-meta { margin-top: 24px; font-size: 9px; }
-  .chart-controls { font-size: 9px; margin-bottom: 21px; }
-  .chart-scrubber { gap: 7px; }
-  .chart-scrubber input { width: 65px; }
+  .chart-legend { font-size: 9px; margin-bottom: 21px; }
   .chart-footer { margin: 0 -15px; padding: 14px 15px; font-size: 9px; flex-wrap: wrap; gap: 8px; }
   .chart-empty { min-height: 295px; padding: 20px 10px; }
   .chart-empty strong { font-size: 12px; }

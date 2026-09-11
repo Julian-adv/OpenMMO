@@ -50,11 +50,6 @@ export function visibleConnectionParts(sample: Sample) {
   return connectionParts(sample).filter((part) => part.key !== 'other_accounts' || part.accounts > 0)
 }
 
-export function formatBreakdown(sample: Sample) {
-  return visibleConnectionParts(sample)
-    .map((part) => `${part.label} ${formatCount(part.accounts)}계정 (${formatCount(part.percent)}%)`).join(', ')
-}
-
 function hasValidCounts(sample: Sample, integer: boolean) {
   return connectionKinds.every(({ key }) => Number.isFinite(sample[key]) && sample[key] >= 0 &&
     (!integer || Number.isSafeInteger(sample[key]))) &&

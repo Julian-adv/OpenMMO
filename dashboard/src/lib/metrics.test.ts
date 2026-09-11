@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatBreakdown, formatDateTime, nearestSample, parseHistory, periods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, nearestSample, parseHistory, periods, splitSegments, summarize } from './metrics'
 
 describe('concurrent account history', () => {
   const webCount = (accounts: number) => ({ accounts, web_accounts: accounts, agent_accounts: 0, other_accounts: 0 })
@@ -72,7 +72,6 @@ describe('concurrent account history', () => {
   it('shows component shares of the unchanged total, including unclassified history and zero', () => {
     const sample = { timestamp: 60, accounts: 10, web_accounts: 6, agent_accounts: 3, other_accounts: 1 }
     expect(connectionParts(sample).map((part) => part.percent)).toEqual([60, 30, 10])
-    expect(formatBreakdown(sample)).toBe('웹 접속 6계정 (60%), 외부 에이전트 3계정 (30%), 기타·미분류 1계정 (10%)')
     expect(connectionParts({ timestamp: 60, ...webCount(0) }).map((part) => part.percent)).toEqual([0, 0, 0])
     expect(connectionParts({ ...sample, web_accounts: 0, agent_accounts: 0, other_accounts: 10 }).map((part) => part.percent)).toEqual([0, 0, 100])
   })

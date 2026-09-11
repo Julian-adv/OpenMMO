@@ -1,6 +1,6 @@
 <script lang="ts">
   import ConnectionBreakdown from './ConnectionBreakdown.svelte'
-  import { connectionKinds, formatAxisTime, formatBreakdown, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type ConcurrentHistory, type Sample } from './metrics'
+  import { connectionKinds, formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type ConcurrentHistory, type Sample } from './metrics'
 
   let { history, peak }: { history: ConcurrentHistory; peak: number | null } = $props()
   let container: HTMLDivElement
@@ -97,22 +97,12 @@
     </div>
   {/if}
 </div>
-<div class="chart-controls">
-  <div class="chart-legend" aria-label="그래프 범례">
-    <span class="legend"><i class="total-line"></i>합계</span>
-    {#each visibleKinds as kind (kind.key)}
-      <span class="legend"><i style:background={kind.color}></i>{kind.label}</span>
-    {/each}
-    {#if peak !== null}
-      <span class="legend"><i class="peak-line"></i>기간 최고 접속</span>
-    {/if}
-  </div>
-  <label class="chart-scrubber">
-    <span>시간별 보기</span>
-    <input type="range" min="0" max={Math.max(0, history.samples.length - 1)} step="1"
-      value={selectedIndex ?? history.samples.length - 1} aria-label="기록 시점 선택"
-      aria-valuetext={selected ? `${formatDateTime(selected.timestamp)}, 합계 ${formatCount(selected.accounts)}계정${history.sample_interval_seconds > 60 ? ' 평균' : ''}, ${formatBreakdown(selected)}` : '방향키로 기록 시점을 선택하세요'}
-      oninput={(event) => { selectedTime = history.samples[Number(event.currentTarget.value)].timestamp }}
-      onfocus={() => { selectedTime ??= history.samples[history.samples.length - 1].timestamp }} />
-  </label>
+<div class="chart-legend" aria-label="그래프 범례">
+  <span class="legend"><i class="total-line"></i>합계</span>
+  {#each visibleKinds as kind (kind.key)}
+    <span class="legend"><i style:background={kind.color}></i>{kind.label}</span>
+  {/each}
+  {#if peak !== null}
+    <span class="legend"><i class="peak-line"></i>기간 최고 접속</span>
+  {/if}
 </div>
