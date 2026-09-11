@@ -1,8 +1,8 @@
-import type { LevelSample } from './metrics'
+import type { TimestampSample } from './metrics'
 
 const palette = ['#167b6c', '#5276d1', '#c66a2b', '#9a59bb', '#c34f74', '#708c2f', '#3194a8', '#aa8242', '#6861a8', '#885b51']
 
-export function createLevelColors() {
+export function createCharacterColors() {
   let previous: Record<string, string> = Object.create(null)
   return (names: string[]) => {
     const used = new Set(names.map((name) => previous[name]).filter(Boolean))
@@ -16,7 +16,7 @@ export function createLevelColors() {
   }
 }
 
-export function levelAt(samples: LevelSample[], timestamp: number): LevelSample | null {
+export function sampleAt<T extends TimestampSample>(samples: T[], timestamp: number): T | null {
   let low = 0
   let high = samples.length
   while (low < high) {
@@ -27,8 +27,8 @@ export function levelAt(samples: LevelSample[], timestamp: number): LevelSample 
   return samples[low - 1] ?? null
 }
 
-export function levelPath(samples: LevelSample[], until: number, x: (time: number) => number, y: (level: number) => number) {
+export function stepPath<T extends TimestampSample>(samples: T[], until: number, x: (time: number) => number, y: (value: number) => number, value: (sample: T) => number) {
   return samples.map((sample, index) => index === 0
-    ? `M${x(sample.timestamp)},${y(sample.level)}`
-    : `H${x(sample.timestamp)}V${y(sample.level)}`).join(' ') + (samples.length ? ` H${x(until)}` : '')
+    ? `M${x(sample.timestamp)},${y(value(sample))}`
+    : `H${x(sample.timestamp)}V${y(value(sample))}`).join(' ') + (samples.length ? ` H${x(until)}` : '')
 }

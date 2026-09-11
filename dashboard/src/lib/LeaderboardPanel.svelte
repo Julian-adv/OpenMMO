@@ -1,9 +1,11 @@
-<script lang="ts">
+<script lang="ts" generics="M extends LeaderboardMetric">
   import MetricsError from './MetricsError.svelte'
-  import type { LevelLeaderboard } from './metrics'
+  import GoldAmount from './GoldAmount.svelte'
+  import type { CharacterLeaderboard, LeaderboardMetric } from './metrics'
 
-  let { leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
-    leaderboard: LevelLeaderboard | null
+  let { metric, leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
+    metric: M
+    leaderboard: CharacterLeaderboard<M> | null
     colors: Record<string, string>
     selectedCharacter: string | null
     loading: boolean
@@ -11,20 +13,22 @@
     error: string
     refresh: () => void
   } = $props()
+  let label = $derived(metric === 'gold' ? '골드' : '레벨')
+  let titleId = $derived(`${metric}-leaderboard-title`)
 </script>
 
-<section class="chart-panel" aria-labelledby="level-leaderboard-title" aria-busy={loading}>
+<section class="chart-panel" aria-labelledby={titleId} aria-busy={loading}>
   <div class="chart-heading">
     <div>
-      <h2 id="level-leaderboard-title">레벨 상위 10명</h2>
+      <h2 id={titleId}>{label} 상위 10명</h2>
     </div>
     <span class="leaderboard-tag">TOP 10</span>
   </div>
   <MetricsError {error} until={leaderboard?.timestamp} {refreshing} {refresh} />
   {#if leaderboard && leaderboard.entries.length > 0}
-    <table aria-labelledby="level-leaderboard-title">
+    <table aria-labelledby={titleId}>
       <thead>
-        <tr><th scope="col" class="rank">순위</th><th scope="col">캐릭터</th><th scope="col" class="level">레벨</th></tr>
+        <tr><th scope="col" class="rank">순위</th><th scope="col">캐릭터</th><th scope="col" class="value" class:gold={metric === 'gold'}>{label}</th></tr>
       </thead>
       <tbody>
         {#each leaderboard.entries as entry, index (entry.name)}
@@ -39,15 +43,15 @@
                 <span class="account-character">({firstCharacter.name})</span>
               {/if}
             </th>
-            <td class="level"><span>Lv.</span> {entry.level.toLocaleString('ko-KR')}</td>
+            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
           </tr>
         {/each}
       </tbody>
     </table>
   {:else}
     <div class="chart-empty" role="status">
-      <strong>{loading ? '레벨 순위를 불러오고 있어요' : error ? '순위에 연결할 수 없어요' : '아직 순위에 표시할 캐릭터가 없어요'}</strong>
-      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 순위가 자동으로 갱신됩니다.' : '캐릭터가 생성되면 레벨 순위가 표시됩니다.'}</p>
+      <strong>{loading ? `${label} 순위를 불러오고 있어요` : error ? '순위에 연결할 수 없어요' : '아직 순위에 표시할 캐릭터가 없어요'}</strong>
+      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 순위가 자동으로 갱신됩니다.' : `캐릭터가 생성되면 ${label} 순위가 표시됩니다.`}</p>
     </div>
   {/if}
 </section>
@@ -68,14 +72,16 @@
   .character-button i { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
   .selected { background: #f0f6f3; }
   .account-character { color: #74857d; font-size: 11px; font-weight: 400; }
-  .level { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
-  td.level { color: #166d5e; font-weight: 600; }
-  .level span { color: #899b90; font-size: 10px; font-weight: 400; }
+  .value { width: 76px; text-align: right; font-variant-numeric: tabular-nums; }
+  td.value { color: #166d5e; font-weight: 600; }
+  .value span { color: #899b90; font-size: 10px; font-weight: 400; }
+  .value.gold { width: 124px; }
   @media (max-width: 600px) {
     .chart-heading { flex-direction: row; align-items: center; gap: 12px; }
     th, td { padding: 11px 6px; }
     .rank { width: 44px; }
-    .level { width: 72px; }
+    .value { width: 72px; }
+    .value.gold { width: 112px; }
     .leaderboard-tag { font-size: 9px; padding: 5px 8px; }
   }
 </style>

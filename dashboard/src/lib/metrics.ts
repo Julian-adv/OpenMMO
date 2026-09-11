@@ -10,46 +10,46 @@ export interface TimestampSample {
   timestamp: number
 }
 
-export interface LevelLeaderboard extends TimestampSample {
+export type LeaderboardMetric = 'level' | 'gold'
+export type CharacterSample<M extends LeaderboardMetric> = TimestampSample & Record<M, number>
+
+export interface CharacterLeaderboard<M extends LeaderboardMetric> extends TimestampSample {
   from: number
   sample_interval_seconds: number
-  entries: { name: string, level: number, account_first_rank: number }[]
-  series: LevelSeries[]
+  entries: ({ name: string, account_first_rank: number } & Record<M, number>)[]
+  series: { name: string, started_at: number, samples: CharacterSample<M>[] }[]
 }
 
-export interface LevelSample extends TimestampSample {
-  level: number
-}
+export type LevelLeaderboard = CharacterLeaderboard<'level'>
+export type GoldLeaderboard = CharacterLeaderboard<'gold'>
 
-export interface LevelSeries {
-  name: string
-  started_at: number
-  samples: LevelSample[]
-}
-
-export const levelPeriods = [
+export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
   { hours: 720, label: '1개월', interval: 3600 },
   { hours: 4320, label: '6개월', interval: 21600 },
   { hours: 8760, label: '1년', interval: 86400 },
 ] as const
-export type LevelHours = typeof levelPeriods[number]['hours']
+export type LeaderboardHours = typeof leaderboardPeriods[number]['hours']
 
-export function parseLevelLeaderboard(value: unknown, hours: LevelHours): LevelLeaderboard {
-  if (!value || typeof value !== 'object') throw new Error('Invalid level leaderboard response')
-  const data = value as LevelLeaderboard
-  const interval = levelPeriods.find((period) => period.hours === hours)!.interval
+export const parseLevelLeaderboard = (value: unknown, hours: LeaderboardHours): LevelLeaderboard => parseLeaderboard(value, hours, 'level')
+export const parseGoldLeaderboard = (value: unknown, hours: LeaderboardHours): GoldLeaderboard => parseLeaderboard(value, hours, 'gold')
+
+function parseLeaderboard<M extends LeaderboardMetric>(value: unknown, hours: LeaderboardHours, metric: M): CharacterLeaderboard<M> {
+  if (!value || typeof value !== 'object') throw new Error(`Invalid ${metric} leaderboard response`)
+  const data = value as CharacterLeaderboard<M>
+  const minimum = metric === 'gold' ? 0 : 1
+  const interval = leaderboardPeriods.find((period) => period.hours === hours)!.interval
   if (!Number.isSafeInteger(data.timestamp) || data.timestamp < 0 ||
     !Number.isSafeInteger(data.from) || data.timestamp - data.from !== hours * 3600 ||
     data.sample_interval_seconds !== interval ||
     !Array.isArray(data.entries) || data.entries.length > 10 ||
     !data.entries.every((entry, index) => entry && typeof entry.name === 'string' && entry.name.trim().length > 0 &&
-      Number.isSafeInteger(entry.level) && entry.level >= 1 &&
+      Number.isSafeInteger(entry[metric]) && entry[metric] >= minimum &&
       Number.isSafeInteger(entry.account_first_rank) && entry.account_first_rank >= 1 && entry.account_first_rank <= index + 1 &&
       data.entries[entry.account_first_rank - 1]?.account_first_rank === entry.account_first_rank &&
-      (index === 0 || entry.level <= data.entries[index - 1].level)) ||
+      (index === 0 || entry[metric] <= data.entries[index - 1][metric])) ||
     new Set(data.entries.map((entry) => entry.name)).size !== data.entries.length) {
-    throw new Error('Invalid level leaderboard response')
+    throw new Error(`Invalid ${metric} leaderboard response`)
   }
   if (!Array.isArray(data.series) || data.series.length !== data.entries.length ||
     !data.series.every((series, index) => series && series.name === data.entries[index].name &&
@@ -58,9 +58,9 @@ export function parseLevelLeaderboard(value: unknown, hours: LevelHours): LevelL
       series.samples[0].timestamp === Math.max(data.from, series.started_at) &&
       series.samples.every((sample, sampleIndex) => sample && Number.isSafeInteger(sample.timestamp) &&
         sample.timestamp >= data.from && sample.timestamp <= data.timestamp &&
-        Number.isSafeInteger(sample.level) && sample.level >= 1 &&
+        Number.isSafeInteger(sample[metric]) && sample[metric] >= minimum &&
         (sampleIndex === 0 || sample.timestamp > series.samples[sampleIndex - 1].timestamp)))) {
-    throw new Error('Invalid level history response')
+    throw new Error(`Invalid ${metric} history response`)
   }
   return data
 }
@@ -349,7 +349,16 @@ const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
 
 export const formatTime = (timestamp: number) => timeFormatter.format(timestamp * 1000)
 export const formatCount = (value: number) => value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
-export const formatGoldAxis = (value: number) => value.toLocaleString('ko-KR', { notation: 'compact', maximumFractionDigits: 1 })
+export function goldSegments(copper: number) {
+  const amount = Math.round(copper)
+  return [
+    { unit: 'gold', value: Math.floor(amount / 10_000), suffix: 'g' },
+    { unit: 'silver', value: Math.floor(amount % 10_000 / 100), suffix: 's' },
+    { unit: 'copper', value: amount % 100, suffix: 'c' },
+  ].filter((part) => part.value > 0 || (amount === 0 && part.unit === 'copper'))
+    .map((part) => ({ unit: part.unit, text: `${part.value.toLocaleString('ko-KR')}${part.suffix}` }))
+}
+export const formatGold = (copper: number) => goldSegments(copper).map((part) => part.text).join('')
 export const formatDateTime = (timestamp: number) => dateFormatter.format(timestamp * 1000)
 export const formatAxisTime = (timestamp: number, hours: number, daily = false) =>
   (hours <= 24 && !daily ? timeFormatter : hours <= 4320 ? dayFormatter : monthFormatter).format(timestamp * 1000)

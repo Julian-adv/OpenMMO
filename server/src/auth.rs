@@ -662,6 +662,7 @@ impl AuthService {
         Self::ensure_migrations_schema(&conn)?;
         Self::migrate_level_curve(&conn)?;
         Self::ensure_level_history_schema(&conn)?;
+        Self::ensure_gold_history_schema(&conn)?;
 
         Ok(Self {
             pool,
@@ -762,6 +763,11 @@ impl AuthService {
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_characters_level_ranking
              ON characters(level DESC, xp DESC, id ASC)",
+            [],
+        )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_gold_ranking
+             ON characters(gold DESC, id ASC)",
             [],
         )?;
 

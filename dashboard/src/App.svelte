@@ -4,13 +4,13 @@
   import HistoryChart from './lib/HistoryChart.svelte'
   import GoldPanel from './lib/GoldPanel.svelte'
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
-  import LevelLeaderboardPanel from './lib/LevelLeaderboardPanel.svelte'
-  import LevelHistoryPanel from './lib/LevelHistoryPanel.svelte'
-  import { createLevelColors } from './lib/levelHistory'
+  import LeaderboardPanel from './lib/LeaderboardPanel.svelte'
+  import LeaderboardHistoryPanel from './lib/LeaderboardHistoryPanel.svelte'
+  import { createCharacterColors } from './lib/leaderboardHistory'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LevelHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -24,12 +24,17 @@
   const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
-  let levelHours = $state<LevelHours>(168)
+  let levelHours = $state<LeaderboardHours>(168)
   let selectedCharacter = $state<string | null>(null)
   const leaderboard = createMetricsResource(() => levelHours, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
-  const assignLevelColors = createLevelColors()
+  const assignLevelColors = createCharacterColors()
   let levelColors = $derived(leaderboard.history ? assignLevelColors(leaderboard.history.entries.map((entry) => entry.name)) : {})
-  const resources = [concurrent, unique, gold, perAccountGold, leaderboard]
+  let goldLeaderboardHours = $state<LeaderboardHours>(168)
+  let selectedGoldCharacter = $state<string | null>(null)
+  const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')
+  const assignGoldColors = createCharacterColors()
+  let goldColors = $derived(goldLeaderboard.history ? assignGoldColors(goldLeaderboard.history.entries.map((entry) => entry.name)) : {})
+  const resources = [concurrent, unique, gold, perAccountGold, leaderboard, goldLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -63,7 +68,7 @@
     <div>
       <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
       <h1>월드 현황<span>.</span></h1>
-      <p class="page-description">지금 함께하는 플레이어, 레벨 순위와 서버의 골드 변화를 살펴보세요.</p>
+      <p class="page-description">지금 함께하는 플레이어, 레벨·골드 순위와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
@@ -166,9 +171,14 @@
 
   <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours history={perAccountGold.history} loading={perAccountGold.loading} refreshing={perAccountGold.refreshing} error={perAccountGold.error} refresh={() => perAccountGold.refresh()} />
 
-  <div class="level-grid">
-    <LevelLeaderboardPanel leaderboard={leaderboard.history} colors={levelColors} bind:selectedCharacter loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
-    <LevelHistoryPanel bind:hours={levelHours} leaderboard={leaderboard.history} colors={levelColors} bind:selectedCharacter loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
+  <div class="leaderboard-grid">
+    <LeaderboardPanel metric="level" leaderboard={leaderboard.history} colors={levelColors} bind:selectedCharacter loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
+    <LeaderboardHistoryPanel metric="level" bind:hours={levelHours} leaderboard={leaderboard.history} colors={levelColors} bind:selectedCharacter loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
+  </div>
+
+  <div class="leaderboard-grid">
+    <LeaderboardPanel metric="gold" leaderboard={goldLeaderboard.history} colors={goldColors} bind:selectedCharacter={selectedGoldCharacter} loading={goldLeaderboard.loading} refreshing={goldLeaderboard.refreshing} error={goldLeaderboard.error} refresh={() => goldLeaderboard.refresh()} />
+    <LeaderboardHistoryPanel metric="gold" bind:hours={goldLeaderboardHours} leaderboard={goldLeaderboard.history} colors={goldColors} bind:selectedCharacter={selectedGoldCharacter} loading={goldLeaderboard.loading} refreshing={goldLeaderboard.refreshing} error={goldLeaderboard.error} refresh={() => goldLeaderboard.refresh()} />
   </div>
 
   <section class="notes-grid" aria-label="지표 안내">

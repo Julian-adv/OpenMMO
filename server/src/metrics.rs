@@ -44,6 +44,35 @@ pub struct LevelSeries {
     pub samples: Vec<LevelSample>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GoldLeaderboardEntry {
+    pub name: String,
+    pub gold: i64,
+    pub account_first_rank: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GoldLeaderboard {
+    pub timestamp: i64,
+    pub from: i64,
+    pub sample_interval_seconds: i64,
+    pub entries: Vec<GoldLeaderboardEntry>,
+    pub series: Vec<CharacterGoldSeries>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CharacterGoldSample {
+    pub timestamp: i64,
+    pub gold: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CharacterGoldSeries {
+    pub name: String,
+    pub started_at: i64,
+    pub samples: Vec<CharacterGoldSample>,
+}
+
 pub fn kst_day_start(timestamp: i64) -> i64 {
     timestamp - (timestamp + 9 * 3600).rem_euclid(DAY_SECONDS)
 }
@@ -188,6 +217,7 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/unique", get(unique_history))
         .route("/api/metrics/gold", get(gold_history))
         .route("/api/metrics/level-leaderboard", get(level_leaderboard))
+        .route("/api/metrics/gold-leaderboard", get(gold_leaderboard))
         .route(
             "/api/metrics/gold-per-account",
             get(per_account_gold_history),
@@ -241,22 +271,26 @@ fn metrics_unavailable() -> Response {
         .into_response()
 }
 
+fn leaderboard_interval(hours: u32) -> Result<i64, (StatusCode, &'static str)> {
+    match hours {
+        168 | 720 => Ok(3600),
+        4320 => Ok(21600),
+        8760 => Ok(86400),
+        _ => Err((
+            StatusCode::BAD_REQUEST,
+            "hours must be 168, 720, 4320, or 8760",
+        )),
+    }
+}
+
 async fn level_leaderboard(
     State(state): State<MetricsState>,
     Query(query): Query<HistoryQuery>,
 ) -> Response {
     let hours = query.hours.unwrap_or(168);
-    let interval = match hours {
-        168 | 720 => 3600,
-        4320 => 21600,
-        8760 => 86400,
-        _ => {
-            return (
-                StatusCode::BAD_REQUEST,
-                "hours must be 168, 720, 4320, or 8760",
-            )
-                .into_response()
-        }
+    let interval = match leaderboard_interval(hours) {
+        Ok(interval) => interval,
+        Err(error) => return error.into_response(),
     };
     match auth_db(move || state.auth.level_leaderboard(hours, interval)).await {
         Ok(leaderboard) => {
@@ -264,6 +298,26 @@ async fn level_leaderboard(
         }
         Err(error) => {
             warn!("Level leaderboard failed: {error}");
+            metrics_unavailable()
+        }
+    }
+}
+
+async fn gold_leaderboard(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(168);
+    let interval = match leaderboard_interval(hours) {
+        Ok(interval) => interval,
+        Err(error) => return error.into_response(),
+    };
+    match auth_db(move || state.auth.gold_leaderboard(hours, interval)).await {
+        Ok(leaderboard) => {
+            ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
+        }
+        Err(error) => {
+            warn!("Gold leaderboard failed: {error}");
             metrics_unavailable()
         }
     }
@@ -393,6 +447,157 @@ async fn per_account_gold_history(
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+
+    #[tokio::test]
+    async fn gold_leaderboard_ranks_saved_characters_and_returns_their_history() {
+        let path = crate::test_util::unique_temp_dir("gold_leaderboard").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("gold_leaderboard"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(game, auth);
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/gold-leaderboard");
+        let empty: GoldLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(empty.entries.is_empty());
+        assert!(empty.series.is_empty());
+        assert_eq!(empty.timestamp - empty.from, 168 * 3600);
+        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, 86400)] {
+            let history: GoldLeaderboard = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            assert_eq!(history.timestamp - history.from, hours * 3600);
+            assert_eq!(history.sample_interval_seconds, interval);
+        }
+        for hours in ["0", "24", "169", "-1", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (player_name) VALUES ('player'), ('npc_rich'), ('npcxplayer');
+             INSERT INTO characters (account_name, character_name, gold)
+             VALUES ('npc_rich', 'OfficialNpc', 999999999999);",
+        )
+        .unwrap();
+        let npc_only: GoldLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(npc_only.entries.is_empty());
+        for i in 1..=12 {
+            conn.execute(
+                "INSERT INTO characters (account_name, character_name, gold, xp)
+                 VALUES ('player', ?1, ?2, ?3)",
+                rusqlite::params![
+                    format!("Hero{i}"),
+                    if i == 10 { 1100 } else { i * 100 },
+                    i * 1000
+                ],
+            )
+            .unwrap();
+        }
+        conn.execute_batch(
+            "INSERT INTO characters (account_name, character_name, gold)
+             VALUES ('npcxplayer', 'LooksLikeNpc', 5000000000);",
+        )
+        .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let body: serde_json::Value = response.json().await.unwrap();
+        for entry in body["entries"].as_array().unwrap() {
+            assert_eq!(entry.as_object().unwrap().len(), 3);
+        }
+        let leaderboard: GoldLeaderboard = serde_json::from_value(body).unwrap();
+        assert_eq!(
+            leaderboard
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "LooksLikeNpc",
+                "Hero12",
+                "Hero10",
+                "Hero11",
+                "Hero9",
+                "Hero8",
+                "Hero7",
+                "Hero6",
+                "Hero5",
+                "Hero4"
+            ]
+        );
+        assert_eq!(leaderboard.entries[0].gold, 5000000000);
+        assert_eq!(leaderboard.entries[0].account_first_rank, 1);
+        assert!(leaderboard.entries[1..]
+            .iter()
+            .all(|entry| entry.account_first_rank == 2));
+        assert_eq!(leaderboard.series.len(), 10);
+        for (entry, series) in leaderboard.entries.iter().zip(&leaderboard.series) {
+            assert_eq!(entry.name, series.name);
+            assert_eq!(entry.gold, series.samples.last().unwrap().gold);
+        }
+
+        let previous = unix_now() - 86400;
+        conn.execute(
+            "UPDATE character_gold_history SET timestamp = ?1
+             WHERE character_id = (SELECT id FROM characters WHERE character_name = 'Hero1')",
+            [previous],
+        )
+        .unwrap();
+        conn.execute(
+            "UPDATE characters SET gold = 6000000000 WHERE character_name = 'Hero1'",
+            [],
+        )
+        .unwrap();
+        let updated: GoldLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(updated.entries[0].name, "Hero1");
+        assert_eq!(updated.entries[0].gold, 6000000000);
+        assert_eq!(updated.entries[2].account_first_rank, 1);
+        assert_eq!(
+            updated.series[0].samples[0],
+            CharacterGoldSample {
+                timestamp: previous,
+                gold: 100
+            }
+        );
+        assert_eq!(updated.series[0].samples.last().unwrap().gold, 6000000000);
+
+        conn.execute_batch(
+            "DELETE FROM characters WHERE character_name != 'Hero1';
+             UPDATE characters SET gold = 0 WHERE character_name = 'Hero1';",
+        )
+        .unwrap();
+        let single: GoldLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(
+            single.entries,
+            [GoldLeaderboardEntry {
+                name: "Hero1".into(),
+                gold: 0,
+                account_first_rank: 1
+            }]
+        );
+        assert_eq!(single.series[0].samples.last().unwrap().gold, 0);
+        conn.execute("DROP TABLE characters", []).unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
 
     #[tokio::test]
     async fn level_leaderboard_ranks_saved_characters_and_excludes_npc_accounts() {

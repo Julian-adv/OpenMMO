@@ -1,8 +1,9 @@
 <script lang="ts">
+  import GoldAmount from './GoldAmount.svelte'
   import HistoryChart from './HistoryChart.svelte'
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { formatCount, formatDateTime, formatGoldAxis, goldPeriods, kstDayStart, uniquePeriods, type GoldHours, type PerAccountGoldHistory, type UniqueHours } from './metrics'
+  import { formatCount, formatGold, formatDateTime, goldPeriods, kstDayStart, uniquePeriods, type GoldHours, type PerAccountGoldHistory, type UniqueHours } from './metrics'
 
   let { hours = $bindable(), activeHours = $bindable(), history, loading, refreshing, error, refresh }: {
     hours: GoldHours
@@ -35,9 +36,9 @@
   <MetricsError {error} until={history?.until} {refreshing} {refresh} />
   <div class="metric-summary">
     <span>최근 집계 · 활성 유저 1인당 골드{error ? ' · 갱신 중단' : ''}</span>
-    <strong>{latest ? formatCount(latest.gold_per_account) : '—'}<small>골드/계정</small></strong>
+    <strong>{#if latest}<GoldAmount copper={latest.gold_per_account} />{:else}—{/if}<small>/계정</small></strong>
     {#if latest}
-      <p>{formatCount(latest.total_gold)}골드 ÷ {formatCount(latest.accounts)}계정 · 골드 집계: {formatDateTime(latest.timestamp)} KST</p>
+      <p><GoldAmount copper={latest.total_gold} /> ÷ {formatCount(latest.accounts)}계정 · 골드 집계: {formatDateTime(latest.timestamp)} KST</p>
       <p>활성 유저 집계: {formatDateTime(kstDayStart(latest.timestamp))} KST · 직전 {activePeriod.label}</p>
     {:else}
       <p>최근 골드 기록에 대응하는 활성 계정 집계가 없거나 계정 수가 0이면 계산하지 않습니다.</p>
@@ -49,10 +50,11 @@
   {/if}
   <div class="chart-meta"><span>골드/계정 · 직전 {activePeriod.label} 활성 유저</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
   {#if history && history.samples.length > 0}
-    <HistoryChart {history} {peak} value={(sample) => sample.gold_per_account} legend={`직전 ${activePeriod.label} 활성 유저 1인당 골드`} valueLabel={period.interval > 3600 ? '골드/계정 (평균)' : '골드/계정'} unit="골드/계정" peakLabel="기간 최고" axisWidth={72} formatAxisValue={formatGoldAxis}>
+    <HistoryChart {history} {peak} value={(sample) => sample.gold_per_account} legend={`직전 ${activePeriod.label} 활성 유저 1인당 골드`} valueLabel={period.interval > 3600 ? '골드/계정 (평균)' : '골드/계정'} unit="/계정" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold}>
+      {#snippet amount(copper, svg)}<GoldAmount {copper} {svg} />{/snippet}
       {#snippet detail(selected)}
         {#if period.interval > 3600}
-          <span>구간 최고: {formatCount(selected.peak_gold_per_account)}골드/계정 · {selected.sample_count}개 시간별 기록</span>
+          <span>구간 최고: <GoldAmount copper={selected.peak_gold_per_account} />/계정 · {selected.sample_count}개 시간별 기록</span>
           <span>시간별 1인당 골드를 계산한 뒤 평균합니다.</span>
         {:else}
           <span>활성 유저 집계: {formatDateTime(kstDayStart(selected.timestamp))} KST</span>

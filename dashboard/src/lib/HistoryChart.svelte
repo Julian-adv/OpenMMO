@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte'
   import { axisStep, formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type TimestampSample, type ChartHistory } from './metrics'
 
-  let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatAxisValue = String, layers, detail, legends }: {
+  let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatValue = formatCount, amount, layers, detail, legends }: {
     history: ChartHistory<T>
     peak: number | null
     value: (sample: T) => number
@@ -12,7 +12,8 @@
     unit?: string
     peakLabel?: string
     axisWidth?: number
-    formatAxisValue?: (value: number) => string
+    formatValue?: (value: number) => string
+    amount?: Snippet<[number, boolean]>
     layers?: Snippet<[T[], (timestamp: number) => number, (amount: number) => number]>
     detail?: Snippet<[T]>
     legends?: Snippet
@@ -52,11 +53,11 @@
 </script>
 
 <div class="chart-canvas" bind:this={container} bind:contentRect={null, (rect: DOMRectReadOnly | null | undefined) => { if (rect) width = rect.width }}>
-  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. ${history.samples.length}개 지점.${peak === null ? '' : ` 가로 점선은 ${peakLabel} ${formatCount(peak)}${unit} 기준입니다.`}`}
+  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. ${history.samples.length}개 지점.${peak === null ? '' : ` 가로 점선은 ${peakLabel} ${formatValue(peak)}${unit} 기준입니다.`}`}
     onpointermove={selectAtPointer} onpointerleave={() => { selectedTime = null }}>
     {#each [4, 3, 2, 1, 0] as tick (tick)}
       <line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} class="grid-line" />
-      <text x={left - 14} y={y(tick * step) + 4} text-anchor="end" class="axis-label">{formatAxisValue(tick * step)}</text>
+      <text x={left - 14} y={y(tick * step) + 4} text-anchor="end" class="axis-label">{#if amount}{@render amount(tick * step, true)}{:else}{tick * step}{/if}</text>
     {/each}
     {#each axisTicks as tick (tick)}
       <text x={left + plotWidth * tick / 6} y={height - 10} text-anchor={tick === 0 ? 'start' : tick === 6 ? 'end' : 'middle'} class="axis-label">
@@ -78,7 +79,7 @@
     {/each}
     {#if peak !== null}
       <line x1={left} x2={width - right} y1={y(peak)} y2={y(peak)} class="peak-line" />
-      <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">{peakLabel} {formatCount(peak)}{unit}</text>
+      <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">{peakLabel} {#if amount}{@render amount(peak, true)}{:else}{formatValue(peak)}{/if}{unit}</text>
     {/if}
     {#if selected}
       <line x1={x(selected.timestamp)} x2={x(selected.timestamp)} y1={top} y2={y(0)} stroke="#83b7ac" stroke-dasharray="4 4" />
@@ -88,7 +89,7 @@
   {#if selected}
     <div class="chart-tooltip" style:left={`${tooltipLeft}px`}>
       <span>{formatDateTime(selected.timestamp)}</span>
-      <strong>{formatCount(value(selected))} <small>{valueLabel}</small></strong>
+      <strong>{#if amount}{@render amount(value(selected), false)}{:else}{formatValue(value(selected))}{/if} <small>{valueLabel}</small></strong>
       {@render detail?.(selected)}
     </div>
   {/if}

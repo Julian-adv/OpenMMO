@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGoldAxis, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+
+describe('gold display units', () => {
+  it.each([
+    [0, '0c'], [1, '1c'], [100, '1s'], [9999, '99s99c'],
+    [10000, '1g'], [86134, '8g61s34c'], [123456789, '12,345g67s89c'],
+  ])('displays %i copper as %s gold', (copper, expected) => {
+    expect(formatGold(copper)).toBe(expected)
+  })
+
+  it('preserves denomination colors and rounds averages before splitting units', () => {
+    expect(goldSegments(86134)).toEqual([
+      { unit: 'gold', text: '8g' }, { unit: 'silver', text: '61s' }, { unit: 'copper', text: '34c' },
+    ])
+    expect(formatGold(10000 / 3)).toBe('33s33c')
+    expect(formatGold(99.9)).toBe('1s')
+    expect(formatGold(9999.9)).toBe('1g')
+  })
+})
 
 describe('gold per active account history', () => {
   const midnight = 1000 * 86400 - 9 * 3600
@@ -85,7 +103,6 @@ describe('hourly gold history', () => {
     }
     expect(() => parseGoldHistory({ ...data, samples: [sample, sample] }, 4320)).toThrow()
     expect(() => parseGoldHistory({ ...data, latest: { timestamp: 7201, total_gold: 101 } }, 4320)).toThrow()
-    expect(formatGoldAxis(100000000)).toBe('1억')
   })
 })
 
