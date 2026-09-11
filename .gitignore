@@ -13,6 +13,10 @@ client/.env.local
 client/.env.production
 client/*.tsbuildinfo
 client/vite.config.d.ts
+dashboard/dist/
+dashboard/*.tsbuildinfo
+dashboard/test-results/
+dashboard/playwright-report/
 tools/glb-editor/vite.config.d.ts
 
 # Rust (workspace)

@@ -244,6 +244,7 @@ mod instrument;
 mod inventory;
 mod land;
 mod landscaping;
+mod metrics;
 mod monster;
 mod monster_ai;
 mod mounts;

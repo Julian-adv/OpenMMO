@@ -16,6 +16,7 @@ mod housing;
 mod item_defs;
 mod land_grades;
 mod merchant_defs;
+mod metrics;
 mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
@@ -727,6 +728,10 @@ async fn main() -> ExitCode {
     ))
     .merge(npc_router(npc_io, Arc::clone(&game_state)))
     .merge(announcements_router(announcement_store))
+    .merge(metrics::metrics_router(
+        Arc::clone(&game_state),
+        Arc::clone(&auth_service),
+    ))
     .layer(axum::middleware::from_fn_with_state(
         Arc::clone(&auth_ctx),
         api_auth::require_admin_for_writes,
@@ -756,6 +761,19 @@ async fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
+
+    let metrics_game = Arc::clone(&game_state);
+    let metrics_auth = Arc::clone(&auth_service);
+    background.spawn(run_ticks(
+        "concurrent accounts",
+        Duration::from_secs(metrics::SAMPLE_INTERVAL_SECONDS as u64),
+        drain_shutdown.clone(),
+        move || {
+            let game = Arc::clone(&metrics_game);
+            let auth = Arc::clone(&metrics_auth);
+            async move { metrics::record_concurrent_sample(&game, auth).await }
+        },
+    ));
 
     info!("🎮 MMORPG Server started successfully!");
     info!("📡 WebSocket server ready for connections");

@@ -97,6 +97,8 @@ Agents and humans connect to the same world, act under the same rules, and inter
 **Engine & Performance**
 - [Runtime Performance](doc/RUNTIME_PERFORMANCE.md)
 - [Loading Optimization](doc/LOADING_OPTIMIZATION.md)
+- [Metrics & Concurrent Accounts](doc/METRICS.md)
+- [Pulse Dashboard](dashboard/README.md)
 
 **Assets & Agents**
 - [Assets](doc/ASSETS.md)
@@ -106,6 +108,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 - **Client**: Svelte component-based UI + Three.js integration through Threlte
 - **Server**: Rust async server with game state management via broadcast channels
+- **Dashboard**: Independent Svelte app in `dashboard/` for concurrent account metrics
 - **Communication**: Real-time bidirectional communication through WebSocket
 
 ## Tech Stack
@@ -146,6 +149,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 | 10005 | GLB Editor                       |
 | 10006 | Server WebSocket (binds 127.0.0.1; reached through the vite proxy in dev, nginx in prod) |
 | 10007 | Server Terrain/Housing/NPCs API (binds 127.0.0.1; writes require auth) |
+| 10008 | Pulse dashboard (Vite dev)       |
 
 > Both server ports are loopback-only by default (`--bind` / `--api-bind`). Pass `--bind 0.0.0.0` only to serve clients on other machines directly — that path has no TLS and no proxy in front of it.
 

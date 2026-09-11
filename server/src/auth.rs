@@ -8,6 +8,8 @@ mod fence;
 mod land;
 #[path = "auth_landscaping.rs"]
 mod landscaping;
+#[path = "auth_metrics.rs"]
+mod metrics;
 use crate::world_config::world_config;
 pub use land::{LandAccount, OwnedLandPlot};
 use onlinerpg_shared::inventory::EquipSlot;
@@ -654,6 +656,7 @@ impl AuthService {
         Self::ensure_titles_schema(&conn)?;
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
+        Self::ensure_concurrent_samples_schema(&conn)?;
         Self::ensure_pricing_schema(&conn)?;
         Self::ensure_migrations_schema(&conn)?;
         Self::migrate_level_curve(&conn)?;
