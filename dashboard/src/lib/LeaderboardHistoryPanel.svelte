@@ -2,7 +2,7 @@
   import MetricsError from './MetricsError.svelte'
   import GoldAmount from './GoldAmount.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { axisStep, formatAxisTime, formatDateTime, leaderboardLabels, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
+  import { axisStep, formatAxisTime, formatDateTime, leaderboardMetrics, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
   import { sampleAt, stepPath } from './leaderboardHistory'
 
   let { metric, hours = $bindable(), leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
@@ -16,7 +16,7 @@
     error: string
     refresh: () => void
   } = $props()
-  let label = $derived(leaderboardLabels[metric])
+  let { label, axisLabel, enchantPrefix } = $derived(leaderboardMetrics[metric])
   let titleId = $derived(`${metric}-history-title`)
   let container = $state<HTMLDivElement>()
   let width = $state(600)
@@ -59,7 +59,7 @@
     <PeriodFilter bind:hours options={leaderboardPeriods} label={`${label} 변화 조회 기간`} />
   </div>
   <MetricsError {error} until={leaderboard?.timestamp} {refreshing} {refresh} />
-  <div class="chart-meta"><span>{metric === 'gold' ? '보유금액' : metric === 'weapon_enchant' ? '인챈트 단계' : '레벨 (Lv.)'}</span></div>
+  <div class="chart-meta"><span>{axisLabel}</span></div>
   {#if leaderboard && series.length > 0}
     <div class="chart-canvas" style:min-height={width < 450 ? '280px' : '360px'} bind:this={container}
       bind:contentRect={null, (rect: DOMRectReadOnly | null | undefined) => { if (rect) { width = rect.width; height = rect.height } }}>
@@ -67,7 +67,7 @@
         onpointermove={selectAtPointer} onpointerleave={() => { selectedTime = null }}>
         {#each ticks as tick (tick)}
           <line x1={left} x2={width - right} y1={y(tick)} y2={y(tick)} class="grid-line" />
-          <text x={left - 10} y={y(tick) + 4} text-anchor="end" class="axis-label">{#if metric === 'gold'}<GoldAmount copper={tick} svg />{:else}{metric === 'weapon_enchant' ? '+' : ''}{tick}{/if}</text>
+          <text x={left - 10} y={y(tick) + 4} text-anchor="end" class="axis-label">{#if metric === 'gold'}<GoldAmount copper={tick} svg />{:else}{enchantPrefix}{tick}{/if}</text>
         {/each}
         {#each width < 500 ? [0, 3, 6] : [0, 2, 4, 6] as tick (tick)}
           <text x={left + plotWidth * tick / 6} y={height - 10} text-anchor={tick === 0 ? 'start' : tick === 6 ? 'end' : 'middle'} class="axis-label">
@@ -96,7 +96,7 @@
           <span>{formatDateTime(selected)} KST</span>
           {#each series.filter((entry) => !focused || focused === entry.name) as entry (entry.name)}
             {@const sample = sampleAt(entry.samples, selected)}
-            <div class="tooltip-entry"><span><i style:background={colors[entry.name]}></i>{entry.name}</span><b>{#if !sample}기록 없음{:else if metric === 'gold'}<GoldAmount copper={sample[metric]} />{:else}{metric === 'weapon_enchant' ? '+' : 'Lv. '}{sample[metric]}{/if}</b></div>
+            <div class="tooltip-entry"><span><i style:background={colors[entry.name]}></i>{entry.name}</span><b>{#if !sample}기록 없음{:else if metric === 'gold'}<GoldAmount copper={sample[metric]} />{:else}{enchantPrefix || 'Lv. '}{sample[metric]}{/if}</b></div>
           {/each}
         </div>
       {/if}

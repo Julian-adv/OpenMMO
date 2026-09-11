@@ -1,11 +1,13 @@
 use super::{unix_now, AuthError, AuthService, NPC_ACCOUNT_PREFIX};
 use crate::metrics::{
-    kst_day_start, AccountActivity, CharacterGoldSample, CharacterGoldSeries, CharacterLeaderboard,
-    ConcurrentCounts, ConcurrentHistorySample, GoldHistory, GoldHistorySample, GoldLeaderboard,
-    GoldLeaderboardEntry, GoldSample, LevelLeaderboard, LevelLeaderboardEntry, LevelSample,
-    LevelSeries, PerAccountGoldHistory, PerAccountGoldHistorySample, PerAccountGoldSample,
-    UniqueHistory, UniqueSample, WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry,
-    WeaponEnchantSample, WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
+    kst_day_start, AccountActivity, ArmorEnchantLeaderboard, ArmorEnchantLeaderboardEntry,
+    ArmorEnchantSample, ArmorEnchantSeries, CharacterGoldSample, CharacterGoldSeries,
+    CharacterLeaderboard, ConcurrentCounts, ConcurrentHistorySample, GoldHistory,
+    GoldHistorySample, GoldLeaderboard, GoldLeaderboardEntry, GoldSample, LevelLeaderboard,
+    LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
+    PerAccountGoldHistorySample, PerAccountGoldSample, UniqueHistory, UniqueSample,
+    WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry, WeaponEnchantSample,
+    WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
 };
 use rusqlite::{params, types::FromSql, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
@@ -14,6 +16,7 @@ enum LeaderboardMetric {
     Level,
     Gold,
     WeaponEnchant,
+    ArmorEnchant,
 }
 
 fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Error> {
@@ -61,6 +64,44 @@ impl AuthService {
         transaction.execute(
             "CREATE INDEX IF NOT EXISTS idx_characters_weapon_enchant_ranking
              ON characters(weapon_enchant DESC, id ASC)",
+            [],
+        )?;
+        transaction.commit()
+    }
+
+    pub(super) fn ensure_armor_enchant_history_schema(
+        conn: &Connection,
+    ) -> Result<(), rusqlite::Error> {
+        let transaction = conn.unchecked_transaction()?;
+        if !Self::table_columns(&transaction, "characters")?.contains("armor_enchant") {
+            transaction.execute(
+                "ALTER TABLE characters ADD COLUMN armor_enchant INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let armor_slots: HashMap<_, _> = crate::item_defs::item_defs()
+            .all()
+            .filter(|def| def.is_armor())
+            .filter_map(|def| def.equip_slot.map(|slot| (&def.id, slot)))
+            .collect();
+        let armor_slots = serde_json::to_string(&armor_slots)
+            .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+        transaction.execute(
+            "UPDATE characters SET armor_enchant = COALESCE((
+                SELECT SUM(enchant) FROM (
+                    SELECT MAX(0, MAX(items.enchant)) AS enchant
+                    FROM character_items items
+                    JOIN json_each(?1) definitions ON items.item_def_id = definitions.key
+                    WHERE items.character_id = characters.id AND items.quantity > 0
+                    GROUP BY definitions.value
+                )
+             ), 0)",
+            [armor_slots],
+        )?;
+        Self::ensure_character_history_schema(&transaction, "armor_enchant", 0)?;
+        transaction.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_armor_enchant_ranking
+             ON characters(armor_enchant DESC, id ASC)",
             [],
         )?;
         transaction.commit()
@@ -174,6 +215,34 @@ impl AuthService {
         )
     }
 
+    pub fn armor_enchant_leaderboard(
+        &self,
+        hours: u32,
+        interval: i64,
+    ) -> Result<ArmorEnchantLeaderboard, AuthError> {
+        self.character_leaderboard(
+            LeaderboardMetric::ArmorEnchant,
+            hours,
+            interval,
+            |name, armor_enchant, account_first_rank| ArmorEnchantLeaderboardEntry {
+                name,
+                armor_enchant,
+                account_first_rank,
+            },
+            |name, started_at, samples| ArmorEnchantSeries {
+                name,
+                started_at,
+                samples: samples
+                    .into_iter()
+                    .map(|(timestamp, armor_enchant)| ArmorEnchantSample {
+                        timestamp,
+                        armor_enchant,
+                    })
+                    .collect(),
+            },
+        )
+    }
+
     fn character_leaderboard<Value: FromSql, Entry, Series>(
         &self,
         metric: LeaderboardMetric,
@@ -186,6 +255,7 @@ impl AuthService {
             LeaderboardMetric::Level => ("level", "level DESC, xp DESC, id ASC"),
             LeaderboardMetric::Gold => ("gold", "gold DESC, id ASC"),
             LeaderboardMetric::WeaponEnchant => ("weapon_enchant", "weapon_enchant DESC, id ASC"),
+            LeaderboardMetric::ArmorEnchant => ("armor_enchant", "armor_enchant DESC, id ASC"),
         };
         let mut conn = self.open_connection()?;
         let transaction = conn.transaction()?;
@@ -609,7 +679,11 @@ impl AuthService {
 mod tests {
     use super::*;
 
-    fn weapon(item_def_id: &str, enchant: i32, equip_slot: Option<&str>) -> crate::auth::ItemRow {
+    fn inventory_item(
+        item_def_id: &str,
+        enchant: i32,
+        equip_slot: Option<&str>,
+    ) -> crate::auth::ItemRow {
         crate::auth::ItemRow {
             item_def_id: item_def_id.into(),
             quantity: 1,
@@ -654,9 +728,9 @@ mod tests {
         )
         .unwrap();
         let mut items = vec![
-            weapon("iron_sword", 7, None),
-            weapon("worn_iron_sword", 3, Some("main_hand")),
-            weapon("wooden_shield", 20, Some("off_hand")),
+            inventory_item("iron_sword", 7, None),
+            inventory_item("worn_iron_sword", 3, Some("main_hand")),
+            inventory_item("wooden_shield", 20, Some("off_hand")),
         ];
         let save = |items: &[crate::auth::ItemRow]| {
             auth.save_batch(&[], &[(1, items.to_vec())], &[], &[], None)
@@ -676,7 +750,7 @@ mod tests {
         items[1].equip_slot = None;
         save(&items);
         assert_eq!(count(), 1);
-        items.push(weapon("torch", 9, Some("off_hand")));
+        items.push(inventory_item("torch", 9, Some("off_hand")));
         save(&items);
         assert_eq!(count(), 2);
         assert_eq!(
@@ -686,7 +760,10 @@ mod tests {
         assert!(auth
             .save_batch(
                 &[],
-                &[(1, vec![]), (99999, vec![weapon("iron_sword", 12, None)])],
+                &[
+                    (1, vec![]),
+                    (99999, vec![inventory_item("iron_sword", 12, None)])
+                ],
                 &[],
                 &[],
                 None
@@ -697,7 +774,7 @@ mod tests {
             auth.weapon_enchant_leaderboard(168, 3600).unwrap().entries[0].weapon_enchant,
             9
         );
-        save(&[weapon("worn_iron_sword", 3, None)]);
+        save(&[inventory_item("worn_iron_sword", 3, None)]);
         save(&[]);
         assert_eq!(
             auth.weapon_enchant_leaderboard(168, 3600).unwrap().series[0]
@@ -725,6 +802,148 @@ mod tests {
         assert_eq!(
             conn.query_row(
                 "SELECT COUNT(*) FROM character_weapon_enchant_history WHERE character_id = 2",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn armor_enchant_history_sums_slot_maxima_atomically() {
+        let path = crate::test_util::unique_temp_dir("armor_enchant_lifecycle").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "DROP TRIGGER character_armor_enchant_created;
+             DROP TRIGGER character_armor_enchant_changed;
+             DROP TABLE character_armor_enchant_history;
+             DROP INDEX idx_characters_armor_enchant_ranking;
+             ALTER TABLE characters DROP COLUMN armor_enchant;
+             INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
+             INSERT INTO characters (id, account_name, character_name, created_at)
+             VALUES (1, 'player', 'Hero', 100), (2, 'npc_test', 'Npc', 100), (3, 'npcxplayer', 'NoArmor', 100);
+             INSERT INTO character_items (character_id, item_def_id, quantity, enchant, equip_slot)
+             VALUES (1, 'leather_helmet', 1, 2, NULL), (1, 'iron_helmet', 1, 1, 'head'),
+                    (1, 'breastplate', 1, 3, 'chest'), (1, 'wooden_shield', 1, 4, 'off_hand'),
+                    (1, 'leather_gloves', 1, 5, NULL), (1, 'leather_pants', 1, 6, NULL),
+                    (1, 'iron_boots', 1, 7, 'boots'), (1, 'leather_boots', 0, 99, NULL),
+                    (1, 'iron_sword', 1, 99, 'main_hand'), (1, 'ring_of_protection', 1, 99, 'ring'),
+                    (1, 'missing_item', 1, 99, NULL), (1, 'raven_shield', 1, -3, NULL),
+                    (2, 'breastplate', 1, 99, NULL), (3, 'iron_sword', 1, 99, NULL);",
+        ).unwrap();
+        let before = unix_now();
+        AuthService::ensure_armor_enchant_history_schema(&conn).unwrap();
+        let initial = auth.armor_enchant_leaderboard(168, 3600).unwrap();
+        assert_eq!(initial.entries.len(), 2);
+        assert_eq!(initial.entries[0].armor_enchant, 27);
+        assert_eq!(initial.entries[1].armor_enchant, 0);
+        assert!((before..=unix_now()).contains(&initial.series[0].started_at));
+        conn.execute(
+            "UPDATE character_armor_enchant_history SET timestamp = timestamp - 86400",
+            [],
+        )
+        .unwrap();
+        let mut items = vec![
+            inventory_item("leather_helmet", 2, None),
+            inventory_item("iron_helmet", 1, Some("head")),
+            inventory_item("breastplate", 3, Some("chest")),
+            inventory_item("wooden_shield", 4, Some("off_hand")),
+            inventory_item("leather_gloves", 5, None),
+            inventory_item("leather_pants", 6, None),
+            inventory_item("iron_boots", 7, Some("boots")),
+        ];
+        let save = |items: &[crate::auth::ItemRow]| {
+            auth.save_batch(&[], &[(1, items.to_vec())], &[], &[], None)
+                .unwrap()
+        };
+        let count = || {
+            conn.query_row(
+                "SELECT COUNT(*) FROM character_armor_enchant_history WHERE character_id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap()
+        };
+        save(&items);
+        assert_eq!(count(), 1);
+        items[0].equip_slot = Some("head".into());
+        items[1].equip_slot = None;
+        save(&items);
+        assert_eq!(count(), 1);
+        items[1].enchant = 9;
+        save(&items);
+        assert_eq!(count(), 2);
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().entries[0].armor_enchant,
+            34
+        );
+        assert!(auth
+            .save_batch(
+                &[],
+                &[
+                    (1, vec![]),
+                    (99999, vec![inventory_item("breastplate", 12, None)])
+                ],
+                &[],
+                &[],
+                None
+            )
+            .is_err());
+        assert_eq!(auth.load_inventory(1).unwrap(), items);
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().entries[0].armor_enchant,
+            34
+        );
+        items.retain(|item| item.item_def_id != "iron_helmet");
+        save(&items);
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().entries[0].armor_enchant,
+            27
+        );
+        save(&[]);
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().series[0]
+                .samples
+                .last()
+                .unwrap()
+                .armor_enchant,
+            0
+        );
+        save(&[
+            inventory_item("iron_helmet", i32::MAX, None),
+            inventory_item("breastplate", i32::MAX, None),
+            inventory_item("wooden_shield", i32::MAX, None),
+            inventory_item("iron_boots", -1, None),
+        ]);
+        let total = 3 * i32::MAX as u64;
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().entries[0].armor_enchant,
+            total
+        );
+        let recorded_count = count();
+        conn.execute(
+            "UPDATE characters SET character_name = 'Renamed' WHERE id = 1",
+            [],
+        )
+        .unwrap();
+        drop(AuthService::new(path).unwrap());
+        assert_eq!(count(), recorded_count);
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().series[0].name,
+            "Renamed"
+        );
+        assert_eq!(
+            auth.armor_enchant_leaderboard(168, 3600).unwrap().entries[0].armor_enchant,
+            total
+        );
+        conn.execute("DELETE FROM characters WHERE id = 1", [])
+            .unwrap();
+        assert_eq!(count(), 0);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM character_armor_enchant_history WHERE character_id = 2",
                 [],
                 |row| row.get::<_, i64>(0)
             )

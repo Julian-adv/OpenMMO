@@ -10,8 +10,13 @@ export interface TimestampSample {
   timestamp: number
 }
 
-export const leaderboardLabels = { level: '레벨', gold: '골드', weapon_enchant: '무기 인챈트' } as const
-export type LeaderboardMetric = keyof typeof leaderboardLabels
+export const leaderboardMetrics = {
+  level: { label: '레벨', columnLabel: '레벨', axisLabel: '레벨 (Lv.)', description: '', enchantPrefix: '' },
+  gold: { label: '골드', columnLabel: '골드', axisLabel: '보유금액', description: '', enchantPrefix: '' },
+  weapon_enchant: { label: '무기 인챈트', columnLabel: '인챈트', axisLabel: '인챈트 단계', description: '가방·장비의 무기 중 최고 인챈트', enchantPrefix: '+' },
+  armor_enchant: { label: '방어구 인챈트', columnLabel: '합계', axisLabel: '인챈트 합계', description: '가방·장비의 방어구 슬롯별 최고 인챈트 합계', enchantPrefix: '+' },
+} as const
+export type LeaderboardMetric = keyof typeof leaderboardMetrics
 export type CharacterSample<M extends LeaderboardMetric> = TimestampSample & Record<M, number>
 
 export interface CharacterLeaderboard<M extends LeaderboardMetric> extends TimestampSample {
@@ -24,6 +29,7 @@ export interface CharacterLeaderboard<M extends LeaderboardMetric> extends Times
 export type LevelLeaderboard = CharacterLeaderboard<'level'>
 export type GoldLeaderboard = CharacterLeaderboard<'gold'>
 export type WeaponEnchantLeaderboard = CharacterLeaderboard<'weapon_enchant'>
+export type ArmorEnchantLeaderboard = CharacterLeaderboard<'armor_enchant'>
 
 export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
@@ -36,6 +42,7 @@ export type LeaderboardHours = typeof leaderboardPeriods[number]['hours']
 export const parseLevelLeaderboard = (value: unknown, hours: LeaderboardHours): LevelLeaderboard => parseLeaderboard(value, hours, 'level')
 export const parseGoldLeaderboard = (value: unknown, hours: LeaderboardHours): GoldLeaderboard => parseLeaderboard(value, hours, 'gold')
 export const parseWeaponEnchantLeaderboard = (value: unknown, hours: LeaderboardHours): WeaponEnchantLeaderboard => parseLeaderboard(value, hours, 'weapon_enchant')
+export const parseArmorEnchantLeaderboard = (value: unknown, hours: LeaderboardHours): ArmorEnchantLeaderboard => parseLeaderboard(value, hours, 'armor_enchant')
 
 function parseLeaderboard<M extends LeaderboardMetric>(value: unknown, hours: LeaderboardHours, metric: M): CharacterLeaderboard<M> {
   if (!value || typeof value !== 'object') throw new Error(`Invalid ${metric} leaderboard response`)

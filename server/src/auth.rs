@@ -576,8 +576,9 @@ impl AuthService {
               cape_texture, locked) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
-        let mut update_enchant =
-            conn.prepare("UPDATE characters SET weapon_enchant = ?2 WHERE id = ?1")?;
+        let mut update_enchant = conn.prepare(
+            "UPDATE characters SET weapon_enchant = ?2, armor_enchant = ?3 WHERE id = ?1",
+        )?;
         let defs = crate::item_defs::item_defs();
 
         for (character_id, items) in inventories {
@@ -594,19 +595,26 @@ impl AuthService {
                     item.locked
                 ])?;
             }
-            let weapon_enchant = items
-                .iter()
-                .filter(|item| {
-                    item.quantity > 0
-                        && defs
-                            .get(&item.item_def_id)
-                            .is_some_and(|def| def.is_weapon())
-                })
-                .map(|item| item.enchant)
-                .max()
-                .unwrap_or(0)
-                .max(0);
-            update_enchant.execute(params![character_id, weapon_enchant])?;
+            let mut weapon_enchant = 0;
+            let mut armor_slots = HashMap::new();
+            for item in items.iter().filter(|item| item.quantity > 0) {
+                let Some(def) = defs.get(&item.item_def_id) else {
+                    continue;
+                };
+                if def.is_weapon() {
+                    weapon_enchant = weapon_enchant.max(item.enchant);
+                } else if def.is_armor() {
+                    if let Some(slot) = def.equip_slot {
+                        let enchant = armor_slots.entry(slot).or_insert(0);
+                        *enchant = (*enchant).max(item.enchant);
+                    }
+                }
+            }
+            let armor_enchant: i64 = armor_slots
+                .values()
+                .map(|enchant| i64::from(*enchant))
+                .sum();
+            update_enchant.execute(params![character_id, weapon_enchant, armor_enchant])?;
         }
         Ok(())
     }
@@ -680,6 +688,7 @@ impl AuthService {
         Self::ensure_level_history_schema(&conn)?;
         Self::ensure_gold_history_schema(&conn)?;
         Self::ensure_weapon_enchant_history_schema(&conn)?;
+        Self::ensure_armor_enchant_history_schema(&conn)?;
 
         Ok(Self {
             pool,

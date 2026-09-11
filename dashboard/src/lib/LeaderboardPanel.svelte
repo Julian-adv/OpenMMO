@@ -1,7 +1,7 @@
 <script lang="ts" generics="M extends LeaderboardMetric">
   import MetricsError from './MetricsError.svelte'
   import GoldAmount from './GoldAmount.svelte'
-  import { leaderboardLabels, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
+  import { leaderboardMetrics, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
 
   let { metric, leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
     metric: M
@@ -13,7 +13,7 @@
     error: string
     refresh: () => void
   } = $props()
-  let label = $derived(leaderboardLabels[metric])
+  let { label, columnLabel, description, enchantPrefix } = $derived(leaderboardMetrics[metric])
   let titleId = $derived(`${metric}-leaderboard-title`)
 </script>
 
@@ -21,7 +21,7 @@
   <div class="chart-heading">
     <div>
       <h2 id={titleId}>{label} 상위 10명</h2>
-      {#if metric === 'weapon_enchant'}<p>가방·장비의 무기 중 최고 인챈트</p>{/if}
+      {#if description}<p>{description}</p>{/if}
     </div>
     <span class="leaderboard-tag">TOP 10</span>
   </div>
@@ -29,7 +29,7 @@
   {#if leaderboard && leaderboard.entries.length > 0}
     <table aria-labelledby={titleId}>
       <thead>
-        <tr><th scope="col" class="rank">순위</th><th scope="col">캐릭터</th><th scope="col" class="value" class:gold={metric === 'gold'}>{metric === 'weapon_enchant' ? '인챈트' : label}</th></tr>
+        <tr><th scope="col" class="rank">순위</th><th scope="col">캐릭터</th><th scope="col" class="value" class:gold={metric === 'gold'}>{columnLabel}</th></tr>
       </thead>
       <tbody>
         {#each leaderboard.entries as entry, index (entry.name)}
@@ -44,7 +44,7 @@
                 <span class="account-character">({firstCharacter.name})</span>
               {/if}
             </th>
-            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else if metric === 'weapon_enchant'}+{entry[metric].toLocaleString('ko-KR')}{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
+            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else if enchantPrefix}{enchantPrefix}{entry[metric].toLocaleString('ko-KR')}{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
           </tr>
         {/each}
       </tbody>

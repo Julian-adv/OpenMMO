@@ -91,6 +91,29 @@ pub struct WeaponEnchantSeries {
     pub samples: Vec<WeaponEnchantSample>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArmorEnchantLeaderboardEntry {
+    pub name: String,
+    pub armor_enchant: u64,
+    pub account_first_rank: usize,
+}
+
+pub type ArmorEnchantLeaderboard =
+    CharacterLeaderboard<ArmorEnchantLeaderboardEntry, ArmorEnchantSeries>;
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArmorEnchantSample {
+    pub timestamp: i64,
+    pub armor_enchant: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ArmorEnchantSeries {
+    pub name: String,
+    pub started_at: i64,
+    pub samples: Vec<ArmorEnchantSample>,
+}
+
 pub fn kst_day_start(timestamp: i64) -> i64 {
     timestamp - (timestamp + 9 * 3600).rem_euclid(DAY_SECONDS)
 }
@@ -241,6 +264,10 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
             get(weapon_enchant_leaderboard),
         )
         .route(
+            "/api/metrics/armor-enchant-leaderboard",
+            get(armor_enchant_leaderboard),
+        )
+        .route(
             "/api/metrics/gold-per-account",
             get(per_account_gold_history),
         )
@@ -309,57 +336,59 @@ async fn level_leaderboard(
     State(state): State<MetricsState>,
     Query(query): Query<HistoryQuery>,
 ) -> Response {
-    let hours = query.hours.unwrap_or(168);
-    let interval = match leaderboard_interval(hours) {
-        Ok(interval) => interval,
-        Err(error) => return error.into_response(),
-    };
-    match auth_db(move || state.auth.level_leaderboard(hours, interval)).await {
-        Ok(leaderboard) => {
-            ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
-        }
-        Err(error) => {
-            warn!("Level leaderboard failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    leaderboard_response(state.auth, query, "Level", AuthService::level_leaderboard).await
 }
 
 async fn gold_leaderboard(
     State(state): State<MetricsState>,
     Query(query): Query<HistoryQuery>,
 ) -> Response {
-    let hours = query.hours.unwrap_or(168);
-    let interval = match leaderboard_interval(hours) {
-        Ok(interval) => interval,
-        Err(error) => return error.into_response(),
-    };
-    match auth_db(move || state.auth.gold_leaderboard(hours, interval)).await {
-        Ok(leaderboard) => {
-            ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
-        }
-        Err(error) => {
-            warn!("Gold leaderboard failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    leaderboard_response(state.auth, query, "Gold", AuthService::gold_leaderboard).await
 }
 
 async fn weapon_enchant_leaderboard(
     State(state): State<MetricsState>,
     Query(query): Query<HistoryQuery>,
 ) -> Response {
+    leaderboard_response(
+        state.auth,
+        query,
+        "Weapon enchant",
+        AuthService::weapon_enchant_leaderboard,
+    )
+    .await
+}
+
+async fn armor_enchant_leaderboard(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    leaderboard_response(
+        state.auth,
+        query,
+        "Armor enchant",
+        AuthService::armor_enchant_leaderboard,
+    )
+    .await
+}
+
+async fn leaderboard_response<T: Serialize + Send + 'static>(
+    auth: Arc<AuthService>,
+    query: HistoryQuery,
+    label: &str,
+    load: fn(&AuthService, u32, i64) -> Result<T, crate::auth::AuthError>,
+) -> Response {
     let hours = query.hours.unwrap_or(168);
     let interval = match leaderboard_interval(hours) {
         Ok(interval) => interval,
         Err(error) => return error.into_response(),
     };
-    match auth_db(move || state.auth.weapon_enchant_leaderboard(hours, interval)).await {
+    match auth_db(move || load(&auth, hours, interval)).await {
         Ok(leaderboard) => {
             ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
         }
         Err(error) => {
-            warn!("Weapon enchant leaderboard failed: {error}");
+            warn!("{label} leaderboard failed: {error}");
             metrics_unavailable()
         }
     }
@@ -617,6 +646,122 @@ mod tests {
         );
         assert_eq!(updated.series[0].samples.last().unwrap().weapon_enchant, 15);
         conn.execute("DROP TABLE character_weapon_enchant_history", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn armor_enchant_leaderboard_ranks_slot_totals_and_returns_history() {
+        let path = crate::test_util::unique_temp_dir("armor_enchant_leaderboard").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("armor_enchant_leaderboard"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/armor-enchant-leaderboard");
+        let empty: ArmorEnchantLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(empty.entries.is_empty());
+        assert!(empty.series.is_empty());
+        assert_eq!(empty.timestamp - empty.from, 168 * 3600);
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');",
+        )
+        .unwrap();
+        let armor = |item_def_id: &str, enchant| crate::auth::ItemRow {
+            item_def_id: item_def_id.into(),
+            quantity: 1,
+            enchant,
+            equip_slot: None,
+            cape_color: None,
+            cape_texture: None,
+            locked: false,
+        };
+        for id in 1..=14 {
+            let account = match id {
+                13 => "npc_test",
+                14 => "npcxplayer",
+                _ => "player",
+            };
+            conn.execute(
+                "INSERT INTO characters (id, account_name, character_name) VALUES (?1, ?2, ?3)",
+                rusqlite::params![id, account, format!("Hero{id}")],
+            )
+            .unwrap();
+            auth.save_batch(
+                &[],
+                &[(
+                    i64::from(id),
+                    vec![
+                        armor("iron_helmet", if id == 10 { 11 } else { id }),
+                        armor("leather_helmet", 1),
+                        armor("wooden_shield", 3),
+                    ],
+                )],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+        }
+        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, 86400)] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let body: serde_json::Value = response.json().await.unwrap();
+            for entry in body["entries"].as_array().unwrap() {
+                assert_eq!(entry.as_object().unwrap().len(), 3);
+            }
+            let result: ArmorEnchantLeaderboard = serde_json::from_value(body).unwrap();
+            assert_eq!(result.timestamp - result.from, hours * 3600);
+            assert_eq!(result.sample_interval_seconds, interval);
+            assert_eq!(
+                result
+                    .entries
+                    .iter()
+                    .map(|entry| entry.name.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "Hero14", "Hero12", "Hero10", "Hero11", "Hero9", "Hero8", "Hero7", "Hero6",
+                    "Hero5", "Hero4"
+                ]
+            );
+            assert_eq!(result.entries[0].armor_enchant, 17);
+            assert_eq!(result.entries[0].account_first_rank, 1);
+            assert!(result.entries[1..]
+                .iter()
+                .all(|entry| entry.account_first_rank == 2));
+            assert_eq!(result.series.len(), 10);
+            for (entry, series) in result.entries.iter().zip(&result.series) {
+                assert_eq!(entry.name, series.name);
+                assert_eq!(
+                    entry.armor_enchant,
+                    series.samples.last().unwrap().armor_enchant
+                );
+            }
+        }
+        for hours in ["0", "24", "169", "-1", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        conn.execute("DROP TABLE character_armor_enchant_history", [])
             .unwrap();
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);

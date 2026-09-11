@@ -1,6 +1,8 @@
 import { SvelteURLSearchParams } from 'svelte/reactivity'
 import type { Hours } from './metrics'
 
+export type MetricsResource<T> = ReturnType<typeof createMetricsResource<T, Hours>>
+
 export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H, query: Record<string, string>) => T, errorLabel = '접속 현황', getQuery: () => Record<string, string> = () => ({})) {
   let history = $state<T | null>(null)
   let refreshing = $state(false)

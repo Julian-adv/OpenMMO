@@ -24,6 +24,8 @@
 
 골드 순위 아래에는 무기 인챈트 상위 10명 표와 변화 그래프가 있습니다. 가방·장비 슬롯에 보유한 무기 중 최고 인챈트를 `+7`처럼 표시하며 장착 여부와 무관합니다. 방어구·창고 아이템은 제외하고 무기가 없으면 `+0`입니다. 공식 NPC 제외, 같은 계정 표시, 기간 선택·선 강조·30초 갱신은 다른 순위와 같습니다. 최초 적용 시점의 현재값부터 기록하며 최고 무기 상실로 값이 내려가는 경우도 표시합니다.
 
+무기 순위 아래에는 같은 형식의 방어구 인챈트 상위 10명 표와 변화 그래프가 있습니다. 가방·장비의 방어구를 아이템 정의의 슬롯별로 묶어 최고 인챈트를 하나씩 고른 뒤 합산합니다. 투구·갑옷·방패·장갑·바지·신발을 포함하며 같은 슬롯의 중복 방어구는 더하지 않습니다. 무기·액세서리·창고 아이템은 제외하고 방어구가 없으면 `+0`입니다. 예를 들어 투구 최고 `+4`, 갑옷 최고 `+3`, 방패 최고 `+2`이면 합계 `+9`입니다. 장착 여부는 순위에 영향을 주지 않으며 기록·조회·갱신 방식은 무기 순위와 같습니다.
+
 DB와 API의 금액은 코퍼 단위이며 `1골드 = 100실버 = 10,000코퍼`입니다. 순위 표, 총 골드·1인당 골드 요약, 그래프 축과 툴팁은 `8g61s34c` 형식으로 표시하고 각 단위에 금색·은색·구리색을 적용합니다. 0인 단위는 생략하고 전체 금액이 0이면 `0c`를 표시합니다. 평균값은 가장 가까운 1코퍼로 반올림합니다.
 
 ## 개발
@@ -54,7 +56,7 @@ npm run build
 npm run preview
 ```
 
-`dist/`는 별도 도메인이나 게임 사이트의 하위 경로에 제공할 수 있는 정적 파일입니다. 하위 경로에 게시할 때는 `DASHBOARD_BASE=/dashboard/ npm run build`로 빌드합니다. API 경로는 두 경우 모두 같은 출처의 `/api/metrics/concurrent`, `/api/metrics/unique`, `/api/metrics/gold`, `/api/metrics/gold-per-account`, `/api/metrics/level-leaderboard`, `/api/metrics/gold-leaderboard`, `/api/metrics/weapon-enchant-leaderboard`입니다.
+`dist/`는 별도 도메인이나 게임 사이트의 하위 경로에 제공할 수 있는 정적 파일입니다. 하위 경로에 게시할 때는 `DASHBOARD_BASE=/dashboard/ npm run build`로 빌드합니다. API 경로는 두 경우 모두 같은 출처의 `/api/metrics/concurrent`, `/api/metrics/unique`, `/api/metrics/gold`, `/api/metrics/gold-per-account`, `/api/metrics/level-leaderboard`, `/api/metrics/gold-leaderboard`, `/api/metrics/weapon-enchant-leaderboard`, `/api/metrics/armor-enchant-leaderboard`입니다.
 
 게임 서버의 기존 REST 포트로 `/api/metrics/`만 프록시하고, 나머지는 대시보드 정적 파일을 제공합니다. 별도 사이트의 nginx 설정 예:
 

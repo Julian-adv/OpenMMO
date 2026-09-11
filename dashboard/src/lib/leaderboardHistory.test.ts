@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCharacterColors, sampleAt, stepPath } from './leaderboardHistory'
-import { leaderboardPeriods, parseGoldLeaderboard, parseLevelLeaderboard, parseWeaponEnchantLeaderboard } from './metrics'
+import { leaderboardPeriods, parseArmorEnchantLeaderboard, parseGoldLeaderboard, parseLevelLeaderboard, parseWeaponEnchantLeaderboard } from './metrics'
 
 describe('character level history', () => {
   const timestamp = 1800000000
@@ -125,5 +125,32 @@ describe('character weapon enchant history', () => {
     expect(sampleAt(samples, 200)?.weapon_enchant).toBe(7)
     expect(sampleAt(samples, 400)?.weapon_enchant).toBe(0)
     expect(stepPath(samples, 400, (time) => time, (enchant) => enchant, (sample) => sample.weapon_enchant)).toBe('M100,3 H200V7 H300V0 H400')
+  })
+})
+
+describe('character armor enchant history', () => {
+  const timestamp = 1800000000
+  const entries = [{ name: 'Hero', armor_enchant: 27, account_first_rank: 1 }, { name: 'NewHero', armor_enchant: 0, account_first_rank: 1 }]
+  const series = entries.map((entry) => ({ name: entry.name, started_at: timestamp - 100, samples: [
+    { timestamp: timestamp - 100, armor_enchant: entry.armor_enchant + 5 },
+    { timestamp, armor_enchant: entry.armor_enchant },
+  ] }))
+  const data = { timestamp, from: timestamp - 168 * 3600, sample_interval_seconds: 3600, entries, series }
+
+  it.each(leaderboardPeriods)('accepts $label slot totals, decreases and zero', ({ hours, interval }) => {
+    const history = { ...data, from: timestamp - hours * 3600, sample_interval_seconds: interval }
+    expect(parseArmorEnchantLeaderboard(history, hours)).toEqual(history)
+    expect(parseArmorEnchantLeaderboard({ ...history, entries: [], series: [] }, hours).entries).toEqual([])
+    expect(() => parseWeaponEnchantLeaderboard(history, hours)).toThrow()
+  })
+
+  it('rejects invalid totals, ranking order and mismatched histories', () => {
+    for (const armor_enchant of [-1, 0.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => parseArmorEnchantLeaderboard({ ...data, entries: [{ ...entries[0], armor_enchant }, entries[1]] }, 168)).toThrow()
+      expect(() => parseArmorEnchantLeaderboard({ ...data, series: [{ ...series[0], samples: [{ timestamp: timestamp - 100, armor_enchant }] }, series[1]] }, 168)).toThrow()
+    }
+    expect(() => parseArmorEnchantLeaderboard({ ...data, entries: [...entries].reverse() }, 168)).toThrow()
+    expect(() => parseArmorEnchantLeaderboard({ ...data, series: [...series].reverse() }, 168)).toThrow()
+    expect(() => parseArmorEnchantLeaderboard({ ...data, series: [] }, 168)).toThrow()
   })
 })
