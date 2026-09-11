@@ -1,6 +1,6 @@
 import type { Hours } from './metrics'
 
-export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H) => T) {
+export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H) => T, errorLabel = '접속 현황') {
   let history = $state<T | null>(null)
   let refreshing = $state(false)
   let error = $state('')
@@ -28,7 +28,7 @@ export function createMetricsResource<T, H extends Hours>(getHours: () => H, end
           error = ''
         }
       } catch {
-        if (!stopped) error = '접속 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'
+        if (!stopped) error = `${errorLabel}을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.`
       } finally {
         window.clearTimeout(timeout)
         controller = null

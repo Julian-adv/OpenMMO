@@ -2,8 +2,11 @@
   import ConcurrentChart from './lib/ConcurrentChart.svelte'
   import ConnectionBreakdown from './lib/ConnectionBreakdown.svelte'
   import HistoryChart from './lib/HistoryChart.svelte'
+  import GoldPanel from './lib/GoldPanel.svelte'
+  import MetricsError from './lib/MetricsError.svelte'
+  import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type Hours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -11,19 +14,21 @@
   let uniquePeriod = $derived(uniquePeriods.find((period) => period.hours === uniqueHours)!)
   const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory)
   const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
+  let goldHours = $state<GoldHours>(24)
+  const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
   let history = $derived(concurrent.history)
-  let refreshing = $derived(concurrent.refreshing || unique.refreshing)
+  let refreshing = $derived(concurrent.refreshing || unique.refreshing || gold.refreshing)
   let error = $derived(concurrent.error)
   let loading = $derived(concurrent.loading)
   let uniqueLatest = $derived(unique.history?.samples.at(-1))
   let uniquePeak = $derived(unique.history?.samples.length ? Math.max(...unique.history.samples.map((sample) => sample.accounts)) : null)
   let summary = $derived(summarize(history?.samples ?? []))
   const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
-  const refresh = () => { concurrent.refresh(); unique.refresh() }
+  const refresh = () => { concurrent.refresh(); unique.refresh(); gold.refresh() }
 </script>
 
 <svelte:head>
-  <title>접속 현황 · OpenMMO Pulse</title>
+  <title>월드 현황 · OpenMMO Pulse</title>
 </svelte:head>
 
 <header class="site-header">
@@ -32,7 +37,7 @@
       <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12h5l3-7 3 14 3-7h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg></span>
       <span>OpenMMO <span class="brand-sub">Pulse</span></span>
     </a>
-    <nav aria-label="대시보드"><a class="nav-current" href={import.meta.env.BASE_URL} aria-current="page">접속 현황</a></nav>
+    <nav aria-label="대시보드"><a class="nav-current" href={import.meta.env.BASE_URL} aria-current="page">월드 현황</a></nav>
     <span class="header-caption">월드의 오늘을 기록합니다</span>
   </div>
 </header>
@@ -41,26 +46,21 @@
   <div class="page-heading">
     <div>
       <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
-      <h1>월드 접속 현황<span>.</span></h1>
-      <p class="page-description">지금 함께하는 플레이어와 시간에 따른 월드의 변화를 살펴보세요.</p>
+      <h1>월드 현황<span>.</span></h1>
+      <p class="page-description">지금 함께하는 플레이어와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
-      <div class:unavailable={!!error || !!unique.error} class="update-status" role="status">
+      <div class:unavailable={!!error || !!unique.error || !!gold.error} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if error || unique.error}연결 확인 필요{:else if loading || unique.loading}연결 중{:else}30초마다 업데이트{/if}
+        {#if error || unique.error || gold.error}연결 확인 필요{:else if loading || unique.loading || gold.loading}연결 중{:else}30초마다 업데이트{/if}
       </div>
-      <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="접속 현황 새로고침" title="새로고침">
+      <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
     </div>
   </div>
 
-  {#if error}
-    <div class="error-banner" role="alert">
-      <span>{error} {history ? `마지막 수신: ${formatDateTime(history.until)} KST. 아래는 마지막으로 받은 기록입니다.` : ''}</span>
-      <button onclick={() => refresh()} disabled={refreshing}>다시 시도</button>
-    </div>
-  {/if}
+  <MetricsError {error} until={history?.until} {refreshing} {refresh} />
 
   <section class="stat-grid" aria-label="접속 요약" aria-busy={loading}>
     <article class="stat-card current-card">
@@ -87,11 +87,7 @@
         <h2 id="chart-title">동시 접속 추이</h2>
         <p>월드에 머물고 있는 계정 수의 변화</p>
       </div>
-      <div class="period-filter" role="group" aria-label="조회 기간">
-        {#each periods as option (option.hours)}
-          <button class:active={hours === option.hours} aria-pressed={hours === option.hours} onclick={() => { hours = option.hours }}>{option.label}</button>
-        {/each}
-      </div>
+      <PeriodFilter bind:hours options={periods} label="조회 기간" />
     </div>
     <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
     {#if history && history.samples.length > 0}
@@ -109,25 +105,16 @@
     </div>
   </section>
 
-  <section class="chart-panel unique-panel" aria-labelledby="unique-chart-title" aria-busy={unique.loading}>
+  <section class="chart-panel" aria-labelledby="unique-chart-title" aria-busy={unique.loading}>
     <div class="chart-heading">
       <div>
         <h2 id="unique-chart-title">유니크 접속 계정 추이</h2>
         <p>매일 자정 기준, 직전 {uniquePeriod.label} 동안 게임에 접속한 계정 수</p>
       </div>
-      <div class="period-filter" role="group" aria-label="유니크 계정 집계 기간">
-        {#each uniquePeriods as option (option.hours)}
-          <button class:active={uniqueHours === option.hours} aria-pressed={uniqueHours === option.hours} onclick={() => { uniqueHours = option.hours }}>{option.label}</button>
-        {/each}
-      </div>
+      <PeriodFilter bind:hours={uniqueHours} options={uniquePeriods} label="유니크 계정 집계 기간" />
     </div>
-    {#if unique.error}
-      <div class="error-banner" role="alert">
-        <span>{unique.error} {unique.history ? `마지막 수신: ${formatDateTime(unique.history.until)} KST. 아래는 마지막으로 받은 기록입니다.` : ''}</span>
-        <button onclick={() => unique.refresh()} disabled={unique.refreshing}>다시 시도</button>
-      </div>
-    {/if}
-    <div class="unique-summary">
+    <MetricsError error={unique.error} until={unique.history?.until} refreshing={unique.refreshing} refresh={() => unique.refresh()} />
+    <div class="metric-summary">
       <span>마지막 일별 집계 · 직전 {uniquePeriod.label}</span>
       <strong>{count(uniqueLatest?.accounts)}<small>계정</small></strong>
       <p>{unique.history?.last_aggregated_at != null ? `마지막 집계 기준: ${formatDateTime(unique.history.last_aggregated_at)} KST` : '첫 일별 집계를 기다리고 있어요'}</p>
@@ -138,7 +125,7 @@
     {/if}
     <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계 · 한국 시간 (KST)</span></div>
     {#if unique.history && unique.history.samples.length > 0}
-      <HistoryChart history={unique.history} peak={uniquePeak} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
+      <HistoryChart history={unique.history} peak={uniquePeak} value={(sample) => sample.accounts} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
         {#snippet detail(selected)}
           <span>집계 시작: {formatDateTime(selected.timestamp - uniqueHours * 3600)}</span>
           <span>자정 기준 일별 집계 · 직전 {uniquePeriod.label}</span>
@@ -159,6 +146,8 @@
     </div>
   </section>
 
+  <GoldPanel bind:hours={goldHours} history={gold.history} loading={gold.loading} refreshing={gold.refreshing} error={gold.error} refresh={() => gold.refresh()} />
+
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">
       <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="8" r="3" stroke="currentColor" stroke-width="1.5" /><path d="M3 20v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6m2 3a5 5 0 0 1 3 4v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
@@ -166,7 +155,7 @@
     </div>
     <div class="metric-note">
       <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" /><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
-      <div><h3>기록된 순간을 연결합니다</h3><p>최고·평균은 1분 간격의 기록으로 계산합니다. 긴 기간의 그래프는 구간 평균으로 표시하며, 기록이 없는 구간은 평균에서 제외합니다. 1개월·6개월·1년은 최근 30일·180일·365일 기준입니다.</p></div>
+      <div><h3>기록된 순간을 연결합니다</h3><p>접속 지표의 최고·평균은 1분 간격, 총 골드는 1시간 간격의 기록으로 계산합니다. 긴 기간의 그래프는 구간 평균으로 표시하며, 기록이 없는 구간은 평균에서 제외합니다. 1개월·6개월·1년은 최근 30일·180일·365일 기준입니다.</p></div>
     </div>
   </section>
   <footer class="site-footer"><span>OpenMMO <strong>Pulse</strong></span><span>작은 순간들이 모여, 하나의 월드가 됩니다.</span></footer>

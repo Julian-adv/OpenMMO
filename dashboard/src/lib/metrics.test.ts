@@ -1,5 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, nearestSample, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGoldAxis, goldPeriods, nearestSample, parseGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+
+describe('hourly gold history', () => {
+  it.each(goldPeriods)('accepts hourly gold with the $label resolution', ({ hours, interval }) => {
+    const until = hours * 3600
+    const data = { from: 0, until, sample_interval_seconds: interval,
+      latest: { timestamp: until, total_gold: 123456789 },
+      samples: [{ timestamp: until, total_gold: 123456789, peak_gold: 123456789, sample_count: 1 }] }
+    expect(parseGoldHistory(data, hours)).toEqual(data)
+    expect(() => parseGoldHistory({ ...data, sample_interval_seconds: 60 }, hours)).toThrow()
+  })
+
+  it('preserves missing hours, saved zeroes and the latest total outside the selected range', () => {
+    const data = { from: 0, until: 86400, sample_interval_seconds: 3600, latest: { timestamp: 10800, total_gold: 25 },
+      samples: [{ timestamp: 3600, total_gold: 0, peak_gold: 0, sample_count: 1 },
+        { timestamp: 10800, total_gold: 25, peak_gold: 25, sample_count: 1 }] }
+    expect(parseGoldHistory(data, 24)).toEqual(data)
+    expect(splitSegments(data.samples, 3600)).toEqual(data.samples.map(sample => [sample]))
+    expect(parseGoldHistory({ ...data, from: 82800, samples: [] }, 1).latest).toEqual(data.latest)
+    expect(parseGoldHistory({ ...data, latest: null, samples: [] }, 24).latest).toBeNull()
+    expect(() => parseGoldHistory({ ...data, latest: null }, 24)).toThrow()
+    expect(() => parseGoldHistory({ ...data, samples: [] }, 24)).toThrow()
+  })
+
+  it('accepts partial buckets and fractional averages and rejects invalid observations', () => {
+    const sample = { timestamp: 300, total_gold: 50.5, peak_gold: 101, sample_count: 2 }
+    const data = { from: 300, until: 4320 * 3600 + 300, sample_interval_seconds: 21600,
+      latest: { timestamp: 7200, total_gold: 101 }, samples: [sample] }
+    expect(parseGoldHistory(data, 4320)).toEqual(data)
+    for (const invalid of [{ total_gold: -1 }, { total_gold: NaN }, { peak_gold: 50 }, { sample_count: 0 }, { sample_count: 7 }, { timestamp: 301 }]) {
+      expect(() => parseGoldHistory({ ...data, samples: [{ ...sample, ...invalid }] }, 4320)).toThrow()
+    }
+    expect(() => parseGoldHistory({ ...data, samples: [sample, sample] }, 4320)).toThrow()
+    expect(() => parseGoldHistory({ ...data, latest: { timestamp: 7201, total_gold: 101 } }, 4320)).toThrow()
+    expect(formatGoldAxis(100000000)).toBe('1억')
+  })
+})
 
 describe('concurrent account history', () => {
   const webCount = (accounts: number) => ({ accounts, web_accounts: accounts, agent_accounts: 0, other_accounts: 0 })

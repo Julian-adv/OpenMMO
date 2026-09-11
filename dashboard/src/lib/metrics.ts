@@ -6,8 +6,11 @@ export const connectionKinds = [
 
 export type ConnectionCounts = Record<typeof connectionKinds[number]['key'], number>
 
-export interface AccountSample {
+export interface TimestampSample {
   timestamp: number
+}
+
+export interface AccountSample extends TimestampSample {
   accounts: number
 }
 
@@ -19,7 +22,7 @@ export interface HistorySample extends Sample {
   sample_count: number
 }
 
-export interface ChartHistory<T extends AccountSample = AccountSample> {
+export interface ChartHistory<T extends TimestampSample = AccountSample> {
   from: number
   until: number
   sample_interval_seconds: number
@@ -36,6 +39,19 @@ export interface UniqueHistory extends ChartHistory {
   last_aggregated_at: number | null
 }
 
+export interface GoldSample extends TimestampSample {
+  total_gold: number
+}
+
+export interface GoldHistorySample extends GoldSample {
+  peak_gold: number
+  sample_count: number
+}
+
+export interface GoldHistory extends ChartHistory<GoldHistorySample> {
+  latest: GoldSample | null
+}
+
 export const periods = [
   { hours: 1, label: '1시간', interval: 60, intervalLabel: '1분 간격' },
   { hours: 6, label: '6시간', interval: 60, intervalLabel: '1분 간격' },
@@ -47,6 +63,15 @@ export const periods = [
 ] as const
 
 export type Hours = typeof periods[number]['hours']
+export const goldPeriods = [
+  { hours: 1, label: '1시간', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 24, label: '24시간', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 168, label: '1주일', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 720, label: '1개월', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 4320, label: '6개월', interval: 21600, intervalLabel: '6시간 평균' },
+  { hours: 8760, label: '1년', interval: 86400, intervalLabel: '1일 평균' },
+] as const
+export type GoldHours = typeof goldPeriods[number]['hours']
 export const uniquePeriods = [
   { hours: 24, label: '1일' },
   { hours: 168, label: '1주일' },
@@ -138,7 +163,33 @@ export function parseUniqueHistory(value: unknown, hours: UniqueHours): UniqueHi
   return data
 }
 
-export function splitSegments<T extends AccountSample>(samples: T[], interval: number): T[][] {
+export function parseGoldHistory(value: unknown, hours: GoldHours): GoldHistory {
+  if (!value || typeof value !== 'object') throw new Error('Invalid gold metrics response')
+  const data = value as GoldHistory
+  const interval = goldPeriods.find((period) => period.hours === hours)!.interval
+  const latest = data.latest
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 || data.sample_interval_seconds !== interval ||
+    (latest !== null && (!latest || !Number.isSafeInteger(latest.timestamp) || latest.timestamp < 0 ||
+      latest.timestamp > data.until || latest.timestamp % 3600 !== 0 ||
+      !Number.isSafeInteger(latest.total_gold) || latest.total_gold < 0)) ||
+    !Array.isArray(data.samples) || data.samples.length > Math.ceil(hours * 3600 / interval) + 1 ||
+    !data.samples.every((sample, index) => sample && Number.isSafeInteger(sample.timestamp) &&
+      sample.timestamp >= data.from && sample.timestamp <= data.until &&
+      (sample.timestamp === data.from || sample.timestamp % interval === 0) &&
+      Number.isFinite(sample.total_gold) && sample.total_gold >= 0 &&
+      Number.isSafeInteger(sample.peak_gold) && sample.peak_gold >= sample.total_gold &&
+      Number.isSafeInteger(sample.sample_count) && sample.sample_count > 0 && sample.sample_count <= interval / 3600 &&
+      (index === 0 || Math.floor(sample.timestamp / interval) > Math.floor(data.samples[index - 1].timestamp / interval))) ||
+    (latest !== null && latest.timestamp >= data.from
+      ? data.samples.at(-1)?.timestamp !== Math.max(data.from, Math.floor(latest.timestamp / interval) * interval)
+      : data.samples.length !== 0)) {
+    throw new Error('Invalid gold metrics response')
+  }
+  return data
+}
+
+export function splitSegments<T extends TimestampSample>(samples: T[], interval: number): T[][] {
   const segments: T[][] = []
   for (const sample of samples) {
     const previous = segments.at(-1)?.at(-1)
@@ -151,7 +202,7 @@ export function splitSegments<T extends AccountSample>(samples: T[], interval: n
   return segments
 }
 
-export function nearestSample(samples: AccountSample[], timestamp: number): number | null {
+export function nearestSample(samples: TimestampSample[], timestamp: number): number | null {
   if (!samples.length) return null
   let low = 0
   let high = samples.length - 1
@@ -179,6 +230,7 @@ const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
 
 export const formatTime = (timestamp: number) => timeFormatter.format(timestamp * 1000)
 export const formatCount = (value: number) => value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
+export const formatGoldAxis = (value: number) => value.toLocaleString('ko-KR', { notation: 'compact', maximumFractionDigits: 1 })
 export const formatDateTime = (timestamp: number) => dateFormatter.format(timestamp * 1000)
 export const formatAxisTime = (timestamp: number, hours: number, daily = false) =>
   (hours <= 24 && !daily ? timeFormatter : hours <= 4320 ? dayFormatter : monthFormatter).format(timestamp * 1000)

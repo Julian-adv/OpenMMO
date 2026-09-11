@@ -86,6 +86,29 @@ struct ConcurrentHistory {
     samples: Vec<ConcurrentHistorySample>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GoldSample {
+    pub timestamp: i64,
+    pub total_gold: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct GoldHistorySample {
+    pub timestamp: i64,
+    pub total_gold: f64,
+    pub peak_gold: i64,
+    pub sample_count: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct GoldHistory {
+    pub from: i64,
+    pub until: i64,
+    pub sample_interval_seconds: i64,
+    pub latest: Option<GoldSample>,
+    pub samples: Vec<GoldHistorySample>,
+}
+
 #[derive(Clone)]
 struct MetricsState {
     game: Arc<GameState>,
@@ -101,6 +124,7 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
     Router::new()
         .route("/api/metrics/concurrent", get(concurrent_history))
         .route("/api/metrics/unique", get(unique_history))
+        .route("/api/metrics/gold", get(gold_history))
         .with_state(MetricsState { game, auth })
 }
 
@@ -208,10 +232,111 @@ async fn concurrent_history(
         .into_response()
 }
 
+async fn gold_history(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(24);
+    let interval = match hours {
+        1 | 24 | 168 | 720 => 3600,
+        4320 => 21600,
+        8760 => DAY_SECONDS,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "hours must be 1, 24, 168, 720, 4320, or 8760",
+            )
+                .into_response();
+        }
+    };
+    match auth_db(move || state.auth.gold_history(unix_now(), hours, interval)).await {
+        Ok(history) => ([(header::CACHE_CONTROL, "no-store")], Json(history)).into_response(),
+        Err(error) => {
+            warn!("Gold history failed: {error}");
+            metrics_unavailable()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+
+    #[tokio::test]
+    async fn gold_endpoint_returns_saved_totals_for_all_six_periods() {
+        let path = crate::test_util::unique_temp_dir("gold_endpoint").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("gold_endpoint"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/gold");
+        let empty: GoldHistory = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(empty.until - empty.from, 86400);
+        assert_eq!(empty.latest, None);
+        assert!(empty.samples.is_empty());
+        let now = unix_now();
+        auth.record_gold_snapshot(now - 364 * DAY_SECONDS, 30)
+            .unwrap();
+        auth.record_gold_snapshot(now, 30).unwrap();
+        for (hours, interval) in [
+            (1, 3600),
+            (24, 3600),
+            (168, 3600),
+            (720, 3600),
+            (4320, 21600),
+            (8760, 86400),
+        ] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let body: GoldHistory = response.json().await.unwrap();
+            assert_eq!(body.until - body.from, hours * 3600);
+            assert_eq!(body.sample_interval_seconds, interval);
+            assert_eq!(body.latest.unwrap().total_gold, 0);
+            assert_eq!(
+                body.samples
+                    .iter()
+                    .map(|sample| sample.sample_count)
+                    .sum::<u32>(),
+                if hours == 8760 { 2 } else { 1 }
+            );
+        }
+        for hours in [
+            "0",
+            "6",
+            "25",
+            "8761",
+            "-1",
+            "invalid",
+            "99999999999999999999",
+        ] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .execute("DROP TABLE gold_snapshots", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
 
     #[tokio::test]
     async fn account_endpoints_limit_ranges_and_preserve_distinct_counts() {

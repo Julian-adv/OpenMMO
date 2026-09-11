@@ -1,12 +1,58 @@
 use super::{AuthError, AuthService};
 use crate::metrics::{
-    kst_day_start, AccountActivity, ConcurrentCounts, ConcurrentHistorySample, UniqueHistory,
-    UniqueSample, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
+    kst_day_start, AccountActivity, ConcurrentCounts, ConcurrentHistorySample, GoldHistory,
+    GoldHistorySample, GoldSample, UniqueHistory, UniqueSample, DAY_SECONDS,
+    SAMPLE_INTERVAL_SECONDS,
 };
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashSet;
 
 impl AuthService {
+    pub fn gold_history(
+        &self,
+        until: i64,
+        hours: u32,
+        interval: i64,
+    ) -> Result<GoldHistory, AuthError> {
+        let from = until - i64::from(hours) * 3600;
+        let mut conn = self.open_connection()?;
+        let transaction = conn.transaction()?;
+        let latest = transaction
+            .query_row(
+                "SELECT ts, total_gold FROM gold_snapshots WHERE ts <= ?1 ORDER BY ts DESC LIMIT 1",
+                [until],
+                |row| {
+                    Ok(GoldSample {
+                        timestamp: row.get(0)?,
+                        total_gold: row.get(1)?,
+                    })
+                },
+            )
+            .optional()?;
+        let mut statement = transaction.prepare(
+            "SELECT MAX((ts / ?3) * ?3, ?1), AVG(total_gold), MAX(total_gold), COUNT(*)
+             FROM gold_snapshots WHERE ts >= ?1 AND ts <= ?2
+             GROUP BY ts / ?3 ORDER BY ts / ?3",
+        )?;
+        let samples = statement
+            .query_map(params![from, until, interval], |row| {
+                Ok(GoldHistorySample {
+                    timestamp: row.get(0)?,
+                    total_gold: row.get(1)?,
+                    peak_gold: row.get(2)?,
+                    sample_count: row.get(3)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(GoldHistory {
+            from,
+            until,
+            sample_interval_seconds: interval,
+            latest,
+            samples,
+        })
+    }
+
     pub(super) fn ensure_account_activity_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS unique_account_collection (
@@ -259,6 +305,57 @@ impl AuthService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gold_history_reuses_hourly_snapshots_and_preserves_gaps_and_peaks() {
+        let path = crate::test_util::unique_temp_dir("gold_history").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let empty = auth.gold_history(86400, 24, 3600).unwrap();
+        assert_eq!(empty.latest, None);
+        assert!(empty.samples.is_empty());
+        auth.open_connection()
+            .unwrap()
+            .execute_batch(
+                "INSERT INTO gold_snapshots (ts, total_gold, characters, npc_gold, active_gold, active_characters)
+                 VALUES (0, 900, 0, 0, 0, 0), (3600, 0, 0, 0, 0, 0), (7200, 100, 0, 0, 0, 0),
+                        (46800, 25, 0, 0, 0, 0), (90000, 999, 0, 0, 0, 0)",
+            )
+            .unwrap();
+        drop(auth);
+        let auth = AuthService::new(path).unwrap();
+        let history = auth.gold_history(86400, 24, 3600).unwrap();
+        assert_eq!(history.samples.len(), 4);
+        assert_eq!(history.samples[1].total_gold, 0.0);
+        assert_eq!(history.samples[3].timestamp, 46800);
+        assert_eq!(
+            history.latest,
+            Some(GoldSample {
+                timestamp: 46800,
+                total_gold: 25
+            })
+        );
+        let aggregated = auth.gold_history(86700, 24, 21600).unwrap();
+        assert_eq!(
+            aggregated.samples,
+            vec![
+                GoldHistorySample {
+                    timestamp: 300,
+                    total_gold: 50.0,
+                    peak_gold: 100,
+                    sample_count: 2
+                },
+                GoldHistorySample {
+                    timestamp: 43200,
+                    total_gold: 25.0,
+                    peak_gold: 25,
+                    sample_count: 1
+                },
+            ]
+        );
+        let stale = auth.gold_history(86400, 1, 3600).unwrap();
+        assert!(stale.samples.is_empty());
+        assert_eq!(stale.latest, history.latest);
+    }
 
     fn activity(id: &str, account: &str, start: i64, end: i64) -> AccountActivity {
         AccountActivity {

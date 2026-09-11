@@ -1,15 +1,19 @@
-<script lang="ts" generics="T extends AccountSample">
+<script lang="ts" generics="T extends TimestampSample">
   import type { Snippet } from 'svelte'
-  import { formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type AccountSample, type ChartHistory } from './metrics'
+  import { formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type TimestampSample, type ChartHistory } from './metrics'
 
-  let { history, peak, legend, legendLabel = legend, valueLabel, peakLabel = '기간 최고 접속', layers, detail, legends }: {
+  let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatAxisValue = String, layers, detail, legends }: {
     history: ChartHistory<T>
     peak: number | null
+    value: (sample: T) => number
     legend: string
     legendLabel?: string
     valueLabel: string
+    unit?: string
     peakLabel?: string
-    layers?: Snippet<[T[], (timestamp: number) => number, (accounts: number) => number]>
+    axisWidth?: number
+    formatAxisValue?: (value: number) => string
+    layers?: Snippet<[T[], (timestamp: number) => number, (amount: number) => number]>
     detail?: Snippet<[T]>
     legends?: Snippet
   } = $props()
@@ -20,7 +24,6 @@
   let hours = $derived((history.until - history.from) / 3600)
   let daily = $derived(history.sample_interval_seconds >= 86400)
   let axisTicks = $derived(daily && hours <= 24 ? [0, 6] : width >= 600 ? [0, 1, 2, 3, 4, 5, 6] : hours > 24 && hours <= 4320 ? [0, 3, 6] : [0, 2, 4, 6])
-  const left = 42
   const right = 18
   const top = 24
   const bottom = 38
@@ -36,11 +39,11 @@
   let selectedIndex = $derived(selectedTime === null ? null : nearestSample(history.samples, selectedTime))
   let selected = $derived(selectedIndex === null ? null : history.samples[selectedIndex])
   const x = (timestamp: number) => left + (timestamp - history.from) / (history.until - history.from) * plotWidth
-  const y = (accounts: number) => top + plotHeight * (1 - accounts / ceiling)
+  const y = (amount: number) => top + plotHeight * (1 - amount / ceiling)
   let tooltipLeft = $derived(selected ? Math.max(8, Math.min(width - 244, x(selected.timestamp) - 118)) : 0)
 
   function line(samples: T[]) {
-    return samples.map((sample, index) => `${index === 0 ? 'M' : 'L'}${x(sample.timestamp)},${y(sample.accounts)}`).join(' ')
+    return samples.map((sample, index) => `${index === 0 ? 'M' : 'L'}${x(sample.timestamp)},${y(value(sample))}`).join(' ')
   }
 
   function selectAtPointer(event: PointerEvent) {
@@ -53,11 +56,11 @@
 </script>
 
 <div class="chart-canvas" bind:this={container} bind:contentRect={null, (rect: DOMRectReadOnly | null | undefined) => { if (rect) width = rect.width }}>
-  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. ${history.samples.length}개 지점.${peak === null ? '' : ` ${peakLabel} ${formatCount(peak)}계정을 가로 점선으로 표시합니다.`}`}
+  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. ${history.samples.length}개 지점.${peak === null ? '' : ` 가로 점선은 ${peakLabel} ${formatCount(peak)}${unit} 기준입니다.`}`}
     onpointermove={selectAtPointer} onpointerleave={() => { selectedTime = null }}>
     {#each [4, 3, 2, 1, 0] as tick (tick)}
       <line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} class="grid-line" />
-      <text x={left - 14} y={y(tick * step) + 4} text-anchor="end" class="axis-label">{tick * step}</text>
+      <text x={left - 14} y={y(tick * step) + 4} text-anchor="end" class="axis-label">{formatAxisValue(tick * step)}</text>
     {/each}
     {#each axisTicks as tick (tick)}
       <text x={left + plotWidth * tick / 6} y={height - 10} text-anchor={tick === 0 ? 'start' : tick === 6 ? 'end' : 'middle'} class="axis-label">
@@ -73,22 +76,22 @@
       {#if segment.length > 1}
         <path d={line(segment)} fill="none" stroke="#31594f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
       {:else}
-        <circle cx={x(segment[0].timestamp)} cy={y(segment[0].accounts)} r="3.5" fill="#31594f" />
+        <circle cx={x(segment[0].timestamp)} cy={y(value(segment[0]))} r="3.5" fill="#31594f" />
       {/if}
     {/each}
     {#if peak !== null}
       <line x1={left} x2={width - right} y1={y(peak)} y2={y(peak)} class="peak-line" />
-      <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">{peakLabel} {formatCount(peak)}계정</text>
+      <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">{peakLabel} {formatCount(peak)}{unit}</text>
     {/if}
     {#if selected}
       <line x1={x(selected.timestamp)} x2={x(selected.timestamp)} y1={top} y2={y(0)} stroke="#83b7ac" stroke-dasharray="4 4" />
-      <circle cx={x(selected.timestamp)} cy={y(selected.accounts)} r="5" fill="#31594f" stroke="white" stroke-width="2.5" />
+      <circle cx={x(selected.timestamp)} cy={y(value(selected))} r="5" fill="#31594f" stroke="white" stroke-width="2.5" />
     {/if}
   </svg>
   {#if selected}
     <div class="chart-tooltip" style:left={`${tooltipLeft}px`}>
       <span>{formatDateTime(selected.timestamp)}</span>
-      <strong>{formatCount(selected.accounts)} <small>{valueLabel}</small></strong>
+      <strong>{formatCount(value(selected))} <small>{valueLabel}</small></strong>
       {@render detail?.(selected)}
     </div>
   {/if}
