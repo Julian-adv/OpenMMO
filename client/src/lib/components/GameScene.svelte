@@ -965,6 +965,7 @@
     if ($weather && $weatherSectorsReady && currentPlayer && !$isUnderground) {
       sample = sampleLocalWeather(
         $weather.seed,
+        $weather.bias,
         calDate,
         calendarSystem.getGameHour(),
         currentPlayer.position.x,

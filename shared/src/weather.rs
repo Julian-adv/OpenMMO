@@ -162,7 +162,15 @@ fn hash01(seed: u64, sector: u64, cycle: i64, salt: u64) -> f64 {
 
 /// The cell a sector hosts at `t_min`, if any. Only the current cycle can
 /// be live: a cell fits inside its own cycle (`birth + life ≤ (k + 1) * P`).
-pub fn sector_cell(sectors: &[Sector], index: usize, seed: u64, t_min: f64) -> Option<Cell> {
+/// `bias` scales every zone's chance: 1.0 is the baked schedule, 0.5 skips
+/// half the cycles, 0.0 turns rain off.
+pub fn sector_cell(
+    sectors: &[Sector],
+    index: usize,
+    seed: u64,
+    bias: f64,
+    t_min: f64,
+) -> Option<Cell> {
     let sector = &sectors[index];
     if sector.spots.is_empty() {
         return None;
@@ -173,7 +181,7 @@ pub fn sector_cell(sectors: &[Sector], index: usize, seed: u64, t_min: f64) -> O
     }
     let k = (t_min / sched.period).floor() as i64;
     let id = index as u64;
-    if hash01(seed, id, k, 1) >= sched.chance {
+    if hash01(seed, id, k, 1) >= sched.chance * bias {
         return None;
     }
     let life = (sched.life_min + hash01(seed, id, k, 2) * sched.life_var)
@@ -198,9 +206,9 @@ pub fn sector_cell(sectors: &[Sector], index: usize, seed: u64, t_min: f64) -> O
     })
 }
 
-pub fn cells_at(sectors: &[Sector], seed: u64, t_min: f64) -> Vec<Cell> {
+pub fn cells_at(sectors: &[Sector], seed: u64, bias: f64, t_min: f64) -> Vec<Cell> {
     (0..sectors.len())
-        .filter_map(|i| sector_cell(sectors, i, seed, t_min))
+        .filter_map(|i| sector_cell(sectors, i, seed, bias, t_min))
         .collect()
 }
 
@@ -263,15 +271,33 @@ mod tests {
     fn same_inputs_same_cells() {
         let s = sectors();
         for t in [0.0, 123.0, 99_999.5, 1e7] {
-            assert_eq!(cells_at(&s, 42, t), cells_at(&s, 42, t));
+            assert_eq!(cells_at(&s, 42, 1.0, t), cells_at(&s, 42, 1.0, t));
         }
         let a: Vec<_> = (0..200)
-            .map(|i| cells_at(&s, 42, i as f64 * 97.0).len())
+            .map(|i| cells_at(&s, 42, 1.0, i as f64 * 97.0).len())
             .collect();
         let b: Vec<_> = (0..200)
-            .map(|i| cells_at(&s, 43, i as f64 * 97.0).len())
+            .map(|i| cells_at(&s, 43, 1.0, i as f64 * 97.0).len())
             .collect();
         assert_ne!(a, b, "a different seed must give a different schedule");
+    }
+
+    #[test]
+    fn bias_scales_how_often_cells_form() {
+        let s = sectors();
+        let live_minutes = |bias: f64| {
+            (0..20_000)
+                .filter(|i| !cells_at(&s, 42, bias, *i as f64 * 7.0).is_empty())
+                .count() as f64
+        };
+        let full = live_minutes(1.0);
+        let half = live_minutes(0.5);
+        assert!(full > 0.0);
+        assert!(
+            half > full * 0.3 && half < full * 0.7,
+            "half {half} vs full {full}"
+        );
+        assert_eq!(live_minutes(0.0), 0.0);
     }
 
     #[test]
@@ -283,7 +309,7 @@ mod tests {
             let mut saw_gap = false;
             let mut t = 0.0;
             while t < sched.period * 40.0 {
-                let cell = sector_cell(&s, i, 7, t);
+                let cell = sector_cell(&s, i, 7, 1.0, t);
                 match cell {
                     Some(c) => {
                         saw_rain = true;
@@ -307,7 +333,7 @@ mod tests {
         // cycle of the current time
         let mut t = 0.0;
         while t < sched.period * 20.0 {
-            if let Some(c) = sector_cell(&s, 0, 9, t) {
+            if let Some(c) = sector_cell(&s, 0, 9, 1.0, t) {
                 let life = c.progress as f64; // 0..1 inside its own life
                 assert!((0.0..=1.0).contains(&life));
             }
@@ -324,7 +350,7 @@ mod tests {
         let mut stages = Vec::new();
         let mut t = 0.0;
         while t < sched.period * 30.0 {
-            if let Some(c) = sector_cell(&s, 1, 3, t) {
+            if let Some(c) = sector_cell(&s, 1, 3, 1.0, t) {
                 if stages.last() != Some(&c.stage()) {
                     stages.push(c.stage());
                 }

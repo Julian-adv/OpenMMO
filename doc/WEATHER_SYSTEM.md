@@ -133,8 +133,11 @@ implementation, no drift.
   (`server/src/game_state/weather.rs`). The seed is read from
   `weather-sectors.json` — it is the seed the sectors were placed with, so
   the server keeps no other record of the world seed; without the file,
-  weather stays off and the server logs why. `bias` is a global multiplier on
-  `chance` for events/admin (`/weather` later).
+  weather stays off and the server logs why. `bias` multiplies every zone's
+  `chance` (1.0 = baked schedule, 0.5 = half the cells, 0 = off); it comes
+  from `--weather-bias` / `WEATHER_BIAS` at boot, so the amount of rain is a
+  deployment setting rather than a code change. A live `/weather` override
+  is a follow-up.
 - `ServerMessage::WeatherSync { seed, bias }` on connection accept and from
   `run_ticks("weather", 30 s)` (same scaffolding as the time-sync tick).
   Seeds cross the wire as JS numbers, so they must stay below 2^53.

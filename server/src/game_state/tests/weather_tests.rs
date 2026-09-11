@@ -42,9 +42,9 @@ async fn load_weather_reads_the_baked_seed() {
     .await
     .unwrap();
 
-    game_state.load_weather().await;
+    game_state.load_weather(0.75).await;
     assert!(matches!(
         game_state.weather_sync_message(),
-        Some(ServerMessage::WeatherSync { seed: 777, bias }) if bias == 1.0
+        Some(ServerMessage::WeatherSync { seed: 777, bias }) if bias == 0.75
     ));
 }

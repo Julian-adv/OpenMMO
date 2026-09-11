@@ -667,15 +667,32 @@ async fn weather_zone_shares_from_bake() {
     let mut source = [[0u64; 5]; 5];
     let mut total = [0u64; 5];
     let mut max_cells = 0;
+    let mut live_counts: Vec<usize> = Vec::new();
+    let mut coverage: Vec<f64> = Vec::new();
+    let mut window_coverage: Vec<f64> = Vec::new();
+    let in_window =
+        |x: f32, z: f32| (-9500.0..=12500.0).contains(&x) && (-4000.0..=11500.0).contains(&z);
+    let window_n = samples
+        .iter()
+        .filter(|&&(_, x, z)| in_window(x, z))
+        .count()
+        .max(1);
     let days = 30.0;
     let mut t = 0.0;
     while t < days * 1440.0 {
-        let cells = cells_at(&sectors.sectors, 42, t);
+        let cells = cells_at(&sectors.sectors, 42, 1.0, t);
         max_cells = max_cells.max(cells.len());
+        live_counts.push(cells.iter().filter(|c| c.env > 0.0).count());
+        let mut wet_now = 0usize;
+        let mut wet_window = 0usize;
         for &(zone, x, z) in &samples {
             total[zone as usize] += 1;
             if rain_at(&cells, x, z) > 0.35 {
                 wet[zone as usize] += 1;
+                wet_now += 1;
+                if in_window(x, z) {
+                    wet_window += 1;
+                }
                 let strongest = cells
                     .iter()
                     .max_by(|a, b| {
@@ -689,8 +706,38 @@ async fn weather_zone_shares_from_bake() {
                 source[zone as usize][sectors.sectors[strongest.sector].zone as usize] += 1;
             }
         }
+        coverage.push(wet_now as f64 / samples.len() as f64);
+        window_coverage.push(wet_window as f64 / window_n as f64);
         t += 30.0;
     }
+    let pct = |v: &mut Vec<f64>, q: f64| {
+        v.sort_by(|a, b| a.total_cmp(b));
+        v[((v.len() - 1) as f64 * q) as usize] * 100.0
+    };
+    let mean = |v: &Vec<f64>| v.iter().sum::<f64>() / v.len() as f64 * 100.0;
+    let mut lc: Vec<f64> = live_counts.iter().map(|&c| c as f64 / 100.0).collect();
+    eprintln!(
+        "live cells: mean {:.1} p10 {:.0} p50 {:.0} p90 {:.0} max {}",
+        mean(&lc),
+        pct(&mut lc, 0.1),
+        pct(&mut lc, 0.5),
+        pct(&mut lc, 0.9),
+        max_cells
+    );
+    let mut cov = coverage.clone();
+    eprintln!(
+        "land wet coverage (all): mean {:.1}% p10 {:.1}% p50 {:.1}% p90 {:.1}% max {:.1}%",
+        mean(&coverage),
+        pct(&mut cov, 0.1),
+        pct(&mut cov, 0.5),
+        pct(&mut cov, 0.9),
+        pct(&mut cov, 1.0)
+    );
+    let mut wc = window_coverage.clone();
+    eprintln!(
+        "land wet coverage (Valdran window, {} plots): mean {:.1}% p10 {:.1}% p50 {:.1}% p90 {:.1}% max {:.1}%",
+        window_n, mean(&window_coverage), pct(&mut wc, 0.1), pct(&mut wc, 0.5), pct(&mut wc, 0.9), pct(&mut wc, 1.0)
+    );
     let names = ["sea", "wetCoast", "temperate", "rainShadow", "alpine"];
     eprintln!(
         "sectors {:?} (max live cells {max_cells}), samples {}",

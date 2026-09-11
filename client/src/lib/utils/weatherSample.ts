@@ -31,11 +31,12 @@ export function weatherChanged(
 
 export function sampleLocalWeather(
   seed: number,
+  bias: number,
   date: CalendarDate,
   gameHour: number,
   x: number,
   z: number
 ): LocalWeather {
-  const rain = weather_rain_at(seed, gameMinutesAt(date, gameHour), x, z)
+  const rain = weather_rain_at(seed, bias, gameMinutesAt(date, gameHour), x, z)
   return { rain, cloud: weather_cloud_factor(rain) }
 }

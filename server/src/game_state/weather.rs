@@ -16,17 +16,23 @@ pub struct WeatherState {
 
 impl GameState {
     /// Weather stays off until a bake has produced `weather-sectors.json`.
-    pub async fn load_weather(&self) {
+    pub async fn load_weather(&self, bias: f32) {
+        let bias = if bias.is_finite() && bias >= 0.0 {
+            bias
+        } else {
+            warn!("weather: invalid bias {bias}; using 1.0");
+            1.0
+        };
         match self.terrain_io.read_weather_sectors().await {
             Ok(Some(sectors)) => {
                 info!(
-                    "weather: {} rain sectors, seed {}",
+                    "weather: {} rain sectors, seed {}, bias {bias}",
                     sectors.sectors.len(),
                     sectors.seed
                 );
                 self.set_weather(WeatherState {
                     seed: sectors.seed,
-                    bias: 1.0,
+                    bias,
                 });
             }
             Ok(None) => {

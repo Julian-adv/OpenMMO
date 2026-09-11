@@ -29,12 +29,13 @@ describe('weatherSample', () => {
   it('samples rain at the player and derives the cloud factor', () => {
     const sample = sampleLocalWeather(
       42,
+      1,
       { year: 217, month: 1, day: 1 },
       12,
       100,
       -50
     )
-    expect(weather_rain_at).toHaveBeenCalledWith(42, 720, 100, -50)
+    expect(weather_rain_at).toHaveBeenCalledWith(42, 1, 720, 100, -50)
     expect(sample).toEqual({ rain: 0.6, cloud: 0.3 })
   })
 

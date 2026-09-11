@@ -407,9 +407,9 @@ pub fn weather_game_minutes(year: u32, month: u8, day: u8, hour: u8, minute: u8)
 
 /// Seeds ride the wire as JS numbers, so they are taken as `f64` here.
 #[wasm_bindgen]
-pub fn weather_rain_at(seed: f64, t_min: f64, x: f32, z: f32) -> f32 {
+pub fn weather_rain_at(seed: f64, bias: f64, t_min: f64, x: f32, z: f32) -> f32 {
     WEATHER_SECTORS.with(|s| {
-        let cells = crate::weather::cells_at(&s.borrow(), seed as u64, t_min);
+        let cells = crate::weather::cells_at(&s.borrow(), seed as u64, bias, t_min);
         crate::weather::rain_at(&cells, x, z)
     })
 }
