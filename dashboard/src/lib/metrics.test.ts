@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, nearestSample, parseHistory, periods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, nearestSample, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
 
 describe('concurrent account history', () => {
   const webCount = (accounts: number) => ({ accounts, web_accounts: accounts, agent_accounts: 0, other_accounts: 0 })
@@ -42,11 +42,11 @@ describe('concurrent account history', () => {
     }
   })
 
-  it('shows Korean dates and years on longer ranges', () => {
+  it('shows Korean weekdays with dates and years on longer ranges', () => {
     const timestamp = Date.UTC(2026, 0, 1, 15) / 1000
     expect(formatAxisTime(timestamp, 24)).toBe('00:00')
-    expect(formatAxisTime(timestamp, 168)).toBe('1. 2.')
-    expect(formatAxisTime(timestamp, 4320)).toBe('1. 2.')
+    expect(formatAxisTime(timestamp, 168)).toBe('1. 2. (금)')
+    expect(formatAxisTime(timestamp, 4320)).toBe('1. 2. (금)')
     expect(formatAxisTime(timestamp, 8760)).toBe('26. 1.')
     expect(formatDateTime(timestamp)).toContain('2026년')
   })
@@ -94,5 +94,54 @@ describe('concurrent account history', () => {
     expect(parseHistory(data, 168)).toEqual(data)
     expect(summarize(data.samples)).toEqual({ peak: 8, peakAt: 60, average: 6, sampleCount: 3 })
     expect(connectionParts(sample).reduce((total, part) => total + part.percent, 0)).toBeCloseTo(100)
+  })
+})
+
+describe('daily unique account history', () => {
+  const day = 86400
+  const midnight = 1000 * day - 9 * 3600
+
+  it.each(uniquePeriods)('accepts cached daily counts for the $label window', ({ hours }) => {
+    const data = { from: midnight - hours * 3600, until: midnight, window_seconds: hours * 3600,
+      sample_interval_seconds: day, collection_started_at: 0, last_aggregated_at: midnight,
+      samples: [{ timestamp: midnight - day, accounts: 3 }, { timestamp: midnight, accounts: 4 }] }
+    expect(parseUniqueHistory(data, hours)).toEqual(data)
+    expect(() => parseUniqueHistory({ ...data, window_seconds: 1 }, hours)).toThrow()
+    expect(() => parseUniqueHistory({ ...data, sample_interval_seconds: 60 }, hours)).toThrow()
+  })
+
+  it('keeps pending aggregation distinct from a saved zero count', () => {
+    const data = { from: midnight - day, until: midnight, window_seconds: day, sample_interval_seconds: day,
+      collection_started_at: midnight - 3600, last_aggregated_at: null, samples: [] }
+    expect(parseUniqueHistory(data, 24)).toEqual(data)
+    const collected = { ...data, last_aggregated_at: midnight, samples: [{ timestamp: midnight, accounts: 0 }] }
+    expect(parseUniqueHistory(collected, 24)).toEqual(collected)
+    expect(() => parseUniqueHistory({ ...collected, samples: [] }, 24)).toThrow()
+    expect(() => parseUniqueHistory({ ...collected, last_aggregated_at: null }, 24)).toThrow()
+  })
+
+  it('accepts missing days and an old aggregation outside the selected range', () => {
+    const data = { from: midnight - 7 * day, until: midnight, window_seconds: 7 * day, sample_interval_seconds: day,
+      collection_started_at: 0, last_aggregated_at: midnight - day,
+      samples: [{ timestamp: midnight - 5 * day, accounts: 2 }, { timestamp: midnight - day, accounts: 4 }] }
+    expect(parseUniqueHistory(data, 168)).toEqual(data)
+    expect(splitSegments(data.samples, day)).toEqual(data.samples.map(sample => [sample]))
+    const stale = { ...data, from: midnight - day, window_seconds: day, last_aggregated_at: midnight - 2 * day, samples: [] }
+    expect(parseUniqueHistory(stale, 24)).toEqual(stale)
+  })
+
+  it('rejects non-daily, duplicate, unordered and invalid daily observations', () => {
+    const data = { from: midnight - day, until: midnight, window_seconds: day, sample_interval_seconds: day,
+      collection_started_at: 0, last_aggregated_at: midnight,
+      samples: [{ timestamp: midnight - day, accounts: 2 }, { timestamp: midnight, accounts: 3 }] }
+    for (const accounts of [-1, 0.5, NaN, Infinity]) {
+      expect(() => parseUniqueHistory({ ...data, samples: [data.samples[0], { timestamp: midnight, accounts }] }, 24)).toThrow()
+    }
+    expect(() => parseUniqueHistory({ ...data, samples: [data.samples[0], ...data.samples] }, 24)).toThrow()
+    expect(() => parseUniqueHistory({ ...data, samples: [...data.samples].reverse() }, 24)).toThrow()
+    expect(() => parseUniqueHistory({ ...data, samples: [{ timestamp: midnight - 3600, accounts: 2 }, data.samples[1]] }, 24)).toThrow()
+    expect(() => parseUniqueHistory({ ...data, last_aggregated_at: midnight + day }, 24)).toThrow()
+    expect(() => parseUniqueHistory({ ...data, collection_started_at: midnight }, 24)).toThrow()
+    expect(formatAxisTime(midnight, 24, true)).toMatch(/\([월화수목금토일]\)/)
   })
 })

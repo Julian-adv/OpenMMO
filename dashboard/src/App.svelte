@@ -1,59 +1,25 @@
 <script lang="ts">
   import ConcurrentChart from './lib/ConcurrentChart.svelte'
   import ConnectionBreakdown from './lib/ConnectionBreakdown.svelte'
-  import { formatDateTime, formatTime, parseHistory, periods, summarize, type ConcurrentHistory, type Hours } from './lib/metrics'
+  import HistoryChart from './lib/HistoryChart.svelte'
+  import { createMetricsResource } from './lib/metricsResource.svelte'
+  import { formatDateTime, formatTime, parseHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type Hours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
-  let history = $state<ConcurrentHistory | null>(null)
-  let refreshing = $state(false)
-  let error = $state('')
-  let loading = $derived(history === null && !error)
-  let refresh = () => {}
+  let uniqueHours = $state<UniqueHours>(24)
+  let uniquePeriod = $derived(uniquePeriods.find((period) => period.hours === uniqueHours)!)
+  const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory)
+  const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
+  let history = $derived(concurrent.history)
+  let refreshing = $derived(concurrent.refreshing || unique.refreshing)
+  let error = $derived(concurrent.error)
+  let loading = $derived(concurrent.loading)
+  let uniqueLatest = $derived(unique.history?.samples.at(-1))
+  let uniquePeak = $derived(unique.history?.samples.length ? Math.max(...unique.history.samples.map((sample) => sample.accounts)) : null)
   let summary = $derived(summarize(history?.samples ?? []))
   const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
-
-  $effect(() => {
-    const requestedHours = hours
-    let stopped = false
-    let controller: AbortController | null = null
-    history = null
-    error = ''
-
-    async function update() {
-      if (controller) return
-      const request = new AbortController()
-      controller = request
-      refreshing = true
-      const timeout = window.setTimeout(() => request.abort(), 10000)
-      try {
-        const response = await fetch(`/api/metrics/concurrent?hours=${requestedHours}`, { signal: request.signal, cache: 'no-store' })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const data = parseHistory(await response.json(), requestedHours)
-        if (!stopped) {
-          history = data
-          error = ''
-        }
-      } catch {
-        if (!stopped) error = '접속 현황을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'
-      } finally {
-        window.clearTimeout(timeout)
-        controller = null
-        if (!stopped) {
-          refreshing = false
-        }
-      }
-    }
-
-    refresh = () => { void update() }
-    void update()
-    const timer = window.setInterval(() => { void update() }, 30000)
-    return () => {
-      stopped = true
-      window.clearInterval(timer)
-      controller?.abort()
-    }
-  })
+  const refresh = () => { concurrent.refresh(); unique.refresh() }
 </script>
 
 <svelte:head>
@@ -79,9 +45,9 @@
       <p class="page-description">지금 함께하는 플레이어와 시간에 따른 월드의 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
-      <div class:unavailable={!!error} class="update-status" role="status">
+      <div class:unavailable={!!error || !!unique.error} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if error}연결 확인 필요{:else if loading}연결 중{:else}30초마다 업데이트{/if}
+        {#if error || unique.error}연결 확인 필요{:else if loading || unique.loading}연결 중{:else}30초마다 업데이트{/if}
       </div>
       <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="접속 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -140,6 +106,56 @@
     <div class="chart-footer">
       <span>{history ? `${formatDateTime(history.from)} — ${formatDateTime(history.until)}` : `최근 ${period.label}`} <span class="timezone">KST</span></span>
       <span>{history ? `${summary.sampleCount.toLocaleString('ko-KR')}개 기록` : '기록 확인 중'}</span>
+    </div>
+  </section>
+
+  <section class="chart-panel unique-panel" aria-labelledby="unique-chart-title" aria-busy={unique.loading}>
+    <div class="chart-heading">
+      <div>
+        <h2 id="unique-chart-title">유니크 접속 계정 추이</h2>
+        <p>매일 자정 기준, 직전 {uniquePeriod.label} 동안 게임에 접속한 계정 수</p>
+      </div>
+      <div class="period-filter" role="group" aria-label="유니크 계정 집계 기간">
+        {#each uniquePeriods as option (option.hours)}
+          <button class:active={uniqueHours === option.hours} aria-pressed={uniqueHours === option.hours} onclick={() => { uniqueHours = option.hours }}>{option.label}</button>
+        {/each}
+      </div>
+    </div>
+    {#if unique.error}
+      <div class="error-banner" role="alert">
+        <span>{unique.error} {unique.history ? `마지막 수신: ${formatDateTime(unique.history.until)} KST. 아래는 마지막으로 받은 기록입니다.` : ''}</span>
+        <button onclick={() => unique.refresh()} disabled={unique.refreshing}>다시 시도</button>
+      </div>
+    {/if}
+    <div class="unique-summary">
+      <span>마지막 일별 집계 · 직전 {uniquePeriod.label}</span>
+      <strong>{count(uniqueLatest?.accounts)}<small>계정</small></strong>
+      <p>{unique.history?.last_aggregated_at != null ? `마지막 집계 기준: ${formatDateTime(unique.history.last_aggregated_at)} KST` : '첫 일별 집계를 기다리고 있어요'}</p>
+      <p>같은 계정의 재접속·캐릭터 변경은 한 번만 셉니다. 공식 NPC는 제외합니다.</p>
+    </div>
+    {#if unique.history?.last_aggregated_at != null && unique.history.collection_started_at > unique.history.from - unique.history.window_seconds}
+      <p class="chart-notice">{formatDateTime(unique.history.collection_started_at)} KST부터 수집한 기록입니다. 일부 시점은 수집 시작 이후의 접속만 포함합니다.</p>
+    {/if}
+    <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계 · 한국 시간 (KST)</span></div>
+    {#if unique.history && unique.history.samples.length > 0}
+      <HistoryChart history={unique.history} peak={uniquePeak} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
+        {#snippet detail(selected)}
+          <span>집계 시작: {formatDateTime(selected.timestamp - uniqueHours * 3600)}</span>
+          <span>자정 기준 일별 집계 · 직전 {uniquePeriod.label}</span>
+          {#if unique.history && selected.timestamp - unique.history.window_seconds < unique.history.collection_started_at}
+            <span>수집 시작 이후의 접속만 포함</span>
+          {/if}
+        {/snippet}
+      </HistoryChart>
+    {:else}
+      <div class="chart-empty" role="status">
+        <strong>{unique.loading ? '일별 유니크 계정 기록을 불러오고 있어요' : unique.error ? '기록에 연결할 수 없어요' : unique.history?.last_aggregated_at == null ? '첫 일별 집계를 기다리고 있어요' : '이 기간의 일별 집계 기록이 없어요'}</strong>
+        <p>{unique.loading ? '잠시만 기다려 주세요.' : unique.error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : `매일 한국 시간 자정 이후 집계합니다.${unique.history ? ` 다음 집계 기준: ${formatDateTime(unique.history.until + 86400)} KST` : ''}`}</p>
+      </div>
+    {/if}
+    <div class="chart-footer">
+      <span>{unique.history ? `${formatDateTime(unique.history.from)} — ${formatDateTime(unique.history.until)}` : `최근 ${uniquePeriod.label}`} <span class="timezone">KST</span></span>
+      <span>{unique.history ? `${unique.history.samples.length.toLocaleString('ko-KR')}개 시점` : '기록 확인 중'}</span>
     </div>
   </section>
 

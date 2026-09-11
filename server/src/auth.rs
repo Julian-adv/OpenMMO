@@ -657,6 +657,7 @@ impl AuthService {
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
         Self::ensure_concurrent_samples_schema(&conn)?;
+        Self::ensure_account_activity_schema(&conn)?;
         Self::ensure_pricing_schema(&conn)?;
         Self::ensure_migrations_schema(&conn)?;
         Self::migrate_level_curve(&conn)?;

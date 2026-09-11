@@ -72,6 +72,14 @@ h1 > span { color: #168878; margin-left: 2px; }
 .stat-icon { font-size: 21px; line-height: 18px; font-weight: 400; color: #a0afa7; }
 .average-icon { font-size: 25px; }
 .chart-panel { background: white; border: 1px solid #e2e9e5; border-radius: 14px; padding: 28px 28px 0; }
+.unique-panel { margin-top: 24px; }
+.unique-panel .error-banner { margin: 20px 0 0; }
+.unique-summary { margin-top: 24px; color: #74857d; font-size: 11px; }
+.unique-summary strong { display: flex; align-items: baseline; gap: 8px; margin-top: 4px; color: #166d5e; font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.unique-summary small { font-size: 11px; font-weight: 400; }
+.unique-summary p, .chart-notice { font-size: 11px; line-height: 1.8; word-break: keep-all; }
+.unique-summary p { margin: 6px 0 0; }
+.chart-notice { padding: 10px 12px; margin: 16px 0 0; border-radius: 8px; background: #fff8eb; color: #886022; }
 .chart-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .chart-heading p { margin: 6px 0 0; color: #8a9891; font-size: 11px; }

@@ -6,10 +6,12 @@ export const connectionKinds = [
 
 export type ConnectionCounts = Record<typeof connectionKinds[number]['key'], number>
 
-export interface Sample extends ConnectionCounts {
+export interface AccountSample {
   timestamp: number
   accounts: number
 }
+
+export interface Sample extends AccountSample, ConnectionCounts {}
 
 export interface HistorySample extends Sample {
   peak_accounts: number
@@ -17,12 +19,21 @@ export interface HistorySample extends Sample {
   sample_count: number
 }
 
-export interface ConcurrentHistory {
+export interface ChartHistory<T extends AccountSample = AccountSample> {
   from: number
   until: number
   sample_interval_seconds: number
+  samples: T[]
+}
+
+export interface ConcurrentHistory extends ChartHistory<HistorySample> {
   current: Sample
-  samples: HistorySample[]
+}
+
+export interface UniqueHistory extends ChartHistory {
+  window_seconds: number
+  collection_started_at: number
+  last_aggregated_at: number | null
 }
 
 export const periods = [
@@ -36,6 +47,14 @@ export const periods = [
 ] as const
 
 export type Hours = typeof periods[number]['hours']
+export const uniquePeriods = [
+  { hours: 24, label: '1일' },
+  { hours: 168, label: '1주일' },
+  { hours: 720, label: '1개월' },
+  { hours: 4320, label: '6개월' },
+  { hours: 8760, label: '1년' },
+] as const
+export type UniqueHours = typeof uniquePeriods[number]['hours']
 export const formatPeriod = (hours: number) => periods.find((period) => period.hours === hours)?.label ?? `${hours}시간`
 
 export function connectionParts(sample: Sample) {
@@ -97,8 +116,30 @@ export function summarize(samples: HistorySample[]) {
   return { peak: peak.peak_accounts, average: total / sampleCount, peakAt: peak.peak_timestamp, sampleCount }
 }
 
-export function splitSegments(samples: Sample[], interval: number): Sample[][] {
-  const segments: Sample[][] = []
+export function parseUniqueHistory(value: unknown, hours: UniqueHours): UniqueHistory {
+  if (!value || typeof value !== 'object') throw new Error('Invalid unique metrics response')
+  const data = value as UniqueHistory
+  const day = 86400
+  const last = data.last_aggregated_at
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 || data.window_seconds !== hours * 3600 ||
+    (data.until + 9 * 3600) % day !== 0 || data.sample_interval_seconds !== day ||
+    !Number.isSafeInteger(data.collection_started_at) || data.collection_started_at < 0 ||
+    (last !== null && (!Number.isSafeInteger(last) || last > data.until || last <= data.collection_started_at || (last + 9 * 3600) % day !== 0)) ||
+    !Array.isArray(data.samples) || data.samples.length > hours / 24 + 1 ||
+    !data.samples.every((sample, index) => sample && Number.isSafeInteger(sample.timestamp) &&
+      Number.isSafeInteger(sample.accounts) && sample.accounts >= 0 &&
+      sample.timestamp >= data.from && sample.timestamp > data.collection_started_at && sample.timestamp <= data.until &&
+      (sample.timestamp + 9 * 3600) % day === 0 &&
+      (index === 0 || sample.timestamp > data.samples[index - 1].timestamp)) ||
+    (last !== null && last >= data.from ? data.samples.at(-1)?.timestamp !== last : data.samples.length !== 0)) {
+    throw new Error('Invalid unique metrics response')
+  }
+  return data
+}
+
+export function splitSegments<T extends AccountSample>(samples: T[], interval: number): T[][] {
+  const segments: T[][] = []
   for (const sample of samples) {
     const previous = segments.at(-1)?.at(-1)
     if (!previous || Math.floor(sample.timestamp / interval) - Math.floor(previous.timestamp / interval) > 1) {
@@ -110,7 +151,7 @@ export function splitSegments(samples: Sample[], interval: number): Sample[][] {
   return segments
 }
 
-export function nearestSample(samples: Sample[], timestamp: number): number | null {
+export function nearestSample(samples: AccountSample[], timestamp: number): number | null {
   if (!samples.length) return null
   let low = 0
   let high = samples.length - 1
@@ -130,7 +171,7 @@ const dateFormatter = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 })
 const dayFormatter = new Intl.DateTimeFormat('ko-KR', {
-  timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric',
+  timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric', weekday: 'short',
 })
 const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul', year: '2-digit', month: 'numeric',
@@ -139,5 +180,5 @@ const monthFormatter = new Intl.DateTimeFormat('ko-KR', {
 export const formatTime = (timestamp: number) => timeFormatter.format(timestamp * 1000)
 export const formatCount = (value: number) => value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
 export const formatDateTime = (timestamp: number) => dateFormatter.format(timestamp * 1000)
-export const formatAxisTime = (timestamp: number, hours: number) =>
-  (hours <= 24 ? timeFormatter : hours <= 4320 ? dayFormatter : monthFormatter).format(timestamp * 1000)
+export const formatAxisTime = (timestamp: number, hours: number, daily = false) =>
+  (hours <= 24 && !daily ? timeFormatter : hours <= 4320 ? dayFormatter : monthFormatter).format(timestamp * 1000)

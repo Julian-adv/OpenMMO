@@ -1329,6 +1329,9 @@ async fn handle_client_message(
 
             state.player_id = Some(id);
             state.character_name = Some(selected_character.name.clone());
+            game_state
+                .begin_account_activity(id, &authed_account_name, auth_service)
+                .await;
             drop(character_sessions);
 
             info!(

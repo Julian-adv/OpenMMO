@@ -356,6 +356,17 @@ async fn main() -> ExitCode {
         }
     };
 
+    let metrics_auth = Arc::clone(&auth_service);
+    match game_state::auth_db(move || metrics_auth.backfill_daily_unique_accounts(auth::unix_now()))
+        .await
+    {
+        Ok(days) => info!("Backfilled {days} days of unique account metrics"),
+        Err(error) => {
+            error!("Failed to backfill daily unique account metrics: {error}");
+            return ExitCode::FAILURE;
+        }
+    }
+
     let google_client_ids: Vec<String> = [&args.google_client_id, &args.google_cli_client_id]
         .into_iter()
         .filter_map(|value| optional_value(value.as_deref()))
@@ -844,6 +855,7 @@ async fn main() -> ExitCode {
     drain(&mut connections, "Connection").await;
 
     game_state.persist_shutdown_snapshot(&auth_service).await;
+    metrics::record_concurrent_sample(&game_state, Arc::clone(&auth_service)).await;
     game_state
         .tick_combat_audit(
             args.state_dir.clone(),

@@ -370,6 +370,7 @@ pub struct GameState {
     world_drop_defs: crate::world_drop_defs::WorldDropDefs,
     id_state: Arc<RwLock<IdState>>,
     account_sessions: Arc<RwLock<HashMap<String, AccountSession>>>,
+    account_activities: Arc<RwLock<HashMap<PlayerId, crate::metrics::AccountActivity>>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<Bytes>>>>,
     // player_id → (character_id, current_xp, attributes)
@@ -692,6 +693,7 @@ impl GameState {
             world_drop_defs,
             id_state: Arc::new(RwLock::new(IdState::default())),
             account_sessions: Arc::new(RwLock::new(HashMap::new())),
+            account_activities: Arc::new(RwLock::new(HashMap::new())),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
             player_characters: Arc::new(RwLock::new(HashMap::new())),
