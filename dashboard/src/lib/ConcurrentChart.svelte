@@ -2,7 +2,7 @@
   import ConnectionBreakdown from './ConnectionBreakdown.svelte'
   import { connectionKinds, formatAxisTime, formatBreakdown, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type ConcurrentHistory, type Sample } from './metrics'
 
-  let { history }: { history: ConcurrentHistory } = $props()
+  let { history, peak }: { history: ConcurrentHistory; peak: number | null } = $props()
   let container: HTMLDivElement
   let width = $state(1000)
   let selectedTime = $state<number | null>(null)
@@ -17,7 +17,7 @@
   let plotWidth = $derived(Math.max(1, width - left - right))
   let plotHeight = $derived(height - top - bottom)
   let step = $derived.by(() => {
-    const raw = Math.max(1, history.samples.reduce((peak, sample) => Math.max(peak, sample.accounts), 0) / 4)
+    const raw = Math.max(1, (peak ?? 0) / 4)
     const magnitude = 10 ** Math.floor(Math.log10(raw))
     return ([1, 2, 5, 10].find((value) => value * magnitude >= raw) ?? 10) * magnitude
   })
@@ -54,7 +54,7 @@
 </script>
 
 <div class="chart-canvas" bind:this={container} bind:contentRect={null, (rect: DOMRectReadOnly | null | undefined) => { if (rect) width = rect.width }}>
-  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. 웹 접속과 외부 에이전트 등의 구성을 색상별로 누적 표시합니다. ${history.samples.length}개 지점.`}
+  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`최근 ${formatPeriod(hours)} ${legend} 그래프. 웹 접속과 외부 에이전트 등의 구성을 색상별로 누적 표시합니다. ${history.samples.length}개 지점.${peak === null ? '' : ` 기간 최고 접속 ${formatCount(peak)}계정을 가로 점선으로 표시합니다.`}`}
     onpointermove={selectAtPointer} onpointerleave={() => { selectedTime = null }}>
     {#each [4, 3, 2, 1, 0] as tick (tick)}
       <line x1={left} x2={width - right} y1={y(tick * step)} y2={y(tick * step)} class="grid-line" />
@@ -80,6 +80,10 @@
         <circle cx={x(segment[0].timestamp)} cy={y(segment[0].accounts)} r="3.5" fill="#31594f" />
       {/if}
     {/each}
+    {#if peak !== null}
+      <line x1={left} x2={width - right} y1={y(peak)} y2={y(peak)} class="peak-line" />
+      <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">기간 최고 접속 {formatCount(peak)}계정</text>
+    {/if}
     {#if selected}
       <line x1={x(selected.timestamp)} x2={x(selected.timestamp)} y1={top} y2={y(0)} stroke="#83b7ac" stroke-dasharray="4 4" />
       <circle cx={x(selected.timestamp)} cy={y(selected.accounts)} r="5" fill="#31594f" stroke="white" stroke-width="2.5" />
@@ -99,6 +103,9 @@
     {#each visibleKinds as kind (kind.key)}
       <span class="legend"><i style:background={kind.color}></i>{kind.label}</span>
     {/each}
+    {#if peak !== null}
+      <span class="legend"><i class="peak-line"></i>기간 최고 접속</span>
+    {/if}
   </div>
   <label class="chart-scrubber">
     <span>시간별 보기</span>

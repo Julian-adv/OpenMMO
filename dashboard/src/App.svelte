@@ -129,7 +129,7 @@
     </div>
     <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
     {#if history && history.samples.length > 0}
-      <ConcurrentChart {history} />
+      <ConcurrentChart {history} peak={summary.peak} />
     {:else}
       <div class="chart-empty" role="status">
         <div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 64 48" fill="none"><path d="M4 42h56M4 24h56M4 6h56" stroke="currentColor" stroke-opacity=".18" /><path d="M6 34h13l9-16 10 11 10-19 10 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
