@@ -187,7 +187,6 @@ gameplay reason for players to read the weather ahead.
 | B | rain layer + preset flag + ambience (port from `experiment/rain-prototype`) | T1–T2 |
 | C | map overlay + forecast scrub — prototyped, held back until a gameplay reason exists | later |
 | D | storms: a rare oversized cell (10–15 km, 1–2 real hours) from its own sector so it spans zones, with slanted rain, lightning, and a wind boost — still a pure function, so the map forecasts landfall; snow on the alpine zone once a snow region is decided; wetness (campfire/hunger); fishing tables; wet/dry seasons by scaling `P` with the 360-day year in `celestial.rs`; `/weather` override | separate proposals |
-| E | river levels and flooding from accumulated rain — belongs to the water system, after the upstream water-field and erosion experiments settle; weather never touches water itself | later, with the maintainer |
 
 ## Test plan
 
