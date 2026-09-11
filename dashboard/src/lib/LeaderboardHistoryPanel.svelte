@@ -2,7 +2,7 @@
   import MetricsError from './MetricsError.svelte'
   import GoldAmount from './GoldAmount.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { axisStep, formatAxisTime, formatDateTime, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
+  import { axisStep, formatAxisTime, formatDateTime, leaderboardLabels, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
   import { sampleAt, stepPath } from './leaderboardHistory'
 
   let { metric, hours = $bindable(), leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
@@ -16,7 +16,7 @@
     error: string
     refresh: () => void
   } = $props()
-  let label = $derived(metric === 'gold' ? '골드' : '레벨')
+  let label = $derived(leaderboardLabels[metric])
   let titleId = $derived(`${metric}-history-title`)
   let container = $state<HTMLDivElement>()
   let width = $state(600)
@@ -59,7 +59,7 @@
     <PeriodFilter bind:hours options={leaderboardPeriods} label={`${label} 변화 조회 기간`} />
   </div>
   <MetricsError {error} until={leaderboard?.timestamp} {refreshing} {refresh} />
-  <div class="chart-meta"><span>{metric === 'gold' ? '보유 금액 (g · s · c)' : '레벨 (Lv.)'}</span></div>
+  <div class="chart-meta"><span>{metric === 'gold' ? '보유금액' : metric === 'weapon_enchant' ? '인챈트 단계' : '레벨 (Lv.)'}</span></div>
   {#if leaderboard && series.length > 0}
     <div class="chart-canvas" style:min-height={width < 450 ? '280px' : '360px'} bind:this={container}
       bind:contentRect={null, (rect: DOMRectReadOnly | null | undefined) => { if (rect) { width = rect.width; height = rect.height } }}>
@@ -67,7 +67,7 @@
         onpointermove={selectAtPointer} onpointerleave={() => { selectedTime = null }}>
         {#each ticks as tick (tick)}
           <line x1={left} x2={width - right} y1={y(tick)} y2={y(tick)} class="grid-line" />
-          <text x={left - 10} y={y(tick) + 4} text-anchor="end" class="axis-label">{#if metric === 'gold'}<GoldAmount copper={tick} svg />{:else}{tick}{/if}</text>
+          <text x={left - 10} y={y(tick) + 4} text-anchor="end" class="axis-label">{#if metric === 'gold'}<GoldAmount copper={tick} svg />{:else}{metric === 'weapon_enchant' ? '+' : ''}{tick}{/if}</text>
         {/each}
         {#each width < 500 ? [0, 3, 6] : [0, 2, 4, 6] as tick (tick)}
           <text x={left + plotWidth * tick / 6} y={height - 10} text-anchor={tick === 0 ? 'start' : tick === 6 ? 'end' : 'middle'} class="axis-label">
@@ -96,7 +96,7 @@
           <span>{formatDateTime(selected)} KST</span>
           {#each series.filter((entry) => !focused || focused === entry.name) as entry (entry.name)}
             {@const sample = sampleAt(entry.samples, selected)}
-            <div class="tooltip-entry"><span><i style:background={colors[entry.name]}></i>{entry.name}</span><b>{#if !sample}기록 없음{:else if metric === 'gold'}<GoldAmount copper={sample[metric]} />{:else}Lv. {sample[metric]}{/if}</b></div>
+            <div class="tooltip-entry"><span><i style:background={colors[entry.name]}></i>{entry.name}</span><b>{#if !sample}기록 없음{:else if metric === 'gold'}<GoldAmount copper={sample[metric]} />{:else}{metric === 'weapon_enchant' ? '+' : 'Lv. '}{sample[metric]}{/if}</b></div>
           {/each}
         </div>
       {/if}
@@ -118,11 +118,11 @@
 </section>
 
 <style>
-  .chart-heading { flex-wrap: wrap; gap: 16px; }
+  .chart-heading { flex-wrap: wrap; gap: 12px; }
   .chart-canvas { flex: 1; }
   .chart-canvas > svg { position: absolute; inset: 0; height: 100%; }
-  .character-legend { display: flex; flex-wrap: wrap; gap: 5px; margin: 14px 0; }
-  .character-legend button { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 6px; padding: 6px 8px; background: #f6f8f7; font-size: 10px; overflow-wrap: anywhere; text-align: left; }
+  .character-legend { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+  .character-legend button { display: flex; align-items: center; gap: 6px; border: 1px solid transparent; border-radius: 6px; padding: 5px 7px; background: #f6f8f7; font-size: 10px; overflow-wrap: anywhere; text-align: left; }
   .character-legend .active { border-color: #bfd6c9; background: #edf5f0; }
   .character-legend .muted { opacity: .5; }
   i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }

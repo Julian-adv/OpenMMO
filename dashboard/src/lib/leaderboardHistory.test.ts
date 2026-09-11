@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createCharacterColors, sampleAt, stepPath } from './leaderboardHistory'
-import { leaderboardPeriods, parseGoldLeaderboard, parseLevelLeaderboard } from './metrics'
+import { leaderboardPeriods, parseGoldLeaderboard, parseLevelLeaderboard, parseWeaponEnchantLeaderboard } from './metrics'
 
 describe('character level history', () => {
   const timestamp = 1800000000
@@ -91,5 +91,39 @@ describe('character gold history', () => {
     expect(sampleAt(samples, 200)?.gold).toBe(5000000000)
     expect(sampleAt(samples, 400)?.gold).toBe(50)
     expect(stepPath(samples, 400, (time) => time, (gold) => gold, (sample) => sample.gold)).toBe('M100,0 H200V5000000000 H300V50 H400')
+  })
+})
+
+describe('character weapon enchant history', () => {
+  const timestamp = 1800000000
+  const entries = [{ name: 'Hero', weapon_enchant: 7, account_first_rank: 1 }, { name: 'NewHero', weapon_enchant: 0, account_first_rank: 1 }]
+  const series = entries.map((entry) => ({ name: entry.name, started_at: timestamp, samples: [{ timestamp, weapon_enchant: entry.weapon_enchant }] }))
+  const data = { timestamp, from: timestamp - 168 * 3600, sample_interval_seconds: 3600, entries, series }
+
+  it.each(leaderboardPeriods)('accepts $label weapon enchant histories including zero', ({ hours, interval }) => {
+    const history = { ...data, from: timestamp - hours * 3600, sample_interval_seconds: interval }
+    expect(parseWeaponEnchantLeaderboard(history, hours)).toEqual(history)
+    expect(parseWeaponEnchantLeaderboard({ ...history, entries: [], series: [] }, hours).entries).toEqual([])
+    expect(() => parseLevelLeaderboard(history, hours)).toThrow()
+    expect(() => parseGoldLeaderboard(history, hours)).toThrow()
+  })
+
+  it('rejects invalid enchant values, mismatched histories and ranking order', () => {
+    for (const weapon_enchant of [-1, 0.5, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(() => parseWeaponEnchantLeaderboard({ ...data, entries: [{ ...entries[0], weapon_enchant }, entries[1]] }, 168)).toThrow()
+      expect(() => parseWeaponEnchantLeaderboard({ ...data, series: [{ ...series[0], samples: [{ timestamp, weapon_enchant }] }, series[1]] }, 168)).toThrow()
+    }
+    expect(() => parseWeaponEnchantLeaderboard({ ...data, entries: [...entries].reverse() }, 168)).toThrow()
+    expect(() => parseWeaponEnchantLeaderboard({ ...data, series: [...series].reverse() }, 168)).toThrow()
+    expect(() => parseWeaponEnchantLeaderboard({ ...data, series: [] }, 168)).toThrow()
+  })
+
+  it('preserves decreases when the strongest owned weapon is lost', () => {
+    const samples = [{ timestamp: 100, weapon_enchant: 3 }, { timestamp: 200, weapon_enchant: 7 }, { timestamp: 300, weapon_enchant: 0 }]
+    expect(sampleAt(samples, 99)).toBeNull()
+    expect(sampleAt(samples, 199)?.weapon_enchant).toBe(3)
+    expect(sampleAt(samples, 200)?.weapon_enchant).toBe(7)
+    expect(sampleAt(samples, 400)?.weapon_enchant).toBe(0)
+    expect(stepPath(samples, 400, (time) => time, (enchant) => enchant, (sample) => sample.weapon_enchant)).toBe('M100,3 H200V7 H300V0 H400')
   })
 })

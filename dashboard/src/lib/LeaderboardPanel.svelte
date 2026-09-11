@@ -1,7 +1,7 @@
 <script lang="ts" generics="M extends LeaderboardMetric">
   import MetricsError from './MetricsError.svelte'
   import GoldAmount from './GoldAmount.svelte'
-  import type { CharacterLeaderboard, LeaderboardMetric } from './metrics'
+  import { leaderboardLabels, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
 
   let { metric, leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
     metric: M
@@ -13,7 +13,7 @@
     error: string
     refresh: () => void
   } = $props()
-  let label = $derived(metric === 'gold' ? '골드' : '레벨')
+  let label = $derived(leaderboardLabels[metric])
   let titleId = $derived(`${metric}-leaderboard-title`)
 </script>
 
@@ -21,6 +21,7 @@
   <div class="chart-heading">
     <div>
       <h2 id={titleId}>{label} 상위 10명</h2>
+      {#if metric === 'weapon_enchant'}<p>가방·장비의 무기 중 최고 인챈트</p>{/if}
     </div>
     <span class="leaderboard-tag">TOP 10</span>
   </div>
@@ -28,7 +29,7 @@
   {#if leaderboard && leaderboard.entries.length > 0}
     <table aria-labelledby={titleId}>
       <thead>
-        <tr><th scope="col" class="rank">순위</th><th scope="col">캐릭터</th><th scope="col" class="value" class:gold={metric === 'gold'}>{label}</th></tr>
+        <tr><th scope="col" class="rank">순위</th><th scope="col">캐릭터</th><th scope="col" class="value" class:gold={metric === 'gold'}>{metric === 'weapon_enchant' ? '인챈트' : label}</th></tr>
       </thead>
       <tbody>
         {#each leaderboard.entries as entry, index (entry.name)}
@@ -43,7 +44,7 @@
                 <span class="account-character">({firstCharacter.name})</span>
               {/if}
             </th>
-            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
+            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else if metric === 'weapon_enchant'}+{entry[metric].toLocaleString('ko-KR')}{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
           </tr>
         {/each}
       </tbody>
@@ -60,8 +61,8 @@
   .chart-heading { flex-wrap: nowrap; align-items: flex-start; gap: 12px; }
   .chart-heading > div { min-width: 0; }
   .leaderboard-tag { flex-shrink: 0; color: #167b6c; background: #eaf3ef; border-radius: 6px; padding: 6px 10px; font-size: 10px; font-weight: 600; letter-spacing: 1px; }
-  table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 24px; font-size: 13px; }
-  th, td { padding: 13px 12px; border-bottom: 1px solid #edf1ee; text-align: left; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 16px; font-size: 13px; }
+  th, td { padding: 9px 10px; border-bottom: 1px solid #edf1ee; text-align: left; }
   thead th { background: #f6f8f7; color: #74857d; font-size: 11px; font-weight: 500; }
   tbody tr:last-child > * { border-bottom: 0; }
   .rank { width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
@@ -78,7 +79,7 @@
   .value.gold { width: 124px; }
   @media (max-width: 600px) {
     .chart-heading { flex-direction: row; align-items: center; gap: 12px; }
-    th, td { padding: 11px 6px; }
+    th, td { padding: 8px 6px; }
     .rank { width: 44px; }
     .value { width: 72px; }
     .value.gold { width: 112px; }

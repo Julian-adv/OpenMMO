@@ -576,6 +576,9 @@ impl AuthService {
               cape_texture, locked) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         )?;
+        let mut update_enchant =
+            conn.prepare("UPDATE characters SET weapon_enchant = ?2 WHERE id = ?1")?;
+        let defs = crate::item_defs::item_defs();
 
         for (character_id, items) in inventories {
             delete.execute(params![character_id])?;
@@ -591,6 +594,19 @@ impl AuthService {
                     item.locked
                 ])?;
             }
+            let weapon_enchant = items
+                .iter()
+                .filter(|item| {
+                    item.quantity > 0
+                        && defs
+                            .get(&item.item_def_id)
+                            .is_some_and(|def| def.is_weapon())
+                })
+                .map(|item| item.enchant)
+                .max()
+                .unwrap_or(0)
+                .max(0);
+            update_enchant.execute(params![character_id, weapon_enchant])?;
         }
         Ok(())
     }
@@ -663,6 +679,7 @@ impl AuthService {
         Self::migrate_level_curve(&conn)?;
         Self::ensure_level_history_schema(&conn)?;
         Self::ensure_gold_history_schema(&conn)?;
+        Self::ensure_weapon_enchant_history_schema(&conn)?;
 
         Ok(Self {
             pool,

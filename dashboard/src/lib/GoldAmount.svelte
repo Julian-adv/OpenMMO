@@ -13,7 +13,7 @@
 
 <style>
   .gold-amount { white-space: nowrap; font-variant-numeric: tabular-nums; }
-  .gold { color: #b8860b; }
+  .gold { color: #d4b000; }
   .silver { color: #8a95a3; }
   .copper { color: #b87333; }
   tspan { fill: currentColor; }

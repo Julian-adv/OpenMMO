@@ -1,13 +1,20 @@
 use super::{unix_now, AuthError, AuthService, NPC_ACCOUNT_PREFIX};
 use crate::metrics::{
-    kst_day_start, AccountActivity, CharacterGoldSample, CharacterGoldSeries, ConcurrentCounts,
-    ConcurrentHistorySample, GoldHistory, GoldHistorySample, GoldLeaderboard, GoldLeaderboardEntry,
-    GoldSample, LevelLeaderboard, LevelLeaderboardEntry, LevelSample, LevelSeries,
-    PerAccountGoldHistory, PerAccountGoldHistorySample, PerAccountGoldSample, UniqueHistory,
-    UniqueSample, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
+    kst_day_start, AccountActivity, CharacterGoldSample, CharacterGoldSeries, CharacterLeaderboard,
+    ConcurrentCounts, ConcurrentHistorySample, GoldHistory, GoldHistorySample, GoldLeaderboard,
+    GoldLeaderboardEntry, GoldSample, LevelLeaderboard, LevelLeaderboardEntry, LevelSample,
+    LevelSeries, PerAccountGoldHistory, PerAccountGoldHistorySample, PerAccountGoldSample,
+    UniqueHistory, UniqueSample, WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry,
+    WeaponEnchantSample, WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
 };
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, types::FromSql, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
+
+enum LeaderboardMetric {
+    Level,
+    Gold,
+    WeaponEnchant,
+}
 
 fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Error> {
     conn.query_row(
@@ -24,6 +31,39 @@ impl AuthService {
 
     pub(super) fn ensure_gold_history_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         Self::ensure_character_history_schema(conn, "gold", 0)
+    }
+
+    pub(super) fn ensure_weapon_enchant_history_schema(
+        conn: &Connection,
+    ) -> Result<(), rusqlite::Error> {
+        let transaction = conn.unchecked_transaction()?;
+        if !Self::table_columns(&transaction, "characters")?.contains("weapon_enchant") {
+            transaction.execute(
+                "ALTER TABLE characters ADD COLUMN weapon_enchant INTEGER NOT NULL DEFAULT 0",
+                [],
+            )?;
+        }
+        let weapon_ids: Vec<_> = crate::item_defs::item_defs()
+            .all()
+            .filter(|def| def.is_weapon())
+            .map(|def| &def.id)
+            .collect();
+        let weapon_ids = serde_json::to_string(&weapon_ids)
+            .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+        transaction.execute(
+            "UPDATE characters SET weapon_enchant = MAX(0, COALESCE((
+                SELECT MAX(enchant) FROM character_items WHERE character_id = characters.id
+                    AND quantity > 0 AND item_def_id IN (SELECT value FROM json_each(?1))
+             ), 0))",
+            [weapon_ids],
+        )?;
+        Self::ensure_character_history_schema(&transaction, "weapon_enchant", 0)?;
+        transaction.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_weapon_enchant_ranking
+             ON characters(weapon_enchant DESC, id ASC)",
+            [],
+        )?;
+        transaction.commit()
     }
 
     fn ensure_character_history_schema(
@@ -61,79 +101,24 @@ impl AuthService {
         hours: u32,
         interval: i64,
     ) -> Result<LevelLeaderboard, AuthError> {
-        let mut conn = self.open_connection()?;
-        let transaction = conn.transaction()?;
-        let mut statement = transaction.prepare(
-            "SELECT character_name, level, account_name, id FROM characters
-             WHERE account_name NOT GLOB ?1
-             ORDER BY level DESC, xp DESC, id ASC LIMIT 10",
-        )?;
-        let rows = statement
-            .query_map([format!("{NPC_ACCOUNT_PREFIX}*")], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, u32>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, i64>(3)?,
-                ))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-        let until = unix_now();
-        let from = until - i64::from(hours) * 3600;
-        let mut first_ranks = HashMap::new();
-        let mut entries = Vec::new();
-        let mut series = Vec::new();
-        let mut history = transaction.prepare(
-            "SELECT timestamp, level FROM character_level_history
-             WHERE character_id = ?1 AND timestamp IN (
-                SELECT MIN(timestamp) FROM character_level_history WHERE character_id = ?1 AND timestamp <= ?3
-                UNION SELECT MAX(timestamp) FROM character_level_history WHERE character_id = ?1 AND timestamp <= ?2
-                UNION SELECT MAX(timestamp) FROM character_level_history
-                    WHERE character_id = ?1 AND timestamp > ?2 AND timestamp <= ?3 GROUP BY timestamp / ?4
-             ) ORDER BY timestamp",
-        )?;
-        for (index, (name, level, account, id)) in rows.into_iter().enumerate() {
-            let recorded = history
-                .query_map(params![id, from, until, interval], |row| {
-                    Ok(LevelSample {
-                        timestamp: row.get(0)?,
-                        level: row.get(1)?,
-                    })
-                })?
-                .collect::<Result<Vec<_>, _>>()?;
-            if let Some(first) = recorded.first() {
-                let started_at = first.timestamp;
-                let baseline = recorded
-                    .iter()
-                    .rposition(|sample| sample.timestamp <= from)
-                    .unwrap_or(0);
-                let samples = recorded
-                    .into_iter()
-                    .skip(baseline)
-                    .map(|mut sample| {
-                        sample.timestamp = sample.timestamp.max(from);
-                        sample
-                    })
-                    .collect();
-                series.push(LevelSeries {
-                    name: name.clone(),
-                    started_at,
-                    samples,
-                });
-            }
-            entries.push(LevelLeaderboardEntry {
+        self.character_leaderboard(
+            LeaderboardMetric::Level,
+            hours,
+            interval,
+            |name, level, account_first_rank| LevelLeaderboardEntry {
                 name,
                 level,
-                account_first_rank: *first_ranks.entry(account).or_insert(index + 1),
-            });
-        }
-        Ok(LevelLeaderboard {
-            timestamp: until,
-            from,
-            sample_interval_seconds: interval,
-            entries,
-            series,
-        })
+                account_first_rank,
+            },
+            |name, started_at, samples| LevelSeries {
+                name,
+                started_at,
+                samples: samples
+                    .into_iter()
+                    .map(|(timestamp, level)| LevelSample { timestamp, level })
+                    .collect(),
+            },
+        )
     }
 
     pub fn gold_leaderboard(
@@ -141,18 +126,79 @@ impl AuthService {
         hours: u32,
         interval: i64,
     ) -> Result<GoldLeaderboard, AuthError> {
+        self.character_leaderboard(
+            LeaderboardMetric::Gold,
+            hours,
+            interval,
+            |name, gold, account_first_rank| GoldLeaderboardEntry {
+                name,
+                gold,
+                account_first_rank,
+            },
+            |name, started_at, samples| CharacterGoldSeries {
+                name,
+                started_at,
+                samples: samples
+                    .into_iter()
+                    .map(|(timestamp, gold)| CharacterGoldSample { timestamp, gold })
+                    .collect(),
+            },
+        )
+    }
+
+    pub fn weapon_enchant_leaderboard(
+        &self,
+        hours: u32,
+        interval: i64,
+    ) -> Result<WeaponEnchantLeaderboard, AuthError> {
+        self.character_leaderboard(
+            LeaderboardMetric::WeaponEnchant,
+            hours,
+            interval,
+            |name, weapon_enchant, account_first_rank| WeaponEnchantLeaderboardEntry {
+                name,
+                weapon_enchant,
+                account_first_rank,
+            },
+            |name, started_at, samples| WeaponEnchantSeries {
+                name,
+                started_at,
+                samples: samples
+                    .into_iter()
+                    .map(|(timestamp, weapon_enchant)| WeaponEnchantSample {
+                        timestamp,
+                        weapon_enchant,
+                    })
+                    .collect(),
+            },
+        )
+    }
+
+    fn character_leaderboard<Value: FromSql, Entry, Series>(
+        &self,
+        metric: LeaderboardMetric,
+        hours: u32,
+        interval: i64,
+        make_entry: fn(String, Value, usize) -> Entry,
+        make_series: fn(String, i64, Vec<(i64, Value)>) -> Series,
+    ) -> Result<CharacterLeaderboard<Entry, Series>, AuthError> {
+        let (metric, order_by) = match metric {
+            LeaderboardMetric::Level => ("level", "level DESC, xp DESC, id ASC"),
+            LeaderboardMetric::Gold => ("gold", "gold DESC, id ASC"),
+            LeaderboardMetric::WeaponEnchant => ("weapon_enchant", "weapon_enchant DESC, id ASC"),
+        };
         let mut conn = self.open_connection()?;
         let transaction = conn.transaction()?;
-        let mut statement = transaction.prepare(
-            "SELECT character_name, gold, account_name, id FROM characters
+        let mut statement = transaction.prepare(&format!(
+            "SELECT character_name, {metric}, account_name, id FROM characters
              WHERE account_name NOT GLOB ?1
-             ORDER BY gold DESC, id ASC LIMIT 10",
-        )?;
+             ORDER BY {order_by} LIMIT 10",
+        ))?;
         let rows = statement
             .query_map([format!("{NPC_ACCOUNT_PREFIX}*")], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
-                    row.get::<_, i64>(1)?,
+                    row.get::<_, Value>(1)?,
                     row.get::<_, String>(2)?,
                     row.get::<_, i64>(3)?,
                 ))
@@ -163,51 +209,40 @@ impl AuthService {
         let mut first_ranks = HashMap::new();
         let mut entries = Vec::new();
         let mut series = Vec::new();
-        let mut history = transaction.prepare(
-            "SELECT timestamp, gold FROM character_gold_history
+        let mut history = transaction.prepare(&format!(
+            "SELECT timestamp, {metric} FROM character_{metric}_history
              WHERE character_id = ?1 AND timestamp IN (
-                SELECT MIN(timestamp) FROM character_gold_history WHERE character_id = ?1 AND timestamp <= ?3
-                UNION SELECT MAX(timestamp) FROM character_gold_history WHERE character_id = ?1 AND timestamp <= ?2
-                UNION SELECT MAX(timestamp) FROM character_gold_history
+                SELECT MIN(timestamp) FROM character_{metric}_history WHERE character_id = ?1 AND timestamp <= ?3
+                UNION SELECT MAX(timestamp) FROM character_{metric}_history WHERE character_id = ?1 AND timestamp <= ?2
+                UNION SELECT MAX(timestamp) FROM character_{metric}_history
                     WHERE character_id = ?1 AND timestamp > ?2 AND timestamp <= ?3 GROUP BY timestamp / ?4
              ) ORDER BY timestamp",
-        )?;
-        for (index, (name, gold, account, id)) in rows.into_iter().enumerate() {
+        ))?;
+        for (index, (name, value, account, id)) in rows.into_iter().enumerate() {
             let recorded = history
                 .query_map(params![id, from, until, interval], |row| {
-                    Ok(CharacterGoldSample {
-                        timestamp: row.get(0)?,
-                        gold: row.get(1)?,
-                    })
+                    Ok((row.get::<_, i64>(0)?, row.get::<_, Value>(1)?))
                 })?
                 .collect::<Result<Vec<_>, _>>()?;
-            if let Some(first) = recorded.first() {
-                let started_at = first.timestamp;
+            if let Some(&(started_at, _)) = recorded.first() {
                 let baseline = recorded
                     .iter()
-                    .rposition(|sample| sample.timestamp <= from)
+                    .rposition(|(timestamp, _)| *timestamp <= from)
                     .unwrap_or(0);
                 let samples = recorded
                     .into_iter()
                     .skip(baseline)
-                    .map(|mut sample| {
-                        sample.timestamp = sample.timestamp.max(from);
-                        sample
-                    })
+                    .map(|(timestamp, value)| (timestamp.max(from), value))
                     .collect();
-                series.push(CharacterGoldSeries {
-                    name: name.clone(),
-                    started_at,
-                    samples,
-                });
+                series.push(make_series(name.clone(), started_at, samples));
             }
-            entries.push(GoldLeaderboardEntry {
+            entries.push(make_entry(
                 name,
-                gold,
-                account_first_rank: *first_ranks.entry(account).or_insert(index + 1),
-            });
+                value,
+                *first_ranks.entry(account).or_insert(index + 1),
+            ));
         }
-        Ok(GoldLeaderboard {
+        Ok(CharacterLeaderboard {
             timestamp: until,
             from,
             sample_interval_seconds: interval,
@@ -574,6 +609,130 @@ impl AuthService {
 mod tests {
     use super::*;
 
+    fn weapon(item_def_id: &str, enchant: i32, equip_slot: Option<&str>) -> crate::auth::ItemRow {
+        crate::auth::ItemRow {
+            item_def_id: item_def_id.into(),
+            quantity: 1,
+            equip_slot: equip_slot.map(str::to_owned),
+            enchant,
+            cape_color: None,
+            cape_texture: None,
+            locked: false,
+        }
+    }
+
+    #[test]
+    fn weapon_enchant_history_tracks_the_strongest_owned_weapon_atomically() {
+        let path = crate::test_util::unique_temp_dir("weapon_enchant_lifecycle").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "DROP TRIGGER character_weapon_enchant_created;
+             DROP TRIGGER character_weapon_enchant_changed;
+             DROP TABLE character_weapon_enchant_history;
+             DROP INDEX idx_characters_weapon_enchant_ranking;
+             ALTER TABLE characters DROP COLUMN weapon_enchant;
+             INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
+             INSERT INTO characters (id, account_name, character_name, created_at)
+             VALUES (1, 'player', 'Hero', 100), (2, 'npc_test', 'Npc', 100), (3, 'npcxplayer', 'NoWeapon', 100);
+             INSERT INTO character_items (character_id, item_def_id, quantity, enchant, equip_slot)
+             VALUES (1, 'iron_sword', 1, 7, NULL), (1, 'worn_iron_sword', 1, 3, 'main_hand'),
+                    (1, 'wooden_shield', 1, 20, 'off_hand'), (1, 'missing_item', 1, 99, NULL),
+                    (1, 'iron_sword', 0, 50, NULL), (2, 'iron_sword', 1, 99, NULL),
+                    (3, 'wooden_shield', 1, 30, NULL);",
+        ).unwrap();
+        let before = unix_now();
+        AuthService::ensure_weapon_enchant_history_schema(&conn).unwrap();
+        let initial = auth.weapon_enchant_leaderboard(168, 3600).unwrap();
+        assert_eq!(initial.entries.len(), 2);
+        assert_eq!(initial.entries[0].weapon_enchant, 7);
+        assert_eq!(initial.entries[1].weapon_enchant, 0);
+        assert!((before..=unix_now()).contains(&initial.series[0].started_at));
+        conn.execute(
+            "UPDATE character_weapon_enchant_history SET timestamp = timestamp - 86400",
+            [],
+        )
+        .unwrap();
+        let mut items = vec![
+            weapon("iron_sword", 7, None),
+            weapon("worn_iron_sword", 3, Some("main_hand")),
+            weapon("wooden_shield", 20, Some("off_hand")),
+        ];
+        let save = |items: &[crate::auth::ItemRow]| {
+            auth.save_batch(&[], &[(1, items.to_vec())], &[], &[], None)
+                .unwrap()
+        };
+        let count = || {
+            conn.query_row(
+                "SELECT COUNT(*) FROM character_weapon_enchant_history WHERE character_id = 1",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .unwrap()
+        };
+        save(&items);
+        assert_eq!(count(), 1);
+        items[0].equip_slot = Some("main_hand".into());
+        items[1].equip_slot = None;
+        save(&items);
+        assert_eq!(count(), 1);
+        items.push(weapon("torch", 9, Some("off_hand")));
+        save(&items);
+        assert_eq!(count(), 2);
+        assert_eq!(
+            auth.weapon_enchant_leaderboard(168, 3600).unwrap().entries[0].weapon_enchant,
+            9
+        );
+        assert!(auth
+            .save_batch(
+                &[],
+                &[(1, vec![]), (99999, vec![weapon("iron_sword", 12, None)])],
+                &[],
+                &[],
+                None
+            )
+            .is_err());
+        assert_eq!(auth.load_inventory(1).unwrap(), items);
+        assert_eq!(
+            auth.weapon_enchant_leaderboard(168, 3600).unwrap().entries[0].weapon_enchant,
+            9
+        );
+        save(&[weapon("worn_iron_sword", 3, None)]);
+        save(&[]);
+        assert_eq!(
+            auth.weapon_enchant_leaderboard(168, 3600).unwrap().series[0]
+                .samples
+                .last()
+                .unwrap()
+                .weapon_enchant,
+            0
+        );
+        let recorded_count = count();
+        conn.execute(
+            "UPDATE characters SET character_name = 'Renamed' WHERE id = 1",
+            [],
+        )
+        .unwrap();
+        drop(AuthService::new(path).unwrap());
+        assert_eq!(count(), recorded_count);
+        assert_eq!(
+            auth.weapon_enchant_leaderboard(168, 3600).unwrap().series[0].name,
+            "Renamed"
+        );
+        conn.execute("DELETE FROM characters WHERE id = 1", [])
+            .unwrap();
+        assert_eq!(count(), 0);
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM character_weapon_enchant_history WHERE character_id = 2",
+                [],
+                |row| row.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+    }
+
     #[test]
     fn level_history_seeds_existing_characters_and_tracks_saved_changes() {
         let path = crate::test_util::unique_temp_dir("level_history_lifecycle").join("game.db");
@@ -851,6 +1010,74 @@ mod tests {
             conn.query_row("SELECT COUNT(*) FROM character_gold_history", [], |row| {
                 row.get::<_, i64>(0)
             })
+            .unwrap(),
+            7
+        );
+    }
+
+    #[test]
+    fn weapon_enchant_history_preserves_baselines_and_last_bucket_values_for_every_period() {
+        let path =
+            crate::test_util::unique_temp_dir("weapon_enchant_history_ranges").join("game.db");
+        let auth = AuthService::new(path).unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (player_name) VALUES ('player');
+             INSERT INTO characters (id, account_name, character_name, weapon_enchant)
+             VALUES (1, 'player', 'Hero', 10), (2, 'player', 'NewHero', 0);
+             DELETE FROM character_weapon_enchant_history WHERE character_id = 1;",
+        )
+        .unwrap();
+        let now = unix_now();
+        let bucket = (now / DAY_SECONDS - 2) * DAY_SECONDS;
+        for (timestamp, weapon_enchant) in [
+            (now - 400 * DAY_SECONDS, 0),
+            (now - 20 * DAY_SECONDS, 5),
+            (bucket + 1, 6),
+            (bucket + 2, 7),
+            (bucket + 3, 6),
+            (now - 3600, 10),
+        ] {
+            conn.execute(
+                "INSERT INTO character_weapon_enchant_history VALUES (1, ?1, ?2)",
+                params![timestamp, weapon_enchant],
+            )
+            .unwrap();
+        }
+        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, DAY_SECONDS)] {
+            let result = auth.weapon_enchant_leaderboard(hours, interval).unwrap();
+            assert_eq!(result.timestamp - result.from, i64::from(hours) * 3600);
+            assert_eq!(result.sample_interval_seconds, interval);
+            let hero = &result.series[0];
+            assert_eq!(hero.started_at, now - 400 * DAY_SECONDS);
+            assert_eq!(
+                hero.samples[0],
+                WeaponEnchantSample {
+                    timestamp: result.from,
+                    weapon_enchant: if hours == 168 { 5 } else { 0 }
+                }
+            );
+            assert!(hero.samples.contains(&WeaponEnchantSample {
+                timestamp: bucket + 3,
+                weapon_enchant: 6
+            }));
+            assert!(!hero.samples.iter().any(|sample| sample.weapon_enchant == 7));
+            assert_eq!(hero.samples.last().unwrap().weapon_enchant, 10);
+            assert!(hero
+                .samples
+                .windows(2)
+                .all(|pair| pair[0].timestamp < pair[1].timestamp));
+            let new_hero = &result.series[1];
+            assert_eq!(new_hero.samples.len(), 1);
+            assert_eq!(new_hero.samples[0].timestamp, new_hero.started_at);
+            assert!(new_hero.started_at > result.from);
+        }
+        assert_eq!(
+            conn.query_row(
+                "SELECT COUNT(*) FROM character_weapon_enchant_history",
+                [],
+                |row| { row.get::<_, i64>(0) }
+            )
             .unwrap(),
             7
         );

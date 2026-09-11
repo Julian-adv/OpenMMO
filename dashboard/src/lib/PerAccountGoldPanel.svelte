@@ -75,6 +75,6 @@
 </section>
 
 <style>
-  .active-period-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 20px; }
+  .active-period-filter { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; }
   .active-period-filter > span { color: #60796c; font-size: 11px; }
 </style>

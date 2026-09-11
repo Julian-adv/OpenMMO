@@ -10,7 +10,7 @@
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -34,7 +34,12 @@
   const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')
   const assignGoldColors = createCharacterColors()
   let goldColors = $derived(goldLeaderboard.history ? assignGoldColors(goldLeaderboard.history.entries.map((entry) => entry.name)) : {})
-  const resources = [concurrent, unique, gold, perAccountGold, leaderboard, goldLeaderboard]
+  let weaponEnchantHours = $state<LeaderboardHours>(168)
+  let selectedWeaponCharacter = $state<string | null>(null)
+  const weaponEnchantLeaderboard = createMetricsResource(() => weaponEnchantHours, 'weapon-enchant-leaderboard', parseWeaponEnchantLeaderboard, '무기 인챈트 순위 정보')
+  const assignWeaponColors = createCharacterColors()
+  let weaponColors = $derived(weaponEnchantLeaderboard.history ? assignWeaponColors(weaponEnchantLeaderboard.history.entries.map((entry) => entry.name)) : {})
+  const resources = [concurrent, unique, gold, perAccountGold, leaderboard, goldLeaderboard, weaponEnchantLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -68,7 +73,7 @@
     <div>
       <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
       <h1>월드 현황<span>.</span></h1>
-      <p class="page-description">지금 함께하는 플레이어, 레벨·골드 순위와 서버의 골드 변화를 살펴보세요.</p>
+      <p class="page-description">지금 함께하는 플레이어, 레벨·골드·무기 인챈트 순위와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
@@ -179,6 +184,11 @@
   <div class="leaderboard-grid">
     <LeaderboardPanel metric="gold" leaderboard={goldLeaderboard.history} colors={goldColors} bind:selectedCharacter={selectedGoldCharacter} loading={goldLeaderboard.loading} refreshing={goldLeaderboard.refreshing} error={goldLeaderboard.error} refresh={() => goldLeaderboard.refresh()} />
     <LeaderboardHistoryPanel metric="gold" bind:hours={goldLeaderboardHours} leaderboard={goldLeaderboard.history} colors={goldColors} bind:selectedCharacter={selectedGoldCharacter} loading={goldLeaderboard.loading} refreshing={goldLeaderboard.refreshing} error={goldLeaderboard.error} refresh={() => goldLeaderboard.refresh()} />
+  </div>
+
+  <div class="leaderboard-grid">
+    <LeaderboardPanel metric="weapon_enchant" leaderboard={weaponEnchantLeaderboard.history} colors={weaponColors} bind:selectedCharacter={selectedWeaponCharacter} loading={weaponEnchantLeaderboard.loading} refreshing={weaponEnchantLeaderboard.refreshing} error={weaponEnchantLeaderboard.error} refresh={() => weaponEnchantLeaderboard.refresh()} />
+    <LeaderboardHistoryPanel metric="weapon_enchant" bind:hours={weaponEnchantHours} leaderboard={weaponEnchantLeaderboard.history} colors={weaponColors} bind:selectedCharacter={selectedWeaponCharacter} loading={weaponEnchantLeaderboard.loading} refreshing={weaponEnchantLeaderboard.refreshing} error={weaponEnchantLeaderboard.error} refresh={() => weaponEnchantLeaderboard.refresh()} />
   </div>
 
   <section class="notes-grid" aria-label="지표 안내">

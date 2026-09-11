@@ -15,6 +15,15 @@ pub const SAMPLE_INTERVAL_SECONDS: i64 = 60;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
 
+#[derive(Serialize, Deserialize)]
+pub struct CharacterLeaderboard<Entry, Series> {
+    pub timestamp: i64,
+    pub from: i64,
+    pub sample_interval_seconds: i64,
+    pub entries: Vec<Entry>,
+    pub series: Vec<Series>,
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LevelLeaderboardEntry {
     pub name: String,
@@ -22,14 +31,7 @@ pub struct LevelLeaderboardEntry {
     pub account_first_rank: usize,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct LevelLeaderboard {
-    pub timestamp: i64,
-    pub from: i64,
-    pub sample_interval_seconds: i64,
-    pub entries: Vec<LevelLeaderboardEntry>,
-    pub series: Vec<LevelSeries>,
-}
+pub type LevelLeaderboard = CharacterLeaderboard<LevelLeaderboardEntry, LevelSeries>;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LevelSample {
@@ -51,14 +53,7 @@ pub struct GoldLeaderboardEntry {
     pub account_first_rank: usize,
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct GoldLeaderboard {
-    pub timestamp: i64,
-    pub from: i64,
-    pub sample_interval_seconds: i64,
-    pub entries: Vec<GoldLeaderboardEntry>,
-    pub series: Vec<CharacterGoldSeries>,
-}
+pub type GoldLeaderboard = CharacterLeaderboard<GoldLeaderboardEntry, CharacterGoldSeries>;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct CharacterGoldSample {
@@ -71,6 +66,29 @@ pub struct CharacterGoldSeries {
     pub name: String,
     pub started_at: i64,
     pub samples: Vec<CharacterGoldSample>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WeaponEnchantLeaderboardEntry {
+    pub name: String,
+    pub weapon_enchant: u32,
+    pub account_first_rank: usize,
+}
+
+pub type WeaponEnchantLeaderboard =
+    CharacterLeaderboard<WeaponEnchantLeaderboardEntry, WeaponEnchantSeries>;
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WeaponEnchantSample {
+    pub timestamp: i64,
+    pub weapon_enchant: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WeaponEnchantSeries {
+    pub name: String,
+    pub started_at: i64,
+    pub samples: Vec<WeaponEnchantSample>,
 }
 
 pub fn kst_day_start(timestamp: i64) -> i64 {
@@ -219,6 +237,10 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/level-leaderboard", get(level_leaderboard))
         .route("/api/metrics/gold-leaderboard", get(gold_leaderboard))
         .route(
+            "/api/metrics/weapon-enchant-leaderboard",
+            get(weapon_enchant_leaderboard),
+        )
+        .route(
             "/api/metrics/gold-per-account",
             get(per_account_gold_history),
         )
@@ -318,6 +340,26 @@ async fn gold_leaderboard(
         }
         Err(error) => {
             warn!("Gold leaderboard failed: {error}");
+            metrics_unavailable()
+        }
+    }
+}
+
+async fn weapon_enchant_leaderboard(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(168);
+    let interval = match leaderboard_interval(hours) {
+        Ok(interval) => interval,
+        Err(error) => return error.into_response(),
+    };
+    match auth_db(move || state.auth.weapon_enchant_leaderboard(hours, interval)).await {
+        Ok(leaderboard) => {
+            ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
+        }
+        Err(error) => {
+            warn!("Weapon enchant leaderboard failed: {error}");
             metrics_unavailable()
         }
     }
@@ -447,6 +489,140 @@ async fn per_account_gold_history(
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+
+    #[tokio::test]
+    async fn weapon_enchant_leaderboard_ranks_inventory_maxima_and_returns_history() {
+        let path = crate::test_util::unique_temp_dir("weapon_enchant_leaderboard").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("weapon_enchant_leaderboard"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/weapon-enchant-leaderboard");
+        let empty: WeaponEnchantLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(empty.entries.is_empty());
+        assert!(empty.series.is_empty());
+        assert_eq!(empty.timestamp - empty.from, 168 * 3600);
+        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, 86400)] {
+            let history: WeaponEnchantLeaderboard = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            assert_eq!(history.timestamp - history.from, hours * 3600);
+            assert_eq!(history.sample_interval_seconds, interval);
+        }
+        for hours in ["0", "24", "169", "-1", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        let conn = rusqlite::Connection::open(path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');",
+        )
+        .unwrap();
+        let sword = |enchant| crate::auth::ItemRow {
+            item_def_id: "iron_sword".into(),
+            quantity: 1,
+            enchant,
+            equip_slot: None,
+            cape_color: None,
+            cape_texture: None,
+            locked: false,
+        };
+        for id in 1..=14 {
+            let account = match id {
+                13 => "npc_test",
+                14 => "npcxplayer",
+                _ => "player",
+            };
+            conn.execute(
+                "INSERT INTO characters (id, account_name, character_name) VALUES (?1, ?2, ?3)",
+                rusqlite::params![id, account, format!("Hero{id}")],
+            )
+            .unwrap();
+            auth.save_batch(
+                &[],
+                &[(i64::from(id), vec![sword(if id == 10 { 11 } else { id })])],
+                &[],
+                &[],
+                None,
+            )
+            .unwrap();
+        }
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let body: serde_json::Value = response.json().await.unwrap();
+        for entry in body["entries"].as_array().unwrap() {
+            assert_eq!(entry.as_object().unwrap().len(), 3);
+        }
+        let leaderboard: WeaponEnchantLeaderboard = serde_json::from_value(body).unwrap();
+        assert_eq!(
+            leaderboard
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Hero14", "Hero12", "Hero10", "Hero11", "Hero9", "Hero8", "Hero7", "Hero6",
+                "Hero5", "Hero4"
+            ]
+        );
+        assert_eq!(leaderboard.entries[0].weapon_enchant, 14);
+        assert_eq!(leaderboard.entries[0].account_first_rank, 1);
+        assert!(leaderboard.entries[1..]
+            .iter()
+            .all(|entry| entry.account_first_rank == 2));
+        assert_eq!(leaderboard.series.len(), 10);
+        for (entry, series) in leaderboard.entries.iter().zip(&leaderboard.series) {
+            assert_eq!(entry.name, series.name);
+            assert_eq!(
+                entry.weapon_enchant,
+                series.samples.last().unwrap().weapon_enchant
+            );
+        }
+        let previous = unix_now() - 86400;
+        conn.execute(
+            "UPDATE character_weapon_enchant_history SET timestamp = ?1 WHERE character_id = 1",
+            [previous],
+        )
+        .unwrap();
+        auth.save_batch(&[], &[(1, vec![sword(15)])], &[], &[], None)
+            .unwrap();
+        let updated: WeaponEnchantLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(updated.entries[0].name, "Hero1");
+        assert_eq!(updated.entries[0].weapon_enchant, 15);
+        assert_eq!(updated.entries[2].account_first_rank, 1);
+        assert_eq!(
+            updated.series[0].samples[0],
+            WeaponEnchantSample {
+                timestamp: previous,
+                weapon_enchant: 1
+            }
+        );
+        assert_eq!(updated.series[0].samples.last().unwrap().weapon_enchant, 15);
+        conn.execute("DROP TABLE character_weapon_enchant_history", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
 
     #[tokio::test]
     async fn gold_leaderboard_ranks_saved_characters_and_returns_their_history() {

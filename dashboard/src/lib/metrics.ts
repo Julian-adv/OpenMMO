@@ -10,7 +10,8 @@ export interface TimestampSample {
   timestamp: number
 }
 
-export type LeaderboardMetric = 'level' | 'gold'
+export const leaderboardLabels = { level: '레벨', gold: '골드', weapon_enchant: '무기 인챈트' } as const
+export type LeaderboardMetric = keyof typeof leaderboardLabels
 export type CharacterSample<M extends LeaderboardMetric> = TimestampSample & Record<M, number>
 
 export interface CharacterLeaderboard<M extends LeaderboardMetric> extends TimestampSample {
@@ -22,6 +23,7 @@ export interface CharacterLeaderboard<M extends LeaderboardMetric> extends Times
 
 export type LevelLeaderboard = CharacterLeaderboard<'level'>
 export type GoldLeaderboard = CharacterLeaderboard<'gold'>
+export type WeaponEnchantLeaderboard = CharacterLeaderboard<'weapon_enchant'>
 
 export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
@@ -33,11 +35,12 @@ export type LeaderboardHours = typeof leaderboardPeriods[number]['hours']
 
 export const parseLevelLeaderboard = (value: unknown, hours: LeaderboardHours): LevelLeaderboard => parseLeaderboard(value, hours, 'level')
 export const parseGoldLeaderboard = (value: unknown, hours: LeaderboardHours): GoldLeaderboard => parseLeaderboard(value, hours, 'gold')
+export const parseWeaponEnchantLeaderboard = (value: unknown, hours: LeaderboardHours): WeaponEnchantLeaderboard => parseLeaderboard(value, hours, 'weapon_enchant')
 
 function parseLeaderboard<M extends LeaderboardMetric>(value: unknown, hours: LeaderboardHours, metric: M): CharacterLeaderboard<M> {
   if (!value || typeof value !== 'object') throw new Error(`Invalid ${metric} leaderboard response`)
   const data = value as CharacterLeaderboard<M>
-  const minimum = metric === 'gold' ? 0 : 1
+  const minimum = metric === 'level' ? 1 : 0
   const interval = leaderboardPeriods.find((period) => period.hours === hours)!.interval
   if (!Number.isSafeInteger(data.timestamp) || data.timestamp < 0 ||
     !Number.isSafeInteger(data.from) || data.timestamp - data.from !== hours * 3600 ||
