@@ -118,20 +118,6 @@
   import { regionKey } from '../terrain/terrain-constants'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import SelfMarker from './SelfMarker.svelte'
-  import { untrack } from 'svelte'
-  import { weather, weatherSectorsReady } from '../stores/weatherStore'
-  import { serverGameTime } from '../stores/timeStore'
-  import {
-    weather_cells_at,
-    weather_game_minutes,
-  } from '../wasm/onlinerpg_shared'
-  import {
-    drawRainCells,
-    forecastLabel,
-    FORECAST_MAX_MINUTES,
-    FORECAST_STEP_MINUTES,
-    type RainCellView,
-  } from '../utils/weatherOverlay'
 
   const graphicsPreset = $derived(getEffectivePreset($graphicsQuality))
   const mobileMapBudget = $derived(graphicsPreset.renderBudget === 'mobile')
@@ -156,24 +142,6 @@
 
   // --- Zoom state (in regions/km) ---
   let zoomSpan = $state(DEFAULT_ZOOM)
-
-  // --- Rain forecast overlay ---
-  let forecastOffsetMinutes = $state(0)
-  let rainOverlayVisible = $state(true)
-  const forecastAvailable = $derived($weather !== null && $weatherSectorsReady)
-
-  // The clock is read untracked so the time sync alone never redraws the
-  // atlas; the 30 s WeatherSync write is what keeps an open map current.
-  function forecastCells(offsetMinutes: number): RainCellView[] | null {
-    const seed = $weather?.seed
-    if (seed === undefined || !$weatherSectorsReady) return null
-    const now = untrack(() => $serverGameTime)
-    if (!now) return null
-    const t =
-      weather_game_minutes(now.year, now.month, now.day, now.hour, now.minute) +
-      offsetMinutes
-    return weather_cells_at(seed, t) as RainCellView[]
-  }
   let initializedForOpen = $state(false)
   let selectingDestination = $state(false)
   const canTravel = $derived(
@@ -324,9 +292,6 @@
     const ownership = ownersByRegion
     const playerName = currentPlayerName
     void $landGradeVersion
-    const rainCells = rainOverlayVisible
-      ? forecastCells(forecastOffsetMinutes)
-      : null
     const cw = containerW
     const ch = containerH
     const dpr = Math.min(
@@ -477,7 +442,6 @@
         drawLandPlotGrid(atlasCtx, expandedViewWorldSize, atlasTransform)
       }
       drawHouseMapFootprints(atlasCtx, houses, atlasTransform)
-      if (rainCells) drawRainCells(atlasCtx, rainCells, atlasTransform)
 
       ctx.clearRect(0, 0, cw, ch)
       ctx.fillStyle = OUT_OF_WORLD_OCEAN
@@ -728,22 +692,7 @@
   })
 
   // --- Drag to pan ---
-  // A press that started on the forecast bar must not end as a map click:
-  // the click lands on the container when the pointer is released off the bar.
-  let forecastPressed = false
-
-  function pressForecast(event: PointerEvent) {
-    event.stopPropagation()
-    forecastPressed = true
-    window.addEventListener(
-      'pointerup',
-      () => setTimeout(() => (forecastPressed = false), 0),
-      { once: true }
-    )
-  }
-
   function handlePointerDown(event: PointerEvent) {
-    forecastPressed = false
     if (event.ctrlKey && $isAdminUser) return // let Ctrl+click through for teleport
     if (event.pointerType === 'mouse' && event.button !== 0) return
     event.preventDefault()
@@ -799,10 +748,6 @@
   })
 
   function handleMapHover(event: PointerEvent) {
-    if ((event.target as Element | null)?.closest?.('.forecast')) {
-      hoverPointer = null
-      return
-    }
     hoverPointer = { x: event.clientX, y: event.clientY }
   }
 
@@ -852,7 +797,6 @@
   }
 
   function handleMapClick(event: MouseEvent) {
-    if (forecastPressed) return
     if (suppressNextClick) {
       suppressNextClick = false
       event.preventDefault()
@@ -906,7 +850,6 @@
   // macOS turns Ctrl+click into a contextmenu event (no click fires at all),
   // so the teleport shortcut must be caught here too.
   function handleMapContextMenu(event: MouseEvent) {
-    if (forecastPressed) return
     if (selectingDestination) {
       event.preventDefault()
       return
@@ -1061,24 +1004,6 @@
             <path d="M12 3.5v17M3.5 12h17"></path>
           </svg></button
         >
-        {#if forecastAvailable}
-          <button
-            type="button"
-            class="ctrl-btn center-btn"
-            class:active={rainOverlayVisible}
-            onclick={() => (rainOverlayVisible = !rainOverlayVisible)}
-            title="Toggle Rain Forecast"
-            aria-label="Toggle rain forecast"
-            aria-pressed={rainOverlayVisible}
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path
-                d="M7 15.5a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 17 8.5h.5a3.5 3.5 0 0 1 0 7z"
-              ></path>
-              <path d="M9 18.5l-1 2M13 18.5l-1 2M17 18.5l-1 2"></path>
-            </svg></button
-          >
-        {/if}
       </div>
       <button
         type="button"
@@ -1163,28 +1088,6 @@
           />
         {/if}
       </div>
-      {#if forecastAvailable && rainOverlayVisible}
-        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-        <label
-          class="forecast"
-          onpointerdown={pressForecast}
-          onclick={(e) => e.stopPropagation()}
-          oncontextmenu={(e) => e.stopPropagation()}
-        >
-          <span class="forecast-title">Rain</span>
-          <input
-            type="range"
-            min="0"
-            max={FORECAST_MAX_MINUTES}
-            step={FORECAST_STEP_MINUTES}
-            bind:value={forecastOffsetMinutes}
-            aria-label="Rain forecast look-ahead"
-          />
-          <span class="forecast-label"
-            >{forecastLabel(forecastOffsetMinutes)}</span
-          >
-        </label>
-      {/if}
       {#if hoveredOwner}
         <div
           class="plot-owner-tooltip"
@@ -1356,35 +1259,6 @@
     grid-column: 2;
     display: flex;
     gap: 6px;
-  }
-
-  .forecast {
-    position: absolute;
-    z-index: 5;
-    left: 50%;
-    bottom: 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border: 1px solid var(--wm-brass);
-    border-radius: 4px;
-    background: rgba(8, 11, 9, 0.85);
-    color: var(--wm-paper);
-    font-family: var(--wm-serif);
-    font-size: 13px;
-    transform: translateX(-50%);
-    cursor: default;
-  }
-
-  .forecast input {
-    width: 140px;
-    accent-color: var(--wm-gold);
-    cursor: pointer;
-  }
-
-  .forecast-label {
-    min-width: 52px;
   }
 
   .ctrl-btn {

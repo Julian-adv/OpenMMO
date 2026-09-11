@@ -8,9 +8,10 @@ moving-cloud draft of 2026-08-08.
 
 Regional weather. Each part of the world has a climate; rain forms over a
 region, falls for a while, and clears. Only the ground under a rain cell gets
-dimmed light, rain and sound. Players can open the world map and see where it
-rains now and where it will rain next. Tone: subtle, cozy rain that fits the
-warm quarter-view look — not a gray realism filter.
+dimmed light, rain and sound. Tone: subtle, cozy rain that fits the warm
+quarter-view look — not a gray realism filter. Because every cell is a pure
+function of time, a map forecast can be added later without touching the
+model; the world map is left as it is for now.
 
 Non-goals (v1): snow, lightning visuals, wetness debuffs, weather-dependent
 fishing, seasons, sky dome (quarter view — the sky is never on screen).
@@ -123,8 +124,8 @@ ramp-up is what darkens the ground before rain.
 
 `shared/` crate, exported through `wasm_api` next to the message codec — the
 same home as `celestial.rs` and `moon.rs`. Server calls it natively (future
-gameplay hooks), client through wasm: once per frame at the player and a coarse
-grid when the map overlay is open. One implementation, no drift.
+gameplay hooks), client through wasm once per frame at the player. One
+implementation, no drift.
 
 ## Server
 
@@ -169,12 +170,11 @@ day from the server's. Per-frame local sample drives:
    the SFX volume/mute settings; ducked indoors; the BGM playlist goes quiet
    through the same quiet-zone path as bard performances, with hysteresis
    (on above 0.35, off below 0.2) so it does not flap at a cell edge.
-4. **Map overlay** — `drawRainCells` (`utils/weatherOverlay.ts`) painted in
-   `WorldMapDialog`'s atlas pass after the house footprints: soft discs
-   whose opacity follows the cell envelope, a toggle button, and a forecast
-   slider (0 to +12 game hours in 30-minute steps) that re-evaluates the same
-   function. The clock is read untracked so the time sync alone never redraws
-   the atlas; the 30 s `WeatherSync` write is what refreshes an open map.
+
+The world map is deliberately untouched. A forecast layer (cells as soft
+discs in the atlas pass, a slider that evaluates the same function at a later
+time) was prototyped and works, but it is held back until there is a
+gameplay reason for players to read the weather ahead.
 
 ## Phases
 
@@ -182,7 +182,7 @@ day from the server's. Per-frame local sample drives:
 |---|---|---|
 | A | climate bake + shared cell function + WeatherSync + stores + lighting | T2 |
 | B | rain layer + preset flag + ambience (port from `experiment/rain-prototype`) | T1–T2 |
-| C | map overlay + forecast scrub | T1 |
+| C | map overlay + forecast scrub — prototyped, held back until a gameplay reason exists | later |
 | D | storms: a rare oversized cell (10–15 km, 1–2 real hours) from its own sector so it spans zones, with slanted rain, lightning, and a wind boost — still a pure function, so the map forecasts landfall; snow on the alpine zone once a snow region is decided; wetness (campfire/hunger); fishing tables; wet/dry seasons by scaling `P` with the 360-day year in `celestial.rs`; `/weather` override | separate proposals |
 | E | river levels and flooding from accumulated rain — belongs to the water system, after the upstream water-field and erosion experiments settle; weather never touches water itself | later, with the maintainer |
 
@@ -195,14 +195,14 @@ day from the server's. Per-frame local sample drives:
 - Bake: every settlement in `data/map_labels.json` lands on a land zone;
   sea plots are zone 0.
 - Protocol: `WeatherSync` round-trip through the codec.
-- Client: store updates, lighting multiplier applied, overlay draw smoke test
-  with a fake function.
-- Live E2E: stand in a forecast cell as it forms; dim, particles and sound
-  rise together; map matches the ground.
+- Client: store updates, lighting multiplier applied, idle deadband, rain
+  ambience lifecycle.
+- Live E2E: stand in a cell as it forms; dim, particles and sound rise
+  together and settle back to idle.
 
 ## Questions for the maintainer (with the proposal)
 
 1. Existing plans for weather? Intentionally omitted?
 2. Zones baked from elevation vs hand-placed anchors like `land_grades.rs`.
 3. v1 scope confirmation (dim + rain + sound with distant thunder; no snow or lightning visuals yet).
-4. Map exposure: world-map toggle only, or minimap too.
+4. Whether and when a map forecast is wanted (world map, minimap, or neither).

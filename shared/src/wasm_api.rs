@@ -405,39 +405,7 @@ pub fn weather_game_minutes(year: u32, month: u8, day: u8, hour: u8, minute: u8)
     })
 }
 
-#[derive(Serialize)]
-struct WeatherCellJs {
-    x: f32,
-    z: f32,
-    radius_m: f32,
-    env: f32,
-    progress: f32,
-    stage: &'static str,
-}
-
 /// Seeds ride the wire as JS numbers, so they are taken as `f64` here.
-#[wasm_bindgen]
-pub fn weather_cells_at(seed: f64, t_min: f64) -> Result<JsValue, JsError> {
-    let cells: Vec<WeatherCellJs> = WEATHER_SECTORS.with(|s| {
-        crate::weather::cells_at(&s.borrow(), seed as u64, t_min)
-            .into_iter()
-            .map(|c| WeatherCellJs {
-                x: c.x,
-                z: c.z,
-                radius_m: c.radius_m,
-                env: c.env,
-                progress: c.progress,
-                stage: match c.stage() {
-                    crate::weather::CellStage::Forming => "forming",
-                    crate::weather::CellStage::Raining => "raining",
-                    crate::weather::CellStage::Clearing => "clearing",
-                },
-            })
-            .collect()
-    });
-    to_js(&cells)
-}
-
 #[wasm_bindgen]
 pub fn weather_rain_at(seed: f64, t_min: f64, x: f32, z: f32) -> f32 {
     WEATHER_SECTORS.with(|s| {
