@@ -89,16 +89,20 @@ knows the seed can evaluate any time — that is the forecast.
 
 | Zone | km² per sector | Period | Lifetime | Chance | Radius | Real-time feel |
 |---|---|---|---|---|---|---|
-| Wet coast | 4 | 510 (8.5 h) | 165–300 | 0.9 | 1.6–2.6 km | 21–37 min of rain every ~1 h |
+| Wet coast | 4 | 560 (9.3 h) | 165–240 | 0.9 | 1.6–2.6 km | 21–30 min of rain every ~1.2 h |
 | Temperate | 7 | 2,000 (~1.4 d) | 120–240 | 0.8 | 3.5–5.4 km | 15–30 min every ~4 h |
 | Rain shadow | 36 | 6,800 (~5 d) | 120–180 | 0.6 | 3.0–4.6 km | 15–22 min every ~14 h |
-| Alpine | 12 | 1,260 (21 h) | 180–360 | 0.9 | 3.3–5.2 km | 22–45 min every ~2.6 h |
+| Alpine | 12 | 1,100 (18 h) | 180–240 | 0.9 | 3.3–5.2 km | 22–30 min every ~2.3 h |
 
-A rain event must be felt inside a play session; 15–40 real minutes matches
-FFXIV's 23-minute weather slot. Dryness is expressed by the gap between events,
+A rain event must be felt inside a play session: 15–30 real minutes. Games
+with compressed clocks converge on 10–25 real minutes per event regardless
+of day length (FFXIV 23 min slots, Mabinogi 20 min blocks, Minecraft 10–20
+min), Black Desert's 40–60 min draws "30 is enough" complaints, and Red
+Dead Online's 1–2 min reads as broken, so the floor stays at 15 and the cap
+is 30. Dryness is expressed by the gap between events,
 not by shorter events. Measured share of time a plot is wet (30 game days,
 seed 42, Valdran: 22 coastal, 15 temperate, 1 shadow, 1 alpine sector):
-wet coast 30 %, temperate 20 %, alpine 22 %, rain shadow 16 %. Cells reach
+wet coast 25 %, temperate 18 %, alpine 19 %, rain shadow 14 %. Cells reach
 3–5 km, so the rain shadow is "the least rainy place", never bone dry — most
 of its rain is spill from the zones around it.
 

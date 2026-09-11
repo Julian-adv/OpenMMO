@@ -57,9 +57,9 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
     NO_RAIN,
     // wet coast: small showers hanging over the shoreline
     ZoneSchedule {
-        period: 510.0,
+        period: 560.0,
         life_min: 165.0,
-        life_var: 135.0,
+        life_var: 75.0,
         chance: 0.9,
         radius_min_km: 1.6,
         radius_var_km: 1.0,
@@ -84,9 +84,9 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
     },
     // alpine
     ZoneSchedule {
-        period: 1260.0,
+        period: 1100.0,
         life_min: 180.0,
-        life_var: 180.0,
+        life_var: 60.0,
         chance: 0.9,
         radius_min_km: 3.3,
         radius_var_km: 1.9,
