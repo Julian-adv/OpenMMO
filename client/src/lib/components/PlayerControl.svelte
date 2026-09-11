@@ -59,6 +59,7 @@
   import { hungerState, SPRINT_MIN_SATIATION } from '../stores/hungerStore'
   import {
     getItemDef,
+    hasWeaponRange,
     isRangedWeapon,
     weaponRangeMeters,
   } from '../data/itemDefs'
@@ -98,7 +99,11 @@
     STALL_TRADE_APPROACH,
     TIP_HAT_APPROACH,
   } from '../data/approachRanges'
-  import { passability_get_floor_at } from '../wasm/onlinerpg_shared'
+  import {
+    archery_attack_mult,
+    passability_get_floor_at,
+  } from '../wasm/onlinerpg_shared'
+  import { skillsStore } from '../stores/skillsStore'
   import { get } from 'svelte/store'
   import { sprintRequested } from '../stores/movementSettings'
   import { createPlayerPhysics } from './player-control/player-physics'
@@ -835,6 +840,15 @@
     return weaponRangeMeters($inventoryStore.equipped.main_hand?.item_def_id)
   }
 
+  /** Archery quickens a weapon with a reach of its own, never a blade. The
+   *  curve comes from wasm so it cannot drift from the window the server
+   *  gates shots with (doc/COMBAT.md 궁술). */
+  function equippedAttackMult(): number {
+    if (!hasWeaponRange($inventoryStore.equipped.main_hand?.item_def_id))
+      return 1
+    return archery_attack_mult($skillsStore.map.archery?.level ?? 0)
+  }
+
   /** Shared by click attacks and the chase tick. */
   function attackLineBlocked(from: Position, to: Position, floor: number) {
     return housingManager.attackLineBlocked(
@@ -1162,7 +1176,7 @@
       combatController,
       cooldownMs:
         (attackCooldown ? attackCooldown * 1000 : 1500) /
-        ($hungerState?.attackMult ?? 1),
+        (($hungerState?.attackMult ?? 1) * equippedAttackMult()),
       attackRange: equippedAttackRange(),
       chasePathing,
       getMonsterInfo: (monsterId) => {

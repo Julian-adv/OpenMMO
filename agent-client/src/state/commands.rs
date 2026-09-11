@@ -11,10 +11,30 @@ pub struct ActionProgress {
 }
 
 impl SharedState {
+    /// The base slash1 cadence, quickened by archery when the weapon in hand
+    /// declares a reach. A blade keeps the base interval however well we shoot.
+    fn attack_cooldown_now(&self) -> std::time::Duration {
+        let ranged = self
+            .self_equipped
+            .get(&onlinerpg_shared::inventory::EquipSlot::MainHand)
+            .and_then(|item| crate::item_defs::get(&item.item_def_id))
+            .is_some_and(|def| def.has_range());
+        if !ranged {
+            return self.attack_cooldown;
+        }
+        let level = self
+            .self_skills
+            .get(onlinerpg_shared::skills::SkillId::Archery)
+            .level;
+        self.attack_cooldown
+            .div_f32(onlinerpg_shared::skills::archery_attack_mult(level))
+    }
+
     pub fn player_attack_wait(&self) -> std::time::Duration {
+        let cooldown = self.attack_cooldown_now();
         self.last_player_attack_at
             .map_or(std::time::Duration::ZERO, |last| {
-                self.attack_cooldown.saturating_sub(last.elapsed())
+                cooldown.saturating_sub(last.elapsed())
             })
     }
 

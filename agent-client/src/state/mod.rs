@@ -410,6 +410,9 @@ pub struct SharedState {
     treasure_chests_spent: HashSet<String>,
     cmd_tx: mpsc::Sender<ClientMessage>,
     pub attack_cooldown: std::time::Duration,
+    /// Our trained skills, so the shot cadence follows the same curve the
+    /// server gates it with (doc/COMBAT.md 궁술).
+    pub self_skills: onlinerpg_shared::skills::Skills,
     last_player_attack_at: Option<tokio::time::Instant>,
     /// Notified when an urgent event arrives
     pub urgent_notify: Arc<Notify>,
@@ -515,6 +518,7 @@ impl SharedState {
             treasure_chests_spent: HashSet::new(),
             cmd_tx,
             attack_cooldown: DEFAULT_ATTACK_COOLDOWN,
+            self_skills: Default::default(),
             last_player_attack_at: None,
             urgent_notify: Arc::new(Notify::new()),
             monster_ai: MonsterAiManager::new(),

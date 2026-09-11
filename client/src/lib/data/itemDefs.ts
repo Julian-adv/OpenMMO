@@ -123,6 +123,15 @@ export function weaponRangeMeters(
   return range && range > 0 ? range : PLAYER_ATTACK_RANGE_METERS
 }
 
+/** Whether the weapon declares a reach of its own — the server's own test for
+ *  applying the archery cadence. Distinct from `isRangedWeapon`, which reads
+ *  `rangedAbility` and answers a question about visuals: a `range` weapon that
+ *  rolls on STR still shoots, but is not drawn as a bow. */
+export function hasWeaponRange(itemDefId: string | null | undefined): boolean {
+  const def = itemDefId ? getItemDef(itemDefId) : undefined
+  return def?.category === 'weapon' && !!def.range && def.range > 0
+}
+
 /** A weapon that resolves on an ability instead of STR — the `rangedAbility`
  *  column is what makes it ranged, on the client as on the server. */
 export function isRangedWeapon(itemDefId: string | null | undefined): boolean {

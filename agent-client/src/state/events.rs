@@ -732,6 +732,23 @@ impl SharedState {
                 self.self_hunger = Some((*satiation, *state));
                 self.self_move_mult = *move_mult;
             }
+            ServerMessage::SkillsUpdate { ref skills } => {
+                self.self_skills = skills.clone();
+            }
+            ServerMessage::SkillXpGained {
+                skill,
+                total_xp,
+                new_level,
+                ..
+            } => {
+                self.self_skills.map.insert(
+                    *skill,
+                    onlinerpg_shared::skills::SkillProgress {
+                        level: *new_level,
+                        xp: *total_xp,
+                    },
+                );
+            }
             ServerMessage::DebuffUpdate { ref debuffs } => {
                 self.self_debuffs = debuffs.iter().map(|d| d.id.clone()).collect();
             }

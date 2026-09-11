@@ -26,6 +26,10 @@ pub struct ItemDef {
     pub world_model: Option<String>,
     #[serde(default)]
     pub nutrition: Option<u32>,
+    /// Weapon reach in meters; absent means melee. The server's own test for
+    /// whether the archery cadence applies (doc/COMBAT.md 궁술).
+    #[serde(default)]
+    pub range: Option<f32>,
 }
 
 impl ItemDef {
@@ -50,6 +54,11 @@ impl ItemDef {
     /// Using it sets a tip hat down or picks it back up (server's toggle).
     pub fn is_tip_hat(&self) -> bool {
         self.category.as_deref() == Some("tip_hat")
+    }
+
+    /// Declares a reach of its own, so the archery skill quickens it.
+    pub fn has_range(&self) -> bool {
+        self.category.as_deref() == Some("weapon") && self.range.is_some_and(|r| r > 0.0)
     }
 
     /// A dungeon floor key (doc/DUNGEON_REWARD.md): worth grabbing on sight.
