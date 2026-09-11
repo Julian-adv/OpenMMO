@@ -661,6 +661,7 @@ impl AuthService {
         Self::ensure_pricing_schema(&conn)?;
         Self::ensure_migrations_schema(&conn)?;
         Self::migrate_level_curve(&conn)?;
+        Self::ensure_level_history_schema(&conn)?;
 
         Ok(Self {
             pool,

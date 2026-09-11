@@ -25,7 +25,23 @@ pub struct LevelLeaderboardEntry {
 #[derive(Serialize, Deserialize)]
 pub struct LevelLeaderboard {
     pub timestamp: i64,
+    pub from: i64,
+    pub sample_interval_seconds: i64,
     pub entries: Vec<LevelLeaderboardEntry>,
+    pub series: Vec<LevelSeries>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LevelSample {
+    pub timestamp: i64,
+    pub level: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LevelSeries {
+    pub name: String,
+    pub started_at: i64,
+    pub samples: Vec<LevelSample>,
 }
 
 pub fn kst_day_start(timestamp: i64) -> i64 {
@@ -225,8 +241,24 @@ fn metrics_unavailable() -> Response {
         .into_response()
 }
 
-async fn level_leaderboard(State(state): State<MetricsState>) -> Response {
-    match auth_db(move || state.auth.level_leaderboard()).await {
+async fn level_leaderboard(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(168);
+    let interval = match hours {
+        168 | 720 => 3600,
+        4320 => 21600,
+        8760 => 86400,
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "hours must be 168, 720, 4320, or 8760",
+            )
+                .into_response()
+        }
+    };
+    match auth_db(move || state.auth.level_leaderboard(hours, interval)).await {
         Ok(leaderboard) => {
             ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
         }
@@ -375,6 +407,31 @@ mod tests {
         let url = format!("http://{addr}/api/metrics/level-leaderboard");
         let empty: LevelLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert!(empty.entries.is_empty());
+        assert!(empty.series.is_empty());
+        assert_eq!(empty.timestamp - empty.from, 168 * 3600);
+        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, 86400)] {
+            let history: LevelLeaderboard = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+            assert_eq!(history.timestamp - history.from, hours * 3600);
+            assert_eq!(history.sample_interval_seconds, interval);
+        }
+        for hours in ["0", "24", "169", "-1", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
 
         let conn = rusqlite::Connection::open(path).unwrap();
         let npc = auth.login_npc("npc_leaderboard").unwrap();
@@ -428,6 +485,11 @@ mod tests {
             assert_eq!(entry.as_object().unwrap().len(), 3);
         }
         let leaderboard: LevelLeaderboard = serde_json::from_value(body).unwrap();
+        assert_eq!(leaderboard.series.len(), 10);
+        for (entry, series) in leaderboard.entries.iter().zip(&leaderboard.series) {
+            assert_eq!(entry.name, series.name);
+            assert_eq!(entry.level, series.samples.last().unwrap().level);
+        }
         assert!((before..=unix_now()).contains(&leaderboard.timestamp));
         assert_eq!(
             leaderboard

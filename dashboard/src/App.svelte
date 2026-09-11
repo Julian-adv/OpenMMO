@@ -5,10 +5,12 @@
   import GoldPanel from './lib/GoldPanel.svelte'
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
   import LevelLeaderboardPanel from './lib/LevelLeaderboardPanel.svelte'
+  import LevelHistoryPanel from './lib/LevelHistoryPanel.svelte'
+  import { createLevelColors } from './lib/levelHistory'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LevelHours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -22,7 +24,11 @@
   const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
-  const leaderboard = createMetricsResource(() => undefined, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
+  let levelHours = $state<LevelHours>(168)
+  let selectedCharacter = $state<string | null>(null)
+  const leaderboard = createMetricsResource(() => levelHours, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
+  const assignLevelColors = createLevelColors()
+  let levelColors = $derived(leaderboard.history ? assignLevelColors(leaderboard.history.entries.map((entry) => entry.name)) : {})
   const resources = [concurrent, unique, gold, perAccountGold, leaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
@@ -160,7 +166,10 @@
 
   <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours history={perAccountGold.history} loading={perAccountGold.loading} refreshing={perAccountGold.refreshing} error={perAccountGold.error} refresh={() => perAccountGold.refresh()} />
 
-  <LevelLeaderboardPanel leaderboard={leaderboard.history} loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
+  <div class="level-grid">
+    <LevelLeaderboardPanel leaderboard={leaderboard.history} colors={levelColors} bind:selectedCharacter loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
+    <LevelHistoryPanel bind:hours={levelHours} leaderboard={leaderboard.history} colors={levelColors} bind:selectedCharacter loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
+  </div>
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">

@@ -1,6 +1,6 @@
 <script lang="ts" generics="T extends TimestampSample">
   import type { Snippet } from 'svelte'
-  import { formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type TimestampSample, type ChartHistory } from './metrics'
+  import { axisStep, formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type TimestampSample, type ChartHistory } from './metrics'
 
   let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatAxisValue = String, layers, detail, legends }: {
     history: ChartHistory<T>
@@ -29,11 +29,7 @@
   const bottom = 38
   let plotWidth = $derived(Math.max(1, width - left - right))
   let plotHeight = $derived(height - top - bottom)
-  let step = $derived.by(() => {
-    const raw = Math.max(1, (peak ?? 0) / 4)
-    const magnitude = 10 ** Math.floor(Math.log10(raw))
-    return ([1, 2, 5, 10].find((value) => value * magnitude >= raw) ?? 10) * magnitude
-  })
+  let step = $derived(axisStep(peak ?? 0))
   let ceiling = $derived(step * 4)
   let segments = $derived(splitSegments(history.samples, history.sample_interval_seconds))
   let selectedIndex = $derived(selectedTime === null ? null : nearestSample(history.samples, selectedTime))
@@ -68,13 +64,14 @@
       </text>
     {/each}
     {#each segments as segment (segment[0].timestamp)}
+      {@const path = segment.length > 1 ? line(segment) : ''}
       {#if layers}
         {@render layers(segment, x, y)}
       {:else if segment.length > 1}
-        <path d={`${line(segment)} L${x(segment[segment.length - 1].timestamp)},${y(0)} L${x(segment[0].timestamp)},${y(0)} Z`} fill="#168878" fill-opacity="0.25" />
+        <path d={`${path} L${x(segment[segment.length - 1].timestamp)},${y(0)} L${x(segment[0].timestamp)},${y(0)} Z`} fill="#168878" fill-opacity="0.25" />
       {/if}
       {#if segment.length > 1}
-        <path d={line(segment)} fill="none" stroke="#31594f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
+        <path d={path} fill="none" stroke="#31594f" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" />
       {:else}
         <circle cx={x(segment[0].timestamp)} cy={y(value(segment[0]))} r="3.5" fill="#31594f" />
       {/if}

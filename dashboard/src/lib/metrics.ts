@@ -11,13 +11,37 @@ export interface TimestampSample {
 }
 
 export interface LevelLeaderboard extends TimestampSample {
+  from: number
+  sample_interval_seconds: number
   entries: { name: string, level: number, account_first_rank: number }[]
+  series: LevelSeries[]
 }
 
-export function parseLevelLeaderboard(value: unknown): LevelLeaderboard {
+export interface LevelSample extends TimestampSample {
+  level: number
+}
+
+export interface LevelSeries {
+  name: string
+  started_at: number
+  samples: LevelSample[]
+}
+
+export const levelPeriods = [
+  { hours: 168, label: '1주일', interval: 3600 },
+  { hours: 720, label: '1개월', interval: 3600 },
+  { hours: 4320, label: '6개월', interval: 21600 },
+  { hours: 8760, label: '1년', interval: 86400 },
+] as const
+export type LevelHours = typeof levelPeriods[number]['hours']
+
+export function parseLevelLeaderboard(value: unknown, hours: LevelHours): LevelLeaderboard {
   if (!value || typeof value !== 'object') throw new Error('Invalid level leaderboard response')
   const data = value as LevelLeaderboard
+  const interval = levelPeriods.find((period) => period.hours === hours)!.interval
   if (!Number.isSafeInteger(data.timestamp) || data.timestamp < 0 ||
+    !Number.isSafeInteger(data.from) || data.timestamp - data.from !== hours * 3600 ||
+    data.sample_interval_seconds !== interval ||
     !Array.isArray(data.entries) || data.entries.length > 10 ||
     !data.entries.every((entry, index) => entry && typeof entry.name === 'string' && entry.name.trim().length > 0 &&
       Number.isSafeInteger(entry.level) && entry.level >= 1 &&
@@ -26,6 +50,17 @@ export function parseLevelLeaderboard(value: unknown): LevelLeaderboard {
       (index === 0 || entry.level <= data.entries[index - 1].level)) ||
     new Set(data.entries.map((entry) => entry.name)).size !== data.entries.length) {
     throw new Error('Invalid level leaderboard response')
+  }
+  if (!Array.isArray(data.series) || data.series.length !== data.entries.length ||
+    !data.series.every((series, index) => series && series.name === data.entries[index].name &&
+      Number.isSafeInteger(series.started_at) && series.started_at >= 0 && series.started_at <= data.timestamp &&
+      Array.isArray(series.samples) && series.samples.length > 0 && series.samples.length <= Math.ceil(hours * 3600 / interval) + 3 &&
+      series.samples[0].timestamp === Math.max(data.from, series.started_at) &&
+      series.samples.every((sample, sampleIndex) => sample && Number.isSafeInteger(sample.timestamp) &&
+        sample.timestamp >= data.from && sample.timestamp <= data.timestamp &&
+        Number.isSafeInteger(sample.level) && sample.level >= 1 &&
+        (sampleIndex === 0 || sample.timestamp > series.samples[sampleIndex - 1].timestamp)))) {
+    throw new Error('Invalid level history response')
   }
   return data
 }
@@ -266,6 +301,12 @@ export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, act
 }
 
 export const kstDayStart = (timestamp: number) => Math.floor((timestamp + 9 * 3600) / 86400) * 86400 - 9 * 3600
+
+export function axisStep(span: number) {
+  const raw = Math.max(1, span / 4)
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  return ([1, 2, 5, 10].find((value) => value * magnitude >= raw) ?? 10) * magnitude
+}
 
 export function splitSegments<T extends TimestampSample>(samples: T[], interval: number): T[][] {
   const segments: T[][] = []
