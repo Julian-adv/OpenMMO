@@ -693,6 +693,7 @@ impl AuthService {
         Self::ensure_gold_history_schema(&conn)?;
         Self::ensure_weapon_enchant_history_schema(&conn)?;
         Self::ensure_armor_enchant_history_schema(&conn)?;
+        Self::ensure_land_history_schema(&conn)?;
 
         Ok(Self {
             pool,

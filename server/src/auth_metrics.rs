@@ -4,7 +4,8 @@ use crate::metrics::{
     ArmorEnchantSample, ArmorEnchantSeries, CharacterGoldSample, CharacterGoldSeries,
     CharacterLeaderboard, ConcurrentCounts, ConcurrentHistorySample, GoldHistory,
     GoldHistorySample, GoldLeaderboard, GoldLeaderboardEntry, GoldSample, GoldSource,
-    LevelLeaderboard, LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
+    LandLeaderboard, LandLeaderboardEntry, LandSample, LandSeries, LevelLeaderboard,
+    LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
     PerAccountGoldHistorySample, PerAccountGoldSample, UniqueHistory, UniqueSample,
     WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry, WeaponEnchantSample,
     WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
@@ -17,6 +18,20 @@ enum LeaderboardMetric {
     Gold,
     WeaponEnchant,
     ArmorEnchant,
+    Land,
+}
+
+fn character_metric_source(metric: &str) -> &'static str {
+    if metric == "land_plots" {
+        "(SELECT c.*, COALESCE(land.land_plots, 0) AS land_plots FROM characters c
+          LEFT JOIN (
+            SELECT e.owner_id, COUNT(*) AS land_plots
+            FROM land_estates e JOIN land_plots p ON p.estate_id = e.id
+            GROUP BY e.owner_id
+          ) land ON land.owner_id = c.id)"
+    } else {
+        "characters"
+    }
 }
 
 fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Error> {
@@ -179,6 +194,10 @@ impl AuthService {
         Self::ensure_character_history_schema(conn, "gold", 0)
     }
 
+    pub(super) fn ensure_land_history_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        Self::ensure_character_history_schema(conn, "land_plots", 0)
+    }
+
     pub(super) fn ensure_weapon_enchant_history_schema(
         conn: &Connection,
     ) -> Result<(), rusqlite::Error> {
@@ -255,6 +274,12 @@ impl AuthService {
         metric: &str,
         minimum: u32,
     ) -> Result<(), rusqlite::Error> {
+        let source = character_metric_source(metric);
+        let initial_value = if metric == "land_plots" {
+            "0".to_owned()
+        } else {
+            format!("NEW.{metric}")
+        };
         conn.execute_batch(&format!(
             "CREATE TABLE IF NOT EXISTS character_{metric}_history (
                 character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
@@ -263,13 +288,13 @@ impl AuthService {
                 PRIMARY KEY (character_id, timestamp)
              );
              INSERT INTO character_{metric}_history (character_id, timestamp, {metric})
-             SELECT id, CAST(strftime('%s', 'now') AS INTEGER), {metric} FROM characters c
+             SELECT id, CAST(strftime('%s', 'now') AS INTEGER), {metric} FROM {source} c
              WHERE account_name NOT GLOB '{NPC_ACCOUNT_PREFIX}*'
                 AND NOT EXISTS (SELECT 1 FROM character_{metric}_history WHERE character_id = c.id);
              CREATE TRIGGER IF NOT EXISTS character_{metric}_created AFTER INSERT ON characters
              WHEN NEW.account_name NOT GLOB '{NPC_ACCOUNT_PREFIX}*'
              BEGIN
-                INSERT INTO character_{metric}_history VALUES (NEW.id, CAST(strftime('%s', 'now') AS INTEGER), NEW.{metric});
+                INSERT INTO character_{metric}_history VALUES (NEW.id, CAST(strftime('%s', 'now') AS INTEGER), {initial_value});
              END;
              DROP TRIGGER IF EXISTS character_{metric}_changed;
              CREATE TABLE IF NOT EXISTS character_metrics_state (
@@ -305,11 +330,18 @@ impl AuthService {
     }
 
     fn write_character_metric_samples(conn: &Connection, now: i64) -> Result<(), rusqlite::Error> {
-        for metric in ["level", "gold", "weapon_enchant", "armor_enchant"] {
+        for metric in [
+            "level",
+            "gold",
+            "weapon_enchant",
+            "armor_enchant",
+            "land_plots",
+        ] {
+            let source = character_metric_source(metric);
             conn.execute(
                 &format!(
                     "INSERT INTO character_{metric}_history (character_id, timestamp, {metric})
-                 SELECT c.id, ?1, c.{metric} FROM characters c
+                 SELECT c.id, ?1, c.{metric} FROM {source} c
                  WHERE account_name NOT GLOB '{NPC_ACCOUNT_PREFIX}*' AND c.{metric} IS NOT (
                     SELECT h.{metric} FROM character_{metric}_history h
                     WHERE h.character_id = c.id ORDER BY timestamp DESC LIMIT 1
@@ -428,6 +460,34 @@ impl AuthService {
         )
     }
 
+    pub fn land_leaderboard(
+        &self,
+        hours: u32,
+        interval: i64,
+    ) -> Result<LandLeaderboard, AuthError> {
+        self.character_leaderboard(
+            LeaderboardMetric::Land,
+            hours,
+            interval,
+            |name, land_plots, account_first_rank| LandLeaderboardEntry {
+                name,
+                land_plots,
+                account_first_rank,
+            },
+            |name, started_at, samples| LandSeries {
+                name,
+                started_at,
+                samples: samples
+                    .into_iter()
+                    .map(|(timestamp, land_plots)| LandSample {
+                        timestamp,
+                        land_plots,
+                    })
+                    .collect(),
+            },
+        )
+    }
+
     fn character_leaderboard<Value: FromSql, Entry, Series>(
         &self,
         metric: LeaderboardMetric,
@@ -441,12 +501,19 @@ impl AuthService {
             LeaderboardMetric::Gold => ("gold", "gold DESC, id ASC"),
             LeaderboardMetric::WeaponEnchant => ("weapon_enchant", "weapon_enchant DESC, id ASC"),
             LeaderboardMetric::ArmorEnchant => ("armor_enchant", "armor_enchant DESC, id ASC"),
+            LeaderboardMetric::Land => ("land_plots", "land_plots DESC, id ASC"),
+        };
+        let source = character_metric_source(metric);
+        let filter = if metric == "land_plots" {
+            "AND land_plots > 0"
+        } else {
+            ""
         };
         let mut conn = self.open_connection()?;
         let transaction = conn.transaction()?;
         let mut statement = transaction.prepare(&format!(
-            "SELECT character_name, {metric}, account_name, id FROM characters
-             WHERE account_name NOT GLOB ?1
+            "SELECT character_name, {metric}, account_name, id FROM {source}
+             WHERE account_name NOT GLOB ?1 {filter}
              ORDER BY {order_by} LIMIT 10",
         ))?;
         let rows = statement
@@ -863,6 +930,104 @@ impl AuthService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn land_history_starts_from_existing_plots_and_tracks_hourly_ownership_changes() {
+        let path = crate::test_util::unique_temp_dir("land_history").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "DROP TRIGGER character_land_plots_created;
+             DROP TABLE character_land_plots_history;
+             INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
+             INSERT INTO characters (id, account_name, character_name) VALUES
+                (1, 'player', 'Hero'), (2, 'player', 'Alt'), (3, 'npc_test', 'Npc'), (4, 'npcxplayer', 'Other');
+             INSERT INTO land_estates (id, owner_id, account_name, grade, created_at) VALUES
+                (1, 1, 'player', 1, 100), (2, 1, 'player', 2, 100),
+                (3, 3, 'npc_test', 1, 100), (4, 4, 'npcxplayer', 1, 100), (5, 4, 'npcxplayer', 2, 100);
+             INSERT INTO land_plots (tile_x, tile_z, quadrant, estate_id) VALUES
+                (0, 0, 0, 1), (0, 0, 1, 1), (0, 0, 2, 2), (0, 0, 3, 3), (1, 0, 0, 4);",
+        ).unwrap();
+        let now = unix_now();
+        AuthService::ensure_land_history_schema(&conn).unwrap();
+        let initial = auth.land_leaderboard(168, 3600).unwrap();
+        assert_eq!(
+            initial
+                .entries
+                .iter()
+                .map(|entry| (entry.name.as_str(), entry.land_plots))
+                .collect::<Vec<_>>(),
+            [("Hero", 3), ("Other", 1)]
+        );
+        assert!((now..=unix_now()).contains(&initial.series[0].started_at));
+        assert_eq!(initial.series[0].samples[0].land_plots, 3);
+        let recorded = || {
+            conn.prepare("SELECT character_id, timestamp, land_plots FROM character_land_plots_history ORDER BY character_id, timestamp")
+                .unwrap().query_map([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, u32>(2)?)))
+                .unwrap().collect::<Result<Vec<_>, _>>().unwrap()
+        };
+        assert_eq!(recorded().len(), 3);
+        assert!(!recorded().iter().any(|row| row.0 == 3));
+        conn.execute(
+            "UPDATE character_land_plots_history SET timestamp = ?1",
+            [now - DAY_SECONDS],
+        )
+        .unwrap();
+        let baseline = recorded();
+        AuthService::ensure_land_history_schema(&conn).unwrap();
+        assert_eq!(recorded(), baseline);
+        conn.execute("UPDATE land_estates SET owner_id = 2 WHERE id = 2", [])
+            .unwrap();
+        let transferred = auth.land_leaderboard(168, 3600).unwrap();
+        assert_eq!(
+            transferred
+                .entries
+                .iter()
+                .map(|entry| (
+                    entry.name.as_str(),
+                    entry.land_plots,
+                    entry.account_first_rank
+                ))
+                .collect::<Vec<_>>(),
+            [("Hero", 2, 1), ("Alt", 1, 1), ("Other", 1, 3)]
+        );
+        assert_eq!(recorded(), baseline);
+        assert!(auth.record_hourly_character_metrics(now - 7200).unwrap());
+        assert_eq!(recorded().len(), 5);
+        conn.execute("DELETE FROM land_estates WHERE id = 1", [])
+            .unwrap();
+        assert!(auth.record_hourly_character_metrics(now - 3600).unwrap());
+        assert!(recorded().contains(&(1, now - 3600, 0)));
+        let changed = recorded();
+        assert!(auth.record_hourly_character_metrics(now).unwrap());
+        assert_eq!(recorded(), changed);
+        conn.execute(
+            "UPDATE characters SET character_name = 'Renamed' WHERE id = 2",
+            [],
+        )
+        .unwrap();
+        let reopened = AuthService::new(path).unwrap();
+        assert_eq!(recorded(), changed);
+        let result = reopened.land_leaderboard(168, 3600).unwrap();
+        assert_eq!(result.entries[0].name, "Renamed");
+        assert_eq!(
+            result.series[0]
+                .samples
+                .iter()
+                .map(|sample| sample.land_plots)
+                .collect::<Vec<_>>(),
+            [0, 1]
+        );
+        conn.execute("DELETE FROM characters WHERE id = 2", [])
+            .unwrap();
+        assert!(!recorded().iter().any(|row| row.0 == 2));
+        assert_eq!(
+            reopened.land_leaderboard(168, 3600).unwrap().entries.len(),
+            1
+        );
+        conn.execute("INSERT INTO characters (id, account_name, character_name) VALUES (5, 'player', 'NewHero')", []).unwrap();
+        assert!(recorded().iter().any(|row| row.0 == 5 && row.2 == 0));
+    }
 
     #[test]
     fn character_metrics_write_only_on_hourly_sampling_and_retry_atomically() {

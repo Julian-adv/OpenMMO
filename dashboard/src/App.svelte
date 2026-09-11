@@ -12,7 +12,7 @@
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -38,7 +38,9 @@
   const weaponEnchantLeaderboard = createMetricsResource(() => weaponEnchantHours, 'weapon-enchant-leaderboard', parseWeaponEnchantLeaderboard, '무기 인챈트 순위 정보')
   let armorEnchantHours = $state<LeaderboardHours>(168)
   const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
-  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard]
+  let landHours = $state<LeaderboardHours>(168)
+  const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
+  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard, landLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -72,7 +74,7 @@
     <div>
       <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
       <h1>월드 현황<span>.</span></h1>
-      <p class="page-description">지금 함께하는 플레이어, 레벨·골드·무기·방어구 인챈트 순위와 서버의 골드 변화를 살펴보세요.</p>
+      <p class="page-description">지금 함께하는 플레이어, 레벨·골드·인챈트·영지 보유 순위와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
@@ -185,6 +187,8 @@
   <LeaderboardSection metric="weapon_enchant" bind:hours={weaponEnchantHours} resource={weaponEnchantLeaderboard} />
 
   <LeaderboardSection metric="armor_enchant" bind:hours={armorEnchantHours} resource={armorEnchantLeaderboard} />
+
+  <LeaderboardSection metric="land_plots" bind:hours={landHours} resource={landLeaderboard} />
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">

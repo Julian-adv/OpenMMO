@@ -1,6 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import { createCharacterColors, sampleAt, stepPath } from './leaderboardHistory'
-import { leaderboardPeriods, parseArmorEnchantLeaderboard, parseGoldLeaderboard, parseLevelLeaderboard, parseWeaponEnchantLeaderboard } from './metrics'
+import { leaderboardPeriods, parseArmorEnchantLeaderboard, parseGoldLeaderboard, parseLandLeaderboard, parseLevelLeaderboard, parseWeaponEnchantLeaderboard } from './metrics'
+
+describe('land ownership history', () => {
+  const timestamp = 1800000000
+  const entries = [{ name: 'Hero', land_plots: 4, account_first_rank: 1 }, { name: 'Alt', land_plots: 2, account_first_rank: 1 }]
+  const series = entries.map((entry) => ({ name: entry.name, started_at: timestamp - 100,
+    samples: [{ timestamp: timestamp - 100, land_plots: 0 }, { timestamp, land_plots: entry.land_plots }] }))
+  const data = { timestamp, from: timestamp - 168 * 3600, sample_interval_seconds: 3600, entries, series }
+
+  it.each(leaderboardPeriods)('accepts the $label period and ownership starting from zero', ({ hours, interval }) => {
+    const history = { ...data, from: timestamp - hours * 3600, sample_interval_seconds: interval }
+    expect(parseLandLeaderboard(history, hours)).toEqual(history)
+    expect(parseLandLeaderboard({ ...history, entries: [], series: [] }, hours).entries).toEqual([])
+    expect(sampleAt(series[0].samples, timestamp - 1)?.land_plots).toBe(0)
+  })
+
+  it('rejects non-owners in the ranking, invalid plot counts and mismatched history', () => {
+    for (const land_plots of [0, -1, 1.5, NaN, Infinity]) {
+      expect(() => parseLandLeaderboard({ ...data, entries: [entries[0], { ...entries[1], land_plots }] }, 168)).toThrow()
+    }
+    for (const land_plots of [-1, 1.5, NaN, Infinity]) {
+      expect(() => parseLandLeaderboard({ ...data, series: [{ ...series[0], samples: [{ timestamp: timestamp - 100, land_plots }] }, series[1]] }, 168)).toThrow()
+    }
+    expect(() => parseLandLeaderboard({ ...data, entries: [...entries].reverse() }, 168)).toThrow()
+    expect(() => parseLandLeaderboard({ ...data, series: [...series].reverse() }, 168)).toThrow()
+    expect(() => parseLandLeaderboard({ ...data, series: [] }, 168)).toThrow()
+  })
+})
 
 describe('character level history', () => {
   const timestamp = 1800000000

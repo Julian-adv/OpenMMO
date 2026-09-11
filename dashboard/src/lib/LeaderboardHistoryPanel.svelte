@@ -55,6 +55,7 @@
   <div class="chart-heading">
     <div>
       <h2 id={titleId}>{label} 변화</h2>
+      {#if metric === 'land_plots'}<p>현재 상위 10명의 보유량 · 시간별 관측값</p>{/if}
     </div>
     <PeriodFilter bind:hours options={leaderboardPeriods} label={`${label} 변화 조회 기간`} />
   </div>
@@ -96,7 +97,7 @@
           <span>{formatDateTime(selected)} KST</span>
           {#each series.filter((entry) => !focused || focused === entry.name) as entry (entry.name)}
             {@const sample = sampleAt(entry.samples, selected)}
-            <div class="tooltip-entry"><span><i style:background={colors[entry.name]}></i>{entry.name}</span><b>{#if !sample}기록 없음{:else if metric === 'gold'}<GoldAmount copper={sample[metric]} />{:else}{enchantPrefix || 'Lv. '}{sample[metric]}{/if}</b></div>
+            <div class="tooltip-entry"><span><i style:background={colors[entry.name]}></i>{entry.name}</span><b>{#if !sample}기록 없음{:else if metric === 'gold'}<GoldAmount copper={sample[metric]} />{:else if metric === 'land_plots'}{sample[metric].toLocaleString('ko-KR')} 필지{:else}{enchantPrefix || 'Lv. '}{sample[metric]}{/if}</b></div>
           {/each}
         </div>
       {/if}
@@ -112,7 +113,7 @@
   {:else}
     <div class="chart-empty" role="status">
       <strong>{loading ? `${label} 기록을 불러오고 있어요` : error ? '기록에 연결할 수 없어요' : `아직 ${label} 기록이 없어요`}</strong>
-      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : `캐릭터가 생성되면 ${label} 변화가 기록됩니다.`}</p>
+      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : metric === 'land_plots' ? '영지를 보유한 캐릭터가 생기면 보유량 변화가 표시됩니다.' : `캐릭터가 생성되면 ${label} 변화가 기록됩니다.`}</p>
     </div>
   {/if}
 </section>

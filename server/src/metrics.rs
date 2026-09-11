@@ -211,6 +211,28 @@ pub struct ArmorEnchantSeries {
     pub samples: Vec<ArmorEnchantSample>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LandLeaderboardEntry {
+    pub name: String,
+    pub land_plots: u32,
+    pub account_first_rank: usize,
+}
+
+pub type LandLeaderboard = CharacterLeaderboard<LandLeaderboardEntry, LandSeries>;
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LandSample {
+    pub timestamp: i64,
+    pub land_plots: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LandSeries {
+    pub name: String,
+    pub started_at: i64,
+    pub samples: Vec<LandSample>,
+}
+
 pub fn kst_day_start(timestamp: i64) -> i64 {
     timestamp - (timestamp + 9 * 3600).rem_euclid(DAY_SECONDS)
 }
@@ -358,6 +380,7 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/gold-sinks", get(gold_sinks))
         .route("/api/metrics/level-leaderboard", get(level_leaderboard))
         .route("/api/metrics/gold-leaderboard", get(gold_leaderboard))
+        .route("/api/metrics/land-leaderboard", get(land_leaderboard))
         .route(
             "/api/metrics/weapon-enchant-leaderboard",
             get(weapon_enchant_leaderboard),
@@ -508,6 +531,19 @@ async fn armor_enchant_leaderboard(
     .await
 }
 
+async fn land_leaderboard(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    leaderboard_response(
+        state.auth,
+        query,
+        "Land leaderboard",
+        AuthService::land_leaderboard,
+    )
+    .await
+}
+
 async fn leaderboard_response<T: Serialize + Send + 'static>(
     auth: Arc<AuthService>,
     query: HistoryQuery,
@@ -553,16 +589,9 @@ async fn concurrent_history(
     let until = unix_now();
     let from = until - i64::from(hours) * 3600;
     let samples =
-        match auth_db(move || state.auth.concurrent_account_samples(from, until, interval)).await {
-            Ok(samples) => samples,
-            Err(error) => {
-                warn!("Concurrent account history failed: {error}");
-                return metrics_unavailable();
-            }
-        };
-    (
-        [(header::CACHE_CONTROL, "no-store")],
-        Json(ConcurrentHistory {
+        auth_db(move || state.auth.concurrent_account_samples(from, until, interval)).await;
+    metrics_response(
+        samples.map(|samples| ConcurrentHistory {
             from,
             until,
             sample_interval_seconds: interval,
@@ -573,8 +602,8 @@ async fn concurrent_history(
             },
             samples,
         }),
+        "Concurrent account history",
     )
-        .into_response()
 }
 
 fn gold_history_interval(hours: u32) -> Result<i64, (StatusCode, &'static str)> {
@@ -930,6 +959,108 @@ mod tests {
         assert_eq!(updated.series[0].samples.last().unwrap().weapon_enchant, 1);
         assert!(!auth.record_hourly_character_metrics(unix_now()).unwrap());
         conn.execute("DROP TABLE character_weapon_enchant_history", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn land_leaderboard_ranks_owned_plots_and_returns_history() {
+        let path = crate::test_util::unique_temp_dir("land_leaderboard").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("land_leaderboard"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/land-leaderboard");
+        let empty: LandLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(empty.entries.is_empty());
+        assert!(empty.series.is_empty());
+        assert_eq!(empty.timestamp - empty.from, 168 * 3600);
+        let conn = rusqlite::Connection::open(path).unwrap();
+        for id in 1..=15 {
+            let account = match id {
+                13 => "npc_test".to_owned(),
+                12 | 14 => "npcxplayer".to_owned(),
+                _ => format!("player{id}"),
+            };
+            conn.execute(
+                "INSERT OR IGNORE INTO accounts (player_name) VALUES (?1)",
+                [&account],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO characters (id, account_name, character_name) VALUES (?1, ?2, ?3)",
+                rusqlite::params![id, account, format!("Hero{id}")],
+            )
+            .unwrap();
+            conn.execute("INSERT INTO land_estates (id, owner_id, account_name, grade, created_at) VALUES (?1, ?1, ?2, ?3, 100)",
+                rusqlite::params![id, account, if id == 14 { 2 } else { 1 }]).unwrap();
+            let plots = match id {
+                10 => 11,
+                15 => 0,
+                _ => id,
+            };
+            for plot in 0..plots {
+                conn.execute("INSERT INTO land_plots (tile_x, tile_z, quadrant, estate_id) VALUES (?1, ?2, 0, ?1)",
+                    rusqlite::params![id, plot]).unwrap();
+            }
+        }
+        auth.record_hourly_character_metrics(unix_now()).unwrap();
+        for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, 86400)] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let body: serde_json::Value = response.json().await.unwrap();
+            for entry in body["entries"].as_array().unwrap() {
+                assert_eq!(entry.as_object().unwrap().len(), 3);
+            }
+            for series in body["series"].as_array().unwrap() {
+                assert_eq!(series.as_object().unwrap().len(), 3);
+            }
+            let result: LandLeaderboard = serde_json::from_value(body).unwrap();
+            assert_eq!(result.timestamp - result.from, hours * 3600);
+            assert_eq!(result.sample_interval_seconds, interval);
+            assert_eq!(
+                result
+                    .entries
+                    .iter()
+                    .map(|entry| entry.name.as_str())
+                    .collect::<Vec<_>>(),
+                [
+                    "Hero14", "Hero12", "Hero10", "Hero11", "Hero9", "Hero8", "Hero7", "Hero6",
+                    "Hero5", "Hero4"
+                ]
+            );
+            assert_eq!(result.entries[0].land_plots, 14);
+            assert_eq!(result.entries[1].account_first_rank, 1);
+            assert_eq!(result.series.len(), 10);
+            for (entry, series) in result.entries.iter().zip(&result.series) {
+                assert_eq!(entry.name, series.name);
+                assert_eq!(entry.land_plots, series.samples.last().unwrap().land_plots);
+            }
+        }
+        for hours in ["0", "24", "169", "-1", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        assert!(!auth.record_hourly_character_metrics(unix_now()).unwrap());
+        conn.execute("DROP TABLE character_land_plots_history", [])
             .unwrap();
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);

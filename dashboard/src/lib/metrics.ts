@@ -15,6 +15,7 @@ export const leaderboardMetrics = {
   gold: { label: '골드', columnLabel: '골드', axisLabel: '보유금액', description: '', enchantPrefix: '' },
   weapon_enchant: { label: '무기 인챈트', columnLabel: '인챈트', axisLabel: '인챈트 단계', description: '가방·장비의 무기 중 최고 인챈트', enchantPrefix: '+' },
   armor_enchant: { label: '방어구 인챈트', columnLabel: '합계', axisLabel: '인챈트 합계', description: '가방·장비의 방어구 슬롯별 최고 인챈트 합계', enchantPrefix: '+' },
+  land_plots: { label: '영지 보유', columnLabel: '필지 수', axisLabel: '보유 필지 수', description: '개척지·왕령 필지 합계 · 공식 NPC 제외', enchantPrefix: '' },
 } as const
 export type LeaderboardMetric = keyof typeof leaderboardMetrics
 export type CharacterSample<M extends LeaderboardMetric> = TimestampSample & Record<M, number>
@@ -30,6 +31,7 @@ export type LevelLeaderboard = CharacterLeaderboard<'level'>
 export type GoldLeaderboard = CharacterLeaderboard<'gold'>
 export type WeaponEnchantLeaderboard = CharacterLeaderboard<'weapon_enchant'>
 export type ArmorEnchantLeaderboard = CharacterLeaderboard<'armor_enchant'>
+export type LandLeaderboard = CharacterLeaderboard<'land_plots'>
 
 export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
@@ -43,6 +45,7 @@ export const parseLevelLeaderboard = (value: unknown, hours: LeaderboardHours): 
 export const parseGoldLeaderboard = (value: unknown, hours: LeaderboardHours): GoldLeaderboard => parseLeaderboard(value, hours, 'gold')
 export const parseWeaponEnchantLeaderboard = (value: unknown, hours: LeaderboardHours): WeaponEnchantLeaderboard => parseLeaderboard(value, hours, 'weapon_enchant')
 export const parseArmorEnchantLeaderboard = (value: unknown, hours: LeaderboardHours): ArmorEnchantLeaderboard => parseLeaderboard(value, hours, 'armor_enchant')
+export const parseLandLeaderboard = (value: unknown, hours: LeaderboardHours): LandLeaderboard => parseLeaderboard(value, hours, 'land_plots')
 
 function parseLeaderboard<M extends LeaderboardMetric>(value: unknown, hours: LeaderboardHours, metric: M): CharacterLeaderboard<M> {
   if (!value || typeof value !== 'object') throw new Error(`Invalid ${metric} leaderboard response`)
@@ -55,6 +58,7 @@ function parseLeaderboard<M extends LeaderboardMetric>(value: unknown, hours: Le
     !Array.isArray(data.entries) || data.entries.length > 10 ||
     !data.entries.every((entry, index) => entry && typeof entry.name === 'string' && entry.name.trim().length > 0 &&
       Number.isSafeInteger(entry[metric]) && entry[metric] >= minimum &&
+      (metric !== 'land_plots' || entry[metric] > 0) &&
       Number.isSafeInteger(entry.account_first_rank) && entry.account_first_rank >= 1 && entry.account_first_rank <= index + 1 &&
       data.entries[entry.account_first_rank - 1]?.account_first_rank === entry.account_first_rank &&
       (index === 0 || entry[metric] <= data.entries[index - 1][metric])) ||

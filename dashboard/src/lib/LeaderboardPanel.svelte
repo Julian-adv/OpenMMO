@@ -44,7 +44,7 @@
                 <span class="account-character">({firstCharacter.name})</span>
               {/if}
             </th>
-            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else if enchantPrefix}{enchantPrefix}{entry[metric].toLocaleString('ko-KR')}{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
+            <td class="value" class:gold={metric === 'gold'}>{#if metric === 'gold'}<GoldAmount copper={entry[metric]} />{:else if metric === 'land_plots'}{entry[metric].toLocaleString('ko-KR')} <span>필지</span>{:else if enchantPrefix}{enchantPrefix}{entry[metric].toLocaleString('ko-KR')}{:else}<span>Lv.</span> {entry[metric].toLocaleString('ko-KR')}{/if}</td>
           </tr>
         {/each}
       </tbody>
@@ -52,7 +52,7 @@
   {:else}
     <div class="chart-empty" role="status">
       <strong>{loading ? `${label} 순위를 불러오고 있어요` : error ? '순위에 연결할 수 없어요' : '아직 순위에 표시할 캐릭터가 없어요'}</strong>
-      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 순위가 자동으로 갱신됩니다.' : `캐릭터가 생성되면 ${label} 순위가 표시됩니다.`}</p>
+      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 순위가 자동으로 갱신됩니다.' : metric === 'land_plots' ? '영지를 보유한 캐릭터가 생기면 순위가 표시됩니다.' : `캐릭터가 생성되면 ${label} 순위가 표시됩니다.`}</p>
     </div>
   {/if}
 </section>
