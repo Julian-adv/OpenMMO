@@ -11,9 +11,34 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::warn;
 
-pub const SAMPLE_INTERVAL_SECONDS: i64 = 60;
+pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
+
+#[derive(Clone)]
+pub struct ItemSaleRecord {
+    pub timestamp: i64,
+    pub item_def_id: String,
+    pub quantity: u64,
+    pub gold: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ItemGoldSource {
+    pub item_def_id: String,
+    pub name: String,
+    pub quantity: u64,
+    pub gold: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ItemGoldSources {
+    pub from: i64,
+    pub until: i64,
+    pub collection_started_at: i64,
+    pub total_gold: i64,
+    pub entries: Vec<ItemGoldSource>,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct CharacterLeaderboard<Entry, Series> {
@@ -257,6 +282,7 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/concurrent", get(concurrent_history))
         .route("/api/metrics/unique", get(unique_history))
         .route("/api/metrics/gold", get(gold_history))
+        .route("/api/metrics/item-gold-sources", get(item_gold_sources))
         .route("/api/metrics/level-leaderboard", get(level_leaderboard))
         .route("/api/metrics/gold-leaderboard", get(gold_leaderboard))
         .route(
@@ -292,11 +318,22 @@ pub async fn record_concurrent_sample(game: &GameState, auth: Arc<AuthService>) 
     }
 }
 
+pub async fn record_hourly_metrics(game: &GameState, auth: Arc<AuthService>) {
+    game.flush_dirty_saves(&auth).await;
+    game.flush_item_sales(&auth, unix_now(), false).await;
+    game.tick_gold_snapshot(&auth).await;
+    let history_auth = Arc::clone(&auth);
+    if let Err(error) =
+        auth_db(move || history_auth.record_hourly_character_metrics(unix_now())).await
+    {
+        warn!("Character metrics snapshot failed: {error}");
+    }
+    record_concurrent_sample(game, auth).await;
+}
+
 fn history_interval(hours: u32) -> Option<i64> {
     match hours {
-        1 | 6 | 24 => Some(SAMPLE_INTERVAL_SECONDS),
-        168 => Some(600),
-        720 => Some(3600),
+        1 | 6 | 24 | 168 | 720 => Some(SAMPLE_INTERVAL_SECONDS),
         4320 => Some(21600),
         8760 => Some(86400),
         _ => None,
@@ -482,6 +519,23 @@ async fn gold_history(
     }
 }
 
+async fn item_gold_sources(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(24);
+    if let Err(error) = gold_history_interval(hours) {
+        return error.into_response();
+    }
+    match auth_db(move || state.auth.item_gold_sources(unix_now(), hours)).await {
+        Ok(sources) => ([(header::CACHE_CONTROL, "no-store")], Json(sources)).into_response(),
+        Err(error) => {
+            warn!("Item gold sources failed: {error}");
+            metrics_unavailable()
+        }
+    }
+}
+
 async fn per_account_gold_history(
     State(state): State<MetricsState>,
     Query(query): Query<PerAccountGoldQuery>,
@@ -518,6 +572,63 @@ async fn per_account_gold_history(
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+
+    #[tokio::test]
+    async fn item_gold_sources_api_validates_periods_and_reports_database_failures() {
+        let path = crate::test_util::unique_temp_dir("item_gold_sources_api").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(
+            Arc::new(make_test_game_state("item_gold_sources_api")),
+            Arc::clone(&auth),
+        );
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/item-gold-sources");
+        let empty: ItemGoldSources = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(empty.until - empty.from, 24 * 3600);
+        assert!(empty.entries.is_empty());
+        auth.record_item_sales(&[ItemSaleRecord {
+            timestamp: unix_now() - 3600,
+            item_def_id: "iron_sword".into(),
+            quantity: 2,
+            gold: 9000,
+        }])
+        .unwrap();
+        for hours in [1, 24, 168, 720, 4320, 8760] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let sources: ItemGoldSources = response.json().await.unwrap();
+            assert_eq!(sources.until - sources.from, hours * 3600);
+            assert_eq!(sources.total_gold, 9000);
+            assert_eq!(sources.entries[0].quantity, 2);
+        }
+        for hours in ["0", "6", "-1", "25", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .execute("DROP TABLE item_sale_samples", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
 
     #[tokio::test]
     async fn weapon_enchant_leaderboard_ranks_inventory_maxima_and_returns_history() {
@@ -592,6 +703,7 @@ mod tests {
             )
             .unwrap();
         }
+        auth.record_hourly_character_metrics(unix_now()).unwrap();
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
@@ -644,7 +756,8 @@ mod tests {
                 weapon_enchant: 1
             }
         );
-        assert_eq!(updated.series[0].samples.last().unwrap().weapon_enchant, 15);
+        assert_eq!(updated.series[0].samples.last().unwrap().weapon_enchant, 1);
+        assert!(!auth.record_hourly_character_metrics(unix_now()).unwrap());
         conn.execute("DROP TABLE character_weapon_enchant_history", [])
             .unwrap();
         let response = client.get(&url).send().await.unwrap();
@@ -710,6 +823,7 @@ mod tests {
             )
             .unwrap();
         }
+        auth.record_hourly_character_metrics(unix_now()).unwrap();
         for (hours, interval) in [(168, 3600), (720, 3600), (4320, 21600), (8760, 86400)] {
             let response = client
                 .get(format!("{url}?hours={hours}"))
@@ -776,7 +890,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("gold_leaderboard"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, auth);
+        let router = metrics_router(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/gold-leaderboard");
@@ -885,6 +999,7 @@ mod tests {
             [],
         )
         .unwrap();
+        auth.record_hourly_character_metrics(unix_now()).unwrap();
         let updated: GoldLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(updated.entries[0].name, "Hero1");
         assert_eq!(updated.entries[0].gold, 6000000000);
@@ -912,7 +1027,8 @@ mod tests {
                 account_first_rank: 1
             }]
         );
-        assert_eq!(single.series[0].samples.last().unwrap().gold, 0);
+        assert_eq!(single.series[0].samples.last().unwrap().gold, 6000000000);
+        assert!(!auth.record_hourly_character_metrics(unix_now()).unwrap());
         conn.execute("DROP TABLE characters", []).unwrap();
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -1292,10 +1408,10 @@ mod tests {
         record_concurrent_sample(&game, Arc::clone(&auth)).await;
 
         for (hours, interval) in [
-            (1, 60),
-            (6, 60),
-            (24, 60),
-            (168, 600),
+            (1, 3600),
+            (6, 3600),
+            (24, 3600),
+            (168, 3600),
             (720, 3600),
             (4320, 21600),
             (8760, 86400),

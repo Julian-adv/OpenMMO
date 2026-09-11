@@ -139,10 +139,10 @@ describe('concurrent account history', () => {
 
   it('validates fractional averages and rejects invalid aggregate statistics', () => {
     const sample = { timestamp: 0, ...webCount(1.5), peak_accounts: 3, peak_timestamp: 60, sample_count: 2 }
-    const data = { from: 0, until: 168 * 3600, sample_interval_seconds: 600,
+    const data = { from: 0, until: 168 * 3600, sample_interval_seconds: 3600,
       current: { timestamp: 168 * 3600, ...webCount(2) }, samples: [sample] }
     expect(parseHistory(data, 168)).toEqual(data)
-    for (const invalid of [{ accounts: NaN }, { peak_accounts: 1 }, { peak_timestamp: 600 }, { sample_count: 0 }, { sample_count: 11 }]) {
+    for (const invalid of [{ accounts: NaN }, { peak_accounts: 1 }, { peak_timestamp: 3600 }, { sample_count: 0 }, { sample_count: 61 }]) {
       expect(() => parseHistory({ ...data, samples: [{ ...sample, ...invalid }] }, 168)).toThrow()
     }
   })
@@ -165,8 +165,8 @@ describe('concurrent account history', () => {
   })
 
   it('rejects malformed, duplicate and out-of-window data', () => {
-    const data = { from: 0, until: 3600, sample_interval_seconds: 60,
-      current: { timestamp: 3600, ...webCount(2) }, samples }
+    const data = { from: 0, until: 3600, sample_interval_seconds: 3600,
+      current: { timestamp: 3600, ...webCount(2) }, samples: samples.slice(0, 2) }
     expect(parseHistory(data, 1)).toEqual(data)
     expect(() => parseHistory(data, 24)).toThrow()
     expect(() => parseHistory({ ...data, samples: [...samples, samples[2]] }, 1)).toThrow()
@@ -183,7 +183,7 @@ describe('concurrent account history', () => {
 
   it('rejects component counts that disagree with the total or have invalid values', () => {
     const current = { timestamp: 3600, accounts: 3, web_accounts: 1, agent_accounts: 2, other_accounts: 0 }
-    const data = { from: 0, until: 3600, sample_interval_seconds: 60, current, samples }
+    const data = { from: 0, until: 3600, sample_interval_seconds: 3600, current, samples: samples.slice(0, 2) }
     expect(parseHistory(data, 1)).toEqual(data)
     for (const invalid of [{ web_accounts: -1 }, { agent_accounts: NaN }, { other_accounts: undefined }, { web_accounts: 2 }, { web_accounts: 0.5, agent_accounts: 2.5 }]) {
       expect(() => parseHistory({ ...data, current: { ...current, ...invalid } }, 1)).toThrow()
@@ -194,7 +194,7 @@ describe('concurrent account history', () => {
   it('accepts fractional aggregate components without changing the total or weighting', () => {
     const sample = { timestamp: 0, accounts: 6, web_accounts: 2 / 3, agent_accounts: 4 / 3, other_accounts: 4,
       peak_accounts: 8, peak_timestamp: 60, sample_count: 3 }
-    const data = { from: 0, until: 168 * 3600, sample_interval_seconds: 600,
+    const data = { from: 0, until: 168 * 3600, sample_interval_seconds: 3600,
       current: { timestamp: 168 * 3600, ...webCount(0) }, samples: [sample] }
     expect(parseHistory(data, 168)).toEqual(data)
     expect(summarize(data.samples)).toEqual({ peak: 8, peakAt: 60, average: 6, sampleCount: 3 })

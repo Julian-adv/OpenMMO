@@ -690,7 +690,6 @@ impl super::GameState {
         }
         let inventories = Vec::from_iter(self.take_player_inventory(player_id).await);
         let skills = Vec::from_iter(self.take_player_skills(player_id).await);
-
         let auth = auth.clone();
         flush_save(
             move || auth.save_batch(&characters, &inventories, &skills, &[], None),
@@ -709,10 +708,10 @@ impl super::GameState {
         let character_count = characters.len();
         let inventory_count = inventories.len();
         let datetime = self.current_game_datetime();
-        let auth = auth.clone();
+        let saved_auth = auth.clone();
         flush_save(
             move || {
-                auth.save_batch(
+                saved_auth.save_batch(
                     &characters,
                     &inventories,
                     &skills,
@@ -728,6 +727,8 @@ impl super::GameState {
             "shutdown snapshot",
         )
         .await;
+        self.flush_item_sales(auth, crate::auth::unix_now(), true)
+            .await;
     }
 
     async fn collect_shutdown_snapshot(

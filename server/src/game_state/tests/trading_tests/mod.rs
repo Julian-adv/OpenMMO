@@ -2,6 +2,7 @@ use super::*;
 
 mod batch_tests;
 mod buyback_tests;
+mod item_sales_tests;
 mod merchant_tests;
 mod resident_tests;
 

@@ -4,6 +4,8 @@
   import HistoryChart from './lib/HistoryChart.svelte'
   import GoldPanel from './lib/GoldPanel.svelte'
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
+  import ItemGoldSourcesPanel from './lib/ItemGoldSourcesPanel.svelte'
+  import { parseItemGoldSources } from './lib/itemGoldSources'
   import LeaderboardSection from './lib/LeaderboardSection.svelte'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
@@ -23,6 +25,8 @@
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
   let levelHours = $state<LeaderboardHours>(168)
+  let itemGoldHours = $state<GoldHours>(24)
+  const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '아이템 판매 현황')
   const leaderboard = createMetricsResource(() => levelHours, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
   let goldLeaderboardHours = $state<LeaderboardHours>(168)
   const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')
@@ -30,7 +34,7 @@
   const weaponEnchantLeaderboard = createMetricsResource(() => weaponEnchantHours, 'weapon-enchant-leaderboard', parseWeaponEnchantLeaderboard, '무기 인챈트 순위 정보')
   let armorEnchantHours = $state<LeaderboardHours>(168)
   const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
-  const resources = [concurrent, unique, gold, perAccountGold, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard]
+  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -69,7 +73,7 @@
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}30초마다 업데이트{/if}
+        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}1시간마다 업데이트{/if}
       </div>
       <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -81,7 +85,7 @@
 
   <section class="stat-grid" aria-label="접속 요약" aria-busy={loading}>
     <article class="stat-card current-card">
-      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : 'LIVE'}</span></div>
+      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : '1시간 갱신'}</span></div>
       <div class="stat-value">{count(history?.current.accounts)}<span>계정</span></div>
       <div class="stat-detail"><span class="tiny-dot"></span>{history ? `${formatTime(history.until)} KST 기준` : '월드에 입장한 계정 기준'}</div>
       {#if history}<ConnectionBreakdown sample={history.current} />{/if}
@@ -104,7 +108,7 @@
         <h2 id="chart-title">동시 접속 추이</h2>
         <p>월드에 머물고 있는 계정 수의 변화</p>
       </div>
-      <PeriodFilter bind:hours options={periods} label="조회 기간" />
+      <PeriodFilter bind:hours options={periods.filter((period) => period.hours >= 24)} label="조회 기간" />
     </div>
     <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
     {#if history && history.samples.length > 0}
@@ -113,7 +117,7 @@
       <div class="chart-empty" role="status">
         <div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 64 48" fill="none"><path d="M4 42h56M4 24h56M4 6h56" stroke="currentColor" stroke-opacity=".18" /><path d="M6 34h13l9-16 10 11 10-19 10 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
         <strong>{loading ? '월드의 기록을 불러오고 있어요' : error ? '기록에 연결할 수 없어요' : '첫 번째 기록을 기다리고 있어요'}</strong>
-        <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : '이 기간에 수집된 기록이 아직 없습니다. 새 기록은 1분마다 쌓입니다.'}</p>
+        <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 그래프가 자동으로 갱신됩니다.' : '이 기간에 수집된 기록이 아직 없습니다. 새 기록은 1시간마다 쌓입니다.'}</p>
       </div>
     {/if}
     <div class="chart-footer">
@@ -167,6 +171,8 @@
 
   <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours history={perAccountGold.history} loading={perAccountGold.loading} refreshing={perAccountGold.refreshing} error={perAccountGold.error} refresh={() => perAccountGold.refresh()} />
 
+  <ItemGoldSourcesPanel bind:hours={itemGoldHours} sources={itemGoldSources.history} loading={itemGoldSources.loading} refreshing={itemGoldSources.refreshing} error={itemGoldSources.error} refresh={() => itemGoldSources.refresh()} />
+
   <LeaderboardSection metric="level" bind:hours={levelHours} resource={leaderboard} />
 
   <LeaderboardSection metric="gold" bind:hours={goldLeaderboardHours} resource={goldLeaderboard} />
@@ -182,7 +188,7 @@
     </div>
     <div class="metric-note">
       <span class="note-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="1.5" /><path d="M12 7v5l3 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" /></svg></span>
-      <div><h3>기록된 순간을 연결합니다</h3><p>접속 지표의 최고·평균은 1분 간격, 총 골드는 1시간 간격의 기록으로 계산합니다. 긴 기간의 그래프는 구간 평균으로 표시하며, 기록이 없는 구간은 평균에서 제외합니다. 1개월·6개월·1년은 최근 30일·180일·365일 기준입니다.</p></div>
+      <div><h3>기록된 순간을 연결합니다</h3><p>접속 지표의 최고·평균과 총 골드는 1시간 간격의 기록으로 계산합니다. 긴 기간의 그래프는 구간 평균으로 표시하며, 기록이 없는 구간은 평균에서 제외합니다. 1개월·6개월·1년은 최근 30일·180일·365일 기준입니다.</p></div>
     </div>
   </section>
   <footer class="site-footer"><span>OpenMMO <strong>Pulse</strong></span><span>작은 순간들이 모여, 하나의 월드가 됩니다.</span></footer>

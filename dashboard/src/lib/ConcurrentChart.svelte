@@ -18,7 +18,7 @@
   }
 </script>
 
-<HistoryChart {history} {peak} value={(sample) => sample.accounts} legend={history.sample_interval_seconds > 60 ? '평균 접속 계정 수' : '접속 계정 수'} legendLabel="합계" valueLabel={history.sample_interval_seconds > 60 ? '계정 합계 (평균)' : '계정 합계'}>
+<HistoryChart {history} {peak} value={(sample) => sample.accounts} legend="평균 접속 계정 수" legendLabel="합계" valueLabel="계정 합계 (평균)">
   {#snippet layers(segment, x, y)}
     {#each connectionKinds as kind, layer (kind.key)}
       {#if segment.length > 1}

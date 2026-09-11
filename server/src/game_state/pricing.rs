@@ -51,8 +51,7 @@ impl super::GameState {
         self.pricing.write().await.index_percent = percent;
     }
 
-    /// Called right after the dirty-save flush; the DB ignores repeats
-    /// within the same hour.
+    /// The hourly metrics job records the saved gold supply.
     pub async fn tick_gold_snapshot(&self, auth: &Arc<AuthService>) {
         let auth = Arc::clone(auth);
         let active_days = world_config().pricing.active_days;

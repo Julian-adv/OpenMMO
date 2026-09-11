@@ -45,10 +45,18 @@ export function createMetricsResource<T, H extends Hours>(getHours: () => H, end
 
     refresh = () => { void update() }
     void update()
-    const timer = window.setInterval(() => { void update() }, 30000)
+    let timer: number
+    function scheduleRefresh() {
+      const hour = 3600000
+      timer = window.setTimeout(() => {
+        void update()
+        scheduleRefresh()
+      }, hour - Date.now() % hour + 5000)
+    }
+    scheduleRefresh()
     return () => {
       stopped = true
-      window.clearInterval(timer)
+      window.clearTimeout(timer)
       controller?.abort()
     }
   })

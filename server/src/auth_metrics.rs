@@ -28,6 +28,112 @@ fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Erro
 }
 
 impl AuthService {
+    pub(super) fn ensure_item_sales_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let transaction = conn.unchecked_transaction()?;
+        transaction.execute_batch(
+            "CREATE TABLE IF NOT EXISTS item_sale_collection (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                started_at INTEGER NOT NULL
+             );
+             INSERT OR IGNORE INTO item_sale_collection (id, started_at)
+                VALUES (1, unixepoch());
+             CREATE TABLE IF NOT EXISTS item_sale_samples (
+                timestamp INTEGER NOT NULL,
+                item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL CHECK (quantity > 0),
+                gold INTEGER NOT NULL CHECK (gold >= 0),
+                PRIMARY KEY (timestamp, item_def_id)
+             );",
+        )?;
+        if !Self::table_columns(&transaction, "item_sale_collection")?.contains("hourly") {
+            transaction.execute_batch(
+                "ALTER TABLE item_sale_collection ADD COLUMN hourly INTEGER NOT NULL DEFAULT 1;
+                 CREATE TEMP TABLE hourly_item_sales AS
+                    SELECT timestamp - timestamp % 3600 AS timestamp, item_def_id,
+                           SUM(quantity) AS quantity, SUM(gold) AS gold
+                    FROM item_sale_samples GROUP BY timestamp - timestamp % 3600, item_def_id;
+                 DELETE FROM item_sale_samples;
+                 INSERT INTO item_sale_samples SELECT * FROM hourly_item_sales;
+                 DROP TABLE hourly_item_sales;",
+            )?;
+        }
+        transaction.commit()
+    }
+
+    pub fn record_item_sales(
+        &self,
+        sales: &[crate::metrics::ItemSaleRecord],
+    ) -> Result<(), AuthError> {
+        if sales.is_empty() {
+            return Ok(());
+        }
+        let conn = self.open_connection()?;
+        let transaction = conn.unchecked_transaction()?;
+        let mut statement = transaction.prepare_cached(
+            "INSERT INTO item_sale_samples (timestamp, item_def_id, quantity, gold)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(timestamp, item_def_id) DO UPDATE SET
+                quantity = quantity + excluded.quantity, gold = gold + excluded.gold",
+        )?;
+        for sale in sales {
+            statement.execute(params![
+                sale.timestamp - sale.timestamp.rem_euclid(SAMPLE_INTERVAL_SECONDS),
+                sale.item_def_id,
+                sale.quantity,
+                sale.gold
+            ])?;
+        }
+        drop(statement);
+        transaction.commit()?;
+        Ok(())
+    }
+
+    pub fn item_gold_sources(
+        &self,
+        until: i64,
+        hours: u32,
+    ) -> Result<crate::metrics::ItemGoldSources, AuthError> {
+        let conn = self.open_connection()?;
+        let transaction = conn.unchecked_transaction()?;
+        let until = until - until.rem_euclid(SAMPLE_INTERVAL_SECONDS);
+        let from = until - i64::from(hours) * 3600;
+        let collection_started_at = transaction.query_row(
+            "SELECT started_at FROM item_sale_collection WHERE id = 1",
+            [],
+            |row| row.get(0),
+        )?;
+        let defs = crate::item_defs::item_defs();
+        let mut statement = transaction.prepare(
+            "SELECT item_def_id, SUM(quantity), SUM(gold) AS total_gold
+             FROM item_sale_samples WHERE timestamp >= ?1 AND timestamp < ?2
+             GROUP BY item_def_id ORDER BY total_gold DESC, item_def_id ASC",
+        )?;
+        let entries = statement
+            .query_map(params![from, until], |row| {
+                let item_def_id: String = row.get(0)?;
+                Ok(crate::metrics::ItemGoldSource {
+                    name: defs
+                        .get(&item_def_id)
+                        .map_or_else(|| item_def_id.clone(), |item| item.name.clone()),
+                    item_def_id,
+                    quantity: row.get(1)?,
+                    gold: row.get(2)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let total_gold = entries
+            .iter()
+            .try_fold(0i64, |total, entry| total.checked_add(entry.gold))
+            .ok_or_else(|| AuthError::Database("Item sale total overflow".into()))?;
+        Ok(crate::metrics::ItemGoldSources {
+            from,
+            until,
+            collection_started_at,
+            total_gold,
+            entries,
+        })
+    }
+
     pub(super) fn ensure_level_history_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         Self::ensure_character_history_schema(conn, "level", 1)
     }
@@ -128,13 +234,55 @@ impl AuthService {
              BEGIN
                 INSERT INTO character_{metric}_history VALUES (NEW.id, CAST(strftime('%s', 'now') AS INTEGER), NEW.{metric});
              END;
-             CREATE TRIGGER IF NOT EXISTS character_{metric}_changed AFTER UPDATE OF {metric} ON characters
-             WHEN NEW.{metric} != OLD.{metric} AND NEW.account_name NOT GLOB '{NPC_ACCOUNT_PREFIX}*'
-             BEGIN
-                INSERT INTO character_{metric}_history VALUES (NEW.id, CAST(strftime('%s', 'now') AS INTEGER), NEW.{metric})
-                ON CONFLICT (character_id, timestamp) DO UPDATE SET {metric} = excluded.{metric};
-             END;"
+             DROP TRIGGER IF EXISTS character_{metric}_changed;
+             CREATE TABLE IF NOT EXISTS character_metrics_state (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                sampled_at INTEGER NOT NULL
+             );"
         ))
+    }
+
+    pub fn record_hourly_character_metrics(&self, now: i64) -> Result<bool, AuthError> {
+        let mut conn = self.open_connection()?;
+        let transaction =
+            conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let previous: Option<i64> = transaction
+            .query_row(
+                "SELECT sampled_at FROM character_metrics_state WHERE id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let boundary = now - now.rem_euclid(SAMPLE_INTERVAL_SECONDS);
+        if previous.is_some_and(|previous| previous >= boundary) {
+            return Ok(false);
+        }
+        Self::write_character_metric_samples(&transaction, now)?;
+        transaction.execute(
+            "INSERT INTO character_metrics_state (id, sampled_at) VALUES (1, ?1)
+             ON CONFLICT(id) DO UPDATE SET sampled_at = excluded.sampled_at",
+            [now],
+        )?;
+        transaction.commit()?;
+        Ok(true)
+    }
+
+    fn write_character_metric_samples(conn: &Connection, now: i64) -> Result<(), rusqlite::Error> {
+        for metric in ["level", "gold", "weapon_enchant", "armor_enchant"] {
+            conn.execute(
+                &format!(
+                    "INSERT INTO character_{metric}_history (character_id, timestamp, {metric})
+                 SELECT c.id, ?1, c.{metric} FROM characters c
+                 WHERE account_name NOT GLOB '{NPC_ACCOUNT_PREFIX}*' AND c.{metric} IS NOT (
+                    SELECT h.{metric} FROM character_{metric}_history h
+                    WHERE h.character_id = c.id ORDER BY timestamp DESC LIMIT 1
+                 )
+                 ON CONFLICT(character_id, timestamp) DO UPDATE SET {metric} = excluded.{metric}"
+                ),
+                [now],
+            )?;
+        }
+        Ok(())
     }
 
     pub fn level_leaderboard(
@@ -679,6 +827,181 @@ impl AuthService {
 mod tests {
     use super::*;
 
+    #[test]
+    fn character_metrics_write_only_on_hourly_sampling_and_retry_atomically() {
+        let path = crate::test_util::unique_temp_dir("hourly_character_metrics").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test');
+             INSERT INTO characters (id, account_name, character_name) VALUES (1, 'player', 'Hero'), (2, 'npc_test', 'Npc');",
+        ).unwrap();
+        let now = unix_now();
+        for metric in ["level", "gold", "weapon_enchant", "armor_enchant"] {
+            conn.execute(
+                &format!("UPDATE character_{metric}_history SET timestamp = ?1"),
+                [now - 7200],
+            )
+            .unwrap();
+        }
+        assert!(auth.record_hourly_character_metrics(now - 3600).unwrap());
+        for value in 1..=50 {
+            conn.execute("UPDATE characters SET gold = ?1, level = ?1, weapon_enchant = ?1, armor_enchant = ?1", [value]).unwrap();
+        }
+        for metric in ["level", "gold", "weapon_enchant", "armor_enchant"] {
+            let count: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM character_{metric}_history"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 1, "{metric} writes must wait for the hourly job");
+        }
+        conn.execute_batch("CREATE TRIGGER reject_hourly_metrics BEFORE INSERT ON character_gold_history BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+        assert!(auth.record_hourly_character_metrics(now).is_err());
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM character_level_history", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 1);
+        conn.execute_batch("DROP TRIGGER reject_hourly_metrics;")
+            .unwrap();
+        assert!(auth.record_hourly_character_metrics(now).unwrap());
+        for metric in ["level", "gold", "weapon_enchant", "armor_enchant"] {
+            let count: i64 = conn
+                .query_row(
+                    &format!("SELECT COUNT(*) FROM character_{metric}_history"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            assert_eq!(count, 2);
+            let value: i64 = conn.query_row(&format!("SELECT {metric} FROM character_{metric}_history ORDER BY timestamp DESC LIMIT 1"), [], |r| r.get(0)).unwrap();
+            assert_eq!(value, 50);
+        }
+        conn.execute("UPDATE characters SET gold = 99", []).unwrap();
+        assert!(!auth.record_hourly_character_metrics(now).unwrap());
+        let reopened = AuthService::new(path).unwrap();
+        assert!(!reopened.record_hourly_character_metrics(now).unwrap());
+        assert!(reopened
+            .record_hourly_character_metrics(now + 3600)
+            .unwrap());
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM character_gold_history", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(count, 3);
+        assert!(reopened
+            .record_hourly_character_metrics(now + 7200)
+            .unwrap());
+        let unchanged: i64 = conn
+            .query_row("SELECT COUNT(*) FROM character_gold_history", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(unchanged, count);
+    }
+
+    #[test]
+    fn item_sales_migrate_seconds_to_hourly_totals_once() {
+        let path = crate::test_util::unique_temp_dir("hourly_item_sales_migration").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let conn = auth.open_connection().unwrap();
+        conn.execute_batch(
+            "ALTER TABLE item_sale_collection DROP COLUMN hourly;
+             INSERT INTO item_sale_samples VALUES (3601, 'iron_sword', 2, 8000),
+                (3650, 'iron_sword', 1, 5000), (7200, 'iron_sword', 1, 4000);",
+        )
+        .unwrap();
+        let started: i64 = conn
+            .query_row("SELECT started_at FROM item_sale_collection", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        drop(AuthService::new(path.clone()).unwrap());
+        drop(AuthService::new(path).unwrap());
+        let sources = auth.item_gold_sources(7200, 1).unwrap();
+        assert_eq!(sources.collection_started_at, started);
+        assert_eq!(
+            (sources.entries[0].quantity, sources.total_gold),
+            (3, 13000)
+        );
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM item_sale_samples", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn item_gold_sources_aggregate_actual_payouts_with_exact_period_boundaries() {
+        let path = crate::test_util::unique_temp_dir("item_gold_sources").join("game.db");
+        let auth = AuthService::new(path.clone()).unwrap();
+        let now = unix_now() - unix_now().rem_euclid(3600);
+        let sale = |timestamp, id: &str, quantity, gold| crate::metrics::ItemSaleRecord {
+            timestamp,
+            item_def_id: id.into(),
+            quantity,
+            gold,
+        };
+        let sales = [
+            sale(now - 3601, "iron_sword", 1, 99999),
+            sale(now - 3600, "iron_sword", 1, 4000),
+            sale(now - 1, "iron_sword", 1, 5000),
+            sale(now - 1, "healing_potion", 20, 4800),
+            sale(now - 1, "healing_potion", 1, 300),
+            sale(now - 1, "removed_item", 1, 5100),
+            sale(now + 1, "iron_sword", 1, 99999),
+        ];
+        auth.record_item_sales(&sales).unwrap();
+        let sources = auth.item_gold_sources(now, 1).unwrap();
+        assert_eq!(sources.total_gold, 19200);
+        assert_eq!(
+            sources
+                .entries
+                .iter()
+                .map(|e| (e.item_def_id.as_str(), e.quantity, e.gold))
+                .collect::<Vec<_>>(),
+            [
+                ("iron_sword", 2, 9000),
+                ("healing_potion", 21, 5100),
+                ("removed_item", 1, 5100)
+            ]
+        );
+        assert_eq!(
+            sources.entries[0].name,
+            crate::item_defs::item_defs()
+                .get("iron_sword")
+                .unwrap()
+                .name
+        );
+        assert_eq!(sources.entries[2].name, "removed_item");
+        let reopened = AuthService::new(path).unwrap();
+        assert_eq!(
+            reopened
+                .item_gold_sources(now, 1)
+                .unwrap()
+                .collection_started_at,
+            sources.collection_started_at
+        );
+        assert_eq!(
+            reopened.item_gold_sources(now, 1).unwrap().total_gold,
+            19200
+        );
+        let empty = auth.item_gold_sources(now + 7200, 1).unwrap();
+        assert!(empty.entries.is_empty());
+        assert_eq!(empty.total_gold, 0);
+
+        let invalid = [
+            sale(now - 1, "iron_sword", 1, 4000),
+            sale(now - 1, "bad", 0, 1),
+        ];
+        assert!(auth.record_item_sales(&invalid).is_err());
+        assert_eq!(auth.item_gold_sources(now, 1).unwrap().total_gold, 19200);
+    }
+
     fn inventory_item(
         item_def_id: &str,
         enchant: i32,
@@ -702,7 +1025,7 @@ mod tests {
         let conn = auth.open_connection().unwrap();
         conn.execute_batch(
             "DROP TRIGGER character_weapon_enchant_created;
-             DROP TRIGGER character_weapon_enchant_changed;
+             DROP TRIGGER IF EXISTS character_weapon_enchant_changed;
              DROP TABLE character_weapon_enchant_history;
              DROP INDEX idx_characters_weapon_enchant_ranking;
              ALTER TABLE characters DROP COLUMN weapon_enchant;
@@ -734,7 +1057,8 @@ mod tests {
         ];
         let save = |items: &[crate::auth::ItemRow]| {
             auth.save_batch(&[], &[(1, items.to_vec())], &[], &[], None)
-                .unwrap()
+                .unwrap();
+            AuthService::write_character_metric_samples(&conn, unix_now()).unwrap()
         };
         let count = || {
             conn.query_row(
@@ -817,7 +1141,7 @@ mod tests {
         let conn = auth.open_connection().unwrap();
         conn.execute_batch(
             "DROP TRIGGER character_armor_enchant_created;
-             DROP TRIGGER character_armor_enchant_changed;
+             DROP TRIGGER IF EXISTS character_armor_enchant_changed;
              DROP TABLE character_armor_enchant_history;
              DROP INDEX idx_characters_armor_enchant_ranking;
              ALTER TABLE characters DROP COLUMN armor_enchant;
@@ -856,7 +1180,8 @@ mod tests {
         ];
         let save = |items: &[crate::auth::ItemRow]| {
             auth.save_batch(&[], &[(1, items.to_vec())], &[], &[], None)
-                .unwrap()
+                .unwrap();
+            AuthService::write_character_metric_samples(&conn, unix_now()).unwrap()
         };
         let count = || {
             conn.query_row(
@@ -959,7 +1284,7 @@ mod tests {
         let conn = auth.open_connection().unwrap();
         conn.execute_batch(
             "DROP TRIGGER character_level_created;
-             DROP TRIGGER character_level_changed;
+             DROP TRIGGER IF EXISTS character_level_changed;
              DROP TABLE character_level_history;
              INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
              INSERT INTO characters (id, account_name, character_name, level, created_at)
@@ -995,6 +1320,7 @@ mod tests {
              UPDATE characters SET character_name = 'Renamed' WHERE id = 1;",
         )
         .unwrap();
+        AuthService::write_character_metric_samples(&conn, unix_now()).unwrap();
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM character_level_history", [], |row| {
                 row.get(0)
@@ -1100,7 +1426,7 @@ mod tests {
         let conn = auth.open_connection().unwrap();
         conn.execute_batch(
             "DROP TRIGGER character_gold_created;
-             DROP TRIGGER character_gold_changed;
+             DROP TRIGGER IF EXISTS character_gold_changed;
              DROP TABLE character_gold_history;
              INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
              INSERT INTO characters (id, account_name, character_name, gold, created_at)
@@ -1136,6 +1462,7 @@ mod tests {
              UPDATE characters SET character_name = 'Renamed' WHERE id = 1;",
         )
         .unwrap();
+        AuthService::write_character_metric_samples(&conn, unix_now()).unwrap();
         let count: i64 = conn
             .query_row("SELECT COUNT(*) FROM character_gold_history", [], |row| {
                 row.get(0)
@@ -1793,14 +2120,14 @@ mod tests {
     }
 
     #[test]
-    fn concurrent_samples_survive_restart_and_preserve_missing_minutes() {
+    fn concurrent_samples_survive_restart_and_preserve_missing_hours() {
         let path = crate::test_util::unique_temp_dir("concurrent_samples").join("game.db");
         let auth = AuthService::new(path.clone()).unwrap();
         for (now, web_accounts, agent_accounts, other_accounts) in [
-            (65, 1, 2, 0),
-            (119, 2, 1, 1),
-            (121, 0, 0, 0),
-            (305, 3, 4, 0),
+            (3900, 1, 2, 0),
+            (7140, 2, 1, 1),
+            (7260, 0, 0, 0),
+            (18300, 3, 4, 0),
         ] {
             auth.record_concurrent_accounts(
                 now,
@@ -1815,50 +2142,50 @@ mod tests {
         drop(auth);
 
         let auth = AuthService::new(path).unwrap();
-        let samples = auth.concurrent_account_samples(60, 300, 60).unwrap();
+        let samples = auth.concurrent_account_samples(3600, 18000, 3600).unwrap();
         assert_eq!(
             samples,
             vec![
                 ConcurrentHistorySample {
-                    timestamp: 60,
+                    timestamp: 3600,
                     accounts: 4.0,
                     web_accounts: 2.0,
                     agent_accounts: 1.0,
                     other_accounts: 1.0,
                     peak_accounts: 4,
-                    peak_timestamp: 60,
+                    peak_timestamp: 3600,
                     sample_count: 1,
                 },
                 ConcurrentHistorySample {
-                    timestamp: 120,
+                    timestamp: 7200,
                     accounts: 0.0,
                     web_accounts: 0.0,
                     agent_accounts: 0.0,
                     other_accounts: 0.0,
                     peak_accounts: 0,
-                    peak_timestamp: 120,
+                    peak_timestamp: 7200,
                     sample_count: 1,
                 },
                 ConcurrentHistorySample {
-                    timestamp: 300,
+                    timestamp: 18000,
                     accounts: 7.0,
                     web_accounts: 3.0,
                     agent_accounts: 4.0,
                     other_accounts: 0.0,
                     peak_accounts: 7,
-                    peak_timestamp: 300,
+                    peak_timestamp: 18000,
                     sample_count: 1,
                 },
             ]
         );
         assert_eq!(
-            auth.concurrent_account_samples(121, 299, 60).unwrap(),
+            auth.concurrent_account_samples(7260, 17940, 3600).unwrap(),
             vec![]
         );
     }
 
     #[test]
-    fn concurrent_history_aggregates_only_observed_minutes_and_keeps_peaks() {
+    fn concurrent_history_aggregates_only_observed_legacy_minutes_and_keeps_peaks() {
         let path = crate::test_util::unique_temp_dir("concurrent_aggregates").join("game.db");
         let auth = AuthService::new(path).unwrap();
         for (timestamp, web_accounts, agent_accounts, other_accounts) in [
@@ -1869,15 +2196,10 @@ mod tests {
             (1200, 1, 1, 1),
             (1260, 99, 0, 0),
         ] {
-            auth.record_concurrent_accounts(
-                timestamp,
-                ConcurrentCounts {
-                    web_accounts,
-                    agent_accounts,
-                    other_accounts,
-                },
-            )
-            .unwrap();
+            auth.open_connection().unwrap().execute(
+                "INSERT INTO concurrent_account_samples (timestamp, accounts, web_accounts, agent_accounts) VALUES (?1, ?2, ?3, ?4)",
+                params![timestamp, web_accounts + agent_accounts + other_accounts, web_accounts, agent_accounts],
+            ).unwrap();
         }
         assert_eq!(
             auth.concurrent_account_samples(100, 1230, 600).unwrap(),

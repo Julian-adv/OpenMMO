@@ -1121,10 +1121,7 @@ impl super::GameState {
         }
     }
 
-    /// Sell one unit of a bag item to a trading NPC. Merchants pay
-    /// `base_price * sell_rate_percent / 100` and the item vanishes;
-    /// residents only buy wishlist items, pay their premium rate out of a
-    /// finite wallet, and keep the item in their real inventory.
+    /// Sell one bag item; residents pay from their wallet and keep it.
     pub async fn sell_item(
         &self,
         player_id: &PlayerId,
@@ -1342,8 +1339,17 @@ impl super::GameState {
             )
         };
 
-        // The unit a merchant buys vanishes (no stock), so record it for
-        // buyback at the exact payout — the only way to undo a mis-sell.
+        if !is_resident {
+            self.record_item_sale(&item_def_id, 1, payout).await;
+        }
+        self.mark_dirty(player_id).await;
+        self.mark_inventory_dirty(player_id).await;
+        if is_resident {
+            self.mark_dirty(npc_player_id).await;
+            self.mark_inventory_dirty(npc_player_id).await;
+        }
+
+        // Keep the exact payout for buyback.
         if !is_resident {
             let buyback = self
                 .record_buybacks(
@@ -1381,8 +1387,6 @@ impl super::GameState {
                 .await;
         }
         info!("{player_name} sold {item_def_id} to {npc_name} for {payout}");
-        self.mark_dirty(player_id).await;
-        self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
             player_id,
             ServerMessage::InventoryUpdated {
@@ -1394,8 +1398,6 @@ impl super::GameState {
         self.abort_instrument_if_lost(player_id).await;
 
         if let Some(npc_snapshot) = npc_snapshot {
-            self.mark_dirty(npc_player_id).await;
-            self.mark_inventory_dirty(npc_player_id).await;
             self.send_direct_message(
                 npc_player_id,
                 ServerMessage::InventoryUpdated {
@@ -1417,13 +1419,7 @@ impl super::GameState {
         .await;
     }
 
-    /// Sell multiple bag stacks in one all-or-nothing transaction: every line
-    /// is validated (ownership, quantity, wishlist, resident carry weight,
-    /// resident wallet) before anything is mutated, so a big cart either
-    /// completes in full or leaves the player's bag/gold untouched. Mirrors
-    /// `sell_item`'s per-unit rules, generalized to N stacks; deals are
-    /// single-use per item def, so within one batch only the first line
-    /// touching a given item def can redeem one.
+    /// Validate the whole cart before selling; redeem each deal once.
     pub async fn sell_items(
         &self,
         player_id: &PlayerId,
@@ -1679,10 +1675,20 @@ impl super::GameState {
         drop(inventories);
         drop(gold_map);
 
-        // Merchants keep no stock, so every sold unit becomes its own buyback
-        // entry at the normal per-unit price, recorded in one pass. The unit a
-        // deal applied to is intentionally not buyback-able at its haggled
-        // price; the normal rate is what repurchasing costs.
+        if !is_resident {
+            for plan in &plans {
+                self.record_item_sale(&plan.item_def_id, plan.qty, plan.payout)
+                    .await;
+            }
+        }
+        self.mark_dirty(player_id).await;
+        self.mark_inventory_dirty(player_id).await;
+        if is_resident {
+            self.mark_dirty(npc_player_id).await;
+            self.mark_inventory_dirty(npc_player_id).await;
+        }
+
+        // Batch buyback uses the normal per-unit price, including haggled units.
         let mut recorded = Vec::new();
         if !is_resident {
             for plan in &plans {
@@ -1730,8 +1736,6 @@ impl super::GameState {
             );
         }
 
-        self.mark_dirty(player_id).await;
-        self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
             player_id,
             ServerMessage::InventoryUpdated {
@@ -1743,8 +1747,6 @@ impl super::GameState {
         self.abort_instrument_if_lost(player_id).await;
 
         if let Some(npc_snapshot) = npc_snapshot {
-            self.mark_dirty(npc_player_id).await;
-            self.mark_inventory_dirty(npc_player_id).await;
             self.send_direct_message(
                 npc_player_id,
                 ServerMessage::InventoryUpdated {

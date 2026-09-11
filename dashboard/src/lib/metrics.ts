@@ -135,10 +135,10 @@ export interface PerAccountGoldHistory extends ChartHistory<PerAccountGoldHistor
 }
 
 export const periods = [
-  { hours: 1, label: '1시간', interval: 60, intervalLabel: '1분 간격' },
-  { hours: 6, label: '6시간', interval: 60, intervalLabel: '1분 간격' },
-  { hours: 24, label: '24시간', interval: 60, intervalLabel: '1분 간격' },
-  { hours: 168, label: '1주일', interval: 600, intervalLabel: '10분 평균' },
+  { hours: 1, label: '1시간', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 6, label: '6시간', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 24, label: '1일', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 168, label: '1주일', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 720, label: '1개월', interval: 3600, intervalLabel: '1시간 평균' },
   { hours: 4320, label: '6개월', interval: 21600, intervalLabel: '6시간 평균' },
   { hours: 8760, label: '1년', interval: 86400, intervalLabel: '1일 평균' },

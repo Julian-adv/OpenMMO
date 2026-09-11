@@ -13,6 +13,7 @@ async fn resident_buys_wishlist_item_at_premium_from_wallet() {
         .sell_item(&pid("seller"), &pid("npc_karl"), 7)
         .await;
     assert_eq!(game_state.get_player_gold(&pid("seller")).await, 60);
+    assert!(game_state.pending_item_sales.read().await.is_empty());
     assert_eq!(
         game_state.get_player_gold(&pid("npc_karl")).await,
         10_000 - 60

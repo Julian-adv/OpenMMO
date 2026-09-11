@@ -680,6 +680,7 @@ impl AuthService {
         Self::ensure_titles_schema(&conn)?;
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
+        Self::ensure_item_sales_schema(&conn)?;
         Self::ensure_concurrent_samples_schema(&conn)?;
         Self::ensure_account_activity_schema(&conn)?;
         Self::ensure_pricing_schema(&conn)?;
@@ -2016,9 +2017,7 @@ impl AuthService {
         character.ok_or(AuthError::CharacterNotFound)
     }
 
-    /// The one write path for game state: the periodic flush, a single player's
-    /// logout and the shutdown snapshot all land here. Everything goes in one
-    /// transaction, so a save costs one commit no matter how much it covers.
+    /// Save game state in one transaction.
     pub fn save_batch(
         &self,
         characters: &[CharacterSaveData],

@@ -137,7 +137,6 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
     // Batch-save dirty character states and inventories every 4 ticks (32s)
     if tick_count.is_multiple_of(4) {
         game_state.flush_dirty_saves(auth_service).await;
-        game_state.tick_gold_snapshot(auth_service).await;
     }
 
     let datetime = game_state.broadcast_game_time();
@@ -775,16 +774,23 @@ async fn main() -> ExitCode {
 
     let metrics_game = Arc::clone(&game_state);
     let metrics_auth = Arc::clone(&auth_service);
-    background.spawn(run_ticks(
-        "concurrent accounts",
-        Duration::from_secs(metrics::SAMPLE_INTERVAL_SECONDS as u64),
-        drain_shutdown.clone(),
-        move || {
-            let game = Arc::clone(&metrics_game);
-            let auth = Arc::clone(&metrics_auth);
-            async move { metrics::record_concurrent_sample(&game, auth).await }
-        },
-    ));
+    let mut metrics_shutdown = drain_shutdown.clone();
+    background.spawn(async move {
+        loop {
+            guard_tick(
+                "hourly metrics",
+                metrics::record_hourly_metrics(&metrics_game, Arc::clone(&metrics_auth)),
+            )
+            .await;
+            let remaining = metrics::SAMPLE_INTERVAL_SECONDS
+                - auth::unix_now().rem_euclid(metrics::SAMPLE_INTERVAL_SECONDS);
+            tokio::select! {
+                biased;
+                _ = metrics_shutdown.changed() => break,
+                _ = tokio::time::sleep(Duration::from_secs(remaining as u64)) => {}
+            }
+        }
+    });
 
     info!("🎮 MMORPG Server started successfully!");
     info!("📡 WebSocket server ready for connections");
