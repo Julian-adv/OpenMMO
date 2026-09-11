@@ -395,7 +395,7 @@ export type EstateChestState = {
 }
 
 /** Trained-skill ids (shared `SkillId` wire strings). */
-export type SkillId = 'fishing'
+export type SkillId = 'fishing' | 'archery'
 
 /** Shared `FishingAction` wire strings (`ClientMessage::FishingRespond`).
  *  `hook` answers a bite; the rest are held stances during the fight. */

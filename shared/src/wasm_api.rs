@@ -97,6 +97,14 @@ pub fn skill_level_cap() -> u32 {
     crate::skills::SKILL_LEVEL_CAP
 }
 
+/// The archery attack-speed multiplier, so the client paces its own shots on
+/// the same curve the server gates them with. Damage is server-side only and
+/// has no client mirror.
+#[wasm_bindgen]
+pub fn archery_attack_mult(level: u32) -> f32 {
+    crate::skills::archery_attack_mult(level)
+}
+
 /// How long a cast is airborne (`CAST_MS`), so the client can line the splash
 /// up with the bobber landing instead of the swing that threw it.
 #[wasm_bindgen]

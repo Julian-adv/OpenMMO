@@ -13,12 +13,15 @@ pub const SKILL_LEVEL_CAP: u32 = 30;
 pub enum SkillId {
     #[serde(rename = "fishing")]
     Fishing,
+    #[serde(rename = "archery")]
+    Archery,
 }
 
 impl SkillId {
     pub fn as_str(&self) -> &'static str {
         match self {
             SkillId::Fishing => "fishing",
+            SkillId::Archery => "archery",
         }
     }
 
@@ -26,6 +29,7 @@ impl SkillId {
     pub fn display_name(&self) -> &'static str {
         match self {
             SkillId::Fishing => "Fishing",
+            SkillId::Archery => "Archery",
         }
     }
 }
@@ -36,6 +40,7 @@ impl std::str::FromStr for SkillId {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "fishing" => Ok(SkillId::Fishing),
+            "archery" => Ok(SkillId::Archery),
             _ => Err(()),
         }
     }
@@ -63,6 +68,25 @@ pub fn skill_level_from_xp(xp: u64) -> u32 {
         level += 1;
     }
     level
+}
+
+/// Attack-speed multiplier a trained archer's ranged weapon swings at: +1%
+/// per level, +30% at the cap. The ceiling is load-bearing — at +30% the
+/// 1,380 ms interval still lands above the 1,033 ms `bow_shoot` clip, so no
+/// animation, sound or arrow-flight timing has to move. Raising the curve
+/// past that truncates the shot animation and drags `player_ranged_impact`
+/// (780 ms, which the server's loot delay also reads) along with it. Melee
+/// keeps the base cadence: only a weapon declaring a `range` applies this.
+pub fn archery_attack_mult(level: u32) -> f32 {
+    1.0 + 0.01 * level.min(SKILL_LEVEL_CAP) as f32
+}
+
+/// Flat damage a trained archer adds to a ranged hit: +1 per 6 levels, +5 at
+/// the cap. The ceiling matches a fully enchanted weapon (doc/ENCHANT.md), so
+/// the number has a meaning players already hold. Rides the same slot as the
+/// ability modifier and the enchant — no percentages anywhere in this system.
+pub fn archery_damage_bonus(level: u32) -> i32 {
+    (level.min(SKILL_LEVEL_CAP) / 6) as i32
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -168,6 +192,35 @@ mod tests {
         assert!(r.leveled_up);
         // A maxed skill reports nothing — no dirty flag, no message.
         assert!(skills.add_xp(SkillId::Fishing, 1).is_none());
+    }
+
+    #[test]
+    fn archery_attack_mult_runs_one_percent_a_level_and_clamps() {
+        assert_eq!(archery_attack_mult(0), 1.0);
+        assert_eq!(archery_attack_mult(1), 1.01);
+        assert_eq!(archery_attack_mult(15), 1.15);
+        assert_eq!(archery_attack_mult(SKILL_LEVEL_CAP), 1.30);
+        // A level past the cap cannot exist, but the curve must not run on
+        // if one ever does — the cadence floor is asserted against 1.30.
+        assert_eq!(archery_attack_mult(100), 1.30);
+    }
+
+    #[test]
+    fn archery_damage_bonus_steps_every_six_levels() {
+        for (level, expected) in [
+            (0, 0),
+            (5, 0),
+            (6, 1),
+            (11, 1),
+            (12, 2),
+            (23, 3),
+            (24, 4),
+            (29, 4),
+            (SKILL_LEVEL_CAP, 5),
+            (100, 5),
+        ] {
+            assert_eq!(archery_damage_bonus(level), expected, "level {level}");
+        }
     }
 
     #[test]
