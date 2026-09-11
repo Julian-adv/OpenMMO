@@ -1,11 +1,12 @@
-use super::{AuthError, AuthService};
+use super::{unix_now, AuthError, AuthService, NPC_ACCOUNT_PREFIX};
 use crate::metrics::{
     kst_day_start, AccountActivity, ConcurrentCounts, ConcurrentHistorySample, GoldHistory,
-    GoldHistorySample, GoldSample, PerAccountGoldHistory, PerAccountGoldHistorySample,
-    PerAccountGoldSample, UniqueHistory, UniqueSample, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
+    GoldHistorySample, GoldSample, LevelLeaderboard, LevelLeaderboardEntry, PerAccountGoldHistory,
+    PerAccountGoldHistorySample, PerAccountGoldSample, UniqueHistory, UniqueSample, DAY_SECONDS,
+    SAMPLE_INTERVAL_SECONDS,
 };
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Error> {
     conn.query_row(
@@ -16,6 +17,41 @@ fn unique_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Erro
 }
 
 impl AuthService {
+    pub fn level_leaderboard(&self) -> Result<LevelLeaderboard, AuthError> {
+        let conn = self.open_connection()?;
+        let mut statement = conn.prepare(
+            "SELECT character_name, level, account_name FROM characters
+             WHERE account_name NOT GLOB ?1
+             ORDER BY level DESC, xp DESC, id ASC LIMIT 10",
+        )?;
+        let rows = statement
+            .query_map([format!("{NPC_ACCOUNT_PREFIX}*")], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, u32>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut first_ranks = HashMap::new();
+        let entries = rows
+            .into_iter()
+            .enumerate()
+            .map(|(index, (name, level, account))| {
+                let account_first_rank = *first_ranks.entry(account).or_insert(index + 1);
+                LevelLeaderboardEntry {
+                    name,
+                    level,
+                    account_first_rank,
+                }
+            })
+            .collect();
+        Ok(LevelLeaderboard {
+            timestamp: unix_now(),
+            entries,
+        })
+    }
+
     pub fn per_account_gold_history(
         &self,
         until: i64,

@@ -15,6 +15,19 @@ pub const SAMPLE_INTERVAL_SECONDS: i64 = 60;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct LevelLeaderboardEntry {
+    pub name: String,
+    pub level: u32,
+    pub account_first_rank: usize,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LevelLeaderboard {
+    pub timestamp: i64,
+    pub entries: Vec<LevelLeaderboardEntry>,
+}
+
 pub fn kst_day_start(timestamp: i64) -> i64 {
     timestamp - (timestamp + 9 * 3600).rem_euclid(DAY_SECONDS)
 }
@@ -158,6 +171,7 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/concurrent", get(concurrent_history))
         .route("/api/metrics/unique", get(unique_history))
         .route("/api/metrics/gold", get(gold_history))
+        .route("/api/metrics/level-leaderboard", get(level_leaderboard))
         .route(
             "/api/metrics/gold-per-account",
             get(per_account_gold_history),
@@ -209,6 +223,18 @@ fn metrics_unavailable() -> Response {
         "Metrics are temporarily unavailable",
     )
         .into_response()
+}
+
+async fn level_leaderboard(State(state): State<MetricsState>) -> Response {
+    match auth_db(move || state.auth.level_leaderboard()).await {
+        Ok(leaderboard) => {
+            ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
+        }
+        Err(error) => {
+            warn!("Level leaderboard failed: {error}");
+            metrics_unavailable()
+        }
+    }
 }
 
 async fn unique_history(
@@ -335,6 +361,154 @@ async fn per_account_gold_history(
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+
+    #[tokio::test]
+    async fn level_leaderboard_ranks_saved_characters_and_excludes_npc_accounts() {
+        let path = crate::test_util::unique_temp_dir("level_leaderboard").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("level_leaderboard"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/level-leaderboard");
+        let empty: LevelLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(empty.entries.is_empty());
+
+        let conn = rusqlite::Connection::open(path).unwrap();
+        let npc = auth.login_npc("npc_leaderboard").unwrap();
+        conn.execute(
+            "INSERT INTO characters (account_name, character_name, level, xp)
+             VALUES (?1, 'OfficialNpc', 99, 999999)",
+            [&npc],
+        )
+        .unwrap();
+        let npc_only: LevelLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(npc_only.entries.is_empty());
+        for i in 1..=12 {
+            let account = auth
+                .login_google(&format!("ranking-account-{}", (i - 1) / 3))
+                .unwrap();
+            conn.execute(
+                "INSERT INTO characters (account_name, character_name, level, xp)
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    account,
+                    format!("Hero{i}"),
+                    if i == 12 { 11 } else { 10 },
+                    match i {
+                        12 => 0,
+                        10 => 1100,
+                        _ => i * 100,
+                    }
+                ],
+            )
+            .unwrap();
+        }
+        conn.execute(
+            "INSERT INTO accounts (player_name) VALUES ('npcxplayer')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO characters (account_name, character_name, level, xp)
+             VALUES ('npcxplayer', 'LooksLikeNpc', 10, 5000)",
+            [],
+        )
+        .unwrap();
+
+        let before = unix_now();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let body: serde_json::Value = response.json().await.unwrap();
+        for entry in body["entries"].as_array().unwrap() {
+            assert_eq!(entry.as_object().unwrap().len(), 3);
+        }
+        let leaderboard: LevelLeaderboard = serde_json::from_value(body).unwrap();
+        assert!((before..=unix_now()).contains(&leaderboard.timestamp));
+        assert_eq!(
+            leaderboard
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Hero12",
+                "LooksLikeNpc",
+                "Hero10",
+                "Hero11",
+                "Hero9",
+                "Hero8",
+                "Hero7",
+                "Hero6",
+                "Hero5",
+                "Hero4"
+            ]
+        );
+        assert_eq!(leaderboard.entries[0].level, 11);
+        assert!(leaderboard.entries[1..]
+            .iter()
+            .all(|entry| entry.level == 10));
+        assert_eq!(
+            leaderboard
+                .entries
+                .iter()
+                .map(|entry| entry.account_first_rank)
+                .collect::<Vec<_>>(),
+            [1, 2, 1, 1, 5, 5, 5, 8, 8, 8]
+        );
+
+        conn.execute(
+            "UPDATE characters SET level = 20 WHERE character_name = 'Hero1'",
+            [],
+        )
+        .unwrap();
+        let updated: LevelLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(updated.entries[0].name, "Hero1");
+        assert_eq!(updated.entries[0].level, 20);
+        conn.execute("DELETE FROM characters WHERE character_name = 'Hero1'", [])
+            .unwrap();
+        let deleted: LevelLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(deleted.entries, leaderboard.entries);
+        conn.execute(
+            "UPDATE characters SET level = 20 WHERE character_name = 'Hero11'",
+            [],
+        )
+        .unwrap();
+        let reordered: LevelLeaderboard =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(reordered.entries[0].name, "Hero11");
+        assert_eq!(reordered.entries[1].name, "Hero12");
+        assert_eq!(reordered.entries[3].name, "Hero10");
+        for index in [0, 1, 3] {
+            assert_eq!(reordered.entries[index].account_first_rank, 1);
+        }
+        conn.execute(
+            "DELETE FROM characters WHERE character_name != 'Hero12'",
+            [],
+        )
+        .unwrap();
+        let single: LevelLeaderboard = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(
+            single.entries,
+            [LevelLeaderboardEntry {
+                name: "Hero12".into(),
+                level: 11,
+                account_first_rank: 1
+            }]
+        );
+
+        conn.execute("DROP TABLE characters", []).unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
 
     #[tokio::test]
     async fn per_account_gold_endpoint_supports_independent_ranges_and_active_windows() {

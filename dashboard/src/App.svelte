@@ -4,10 +4,11 @@
   import HistoryChart from './lib/HistoryChart.svelte'
   import GoldPanel from './lib/GoldPanel.svelte'
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
+  import LevelLeaderboardPanel from './lib/LevelLeaderboardPanel.svelte'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type UniqueHours } from './lib/metrics'
 
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
@@ -21,7 +22,8 @@
   const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
-  const resources = [concurrent, unique, gold, perAccountGold]
+  const leaderboard = createMetricsResource(() => undefined, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
+  const resources = [concurrent, unique, gold, perAccountGold, leaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -55,7 +57,7 @@
     <div>
       <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
       <h1>월드 현황<span>.</span></h1>
-      <p class="page-description">지금 함께하는 플레이어와 서버의 골드 변화를 살펴보세요.</p>
+      <p class="page-description">지금 함께하는 플레이어, 레벨 순위와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
@@ -157,6 +159,8 @@
   <GoldPanel bind:hours={goldHours} history={gold.history} loading={gold.loading} refreshing={gold.refreshing} error={gold.error} refresh={() => gold.refresh()} />
 
   <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours history={perAccountGold.history} loading={perAccountGold.loading} refreshing={perAccountGold.refreshing} error={perAccountGold.error} refresh={() => perAccountGold.refresh()} />
+
+  <LevelLeaderboardPanel leaderboard={leaderboard.history} loading={leaderboard.loading} refreshing={leaderboard.refreshing} error={leaderboard.error} refresh={() => leaderboard.refresh()} />
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">

@@ -12,6 +12,8 @@
 
 서버를 다시 시작하면 접속을 받기 전에 수집 시작 이후 누락된 자정별 집계를 모두 채웁니다. 이미 저장된 날짜는 다시 계산하지 않으며, 수집을 시작하기 전의 기록은 만들지 않습니다.
 
+레벨 상위 10명 표는 오프라인을 포함한 전체 캐릭터 중 공식 NPC 계정을 제외한 순위입니다. 레벨 내림차순, 동점이면 경험치 내림차순과 캐릭터 ID 오름차순으로 정렬합니다. 계정당 여러 캐릭터가 각각 순위에 들어갈 수 있습니다. 같은 계정의 두 번째 캐릭터부터 `Agent 1 (Jake 1)`처럼 표에서 가장 먼저 나온 캐릭터명을 괄호 안에 표시합니다. 저장된 레벨을 30초마다 조회하므로 접속 중 레벨 변화는 서버 저장(보통 32초 간격)과 화면 갱신 후 반영됩니다.
+
 ## 개발
 
 저장소 루트에서 최신 게임 서버를 실행한 뒤 별도 터미널에서 시작합니다. 새 서버 코드가 실행되어야 지표 API와 수집이 활성화됩니다.
@@ -40,7 +42,7 @@ npm run build
 npm run preview
 ```
 
-`dist/`는 별도 도메인이나 게임 사이트의 하위 경로에 제공할 수 있는 정적 파일입니다. 하위 경로에 게시할 때는 `DASHBOARD_BASE=/dashboard/ npm run build`로 빌드합니다. API 경로는 두 경우 모두 같은 출처의 `/api/metrics/concurrent`, `/api/metrics/unique`, `/api/metrics/gold`, `/api/metrics/gold-per-account`입니다.
+`dist/`는 별도 도메인이나 게임 사이트의 하위 경로에 제공할 수 있는 정적 파일입니다. 하위 경로에 게시할 때는 `DASHBOARD_BASE=/dashboard/ npm run build`로 빌드합니다. API 경로는 두 경우 모두 같은 출처의 `/api/metrics/concurrent`, `/api/metrics/unique`, `/api/metrics/gold`, `/api/metrics/gold-per-account`, `/api/metrics/level-leaderboard`입니다.
 
 게임 서버의 기존 REST 포트로 `/api/metrics/`만 프록시하고, 나머지는 대시보드 정적 파일을 제공합니다. 별도 사이트의 nginx 설정 예:
 

@@ -758,6 +758,11 @@ impl AuthService {
             "CREATE INDEX IF NOT EXISTS idx_characters_account_name ON characters(account_name)",
             [],
         )?;
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_characters_level_ranking
+             ON characters(level DESC, xp DESC, id ASC)",
+            [],
+        )?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS character_items (

@@ -10,6 +10,26 @@ export interface TimestampSample {
   timestamp: number
 }
 
+export interface LevelLeaderboard extends TimestampSample {
+  entries: { name: string, level: number, account_first_rank: number }[]
+}
+
+export function parseLevelLeaderboard(value: unknown): LevelLeaderboard {
+  if (!value || typeof value !== 'object') throw new Error('Invalid level leaderboard response')
+  const data = value as LevelLeaderboard
+  if (!Number.isSafeInteger(data.timestamp) || data.timestamp < 0 ||
+    !Array.isArray(data.entries) || data.entries.length > 10 ||
+    !data.entries.every((entry, index) => entry && typeof entry.name === 'string' && entry.name.trim().length > 0 &&
+      Number.isSafeInteger(entry.level) && entry.level >= 1 &&
+      Number.isSafeInteger(entry.account_first_rank) && entry.account_first_rank >= 1 && entry.account_first_rank <= index + 1 &&
+      data.entries[entry.account_first_rank - 1]?.account_first_rank === entry.account_first_rank &&
+      (index === 0 || entry.level <= data.entries[index - 1].level)) ||
+    new Set(data.entries.map((entry) => entry.name)).size !== data.entries.length) {
+    throw new Error('Invalid level leaderboard response')
+  }
+  return data
+}
+
 export interface AccountSample extends TimestampSample {
   accounts: number
 }

@@ -10,12 +10,12 @@ impl super::GameState {
         account_name: &str,
         auth: &AuthService,
     ) {
-        if !self
+        if self
             .players
             .read()
             .await
             .get(&player_id)
-            .is_some_and(|player| !player.is_official_npc)
+            .is_none_or(|player| player.is_official_npc)
         {
             return;
         }
