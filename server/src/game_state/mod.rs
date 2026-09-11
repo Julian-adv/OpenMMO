@@ -382,6 +382,11 @@ pub struct GameState {
     player_skills: Arc<RwLock<HashMap<PlayerId, onlinerpg_shared::skills::Skills>>>,
     /// Players whose skills changed since the last periodic save.
     dirty_skills: Arc<RwLock<HashSet<PlayerId>>>,
+    /// Archery XP earned but not yet folded into `player_skills`. A landed
+    /// shot lands here instead of taking the global skills write lock and
+    /// sending a message every 1.4 s; `tick_archery_xp` flushes it. See
+    /// doc/COMBAT.md 궁술.
+    pending_archery_xp: Arc<RwLock<HashMap<PlayerId, u64>>>,
     /// Live fishing sessions, one per player, advanced by `tick_fishing`.
     fishing_sessions: Arc<RwLock<HashMap<PlayerId, fishing::FishingSession>>>,
     /// Session count mirror, so the per-move cancel check costs one atomic
@@ -697,6 +702,7 @@ impl GameState {
             player_gold: Arc::new(RwLock::new(HashMap::new())),
             player_skills: Arc::new(RwLock::new(HashMap::new())),
             dirty_skills: Arc::new(RwLock::new(HashSet::new())),
+            pending_archery_xp: Arc::new(RwLock::new(HashMap::new())),
             fishing_sessions: Arc::new(RwLock::new(HashMap::new())),
             fishing_active: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             #[cfg(test)]

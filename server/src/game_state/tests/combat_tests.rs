@@ -1825,3 +1825,334 @@ async fn re_equipping_a_bow_keeps_the_chosen_round() {
         Some("iron_arrow")
     );
 }
+
+// --- Archery skill (doc/COMBAT.md 궁술) ---
+
+use onlinerpg_shared::skills::SkillId;
+
+/// The whole "no animation work" premise of the archery speed bonus: at the
+/// level cap the interval must still outlast the bow_shoot clip. Fail this and
+/// the shot animation is cut mid-draw and `player_ranged_impact` has to move
+/// with it.
+#[test]
+fn the_capped_archery_cadence_still_outlasts_the_bow_clip() {
+    let capped = (*super::combat::PLAYER_ATTACK_INTERVAL_MS as f32
+        / onlinerpg_shared::skills::archery_attack_mult(onlinerpg_shared::skills::SKILL_LEVEL_CAP))
+    .ceil() as u64;
+    assert!(
+        capped >= *super::combat::PLAYER_RANGED_CLIP_MS,
+        "capped archery interval {capped}ms is under the {}ms bow_shoot clip",
+        *super::combat::PLAYER_RANGED_CLIP_MS
+    );
+}
+
+/// Register `player` with one skill already trained to `level`.
+async fn train(game_state: &GameState, player: &PlayerId, skill: SkillId, level: u32) {
+    let mut skills = onlinerpg_shared::skills::Skills::default();
+    skills.map.insert(
+        skill,
+        onlinerpg_shared::skills::SkillProgress {
+            level,
+            xp: onlinerpg_shared::skills::skill_xp_for_level(level),
+        },
+    );
+    game_state.register_player_skills(player, skills).await;
+}
+
+/// A tanky target that survives a long string of shots.
+async fn training_dummy(game_state: &GameState, id: &str, x: f32) {
+    let mut monster = make_monster(id, at(x), 0);
+    monster.health = 100_000;
+    monster.max_health = 100_000;
+    game_state
+        .monsters
+        .write()
+        .await
+        .insert(id.to_string(), monster);
+}
+
+/// A landed shot banks XP without touching the skills map, and the flush folds
+/// the whole window in as one grant with one message.
+#[tokio::test]
+async fn landed_shots_bank_archery_xp_and_the_flush_pays_it_as_one_grant() {
+    let game_state = make_test_game_state("archery_xp_flush");
+    let player = pid("archer");
+    let mut rx = setup_archer(&game_state, "bow", attrs_with(10, 30)).await;
+    train(&game_state, &player, SkillId::Archery, 0).await;
+    training_dummy(&game_state, "dummy", 8.0).await;
+
+    for _ in 0..3 {
+        game_state.last_player_attacks.write().await.remove(&player);
+        game_state
+            .broadcast_player_attack(&player, "dummy".to_string())
+            .await;
+    }
+    // Still nothing in the map, and nothing on the wire, until the flush.
+    assert_eq!(
+        game_state.skill_level(&player, SkillId::Archery).await,
+        0,
+        "banked XP must not reach the skills map before the flush"
+    );
+    assert!(!drain(&mut rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::SkillXpGained { .. })));
+
+    game_state.tick_archery_xp().await;
+    let gains: Vec<_> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|msg| match msg {
+            ServerMessage::SkillXpGained {
+                skill, xp_amount, ..
+            } => Some((skill, xp_amount)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        gains,
+        vec![(SkillId::Archery, 3 * super::combat::ARCHERY_XP_PER_HIT)],
+        "three shots must arrive as one summed grant"
+    );
+    // Drained: a second flush with nothing banked says nothing.
+    game_state.tick_archery_xp().await;
+    assert!(!drain(&mut rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::SkillXpGained { .. })));
+}
+
+/// A blade trains nothing, however many times it lands.
+#[tokio::test]
+async fn melee_hits_never_train_archery() {
+    let game_state = make_test_game_state("archery_xp_melee");
+    let player = pid("archer");
+    let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+    train(&game_state, &player, SkillId::Archery, 0).await;
+    training_dummy(&game_state, "dummy", 1.5).await;
+
+    for _ in 0..3 {
+        game_state.last_player_attacks.write().await.remove(&player);
+        game_state
+            .broadcast_player_attack(&player, "dummy".to_string())
+            .await;
+    }
+    game_state.tick_archery_xp().await;
+    assert!(!drain(&mut rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::SkillXpGained { .. })));
+}
+
+/// Only hits train. With a +0 attack bonus against guard 10 the d20 splits the
+/// shots either way, and the banked total must track the hits exactly — a
+/// whiff teaches nothing.
+#[tokio::test]
+async fn a_missed_shot_trains_nothing() {
+    let game_state = make_test_game_state("archery_xp_miss");
+    let player = pid("archer");
+    let mut rx = setup_archer_with_ammo(
+        &game_state,
+        "bow",
+        attrs_with(10, 10),
+        &[("iron_arrow", 200)],
+    )
+    .await;
+    train(&game_state, &player, SkillId::Archery, 0).await;
+    training_dummy(&game_state, "dummy", 8.0).await;
+
+    const SHOTS: usize = 40;
+    let mut hits = 0;
+    for _ in 0..SHOTS {
+        game_state.last_player_attacks.write().await.remove(&player);
+        game_state
+            .broadcast_player_attack(&player, "dummy".to_string())
+            .await;
+        let (hit, _) = expect_attacked(&mut rx, "dummy");
+        hits += u64::from(hit);
+    }
+    // A 50/50 roll 40 times over: seeing only one outcome is a 2^-40 event and
+    // means the roll, not the test, has changed.
+    assert!(hits > 0 && hits < SHOTS as u64, "got {hits}/{SHOTS} hits");
+    assert_eq!(
+        game_state
+            .pending_archery_xp
+            .read()
+            .await
+            .get(&player)
+            .copied(),
+        Some(hits * super::combat::ARCHERY_XP_PER_HIT)
+    );
+}
+
+/// The damage bonus rides the ranged roll only. A +10 modifier guarantees the
+/// hit, so the damage bands are exact: the trained floor lands where the
+/// untrained ceiling does, and a blade's band never moves at all.
+#[tokio::test]
+async fn the_archery_damage_bonus_applies_to_shots_and_not_to_blades() {
+    let cap = onlinerpg_shared::skills::SKILL_LEVEL_CAP;
+    let bonus = onlinerpg_shared::skills::archery_damage_bonus(cap) as u32;
+
+    let game_state = make_test_game_state("archery_damage_bow");
+    let player = pid("archer");
+    let mut rx = setup_archer(&game_state, "bow", attrs_with(10, 30)).await;
+    train(&game_state, &player, SkillId::Archery, cap).await;
+    training_dummy(&game_state, "dummy", 8.0).await;
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    let (hit, damage) = expect_attacked(&mut rx, "dummy");
+    assert!(hit, "DEX(+10) against guard 10 cannot miss");
+    // 1d1 bow + 1d6 arrow + DEX(+10) is 11..=17 untrained; the bonus shifts
+    // the whole band up, so the worst trained shot matches the best raw one.
+    assert!(
+        (12 + bonus..=17 + bonus).contains(&damage),
+        "1d1 + 1d6 + DEX(+10) + {bonus}, got {damage}"
+    );
+
+    // The same skill with a blade in hand: 1d4 + STR(+10), bonus nowhere.
+    let game_state = make_test_game_state("archery_damage_dagger");
+    let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+    train(&game_state, &player, SkillId::Archery, cap).await;
+    training_dummy(&game_state, "dummy", 1.5).await;
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    let (hit, damage) = expect_attacked(&mut rx, "dummy");
+    assert!(hit);
+    assert!(
+        (11..=14).contains(&damage),
+        "1d4 + STR(+10) with no archery bonus, got {damage}"
+    );
+}
+
+/// The shortened window is authoritative, and it is the bow's alone.
+#[tokio::test]
+async fn a_trained_archer_shoots_inside_the_base_interval_but_not_below_the_floor() {
+    let cap = onlinerpg_shared::skills::SKILL_LEVEL_CAP;
+    let capped_interval = (*super::combat::PLAYER_ATTACK_INTERVAL_MS as f32
+        / onlinerpg_shared::skills::archery_attack_mult(cap))
+    .ceil() as u64;
+
+    let game_state = make_test_game_state("archery_cadence");
+    let player = pid("archer");
+    let mut rx = setup_archer(&game_state, "bow", attrs_with(10, 30)).await;
+    train(&game_state, &player, SkillId::Archery, cap).await;
+    training_dummy(&game_state, "dummy", 8.0).await;
+
+    let fired = |rx: &mut DirectRx| {
+        drain(rx)
+            .iter()
+            .any(|msg| matches!(msg, ServerMessage::PlayerAttacked { .. }))
+    };
+
+    // Inside the base interval, but past the archer's own: accepted.
+    game_state
+        .last_player_attacks
+        .write()
+        .await
+        .insert(player, GameState::now_ms().saturating_sub(capped_interval));
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    assert!(
+        fired(&mut rx),
+        "a capped archer fires at {capped_interval}ms"
+    );
+
+    // A hair under it: refused.
+    game_state.last_player_attacks.write().await.insert(
+        player,
+        GameState::now_ms().saturating_sub(capped_interval - 50),
+    );
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    assert!(!fired(&mut rx), "nothing beats the archer's own interval");
+
+    // The same skill, a blade in hand: back to the base cadence.
+    let game_state = make_test_game_state("archery_cadence_melee");
+    let mut rx = setup_archer(&game_state, "dagger", attrs_with(30, 10)).await;
+    train(&game_state, &player, SkillId::Archery, cap).await;
+    training_dummy(&game_state, "dummy", 1.5).await;
+    game_state
+        .last_player_attacks
+        .write()
+        .await
+        .insert(player, GameState::now_ms().saturating_sub(capped_interval));
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    assert!(!fired(&mut rx), "archery must never quicken a blade");
+}
+
+/// Hunger and archery are one multiplier: a starving archer is slower than a
+/// fed one at the same skill, and faster than a starving beginner.
+#[tokio::test]
+async fn archery_and_hunger_compose_into_one_interval() {
+    let cap = onlinerpg_shared::skills::SKILL_LEVEL_CAP;
+    let combined = (*super::combat::PLAYER_ATTACK_INTERVAL_MS as f32
+        / (onlinerpg_shared::hunger::WEAK_ATTACK_MULT
+            * onlinerpg_shared::skills::archery_attack_mult(cap)))
+    .ceil() as u64;
+
+    let game_state = make_test_game_state("archery_hunger");
+    let player = pid("archer");
+    let mut rx = setup_archer(&game_state, "bow", attrs_with(10, 30)).await;
+    // setup_archer seeds the character without hunger; re-register it starved.
+    game_state
+        .register_player_character(&player, 1, 0, attrs_with(10, 30), 0, Some(50))
+        .await;
+    train(&game_state, &player, SkillId::Archery, cap).await;
+    training_dummy(&game_state, "dummy", 8.0).await;
+
+    let fired = |rx: &mut DirectRx| {
+        drain(rx)
+            .iter()
+            .any(|msg| matches!(msg, ServerMessage::PlayerAttacked { .. }))
+    };
+
+    game_state
+        .last_player_attacks
+        .write()
+        .await
+        .insert(player, GameState::now_ms().saturating_sub(combined - 50));
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    assert!(
+        !fired(&mut rx),
+        "hunger must still lengthen a trained window"
+    );
+
+    game_state
+        .last_player_attacks
+        .write()
+        .await
+        .insert(player, GameState::now_ms().saturating_sub(combined));
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+    assert!(fired(&mut rx), "the two multipliers compose, not override");
+}
+
+/// Logging out mid-window keeps the banked XP: the save rows carry it.
+#[tokio::test]
+async fn logging_out_flushes_banked_archery_xp_into_the_saved_rows() {
+    let game_state = make_test_game_state("archery_logout_flush");
+    let player = pid("archer");
+    let _rx = setup_archer(&game_state, "bow", attrs_with(10, 30)).await;
+    train(&game_state, &player, SkillId::Archery, 0).await;
+    training_dummy(&game_state, "dummy", 8.0).await;
+
+    game_state
+        .broadcast_player_attack(&player, "dummy".to_string())
+        .await;
+
+    let (character_id, rows) = game_state
+        .take_player_skills(&player)
+        .await
+        .expect("archer has skills");
+    assert_eq!(character_id, 1);
+    let archery = rows
+        .iter()
+        .find(|row| row.skill_id == "archery")
+        .expect("the banked window must survive the logout");
+    assert_eq!(archery.xp, super::combat::ARCHERY_XP_PER_HIT);
+}

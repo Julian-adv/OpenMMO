@@ -4,6 +4,7 @@ player_attack_interval,1380,slash1 cadence with server-arrival jitter allowance
 player_attack_damage_text,750,damage number pops after a slash1 hit
 player_ranged_impact,780,bow_shoot arrow leaves - the bow arm starts its recoil at 0.767-0.800s
 player_ranged_flight,333,arrow flight at the bow's full 10m range - the server's fixed allowance before loot falls
+player_ranged_clip,1033,bow_shoot clip length - the cadence floor an attack-speed bonus must never dip under
 player_ranged_draw,460,bow-draw.ogg starts - 0.52s long so it runs under the loose and tails off just after
 sword_miss,450,whiff sfx on a missed slash1 swing
 prop_swing_impact,660,barrel/crate shatters as the slash1 blade lands

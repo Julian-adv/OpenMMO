@@ -75,6 +75,17 @@ pub(super) static PLAYER_RANGED_IMPACT_DELAY: LazyLock<Duration> = LazyLock::new
 pub(super) static PLAYER_ATTACK_INTERVAL_MS: LazyLock<u64> =
     LazyLock::new(|| anim_delay_ms("player_attack_interval"));
 
+// The bow_shoot clip. The archery speed bonus must never shorten the interval
+// below it, or the shot animation is cut mid-draw — asserted in the tests.
+#[cfg(test)]
+pub(super) static PLAYER_RANGED_CLIP_MS: LazyLock<u64> =
+    LazyLock::new(|| anim_delay_ms("player_ranged_clip"));
+
+// What one landed ranged shot trains. Flat: neither the target's level nor the
+// kill matters, so a beginner and a veteran train at the same rate
+// (doc/COMBAT.md 궁술).
+pub(super) const ARCHERY_XP_PER_HIT: u64 = 10;
+
 // Hand-measured length of the ChestOpen clip in chest_animated.glb (re-measure
 // if the GLB is re-exported): how long treasure-chest loot is withheld before
 // bursting out, so the lid is open by the time the drops exist.
@@ -219,26 +230,56 @@ impl super::GameState {
         });
     }
 
-    async fn claim_player_attack_window(&self, player_id: &PlayerId) -> PlayerAttackWindow {
+    /// The shortest interval any player can reach: hunger only lengthens, and
+    /// archery shortens by at most the level cap's multiplier. Anything inside
+    /// this is refused without a single skill or hunger lookup.
+    fn attack_window_floor_ms(ranged: bool) -> u64 {
+        if ranged {
+            (*PLAYER_ATTACK_INTERVAL_MS as f32
+                / onlinerpg_shared::skills::archery_attack_mult(
+                    onlinerpg_shared::skills::SKILL_LEVEL_CAP,
+                ))
+            .ceil() as u64
+        } else {
+            *PLAYER_ATTACK_INTERVAL_MS
+        }
+    }
+
+    async fn claim_player_attack_window(
+        &self,
+        player_id: &PlayerId,
+        ranged: bool,
+    ) -> PlayerAttackWindow {
         let now = Self::now_ms();
-        // Hunger only lengthens the interval, so an attack still inside the
-        // base window never needs the hunger lookup — spam-clicks stay cheap.
+        // An attack inside the floor cannot be accepted at any hunger or
+        // archery level, so spam-clicks stay free of both lookups.
+        let floor_ms = Self::attack_window_floor_ms(ranged);
         if let Some(last) = self
             .last_player_attacks
             .read()
             .await
             .get(player_id)
             .copied()
-            .filter(|last| now.saturating_sub(*last) < *PLAYER_ATTACK_INTERVAL_MS)
+            .filter(|last| now.saturating_sub(*last) < floor_ms)
         {
             return PlayerAttackWindow {
                 checked_at_ms: now,
                 since_accepted_ms: Some(now.saturating_sub(last)),
-                checked_interval_ms: *PLAYER_ATTACK_INTERVAL_MS,
+                checked_interval_ms: floor_ms,
                 accepted: false,
             };
         }
-        let attack_mult = self.hunger_attack_mult(player_id).await.max(f32::EPSILON);
+        let hunger_mult = self.hunger_attack_mult(player_id).await;
+        // Only a ranged weapon reads the bow skill: archery never quickens a blade.
+        let archery_mult = if ranged {
+            onlinerpg_shared::skills::archery_attack_mult(
+                self.skill_level(player_id, onlinerpg_shared::skills::SkillId::Archery)
+                    .await,
+            )
+        } else {
+            1.0
+        };
+        let attack_mult = (hunger_mult * archery_mult).max(f32::EPSILON);
         let required_interval = (*PLAYER_ATTACK_INTERVAL_MS as f32 / attack_mult).ceil() as u64;
         let mut last_attacks = self.last_player_attacks.write().await;
         let last = last_attacks.entry(*player_id).or_insert(0);
@@ -603,7 +644,8 @@ impl super::GameState {
                 return;
             }
         };
-        let timing = self.claim_player_attack_window(player_id).await;
+        let is_ranged = weapon.range.is_some();
+        let timing = self.claim_player_attack_window(player_id, is_ranged).await;
         let accepted = timing.accepted;
         if let Some(audit) = audit {
             audit.finish(
@@ -642,6 +684,17 @@ impl super::GameState {
 
         let hit_mod = self.hunger_hit_mod(player_id).await;
 
+        // Trained aim adds hurt, never accuracy — the exploding d20 makes any
+        // hit bonus superlinear against high guard (doc/COMBAT.md 궁술).
+        let archery_damage = if is_ranged {
+            onlinerpg_shared::skills::archery_damage_bonus(
+                self.skill_level(player_id, onlinerpg_shared::skills::SkillId::Archery)
+                    .await,
+            )
+        } else {
+            0
+        };
+
         let (result_hit, result_roll, result_damage) = {
             let def = self.monster_defs.get(&monster_type);
             let target_guard = def.map(|d| i32::from(d.guard)).unwrap_or(10);
@@ -655,10 +708,16 @@ impl super::GameState {
                 target_guard,
                 &weapon.dice,
                 ammo.as_ref().map(|round| round.dice.as_str()),
-                ability_mod + weapon.enchant,
+                ability_mod + weapon.enchant + archery_damage,
             );
             (result.hit, result.roll, result.damage)
         };
+
+        // Only a landed shot trains: a miss teaches nothing, and the grant is
+        // banked rather than applied so the skills lock is not taken per shot.
+        if is_ranged && result_hit {
+            self.accrue_archery_xp(player_id, ARCHERY_XP_PER_HIT).await;
+        }
 
         debug!(
             "Dice roll: {}, Hit: {}, Damage: {}",
@@ -821,7 +880,7 @@ impl super::GameState {
                     corpse_position,
                     monster_floor_level,
                     effective_level,
-                    if weapon.ability.is_some() {
+                    if is_ranged {
                         *PLAYER_RANGED_IMPACT_DELAY
                     } else {
                         *PLAYER_ATTACK_IMPACT_DELAY

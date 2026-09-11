@@ -601,6 +601,20 @@ async fn main() -> ExitCode {
         },
     ));
 
+    // Landed shots bank archery XP; this is where it lands in the skill map
+    // and reaches its owner. One window's worth per player per flush, so the
+    // combat log reads one line instead of one per shot.
+    let game_state_for_archery = Arc::clone(&game_state);
+    background.spawn(run_ticks(
+        "archery xp",
+        Duration::from_secs(5),
+        drain_shutdown.clone(),
+        move || {
+            let game_state = Arc::clone(&game_state_for_archery);
+            async move { game_state.tick_archery_xp().await }
+        },
+    ));
+
     let game_state_for_ground = Arc::clone(&game_state);
     background.spawn(run_ticks(
         "ground item despawn",

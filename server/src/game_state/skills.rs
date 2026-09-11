@@ -2,8 +2,8 @@
 //! XP grants. Mirrors the gold/inventory pattern — skills live outside the
 //! broadcast `Player` struct (private to their owner), are registered on
 //! EnterGame, flushed through the same dirty-set saves, and detached on
-//! logout. Nothing grants skill XP yet; the first caller is the fishing
-//! system (doc/FISHING.md).
+//! logout. Fishing grants per catch (doc/FISHING.md); archery accumulates
+//! per landed shot and flushes on a tick (doc/COMBAT.md 궁술).
 
 use onlinerpg_shared::skills::{SkillId, SkillXpResult, Skills};
 use tracing::warn;
@@ -94,12 +94,48 @@ impl GameState {
         Some(result)
     }
 
+    /// Bank archery XP for the next flush. A landed shot calls this every
+    /// ~1.4 s per archer, so it must stay off the global skills lock and off
+    /// the wire — `tick_archery_xp` pays both costs once per window.
+    pub(super) async fn accrue_archery_xp(&self, player_id: &PlayerId, amount: u64) {
+        *self
+            .pending_archery_xp
+            .write()
+            .await
+            .entry(*player_id)
+            .or_insert(0) += amount;
+    }
+
+    /// Fold every banked archery grant into `Skills` and tell each owner. The
+    /// level-up is only discovered here — banked XP is not applied yet — so a
+    /// level can land up to one window late.
+    pub async fn tick_archery_xp(&self) {
+        let pending: Vec<(PlayerId, u64)> = {
+            let mut map = self.pending_archery_xp.write().await;
+            map.drain().collect()
+        };
+        for (player_id, amount) in pending {
+            self.add_skill_xp(&player_id, SkillId::Archery, amount)
+                .await;
+        }
+    }
+
+    /// Flush one player's banked archery XP, for paths that are about to drop
+    /// their skill state and would otherwise discard the window.
+    async fn flush_archery_xp(&self, player_id: &PlayerId) {
+        let pending = self.pending_archery_xp.write().await.remove(player_id);
+        if let Some(amount) = pending {
+            self.add_skill_xp(player_id, SkillId::Archery, amount).await;
+        }
+    }
+
     /// Snapshot a player's skills as save rows and drop the in-memory entry.
     /// The logout twin of `take_player_inventory`.
     pub(super) async fn take_player_skills(
         &self,
         player_id: &PlayerId,
     ) -> Option<(i64, Vec<SkillRow>)> {
+        self.flush_archery_xp(player_id).await;
         let character_id = {
             let characters = self.player_characters.read().await;
             characters.get(player_id).map(|(id, _, _)| *id)?
@@ -170,6 +206,7 @@ impl GameState {
     /// Drop skill state for a player that is being removed without a persist
     /// (the take/persist paths already removed it in the normal case).
     pub(super) async fn forget_player_skills(&self, player_id: &PlayerId) {
+        self.pending_archery_xp.write().await.remove(player_id);
         self.player_skills.write().await.remove(player_id);
         self.dirty_skills.write().await.remove(player_id);
     }
