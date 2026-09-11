@@ -741,6 +741,28 @@ impl super::GameState {
         {
             return;
         }
+        // Resolved under a read lock before the mutation below, because the
+        // skill lookup is its own await and the write lock must not span it.
+        // Every row leaves the pair empty today, so this is a miss.
+        let requirement = {
+            let inventories = self.inventories.read().await;
+            inventories
+                .get(player_id)
+                .and_then(|inv| inv.bag.iter().find(|i| i.instance_id == instance_id))
+                .and_then(|item| self.item_defs.get(&item.item_def_id))
+                .and_then(|def| def.skill_requirement())
+        };
+        if let Some((skill, level)) = requirement {
+            if self.skill_level(player_id, skill).await < level {
+                self.send_system_message(
+                    player_id,
+                    &format!("Requires {} level {level}", skill.display_name()),
+                )
+                .await;
+                return;
+            }
+        }
+
         let (snapshot, torch_on) = {
             let mut inventories = self.inventories.write().await;
             let inv = match inventories.get_mut(player_id) {

@@ -1,4 +1,5 @@
 use onlinerpg_shared::inventory::EquipSlot;
+use onlinerpg_shared::skills::SkillId;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
@@ -170,6 +171,15 @@ pub struct ItemDefinition {
     /// costs nothing to fire.
     #[serde(rename = "ammoKind", default)]
     pub ammo_kind: Option<String>,
+    /// Trained skill required to equip this item, as a `SkillId` token
+    /// ("archery", "fishing"). Pairs with `min_skill_level`; both empty on
+    /// every row today — the gate exists so a future item only fills two CSV
+    /// cells (doc/COMBAT.md 궁술).
+    #[serde(rename = "minSkill", default)]
+    min_skill: Option<String>,
+    /// Level in `min_skill` required to equip. Absent or 0 gates nothing.
+    #[serde(rename = "minSkillLevel", default)]
+    pub min_skill_level: Option<u32>,
 }
 
 /// The attribute a weapon's attack and damage bonus is read from.
@@ -352,6 +362,15 @@ impl ItemDefinition {
         }
     }
 
+    /// The trained skill this item is locked behind, with its level. `None`
+    /// when the row leaves either cell empty. An unknown token fails the boot
+    /// in `load()`.
+    pub fn skill_requirement(&self) -> Option<(SkillId, u32)> {
+        let skill = self.min_skill.as_deref()?.parse::<SkillId>().ok()?;
+        let level = self.min_skill_level.filter(|level| *level > 0)?;
+        Some((skill, level))
+    }
+
     /// Occupies both hands, so the off-hand slot must stay empty.
     pub fn is_two_handed(&self) -> bool {
         self.hands.unwrap_or(1) >= 2
@@ -515,6 +534,20 @@ impl ItemDefs {
                 def.id,
                 def.ranged_ability.as_deref().unwrap_or_default()
             );
+            // A typo would silently unlock the item instead of gating it.
+            assert!(
+                def.min_skill
+                    .as_deref()
+                    .is_none_or(|token| token.parse::<SkillId>().is_ok()),
+                "item '{}': unknown minSkill '{}'",
+                def.id,
+                def.min_skill.as_deref().unwrap_or_default()
+            );
+            assert!(
+                def.min_skill.is_some() == def.min_skill_level.is_some_and(|l| l > 0),
+                "item '{}': minSkill and minSkillLevel must be set together",
+                def.id
+            );
             assert!(
                 def.hands.is_none_or(|hands| (1..=2).contains(&hands)),
                 "item '{}': hands must be 1 or 2",
@@ -668,6 +701,56 @@ mod tests {
             .into_iter()
             .map(|(id, _)| id)
             .collect()
+    }
+
+    /// The equip gate reads a pair of columns, and needs both. Every shipped
+    /// row leaves them empty, so the gate is dormant until an item fills them
+    /// (doc/COMBAT.md 궁술).
+    #[test]
+    fn a_skill_requirement_needs_both_columns() {
+        let def =
+            |json: &str| serde_json::from_str::<ItemDefinition>(json).expect("item def parses");
+        let base = r#""id":"x","name":"X","description":"","weight":1"#;
+
+        assert_eq!(def(&format!("{{{base}}}")).skill_requirement(), None);
+        assert_eq!(
+            def(&format!(
+                r#"{{{base},"minSkill":"archery","minSkillLevel":12}}"#
+            ))
+            .skill_requirement(),
+            Some((onlinerpg_shared::skills::SkillId::Archery, 12))
+        );
+        // Half a pair, or a level of zero, gates nothing — the boot assertion
+        // rejects those rows, so this is the belt to its braces.
+        assert_eq!(
+            def(&format!(r#"{{{base},"minSkill":"archery"}}"#)).skill_requirement(),
+            None
+        );
+        assert_eq!(
+            def(&format!(
+                r#"{{{base},"minSkill":"archery","minSkillLevel":0}}"#
+            ))
+            .skill_requirement(),
+            None
+        );
+        assert_eq!(
+            def(&format!(r#"{{{base},"minSkillLevel":12}}"#)).skill_requirement(),
+            None
+        );
+    }
+
+    /// Nothing shipped is locked behind a skill yet.
+    #[test]
+    fn no_shipped_item_is_gated_on_a_skill() {
+        let defs = ItemDefs::load();
+        for def in defs.all() {
+            assert_eq!(
+                def.skill_requirement(),
+                None,
+                "item '{}' claims a skill requirement",
+                def.id
+            );
+        }
     }
 
     /// The three ranged columns come off items.csv, and an empty `range`
