@@ -1,7 +1,7 @@
 use super::*;
 use crate::housing::HousingIO;
 use crate::item_defs::ItemDefs;
-use crate::metrics::GoldSource;
+use crate::metrics::{GoldSink, GoldSource};
 use crate::monster_defs::MonsterDefs;
 use crate::types::{
     AttackRejectReason, CharacterClass, ClientKind, Gender, MonsterLifecycle, MonsterState,
@@ -62,6 +62,17 @@ async fn assert_gold_production(game: &GameState, source: GoldSource, quantity: 
             (quantity + record.quantity, gold + record.gold)
         });
     assert_eq!(totals, (quantity, gold), "{source:?}");
+}
+
+async fn assert_gold_consumption(game: &GameState, sink: GoldSink, quantity: u64, gold: i64) {
+    let pending = game.pending_gold_sinks.read().await;
+    let totals = pending
+        .values()
+        .filter(|record| record.sink == sink)
+        .fold((0, 0), |(quantity, gold), record| {
+            (quantity + record.quantity, gold + record.gold)
+        });
+    assert_eq!(totals, (quantity, gold), "{sink:?}");
 }
 
 /// Stable numeric id derived from a fixture's name, so tests keep naming

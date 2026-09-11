@@ -729,6 +729,8 @@ impl super::GameState {
         .await;
         self.flush_gold_sources(auth, crate::auth::unix_now(), true)
             .await;
+        self.flush_gold_sinks(auth, crate::auth::unix_now(), true)
+            .await;
     }
 
     async fn collect_shutdown_snapshot(

@@ -770,6 +770,16 @@ impl super::GameState {
             self.send_deal_cleared(player_id, npc_player_id, item_def_id, DealKind::Buy)
                 .await;
         }
+        if !is_resident {
+            self.record_gold_sink(
+                crate::metrics::GoldSink::ItemPurchase {
+                    item_def_id: item_def_id.to_owned(),
+                },
+                1,
+                price,
+            )
+            .await;
+        }
         info!("{player_name} bought {item_def_id} from {npc_name} for {price}");
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
@@ -1072,6 +1082,16 @@ impl super::GameState {
                 "{player_name} bought {}x{} from {npc_name} for {}",
                 plan.qty, plan.item_def_id, plan.price
             );
+            if !is_resident {
+                self.record_gold_sink(
+                    crate::metrics::GoldSink::ItemPurchase {
+                        item_def_id: plan.item_def_id.clone(),
+                    },
+                    plan.qty,
+                    plan.price,
+                )
+                .await;
+            }
         }
 
         self.mark_dirty(player_id).await;
@@ -1952,6 +1972,14 @@ impl super::GameState {
             "{player_name} bought back {} from {npc_name} for {}",
             entry.item_def_id, entry.price
         );
+        self.record_gold_sink(
+            crate::metrics::GoldSink::ItemBuyback {
+                item_def_id: entry.item_def_id.clone(),
+            },
+            1,
+            entry.price,
+        )
+        .await;
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;
         self.send_direct_message(
@@ -2125,6 +2153,14 @@ impl super::GameState {
                 "{player_name} bought back {} from {npc_name} for {}",
                 entry.item_def_id, entry.price
             );
+            self.record_gold_sink(
+                crate::metrics::GoldSink::ItemBuyback {
+                    item_def_id: entry.item_def_id.clone(),
+                },
+                1,
+                entry.price,
+            )
+            .await;
         }
         self.mark_dirty(player_id).await;
         self.mark_inventory_dirty(player_id).await;

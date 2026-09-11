@@ -4,6 +4,8 @@ mod estate_storage;
 pub(crate) use estate_storage::EstateDeposit;
 #[path = "auth_fence.rs"]
 mod fence;
+#[path = "auth_gold_sinks.rs"]
+mod gold_sinks;
 #[path = "auth_land.rs"]
 mod land;
 #[path = "auth_landscaping.rs"]
@@ -681,6 +683,7 @@ impl AuthService {
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
         Self::ensure_item_sales_schema(&conn)?;
+        Self::ensure_gold_sinks_schema(&conn)?;
         Self::ensure_concurrent_samples_schema(&conn)?;
         Self::ensure_account_activity_schema(&conn)?;
         Self::ensure_pricing_schema(&conn)?;

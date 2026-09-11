@@ -718,6 +718,9 @@ impl GameState {
             seller_rows,
         ) = outcome?;
 
+        self.record_gold_sink(crate::metrics::GoldSink::StallTax, 1, tax)
+            .await;
+
         let save_data = {
             let players = self.players.read().await;
             let hunger = self.hunger.read().await;
@@ -811,8 +814,7 @@ impl GameState {
         Ok(())
     }
 
-    /// What each side keeps as their record. The tax is shown to the seller
-    /// only: the customer paid the prices on the tags.
+    /// The seller's receipt includes the tax.
     async fn report_stall_sale(
         &self,
         buyer: &PlayerId,

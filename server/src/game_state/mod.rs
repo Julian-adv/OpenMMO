@@ -373,6 +373,8 @@ pub struct GameState {
     account_activities: Arc<RwLock<HashMap<PlayerId, crate::metrics::AccountActivity>>>,
     pending_gold_sources:
         Arc<RwLock<HashMap<(i64, crate::metrics::GoldSource), crate::metrics::GoldSourceRecord>>>,
+    pending_gold_sinks:
+        Arc<RwLock<HashMap<(i64, crate::metrics::GoldSink), crate::metrics::GoldSinkRecord>>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<Bytes>>>>,
     // player_id → (character_id, current_xp, attributes)
@@ -697,6 +699,7 @@ impl GameState {
             account_sessions: Arc::new(RwLock::new(HashMap::new())),
             account_activities: Arc::new(RwLock::new(HashMap::new())),
             pending_gold_sources: Arc::new(RwLock::new(HashMap::new())),
+            pending_gold_sinks: Arc::new(RwLock::new(HashMap::new())),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
             player_characters: Arc::new(RwLock::new(HashMap::new())),

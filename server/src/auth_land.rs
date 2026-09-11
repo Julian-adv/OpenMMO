@@ -1,4 +1,5 @@
 use super::{AuthError, AuthService, CharacterSaveData, ItemRow};
+use crate::metrics::{GoldSink, GoldSinkRecord};
 use onlinerpg_terrain::coords::{tile_to_region, WORLD_TILES_X};
 use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
 use serde::Serialize;
@@ -105,7 +106,17 @@ impl AuthService {
         };
         account.treasury = treasury;
         if deposit && account.missed > 0 && account.treasury >= account.recovery_cost() {
-            account.treasury -= account.recovery_cost();
+            let cost = account.recovery_cost();
+            account.treasury -= cost;
+            Self::write_gold_sinks(
+                &tx,
+                &[GoldSinkRecord {
+                    timestamp: super::unix_now(),
+                    sink: GoldSink::LandRecovery,
+                    quantity: 1,
+                    gold: cost,
+                }],
+            )?;
             account.missed = 0;
             account.free_months = 1;
         }
@@ -151,6 +162,12 @@ impl AuthService {
         let month_seconds = (crate::game_state::time::REAL_DAY_DURATION_SECONDS
             * onlinerpg_shared::moon::GAME_DAYS_PER_MONTH as f64)
             as i64;
+        let mut collected = GoldSinkRecord {
+            timestamp: super::unix_now(),
+            sink: GoldSink::LandTax,
+            quantity: 0,
+            gold: 0,
+        };
         for (id, owner, mut treasury, mut missed, mut free, last, seen, plots) in rows {
             let tax = plots * LAND_TAX_PER_PLOT;
             for period in last + 1..=month {
@@ -161,6 +178,8 @@ impl AuthService {
                     free -= 1;
                 } else if !inactive && missed == 0 && treasury >= tax {
                     treasury -= tax;
+                    collected.quantity += 1;
+                    collected.gold += tax;
                 } else {
                     missed = missed.saturating_add(1);
                 }
@@ -173,6 +192,9 @@ impl AuthService {
                 "UPDATE land_tax_periods SET month=?2 WHERE estate_id=?1",
                 params![id, month],
             )?;
+        }
+        if collected.quantity > 0 {
+            Self::write_gold_sinks(&tx, &[collected])?;
         }
         tx.commit()?;
         Ok(())

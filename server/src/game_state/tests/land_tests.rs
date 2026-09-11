@@ -743,6 +743,11 @@ async fn land_tax_account_transfers_persist_and_reject_invalid_requests() {
     assert_eq!(game.player_gold.read().await[&owner], 5_000);
     assert_eq!(auth.land_account(character).unwrap().treasury, 5_000);
     assert!(drain(&mut rx).iter().any(|m| matches!(m, ServerMessage::LandAccountState { error: Some(reason), .. } if reason.contains("could not be saved"))));
+    assert!(auth
+        .gold_sinks(crate::auth::unix_now() + 3600, 24)
+        .unwrap()
+        .entries
+        .is_empty());
 }
 
 #[tokio::test]
@@ -764,6 +769,16 @@ async fn land_tax_rollover_exemption_recovery_and_restart_are_consistent() {
         (state.treasury, state.free_months, state.missed),
         (2000, 0, 0)
     );
+    assert!(auth
+        .gold_sinks(crate::auth::unix_now() + 3600, 24)
+        .unwrap()
+        .entries
+        .is_empty());
+    conn.execute_batch("CREATE TRIGGER reject_tax_metric BEFORE INSERT ON gold_sink_samples BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    assert!(auth.collect_land_taxes(month + 2, &[character]).is_err());
+    assert_eq!(auth.land_account(character).unwrap().treasury, 2000);
+    conn.execute_batch("DROP TRIGGER reject_tax_metric;")
+        .unwrap();
     auth.collect_land_taxes(month + 2, &[character]).unwrap();
     assert_eq!(auth.land_account(character).unwrap().treasury, 0);
     let reopened = crate::auth::AuthService::new(path).unwrap();
@@ -784,6 +799,21 @@ async fn land_tax_rollover_exemption_recovery_and_restart_are_consistent() {
         .unwrap()
         .unwrap();
     assert_eq!((gold, state.treasury, state.missed), (6000, 4000, 2));
+    let mut failed_save = game.get_player_save_data(&pid("Settler")).await.unwrap();
+    failed_save.gold = gold;
+    conn.execute_batch("CREATE TRIGGER reject_recovery_inventory BEFORE INSERT ON character_items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    assert!(auth
+        .transfer_land_gold(failed_save, &rows, 2000, true)
+        .is_err());
+    assert_eq!(auth.land_account(character).unwrap().treasury, 4000);
+    assert_eq!(
+        auth.gold_sinks(crate::auth::unix_now() + 3600, 24)
+            .unwrap()
+            .total_gold,
+        2000
+    );
+    conn.execute_batch("DROP TRIGGER reject_recovery_inventory;")
+        .unwrap();
     let mut save = game.get_player_save_data(&pid("Settler")).await.unwrap();
     save.gold = gold;
     let (_, state) = auth
@@ -795,6 +825,21 @@ async fn land_tax_rollover_exemption_recovery_and_restart_are_consistent() {
     assert_eq!(auth.land_account(character).unwrap().missed, 0);
     auth.collect_land_taxes(month + 6, &[character]).unwrap();
     assert_eq!(auth.land_account(character).unwrap().missed, 1);
+    let sinks = reopened
+        .gold_sinks(crate::auth::unix_now() + 3600, 24)
+        .unwrap();
+    assert_eq!(sinks.total_gold, 8000);
+    assert_eq!(sinks.entries.len(), 2);
+    assert_eq!(sinks.entries[0].sink, GoldSink::LandRecovery);
+    assert_eq!(
+        (sinks.entries[0].quantity, sinks.entries[0].gold),
+        (1, 6000)
+    );
+    assert_eq!(sinks.entries[1].sink, GoldSink::LandTax);
+    assert_eq!(
+        (sinks.entries[1].quantity, sinks.entries[1].gold),
+        (1, 2000)
+    );
 }
 
 #[tokio::test]
@@ -818,4 +863,9 @@ async fn land_tax_inactive_owner_misses_payment_despite_funded_account() {
     auth.collect_land_taxes(month + 1, &[]).unwrap();
     let state = auth.land_account(character).unwrap();
     assert_eq!((state.treasury, state.missed), (100000, 1));
+    assert!(auth
+        .gold_sinks(crate::auth::unix_now() + 3600, 24)
+        .unwrap()
+        .entries
+        .is_empty());
 }

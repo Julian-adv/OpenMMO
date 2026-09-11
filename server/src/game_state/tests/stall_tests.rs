@@ -272,6 +272,7 @@ async fn buying_off_a_stall_moves_the_goods_and_taxes_the_seller() {
     // 300 copper at 5% tax: the customer pays the tag, the seller keeps 285.
     assert_eq!(game_state.get_player_gold(&market.customer).await, 700);
     assert_eq!(game_state.get_player_gold(&market.owner).await, 285);
+    assert_gold_consumption(game_state, GoldSink::StallTax, 1, 15).await;
     assert_eq!(
         game_state.stalls.read().await[&market.owner].listings[0].quantity,
         2
@@ -379,6 +380,7 @@ async fn a_cart_line_that_cannot_be_filled_rolls_the_whole_purchase_back() {
         1_000,
         "nothing is charged"
     );
+    assert!(game_state.pending_gold_sinks.read().await.is_empty());
     assert!(
         game_state.inventories.read().await[&market.customer]
             .bag
@@ -440,6 +442,7 @@ async fn a_multi_line_cart_moves_together_and_is_taxed_once() {
     // 400 copper at 5%: the customer pays the tags, the seller keeps 380.
     assert_eq!(game_state.get_player_gold(&market.customer).await, 600);
     assert_eq!(game_state.get_player_gold(&market.owner).await, 380);
+    assert_gold_consumption(game_state, GoldSink::StallTax, 1, 20).await;
     assert_eq!(
         game_state.inventories.read().await[&market.customer]
             .bag

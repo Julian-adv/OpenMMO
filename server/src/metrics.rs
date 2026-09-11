@@ -64,6 +64,54 @@ pub struct ItemGoldSources {
     pub entries: Vec<ItemGoldSource>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "sink", rename_all = "snake_case")]
+pub enum GoldSink {
+    ItemPurchase { item_def_id: String },
+    ItemBuyback { item_def_id: String },
+    StallTax,
+    LandTax,
+    LandRecovery,
+}
+
+impl GoldSink {
+    pub fn storage_key(&self) -> (&str, &str) {
+        match self {
+            Self::ItemPurchase { item_def_id } => ("item_purchase", item_def_id),
+            Self::ItemBuyback { item_def_id } => ("item_buyback", item_def_id),
+            Self::StallTax => ("stall_tax", ""),
+            Self::LandTax => ("land_tax", ""),
+            Self::LandRecovery => ("land_recovery", ""),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct GoldSinkRecord {
+    pub timestamp: i64,
+    pub sink: GoldSink,
+    pub quantity: u64,
+    pub gold: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GoldSinkEntry {
+    #[serde(flatten)]
+    pub sink: GoldSink,
+    pub name: String,
+    pub quantity: u64,
+    pub gold: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GoldSinks {
+    pub from: i64,
+    pub until: i64,
+    pub collection_started_at: i64,
+    pub total_gold: i64,
+    pub entries: Vec<GoldSinkEntry>,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct CharacterLeaderboard<Entry, Series> {
     pub timestamp: i64,
@@ -307,6 +355,7 @@ pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/unique", get(unique_history))
         .route("/api/metrics/gold", get(gold_history))
         .route("/api/metrics/item-gold-sources", get(item_gold_sources))
+        .route("/api/metrics/gold-sinks", get(gold_sinks))
         .route("/api/metrics/level-leaderboard", get(level_leaderboard))
         .route("/api/metrics/gold-leaderboard", get(gold_leaderboard))
         .route(
@@ -345,6 +394,7 @@ pub async fn record_concurrent_sample(game: &GameState, auth: Arc<AuthService>) 
 pub async fn record_hourly_metrics(game: &GameState, auth: Arc<AuthService>) {
     game.flush_dirty_saves(&auth).await;
     game.flush_gold_sources(&auth, unix_now(), false).await;
+    game.flush_gold_sinks(&auth, unix_now(), false).await;
     game.tick_gold_snapshot(&auth).await;
     let history_auth = Arc::clone(&auth);
     if let Err(error) =
@@ -568,6 +618,20 @@ async fn item_gold_sources(
     )
 }
 
+async fn gold_sinks(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(24);
+    if let Err(error) = gold_history_interval(hours) {
+        return error.into_response();
+    }
+    metrics_response(
+        auth_db(move || state.auth.gold_sinks(unix_now(), hours)).await,
+        "Gold sinks",
+    )
+}
+
 async fn per_account_gold_history(
     State(state): State<MetricsState>,
     Query(query): Query<PerAccountGoldQuery>,
@@ -600,6 +664,74 @@ async fn per_account_gold_history(
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
+
+    #[tokio::test]
+    async fn gold_sinks_api_validates_periods_and_reports_database_failures() {
+        let path = crate::test_util::unique_temp_dir("gold_sinks_api").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_router(
+            Arc::new(make_test_game_state("gold_sinks_api")),
+            Arc::clone(&auth),
+        );
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/gold-sinks");
+        let empty: GoldSinks = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(empty.until - empty.from, 24 * 3600);
+        assert!(empty.entries.is_empty());
+        auth.record_gold_sinks(&[GoldSinkRecord {
+            timestamp: unix_now() - 3600,
+            sink: GoldSink::ItemPurchase {
+                item_def_id: "iron_sword".into(),
+            },
+            quantity: 2,
+            gold: 9000,
+        }])
+        .unwrap();
+        auth.record_gold_sinks(&[GoldSinkRecord {
+            timestamp: unix_now() - 3600,
+            sink: GoldSink::StallTax,
+            quantity: 1,
+            gold: 10000,
+        }])
+        .unwrap();
+        for hours in [1, 24, 168, 720, 4320, 8760] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let sources: GoldSinks = response.json().await.unwrap();
+            assert_eq!(sources.until - sources.from, hours * 3600);
+            assert_eq!(sources.total_gold, 19000);
+            assert_eq!(sources.entries[0].sink, GoldSink::StallTax);
+            assert_eq!(sources.entries[0].quantity, 1);
+            assert_eq!(sources.entries[1].quantity, 2);
+        }
+        for hours in ["0", "6", "-1", "25", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .execute("DROP TABLE gold_sink_samples", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
 
     #[tokio::test]
     async fn item_gold_sources_api_validates_periods_and_reports_database_failures() {

@@ -6,6 +6,8 @@
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
   import ItemGoldSourcesPanel from './lib/ItemGoldSourcesPanel.svelte'
   import { parseItemGoldSources } from './lib/itemGoldSources'
+  import GoldSinksPanel from './lib/GoldSinksPanel.svelte'
+  import { parseGoldSinks } from './lib/goldSinks'
   import LeaderboardSection from './lib/LeaderboardSection.svelte'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
@@ -27,6 +29,8 @@
   let levelHours = $state<LeaderboardHours>(168)
   let itemGoldHours = $state<GoldHours>(24)
   const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '골드 생산 현황')
+  let goldSinkHours = $state<GoldHours>(24)
+  const goldSinks = createMetricsResource(() => goldSinkHours, 'gold-sinks', parseGoldSinks, '골드 소모 현황')
   const leaderboard = createMetricsResource(() => levelHours, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
   let goldLeaderboardHours = $state<LeaderboardHours>(168)
   const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')
@@ -34,7 +38,7 @@
   const weaponEnchantLeaderboard = createMetricsResource(() => weaponEnchantHours, 'weapon-enchant-leaderboard', parseWeaponEnchantLeaderboard, '무기 인챈트 순위 정보')
   let armorEnchantHours = $state<LeaderboardHours>(168)
   const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
-  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard]
+  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -172,6 +176,7 @@
   <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours history={perAccountGold.history} loading={perAccountGold.loading} refreshing={perAccountGold.refreshing} error={perAccountGold.error} refresh={() => perAccountGold.refresh()} />
 
   <ItemGoldSourcesPanel bind:hours={itemGoldHours} sources={itemGoldSources.history} loading={itemGoldSources.loading} refreshing={itemGoldSources.refreshing} error={itemGoldSources.error} refresh={() => itemGoldSources.refresh()} />
+  <GoldSinksPanel bind:hours={goldSinkHours} sinks={goldSinks.history} loading={goldSinks.loading} refreshing={goldSinks.refreshing} error={goldSinks.error} refresh={() => goldSinks.refresh()} />
 
   <LeaderboardSection metric="level" bind:hours={levelHours} resource={leaderboard} />
 
