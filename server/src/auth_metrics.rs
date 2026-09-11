@@ -3,8 +3,8 @@ use crate::metrics::{
     kst_day_start, AccountActivity, ArmorEnchantLeaderboard, ArmorEnchantLeaderboardEntry,
     ArmorEnchantSample, ArmorEnchantSeries, CharacterGoldSample, CharacterGoldSeries,
     CharacterLeaderboard, ConcurrentCounts, ConcurrentHistorySample, GoldHistory,
-    GoldHistorySample, GoldLeaderboard, GoldLeaderboardEntry, GoldSample, LevelLeaderboard,
-    LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
+    GoldHistorySample, GoldLeaderboard, GoldLeaderboardEntry, GoldSample, GoldSource,
+    LevelLeaderboard, LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
     PerAccountGoldHistorySample, PerAccountGoldSample, UniqueHistory, UniqueSample,
     WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry, WeaponEnchantSample,
     WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
@@ -53,16 +53,38 @@ impl AuthService {
                            SUM(quantity) AS quantity, SUM(gold) AS gold
                     FROM item_sale_samples GROUP BY timestamp - timestamp % 3600, item_def_id;
                  DELETE FROM item_sale_samples;
-                 INSERT INTO item_sale_samples SELECT * FROM hourly_item_sales;
+                 INSERT INTO item_sale_samples (timestamp, item_def_id, quantity, gold)
+                    SELECT * FROM hourly_item_sales;
                  DROP TABLE hourly_item_sales;",
+            )?;
+        }
+        if !Self::table_columns(&transaction, "item_sale_samples")?.contains("source") {
+            transaction.execute_batch(
+                "ALTER TABLE item_sale_samples RENAME TO legacy_item_sale_samples;
+                 CREATE TABLE item_sale_samples (
+                    timestamp INTEGER NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'item_sale',
+                    item_def_id TEXT NOT NULL,
+                    quantity INTEGER NOT NULL CHECK (quantity > 0),
+                    gold INTEGER NOT NULL CHECK (gold >= 0),
+                    PRIMARY KEY (timestamp, source, item_def_id),
+                    CHECK ((source = 'item_sale' AND item_def_id != '') OR
+                           (source IN ('dungeon_chest', 'coin_pile', 'coin_pouch', 'npc_salary')
+                            AND item_def_id = ''))
+                 );
+                 INSERT INTO item_sale_samples (timestamp, item_def_id, quantity, gold)
+                    SELECT timestamp, item_def_id, quantity, gold FROM legacy_item_sale_samples;
+                 DROP TABLE legacy_item_sale_samples;
+                 ALTER TABLE item_sale_collection ADD COLUMN rewards_started_at INTEGER NOT NULL DEFAULT 0;
+                 UPDATE item_sale_collection SET rewards_started_at = unixepoch();",
             )?;
         }
         transaction.commit()
     }
 
-    pub fn record_item_sales(
+    pub fn record_gold_sources(
         &self,
-        sales: &[crate::metrics::ItemSaleRecord],
+        sales: &[crate::metrics::GoldSourceRecord],
     ) -> Result<(), AuthError> {
         if sales.is_empty() {
             return Ok(());
@@ -70,15 +92,17 @@ impl AuthService {
         let conn = self.open_connection()?;
         let transaction = conn.unchecked_transaction()?;
         let mut statement = transaction.prepare_cached(
-            "INSERT INTO item_sale_samples (timestamp, item_def_id, quantity, gold)
-             VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(timestamp, item_def_id) DO UPDATE SET
+            "INSERT INTO item_sale_samples (timestamp, source, item_def_id, quantity, gold)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(timestamp, source, item_def_id) DO UPDATE SET
                 quantity = quantity + excluded.quantity, gold = gold + excluded.gold",
         )?;
         for sale in sales {
+            let (source, item_def_id) = sale.source.storage_key();
             statement.execute(params![
                 sale.timestamp - sale.timestamp.rem_euclid(SAMPLE_INTERVAL_SECONDS),
-                sale.item_def_id,
+                source,
+                item_def_id,
                 sale.quantity,
                 sale.gold
             ])?;
@@ -97,38 +121,51 @@ impl AuthService {
         let transaction = conn.unchecked_transaction()?;
         let until = until - until.rem_euclid(SAMPLE_INTERVAL_SECONDS);
         let from = until - i64::from(hours) * 3600;
-        let collection_started_at = transaction.query_row(
-            "SELECT started_at FROM item_sale_collection WHERE id = 1",
+        let (collection_started_at, rewards_started_at) = transaction.query_row(
+            "SELECT started_at, rewards_started_at FROM item_sale_collection WHERE id = 1",
             [],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )?;
         let defs = crate::item_defs::item_defs();
         let mut statement = transaction.prepare(
-            "SELECT item_def_id, SUM(quantity), SUM(gold) AS total_gold
+            "SELECT source, item_def_id, SUM(quantity), SUM(gold) AS total_gold
              FROM item_sale_samples WHERE timestamp >= ?1 AND timestamp < ?2
-             GROUP BY item_def_id ORDER BY total_gold DESC, item_def_id ASC",
+             GROUP BY source, item_def_id ORDER BY total_gold DESC, source ASC, item_def_id ASC",
         )?;
         let entries = statement
             .query_map(params![from, until], |row| {
-                let item_def_id: String = row.get(0)?;
+                let kind: String = row.get(0)?;
+                let item_def_id: String = row.get(1)?;
+                let (source, name) = match kind.as_str() {
+                    "item_sale" => {
+                        let name = defs
+                            .get(&item_def_id)
+                            .map_or_else(|| item_def_id.clone(), |item| item.name.clone());
+                        (GoldSource::ItemSale { item_def_id }, name)
+                    }
+                    "dungeon_chest" => (GoldSource::DungeonChest, "던전 보상 상자".into()),
+                    "coin_pile" => (GoldSource::CoinPile, "동전 더미 획득".into()),
+                    "coin_pouch" => (GoldSource::CoinPouch, "동전 주머니 개봉".into()),
+                    "npc_salary" => (GoldSource::NpcSalary, "주민 NPC 급여".into()),
+                    _ => return Err(rusqlite::Error::InvalidQuery),
+                };
                 Ok(crate::metrics::ItemGoldSource {
-                    name: defs
-                        .get(&item_def_id)
-                        .map_or_else(|| item_def_id.clone(), |item| item.name.clone()),
-                    item_def_id,
-                    quantity: row.get(1)?,
-                    gold: row.get(2)?,
+                    source,
+                    name,
+                    quantity: row.get(2)?,
+                    gold: row.get(3)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
         let total_gold = entries
             .iter()
             .try_fold(0i64, |total, entry| total.checked_add(entry.gold))
-            .ok_or_else(|| AuthError::Database("Item sale total overflow".into()))?;
+            .ok_or_else(|| AuthError::Database("Gold source total overflow".into()))?;
         Ok(crate::metrics::ItemGoldSources {
             from,
             until,
             collection_started_at,
+            rewards_started_at,
             total_gold,
             entries,
         })
@@ -906,33 +943,110 @@ mod tests {
     }
 
     #[test]
-    fn item_sales_migrate_seconds_to_hourly_totals_once() {
-        let path = crate::test_util::unique_temp_dir("hourly_item_sales_migration").join("game.db");
-        let auth = AuthService::new(path.clone()).unwrap();
-        let conn = auth.open_connection().unwrap();
-        conn.execute_batch(
-            "ALTER TABLE item_sale_collection DROP COLUMN hourly;
-             INSERT INTO item_sale_samples VALUES (3601, 'iron_sword', 2, 8000),
-                (3650, 'iron_sword', 1, 5000), (7200, 'iron_sword', 1, 4000);",
-        )
-        .unwrap();
-        let started: i64 = conn
-            .query_row("SELECT started_at FROM item_sale_collection", [], |r| {
-                r.get(0)
-            })
+    fn gold_source_migration_preserves_legacy_sales_and_collection_dates() {
+        for hourly in [false, true] {
+            let path = crate::test_util::unique_temp_dir("gold_source_migration").join("game.db");
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE item_sale_collection (id INTEGER PRIMARY KEY, started_at INTEGER NOT NULL);
+                 INSERT INTO item_sale_collection VALUES (1, 3000);
+                 CREATE TABLE item_sale_samples (
+                    timestamp INTEGER NOT NULL, item_def_id TEXT NOT NULL,
+                    quantity INTEGER NOT NULL, gold INTEGER NOT NULL,
+                    PRIMARY KEY (timestamp, item_def_id)
+                 );",
+            ).unwrap();
+            if hourly {
+                conn.execute_batch(
+                    "ALTER TABLE item_sale_collection ADD COLUMN hourly INTEGER NOT NULL DEFAULT 1;
+                     INSERT INTO item_sale_samples VALUES (3600, 'iron_sword', 3, 13000),
+                        (7200, 'iron_sword', 1, 4000);",
+                )
+                .unwrap();
+            } else {
+                conn.execute_batch(
+                    "INSERT INTO item_sale_samples VALUES (3601, 'iron_sword', 2, 8000),
+                        (3650, 'iron_sword', 1, 5000), (7200, 'iron_sword', 1, 4000);",
+                )
+                .unwrap();
+            }
+            let auth = AuthService::new(path.clone()).unwrap();
+            let sources = auth.item_gold_sources(7200, 1).unwrap();
+            assert_eq!(sources.collection_started_at, 3000);
+            assert!(sources.rewards_started_at >= unix_now() - 60);
+            assert_eq!(
+                (sources.entries[0].quantity, sources.total_gold),
+                (3, 13000)
+            );
+            assert_eq!(
+                sources.entries[0].source,
+                GoldSource::ItemSale {
+                    item_def_id: "iron_sword".into()
+                }
+            );
+            conn.execute(
+                "UPDATE item_sale_collection SET rewards_started_at = 6000",
+                [],
+            )
             .unwrap();
-        drop(AuthService::new(path.clone()).unwrap());
-        drop(AuthService::new(path).unwrap());
-        let sources = auth.item_gold_sources(7200, 1).unwrap();
-        assert_eq!(sources.collection_started_at, started);
+            let reopened = AuthService::new(path).unwrap();
+            let sources = reopened.item_gold_sources(7200, 1).unwrap();
+            assert_eq!(
+                (sources.collection_started_at, sources.rewards_started_at),
+                (3000, 6000)
+            );
+            assert_eq!(
+                (sources.entries[0].quantity, sources.total_gold),
+                (3, 13000)
+            );
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM item_sale_samples", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, 2);
+        }
+    }
+
+    #[test]
+    fn gold_sources_separate_rewards_from_item_ids_and_respect_hour_boundaries() {
+        let path = crate::test_util::unique_temp_dir("gold_source_boundaries").join("game.db");
+        let auth = AuthService::new(path).unwrap();
+        let sources = [
+            GoldSource::DungeonChest,
+            GoldSource::CoinPile,
+            GoldSource::CoinPouch,
+            GoldSource::NpcSalary,
+            GoldSource::ItemSale {
+                item_def_id: "coin_pile".into(),
+            },
+        ];
+        let mut records = Vec::new();
+        for source in sources {
+            for (timestamp, gold) in [(3599, 999), (3600, 10), (7199, 20), (7200, 999)] {
+                records.push(crate::metrics::GoldSourceRecord {
+                    timestamp,
+                    source: source.clone(),
+                    quantity: 1,
+                    gold,
+                });
+            }
+        }
+        auth.record_gold_sources(&records).unwrap();
+        let result = auth.item_gold_sources(7250, 1).unwrap();
         assert_eq!(
-            (sources.entries[0].quantity, sources.total_gold),
-            (3, 13000)
+            (result.from, result.until, result.total_gold),
+            (3600, 7200, 150)
         );
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM item_sale_samples", [], |r| r.get(0))
-            .unwrap();
-        assert_eq!(count, 2);
+        assert_eq!(result.entries.len(), 5);
+        for entry in result.entries {
+            assert_eq!((entry.quantity, entry.gold), (2, 30));
+            let value = serde_json::to_value(&entry).unwrap();
+            assert_eq!(value["source"], entry.source.storage_key().0);
+            assert_eq!(
+                value.get("item_def_id").is_some(),
+                matches!(entry.source, GoldSource::ItemSale { .. })
+            );
+        }
     }
 
     #[test]
@@ -940,9 +1054,11 @@ mod tests {
         let path = crate::test_util::unique_temp_dir("item_gold_sources").join("game.db");
         let auth = AuthService::new(path.clone()).unwrap();
         let now = unix_now() - unix_now().rem_euclid(3600);
-        let sale = |timestamp, id: &str, quantity, gold| crate::metrics::ItemSaleRecord {
+        let sale = |timestamp, id: &str, quantity, gold| crate::metrics::GoldSourceRecord {
             timestamp,
-            item_def_id: id.into(),
+            source: GoldSource::ItemSale {
+                item_def_id: id.into(),
+            },
             quantity,
             gold,
         };
@@ -955,14 +1071,14 @@ mod tests {
             sale(now - 1, "removed_item", 1, 5100),
             sale(now + 1, "iron_sword", 1, 99999),
         ];
-        auth.record_item_sales(&sales).unwrap();
+        auth.record_gold_sources(&sales).unwrap();
         let sources = auth.item_gold_sources(now, 1).unwrap();
         assert_eq!(sources.total_gold, 19200);
         assert_eq!(
             sources
                 .entries
                 .iter()
-                .map(|e| (e.item_def_id.as_str(), e.quantity, e.gold))
+                .map(|e| (e.source.storage_key().1, e.quantity, e.gold))
                 .collect::<Vec<_>>(),
             [
                 ("iron_sword", 2, 9000),
@@ -998,7 +1114,7 @@ mod tests {
             sale(now - 1, "iron_sword", 1, 4000),
             sale(now - 1, "bad", 0, 1),
         ];
-        assert!(auth.record_item_sales(&invalid).is_err());
+        assert!(auth.record_gold_sources(&invalid).is_err());
         assert_eq!(auth.item_gold_sources(now, 1).unwrap().total_gold, 19200);
     }
 

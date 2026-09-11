@@ -655,11 +655,11 @@ async fn sell_item_applies_deal_bonus() {
         .sell_item(&pid("buyer"), &pid("npc_rica"), 7)
         .await;
     assert_eq!(game_state.get_player_gold(&pid("buyer")).await, 5_000);
-    let pending = game_state.pending_item_sales.read().await;
+    let pending = game_state.pending_gold_sources.read().await;
     assert_eq!(pending.len(), 1);
     let sale = pending.values().next().unwrap();
     assert_eq!(
-        (sale.item_def_id.as_str(), sale.quantity, sale.gold),
+        (sale.source.storage_key().1, sale.quantity, sale.gold),
         ("iron_sword", 1, 5000)
     );
 }

@@ -50,10 +50,12 @@ impl super::GameState {
                 // Cap accumulation, but never confiscate an above-cap wallet
                 // (trade proceeds may legitimately exceed the cap).
                 *gold = (before + salary).min(cap.max(before));
-                (*gold != before).then_some(*gold)
+                (*gold != before).then_some((*gold, *gold - before))
             };
-            if let Some(gold) = paid {
-                info!("salary: {name} paid {salary} on day {game_day}, wallet now {gold}");
+            if let Some((gold, amount)) = paid {
+                self.record_gold_source(crate::metrics::GoldSource::NpcSalary, 1, amount)
+                    .await;
+                info!("salary: {name} paid {amount} on day {game_day}, wallet now {gold}");
                 self.mark_dirty(&player_id).await;
                 self.send_direct_message(&player_id, ServerMessage::GoldUpdate { gold })
                     .await;

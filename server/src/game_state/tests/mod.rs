@@ -1,6 +1,7 @@
 use super::*;
 use crate::housing::HousingIO;
 use crate::item_defs::ItemDefs;
+use crate::metrics::GoldSource;
 use crate::monster_defs::MonsterDefs;
 use crate::types::{
     AttackRejectReason, CharacterClass, ClientKind, Gender, MonsterLifecycle, MonsterState,
@@ -51,6 +52,17 @@ mod title_tests;
 mod trading_tests;
 mod wet_tests;
 mod world_ready_tests;
+
+async fn assert_gold_production(game: &GameState, source: GoldSource, quantity: u64, gold: i64) {
+    let pending = game.pending_gold_sources.read().await;
+    let totals = pending
+        .values()
+        .filter(|record| record.source == source)
+        .fold((0, 0), |(quantity, gold), record| {
+            (quantity + record.quantity, gold + record.gold)
+        });
+    assert_eq!(totals, (quantity, gold), "{source:?}");
+}
 
 /// Stable numeric id derived from a fixture's name, so tests keep naming
 /// players ("owner", "buyer") instead of carrying opaque integers. Only needs

@@ -1137,9 +1137,7 @@ impl super::GameState {
             .await;
     }
 
-    /// Open a fished-up coin pouch: roll its dice for the copper inside,
-    /// spend the pouch, and credit the wallet. The system line puts the
-    /// amount in the combat log; `award_copper` drives the gold popup.
+    /// Spend a coin pouch and credit its rolled copper reward.
     async fn use_coin_pouch(&self, player_id: &PlayerId, instance_id: u64, dice: &str) {
         let name = {
             let inventories = self.inventories.read().await;
@@ -1156,6 +1154,8 @@ impl super::GameState {
         let copper = crate::game::combat::roll_dice(dice);
         self.consume_one_and_sync(player_id, instance_id).await;
         self.award_copper(player_id, i64::from(copper)).await;
+        self.record_gold_source(crate::metrics::GoldSource::CoinPouch, 1, i64::from(copper))
+            .await;
         info!(
             "Player {} opened a coin pouch: +{} copper",
             self.player_name_of(player_id).await,
@@ -2271,9 +2271,7 @@ impl super::GameState {
         true
     }
 
-    /// Pick up a dungeon coin pile: claim it (first picker wins), credit a
-    /// random 1–10 copper to the wallet, then broadcast its removal to nearby
-    /// players. Skips the bag/weight path entirely — it's currency, not loot.
+    /// Claim a coin pile and credit 1–10 copper without taking bag space.
     async fn pickup_coin_pile(
         &self,
         player_id: &PlayerId,
@@ -2294,6 +2292,8 @@ impl super::GameState {
 
         let copper: i64 = rand::thread_rng().gen_range(1..=10);
         self.award_copper(player_id, copper).await;
+        self.record_gold_source(crate::metrics::GoldSource::CoinPile, 1, copper)
+            .await;
         self.send_system_message(player_id, format!("You picked up {copper} copper."))
             .await;
         info!(

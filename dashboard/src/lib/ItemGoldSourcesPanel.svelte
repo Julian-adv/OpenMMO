@@ -3,7 +3,7 @@
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
   import { formatCount, formatDateTime, uniquePeriods, type GoldHours } from './metrics'
-  import type { ItemGoldSources } from './itemGoldSources'
+  import { goldSourceKey, type ItemGoldSources } from './itemGoldSources'
 
   let { hours = $bindable(), sources, loading, refreshing, error, refresh }: {
     hours: GoldHours
@@ -20,32 +20,35 @@
 <section class="chart-panel" aria-labelledby="item-gold-sources-title" aria-busy={loading}>
   <div class="chart-heading">
     <div>
-      <h2 id="item-gold-sources-title">아이템 판매 골드 생산 순위</h2>
-      <p>상인에게 판매한 아이템 종류별 · 시간별 합계 · 생성 골드 내림차순</p>
+      <h2 id="item-gold-sources-title">골드 생산 순위</h2>
+      <p>아이템 판매·상자·동전 획득·NPC 급여 · 생성 골드 내림차순</p>
     </div>
-    <PeriodFilter bind:hours options={uniquePeriods} label="아이템 판매 집계 기간" />
+    <PeriodFilter bind:hours options={uniquePeriods} label="골드 생산 집계 기간" />
   </div>
   <MetricsError {error} until={sources?.until} {refreshing} {refresh} />
   <div class="metric-summary">
-    <span>완료된 최근 {period.label} 판매로 생성된 골드{error ? ' · 갱신 중단' : ''}</span>
+    <span>완료된 최근 {period.label} 생성된 골드{error ? ' · 갱신 중단' : ''}</span>
     <strong>{#if sources}<GoldAmount copper={sources.total_gold} />{:else}—{/if}</strong>
-    <p>흥정을 포함한 실제 판매 지급액입니다. 주민 NPC·플레이어 간 거래는 제외하며, 재매입 비용은 차감하지 않습니다.</p>
-    <p>현재 시간대의 판매는 다음 정각 집계 후 반영됩니다.</p>
+    <p>흥정 포함 판매 지급액, 던전 보상 상자, 몬스터·상자·파괴물의 동전 더미, 동전 주머니, 주민 NPC 급여를 합산합니다. 동전 더미는 주웠을 때 집계합니다.</p>
+    <p>주민 NPC·플레이어 간 거래와 팁은 제외하며, 소비한 골드는 차감하지 않습니다. 현재 시간대의 획득은 다음 정각에 반영됩니다.</p>
   </div>
   {#if sources && sources.collection_started_at > sources.from}
-    <p class="chart-notice">{formatDateTime(sources.collection_started_at)} KST부터 수집한 판매만 포함합니다.</p>
+    <p class="chart-notice">아이템 판매는 {formatDateTime(sources.collection_started_at)} KST부터 수집한 기록만 포함합니다.</p>
+  {/if}
+  {#if sources && sources.rewards_started_at > sources.from}
+    <p class="chart-notice">판매 외 골드는 {formatDateTime(sources.rewards_started_at)} KST부터 수집한 기록만 포함합니다.</p>
   {/if}
   {#if sources && sources.entries.length > 0}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-    <div class="table-scroll" tabindex="0" role="region" aria-label="아이템 판매 골드 순위 표">
+    <div class="table-scroll" tabindex="0" role="region" aria-label="골드 생산 순위 표">
       <table aria-labelledby="item-gold-sources-title">
-        <thead><tr><th scope="col" class="rank">순위</th><th scope="col">아이템</th><th scope="col" class="number">판매 수량</th><th scope="col" class="number">생성 골드</th><th scope="col" class="share">비중</th></tr></thead>
+        <thead><tr><th scope="col" class="rank">순위</th><th scope="col">골드 생산원</th><th scope="col" class="number">수량 / 횟수</th><th scope="col" class="number">생성 골드</th><th scope="col" class="share">비중</th></tr></thead>
         <tbody>
-          {#each sources.entries as entry, index (entry.item_def_id)}
+          {#each sources.entries as entry, index (goldSourceKey(entry))}
             <tr>
               <td class="rank"><span class:podium={index < 3}>{index + 1}</span></td>
-              <th scope="row" class="item-name" title={entry.item_def_id}>{entry.name}</th>
-              <td class="number">{formatCount(entry.quantity)}<small>개</small></td>
+              <th scope="row" class="item-name">{entry.name}{#if entry.source === 'item_sale'}<small>상인 판매</small>{/if}</th>
+              <td class="number">{formatCount(entry.quantity)}<small>{entry.source === 'item_sale' ? '개' : '회'}</small></td>
               <td class="number amount"><GoldAmount copper={entry.gold} /></td>
               <td class="share"><div class="share-value"><span class="share-track" aria-hidden="true"><span style:width={`${percent(entry.gold)}%`}></span></span><span>{formatCount(percent(entry.gold))}%</span></div></td>
             </tr>
@@ -55,13 +58,13 @@
     </div>
   {:else}
     <div class="chart-empty" role="status">
-      <strong>{loading ? '아이템 판매 기록을 불러오고 있어요' : error ? '판매 기록에 연결할 수 없어요' : '이 기간에 기록된 상인 판매가 없어요'}</strong>
-      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 표가 자동으로 갱신됩니다.' : '판매 수량과 지급액을 모아 매시간 순위에 반영합니다.'}</p>
+      <strong>{loading ? '골드 생산 기록을 불러오고 있어요' : error ? '골드 생산 기록에 연결할 수 없어요' : '이 기간에 기록된 골드 생산이 없어요'}</strong>
+      <p>{loading ? '잠시만 기다려 주세요.' : error ? '연결이 복구되면 표가 자동으로 갱신됩니다.' : '판매와 보상의 실제 지급액을 모아 매시간 순위에 반영합니다.'}</p>
     </div>
   {/if}
   <div class="chart-footer">
     <span>{sources ? `${formatDateTime(sources.from)} — ${formatDateTime(sources.until)}` : `최근 ${period.label}`} <span class="timezone">KST</span></span>
-    <span>{sources ? `${formatCount(sources.entries.length)}종 아이템` : '기록 확인 중'}</span>
+    <span>{sources ? `${formatCount(sources.entries.length)}개 생산원` : '기록 확인 중'}</span>
   </div>
 </section>
 
@@ -75,6 +78,7 @@
   .rank span { display: inline-grid; place-items: center; min-width: 28px; height: 28px; color: #899b90; font-weight: 600; border-radius: 8px; }
   .rank .podium { background: #eaf3ef; color: #166d5e; }
   .item-name { font-weight: 500; overflow-wrap: anywhere; }
+  .item-name small { display: block; margin-top: 3px; color: #899b90; font-size: 10px; }
   .number { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
   .number small { margin-left: 4px; color: #899b90; font-size: 10px; }
   .amount { font-weight: 600; }

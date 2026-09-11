@@ -102,6 +102,7 @@ async fn tipping_moves_copper_from_the_tipper_to_the_owner() {
 
     assert_eq!(game_state.get_player_gold(&fan_id).await, 380);
     assert_eq!(game_state.get_player_gold(&bard_id).await, 120);
+    assert!(game_state.pending_gold_sources.read().await.is_empty());
 
     game_state.tip_hat_tip(&fan_id, hat_id, 10_000).await;
     assert_eq!(

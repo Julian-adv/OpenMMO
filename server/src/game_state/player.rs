@@ -727,7 +727,7 @@ impl super::GameState {
             "shutdown snapshot",
         )
         .await;
-        self.flush_item_sales(auth, crate::auth::unix_now(), true)
+        self.flush_gold_sources(auth, crate::auth::unix_now(), true)
             .await;
     }
 

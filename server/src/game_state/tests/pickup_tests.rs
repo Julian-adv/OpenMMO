@@ -1,6 +1,37 @@
 use super::*;
 
 #[tokio::test]
+async fn coin_pickup_records_only_the_successful_payout() {
+    let game = make_test_game_state("coin_pickup_metrics");
+    game.add_player(make_player("picker", 0.0, 0.0)).await;
+    game.add_player(make_player("rival", 0.0, 0.0)).await;
+    game.spawn_ground_item(GroundItem {
+        instance_id: 42,
+        item_def_id: COIN_PILE_ITEM_ID.into(),
+        position: Position {
+            x: 0.5,
+            y: 0.0,
+            z: 0.0,
+        },
+        floor_level: 0,
+        quantity: 1,
+        enchant: 0,
+        dropped_by: None,
+        cape_color: None,
+        cape_texture: None,
+    })
+    .await;
+    assert!(game.pending_gold_sources.read().await.is_empty());
+    let picker = pid("picker");
+    let rival = pid("rival");
+    tokio::join!(game.pickup_item(&picker, 42), game.pickup_item(&rival, 42));
+    game.pickup_item(&picker, 42).await;
+    let gold = game.get_player_gold(&picker).await + game.get_player_gold(&rival).await;
+    assert!((1..=10).contains(&gold));
+    assert_gold_production(&game, GoldSource::CoinPile, 1, gold).await;
+}
+
+#[tokio::test]
 async fn pickup_broadcasts_the_pickup_animation() {
     let game_state = make_test_game_state("pickup_anim_broadcast");
     game_state.add_player(make_player("picker", 0.0, 0.0)).await;

@@ -13,7 +13,7 @@ async fn resident_buys_wishlist_item_at_premium_from_wallet() {
         .sell_item(&pid("seller"), &pid("npc_karl"), 7)
         .await;
     assert_eq!(game_state.get_player_gold(&pid("seller")).await, 60);
-    assert!(game_state.pending_item_sales.read().await.is_empty());
+    assert!(game_state.pending_gold_sources.read().await.is_empty());
     assert_eq!(
         game_state.get_player_gold(&pid("npc_karl")).await,
         10_000 - 60
@@ -600,6 +600,7 @@ async fn salary_pays_once_per_day_rollover_up_to_cap() {
     // First tick after boot only records the day.
     game_state.tick_npc_salaries().await;
     assert_eq!(game_state.get_player_gold(&pid("npc_karl")).await, 27_000);
+    assert!(game_state.pending_gold_sources.read().await.is_empty());
 
     // Roll the ledger back a day: the next tick pays one salary, capped at
     // the 30_000 wallet cap (27_000 + 5_000 → 30_000).
@@ -613,6 +614,10 @@ async fn salary_pays_once_per_day_rollover_up_to_cap() {
     // Same day again: no double payment.
     game_state.tick_npc_salaries().await;
     assert_eq!(game_state.get_player_gold(&pid("npc_karl")).await, 30_000);
+    assert_gold_production(&game_state, GoldSource::NpcSalary, 1, 3000).await;
+    *game_state.npc_salary_last_day.write().await = Some(game_state.current_game_day() - 1);
+    game_state.tick_npc_salaries().await;
+    assert_gold_production(&game_state, GoldSource::NpcSalary, 1, 3000).await;
 }
 
 // --- Loadout: issued gear seeded on join, never sold ---

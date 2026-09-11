@@ -15,17 +15,40 @@ pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum GoldSource {
+    ItemSale { item_def_id: String },
+    DungeonChest,
+    CoinPile,
+    CoinPouch,
+    NpcSalary,
+}
+
+impl GoldSource {
+    pub fn storage_key(&self) -> (&str, &str) {
+        match self {
+            Self::ItemSale { item_def_id } => ("item_sale", item_def_id),
+            Self::DungeonChest => ("dungeon_chest", ""),
+            Self::CoinPile => ("coin_pile", ""),
+            Self::CoinPouch => ("coin_pouch", ""),
+            Self::NpcSalary => ("npc_salary", ""),
+        }
+    }
+}
+
 #[derive(Clone)]
-pub struct ItemSaleRecord {
+pub struct GoldSourceRecord {
     pub timestamp: i64,
-    pub item_def_id: String,
+    pub source: GoldSource,
     pub quantity: u64,
     pub gold: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ItemGoldSource {
-    pub item_def_id: String,
+    #[serde(flatten)]
+    pub source: GoldSource,
     pub name: String,
     pub quantity: u64,
     pub gold: i64,
@@ -36,6 +59,7 @@ pub struct ItemGoldSources {
     pub from: i64,
     pub until: i64,
     pub collection_started_at: i64,
+    pub rewards_started_at: i64,
     pub total_gold: i64,
     pub entries: Vec<ItemGoldSource>,
 }
@@ -320,7 +344,7 @@ pub async fn record_concurrent_sample(game: &GameState, auth: Arc<AuthService>) 
 
 pub async fn record_hourly_metrics(game: &GameState, auth: Arc<AuthService>) {
     game.flush_dirty_saves(&auth).await;
-    game.flush_item_sales(&auth, unix_now(), false).await;
+    game.flush_gold_sources(&auth, unix_now(), false).await;
     game.tick_gold_snapshot(&auth).await;
     let history_auth = Arc::clone(&auth);
     if let Err(error) =
@@ -357,6 +381,19 @@ fn metrics_unavailable() -> Response {
         .into_response()
 }
 
+fn metrics_response<T: Serialize>(
+    result: Result<T, crate::auth::AuthError>,
+    label: &str,
+) -> Response {
+    match result {
+        Ok(data) => ([(header::CACHE_CONTROL, "no-store")], Json(data)).into_response(),
+        Err(error) => {
+            warn!("{label} failed: {error}");
+            metrics_unavailable()
+        }
+    }
+}
+
 fn leaderboard_interval(hours: u32) -> Result<i64, (StatusCode, &'static str)> {
     match hours {
         168 | 720 => Ok(3600),
@@ -373,14 +410,26 @@ async fn level_leaderboard(
     State(state): State<MetricsState>,
     Query(query): Query<HistoryQuery>,
 ) -> Response {
-    leaderboard_response(state.auth, query, "Level", AuthService::level_leaderboard).await
+    leaderboard_response(
+        state.auth,
+        query,
+        "Level leaderboard",
+        AuthService::level_leaderboard,
+    )
+    .await
 }
 
 async fn gold_leaderboard(
     State(state): State<MetricsState>,
     Query(query): Query<HistoryQuery>,
 ) -> Response {
-    leaderboard_response(state.auth, query, "Gold", AuthService::gold_leaderboard).await
+    leaderboard_response(
+        state.auth,
+        query,
+        "Gold leaderboard",
+        AuthService::gold_leaderboard,
+    )
+    .await
 }
 
 async fn weapon_enchant_leaderboard(
@@ -390,7 +439,7 @@ async fn weapon_enchant_leaderboard(
     leaderboard_response(
         state.auth,
         query,
-        "Weapon enchant",
+        "Weapon enchant leaderboard",
         AuthService::weapon_enchant_leaderboard,
     )
     .await
@@ -403,7 +452,7 @@ async fn armor_enchant_leaderboard(
     leaderboard_response(
         state.auth,
         query,
-        "Armor enchant",
+        "Armor enchant leaderboard",
         AuthService::armor_enchant_leaderboard,
     )
     .await
@@ -420,15 +469,7 @@ async fn leaderboard_response<T: Serialize + Send + 'static>(
         Ok(interval) => interval,
         Err(error) => return error.into_response(),
     };
-    match auth_db(move || load(&auth, hours, interval)).await {
-        Ok(leaderboard) => {
-            ([(header::CACHE_CONTROL, "no-store")], Json(leaderboard)).into_response()
-        }
-        Err(error) => {
-            warn!("{label} leaderboard failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    metrics_response(auth_db(move || load(&auth, hours, interval)).await, label)
 }
 
 async fn unique_history(
@@ -443,13 +484,10 @@ async fn unique_history(
         )
             .into_response();
     }
-    match auth_db(move || state.auth.unique_account_history(unix_now(), hours / 24)).await {
-        Ok(history) => ([(header::CACHE_CONTROL, "no-store")], Json(history)).into_response(),
-        Err(error) => {
-            warn!("Unique account history failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    metrics_response(
+        auth_db(move || state.auth.unique_account_history(unix_now(), hours / 24)).await,
+        "Unique account history",
+    )
 }
 
 async fn concurrent_history(
@@ -510,13 +548,10 @@ async fn gold_history(
         Ok(interval) => interval,
         Err(response) => return response.into_response(),
     };
-    match auth_db(move || state.auth.gold_history(unix_now(), hours, interval)).await {
-        Ok(history) => ([(header::CACHE_CONTROL, "no-store")], Json(history)).into_response(),
-        Err(error) => {
-            warn!("Gold history failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    metrics_response(
+        auth_db(move || state.auth.gold_history(unix_now(), hours, interval)).await,
+        "Gold history",
+    )
 }
 
 async fn item_gold_sources(
@@ -527,13 +562,10 @@ async fn item_gold_sources(
     if let Err(error) = gold_history_interval(hours) {
         return error.into_response();
     }
-    match auth_db(move || state.auth.item_gold_sources(unix_now(), hours)).await {
-        Ok(sources) => ([(header::CACHE_CONTROL, "no-store")], Json(sources)).into_response(),
-        Err(error) => {
-            warn!("Item gold sources failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    metrics_response(
+        auth_db(move || state.auth.item_gold_sources(unix_now(), hours)).await,
+        "Item gold sources",
+    )
 }
 
 async fn per_account_gold_history(
@@ -553,19 +585,15 @@ async fn per_account_gold_history(
         )
             .into_response();
     }
-    match auth_db(move || {
-        state
-            .auth
-            .per_account_gold_history(unix_now(), hours, interval, active_hours / 24)
-    })
-    .await
-    {
-        Ok(history) => ([(header::CACHE_CONTROL, "no-store")], Json(history)).into_response(),
-        Err(error) => {
-            warn!("Per-account gold history failed: {error}");
-            metrics_unavailable()
-        }
-    }
+    metrics_response(
+        auth_db(move || {
+            state
+                .auth
+                .per_account_gold_history(unix_now(), hours, interval, active_hours / 24)
+        })
+        .await,
+        "Per-account gold history",
+    )
 }
 
 #[cfg(test)]
@@ -589,11 +617,20 @@ mod tests {
         let empty: ItemGoldSources = client.get(&url).send().await.unwrap().json().await.unwrap();
         assert_eq!(empty.until - empty.from, 24 * 3600);
         assert!(empty.entries.is_empty());
-        auth.record_item_sales(&[ItemSaleRecord {
+        auth.record_gold_sources(&[GoldSourceRecord {
             timestamp: unix_now() - 3600,
-            item_def_id: "iron_sword".into(),
+            source: GoldSource::ItemSale {
+                item_def_id: "iron_sword".into(),
+            },
             quantity: 2,
             gold: 9000,
+        }])
+        .unwrap();
+        auth.record_gold_sources(&[GoldSourceRecord {
+            timestamp: unix_now() - 3600,
+            source: GoldSource::DungeonChest,
+            quantity: 1,
+            gold: 10000,
         }])
         .unwrap();
         for hours in [1, 24, 168, 720, 4320, 8760] {
@@ -606,8 +643,10 @@ mod tests {
             assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
             let sources: ItemGoldSources = response.json().await.unwrap();
             assert_eq!(sources.until - sources.from, hours * 3600);
-            assert_eq!(sources.total_gold, 9000);
-            assert_eq!(sources.entries[0].quantity, 2);
+            assert_eq!(sources.total_gold, 19000);
+            assert_eq!(sources.entries[0].source, GoldSource::DungeonChest);
+            assert_eq!(sources.entries[0].quantity, 1);
+            assert_eq!(sources.entries[1].quantity, 2);
         }
         for hours in ["0", "6", "-1", "25", "invalid"] {
             assert_eq!(

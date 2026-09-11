@@ -708,15 +708,7 @@ impl GameState {
         }
     }
 
-    /// Open the final-floor treasure chest: next to it on the deepest floor,
-    /// carrying the deepest locked floor's key, one open per character per
-    /// night. The open spends one of each of the dungeon's keys the opener
-    /// holds. The rolled items burst out of the chest as ground drops
-    /// scattered around it (anyone nearby may grab them); the depth-scaled
-    /// gold goes straight to the opener. The open is broadcast nearby.
-    /// Re-opening an already-claimed chest still swings the lid: the clicker
-    /// alone gets an item-less `DungeonChestOpened` showing an empty box, and
-    /// keeps the keys.
+    /// Spend dungeon keys for the nightly chest reward; repeat opens show an empty chest.
     pub async fn open_dungeon_chest(
         &self,
         player_id: &PlayerId,
@@ -846,6 +838,8 @@ impl GameState {
             *wallet += gold;
             *wallet
         };
+        self.record_gold_source(crate::metrics::GoldSource::DungeonChest, 1, gold)
+            .await;
         self.mark_dirty(player_id).await;
         self.send_direct_message(player_id, ServerMessage::GoldUpdate { gold: new_gold })
             .await;

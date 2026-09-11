@@ -26,7 +26,7 @@
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
   let levelHours = $state<LeaderboardHours>(168)
   let itemGoldHours = $state<GoldHours>(24)
-  const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '아이템 판매 현황')
+  const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '골드 생산 현황')
   const leaderboard = createMetricsResource(() => levelHours, 'level-leaderboard', parseLevelLeaderboard, '레벨 순위 정보')
   let goldLeaderboardHours = $state<LeaderboardHours>(168)
   const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')

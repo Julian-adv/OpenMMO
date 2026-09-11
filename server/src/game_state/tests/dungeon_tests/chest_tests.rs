@@ -222,6 +222,7 @@ async fn dungeon_chest_refills_once_per_night() {
         after_second,
         "one open per night, not one per visit"
     );
+    assert_gold_production(&game_state, GoldSource::DungeonChest, 2, after_second).await;
 }
 
 /// The chest takes the deepest locked floor's key; a slain guardian is no
@@ -330,6 +331,7 @@ async fn dungeon_chest_persistence_failure_rejects_without_reward_and_can_retry(
         .await;
 
     assert_chest_rejected(&mut direct_rx, "saved");
+    assert!(game_state.pending_gold_sources.read().await.is_empty());
     assert_eq!(
         game_state.get_player_gold(&player_id).await,
         0,
@@ -353,6 +355,13 @@ async fn dungeon_chest_persistence_failure_rejects_without_reward_and_can_retry(
         game_state.get_player_gold(&player_id).await > 0,
         "retry after schema repair should pay out"
     );
+    assert_gold_production(
+        &game_state,
+        GoldSource::DungeonChest,
+        1,
+        game_state.get_player_gold(&player_id).await,
+    )
+    .await;
     // Poll the eject task onto its timer, then cross the lid-swing delay
     // (virtual time; same idiom as pickup_tests).
     tokio::time::sleep(std::time::Duration::from_millis(1)).await;

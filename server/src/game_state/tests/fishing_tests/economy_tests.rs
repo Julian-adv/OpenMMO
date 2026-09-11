@@ -63,4 +63,6 @@ async fn opening_a_coin_pouch_pays_its_copper_and_spends_it() {
         !inv.bag.iter().any(|i| i.item_def_id == "sunken_coin_pouch"),
         "an opened pouch is spent"
     );
+    game_state.use_item(&id, instance_id).await;
+    assert_gold_production(&game_state, GoldSource::CoinPouch, 1, paid).await;
 }
