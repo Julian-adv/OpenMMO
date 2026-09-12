@@ -35,6 +35,12 @@
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
   import GameSceneTreeLayer from './game-scene/GameSceneTreeLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
+  import GameSceneRainLayer from './game-scene/GameSceneRainLayer.svelte'
+  import {
+    stopRainAmbience,
+    updateRainAmbience,
+  } from '../managers/rainAmbienceManager'
+  import { setRainQuiet } from '../managers/bgmManager'
   import GameSceneHousingLayer from './game-scene/GameSceneHousingLayer.svelte'
   import GameSceneLandClaimLayer from './game-scene/GameSceneLandClaimLayer.svelte'
   import GameSceneHousePlacementLayer from './game-scene/GameSceneHousePlacementLayer.svelte'
@@ -93,6 +99,14 @@
     sunDebugOffset,
     serverGameTime,
   } from '../stores/timeStore'
+  import {
+    localWeather,
+    NO_WEATHER,
+    weather,
+    weatherSectorsReady,
+    type LocalWeather,
+  } from '../stores/weatherStore'
+  import { sampleLocalWeather, weatherChanged } from '../utils/weatherSample'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -223,6 +237,8 @@
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
+  let rainLayerRef = $state<GameSceneRainLayer | undefined>(undefined)
+  let rainBgmQuiet = false
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let dungeonLayerRef = $state<GameSceneDungeonLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(
@@ -402,6 +418,8 @@
     if (objectGroup) objectGroup.visible = !underground
     const windGroup = windParticlesRef?.getGroup?.()
     if (windGroup) windGroup.visible = !underground
+    const rainGroup = rainLayerRef?.getGroup?.()
+    if (rainGroup) rainGroup.visible = !underground
     const riverRocksGroup = riverRocksRef?.getGroup?.()
     if (riverRocksGroup) riverRocksGroup.visible = !underground
     const shoreSprayGroup = shoreSprayRef?.getGroup?.()
@@ -738,10 +756,27 @@
       // Update wind-blown particles (only when grass is visible nearby)
       {
         const windStart = performance.now()
-        const grassCount = grassLayerRef?.getPlayerChunkGrassCount() ?? 0
+        // Petals and seeds stop spawning under rain; the live ones age out.
+        const grassCount =
+          localSample.rain > 0.2
+            ? 0
+            : (grassLayerRef?.getPlayerChunkGrassCount() ?? 0)
         if (windState)
           windParticlesRef?.update(deltaTime, camera, windState, grassCount)
         loopProfiler.record('windParticles', performance.now() - windStart)
+      }
+
+      {
+        const rainStart = performance.now()
+        const rain = localSample.rain
+        const indoor = $playerInsideHouseId !== null
+        rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain)
+        updateRainAmbience(rain, indoor, deltaTime / 1000)
+        // Hysteresis keeps the playlist from flapping along a cell edge.
+        if (rain > 0.35) rainBgmQuiet = true
+        else if (rain < 0.2) rainBgmQuiet = false
+        setRainQuiet(rainBgmQuiet)
+        loopProfiler.record('rain', performance.now() - rainStart)
       }
 
       // Update river-rock spray particles + wake scroll
@@ -809,6 +844,7 @@
         grassLayerRef,
         treeLayerRef,
         windParticlesRef,
+        rainLayerRef,
         housingLayerRef,
         objectOverlayRef,
         currentPlayerModel,
@@ -919,6 +955,31 @@
     cameraDistance.set(camera.zoom)
   }
 
+  let localSample: LocalWeather = NO_WEATHER
+  let publishedWeather: LocalWeather = NO_WEATHER
+
+  // Weather runs on true game time, not the debug-offset display hour, so
+  // it stays in step with the server and the map forecast.
+  function updateLocalWeather(calDate: CalendarDate): number {
+    let sample = NO_WEATHER
+    if ($weather && $weatherSectorsReady && currentPlayer && !$isUnderground) {
+      sample = sampleLocalWeather(
+        $weather.seed,
+        $weather.bias,
+        calDate,
+        calendarSystem.getGameHour(),
+        currentPlayer.position.x,
+        currentPlayer.position.z
+      )
+    }
+    localSample = sample
+    if (weatherChanged(publishedWeather, sample)) {
+      publishedWeather = sample
+      localWeather.set(sample)
+    }
+    return sample.cloud
+  }
+
   function updateLightPosition(
     sunLightSnapshot: SunLightSnapshot,
     calDate: CalendarDate
@@ -932,6 +993,7 @@
       scene,
       sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
+      cloudFactor: updateLocalWeather(calDate),
       underground: $isUnderground,
     })
   }
@@ -1101,6 +1163,8 @@
       unsubscribeServerGameTime()
       unsubscribeSunTimeScale()
       stopGameLoop()
+      stopRainAmbience()
+      setRainQuiet(false)
       stopChatBubbleChecker()
       networkManager.disconnect()
       monsterManager.reset()
@@ -1262,6 +1326,14 @@
   <GameSceneWindParticles
     bind:this={windParticlesRef}
     playerPosition={currentPlayer?.position ?? null}
+  />
+{/if}
+
+{#if graphicsPreset.enableRainParticles}
+  <GameSceneRainLayer
+    bind:this={rainLayerRef}
+    playerPosition={currentPlayer?.position ?? null}
+    heightManager={terrainHeightManager}
   />
 {/if}
 

@@ -244,6 +244,12 @@ enum Cmd {
         /// so the water field matches the original bake's terrain.
         #[arg(long)]
         water_field_only: bool,
+
+        /// Only (re)write `climate/` zone grids from the macro world; leave
+        /// every other artifact untouched. Safe against a live world for the
+        /// same reason as `--water-field-only`.
+        #[arg(long, conflicts_with = "water_field_only")]
+        climate_only: bool,
     },
 
     /// Dump river segment data influencing a single tile.
@@ -417,6 +423,7 @@ fn main() -> Result<()> {
             region_z_min,
             region_z_max,
             water_field_only,
+            climate_only,
         } => {
             if region_x_max < region_x_min || region_z_max < region_z_min {
                 anyhow::bail!(
@@ -434,6 +441,7 @@ fn main() -> Result<()> {
                 (region_x_min, region_z_min),
                 (region_x_max, region_z_max),
                 water_field_only,
+                climate_only,
             )
         }
         Cmd::InspectTile {

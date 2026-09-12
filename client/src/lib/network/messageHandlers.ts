@@ -153,6 +153,7 @@ import {
 import { discoveredDungeonIds } from '../stores/dungeonStore'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
+import { setWeather } from '../stores/weatherStore'
 import { combatController } from '../managers/combatController'
 import { playerVisualFloorLevel } from '../stores/housingStore'
 import { currentDungeonDepth } from '../stores/dungeonStore'
@@ -986,6 +987,10 @@ export function handleServerMessage(
         minute: data.datetime.minute,
         isNight: data.is_night,
       })
+      break
+    }
+    case 'WeatherSync': {
+      setWeather({ seed: data.seed, bias: data.bias })
       break
     }
 

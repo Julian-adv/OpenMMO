@@ -26,6 +26,9 @@ export interface SceneLightingUpdateParams {
   scene: THREE.Scene
   sunLightSnapshot: SunLightSnapshot
   eclipseFactor: number
+  /** Overcast 0..1 from the weather cells over the player; full cover reads
+   *  as a cloudy afternoon, never as night. */
+  cloudFactor?: number
   /** Dungeon render mode: no sun/moon, dim cold ambient, dark background. */
   underground?: boolean
 }
@@ -130,6 +133,7 @@ export function createSceneLightingController(): SceneLightingController {
     )
 
     const eclipse = params.eclipseFactor
+    const cloud = params.cloudFactor ?? 0
 
     if (params.ambientLight) {
       const twilightBlend = celestialLightState.directional.sunColorBlendFactor
@@ -140,16 +144,19 @@ export function createSceneLightingController(): SceneLightingController {
 
       params.ambientLight.color.copy(ambientColor)
       params.ambientLight.intensity =
-        celestialLightState.ambientIntensity * (1 - eclipse * 0.5)
+        celestialLightState.ambientIntensity *
+        (1 - eclipse * 0.5) *
+        (1 - cloud * 0.25)
     }
 
     // Scale IBL environment intensity with day/night cycle
     const envDayIntensity = 0.2
     const envNightIntensity = 0.03
     params.scene.environmentIntensity =
-      envDayIntensity +
-      (envNightIntensity - envDayIntensity) *
-        celestialLightState.ambientNightFactor
+      (envDayIntensity +
+        (envNightIntensity - envDayIntensity) *
+          celestialLightState.ambientNightFactor) *
+      (1 - cloud * 0.25)
 
     if (!params.directionalLight) return
 
@@ -165,7 +172,7 @@ export function createSceneLightingController(): SceneLightingController {
       playerPos.z + shadowOffset.z
     )
     params.directionalLight.intensity =
-      directionalLightState.intensity * (1 - eclipse * 0.95)
+      directionalLightState.intensity * (1 - eclipse * 0.95) * (1 - cloud * 0.5)
 
     const shouldCastSunShadow =
       params.directionalShadowsEnabled &&

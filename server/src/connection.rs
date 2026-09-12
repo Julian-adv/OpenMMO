@@ -1275,6 +1275,9 @@ async fn handle_client_message(
                 is_night: GameState::is_night(&datetime),
                 datetime,
             });
+            if let Some(weather) = game_state.weather_sync_message() {
+                responses.push(weather);
+            }
 
             // Send inventory state
             if let Some(inv) = inventory {

@@ -1111,6 +1111,12 @@ pub enum ServerMessage {
         datetime: GameDateTime,
         is_night: bool,
     },
+    /// Everything a client needs to evaluate rain anywhere, any time
+    /// (doc/WEATHER_SYSTEM.md): sent on join and every 30 s.
+    WeatherSync {
+        seed: u64,
+        bias: f32,
+    },
     /// NPC clients only (doc/PRICING.md).
     PricingNotice(crate::pricing::PricingNotice),
     MonsterSpawned {
