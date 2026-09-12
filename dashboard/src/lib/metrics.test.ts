@@ -3,8 +3,8 @@ import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegmen
 
 describe('gold display units', () => {
   it.each([
-    [0, '0c'], [1, '1c'], [100, '1s'], [9999, '99s99c'],
-    [10000, '1g'], [86134, '8g61s34c'], [123456789, '12,345g67s89c'],
+    [0, '0c'], [1, '1c'], [100, '1s'], [9999, '99s 99c'],
+    [10000, '1g'], [86134, '8g 61s 34c'], [123456789, '12,345g 67s 89c'],
   ])('displays %i copper as %s gold', (copper, expected) => {
     expect(formatGold(copper)).toBe(expected)
   })
@@ -13,7 +13,7 @@ describe('gold display units', () => {
     expect(goldSegments(86134)).toEqual([
       { unit: 'gold', text: '8g' }, { unit: 'silver', text: '61s' }, { unit: 'copper', text: '34c' },
     ])
-    expect(formatGold(10000 / 3)).toBe('33s33c')
+    expect(formatGold(10000 / 3)).toBe('33s 33c')
     expect(formatGold(99.9)).toBe('1s')
     expect(formatGold(9999.9)).toBe('1g')
   })
@@ -41,8 +41,8 @@ describe('gold per active account history', () => {
     expect(parsePerAccountGoldHistory(zero, 24, 24).latest?.gold_per_account).toBe(0)
     expect(parsePerAccountGoldHistory({ ...data, latest: null }, 24, 24).samples).toEqual([sample])
     expect(parsePerAccountGoldHistory({ ...data, latest: null, samples: [] }, 24, 24).latest).toBeNull()
-    const stale = { ...data, from: midnight + 3600, until: midnight + 7200, samples: [] }
-    expect(parsePerAccountGoldHistory(stale, 1, 24).latest).toEqual(latest)
+    const stale = { ...data, from: midnight + 3600, until: midnight + 3600 + 86400, samples: [] }
+    expect(parsePerAccountGoldHistory(stale, 24, 24).latest).toEqual(latest)
     const samples = [{ ...sample, timestamp: midnight - 7200 }, sample]
     expect(splitSegments(parsePerAccountGoldHistory({ ...data, samples }, 24, 24).samples, 3600)).toHaveLength(2)
   })
@@ -87,7 +87,7 @@ describe('hourly gold history', () => {
         { timestamp: 10800, total_gold: 25, peak_gold: 25, sample_count: 1 }] }
     expect(parseGoldHistory(data, 24)).toEqual(data)
     expect(splitSegments(data.samples, 3600)).toEqual(data.samples.map(sample => [sample]))
-    expect(parseGoldHistory({ ...data, from: 82800, samples: [] }, 1).latest).toEqual(data.latest)
+    expect(parseGoldHistory({ ...data, from: 86400, until: 172800, samples: [] }, 24).latest).toEqual(data.latest)
     expect(parseGoldHistory({ ...data, latest: null, samples: [] }, 24).latest).toBeNull()
     expect(() => parseGoldHistory({ ...data, latest: null }, 24)).toThrow()
     expect(() => parseGoldHistory({ ...data, samples: [] }, 24)).toThrow()

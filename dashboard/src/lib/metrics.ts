@@ -150,8 +150,7 @@ export const periods = [
 
 export type Hours = typeof periods[number]['hours']
 export const goldPeriods = [
-  { hours: 1, label: '1시간', interval: 3600, intervalLabel: '1시간 간격' },
-  { hours: 24, label: '24시간', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 24, label: '1일', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 168, label: '1주일', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 720, label: '1개월', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 4320, label: '6개월', interval: 21600, intervalLabel: '6시간 평균' },
@@ -372,7 +371,7 @@ export function goldSegments(copper: number) {
   ].filter((part) => part.value > 0 || (amount === 0 && part.unit === 'copper'))
     .map((part) => ({ unit: part.unit, text: `${part.value.toLocaleString('ko-KR')}${part.suffix}` }))
 }
-export const formatGold = (copper: number) => goldSegments(copper).map((part) => part.text).join('')
+export const formatGold = (copper: number) => goldSegments(copper).map((part) => part.text).join(' ')
 export const formatDateTime = (timestamp: number) => dateFormatter.format(timestamp * 1000)
 export const formatAxisTime = (timestamp: number, hours: number, daily = false) =>
   (hours <= 24 && !daily ? timeFormatter : hours <= 4320 ? dayFormatter : monthFormatter).format(timestamp * 1000)

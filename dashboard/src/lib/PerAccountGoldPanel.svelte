@@ -46,7 +46,7 @@
   {#if history && history.samples.length > 0 && history.collection_started_at > kstDayStart(history.from) - history.window_seconds}
     <p class="chart-notice">{formatDateTime(history.collection_started_at)} KST부터 수집한 접속 기록입니다. 일부 시점의 활성 계정 수는 선택한 기간 전체를 포함하지 못합니다.</p>
   {/if}
-  <div class="chart-meta"><span>골드/계정 · 직전 {activePeriod.label} 활성 유저</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
+  <div class="chart-meta"><span>골드/계정 · 직전 {activePeriod.label} 활성 유저</span><span>{period.intervalLabel}</span></div>
   {#if history && history.samples.length > 0}
     <HistoryChart {history} {peak} value={(sample) => sample.gold_per_account} legend={`직전 ${activePeriod.label} 활성 유저 1인당 골드`} valueLabel={period.interval > 3600 ? '골드/계정 (평균)' : '골드/계정'} unit="/계정" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold}>
       {#snippet amount(copper, svg)}<GoldAmount {copper} {svg} />{/snippet}

@@ -113,11 +113,10 @@
     <div class="chart-heading">
       <div>
         <h2 id="chart-title">동시 접속 추이</h2>
-        <p>월드에 머물고 있는 계정 수의 변화</p>
       </div>
       <PeriodFilter bind:hours options={periods.filter((period) => period.hours >= 24)} label="조회 기간" />
     </div>
-    <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
+    <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel}</span></div>
     {#if history && history.samples.length > 0}
       <ConcurrentChart {history} peak={summary.peak} />
     {:else}
@@ -146,12 +145,11 @@
       <span>마지막 일별 집계 · 직전 {uniquePeriod.label}</span>
       <strong>{count(uniqueLatest?.accounts)}<small>계정</small></strong>
       <p>{unique.history?.last_aggregated_at != null ? `마지막 집계 기준: ${formatDateTime(unique.history.last_aggregated_at)} KST` : '첫 일별 집계를 기다리고 있어요'}</p>
-      <p>같은 계정의 재접속·캐릭터 변경은 한 번만 셉니다. 공식 NPC는 제외합니다.</p>
     </div>
     {#if unique.history?.last_aggregated_at != null && unique.history.collection_started_at > unique.history.from - unique.history.window_seconds}
       <p class="chart-notice">{formatDateTime(unique.history.collection_started_at)} KST부터 수집한 기록입니다. 일부 시점은 수집 시작 이후의 접속만 포함합니다.</p>
     {/if}
-    <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계 · 한국 시간 (KST)</span></div>
+    <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계</span></div>
     {#if unique.history && unique.history.samples.length > 0}
       <HistoryChart history={unique.history} peak={uniquePeak} value={(sample) => sample.accounts} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
         {#snippet detail(selected)}

@@ -6,9 +6,9 @@
 </script>
 
 {#if svg}
-  {#each segments as segment (segment.unit)}<tspan class={segment.unit}>{segment.text}</tspan>{/each}
+  {#each segments as segment, index (segment.unit)}{#if index > 0}{' '}{/if}<tspan class={segment.unit}>{segment.text}</tspan>{/each}
 {:else}
-  <span class="gold-amount">{#each segments as segment (segment.unit)}<span class={segment.unit}>{segment.text}</span>{/each}</span>
+  <span class="gold-amount">{#each segments as segment, index (segment.unit)}{#if index > 0}{' '}{/if}<span class={segment.unit}>{segment.text}</span>{/each}</span>
 {/if}
 
 <style>
