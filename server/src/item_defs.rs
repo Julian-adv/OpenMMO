@@ -36,7 +36,6 @@ impl ItemEffect {
 pub enum WeaponType {
     Sword,
     GreatSword,
-    ShortSword,
     Dagger,
     Axe,
     Staff,
@@ -46,6 +45,12 @@ pub enum WeaponType {
     Bow,
     Crossbow,
     Torch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArmorType {
+    Shield,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -77,6 +82,8 @@ pub struct ItemDefinition {
     pub category: Option<String>,
     #[serde(rename = "weaponType", default)]
     pub weapon_type: Option<WeaponType>,
+    #[serde(rename = "armorType", default)]
+    pub armor_type: Option<ArmorType>,
     /// Dice notation whose meaning depends on `category`.
     #[serde(default)]
     pub dice: Option<String>,
@@ -534,6 +541,13 @@ impl ItemDefs {
                 "item '{}': category weapon and weaponType must be set together",
                 def.id
             );
+            if def.armor_type == Some(ArmorType::Shield) {
+                assert!(
+                    def.is_armor() && def.equip_slot == Some(EquipSlot::OffHand),
+                    "item '{}': armorType shield requires off-hand armor",
+                    def.id
+                );
+            }
         }
 
         info!("Loaded {} item definitions", defs.len());
@@ -1000,8 +1014,8 @@ mod tests {
             ("notched_iron_sword", WeaponType::Sword),
             ("steel_longsword", WeaponType::Sword),
             ("great_sword", WeaponType::GreatSword),
-            ("goblin_sword", WeaponType::ShortSword),
-            ("small_sword", WeaponType::ShortSword),
+            ("goblin_sword", WeaponType::Sword),
+            ("small_sword", WeaponType::Sword),
             ("dagger", WeaponType::Dagger),
             ("morningstar", WeaponType::Mace),
             ("greatclub", WeaponType::Club),
@@ -1020,7 +1034,6 @@ mod tests {
         let cases = [
             ("sword", WeaponType::Sword),
             ("great_sword", WeaponType::GreatSword),
-            ("short_sword", WeaponType::ShortSword),
             ("dagger", WeaponType::Dagger),
             ("axe", WeaponType::Axe),
             ("staff", WeaponType::Staff),
@@ -1035,6 +1048,23 @@ mod tests {
         for (wire, expected) in cases {
             let json = format!("\"{wire}\"");
             assert_eq!(serde_json::from_str::<WeaponType>(&json).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn shields_have_an_explicit_armor_type_and_keep_their_guard() {
+        let defs = ItemDefs::load();
+        for (id, guard) in [("wooden_shield", 1), ("raven_shield", 2)] {
+            let def = defs.get(id).unwrap();
+            assert_eq!(def.armor_type, Some(ArmorType::Shield), "{id}");
+            assert_eq!(def.equip_slot, Some(EquipSlot::OffHand), "{id}");
+            assert!(def.is_armor(), "{id}");
+            assert!(!def.is_weapon(), "{id}");
+            assert_eq!(def.weapon_type, None, "{id}");
+            assert_eq!(def.guard, Some(guard), "{id}");
+        }
+        for id in ["torch", "worn_torch", "iron_helmet", "ring_of_protection"] {
+            assert_eq!(defs.get(id).unwrap().armor_type, None, "{id}");
         }
     }
 }

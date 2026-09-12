@@ -136,9 +136,16 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 
 `items.csv`의 `category=weapon`은 피해·인챈트 판정에 쓰는 상위 분류이고,
 `weaponType`은 무기군을 나타내는 하위 분류다. 현재 값은 `sword`,
-`short_sword`, `dagger`, `spear`, `mace`, `club`, `torch`이며 향후 무기를 위해
-`axe`, `staff`, `bow`, `crossbow`도 예약한다. 타입 자체는 사거리·양손 여부·공격
-애니메이션을 결정하지 않으며, 그런 동작은 별도 속성으로 둔다.
+`great_sword`, `dagger`, `spear`, `mace`, `club`, `bow`, `torch`이며 향후 무기를 위해
+`axe`, `staff`, `crossbow`도 예약한다. `goblin_sword`와 `small_sword`는
+`sword`에 속하며, 단검은 `dagger`로 구분한다. 사거리·양손 여부는 별도 속성이고,
+타입별 애니메이션은 `weapon_animations.csv`에서 설정한다.
+
+방패는 `category=armor`를 유지하면서 `armorType=shield`로 구분한다.
+`wooden_shield`와 `raven_shield`에 적용하며 `equipSlot=off_hand`여야 한다.
+`off_hand` 슬롯의 횃불은 `category=weapon`, `weaponType=torch`이므로 방패가 아니다.
+아이템 툴팁에도 `Type: Shield`를 표시한다. 다른 방어구의 `armorType`은 비워 두며,
+아이템 ID·피해 주사위·방어력·강화 계산은 그대로 유지한다.
 
 ### 티어별 무기
 
