@@ -61,7 +61,8 @@ function sample(name, time) {
 for (const [name, clip] of clips) {
   for (let frame = 0; frame <= Math.ceil(clip.duration * 30); frame++) {
     const pose = sample(name, Math.min(frame / 30, clip.duration))
-    assert.ok(pose.bounds.min.y > -.015 && pose.bounds.min.y < (name === 'Run' ? .5 : .015), `${name}: feet/corpse leave the ground`)
+    const floorMin = name === 'Death' ? -.115 : -.015
+    assert.ok(pose.bounds.min.y > floorMin && pose.bounds.min.y < (name === 'Run' ? .5 : .015), `${name}: feet/corpse leave the ground`)
     assert.ok(pose.bounds.getSize(new THREE.Vector3()).length() < 3.5, `${name}: stretched mesh`)
   }
 }
@@ -84,5 +85,7 @@ assert.ok(definition.attackImpactDelay > 0 && definition.attackImpactDelay < dur
 assert.ok(definition.attackCooldown >= durationMs)
 const corpse = sample(definition.animDie, clips.get(definition.animDie).duration)
 assert.ok(corpse.bounds.max.y < .55, 'The death clip must finish lying down')
+assert.ok(corpse.bounds.min.y > -.105 && corpse.bounds.min.y < -.09, 'The corpse must retain its baked 10 cm lowering')
+assert.equal(definition.corpseAutoGround, false, 'Runtime grounding must preserve the baked death pose')
 console.log(`Skeleton validated: ${triangles} triangles, ${clips.size} clips, ${durationMs}ms swipe, ${definition.attackImpactDelay}ms impact`)
 console.log(fileURLToPath(new URL(`client/public/models/${definition.model}`, root)))

@@ -10,9 +10,15 @@
   - `tools/blender-scripts/build_skeleton_monster.py`로 원본에서 재생성. 편집본은 `assets/skeleton/skeleton.blend`, 게임 모델은 `client/public/models/monsters/skeleton.glb`.
   - 애니메이션: 사용자 제공 Mixamo 65본 FBX `Idle`, `Walk`, `Run`, `Attack`, `Death` (2026-09-11 수령). Mixamo 서비스 이용 조건 적용; 원본은 `assets/skeleton/fbx/`에 보관하고 Tripo 리그로 리타게팅.
   - 게임 GLB에는 새 FBX에서 변환한 5개 클립만 포함. 걷기·달리기는 제자리 이동으로 변환. 공격 2.625초, 타격 시점 1042ms, 쿨다운 3000ms.
+  - `Death` 접지 보정 (2026-09-12): Blender에서 Root 위치 키를 36~48프레임 (1.5~2초)에 걸쳐 부드럽게 원본보다 총 10cm 낮추고 마지막 71프레임까지 유지. `skeleton.blend`와 게임 GLB에 베이크하며 빌드 스크립트에도 반영.
+  - 왼발 접지 보정 (2026-09-12): `Death`의 48~60프레임 (2~2.5초)에 왼쪽 고관절 회전을 추가해 발끝을 바닥에 내려놓고 마지막 자세까지 접지 유지. 최종 회전 약 15.3°, 발 메시 최저점 약 2mm. 몸통 높이와 오른쪽 다리는 유지하며 Blender 키프레임으로 베이크.
+  - 이동 속도는 리타게팅 빌드 보고서의 측정값에 맞춰 걷기 0.78m/s, 달리기 3.00m/s로 설정 (2026-09-12). 클립은 원래 속도로 재생.
+  - 모델·편집본·원본·FBX 5개와 기여자 제공 시연 영상 `assets/skeleton/skeleton_gameplay.mp4`는 [Hugging Face 에셋 PR #7](https://huggingface.co/datasets/jake-song-openmmo/onlinerpg-assets/discussions/7)에서 받아 `assets.lock`에 등록.
   - **[미사용]** 원본 Tripo 클립과 기존 idle / walk / pursuit / combat_idle / attack_swipe / death 클립은 게임 모델에서 제거.
-  - 공용 캐릭터 애니메이션을 사용하지 않음. 무기·출혈 효과·전용 사망 음성 없음. `material=bone`은 기본 타격음으로 폴백.
-  - 최상위 일반 몬스터 능력치: 레벨 20, 체력 200, guard 25, 피해 4d12. 던전 출현 설정은 비워 두며 관리자가 추후 배치한다. `corpseAutoGround=false`로 베이크한 죽음 접지를 유지.
+  - 공용 캐릭터 애니메이션을 사용하지 않음. 무기·출혈 효과 없음. `material=bone`은 금속·나무 무기 피격 시 `bone-hit.ogg`를 재생 ([효과음 출처](sfx.md#combat)).
+  - 사망 시작 시 뼈가 부서져 흩어지는 `skeleton-death.ogg`를 재생 ([효과음 출처](sfx.md#monsters)).
+  - 일반 몬스터 능력치: 레벨 16, 체력 72 (레벨 기본값), guard 20, 피해 6d8. 오거의 체력 36·무기 포함 피해 3d8의 두 배이며, 방어는 기준 10 초과분을 두 배로 설정 (`10 + 2 × (15 - 10)`).
+  - 던전 출현 설정은 비워 두며 관리자가 추후 배치한다. `corpseAutoGround=false`로 베이크한 죽음 접지를 유지.
 
 - SCP939 https://sketchfab.com/3d-models/scp939-79a749a5073b453d9d85875797bf45d7
   - `939_DieProne` (2026-08-24): 원본 클립 중 죽음이 `939_Die`(상체를 들었다 웅크림)·`939_Dead`뿐이고 모두 살아

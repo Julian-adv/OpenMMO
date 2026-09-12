@@ -11,6 +11,16 @@
       "attackerMaterial": "metal",
       "targetMaterial": "stone",
       "sound": "/sounds/sword-stone.ogg"
+    },
+    {
+      "attackerMaterial": "metal",
+      "targetMaterial": "bone",
+      "sound": "/sounds/bone-hit.ogg"
+    },
+    {
+      "attackerMaterial": "wood",
+      "targetMaterial": "bone",
+      "sound": "/sounds/bone-hit.ogg"
     }
   ],
   "missSounds": [

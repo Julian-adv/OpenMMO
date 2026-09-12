@@ -6,11 +6,14 @@ import statistics
 import sys
 
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Matrix, Quaternion, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 FPS = 24
 HEIGHT = 1.8
+DEATH_SINK = .10
+DEATH_SINK_FRAMES = (36, 48)
+DEATH_LEFT_LEG_FRAMES = (48, 60)
 MAPPING = {
     'Hip': 'Hips', 'Pelvis': 'Hips', 'Waist': 'Spine',
     'Spine01': 'Spine1', 'Spine02': 'Spine2',
@@ -49,6 +52,44 @@ def bounds(mesh):
     evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
     points = [evaluated.matrix_world @ v.co for v in evaluated.data.vertices]
     return [(min(p[i] for p in points), max(p[i] for p in points)) for i in range(3)]
+
+
+def settle_left_leg(arm, mesh, frames):
+    groups = {mesh.vertex_groups[name].index for name in ['L_Foot', 'L_ToeBase']}
+    vertices = [v.index for v in mesh.data.vertices
+                if any(g.group in groups and g.weight > .5 for g in v.groups)]
+    start, end = DEATH_LEFT_LEG_FRAMES
+    thigh = arm.pose.bones['L_Thigh']
+    for frame in range(start + 1, len(frames)):
+        restore(arm, frames[frame])
+        original = thigh.matrix.copy()
+        location, _, scale = frames[frame]['L_Thigh']
+        direction = arm.pose.bones['L_Foot'].head - thigh.head
+        axis = Vector((-direction.y, direction.x, 0)).normalized()
+        pivot = Matrix.Translation(original.translation)
+
+        def rotate(angle):
+            thigh.matrix = pivot @ Quaternion(axis, angle).to_matrix().to_4x4() @ pivot.inverted() @ original
+            thigh.location, thigh.scale = location, scale
+            thigh.rotation_quaternion.make_compatible(frames[frame]['L_Thigh'][1])
+            bpy.context.view_layer.update()
+            evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+            return min((evaluated.matrix_world @ evaluated.data.vertices[i].co).z for i in vertices)
+
+        if rotate(0) <= .002:
+            continue
+        low, high = 0, math.radians(45)
+        if rotate(high) > .002:
+            raise ValueError(f'Death frame {frame}: left foot cannot reach the floor')
+        for _ in range(18):
+            angle = (low + high) / 2
+            if rotate(angle) > .002:
+                low = angle
+            else:
+                high = angle
+        progress = min(1, (frame - start) / (end - start))
+        rotate((low + high) / 2 * progress ** 2 * (3 - 2 * progress))
+        frames[frame] = snapshot(arm)
 
 
 def load_motion(path, target):
@@ -109,8 +150,15 @@ def retarget(arm, mesh, rest_pose, source_rest, source_frames, factor, name):
     constant = min(lows)
     for i, pose in enumerate(result):
         restore(arm, pose)
-        shift_root(arm, (0, 0, .002 - (constant if name == 'Run' else lows[i])))
+        ground_shift = .002 - (constant if name == 'Run' else lows[i])
+        if name == 'Death':
+            start, end = DEATH_SINK_FRAMES
+            progress = max(0, min(1, (i - start) / (end - start)))
+            ground_shift -= DEATH_SINK * progress ** 2 * (3 - 2 * progress)
+        shift_root(arm, (0, 0, ground_shift))
         result[i] = snapshot(arm)
+    if name == 'Death':
+        settle_left_leg(arm, mesh, result)
     speed = math.hypot(travel.x, travel.y) * factor / ((len(result) - 1) / FPS)
     if name in ('Walk', 'Run') and speed < .1:
         velocities = []

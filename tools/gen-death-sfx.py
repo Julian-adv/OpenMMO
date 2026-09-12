@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Batch-generate death-cry candidates with the ElevenLabs SFX API.
+"""Generate sound-effect candidates with the ElevenLabs SFX API.
 
 Usage: gen-death-sfx.py [--takes N] [--duration S] [subject ...]
 Key is read from ~/.config/elevenlabs/key (or $ELEVENLABS_API_KEY).
@@ -22,6 +22,20 @@ PROMPTS = {
     "player_death_male": "A young male warrior's short agonized death scream as a sword strikes him down, a single hoarse cry cut off abruptly as he falls. Human voice only, no music, no reverb.",
     "sword_stone": "A steel sword blade striking a stone golem: a hard metallic clang ringing off solid rock with a short spray of stone chips and grit. Impact only, no voice, no music.",
     "sword_flesh": "A sword blade cutting deep into a huge fleshy monster: a heavy wet meaty thud with a thick tearing of flesh. Impact only, no voice, no music.",
+    "bone_hit": (
+        "A single close-up impact on a dry skeleton ribcage: a hard hollow bone clack "
+        "followed immediately by a very short brittle rattle of loose bones knocking together. "
+        "Tight, dry, crisp game combat hit, under one second. One strike only, "
+        "no music, no voice, no flesh, no metal ringing, no reverb."
+    ),
+    "skeleton_death": (
+        "A dry skeleton suddenly crumbling into a loose pile of bones: an immediate brittle "
+        "crack followed by a fast cascading clatter of many small hollow bone fragments, "
+        "a crisp papery crunch and skittering rattle as the pieces scatter and settle on "
+        "a stone floor. One short continuous collapse, starting immediately and fading "
+        "naturally to silence. Close, dry game sound effect, no voice, no music, no flesh, "
+        "no metal, no glass, no explosion, no reverb."
+    ),
     "scp939": "The wet, distorted death shriek of a fleshy eyeless monster, unnatural and wrong",
 }
 
