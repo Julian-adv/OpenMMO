@@ -6,6 +6,8 @@ import { getTerrainApiUrl } from '../utils/networkUtils'
 export interface ServerWeather {
   seed: number
   bias: number
+  /** Names the sector list the server loaded; the list is fetched per tag. */
+  sectorsTag: string
 }
 
 export const weather = writable<ServerWeather | null>(null)
@@ -21,41 +23,41 @@ export interface LocalWeather {
 export const NO_WEATHER: LocalWeather = { rain: 0, cloud: 0 }
 export const localWeather = writable<LocalWeather>(NO_WEATHER)
 
-let sectorsRequested = false
+let loadedTag: string | null = null
+let requestedTag: string | null = null
 
+/** A reconnect or the 30 s sync with an unchanged tag fetches nothing; the
+ *  list held in wasm stays valid, so rain does not blink during a rejoin. */
 export function setWeather(next: ServerWeather) {
   weather.set(next)
-  if (!sectorsRequested) {
-    sectorsRequested = true
-    void loadSectors()
+  if (next.sectorsTag !== loadedTag && next.sectorsTag !== requestedTag) {
+    requestedTag = next.sectorsTag
+    void loadSectors(next.sectorsTag)
   }
 }
 
 export function clearWeather() {
   weather.set(null)
   localWeather.set(NO_WEATHER)
-  resetWeatherSectors()
+  loadedTag = null
+  requestedTag = null
 }
 
-/** Reconnect: keep the last seed so rain, light, and music hold steady until
- *  the rejoin's `WeatherSync` lands, but re-fetch the list in case the world
- *  was re-baked in between (the server revalidates it, so this is cheap). */
-export function resetWeatherSectors() {
-  sectorsRequested = false
-}
-
-/** The list is one small file per bake; a failed fetch retries on the next
- *  `WeatherSync` (every 30 s) rather than hammering the server. */
-async function loadSectors() {
+/** The URL carries the tag so the response can be cached as immutable; a
+ *  failed fetch retries on the next `WeatherSync` rather than hammering. */
+async function loadSectors(tag: string) {
   try {
     const resp = await fetch(
-      `${getTerrainApiUrl()}/api/terrain/weather-sectors`
+      `${getTerrainApiUrl()}/api/terrain/weather-sectors?v=${encodeURIComponent(tag)}`
     )
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
-    const count = weather_set_sectors(await resp.text())
+    const text = await resp.text()
+    if (requestedTag !== tag) return
+    const count = weather_set_sectors(text)
+    loadedTag = tag
     weatherSectorsReady.set(count > 0)
   } catch (err) {
-    sectorsRequested = false
+    if (requestedTag === tag) requestedTag = null
     console.warn('weather: sectors unavailable', err)
   }
 }

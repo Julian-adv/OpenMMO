@@ -49,6 +49,7 @@ pub fn terrain_router(
             "/api/terrain/objects/{rx}/{rz}",
             get(get_object).put(put_object),
         )
+        .route("/api/terrain/weather-sectors", get(get_weather_sectors))
         .with_state(ObjectsState {
             terrain: Arc::clone(&terrain_io),
             game_state,
@@ -88,7 +89,6 @@ pub fn terrain_router(
             get(get_land_grades).put(put_land_grades),
         )
         .route("/api/terrain/climate/{rx}/{rz}", get(get_climate))
-        .route("/api/terrain/weather-sectors", get(get_weather_sectors))
         .route("/api/terrain/trees/{x}/{z}", get(get_trees))
         .route("/api/terrain/river-field/{x}/{z}", get(get_river_field))
         .route("/api/terrain/water-field/{x}/{z}", get(get_water_field))
@@ -566,15 +566,21 @@ async fn get_climate(
     .await
 }
 
-async fn get_weather_sectors(
-    request_headers: axum::http::HeaderMap,
-    State(terrain): State<Arc<TerrainIO>>,
-) -> Result<Response, StatusCode> {
-    serve_revalidated(
-        coords::weather_sectors_path(terrain.base_dir()),
-        &request_headers,
-    )
-    .await
+/// The list the server loaded at boot, not the file on disk: the client asks
+/// with `?v=<sectors_tag>` from `WeatherSync`, so the body is immutable per
+/// URL and a re-bake reaches clients only through a restart.
+async fn get_weather_sectors(State(state): State<ObjectsState>) -> Response {
+    match state.game_state.weather_sectors_json() {
+        Some(json) => (
+            [
+                (header::CONTENT_TYPE, "application/json"),
+                (header::CACHE_CONTROL, "public, max-age=31536000, immutable"),
+            ],
+            json,
+        )
+            .into_response(),
+        None => (StatusCode::NOT_FOUND, [(header::CACHE_CONTROL, "no-cache")]).into_response(),
+    }
 }
 
 async fn get_trees(

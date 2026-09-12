@@ -129,20 +129,25 @@ implementation, no drift.
 
 ## Server
 
-- `WeatherState { seed: u64, bias: f32 }` in `GameState` next to `game_clock`
-  (`server/src/game_state/weather.rs`). The seed is read from
-  `weather-sectors.json` — it is the seed the sectors were placed with, so
-  the server keeps no other record of the world seed; without the file,
-  weather stays off and the server logs why. `bias` multiplies every zone's
+- `WeatherState { seed, bias, sectors_json, sectors_tag }` in `GameState`
+  next to `game_clock` (`server/src/game_state/weather.rs`). The seed is
+  read from `weather-sectors.json` — it is the seed the sectors were placed
+  with, so the server keeps no other record of the world seed; without the
+  file, weather stays off and the server logs why. The file bytes stay in
+  memory with a content hash (`sectors_tag`), so a re-bake reaches clients
+  only through a restart and every client evaluates the list the seed was
+  broadcast with. `bias` multiplies every zone's
   `chance` (1.0 = baked schedule, 0.5 = half the cells, 0 = off); it comes
   from `--weather-bias` / `WEATHER_BIAS` at boot, so the amount of rain is a
   deployment setting rather than a code change. A live `/weather` override
   is a follow-up.
-- `ServerMessage::WeatherSync { seed, bias }` on connection accept and from
-  `run_ticks("weather", 30 s)` (same scaffolding as the time-sync tick).
-  Seeds cross the wire as JS numbers, so they must stay below 2^53.
-- Climate grid served at `/api/terrain/climate/{rx}/{rz}` and the sector list
-  at `/api/terrain/weather-sectors`, both revalidated like tree files.
+- `ServerMessage::WeatherSync { seed, bias, sectors_tag }` on connection
+  accept and from `run_ticks("weather", 30 s)` (same scaffolding as the
+  time-sync tick). Seeds cross the wire as JS numbers; `place_sectors` masks
+  them to 53 bits.
+- Climate grid served at `/api/terrain/climate/{rx}/{rz}`, revalidated like
+  tree files. The sector list at `/api/terrain/weather-sectors?v=<tag>` is
+  served from memory as immutable; the tag in the URL is the cache key.
 - `PROTOCOL_VERSION` 69 → 70; agent-client 0.50.0 lists `WeatherSync` as
   noise so it never wakes the LLM.
 - Load at 5,000 CCU: one tiny broadcast per 30 s, zero per-player work.
@@ -150,7 +155,8 @@ implementation, no drift.
 ## Client
 
 `weatherStore.ts` (mirrors `timeStore.ts`) fed from `messageHandlers.ts`,
-fetching the sector list into wasm on the first sync. The per-plot climate
+fetching the sector list into wasm when the sync carries a tag it has not
+loaded; a reconnect with the same tag fetches nothing. The per-plot climate
 route has no client reader yet; a climate map layer can add one modelled on
 `landGradeStore.ts`. The rain function is called through wasm
 (`weather_set_sectors`, `weather_game_minutes`, `weather_cells_at`,

@@ -617,10 +617,17 @@ impl TerrainIO {
     pub async fn read_weather_sectors(
         &self,
     ) -> std::io::Result<Option<onlinerpg_shared::weather::WeatherSectors>> {
-        match fs::read(coords::weather_sectors_path(&self.base_dir)).await {
-            Ok(data) => serde_json::from_slice(&data)
+        match self.read_weather_sectors_bytes().await? {
+            Some(data) => serde_json::from_slice(&data)
                 .map(Some)
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn read_weather_sectors_bytes(&self) -> std::io::Result<Option<Vec<u8>>> {
+        match fs::read(coords::weather_sectors_path(&self.base_dir)).await {
+            Ok(data) => Ok(Some(data)),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
         }
