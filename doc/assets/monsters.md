@@ -16,7 +16,7 @@
     Attack은 사용자 제공 `Sword And Shield Slash.fbx`(Mixamo, 2026-09-12 수령)로 교체했다. Mixamo 서비스
     이용 조건 적용. 원본은 `assets/skeleton_warrior/fbx/`에 보관하고 Tripo 리그로 리타게팅했다.
   - 게임 GLB에는 `Idle`, `Walk`, `Run`, `Attack`, `Death` 5개 클립만 포함한다. 걷기·달리기는 제자리 이동,
-    Attack은 1.5초이고 오른손의 수평 도달 거리가 최대인 625ms를 타격 시점으로 사용한다. 쿨다운은 1800ms.
+    Attack은 1.5초이고 오른손의 수평 도달 거리가 최대인 625ms를 타격 시점으로 사용한다. 쿨다운은 2000ms.
   - 기존 `morningstar` 아이템 모델을 `R_Hand`에 장착하고 손 가중치 정점의 중심에 맞춰 본 로컬 오프셋을
     Y 0.103m·X 0.02m·Z -0.004m로 지정했다. 무기 자체의 출처와 라이선스는
     [items.md의 morningstar](items.md) 기록을 따른다.
@@ -25,8 +25,10 @@
     검증기는 무기를 부착한 상태로 모든 클립을 120fps로 검사한다.
   - 사망음은 기존 `skeleton-death.ogg`를 재사용하고, 갑옷 피격은 `metal-hit.ogg`를 사용한다
     ([효과음 출처](sfx.md)).
-  - 정예 일반 몬스터 능력치는 레벨 22, 체력 260, guard 30, 피해 5d12. 던전 출현 설정은 비워 두며
-    관리자가 추후 배치한다. `material=metal`, `corpseAutoGround=false`.
+  - 일반 스켈레톤의 상위종으로 조정 (2026-09-12): 레벨 20, 체력 90 (레벨 기본값), guard 24,
+    기본 피해 6d8 + 모닝스타 1d8 = 총 7d8, 기본 명중 보너스 +20, 공격 간격 2초.
+    일반 스켈레톤보다 체력은 25% 높고 갑옷으로 방어 +4, 무기로 추가 피해를 얻는다.
+    던전 출현 설정은 비워 두며 관리자가 추후 배치한다. `material=metal`, `corpseAutoGround=false`.
 - skeleton — Tripo Pro (유료), 사용자 생성일 2026-09-11.
   - 사용자 제공 `skeleton+3d+model.glb`; 원본은 `assets/skeleton/source.glb`에 보관.
   - 이용권: 사용자 확인 Tripo Pro 유료 생성물. 별도 CC 라이선스 표시는 없으며 Tripo 서비스 이용 조건 적용.
