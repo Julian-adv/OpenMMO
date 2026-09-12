@@ -53,7 +53,7 @@ pub(super) fn build_prompt(
 
     prompt.push_str("=== CURRENT STATE ===\n");
     prompt.push_str(&state.format_world_state());
-    prompt.push('\n');
+    prompt.push_str("\nUse player names without titles in actions and favor updates.\n");
     if let Some(terrain) = terrain {
         prompt.push_str(terrain.trim_end());
         prompt.push('\n');

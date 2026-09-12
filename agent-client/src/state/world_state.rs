@@ -211,19 +211,20 @@ impl SharedState {
                 }
             }
             let npc_tag = if p.is_official_npc { " (NPC)" } else { "" };
-            let title_tag = p
-                .title
-                .as_deref()
-                .map(|t| format!(" \"{}\"", crate::title_defs::title_name(t)))
-                .unwrap_or_default();
             let favor_tag = match self.favor.get(&p.name) {
                 Some(v) if !p.is_official_npc && *v != 0 => format!(" (favor {v:+})"),
                 _ => String::new(),
             };
             lines.push(format!(
-                "Player: {}{title_tag}{npc_tag}{favor_tag} Lv.{} HP {}/{} at ({:.1}, {:.1}, {:.1})",
+                "Player: {}{npc_tag}{favor_tag} Lv.{} HP {}/{} at ({:.1}, {:.1}, {:.1})",
                 p.name, p.level, p.health, p.max_health, p.position.x, p.position.y, p.position.z
             ));
+            if let Some(title) = p.title.as_deref() {
+                lines.push(format!(
+                    "  Title: \"{}\"",
+                    crate::title_defs::title_name(title)
+                ));
+            }
             if p.is_official_npc {
                 if let Some(shop) = crate::shop_info::shop_line_for(&p.name, index) {
                     lines.push(shop);

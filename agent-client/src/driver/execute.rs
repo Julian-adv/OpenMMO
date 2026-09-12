@@ -1884,6 +1884,41 @@ mod tests {
     use crate::state::NPC_SIGHT_RADIUS;
     use onlinerpg_shared::inventory::GroundItem;
 
+    #[tokio::test]
+    async fn a_deal_with_a_titled_name_reaches_the_correct_player() {
+        let (mut s, mut rx) = test_state();
+        s.self_player = Some(test_player(0.0, 0.0));
+        s.self_player_id = Some(1.into());
+        let mut event = test_player(3.0, 0.0);
+        event.id = 2.into();
+        event.name = "Event".to_string();
+        event.title = Some("ogre_slayer_solo".to_string());
+        s.nearby_players.insert(event.id, event);
+        let state = Arc::new(Mutex::new(s));
+
+        handle_response(
+            &state,
+            r#"{"actions":[{"type":"offer_deal","target":"Event \"Who Slew the Ogre Warlord Alone\"","item":"healing_potion","kind":"buy","modifier_pct":-5}],"favor":{"Event \"Who Slew the Ogre Warlord Alone\"":1}}"#,
+            &None,
+            &None,
+            false,
+        )
+        .await;
+
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(onlinerpg_shared::ClientMessage::OfferDeal {
+                target_player_id,
+                item_def_id,
+                modifier_pct: -5,
+                ..
+            }) if target_player_id == 2.into() && item_def_id == "healing_potion"
+        ));
+        let s = state.lock().await;
+        assert_eq!(s.favor.get("Event"), Some(&1));
+        assert_eq!(s.favor.len(), 1);
+    }
+
     /// Resolution only reads state, so the dropped command receiver is fine.
     fn state_with(items: Vec<GroundItem>) -> SharedState {
         let (mut s, _rx) = test_state();

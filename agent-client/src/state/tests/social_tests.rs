@@ -1,5 +1,87 @@
 use super::*;
 
+#[test]
+fn a_titled_player_resolves_to_the_canonical_name() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    s.self_player_id = Some(PlayerId::from(1));
+    let mut event = test_player(3.0, 0.0);
+    event.id = PlayerId::from(2);
+    event.name = "Event".to_string();
+    event.title = Some("ogre_slayer_solo".to_string());
+    s.nearby_players.insert(event.id, event);
+    let display_name = "Event \"Who Slew the Ogre Warlord Alone\"";
+
+    for name in ["Event", "event", "2", display_name] {
+        assert_eq!(s.resolve_nearby_player(name), Some((2.into(), false)));
+    }
+    assert_eq!(
+        s.resolve_move_target(display_name),
+        Ok(MoveTarget::Character {
+            id: 2.into(),
+            name: "Event".to_string(),
+        })
+    );
+    assert!(s.apply_favor(display_name, 1));
+    assert_eq!(s.favor.get("Event"), Some(&1));
+    assert!(!s.favor.contains_key(display_name));
+
+    let world = s.format_world_state();
+    assert!(world.contains("Player: Event (favor +1) Lv."), "{world}");
+    assert!(
+        world.contains("\n  Title: \"Who Slew the Ogre Warlord Alone\""),
+        "{world}"
+    );
+    assert!(!world.contains(display_name), "{world}");
+
+    let mut namesake = test_player(4.0, 0.0);
+    namesake.id = 3.into();
+    namesake.name = display_name.to_string();
+    s.nearby_players.insert(namesake.id, namesake);
+    assert_eq!(
+        s.resolve_nearby_player(display_name),
+        Some((3.into(), false))
+    );
+}
+
+#[test]
+fn title_matching_requires_a_unique_visible_player_with_that_title() {
+    let (mut s, _rx) = test_state();
+    s.self_player = Some(test_player(0.0, 0.0));
+    s.self_player_id = Some(PlayerId::from(1));
+    let mut event = test_player(3.0, 0.0);
+    event.id = 2.into();
+    event.name = "Event".to_string();
+    event.title = Some("ogre_slayer_solo".to_string());
+    s.nearby_players.insert(event.id, event.clone());
+    let display_name = "Event \"Who Slew the Ogre Warlord Alone\"";
+
+    for wrong in ["Event \"Wrong Title\"", "Who Slew the Ogre Warlord Alone"] {
+        assert_eq!(s.resolve_nearby_player(wrong), None);
+    }
+    event.floor_level = 1;
+    s.nearby_players.insert(event.id, event.clone());
+    assert_eq!(s.resolve_nearby_player(display_name), None);
+    event.floor_level = 0;
+    event.position.x = NPC_SIGHT_RADIUS + 1.0;
+    s.nearby_players.insert(event.id, event.clone());
+    assert_eq!(s.resolve_nearby_player(display_name), None);
+
+    event.position.x = 3.0;
+    event.title = None;
+    s.nearby_players.insert(event.id, event.clone());
+    assert_eq!(s.resolve_nearby_player(display_name), None);
+    event.title = Some("ogre_slayer_solo".to_string());
+    s.nearby_players.insert(event.id, event.clone());
+    assert_eq!(
+        s.resolve_nearby_player(display_name),
+        Some((2.into(), false))
+    );
+    event.id = 3.into();
+    s.nearby_players.insert(event.id, event);
+    assert_eq!(s.resolve_nearby_player(display_name), None);
+}
+
 /// Chat history is a capped ring stamped with the game clock — the
 /// short-term memory a stateless backend gets replayed each prompt.
 #[test]

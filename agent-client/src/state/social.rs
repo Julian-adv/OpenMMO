@@ -198,20 +198,36 @@ impl SharedState {
             .collect()
     }
 
-    /// Resolve a player name (or raw id) among nearby players, as used by
-    /// player-targeting LLM actions. Returns `(player_id, is_official_npc)`.
-    /// `name_or_id` stays `&str` because it comes straight from LLM output and
-    /// may be either form; the resolved handle is what gets typed.
-    /// Only same-floor characters resolve: the world state the LLM saw lists
-    /// no one else, and a cross-floor chase would burn its A* budget to reach
-    /// a name it never should have been offered.
+    /// Resolve a same-floor name or id, then an exact visible name with its title.
     pub fn resolve_nearby_player(&self, name_or_id: &str) -> Option<(PlayerId, bool)> {
-        self.players_on_my_floor()
-            .find(|(id, p)| {
-                p.name.eq_ignore_ascii_case(name_or_id)
-                    || name_or_id.parse::<u64>().is_ok_and(|n| id.get() == n)
-            })
-            .map(|(id, p)| (*id, p.is_official_npc))
+        let name_or_id = name_or_id.trim();
+        let raw_id = name_or_id.parse::<u64>().ok();
+        if let Some((id, player)) = self.players_on_my_floor().find(|(id, p)| {
+            p.name.eq_ignore_ascii_case(name_or_id) || raw_id.is_some_and(|n| id.get() == n)
+        }) {
+            return Some((*id, player.is_official_npc));
+        }
+        if !name_or_id.ends_with('"') {
+            return None;
+        }
+
+        let position = self.self_player.as_ref()?.position;
+        let mut matches = self.players_on_my_floor().filter(|(id, p)| {
+            self.self_player_id.as_ref() != Some(*id)
+                && p.position.dist_xz_sq(&position) <= NPC_SIGHT_RADIUS * NPC_SIGHT_RADIUS
+                && p.title.as_deref().is_some_and(|title| {
+                    name_or_id.eq_ignore_ascii_case(&format!(
+                        "{} \"{}\"",
+                        p.name,
+                        crate::title_defs::title_name(title)
+                    ))
+                })
+        });
+        let (id, player) = matches.next()?;
+        matches
+            .next()
+            .is_none()
+            .then_some((*id, player.is_official_npc))
     }
 
     pub fn names_self(&self, name_or_id: &str) -> bool {

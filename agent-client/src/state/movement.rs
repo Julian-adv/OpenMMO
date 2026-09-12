@@ -110,13 +110,10 @@ impl SharedState {
             return Err(self.unknown_target(asked));
         }
 
-        if let Some((id, p)) = self
-            .players_on_my_floor()
-            .find(|(_, p)| p.name.eq_ignore_ascii_case(asked))
-        {
+        if let Some((id, _)) = self.resolve_nearby_player(asked) {
             return Ok(MoveTarget::Character {
-                id: *id,
-                name: p.name.clone(),
+                id,
+                name: self.player_display_name(&id),
             });
         }
 
