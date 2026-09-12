@@ -37,6 +37,7 @@ mod meal_tests;
 mod metrics_tests;
 mod monster_ai_tests;
 mod mount_tests;
+mod movement_audit_tests;
 mod movement_tests;
 mod party_tests;
 mod persistence_tests;

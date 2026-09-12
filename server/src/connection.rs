@@ -176,6 +176,7 @@ struct ConnectionState {
     /// Client program reported in `ClientInfo`. `None` until the handshake
     /// arrives, which is what gates every other message.
     client_kind: Option<ClientKind>,
+    reported_client_version: String,
     /// Set when the connection must be dropped right after its pending
     /// responses are flushed (protocol mismatch).
     must_close: bool,
@@ -234,6 +235,7 @@ impl ConnectionState {
         Self {
             client_ip,
             client_kind: None,
+            reported_client_version: String::new(),
             must_close: false,
             account_name: None,
             account_session_id: None,
@@ -783,6 +785,7 @@ fn handle_handshake(
             state.client_ip
         );
         state.client_kind = Some(kind);
+        state.reported_client_version = client_version.chars().take(128).collect();
         return Some(vec![]);
     }
 
@@ -1311,6 +1314,12 @@ async fn handle_client_message(
 
             let rejoin_floor = player.floor_level;
             let rejoin_pos = player.position;
+            info!(target: "movement_audit",
+                player_id = %id, character_id, account_session_id,
+                client_kind = ?state.client_kind,
+                reported_version = ?state.reported_client_version,
+                position = ?player.position, rotation = player.rotation, floor = player.floor_level,
+                "Movement session joined");
             responses.extend(game_state.add_player(player).await);
             // Stamps last_seen_at at the next flush.
             game_state.mark_dirty(&id).await;

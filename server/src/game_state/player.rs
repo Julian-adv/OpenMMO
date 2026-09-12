@@ -1,3 +1,4 @@
+use super::movement_audit::{self, Pose};
 use super::KickNotice;
 use crate::auth::{AuthError, AuthService, CharacterSaveData, ItemRow};
 use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
@@ -159,8 +160,9 @@ impl LayoutGrind {
 
 /// Client-requested destination the server walks the player toward at capped
 /// speed.
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize)]
 pub(super) struct MoveIntent {
+    request: Option<movement_audit::Request>,
     turn_only: bool,
     recovery: Option<u32>,
     pub(super) target: Position,
@@ -180,6 +182,8 @@ pub(super) type MoveQueue = VecDeque<MoveIntent>;
 /// A refused step: where the server has the player (for the correction) plus the
 /// diagnostics for the warn, both emitted together in `correct_refused_positions`.
 struct RefusedMove {
+    diagnostic: Option<serde_json::Value>,
+    request_id: Option<u64>,
     player_id: PlayerId,
     position: Position,
     rotation: f32,
@@ -200,6 +204,7 @@ struct RefusedMove {
 }
 
 /// Wire fields of a client PlayerMove (see shared messages).
+#[derive(Clone, Copy, Debug, serde::Serialize)]
 pub(crate) struct MoveCommand {
     pub(crate) position: Position,
     pub(crate) rotation: f32,
@@ -838,6 +843,7 @@ impl super::GameState {
         {
             let mut players = self.players.write().await;
             self.combat_audit.observe(&player);
+            self.movement_audit.register(player_id);
             players.insert(player_id, player.clone());
         }
         {
@@ -1055,6 +1061,7 @@ impl super::GameState {
         let removed_player = {
             let mut players = self.players.write().await;
             self.combat_audit.logout(player_id);
+            self.movement_audit.remove(player_id);
             players.remove(player_id)
         };
         if let Some(player) = &removed_player {
@@ -1111,6 +1118,7 @@ impl super::GameState {
         cmd: MoveCommand,
         is_official_npc: bool,
     ) {
+        let received_ms = Self::now_ms();
         let MoveCommand {
             position: mut new_position,
             rotation: new_rotation,
@@ -1133,10 +1141,16 @@ impl super::GameState {
             return;
         }
         new_position.x = wrap_world_x(new_position.x);
-        let (current_floor, current_position, health, posed) = {
+        let (current_floor, current_position, health, posed, received_pose) = {
             let players = self.players.read().await;
             match players.get(player_id) {
-                Some(p) => (p.floor_level, p.position, p.health, p.object_type.is_some()),
+                Some(p) => (
+                    p.floor_level,
+                    p.position,
+                    p.health,
+                    p.object_type.is_some(),
+                    Pose::from(p),
+                ),
                 None => {
                     warn!("Attempted to move non-existent player: {}", player_id);
                     return;
@@ -1225,24 +1239,41 @@ impl super::GameState {
         }
         let mut queues = self.movement_intents.write().await;
         let queue = queues.entry(*player_id).or_default();
-        if !append
+        let queue_before = queue.len();
+        let replaced = !append
             || queue
                 .front()
-                .is_some_and(|intent| intent.recovery.is_some())
-        {
+                .is_some_and(|intent| intent.recovery.is_some());
+        let mut dropped = None;
+        if replaced {
             queue.clear();
         } else if queue.len() >= MAX_QUEUED_WAYPOINTS {
-            // Drop the oldest leg, not the newest: losing path fidelity in the
-            // middle beats never reaching where the client actually is. The
-            // resulting current-position→new-head beeline is the same risk as
-            // a replace and is still collision-checked while walking.
-            queue.pop_front();
+            // The tick collision-checks the new head after overflow.
+            dropped = queue
+                .pop_front()
+                .and_then(|intent| intent.request.map(|r| r.id));
             warn!(
                 "Waypoint queue full for player {}, dropped oldest",
                 self.player_name_of(player_id).await
             );
         }
+        let request = movement_audit::Request {
+            id: movement_audit::next_request_id(),
+            received_ms,
+            queued_ms: Self::now_ms(),
+            corrections_issued_before_queue: 0,
+            raw: cmd,
+            received_pose,
+            leg_start,
+            leg_floor,
+            target: new_position,
+            queue_before,
+            replaced,
+            dropped,
+        };
+        let request = self.movement_audit.request(*player_id, request);
         queue.push_back(MoveIntent {
+            request: Some(request),
             turn_only: false,
             recovery: None,
             target: new_position,
@@ -1277,14 +1308,12 @@ impl super::GameState {
             && player.health > 0
             && player.floor_level == 0
             && !Self::in_combat(&player)
-            && goal.x.is_finite()
-            && goal.y.is_finite()
-            && goal.z.is_finite();
-        let hunger = self.hunger_movement_profiles_for(&[*player_id]).await;
-        let speed = PLAYER_MOVE_SPEED
-            * onlinerpg_shared::world::HORSE_MOVE_MULT
-            * hunger.get(player_id).map_or(1.0, |p| p.0);
-        let target = if eligible {
+            && goal.is_finite();
+        let mut target = if eligible {
+            let hunger = self.hunger_movement_profiles_for(&[*player_id]).await;
+            let speed = PLAYER_MOVE_SPEED
+                * onlinerpg_shared::world::HORSE_MOVE_MULT
+                * hunger.get(player_id).map_or(1.0, |p| p.0);
             onlinerpg_shared::mount_movement::recovery_target(
                 &self.passability_read(),
                 player.position,
@@ -1295,7 +1324,6 @@ impl super::GameState {
         } else {
             None
         };
-        let mut target = target;
         if let Some(end) = target.as_mut() {
             let distance = player.position.dist_xz_sq(end).sqrt();
             let count = (distance / 0.1).ceil() as usize;
@@ -1339,6 +1367,7 @@ impl super::GameState {
         queues.remove(player_id);
         if let Some(target) = target {
             queues.entry(*player_id).or_default().push_back(MoveIntent {
+                request: None,
                 turn_only: false,
                 recovery: Some(request_id),
                 target,
@@ -1383,6 +1412,7 @@ impl super::GameState {
         let queue = queues.entry(*player_id).or_default();
         queue.clear();
         queue.push_back(MoveIntent {
+            request: None,
             turn_only: true,
             recovery: None,
             target: player.position,
@@ -1407,6 +1437,7 @@ impl super::GameState {
         let mut activities: Vec<(PlayerId, f32, bool)> = Vec::new();
         let mut refused: Vec<RefusedMove> = Vec::new();
         let mut recovery_updates = Vec::new();
+        let tick_at_ms = Self::now_ms();
         {
             let mut queues = self.movement_intents.write().await;
             if queues.is_empty() {
@@ -1456,6 +1487,10 @@ impl super::GameState {
                     * hunger_mult
                     * mount_mult
                     * onlinerpg_shared::hunger::sprint_move_mult(sprinting);
+                let tick_from = Pose::from(&*player);
+                let tick_request_id = waypoints.front().and_then(|i| i.request.map(|r| r.id));
+                let mut last_request_id = tick_request_id;
+                let mut tick_outcome = "clear";
                 let old_position = player.position;
                 let old_floor = player.floor_level;
                 let old_rotation = player.rotation;
@@ -1464,6 +1499,7 @@ impl super::GameState {
                 let speed = max_step / dt.max(f32::EPSILON);
                 let mut blocked = false;
                 while let Some(intent) = waypoints.front() {
+                    last_request_id = intent.request.map(|r| r.id);
                     let target = &intent.target;
                     let dx = shortest_world_delta_x(player.position.x, target.x);
                     let dz = target.z - player.position.z;
@@ -1588,6 +1624,7 @@ impl super::GameState {
                         match outcome {
                             super::passability::StepOutcome::Clear => {}
                             super::passability::StepOutcome::Slid(slid_x, slid_z) => {
+                                tick_outcome = "slid";
                                 // The leg is unfinished: keep it queued so the
                                 // next tick resumes from the slid position.
                                 player.rotation = facing;
@@ -1599,14 +1636,31 @@ impl super::GameState {
                                 break;
                             }
                             super::passability::StepOutcome::Blocked(info) => {
-                                // A blocked step never moves the player, so the
-                                // position/rotation here are what the correction
-                                // sends.
+                                tick_outcome = "blocked";
+                                // Corrections use the last safe pose.
                                 if recovery.is_some() {
                                     blocked = true;
                                     break;
                                 }
+                                let diagnostic = self.movement_audit.detail_due(*player_id, std::time::Instant::now()).then(|| {
+                                    let attempted = Position { x: wrap_world_x(step_x), y: step_y, z: step_z };
+                                    let geometry = cache.get(info.key).map(|entry| serde_json::json!({
+                                        "from": movement_audit::cells_near(entry, step_floor, player.position),
+                                        "attempted": movement_audit::cells_near(entry, step_floor, attempted),
+                                    }));
+                                    serde_json::json!({
+                                        "at_ms": tick_at_ms, "dt": dt, "speed": speed,
+                                        "pose": Pose::from(&*player), "attempted": attempted,
+                                        "step_floor": step_floor, "intent": intent,
+                                        "queue": waypoints.iter().map(|i| serde_json::json!({
+                                            "request_id": i.request.map(|r| r.id), "target": i.target, "floor": i.floor_level
+                                        })).collect::<Vec<_>>(),
+                                        "geometry": geometry,
+                                    })
+                                });
                                 refused.push(RefusedMove {
+                                    diagnostic,
+                                    request_id: intent.request.map(|r| r.id),
                                     player_id: *player_id,
                                     position: player.position,
                                     rotation: player.rotation,
@@ -1644,6 +1698,11 @@ impl super::GameState {
                         break;
                     }
                 }
+                self.movement_audit.tick(*player_id, movement_audit::Tick {
+                    at_ms: tick_at_ms, first_request_id: tick_request_id, last_request_id, dt, speed,
+                    from: tick_from, to: Pose::from(&*player), outcome: tick_outcome,
+                    queue_remaining: waypoints.len(),
+                });
                 let position_changed = player.position.x != old_position.x
                     || player.position.y != old_position.y
                     || player.position.z != old_position.z;
@@ -1818,9 +1877,30 @@ impl super::GameState {
         }
 
         for (r, (name, _)) in due.iter().zip(&profiles) {
+            if let Some(diagnostic) = &r.diagnostic {
+                if let Some(history) = self.movement_audit.snapshot(r.player_id, now) {
+                    let character_id = self
+                        .player_characters
+                        .read()
+                        .await
+                        .get(&r.player_id)
+                        .map(|row| row.0);
+                    let detail = serde_json::json!({
+                        "schema": 1, "player_id": r.player_id, "character_id": character_id,
+                        "name": name, "server_layout": onlinerpg_shared::LAYOUT_VERSION,
+                        "block_key": r.block_key, "stairwell": r.stairwell, "sealed": r.sealed,
+                        "step": diagnostic, "history": history,
+                    });
+                    warn!(target: "movement_audit", detail = %detail, "Movement collision trace");
+                }
+            }
+            self.movement_audit
+                .correction(r.player_id, r.position, r.floor_level);
             // Stays at warn: with the slide in place a hit means client and
             // server disagree — a bug signal, not an expected outcome.
             warn!(
+                player_id = %r.player_id,
+                request_id = ?r.request_id,
                 "Blocked move for player {}: ({:.1},{:.1}) -> ({:.1},{:.1}) y={:.1}->{:.1} \
                  floor={} (intent {}) by {} stairwell={} consulted={}",
                 name,
@@ -1892,6 +1972,8 @@ impl super::GameState {
         else {
             return false;
         };
+        self.movement_audit
+            .correction(*player_id, position, floor_level);
         self.send_direct_message(
             player_id,
             ServerMessage::PositionCorrected {

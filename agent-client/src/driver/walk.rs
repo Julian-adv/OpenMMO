@@ -334,9 +334,8 @@ pub(super) async fn walk(
     state: &Arc<Mutex<SharedState>>,
     to: &WalkTo<'_>,
     background: bool,
-    sprint: Option<bool>,
+    mut sprint: Option<bool>,
 ) -> Walked {
-    let mut sprint = sprint;
     let tuning = to.tuning();
     let started = Instant::now();
     let mut route: Vec<PathWaypoint> = Vec::new();

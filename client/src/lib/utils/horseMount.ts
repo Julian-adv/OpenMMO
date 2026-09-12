@@ -75,7 +75,13 @@ export class HorseMount {
           dx * Math.sin(rotation) + dz * Math.cos(rotation) < -distance * 0.5
       }
     }
-    this.previousPosition = position ? { x: position.x, z: position.z } : null
+    if (position) {
+      this.previousPosition ??= { x: 0, z: 0 }
+      this.previousPosition.x = position.x
+      this.previousPosition.z = position.z
+    } else {
+      this.previousPosition = null
+    }
     if (speed < 0.1) this.reversing = false
     const yaw =
       this.previousRotation === null

@@ -229,6 +229,7 @@ mod consent;
 mod deals;
 mod debuff;
 pub(crate) mod fishing;
+mod movement_audit;
 pub(crate) use deals::band_invariant_holds;
 /// Only the tests name the id from outside; the logic lives in debuff.rs.
 #[cfg(test)]
@@ -337,6 +338,7 @@ pub(crate) struct ServerGroundItem {
 #[derive(Clone)]
 pub struct GameState {
     combat_audit: Arc<combat_audit::CombatAudit>,
+    movement_audit: Arc<movement_audit::MovementAudit>,
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     /// Lowercased name → online player id, updated by `add_player`/
     /// `remove_player` right after the roster under its own lock (never held
@@ -676,6 +678,7 @@ impl GameState {
         Self {
             terrain_io,
             combat_audit: Arc::new(combat_audit::CombatAudit::default()),
+            movement_audit: Arc::new(movement_audit::MovementAudit::default()),
             players: Arc::new(RwLock::new(HashMap::new())),
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
             movement_intents: Arc::new(RwLock::new(HashMap::new())),
