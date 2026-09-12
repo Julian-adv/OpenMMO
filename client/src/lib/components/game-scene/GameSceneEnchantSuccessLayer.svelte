@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { T, useTask, useThrelte } from '@threlte/core'
+  import { T, useThrelte } from '@threlte/core'
   import { onMount } from 'svelte'
   import * as THREE from 'three'
   import type { WebGPURenderer } from 'three/webgpu'
@@ -11,17 +11,30 @@
   } from '../../stores/enchantSuccessStore'
   import { teleportLoading } from '../../stores/debugStore'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
-  import { EnchantSuccessEffect } from '../../effects/enchant-success'
+  import type { EnchantEffectAnchor } from '../../utils/playerEffectAnchors'
+  import {
+    selectEnchantLight,
+    type EnchantLight,
+  } from '../../utils/enchantLight'
+  import {
+    EnchantSuccessEffect,
+    ENCHANT_SUCCESS_DURATION,
+  } from '../../effects/enchant-success'
 
   let {
     currentPlayer,
     getAnchor,
+    setPose,
   }: {
     currentPlayer: LocalPlayer | null
-    getAnchor: (event: EnchantSuccess, target: THREE.Vector3) => boolean
+    getAnchor: (event: EnchantSuccess, target: EnchantEffectAnchor) => boolean
+    setPose: (playerId: number, until: number) => void
   } = $props()
   const group = new THREE.Group()
-  const anchor = new THREE.Vector3()
+  const anchor: EnchantEffectAnchor = {
+    position: new THREE.Vector3(),
+    weapon: null,
+  }
   const frustum = new THREE.Frustum()
   const matrix = new THREE.Matrix4()
   const { camera, renderer, scene } = useThrelte()
@@ -29,12 +42,14 @@
     system: EnchantSuccessEffect
     event: EnchantSuccess | null
   }[] = []
+  const lights: EnchantLight[] = []
   let prepared = false
   let textureMap: THREE.Texture | null = null
 
   function clear() {
     takeEnchantSuccesses()
     slots.forEach((slot) => {
+      if (slot.event) setPose(slot.event.playerId, 0)
       slot.event = null
       slot.system.clear()
     })
@@ -57,8 +72,8 @@
         for (let i = 0; i < PREWARM_ENCHANT_EFFECTS; i++) {
           const system = new EnchantSuccessEffect(map)
           slots.push({ system, event: null })
+          lights.push(system.light)
           group.add(system.group)
-          if (i === 0) group.add(system.light)
           system.group.visible = true
         }
         try {
@@ -87,7 +102,7 @@
     }
   })
 
-  useTask(() => {
+  export function update() {
     if (!prepared || !$camera) return
     const player = currentPlayer
     if (!player || $teleportLoading) {
@@ -96,7 +111,7 @@
     }
     const now = Date.now()
     for (const event of takeEnchantSuccesses()) {
-      if (now - event.startedAt >= 600) continue
+      if (now - event.startedAt >= ENCHANT_SUCCESS_DURATION * 1000) continue
       const local = event.playerId === player.id
       let slot = local
         ? slots[0]
@@ -106,16 +121,26 @@
       if (!slot) {
         slot = slots.find(
           (entry, i) =>
-            i > 0 && (!entry.event || now - entry.event.startedAt >= 600)
+            i > 0 &&
+            (!entry.event ||
+              now - entry.event.startedAt >= ENCHANT_SUCCESS_DURATION * 1000)
         )
         if (!slot && textureMap) {
           const system = new EnchantSuccessEffect(textureMap)
           slot = { system, event: null }
           slots.push(slot)
+          lights.push(system.light)
           group.add(system.group)
         }
       }
-      if (slot) slot.event = event
+      if (slot) {
+        slot.event = event
+        slot.system.light.playerId = event.playerId
+        setPose(
+          event.playerId,
+          event.weapon ? event.startedAt + ENCHANT_SUCCESS_DURATION * 1000 : 0
+        )
+      }
     }
     matrix.multiplyMatrices(
       $camera.projectionMatrix,
@@ -123,38 +148,48 @@
     )
     frustum.setFromProjectionMatrix(matrix, $camera.coordinateSystem)
     const crowded =
-      slots.filter((slot) => slot.event && now - slot.event.startedAt < 600)
-        .length > 8
+      slots.filter(
+        (slot) =>
+          slot.event &&
+          now - slot.event.startedAt < ENCHANT_SUCCESS_DURATION * 1000
+      ).length > 8
     for (const slot of slots) {
       const event = slot.event
       if (!event) continue
       const elapsed = (now - event.startedAt) / 1000
       const local = event.playerId === player.id
-      if (elapsed >= 0.6 || (local && player.health <= 0)) {
+      if (
+        elapsed >= ENCHANT_SUCCESS_DURATION ||
+        (local && player.health <= 0)
+      ) {
         slot.event = null
         slot.system.clear()
         continue
       }
       if (
         !getAnchor(event, anchor) ||
-        (!local && !frustum.containsPoint(anchor))
+        (!local && !frustum.containsPoint(anchor.position))
       ) {
         slot.system.clear()
         continue
       }
       slot.system.update(
-        Math.min(1, elapsed / 0.3),
-        elapsed < 0.3 ? null : (elapsed - 0.3) * 2,
+        elapsed,
         anchor,
         $camera,
         crowded ||
           (!local &&
-            (anchor.x - player.position.x) ** 2 +
-              (anchor.z - player.position.z) ** 2 >
+            (anchor.position.x - player.position.x) ** 2 +
+              (anchor.position.z - player.position.z) ** 2 >
               225)
       )
     }
-  })
+  }
+
+  export function getLight(): EnchantLight | null {
+    if (!currentPlayer) return null
+    return selectEnchantLight(lights, currentPlayer.id, currentPlayer.position)
+  }
 </script>
 
 <T is={group} />

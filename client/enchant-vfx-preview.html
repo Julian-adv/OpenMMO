@@ -49,13 +49,13 @@
     <header>
       <h1>강화 성공 효과 비교</h1>
       <p>
-        실제 발키리 모델 · 게임 기본 줌의 화면 크기 · 갑옷은 몸통, 무기는
-        오른손에 표시
+        실제 발키리 모델 · 게임 기본 줌의 화면 크기 · 갑옷은 몸통, 무기는 무기
+        전체에서 빛줄기 방출 · 디버깅용 10초
       </p>
       <button id="replay">다시 재생</button>
       <select id="speed">
         <option value="0.25">느리게 · 4배 확대 관찰</option>
-        <option value="1">실제 속도 · 0.6초</option>
+        <option value="1" selected>실제 속도 · 디버깅용 10초</option>
       </select>
     </header>
     <div id="view"></div>
@@ -67,10 +67,10 @@
         <h2>갑옷 · 간소화</h2>
       </div>
       <div>
-        <h2>무기 · 기본</h2>
+        <h2>그레이트 소드 · 기본</h2>
       </div>
       <div>
-        <h2>무기 · 간소화</h2>
+        <h2>그레이트 소드 · 간소화</h2>
       </div>
     </div>
     <script type="module">
@@ -82,10 +82,24 @@
         computeSoleGroundOffset,
         findBoneByName,
       } from './src/lib/utils/characterAnimationUtils.ts'
-      import { EnchantSuccessEffect } from './src/lib/effects/enchant-success.ts'
+      import {
+        EnchantSuccessEffect,
+        ENCHANT_SUCCESS_DURATION,
+      } from './src/lib/effects/enchant-success.ts'
+      import { PlayerEffectAnchors } from './src/lib/utils/playerEffectAnchors.ts'
+      import { poseMainHandProp } from './src/lib/utils/handProps.ts'
+      import { getWeaponAnimation } from './src/lib/data/weaponAnimationDefs.ts'
+      import { loadWeaponAnimations } from './src/lib/utils/weaponAnimations.ts'
+      import { createTwoHandedGrip } from './src/lib/utils/twoHandedGrip.ts'
+      import { EnchantWeaponPose } from './src/lib/utils/enchantWeaponPose.ts'
+      import {
+        applyEnchantLight,
+        selectEnchantLight,
+      } from './src/lib/utils/enchantLight.ts'
       const host = document.querySelector('#view'),
         renderer = new WebGPURenderer({ antialias: true })
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+      renderer.shadowMap.enabled = true
       host.append(renderer.domElement)
       const scene = new THREE.Scene()
       scene.background = new THREE.Color('#111714')
@@ -102,13 +116,33 @@
         { weapon: true, reduced: false },
         { weapon: true, reduced: true },
       ]
-      const anchors = variants.map(() => new THREE.Vector3())
+      const anchors = variants.map(() => ({
+        position: new THREE.Vector3(),
+        weapon: null,
+      }))
+      const boneAnchors = []
+      const grips = []
+      const poses = []
       const models = []
       const pedestals = []
-      scene.add(new THREE.HemisphereLight('#e9eedf', '#404c32', 2))
-      const sun = new THREE.DirectionalLight('#fff2dc', 2)
+      scene.add(new THREE.HemisphereLight('#e9eedf', '#404c32', 0.35))
+      const sun = new THREE.DirectionalLight('#fff2dc', 0.5)
       sun.position.set(-3, 7, 5)
       scene.add(sun)
+      const shadowLight = new THREE.PointLight('#ffcc66', 0, 50, 1.2)
+      shadowLight.castShadow = true
+      shadowLight.shadow.mapSize.set(512, 512)
+      shadowLight.shadow.bias = -0.0001
+      shadowLight.shadow.normalBias = 0.005
+      scene.add(shadowLight)
+      const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100),
+        new THREE.MeshStandardMaterial({ color: '#46513a', roughness: 1 })
+      )
+      ground.rotation.x = -Math.PI / 2
+      ground.position.y = -0.08
+      ground.receiveShadow = true
+      scene.add(ground)
       const loader = new GLTFLoader()
       const character = await loader.loadAsync(
         '/models/characters/valkyrie.glb'
@@ -116,33 +150,53 @@
       const locomotion = await loader.loadAsync(
         '/models/animations/locomotion.glb'
       )
-      const hands = []
+      const sword = await loader.loadAsync('/models/weapons/great_sword.glb')
+      const weaponProfile = getWeaponAnimation('great_sword')
       const mixers = []
       for (let i = 0; i < variants.length; i++) {
         const { clonedScene, modelRoot } = createCharacterModelRoot(
           character.scene
         )
         clonedScene.position.y = computeSoleGroundOffset(modelRoot)
-        modelRoot.position.x = anchors[i].x
         scene.add(modelRoot)
         models.push(modelRoot)
-        hands.push(findBoneByName(clonedScene, 'RightHand'))
+        boneAnchors.push(new PlayerEffectAnchors(clonedScene))
         const mixer = new THREE.AnimationMixer(modelRoot)
-        const clip = [...character.animations, ...locomotion.animations].find(
+        let clip = [...character.animations, ...locomotion.animations].find(
           (clip) => /idle/i.test(clip.name)
         )
+        if (variants[i].weapon) {
+          const clips = await loadWeaponAnimations(
+            'characters/valkyrie.glb',
+            clonedScene,
+            weaponProfile
+          )
+          clip = clips.get(weaponProfile.idle)
+          const prop = sword.scene.clone()
+          poseMainHandProp(prop, 'great_sword')
+          findBoneByName(clonedScene, 'RightHand').add(prop)
+          anchors[i].weapon = prop
+          grips.push(
+            createTwoHandedGrip(
+              clonedScene,
+              prop,
+              weaponProfile.offHandGripReach
+            )
+          )
+        }
         if (clip) mixer.clipAction(clip).play()
         mixers.push(mixer)
       }
       const effects = anchors.map(() => new EnchantSuccessEffect(map))
       for (let i = 0; i < variants.length; i++) {
         scene.add(effects[i].group)
+        effects[i].light.playerId = i
         effects[i].group.visible = true
         const mesh = new THREE.Mesh(
           new THREE.CylinderGeometry(0.65, 0.7, 0.12, 48),
-          new THREE.MeshBasicMaterial({ color: '#303c30' })
+          new THREE.MeshStandardMaterial({ color: '#303c30' })
         )
-        mesh.position.x = anchors[i].x
+        mesh.receiveShadow = true
         scene.add(mesh)
         pedestals.push(mesh)
       }
@@ -180,24 +234,50 @@
         const now = performance.now()
         elapsed +=
           ((now - last) / 1000) * Number(document.querySelector('#speed').value)
-        mixers.forEach((mixer) => mixer.update((now - last) / 1000))
+        const dt = (now - last) / 1000
+        poses.forEach((pose) => pose?.restore())
+        mixers.forEach((mixer) => mixer.update(dt))
         scene.updateMatrixWorld(true)
-        hands.forEach((hand, i) => {
-          anchors[i].set(models[i].position.x, 1.1, 0)
-          if (variants[i].weapon && hand) hand.getWorldPosition(anchors[i])
+        grips.forEach((grip) => grip?.update(true))
+        anchors.forEach((anchor, i) => {
+          if (!anchor.weapon) return
+          const active = elapsed < ENCHANT_SUCCESS_DURATION
+          if (!poses[i] && active)
+            poses[i] = new EnchantWeaponPose(
+              models[i],
+              anchor.weapon,
+              'RightHand',
+              true
+            )
+          poses[i]?.apply(dt, active)
+          if (poses[i]?.weight === 0) poses[i] = null
+        })
+        boneAnchors.forEach((bones, i) => {
+          bones.getWorldPosition(
+            variants[i].weapon,
+            'RightHand',
+            anchors[i].position
+          )
         })
         last = now
-        if (elapsed > 1.1) elapsed = 0
+        if (elapsed > ENCHANT_SUCCESS_DURATION + 0.5) elapsed = 0
         for (let i = 0; i < variants.length; i++) {
-          if (elapsed < 0.6)
-            effects[i].update(
-              Math.min(1, elapsed / 0.3),
-              elapsed < 0.3 ? null : (elapsed - 0.3) * 2,
-              anchors[i],
-              camera,
-              variants[i].reduced
-            )
+          if (elapsed < ENCHANT_SUCCESS_DURATION)
+            effects[i].update(elapsed, anchors[i], camera, variants[i].reduced)
           else effects[i].clear()
+        }
+        if (
+          !applyEnchantLight(
+            shadowLight,
+            selectEnchantLight(
+              effects.map((effect) => effect.light),
+              2,
+              models[2].position
+            )
+          )
+        ) {
+          shadowLight.position.copy(models[0].position).y = 3
+          shadowLight.intensity = 50
         }
         renderer.render(scene, camera)
       })

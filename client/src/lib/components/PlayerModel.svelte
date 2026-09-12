@@ -47,6 +47,7 @@
 
 <script lang="ts">
   import { RiderMotion } from '../utils/riderMotion'
+  import { EnchantWeaponPose } from '../utils/enchantWeaponPose'
   import { HorseReins } from '../utils/horseReins'
   import {
     HorseMount,
@@ -119,7 +120,10 @@
     torchLightEnabled,
   } from '../stores/debugStore'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
-  import { PlayerEffectAnchors } from '../utils/playerEffectAnchors'
+  import {
+    PlayerEffectAnchors,
+    type EnchantEffectAnchor,
+  } from '../utils/playerEffectAnchors'
   import type { WindState } from '../shaders/grass-material'
   import {
     attachCapeFit,
@@ -407,6 +411,8 @@
   let pickupGrabNotified = $state(false)
   let weaponObject: THREE.Object3D | null = null
   let weaponGrip: TwoHandedGrip | null = null
+  let enchantPose: EnchantWeaponPose | null = null
+  let enchantPoseUntil = 0
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
 
@@ -469,6 +475,8 @@
   }
 
   function detachWeapon() {
+    enchantPose?.restore()
+    enchantPose = null
     weaponGrip = null
     if (weaponObject && weaponObject.parent) {
       weaponObject.parent.remove(weaponObject)
@@ -1086,6 +1094,9 @@
     if (activeGltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
       hitAction = null
+      enchantPose?.restore()
+      enchantPose = null
+      enchantPoseUntil = 0
       hitClipLoaded = false
 
       const { clonedScene: cloned, modelRoot: newModelRoot } =
@@ -1259,14 +1270,23 @@
     return modelGroup
   }
 
-  export function getEnchantAnchor(weapon: boolean, target: THREE.Vector3) {
+  export function getEnchantAnchor(
+    weapon: boolean,
+    target: EnchantEffectAnchor
+  ) {
+    target.weapon = weapon ? weaponObject : null
+    if (weapon && !target.weapon?.visible) return false
     return (
       effectAnchors?.getWorldPosition(
         weapon,
         mainHandBoneFor(equippedMainHandItemId),
-        target
+        target.position
       ) ?? false
     )
+  }
+
+  export function setEnchantPoseUntil(until: number) {
+    enchantPoseUntil = until
   }
 
   export function getHoverMeshGroup() {
@@ -1289,6 +1309,7 @@
    *  early in places, which is why the two are not simply written in sequence
    *  at the call site. */
   export function update(deltaTime: number, wind: WindState | null = null) {
+    enchantPose?.restore()
     riderMotion?.restore()
     updatePose(deltaTime)
     if (riding && horseMount) {
@@ -1303,6 +1324,25 @@
     weaponGrip?.update(
       !riding && weaponClips.has(currentAction?.getClip().name ?? '')
     )
+    const canPose = playerState === 'idle' && !riding && weaponObject?.visible
+    const enchanting = canPose && Date.now() < enchantPoseUntil
+    if (
+      enchanting &&
+      weaponObject &&
+      clonedScene &&
+      enchantPose?.weapon !== weaponObject
+    ) {
+      enchantPose = new EnchantWeaponPose(
+        clonedScene,
+        weaponObject,
+        mainHandBoneFor(equippedMainHandItemId),
+        !!weaponAnimationProfile?.offHandGripReach
+      )
+    }
+    if (enchantPose) {
+      if (canPose) enchantPose.apply(deltaTime, !!enchanting)
+      if (!canPose || enchantPose.weight === 0) enchantPose = null
+    }
     updateCape(deltaTime, wind)
   }
 

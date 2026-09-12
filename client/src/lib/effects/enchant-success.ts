@@ -1,23 +1,74 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
-import { color, float, sin, texture, uniform, uv, vec2 } from 'three/tsl'
+import {
+  attribute,
+  color,
+  exp,
+  float,
+  mix,
+  sin,
+  texture,
+  uniform,
+  uv,
+  vec2,
+} from 'three/tsl'
+import type { EnchantEffectAnchor } from '../utils/playerEffectAnchors'
+import {
+  ENCHANT_WEAPON_RAYS,
+  getWeaponEffectAxis,
+} from '../utils/weaponEffectAxis'
+import {
+  ENCHANT_LIGHT_INTENSITY,
+  type EnchantLight,
+} from '../utils/enchantLight'
+
+export const ENCHANT_SUCCESS_DURATION = 10
+export const ENCHANT_SUCCESS_GATHER_DURATION = 0.3
+export const ENCHANT_SUCCESS_RELEASE_START = ENCHANT_SUCCESS_DURATION - 0.3
 
 export class EnchantSuccessEffect {
   readonly group = new THREE.Group()
-  readonly light = new THREE.PointLight('#f4e6c9', 0, 3.5, 2)
+  readonly light: EnchantLight = {
+    playerId: -1,
+    position: new THREE.Vector3(),
+    intensity: 0,
+  }
   private opacity = uniform(0)
   private phase = uniform(0)
   private dissolve = uniform(-0.2)
   private geometry = new THREE.PlaneGeometry(1, 1)
   private glowMaterial = new MeshBasicNodeMaterial()
   private threadMaterial = new MeshBasicNodeMaterial()
+  private rayMaterial = new MeshBasicNodeMaterial()
+  private axisMaterial = new MeshBasicNodeMaterial()
+  private rayGeometry = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0)
+  private rayOpacity = new THREE.InstancedBufferAttribute(
+    new Float32Array(ENCHANT_WEAPON_RAYS),
+    1
+  )
+  private rays: THREE.InstancedMesh
+  private axisGlow: THREE.Mesh
   private core: THREE.Mesh
   private threads: THREE.Mesh[]
   private dust: THREE.InstancedMesh
   private dummy = new THREE.Object3D()
+  private cameraDirection = new THREE.Vector3()
+  private rayDirection = new THREE.Vector3()
+  private screenDirection = new THREE.Vector3()
+  private rayRotation = new THREE.Matrix4()
+  private rayNormal = new THREE.Vector3()
+  private weaponCenter = new THREE.Vector3()
+  private weaponAxis = new THREE.Vector3()
+  private radialAxis = new THREE.Vector3()
+  private radialSide = new THREE.Vector3()
 
   constructor(map: THREE.Texture) {
-    for (const material of [this.glowMaterial, this.threadMaterial]) {
+    for (const material of [
+      this.glowMaterial,
+      this.threadMaterial,
+      this.rayMaterial,
+      this.axisMaterial,
+    ]) {
       material.transparent = true
       material.depthWrite = false
       material.blending = THREE.AdditiveBlending
@@ -48,6 +99,38 @@ export class EnchantSuccessEffect {
       .mul(erosion)
       .mul(feather)
       .mul(0.45)
+    const spread = uv().y.pow(0.75).mul(0.4).add(0.06)
+    const diffusion = exp(uv().x.sub(0.5).div(spread).pow(2).mul(-2))
+    const outwardFade = exp(uv().y.mul(-4)).mul(
+      float(1).sub(uv().y).smoothstep(0, 0.3)
+    )
+    this.rayMaterial.colorNode = mix(
+      color('#fff7dc'),
+      color('#e5bf78'),
+      uv().y.smoothstep(0, 0.7)
+    )
+    this.rayMaterial.opacityNode = diffusion
+      .mul(outwardFade)
+      .mul(attribute('aEnchantRayOpacity', 'float'))
+      .mul(this.opacity)
+      .mul(0.65)
+    this.axisMaterial.colorNode = color('#fff2c6')
+    this.axisMaterial.opacityNode = exp(uv().x.sub(0.5).mul(6).pow(2).negate())
+      .mul(uv().y.smoothstep(0, 0.1))
+      .mul(float(1).sub(uv().y).smoothstep(0, 0.1))
+      .mul(this.opacity)
+      .mul(0.8)
+    this.axisGlow = new THREE.Mesh(this.geometry, this.axisMaterial)
+    this.axisGlow.name = 'enchant-weapon-axis-glow'
+    this.rayGeometry.setAttribute('aEnchantRayOpacity', this.rayOpacity)
+    this.rayOpacity.setUsage(THREE.DynamicDrawUsage)
+    this.rays = new THREE.InstancedMesh(
+      this.rayGeometry,
+      this.rayMaterial,
+      ENCHANT_WEAPON_RAYS
+    )
+    this.rays.name = 'enchant-weapon-rays'
+    this.rays.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     this.core = new THREE.Mesh(this.geometry, this.glowMaterial)
     this.threads = Array.from(
       { length: 3 },
@@ -56,7 +139,13 @@ export class EnchantSuccessEffect {
     this.dust = new THREE.InstancedMesh(this.geometry, this.glowMaterial, 20)
     this.dust.frustumCulled = false
     this.dust.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-    this.group.add(this.core, ...this.threads, this.dust)
+    this.group.add(
+      this.core,
+      ...this.threads,
+      this.dust,
+      this.rays,
+      this.axisGlow
+    )
     this.group.traverse((object) => {
       object.frustumCulled = false
     })
@@ -64,28 +153,53 @@ export class EnchantSuccessEffect {
   }
 
   update(
-    progress: number,
-    release: number | null,
-    hand: THREE.Vector3,
+    elapsed: number,
+    anchor: EnchantEffectAnchor,
     camera: THREE.Camera,
     reduced = false
   ) {
-    const p = THREE.MathUtils.clamp(progress, 0, 1)
+    if (elapsed >= ENCHANT_SUCCESS_DURATION) {
+      this.clear()
+      return
+    }
+    const p = THREE.MathUtils.clamp(
+      elapsed / ENCHANT_SUCCESS_GATHER_DURATION,
+      0,
+      1
+    )
+    const release =
+      elapsed < ENCHANT_SUCCESS_RELEASE_START
+        ? null
+        : (elapsed - ENCHANT_SUCCESS_RELEASE_START) * 2
     const tail = THREE.MathUtils.clamp((release ?? 0) / 0.6, 0, 1)
     const easedTail = tail * tail * (3 - 2 * tail)
     const fade =
       release === null ? THREE.MathUtils.smoothstep(p, 0, 0.2) : 1 - easedTail
-    this.phase.value = p + tail * 0.7
+    this.phase.value = elapsed * 2 + tail * 0.7
     this.dissolve.value = -0.2 + easedTail * 1.4
     this.group.visible = fade > 0
-    this.group.position.copy(hand)
-    this.light.position.copy(hand)
+    camera.getWorldDirection(this.cameraDirection)
+    this.group.position
+      .copy(anchor.position)
+      .addScaledVector(this.cameraDirection, -0.5)
+    this.light.position.copy(this.group.position)
     this.opacity.value = fade * (0.35 + p * 0.65)
+    this.light.intensity = fade * p * ENCHANT_LIGHT_INTENSITY
+    this.rays.visible = anchor.weapon !== null
+    this.axisGlow.visible = anchor.weapon !== null
+    this.dust.visible = anchor.weapon === null
+    this.core.visible = anchor.weapon === null
+    if (anchor.weapon) {
+      this.threads.forEach((thread) => {
+        thread.visible = false
+      })
+      this.updateWeapon(anchor.weapon, elapsed, camera, reduced)
+      return
+    }
     this.core.quaternion.copy(camera.quaternion)
     this.core.scale.setScalar(
       release === null ? 0.18 + p * 0.38 : 0.56 + easedTail * 0.65
     )
-    this.light.intensity = fade * (release === null ? p * 3 : 3)
     for (let i = 0; i < this.threads.length; i++) {
       const thread = this.threads[i]
       thread.visible = !reduced || i === 0
@@ -121,6 +235,83 @@ export class EnchantSuccessEffect {
     this.dust.instanceMatrix.needsUpdate = true
   }
 
+  private updateWeapon(
+    weapon: THREE.Object3D,
+    elapsed: number,
+    camera: THREE.Camera,
+    reduced: boolean
+  ) {
+    const axis = getWeaponEffectAxis(weapon)
+    if (!weapon.visible || axis.length <= 0) {
+      this.clear()
+      return
+    }
+    weapon.updateWorldMatrix(true, false)
+    this.weaponCenter.copy(axis.center).applyMatrix4(weapon.matrixWorld)
+    this.weaponAxis.copy(axis.direction).transformDirection(weapon.matrixWorld)
+    this.radialAxis.crossVectors(this.weaponAxis, this.cameraDirection)
+    if (this.radialAxis.lengthSq() < 0.001)
+      this.radialAxis.set(1, 0, 0).applyQuaternion(camera.quaternion)
+    this.radialAxis.normalize()
+    this.radialSide.crossVectors(this.weaponAxis, this.radialAxis).normalize()
+    this.group.position
+      .copy(this.weaponCenter)
+      .addScaledVector(this.cameraDirection, -0.12)
+    this.light.position
+      .copy(this.weaponCenter)
+      .addScaledVector(this.cameraDirection, -0.35)
+    this.rayNormal.crossVectors(this.radialAxis, this.weaponAxis).normalize()
+    this.rayRotation.makeBasis(this.radialAxis, this.weaponAxis, this.rayNormal)
+    this.axisGlow.quaternion.setFromRotationMatrix(this.rayRotation)
+    const axisLength = this.dummy.position
+      .copy(axis.center)
+      .addScaledVector(axis.direction, axis.length)
+      .applyMatrix4(weapon.matrixWorld)
+      .distanceTo(this.weaponCenter)
+    this.axisGlow.scale.set(0.3, axisLength + 0.08, 1)
+    const rings = reduced ? 3 : 6
+    const spokes = 8
+    const count = rings * spokes
+    this.rays.count = count
+    for (let i = 0; i < count; i++) {
+      const ring = Math.floor(i / spokes)
+      const angle = ((i % spokes) * Math.PI * 2) / spokes
+      const pulse = 0.8 + 0.2 * Math.sin(elapsed * 3 - ring * 0.35)
+      this.rayDirection
+        .copy(this.radialAxis)
+        .multiplyScalar(Math.cos(angle))
+        .addScaledVector(this.radialSide, Math.sin(angle))
+      this.screenDirection.crossVectors(this.rayDirection, this.cameraDirection)
+      if (this.screenDirection.lengthSq() < 0.001)
+        this.screenDirection.copy(this.weaponAxis)
+      this.screenDirection.normalize()
+      this.rayNormal
+        .crossVectors(this.screenDirection, this.rayDirection)
+        .normalize()
+      const length = 0.65 + pulse * 0.25
+      this.dummy.position
+        .copy(axis.center)
+        .addScaledVector(
+          axis.direction,
+          ((ring + 0.5) / rings - 0.5) * axis.length * 0.9
+        )
+        .applyMatrix4(weapon.matrixWorld)
+        .sub(this.weaponCenter)
+      this.rayRotation.makeBasis(
+        this.screenDirection,
+        this.rayDirection,
+        this.rayNormal
+      )
+      this.dummy.quaternion.setFromRotationMatrix(this.rayRotation)
+      this.dummy.scale.set(0.65, length, 1)
+      this.dummy.updateMatrix()
+      this.rays.setMatrixAt(i, this.dummy.matrix)
+      this.rayOpacity.setX(i, pulse)
+    }
+    this.rays.instanceMatrix.needsUpdate = true
+    this.rayOpacity.needsUpdate = true
+  }
+
   clear() {
     this.group.visible = false
     this.light.intensity = 0
@@ -129,11 +320,14 @@ export class EnchantSuccessEffect {
   dispose() {
     this.clear()
     this.dust.dispose()
+    this.rays.dispose()
     this.geometry.dispose()
+    this.rayGeometry.dispose()
     this.glowMaterial.dispose()
     this.threadMaterial.dispose()
+    this.rayMaterial.dispose()
+    this.axisMaterial.dispose()
     this.group.clear()
     this.group.removeFromParent()
-    this.light.removeFromParent()
   }
 }

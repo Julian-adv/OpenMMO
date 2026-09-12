@@ -1,6 +1,11 @@
 import type * as THREE from 'three'
 import { findBoneByName } from './characterAnimationUtils'
 
+export interface EnchantEffectAnchor {
+  position: THREE.Vector3
+  weapon: THREE.Object3D | null
+}
+
 export class PlayerEffectAnchors {
   private rightHand: THREE.Bone | undefined
   private leftHand: THREE.Bone | undefined

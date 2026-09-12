@@ -6,6 +6,8 @@
   import PlayerModel from '../PlayerModel.svelte'
   import GameSceneEnchantSuccessLayer from './GameSceneEnchantSuccessLayer.svelte'
   import type { EnchantSuccess } from '../../stores/enchantSuccessStore'
+  import type { EnchantEffectAnchor } from '../../utils/playerEffectAnchors'
+  import { applyEnchantLight } from '../../utils/enchantLight'
   import PlayerControl from '../PlayerControl.svelte'
   import type { PlayerControlEvent } from '../player-control/events'
   import type {
@@ -208,22 +210,26 @@
     )
   )
 
-  function getEnchantAnchor(event: EnchantSuccess, target: THREE.Vector3) {
+  function getEnchantAnchor(
+    event: EnchantSuccess,
+    target: EnchantEffectAnchor
+  ) {
     const local = event.playerId === currentPlayer?.id
     if (!local && !remoteVisibility.get(event.playerId)) return false
     const model = local ? currentPlayerModel : remoteModels.get(event.playerId)
     return model?.getEnchantAnchor(event.weapon, target) ?? false
   }
 
-  // Unified torch: exactly one PointLight for the entire scene.
-  // Priority: local player's torch (if ON) > closest visible remote player
-  // with torchOn. When no candidate, intensity drops to 0. Keeping the
-  // PointLight count at a constant 1 avoids WebGPU pipeline recompile stalls.
-  //
-  // Position/intensity are driven imperatively from the game loop (not a
-  // $derived) because currentPlayer.position is a mutated plain object that
-  // Svelte reactivity cannot track. The game loop runs every frame anyway,
-  // so recomputing the target here has no extra cost.
+  function setEnchantPose(playerId: number, until: number) {
+    const model =
+      playerId === currentPlayer?.id
+        ? currentPlayerModel
+        : remoteModels.get(playerId)
+    model?.setEnchantPoseUntil(until)
+  }
+
+  let enchantLayer: GameSceneEnchantSuccessLayer | undefined
+  // One shadow light: enchantment > fire > local torch > nearest torch.
   let unifiedTorchLight = $state<THREE.PointLight | undefined>(undefined)
 
   // mapSize is only read when the cube map is allocated, so a quality switch
@@ -446,6 +452,7 @@
   }
 
   export function updateUnifiedTorchFlicker(deltaTime: number) {
+    enchantLayer?.update()
     const torchSource = isUnderground
       ? wallTorchPositions
       : localHouseId != null
@@ -453,7 +460,10 @@
         : undefined
     const wallPositions = torchEffectsDisabled ? [] : (torchSource?.() ?? [])
     let occupiedWallIdx = -1
-    if (unifiedTorchLight) {
+    if (
+      unifiedTorchLight &&
+      !applyEnchantLight(unifiedTorchLight, enchantLayer?.getLight() ?? null)
+    ) {
       const result = computeUnifiedTorchTarget(wallPositions)
       if (result) {
         occupiedWallIdx = result.wallIdx
@@ -478,7 +488,12 @@
   }
 </script>
 
-<GameSceneEnchantSuccessLayer {currentPlayer} getAnchor={getEnchantAnchor} />
+<GameSceneEnchantSuccessLayer
+  bind:this={enchantLayer}
+  {currentPlayer}
+  getAnchor={getEnchantAnchor}
+  setPose={setEnchantPose}
+/>
 
 {#if camera && currentPlayer}
   <PlayerControl
@@ -620,10 +635,7 @@
     {/if}
   {/each}
 
-  <!-- Unified point light. Mounted exactly once, priority:
-       local torch > closest visible remote torch. Shadow mode is fixed by the
-       effective graphics preset (mobile keeps the light but skips shadow maps).
-       Position/intensity are driven from the game loop. -->
+  <!-- Enchantment takes priority on the existing shadow light. -->
   {#if !torchEffectsDisabled}
     <T.PointLight
       bind:ref={unifiedTorchLight}
