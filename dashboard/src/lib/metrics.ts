@@ -230,6 +230,13 @@ export function parseHistory(value: unknown, hours: Hours): ConcurrentHistory {
   return data
 }
 
+export function withCurrent(history: ConcurrentHistory): ConcurrentHistory {
+  const { current, samples } = history
+  if (history.sample_interval_seconds !== 3600 || samples.at(-1)?.timestamp === current.timestamp) return history
+  const live = { ...current, peak_accounts: current.accounts, peak_timestamp: current.timestamp, sample_count: 1 }
+  return { ...history, samples: [...samples, live] }
+}
+
 export function summarize(samples: HistorySample[]) {
   if (samples.length === 0) return { peak: null, average: null, peakAt: null, sampleCount: 0 }
   let peak = samples[0]

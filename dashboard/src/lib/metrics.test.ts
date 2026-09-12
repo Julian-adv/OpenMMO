@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize, withCurrent } from './metrics'
 
 describe('gold display units', () => {
   it.each([
@@ -269,5 +269,22 @@ describe('price index history', () => {
     expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(3600, 100, 83)] }, 168)).toThrow()
     expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(3600, 90, 83), meeting(400000, 90, 75)] }, 168)).toThrow()
     expect(() => parsePriceIndexHistory({ ...data, current_index_percent: 0 }, 168)).toThrow()
+  })
+})
+
+describe('live concurrent point', () => {
+  const sample = { timestamp: 3600, accounts: 3, web_accounts: 2, agent_accounts: 1, other_accounts: 0, peak_accounts: 3, peak_timestamp: 3600, sample_count: 1 }
+  const current = { timestamp: 5400, accounts: 5, web_accounts: 4, agent_accounts: 1, other_accounts: 0 }
+  const history = { from: 0, until: 5400, sample_interval_seconds: 3600, current, samples: [sample] }
+
+  it('appends the request-time reading after the hourly samples', () => {
+    expect(withCurrent(history).samples).toEqual([sample, { ...current, peak_accounts: 5, peak_timestamp: 5400, sample_count: 1 }])
+  })
+
+  it('leaves averaged periods and on-the-hour requests untouched', () => {
+    const averaged = { ...history, sample_interval_seconds: 21600 }
+    expect(withCurrent(averaged)).toBe(averaged)
+    const onTheHour = { ...history, current: { ...current, timestamp: 3600 } }
+    expect(withCurrent(onTheHour)).toBe(onTheHour)
   })
 })

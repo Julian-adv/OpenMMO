@@ -14,7 +14,7 @@
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
   import { useDashboardAuth } from './lib/auth.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, summarize, withCurrent, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   const auth = useDashboardAuth()
   let hours = $state<Hours>(24)
@@ -55,6 +55,8 @@
   let uniqueLatest = $derived(unique.history?.samples.at(-1))
   let uniquePeak = $derived(unique.history?.samples.length ? Math.max(...unique.history.samples.map((sample) => sample.accounts)) : null)
   let summary = $derived(summarize(history?.samples ?? []))
+  let chartHistory = $derived(history && withCurrent(history))
+  let chartSummary = $derived(summarize(chartHistory?.samples ?? []))
   const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
   const refresh = () => { resources.forEach((resource) => resource.refresh()) }
 </script>
@@ -120,8 +122,8 @@
       <PeriodFilter bind:hours options={periods.filter((period) => period.hours >= 24)} label="조회 기간" />
     </div>
     <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel}</span></div>
-    {#if history && history.samples.length > 0}
-      <ConcurrentChart {history} peak={summary.peak} />
+    {#if chartHistory && history && history.samples.length > 0}
+      <ConcurrentChart history={chartHistory} peak={chartSummary.peak} />
     {:else}
       <div class="chart-empty" role="status">
         <div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 64 48" fill="none"><path d="M4 42h56M4 24h56M4 6h56" stroke="currentColor" stroke-opacity=".18" /><path d="M6 34h13l9-16 10 11 10-19 10 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
