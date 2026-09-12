@@ -38,6 +38,17 @@ assert.deepEqual(gltf.animations.map((clip) => clip.name).sort(), [
 
 const mixer = new THREE.AnimationMixer(gltf.scene)
 const clips = new Map(gltf.animations.map((clip) => [clip.name, clip]))
+gltf.scene.updateMatrixWorld(true)
+const armSegments = ['L_Forearm', 'L_Hand', 'R_Forearm', 'R_Hand'].map((name) => {
+  const bone = gltf.scene.getObjectByName(name)
+  assert.ok(bone, `Missing arm bone: ${name}`)
+  return {
+    bone,
+    length: bone.getWorldPosition(new THREE.Vector3()).distanceTo(
+      bone.parent.getWorldPosition(new THREE.Vector3())
+    ),
+  }
+})
 for (const [name, value] of Object.entries(definition)) {
   if (!name.startsWith('anim') || !value) continue
   for (const clip of value.split('|')) {
@@ -54,6 +65,15 @@ function sample(name, time) {
   mixer.setTime(time)
   gltf.scene.updateMatrixWorld(true)
   mesh.skeleton.update()
+  for (const { bone, length } of armSegments) {
+    const currentLength = bone.getWorldPosition(new THREE.Vector3()).distanceTo(
+      bone.parent.getWorldPosition(new THREE.Vector3())
+    )
+    assert.ok(
+      Math.abs(currentLength - length) < 0.001,
+      `${name} ${time}: ${bone.name} changes arm length (${currentLength} vs ${length})`
+    )
+  }
   const bounds = new THREE.Box3()
   const vertex = new THREE.Vector3()
   for (
@@ -172,7 +192,7 @@ for (const [name, clip] of clips) {
       previousRotation = rotation
       if (frame/60 >= 2.25) {
         if (settledPosition) assert.ok(handGrip.distanceTo(settledPosition) < .005, 'Sword must remain still after landing')
-        settledPosition = handGrip
+        settledPosition ??= handGrip
       }
     }
     assert.ok(blade.min.y > -.035, `${name} ${frame/60}: blade penetrates floor (${blade.min.y})`)

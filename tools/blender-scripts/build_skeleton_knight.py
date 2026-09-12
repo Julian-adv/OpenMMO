@@ -420,9 +420,26 @@ def stabilize_death_grip(armature, baked, direction):
     blade = Vector((-.8, .6, 0))
     flat = Matrix((blade, Vector((0, 0, 1)).cross(blade), Vector((0, 0, 1)))).transposed().to_quaternion()
     wrists = []
+    shoulders = []
     for pose in frames:
         restore(armature, pose)
         wrists.append(armature.pose.bones['R_Hand'].head.copy())
+        shoulders.append(armature.pose.bones['R_Upperarm'].head.copy())
+    forearm = armature.pose.bones['R_Forearm'].head
+    reach = ((forearm-shoulders[-1]).length + (wrists[-1]-forearm).length)*.99
+    settled = wrists[-1].copy()
+    settled.z = max(settled.z, .012-min((flat @ (GRIP+p)).z for p in SWORD_POINTS))
+    landing_shoulders = shoulders[math.ceil(2.2*BAKE_FPS):]
+    # Keep the landing point reachable throughout the remaining body motion.
+    for _ in range(16):
+        for shoulder in landing_shoulders:
+            radius = math.sqrt(max(0, reach*reach-(settled.z-shoulder.z)**2))
+            offset = Vector((settled.x-shoulder.x, settled.y-shoulder.y, 0))
+            if offset.length > radius:
+                offset *= radius/offset.length
+                settled.x, settled.y = shoulder.x+offset.x, shoulder.y+offset.y
+    if any((settled-shoulder).length > reach+1e-6 for shoulder in landing_shoulders):
+        raise ValueError('No reachable death grip landing point')
     for index, pose in enumerate(frames):
         restore(armature, pose)
         moment = index/BAKE_FPS
@@ -430,13 +447,13 @@ def stabilize_death_grip(armature, baked, direction):
         rotation = first_rotation.slerp(flat, progress*progress*(3-2*progress)).to_matrix()
         wrist = sum((wrists[min(len(frames)-1, max(0, index+offset))] for offset in range(-6, 7)), Vector())/13
         settle = max(0, min(1, (moment-1.6)/.6))
-        wrist = wrist.lerp(wrists[-1], settle*settle*(3-2*settle))
+        wrist = wrist.lerp(settled, settle*settle*(3-2*settle))
         floor_height = .012-min((rotation @ (GRIP+p)).z for p in SWORD_POINTS)
         wrist.z = max(wrist.z, floor_height)
         shoulder = armature.pose.bones['R_Upperarm'].head.copy()
         solve_arm(armature, 'R', wrist, shoulder+Vector((-.5, 0, .2)))
         hand = armature.pose.bones['R_Hand']
-        hand.matrix = Matrix.Translation(wrist) @ rotation.to_4x4()
+        hand.matrix = Matrix.Translation(hand.head) @ rotation.to_4x4()
         bpy.context.view_layer.update()
         frames[index] = snapshot(armature)
 
