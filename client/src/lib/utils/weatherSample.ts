@@ -1,6 +1,6 @@
 import {
   weather_cloud_factor,
-  weather_game_minutes,
+  weather_day_start_minutes,
   weather_rain_at,
 } from '../wasm/onlinerpg_shared'
 import type { LocalWeather } from '../stores/weatherStore'
@@ -10,22 +10,7 @@ import type { CalendarDate } from './celestialSimulation'
  *  The day index comes from wasm so it cannot drift from the server's. */
 export function gameMinutesAt(date: CalendarDate, gameHour: number): number {
   return (
-    weather_game_minutes(date.year, date.month, date.day, 0, 0) + gameHour * 60
-  )
-}
-
-const PUBLISH_STEP = 0.005
-
-/** Store writes are rate-limited by a deadband, but idle must always land:
- *  a value decaying into the band would otherwise never reach zero. */
-export function weatherChanged(
-  prev: LocalWeather,
-  next: LocalWeather
-): boolean {
-  return (
-    Math.abs(next.rain - prev.rain) > PUBLISH_STEP ||
-    Math.abs(next.cloud - prev.cloud) > PUBLISH_STEP ||
-    (next.rain === 0 && prev.rain !== 0)
+    weather_day_start_minutes(date.year, date.month, date.day) + gameHour * 60
   )
 }
 

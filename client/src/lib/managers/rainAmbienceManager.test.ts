@@ -1,9 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { writable } from 'svelte/store'
 
 vi.mock('./sfxManager', () => ({
-  sfxMuted: writable(false),
-  sfxVolume: writable(1),
+  getSfxMultiplier: () => 1,
 }))
 
 import { stopRainAmbience, updateRainAmbience } from './rainAmbienceManager'

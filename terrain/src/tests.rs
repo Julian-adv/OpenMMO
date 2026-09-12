@@ -543,70 +543,6 @@ fn climate_path_format() {
     );
 }
 
-#[tokio::test]
-async fn climate_write_read_roundtrip() {
-    let dir = unique_temp_dir("climate_roundtrip");
-    let io = crate::io::TerrainIO::new(dir.clone());
-    let data: Vec<u8> = (0..crate::land::REGION_PLOTS)
-        .map(|i| (i % 5) as u8)
-        .collect();
-
-    io.write_climate(-2, 4, &data).await.unwrap();
-    assert_eq!(io.read_climate(-2, 4).await.unwrap(), Some(data));
-    assert_eq!(io.read_climate(0, 0).await.unwrap(), None);
-
-    let _ = tokio::fs::remove_dir_all(&dir).await;
-}
-
-#[tokio::test]
-async fn climate_write_rejects_bad_size_and_bytes() {
-    let io = crate::io::TerrainIO::new(unique_temp_dir("climate_invalid"));
-    let short = vec![0u8; 100];
-    assert_eq!(
-        io.write_climate(0, 0, &short).await.unwrap_err().kind(),
-        std::io::ErrorKind::InvalidData
-    );
-    let mut bad_zone = vec![2u8; crate::land::REGION_PLOTS];
-    bad_zone[7] = 9;
-    assert_eq!(
-        io.write_climate(0, 0, &bad_zone).await.unwrap_err().kind(),
-        std::io::ErrorKind::InvalidData
-    );
-}
-
-#[tokio::test]
-async fn weather_sectors_read_missing_and_present() {
-    let dir = unique_temp_dir("weather_sectors");
-    let io = crate::io::TerrainIO::new(dir.clone());
-    assert_eq!(io.read_weather_sectors().await.unwrap(), None);
-
-    let ws = onlinerpg_shared::weather::WeatherSectors {
-        version: onlinerpg_shared::weather::WEATHER_SECTORS_VERSION,
-        seed: 42,
-        sectors: vec![onlinerpg_shared::weather::Sector {
-            zone: 1,
-            spots: vec![[16.0, -48.0]],
-        }],
-    };
-    tokio::fs::create_dir_all(&dir).await.unwrap();
-    tokio::fs::write(
-        coords::weather_sectors_path(&dir),
-        serde_json::to_vec(&ws).unwrap(),
-    )
-    .await
-    .unwrap();
-    assert_eq!(io.read_weather_sectors().await.unwrap(), Some(ws));
-
-    tokio::fs::write(coords::weather_sectors_path(&dir), b"not json")
-        .await
-        .unwrap();
-    assert_eq!(
-        io.read_weather_sectors().await.unwrap_err().kind(),
-        std::io::ErrorKind::InvalidData
-    );
-    let _ = tokio::fs::remove_dir_all(&dir).await;
-}
-
 /// Share of time a plot in each zone is under rain, from a real bake. Sectors
 /// are placed here from the baked climate files so schedule constants can be
 /// tuned without re-running the world sim:
@@ -618,13 +554,16 @@ async fn weather_zone_shares_from_bake() {
     use onlinerpg_shared::worldgen::weather_sectors::{place_sectors, ClimatePlotGrid};
     let dir =
         std::path::PathBuf::from(std::env::var("WEATHER_BAKE_DIR").expect("WEATHER_BAKE_DIR"));
-    let io = crate::io::TerrainIO::new(dir.clone());
     let mut regions: Vec<(i32, i32, Vec<u8>)> = Vec::new();
     for entry in std::fs::read_dir(dir.join("climate")).unwrap() {
         let name = entry.unwrap().file_name().into_string().unwrap();
         let rx: i32 = name[1..4].parse().unwrap();
         let rz: i32 = name[5..8].parse().unwrap();
-        regions.push((rx, rz, io.read_climate(rx, rz).await.unwrap().unwrap()));
+        regions.push((
+            rx,
+            rz,
+            std::fs::read(coords::climate_path(&dir, rx, rz)).unwrap(),
+        ));
     }
     let rx0 = regions.iter().map(|r| r.0).min().unwrap();
     let rz0 = regions.iter().map(|r| r.1).min().unwrap();

@@ -251,8 +251,15 @@ struct Args {
 
     /// Multiplier on how often rain cells form: 1.0 is the baked schedule,
     /// 0.5 skips half the cycles, 0 turns rain off.
-    #[arg(long, env = "WEATHER_BIAS", default_value_t = 1.0)]
+    #[arg(long, env = "WEATHER_BIAS", default_value_t = 1.0, value_parser = parse_weather_bias)]
     weather_bias: f32,
+}
+
+fn parse_weather_bias(s: &str) -> Result<f32, String> {
+    match s.parse::<f32>() {
+        Ok(v) if v.is_finite() && v >= 0.0 => Ok(v),
+        _ => Err("expected a finite number >= 0".to_string()),
+    }
 }
 
 /// Treat blank CLI/env values as absent: compose `.env` files spell an unset

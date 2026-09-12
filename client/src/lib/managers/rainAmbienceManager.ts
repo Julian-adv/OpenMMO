@@ -1,12 +1,10 @@
-import { get } from 'svelte/store'
-import { sfxMuted, sfxVolume } from './sfxManager'
+import { getSfxMultiplier } from './sfxManager'
 
 // Looping ambience + scheduled one-shots need WebAudio (gain automation,
 // seamless loop), so this runs beside sfxManager but obeys the same
 // SFX volume/mute settings.
 const RAIN_URL = '/sounds/rain-loop.ogg'
 const THUNDER_URL = '/sounds/thunder-distant.ogg'
-const RAIN_BASE_GAIN = 1.0
 const INDOOR_FACTOR = 0.35
 const SMOOTH_RATE = 1.2
 const THUNDER_MIN_INTENSITY = 0.35
@@ -18,6 +16,7 @@ let rainGain: GainNode | null = null
 let thunderBuffer: AudioBuffer | null = null
 let current = 0
 let thunderIn: number | null = null
+let resuming = false
 
 function randBetween([lo, hi]: number[]): number {
   return lo + Math.random() * (hi - lo)
@@ -56,7 +55,7 @@ function init() {
 /** Soft distant rumble: random pitch, muffling, and volume every time. */
 function playThunder(indoor: boolean) {
   if (!audioCtx || !thunderBuffer) return
-  const volume = get(sfxMuted) ? 0 : get(sfxVolume)
+  const volume = getSfxMultiplier()
   if (volume <= 0) return
 
   const src = audioCtx.createBufferSource()
@@ -89,13 +88,14 @@ export function updateRainAmbience(
     init()
   }
   if (!audioCtx || !rainGain) return
-  if (audioCtx.state === 'suspended') void audioCtx.resume()
+  if (audioCtx.state === 'suspended' && !resuming) {
+    resuming = true
+    audioCtx.resume().finally(() => (resuming = false))
+  }
 
   const k = Math.min(1, SMOOTH_RATE * dtSec)
   current += (target - current) * k
-
-  const volume = get(sfxMuted) ? 0 : get(sfxVolume)
-  rainGain.gain.value = current * RAIN_BASE_GAIN * volume
+  rainGain.gain.value = current * getSfxMultiplier()
 
   if (intensity > THUNDER_MIN_INTENSITY) {
     if (thunderIn === null) {
@@ -120,4 +120,5 @@ export function stopRainAmbience() {
   thunderBuffer = null
   current = 0
   thunderIn = null
+  resuming = false
 }

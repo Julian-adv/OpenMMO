@@ -588,43 +588,6 @@ impl TerrainIO {
         write_terrain_file(&coords::land_grade_path(&self.base_dir, rx, rz), data).await
     }
 
-    pub async fn read_climate(&self, rx: i32, rz: i32) -> std::io::Result<Option<Vec<u8>>> {
-        match fs::read(coords::climate_path(&self.base_dir, rx, rz)).await {
-            Ok(data) if data.len() == crate::land::REGION_PLOTS => Ok(Some(data)),
-            Ok(_) => Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("climate ({rx}, {rz}): wrong size"),
-            )),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-
-    pub async fn write_climate(&self, rx: i32, rz: i32, data: &[u8]) -> std::io::Result<()> {
-        if data.len() != crate::land::REGION_PLOTS
-            || data
-                .iter()
-                .any(|&c| onlinerpg_shared::worldgen::climate::Climate::try_from(c).is_err())
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                "climate: expected one valid zone byte per plot",
-            ));
-        }
-        write_terrain_file(&coords::climate_path(&self.base_dir, rx, rz), data).await
-    }
-
-    pub async fn read_weather_sectors(
-        &self,
-    ) -> std::io::Result<Option<onlinerpg_shared::weather::WeatherSectors>> {
-        match self.read_weather_sectors_bytes().await? {
-            Some(data) => serde_json::from_slice(&data)
-                .map(Some)
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
-            None => Ok(None),
-        }
-    }
-
     pub async fn read_weather_sectors_bytes(&self) -> std::io::Result<Option<Vec<u8>>> {
         match fs::read(coords::weather_sectors_path(&self.base_dir)).await {
             Ok(data) => Ok(Some(data)),

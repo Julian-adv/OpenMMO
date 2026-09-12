@@ -150,8 +150,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v68: consignment stalls replace the stall entry to player trades.
 /// v69: persistent item locks and SetItemLocked.
 /// v70: mounted reverse recovery and authoritative recovery progress;
-///      `ServerMessage::WeatherSync` (seed + bias for the regional rain
-///      cells, doc/WEATHER_SYSTEM.md); an older client cannot decode it.
+///      `ServerMessage::WeatherSync` (seed, bias and sector tag for the
+///      regional rain cells, doc/WEATHER_SYSTEM.md); an older client cannot
+///      decode it.
 pub const PROTOCOL_VERSION: u32 = 70;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by

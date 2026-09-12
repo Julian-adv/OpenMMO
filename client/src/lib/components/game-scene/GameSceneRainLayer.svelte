@@ -2,6 +2,7 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import {
+    createParticleInstancedMesh,
     createWindParticleMaterial,
     PARTICLE_OPACITY_ATTR,
   } from '../../shaders/wind-particle-material'
@@ -129,7 +130,6 @@
   const rainGroup = new THREE.Group()
   let streakMesh: THREE.InstancedMesh | null = null
   let splashMesh: THREE.InstancedMesh | null = null
-  let initialized = false
   let dropsAlive = 0
   let splashesAlive = 0
   let spawnAccumulator = 0
@@ -140,32 +140,20 @@
     height: number,
     count: number
   ): THREE.InstancedMesh {
-    const geom = new THREE.PlaneGeometry(width, height)
-    geom.setAttribute(
-      PARTICLE_OPACITY_ATTR,
-      new THREE.InstancedBufferAttribute(new Float32Array(count), 1)
-    )
-    const mesh = new THREE.InstancedMesh(
-      geom,
+    return createParticleInstancedMesh(
       createWindParticleMaterial(tex),
+      width,
+      height,
       count
     )
-    mesh.frustumCulled = false
-    mesh.castShadow = false
-    mesh.receiveShadow = false
-    const zeroMat = new THREE.Matrix4().makeScale(0, 0, 0)
-    for (let i = 0; i < count; i++) mesh.setMatrixAt(i, zeroMat)
-    return mesh
   }
 
-  function init(): boolean {
-    if (initialized) return true
+  function init() {
+    if (streakMesh) return
     streakMesh = createPooledMesh(createStreakTexture(), 0.03, 0.42, MAX_DROPS)
     splashMesh = createPooledMesh(createSplashTexture(), 0.3, 0.3, MAX_SPLASHES)
     splashMesh.renderOrder = 1
     streakMesh.renderOrder = 2
-    initialized = true
-    return true
   }
 
   export function getGroup(): THREE.Group {
@@ -223,7 +211,7 @@
     s.alive = true
   }
 
-  /** Called from GameScene's game loop. `intensity` 0..1 gates spawning. */
+  /** `intensity` 0..1 gates spawning. */
   export function update(
     deltaTime: number,
     camera: THREE.Camera | undefined,
@@ -232,11 +220,9 @@
     if (!camera) return
     if (intensity <= 0 && dropsAlive === 0 && splashesAlive === 0) {
       spawnAccumulator = 0
-      if (streakMesh?.parent) rainGroup.remove(streakMesh)
-      if (splashMesh?.parent) rainGroup.remove(splashMesh)
       return
     }
-    if (!init()) return
+    init()
 
     const dt = Math.min(deltaTime / 1000, 0.1)
     tmpQuat.copy(camera.quaternion)
@@ -252,7 +238,6 @@
       spawnAccumulator = 0
     }
 
-    // Streaks
     const streakOpacity = streakMesh!.geometry.getAttribute(
       PARTICLE_OPACITY_ATTR
     ) as THREE.InstancedBufferAttribute
@@ -284,7 +269,6 @@
       streakMesh!.setMatrixAt(i, tmpMatrix)
     }
 
-    // Splashes: quick expanding ring lying flat on the ground
     const splashOpacity = splashMesh!.geometry.getAttribute(
       PARTICLE_OPACITY_ATTR
     ) as THREE.InstancedBufferAttribute
@@ -310,26 +294,24 @@
       splashMesh!.setMatrixAt(i, tmpMatrix)
     }
 
-    const prevD = dropsAlive
-    const prevS = splashesAlive
     dropsAlive = aliveD
     splashesAlive = aliveS
+    syncMesh(streakMesh!, streakOpacity, aliveD)
+    syncMesh(splashMesh!, splashOpacity, aliveS)
+  }
 
-    if (aliveD > 0) {
-      streakMesh!.instanceMatrix.needsUpdate = true
-      streakOpacity.needsUpdate = true
-      if (streakMesh!.parent) rainGroup.remove(streakMesh!)
-      rainGroup.add(streakMesh!)
-    } else if (prevD > 0 && streakMesh!.parent) {
-      rainGroup.remove(streakMesh!)
-    }
-    if (aliveS > 0) {
-      splashMesh!.instanceMatrix.needsUpdate = true
-      splashOpacity.needsUpdate = true
-      if (splashMesh!.parent) rainGroup.remove(splashMesh!)
-      rainGroup.add(splashMesh!)
-    } else if (prevS > 0 && splashMesh!.parent) {
-      rainGroup.remove(splashMesh!)
+  /** An empty pool leaves the group so it costs no draw call. */
+  function syncMesh(
+    mesh: THREE.InstancedMesh,
+    opacity: THREE.InstancedBufferAttribute,
+    alive: number
+  ) {
+    if (alive > 0) {
+      mesh.instanceMatrix.needsUpdate = true
+      opacity.needsUpdate = true
+      if (!mesh.parent) rainGroup.add(mesh)
+    } else if (mesh.parent) {
+      rainGroup.remove(mesh)
     }
   }
 </script>

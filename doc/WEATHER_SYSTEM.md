@@ -1,8 +1,7 @@
 # Weather System
 
-Status: design, implementation in progress on `feature/weather-system`; the
-proposal goes upstream once it is built and tested. Supersedes the
-moving-cloud draft of 2026-08-08.
+Shipped with PR #173 (2026-09-12). Supersedes the moving-cloud draft of
+2026-08-08.
 
 ## Goal
 
@@ -159,8 +158,8 @@ fetching the sector list into wasm when the sync carries a tag it has not
 loaded; a reconnect with the same tag fetches nothing. The per-plot climate
 route has no client reader yet; a climate map layer can add one modelled on
 `landGradeStore.ts`. The rain function is called through wasm
-(`weather_set_sectors`, `weather_game_minutes`, `weather_cells_at`,
-`weather_rain_at`, `weather_cloud_factor`) — the client never re-implements
+(`weather_set_sectors`, `weather_day_start_minutes`, `weather_rain_at`,
+`weather_cloud_factor`) — the client never re-implements
 it, and even the game-minute conversion stays in Rust so `t` cannot drift a
 day from the server's. Per-frame local sample drives:
 
@@ -185,15 +184,6 @@ discs in the atlas pass, a slider that evaluates the same function at a later
 time) was prototyped and works, but it is held back until there is a
 gameplay reason for players to read the weather ahead.
 
-## Phases
-
-| Phase | Scope | Tier |
-|---|---|---|
-| A | climate bake + shared cell function + WeatherSync + stores + lighting | T2 |
-| B | rain layer + preset flag + ambience (port from `experiment/rain-prototype`) | T1–T2 |
-| C | map overlay + forecast scrub — prototyped, held back until a gameplay reason exists | later |
-| D | storms: a rare oversized cell (10–15 km, 1–2 real hours) from its own sector so it spans zones, with slanted rain, lightning, and a wind boost — still a pure function, so the map forecasts landfall; snow on the alpine zone once a snow region is decided; wetness (campfire/hunger); fishing tables; wet/dry seasons by scaling `P` with the 360-day year in `celestial.rs`; `/weather` override | separate proposals |
-
 ## Test plan
 
 - Unit: determinism (fixed seed → golden cells), one-cell-per-sector invariant
@@ -203,14 +193,7 @@ gameplay reason for players to read the weather ahead.
 - Bake: every settlement in `data/map_labels.json` lands on a land zone;
   sea plots are zone 0.
 - Protocol: `WeatherSync` round-trip through the codec.
-- Client: store updates, lighting multiplier applied, idle deadband, rain
-  ambience lifecycle.
+- Client: store updates, lighting multiplier applied, rain ambience
+  lifecycle.
 - Live E2E: stand in a cell as it forms; dim, particles and sound rise
   together and settle back to idle.
-
-## Questions for the maintainer (with the proposal)
-
-1. Existing plans for weather? Intentionally omitted?
-2. Zones baked from elevation vs hand-placed anchors like `land_grades.rs`.
-3. v1 scope confirmation (dim + rain + sound with distant thunder; no snow or lightning visuals yet).
-4. Whether and when a map forecast is wanted (world map, minimap, or neither).

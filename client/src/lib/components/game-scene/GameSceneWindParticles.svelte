@@ -3,6 +3,7 @@
   import * as THREE from 'three'
   import type { WindState } from '../../shaders/grass-material'
   import {
+    createParticleInstancedMesh,
     createWindParticleMaterial,
     loadDandelionSeedTexture,
     loadGrassLeafTexture,
@@ -96,29 +97,11 @@
   let grassLeafAlive = 0
   let petalAlive = 0
 
-  function createParticleMesh(
+  const createParticleMesh = (
     material: THREE.Material,
     width: number,
     height: number
-  ): THREE.InstancedMesh {
-    const geom = new THREE.PlaneGeometry(width, height)
-    geom.setAttribute(
-      PARTICLE_OPACITY_ATTR,
-      new THREE.InstancedBufferAttribute(new Float32Array(MAX_PER_TYPE), 1)
-    )
-
-    const mesh = new THREE.InstancedMesh(geom, material, MAX_PER_TYPE)
-    mesh.frustumCulled = false
-    mesh.castShadow = false
-    mesh.receiveShadow = false
-
-    const zeroMat = new THREE.Matrix4().makeScale(0, 0, 0)
-    for (let i = 0; i < MAX_PER_TYPE; i++) {
-      mesh.setMatrixAt(i, zeroMat)
-    }
-
-    return mesh
-  }
+  ) => createParticleInstancedMesh(material, width, height, MAX_PER_TYPE)
 
   /** Lazy init — material + mesh creation deferred to first spawn. */
   function init(): boolean {

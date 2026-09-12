@@ -1,24 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('../wasm/onlinerpg_shared', () => ({
-  weather_game_minutes: vi.fn(
-    (year: number, month: number, day: number, hour: number, minute: number) =>
-      (year - 217) * 360 * 1440 +
-      (month - 1) * 30 * 1440 +
-      (day - 1) * 1440 +
-      hour * 60 +
-      minute
+  weather_day_start_minutes: vi.fn(
+    (year: number, month: number, day: number) =>
+      (year - 217) * 360 * 1440 + (month - 1) * 30 * 1440 + (day - 1) * 1440
   ),
   weather_rain_at: vi.fn(() => 0.6),
   weather_cloud_factor: vi.fn((rain: number) => rain * 0.5),
 }))
 
 import { weather_rain_at } from '../wasm/onlinerpg_shared'
-import {
-  gameMinutesAt,
-  sampleLocalWeather,
-  weatherChanged,
-} from './weatherSample'
+import { gameMinutesAt, sampleLocalWeather } from './weatherSample'
 
 describe('weatherSample', () => {
   it('adds the fractional game hour to the day from wasm', () => {
@@ -37,20 +29,5 @@ describe('weatherSample', () => {
     )
     expect(weather_rain_at).toHaveBeenCalledWith(42, 1, 720, 100, -50)
     expect(sample).toEqual({ rain: 0.6, cloud: 0.3 })
-  })
-
-  it('publishes past the deadband and always lands on idle', () => {
-    expect(
-      weatherChanged({ rain: 0.5, cloud: 0 }, { rain: 0.503, cloud: 0 })
-    ).toBe(false)
-    expect(
-      weatherChanged({ rain: 0.5, cloud: 0 }, { rain: 0.51, cloud: 0 })
-    ).toBe(true)
-    expect(
-      weatherChanged({ rain: 0.004, cloud: 0 }, { rain: 0, cloud: 0 })
-    ).toBe(true)
-    expect(weatherChanged({ rain: 0, cloud: 0 }, { rain: 0, cloud: 0 })).toBe(
-      false
-    )
   })
 })
