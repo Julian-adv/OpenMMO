@@ -118,6 +118,14 @@ weapon.scene.position.set(
 )
 handBone.add(weapon.scene)
 
+for (const [name, clip] of clips) {
+  for (let frame = 0; frame <= Math.ceil(clip.duration * 120); frame++) {
+    sample(name, Math.min(frame / 120, clip.duration))
+    const bounds = new THREE.Box3().setFromObject(weapon.scene, true)
+    assert.ok(bounds.min.y >= -0.015, `${name}: morningstar penetrates the ground`)
+  }
+}
+
 const attack = definition.animAttack
 const ready = sample(attack, 0)
 const impact = sample(attack, definition.attackImpactDelay / 1000)

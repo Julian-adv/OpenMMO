@@ -20,6 +20,11 @@
   - 기존 `morningstar` 아이템 모델을 `R_Hand`에 장착하고 손 가중치 정점의 중심에 맞춰 본 로컬 오프셋을
     Y 0.103m·X 0.02m·Z -0.004m로 지정했다. 무기 자체의 출처와 라이선스는
     [items.md의 morningstar](items.md) 기록을 따른다.
+  - 무기 접지 보정 (2026-09-12): Attack·Death에서 모닝스타의 실제 정점을 기준으로 오른손 손목 회전을 보정해
+    지면 관통을 방지한다. 보정은 주변 6프레임에 완만하게 이어지며 .blend와 게임 GLB에 베이크한다.
+    검증기는 무기를 부착한 상태로 모든 클립을 120fps로 검사한다.
+  - 사망음은 기존 `skeleton-death.ogg`를 재사용하고, 갑옷 피격은 `metal-hit.ogg`를 사용한다
+    ([효과음 출처](sfx.md)).
   - 정예 일반 몬스터 능력치는 레벨 22, 체력 260, guard 30, 피해 5d12. 던전 출현 설정은 비워 두며
     관리자가 추후 배치한다. `material=metal`, `corpseAutoGround=false`.
 - skeleton — Tripo Pro (유료), 사용자 생성일 2026-09-11.

@@ -28,6 +28,11 @@ and thunder scheduling), which follows the same SFX volume/mute settings as
 
 ## Combat
 
+- metal-hit.ogg — 금속 갑옷 피격음 (`metal` / `wood` → `metal`).
+  ElevenLabs Sound Effects API, Starter 유료 플랜으로 2026-09-12 직접 생성.
+  유료 플랜 상업 이용 라이선스 적용. `tools/gen-death-sfx.py`의 `metal_hit`,
+  0.7초·prompt_influence 0.6·1테이크. 원본은 `assets/skeleton_warrior/sfx/metal-hit.mp3`에 보관.
+  44.1 kHz 모노 Ogg q5, 피크 −3 dB, 100 ms 테일 페이드로 가공.
 - sword-leather.ogg, sword-miss3.ogg — predate this file; provenance not
   recorded here. Mapped in `data/material-impact-sounds.json`.
 - sword-flesh4.ogg — sword cutting into a fleshy monster (`metal` → `flesh`:
@@ -54,6 +59,20 @@ and thunder scheduling), which follows the same SFX volume/mute settings as
 - sword-flesh3.ogg — **[미사용]** replaced by sword-flesh4.ogg on 2026-08-22.
 
 ## Monsters
+
+- skeleton-death.ogg — 스켈레톤 사망 시 뼈가 파사삭 부서져 바닥에 흩어지는 소리.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-12 생성
+  (Starter 유료 플랜, 직접 생성; [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform)).
+  `tools/gen-death-sfx.py`의 `skeleton_death`, 1.5초·prompt_influence 0.6·2테이크 중 2번 사용.
+  원본은 `~/assets_original/sfx/skeleton-death_take2_2026-09-12.mp3`에 보관.
+  디코딩 피크 초과를 막기 위해 float PCM에 −7 dB를 먼저 적용한 뒤 `tools/trim-sfx.py`로
+  1.25초·100 ms 테일 페이드·피크 −3 dB·44.1 kHz 모노 Ogg q5로 가공.
+  프롬프트: "A dry skeleton suddenly crumbling into a loose pile of bones: an immediate brittle
+  crack followed by a fast cascading clatter of many small hollow bone fragments,
+  a crisp papery crunch and skittering rattle as the pieces scatter and settle on
+  a stone floor. One short continuous collapse, starting immediately and fading
+  naturally to silence. Close, dry game sound effect, no voice, no music, no flesh,
+  no metal, no glass, no explosion, no reverb."
 
 - kobold-death.ogg — kobold death groan, generated with
   [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) on

@@ -6,11 +6,13 @@ import statistics
 import sys
 
 import bpy
-from mathutils import Matrix, Vector
+import numpy as np
+from mathutils import Matrix, Quaternion, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 FPS = 24
 HEIGHT = 1.9
+WEAPON_OFFSET = Vector((0.02, 0.103, -0.004))
 MAPPING = {
     "Hip": "Hips",
     "Pelvis": "Hips",
@@ -68,6 +70,52 @@ def bounds(mesh):
         (min(point[axis] for point in points), max(point[axis] for point in points))
         for axis in range(3)
     ]
+
+
+def weapon_points():
+    before = set(bpy.data.objects)
+    bpy.ops.import_scene.gltf(
+        filepath=str(ROOT / "client/public/models/weapons/morningstar.glb")
+    )
+    imported = set(bpy.data.objects) - before
+    points = []
+    for obj in imported:
+        if obj.type != "MESH":
+            continue
+        for vertex in obj.data.vertices:
+            point = obj.matrix_world @ vertex.co
+            points.append(Vector((point.x, point.z, -point.y)) + WEAPON_OFFSET)
+    for obj in imported:
+        bpy.data.objects.remove(obj, do_unlink=True)
+    return np.array(points)
+
+
+def ground_weapon(armature, frames, points, direction):
+    angles = []
+    for pose in frames:
+        restore(armature, pose)
+        matrix = armature.pose.bones["R_Hand"].matrix.copy()
+
+        def clearance(angle):
+            rotation = Matrix.Rotation(direction * angle, 4, "Y")
+            world = armature.matrix_world @ matrix @ rotation
+            return np.min(points @ np.array(world[2][:3])) + world[2][3]
+
+        angle = 0.0
+        while clearance(angle) < 0.025:
+            angle += math.radians(1)
+            if angle > math.pi:
+                raise ValueError("Cannot ground the morningstar with a wrist rotation")
+        angles.append(angle)
+    for index, pose in enumerate(frames):
+        restore(armature, pose)
+        angle = max(
+            value * max(0, 1 - abs(index - neighbor) / 6) ** 2
+            for neighbor, value in enumerate(angles)
+        )
+        bone = armature.pose.bones["R_Hand"]
+        bone.rotation_quaternion @= Quaternion((0, 1, 0), direction * angle)
+        frames[index] = snapshot(armature)
 
 
 def load_motion(path, target):
@@ -253,6 +301,9 @@ def main():
         baked[name], report[name] = retarget(
             armature, mesh, rest_pose, source_rest, frames, factor, name
         )
+    points = weapon_points()
+    ground_weapon(armature, baked["Attack"], points, -1)
+    ground_weapon(armature, baked["Death"], points, 1)
     for action in list(bpy.data.actions):
         bpy.data.actions.remove(action)
     actions = {}

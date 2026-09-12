@@ -8,6 +8,12 @@ Candidates land in sfx-candidates/<subject>-<n>.mp3 (gitignored).
 import argparse, json, os, pathlib, sys, time, urllib.request
 
 PROMPTS = {
+    "metal_hit": (
+        'A single steel weapon striking a worn iron breastplate: an immediate hard '
+        'dry metallic clang with a short rattling ring of loose armor plates. One '
+        'crisp close-up melee hit, under one second. No voice, no music, no rock '
+        'debris, no reverb, no repeated hits.'
+    ),
     "orc": "The short, guttural death roar of an orc warrior cut down by a sword in battle",
     "orc_female": "A woman's very short, sharp, high-pitched death scream, a single shrill feminine cry less than half a second long, cut off instantly as a sword strikes her down. Clearly a female human-like voice, high soprano pitch, no growl, no male voice, no music.",
     "hobgoblin": "The harsh, guttural death cry of a hobgoblin soldier felled by a sword: a rough snarling humanoid war-cry choking off as he falls. Voice only, no dog, no barking, no animal, no music.",
@@ -22,6 +28,14 @@ PROMPTS = {
     "player_death_male": "A young male warrior's short agonized death scream as a sword strikes him down, a single hoarse cry cut off abruptly as he falls. Human voice only, no music, no reverb.",
     "sword_stone": "A steel sword blade striking a stone golem: a hard metallic clang ringing off solid rock with a short spray of stone chips and grit. Impact only, no voice, no music.",
     "sword_flesh": "A sword blade cutting deep into a huge fleshy monster: a heavy wet meaty thud with a thick tearing of flesh. Impact only, no voice, no music.",
+    "skeleton_death": (
+        "A dry skeleton suddenly crumbling into a loose pile of bones: an immediate brittle "
+        "crack followed by a fast cascading clatter of many small hollow bone fragments, "
+        "a crisp papery crunch and skittering rattle as the pieces scatter and settle on "
+        "a stone floor. One short continuous collapse, starting immediately and fading "
+        "naturally to silence. Close, dry game sound effect, no voice, no music, no flesh, "
+        "no metal, no glass, no explosion, no reverb."
+    ),
     "scp939": "The wet, distorted death shriek of a fleshy eyeless monster, unnatural and wrong",
 }
 
