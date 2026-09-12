@@ -446,6 +446,7 @@ fn resolve_from_registry(npc: &mut NpcConfig) -> anyhow::Result<()> {
 pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
     use onlinerpg_shared::ServerMessage;
     match msg {
+        ServerMessage::EquipmentEnchantSucceeded { .. } => "EquipmentEnchantSucceeded",
         ServerMessage::AuthSuccess { .. } => "AuthSuccess",
         ServerMessage::AuthError { .. } => "AuthError",
         ServerMessage::JoinSuccess { .. } => "JoinSuccess",

@@ -119,6 +119,7 @@
     torchLightEnabled,
   } from '../stores/debugStore'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
+  import { PlayerEffectAnchors } from '../utils/playerEffectAnchors'
   import type { WindState } from '../shaders/grass-material'
   import {
     attachCapeFit,
@@ -380,6 +381,7 @@
   let ringPos = $state<{ x: number; y: number; z: number } | null>(null)
 
   let clonedScene: THREE.Object3D | null = null
+  let effectAnchors: PlayerEffectAnchors | null = null
   let validAnimations = $state<THREE.AnimationClip[]>([])
   const validAnimationsByName = $derived(
     new Map<string, THREE.AnimationClip>(
@@ -1210,6 +1212,7 @@
 
       clonedScene = cloned
       modelRoot = newModelRoot
+      effectAnchors = new PlayerEffectAnchors(cloned)
 
       if (isCurrentPlayer) {
         const rightHand = findBoneByName(cloned, 'RightHand')
@@ -1238,6 +1241,7 @@
         modelRoot = null
       }
       clonedScene = null
+      effectAnchors = null
       attachedWeaponItemId = null
       attachedOffhandItemId = null
       musicPropObject = null
@@ -1253,6 +1257,16 @@
 
   export function getModelGroup() {
     return modelGroup
+  }
+
+  export function getEnchantAnchor(weapon: boolean, target: THREE.Vector3) {
+    return (
+      effectAnchors?.getWorldPosition(
+        weapon,
+        mainHandBoneFor(equippedMainHandItemId),
+        target
+      ) ?? false
+    )
   }
 
   export function getHoverMeshGroup() {

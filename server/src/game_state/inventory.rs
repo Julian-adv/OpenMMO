@@ -1544,7 +1544,7 @@ impl super::GameState {
             (rng.gen_range(0..ENCHANT_BP_SCALE), rng.gen::<u64>())
         };
 
-        let (snapshot, message, enchant_log, scroll_def) = {
+        let (snapshot, message, enchant_log, scroll_def, success) = {
             let mut inventories = self.inventories.write().await;
             let inv = match inventories.get_mut(player_id) {
                 Some(inv) => inv,
@@ -1573,7 +1573,8 @@ impl super::GameState {
 
             let item = inv.equipped.get_mut(&slot).expect("the selector found it");
             let name = self.item_name(&item.item_def_id);
-            let (message, enchant_log) = if roll_bp >= (scroll.ladder)(item.enchant) {
+            let success = roll_bp < (scroll.ladder)(item.enchant);
+            let (message, enchant_log) = if !success {
                 let log = format!(
                     "destroyed {} enchanting at +{}",
                     item.item_def_id, item.enchant
@@ -1607,7 +1608,13 @@ impl super::GameState {
                     format!("enchanted {} to +{}", item.item_def_id, item.enchant),
                 )
             };
-            (inv.clone(), message, enchant_log, scroll_def)
+            (
+                inv.clone(),
+                message,
+                enchant_log,
+                scroll_def,
+                success.then_some(slot == EquipSlot::MainHand),
+            )
         };
 
         let name = actor.name;
@@ -1623,6 +1630,21 @@ impl super::GameState {
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.send_system_message(player_id, message).await;
+        if let Some(weapon) = success {
+            if let Some((position, _, floor_level, _)) = self.player_pose(player_id).await {
+                self.send_direct_message_to_players_within_position(
+                    &position,
+                    floor_level,
+                    super::EVENT_DELIVERY_RADIUS,
+                    ServerMessage::EquipmentEnchantSucceeded {
+                        player_id: *player_id,
+                        weapon,
+                    },
+                    None,
+                )
+                .await;
+            }
+        }
     }
 
     /// Display name for an item def, falling back to the raw id.
