@@ -375,6 +375,7 @@ pub struct GameState {
     id_state: Arc<RwLock<IdState>>,
     account_sessions: Arc<RwLock<HashMap<String, AccountSession>>>,
     account_activities: Arc<RwLock<HashMap<PlayerId, crate::metrics::AccountActivity>>>,
+    pending_weapon_enchant_failures: Arc<RwLock<Vec<crate::metrics::WeaponEnchantFailure>>>,
     pending_gold_sources:
         Arc<RwLock<HashMap<(i64, crate::metrics::GoldSource), crate::metrics::GoldSourceRecord>>>,
     pending_gold_sinks:
@@ -705,6 +706,7 @@ impl GameState {
             account_sessions: Arc::new(RwLock::new(HashMap::new())),
             account_activities: Arc::new(RwLock::new(HashMap::new())),
             pending_gold_sources: Arc::new(RwLock::new(HashMap::new())),
+            pending_weapon_enchant_failures: Arc::new(RwLock::new(Vec::new())),
             pending_gold_sinks: Arc::new(RwLock::new(HashMap::new())),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),

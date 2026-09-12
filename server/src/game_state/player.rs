@@ -737,6 +737,7 @@ impl super::GameState {
             .await;
         self.flush_gold_sinks(auth, crate::auth::unix_now(), true)
             .await;
+        self.flush_weapon_enchant_failures(auth).await;
     }
 
     async fn collect_shutdown_snapshot(
@@ -783,6 +784,7 @@ impl super::GameState {
     /// logout's save.
     pub async fn flush_dirty_saves(&self, auth: &AuthService) {
         let _persistence = self.persistence_lock.lock().await;
+        self.flush_weapon_enchant_failures(auth).await;
 
         let (dirty_player_ids, dirty_states) = self.collect_dirty_character_states().await;
         let (dirty_inventory_ids, dirty_inventories) = self.collect_dirty_inventory_states().await;

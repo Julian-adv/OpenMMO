@@ -1,4 +1,6 @@
 use crate::types::{CharacterAttributes, GameDateTime};
+#[path = "auth_enchant_failures.rs"]
+mod enchant_failures;
 #[path = "auth_estate_storage.rs"]
 mod estate_storage;
 pub(crate) use estate_storage::EstateDeposit;
@@ -693,6 +695,7 @@ impl AuthService {
         Self::ensure_level_history_schema(&conn)?;
         Self::ensure_gold_history_schema(&conn)?;
         Self::ensure_weapon_enchant_history_schema(&conn)?;
+        Self::ensure_weapon_enchant_failures_schema(&conn)?;
         Self::ensure_armor_enchant_history_schema(&conn)?;
         Self::ensure_land_history_schema(&conn)?;
 

@@ -84,6 +84,11 @@ async fn enchant_scroll_enchants_wielded_weapon() {
     let weapon = inv.equipped.get(&EquipSlot::MainHand).unwrap();
     assert_eq!(weapon.enchant, 1);
     assert!(inv.bag.is_empty(), "the scroll and the oil should be spent");
+    assert!(game_state
+        .pending_weapon_enchant_failures
+        .read()
+        .await
+        .is_empty());
 }
 
 #[tokio::test]
@@ -307,11 +312,21 @@ async fn enchant_armor_scroll_destroys_over_enchanted_armor() {
             .await;
 
     let reader = pid("reader");
+    game_state
+        .player_characters
+        .write()
+        .await
+        .insert(reader, (1, 0, attrs_with_cha(10)));
     for _ in 0..100 {
         game_state.use_item(&reader, SCROLL_ID).await;
         let inv = game_state.get_player_inventory(&reader).await.unwrap();
         if !inv.equipped.contains_key(&EquipSlot::Chest) {
-            return; // evaporated, as expected
+            assert!(game_state
+                .pending_weapon_enchant_failures
+                .read()
+                .await
+                .is_empty());
+            return;
         }
     }
     panic!("the armor should have evaporated within 100 reads at 99% odds");
@@ -320,9 +335,7 @@ async fn enchant_armor_scroll_destroys_over_enchanted_armor() {
 #[tokio::test]
 async fn enchant_scroll_destroys_over_enchanted_weapon() {
     let game_state = make_test_game_state("enchant_boom");
-    // At +12 the success floor is 1%, so each read is a 99% destruction
-    // roll. 100 scrolls make survival odds ~1e-200: the loop below is
-    // deterministic for all practical purposes.
+    // Surviving 100 attempts at +12 has probability about 1e-200.
     let _rx = setup_weapon_enchant_reader(&game_state, Some(("iron_sword", 12)), 100).await;
 
     let reader = pid("reader");
@@ -381,4 +394,103 @@ async fn each_reading_burns_one_flask_of_oil() {
         .find(|item| item.item_def_id == "whetstone_oil")
         .expect("the oil stack should survive a single reading");
     assert_eq!(oil.quantity, 2, "one flask per reading");
+}
+
+#[tokio::test]
+async fn weapon_enchant_failures_record_each_loss_and_exclude_official_npcs() {
+    for official_npc in [false, true] {
+        let game = make_test_game_state("enchant_failure_events");
+        let reader = pid("reader");
+        for enchant in [8, 7] {
+            let _rx = setup_weapon_enchant_reader(&game, Some(("iron_sword", enchant)), 100).await;
+            game.player_characters
+                .write()
+                .await
+                .insert(reader, (1, 0, attrs_with_cha(10)));
+            game.players
+                .write()
+                .await
+                .get_mut(&reader)
+                .unwrap()
+                .is_official_npc = official_npc;
+            for attempt in 0..100 {
+                game.use_item(&reader, SCROLL_ID).await;
+                let mut inventories = game.inventories.write().await;
+                let inv = inventories.get_mut(&reader).unwrap();
+                let Some(weapon) = inv.equipped.get_mut(&EquipSlot::MainHand) else {
+                    break;
+                };
+                assert!(
+                    attempt < 99,
+                    "weapon should be destroyed within 100 attempts"
+                );
+                weapon.enchant = enchant;
+            }
+        }
+        let failures = game.pending_weapon_enchant_failures.read().await;
+        if official_npc {
+            assert!(failures.is_empty());
+        } else {
+            assert_eq!(failures.len(), 2);
+            assert_eq!(
+                failures
+                    .iter()
+                    .map(|event| event.enchant)
+                    .collect::<Vec<_>>(),
+                [8, 7]
+            );
+            assert_ne!(failures[0].id, failures[1].id);
+            for failure in failures.iter() {
+                assert_eq!(failure.character_id, 1);
+                assert_eq!(failure.name, "reader");
+                assert_eq!(failure.item_def_id, "iron_sword");
+                assert_eq!(failure.item_name, game.item_name("iron_sword"));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn weapon_enchant_failures_retry_saves_after_character_leaves() {
+    let game = make_test_game_state("enchant_failure_retry");
+    let path = crate::test_util::unique_temp_dir("enchant_failure_retry").join("game.db");
+    let auth = crate::auth::AuthService::new(path.clone()).unwrap();
+    let conn = rusqlite::Connection::open(path).unwrap();
+    conn.execute(
+        "ALTER TABLE weapon_enchant_failures RENAME TO saved_failures",
+        [],
+    )
+    .unwrap();
+    let failure = crate::metrics::WeaponEnchantFailure {
+        id: "retry-event".into(),
+        timestamp: crate::auth::unix_now(),
+        character_id: 1,
+        name: "departed reader".into(),
+        item_def_id: "iron_sword".into(),
+        item_name: "Iron Sword".into(),
+        enchant: 8,
+    };
+    game.pending_weapon_enchant_failures
+        .write()
+        .await
+        .push(failure.clone());
+    game.flush_dirty_saves(&auth).await;
+    assert_eq!(
+        game.pending_weapon_enchant_failures.read().await.as_slice(),
+        std::slice::from_ref(&failure)
+    );
+    conn.execute(
+        "ALTER TABLE saved_failures RENAME TO weapon_enchant_failures",
+        [],
+    )
+    .unwrap();
+    game.flush_dirty_saves(&auth).await;
+    game.flush_dirty_saves(&auth).await;
+    assert!(game.pending_weapon_enchant_failures.read().await.is_empty());
+    let result = auth
+        .weapon_enchant_failures(crate::auth::unix_now())
+        .unwrap();
+    assert_eq!(result.entries.len(), 1);
+    assert_eq!(result.entries[0].latest, failure);
+    assert_eq!(result.entries[0].failure_count, 1);
 }

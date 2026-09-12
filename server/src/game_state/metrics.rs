@@ -6,6 +6,24 @@ use crate::types::{ClientKind, PlayerId};
 use tracing::warn;
 
 impl super::GameState {
+    pub(crate) async fn flush_weapon_enchant_failures(&self, auth: &AuthService) {
+        let failures = std::mem::take(&mut *self.pending_weapon_enchant_failures.write().await);
+        if failures.is_empty() {
+            return;
+        }
+        let saved = failures.clone();
+        let auth = auth.clone();
+        if let Err(error) =
+            super::auth_db(move || auth.record_weapon_enchant_failures(&saved)).await
+        {
+            warn!("Weapon enchant failure save failed: {error}");
+            self.pending_weapon_enchant_failures
+                .write()
+                .await
+                .splice(0..0, failures);
+        }
+    }
+
     pub(super) async fn record_gold_sink(&self, sink: GoldSink, quantity: u32, gold: i64) {
         let now = unix_now();
         let timestamp = now - now.rem_euclid(crate::metrics::SAMPLE_INTERVAL_SECONDS);

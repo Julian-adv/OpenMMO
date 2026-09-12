@@ -10,6 +10,8 @@
   import GoldSinksPanel from './lib/GoldSinksPanel.svelte'
   import { parseGoldSinks } from './lib/goldSinks'
   import LeaderboardSection from './lib/LeaderboardSection.svelte'
+  import WeaponEnchantFailuresPanel from './lib/WeaponEnchantFailuresPanel.svelte'
+  import { parseWeaponEnchantFailures } from './lib/weaponEnchantFailures'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
@@ -41,13 +43,14 @@
   const goldLeaderboard = createMetricsResource(() => goldLeaderboardHours, 'gold-leaderboard', parseGoldLeaderboard, '골드 순위 정보')
   let weaponEnchantHours = $state<LeaderboardHours>(168)
   const weaponEnchantLeaderboard = createMetricsResource(() => weaponEnchantHours, 'weapon-enchant-leaderboard', parseWeaponEnchantLeaderboard, '무기 인챈트 순위 정보')
+  const weaponEnchantFailures = createMetricsResource(() => 8760, 'weapon-enchant-failures', parseWeaponEnchantFailures, '무기 인챈트 실패 내역')
   let armorEnchantHours = $state<LeaderboardHours>(168)
   const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
   let landHours = $state<LeaderboardHours>(168)
   const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
   const serverStarts = createMetricsResource(() => 8760, 'server-starts', parseServerStarts, '배포 기록')
   let markers = $derived(deployMarkers(serverStarts.history?.starts ?? []))
-  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard, landLeaderboard]
+  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, landLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -193,6 +196,8 @@
   <LeaderboardSection metric="gold" bind:hours={goldLeaderboardHours} resource={goldLeaderboard} />
 
   <LeaderboardSection metric="weapon_enchant" bind:hours={weaponEnchantHours} resource={weaponEnchantLeaderboard} />
+
+  <WeaponEnchantFailuresPanel resource={weaponEnchantFailures} />
 
   <LeaderboardSection metric="armor_enchant" bind:hours={armorEnchantHours} resource={armorEnchantLeaderboard} />
 

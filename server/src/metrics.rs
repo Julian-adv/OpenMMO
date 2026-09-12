@@ -15,6 +15,31 @@ pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WeaponEnchantFailure {
+    pub id: String,
+    pub timestamp: i64,
+    pub character_id: i64,
+    pub name: String,
+    pub item_def_id: String,
+    pub item_name: String,
+    pub enchant: i32,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WeaponEnchantFailureGroup {
+    #[serde(flatten)]
+    pub latest: WeaponEnchantFailure,
+    pub failure_count: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WeaponEnchantFailures {
+    pub until: i64,
+    pub collection_started_at: i64,
+    pub entries: Vec<WeaponEnchantFailureGroup>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum GoldSource {
@@ -427,6 +452,10 @@ fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         .route("/api/metrics/gold", get(gold_history))
         .route("/api/metrics/item-gold-sources", get(item_gold_sources))
         .route("/api/metrics/gold-sinks", get(gold_sinks))
+        .route(
+            "/api/metrics/weapon-enchant-failures",
+            get(weapon_enchant_failures),
+        )
         .route("/api/metrics/level-leaderboard", get(level_leaderboard))
         .route("/api/metrics/gold-leaderboard", get(gold_leaderboard))
         .route("/api/metrics/land-leaderboard", get(land_leaderboard))
@@ -567,6 +596,13 @@ async fn weapon_enchant_leaderboard(
         AuthService::weapon_enchant_leaderboard,
     )
     .await
+}
+
+async fn weapon_enchant_failures(State(state): State<MetricsState>) -> Response {
+    metrics_response(
+        auth_db(move || state.auth.weapon_enchant_failures(unix_now())).await,
+        "Weapon enchant failures",
+    )
 }
 
 async fn armor_enchant_leaderboard(
@@ -906,6 +942,52 @@ mod tests {
         rusqlite::Connection::open(path)
             .unwrap()
             .execute("DROP TABLE item_sale_samples", [])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn weapon_enchant_failures_endpoint_returns_events_and_reports_storage_failure() {
+        let path = crate::test_util::unique_temp_dir("enchant_failure_api").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("enchant_failure_api"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_routes(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/weapon-enchant-failures");
+        let empty: WeaponEnchantFailures =
+            client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert!(empty.entries.is_empty());
+        let failure = WeaponEnchantFailure {
+            id: "api-event".into(),
+            timestamp: unix_now(),
+            character_id: 1,
+            name: "Reader".into(),
+            item_def_id: "iron_sword".into(),
+            item_name: "Iron Sword".into(),
+            enchant: 8,
+        };
+        let repeated = WeaponEnchantFailure {
+            id: "api-event-repeat".into(),
+            ..failure.clone()
+        };
+        auth.record_weapon_enchant_failures(&[failure, repeated.clone()])
+            .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        let result = response.json::<WeaponEnchantFailures>().await.unwrap();
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].latest, repeated);
+        assert_eq!(result.entries[0].failure_count, 2);
+        rusqlite::Connection::open(path)
+            .unwrap()
+            .execute("DROP TABLE weapon_enchant_failures", [])
             .unwrap();
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);

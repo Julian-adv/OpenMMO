@@ -1524,8 +1524,7 @@ impl super::GameState {
         {
             return;
         }
-        // The oil is drawn by definition, not by instance, so it cannot be
-        // reconciled against a trade table's instance-level reservations.
+        // Oil consumption cannot reconcile trade reservations.
         if self
             .reject_if_trading(player_id, "read an enchant scroll")
             .await
@@ -1533,8 +1532,13 @@ impl super::GameState {
             return;
         }
 
-        // Rolled before the lock is taken; `pick` chooses among the targets
-        // the selector finds.
+        let actor = self.item_audit_actor(player_id).await;
+        let record_failure = self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .is_some_and(|player| !player.is_official_npc);
         let (roll_bp, pick) = {
             let mut rng = rand::thread_rng();
             (rng.gen_range(0..ENCHANT_BP_SCALE), rng.gen::<u64>())
@@ -1574,6 +1578,26 @@ impl super::GameState {
                     "destroyed {} enchanting at +{}",
                     item.item_def_id, item.enchant
                 );
+                if record_failure
+                    && self
+                        .item_defs
+                        .get(&item.item_def_id)
+                        .is_some_and(|def| def.is_weapon())
+                {
+                    if let Some(character_id) = actor.character_id {
+                        self.pending_weapon_enchant_failures.write().await.push(
+                            crate::metrics::WeaponEnchantFailure {
+                                id: uuid::Uuid::new_v4().to_string(),
+                                timestamp: crate::auth::unix_now(),
+                                character_id,
+                                name: actor.name.clone(),
+                                item_def_id: item.item_def_id.clone(),
+                                item_name: name.clone(),
+                                enchant: item.enchant,
+                            },
+                        );
+                    }
+                }
                 inv.equipped.remove(&slot);
                 ((scroll.destroyed)(&name), log)
             } else {
@@ -1586,10 +1610,9 @@ impl super::GameState {
             (inv.clone(), message, enchant_log, scroll_def)
         };
 
-        let name = self.player_name_of(player_id).await;
+        let name = actor.name;
         info!("{name} {enchant_log}");
-        // The reading's reagents skip consume_one_and_sync, so journal-based
-        // consumption metrics need their own lines here.
+        // Reagents bypass consume_one_and_sync, so log their consumption here.
         if let Some((position, _, floor_level, _)) = self.player_pose(player_id).await {
             let place = crate::dungeon_defs::place_label(&position, floor_level);
             info!("{name} consumed {WHETSTONE_OIL_ITEM_ID} at {place}");

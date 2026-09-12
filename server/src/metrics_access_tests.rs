@@ -15,6 +15,7 @@ const ENDPOINTS: &[&str] = &[
     "gold-leaderboard",
     "land-leaderboard",
     "weapon-enchant-leaderboard",
+    "weapon-enchant-failures",
     "armor-enchant-leaderboard",
     "gold-per-account",
 ];
