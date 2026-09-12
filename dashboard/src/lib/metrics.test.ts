@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
 
 describe('gold display units', () => {
   it.each([
@@ -248,5 +248,26 @@ describe('daily unique account history', () => {
     expect(() => parseUniqueHistory({ ...data, last_aggregated_at: midnight + day }, 24)).toThrow()
     expect(() => parseUniqueHistory({ ...data, collection_started_at: midnight }, 24)).toThrow()
     expect(formatAxisTime(midnight, 24, true)).toMatch(/\([월화수목금토일]\)/)
+  })
+})
+
+describe('price index history', () => {
+  const meeting = (timestamp: number, index_before: number, index_after: number) =>
+    ({ timestamp, game_day: 1600, m_prev: 200, m_now: 150, growth: -0.25, index_before, index_after })
+  const data = { from: 0, until: 168 * 3600, current_index_percent: 75, baseline_index_percent: 90,
+    meetings: [meeting(3600, 90, 83), meeting(400000, 83, 75)] }
+
+  it('accepts a chained meeting list starting from the baseline', () => {
+    expect(parsePriceIndexHistory(data, 168)).toEqual(data)
+    expect(parsePriceIndexHistory({ ...data, meetings: [] }, 168).meetings).toEqual([])
+  })
+
+  it('rejects windows, ordering and chains that do not match', () => {
+    expect(() => parsePriceIndexHistory(data, 720)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(0, 90, 83)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(400000, 90, 83), meeting(3600, 83, 75)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(3600, 100, 83)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(3600, 90, 83), meeting(400000, 90, 75)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, current_index_percent: 0 }, 168)).toThrow()
   })
 })

@@ -33,6 +33,23 @@ export type WeaponEnchantLeaderboard = CharacterLeaderboard<'weapon_enchant'>
 export type ArmorEnchantLeaderboard = CharacterLeaderboard<'armor_enchant'>
 export type LandLeaderboard = CharacterLeaderboard<'land_plots'>
 
+export interface PriceMeeting extends TimestampSample {
+  game_day: number
+  m_prev: number
+  m_now: number
+  growth: number
+  index_before: number
+  index_after: number
+}
+
+export interface PriceIndexHistory {
+  from: number
+  until: number
+  current_index_percent: number
+  baseline_index_percent: number
+  meetings: PriceMeeting[]
+}
+
 export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
   { hours: 720, label: '1개월', interval: 3600 },
@@ -309,6 +326,27 @@ export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, act
       ? data.samples.at(-1)?.timestamp !== Math.max(data.from, Math.floor(latest.timestamp / interval) * interval)
       : data.samples.length !== 0))) {
     throw new Error('Invalid per-account gold metrics response')
+  }
+  return data
+}
+
+const isPercent = (value: unknown) => Number.isSafeInteger(value) && (value as number) > 0
+
+export function parsePriceIndexHistory(value: unknown, hours: LeaderboardHours): PriceIndexHistory {
+  if (!value || typeof value !== 'object') throw new Error('Invalid price index response')
+  const data = value as PriceIndexHistory
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 ||
+    !isPercent(data.current_index_percent) || !isPercent(data.baseline_index_percent) ||
+    !Array.isArray(data.meetings) ||
+    !data.meetings.every((meeting, index) => meeting && typeof meeting === 'object' &&
+      Number.isSafeInteger(meeting.timestamp) && meeting.timestamp > data.from && meeting.timestamp <= data.until &&
+      (index === 0 || meeting.timestamp >= data.meetings[index - 1].timestamp) &&
+      Number.isSafeInteger(meeting.game_day) &&
+      Number.isFinite(meeting.m_prev) && meeting.m_prev >= 0 && Number.isFinite(meeting.m_now) && meeting.m_now >= 0 &&
+      Number.isFinite(meeting.growth) && isPercent(meeting.index_before) && isPercent(meeting.index_after) &&
+      meeting.index_before === (index === 0 ? data.baseline_index_percent : data.meetings[index - 1].index_after))) {
+    throw new Error('Invalid price index response')
   }
   return data
 }

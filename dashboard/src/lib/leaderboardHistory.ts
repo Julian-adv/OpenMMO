@@ -1,4 +1,4 @@
-import type { TimestampSample } from './metrics'
+import { axisStep, type TimestampSample } from './metrics'
 
 const palette = ['#167b6c', '#5276d1', '#c66a2b', '#9a59bb', '#c34f74', '#708c2f', '#3194a8', '#aa8242', '#6861a8', '#885b51']
 
@@ -31,4 +31,12 @@ export function stepPath<T extends TimestampSample>(samples: T[], until: number,
   return samples.map((sample, index) => index === 0
     ? `M${x(sample.timestamp)},${y(value(sample))}`
     : `H${x(sample.timestamp)}V${y(value(sample))}`).join(' ') + (samples.length ? ` H${x(until)}` : '')
+}
+
+export function axisRange(minimum: number, maximum: number, padding: number, span = maximum - minimum) {
+  const step = axisStep(span)
+  const floor = Math.max(0, Math.floor((minimum - padding) / step) * step)
+  const ceiling = Math.max(floor + step * 4, (Math.floor(maximum / step) + 1) * step)
+  const ticks = Array.from({ length: Math.round((ceiling - floor) / step) + 1 }, (_, index) => floor + index * step)
+  return { step, floor, ceiling, ticks }
 }

@@ -1,4 +1,4 @@
-use super::{unix_now, AuthError, AuthService, NPC_ACCOUNT_PREFIX};
+use super::{unix_now, AuthError, AuthService, PricingMeeting, NPC_ACCOUNT_PREFIX};
 use crate::metrics::{
     kst_day_start, AccountActivity, ArmorEnchantLeaderboard, ArmorEnchantLeaderboardEntry,
     ArmorEnchantSample, ArmorEnchantSeries, CharacterGoldSample, CharacterGoldSeries,
@@ -6,9 +6,9 @@ use crate::metrics::{
     GoldHistorySample, GoldLeaderboard, GoldLeaderboardEntry, GoldSample, GoldSource,
     LandLeaderboard, LandLeaderboardEntry, LandSample, LandSeries, LevelLeaderboard,
     LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
-    PerAccountGoldHistorySample, PerAccountGoldSample, UniqueHistory, UniqueSample,
-    WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry, WeaponEnchantSample,
-    WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
+    PerAccountGoldHistorySample, PerAccountGoldSample, PriceIndexHistory, PriceMeeting,
+    UniqueHistory, UniqueSample, WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry,
+    WeaponEnchantSample, WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
 };
 use rusqlite::{params, types::FromSql, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
@@ -642,6 +642,45 @@ impl AuthService {
             collection_started_at,
             latest,
             samples,
+        })
+    }
+
+    pub fn price_index_history(
+        &self,
+        until: i64,
+        hours: u32,
+    ) -> Result<PriceIndexHistory, AuthError> {
+        let from = until - i64::from(hours) * 3600;
+        let current_index_percent = self.load_pricing_state()?.index_percent;
+        let conn = self.open_connection()?;
+        let mut statement = conn.prepare(
+            "SELECT ts, game_day, m_prev, m_now, growth, index_before, index_after
+             FROM pricing_history WHERE ts > ?1 AND ts <= ?2 ORDER BY ts, rowid",
+        )?;
+        let meetings = statement
+            .query_map(params![from, until], |row| {
+                Ok(PriceMeeting {
+                    timestamp: row.get(0)?,
+                    meeting: PricingMeeting {
+                        game_day: row.get(1)?,
+                        m_prev: row.get(2)?,
+                        m_now: row.get(3)?,
+                        growth: row.get(4)?,
+                        index_before: row.get(5)?,
+                        index_after: row.get(6)?,
+                    },
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        let baseline_index_percent = meetings
+            .first()
+            .map_or(current_index_percent, |first| first.meeting.index_before);
+        Ok(PriceIndexHistory {
+            from,
+            until,
+            current_index_percent,
+            baseline_index_percent,
+            meetings,
         })
     }
 

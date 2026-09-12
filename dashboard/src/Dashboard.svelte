@@ -4,6 +4,7 @@
   import HistoryChart from './lib/HistoryChart.svelte'
   import GoldPanel from './lib/GoldPanel.svelte'
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
+  import PriceIndexPanel from './lib/PriceIndexPanel.svelte'
   import ItemGoldSourcesPanel from './lib/ItemGoldSourcesPanel.svelte'
   import { parseItemGoldSources } from './lib/itemGoldSources'
   import GoldSinksPanel from './lib/GoldSinksPanel.svelte'
@@ -13,7 +14,7 @@
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
   import { useDashboardAuth } from './lib/auth.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   const auth = useDashboardAuth()
   let hours = $state<Hours>(24)
@@ -28,6 +29,8 @@
   const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
+  let priceIndexHours = $state<LeaderboardHours>(168)
+  const priceIndex = createMetricsResource(() => priceIndexHours, 'price-index', parsePriceIndexHistory, '물가 지수 현황')
   let levelHours = $state<LeaderboardHours>(168)
   let itemGoldHours = $state<GoldHours>(24)
   const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '골드 생산 현황')
@@ -42,7 +45,7 @@
   const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
   let landHours = $state<LeaderboardHours>(168)
   const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
-  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard, landLeaderboard]
+  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard, landLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -175,6 +178,8 @@
   <GoldPanel bind:hours={goldHours} resource={gold} />
 
   <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours resource={perAccountGold} />
+
+  <PriceIndexPanel bind:hours={priceIndexHours} resource={priceIndex} />
 
   <ItemGoldSourcesPanel bind:hours={itemGoldHours} resource={itemGoldSources} />
   <GoldSinksPanel bind:hours={goldSinkHours} resource={goldSinks} />

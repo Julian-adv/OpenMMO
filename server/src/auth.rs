@@ -180,7 +180,7 @@ impl Default for PricingState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PricingMeeting {
     pub game_day: i64,
     pub m_prev: f64,

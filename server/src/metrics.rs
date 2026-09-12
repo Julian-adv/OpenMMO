@@ -354,6 +354,25 @@ pub struct PerAccountGoldHistory {
     pub samples: Vec<PerAccountGoldHistorySample>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct PriceMeeting {
+    pub timestamp: i64,
+    #[serde(flatten)]
+    pub meeting: crate::auth::PricingMeeting,
+}
+
+/// `baseline_index_percent` is the index in effect at `from`. The index only
+/// moves inside `save_pricing_state` together with a history row, so the
+/// meetings alone reproduce the curve.
+#[derive(Serialize, Deserialize)]
+pub struct PriceIndexHistory {
+    pub from: i64,
+    pub until: i64,
+    pub current_index_percent: u32,
+    pub baseline_index_percent: u32,
+    pub meetings: Vec<PriceMeeting>,
+}
+
 #[derive(Clone)]
 struct MetricsState {
     game: Arc<GameState>,
@@ -409,6 +428,7 @@ fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
             "/api/metrics/gold-per-account",
             get(per_account_gold_history),
         )
+        .route("/api/metrics/price-index", get(price_index_history))
         .with_state(MetricsState { game, auth })
 }
 
@@ -674,6 +694,20 @@ async fn gold_sinks(
     metrics_response(
         auth_db(move || state.auth.gold_sinks(unix_now(), hours)).await,
         "Gold sinks",
+    )
+}
+
+async fn price_index_history(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(168);
+    if let Err(error) = leaderboard_interval(hours) {
+        return error.into_response();
+    }
+    metrics_response(
+        auth_db(move || state.auth.price_index_history(unix_now(), hours)).await,
+        "Price index history",
     )
 }
 
@@ -1606,6 +1640,100 @@ mod tests {
         }
         conn.execute("DROP TABLE unique_account_daily_samples", [])
             .unwrap();
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn price_index_endpoint_reports_meetings_and_the_index_in_effect_at_window_start() {
+        let path = crate::test_util::unique_temp_dir("price_index_endpoint").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("price_index_endpoint"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_routes(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/price-index");
+
+        let empty: PriceIndexHistory = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(empty.until - empty.from, 168 * 3600);
+        assert_eq!(empty.current_index_percent, 100);
+        assert_eq!(empty.baseline_index_percent, 100);
+        assert!(empty.meetings.is_empty());
+
+        let now = unix_now();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        for (ts, day, before, after) in [
+            (now - 400 * DAY_SECONDS, 100, 100, 90),
+            (now - 20 * DAY_SECONDS, 1500, 90, 83),
+            (now - 2 * DAY_SECONDS, 1620, 83, 75),
+        ] {
+            conn.execute(
+                "INSERT INTO pricing_history (ts, game_day, m_prev, m_now, growth, index_before, index_after) \
+                 VALUES (?1, ?2, 200.0, 150.0, -0.25, ?3, ?4)",
+                rusqlite::params![ts, day, before, after],
+            )
+            .unwrap();
+        }
+        auth.save_pricing_state(
+            &crate::auth::PricingState {
+                index_percent: 75,
+                last_meeting_day: Some(1620),
+                m_prev: Some(150.0),
+            },
+            None,
+        )
+        .unwrap();
+
+        for (hours, baseline, meetings) in [
+            (168, 83, vec![(1620, 83, 75)]),
+            (720, 90, vec![(1500, 90, 83), (1620, 83, 75)]),
+            (4320, 90, vec![(1500, 90, 83), (1620, 83, 75)]),
+            (8760, 90, vec![(1500, 90, 83), (1620, 83, 75)]),
+        ] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let body: PriceIndexHistory = response.json().await.unwrap();
+            assert_eq!(body.until - body.from, hours * 3600);
+            assert_eq!(body.current_index_percent, 75);
+            assert_eq!(body.baseline_index_percent, baseline, "hours={hours}");
+            assert_eq!(
+                body.meetings
+                    .iter()
+                    .map(|m| (
+                        m.meeting.game_day,
+                        m.meeting.index_before,
+                        m.meeting.index_after
+                    ))
+                    .collect::<Vec<_>>(),
+                meetings
+            );
+            assert!(body
+                .meetings
+                .iter()
+                .all(|m| m.timestamp > body.from && m.timestamp <= body.until));
+        }
+
+        for hours in ["0", "24", "169", "-1", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        conn.execute("DROP TABLE pricing_history", []).unwrap();
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
