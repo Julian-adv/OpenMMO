@@ -355,6 +355,15 @@ async fn main() -> ExitCode {
         }
     };
 
+    let start_auth = Arc::clone(&auth_service);
+    if let Err(error) = game_state::auth_db(move || {
+        start_auth.record_server_start(auth::unix_now(), env!("GIT_HASH"))
+    })
+    .await
+    {
+        warn!("Failed to record server start: {error}");
+    }
+
     let metrics_auth = Arc::clone(&auth_service);
     match game_state::auth_db(move || metrics_auth.backfill_daily_unique_accounts(auth::unix_now()))
         .await

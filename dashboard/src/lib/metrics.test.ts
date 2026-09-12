@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize, withCurrent, deployMarkers } from './metrics'
 
 describe('gold display units', () => {
   it.each([
-    [0, '0c'], [1, '1c'], [100, '1s'], [9999, '99s99c'],
-    [10000, '1g'], [86134, '8g61s34c'], [123456789, '12,345g67s89c'],
+    [0, '0c'], [1, '1c'], [100, '1s'], [9999, '99s 99c'],
+    [10000, '1g'], [86134, '8g 61s 34c'], [123456789, '12,345g 67s 89c'],
   ])('displays %i copper as %s gold', (copper, expected) => {
     expect(formatGold(copper)).toBe(expected)
   })
@@ -13,7 +13,7 @@ describe('gold display units', () => {
     expect(goldSegments(86134)).toEqual([
       { unit: 'gold', text: '8g' }, { unit: 'silver', text: '61s' }, { unit: 'copper', text: '34c' },
     ])
-    expect(formatGold(10000 / 3)).toBe('33s33c')
+    expect(formatGold(10000 / 3)).toBe('33s 33c')
     expect(formatGold(99.9)).toBe('1s')
     expect(formatGold(9999.9)).toBe('1g')
   })
@@ -41,8 +41,8 @@ describe('gold per active account history', () => {
     expect(parsePerAccountGoldHistory(zero, 24, 24).latest?.gold_per_account).toBe(0)
     expect(parsePerAccountGoldHistory({ ...data, latest: null }, 24, 24).samples).toEqual([sample])
     expect(parsePerAccountGoldHistory({ ...data, latest: null, samples: [] }, 24, 24).latest).toBeNull()
-    const stale = { ...data, from: midnight + 3600, until: midnight + 7200, samples: [] }
-    expect(parsePerAccountGoldHistory(stale, 1, 24).latest).toEqual(latest)
+    const stale = { ...data, from: midnight + 3600, until: midnight + 3600 + 86400, samples: [] }
+    expect(parsePerAccountGoldHistory(stale, 24, 24).latest).toEqual(latest)
     const samples = [{ ...sample, timestamp: midnight - 7200 }, sample]
     expect(splitSegments(parsePerAccountGoldHistory({ ...data, samples }, 24, 24).samples, 3600)).toHaveLength(2)
   })
@@ -87,7 +87,7 @@ describe('hourly gold history', () => {
         { timestamp: 10800, total_gold: 25, peak_gold: 25, sample_count: 1 }] }
     expect(parseGoldHistory(data, 24)).toEqual(data)
     expect(splitSegments(data.samples, 3600)).toEqual(data.samples.map(sample => [sample]))
-    expect(parseGoldHistory({ ...data, from: 82800, samples: [] }, 1).latest).toEqual(data.latest)
+    expect(parseGoldHistory({ ...data, from: 86400, until: 172800, samples: [] }, 24).latest).toEqual(data.latest)
     expect(parseGoldHistory({ ...data, latest: null, samples: [] }, 24).latest).toBeNull()
     expect(() => parseGoldHistory({ ...data, latest: null }, 24)).toThrow()
     expect(() => parseGoldHistory({ ...data, samples: [] }, 24)).toThrow()
@@ -248,5 +248,60 @@ describe('daily unique account history', () => {
     expect(() => parseUniqueHistory({ ...data, last_aggregated_at: midnight + day }, 24)).toThrow()
     expect(() => parseUniqueHistory({ ...data, collection_started_at: midnight }, 24)).toThrow()
     expect(formatAxisTime(midnight, 24, true)).toMatch(/\([월화수목금토일]\)/)
+  })
+})
+
+describe('price index history', () => {
+  const meeting = (timestamp: number, index_before: number, index_after: number) =>
+    ({ timestamp, game_day: 1600, m_prev: 200, m_now: 150, growth: -0.25, index_before, index_after })
+  const data = { from: 0, until: 168 * 3600, current_index_percent: 75, baseline_index_percent: 90,
+    meetings: [meeting(3600, 90, 83), meeting(400000, 83, 75)] }
+
+  it('accepts a chained meeting list starting from the baseline', () => {
+    expect(parsePriceIndexHistory(data, 168)).toEqual(data)
+    expect(parsePriceIndexHistory({ ...data, meetings: [] }, 168).meetings).toEqual([])
+  })
+
+  it('rejects windows, ordering and chains that do not match', () => {
+    expect(() => parsePriceIndexHistory(data, 720)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(0, 90, 83)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(400000, 90, 83), meeting(3600, 83, 75)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(3600, 100, 83)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, meetings: [meeting(3600, 90, 83), meeting(400000, 90, 75)] }, 168)).toThrow()
+    expect(() => parsePriceIndexHistory({ ...data, current_index_percent: 0 }, 168)).toThrow()
+  })
+})
+
+describe('live concurrent point', () => {
+  const sample = { timestamp: 3600, accounts: 3, web_accounts: 2, agent_accounts: 1, other_accounts: 0, peak_accounts: 3, peak_timestamp: 3600, sample_count: 1 }
+  const current = { timestamp: 5400, accounts: 5, web_accounts: 4, agent_accounts: 1, other_accounts: 0 }
+  const history = { from: 0, until: 5400, sample_interval_seconds: 3600, current, samples: [sample] }
+
+  it('appends the request-time reading after the hourly samples', () => {
+    expect(withCurrent(history).samples).toEqual([sample, { ...current, peak_accounts: 5, peak_timestamp: 5400, sample_count: 1 }])
+  })
+
+  it('leaves averaged periods and on-the-hour requests untouched', () => {
+    const averaged = { ...history, sample_interval_seconds: 21600 }
+    expect(withCurrent(averaged)).toBe(averaged)
+    const onTheHour = { ...history, current: { ...current, timestamp: 3600 } }
+    expect(withCurrent(onTheHour)).toBe(onTheHour)
+  })
+})
+
+describe('server starts', () => {
+  const starts = [{ timestamp: 3600, build: 'aaa', deploy: true }, { timestamp: 7200, build: 'aaa', deploy: false }, { timestamp: 9000, build: 'bbb', deploy: true }]
+  const data = { from: 0, until: 24 * 3600, starts }
+
+  it('accepts ordered starts inside the window and keeps only deploys as markers', () => {
+    expect(parseServerStarts(data, 24)).toEqual(data)
+    expect(deployMarkers(starts)).toEqual([{ timestamp: 3600, label: 'aaa' }, { timestamp: 9000, label: 'bbb' }])
+  })
+
+  it('rejects window mismatches, out-of-range and unordered starts', () => {
+    expect(() => parseServerStarts(data, 168)).toThrow()
+    expect(() => parseServerStarts({ ...data, starts: [{ ...starts[0], timestamp: 0 }] }, 24)).toThrow()
+    expect(() => parseServerStarts({ ...data, starts: [starts[2], starts[0]] }, 24)).toThrow()
+    expect(() => parseServerStarts({ ...data, starts: [{ ...starts[0], build: '' }] }, 24)).toThrow()
   })
 })

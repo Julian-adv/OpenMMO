@@ -2,7 +2,7 @@
   import MetricsError from './MetricsError.svelte'
   import GoldAmount from './GoldAmount.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { axisStep, formatAxisTime, formatDateTime, leaderboardMetrics, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
+  import { axisRange, formatAxisTime, formatDateTime, leaderboardMetrics, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
   import { sampleAt, stepPath } from './leaderboardHistory'
 
   let { metric, hours = $bindable(), leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
@@ -35,10 +35,7 @@
   let minimum = $derived(values.length ? Math.min(...values) : 1)
   let maximum = $derived(values.length ? Math.max(...values) : 1)
   let padding = $derived(metric === 'gold' ? Math.max(1, maximum * .05) : 1)
-  let step = $derived(axisStep(maximum - minimum + (metric === 'gold' ? padding * 2 : 0)))
-  let floor = $derived(Math.max(0, Math.floor((minimum - padding) / step) * step))
-  let ceiling = $derived(Math.max(floor + step * 4, (Math.floor(maximum / step) + 1) * step))
-  let ticks = $derived(Array.from({ length: Math.round((ceiling - floor) / step) + 1 }, (_, index) => floor + index * step))
+  let { floor, ceiling, ticks } = $derived(axisRange(minimum, maximum, padding, maximum - minimum + (metric === 'gold' ? padding * 2 : 0)))
   const x = (timestamp: number) => left + (timestamp - (leaderboard?.from ?? 0)) / (hours * 3600) * plotWidth
   const y = (value: number) => top + plotHeight * (1 - (value - floor) / (ceiling - floor))
   let selected = $derived(leaderboard && selectedTime !== null && selectedTime >= leaderboard.from && selectedTime <= leaderboard.timestamp ? selectedTime : null)

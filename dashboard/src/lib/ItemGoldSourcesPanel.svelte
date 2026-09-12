@@ -28,7 +28,6 @@
     <span>완료된 최근 {period.label} 생성된 골드{error ? ' · 갱신 중단' : ''}</span>
     <strong>{#if sources}<GoldAmount copper={sources.total_gold} />{:else}—{/if}</strong>
     <p>흥정 포함 판매 지급액, 던전 보상 상자, 몬스터·상자·파괴물의 동전 더미, 동전 주머니, 주민 NPC 급여를 합산합니다. 동전 더미는 주웠을 때 집계합니다.</p>
-    <p>주민 NPC·플레이어 간 거래와 팁은 제외하며, 소비한 골드는 차감하지 않습니다. 현재 시간대의 획득은 다음 정각에 반영됩니다.</p>
   </div>
   {#if sources && sources.collection_started_at > sources.from}
     <p class="chart-notice">아이템 판매는 {formatDateTime(sources.collection_started_at)} KST부터 수집한 기록만 포함합니다.</p>

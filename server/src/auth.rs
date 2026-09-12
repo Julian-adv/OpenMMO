@@ -180,7 +180,7 @@ impl Default for PricingState {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PricingMeeting {
     pub game_day: i64,
     pub m_prev: f64,
@@ -682,6 +682,7 @@ impl AuthService {
         Self::ensure_titles_schema(&conn)?;
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
+        Self::ensure_server_starts_schema(&conn)?;
         Self::ensure_item_sales_schema(&conn)?;
         Self::ensure_gold_sinks_schema(&conn)?;
         Self::ensure_concurrent_samples_schema(&conn)?;
@@ -1190,6 +1191,26 @@ impl AuthService {
         Ok(())
     }
 
+    fn ensure_server_starts_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS server_starts (
+                ts INTEGER PRIMARY KEY,
+                build TEXT NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn record_server_start(&self, now: i64, build: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO server_starts (ts, build) VALUES (?1, ?2)",
+            params![now, build],
+        )?;
+        Ok(())
+    }
+
     fn ensure_pricing_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch(
             "CREATE TABLE IF NOT EXISTS pricing_state (
@@ -1302,7 +1323,9 @@ impl AuthService {
     }
 
     /// Inserts this hour's gold totals; returns the hour, or None if it
-    /// already had a row. Active = seen within `active_days`.
+    /// already had a row. Active = seen within `active_days`. Estate
+    /// treasuries count toward the total only: they are escrowed, so the
+    /// per-active-character reading that drives pricing leaves them out.
     pub fn record_gold_snapshot(
         &self,
         now: i64,
@@ -1314,7 +1337,7 @@ impl AuthService {
         let written = conn.execute(
             "INSERT OR IGNORE INTO gold_snapshots \
              (ts, total_gold, characters, npc_gold, active_gold, active_characters) \
-             SELECT ?1, COALESCE(SUM(gold), 0), COUNT(*), \
+             SELECT ?1, COALESCE(SUM(gold), 0) + (SELECT COALESCE(SUM(treasury), 0) FROM land_estates), COUNT(*), \
                 COALESCE(SUM(CASE WHEN account_name LIKE ?3 THEN gold END), 0), \
                 COALESCE(SUM(CASE WHEN last_seen_at >= ?2 THEN gold END), 0), \
                 COUNT(CASE WHEN last_seen_at >= ?2 THEN 1 END) \
@@ -2167,7 +2190,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gold_snapshot_splits_npc_and_active_gold_once_per_hour() {
+    fn gold_snapshot_adds_treasuries_to_total_and_splits_npc_and_active_gold() {
         let db_path =
             std::env::temp_dir().join(format!("onlinerpg_auth_snap_{}.db", uuid::Uuid::new_v4()));
         let auth = AuthService::new(db_path).unwrap();
@@ -2191,6 +2214,13 @@ mod tests {
             .unwrap();
         }
 
+        conn.execute(
+            "INSERT INTO land_estates (owner_id, account_name, grade, treasury, created_at) \
+             SELECT id, account_name, 1, 40, ?2 FROM characters WHERE id = ?1",
+            params![idle, now],
+        )
+        .unwrap();
+
         let ts = auth.record_gold_snapshot(now, 30).unwrap().unwrap();
         assert_eq!(ts, now - now % 3600);
         let row: (i64, i64, i64, i64, i64) = conn
@@ -2201,7 +2231,7 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
             )
             .unwrap();
-        assert_eq!(row, (157, 3, 7, 107, 2));
+        assert_eq!(row, (197, 3, 7, 107, 2));
 
         assert_eq!(auth.record_gold_snapshot(now + 60, 30).unwrap(), None);
         assert_eq!(auth.active_gold_per_character(now, 30).unwrap(), Some(53.5));

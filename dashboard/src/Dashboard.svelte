@@ -4,6 +4,7 @@
   import HistoryChart from './lib/HistoryChart.svelte'
   import GoldPanel from './lib/GoldPanel.svelte'
   import PerAccountGoldPanel from './lib/PerAccountGoldPanel.svelte'
+  import PriceIndexPanel from './lib/PriceIndexPanel.svelte'
   import ItemGoldSourcesPanel from './lib/ItemGoldSourcesPanel.svelte'
   import { parseItemGoldSources } from './lib/itemGoldSources'
   import GoldSinksPanel from './lib/GoldSinksPanel.svelte'
@@ -13,14 +14,14 @@
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
   import { useDashboardAuth } from './lib/auth.svelte'
-  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parseUniqueHistory, periods, uniquePeriods, summarize, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
+  import { formatDateTime, formatTime, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parseLevelLeaderboard, parseGoldLeaderboard, parseWeaponEnchantLeaderboard, parseArmorEnchantLeaderboard, parseLandLeaderboard, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, summarize, withCurrent, deployMarkers, type GoldHours, type Hours, type LeaderboardHours, type UniqueHours } from './lib/metrics'
 
   const auth = useDashboardAuth()
   let hours = $state<Hours>(24)
   let period = $derived(periods.find((period) => period.hours === hours)!)
   let uniqueHours = $state<UniqueHours>(24)
   let uniquePeriod = $derived(uniquePeriods.find((period) => period.hours === uniqueHours)!)
-  const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory)
+  const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory, '접속 현황', () => ({}), 60000)
   const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
   let goldHours = $state<GoldHours>(24)
   const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
@@ -28,6 +29,8 @@
   const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as UniqueHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
+  let priceIndexHours = $state<LeaderboardHours>(168)
+  const priceIndex = createMetricsResource(() => priceIndexHours, 'price-index', parsePriceIndexHistory, '물가 지수 현황')
   let levelHours = $state<LeaderboardHours>(168)
   let itemGoldHours = $state<GoldHours>(24)
   const itemGoldSources = createMetricsResource(() => itemGoldHours, 'item-gold-sources', parseItemGoldSources, '골드 생산 현황')
@@ -42,7 +45,9 @@
   const armorEnchantLeaderboard = createMetricsResource(() => armorEnchantHours, 'armor-enchant-leaderboard', parseArmorEnchantLeaderboard, '방어구 인챈트 순위 정보')
   let landHours = $state<LeaderboardHours>(168)
   const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
-  const resources = [concurrent, unique, gold, perAccountGold, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard, landLeaderboard]
+  const serverStarts = createMetricsResource(() => 8760, 'server-starts', parseServerStarts, '배포 기록')
+  let markers = $derived(deployMarkers(serverStarts.history?.starts ?? []))
+  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, armorEnchantLeaderboard, landLeaderboard]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -52,6 +57,8 @@
   let uniqueLatest = $derived(unique.history?.samples.at(-1))
   let uniquePeak = $derived(unique.history?.samples.length ? Math.max(...unique.history.samples.map((sample) => sample.accounts)) : null)
   let summary = $derived(summarize(history?.samples ?? []))
+  let chartHistory = $derived(history && withCurrent(history))
+  let chartSummary = $derived(summarize(chartHistory?.samples ?? []))
   const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
   const refresh = () => { resources.forEach((resource) => resource.refresh()) }
 </script>
@@ -80,7 +87,7 @@
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}1시간마다 업데이트{/if}
+        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}현재 접속 1분 · 그 외 1시간마다 업데이트{/if}
       </div>
       <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -92,7 +99,7 @@
 
   <section class="stat-grid" aria-label="접속 요약" aria-busy={loading}>
     <article class="stat-card current-card">
-      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : '1시간 갱신'}</span></div>
+      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : '1분 갱신'}</span></div>
       <div class="stat-value">{count(history?.current.accounts)}<span>계정</span></div>
       <div class="stat-detail"><span class="tiny-dot"></span>{history ? `${formatTime(history.until)} KST 기준` : '월드에 입장한 계정 기준'}</div>
       {#if history}<ConnectionBreakdown sample={history.current} />{/if}
@@ -113,13 +120,12 @@
     <div class="chart-heading">
       <div>
         <h2 id="chart-title">동시 접속 추이</h2>
-        <p>월드에 머물고 있는 계정 수의 변화</p>
       </div>
       <PeriodFilter bind:hours options={periods.filter((period) => period.hours >= 24)} label="조회 기간" />
     </div>
-    <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel} · 한국 시간 (KST)</span></div>
-    {#if history && history.samples.length > 0}
-      <ConcurrentChart {history} peak={summary.peak} />
+    <div class="chart-meta"><span>접속 계정 수</span><span>{period.intervalLabel}</span></div>
+    {#if chartHistory && history && history.samples.length > 0}
+      <ConcurrentChart history={chartHistory} peak={chartSummary.peak} {markers} />
     {:else}
       <div class="chart-empty" role="status">
         <div class="empty-illustration" aria-hidden="true"><svg viewBox="0 0 64 48" fill="none"><path d="M4 42h56M4 24h56M4 6h56" stroke="currentColor" stroke-opacity=".18" /><path d="M6 34h13l9-16 10 11 10-19 10 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" /></svg></div>
@@ -146,14 +152,13 @@
       <span>마지막 일별 집계 · 직전 {uniquePeriod.label}</span>
       <strong>{count(uniqueLatest?.accounts)}<small>계정</small></strong>
       <p>{unique.history?.last_aggregated_at != null ? `마지막 집계 기준: ${formatDateTime(unique.history.last_aggregated_at)} KST` : '첫 일별 집계를 기다리고 있어요'}</p>
-      <p>같은 계정의 재접속·캐릭터 변경은 한 번만 셉니다. 공식 NPC는 제외합니다.</p>
     </div>
     {#if unique.history?.last_aggregated_at != null && unique.history.collection_started_at > unique.history.from - unique.history.window_seconds}
       <p class="chart-notice">{formatDateTime(unique.history.collection_started_at)} KST부터 수집한 기록입니다. 일부 시점은 수집 시작 이후의 접속만 포함합니다.</p>
     {/if}
-    <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계 · 한국 시간 (KST)</span></div>
+    <div class="chart-meta"><span>유니크 계정 수</span><span>하루 한 번 집계</span></div>
     {#if unique.history && unique.history.samples.length > 0}
-      <HistoryChart history={unique.history} peak={uniquePeak} value={(sample) => sample.accounts} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
+      <HistoryChart history={unique.history} peak={uniquePeak} {markers} value={(sample) => sample.accounts} legend={`직전 ${uniquePeriod.label} 유니크 계정`} valueLabel="유니크 계정" peakLabel="그래프 최고">
         {#snippet detail(selected)}
           <span>집계 시작: {formatDateTime(selected.timestamp - uniqueHours * 3600)}</span>
           <span>자정 기준 일별 집계 · 직전 {uniquePeriod.label}</span>
@@ -174,9 +179,11 @@
     </div>
   </section>
 
-  <GoldPanel bind:hours={goldHours} resource={gold} />
+  <GoldPanel bind:hours={goldHours} resource={gold} {markers} />
 
-  <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours resource={perAccountGold} />
+  <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours resource={perAccountGold} {markers} />
+
+  <PriceIndexPanel bind:hours={priceIndexHours} resource={priceIndex} />
 
   <ItemGoldSourcesPanel bind:hours={itemGoldHours} resource={itemGoldSources} />
   <GoldSinksPanel bind:hours={goldSinkHours} resource={goldSinks} />

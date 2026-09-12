@@ -28,7 +28,6 @@
     <span>완료된 최근 {period.label} 소모된 골드{error ? ' · 갱신 중단' : ''}</span>
     <strong>{#if sinks}<GoldAmount copper={sinks.total_gold} />{:else}—{/if}</strong>
     <p>상인 구매·재매입은 아이템별 실제 지불액을, 가판 판매는 수수료만 합산합니다. 토지세와 체납 복구 비용도 포함합니다.</p>
-    <p>주민 NPC·플레이어 간에 이동한 골드와 세금 계좌 입출금은 제외합니다. 현재 시간대의 소모는 다음 정각에 반영됩니다.</p>
   </div>
   {#if sinks && sinks.collection_started_at > sinks.from}
     <p class="chart-notice">{formatDateTime(sinks.collection_started_at)} KST부터 수집한 기록만 포함합니다.</p>

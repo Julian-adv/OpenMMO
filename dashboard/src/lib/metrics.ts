@@ -33,6 +33,38 @@ export type WeaponEnchantLeaderboard = CharacterLeaderboard<'weapon_enchant'>
 export type ArmorEnchantLeaderboard = CharacterLeaderboard<'armor_enchant'>
 export type LandLeaderboard = CharacterLeaderboard<'land_plots'>
 
+export interface PriceMeeting extends TimestampSample {
+  game_day: number
+  m_prev: number
+  m_now: number
+  growth: number
+  index_before: number
+  index_after: number
+}
+
+export interface PriceIndexHistory {
+  from: number
+  until: number
+  current_index_percent: number
+  baseline_index_percent: number
+  meetings: PriceMeeting[]
+}
+
+export interface ServerStart extends TimestampSample {
+  build: string
+  deploy: boolean
+}
+
+export interface ServerStarts {
+  from: number
+  until: number
+  starts: ServerStart[]
+}
+
+export interface ChartMarker extends TimestampSample {
+  label: string
+}
+
 export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
   { hours: 720, label: '1개월', interval: 3600 },
@@ -150,8 +182,7 @@ export const periods = [
 
 export type Hours = typeof periods[number]['hours']
 export const goldPeriods = [
-  { hours: 1, label: '1시간', interval: 3600, intervalLabel: '1시간 간격' },
-  { hours: 24, label: '24시간', interval: 3600, intervalLabel: '1시간 간격' },
+  { hours: 24, label: '1일', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 168, label: '1주일', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 720, label: '1개월', interval: 3600, intervalLabel: '1시간 간격' },
   { hours: 4320, label: '6개월', interval: 21600, intervalLabel: '6시간 평균' },
@@ -212,6 +243,13 @@ export function parseHistory(value: unknown, hours: Hours): ConcurrentHistory {
     throw new Error('Invalid metrics response')
   }
   return data
+}
+
+export function withCurrent(history: ConcurrentHistory): ConcurrentHistory {
+  const { current, samples } = history
+  if (history.sample_interval_seconds !== 3600 || samples.at(-1)?.timestamp === current.timestamp) return history
+  const live = { ...current, peak_accounts: current.accounts, peak_timestamp: current.timestamp, sample_count: 1 }
+  return { ...history, samples: [...samples, live] }
 }
 
 export function summarize(samples: HistorySample[]) {
@@ -314,12 +352,58 @@ export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, act
   return data
 }
 
+export function parseServerStarts(value: unknown, hours: Hours): ServerStarts {
+  if (!value || typeof value !== 'object') throw new Error('Invalid server starts response')
+  const data = value as ServerStarts
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 || !Array.isArray(data.starts) ||
+    !data.starts.every((start, index) => start && typeof start === 'object' &&
+      Number.isSafeInteger(start.timestamp) && start.timestamp > data.from && start.timestamp <= data.until &&
+      (index === 0 || start.timestamp > data.starts[index - 1].timestamp) &&
+      typeof start.build === 'string' && start.build.length > 0 && typeof start.deploy === 'boolean')) {
+    throw new Error('Invalid server starts response')
+  }
+  return data
+}
+
+export const deployMarkers = (starts: ServerStart[]): ChartMarker[] =>
+  starts.filter((start) => start.deploy).map((start) => ({ timestamp: start.timestamp, label: start.build }))
+
+const isPercent = (value: unknown) => Number.isSafeInteger(value) && (value as number) > 0
+
+export function parsePriceIndexHistory(value: unknown, hours: LeaderboardHours): PriceIndexHistory {
+  if (!value || typeof value !== 'object') throw new Error('Invalid price index response')
+  const data = value as PriceIndexHistory
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 ||
+    !isPercent(data.current_index_percent) || !isPercent(data.baseline_index_percent) ||
+    !Array.isArray(data.meetings) ||
+    !data.meetings.every((meeting, index) => meeting && typeof meeting === 'object' &&
+      Number.isSafeInteger(meeting.timestamp) && meeting.timestamp > data.from && meeting.timestamp <= data.until &&
+      (index === 0 || meeting.timestamp >= data.meetings[index - 1].timestamp) &&
+      Number.isSafeInteger(meeting.game_day) &&
+      Number.isFinite(meeting.m_prev) && meeting.m_prev >= 0 && Number.isFinite(meeting.m_now) && meeting.m_now >= 0 &&
+      Number.isFinite(meeting.growth) && isPercent(meeting.index_before) && isPercent(meeting.index_after) &&
+      meeting.index_before === (index === 0 ? data.baseline_index_percent : data.meetings[index - 1].index_after))) {
+    throw new Error('Invalid price index response')
+  }
+  return data
+}
+
 export const kstDayStart = (timestamp: number) => Math.floor((timestamp + 9 * 3600) / 86400) * 86400 - 9 * 3600
 
 export function axisStep(span: number) {
   const raw = Math.max(1, span / 4)
   const magnitude = 10 ** Math.floor(Math.log10(raw))
   return ([1, 2, 5, 10].find((value) => value * magnitude >= raw) ?? 10) * magnitude
+}
+
+export function axisRange(minimum: number, maximum: number, padding: number, span = maximum - minimum + padding * 2) {
+  const step = axisStep(span)
+  const floor = Math.max(0, Math.floor((minimum - padding) / step) * step)
+  const ceiling = Math.max(floor + step * 4, (Math.floor(maximum / step) + 1) * step)
+  const ticks = Array.from({ length: Math.round((ceiling - floor) / step) + 1 }, (_, index) => floor + index * step)
+  return { step, floor, ceiling, ticks }
 }
 
 export function splitSegments<T extends TimestampSample>(samples: T[], interval: number): T[][] {
@@ -372,7 +456,7 @@ export function goldSegments(copper: number) {
   ].filter((part) => part.value > 0 || (amount === 0 && part.unit === 'copper'))
     .map((part) => ({ unit: part.unit, text: `${part.value.toLocaleString('ko-KR')}${part.suffix}` }))
 }
-export const formatGold = (copper: number) => goldSegments(copper).map((part) => part.text).join('')
+export const formatGold = (copper: number) => goldSegments(copper).map((part) => part.text).join(' ')
 export const formatDateTime = (timestamp: number) => dateFormatter.format(timestamp * 1000)
 export const formatAxisTime = (timestamp: number, hours: number, daily = false) =>
   (hours <= 24 && !daily ? timeFormatter : hours <= 4320 ? dayFormatter : monthFormatter).format(timestamp * 1000)
