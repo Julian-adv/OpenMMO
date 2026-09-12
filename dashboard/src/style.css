@@ -36,7 +36,6 @@ main { max-width: 1256px; margin: 0 auto; padding: 52px 32px 0; }
 .eyebrow span { height: 6px; width: 6px; border: 1.5px solid #168878; transform: rotate(45deg); }
 h1 { margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -1.6px; line-height: 1.4; }
 h1 > span { color: #168878; margin-left: 2px; }
-.page-description { font-size: 13px; color: #7b8b84; margin: 10px 0 0; line-height: 1.7; word-break: keep-all; }
 .update-controls { display: flex; align-items: center; gap: 12px; padding-bottom: 3px; flex-shrink: 0; }
 .update-status { display: flex; align-items: center; gap: 7px; color: #75877f; font-size: 11px; }
 .status-dot { height: 6px; width: 6px; border-radius: 50%; background: #2c9c76; box-shadow: 0 0 0 3px #e6f1eb; }
@@ -146,7 +145,6 @@ h3 { margin: 1px 0 6px; font-size: 11px; font-weight: 600; color: #60796c; }
   main { padding: 28px 20px 0; }
   .page-heading { flex-direction: column; gap: 18px; margin-bottom: 22px; }
   h1 { font-size: 28px; }
-  .page-description { font-size: 11px; max-width: 285px; line-height: 1.9; }
   .update-controls { width: 100%; justify-content: space-between; padding: 0; }
   .refresh-button { height: 29px; width: 29px; }
   .stat-grid { grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }

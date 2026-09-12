@@ -76,7 +76,6 @@
     <div>
       <div class="eyebrow"><span></span> WORLD ACTIVITY</div>
       <h1>월드 현황<span>.</span></h1>
-      <p class="page-description">지금 함께하는 플레이어, 레벨·골드·인챈트·영지 보유 순위와 서버의 골드 변화를 살펴보세요.</p>
     </div>
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">

@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { loadDashboardEnv } from './env.mjs'
@@ -11,11 +12,20 @@ export default defineConfig(({ mode }) => {
     },
   }
 
+  const https =
+    env.VITE_HTTPS_KEY && env.VITE_HTTPS_CERT
+      ? {
+          key: fs.readFileSync(env.VITE_HTTPS_KEY),
+          cert: fs.readFileSync(env.VITE_HTTPS_CERT),
+          ...(env.VITE_HTTPS_CA ? { ca: fs.readFileSync(env.VITE_HTTPS_CA) } : {}),
+        }
+      : undefined
+
   return {
     base: env.DASHBOARD_BASE || '/',
     define: { 'import.meta.env.VITE_GOOGLE_CLIENT_ID': JSON.stringify(env.VITE_GOOGLE_CLIENT_ID) },
     plugins: [svelte()],
-    server: { host: '127.0.0.1', port: 10008, strictPort: true, proxy },
-    preview: { host: '127.0.0.1', port: 10008, strictPort: true, proxy },
+    server: { host: '127.0.0.1', port: 10008, strictPort: true, https, proxy },
+    preview: { host: '127.0.0.1', port: 10008, strictPort: true, https, proxy },
   }
 })

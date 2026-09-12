@@ -48,7 +48,7 @@ DB와 API의 금액은 코퍼 단위이며 `1골드 = 100실버 = 10,000코퍼`�
 
 저장소 루트에서 최신 게임 서버를 실행한 뒤 별도 터미널에서 시작합니다. 새 서버 코드가 실행되어야 지표 API와 수집이 활성화됩니다.
 
-Google 로그인 설정은 기존 `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`를 공유하므로 `dashboard/.env.local`을 따로 만들 필요가 없습니다. 개발 실행과 수동 빌드 모두 같은 설정을 사용합니다. 서버에는 `GOOGLE_CLIENT_ID`와 `ADMIN_EMAILS`를 설정하고, 해당 OAuth 클라이언트의 허용된 JavaScript 출처에 `http://localhost:10008`을 등록합니다.
+Google 로그인 설정은 기존 `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`를 공유하므로 `dashboard/.env.local`을 따로 만들 필요가 없습니다. 개발 실행과 수동 빌드 모두 같은 설정을 사용합니다. 서버에는 `GOOGLE_CLIENT_ID`와 `ADMIN_EMAILS`를 설정하고, 해당 OAuth 클라이언트의 허용된 JavaScript 출처에 `https://localhost:10008`을 등록합니다. 개발 서버는 `dashboard/.env.local`에 `VITE_HTTPS_KEY`·`VITE_HTTPS_CERT`(선택 `VITE_HTTPS_CA`)로 게임 클라이언트의 `client/.certs` 인증서를 지정하면 HTTPS로 뜨며, 지정하지 않으면 HTTP입니다.
 
 대시보드에서 다른 클라이언트 ID나 API 주소를 사용할 때만 `.env.example`을 `.env.local`로 복사해 필요한 값을 지정합니다. Google 클라이언트 ID는 셸 환경변수, 대시보드 설정, 게임 클라이언트 설정 순서로 비어 있지 않은 값을 사용합니다. 각 폴더에서는 Vite의 모드별 환경 파일 우선순위를 따르며, 공통 설정에서 가져오는 값은 `VITE_GOOGLE_CLIENT_ID`뿐입니다. `client/`의 환경 파일을 수정한 뒤에는 대시보드 개발 서버를 재시작합니다.
 
@@ -58,7 +58,7 @@ npm ci
 npm run dev
 ```
 
-<http://localhost:10008>에서 확인합니다. 기본 API 대상은 `http://127.0.0.1:10007`이며 Vite가 `/api/metrics`를 프록시합니다. 다른 로컬 서버를 대상으로 실행하려면:
+<https://localhost:10008>에서 확인합니다. 기본 API 대상은 `http://127.0.0.1:10007`이며 Vite가 `/api/metrics`를 프록시합니다. 다른 로컬 서버를 대상으로 실행하려면:
 
 ```bash
 DASHBOARD_API_TARGET=http://127.0.0.1:10107 npm run dev
