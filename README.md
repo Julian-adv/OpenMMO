@@ -136,6 +136,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 - **Rust & Cargo**: [Install Rust](https://rustup.rs/)
 - **Node.js & npm**: [Install Node.js](https://nodejs.org/)
+- **flock**: Required to serialize WASM builds (provided by `util-linux` on Linux).
 - **(Recommended) cargo-watch**: For automatic server restarts on code changes.
   ```bash
   cargo install cargo-watch
@@ -224,6 +225,10 @@ To have Rust code changes in the `shared` library reflected in the browser immed
 # Run from the root directory
 cargo watch -w shared -s "npm run build:wasm --prefix client"
 ```
+
+`build:wasm` serializes data generation, output cleanup, and packaging with a
+per-checkout lock. Manual builds and the watcher can run together; a second build
+waits for the first to finish before touching the generated files.
 
 ### 8. Running the GLB Editor
 

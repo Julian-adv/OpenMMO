@@ -128,3 +128,34 @@ describe('rider facing follows the animated horse head', () => {
     horse.dispose()
   })
 })
+
+describe('mounted backward walking', () => {
+  it('plays the walk cycle backward while keeping the body facing unchanged', () => {
+    const clip = new THREE.AnimationClip('walk', 1, [
+      new THREE.NumberKeyframeTrack('Head.position[x]', [0, 1], [0, 1]),
+    ])
+    const horse = mount([clip])
+    const head = horse.root.getObjectByName('Head')!
+    horse.update(0, 0, 0, { x: 0, z: 0 })
+    horse.update(0.1, 2, 0, { x: 0, z: -0.2 })
+    expect(head.position.x).toBeCloseTo(0.9)
+    horse.update(0.1, 2, 0, { x: 0, z: -0.4 })
+    expect(head.position.x).toBeCloseTo(0.8)
+    expect(horse.root.rotation.y).toBe(0)
+    horse.update(0.1, 2, 0, { x: 0, z: -0.2 })
+    expect(head.position.x).toBeCloseTo(0.9)
+    horse.dispose()
+  })
+
+  it('does not interpret a teleport as backward movement', () => {
+    const horse = mount([
+      new THREE.AnimationClip('walk', 1, [
+        new THREE.NumberKeyframeTrack('Head.position[x]', [0, 1], [0, 1]),
+      ]),
+    ])
+    horse.update(0, 0, 0, { x: 0, z: 0 })
+    horse.update(0.1, 2, 0, { x: 0, z: -20 })
+    expect(horse.root.getObjectByName('Head')!.position.x).toBeCloseTo(0.1)
+    horse.dispose()
+  })
+})

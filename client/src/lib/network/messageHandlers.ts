@@ -196,6 +196,7 @@ import type {
   CharacterRollResult,
   ServerGroundItem,
   PositionCorrection,
+  MountRecovery,
   ServerMonster,
   ServerPlayer,
   CharacterClass,
@@ -411,6 +412,7 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
+  mountRecovery: NetworkEvent<(update: MountRecovery) => void>
   positionCorrected: NetworkEvent<(c: PositionCorrection) => void>
 }
 
@@ -692,6 +694,11 @@ export function handleServerMessage(
       if (existing && existing.floorLevel !== data.floor_level) {
         updatePlayer(data.player_id, { floorLevel: data.floor_level })
       }
+      break
+    }
+
+    case 'MountRecovery': {
+      events.mountRecovery.emit(data)
       break
     }
 

@@ -6,6 +6,7 @@ const MOVE_ANGLE: f32 = PI / 6.0;
 pub const TURN_RADIUS: f32 = 0.65;
 pub const STEP_SECONDS: f32 = 1.0 / 60.0;
 pub const ARRIVAL_DISTANCE: f32 = 0.05;
+pub const BACKWARD_SPEED: f32 = 1.5;
 
 pub fn angle_delta(from: f32, to: f32) -> f32 {
     (to - from + PI).rem_euclid(TAU) - PI
@@ -57,6 +58,109 @@ pub fn arc_step(from: f32, to: f32, speed: f32, dt: f32, radius: f32) -> (f32, f
         signed_radius * (rotation.sin() - from.sin()) + to.cos() * forward,
         rotation,
     )
+}
+
+/// Find room behind the horse for the first turn of a new route.
+pub fn recovery_target(
+    cache: &crate::pathfinding::PassabilityCache,
+    start: crate::Position,
+    rotation: f32,
+    goal: crate::Position,
+    speed: f32,
+) -> Option<crate::Position> {
+    use crate::{pathfinding, shortest_world_delta_x, wrap_world_x, Position};
+    if !rotation.is_finite() || !speed.is_finite() || speed <= 0.0 {
+        return None;
+    }
+    for n in 1..=8 {
+        let distance = n as f32 * 0.25;
+        let end = Position {
+            x: wrap_world_x(start.x - rotation.sin() * distance),
+            z: start.z - rotation.cos() * distance,
+            y: start.y,
+        };
+        if pathfinding::is_movement_blocked_for_mover(
+            cache,
+            start.x,
+            start.z,
+            start.x + shortest_world_delta_x(start.x, end.x),
+            end.z,
+            0,
+            Some(start.y),
+        ) {
+            break;
+        }
+        let route =
+            pathfinding::find_and_smooth_path(end.x, end.z, 0, goal.x, goal.z, 0, cache, 2000);
+        let Some(wp) = route
+            .waypoints
+            .iter()
+            .find(|wp| shortest_world_delta_x(end.x, wp.x).hypot(wp.z - end.z) > ARRIVAL_DISTANCE)
+        else {
+            continue;
+        };
+        if wp.floor != 0 {
+            continue;
+        }
+        let mut p = end;
+        let mut facing = rotation;
+        for _ in 0..600 {
+            let dx = shortest_world_delta_x(p.x, wp.x);
+            let dz = wp.z - p.z;
+            let dist = dx.hypot(dz);
+            let desired = dx.atan2(dz);
+            let (ax, az, next_rotation) = arc_step(
+                facing,
+                desired,
+                speed,
+                STEP_SECONDS,
+                TURN_RADIUS.min(dist / 4.0),
+            );
+            let snap = dist <= ARRIVAL_DISTANCE
+                || (angle_delta(facing, desired).abs() < 1e-4 && speed * STEP_SECONDS >= dist);
+            let next = if snap {
+                Position {
+                    x: p.x + dx,
+                    z: wp.z,
+                    y: p.y,
+                }
+            } else {
+                Position {
+                    x: p.x + ax,
+                    z: p.z + az,
+                    y: p.y,
+                }
+            };
+            if pathfinding::is_movement_blocked_for_mover(
+                cache,
+                p.x,
+                p.z,
+                next.x,
+                next.z,
+                0,
+                Some(p.y),
+            ) {
+                break;
+            }
+            if snap
+                || (angle_delta(next_rotation, desired).abs() < 1e-4
+                    && !pathfinding::is_movement_blocked_for_mover(
+                        cache,
+                        next.x,
+                        next.z,
+                        wp.x,
+                        wp.z,
+                        0,
+                        Some(next.y),
+                    ))
+            {
+                return Some(end);
+            }
+            p = next;
+            facing = next_rotation;
+        }
+    }
+    None
 }
 
 #[cfg(test)]

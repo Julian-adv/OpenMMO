@@ -55,6 +55,8 @@ jobs:
       - run: npm ci
       - name: Test deployment script
         run: bash ../tools/test-deploy-prod.sh
+      - name: Test concurrent WASM builds
+        run: bash ../tools/test-build-wasm.sh
       - run: npm run build:wasm
       - run: npm test
       - run: npm run check

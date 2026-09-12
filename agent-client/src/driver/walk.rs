@@ -271,6 +271,61 @@ pub(super) enum Walked {
     Error,
 }
 
+async fn recover_mount(
+    state: &Arc<Mutex<SharedState>>,
+    goal: (f32, f32),
+    background: bool,
+) -> bool {
+    {
+        let mut s = state.lock().await;
+        s.mount_recovery_id = s.mount_recovery_id.wrapping_add(1);
+        s.mount_recovery_result = None;
+        let request_id = s.mount_recovery_id;
+        if s.send_flagged_command(
+            ClientMessage::PlayerMountRecover {
+                request_id,
+                goal: Position {
+                    x: goal.0,
+                    y: 0.0,
+                    z: goal.1,
+                },
+            },
+            background,
+        )
+        .await
+        .is_err()
+        {
+            return false;
+        }
+    }
+    for _ in 0..200 {
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let s = state.lock().await;
+        if let Some(success) = s.mount_recovery_result {
+            return success;
+        }
+        if !s
+            .self_player
+            .as_ref()
+            .is_some_and(|p| p.mounted && p.health > 0)
+        {
+            return false;
+        }
+    }
+    let mut s = state.lock().await;
+    let _ = s
+        .send_flagged_command(
+            ClientMessage::PlayerMountTurn {
+                rotation: 0.0,
+                stop: true,
+                sprinting: false,
+            },
+            background,
+        )
+        .await;
+    false
+}
+
 /// Walk to `to` until we are inside its arrive range.
 ///
 /// `background` marks steps no current action asked for (the follow task), so
@@ -281,12 +336,14 @@ pub(super) async fn walk(
     background: bool,
     sprint: Option<bool>,
 ) -> Walked {
+    let mut sprint = sprint;
     let tuning = to.tuning();
     let started = Instant::now();
     let mut route: Vec<PathWaypoint> = Vec::new();
     let mut leg = 0usize;
     let mut doors_opened = 0usize;
     let mut repaths = 0usize;
+    let mut recovery_attempted = false;
     let mut unreachable = false;
     let mut last_goal: Option<(f32, f32)> = None;
     let mut corrections = state.lock().await.position_corrections;
@@ -339,6 +396,23 @@ pub(super) async fn walk(
         // a step it refuses, so drop the route and search again from where it
         // says we are (`relocate_self` has already moved us there).
         if snapped {
+            let mounted = state
+                .lock()
+                .await
+                .self_player
+                .as_ref()
+                .is_some_and(|p| p.mounted);
+            if mounted && !recovery_attempted {
+                recovery_attempted = true;
+                sprint = Some(false);
+                if !recover_mount(state, goal, background).await {
+                    return Walked::Lost(LostReason::Desynced);
+                }
+                corrections = state.lock().await.position_corrections;
+                route.clear();
+                leg = 0;
+                continue;
+            }
             corrections = state.lock().await.position_corrections;
             repaths += 1;
             if repaths > MAX_CORRECTION_REPATHS {
@@ -717,6 +791,130 @@ mod tests {
     use onlinerpg_shared::fence::{Fence, FenceAxis, FenceEdge};
     use onlinerpg_shared::housing::{HouseData, PassabilityGrid};
     use onlinerpg_shared::ServerMessage;
+
+    #[tokio::test(start_paused = true)]
+    async fn corrected_mounted_walk_waits_for_recovery_then_replans_once() {
+        for success in [true, false] {
+            let (s, mut rx) = fenced_in_at(-1360.5, 4500.5, true);
+            let start = s.self_player.as_ref().unwrap().position;
+            let rotation = s.self_player.as_ref().unwrap().rotation;
+            let state = Arc::new(Mutex::new(s));
+            let to = WalkTo::Place {
+                x: -1356.5,
+                z: 4500.5,
+                floor: 0,
+            };
+            let walking = walk(&state, &to, false, Some(true));
+            tokio::pin!(walking);
+            let mut corrected = false;
+            let mut recoveries = 0;
+            let result = loop {
+                tokio::select! {
+                    biased;
+                    Some(command) = rx.recv() => match command {
+                        ClientMessage::PlayerMove { sprinting, .. } => {
+                            if !corrected {
+                                state.lock().await.push_event(ServerMessage::PositionCorrected { position: start, rotation, floor_level: 0 });
+                                corrected = true;
+                            } else {
+                                assert_eq!(recoveries, 1);
+                                assert!(!sprinting);
+                            }
+                        }
+                        ClientMessage::PlayerMountRecover { request_id, .. } => {
+                            recoveries += 1;
+                            assert_eq!(recoveries, 1);
+                            let position = Position { z: start.z - 0.5, ..start };
+                            state.lock().await.push_event(ServerMessage::MountRecovery {
+                                request_id, position, rotation, floor_level: 0, done: false, success: true,
+                            });
+                            assert!(rx.try_recv().is_err());
+                            state.lock().await.push_event(ServerMessage::MountRecovery {
+                                request_id, position, rotation, floor_level: 0, done: true, success,
+                            });
+                        }
+                        other => panic!("unexpected command: {other:?}"),
+                    },
+                    result = &mut walking => break result,
+                }
+            };
+            assert_eq!(recoveries, 1);
+            assert_eq!(
+                result,
+                if success {
+                    Walked::Arrived
+                } else {
+                    Walked::Lost(LostReason::Desynced)
+                }
+            );
+            assert!(state.lock().await.self_player.as_ref().unwrap().mounted);
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn mount_recovery_waits_for_the_completion_ack() {
+        let (s, mut rx) = fenced_in_at(-1360.5, 4500.5, true);
+        let state = Arc::new(Mutex::new(s));
+        let copy = state.clone();
+        let recovery =
+            tokio::spawn(async move { recover_mount(&copy, (-1356.5, 4500.5), false).await });
+        let ClientMessage::PlayerMountRecover { request_id, .. } = rx.recv().await.unwrap() else {
+            panic!()
+        };
+        let position = state.lock().await.self_player.as_ref().unwrap().position;
+        state.lock().await.push_event(ServerMessage::MountRecovery {
+            request_id,
+            position,
+            rotation: 0.0,
+            floor_level: 0,
+            done: false,
+            success: true,
+        });
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(!recovery.is_finished());
+        assert!(rx.try_recv().is_err());
+        state.lock().await.push_event(ServerMessage::MountRecovery {
+            request_id,
+            position,
+            rotation: 0.0,
+            floor_level: 0,
+            done: true,
+            success: true,
+        });
+        assert!(recovery.await.unwrap());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn mount_recovery_times_out_and_ignores_late_progress_after_new_movement() {
+        let (s, mut rx) = fenced_in_at(-1360.5, 4500.5, true);
+        let state = Arc::new(Mutex::new(s));
+        assert!(!recover_mount(&state, (-1356.5, 4500.5), false).await);
+        let ClientMessage::PlayerMountRecover { request_id, .. } = rx.try_recv().unwrap() else {
+            panic!()
+        };
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerMountTurn { stop: true, .. })
+        ));
+        let mut s = state.lock().await;
+        let position = s.self_player.as_ref().unwrap().position;
+        s.send_command(ClientMessage::player_move(position, 0.0, 0))
+            .await
+            .unwrap();
+        let before = s.self_player.as_ref().unwrap().position;
+        s.push_event(ServerMessage::MountRecovery {
+            request_id,
+            position: Position {
+                x: before.x - 1.0,
+                ..before
+            },
+            rotation: 1.0,
+            floor_level: 0,
+            done: true,
+            success: true,
+        });
+        assert_eq!(s.self_player.as_ref().unwrap().position, before);
+    }
 
     fn fenced_in_at(
         x: f32,

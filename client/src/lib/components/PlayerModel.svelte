@@ -1300,7 +1300,8 @@
       horseMount.update(
         deltaTime,
         playerState === 'moving' ? _speed : 0,
-        rotation
+        rotation,
+        position
       )
       horseMount.seat.getWorldPosition(seatPosition)
       riderGroup.position.copy(modelGroup.worldToLocal(seatPosition))

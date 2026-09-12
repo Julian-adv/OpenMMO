@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { angleDelta } from './horseMovement'
+import { shortestWrappedDeltaX } from '../terrain/world-wrap'
 
 export const HORSE_MODEL_PATH = '/models/mounts/horse.glb'
 export const RIDING_ANIMATION_PATH = '/models/animations/riding.glb'
@@ -26,6 +27,8 @@ export class HorseMount {
   private current: THREE.AnimationAction | null = null
   private previousRotation: number | null = null
   private turnName: string | null = null
+  private previousPosition: { x: number; z: number } | null = null
+  private reversing = false
 
   constructor(gltf: GLTF) {
     this.root = clone(gltf.scene)
@@ -56,13 +59,31 @@ export class HorseMount {
     this.runSeatHeight = height
   }
 
-  update(dt: number, speed: number, rotation = 0) {
+  update(
+    dt: number,
+    speed: number,
+    rotation = 0,
+    position?: { x: number; z: number }
+  ) {
+    if (position && this.previousPosition) {
+      const dx = shortestWrappedDeltaX(this.previousPosition.x, position.x)
+      const dz = position.z - this.previousPosition.z
+      const distance = Math.hypot(dx, dz)
+      if (distance > 0.00001) {
+        this.reversing =
+          distance < 1 &&
+          dx * Math.sin(rotation) + dz * Math.cos(rotation) < -distance * 0.5
+      }
+    }
+    this.previousPosition = position ? { x: position.x, z: position.z } : null
+    if (speed < 0.1) this.reversing = false
     const yaw =
       this.previousRotation === null
         ? 0
         : angleDelta(this.previousRotation, rotation)
     this.previousRotation = rotation
-    const turning = dt > 0 && Math.abs(yaw) / dt > 0.1 && speed < 3
+    const turning =
+      dt > 0 && Math.abs(yaw) / dt > 0.1 && speed < 3 && !this.reversing
     if (turning) {
       const side = yaw < 0 ? 'right' : 'left'
       if (!this.turnName?.startsWith(`turn_${side}_`)) {
@@ -72,10 +93,12 @@ export class HorseMount {
       this.turnName = null
     }
     const name =
-      this.turnName ?? (speed < 0.1 ? 'idle' : speed < 3 ? 'walk' : 'run')
+      this.turnName ??
+      (speed < 0.1 ? 'idle' : this.reversing || speed < 3 ? 'walk' : 'run')
     const next = this.actions.get(name)
     if (next && next !== this.current) {
       next.reset().setEffectiveWeight(1).play()
+      if (this.reversing) next.time = next.getClip().duration
       next.setLoop(this.turnName ? THREE.LoopOnce : THREE.LoopRepeat, Infinity)
       next.clampWhenFinished = this.turnName !== null
       if (this.current) next.crossFadeFrom(this.current, 0.2, false)
@@ -86,7 +109,7 @@ export class HorseMount {
         ? this.current.getClip().duration / (name.endsWith('180') ? 1 : 0.6)
         : name === 'idle'
           ? 1
-          : speed / (name === 'walk' ? 2 : 8)
+          : ((this.reversing ? -1 : 1) * speed) / (name === 'walk' ? 2 : 8)
       if (this.turnName && this.current.paused) {
         this.current.time = this.current.getClip().duration * 0.35
         this.current.paused = false

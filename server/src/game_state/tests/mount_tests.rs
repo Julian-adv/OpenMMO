@@ -325,3 +325,229 @@ async fn horse_cannot_mount_indoors_and_dismounts_on_entry() {
     game.use_item(&id, 1).await;
     assert!(!game.players.read().await[&id].mounted);
 }
+
+fn recovery_fence(
+    game: &GameState,
+    key: &str,
+    x: i32,
+    z: i32,
+    axis: onlinerpg_shared::fence::FenceAxis,
+) {
+    use onlinerpg_shared::fence::{self, Fence, FenceEdge};
+    fence::sync_passability(
+        &mut game.passability_write(),
+        key,
+        &[Fence {
+            edge: FenceEdge { x, z, axis },
+            y: 5.0,
+            owner_id: 1,
+        }],
+    );
+}
+
+#[tokio::test]
+async fn horse_recovery_backs_up_without_turning_and_repaths_for_four_boundary_poses() {
+    use onlinerpg_shared::{
+        fence::{self, Fence, FenceAxis, FenceEdge},
+        pathfinding,
+    };
+    let game = make_game_state_with("horse_recovery_four", FlatLand, SeaOnlyWater);
+    let fences: Vec<_> = [4740, 4748]
+        .into_iter()
+        .flat_map(|z| {
+            (-1465..-1435).map(move |x| Fence {
+                edge: FenceEdge {
+                    x,
+                    z,
+                    axis: FenceAxis::X,
+                },
+                y: 5.0,
+                owner_id: 1,
+            })
+        })
+        .chain((4700..4720).map(|z| Fence {
+            edge: FenceEdge {
+                x: -1555,
+                z,
+                axis: FenceAxis::Z,
+            },
+            y: 5.0,
+            owner_id: 1,
+        }))
+        .collect();
+    fence::sync_passability(&mut game.passability_write(), "boundary", &fences);
+    let mut actors = Vec::new();
+    for (name, x, z, rotation, gx, gz) in [
+        ("Chef", -1450.7693, 4739.999, 5.345787, -1460.5, 4729.5),
+        ("Event", -1554.996, 4706.3853, -2.5081613, -1554.5, 4705.5),
+        ("GUARD", -1447.0452, 4747.999, 0.6163312, -1455.5, 4746.5),
+        ("GONGJI", -1447.0452, 4747.999, 0.6163312, -1455.5, 4746.5),
+    ] {
+        let player = make_player(name, x, z);
+        let id = player.id;
+        game.add_player(player).await;
+        game.inventories.write().await.insert(
+            id,
+            PlayerInventory {
+                bag: vec![bag_item(1, "horse_reins", 1)],
+                ..Default::default()
+            },
+        );
+        let start = Position { x, y: 5.0, z };
+        {
+            let mut players = game.players.write().await;
+            let p = players.get_mut(&id).unwrap();
+            p.name = name.into();
+            p.position = start;
+            p.rotation = rotation;
+        }
+        game.use_item(&id, 1).await;
+        let mut rx = game.register_direct_channel(&id).await;
+        let goal = Position {
+            x: gx,
+            y: 5.0,
+            z: gz,
+        };
+        game.update_player_position(&id, move_cmd(goal, false), false)
+            .await;
+        game.tick_player_movement(0.05).await;
+        assert_eq!(
+            game.players.read().await[&id].position,
+            start,
+            "{name} must reproduce the blocked arc"
+        );
+        assert!(
+            drain(&mut rx)
+                .iter()
+                .any(|m| matches!(m, ServerMessage::PositionCorrected { .. })),
+            "{name}"
+        );
+        game.recover_horse(&id, 7, goal).await;
+        assert!(
+            drain(&mut rx).iter().any(|m| matches!(
+                m,
+                ServerMessage::MountRecovery {
+                    done: false,
+                    success: true,
+                    ..
+                }
+            )),
+            "{name}"
+        );
+        actors.push((id, name, start, rotation, goal, rx));
+    }
+    for _ in 0..20 {
+        game.tick_player_movement(0.1).await;
+    }
+    for (id, name, start, rotation, goal, mut rx) in actors {
+        let p = game.players.read().await[&id].clone();
+        let distance = start.dist_xz_sq(&p.position).sqrt();
+        assert!(p.mounted, "{name}");
+        assert_eq!(p.rotation, rotation, "{name}");
+        assert!((0.24..=2.01).contains(&distance), "{name}: {distance}");
+        assert!(
+            (p.position.x - start.x) * rotation.sin() + (p.position.z - start.z) * rotation.cos()
+                < 0.0
+        );
+        assert!(
+            drain(&mut rx).iter().any(|m| matches!(
+                m,
+                ServerMessage::MountRecovery {
+                    request_id: 7,
+                    done: true,
+                    success: true,
+                    ..
+                }
+            )),
+            "{name}"
+        );
+        let route = pathfinding::find_and_smooth_path(
+            p.position.x,
+            p.position.z,
+            0,
+            goal.x,
+            goal.z,
+            0,
+            &game.passability_read(),
+            2000,
+        );
+        assert!(route.found);
+        for (index, wp) in route.waypoints.iter().enumerate() {
+            game.update_player_position(
+                &id,
+                move_cmd(
+                    Position {
+                        x: wp.x,
+                        y: 5.0,
+                        z: wp.z,
+                    },
+                    index > 0,
+                ),
+                false,
+            )
+            .await;
+        }
+        for _ in 0..100 {
+            game.tick_player_movement(0.1).await;
+        }
+        let p = game.players.read().await[&id].clone();
+        assert!(
+            p.mounted && p.position.dist_xz_sq(&goal) < 0.01,
+            "{name}: {:?}",
+            p.position
+        );
+        assert!(
+            !drain(&mut rx)
+                .iter()
+                .any(|m| matches!(m, ServerMessage::PositionCorrected { .. })),
+            "{name}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn horse_recovery_refuses_a_blocked_rear_and_stops_for_new_obstacles_or_cancel() {
+    use onlinerpg_shared::fence::FenceAxis;
+    for mode in ["blocked", "new_obstacle", "cancel", "dismount"] {
+        let game = make_game_state_with(mode, FlatLand, SeaOnlyWater);
+        let id = rider(&game).await;
+        let start = Position {
+            x: 0.5,
+            y: 5.0,
+            z: 0.1,
+        };
+        game.players.write().await.get_mut(&id).unwrap().position = start;
+        game.use_item(&id, 1).await;
+        let mut rx = game.register_direct_channel(&id).await;
+        if mode == "blocked" {
+            recovery_fence(&game, "rear", 0, 0, FenceAxis::X);
+        }
+        game.recover_horse(&id, 1, Position { x: 4.0, ..start })
+            .await;
+        if mode == "new_obstacle" {
+            recovery_fence(&game, "rear", 0, 0, FenceAxis::X);
+        }
+        if mode == "cancel" {
+            game.stop_horse(&id).await;
+        }
+        if mode == "dismount" {
+            game.use_item(&id, 1).await;
+        }
+        game.tick_player_movement(1.0).await;
+        assert_eq!(game.players.read().await[&id].position, start, "{mode}");
+        assert!(!game.movement_intents.read().await.contains_key(&id));
+        if mode != "cancel" {
+            assert!(
+                drain(&mut rx).iter().any(|m| matches!(
+                    m,
+                    ServerMessage::MountRecovery {
+                        done: true,
+                        success: false,
+                        ..
+                    }
+                )),
+                "{mode}"
+            );
+        }
+    }
+}

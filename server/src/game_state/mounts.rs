@@ -2,7 +2,7 @@ use super::GameState;
 use crate::types::{Player, PlayerId, ServerMessage};
 
 impl GameState {
-    async fn can_ride_here(&self, player: &Player) -> bool {
+    pub(super) async fn can_ride_here(&self, player: &Player) -> bool {
         if player.health == 0
             || player.floor_level != 0
             || player.object_type.is_some()

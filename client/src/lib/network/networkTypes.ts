@@ -123,6 +123,7 @@ export type RollCharacterStatsResult =
 
 // Serde externally tagged enum shapes
 export type ClientMessage =
+  | { PlayerMountRecover: { request_id: number; goal: Position } }
   | {
       PlayerMountTurn: { rotation: number; stop?: boolean; sprinting?: boolean }
     }
@@ -511,4 +512,13 @@ export type PositionCorrection = {
   y: number
   z: number
   rotation: number
+}
+
+export type MountRecovery = {
+  request_id: number
+  position: Position
+  rotation: number
+  floor_level: number
+  done: boolean
+  success: boolean
 }

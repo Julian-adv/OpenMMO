@@ -39,11 +39,24 @@ impl SharedState {
         self.dispatch_command(msg, !background).await
     }
 
+    pub(super) fn cancel_mount_recovery(&mut self) {
+        self.mount_recovery_id = self.mount_recovery_id.wrapping_add(1);
+        self.mount_recovery_result = Some(false);
+    }
+
     async fn dispatch_command(
         &mut self,
         msg: ClientMessage,
         from_action: bool,
     ) -> anyhow::Result<()> {
+        if matches!(
+            &msg,
+            ClientMessage::PlayerMove { .. }
+                | ClientMessage::PlayerMountTurn { .. }
+                | ClientMessage::PlayerAttack { .. }
+        ) {
+            self.cancel_mount_recovery();
+        }
         let player_attack = matches!(&msg, ClientMessage::PlayerAttack { .. });
         if player_attack && !self.player_attack_wait().is_zero() {
             // The combat loop retries the latest target after the cooldown.

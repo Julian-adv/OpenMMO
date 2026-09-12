@@ -162,6 +162,7 @@ impl LayoutGrind {
 #[derive(Clone)]
 pub(super) struct MoveIntent {
     turn_only: bool,
+    recovery: Option<u32>,
     pub(super) target: Position,
     rotation: f32,
     pub(super) floor_level: i8,
@@ -1224,7 +1225,11 @@ impl super::GameState {
         }
         let mut queues = self.movement_intents.write().await;
         let queue = queues.entry(*player_id).or_default();
-        if !append {
+        if !append
+            || queue
+                .front()
+                .is_some_and(|intent| intent.recovery.is_some())
+        {
             queue.clear();
         } else if queue.len() >= MAX_QUEUED_WAYPOINTS {
             // Drop the oldest leg, not the newest: losing path fidelity in the
@@ -1239,12 +1244,115 @@ impl super::GameState {
         }
         queue.push_back(MoveIntent {
             turn_only: false,
+            recovery: None,
             target: new_position,
             rotation: new_rotation,
             floor_level,
             check_collision: !is_official_npc,
             sprinting,
         });
+    }
+
+    fn mount_recovery_update(
+        player: &Player,
+        request_id: u32,
+        done: bool,
+        success: bool,
+    ) -> ServerMessage {
+        ServerMessage::MountRecovery {
+            request_id,
+            position: player.position,
+            rotation: player.rotation,
+            floor_level: player.floor_level,
+            done,
+            success,
+        }
+    }
+
+    pub async fn recover_horse(&self, player_id: &PlayerId, request_id: u32, goal: Position) {
+        let Some(player) = self.players.read().await.get(player_id).cloned() else {
+            return;
+        };
+        let eligible = player.mounted
+            && player.health > 0
+            && player.floor_level == 0
+            && !Self::in_combat(&player)
+            && goal.x.is_finite()
+            && goal.y.is_finite()
+            && goal.z.is_finite();
+        let hunger = self.hunger_movement_profiles_for(&[*player_id]).await;
+        let speed = PLAYER_MOVE_SPEED
+            * onlinerpg_shared::world::HORSE_MOVE_MULT
+            * hunger.get(player_id).map_or(1.0, |p| p.0);
+        let target = if eligible {
+            onlinerpg_shared::mount_movement::recovery_target(
+                &self.passability_read(),
+                player.position,
+                player.rotation,
+                goal,
+                speed,
+            )
+        } else {
+            None
+        };
+        let mut target = target;
+        if let Some(end) = target.as_mut() {
+            let distance = player.position.dist_xz_sq(end).sqrt();
+            let count = (distance / 0.1).ceil() as usize;
+            let mut previous_y = self
+                .surface_ground_y(0, &player.position, player.position.y)
+                .await;
+            let mut probe = player.clone();
+            for i in 1..=count {
+                let t = i as f32 / count as f32;
+                probe.position = Position {
+                    x: wrap_world_x(
+                        player.position.x + shortest_world_delta_x(player.position.x, end.x) * t,
+                    ),
+                    y: player.position.y,
+                    z: player.position.z + (end.z - player.position.z) * t,
+                };
+                probe.position.y = self.surface_ground_y(0, &probe.position, previous_y).await;
+                if (probe.position.y - previous_y).abs() > 0.15 || !self.can_ride_here(&probe).await
+                {
+                    target = None;
+                    break;
+                }
+                previous_y = probe.position.y;
+                end.y = previous_y;
+            }
+        }
+        let mut queues = self.movement_intents.write().await;
+        let Some(current) = self.players.read().await.get(player_id).cloned() else {
+            return;
+        };
+        if !current.mounted
+            || current.floor_level != 0
+            || current.object_type.is_some()
+            || current.health == 0
+            || Self::in_combat(&current)
+            || current.position != player.position
+            || current.rotation != player.rotation
+        {
+            target = None;
+        }
+        queues.remove(player_id);
+        if let Some(target) = target {
+            queues.entry(*player_id).or_default().push_back(MoveIntent {
+                turn_only: false,
+                recovery: Some(request_id),
+                target,
+                rotation: player.rotation,
+                floor_level: player.floor_level,
+                check_collision: true,
+                sprinting: false,
+            });
+        }
+        self.send_direct_message(
+            player_id,
+            Self::mount_recovery_update(&current, request_id, target.is_none(), target.is_some()),
+        )
+        .await;
     }
 
     pub async fn stop_horse(&self, player_id: &PlayerId) {
@@ -1276,6 +1384,7 @@ impl super::GameState {
         queue.clear();
         queue.push_back(MoveIntent {
             turn_only: true,
+            recovery: None,
             target: player.position,
             rotation,
             floor_level: player.floor_level,
@@ -1297,6 +1406,7 @@ impl super::GameState {
 
         let mut activities: Vec<(PlayerId, f32, bool)> = Vec::new();
         let mut refused: Vec<RefusedMove> = Vec::new();
+        let mut recovery_updates = Vec::new();
         {
             let mut queues = self.movement_intents.write().await;
             if queues.is_empty() {
@@ -1310,6 +1420,16 @@ impl super::GameState {
                 let Some(player) = players.get_mut(player_id) else {
                     return false;
                 };
+                let recovery = waypoints.front().and_then(|i| i.recovery);
+                if let Some(request_id) = recovery {
+                    if !player.mounted || player.health == 0 || Self::in_combat(player) {
+                        recovery_updates.push((
+                            *player_id,
+                            Self::mount_recovery_update(player, request_id, true, false),
+                        ));
+                        return false;
+                    }
+                }
                 // Backstop: combat clears the queue on death.
                 if player.health == 0 {
                     return false;
@@ -1327,6 +1447,11 @@ impl super::GameState {
                 } else {
                     1.0
                 };
+                let base_step = if recovery.is_some() {
+                    onlinerpg_shared::mount_movement::BACKWARD_SPEED * dt.max(0.0) / mount_mult
+                } else {
+                    base_step
+                };
                 let max_step = base_step
                     * hunger_mult
                     * mount_mult
@@ -1343,7 +1468,21 @@ impl super::GameState {
                     let dx = shortest_world_delta_x(player.position.x, target.x);
                     let dz = target.z - player.position.z;
                     let dist = (dx * dx + dz * dz).sqrt();
-                    let (step_x, step_y, step_z, facing, snap) = if player.mounted {
+                    let (step_x, step_y, step_z, facing, snap) = if intent.recovery.is_some() {
+                        if time_left <= 1e-7 {
+                            break;
+                        }
+                        let travel = (speed * time_left).min(dist);
+                        let fraction = if dist > 1e-5 { travel / dist } else { 1.0 };
+                        time_left = 0.0;
+                        (
+                            player.position.x + dx * fraction,
+                            player.position.y + (target.y - player.position.y) * fraction,
+                            player.position.z + dz * fraction,
+                            player.rotation,
+                            travel >= dist,
+                        )
+                    } else if player.mounted {
                         use onlinerpg_shared::mount_movement::{
                             angle_delta, arc_step, turn_duration, ARRIVAL_DISTANCE, STEP_SECONDS,
                             TURN_RADIUS,
@@ -1463,6 +1602,10 @@ impl super::GameState {
                                 // A blocked step never moves the player, so the
                                 // position/rotation here are what the correction
                                 // sends.
+                                if recovery.is_some() {
+                                    blocked = true;
+                                    break;
+                                }
                                 refused.push(RefusedMove {
                                     player_id: *player_id,
                                     position: player.position,
@@ -1528,10 +1671,24 @@ impl super::GameState {
                         sprinting,
                     ));
                 }
+                if let Some(request_id) = recovery {
+                    recovery_updates.push((
+                        *player_id,
+                        Self::mount_recovery_update(
+                            player,
+                            request_id,
+                            blocked || waypoints.is_empty(),
+                            !blocked,
+                        ),
+                    ));
+                }
                 !blocked && !waypoints.is_empty()
             });
         }
 
+        for (id, update) in recovery_updates {
+            self.send_direct_message(&id, update).await;
+        }
         let refused = self.free_sealed_players(refused).await;
         self.correct_refused_positions(refused).await;
         self.record_movement_activity(&activities).await;

@@ -1340,6 +1340,12 @@ async fn handle_client_message(
             return Ok(responses);
         }
 
+        ClientMessage::PlayerMountRecover { request_id, goal } => {
+            if let Some(id) = &state.player_id {
+                game_state.recover_horse(id, request_id, goal).await;
+            }
+        }
+
         ClientMessage::PlayerMountTurn {
             rotation,
             stop,

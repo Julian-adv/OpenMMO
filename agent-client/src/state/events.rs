@@ -338,6 +338,22 @@ impl SharedState {
                 self.adopt_floor_level(player.floor_level);
                 self.request_dungeon_doors_here();
             }
+            ServerMessage::MountRecovery {
+                request_id,
+                position,
+                rotation,
+                floor_level,
+                done,
+                success,
+            } => {
+                if *request_id == self.mount_recovery_id {
+                    self.relocate_self(*position, *rotation, *floor_level);
+                    if *done {
+                        self.mount_recovery_result = Some(*success);
+                    }
+                }
+                return EventUrgency::Noise;
+            }
             ServerMessage::PositionCorrected {
                 position,
                 rotation,
@@ -353,6 +369,7 @@ impl SharedState {
             } => {
                 if self.self_player_id.as_ref() == Some(player_id) {
                     self.relocate_self(*position, *rotation, *floor_level);
+                    self.cancel_mount_recovery();
                     // Any teleport settles the pending summons.
                     self.pending_party_summons.clear();
                 }

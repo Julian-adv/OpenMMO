@@ -148,7 +148,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v67: pre-rolled trophy fights replace the second-fish bonus.
 /// v68: consignment stalls replace the stall entry to player trades.
 /// v69: persistent item locks and SetItemLocked.
-pub const PROTOCOL_VERSION: u32 = 69;
+/// v70: mounted reverse recovery and authoritative recovery progress.
+pub const PROTOCOL_VERSION: u32 = 70;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

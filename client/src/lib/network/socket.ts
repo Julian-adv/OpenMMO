@@ -3,6 +3,7 @@ import type {
   FishingAction,
   Position,
   PositionCorrection,
+  MountRecovery,
   StallBuyLine,
   TradeLineItem,
 } from './networkTypes'
@@ -138,6 +139,7 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  readonly mountRecovery = createEvent<(update: MountRecovery) => void>()
   readonly positionCorrected = createEvent<(c: PositionCorrection) => void>()
 
   constructor() {
@@ -178,6 +180,7 @@ class NetworkManager {
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
       positionCorrected: this.positionCorrected,
+      mountRecovery: this.mountRecovery,
     }
   }
 
@@ -474,6 +477,10 @@ class NetworkManager {
     if (this.sendAndSerialize('RequestRespawn')) {
       this.respawnRequested.emit()
     }
+  }
+
+  sendPlayerMountRecover(requestId: number, goal: Position) {
+    this.sendMessage({ PlayerMountRecover: { request_id: requestId, goal } })
   }
 
   sendPlayerMountTurn(rotation: number, stop = false, sprinting = false) {

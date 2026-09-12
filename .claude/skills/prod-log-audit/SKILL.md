@@ -1,139 +1,59 @@
 ---
 name: prod-log-audit
-description: Daily prod health/log audit for OpenMMO — inspect journald + nginx since the last deploy, classify warnings/errors, check economy, bots, bandwidth, top players, compare with the previous audit note, and write a dated note to ~/work/notes. Use when the user says "로그 조사", "로그 점검", "수상한 점 없는지", "prod 점검", or asks for the daily audit.
+description: Investigate OpenMMO production warnings, errors, suspicious behavior, and unresolved incidents within a deployment interval; correlate journald, nginx, and targeted evidence, then write a dated note to ~/work/notes. Use for "로그 조사", "로그 점검", "수상한 점 없는지", or "prod 점검". Routine statistics are covered by the dashboard.
 ---
 
-# prod 로그 감사 (매일)
+# prod 이상 징후 조사
 
-조사만 한다. 서버 재시작·설정 변경·커밋은 하지 않고, 조치는 후보로만 적는다.
-결과 노트: `~/work/notes/openmmo-YYYY-MM-DD-log-audit.md` (플레이어명이 들어가므로 리포 밖).
+경고·오류, 플레이어가 겪은 반복 실패, 비정상 동작을 조사한다. 대시보드에서 확인할 수 있는 일반 통계를 매번 다시 작성하지 않는다.
+조사는 읽기 전용이다. 서버 재시작·설정 변경·제재·커밋은 별도 요청이 있을 때만 한다.
+결과는 `~/work/notes/openmmo-YYYY-MM-DD-log-audit.md`, 원문·분석 자료는 같은 날짜의 `*-audit/`에 둔다. 플레이어명·IP·계정 정보가 있으므로 공개 리포 밖에 보관한다.
 
-## 0. 접속·시간 규칙
+## 범위와 자료
 
-- `ssh prod` (VPN 필요). 안 되면 게임 다운으로 단정하지 말고 공개 엔드포인트 200 여부와 VPN을 먼저 본다.
-- `journalctl --since/--until`은 **KST**, 로그 줄 안 시각은 **UTC**. 창을 자르면 `head -1`/`tail -1`로 경계 확인.
-- 로그에 ANSI 색 코드가 있다. 모든 grep 전에 `sed -E "s/\x1b\[[0-9;]*m//g"` 를 거친다. 안 거치면 `WARN`/`ERROR` 매칭이 0으로 나온다.
-- 큰 창은 한 번 `/tmp/w.log`로 떨어뜨려 재사용한다.
-- 유닛: `openmmo-server`, `openmmo-agent-client`. 프로토콜 버전 문자열 `protocol vN (server speaks vM)`.
+- `ssh prod`로 접속한다(VPN 필요). 접속 실패만으로 게임 장애를 단정하지 않는다.
+- 사용자가 지정한 기간을 우선한다. “어제 배포부터 오늘 배포까지”는 어제 서버 시작부터 오늘 배포의 첫 서비스 정지 직전까지 `[시작, 종료)`다. 별도 지정이 없으면 직전 배포부터 조회 시점까지다.
+- `openmmo-server`, `openmmo-agent-client`의 systemd 시작·정지 기록, 배포 기록과 Git reflog로 경계와 실행 커밋을 확인한다. 구간 내 추가 재시작은 원인과 함께 보고한다. 오늘 배포 직후 검증은 본 조사 구간과 구분한다.
+- 시간을 추측하지 않는다. `journalctl`에는 `+0900` 등 시간대를 명시하고 JSON의 `__REALTIME_TIMESTAMP`로 정확히 자른다. 본문은 KST, 로그 메시지 안 시각은 UTC일 수 있다. SQLite epoch 비교에는 UTC를 쓴다.
+- 경계 전후를 포함한 저널을 한 번 수집해 로컬에서 재사용한다. ANSI를 제거하고 JSON `MESSAGE`가 바이트 배열이면 UTF-8로 복원한다. 첫·마지막 시각, 누락·suppression·파싱 실패 여부를 확인한다.
+- Nginx의 회전된 access/error 로그와 커널·journald의 해당 구간도 확인한다. 원문과 분석 스크립트, 체크섬을 남긴다. 대화 전문·전체 DB는 기본 수집 대상이 아니며 구체적인 이상 징후 확인에 필요한 자료만 추가한다.
+- 과거 로그의 동작·설정은 당시 배포 커밋과 대조한다. 현재 코드나 현재 HTTP 응답을 과거 상태의 증거로 쓰지 않는다.
 
-## 1. 창 정하기
+## 경고·오류 조사
 
-```
-systemctl show openmmo-server -p ActiveEnterTimestamp --value
-journalctl -u openmmo-server --since "3 days ago" -o short-iso | grep -E "Started|Stopped|listening"
-```
-- 창 = 직전 배포(재시작) → 지금. 창 안에 재시작이 또 있으면 사용자가 모를 수 있으니 **첫 줄에 알린다**.
-- 비교 기준 = 직전 노트(`ls ~/work/notes/openmmo-*-log-audit.md | tail -2`).
+먼저 서버·NPC의 WARN/ERROR를 유형별로 묶는다. 심각한 저빈도 오류를 놓치지 않도록 상위 빈도 밖의 유형도 읽는다. INFO의 실패 결과와 전투 감사 기록도 필요에 따라 대조한다.
+각 유의미한 항목에 **증상·영향, 대상, 첫/마지막 시각, 반복 횟수·빈도, 대표 근거, 원인 확실성, 후속 후보**를 적는다. 건수는 이상 판단에 필요한 범위에서만 쓴다.
 
-## 2. 전체 상태
+- 안정성: panic, OOM, 비정상 종료, DB 잠금·저장 실패, 디스크 부족, 로그 유실, 지연·큐 포화. 플레이어명이나 대화에 포함된 단어를 실제 장애와 혼동하지 않는다.
+- 이동: `Blocked move`, 울타리·집 충돌, 계단 밖 층 변경, `Waypoint queue full`, 강제 이동 종료. 같은 플레이어·위치의 연속성, 여러 플레이어의 동일 지점 실패, 분당 피크와 직후 이벤트를 본다. 큐 초과 뒤 사망만으로 스팸 클릭을 단정하지 않는다.
+- 공격: `Rejected player attack`의 reason과 상세(대상 소멸·시체·층·거리), 동일 공격자/대상의 반복 기간과 허용 공격을 대조한다. 고정 빈도나 낮은 초당 요청 수만으로 정상·어뷰즈를 판정하지 않는다. 필요한 경우 `data/combat-audit/*.jsonl`의 HP 수지·요청 간격·허용/거절·`history_overflow`·`dropped_events`를 확인한다. 감사 대상 밖까지 결과를 일반화하지 않는다.
+- 접속: 프로토콜 거부, 세션 교체, heartbeat, reset, 인증 실패. 배포 전환 중 일시 실패와 정상화 후 지속 실패를 나눈다. `[+N more in the last 60s]`는 억제분이며 로그 줄 수와 요청 수를 구분한다. 같은 IP나 /24만으로 다중 계정·프록시·부정행위를 확정하지 않는다.
+- NPC: LLM 인증·용량·타임아웃, 응답 파싱 실패, 긴 대기, 행동 실패 루프, 상점/여관 고착, 원장 형식 오류. `llm turn ... error`와 `LLM prompt failed`처럼 한 사건의 중복 로그를 구분한다. 서비스 active나 NPC 입장만으로 LLM 정상이라고 판단하지 않는다.
+- Nginx: 모든 5xx, 반복되는 실제 리소스 404, 예상 밖 API 인증 응답과 공격성 요청을 확인한다. 없는 타일의 `/api/terrain/water-field`·`height-original` 404와 스캐너 요청은 실제 플레이 장애와 구분한다. 캐시·재다운로드·전송 폭증은 이상 징후가 있을 때만 상세 분석한다. 바이너리·비정상 요청줄 때문에 조용히 집계에서 누락되지 않게 한다.
 
-- 레벨별 줄 수(서버·agent-client), 패닉/OOM(`panic|panicked|out of memory` — 플레이어명 오탐 주의), 디스크·메모리·load.
-- 일별 입장 수: `Player X (id) joined the game` 를 날짜별 count. (`Session started`라는 문구는 없다 — `Session ended`만 있다.)
-- 배포 직후 건강: NPC 4명이 `Auth failed: Protocol` 1회 뒤 `Authenticated` 됐는지, `Refusing client` kind별 잔여.
+관측 사실과 가설을 구분한다. 장시간 활동·반복 접속·공유 IP만으로 제재 후보를 만들지 않는다. 수정 효과는 수정이 실제 적용된 구간과 충분한 활동이 있을 때 평가한다.
 
-## 3. WARN/ERROR 분류
+## 일반 통계와 선택 조사
 
-숫자·해시를 `N`/`H`로 치환해 `sort | uniq -c | sort -rn`. 상위 항목마다 "누가·언제·최대 빈도"를 본다:
-- `Rejected player attack … (InvalidTarget|OutOfRange)`: 공격자 id별 count → id는 `Player NAME (id) joined`로 이름 매핑. **분당 고정 빈도로 수 시간 평탄**하면 클라 재시도 루프(과거 사례). 분산돼 있고 최대 10/s 이하이면 정상. 총량은 킬 수에 비례(막타 후 인플라이트 스윙 경합, 대략 3~7킬당 1건)이므로 ` killed ` 총량과 비율로 판단. reason 뒤 상세(corpse/absent from registry/alive but unreachable+층·좌표, OutOfRange는 거리)로 게이트 구분 가능 — 같은 (공격자, 몬스터) 페어가 쿨다운 간격으로 장시간 반복되면 붙박이 루프 버그(9/1 별이→m97_10 사례).
-- `Refusing client: protocol vN … ip= kind= version=`: ip/kind/version별. `[+N more in the last 60s]` 억제분이 있으니 "로그 줄 수"로 표기. 같은 /24에 IP가 3개 이상이면 프록시 풀.
-- `Blocked move … by r-X_+Y_N`: 집 콜라이더에 끼임. 같은 집에 여러 명이면 배치 문제.
-- `storey change|floor change … off the stairs`: 계단 밖 층 변경 거부. 시간당 비율을 직전 노트와 비교.
-- `Waypoint queue full`: 분당 피크 → 직후 사망이면 스팸 클릭.
-- `Google token … ExpiredSignature`: 수십 건은 정상.
-- `Dropping connection: unauthenticated`, `handshake failed`: 스캐너. 수만 보고 넘어간다.
-- `bad house file … unknown variant`: 서버가 모르는 하우징 스키마 — 클라/서버 배포 순서 문제. 파일 mtime과 배포 시각을 대조.
-- agent-client: `TradeFailed`, `Position lost`, `Failed to parse agent response` 정도는 평상시 잡음. 총 줄/초도 적는다.
+기본 보고서에서 접속자·계정·레벨·XP 순위, 전체 경제 수지·재고·인챈트/드롭 통계, 웹 상태코드·전송량 분포, 영웅담 후보를 생략한다. 예전 보고서의 해당 표를 관성적으로 재생성하지 않는다.
+이상 징후를 설명하는 분모·비교 수치나 사용자가 별도로 요청한 통계는 필요한 만큼만 포함한다.
 
-## 4. nginx (`/var/log/nginx/access.log*`, 로테이션 일별)
+- 아이템 복제·비정상 자산 증가가 의심되면 해당 거래·캐릭터·기간으로 좁혀 로그와 읽기 전용 DB 사본을 대조한다. DB는 `/home/ubuntu/work/OnlineRPG/data/game_data.db`로 고정하고, 실행 중 파일의 단순 복사 대신 일관된 SQLite 백업을 사용한다. 스냅샷 시각과 로그 창의 차이, 영지 창고·좌판·금고·세금·삭제를 고려한다.
+- [gold_flow.py](gold_flow.py)는 선택적 보조 도구다. 당시 배포본의 상인 종류와 로그를 대조하고 좌판 원금·세금 등 미지원 흐름을 보정하기 전에는 순수지를 확정하지 않는다. Rica·Wick 거래는 생성/소멸, Karl·Signe는 이전이며 되사기는 별도 확인한다. 1g = 10,000c.
+- 강화 이상은 당시 `data-src/items.csv`·`world_drop.csv`와 시도/성공/파괴 로그로 확인한다. `destroyed ... enchanting at +N`은 시도 전 단계이며 보너스 드롭 한 줄에 여러 장이 있을 수 있다.
+- 영웅담은 별도 요청 시에만 [tales.py](tales.py)와 `doc/HEROIC_TALES.md`를 사용한다. 후보는 사실 확인 전 원장에 넣지 않는다. 운영 `agent-client/data/tales/ledger.txt` 쓰기는 해당 쓰기 요청/승인이 있을 때만 하며, 자연어 `DATE | HERO | 기록` 형식과 기존 내용을 보존한다.
 
-- 상태 코드 분포, 4xx 상위 경로. `/api/terrain/water-field|height-original` 404는 **정상**(없는 타일 = 물 없음, 클라가 null 캐시).
-- 400/166 + 바이너리 요청줄 = 인터넷 스캔.
-- 500은 전부 본다(경로·referer·UA).
-- 리소스 404(예: `/portraits/*.png`)는 구 번들이 새 파일명을 요청하는 배포 간 불일치일 수 있다.
-- 대역폭: `$10` 바이트를 날짜(`split($4,d,"[/:]"); d[1]`)·카테고리(`textures|models|bgm|assets|api/terrain|ws`)별로 합산, 웹 고유 IP로 인원 보정. 200 vs 304 비율, (IP,파일) 쌍 대비 200 수로 재다운로드 배율, 상위 IP. 헤더는 `curl -sI`로 실측(`cache-control`, `etag`, `last-modified`). prod nginx 설정은 `/etc/nginx/sites-available/openmmo`(수동 관리, 리포 미추적).
+## 직전 조사와 보고
 
-## 5. 경제
+직전 보고서의 미해결 경고·오류·수상한 동작을 이번 창에서 대조한다. 일반 통계 추적 항목은 대시보드로 넘기고 매번 재측정하지 않는다.
+판정은 해소·개선·미해결·악화·미재현·재검증 불가를 구분한다. 해당 플레이어가 활동하지 않았거나 표본이 부족하면 해소라고 쓰지 않는다. 이전 배포에만 있던 현상과 이번에 새로 생긴 현상을 구분한다.
 
-`gold_flow.py`(이 디렉터리)를 prod에 scp 해서 창을 파이프한다:
-```
-scp .claude/skills/prod-log-audit/gold_flow.py prod:/tmp/ && \
-ssh prod 'journalctl -u openmmo-server --since "<KST>" -o cat | python3 /tmp/gold_flow.py'
-```
-- 상인(Rica·Wick)은 무한 지갑: 판매=생성, 구매=소멸. Karl·Signe는 이전. 1g = 10,000c.
-- **되사기(`bought back`)는 스크립트가 양쪽에서 제외**한다(골드 소모 아님).
-- 급여는 지갑 cap이면 `no payment`만 찍힌다.
-- 대형 P2P 이전(`Trade:` 한쪽 ≥ 20g)은 계정·IP를 묶어 본다. 같은 IP·여러 계정·직후 캐릭터 삭제면 리롤용 자산 이전(위반 아님, 기록만).
-- 직전 노트의 순증감과 비교해 방향(인플레/디플레)을 적는다.
+보고서는 다음 내용만 필요한 분량으로 구성한다.
 
-## 5-1. 인챈트
+1. 정확한 조사 창·실행 커밋·구간 내 비정상 재시작 여부.
+2. 영향과 시급성 순의 주요 이상 징후 및 근거.
+3. 배포 전환·일반 스캔 등 설명 가능한 잡음의 짧은 요약.
+4. 직전 미해결 항목의 관련 결과와 우선 후속 후보.
+5. 원문 경로·재현 방법·누락 및 판정 한계.
 
-로그 문구(모두 `game_state::inventory` / `combat`):
-- 드롭: `Bonus drops ["scroll_of_enchant_weapon", …] at (x,z) PLACE` — 플레이어명 없음, 한 줄에 여러 아이템 가능하니 **장 수는 id 등장 횟수**로 센다.
-- 처치: `Player NAME killed TYPE (lvl N) at (x,z) PLACE; weapon drop: …` — `lvl`은 유효레벨. 조사 당시 배포본의 `world_drop.csv`에서 종류별 `lowLevelChance`, `chance`, `lowLevelMaxLevel`을 읽어 기대 드롭을 계산한다. 창 안에 확률 변경 배포가 있으면 전후를 나눠 합산한다. 로컬 최신 설정을 과거 로그에 적용하지 않는다.
-- 시도: `NAME consumed scroll_of_enchant_(weapon|armor) at PLACE`. 결과: `NAME enchanted ITEM to +N` / `NAME destroyed ITEM enchanting at +N`(+N은 시도 전 값).
-
-적을 것: 처치 수(장소별), 드롭 장 수(종류·장소별)와 킬당 실측률 대 설정 기대값, 시도 수와 성공/파괴 비율, 개인별 시도 상위, 파괴 목록(누가 무엇을 +몇에서), 창 안 최고 도달값, 상인 판매·P2P 건수.
-
-DB(`character_items(item_def_id, enchant, equip_slot, quantity)` + `characters`):
-- 최고 인챈트 무기·방어구(장착/가방 구분, 방어구 id는 `data-src/items.csv`의 `armor` 카테고리로 거른다), +5·+7 이상 개수.
-- 주문서 재고 합계와 보유 상위 — 드롭/일 대 시도/일과 비교해 축적률을 적는다.
-- 같은 캐릭이 +9 무기를 여러 자루 갖는 식의 이상치는 이전 창 시도 로그와 대조해 출처를 적는다.
-
-## 6. DB (`/home/ubuntu/work/OnlineRPG/data/game_data.db`, SQLite)
-
-- 같은 디렉터리에 `game_data-backup-*.db`가 있다. `find … -name "*.db" | head -1`로 잡지 말고 경로를 고정한다.
-- `characters(character_name, account_name, level, xp, gold, class, created_at, last_seen_at, admin_role)`. `last_seen_at`은 2026-08-29부터 채워지므로 그 이전 창의 액티브는 저널 `joined the game` 이름으로 잡는다(저널 보존 약 20일 — `journalctl -o short-iso | head -1`로 시작일 확인).
-- 상위 레벨 20명, 레벨 분포, 액티브 캐릭/계정 수, 골드 합·평균·중앙값·구간 분포, 전체 골드 대비 액티브 비중. 레벨 대비 골드 과다인 캐릭을 표시.
-- **계정 수 (매번 §1 표에 기록)**: `accounts(player_name, created_at, google_sub)`에는 last_seen이 없으므로 액티브는 `characters.last_seen_at`으로 계정을 묶는다.
-  ```
-  select (select count(*) from accounts) total,
-         (select count(*) from accounts where created_at >= strftime('%s','<창 시작 KST→UTC 아님, 그대로>')) new_in_window,
-         (select count(*) from accounts where created_at >= strftime('%s','now')-7*86400) new_7d,
-         (select count(distinct account_name) from characters where last_seen_at >= strftime('%s','<창 시작>')) active_in_window,
-         (select count(*) from accounts where player_name not in (select account_name from characters)) no_character;
-  ```
-  직전 노트의 총계와 차이 = 창 안 가입 수인지 대조한다(삭제된 계정이 있으면 어긋난다). `strftime('%s', ...)`의 인자는 UTC로 해석되므로 창 시작 시각을 **UTC 문자열**로 넣는다.
-
-## 7. 봇·멀티 계정
-
-- 의심 IP가 있으면 그 IP로 `Session ended for NAME (IP)`를 전 기간 모아 이름 목록 → 각 이름의 다른 IP → DB에서 계정 묶기 → 개명 로그(`renamed to`)·삭제 로그(`Character id=N deleted`)로 이름 변천 추적.
-- 서버 몬스터 AI 가동 확인: `monster ai: brains N active N … over_budget 0`. 봇이 맞고 있는지는 `consumed healing_potion` 수로 본다.
-- 금지 이름은 `data/banned_names.txt`(재시작 때 로드, 정확 일치). 추가는 사용자 결정 — 제안만.
-
-## 8. 직전 노트 점검표 대조 — 반드시
-
-직전 노트의 `## 요약 — 조치 후보`/`## 후속 후보`/"내일 재측정" 항목을 **하나씩** 이번 창에서 재측정해 표로 남긴다(항목 / 이번 결과 / 판정: 해소·개선·미해결·악화). 빠뜨리기 쉬우니 노트 작성 전 마지막에 한다.
-
-## 8-1. 영웅담 원장 (doc/HEROIC_TALES.md)
-
-바드 Signe가 저녁 여관 공연에서 부를 사실 원장. `tales.py`가 창 안 저널에서 **후보**만 뽑는다:
-```
-scp .claude/skills/prod-log-audit/tales.py prod:/tmp/ && \
-ssh prod 'journalctl -u openmmo-server --since "<KST>" -o cat | python3 /tmp/tales.py YYYY-MM-DD'
-```
-- 후보를 읽고 노래감인 것만 사용자에게 보인 뒤 prod의 `~/work/OnlineRPG/agent-client/data/tales/ledger.txt`에 **append**한다(리포 밖, gitignore). 형식은 `DATE | HERO | 확인된 사실과 공연 방향을 적은 자연어 문장`. 스크립트는 모든 후보 앞에 `# REVIEW`를 붙여 원장에 복사돼도 바드가 무시하게 한다. 사실 확인과 사용자 승인 뒤 문장을 다듬고 이 접두사를 제거한 줄만 append하며, 스크립트는 절대 직접 쓰지 않는다.
-- 단독 처치·서버 최초 처치는 기존 원장과 로그, 최고 인챈트·레벨 기록은 DB와 대조한 뒤 확인된 내용만 자연어로 적는다. 비극·경쟁·풍자 같은 공연 방향과 지어내면 안 될 경계도 같은 문장에 적는다.
-- 일일 경험치 1위는 DB `SELECT character_name, level, xp FROM characters WHERE level >= 5`를 `~/work/notes/openmmo-YYYY-MM-DD-xp.tsv`로 남기고 직전 tsv와 xp 차이 1위를 적는다. 같은 사람이 이어지면 새 줄 대신 며칠째인지 기존 문장을 갱신한다.
-- 원장은 기본적으로 추가 전용이다. 기존 문장을 고치는 예외는 연속 기록의 횟수 갱신, 개명(`renamed to`), 삭제(`Character id=N deleted`), 어뷰즈로 무효화된 성과 제거뿐이다. 같은 사람의 같은 종류 사건은 첫 번과 연속 기록만 남긴다.
-- 봇도 동일하게 오른다. `npc_` 계정만 제외. 금액·IP·계정명은 원장에 넣지 않는다.
-- 최대 영지 후보는 아래 읽기 전용 조회로 구한다. 구획은32×32m이며 왕령은 제외한다. 최대값이 동률이면 각 소유자의 자연어 기록에 공동 최대임을 명시하고, 단독이면 단독 최대라고 적는다. 결과가 없으면 후보도 없다. 현재 캐릭터명과 기존 원장을 대조하고, 같은 소유자의 같은 규모를 매일 중복 기록하지 않는다. 면적은 토지 소유만 뜻하며 집·농장·정복을 지어내지 않는다는 공연 방향도 기록한다.
-  ```sql
-  WITH sizes AS (
-    SELECT e.id AS estate_id, c.character_name, COUNT(*) AS plots
-    FROM land_estates e
-    JOIN land_plots p ON p.estate_id = e.id
-    JOIN characters c ON c.id = e.owner_id
-    WHERE e.grade = 1 AND substr(c.account_name, 1, 4) != 'npc_'
-    GROUP BY e.id, c.character_name
-  )
-  SELECT estate_id, character_name, plots, plots * 1024 AS area_m2
-  FROM sizes
-  WHERE plots = (SELECT MAX(plots) FROM sizes)
-  ORDER BY estate_id;
-  ```
-
-## 9. 노트 구성
-
-1. 창·재시작 이력 → 2. 전체 상태(계정 총계·신규·액티브 포함) → 3. 플레이어에게 보였던 문제 → 4. 수상하지만 무해 → 5. 사소 → 6. 대역폭 → 7. 경제 → 8. 인챈트 → 8-1. 영웅담 후보(원장에 붙인 줄) → 9. 상위/액티브 플레이어 → 10. 봇 → 11. 직전 점검표 대조 → 12. 후속 후보 → 13. 조회 메모(이번에 새로 알게 된 경로·문구·함정).
-
-사용자에게는 표 위주로 짧게 보고한다. 숫자는 사용자가 툴 출력을 못 보므로 본문에 직접 적는다. 추정은 추정이라고 쓰고, 나중에 틀린 게 드러나면 정정한다.
+사용자에게는 핵심 발견과 다음 조치 후보를 짧게 보고하고 전체 노트를 연결한다. 발견이 없으면 확인 범위와 함께 그렇게 말하며 통계로 분량을 채우지 않는다.

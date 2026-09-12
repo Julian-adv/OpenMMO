@@ -18,7 +18,10 @@
     type TravelDestination,
   } from '../utils/autoTravel'
   import { networkManager } from '../network/socket'
-  import type { PositionCorrection } from '../network/networkTypes'
+  import type {
+    PositionCorrection,
+    MountRecovery,
+  } from '../network/networkTypes'
   import { monsterManager } from '../managers/monsterManager'
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { groundItemManager } from '../managers/groundItemManager'
@@ -272,6 +275,81 @@
   // state drops that data, so there are no movement flags to reset here.
   // lastSentPosition is kinematic (send dedup), not state-membership data.
   let lastSentPosition = $state<Position | null>(null)
+  let mountRecoveryId = 0
+  let mountRecoveryAttempted = false
+  let mountRecovery: {
+    id: number
+    movement: MovingControlState
+    goal: Position
+    approach: PendingApproach | null
+    startedAt: number
+  } | null = null
+
+  function cancelMountRecovery() {
+    if (!mountRecovery) return
+    mountRecovery = null
+    networkManager.sendPlayerMountTurn(playerRotation, true)
+  }
+
+  function startMountRecovery(): boolean {
+    const m = movingState()
+    const goal = m?.waypoints.at(-1)
+    if (
+      !currentPlayer?.mounted ||
+      currentPlayer.health <= 0 ||
+      !m ||
+      !goal ||
+      mountRecoveryAttempted ||
+      combatController.isInCombat
+    )
+      return false
+    mountRecoveryAttempted = true
+    mountRecovery = {
+      id: ++mountRecoveryId,
+      movement: m,
+      goal: {
+        x: goal.x,
+        y: waypointHeight(goal.floor, goal.x, goal.z),
+        z: goal.z,
+      },
+      approach: m.approach,
+      startedAt: performance.now(),
+    }
+    currentSpeed = 0
+    networkManager.sendPlayerMountRecover(mountRecovery.id, mountRecovery.goal)
+    return true
+  }
+
+  function applyMountRecovery(update: MountRecovery) {
+    const pending = mountRecovery
+    if (!pending || pending.id !== update.request_id) return
+    if (
+      !currentPlayer?.mounted ||
+      currentPlayer.health <= 0 ||
+      movingState() !== pending.movement
+    ) {
+      cancelMountRecovery()
+      return
+    }
+    playerRotation = update.rotation
+    writePlayerPosition(update.position, update.rotation)
+    currentSpeed = update.done ? 0 : 1.5 * ($hungerState?.moveMult ?? 1)
+    updatePlayerState()
+    if (!update.done) return
+    mountRecovery = null
+    if (update.success) {
+      lastSentPosition = null
+      handleClickToMove(pending.goal, {
+        approach: pending.approach,
+        sprinting: false,
+        recovering: true,
+      })
+    } else {
+      pending.movement.approach = null
+      stopMovement()
+      cancelAutoTravel('Travel stopped: no room to back up.')
+    }
+  }
 
   // Use the same movement config as remote players, with debug speed multiplier.
   // The hunger multiplier mirrors the server's own movement sim (doc/HUNGER.md)
@@ -647,6 +725,7 @@
   function transitionTo(
     name: Exclude<PlayerControlStateName, 'moving' | 'picking_up'>
   ) {
+    cancelMountRecovery()
     playerControlMachine.transition({ name })
   }
 
@@ -677,6 +756,7 @@
     passabilityFloor?: number,
     append = false
   ) {
+    cancelMountRecovery()
     const wrappedPosition = { ...position, x: wrapWorldX(position.x) }
     const floorLevel = wireFloorLevel(passabilityFloor)
     // The server checks the declared dungeon floor against Y: send the Y of
@@ -719,21 +799,14 @@
     })
   }
 
-  // The server refused a step, so we are somewhere it cannot follow. Snap to
-  // its copy and drop the path that walked us out of sync — keeping it would
-  // just march us back into the same refusal. Combat is left alone on purpose:
-  // dropping the moving state drops the chase goal with it, so the next tick
-  // re-routes from where we now actually are.
   function applyPositionCorrection(correction: PositionCorrection) {
-    // The snap means we never reached what we were walking to.
+    if (mountRecovery) return
+    playerRotation = correction.rotation
+    writePlayerPosition(correction, correction.rotation)
+    if (startMountRecovery()) return
     const m = movingState()
     if (m) m.approach = null
     stopMovement()
-    playerRotation = correction.rotation
-    writePlayerPosition(
-      { x: correction.x, y: correction.y, z: correction.z },
-      correction.rotation
-    )
     cancelAutoTravel('Travel stopped after a position correction.')
   }
 
@@ -747,6 +820,7 @@
 
   /** Turn to face a world point (rotation only; nothing is emitted). */
   function faceTowards(x: number, z: number) {
+    cancelMountRecovery()
     if (!currentPlayer) return
     const dx = shortestWrappedDeltaX(currentPlayer.position.x, x)
     const dz = z - currentPlayer.position.z
@@ -1065,6 +1139,7 @@
 
   const movementTickActions = {
     stopMovement: () => {
+      if (startMountRecovery()) return
       cancelAutoTravel('Travel stopped: the route is blocked.')
       stopMovement()
     },
@@ -1144,6 +1219,19 @@
 
   // Update player movement (click-to-move) with acceleration/deceleration
   function updatePlayerMovement(deltaTime: number) {
+    if (mountRecovery) {
+      if (
+        performance.now() - mountRecovery.startedAt > 10000 ||
+        !currentPlayer?.mounted ||
+        currentPlayer.health <= 0
+      ) {
+        const m = movingState()
+        if (m) m.approach = null
+        stopMovement()
+        cancelAutoTravel('Travel stopped during recovery.')
+      }
+      return
+    }
     updateAutoTravel(deltaTime)
     const m = movingState()
     runPlayerMovementTick({
@@ -1206,7 +1294,9 @@
   }
 
   function updateKeyboardMovement(deltaTime: number) {
+    if (mountRecovery && !inputHandler.hasKeysPressed) return
     if (inputHandler.hasKeysPressed) {
+      cancelMountRecovery()
       cancelAutoTravel()
       clearDoorInteractionRetry()
     }
@@ -1367,9 +1457,14 @@
       approach?: PendingApproach | null
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
+      recovering?: boolean
     } = {}
   ) {
-    cancelAutoTravel()
+    if (!options.recovering) {
+      cancelMountRecovery()
+      mountRecoveryAttempted = false
+      cancelAutoTravel()
+    }
     // Any fresh movement cancels a pending prop break/open (breakProp/openProp
     // re-arm it after their own walk-up call below).
     dungeonManager.clearPendingBreak()
@@ -1379,7 +1474,7 @@
       (options.sprinting ?? sprintRequested(false)) && sprintAvailable()
     // A drunk walker weaves on free moves only; a walk-up still has to
     // arrive where its target is.
-    if (!options.approach) {
+    if (!options.approach && !options.recovering) {
       const radius = staggerRadius(get(activeDebuffs), Date.now())
       if (radius > 0) clickPosition = staggerTarget(clickPosition, radius)
     }
@@ -2364,7 +2459,10 @@
       if (interaction === 'object') exitObjectInteraction()
     })
     const unsubscribeTeleport = teleportLoading.subscribe((loading) => {
-      if (loading) cancelAutoTravel()
+      if (loading) {
+        cancelMountRecovery()
+        cancelAutoTravel()
+      }
     })
     const unsubscribeTravelPlayer = gameStore.subscribe((state) => {
       if (
@@ -2417,6 +2515,8 @@
     canvas.addEventListener('pointermove', handlePointerHover)
     canvas.addEventListener('pointerleave', handlePointerLeave)
 
+    const unsubscribeMountRecovery =
+      networkManager.mountRecovery.on(applyMountRecovery)
     const unsubscribeNetworkEvents = subscribePlayerNetworkEvents({
       isCurrentPlayerEligibleForRespawn: () =>
         !!currentPlayer && currentPlayer.health <= 0,
@@ -2439,6 +2539,8 @@
       canvas.removeEventListener('pointermove', handlePointerHover)
       canvas.removeEventListener('pointerleave', handlePointerLeave)
       clearHover()
+      cancelMountRecovery()
+      unsubscribeMountRecovery()
       unsubscribeNetworkEvents()
       playerControlMachine.dispose()
       clearStandUpTimer()
