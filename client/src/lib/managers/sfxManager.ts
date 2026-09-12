@@ -110,7 +110,7 @@ sfxMuted.subscribe((m) => {
 
 // Multiplier applied on top of each sound's baseline volume so the Settings
 // SFX slider/mute scales all effects uniformly.
-function getSfxMultiplier(): number {
+export function getSfxMultiplier(): number {
   return get(sfxMuted) ? 0 : get(sfxVolume)
 }
 

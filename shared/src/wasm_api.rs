@@ -382,26 +382,32 @@ thread_local! {
 }
 
 /// Parses `weather-sectors.json` once; the per-frame exports below run
-/// against the cached list. Returns the sector count.
+/// against the cached list.
 #[wasm_bindgen]
-pub fn weather_set_sectors(json: &str) -> Result<usize, JsError> {
+pub fn weather_set_sectors(json: &str) -> Result<(), JsError> {
     let parsed: crate::weather::WeatherSectors = serde_json::from_str(json)
         .map_err(|e| JsError::new(&format!("Invalid weather sectors: {e}")))?;
-    let count = parsed.sectors.len();
+    if parsed.version != crate::weather::WEATHER_SECTORS_VERSION {
+        return Err(JsError::new(&format!(
+            "weather sectors version {} (expected {})",
+            parsed.version,
+            crate::weather::WEATHER_SECTORS_VERSION
+        )));
+    }
     WEATHER_SECTORS.with(|s| *s.borrow_mut() = parsed.sectors);
-    Ok(count)
+    Ok(())
 }
 
-/// Game minutes since the calendar epoch — computed here rather than in TS so
-/// the client's `t` cannot drift a day from the server's.
+/// Game minutes at the start of a calendar day — computed here rather than in
+/// TS so the client's `t` cannot drift a day from the server's.
 #[wasm_bindgen]
-pub fn weather_game_minutes(year: u32, month: u8, day: u8, hour: u8, minute: u8) -> f64 {
+pub fn weather_day_start_minutes(year: u32, month: u8, day: u8) -> f64 {
     crate::weather::game_minutes(&crate::world::GameDateTime {
         year,
         month,
         day,
-        hour,
-        minute,
+        hour: 0,
+        minute: 0,
     })
 }
 

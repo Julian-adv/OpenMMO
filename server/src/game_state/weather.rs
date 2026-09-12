@@ -4,7 +4,7 @@
 
 use bytes::Bytes;
 use onlinerpg_shared::messages::ServerMessage;
-use onlinerpg_shared::weather::WeatherSectors;
+use onlinerpg_shared::weather::{WeatherSectors, WEATHER_SECTORS_VERSION};
 use sha2::Digest;
 use tracing::{info, warn};
 
@@ -42,12 +42,6 @@ pub fn sectors_tag(json: &[u8]) -> String {
 impl GameState {
     /// Weather stays off until a bake has produced `weather-sectors.json`.
     pub async fn load_weather(&self, bias: f32) {
-        let bias = if bias.is_finite() && bias >= 0.0 {
-            bias
-        } else {
-            warn!("weather: invalid bias {bias}; using 1.0");
-            1.0
-        };
         let json = match self.terrain_io.read_weather_sectors_bytes().await {
             Ok(Some(json)) => json,
             Ok(None) => {
@@ -60,6 +54,12 @@ impl GameState {
             }
         };
         match serde_json::from_slice::<WeatherSectors>(&json) {
+            Ok(sectors) if sectors.version != WEATHER_SECTORS_VERSION => {
+                warn!(
+                    "weather: weather-sectors.json is version {} (expected {WEATHER_SECTORS_VERSION}); weather disabled",
+                    sectors.version
+                )
+            }
             Ok(sectors) => {
                 let state = WeatherState::new(sectors.seed, bias, json);
                 info!(

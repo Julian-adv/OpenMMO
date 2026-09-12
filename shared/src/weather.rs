@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::moon::game_day_index;
 use crate::world::{shortest_world_delta_x, GameDateTime};
 use crate::worldgen::climate::Climate;
+use crate::worldgen::noise::smoothstep;
 
 pub const GAME_MINUTES_PER_DAY: i64 = 24 * 60;
 
@@ -32,7 +33,7 @@ pub struct WeatherSectors {
 pub const WEATHER_SECTORS_VERSION: u32 = 1;
 
 /// Per-zone cadence in game minutes and kilometres. A rain event lasts
-/// 15-40 real minutes (a game day is 3 real hours); dry zones get longer gaps,
+/// 15-30 real minutes (a game day is 3 real hours); dry zones get longer gaps,
 /// not shorter rain.
 #[derive(Debug, Clone, Copy)]
 pub struct ZoneSchedule {
@@ -97,7 +98,7 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
 /// guaranteed a dry gap between cells.
 pub const MAX_LIFE_SHARE: f64 = 0.9;
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cell {
     pub sector: usize,
     pub x: f32,
@@ -107,25 +108,6 @@ pub struct Cell {
     pub env: f32,
     /// 0..1 progress through the cell's life.
     pub progress: f32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-pub enum CellStage {
-    Forming,
-    Raining,
-    Clearing,
-}
-
-impl Cell {
-    pub fn stage(&self) -> CellStage {
-        if self.progress < 0.25 {
-            CellStage::Forming
-        } else if self.progress < 0.7 {
-            CellStage::Raining
-        } else {
-            CellStage::Clearing
-        }
-    }
 }
 
 pub fn zone_schedule(zone: u8) -> ZoneSchedule {
@@ -143,20 +125,19 @@ pub fn game_minutes(datetime: &GameDateTime) -> f64 {
     (day * GAME_MINUTES_PER_DAY + hour * 60 + minute) as f64
 }
 
-fn smoothstep(a: f32, b: f32, x: f32) -> f32 {
-    let s = ((x - a) / (b - a)).clamp(0.0, 1.0);
-    s * s * (3.0 - 2.0 * s)
-}
-
-/// splitmix64 finaliser over (seed, sector, cycle, salt) → [0, 1).
-fn hash01(seed: u64, sector: u64, cycle: i64, salt: u64) -> f64 {
-    let mut x = seed
-        ^ sector.wrapping_mul(0x9E37_79B9_7F4A_7C15)
-        ^ (cycle as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)
-        ^ salt.wrapping_mul(0x94D0_49BB_1331_11EB);
+pub(crate) fn splitmix64(mut x: u64) -> u64 {
     x = (x ^ (x >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
     x = (x ^ (x >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    x ^= x >> 31;
+    x ^ (x >> 31)
+}
+
+/// Hash of (seed, sector, cycle, salt) → [0, 1).
+fn hash01(seed: u64, sector: u64, cycle: i64, salt: u64) -> f64 {
+    let x = splitmix64(
+        seed ^ sector.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+            ^ (cycle as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9)
+            ^ salt.wrapping_mul(0x94D0_49BB_1331_11EB),
+    );
     (x >> 11) as f64 / (1u64 << 53) as f64
 }
 
@@ -230,9 +211,7 @@ pub fn rain_at(cells: &[Cell], x: f32, z: f32) -> f32 {
 /// Share of the radius that rains at full strength; the rest is the fade.
 pub const CELL_CORE_SHARE: f32 = 0.7;
 
-/// Flat top with a short edge: the map disc is the rain area, and a cell
-/// never soaks its neighbours from beyond its own radius. The Gaussian this
-/// replaced kept 37 % at the radius and drizzled out to twice it.
+/// Flat top with a short edge, so a cell never soaks past its own radius.
 pub fn rain_falloff(normalized_distance: f32) -> f32 {
     1.0 - smoothstep(CELL_CORE_SHARE, 1.0, normalized_distance)
 }
@@ -344,26 +323,31 @@ mod tests {
     }
 
     #[test]
-    fn envelope_forms_rains_and_clears_in_order() {
+    fn envelope_rises_holds_then_falls_within_a_life() {
         let s = sectors();
         let sched = zone_schedule(s[1].zone);
-        let mut stages = Vec::new();
+        let mut lives = 0;
+        let mut prev: Option<Cell> = None;
         let mut t = 0.0;
         while t < sched.period * 30.0 {
-            if let Some(c) = sector_cell(&s, 1, 3, 1.0, t) {
-                if stages.last() != Some(&c.stage()) {
-                    stages.push(c.stage());
+            let cur = sector_cell(&s, 1, 3, 1.0, t);
+            match (prev, cur) {
+                (Some(p), Some(c)) if c.progress >= p.progress => {
+                    if c.progress < 0.25 {
+                        assert!(c.env >= p.env, "forming must not fall at t={t}");
+                    } else if c.progress < 0.7 {
+                        assert!((c.env - 1.0).abs() < 1e-6, "raining must hold at t={t}");
+                    } else {
+                        assert!(c.env <= p.env, "clearing must not rise at t={t}");
+                    }
                 }
+                (None, Some(_)) => lives += 1,
+                _ => {}
             }
+            prev = cur;
             t += 1.0;
         }
-        assert!(stages.len() >= 3);
-        for w in stages.windows(3) {
-            if w[0] == CellStage::Forming {
-                assert_eq!(w[1], CellStage::Raining);
-                assert_eq!(w[2], CellStage::Clearing);
-            }
-        }
+        assert!(lives >= 2);
     }
 
     #[test]

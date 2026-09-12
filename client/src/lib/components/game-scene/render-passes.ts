@@ -93,18 +93,8 @@ export function runRenderPasses(ctx: RenderPassesContext): void {
 
 /** Everything above the water surface: neither refracted into the bed image
  *  nor mirrored, and every group left in costs a pipeline per material. */
-export function aboveWaterGroups(
-  ctx: Pick<
-    RenderPassesContext,
-    | 'entityClipGroup'
-    | 'grassLayerRef'
-    | 'treeLayerRef'
-    | 'windParticlesRef'
-    | 'rainLayerRef'
-    | 'objectOverlayRef'
-    | 'riverRocksRef'
-    | 'shoreSprayRef'
-  >
+function aboveWaterGroups(
+  ctx: RenderPassesContext
 ): (THREE.Group | undefined)[] {
   return [
     ctx.entityClipGroup,

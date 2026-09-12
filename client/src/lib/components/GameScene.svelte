@@ -40,7 +40,7 @@
     stopRainAmbience,
     updateRainAmbience,
   } from '../managers/rainAmbienceManager'
-  import { setRainQuiet } from '../managers/bgmManager'
+  import { setRainIntensity } from '../managers/bgmManager'
   import GameSceneHousingLayer from './game-scene/GameSceneHousingLayer.svelte'
   import GameSceneLandClaimLayer from './game-scene/GameSceneLandClaimLayer.svelte'
   import GameSceneHousePlacementLayer from './game-scene/GameSceneHousePlacementLayer.svelte'
@@ -100,13 +100,11 @@
     serverGameTime,
   } from '../stores/timeStore'
   import {
-    localWeather,
     NO_WEATHER,
     weather,
-    weatherSectorsReady,
     type LocalWeather,
   } from '../stores/weatherStore'
-  import { sampleLocalWeather, weatherChanged } from '../utils/weatherSample'
+  import { sampleLocalWeather } from '../utils/weatherSample'
   import {
     debugVisible,
     cameraRotationEnabled,
@@ -238,7 +236,6 @@
   let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
   let rainLayerRef = $state<GameSceneRainLayer | undefined>(undefined)
-  let rainBgmQuiet = false
   let housingLayerRef = $state<GameSceneHousingLayer | undefined>(undefined)
   let dungeonLayerRef = $state<GameSceneDungeonLayer | undefined>(undefined)
   let groundItemsLayerRef = $state<GameSceneGroundItemsLayer | undefined>(
@@ -418,7 +415,7 @@
     if (objectGroup) objectGroup.visible = !underground
     const windGroup = windParticlesRef?.getGroup?.()
     if (windGroup) windGroup.visible = !underground
-    const rainGroup = rainLayerRef?.getGroup?.()
+    const rainGroup = rainLayerRef?.getGroup()
     if (rainGroup) rainGroup.visible = !underground
     const riverRocksGroup = riverRocksRef?.getGroup?.()
     if (riverRocksGroup) riverRocksGroup.visible = !underground
@@ -753,12 +750,15 @@
         loopProfiler.record('grassUpdate', performance.now() - grassStart)
       }
 
+      const calDate = calendarSystem.getDate()
+      const localWeather = sampleLocalWeatherNow(calDate)
+
       // Update wind-blown particles (only when grass is visible nearby)
       {
         const windStart = performance.now()
         // Petals and seeds stop spawning under rain; the live ones age out.
         const grassCount =
-          localSample.rain > 0.2
+          localWeather.rain > 0.2
             ? 0
             : (grassLayerRef?.getPlayerChunkGrassCount() ?? 0)
         if (windState)
@@ -768,14 +768,11 @@
 
       {
         const rainStart = performance.now()
-        const rain = localSample.rain
+        const rain = localWeather.rain
         const indoor = $playerInsideHouseId !== null
         rainLayerRef?.update(deltaTime, camera, indoor ? 0 : rain)
         updateRainAmbience(rain, indoor, deltaTime / 1000)
-        // Hysteresis keeps the playlist from flapping along a cell edge.
-        if (rain > 0.35) rainBgmQuiet = true
-        else if (rain < 0.2) rainBgmQuiet = false
-        setRainQuiet(rainBgmQuiet)
+        setRainIntensity(rain)
         loopProfiler.record('rain', performance.now() - rainStart)
       }
 
@@ -795,12 +792,11 @@
       loopProfiler.record('cameraUpdate', performance.now() - cameraUpdateStart)
 
       // Compute sun snapshot once per frame (reused by lighting + water)
-      const calDate = calendarSystem.getDate()
       const sunSnapshot = computeSunLightSnapshot(displayHour, calDate)
 
       // Update directional light to follow player
       const lightUpdateStart = performance.now()
-      updateLightPosition(sunSnapshot, calDate)
+      updateLightPosition(sunSnapshot, calDate, localWeather.cloud)
       loopProfiler.record('lightUpdate', performance.now() - lightUpdateStart)
 
       // Update water uniforms — always use real sun direction (not moon)
@@ -955,34 +951,24 @@
     cameraDistance.set(camera.zoom)
   }
 
-  let localSample: LocalWeather = NO_WEATHER
-  let publishedWeather: LocalWeather = NO_WEATHER
-
   // Weather runs on true game time, not the debug-offset display hour, so
-  // it stays in step with the server and the map forecast.
-  function updateLocalWeather(calDate: CalendarDate): number {
-    let sample = NO_WEATHER
-    if ($weather && $weatherSectorsReady && currentPlayer && !$isUnderground) {
-      sample = sampleLocalWeather(
-        $weather.seed,
-        $weather.bias,
-        calDate,
-        calendarSystem.getGameHour(),
-        currentPlayer.position.x,
-        currentPlayer.position.z
-      )
-    }
-    localSample = sample
-    if (weatherChanged(publishedWeather, sample)) {
-      publishedWeather = sample
-      localWeather.set(sample)
-    }
-    return sample.cloud
+  // it stays in step with the server.
+  function sampleLocalWeatherNow(calDate: CalendarDate): LocalWeather {
+    if (!$weather || !currentPlayer || $isUnderground) return NO_WEATHER
+    return sampleLocalWeather(
+      $weather.seed,
+      $weather.bias,
+      calDate,
+      calendarSystem.getGameHour(),
+      currentPlayer.position.x,
+      currentPlayer.position.z
+    )
   }
 
   function updateLightPosition(
     sunLightSnapshot: SunLightSnapshot,
-    calDate: CalendarDate
+    calDate: CalendarDate,
+    cloudFactor: number
   ) {
     sceneLighting.update({
       currentPlayerPosition: currentPlayer?.position ?? null,
@@ -993,7 +979,7 @@
       scene,
       sunLightSnapshot,
       eclipseFactor: eclipseState.factor,
-      cloudFactor: updateLocalWeather(calDate),
+      cloudFactor,
       underground: $isUnderground,
     })
   }
@@ -1164,7 +1150,7 @@
       unsubscribeSunTimeScale()
       stopGameLoop()
       stopRainAmbience()
-      setRainQuiet(false)
+      setRainIntensity(0)
       stopChatBubbleChecker()
       networkManager.disconnect()
       monsterManager.reset()

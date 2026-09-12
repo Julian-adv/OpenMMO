@@ -16,6 +16,27 @@ export const loadGrassLeafTexture = () =>
   loadAlphaTexture('/textures/grass-leaf.png')
 export const loadPetalTexture = () => loadAlphaTexture('/textures/petal.png')
 
+/** Instanced billboard pool with every slot scaled to zero until spawned. */
+export function createParticleInstancedMesh(
+  material: THREE.Material,
+  width: number,
+  height: number,
+  count: number
+): THREE.InstancedMesh {
+  const geom = new THREE.PlaneGeometry(width, height)
+  geom.setAttribute(
+    PARTICLE_OPACITY_ATTR,
+    new THREE.InstancedBufferAttribute(new Float32Array(count), 1)
+  )
+  const mesh = new THREE.InstancedMesh(geom, material, count)
+  mesh.frustumCulled = false
+  mesh.castShadow = false
+  mesh.receiveShadow = false
+  const zeroMat = new THREE.Matrix4().makeScale(0, 0, 0)
+  for (let i = 0; i < count; i++) mesh.setMatrixAt(i, zeroMat)
+  return mesh
+}
+
 /**
  * Create an unlit billboard material for wind-blown particles.
  * Uses alpha from the texture multiplied by per-instance opacity.

@@ -463,7 +463,9 @@ export function setBardZone(inside: boolean) {
   else leavePlaylistQuiet()
 }
 
-export function setRainQuiet(active: boolean) {
+/** Hysteresis keeps the playlist from flapping along a rain cell's edge. */
+export function setRainIntensity(rain: number) {
+  const active = rainQuiet ? rain >= 0.2 : rain > 0.35
   if (rainQuiet === active) return
   rainQuiet = active
   if (active) enterPlaylistQuiet()
