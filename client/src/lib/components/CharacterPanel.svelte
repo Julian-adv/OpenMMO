@@ -7,7 +7,7 @@
     wornAmmoStack,
   } from '../stores/inventoryStore'
   import type { EquipSlot } from '../stores/inventoryStore'
-  import { getItemDef, isRangedWeapon } from '../data/itemDefs'
+  import { getItemDef, isRangedWeapon, isTwoHanded } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import type {
     CharacterAttributes,
@@ -159,13 +159,10 @@
     ][]
   ).flatMap(([slot, pos]) => (pos ? [{ slot, ...pos }] : []))
 
-  // A bow is held in the bow hand, so the panel shows it in the off-hand cell
-  // — the same rule `mainHandBoneFor` uses for the model, so the two agree.
-  // The hand it does not occupy is greyed while a two-hander is wielded: the
-  // server refuses an equip there (`Both hands are on your weapon`), and a
-  // live-looking empty socket invites exactly that.
+  // Bows occupy the left-hand cell; melee two-handers lock it.
   const mainHandId = $derived($inventoryStore.equipped.main_hand?.item_def_id)
   const heldInLeft = $derived(isRangedWeapon(mainHandId))
+  const offHandBlocked = $derived(isTwoHanded(mainHandId) && !heldInLeft)
 
   // The bow is drawn with the right hand, so the arrow it draws belongs in
   // the right-hand cell — which the bow itself has vacated for the left. The
@@ -328,6 +325,7 @@
             />
             {#each VISIBLE_SLOTS as { slot, top, left } (slot)}
               {@const stored = slotBehind(slot)}
+              {@const blocked = offHandBlocked && slot === 'off_hand'}
               {@const isQuiverCell = heldInLeft && slot === 'main_hand'}
               {@const ammo = isQuiverCell ? ammoCell : null}
               {@const item = isQuiverCell
@@ -338,18 +336,23 @@
                 ? $dragMeta !== null &&
                   ammoKind !== undefined &&
                   getItemDef($dragMeta.defId)?.ammoKind === ammoKind
-                : $dragMeta && isSlotCompatible($dragMeta.equipSlot, stored)}
+                : !blocked &&
+                  $dragMeta &&
+                  isSlotCompatible($dragMeta.equipSlot, stored)}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="equip-slot"
+                class:blocked
                 class:drop-target={isDropTarget}
                 style="top:{top}%;left:{left}%"
-                title={item
-                  ? undefined
-                  : isQuiverCell
-                    ? 'No arrows'
-                    : EQUIP_SLOT_LABELS[slot]}
-                data-equip-slot={isQuiverCell ? undefined : stored}
+                title={blocked
+                  ? 'Both hands are on your weapon'
+                  : item
+                    ? undefined
+                    : isQuiverCell
+                      ? 'No arrows'
+                      : EQUIP_SLOT_LABELS[slot]}
+                data-equip-slot={isQuiverCell || blocked ? undefined : stored}
                 data-ammo-kind={isQuiverCell ? ammoKind : undefined}
                 use:itemTooltip={item && def
                   ? { def, item, side: left > 50 ? 'left' : 'right' }
@@ -729,6 +732,11 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
+  }
+
+  .equip-slot.blocked {
+    opacity: 0.35;
+    cursor: not-allowed;
   }
 
   .equip-slot:hover {

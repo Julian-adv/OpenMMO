@@ -156,3 +156,8 @@
     게임 모델 `client/public/models/weapons/skeleton_greatsword.glb`, 편집본
     `assets/skeleton_greatsword/skeleton_greatsword.blend`.
     스켈레톤 기사 전용 장착 외형이며 플레이어 아이템·드롭·판매 항목은 추가하지 않았다.
+
+## Great Sword
+
+- great_sword.glb — Tripo Pro 유료 생성 모델, 2026-09-12. Tripo 서비스 이용 조건 적용. [PR #178의 기여자 확인](https://github.com/Julian-adv/OpenMMO/pull/178#issuecomment-5638085991)에 따라 Skeleton Knight의 대검을 플레이어 아이템으로 분리했다. 원본 `fantasy+sword+3d+model.glb`는 `assets/skeleton_greatsword/source.glb`와 SHA-256이 동일하다(`04a73e744dfe381abc5bdd2fdd7444332afded3a9a4ec2ec223ba0c50be0b3a2`). 원본은 `assets/great_sword/source.glb`에 보존. 전장 1.8m, 칼날 +X, 칼날 평면 XZ(Blender), 원점은 손잡이 끝에서 전장의 19%. 텍스처 3장 512², emissive 제거. `export_item_asset.py --rotation 0 90 0 --grip-fraction 0.19 --icon-rotation 90 0 40`으로 GLB 및 투명 128² 아이콘 생성. `great_sword`: great_sword 타입·2d8·무게 6·28,000·티어 4·hands=2. 전용 Idle·Walk·Run·Slash 팩 사용. 기준 손 로컬 회전(-1.907 / -0.475 / 0.139 rad)은 타입별 weapon_animations.csv에서 읽는다. `offHandGripReach=0.3m`로 대기·걷기·달리기·공격의 매 프레임 왼손 그립에 손잡이 축(-X)을 맞추며, 원래 칼날의 롤과 오른손 위치를 유지한다. 대기 중 손을 떼면 기준 파지로 부드럽게 돌아간다. 애니메이션 출처는 animation.md 참조.
+    - 컨셉아트: Google AI 생성, 사용자 제공 `image.png`(Pro 요금제, 2026-09-12 제공 기록). PNG의 XMP 크레딧은 `Made with Google AI`이며 내장 C2PA에도 Google Media Processing Services가 기록되어 있다. Google 서비스 이용 조건 적용. ![원화](../images/items/great_sword.png)

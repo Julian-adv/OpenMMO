@@ -3,6 +3,7 @@
 
 import * as THREE from 'three'
 import { isRangedWeapon } from '../data/itemDefs'
+import { getWeaponAnimation } from '../data/weaponAnimationDefs'
 
 /** Offset from the wrist bone toward the palm, so a prop looks gripped. */
 const HAND_GRIP_OFFSET = new THREE.Vector3(0, 0.08, 0)
@@ -63,7 +64,11 @@ export function poseMainHandProp(
   forearm?: number
 ) {
   prop.position.copy(HAND_GRIP_OFFSET)
-  if (itemDefId === 'fishing_rod') {
+  const rotation = getWeaponAnimation(itemDefId)?.gripRotationRadians
+  if (rotation) {
+    const [x, y, z] = rotation.split('|').map(Number)
+    prop.rotation.set(x, y, z)
+  } else if (itemDefId === 'fishing_rod') {
     prop.position.copy(FISHING_ROD_POSITION)
     prop.rotation.copy(FISHING_ROD_ROTATION)
   } else if (itemDefId === MANDOLIN_ITEM_DEF_ID) {

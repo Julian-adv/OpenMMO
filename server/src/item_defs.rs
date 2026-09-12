@@ -35,6 +35,7 @@ impl ItemEffect {
 #[serde(rename_all = "snake_case")]
 pub enum WeaponType {
     Sword,
+    GreatSword,
     ShortSword,
     Dagger,
     Axe,
@@ -998,6 +999,7 @@ mod tests {
             ("worn_iron_sword", WeaponType::Sword),
             ("notched_iron_sword", WeaponType::Sword),
             ("steel_longsword", WeaponType::Sword),
+            ("great_sword", WeaponType::GreatSword),
             ("goblin_sword", WeaponType::ShortSword),
             ("small_sword", WeaponType::ShortSword),
             ("dagger", WeaponType::Dagger),
@@ -1017,6 +1019,7 @@ mod tests {
     fn weapon_type_wire_names_are_snake_case() {
         let cases = [
             ("sword", WeaponType::Sword),
+            ("great_sword", WeaponType::GreatSword),
             ("short_sword", WeaponType::ShortSword),
             ("dagger", WeaponType::Dagger),
             ("axe", WeaponType::Axe),

@@ -109,3 +109,4 @@ trophy_raw_perch,Trophy Raw Perch,A trophy-sized catch won by keeping steady pre
 trophy_raw_trout,Trophy Raw Trout,A trophy-sized catch won by keeping steady pressure on the line.,2.0,,true,objects/raw_trout.png,,fish,,2d4,,180,,3,,,,,,,true,40,grilled_trout,,food_poisoning,,,,,,,,,
 trophy_river_salmon,Trophy River Salmon,A trophy-sized catch won by keeping steady pressure on the line.,4.0,,true,objects/river_salmon.png,,fish,,2d6,,600,,4,,,,,,,true,40,grilled_salmon,,food_poisoning,,,,,,,,,
 trophy_golden_sturgeon,Trophy Golden Sturgeon,A trophy-sized catch won by keeping steady pressure on the line.,8.0,,true,objects/golden_sturgeon.png,,fish,,4d6,,4500,,5,,,,,,,true,40,grilled_sturgeon,,food_poisoning,,,,,,,,,
+great_sword,Great Sword,A massive steel blade wielded with both hands. Its weight leaves no hand free for a shield or torch.,6,main_hand,false,weapons/great_sword.png,weapons/great_sword.glb,weapon,great_sword,2d8,metal,28000,,,,,,,4,,,,,,,,,,,,,2,,

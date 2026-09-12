@@ -246,3 +246,24 @@
   재현: `blender -b --python-exit-code 1 -P tools/blender-scripts/prepare_horse_mount.py -- --rider-only`.
 - 기존 캐릭터 애니메이션 리타게팅 경로로 각 캐릭터에 적용한다. 브라우저에서
   남녀 기사 모델의 기승·달리기·하차를 확인했다. 말 자체 클립은 [animals.md](animals.md).
+
+## Great Sword (2026-09-12)
+
+- 제공된 걷기 원본은 뒷걸음질 동작이므로 `great_sword_walk`의 키프레임 순서를 역전해 전진 걷기로 사용한다. 변환 스크립트에서 적용하며 원본 FBX는 보존한다.
+- 사용자 제공 FBX: `Great Sword Idle (1).fbx`, `Great Sword Walk.fbx`, `Great Sword Run.fbx`, `Great Sword Slash.fbx`. 출처: Adobe Mixamo(사용자 확인, 2026-09-12). 라이선스 기록은 [characters.md의 Mixamo 항목](characters.md)을 따른다. 모델의 Pro 생성 출처와 구분한다.
+- 원본은 `assets/great_sword/animations/`에 보존. `build_great_sword_animations.py`가 기존 `all_animation.blend`의 `Armature_combat`에 리타게팅하고 별도 작업 파일로 저장한다. 기존 애니메이션 팩은 변경하지 않는다.
+- 출력: `client/public/models/animations/great_sword.glb`. `great_sword_idle` 7.542초, `great_sword_walk` 1.292초, `great_sword_run` 0.583초, `great_sword_slash` 1.250초(24fps 원본). 수평 루트 이동 제거, 수직 움직임 유지, 시작 프레임 0 정렬. 배포 팩의 캐릭터 메시·재질은 기존 exporter로 제거한다.
+- 캐릭터별 리타게팅·지면 보정 후 대검에만 적용한다. Slash의 0.625초 타격 자세를 기존 근접 판정 0.540초에 맞춰 재생 시간을 조정한다(전체 약 1.08초). 종료 후 대검 Idle로 전환한다. 캐릭터 선택 화면도 같은 Idle을 사용한다.
+- 재현: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_great_sword_animations.py`. 원본 `all_animation.blend`를 덮어쓰지 않는다.
+
+### 무기 타입별 연결
+
+`data-src/items.csv`의 `weaponType`으로 `data-src/weapon_animations.csv`의 `id`를 조회한다. Great Sword는 `great_sword` 타입이며 같은 타입의 다른 아이템도 설정을 공유한다. 아이템 ID에 따른 애니메이션 분기는 없다.
+
+- `pack`: models 기준 애니메이션 GLB 경로.
+- `idle`, `walk`, `run`, `attack`: 상태별 클립 이름. 없는 상태·타입은 기존 공통 동작 사용.
+- `attackImpactMs`: 원본 공격 클립의 타격 시점. 기존 근접 판정 시점에 맞춰 재생 시간을 조정한다.
+- `gripRotationRadians`: 기준 손 로컬 XYZ 회전(rad); 세 값을 `|`로 구분한다.
+- `offHandGripReach`: 양손 그립 간 거리(m)가 이 값 이내일 때 검의 손잡이(-X)를 현재 왼손 검지·엄지 사이로 향하게 보정한다. 손을 놓는 동작에서는 1.5배 거리까지 보정을 부드럽게 해제한다. 캐릭터 선택 화면과 게임에서 같은 보정을 적용하며, 해당 팩 이외의 동작에서는 기준 회전으로 돌아간다.
+
+로컬·다른 플레이어·캐릭터 선택 화면은 같은 타입 설정을 사용한다. 양손 장비 제한은 애니메이션 타입과 독립적으로 items.csv의 `hands=2`에서 결정한다. 현재 전용 설정이 등록된 타입은 `great_sword`이며 나머지 타입은 기존 동작을 유지한다.
