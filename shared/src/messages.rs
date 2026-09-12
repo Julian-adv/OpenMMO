@@ -1116,10 +1116,13 @@ pub enum ServerMessage {
         is_night: bool,
     },
     /// Everything a client needs to evaluate rain anywhere, any time
-    /// (doc/WEATHER_SYSTEM.md): sent on join and every 30 s.
+    /// (doc/WEATHER_SYSTEM.md): sent on join and every 30 s. `sectors_tag`
+    /// names the sector list the server loaded; clients fetch it only when
+    /// the tag changes.
     WeatherSync {
         seed: u64,
         bias: f32,
+        sectors_tag: String,
     },
     /// NPC clients only (doc/PRICING.md).
     PricingNotice(crate::pricing::PricingNotice),

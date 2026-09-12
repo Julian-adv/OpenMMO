@@ -997,7 +997,11 @@ export function handleServerMessage(
       break
     }
     case 'WeatherSync': {
-      setWeather({ seed: data.seed, bias: data.bias })
+      setWeather({
+        seed: data.seed,
+        bias: data.bias,
+        sectorsTag: data.sectors_tag,
+      })
       break
     }
 

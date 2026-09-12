@@ -282,12 +282,18 @@ mod tests {
         let bytes = serialize_server_msg(&ServerMessage::WeatherSync {
             seed: 42,
             bias: 1.0,
+            sectors_tag: "0123456789abcdef".into(),
         })
         .unwrap();
         match deserialize_server_msg(&bytes).unwrap() {
-            ServerMessage::WeatherSync { seed, bias } => {
+            ServerMessage::WeatherSync {
+                seed,
+                bias,
+                sectors_tag,
+            } => {
                 assert_eq!(seed, 42);
                 assert_eq!(bias, 1.0);
+                assert_eq!(sectors_tag, "0123456789abcdef");
             }
             other => panic!("Wrong variant: {other:?}"),
         }
