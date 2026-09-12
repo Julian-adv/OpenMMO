@@ -3,8 +3,8 @@
   import GoldAmount from './GoldAmount.svelte'
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { formatAxisTime, formatCount, formatDateTime, leaderboardPeriods, nearestSample, type LeaderboardHours, type PriceIndexHistory } from './metrics'
-  import { axisRange, stepPath } from './leaderboardHistory'
+  import { axisRange, formatAxisTime, formatCount, formatDateTime, leaderboardPeriods, nearestSample, type LeaderboardHours, type PriceIndexHistory } from './metrics'
+  import { stepPath } from './leaderboardHistory'
 
   let { hours = $bindable(), resource }: {
     hours: LeaderboardHours
@@ -27,7 +27,7 @@
   let values = $derived([100, ...steps.map((step) => step.index)])
   let minimum = $derived(Math.min(...values))
   let maximum = $derived(Math.max(...values))
-  let { floor, ceiling, ticks } = $derived(axisRange(minimum, maximum, 5, maximum - minimum + 10))
+  let { floor, ceiling, ticks } = $derived(axisRange(minimum, maximum, 5))
   const x = (timestamp: number) => left + (timestamp - (history?.from ?? 0)) / (hours * 3600) * plotWidth
   const y = (value: number) => top + plotHeight * (1 - (value - floor) / (ceiling - floor))
   let selected = $derived(meetings.find((meeting) => meeting.timestamp === selectedTime) ?? null)

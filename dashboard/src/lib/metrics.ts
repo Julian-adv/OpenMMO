@@ -359,6 +359,14 @@ export function axisStep(span: number) {
   return ([1, 2, 5, 10].find((value) => value * magnitude >= raw) ?? 10) * magnitude
 }
 
+export function axisRange(minimum: number, maximum: number, padding: number, span = maximum - minimum + padding * 2) {
+  const step = axisStep(span)
+  const floor = Math.max(0, Math.floor((minimum - padding) / step) * step)
+  const ceiling = Math.max(floor + step * 4, (Math.floor(maximum / step) + 1) * step)
+  const ticks = Array.from({ length: Math.round((ceiling - floor) / step) + 1 }, (_, index) => floor + index * step)
+  return { step, floor, ceiling, ticks }
+}
+
 export function splitSegments<T extends TimestampSample>(samples: T[], interval: number): T[][] {
   const segments: T[][] = []
   for (const sample of samples) {

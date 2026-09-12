@@ -2,8 +2,8 @@
   import MetricsError from './MetricsError.svelte'
   import GoldAmount from './GoldAmount.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { formatAxisTime, formatDateTime, leaderboardMetrics, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
-  import { axisRange, sampleAt, stepPath } from './leaderboardHistory'
+  import { axisRange, formatAxisTime, formatDateTime, leaderboardMetrics, leaderboardPeriods, type LeaderboardHours, type CharacterLeaderboard, type LeaderboardMetric } from './metrics'
+  import { sampleAt, stepPath } from './leaderboardHistory'
 
   let { metric, hours = $bindable(), leaderboard, colors, selectedCharacter = $bindable(), loading, refreshing, error, refresh }: {
     metric: M

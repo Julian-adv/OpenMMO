@@ -31,7 +31,7 @@
   </div>
   <div class="chart-meta"><span>총 골드</span><span>{period.intervalLabel}</span></div>
   {#if history && history.samples.length > 0}
-    <HistoryChart {history} {peak} value={(sample) => sample.total_gold} legend="서버 총 골드" valueLabel={period.interval > 3600 ? '골드 (평균)' : '골드'} unit="" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold}>
+    <HistoryChart {history} {peak} value={(sample) => sample.total_gold} legend="서버 총 골드" valueLabel={period.interval > 3600 ? '골드 (평균)' : '골드'} unit="" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold} fitAxis>
       {#snippet amount(copper, svg)}<GoldAmount {copper} {svg} />{/snippet}
       {#snippet detail(selected)}
         {#if period.interval > 3600}

@@ -48,7 +48,7 @@
   {/if}
   <div class="chart-meta"><span>골드/계정 · 직전 {activePeriod.label} 활성 유저</span><span>{period.intervalLabel}</span></div>
   {#if history && history.samples.length > 0}
-    <HistoryChart {history} {peak} value={(sample) => sample.gold_per_account} legend={`직전 ${activePeriod.label} 활성 유저 1인당 골드`} valueLabel={period.interval > 3600 ? '골드/계정 (평균)' : '골드/계정'} unit="/계정" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold}>
+    <HistoryChart {history} {peak} value={(sample) => sample.gold_per_account} legend={`직전 ${activePeriod.label} 활성 유저 1인당 골드`} valueLabel={period.interval > 3600 ? '골드/계정 (평균)' : '골드/계정'} unit="/계정" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold} fitAxis>
       {#snippet amount(copper, svg)}<GoldAmount {copper} {svg} />{/snippet}
       {#snippet detail(selected)}
         {#if period.interval > 3600}
