@@ -4,6 +4,7 @@ import { PLAYER_ATTACK_RANGE_METERS } from './combatTiming'
 
 export const WEAPON_TYPE_LABELS = {
   sword: 'Sword',
+  great_sword: 'Great Sword',
   short_sword: 'Short Sword',
   dagger: 'Dagger',
   axe: 'Axe',

@@ -4,6 +4,12 @@
   import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
   import { onDestroy, untrack } from 'svelte'
   import { AnimationIndex } from '../types/animations'
+  import { getWeaponAnimation } from '../data/weaponAnimationDefs'
+  import { loadWeaponAnimations } from '../utils/weaponAnimations'
+  import {
+    createTwoHandedGrip,
+    type TwoHandedGrip,
+  } from '../utils/twoHandedGrip'
   import {
     createCharacterModelRoot,
     findBoneByName,
@@ -96,6 +102,29 @@
   let footBones: THREE.Bone[] = []
   let validAnimations = $state<THREE.AnimationClip[]>([])
   let setupDone = $state(false)
+  let weaponIdle: THREE.AnimationClip | undefined
+
+  $effect(() => {
+    const root = modelRoot
+    const profile = getWeaponAnimation(equipment?.main_hand)
+    weaponIdle = undefined
+    if (!root) return
+    let cancelled = false
+    if (profile) {
+      void loadWeaponAnimations(modelPath, root, profile)
+        .then((clips) => {
+          if (cancelled) return
+          weaponIdle = profile.idle ? clips.get(profile.idle) : undefined
+          playIdleAnimation()
+        })
+        .catch((error) => console.error('Failed to load weapon preview', error))
+    } else {
+      untrack(playIdleAnimation)
+    }
+    return () => {
+      cancelled = true
+    }
+  })
 
   const OVERLAP_BEFORE_END = 0.3
 
@@ -115,17 +144,19 @@
     ]
     const idleIndex =
       idleIndices[Math.floor(Math.random() * idleIndices.length)]
-    const clip = validAnimations[idleIndex]
+    const clip = weaponIdle ?? validAnimations[idleIndex]
     if (!clip) return
 
     const newAction = mixer.clipAction(clip)
     newAction.reset()
-    newAction.loop = THREE.LoopOnce
-    newAction.clampWhenFinished = true
+    const playOnce = clip !== weaponIdle
+    newAction.loop = playOnce ? THREE.LoopOnce : THREE.LoopRepeat
+    newAction.clampWhenFinished = playOnce
     newAction.paused = !selected
 
     if (currentAction && newAction !== currentAction) {
-      newAction.crossFadeFrom(currentAction, 0.3, true)
+      if (selected) newAction.crossFadeFrom(currentAction, 0.3, false)
+      else currentAction.stop()
     }
 
     newAction.play()
@@ -134,6 +165,7 @@
 
   let capeRig: CapeRig | null = null
   let heldProps: THREE.Object3D[] = []
+  let weaponGrip: TwoHandedGrip | null = null
   // Bumped on detach so a GLB that lands afterwards doesn't attach to a
   // discarded rig.
   let equipGeneration = 0
@@ -179,6 +211,10 @@
       } else poseOffHandProp(prop)
       bone.add(prop)
       heldProps.push(prop)
+      const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
+      if (mainHand && gripReach) {
+        weaponGrip = createTwoHandedGrip(characterRoot, prop, gripReach)
+      }
 
       if (isTorchItemDefId(itemDefId)) lightTorch(prop)
     })
@@ -236,6 +272,7 @@
   }
 
   function detachEquipment(): void {
+    weaponGrip = null
     equipGeneration++
     capeRig?.dispose()
     capeRig = null
@@ -374,7 +411,10 @@
       const clip = currentAction.getClip()
       if (clip && clip.duration > 0) {
         const remainingTime = clip.duration - currentAction.time
-        if (remainingTime <= OVERLAP_BEFORE_END) {
+        if (
+          currentAction.loop === THREE.LoopOnce &&
+          remainingTime <= OVERLAP_BEFORE_END
+        ) {
           playIdleAnimation()
         }
       }
@@ -384,6 +424,7 @@
     // step for every slot, not just the selected one: the cloth starts in its
     // bind pose and needs frames to fall into a hang, and an unlit torch on an
     // unselected character reads as a bug.
+    weaponGrip?.update(currentAction?.getClip() === weaponIdle)
     capeRig?.update(delta, null)
     updateTorch(delta)
   }

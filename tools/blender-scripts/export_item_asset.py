@@ -44,9 +44,13 @@ def parse_args():
     parser.add_argument("--exposure", type=float, default=0)
     parser.add_argument("--texture-size", type=int, default=512, help="maximum texture edge in pixels")
     parser.add_argument("--keep-emission", action="store_true")
+    parser.add_argument("--grip-fraction", type=float,
+                        help="grip origin along +X from the pommel, as a fraction of length")
     parser.add_argument("--output-root", type=Path, default=REPO, help="output checkout or staging directory")
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     args = parser.parse_args(argv)
+    if args.grip_fraction is not None and not 0 <= args.grip_fraction <= 1:
+        parser.error("grip-fraction must be between zero and one")
     if not args.source.is_file():
         parser.error(f"source does not exist: {args.source}")
     if args.source.suffix.lower() not in {".glb", ".gltf", ".fbx"}:
@@ -111,6 +115,12 @@ scene.cursor.location = (
     (min(v.y for v in corners) + max(v.y for v in corners)) / 2,
     min(v.z for v in corners),
 )
+if args.grip_fraction is not None:
+    scene.cursor.location = (
+        min(v.x for v in corners) + item.dimensions.x * args.grip_fraction,
+        (min(v.y for v in corners) + max(v.y for v in corners)) / 2,
+        (min(v.z for v in corners) + max(v.z for v in corners)) / 2,
+    )
 bpy.ops.object.origin_set(type="ORIGIN_CURSOR")
 item.location = (0, 0, 0)
 scene.cursor.location = (0, 0, 0)

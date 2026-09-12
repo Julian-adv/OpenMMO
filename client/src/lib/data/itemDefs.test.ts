@@ -37,6 +37,12 @@ describe('weapon types', () => {
 })
 
 describe('weapon reach from items.json', () => {
+  it('classifies the great sword as two-handed melee', () => {
+    expect(isTwoHanded('great_sword')).toBe(true)
+    expect(isRangedWeapon('great_sword')).toBe(false)
+    expect(itemDefs.great_sword.weaponType).toBe('great_sword')
+    expect(weaponRangeMeters('great_sword')).toBe(PLAYER_ATTACK_RANGE_METERS)
+  })
   it('reads a ranged weapon its declared range', () => {
     expect(weaponRangeMeters('bow')).toBe(10)
     expect(isRangedWeapon('bow')).toBe(true)

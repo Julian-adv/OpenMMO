@@ -408,6 +408,43 @@ async fn setup_two_hand_wielder(game_state: &GameState) -> DirectRx {
 }
 
 #[tokio::test]
+async fn great_sword_clears_and_blocks_off_hand_until_replaced() {
+    let game_state = make_test_game_state("great_sword_off_hand");
+    let _rx = setup_two_hand_wielder(&game_state).await;
+    {
+        let mut inventories = game_state.inventories.write().await;
+        let inv = inventories.get_mut(&pid("wielder")).unwrap();
+        inv.bag[0].item_def_id = "great_sword".into();
+        inv.bag.push(bag_item(3, "iron_sword", 1));
+        inv.bag.push(bag_item(4, "torch", 1));
+    }
+    game_state.equip_item(&pid("wielder"), 2).await;
+    game_state.equip_item(&pid("wielder"), 1).await;
+    game_state.equip_item(&pid("wielder"), 2).await;
+    game_state.equip_item(&pid("wielder"), 4).await;
+    {
+        let inventories = game_state.inventories.read().await;
+        let inv = &inventories[&pid("wielder")];
+        assert_eq!(
+            inv.equipped[&EquipSlot::MainHand].item_def_id,
+            "great_sword"
+        );
+        assert!(!inv.equipped.contains_key(&EquipSlot::OffHand));
+        assert!(inv.bag.iter().any(|item| item.instance_id == 2));
+        assert!(inv.bag.iter().any(|item| item.instance_id == 4));
+    }
+    game_state.equip_item(&pid("wielder"), 3).await;
+    game_state.equip_item(&pid("wielder"), 2).await;
+    let inventories = game_state.inventories.read().await;
+    let inv = &inventories[&pid("wielder")];
+    assert_eq!(
+        inv.equipped[&EquipSlot::OffHand].item_def_id,
+        "wooden_shield"
+    );
+    assert!(inv.bag.iter().any(|item| item.item_def_id == "great_sword"));
+}
+
+#[tokio::test]
 async fn equipping_a_two_hander_empties_the_off_hand() {
     let game_state = make_test_game_state("two_hand_clears_off_hand");
     let _rx = setup_two_hand_wielder(&game_state).await;

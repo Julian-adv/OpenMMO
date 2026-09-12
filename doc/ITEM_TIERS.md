@@ -11,7 +11,7 @@
 | 1 | Old Crypt | 가죽 세트 일부 (투구·바지·벨트) + goblin_sword | 운영 중 |
 | 2 | Orc Warrens | 가죽 세트 완성 (몸통·장갑·부츠) + 체인 세트 일부 (철 부츠·철 투구) + iron_sword | 운영 중 |
 | 3 | Ogre Stronghold (15층, ogre_boss) | 체인 세트 완성 (체인 메일·건틀릿) + 판금 세트 일부 (부츠·그리브) + 기본 망토 + steel_longsword | 운영 중 |
-| 4 | (신규 던전) | 판금 세트 완성 (흉갑·투구·건틀릿) + claymore | 던전 미구현 |
+| 4 | (신규 던전) | 판금 세트 완성 (흉갑·투구·건틀릿) + great_sword | 던전 미구현 |
 | 5 | (신규 던전) | ring_of_protection + rune_blade | 던전 미구현 |
 
 특수 망토(투명·보호 등)·셔츠·amulet_of_life_saving·ring_of_regeneration은 던전 풀에 넣지 않는다 — **월드 드랍 전용 희소템**으로 유저 간 거래의 축을 만든다 (아래 참조).
@@ -86,7 +86,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 
 ### 드랍 방식: 시그니처 + 아이템별 독립 롤
 
-- 던전당 시그니처(확정) 드랍: **각 세트의 몸통(핵심) 파츠 + 보스 무기** — Old Crypt는 leather_helmet·goblin_sword, Orc Warrens는 leather_armor·iron_sword, 티어 3은 chain_mail·steel_longsword, 티어 4는 breastplate·claymore. 보스 무기는 보스가 떨구지 않고 상자에서만 나온다(2026-08-30, 보스 생사와 상자를 분리한 결과). 티어 5는 시그니처 없음 (확정이면 1회 만에 끝나므로 ring_of_protection은 20% 롤).
+- 던전당 시그니처(확정) 드랍: **각 세트의 몸통(핵심) 파츠 + 보스 무기** — Old Crypt는 leather_helmet·goblin_sword, Orc Warrens는 leather_armor·iron_sword, 티어 3은 chain_mail·steel_longsword, 티어 4는 breastplate·great_sword. 보스 무기는 보스가 떨구지 않고 상자에서만 나온다(2026-08-30, 보스 생사와 상자를 분리한 결과). 티어 5는 시그니처 없음 (확정이면 1회 만에 끝나므로 ring_of_protection은 20% 롤).
 - 풀의 나머지 아이템은 **아이템별 확률(`chestChance`)로 독립 롤**. 시그니처는 독립 롤에서 제외해 중복을 막는다.
 - 하위 티어 이월템(chestTier < 던전 티어)은 각 10% 보너스 롤 — 놓친 파츠를 상위 던전에서 메꾼다.
 - 골드는 `깊이 × 500 ~ 깊이 × 1500`.
@@ -147,7 +147,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | 1 | goblin_sword·small_sword (1d4), spear (1d6) | 1d4~1d6 | 1,500~3,500 | 몬스터 10% 드랍, 상점 | 있음 |
 | 2 | iron_sword | 1d8 | 10,000 | Orc Warrens 상자 확정, 월드 드랍 0.5% (상점 비판매) | 있음 |
 | 3 | steel_longsword | 1d10 | 16,000 | 티어 3 던전 무장 몬스터 + Ogre Stronghold 상자 확정 | 있음. 일반 오거는 아직 greatclub(600c) 10% |
-| 4 | claymore (가칭) | 2d6 | 28,000 | 티어 4 던전 무장 몬스터 + 상자 확정 | **신규 애셋 필요** |
+| 4 | great_sword | 2d8 | 28,000 | 티어 4 던전 무장 몬스터 + 상자 확정 | 모델·아이콘 등록; 양손무기; 던전 미구현 |
 | 5 | rune_blade (가칭) | 2d8 | 50,000 | 티어 5 보스 20% 롤 (ring_of_protection과 동일 철학) | **신규 애셋 필요** |
 
 - basePrice는 평균 피해당 가격이 방어구의 guard당 가격 곡선과 나란히 오르도록 책정 (2,200 → 2,900 → 4,000 → 5,600/pt).
@@ -168,7 +168,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 
 ## 남은 작업
 
-1. 신규 애셋: 특수 망토, 셔츠, 장신구 아이콘 2종(life_saving·regeneration), 무기 3종(steel_longsword·claymore·rune_blade — 가칭). Meshy/ChatGPT 생성, `doc/assets/items.md`에 기록. 망토는 프로시저럴이라 3D 애셋이 필요 없다 — 새 망토는 items.csv 행 + 아이콘이면 된다.
+1. 신규 애셋: 특수 망토, 셔츠, 장신구 아이콘 2종(life_saving·regeneration), 무기 rune_blade(가칭); steel_longsword·great_sword 애셋은 등록 완료. Meshy/ChatGPT 생성, `doc/assets/items.md`에 기록. 망토는 프로시저럴이라 3D 애셋이 필요 없다 — 새 망토는 items.csv 행 + 아이콘이면 된다.
 2. ~~back 슬롯 캐릭터 부착 렌더링~~ 완료 (2026-08-17). shirt 칸은 해당 아이템 등장 시 추가.
 3. 특수 망토·장신구 효과 시스템 — 투명은 서버 측 가시성 처리, 사망 방지·재생은 서버 전투 로직.
 4. **유저 간 거래 시스템.** 현재 `trading.rs`는 NPC 상인뿐, P2P 거래 미구현 — 월드 드랍 희소템 컨셉의 전제.
