@@ -1,8 +1,8 @@
 <script lang="ts" generics="T extends TimestampSample">
   import type { Snippet } from 'svelte'
-  import { axisRange, axisStep, formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type TimestampSample, type ChartHistory } from './metrics'
+  import { axisRange, axisStep, formatAxisTime, formatCount, formatDateTime, formatPeriod, nearestSample, splitSegments, type ChartMarker, type TimestampSample, type ChartHistory } from './metrics'
 
-  let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatValue = formatCount, fitAxis = false, amount, layers, detail, legends }: {
+  let { history, peak, value, legend, legendLabel = legend, valueLabel, unit = '계정', peakLabel = '기간 최고 접속', axisWidth: left = 42, formatValue = formatCount, fitAxis = false, markers = [], amount, layers, detail, legends }: {
     history: ChartHistory<T>
     peak: number | null
     value: (sample: T) => number
@@ -14,6 +14,7 @@
     axisWidth?: number
     formatValue?: (value: number) => string
     fitAxis?: boolean
+    markers?: ChartMarker[]
     amount?: Snippet<[number, boolean]>
     layers?: Snippet<[T[], (timestamp: number) => number, (amount: number) => number]>
     detail?: Snippet<[T]>
@@ -43,6 +44,8 @@
     return axisRange(minimum, maximum, Math.max(1, (maximum - minimum) * .05))
   })
   let segments = $derived(splitSegments(history.samples, history.sample_interval_seconds))
+  let visibleMarkers = $derived(markers.filter((marker) => marker.timestamp >= history.from && marker.timestamp <= history.until))
+  let showMarkerLabels = $derived(visibleMarkers.length <= 8)
   let selectedIndex = $derived(selectedTime === null ? null : nearestSample(history.samples, selectedTime))
   let selected = $derived(selectedIndex === null ? null : history.samples[selectedIndex])
   const x = (timestamp: number) => left + (timestamp - history.from) / (history.until - history.from) * plotWidth
@@ -87,6 +90,12 @@
         <circle cx={x(segment[0].timestamp)} cy={y(value(segment[0]))} r="3.5" fill="#31594f" />
       {/if}
     {/each}
+    {#each visibleMarkers as marker (marker.timestamp)}
+      <line x1={x(marker.timestamp)} x2={x(marker.timestamp)} y1={top} y2={y(floor)} class="marker-line" />
+      {#if showMarkerLabels}
+        <text x={x(marker.timestamp)} y={top - 8} text-anchor="middle" class="marker-label">{marker.label}</text>
+      {/if}
+    {/each}
     {#if peak !== null}
       <line x1={left} x2={width - right} y1={y(peak)} y2={y(peak)} class="peak-line" />
       <text x={width - right} y={y(peak) - 8} text-anchor="end" class="peak-label">{peakLabel} {#if amount}{@render amount(peak, true)}{:else}{formatValue(peak)}{/if}{unit}</text>
@@ -109,5 +118,8 @@
   {@render legends?.()}
   {#if peak !== null}
     <span class="legend"><i class="peak-line"></i>{peakLabel}</span>
+  {/if}
+  {#if visibleMarkers.length > 0}
+    <span class="legend"><i class="marker-line"></i>배포</span>
   {/if}
 </div>

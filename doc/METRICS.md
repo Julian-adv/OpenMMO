@@ -142,6 +142,16 @@ GET /api/metrics/price-index?hours=168
 
 `hours`는 `168 / 720 / 4320 / 8760`(기본 168)이며 잘못된 값은 HTTP 400, DB 조회 실패는 HTTP 503입니다. 성공·DB 오류 응답에 `Cache-Control: no-store`를 지정합니다. 응답은 `from`, `until`, `current_index_percent`, `baseline_index_percent`, `meetings`입니다. `current_index_percent`는 `pricing_state`의 현재 지수, `baseline_index_percent`는 `from` 시점의 지수로 기간 내 첫 회의의 `index_before`, 기간에 회의가 없으면 현재 지수입니다. 지수는 회의 행을 남기면서만 바뀌므로 두 값은 그 시점의 실제 지수와 같습니다. 각 회의는 `{ timestamp, game_day, m_prev, m_now, growth, index_before, index_after }`이며 `m_*`는 활성 캐릭터 1인당 골드(코퍼)입니다. 첫 회의는 측정값만 기록하고 행을 남기지 않으므로 그래프에 나타나지 않습니다. 조회는 회의를 열거나 지수를 바꾸지 않습니다.
 
+## 서버 시작과 배포 표시
+
+서버는 부팅 직후 `server_starts(ts, build)`에 시작 시각과 빌드의 git 짧은 해시(`GIT_HASH`, 빌드 스크립트가 `git rev-parse --short HEAD`로 채우며 git이 없으면 `unknown`, 릴리스 빌드만 커밋마다 다시 계산)를 기록합니다. 대시보드는 동시 접속·유니크 계정·총 골드·1인당 골드 그래프에 배포 시각을 세로 점선과 해시 라벨로 표시합니다. 라벨은 그래프에 배포가 8개 이하일 때만 그립니다.
+
+```http
+GET /api/metrics/server-starts?hours=8760
+```
+
+`hours`는 동시 접속 API와 같은 값을 받고 기본값은 `8760`입니다. 응답은 `from`, `until`, `starts`이며 각 시작은 `{ timestamp, build, deploy }`입니다. `deploy`는 직전 시작과 빌드가 다를 때 `true`이고, 첫 기록도 `true`입니다. 직전 시작이 조회 기간 밖이어도 비교합니다. 같은 빌드의 재시작(크래시·수동 재시작)은 `deploy: false`로 남고 대시보드는 그리지 않습니다. 대시보드는 1년 범위를 한 번에 받아 각 그래프의 기간에 맞춰 잘라 씁니다.
+
 ## 레벨 상위 10명
 
 오프라인을 포함한 전체 캐릭터 중 공식 NPC 계정(`npc_` 접두사)을 제외하고, 저장된 레벨이 가장 높은 10명을 표시합니다. 계정별 중복 제거는 하지 않습니다. 레벨 내림차순, 동점이면 누적 경험치 내림차순, 둘 다 같으면 캐릭터 ID 오름차순으로 정렬하며 표시 순위는 1~10입니다. 캐릭터가 10명 미만이면 존재하는 캐릭터만 반환합니다.

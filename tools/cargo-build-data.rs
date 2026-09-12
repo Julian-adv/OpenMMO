@@ -10,6 +10,28 @@ fn main() {
     if let Err(err) = generate_data_json() {
         panic!("failed to generate data JSON from CSV: {err}");
     }
+    git_hash();
+}
+
+/// Release builds (what prod deploys) rebuild on every commit so the hash is
+/// exact; dev builds keep the hash they were born with to avoid recompiling
+/// after each commit.
+fn git_hash() {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+    };
+    if env::var("PROFILE").as_deref() == Ok("release") {
+        if let Some(reflog) = git(&["rev-parse", "--git-path", "logs/HEAD"]) {
+            println!("cargo:rerun-if-changed={reflog}");
+        }
+    }
+    let hash = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".into());
+    println!("cargo:rustc-env=GIT_HASH={hash}");
 }
 
 fn generate_data_json() -> Result<(), Box<dyn Error>> {

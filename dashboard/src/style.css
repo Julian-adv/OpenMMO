@@ -97,6 +97,8 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .grid-line { stroke: #edf1ee; stroke-width: 1; stroke-dasharray: 3 4; }
 .axis-label { fill: #92a098; font: 10px 'Noto Sans KR', sans-serif; font-variant-numeric: tabular-nums; }
 .peak-line { stroke: #b37b30; stroke-width: 1.5; stroke-dasharray: 6 4; }
+.marker-line { stroke: #8f7fd6; stroke-width: 1.2; stroke-dasharray: 2 4; }
+.marker-label { fill: #8f7fd6; font: 9px 'Noto Sans KR', monospace; }
 .peak-label { fill: #986622; font: 10px 'Noto Sans KR', sans-serif; font-variant-numeric: tabular-nums; stroke: white; stroke-width: 4; paint-order: stroke; stroke-linejoin: round; }
 .chart-tooltip { position: absolute; top: 0; pointer-events: none; display: flex; flex-direction: column; gap: 8px; width: 236px; max-width: calc(100% - 16px); border: 1px solid #e3ebe6; border-radius: 10px; padding: 10px 12px; background: #fffffff5; box-shadow: 0 6px 24px #214b3420; }
 .chart-tooltip > span { color: #809086; font-size: 10px; }
@@ -109,6 +111,7 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 .legend i { background: #168878; height: 6px; width: 6px; border-radius: 50%; }
 .legend .total-line { height: 2px; width: 12px; border-radius: 0; background: #31594f; }
 .legend .peak-line { height: 0; width: 18px; border-radius: 0; background: none; border-top: 2px dashed #b37b30; }
+.legend .marker-line { height: 12px; width: 0; border-radius: 0; background: none; border-left: 2px dotted #8f7fd6; }
 .chart-empty { min-height: 358px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 20px; }
 .empty-illustration { color: #5e9a87; width: 64px; margin-bottom: 23px; }
 .chart-empty strong { font-size: 14px; font-weight: 500; color: #607f70; }

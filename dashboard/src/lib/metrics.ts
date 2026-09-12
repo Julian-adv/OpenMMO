@@ -50,6 +50,21 @@ export interface PriceIndexHistory {
   meetings: PriceMeeting[]
 }
 
+export interface ServerStart extends TimestampSample {
+  build: string
+  deploy: boolean
+}
+
+export interface ServerStarts {
+  from: number
+  until: number
+  starts: ServerStart[]
+}
+
+export interface ChartMarker extends TimestampSample {
+  label: string
+}
+
 export const leaderboardPeriods = [
   { hours: 168, label: '1주일', interval: 3600 },
   { hours: 720, label: '1개월', interval: 3600 },
@@ -336,6 +351,23 @@ export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, act
   }
   return data
 }
+
+export function parseServerStarts(value: unknown, hours: Hours): ServerStarts {
+  if (!value || typeof value !== 'object') throw new Error('Invalid server starts response')
+  const data = value as ServerStarts
+  if (!Number.isSafeInteger(data.from) || !Number.isSafeInteger(data.until) ||
+    data.until - data.from !== hours * 3600 || !Array.isArray(data.starts) ||
+    !data.starts.every((start, index) => start && typeof start === 'object' &&
+      Number.isSafeInteger(start.timestamp) && start.timestamp > data.from && start.timestamp <= data.until &&
+      (index === 0 || start.timestamp > data.starts[index - 1].timestamp) &&
+      typeof start.build === 'string' && start.build.length > 0 && typeof start.deploy === 'boolean')) {
+    throw new Error('Invalid server starts response')
+  }
+  return data
+}
+
+export const deployMarkers = (starts: ServerStart[]): ChartMarker[] =>
+  starts.filter((start) => start.deploy).map((start) => ({ timestamp: start.timestamp, label: start.build }))
 
 const isPercent = (value: unknown) => Number.isSafeInteger(value) && (value as number) > 0
 

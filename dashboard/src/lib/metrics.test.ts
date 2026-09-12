@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize, withCurrent } from './metrics'
+import { connectionParts, formatAxisTime, formatDateTime, formatGold, goldSegments, goldPeriods, kstDayStart, nearestSample, parseGoldHistory, parsePerAccountGoldHistory, parseHistory, parsePriceIndexHistory, parseServerStarts, parseUniqueHistory, periods, uniquePeriods, splitSegments, summarize, withCurrent, deployMarkers } from './metrics'
 
 describe('gold display units', () => {
   it.each([
@@ -286,5 +286,22 @@ describe('live concurrent point', () => {
     expect(withCurrent(averaged)).toBe(averaged)
     const onTheHour = { ...history, current: { ...current, timestamp: 3600 } }
     expect(withCurrent(onTheHour)).toBe(onTheHour)
+  })
+})
+
+describe('server starts', () => {
+  const starts = [{ timestamp: 3600, build: 'aaa', deploy: true }, { timestamp: 7200, build: 'aaa', deploy: false }, { timestamp: 9000, build: 'bbb', deploy: true }]
+  const data = { from: 0, until: 24 * 3600, starts }
+
+  it('accepts ordered starts inside the window and keeps only deploys as markers', () => {
+    expect(parseServerStarts(data, 24)).toEqual(data)
+    expect(deployMarkers(starts)).toEqual([{ timestamp: 3600, label: 'aaa' }, { timestamp: 9000, label: 'bbb' }])
+  })
+
+  it('rejects window mismatches, out-of-range and unordered starts', () => {
+    expect(() => parseServerStarts(data, 168)).toThrow()
+    expect(() => parseServerStarts({ ...data, starts: [{ ...starts[0], timestamp: 0 }] }, 24)).toThrow()
+    expect(() => parseServerStarts({ ...data, starts: [starts[2], starts[0]] }, 24)).toThrow()
+    expect(() => parseServerStarts({ ...data, starts: [{ ...starts[0], build: '' }] }, 24)).toThrow()
   })
 })

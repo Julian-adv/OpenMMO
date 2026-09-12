@@ -1,9 +1,9 @@
 <script lang="ts">
   import ConnectionBreakdown from './ConnectionBreakdown.svelte'
   import HistoryChart from './HistoryChart.svelte'
-  import { connectionKinds, type ConcurrentHistory, type Sample } from './metrics'
+  import { connectionKinds, type ChartMarker, type ConcurrentHistory, type Sample } from './metrics'
 
-  let { history, peak }: { history: ConcurrentHistory; peak: number | null } = $props()
+  let { history, peak, markers = [] }: { history: ConcurrentHistory; peak: number | null; markers?: ChartMarker[] } = $props()
   let visibleKinds = $derived(connectionKinds.filter((kind) => kind.key !== 'other_accounts' || history.samples.some((sample) => sample.other_accounts > 0)))
 
   function stackHeight(sample: Sample, layer: number) {
@@ -18,7 +18,7 @@
   }
 </script>
 
-<HistoryChart {history} {peak} value={(sample) => sample.accounts} legend="평균 접속 계정 수" legendLabel="합계" valueLabel="계정 합계 (평균)">
+<HistoryChart {history} {peak} {markers} value={(sample) => sample.accounts} legend="평균 접속 계정 수" legendLabel="합계" valueLabel="계정 합계 (평균)">
   {#snippet layers(segment, x, y)}
     {#each connectionKinds as kind, layer (kind.key)}
       {#if segment.length > 1}

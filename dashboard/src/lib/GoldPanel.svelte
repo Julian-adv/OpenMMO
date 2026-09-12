@@ -4,10 +4,11 @@
   import HistoryChart from './HistoryChart.svelte'
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
-  import { formatGold, formatDateTime, goldPeriods, type GoldHistory, type GoldHours } from './metrics'
+  import { formatGold, formatDateTime, goldPeriods, type ChartMarker, type GoldHistory, type GoldHours } from './metrics'
 
-  let { hours = $bindable(), resource }: {
+  let { hours = $bindable(), resource, markers = [] }: {
     hours: GoldHours
+    markers?: ChartMarker[]
     resource: MetricsResource<GoldHistory>
   } = $props()
   let { history, loading, refreshing, error, refresh } = $derived(resource)
@@ -31,7 +32,7 @@
   </div>
   <div class="chart-meta"><span>총 골드</span><span>{period.intervalLabel}</span></div>
   {#if history && history.samples.length > 0}
-    <HistoryChart {history} {peak} value={(sample) => sample.total_gold} legend="서버 총 골드" valueLabel={period.interval > 3600 ? '골드 (평균)' : '골드'} unit="" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold} fitAxis>
+    <HistoryChart {history} {peak} value={(sample) => sample.total_gold} legend="서버 총 골드" valueLabel={period.interval > 3600 ? '골드 (평균)' : '골드'} unit="" peakLabel="기간 최고" axisWidth={72} formatValue={formatGold} fitAxis {markers}>
       {#snippet amount(copper, svg)}<GoldAmount {copper} {svg} />{/snippet}
       {#snippet detail(selected)}
         {#if period.interval > 3600}

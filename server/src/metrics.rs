@@ -373,6 +373,20 @@ pub struct PriceIndexHistory {
     pub meetings: Vec<PriceMeeting>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ServerStart {
+    pub timestamp: i64,
+    pub build: String,
+    pub deploy: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ServerStarts {
+    pub from: i64,
+    pub until: i64,
+    pub starts: Vec<ServerStart>,
+}
+
 #[derive(Clone)]
 struct MetricsState {
     game: Arc<GameState>,
@@ -429,6 +443,7 @@ fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
             get(per_account_gold_history),
         )
         .route("/api/metrics/price-index", get(price_index_history))
+        .route("/api/metrics/server-starts", get(server_starts))
         .with_state(MetricsState { game, auth })
 }
 
@@ -694,6 +709,20 @@ async fn gold_sinks(
     metrics_response(
         auth_db(move || state.auth.gold_sinks(unix_now(), hours)).await,
         "Gold sinks",
+    )
+}
+
+async fn server_starts(
+    State(state): State<MetricsState>,
+    Query(query): Query<HistoryQuery>,
+) -> Response {
+    let hours = query.hours.unwrap_or(8760);
+    if history_interval(hours).is_none() {
+        return invalid_hours();
+    }
+    metrics_response(
+        auth_db(move || state.auth.server_starts(unix_now(), hours)).await,
+        "Server starts",
     )
 }
 
@@ -1643,6 +1672,77 @@ mod tests {
         let response = client.get(&url).send().await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
         assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+        task.abort();
+    }
+
+    #[tokio::test]
+    async fn server_starts_endpoint_flags_build_changes_as_deploys() {
+        let path = crate::test_util::unique_temp_dir("server_starts_endpoint").join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state("server_starts_endpoint"));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let router = metrics_routes(game, Arc::clone(&auth));
+        let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
+        let client = reqwest::Client::new();
+        let url = format!("http://{addr}/api/metrics/server-starts");
+
+        let now = unix_now();
+        for (age, build) in [
+            (40 * DAY_SECONDS, "aaa"),
+            (10 * DAY_SECONDS, "aaa"),
+            (3 * DAY_SECONDS, "bbb"),
+            (DAY_SECONDS, "bbb"),
+        ] {
+            auth.record_server_start(now - age, build).unwrap();
+        }
+        for (hours, expected) in [
+            (
+                8760,
+                vec![("aaa", true), ("aaa", false), ("bbb", true), ("bbb", false)],
+            ),
+            (720, vec![("aaa", false), ("bbb", true), ("bbb", false)]),
+            (24, vec![]),
+        ] {
+            let response = client
+                .get(format!("{url}?hours={hours}"))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+            let body: ServerStarts = response.json().await.unwrap();
+            assert_eq!(body.until - body.from, hours * 3600);
+            assert_eq!(
+                body.starts
+                    .iter()
+                    .map(|start| (start.build.as_str(), start.deploy))
+                    .collect::<Vec<_>>(),
+                expected,
+                "hours={hours}"
+            );
+        }
+        let default: ServerStarts = client.get(&url).send().await.unwrap().json().await.unwrap();
+        assert_eq!(default.until - default.from, 8760 * 3600);
+        for hours in ["0", "48", "invalid"] {
+            assert_eq!(
+                client
+                    .get(format!("{url}?hours={hours}"))
+                    .send()
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::BAD_REQUEST
+            );
+        }
+        rusqlite::Connection::open(&path)
+            .unwrap()
+            .execute("DROP TABLE server_starts", [])
+            .unwrap();
+        assert_eq!(
+            client.get(&url).send().await.unwrap().status(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
         task.abort();
     }
 

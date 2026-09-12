@@ -7,8 +7,9 @@ use crate::metrics::{
     LandLeaderboard, LandLeaderboardEntry, LandSample, LandSeries, LevelLeaderboard,
     LevelLeaderboardEntry, LevelSample, LevelSeries, PerAccountGoldHistory,
     PerAccountGoldHistorySample, PerAccountGoldSample, PriceIndexHistory, PriceMeeting,
-    UniqueHistory, UniqueSample, WeaponEnchantLeaderboard, WeaponEnchantLeaderboardEntry,
-    WeaponEnchantSample, WeaponEnchantSeries, DAY_SECONDS, SAMPLE_INTERVAL_SECONDS,
+    ServerStart, ServerStarts, UniqueHistory, UniqueSample, WeaponEnchantLeaderboard,
+    WeaponEnchantLeaderboardEntry, WeaponEnchantSample, WeaponEnchantSeries, DAY_SECONDS,
+    SAMPLE_INTERVAL_SECONDS,
 };
 use rusqlite::{params, types::FromSql, Connection, OptionalExtension};
 use std::collections::{HashMap, HashSet};
@@ -642,6 +643,37 @@ impl AuthService {
             collection_started_at,
             latest,
             samples,
+        })
+    }
+
+    /// A start is a deploy when its build differs from the previous start's;
+    /// every row up to `until` is scanned so the predecessor outside the
+    /// window still counts.
+    pub fn server_starts(&self, until: i64, hours: u32) -> Result<ServerStarts, AuthError> {
+        let from = until - i64::from(hours) * 3600;
+        let conn = self.open_connection()?;
+        let mut statement =
+            conn.prepare("SELECT ts, build FROM server_starts WHERE ts <= ?1 ORDER BY ts")?;
+        let mut previous: Option<String> = None;
+        let mut starts = Vec::new();
+        for row in statement.query_map([until], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })? {
+            let (timestamp, build) = row?;
+            let deploy = previous.as_deref() != Some(build.as_str());
+            if timestamp > from {
+                starts.push(ServerStart {
+                    timestamp,
+                    build: build.clone(),
+                    deploy,
+                });
+            }
+            previous = Some(build);
+        }
+        Ok(ServerStarts {
+            from,
+            until,
+            starts,
         })
     }
 

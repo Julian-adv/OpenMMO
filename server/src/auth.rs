@@ -682,6 +682,7 @@ impl AuthService {
         Self::ensure_titles_schema(&conn)?;
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
+        Self::ensure_server_starts_schema(&conn)?;
         Self::ensure_item_sales_schema(&conn)?;
         Self::ensure_gold_sinks_schema(&conn)?;
         Self::ensure_concurrent_samples_schema(&conn)?;
@@ -1186,6 +1187,26 @@ impl AuthService {
                 active_characters INTEGER NOT NULL
             )",
             [],
+        )?;
+        Ok(())
+    }
+
+    fn ensure_server_starts_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS server_starts (
+                ts INTEGER PRIMARY KEY,
+                build TEXT NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn record_server_start(&self, now: i64, build: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO server_starts (ts, build) VALUES (?1, ?2)",
+            params![now, build],
         )?;
         Ok(())
     }
