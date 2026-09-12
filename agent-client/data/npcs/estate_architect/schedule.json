@@ -12,7 +12,7 @@
       "pos": [-1451.768, 1.05, 4760.83],
       "rotation": 90.0,
       "floor_level": 0,
-      "label": "sleeping in bed 71 at the landscaping shop",
+      "label": "sleeping in bed at the landscaping shop",
       "action": "bed",
       "object_id": 71
     }

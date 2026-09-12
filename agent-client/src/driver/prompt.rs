@@ -747,7 +747,8 @@ fn format_schedule_context(
 ) -> Option<String> {
     let entry = &schedule[active_idx?];
     let mut line = format!(
-        "Schedule: go to {} at ({:.1}, {:.1}, {:.1})",
+        "Schedule (automatic): {} at ({:.1}, {:.1}, {:.1}). Travel and scheduled \
+         interactions are automatic; do not issue move actions to follow this schedule.",
         entry.display_label(),
         entry.pos[0],
         entry.pos[1],

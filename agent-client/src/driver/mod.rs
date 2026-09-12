@@ -1026,11 +1026,7 @@ pub async fn llm_driver(
             if due == active_schedule {
                 wrapup = None;
             } else {
-                // The move blocks this loop for the whole walk, so on a real
-                // departure announce it first and hold the move until the LLM
-                // had a turn to wrap up (pack a stall, end a song) or the
-                // grace runs out. A recurring entry re-triggering on the same
-                // spot has nothing to wrap up and moves right away.
+                // Allow one wrap-up turn before departure; recurring entries move immediately.
                 let transition_now = match (wrapup, due.0) {
                     _ if due.0 == active_schedule.0 => true,
                     (_, None) => true,
@@ -1045,9 +1041,10 @@ pub async fn llm_driver(
                             let mut s = state.lock().await;
                             if always_active || s.has_nearby_human_players() {
                                 s.push_ambient_event(format!(
-                                    "[Schedule] Time to head to {} — you set off in a moment. \
-                                     Wrap up what you are doing now (pack up, finish your \
-                                     tune, say goodbye).",
+                                    "[Schedule] Your next routine is {}. Travel and scheduled \
+                                     interactions are automatic; do not issue move actions for \
+                                     this transition. Only wrap up what you are doing now \
+                                     (pack up, finish your tune, say goodbye).",
                                     schedule[i].display_label()
                                 ));
                                 wrapup = Some((Instant::now() + SCHEDULE_WRAPUP_GRACE, false));
