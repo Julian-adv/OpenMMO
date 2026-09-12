@@ -47,6 +47,35 @@
   - 일반 몬스터 능력치: 레벨 16, 체력 72 (레벨 기본값), guard 20, 피해 6d8. 오거의 체력 36·무기 포함 피해 3d8의 두 배이며, 방어는 기준 10 초과분을 두 배로 설정 (`10 + 2 × (15 - 10)`).
   - 던전 출현 설정은 비워 두며 관리자가 추후 배치한다. `corpseAutoGround=false`로 베이크한 죽음 접지를 유지.
 
+- skeleton_knight — 사용자 제공 Tripo Pro 유료 생성 모델, 2026-09-12 생성(사용자 확인).
+  - [컨셉아트](../images/monsters/skeleton_knight_concept.png): 이 대화에서 OpenAI 이미지 생성으로
+    제작한 정예 스켈레톤 기사, 2026-09-12 생성. OpenAI 서비스 이용 조건 적용(이용 요금제 미확인).
+  Tripo 서비스 이용 조건 적용. 원본 `skeleton+knight+3d+model.glb`는
+  `assets/skeleton_knight/source.glb`에 보관한다. 10,002 triangles, Tripo 41본 리그,
+  1024² base color·normal·metallic/roughness 텍스처를 유지하고 장식 포함 높이 2.05m로 맞췄다.
+  - `tools/blender-scripts/build_skeleton_knight.py`로 재생성한다. 편집본은
+    `assets/skeleton_knight/skeleton_knight.blend`, 게임 모델은
+    `client/public/models/monsters/skeleton_knight.glb`.
+  - Idle·Walk·Run은 기존 스켈레톤에 사용한 사용자 제공 Mixamo FBX를 재사용한다.
+    Attack은 `Great Sword Slash.fbx`, Death는 `Two Handed Sword Death (1).fbx`
+    (2026-09-12 수령). Mixamo 서비스 이용 조건 적용.
+    원본 5개는 `assets/skeleton_knight/fbx/`에 보관하며 Tripo 리그로 리타게팅했다.
+  - 대기·이동 중 오른팔을 낮춰 대검 칼날을 뒤쪽 지면에 끌도록 보정했다. 공격에서는 두 손으로
+    손잡이를 잡고, 지면 관통 방지와 양손 그립을 보정한다. 24fps 원본을 72fps로 베이크해
+    프레임 사이의 그립 이탈을 줄였다. 손가락 본이 없어 손가락 개별 움켜쥠은 포함하지 않는다.
+  - 공격 원본 1.25초에 준비 0.417초·회수 0.583초를 더해 2.25초. 타격은 검끝 전방 도달 기준
+    1083ms, 쿨다운 2800ms. 사망 중에도 대검을 오른손에 연결해 쥔 채 쓰러진다.
+    사망 후반에는 망토 때문에 몸통이 뜨지 않도록 루트를 최대 0.15m 내린다.
+    사망 시 검의 회전을 연속 보간하고 손목 이동을 평활화하며, 2.2초부터 그립 위치를 고정해
+    착지 후 흔들림을 방지한다. 검은 계속 오른손 본에 연결된다.
+    `corpseAutoGround=false`로 이 자세를 유지한다.
+  - 2026-09-12 검토 수정: 착지 후 어깨 이동에도 팔이 닿는 위치에 검을 놓고, IK가 계산한
+    손목 위치를 유지해 사망 중 오른팔이 늘어나지 않도록 다시 베이크했다.
+    검증기는 양팔 길이 보존과 착지 위치에서 검이 계속 고정되는지도 확인한다.
+  - 대검은 아래 아이템 문서에 기록한 `weapons/skeleton_greatsword.glb`를 직접 참조한다.
+    `R_Hand`의 로컬 Y +0.11m에 장착하며 전용 외형으로 사용한다(아이템 드롭 없음).
+    [대검 출처](items.md). 정예 일반 몬스터의 임시 능력치는 레벨 25·체력 350·guard 32·피해 6d12.
+    던전 출현 설정은 비워 두어 관리자가 배치한다.
 - SCP939 https://sketchfab.com/3d-models/scp939-79a749a5073b453d9d85875797bf45d7
   - `939_DieProne` (2026-08-24): 원본 클립 중 죽음이 `939_Die`(상체를 들었다 웅크림)·`939_Dead`뿐이고 모두 살아
     있어 보여서 새로 구웠다: `939_Attack1` 45~63프레임(뒷다리로 크게 일어서는 구간)을 앞에 깔고, 그 정점 포즈를
