@@ -49,13 +49,13 @@
     <header>
       <h1>강화 성공 효과 비교</h1>
       <p>
-        실제 발키리 모델 · 게임 기본 줌의 화면 크기 · 갑옷은 몸통, 무기는 무기
-        전체에서 빛줄기 방출 · 디버깅용 10초
+        실제 캐릭터 모델 · 게임 기본 줌 · 검을 높이 든 자세와 칼날에서 퍼지는
+        금빛 · 5초
       </p>
       <button id="replay">다시 재생</button>
       <select id="speed">
         <option value="0.25">느리게 · 4배 확대 관찰</option>
-        <option value="1" selected>실제 속도 · 디버깅용 10초</option>
+        <option value="1" selected>실제 속도 · 5초</option>
       </select>
     </header>
     <div id="view"></div>
@@ -91,7 +91,11 @@
       import { getWeaponAnimation } from './src/lib/data/weaponAnimationDefs.ts'
       import { loadWeaponAnimations } from './src/lib/utils/weaponAnimations.ts'
       import { createTwoHandedGrip } from './src/lib/utils/twoHandedGrip.ts'
-      import { EnchantWeaponPose } from './src/lib/utils/enchantWeaponPose.ts'
+      import {
+        ENCHANT_WEAPON_ANIMATION,
+        EnchantWeaponGrip,
+        loadEnchantAnimations,
+      } from './src/lib/utils/enchantAnimation.ts'
       import {
         applyEnchantLight,
         selectEnchantLight,
@@ -122,7 +126,10 @@
       }))
       const boneAnchors = []
       const grips = []
-      const poses = []
+      const enchantActions = []
+      const idleActions = []
+      const enchantGrips = []
+      const enchanting = []
       const models = []
       const pedestals = []
       scene.add(new THREE.HemisphereLight('#e9eedf', '#404c32', 0.35))
@@ -144,9 +151,11 @@
       ground.receiveShadow = true
       scene.add(ground)
       const loader = new GLTFLoader()
-      const character = await loader.loadAsync(
-        '/models/characters/valkyrie.glb'
-      )
+      const characterPath =
+        new URLSearchParams(location.search).get('character') === 'knight'
+          ? 'characters/knight.glb'
+          : 'characters/valkyrie.glb'
+      const character = await loader.loadAsync(`/models/${characterPath}`)
       const locomotion = await loader.loadAsync(
         '/models/animations/locomotion.glb'
       )
@@ -167,7 +176,7 @@
         )
         if (variants[i].weapon) {
           const clips = await loadWeaponAnimations(
-            'characters/valkyrie.glb',
+            characterPath,
             clonedScene,
             weaponProfile
           )
@@ -176,15 +185,18 @@
           poseMainHandProp(prop, 'great_sword')
           findBoneByName(clonedScene, 'RightHand').add(prop)
           anchors[i].weapon = prop
-          grips.push(
-            createTwoHandedGrip(
-              clonedScene,
-              prop,
-              weaponProfile.offHandGripReach
-            )
+          enchantGrips[i] = new EnchantWeaponGrip(prop)
+          grips[i] = createTwoHandedGrip(
+            clonedScene,
+            prop,
+            weaponProfile.offHandGripReach
+          )
+          const enchants = await loadEnchantAnimations(characterPath, modelRoot)
+          enchantActions[i] = mixer.clipAction(
+            enchants.get(ENCHANT_WEAPON_ANIMATION)
           )
         }
-        if (clip) mixer.clipAction(clip).play()
+        if (clip) idleActions[i] = mixer.clipAction(clip).play()
         mixers.push(mixer)
       }
       const effects = anchors.map(() => new EnchantSuccessEffect(map))
@@ -235,23 +247,22 @@
         elapsed +=
           ((now - last) / 1000) * Number(document.querySelector('#speed').value)
         const dt = (now - last) / 1000
-        poses.forEach((pose) => pose?.restore())
-        mixers.forEach((mixer) => mixer.update(dt))
-        scene.updateMatrixWorld(true)
-        grips.forEach((grip) => grip?.update(true))
-        anchors.forEach((anchor, i) => {
-          if (!anchor.weapon) return
+        mixers.forEach((mixer, i) => {
+          enchantGrips[i]?.update(0)
+          const action = enchantActions[i]
           const active = elapsed < ENCHANT_SUCCESS_DURATION
-          if (!poses[i] && active)
-            poses[i] = new EnchantWeaponPose(
-              models[i],
-              anchor.weapon,
-              'RightHand',
-              true
-            )
-          poses[i]?.apply(dt, active)
-          if (poses[i]?.weight === 0) poses[i] = null
+          if (action && enchanting[i] !== active) {
+            const from = active ? idleActions[i] : action
+            const to = active ? action : idleActions[i]
+            to.reset().play().crossFadeFrom(from, 0.3, false)
+            enchanting[i] = active
+          }
+          mixer.update(dt)
+          const weight = action?.getEffectiveWeight() ?? 0
+          grips[i]?.update(weight === 0)
+          if (weight > 0) enchantGrips[i]?.update(weight)
         })
+        scene.updateMatrixWorld(true)
         boneAnchors.forEach((bones, i) => {
           bones.getWorldPosition(
             variants[i].weapon,

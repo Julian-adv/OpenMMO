@@ -61,7 +61,7 @@ describe('Enchant success', () => {
     effect.dispose()
   })
 
-  it('emits radial rays from the centerline and follows changes in its pose', () => {
+  it('emits every ray from one point on the blade axis and follows its pose', () => {
     const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2, 0.08))
     const effect = new EnchantSuccessEffect(new THREE.Texture())
     const camera = new THREE.PerspectiveCamera()
@@ -73,15 +73,17 @@ describe('Enchant success', () => {
       new THREE.Vector3(0.075, 1, 0.04)
     ).expandByScalar(1e-5)
     let previous: number[] | undefined
-    for (const elapsed of [1, 5]) {
+    for (const progress of [0.2, 0.6]) {
+      const elapsed = ENCHANT_SUCCESS_DURATION * progress
       weapon.position.set(elapsed, 2, -3)
       weapon.rotation.z = elapsed * 0.2
       effect.update(elapsed, anchor, camera)
       const rays = effect.group.getObjectByName(
         'enchant-weapon-rays'
       ) as THREE.InstancedMesh
-      expect(rays.count).toBe(48)
-      const covered = new THREE.Box3()
+      expect(rays.count).toBeGreaterThan(0)
+      expect(rays.count).toBeLessThanOrEqual(16)
+      let firstOrigin: THREE.Vector3 | undefined
       for (let i = 0; i < rays.count; i++) {
         rays.getMatrixAt(i, ray)
         origin.setFromMatrixPosition(ray).add(effect.group.position)
@@ -93,13 +95,12 @@ describe('Enchant success', () => {
         const rayDirection = new THREE.Vector3()
           .setFromMatrixColumn(ray, 1)
           .normalize()
-        const weaponAxis = new THREE.Vector3(0, 1, 0).transformDirection(
-          weapon.matrixWorld
-        )
-        expect(rayDirection.dot(weaponAxis)).toBeCloseTo(0)
-        covered.expandByPoint(origin)
+        expect(rayDirection.length()).toBeCloseTo(1)
+        expect(rayDirection.z).toBeCloseTo(0)
+        if (firstOrigin)
+          expect(origin.distanceTo(firstOrigin)).toBeLessThan(1e-6)
+        else firstOrigin = origin.clone()
       }
-      expect(covered.max.y - covered.min.y).toBeGreaterThan(1.49)
       const opacity = Array.from(
         rays.geometry.getAttribute('aEnchantRayOpacity').array
       )
@@ -107,21 +108,64 @@ describe('Enchant success', () => {
       previous = opacity
       expect(effect.light.intensity).toBe(ENCHANT_LIGHT_INTENSITY)
     }
-    effect.update(6, anchor, camera, true)
+    effect.update(ENCHANT_SUCCESS_DURATION * 0.7, anchor, camera, true)
     expect(
       (
         effect.group.getObjectByName(
           'enchant-weapon-rays'
         ) as THREE.InstancedMesh
       ).count
-    ).toBe(24)
-    effect.update(7, { position: anchor.position, weapon: null }, camera)
+    ).toBeLessThanOrEqual(8)
+    effect.update(
+      ENCHANT_SUCCESS_DURATION * 0.8,
+      { position: anchor.position, weapon: null },
+      camera
+    )
     expect(effect.group.getObjectByName('enchant-weapon-rays')!.visible).toBe(
       false
     )
     expect(effect.group.visible).toBe(true)
     effect.update(ENCHANT_SUCCESS_DURATION, anchor, camera)
     expect(effect.group.visible).toBe(false)
+    effect.dispose()
+    weapon.geometry.dispose()
+  })
+
+  it('limits simultaneous rays while staggering their emission over time', () => {
+    const weapon = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2, 0.08))
+    const effect = new EnchantSuccessEffect(new THREE.Texture())
+    const camera = new THREE.PerspectiveCamera()
+    const anchor = { position: new THREE.Vector3(), weapon }
+    const rays = effect.group.getObjectByName(
+      'enchant-weapon-rays'
+    ) as THREE.InstancedMesh
+    const matrix = new THREE.Matrix4()
+    const directions = new Set<string>()
+    for (const reduced of [false, true]) {
+      for (let frame = 0; frame < 100; frame++) {
+        effect.update(0.3 + frame * 0.031, anchor, camera, reduced)
+        expect(rays.count).toBeGreaterThan(0)
+        expect(rays.count).toBeLessThanOrEqual(reduced ? 8 : 16)
+        for (let i = 0; i < rays.count; i++) {
+          const opacity = rays.geometry
+            .getAttribute('aEnchantRayOpacity')
+            .getX(i)
+          expect(opacity).toBeGreaterThan(0)
+          expect(opacity).toBeLessThanOrEqual(1)
+          rays.getMatrixAt(i, matrix)
+          const direction = new THREE.Vector3()
+            .setFromMatrixColumn(matrix, 1)
+            .normalize()
+          directions.add(
+            direction
+              .toArray()
+              .map((value) => value.toFixed(2))
+              .join(',')
+          )
+        }
+      }
+    }
+    expect(directions.size).toBeGreaterThanOrEqual(8)
     effect.dispose()
     weapon.geometry.dispose()
   })

@@ -47,7 +47,12 @@
 
 <script lang="ts">
   import { RiderMotion } from '../utils/riderMotion'
-  import { EnchantWeaponPose } from '../utils/enchantWeaponPose'
+  import {
+    ENCHANT_WEAPON_ANIMATION,
+    ENCHANT_LEFT_WEAPON_ANIMATION,
+    EnchantWeaponGrip,
+    loadEnchantAnimations,
+  } from '../utils/enchantAnimation'
   import { HorseReins } from '../utils/horseReins'
   import {
     HorseMount,
@@ -411,7 +416,9 @@
   let pickupGrabNotified = $state(false)
   let weaponObject: THREE.Object3D | null = null
   let weaponGrip: TwoHandedGrip | null = null
-  let enchantPose: EnchantWeaponPose | null = null
+  let enchantGrip: EnchantWeaponGrip | null = null
+  let enchantClips = new Map<string, THREE.AnimationClip>()
+  let enchantAction: THREE.AnimationAction | null = null
   let enchantPoseUntil = 0
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
@@ -448,6 +455,7 @@
       )
     }
     handBone.add(weaponObject)
+    enchantGrip = new EnchantWeaponGrip(weaponObject)
     const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
     weaponGrip = gripReach
       ? createTwoHandedGrip(characterRoot, weaponObject, gripReach)
@@ -475,8 +483,8 @@
   }
 
   function detachWeapon() {
-    enchantPose?.restore()
-    enchantPose = null
+    enchantGrip?.update(0)
+    enchantGrip = null
     weaponGrip = null
     if (weaponObject && weaponObject.parent) {
       weaponObject.parent.remove(weaponObject)
@@ -828,9 +836,12 @@
   ) =>
     names.map(resolve).filter((c): c is THREE.AnimationClip => c !== undefined)
 
+  const resolveSocialClip = (name: string) =>
+    enchantClips.get(name) ?? socialClipsByName.get(name)
+
   /** One clip-name lookup across every loaded pack. */
   const resolveClipByName = (name: string) =>
-    socialClipsByName.get(name) ??
+    resolveSocialClip(name) ??
     validAnimationsByName.get(name) ??
     offhandClips.get(name) ??
     rangedClips.get(name)
@@ -901,6 +912,21 @@
     hitAction.play()
   }
 
+  function activeEnchantClip() {
+    if (
+      playerState !== 'idle' ||
+      riding ||
+      !weaponObject?.visible ||
+      Date.now() >= enchantPoseUntil
+    )
+      return undefined
+    return enchantClips.get(
+      mainHandBoneFor(equippedMainHandItemId) === 'LeftHand'
+        ? ENCHANT_LEFT_WEAPON_ANIMATION
+        : ENCHANT_WEAPON_ANIMATION
+    )
+  }
+
   function playAnimationForState() {
     // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
@@ -947,8 +973,10 @@
     const weaponClip = weaponClipName
       ? weaponClips.get(weaponClipName)
       : undefined
+    const enchantClip = activeEnchantClip()
     if (playerState === 'idle') {
       clip =
+        enchantClip ??
         weaponClip ??
         torchIdle ??
         pickClassIdleClip() ??
@@ -981,7 +1009,7 @@
         interactionAnim === SitAnimationName.SIT
           ? SitAnimationName.STAND_TO_SIT
           : interactionAnim
-      clip = clipName ? socialClipsByName.get(clipName) : undefined
+      clip = clipName ? resolveSocialClip(clipName) : undefined
       // `/anim` may name a clip from any pack.
       if (!clip && clipName && DEBUG_ANIM_NAMES.has(clipName)) {
         clip = resolveClipByName(clipName)
@@ -1025,10 +1053,14 @@
     // ends. Clamping instead would freeze the performance mid-strum.
     const playOnce =
       playerState !== 'moving' &&
-      !(playerState === 'idle' && clip === weaponClip) &&
+      !(
+        playerState === 'idle' &&
+        (clip === weaponClip || clip === enchantClip)
+      ) &&
       interactionAnim !== FishingAnimationName.IDLE &&
       !HELD_EMOTE_ANIMS.has(interactionAnim ?? '')
     startAction(clip, playOnce)
+    if (clip === enchantClip) enchantAction = currentAction
   }
 
   function startAction(clip: THREE.AnimationClip, playOnce: boolean) {
@@ -1051,7 +1083,7 @@
   }
 
   function switchSitClip(name: string, loop: boolean) {
-    const clip = socialClipsByName.get(name)
+    const clip = resolveSocialClip(name)
     if (!clip) return
     startAction(clip, !loop)
     sitIdleLastTime = 0
@@ -1094,8 +1126,7 @@
     if (activeGltf && !mixer && !modelRoot) {
       console.log('Setting up real animation system')
       hitAction = null
-      enchantPose?.restore()
-      enchantPose = null
+      enchantAction = null
       enchantPoseUntil = 0
       hitClipLoaded = false
 
@@ -1224,6 +1255,15 @@
       clonedScene = cloned
       modelRoot = newModelRoot
       effectAnchors = new PlayerEffectAnchors(cloned)
+      void loadEnchantAnimations(modelPath, newModelRoot)
+        .then((clips) => {
+          if (modelRoot !== newModelRoot) return
+          enchantClips = clips
+          if (activeEnchantClip()) lastAnimKey = undefined
+        })
+        .catch((error) =>
+          console.warn('Failed to load enchantment animation', error)
+        )
 
       if (isCurrentPlayer) {
         const rightHand = findBoneByName(cloned, 'RightHand')
@@ -1309,7 +1349,7 @@
    *  early in places, which is why the two are not simply written in sequence
    *  at the call site. */
   export function update(deltaTime: number, wind: WindState | null = null) {
-    enchantPose?.restore()
+    enchantGrip?.update(0)
     riderMotion?.restore()
     updatePose(deltaTime)
     if (riding && horseMount) {
@@ -1322,27 +1362,12 @@
       horseReins?.update()
     }
     weaponGrip?.update(
-      !riding && weaponClips.has(currentAction?.getClip().name ?? '')
+      !riding &&
+        !enchantAction?.getEffectiveWeight() &&
+        weaponClips.has(currentAction?.getClip().name ?? '')
     )
-    const canPose = playerState === 'idle' && !riding && weaponObject?.visible
-    const enchanting = canPose && Date.now() < enchantPoseUntil
-    if (
-      enchanting &&
-      weaponObject &&
-      clonedScene &&
-      enchantPose?.weapon !== weaponObject
-    ) {
-      enchantPose = new EnchantWeaponPose(
-        clonedScene,
-        weaponObject,
-        mainHandBoneFor(equippedMainHandItemId),
-        !!weaponAnimationProfile?.offHandGripReach
-      )
-    }
-    if (enchantPose) {
-      if (canPose) enchantPose.apply(deltaTime, !!enchanting)
-      if (!canPose || enchantPose.weight === 0) enchantPose = null
-    }
+    const enchantWeight = enchantAction?.getEffectiveWeight() ?? 0
+    if (enchantWeight > 0) enchantGrip?.update(enchantWeight)
     updateCape(deltaTime, wind)
   }
 
@@ -1552,7 +1577,9 @@
               ? `moving:${movementMode}`
               : playerState === 'attack'
                 ? `attack:${attackCounter}`
-                : playerState
+                : activeEnchantClip()
+                  ? 'enchant'
+                  : playerState
       const animKey = `${equippedMainHandItemId ?? ''}:${stateKey}`
       if (lastAnimKey !== animKey) {
         lastAnimKey = animKey

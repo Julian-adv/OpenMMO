@@ -184,6 +184,7 @@
               225)
       )
     }
+    anchor.weapon = null
   }
 
   export function getLight(): EnchantLight | null {

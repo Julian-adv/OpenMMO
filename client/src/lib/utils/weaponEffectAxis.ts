@@ -8,6 +8,8 @@ export interface WeaponEffectAxis {
   center: THREE.Vector3
   direction: THREE.Vector3
   length: number
+  width: number
+  widthDirection: THREE.Vector3
 }
 
 export function getWeaponEffectAxis(weapon: THREE.Object3D): WeaponEffectAxis {
@@ -36,7 +38,20 @@ export function getWeaponEffectAxis(weapon: THREE.Object3D): WeaponEffectAxis {
     component,
     center.getComponent(component) < 0 ? -1 : 1
   )
-  const axis = { center, direction, length: size.getComponent(component) }
+  const crossSize = size.clone().setComponent(component, -1)
+  const widthComponent =
+    crossSize.x >= crossSize.y && crossSize.x >= crossSize.z
+      ? 0
+      : crossSize.y >= crossSize.z
+        ? 1
+        : 2
+  const axis = {
+    center,
+    direction,
+    length: size.getComponent(component),
+    width: Math.max(size.getComponent(widthComponent), 0.01),
+    widthDirection: new THREE.Vector3().setComponent(widthComponent, 1),
+  }
   axes.set(weapon, axis)
   return axis
 }

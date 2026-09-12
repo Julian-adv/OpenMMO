@@ -247,6 +247,16 @@
 - 기존 캐릭터 애니메이션 리타게팅 경로로 각 캐릭터에 적용한다. 브라우저에서
   남녀 기사 모델의 기승·달리기·하차를 확인했다. 말 자체 클립은 [animals.md](animals.md).
 
+## Enchantment hold (2026-09-13)
+
+- `client/public/models/animations/social.glb`에 `enchant_weapon`과 왼손 무기용 `enchant_weapon_left`를 추가했다. Blender 5.1.0에서 제작한 30fps·4초 고정 자세이며 강화 효과 동안 반복하고 기존 mixer의 0.3초 crossfade로 진입·해제한다.
+- 척추와 허리를 직립으로 세우고 주손 팔을 어깨 바로 위로 편다. 반대 팔은 어깨 아래로 자연스럽게 내린다. 게임에서 관절을 계산하던 `EnchantWeaponPose`는 제거했다. 무기 소품의 장착 회전만 클립 가중치에 맞춰 보정한다.
+- 목과 머리에 시선 회전을 나눠 검을 든 쪽으로 20° 돌리고 32° 위를 바라보도록 키프레임을 조정했다. 왼손 클립은 반대쪽을 바라본다.
+- 출처: 기존 `assets/all_animation.blend`의 33본 `Armature`에 자체 제작한 키프레임. 리그와 작업용 메시의 Mixamo 라이선스는 위 항목과 [characters.md](characters.md)를 따른다. 신규 AI 이미지·모션 생성 및 유료 도구 사용은 없다. 작업 파일에는 외부 텍스처가 필요하지 않다.
+- 편집 파일: `assets/enchant_weapon/enchant_weapon.blend`. 원본 소셜 팩 스냅샷은 같은 폴더의 `social-source.glb`에 보존한다. `graft-glb-clip.py`로 새 클립만 이식하며, 기존 17개 클립의 키프레임 데이터와 스켈레톤이 그대로임을 확인했다. 런타임은 캐릭터별 리타게팅과 접지 보정 후 캐시한다.
+- 재생성: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_enchant_animation.py`.
+- Blender에서 편집한 파일을 재내보내기: 같은 명령 뒤에 `-- --export-only`를 붙인다. 원본 `all_animation.blend`는 수정하지 않는다.
+
 ## Great Sword (2026-09-12)
 
 - 제공된 걷기 원본은 뒷걸음질 동작이므로 `great_sword_walk`의 키프레임 순서를 역전해 전진 걷기로 사용한다. 변환 스크립트에서 적용하며 원본 FBX는 보존한다.
