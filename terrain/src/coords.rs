@@ -124,6 +124,17 @@ pub fn land_grade_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
         .join(format!("r{:+03}_{:+03}.bin", rx, rz))
 }
 
+/// Build filesystem path for a region climate file (one zone byte per plot).
+pub fn climate_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
+    base.join("climate")
+        .join(format!("r{:+03}_{:+03}.bin", rx, rz))
+}
+
+/// Build filesystem path for the world-wide rain-cell sector list.
+pub fn weather_sectors_path(base: &Path) -> PathBuf {
+    base.join("weather-sectors.json")
+}
+
 /// Build filesystem path for a region object JSON file.
 pub fn object_path(base: &Path, rx: i32, rz: i32) -> PathBuf {
     base.join("objects")

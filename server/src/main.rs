@@ -248,6 +248,11 @@ struct Args {
     /// generated on first run). Blank is treated as unset.
     #[arg(long, env = "NPC_AUTH_TOKEN")]
     npc_token: Option<String>,
+
+    /// Multiplier on how often rain cells form: 1.0 is the baked schedule,
+    /// 0.5 skips half the cycles, 0 turns rain off.
+    #[arg(long, env = "WEATHER_BIAS", default_value_t = 1.0)]
+    weather_bias: f32,
 }
 
 /// Treat blank CLI/env values as absent: compose `.env` files spell an unset
@@ -499,6 +504,7 @@ async fn main() -> ExitCode {
         )
         .await;
     game_state.load_pricing(&auth_service).await;
+    game_state.load_weather(args.weather_bias).await;
     if let Err(err) = game_state.load_fences(&auth_service).await {
         error!("Failed to load fences: {}", err);
         return ExitCode::FAILURE;
@@ -702,6 +708,17 @@ async fn main() -> ExitCode {
                     game_state.tick_food_regeneration().await;
                 }
             }
+        },
+    ));
+
+    let game_state_for_weather = Arc::clone(&game_state);
+    background.spawn(run_ticks(
+        "weather",
+        Duration::from_secs(30),
+        drain_shutdown.clone(),
+        move || {
+            let game_state = Arc::clone(&game_state_for_weather);
+            async move { game_state.broadcast_weather() }
         },
     ));
 

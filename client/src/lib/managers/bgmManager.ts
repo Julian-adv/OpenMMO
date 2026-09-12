@@ -405,11 +405,13 @@ let inBardZone = false
  *  open panel, and notes heard from a nearby performer. */
 let livePanelQuiet = false
 let liveNotesQuiet = false
+/** Rain drowns the playlist out; only the ambience and thunder remain. */
+let rainQuiet = false
 let liveNotesTimer: ReturnType<typeof setTimeout> | undefined
 let playlistFadeTimer: ReturnType<typeof setInterval> | undefined
 
 function playlistQuiet(): boolean {
-  return inBardZone || livePanelQuiet || liveNotesQuiet
+  return inBardZone || livePanelQuiet || liveNotesQuiet || rainQuiet
 }
 
 /** Stop the playlist fade and put its volume back where the settings say. */
@@ -458,6 +460,13 @@ export function setBardZone(inside: boolean) {
   if (inBardZone === inside) return
   inBardZone = inside
   if (inside) enterPlaylistQuiet()
+  else leavePlaylistQuiet()
+}
+
+export function setRainQuiet(active: boolean) {
+  if (rainQuiet === active) return
+  rainQuiet = active
+  if (active) enterPlaylistQuiet()
   else leavePlaylistQuiet()
 }
 

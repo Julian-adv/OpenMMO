@@ -87,6 +87,8 @@ pub fn terrain_router(
             "/api/terrain/land-grades/{rx}/{rz}",
             get(get_land_grades).put(put_land_grades),
         )
+        .route("/api/terrain/climate/{rx}/{rz}", get(get_climate))
+        .route("/api/terrain/weather-sectors", get(get_weather_sectors))
         .route("/api/terrain/trees/{x}/{z}", get(get_trees))
         .route("/api/terrain/river-field/{x}/{z}", get(get_river_field))
         .route("/api/terrain/water-field/{x}/{z}", get(get_water_field))
@@ -550,6 +552,29 @@ async fn put_object(
         })?;
     state.game_state.sync_region_furniture(rx, rz, &placements);
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_climate(
+    Path((rx, rz)): Path<(i32, i32)>,
+    request_headers: axum::http::HeaderMap,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    serve_revalidated(
+        coords::climate_path(terrain.base_dir(), rx, rz),
+        &request_headers,
+    )
+    .await
+}
+
+async fn get_weather_sectors(
+    request_headers: axum::http::HeaderMap,
+    State(terrain): State<Arc<TerrainIO>>,
+) -> Result<Response, StatusCode> {
+    serve_revalidated(
+        coords::weather_sectors_path(terrain.base_dir()),
+        &request_headers,
+    )
+    .await
 }
 
 async fn get_trees(

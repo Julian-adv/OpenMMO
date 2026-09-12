@@ -202,6 +202,7 @@ impl SharedState {
             | ServerMessage::MonsterMoved { .. }
             | ServerMessage::PartyPositions { .. }
             | ServerMessage::GameTimeSync { .. }
+            | ServerMessage::WeatherSync { .. }
             | ServerMessage::PricingNotice(_)
             | ServerMessage::HouseSpawned { .. }
             | ServerMessage::HousesInArea { .. }
