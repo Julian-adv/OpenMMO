@@ -144,3 +144,15 @@
     - 가방 아이콘과 땅에 펼쳐지는 탁자가 같은 모델이다 — 아이콘이 곧 설명이 된다. `items.csv`의 `worldModel`도 같은 GLB를 가리킨다.
     - 아이콘 `client/public/items/objects/peddler_stall.png`: Cycles 128 samples, 투명 직교 렌더 512²→128² RGBA, Euler (-62°, 0°, 0°) — 카메라 쪽으로 눕혀 탁자 위의 물건이 판자가 아니라 상품으로 읽히게 하되, 롤은 주지 않아 가방 칸에서 수평으로 놓인다. 2026-09-09 생성.
     - 재현 명령: `/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/blender-scripts/render_peddler_stall_icon.py`
+
+## Skeleton Knight Greatsword
+
+- `skeleton_greatsword.glb` — 사용자 제공 Tripo Pro 유료 생성 모델, 2026-09-12 생성(사용자 확인).
+  Tripo 서비스 이용 조건 적용. 원본 `fantasy+sword+3d+model.glb`는
+  `assets/skeleton_greatsword/source.glb`에 보관한다.
+  - 4,552 triangles, 1024² base color·normal·metallic/roughness 텍스처를 유지한다.
+    전장 1.85m, 칼날 방향 +X, 원점은 자루의 오른손 그립(손잡이 끝에서 전장의 20%).
+  - `tools/blender-scripts/build_skeleton_greatsword.py`로 재생성한다.
+    게임 모델 `client/public/models/weapons/skeleton_greatsword.glb`, 편집본
+    `assets/skeleton_greatsword/skeleton_greatsword.blend`.
+    스켈레톤 기사 전용 장착 외형이며 플레이어 아이템·드롭·판매 항목은 추가하지 않았다.
