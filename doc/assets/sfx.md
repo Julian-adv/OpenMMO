@@ -28,6 +28,11 @@ and thunder scheduling), which follows the same SFX volume/mute settings as
 
 ## Combat
 
+- metal-hit.ogg — 금속 갑옷 피격음 (`metal` / `wood` → `metal`).
+  ElevenLabs Sound Effects API, Starter 유료 플랜으로 2026-09-12 직접 생성.
+  유료 플랜 상업 이용 라이선스 적용. `tools/gen-death-sfx.py`의 `metal_hit`,
+  0.7초·prompt_influence 0.6·1테이크. 원본은 `assets/skeleton_warrior/sfx/metal-hit.mp3`에 보관.
+  44.1 kHz 모노 Ogg q5, 피크 −3 dB, 100 ms 테일 페이드로 가공.
 - bone-hit.ogg — 스켈레톤 피격 시 뼈가 부딪히는 소리 (`metal` / `wood` → `bone`).
   [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-09-12 생성
   (Starter 유료 플랜, 직접 생성; [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform)).

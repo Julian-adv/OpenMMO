@@ -8,6 +8,12 @@ Candidates land in sfx-candidates/<subject>-<n>.mp3 (gitignored).
 import argparse, json, os, pathlib, sys, time, urllib.request
 
 PROMPTS = {
+    "metal_hit": (
+        'A single steel weapon striking a worn iron breastplate: an immediate hard '
+        'dry metallic clang with a short rattling ring of loose armor plates. One '
+        'crisp close-up melee hit, under one second. No voice, no music, no rock '
+        'debris, no reverb, no repeated hits.'
+    ),
     "orc": "The short, guttural death roar of an orc warrior cut down by a sword in battle",
     "orc_female": "A woman's very short, sharp, high-pitched death scream, a single shrill feminine cry less than half a second long, cut off instantly as a sword strikes her down. Clearly a female human-like voice, high soprano pitch, no growl, no male voice, no music.",
     "hobgoblin": "The harsh, guttural death cry of a hobgoblin soldier felled by a sword: a rough snarling humanoid war-cry choking off as he falls. Voice only, no dog, no barking, no animal, no music.",

@@ -4,6 +4,16 @@
   "hitSounds": [
     {
       "attackerMaterial": "metal",
+      "targetMaterial": "metal",
+      "sound": "/sounds/metal-hit.ogg"
+    },
+    {
+      "attackerMaterial": "wood",
+      "targetMaterial": "metal",
+      "sound": "/sounds/metal-hit.ogg"
+    },
+    {
+      "attackerMaterial": "metal",
       "targetMaterial": "flesh",
       "sound": "/sounds/sword-flesh4.ogg"
     },
