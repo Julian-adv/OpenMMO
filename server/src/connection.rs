@@ -40,13 +40,12 @@ pub struct AuthContext {
     /// logins are rejected until it is configured.
     pub google: Option<GoogleAuthVerifier>,
     pub npc_token: String,
-    /// Google account emails allowed to call REST write endpoints.
+    /// Google account emails allowed to administer the game and view metrics.
     pub admin_emails: Vec<String>,
 }
 
 impl AuthContext {
-    /// Verified-email allowlist check shared by REST writes and in-game
-    /// debug/cheat commands.
+    /// Verified-email allowlist for admin APIs and game commands.
     pub fn is_admin(&self, claims: &crate::google_auth::GoogleClaims) -> bool {
         claims.email_verified == Some(true)
             && claims.email.as_deref().is_some_and(|email| {

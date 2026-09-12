@@ -1,9 +1,11 @@
 import { SvelteURLSearchParams } from 'svelte/reactivity'
 import type { Hours } from './metrics'
+import { useDashboardAuth } from './auth.svelte'
 
 export type MetricsResource<T> = ReturnType<typeof createMetricsResource<T, Hours>>
 
 export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H, query: Record<string, string>) => T, errorLabel = '접속 현황', getQuery: () => Record<string, string> = () => ({})) {
+  const auth = useDashboardAuth()
   let history = $state<T | null>(null)
   let refreshing = $state(false)
   let error = $state('')
@@ -27,7 +29,7 @@ export function createMetricsResource<T, H extends Hours>(getHours: () => H, end
       refreshing = true
       const timeout = window.setTimeout(() => request.abort(), 10000)
       try {
-        const response = await fetch(url, { signal: request.signal, cache: 'no-store' })
+        const response = await auth.fetch(url, { signal: request.signal })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         const data = parse(await response.json(), hours, query)
         if (!stopped) {

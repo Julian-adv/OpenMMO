@@ -741,6 +741,7 @@ async fn main() -> ExitCode {
     .merge(metrics::metrics_router(
         Arc::clone(&game_state),
         Arc::clone(&auth_service),
+        Arc::clone(&auth_ctx),
     ))
     .layer(axum::middleware::from_fn_with_state(
         Arc::clone(&auth_ctx),

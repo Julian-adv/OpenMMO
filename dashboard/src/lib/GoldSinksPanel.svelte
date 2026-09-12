@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { MetricsResource } from './metricsResource.svelte'
   import GoldAmount from './GoldAmount.svelte'
   import GoldRankingTable from './GoldRankingTable.svelte'
   import MetricsError from './MetricsError.svelte'
@@ -6,14 +7,11 @@
   import { formatCount, formatDateTime, uniquePeriods, type GoldHours } from './metrics'
   import { goldSinkKey, type GoldSinks } from './goldSinks'
 
-  let { hours = $bindable(), sinks, loading, refreshing, error, refresh }: {
+  let { hours = $bindable(), resource }: {
     hours: GoldHours
-    sinks: GoldSinks | null
-    loading: boolean
-    refreshing: boolean
-    error: string
-    refresh: () => void
+    resource: MetricsResource<GoldSinks>
   } = $props()
+  let { history: sinks, loading, refreshing, error, refresh } = $derived(resource)
   let period = $derived(uniquePeriods.find((option) => option.hours === hours)!)
 </script>
 

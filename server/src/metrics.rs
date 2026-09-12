@@ -371,7 +371,23 @@ struct PerAccountGoldQuery {
     active_hours: Option<u32>,
 }
 
-pub fn metrics_router(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
+pub fn metrics_router(
+    game: Arc<GameState>,
+    auth: Arc<AuthService>,
+    access: Arc<crate::connection::AuthContext>,
+) -> Router {
+    metrics_routes(game, auth)
+        .route(
+            "/api/metrics/session",
+            get(|| async { StatusCode::NO_CONTENT }),
+        )
+        .route_layer(axum::middleware::from_fn_with_state(
+            access,
+            crate::api_auth::require_google_admin,
+        ))
+}
+
+fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
     Router::new()
         .route("/api/metrics/concurrent", get(concurrent_history))
         .route("/api/metrics/unique", get(unique_history))
@@ -690,6 +706,10 @@ async fn per_account_gold_history(
 }
 
 #[cfg(test)]
+#[path = "metrics_access_tests.rs"]
+mod access_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::game_state::tests::make_test_game_state;
@@ -700,7 +720,7 @@ mod tests {
         let auth = Arc::new(AuthService::new(path.clone()).unwrap());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(
+        let router = metrics_routes(
             Arc::new(make_test_game_state("gold_sinks_api")),
             Arc::clone(&auth),
         );
@@ -768,7 +788,7 @@ mod tests {
         let auth = Arc::new(AuthService::new(path.clone()).unwrap());
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(
+        let router = metrics_routes(
             Arc::new(make_test_game_state("item_gold_sources_api")),
             Arc::clone(&auth),
         );
@@ -837,7 +857,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("weapon_enchant_leaderboard"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/weapon-enchant-leaderboard");
@@ -973,7 +993,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("land_leaderboard"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/land-leaderboard");
@@ -1075,7 +1095,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("armor_enchant_leaderboard"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/armor-enchant-leaderboard");
@@ -1192,7 +1212,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("gold_leaderboard"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/gold-leaderboard");
@@ -1345,7 +1365,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("level_leaderboard"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/level-leaderboard");
@@ -1523,7 +1543,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("per_account_gold_endpoint"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/gold-per-account");
@@ -1599,7 +1619,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("gold_endpoint"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(game, Arc::clone(&auth));
+        let router = metrics_routes(game, Arc::clone(&auth));
         let task = tokio::spawn(async move { axum::serve(listener, router).await.unwrap() });
         let client = reqwest::Client::new();
         let url = format!("http://{addr}/api/metrics/gold");
@@ -1674,7 +1694,7 @@ mod tests {
         let game = Arc::new(make_test_game_state("metrics_endpoint"));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let router = metrics_router(Arc::clone(&game), Arc::clone(&auth));
+        let router = metrics_routes(Arc::clone(&game), Arc::clone(&auth));
         let task = tokio::spawn(async move {
             axum::serve(listener, router).await.unwrap();
         });

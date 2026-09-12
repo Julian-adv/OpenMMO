@@ -1,18 +1,16 @@
 <script lang="ts">
+  import type { MetricsResource } from './metricsResource.svelte'
   import GoldAmount from './GoldAmount.svelte'
   import HistoryChart from './HistoryChart.svelte'
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
   import { formatGold, formatDateTime, goldPeriods, type GoldHistory, type GoldHours } from './metrics'
 
-  let { hours = $bindable(), history, loading, refreshing, error, refresh }: {
+  let { hours = $bindable(), resource }: {
     hours: GoldHours
-    history: GoldHistory | null
-    loading: boolean
-    refreshing: boolean
-    error: string
-    refresh: () => void
+    resource: MetricsResource<GoldHistory>
   } = $props()
+  let { history, loading, refreshing, error, refresh } = $derived(resource)
   let period = $derived(goldPeriods.find((option) => option.hours === hours)!)
   let peak = $derived(history?.samples.length ? Math.max(...history.samples.map((sample) => sample.peak_gold)) : null)
   let sampleCount = $derived(history?.samples.reduce((total, sample) => total + sample.sample_count, 0) ?? 0)

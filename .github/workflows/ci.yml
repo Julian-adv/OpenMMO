@@ -53,6 +53,8 @@ jobs:
           cache: npm
           cache-dependency-path: client/package-lock.json
       - run: npm ci
+      - name: Test deployment script
+        run: bash ../tools/test-deploy-prod.sh
       - run: npm run build:wasm
       - run: npm test
       - run: npm run check

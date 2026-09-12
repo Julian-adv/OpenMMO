@@ -108,7 +108,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 - **Client**: Svelte component-based UI + Three.js integration through Threlte
 - **Server**: Rust async server with game state management via broadcast channels
-- **Dashboard**: Independent Svelte app in `dashboard/` for concurrent account metrics
+- **Dashboard**: Admin-only Svelte app in `dashboard/` for world metrics and rankings; see [setup](dashboard/README.md)
 - **Communication**: Real-time bidirectional communication through WebSocket
 
 ## Tech Stack
@@ -175,7 +175,7 @@ This project is organized as a **Cargo Workspace**. The shared Rust crate (`shar
 cargo watch -w server -w shared -w data-src -x "run -p onlinerpg-server"
 ```
 
-The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1), bound to 127.0.0.1 (`--api-bind` to override). Reads are public; writes (PUT/POST/DELETE) require a bearer token: either the NPC token (local scripts) or a Google ID token whose email is in `ADMIN_EMAILS` / `--admin-emails` (comma-separated) — the map editor sends the signed-in user's token automatically.
+The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1), bound to 127.0.0.1 (`--api-bind` to override). Game reads are public; writes (PUT/POST/DELETE) require a bearer token: either the NPC token (local scripts) or a Google ID token whose email is in `ADMIN_EMAILS` / `--admin-emails` (comma-separated) — the map editor sends the signed-in user's token automatically. All `/api/metrics/` reads require a verified Google admin; NPC and game session tokens are not accepted there.
 
 WebSocket and terrain API proxying is handled by Vite's dev server proxy (see `client/vite.config.ts`), so no separate socat or SSL proxy is needed.
 
@@ -242,7 +242,7 @@ Prod runs both binaries as systemd units (`tools/systemd/`), with the client bun
 | `openmmo-server` | `onlinerpg-server` | `openmmo` |
 | `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
 
-Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, publishes the static files, then restarts both units.
+Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, publishes the static files, then restarts both units. It also builds and publishes the dashboard on first deployment or when its source, build environment, or Node.js version changes. Unchanged dashboard builds are skipped. The default dashboard location is `/var/www/openmmo-dashboard`, served at `/dashboard/`; see [dashboard deployment](dashboard/README.md#배포-스크립트로-자동-게시).
 
 There is no host-setup script. nginx on prod is a hand-maintained `/etc/nginx/sites-available/openmmo`; keep it in step with `docker/nginx.conf.template`, which is the reference for the cache rules. In particular `/models/` must be served with `Cache-Control: no-cache` — the object catalog and GLBs are fetched by fixed path, and a time-based expiry lets a stale `catalog.json` hide newly added furniture with no error.
 
