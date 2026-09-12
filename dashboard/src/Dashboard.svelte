@@ -20,7 +20,7 @@
   let period = $derived(periods.find((period) => period.hours === hours)!)
   let uniqueHours = $state<UniqueHours>(24)
   let uniquePeriod = $derived(uniquePeriods.find((period) => period.hours === uniqueHours)!)
-  const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory)
+  const concurrent = createMetricsResource(() => hours, 'concurrent', parseHistory, '접속 현황', () => ({}), 60000)
   const unique = createMetricsResource(() => uniqueHours, 'unique', parseUniqueHistory)
   let goldHours = $state<GoldHours>(24)
   const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
@@ -80,7 +80,7 @@
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}1시간마다 업데이트{/if}
+        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}현재 접속 1분 · 그 외 1시간마다 업데이트{/if}
       </div>
       <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -92,7 +92,7 @@
 
   <section class="stat-grid" aria-label="접속 요약" aria-busy={loading}>
     <article class="stat-card current-card">
-      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : '1시간 갱신'}</span></div>
+      <div class="stat-label">{error && history ? '마지막 확인 접속' : '현재 접속'}<span class="live-tag">{error ? '갱신 중단' : loading ? '연결 중' : '1분 갱신'}</span></div>
       <div class="stat-value">{count(history?.current.accounts)}<span>계정</span></div>
       <div class="stat-detail"><span class="tiny-dot"></span>{history ? `${formatTime(history.until)} KST 기준` : '월드에 입장한 계정 기준'}</div>
       {#if history}<ConnectionBreakdown sample={history.current} />{/if}
