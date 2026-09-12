@@ -289,9 +289,9 @@ impl GameState {
         }
         {
             let mut stalls = self.stalls.write().await;
-            if !stalls
+            if stalls
                 .get(&owner)
-                .is_some_and(|entry| entry.stall.id == stall_id)
+                .is_none_or(|entry| entry.stall.id != stall_id)
             {
                 return;
             }

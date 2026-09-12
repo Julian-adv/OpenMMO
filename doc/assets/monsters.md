@@ -2,6 +2,26 @@
 
 ## Monster
 
+- skeleton_warrior — Tripo 모델, 2026-09-12 수령. 사용자는 앞선 스켈레톤 작업에서 Pro 요금제를 확인했다.
+  이번 모델의 정확한 생성일은 미확인(로컬 다운로드 파일 생성 시각: 2026-09-12).
+  - 사용자 제공 `skeleton+armor+3d+model.glb`; 원본은 `assets/skeleton_warrior/source.glb`에 보관.
+    라이선스는 Tripo 유료 생성물 서비스 이용 조건을 따른다. 10,000 triangles, Tripo 41본 리그와
+    1024² base color·normal·metallic/roughness 텍스처를 유지하며 높이 1.9m로 맞췄다.
+  - 원화 `doc/images/monsters/skeleton_warrior_concept.png`는 이 작업의 ChatGPT 이미지 생성 도구로 만든
+    낡고 부서진 갑옷의 스켈레톤 전사 T-pose 시안(플랜 미확인, 2026-09-12).
+  - `tools/blender-scripts/build_skeleton_warrior.py`로 원본에서 재생성한다. 편집본은
+    `assets/skeleton_warrior/skeleton_warrior.blend`, 게임 모델은
+    `client/public/models/monsters/skeleton_warrior.glb`.
+  - Idle·Walk·Run·Death는 기존 스켈레톤에 사용한 사용자 제공 Mixamo 65본 FBX와 동일한 파일을 재사용한다.
+    Attack은 사용자 제공 `Sword And Shield Slash.fbx`(Mixamo, 2026-09-12 수령)로 교체했다. Mixamo 서비스
+    이용 조건 적용. 원본은 `assets/skeleton_warrior/fbx/`에 보관하고 Tripo 리그로 리타게팅했다.
+  - 게임 GLB에는 `Idle`, `Walk`, `Run`, `Attack`, `Death` 5개 클립만 포함한다. 걷기·달리기는 제자리 이동,
+    Attack은 1.5초이고 오른손의 수평 도달 거리가 최대인 625ms를 타격 시점으로 사용한다. 쿨다운은 1800ms.
+  - 기존 `morningstar` 아이템 모델을 `R_Hand`에 장착하고 손 가중치 정점의 중심에 맞춰 본 로컬 오프셋을
+    Y 0.103m·X 0.02m·Z -0.004m로 지정했다. 무기 자체의 출처와 라이선스는
+    [items.md의 morningstar](items.md) 기록을 따른다.
+  - 정예 일반 몬스터 능력치는 레벨 22, 체력 260, guard 30, 피해 5d12. 던전 출현 설정은 비워 두며
+    관리자가 추후 배치한다. `material=metal`, `corpseAutoGround=false`.
 - skeleton — Tripo Pro (유료), 사용자 생성일 2026-09-11.
   - 사용자 제공 `skeleton+3d+model.glb`; 원본은 `assets/skeleton/source.glb`에 보관.
   - 이용권: 사용자 확인 Tripo Pro 유료 생성물. 별도 CC 라이선스 표시는 없으며 Tripo 서비스 이용 조건 적용.
