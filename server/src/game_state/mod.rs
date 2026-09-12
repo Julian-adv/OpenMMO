@@ -264,6 +264,7 @@ pub(crate) mod time;
 mod tip_hat;
 mod titles;
 mod trading;
+pub mod weather;
 pub use trading::BUYBACK_SWEEP_PERIOD;
 
 // Visible crate-wide so tests outside this module (e.g. the login gate in
@@ -364,6 +365,7 @@ pub struct GameState {
     broadcast_tx: GameStateSender,
     server_notice: Arc<RwLock<Option<String>>>,
     game_clock: Arc<std::sync::RwLock<GameClock>>,
+    weather: Arc<std::sync::RwLock<Option<weather::WeatherState>>>,
     /// NPC name → schedule.json copy; sleep resolves against this + game clock.
     npc_schedules: Arc<std::sync::RwLock<HashMap<String, Vec<ScheduleEntry>>>>,
     monster_defs: MonsterDefs,
@@ -694,6 +696,7 @@ impl GameState {
                 start_real: Instant::now(),
                 start_game_seconds: Self::datetime_to_total_game_seconds(&initial_datetime),
             })),
+            weather: Arc::new(std::sync::RwLock::new(None)),
             npc_schedules: Arc::new(std::sync::RwLock::new(HashMap::new())),
             monster_defs,
             item_defs,

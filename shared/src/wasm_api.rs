@@ -375,6 +375,50 @@ pub fn passability_get_floor_y_base(x: f32, z: f32, floor_level: u8) -> f32 {
     with_cache(|c| pathfinding::get_floor_y_base(c, x, z, floor_level).unwrap_or(f32::NAN))
 }
 
+// --- Weather (doc/WEATHER_SYSTEM.md) ---
+
+thread_local! {
+    static WEATHER_SECTORS: RefCell<Vec<crate::weather::Sector>> = RefCell::new(Vec::new());
+}
+
+/// Parses `weather-sectors.json` once; the per-frame exports below run
+/// against the cached list. Returns the sector count.
+#[wasm_bindgen]
+pub fn weather_set_sectors(json: &str) -> Result<usize, JsError> {
+    let parsed: crate::weather::WeatherSectors = serde_json::from_str(json)
+        .map_err(|e| JsError::new(&format!("Invalid weather sectors: {e}")))?;
+    let count = parsed.sectors.len();
+    WEATHER_SECTORS.with(|s| *s.borrow_mut() = parsed.sectors);
+    Ok(count)
+}
+
+/// Game minutes since the calendar epoch — computed here rather than in TS so
+/// the client's `t` cannot drift a day from the server's.
+#[wasm_bindgen]
+pub fn weather_game_minutes(year: u32, month: u8, day: u8, hour: u8, minute: u8) -> f64 {
+    crate::weather::game_minutes(&crate::world::GameDateTime {
+        year,
+        month,
+        day,
+        hour,
+        minute,
+    })
+}
+
+/// Seeds ride the wire as JS numbers, so they are taken as `f64` here.
+#[wasm_bindgen]
+pub fn weather_rain_at(seed: f64, bias: f64, t_min: f64, x: f32, z: f32) -> f32 {
+    WEATHER_SECTORS.with(|s| {
+        let cells = crate::weather::cells_at(&s.borrow(), seed as u64, bias, t_min);
+        crate::weather::rain_at(&cells, x, z)
+    })
+}
+
+#[wasm_bindgen]
+pub fn weather_cloud_factor(rain: f32) -> f32 {
+    crate::weather::cloud_factor(rain)
+}
+
 // --- Dungeon (procedural, seed-deterministic) ---
 
 #[wasm_bindgen]

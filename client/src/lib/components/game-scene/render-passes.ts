@@ -8,6 +8,7 @@ import type GameSceneShoreSprayLayer from './GameSceneShoreSprayLayer.svelte'
 import type GameSceneGrassLayer from './GameSceneGrassLayer.svelte'
 import type GameSceneTreeLayer from './GameSceneTreeLayer.svelte'
 import type GameSceneWindParticles from './GameSceneWindParticles.svelte'
+import type GameSceneRainLayer from './GameSceneRainLayer.svelte'
 import type GameSceneHousingLayer from './GameSceneHousingLayer.svelte'
 import type ObjectOverlay from '../map-editor/ObjectOverlay.svelte'
 import type { RefractionRenderManager } from '../../managers/refractionRenderManager'
@@ -35,6 +36,7 @@ export interface RenderPassesContext {
   grassLayerRef: GameSceneGrassLayer | undefined
   treeLayerRef: GameSceneTreeLayer | undefined
   windParticlesRef: GameSceneWindParticles | undefined
+  rainLayerRef: GameSceneRainLayer | undefined
   housingLayerRef: GameSceneHousingLayer | undefined
   objectOverlayRef: ObjectOverlay | undefined
   currentPlayerModel: PlayerModel | null
@@ -91,14 +93,25 @@ export function runRenderPasses(ctx: RenderPassesContext): void {
 
 /** Everything above the water surface: neither refracted into the bed image
  *  nor mirrored, and every group left in costs a pipeline per material. */
-function aboveWaterGroups(
-  ctx: RenderPassesContext
+export function aboveWaterGroups(
+  ctx: Pick<
+    RenderPassesContext,
+    | 'entityClipGroup'
+    | 'grassLayerRef'
+    | 'treeLayerRef'
+    | 'windParticlesRef'
+    | 'rainLayerRef'
+    | 'objectOverlayRef'
+    | 'riverRocksRef'
+    | 'shoreSprayRef'
+  >
 ): (THREE.Group | undefined)[] {
   return [
     ctx.entityClipGroup,
     ctx.grassLayerRef?.getGroup(),
     ctx.treeLayerRef?.getGroup(),
     ctx.windParticlesRef?.getGroup(),
+    ctx.rainLayerRef?.getGroup(),
     ctx.objectOverlayRef?.getGroup(),
     ctx.riverRocksRef?.getGroup(),
     ctx.shoreSprayRef?.getGroup(),

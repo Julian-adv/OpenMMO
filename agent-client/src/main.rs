@@ -475,6 +475,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::SystemMessage { .. } => "SystemMessage",
         ServerMessage::GameState { .. } => "GameState",
         ServerMessage::GameTimeSync { .. } => "GameTimeSync",
+        ServerMessage::WeatherSync { .. } => "WeatherSync",
         ServerMessage::PricingNotice(_) => "PricingNotice",
         ServerMessage::MonsterSpawned { .. } => "MonsterSpawned",
         ServerMessage::MonsterMoved { .. } => "MonsterMoved",

@@ -31,6 +31,7 @@ pub mod skills;
 pub mod stall;
 pub mod tip_hat;
 pub mod tree_format;
+pub mod weather;
 pub mod world;
 pub mod worldgen;
 pub mod xp;
@@ -148,7 +149,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v67: pre-rolled trophy fights replace the second-fish bonus.
 /// v68: consignment stalls replace the stall entry to player trades.
 /// v69: persistent item locks and SetItemLocked.
-/// v70: mounted reverse recovery and authoritative recovery progress.
+/// v70: mounted reverse recovery and authoritative recovery progress;
+///      `ServerMessage::WeatherSync` (seed + bias for the regional rain
+///      cells, doc/WEATHER_SYSTEM.md); an older client cannot decode it.
 pub const PROTOCOL_VERSION: u32 = 70;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
@@ -272,6 +275,22 @@ mod tests {
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
         assert!(matches!(decoded, ClientMessage::RequestRespawn));
+    }
+
+    #[test]
+    fn roundtrip_weather_sync() {
+        let bytes = serialize_server_msg(&ServerMessage::WeatherSync {
+            seed: 42,
+            bias: 1.0,
+        })
+        .unwrap();
+        match deserialize_server_msg(&bytes).unwrap() {
+            ServerMessage::WeatherSync { seed, bias } => {
+                assert_eq!(seed, 42);
+                assert_eq!(bias, 1.0);
+            }
+            other => panic!("Wrong variant: {other:?}"),
+        }
     }
 
     #[test]
