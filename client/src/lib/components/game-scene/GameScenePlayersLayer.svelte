@@ -4,6 +4,8 @@
   import { get } from 'svelte/store'
   import { SvelteMap } from 'svelte/reactivity'
   import PlayerModel from '../PlayerModel.svelte'
+  import GameSceneEnchantSuccessLayer from './GameSceneEnchantSuccessLayer.svelte'
+  import type { EnchantSuccess } from '../../stores/enchantSuccessStore'
   import PlayerControl from '../PlayerControl.svelte'
   import type { PlayerControlEvent } from '../player-control/events'
   import type {
@@ -196,6 +198,22 @@
     }
     return map
   })
+
+  let remoteModels = $derived(
+    new SvelteMap(
+      [...otherPlayers.keys()].map((id, index) => [
+        id,
+        otherPlayerModels[index],
+      ])
+    )
+  )
+
+  function getEnchantAnchor(event: EnchantSuccess, target: THREE.Vector3) {
+    const local = event.playerId === currentPlayer?.id
+    if (!local && !remoteVisibility.get(event.playerId)) return false
+    const model = local ? currentPlayerModel : remoteModels.get(event.playerId)
+    return model?.getEnchantAnchor(event.weapon, target) ?? false
+  }
 
   // Unified torch: exactly one PointLight for the entire scene.
   // Priority: local player's torch (if ON) > closest visible remote player
@@ -459,6 +477,8 @@
     return unifiedTorchLight
   }
 </script>
+
+<GameSceneEnchantSuccessLayer {currentPlayer} getAnchor={getEnchantAnchor} />
 
 {#if camera && currentPlayer}
   <PlayerControl

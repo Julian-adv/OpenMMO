@@ -1160,6 +1160,10 @@ pub enum ServerMessage {
         /// cannot see for anyone but themselves.
         ammo_item_def_id: Option<String>,
     },
+    EquipmentEnchantSucceeded {
+        player_id: PlayerId,
+        weapon: bool,
+    },
     /// A valid attack attempt made outside melee range. No attack roll or
     /// damage is applied, but the managed monster should acquire the player.
     MonsterProvoked {

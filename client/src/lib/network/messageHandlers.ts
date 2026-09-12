@@ -40,6 +40,7 @@ import {
   playerGold,
   playerEffectiveStats,
 } from '../stores/inventoryStore'
+import { queueEnchantSuccess } from '../stores/enchantSuccessStore'
 import { capeDyeDialog } from '../stores/capeDyeStore'
 import {
   applyFenceVisibility,
@@ -1693,7 +1694,13 @@ export function handleServerMessage(
       )
       break
 
+    case 'EquipmentEnchantSucceeded':
+      queueEnchantSuccess(data.player_id, data.weapon)
+      break
+
     case 'InventoryState':
+      setInventory(data.inventory)
+      break
     case 'InventoryUpdated':
       setInventory(data.inventory)
       break

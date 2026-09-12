@@ -382,3 +382,45 @@ async fn each_reading_burns_one_flask_of_oil() {
         .expect("the oil stack should survive a single reading");
     assert_eq!(oil.quantity, 2, "one flask per reading");
 }
+
+#[tokio::test]
+async fn enchant_success_event_is_sent_once_to_self_and_nearby_same_floor() {
+    let game_state = make_test_game_state("enchant_event_range");
+    let mut owner = setup_weapon_enchant_reader(&game_state, Some(("iron_sword", 0)), 1).await;
+    game_state.add_player(make_player("near", 2.0, 0.0)).await;
+    game_state.add_player(make_player("far", 1000.0, 0.0)).await;
+    let mut below = make_player("below", 2.0, 0.0);
+    below.floor_level = -1;
+    game_state.add_player(below).await;
+    let mut near = game_state.register_direct_channel(&pid("near")).await;
+    let mut far = game_state.register_direct_channel(&pid("far")).await;
+    let mut below = game_state.register_direct_channel(&pid("below")).await;
+    drain(&mut owner);
+    game_state.use_item(&pid("reader"), SCROLL_ID).await;
+    for receiver in [&mut owner, &mut near] {
+        let events: Vec<_> = drain(receiver)
+            .into_iter()
+            .filter(|msg| matches!(msg, ServerMessage::EquipmentEnchantSucceeded { .. }))
+            .collect();
+        assert_eq!(events.len(), 1);
+        assert!(
+            matches!(events[0], ServerMessage::EquipmentEnchantSucceeded { player_id, weapon: true } if player_id == pid("reader"))
+        );
+    }
+    for receiver in [&mut far, &mut below] {
+        assert!(!drain(receiver)
+            .iter()
+            .any(|msg| matches!(msg, ServerMessage::EquipmentEnchantSucceeded { .. })));
+    }
+}
+
+#[tokio::test]
+async fn enchant_rejected_without_target_emits_no_success_event() {
+    let game_state = make_test_game_state("enchant_event_rejected");
+    let mut owner = setup_weapon_enchant_reader(&game_state, None, 1).await;
+    drain(&mut owner);
+    game_state.use_item(&pid("reader"), SCROLL_ID).await;
+    assert!(!drain(&mut owner)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::EquipmentEnchantSucceeded { .. })));
+}

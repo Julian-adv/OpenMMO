@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>강화 효과 비교</title>
+    <style>
+      body {
+        margin: 0;
+        background: #111714;
+        color: #e9dfc6;
+        font: 16px system-ui;
+      }
+      header {
+        padding: 24px 5vw;
+      }
+      h1 {
+        margin: 0 0 8px;
+        font-size: 26px;
+      }
+      p {
+        color: #a6b3a6;
+      }
+      button,
+      select {
+        padding: 10px;
+        background: #29392f;
+        border: 1px solid #64735c;
+        color: #f3e7c6;
+        border-radius: 8px;
+        font: inherit;
+      }
+      #view {
+        height: 58vh;
+      }
+      .labels {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        text-align: center;
+      }
+      h2 {
+        font-size: 19px;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>강화 성공 효과 비교</h1>
+      <p>
+        실제 발키리 모델 · 게임 기본 줌의 화면 크기 · 갑옷은 몸통, 무기는
+        오른손에 표시
+      </p>
+      <button id="replay">다시 재생</button>
+      <select id="speed">
+        <option value="0.25">느리게 · 4배 확대 관찰</option>
+        <option value="1">실제 속도 · 0.6초</option>
+      </select>
+    </header>
+    <div id="view"></div>
+    <div class="labels">
+      <div>
+        <h2>갑옷 · 기본</h2>
+      </div>
+      <div>
+        <h2>갑옷 · 간소화</h2>
+      </div>
+      <div>
+        <h2>무기 · 기본</h2>
+      </div>
+      <div>
+        <h2>무기 · 간소화</h2>
+      </div>
+    </div>
+    <script type="module">
+      import * as THREE from 'three'
+      import { WebGPURenderer } from 'three/webgpu'
+      import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+      import {
+        createCharacterModelRoot,
+        computeSoleGroundOffset,
+        findBoneByName,
+      } from './src/lib/utils/characterAnimationUtils.ts'
+      import { EnchantSuccessEffect } from './src/lib/effects/enchant-success.ts'
+      const host = document.querySelector('#view'),
+        renderer = new WebGPURenderer({ antialias: true })
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+      host.append(renderer.domElement)
+      const scene = new THREE.Scene()
+      scene.background = new THREE.Color('#111714')
+      const camera = new THREE.OrthographicCamera(-3.6, 3.6, 2, -2, 0.1, 100)
+      camera.position.set(0, 28.867, 40.825)
+      camera.lookAt(0, 0.9, 0)
+      const map = await new THREE.TextureLoader().loadAsync(
+        '/textures/vfx/enchant-filament.png'
+      )
+      map.colorSpace = THREE.SRGBColorSpace
+      const variants = [
+        { weapon: false, reduced: false },
+        { weapon: false, reduced: true },
+        { weapon: true, reduced: false },
+        { weapon: true, reduced: true },
+      ]
+      const anchors = variants.map(() => new THREE.Vector3())
+      const models = []
+      const pedestals = []
+      scene.add(new THREE.HemisphereLight('#e9eedf', '#404c32', 2))
+      const sun = new THREE.DirectionalLight('#fff2dc', 2)
+      sun.position.set(-3, 7, 5)
+      scene.add(sun)
+      const loader = new GLTFLoader()
+      const character = await loader.loadAsync(
+        '/models/characters/valkyrie.glb'
+      )
+      const locomotion = await loader.loadAsync(
+        '/models/animations/locomotion.glb'
+      )
+      const hands = []
+      const mixers = []
+      for (let i = 0; i < variants.length; i++) {
+        const { clonedScene, modelRoot } = createCharacterModelRoot(
+          character.scene
+        )
+        clonedScene.position.y = computeSoleGroundOffset(modelRoot)
+        modelRoot.position.x = anchors[i].x
+        scene.add(modelRoot)
+        models.push(modelRoot)
+        hands.push(findBoneByName(clonedScene, 'RightHand'))
+        const mixer = new THREE.AnimationMixer(modelRoot)
+        const clip = [...character.animations, ...locomotion.animations].find(
+          (clip) => /idle/i.test(clip.name)
+        )
+        if (clip) mixer.clipAction(clip).play()
+        mixers.push(mixer)
+      }
+      const effects = anchors.map(() => new EnchantSuccessEffect(map))
+      for (let i = 0; i < variants.length; i++) {
+        scene.add(effects[i].group)
+        effects[i].group.visible = true
+        const mesh = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.65, 0.7, 0.12, 48),
+          new THREE.MeshBasicMaterial({ color: '#303c30' })
+        )
+        mesh.position.x = anchors[i].x
+        scene.add(mesh)
+        pedestals.push(mesh)
+      }
+      await renderer.init()
+      await renderer.compileAsync(scene, camera)
+      effects.forEach((e) => e.clear())
+      function resize() {
+        const w = host.clientWidth,
+          h = host.clientHeight
+        renderer.setSize(w, h)
+        camera.top = (10 * h) / window.innerHeight
+        camera.left = (-camera.top * w) / h
+        camera.right = -camera.left
+        camera.bottom = -camera.top
+        camera.updateProjectionMatrix()
+        models.forEach((model, i) => {
+          const x =
+            camera.left +
+            (camera.right - camera.left) * ((i + 0.5) / variants.length)
+          model.position.x = x
+          pedestals[i].position.x = x
+        })
+      }
+      resize()
+      window.addEventListener('resize', resize)
+      let elapsed = 0,
+        last = performance.now()
+      document.querySelector('#replay').onclick = () => {
+        elapsed = 0
+      }
+      document.querySelector('#speed').onchange = () => {
+        elapsed = 0
+      }
+      renderer.setAnimationLoop(() => {
+        const now = performance.now()
+        elapsed +=
+          ((now - last) / 1000) * Number(document.querySelector('#speed').value)
+        mixers.forEach((mixer) => mixer.update((now - last) / 1000))
+        scene.updateMatrixWorld(true)
+        hands.forEach((hand, i) => {
+          anchors[i].set(models[i].position.x, 1.1, 0)
+          if (variants[i].weapon && hand) hand.getWorldPosition(anchors[i])
+        })
+        last = now
+        if (elapsed > 1.1) elapsed = 0
+        for (let i = 0; i < variants.length; i++) {
+          if (elapsed < 0.6)
+            effects[i].update(
+              Math.min(1, elapsed / 0.3),
+              elapsed < 0.3 ? null : (elapsed - 0.3) * 2,
+              anchors[i],
+              camera,
+              variants[i].reduced
+            )
+          else effects[i].clear()
+        }
+        renderer.render(scene, camera)
+      })
+    </script>
+  </body>
+</html>
