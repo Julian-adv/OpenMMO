@@ -1,3 +1,4 @@
+import type { AbilityId } from '../data/abilities'
 import type { MonsterData } from '../types/Monster'
 import type { WallDirection } from '../utils/house-geometry'
 import type { ClientEnvReport } from '../utils/clientEnvReport'
@@ -171,6 +172,8 @@ export type ClientMessage =
       }
     }
   | { PlayerAttack: { monster_id: string } }
+  | { UseAbility: { ability: AbilityId } }
+  | { DaggerDoubleSlash: { monster_id: string } }
   | { MonsterAttack: { monster_id: string; target_player_id: number } }
   | 'RequestRespawn'
   | { FishingCast: { position: Position } }

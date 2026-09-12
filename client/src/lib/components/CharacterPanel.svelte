@@ -1,5 +1,7 @@
 <script lang="ts">
   import ItemLockButton from './ItemLockButton.svelte'
+  import GuardianWardEntry from './GuardianWardEntry.svelte'
+  import DaggerSkillEntry from './DaggerSkillEntry.svelte'
   import {
     inventoryStore,
     itemLockMode,
@@ -99,7 +101,17 @@
       : CLASS_LABELS[characterClass]
   )
 
-  const TABS: CharacterPanelTab[] = ['stats', 'skills', 'status', 'titles']
+  const TABS: CharacterPanelTab[] = [
+    'stats',
+    'skills',
+    'abilities',
+    'status',
+    'titles',
+  ]
+
+  const draggedItem = $derived(
+    $dragMeta && !('skill' in $dragMeta) ? $dragMeta : null
+  )
 
   const trainedSkills = $derived(
     (Object.entries($skillsStore.map) as [SkillId, SkillProgress][]).sort(
@@ -333,12 +345,12 @@
                 : $inventoryStore.equipped[stored]}
               {@const def = item ? getItemDef(item.item_def_id) : null}
               {@const isDropTarget = isQuiverCell
-                ? $dragMeta !== null &&
+                ? draggedItem !== null &&
                   ammoKind !== undefined &&
-                  getItemDef($dragMeta.defId)?.ammoKind === ammoKind
+                  getItemDef(draggedItem.defId)?.ammoKind === ammoKind
                 : !blocked &&
-                  $dragMeta &&
-                  isSlotCompatible($dragMeta.equipSlot, stored)}
+                  draggedItem &&
+                  isSlotCompatible(draggedItem.equipSlot, stored)}
               <!-- svelte-ignore a11y_no_static_element_interactions -->
               <div
                 class="equip-slot"
@@ -385,6 +397,14 @@
             {/each}
           </div>
         </div>
+        {#if $characterPanelTab === 'abilities'}
+          <div class="pane-abilities">
+            <div class="skill-grid" role="group" aria-label="Abilities">
+              <GuardianWardEntry />
+              <DaggerSkillEntry />
+            </div>
+          </div>
+        {/if}
         {#if $characterPanelTab === 'skills'}
           <div class="pane-skills">
             {#if trainedSkills.length > 0}
@@ -535,6 +555,7 @@
   }
 
   .pane-skills,
+  .pane-abilities,
   .pane-status,
   .pane-titles {
     position: absolute;
@@ -563,6 +584,7 @@
 
   .tab-row {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     margin-bottom: 4px;
   }
@@ -665,6 +687,13 @@
     inset: 0 auto 0 0;
     background: linear-gradient(90deg, #58a6ff 0%, #7fd0ff 100%);
     box-shadow: 0 0 10px rgba(88, 166, 255, 0.4);
+  }
+
+  .skill-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, var(--equip-slot-size));
+    gap: 6px;
+    padding: 6px 0;
   }
 
   .skills-list {

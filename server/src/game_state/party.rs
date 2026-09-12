@@ -41,7 +41,7 @@ pub(crate) struct Parties {
 }
 
 impl Parties {
-    fn party_of(&self, player_id: &PlayerId) -> Option<&Party> {
+    pub(super) fn party_of(&self, player_id: &PlayerId) -> Option<&Party> {
         self.member_of
             .get(player_id)
             .and_then(|id| self.parties.get(id))

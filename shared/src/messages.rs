@@ -416,6 +416,9 @@ pub enum ClientMessage {
     PlayerAttack {
         monster_id: String,
     },
+    DaggerDoubleSlash {
+        monster_id: String,
+    },
     MonsterAttack {
         monster_id: String,
         target_player_id: PlayerId,
@@ -822,6 +825,9 @@ pub enum ClientMessage {
     FishingStop,
     /// Logged server-side only; accepted once per connection.
     EnvReport(ClientEnvReport),
+    UseAbility {
+        ability: crate::ability::AbilityId,
+    },
 }
 
 impl ClientMessage {
@@ -1159,6 +1165,23 @@ pub enum ServerMessage {
         /// this arrow rather than guessing from the shooter's bag, which they
         /// cannot see for anyone but themselves.
         ammo_item_def_id: Option<String>,
+        dagger_strike: Option<u8>,
+    },
+    DaggerDoubleSlashStarted {
+        player_id: PlayerId,
+        monster_id: String,
+        cooldown_ms: u64,
+    },
+    DaggerDoubleSlashRejected {
+        monster_id: String,
+        reason: String,
+        cooldown_ms: u64,
+    },
+    DaggerDoubleSlashSkipped {
+        player_id: PlayerId,
+        monster_id: String,
+        strike: u8,
+        reason: String,
     },
     EquipmentEnchantSucceeded {
         player_id: PlayerId,
@@ -1722,6 +1745,23 @@ pub enum ServerMessage {
     },
     /// Direct to each dungeon occupant before the sunset reset puts them out.
     DungeonReset,
+    AbilityCooldowns {
+        cooldowns: Vec<crate::ability::AbilityTimer>,
+    },
+    BuffUpdate {
+        buffs: Vec<crate::ability::AbilityTimer>,
+    },
+    AbilityRejected {
+        ability: crate::ability::AbilityId,
+        reason: crate::ability::AbilityRejectReason,
+    },
+    AbilityUsed {
+        ability: crate::ability::AbilityId,
+        player_id: PlayerId,
+        position: Position,
+        floor_level: i8,
+        targets: Vec<PlayerId>,
+    },
 }
 
 pub use crate::entity::PlayerId;

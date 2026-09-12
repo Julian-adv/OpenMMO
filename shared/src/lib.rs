@@ -4,6 +4,7 @@
 //! using flat `onlinerpg_shared::Position` paths regardless of where the
 //! type now lives.
 
+pub mod ability;
 pub mod bridge;
 pub mod celestial;
 pub mod character;
@@ -151,7 +152,10 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v69: persistent item locks and SetItemLocked.
 /// v70: `ServerMessage::WeatherSync` (seed + bias for the regional rain
 ///      cells, doc/WEATHER_SYSTEM.md); an older client cannot decode it.
-pub const PROTOCOL_VERSION: u32 = 70;
+/// v71: Guardian Ward ability, cooldowns, buff snapshots and VFX events.
+/// v72: per-strike damage rolls and skipped dagger strikes.
+/// v73: combined Guardian Ward and Double Slash protocol.
+pub const PROTOCOL_VERSION: u32 = 73;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -274,6 +278,47 @@ mod tests {
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
         assert!(matches!(decoded, ClientMessage::RequestRespawn));
+    }
+
+    #[test]
+    fn roundtrip_dagger_skill_messages() {
+        let request = ClientMessage::DaggerDoubleSlash {
+            monster_id: "m1".to_string(),
+        };
+        let bytes = serialize_client_msg(&request).unwrap();
+        assert!(matches!(deserialize_client_msg(&bytes).unwrap(),
+            ClientMessage::DaggerDoubleSlash { monster_id } if monster_id == "m1"));
+        for message in [
+            ServerMessage::DaggerDoubleSlashStarted {
+                player_id: 1.into(),
+                monster_id: "m1".to_string(),
+                cooldown_ms: 10000,
+            },
+            ServerMessage::DaggerDoubleSlashRejected {
+                monster_id: "m1".to_string(),
+                reason: "dagger_required".to_string(),
+                cooldown_ms: 0,
+            },
+            ServerMessage::DaggerDoubleSlashSkipped {
+                player_id: 1.into(),
+                monster_id: "m1".to_string(),
+                strike: 2,
+                reason: "target_defeated".to_string(),
+            },
+            ServerMessage::PlayerAttacked {
+                player_id: 1.into(),
+                monster_id: "m1".to_string(),
+                hit: true,
+                roll: 20,
+                damage: 17,
+                ammo_item_def_id: None,
+                dagger_strike: Some(1),
+            },
+        ] {
+            let bytes = serialize_server_msg(&message).unwrap();
+            let decoded = deserialize_server_msg(&bytes).unwrap();
+            assert_eq!(format!("{decoded:?}"), format!("{message:?}"));
+        }
     }
 
     #[test]
@@ -592,6 +637,7 @@ mod tests {
                 roll: 18,
                 damage: 5,
                 ammo_item_def_id: None,
+                dagger_strike: None,
             },
             ServerMessage::MonsterProvoked {
                 player_id: 1.into(),

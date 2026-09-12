@@ -10,7 +10,12 @@ export const worldMapVisible = writable(false)
 export const landPlotsVisible = writable(false)
 export const inventoryVisible = writable(false)
 export const characterPanelVisible = writable(false)
-export type CharacterPanelTab = 'stats' | 'skills' | 'status' | 'titles'
+export type CharacterPanelTab =
+  | 'stats'
+  | 'skills'
+  | 'abilities'
+  | 'status'
+  | 'titles'
 export const characterPanelTab = writable<CharacterPanelTab>('stats')
 export const debugSpeedMode = writable(false)
 export const refractionEnabled = writable(true)

@@ -1,4 +1,26 @@
 import { get } from 'svelte/store'
+import { attackLog, daggerSkippedLog } from './combatLog'
+import {
+  acknowledgeDaggerSkill,
+  clearDaggerCast,
+  daggerSkillState,
+  playDaggerSkill,
+} from '../stores/daggerSkillStore'
+import {
+  abilityCooldowns,
+  abilityPending,
+  activeBuffs,
+  timerSnapshot,
+  queueAbilityEffect,
+  type AbilityEffectEvent,
+} from '../stores/abilityStore'
+import {
+  DOUBLE_SLASH,
+  GUARDIAN_WARD,
+  abilityRequirementsNotMet,
+  getAbility,
+  type AbilityTimer,
+} from '../data/abilities'
 import {
   landAccount,
   landAccountError,
@@ -1031,7 +1053,10 @@ export function handleServerMessage(
       break
 
     case 'PlayerAttacked': {
-      remotePlayerManager.handleAttack(data.player_id)
+      if (data.dagger_strike == null) {
+        clearDaggerCast(data.player_id)
+        remotePlayerManager.handleAttack(data.player_id)
+      }
 
       const gameState = get(gameStore)
       const isLocalAttacker = gameState.currentPlayer?.id === data.player_id
@@ -1040,9 +1065,7 @@ export function handleServerMessage(
         : gameState.otherPlayers.get(data.player_id)?.name || 'Unknown'
 
       addCombatMessage({
-        text: data.hit
-          ? `rolled ${data.roll}: HIT for ${data.damage} damage!`
-          : `rolled ${data.roll}: MISSED!`,
+        text: attackLog(data.roll, data.hit, data.damage, data.dagger_strike),
         sender: isLocalAttacker ? 'local' : 'remote',
         name: attackerName,
         hit: data.hit,
@@ -1053,8 +1076,62 @@ export function handleServerMessage(
         data.player_id,
         data.hit,
         data.damage,
-        data.ammo_item_def_id
+        data.ammo_item_def_id,
+        data.dagger_strike != null
       )
+      break
+    }
+
+    case 'DaggerDoubleSlashStarted': {
+      const local = get(gameStore).currentPlayer?.id === data.player_id
+      if (local) {
+        acknowledgeDaggerSkill(data.cooldown_ms)
+      } else {
+        playDaggerSkill(data.player_id)
+        remotePlayerManager.handleAttack(data.player_id)
+      }
+      break
+    }
+
+    case 'DaggerDoubleSlashSkipped': {
+      const state = get(gameStore)
+      const local = state.currentPlayer?.id === data.player_id
+      addCombatMessage({
+        text: daggerSkippedLog(data.strike, data.reason),
+        sender: local ? 'local' : 'remote',
+        name: local
+          ? 'You'
+          : state.otherPlayers.get(data.player_id)?.name || 'Unknown',
+        hit: false,
+      })
+      break
+    }
+
+    case 'DaggerDoubleSlashRejected': {
+      const playerId = get(gameStore).currentPlayer?.id
+      if (playerId !== undefined) clearDaggerCast(playerId)
+      if (data.cooldown_ms > 0) acknowledgeDaggerSkill(data.cooldown_ms)
+      else
+        daggerSkillState.update((state) => ({
+          ...state,
+          pending: false,
+          queued: false,
+        }))
+      const reasons: Record<string, string> = {
+        cooldown: 'skill is cooling down',
+        attack_cooldown: 'wait for the next attack',
+        invalid_target: 'target is gone',
+        out_of_range: 'target is out of reach',
+        attacker_dead: 'you are dead',
+        busy: 'finish your current action',
+      }
+      addChatMessage({
+        text:
+          data.reason === 'dagger_required'
+            ? abilityRequirementsNotMet(DOUBLE_SLASH.name)
+            : `Double Slash: ${reasons[data.reason] ?? data.reason}.`,
+        sender: 'system',
+      })
       break
     }
 
@@ -2089,6 +2166,42 @@ export function handleServerMessage(
     }
 
     // Direct to the owner only: the full active list (doc/DEBUFF.md).
+    case 'AbilityCooldowns':
+      abilityCooldowns.set(timerSnapshot(data.cooldowns as AbilityTimer[]))
+      abilityPending.set({})
+      break
+    case 'BuffUpdate': {
+      const before = get(activeBuffs)
+      const next = timerSnapshot(data.buffs as AbilityTimer[])
+      activeBuffs.set(next)
+      if (next.guardian_ward) {
+        addCombatMessage({
+          text: 'Guardian Ward: Guard +10% for 60 seconds.',
+          sender: 'local',
+        })
+      } else if (before.guardian_ward) {
+        addCombatMessage({ text: 'Guardian Ward ended.', sender: 'local' })
+      }
+      break
+    }
+    case 'AbilityRejected':
+      abilityPending.set({})
+      addChatMessage({
+        text:
+          data.reason === 'equipment'
+            ? abilityRequirementsNotMet(
+                getAbility(data.ability)?.name ?? data.ability
+              )
+            : data.reason === 'cooldown'
+              ? 'Guardian Ward is not ready yet.'
+              : 'Guardian Ward cannot be used right now.',
+        sender: 'system',
+      })
+      break
+    case 'AbilityUsed':
+      if (data.ability === GUARDIAN_WARD.id)
+        queueAbilityEffect(data as Omit<AbilityEffectEvent, 'startedAt'>)
+      break
     case 'DebuffUpdate': {
       const now = Date.now()
       const prevIds = new Set(get(activeDebuffs).map((d) => d.id))

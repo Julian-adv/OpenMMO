@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>단검 이중 베기 · 연출 비교</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #0c1318;
+        color: #e5eeee;
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1440px;
+        margin: auto;
+        padding: 28px 32px;
+      }
+      .eyebrow {
+        color: #7dafa9;
+        font-size: 11px;
+        letter-spacing: 0.18em;
+        margin: 0 0 8px;
+      }
+      h1 {
+        font-size: 28px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        letter-spacing: -0.04em;
+      }
+      .intro {
+        margin: 0;
+        color: #9aadb7;
+      }
+      .heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .badge {
+        border: 1px solid #32444c;
+        padding: 6px 12px;
+        border-radius: 20px;
+        color: #aec5cd;
+        white-space: nowrap;
+      }
+      .comparison {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        margin-top: 26px;
+        border: 1px solid #2b3b44;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #111d26;
+      }
+      article {
+        min-width: 0;
+      }
+      article + article {
+        border-left: 1px solid #2b3b44;
+      }
+      .variant {
+        padding: 18px 22px 0;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .letter {
+        display: grid;
+        place-items: center;
+        height: 32px;
+        width: 32px;
+        border: 1px solid #567a7b;
+        color: #a4e0d6;
+        border-radius: 8px;
+      }
+      article:last-child .letter {
+        color: #bed4ff;
+        border-color: #617495;
+      }
+      h2 {
+        margin: 0;
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .view {
+        height: min(49vh, 470px);
+        min-height: 280px;
+        position: relative;
+        touch-action: none;
+      }
+      .view canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+      .caption {
+        padding: 0 22px 18px;
+        color: #9aadb7;
+        margin: 0;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 20px;
+      }
+      button,
+      select {
+        color: #e5eeee;
+        background: #1b2b35;
+        border: 1px solid #3d535e;
+        border-radius: 7px;
+        padding: 9px 14px;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:hover,
+      select:hover {
+        background: #29414d;
+      }
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid #9ee7db;
+        outline-offset: 3px;
+      }
+      #replay {
+        background: #b0e1d6;
+        border-color: #b0e1d6;
+        color: #122725;
+        font-weight: 600;
+      }
+      label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        color: #a6bac3;
+      }
+      input {
+        accent-color: #b0e1d6;
+      }
+      .timeline {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-top: 18px;
+      }
+      #scrub {
+        flex: 1;
+        min-width: 60px;
+      }
+      #time {
+        font-variant-numeric: tabular-nums;
+        width: 116px;
+        color: #b1c4cb;
+      }
+      .hits {
+        display: flex;
+        gap: 7px;
+      }
+      .hit {
+        border: 1px solid #3d535e;
+        border-radius: 6px;
+        padding: 4px 12px;
+        color: #7b919d;
+      }
+      .hit.active {
+        background: #b0e1d6;
+        color: #122725;
+        border-color: #b0e1d6;
+      }
+      footer {
+        display: flex;
+        justify-content: space-between;
+        gap: 18px;
+        color: #718b99;
+        margin-top: 20px;
+        font-size: 12px;
+      }
+      #status[data-error] {
+        color: #ffada5;
+      }
+      @media (max-width: 650px) {
+        main {
+          padding: 18px 12px;
+        }
+        h1 {
+          font-size: 23px;
+        }
+        .badge {
+          display: none;
+        }
+        .variant {
+          padding: 14px 10px 0;
+          gap: 7px;
+        }
+        h2 {
+          font-size: 14px;
+        }
+        .caption {
+          padding: 0 10px 14px;
+          font-size: 12px;
+        }
+        .view {
+          min-height: 235px;
+          height: 36vh;
+        }
+        footer {
+          flex-direction: column;
+          gap: 4px;
+        }
+        .hits {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="heading">
+        <div>
+          <p class="eyebrow">DAGGER / DOUBLE SLASH</p>
+          <h1>같은 두 번의 베기, 다른 잔상</h1>
+          <p class="intro">
+            안쪽 베기 → 반대 방향 되베기. 두 연출을 같은 타이밍으로 비교합니다.
+          </p>
+        </div>
+        <span class="badge">애니메이션 + VFX 시연</span>
+      </div>
+      <section class="comparison" aria-label="단검 연출 비교">
+        <article>
+          <div class="variant">
+            <span class="letter">A</span>
+            <h2>절제된 칼날 잔상</h2>
+          </div>
+          <div id="view-a" class="view" aria-label="짧은 잔상 3D 프리뷰"></div>
+          <p class="caption">칼날에 붙는 얇은 궤적 · 짧고 날카로운 두 타격</p>
+        </article>
+        <article>
+          <div class="variant">
+            <span class="letter">B</span>
+            <h2>화려한 검기</h2>
+          </div>
+          <div id="view-b" class="view" aria-label="큰 검기 3D 프리뷰"></div>
+          <p class="caption">넓게 뻗는 청백색 검기 · 오래 남는 빛과 파편</p>
+        </article>
+      </section>
+      <div class="toolbar">
+        <button id="replay" disabled>두 버전 다시 재생</button
+        ><button id="pause" disabled>일시정지</button>
+        <label
+          >속도
+          <select id="speed">
+            <option value="1">1× 실제 속도</option>
+            <option value="0.5">0.5×</option>
+            <option value="0.25">0.25× 느리게</option>
+          </select></label
+        >
+        <label
+          >시점
+          <select id="camera">
+            <option value="detail">가까이 보기</option>
+            <option value="game">게임 시점</option>
+            <option value="front">정면</option>
+          </select></label
+        >
+        <label><input id="loop" type="checkbox" checked /> 반복</label
+        ><label><input id="vfx" type="checkbox" checked /> VFX</label>
+      </div>
+      <div class="timeline">
+        <span id="time">0.00 / 0.82초</span
+        ><input
+          id="scrub"
+          aria-label="동작 시간"
+          type="range"
+          min="0"
+          max="0.82"
+          step="0.001"
+          value="0"
+        />
+        <div class="hits">
+          <span id="hit-1" class="hit">1타</span
+          ><span id="hit-2" class="hit">2타</span>
+        </div>
+      </div>
+      <footer>
+        <span id="status" role="status"
+          >캐릭터와 두 애니메이션을 준비하는 중…</span
+        ><span>드래그로 회전 · 휠로 확대 · 두 화면의 시점이 함께 바뀝니다</span>
+      </footer>
+    </main>
+    <script type="module" src="/src/previews/dagger-skill.ts"></script>
+  </body>
+</html>

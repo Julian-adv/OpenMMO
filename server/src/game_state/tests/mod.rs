@@ -13,6 +13,7 @@ use onlinerpg_shared::messages::DealKind;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
+mod ability_tests;
 mod ambient_spawn_tests;
 mod cape_dye_tests;
 mod cape_texture_tests;

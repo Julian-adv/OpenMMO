@@ -1,3 +1,4 @@
+import type { AbilityId } from '../data/abilities'
 import type {
   BagLineItem,
   FishingAction,
@@ -459,8 +460,16 @@ class NetworkManager {
     this.sendMessage('WorldReady')
   }
 
+  sendUseAbility(ability: AbilityId) {
+    this.sendMessage({ UseAbility: { ability } })
+  }
+
   sendPlayerAttack(monsterId: string) {
     this.sendMessage({ PlayerAttack: { monster_id: monsterId } })
+  }
+
+  sendDaggerDoubleSlash(monsterId: string) {
+    this.sendMessage({ DaggerDoubleSlash: { monster_id: monsterId } })
   }
 
   sendMonsterAttack(monsterId: string, targetPlayerId: number) {

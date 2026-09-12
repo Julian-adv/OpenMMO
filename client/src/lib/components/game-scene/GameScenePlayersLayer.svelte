@@ -4,6 +4,7 @@
   import { get } from 'svelte/store'
   import { SvelteMap } from 'svelte/reactivity'
   import PlayerModel from '../PlayerModel.svelte'
+  import GameSceneAbilitiesLayer from './GameSceneAbilitiesLayer.svelte'
   import GameSceneEnchantSuccessLayer from './GameSceneEnchantSuccessLayer.svelte'
   import type { EnchantSuccess } from '../../stores/enchantSuccessStore'
   import PlayerControl from '../PlayerControl.svelte'
@@ -207,6 +208,27 @@
       ])
     )
   )
+
+  function getAbilityAnchor(
+    id: number,
+    shield: boolean,
+    target: THREE.Vector3
+  ) {
+    const local = id === currentPlayer?.id
+    if (
+      local
+        ? !currentPlayer || currentPlayer.health <= 0
+        : !remoteVisibility.get(id) || (otherPlayers.get(id)?.health ?? 0) <= 0
+    )
+      return false
+    const model = local ? currentPlayerModel : remoteModels.get(id)
+    if (!model) return false
+    if (shield) return model.getShieldAnchor(target)
+    const root = model.getModelGroup()
+    if (!root) return false
+    root.getWorldPosition(target)
+    return true
+  }
 
   function getEnchantAnchor(event: EnchantSuccess, target: THREE.Vector3) {
     const local = event.playerId === currentPlayer?.id
@@ -479,6 +501,11 @@
 </script>
 
 <GameSceneEnchantSuccessLayer {currentPlayer} getAnchor={getEnchantAnchor} />
+<GameSceneAbilitiesLayer
+  {currentPlayer}
+  floorLevel={localFloorLevel}
+  getAnchor={getAbilityAnchor}
+/>
 
 {#if camera && currentPlayer}
   <PlayerControl

@@ -22,6 +22,31 @@ beforeEach(() => {
   resetQuickslots()
 })
 
+it('persists a skill alongside item bindings and moves only its own binding', () => {
+  loadQuickslots(7)
+  assignQuickslot(0, { defId: 'dagger', enchant: 9 })
+  assignQuickslot(1, { skill: 'guardian_ward' })
+  assignQuickslot(4, { skill: 'guardian_ward' })
+  resetQuickslots()
+  loadQuickslots(7)
+  expect(get(quickslots)[0]).toEqual({ defId: 'dagger', enchant: 9 })
+  expect(get(quickslots)[1]).toBeNull()
+  expect(get(quickslots)[4]).toEqual({ skill: 'guardian_ward' })
+})
+
+it('preserves abilities from other feature branches alongside legacy item slots', () => {
+  storage.set(
+    'quickslots:7',
+    JSON.stringify(['dagger', { skill: 'missing' }, { skill: 'guardian_ward' }])
+  )
+  loadQuickslots(7)
+  expect(get(quickslots).slice(0, 3)).toEqual([
+    { defId: 'dagger', enchant: null },
+    { skill: 'missing' },
+    { skill: 'guardian_ward' },
+  ])
+})
+
 function item(
   instance_id: number,
   item_def_id: string,

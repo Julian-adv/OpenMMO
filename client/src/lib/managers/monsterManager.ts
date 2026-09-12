@@ -345,7 +345,8 @@ class MonsterManager {
     damage: number,
     /** The round the server spent, so the arrow drawn is the one that left
      *  the quiver — a remote shooter's bag is not visible from here. */
-    ammoItemDefId?: string | null
+    ammoItemDefId?: string | null,
+    daggerSkill = false
   ) {
     const monster = this.monsters.get(monsterId)
     if (!monster || monster.state === 'dead') return
@@ -357,6 +358,34 @@ class MonsterManager {
       ? get(inventoryStore).equipped.main_hand?.item_def_id
       : (state.otherPlayers.get(playerId)?.mainHand ?? undefined)
     const ranged = isRangedWeapon(weaponItemDefId)
+
+    if (daggerSkill) {
+      monster.targetPlayerId = playerId
+      monster.isLastHitSuccess = hit
+      if (isLocalPlayerAttack) {
+        this.emitDamageText(monster, damage, hit)
+        if (hit)
+          playSwordHitSound(
+            getMaterialHitSoundUrl(
+              'metal',
+              getMonsterDef(monster.type)?.material
+            )
+          )
+      }
+      if (!hit) playSwordMissSound(getMaterialMissSoundUrl('metal'), 0)
+      if (monster.ownerId === state.currentPlayer?.id) {
+        this.processAiCommands(
+          monster,
+          ai_handle_hit(monster.id, playerId, hit, damage) ?? []
+        )
+      } else if (hit) {
+        this.applyMonsterPose(monster, { state: 'hit' })
+        this.restartHitClip(monster)
+        monster.stateTimer = 0
+      }
+      this.monsters.set(monsterId, { ...monster })
+      return
+    }
 
     // A ranged shot resolves when its arrow lands, so everything the impact
     // drives waits out the flight on top of the release.

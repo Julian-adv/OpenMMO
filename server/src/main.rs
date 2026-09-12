@@ -696,6 +696,7 @@ async fn main() -> ExitCode {
                         .tick_campfire_drying(Duration::from_secs(1))
                         .await;
                     game_state.tick_debuffs().await;
+                    game_state.tick_buffs().await;
                     game_state.tick_food_regeneration().await;
                 }
             }

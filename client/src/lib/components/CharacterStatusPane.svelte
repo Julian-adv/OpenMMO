@@ -1,5 +1,8 @@
 <script lang="ts">
   import { hungerState, grilling } from '../stores/hungerStore'
+  import { activeBuffs, abilityClock } from '../stores/abilityStore'
+  import { GUARDIAN_WARD } from '../data/abilities'
+  import { formatRemaining } from '../data/debuffPresentation'
   import { visibleDebuffs } from '../stores/debuffStore'
   import {
     HUNGER_BAND_INFO,
@@ -94,7 +97,26 @@
   <div class="status-empty">Status unavailable</div>
 {/if}
 
+{#if ($activeBuffs.guardian_ward ?? 0) > $abilityClock}
+  <section class="effect-card buff-card" aria-label="Guardian Ward buff">
+    <img src={GUARDIAN_WARD.icon} alt="" width="32" height="32" />
+    <div>
+      <strong>Guardian Ward</strong><small
+        >Guard +10% · {formatRemaining(
+          ($activeBuffs.guardian_ward ?? 0) - $abilityClock
+        )} remaining</small
+      >
+    </div>
+  </section>
+{/if}
+
 <style>
+  .buff-card {
+    margin-top: 10px;
+    font-family: system-ui, sans-serif;
+    border: 1px solid #e9d8a966;
+    color: #f3e4b9;
+  }
   .status-content {
     display: flex;
     flex-direction: column;

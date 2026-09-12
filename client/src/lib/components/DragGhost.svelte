@@ -4,7 +4,9 @@
 
 {#if $dragMeta}
   <div class="drag-ghost-wrap" style="left:{$dragPos.x}px;top:{$dragPos.y}px">
-    {#if $dragMeta.groupItems && $dragMeta.groupItems.length > 0}
+    {#if 'skill' in $dragMeta}
+      <img class="drag-ghost skill-ghost" src={$dragMeta.icon} alt="" />
+    {:else if $dragMeta.groupItems && $dragMeta.groupItems.length > 0}
       <div class="drag-ghost-group">
         {#each $dragMeta.groupItems as item, i (i)}
           <div class="drag-ghost-item">
@@ -43,6 +45,11 @@
   .drag-ghost-group {
     display: flex;
     gap: 4px;
+  }
+
+  .skill-ghost {
+    image-rendering: auto;
+    border-radius: 4px;
   }
 
   .drag-ghost-item {
