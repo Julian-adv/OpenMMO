@@ -18,6 +18,7 @@ const ENDPOINTS: &[&str] = &[
     "weapon-enchant-failures",
     "armor-enchant-leaderboard",
     "gold-per-account",
+    "heroic-tales",
 ];
 
 fn claims() -> Value {
@@ -46,6 +47,7 @@ async fn serve(access: AuthContext) -> (String, tokio::task::JoinHandle<()>) {
         Arc::new(make_test_game_state("metrics_access")),
         auth,
         Arc::new(access),
+        crate::test_util::unique_temp_dir("metrics_access_tales").join("ledger.txt"),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/api/metrics", listener.local_addr().unwrap());

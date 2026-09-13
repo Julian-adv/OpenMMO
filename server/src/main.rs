@@ -235,6 +235,14 @@ struct Args {
     #[arg(long, env = "NPC_DATA_DIR", default_value = "./agent-client/data/npcs")]
     npc_data_dir: PathBuf,
 
+    /// Heroic tales ledger used by Signe and displayed in the dashboard.
+    #[arg(
+        long,
+        env = "TALES_LEDGER",
+        default_value = "./agent-client/data/tales/ledger.txt"
+    )]
+    tales_ledger: PathBuf,
+
     /// Google OAuth client ID used to verify browser sign-in tokens
     #[arg(long, env = "GOOGLE_CLIENT_ID")]
     google_client_id: Option<String>,
@@ -775,6 +783,7 @@ async fn main() -> ExitCode {
         Arc::clone(&game_state),
         Arc::clone(&auth_service),
         Arc::clone(&auth_ctx),
+        args.tales_ledger,
     ))
     .layer(axum::middleware::from_fn_with_state(
         Arc::clone(&auth_ctx),

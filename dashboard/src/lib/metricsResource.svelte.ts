@@ -4,7 +4,7 @@ import { useDashboardAuth } from './auth.svelte'
 
 export type MetricsResource<T> = ReturnType<typeof createMetricsResource<T, Hours>>
 
-export function createMetricsResource<T, H extends Hours>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H, query: Record<string, string>) => T, errorLabel = '접속 현황', getQuery: () => Record<string, string> = () => ({}), intervalMs = 3600000) {
+export function createMetricsResource<T, H extends Hours | undefined>(getHours: () => H, endpoint: string, parse: (value: unknown, hours: H, query: Record<string, string>) => T, errorLabel = '접속 현황', getQuery: () => Record<string, string> = () => ({}), intervalMs = 3600000) {
   const auth = useDashboardAuth()
   let history = $state<T | null>(null)
   let refreshing = $state(false)
@@ -15,8 +15,8 @@ export function createMetricsResource<T, H extends Hours>(getHours: () => H, end
     const hours = getHours()
     const query = getQuery()
     const params = new SvelteURLSearchParams(query)
-    params.set('hours', String(hours))
-    const url = `/api/metrics/${endpoint}?${params}`
+    if (hours !== undefined) params.set('hours', String(hours))
+    const url = `/api/metrics/${endpoint}${params.size ? `?${params}` : ''}`
     let stopped = false
     let controller: AbortController | null = null
     history = null

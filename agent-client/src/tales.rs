@@ -6,35 +6,12 @@ use rand::seq::SliceRandom;
 use rand::Rng;
 use tracing::warn;
 
+pub use onlinerpg_shared::tales::Deed;
+
 pub const LEDGER_PATH: &str = "data/tales/ledger.txt";
 
 /// Deeds drawn for one performance set.
 pub const PICKS_PER_SET: usize = 3;
-
-/// One ledger line: `DATE | HERO | FACTS AND PERFORMANCE DIRECTION`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Deed {
-    pub date: String,
-    pub hero: String,
-    pub brief: String,
-}
-
-impl Deed {
-    pub fn parse(line: &str) -> Option<Deed> {
-        let mut fields = line.splitn(3, '|').map(str::trim);
-        let date = fields.next()?;
-        let hero = fields.next()?;
-        let brief = fields.next()?;
-        if date.is_empty() || hero.is_empty() || brief.is_empty() {
-            return None;
-        }
-        Some(Deed {
-            date: date.to_string(),
-            hero: hero.to_string(),
-            brief: brief.to_string(),
-        })
-    }
-}
 
 /// Read the ledger, oldest first. A missing file is an empty ledger.
 pub fn load_ledger(path: &str) -> Vec<Deed> {

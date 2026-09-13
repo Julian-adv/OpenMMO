@@ -12,6 +12,8 @@
   import LeaderboardSection from './lib/LeaderboardSection.svelte'
   import WeaponEnchantFailuresPanel from './lib/WeaponEnchantFailuresPanel.svelte'
   import { parseWeaponEnchantFailures } from './lib/weaponEnchantFailures'
+  import HeroicTalesPanel from './lib/HeroicTalesPanel.svelte'
+  import { parseHeroicTales } from './lib/heroicTales'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
@@ -49,8 +51,9 @@
   let landHours = $state<LeaderboardHours>(168)
   const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
   const serverStarts = createMetricsResource(() => 8760, 'server-starts', parseServerStarts, '배포 기록')
+  const heroicTales = createMetricsResource(() => undefined, 'heroic-tales', parseHeroicTales, '영웅담 원장')
   let markers = $derived(deployMarkers(serverStarts.history?.starts ?? []))
-  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, landLeaderboard]
+  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, landLeaderboard, heroicTales]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -202,6 +205,8 @@
   <LeaderboardSection metric="armor_enchant" bind:hours={armorEnchantHours} resource={armorEnchantLeaderboard} />
 
   <LeaderboardSection metric="land_plots" bind:hours={landHours} resource={landLeaderboard} />
+
+  <HeroicTalesPanel resource={heroicTales} />
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">

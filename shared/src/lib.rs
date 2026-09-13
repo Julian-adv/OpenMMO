@@ -29,6 +29,7 @@ pub mod pricing;
 pub mod schedule;
 pub mod skills;
 pub mod stall;
+pub mod tales;
 pub mod tip_hat;
 pub mod tree_format;
 pub mod weather;

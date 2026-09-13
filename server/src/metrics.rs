@@ -11,6 +11,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::warn;
 
+#[path = "metrics_heroic_tales.rs"]
+mod heroic_tales;
+
 pub const SAMPLE_INTERVAL_SECONDS: i64 = 3600;
 pub const DAY_SECONDS: i64 = 86400;
 pub const UNIQUE_PERIOD_DAYS: [u32; 5] = [1, 7, 30, 180, 365];
@@ -433,8 +436,10 @@ pub fn metrics_router(
     game: Arc<GameState>,
     auth: Arc<AuthService>,
     access: Arc<crate::connection::AuthContext>,
+    tales_ledger: std::path::PathBuf,
 ) -> Router {
     metrics_routes(game, auth)
+        .merge(heroic_tales::router(tales_ledger))
         .route(
             "/api/metrics/session",
             get(|| async { StatusCode::NO_CONTENT }),
