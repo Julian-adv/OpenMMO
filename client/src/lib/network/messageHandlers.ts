@@ -2215,10 +2215,8 @@ export function handleServerMessage(
       abilityPending.set({})
       addChatMessage({
         text:
-          data.reason === 'equipment'
-            ? abilityRequirementsNotMet(
-                getAbility(data.ability)?.name ?? data.ability
-              )
+          data.reason === 'out_of_range'
+            ? 'Target is too far away.'
             : data.reason === 'cooldown'
               ? `${getAbility(data.ability)?.name ?? data.ability} is not ready yet.`
               : abilityRequirementsNotMet(

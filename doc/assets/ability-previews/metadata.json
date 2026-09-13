@@ -1,0 +1,46 @@
+[
+  {
+    "file": "guardian-ward.gif",
+    "size": [
+      768,
+      560
+    ],
+    "frames": 60,
+    "duration_ms": 2800,
+    "bytes": 1886903,
+    "loop": 0
+  },
+  {
+    "file": "double-slash.gif",
+    "size": [
+      768,
+      560
+    ],
+    "frames": 22,
+    "duration_ms": 2400,
+    "bytes": 686884,
+    "loop": 0
+  },
+  {
+    "file": "radiance.gif",
+    "size": [
+      768,
+      560
+    ],
+    "frames": 145,
+    "duration_ms": 6400,
+    "bytes": 9089088,
+    "loop": 0
+  },
+  {
+    "file": "true-aim.gif",
+    "size": [
+      768,
+      560
+    ],
+    "frames": 167,
+    "duration_ms": 7200,
+    "bytes": 942161,
+    "loop": 0
+  }
+]

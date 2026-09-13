@@ -37,6 +37,7 @@ export const RADIANCE = {
 
 export const TRUE_AIM = {
   id: 'bow_mark',
+  target: 'monster',
   name: 'True Aim',
   icon: '/icons/skills/true-aim.png',
   description: 'Your attacks against the marked target always hit.',
@@ -47,7 +48,9 @@ export const TRUE_AIM = {
     { label: 'Duration', value: '5 s' },
     { label: 'Cooldown', value: '10 s' },
   ],
-  details: ['Select a target, then use. Applies only to your attacks.'],
+  details: [
+    'Uses the enemy under your cursor, or your selected target. Applies only to your attacks.',
+  ],
 } as const
 
 export const BUFF_ABILITIES = [GUARDIAN_WARD, RADIANCE, TRUE_AIM] as const

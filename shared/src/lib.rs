@@ -156,7 +156,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v72: per-strike damage rolls and skipped dagger strikes.
 /// v74: Radiance toggle and visible-player lighting state.
 /// v75: targeted abilities and private True Aim mark updates.
-pub const PROTOCOL_VERSION: u32 = 75;
+/// v76: distinct out-of-range ability rejection.
+pub const PROTOCOL_VERSION: u32 = 76;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

@@ -223,21 +223,23 @@ impl GameState {
             .get(player_id)
             .filter(|p| p.is_damageable(Self::now_ms()) && !p.mounted)
             .ok_or(AbilityRejectReason::Unavailable)?;
-        if !reachable_dist_sq(
+        let distance = reachable_dist_sq(
             caster.position,
             caster.floor_level,
             target_position,
             target_floor,
         )
-        .is_some_and(|distance| distance <= range.powi(2))
-            || wall_between(
-                &self.passability_read(),
-                caster.position,
-                target_position,
-                caster.floor_level,
-                true,
-            )
-        {
+        .ok_or(AbilityRejectReason::Unavailable)?;
+        if distance > range.powi(2) {
+            return Err(AbilityRejectReason::OutOfRange);
+        }
+        if wall_between(
+            &self.passability_read(),
+            caster.position,
+            target_position,
+            caster.floor_level,
+            true,
+        ) {
             return Err(AbilityRejectReason::Unavailable);
         }
         let mut state = self.abilities.write().await;

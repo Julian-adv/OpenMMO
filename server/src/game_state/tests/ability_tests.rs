@@ -295,7 +295,11 @@ async fn bow_mark_rejects_wrong_equipment_missing_dead_far_or_other_floor_target
         gs.use_targeted_ability(&pid("caster"), MARK, target).await;
         rejected(&mut rx, AbilityRejectReason::Unavailable);
     }
-    for (x, floor, health) in [(10.01, 0, 10), (5.0, -1, 10), (5.0, 0, 0)] {
+    for (x, floor, health, reason) in [
+        (10.01, 0, 10, AbilityRejectReason::OutOfRange),
+        (5.0, -1, 10, AbilityRejectReason::Unavailable),
+        (5.0, 0, 0, AbilityRejectReason::Unavailable),
+    ] {
         {
             let mut monsters = gs.monsters.write().await;
             let target = monsters.get_mut("target").unwrap();
@@ -305,7 +309,17 @@ async fn bow_mark_rejects_wrong_equipment_missing_dead_far_or_other_floor_target
         }
         gs.use_targeted_ability(&pid("caster"), MARK, Some("target"))
             .await;
-        rejected(&mut rx, AbilityRejectReason::Unavailable);
+        rejected(&mut rx, reason);
+        assert!(!gs
+            .abilities
+            .read()
+            .await
+            .marks_target(&pid("caster"), "target"));
+        assert!(matches!(
+            gs.ability_cooldown_message(&pid("caster")).await,
+            ServerMessage::AbilityCooldowns { cooldowns }
+                if cooldowns.iter().any(|timer| timer.ability == MARK && timer.remaining_ms == 0)
+        ));
     }
     add_mark_target(&gs, "target", 10.0).await;
     gs.use_targeted_ability(&pid("caster"), MARK, Some("target"))

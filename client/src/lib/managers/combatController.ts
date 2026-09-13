@@ -4,6 +4,7 @@ import { startBattleMusic, stopBattleMusic } from './bgmManager'
 export interface MonsterInfo {
   state?: string
   isDeadPending?: boolean
+  health?: number
 }
 
 export type CombatUpdateResult =
@@ -30,6 +31,24 @@ export class CombatController {
 
   get isInCombat(): boolean {
     return this._targetMonsterId !== null
+  }
+
+  getAbilityTarget(
+    hoveredMonsterId: string | null,
+    getMonster: (id: string) => MonsterInfo | undefined
+  ): string | null {
+    for (const id of [hoveredMonsterId, this._targetMonsterId]) {
+      if (!id) continue
+      const monster = getMonster(id)
+      if (
+        monster &&
+        monster.state !== 'dead' &&
+        !monster.isDeadPending &&
+        (monster.health === undefined || monster.health > 0)
+      )
+        return id
+    }
+    return null
   }
 
   /** Returns the counter the opening swing carries. */

@@ -28,4 +28,5 @@ pub enum AbilityRejectReason {
     Unavailable,
     Equipment,
     Cooldown,
+    OutOfRange,
 }

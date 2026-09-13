@@ -21,6 +21,6 @@ ABILITIES 아이콘을 기존 퀵슬롯으로 드래그해 등록한다. 활성 
 
 서버 `AbilityId::Radiance`, `UseAbility`, `AbilityCooldowns`, `BuffUpdate`를 사용한다. 시전 시에만 주변 같은 층으로 `AbilityUsed`를 보낸다. 켜기·끄기·만료·사망은 `PlayerRadianceToggled`로 공유하고, `Player.radiance_on`을 스냅샷에도 포함해 나중에 접근한 사용자도 조명을 볼 수 있다. 다른 사용자에게 버프 자체를 부여하지는 않는다.
 
-프로토콜 v74: 서버와 클라이언트 WASM을 함께 빌드해야 한다. 영구 DB 스키마 변경은 없다.
+통합 프로토콜 v76: 서버·클라이언트 WASM·에이전트 클라이언트를 함께 빌드해야 한다. 영구 DB 스키마 변경은 없다.
 
 아이콘: [출처](assets/ui.md), [생성 프롬프트](assets/radiance-icon-prompt.txt).

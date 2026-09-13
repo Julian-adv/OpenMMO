@@ -76,5 +76,5 @@
 
 ## Skill icons
 
-- `client/public/icons/skills/guardian-ward.png` — Guardian Ward (검의 수호) 능력 및 퀵슬롯 아이콘. OpenAI Codex built-in ImageGen, workspace-provided tier (정확한 등급은 도구에서 공개되지 않음), 생성 2026-09-13. 프로젝트를 위해 생성한 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. 기존 Double Slash 아이콘/생성 프롬프트를 스타일 기준으로 사용했다. 검은 바탕, 옅은 금빛 방패와 보호 궤적, 짧은 빛 번짐. [실제 생성 프롬프트](guardian-ward-icon-prompt.txt). 현재 로컬 적용, HF 업로드 및 PR 제출은 하지 않음.
+- `client/public/icons/skills/guardian-ward.png` — Guardian Ward (검의 수호) 능력 및 퀵슬롯 아이콘. OpenAI Codex built-in ImageGen, workspace-provided tier (정확한 등급은 도구에서 공개되지 않음), 생성 2026-09-13. 프로젝트를 위해 생성한 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. 기존 Double Slash 아이콘/생성 프롬프트를 스타일 기준으로 사용했다. 검은 바탕, 옅은 금빛 방패와 보호 궤적, 짧은 빛 번짐. [실제 생성 프롬프트](guardian-ward-icon-prompt.txt). PNG는 게임 Git 저장소에서 직접 관리한다.
 - `client/public/icons/skills/true-aim.png` — True Aim 어빌리티·퀵슬롯 아이콘. OpenAI Codex built-in ImageGen, workspace-provided tier (정확한 등급은 도구에 공개되지 않음), 생성 2026-09-13. 프로젝트용 생성 이미지이며 OpenAI 서비스 약관의 출력물 이용 조건에 따른다. 기존 Double Slash 아이콘을 스타일 참조로 사용한 검은 바탕의 은백색 조준 문양. [실제 생성 프롬프트](true-aim-icon-prompt.txt).

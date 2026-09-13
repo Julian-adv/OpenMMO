@@ -1,19 +1,23 @@
 <script lang="ts">
   import {
     DOUBLE_SLASH,
-    TRUE_AIM,
     abilityRequirementsNotMet,
     getAbility,
     abilityEquipmentAllowed,
   } from '../data/abilities'
   import { DAGGER_SKILL } from '../data/daggerSkill'
   import { combatController } from '../managers/combatController'
+  import { monsterManager } from '../managers/monsterManager'
   import {
     daggerSkillState,
     daggerSkillClock,
     queueDaggerSkill,
   } from '../stores/daggerSkillStore'
-  import { gameStore, addChatMessage } from '../stores/gameStore'
+  import {
+    gameStore,
+    addChatMessage,
+    hoveredMonsterId,
+  } from '../stores/gameStore'
   import {
     abilityCooldowns,
     abilityPending,
@@ -106,11 +110,16 @@
         })
         return
       }
-      const target =
-        entry.skill.id === TRUE_AIM.id ? combatController.targetMonsterId : null
-      if (entry.skill.id === TRUE_AIM.id && !target) {
+      const needsTarget =
+        'target' in entry.skill && entry.skill.target === 'monster'
+      const target = needsTarget
+        ? combatController.getAbilityTarget($hoveredMonsterId, (id) =>
+            monsterManager.monsters.get(id)
+          )
+        : null
+      if (needsTarget && !target) {
         addChatMessage({
-          text: 'Select a target for True Aim.',
+          text: `Select or hover over a target for ${entry.skill.name}.`,
           sender: 'system',
         })
         return

@@ -25,7 +25,7 @@ Sword 또는 Mace를 주무기로, Shield를 보조 손에 장착하면 사용�
 - `weaponType=sword|mace` 및 실제 off-hand 장비의 `armorType=shield`를 서버에서 확인한다. Torch는 방패로 인정하지 않는다.
 - Goblin Sword 및 Small Sword는 Sword로 분류한다. Dagger와 Great Sword는 별도 분류다. 이 분류 변경은 `d24b0b16`에 기록했다.
 - 서버가 적용 대상, Guard, 지속시간과 재사용 대기시간을 관리한다. 사망/로딩 중 사용 요청은 거절하고, 실패한 요청은 재사용 시간을 소비하지 않는다.
-- 프로토콜 v73: `UseAbility`, `AbilityCooldowns`, `BuffUpdate`, `AbilityRejected`, `AbilityUsed` 및 기존 Double Slash 메시지를 함께 지원한다.
+- 통합 프로토콜 v76: `UseAbility`, `AbilityCooldowns`, `BuffUpdate`, `AbilityRejected`, `AbilityUsed` 및 Double Slash·Radiance·True Aim 메시지를 함께 지원한다. 서버·클라이언트 WASM·에이전트 클라이언트를 함께 빌드해야 한다.
 
 ## 표현
 
@@ -36,4 +36,4 @@ Sword 또는 Mace를 주무기로, Shield를 보조 손에 장착하면 사용�
 - 게임에서는 서버 발동 이벤트에 맞춰 방패 버프 효과음을 한 번 재생한다. 같은 층의 시전자 20 m 이내에서 들리며, 파티에 속하지 않은 주변 유저도 들을 수 있다. 기존 효과음 볼륨·음소거 설정을 따른다. [효과음 출처](assets/sfx.md#abilities).
 - 아이콘은 기존 Double Slash 생성 프롬프트 및 기준 이미지의 빛나는 붓선 스타일을 사용한다. [실제 생성 프롬프트](assets/guardian-ward-icon-prompt.txt), [이미지 출처](assets/ui.md).
 
-현재 로컬 구현이며 PR은 아직 제출하지 않았다.
+통합 구현 범위와 시연 GIF는 [PR 정리 문서](PR_ABILITIES.md)를 참고한다.
