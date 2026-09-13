@@ -50,7 +50,11 @@
   import {
     ENCHANT_WEAPON_ANIMATION,
     ENCHANT_LEFT_WEAPON_ANIMATION,
+    ENCHANT_ARMOR_ANIMATION,
+    ENCHANT_LEFT_ARMOR_ANIMATION,
     EnchantWeaponGrip,
+    getArmorEnchantHold,
+    isArmorEnchantHold,
     loadEnchantAnimations,
   } from '../utils/enchantAnimation'
   import { HorseReins } from '../utils/horseReins'
@@ -419,7 +423,9 @@
   let enchantGrip: EnchantWeaponGrip | null = null
   let enchantClips = new Map<string, THREE.AnimationClip>()
   let enchantAction: THREE.AnimationAction | null = null
+  let armorEnchantAction: THREE.AnimationAction | null = null
   let enchantPoseUntil = 0
+  let enchantWeapon = true
   const OVERLAP_BEFORE_END = 0.3 // Start next animation overlap 0.3 seconds before current ends
   const _nametagPos = new THREE.Vector3()
 
@@ -916,14 +922,27 @@
     if (
       playerState !== 'idle' ||
       riding ||
-      !weaponObject?.visible ||
+      (enchantWeapon && !weaponObject?.visible) ||
       Date.now() >= enchantPoseUntil
     )
       return undefined
     return enchantClips.get(
-      mainHandBoneFor(equippedMainHandItemId) === 'LeftHand'
-        ? ENCHANT_LEFT_WEAPON_ANIMATION
-        : ENCHANT_WEAPON_ANIMATION
+      enchantWeapon
+        ? mainHandBoneFor(equippedMainHandItemId) === 'LeftHand'
+          ? ENCHANT_LEFT_WEAPON_ANIMATION
+          : ENCHANT_WEAPON_ANIMATION
+        : mainHandBoneFor(equippedMainHandItemId) === 'LeftHand'
+          ? ENCHANT_LEFT_ARMOR_ANIMATION
+          : ENCHANT_ARMOR_ANIMATION
+    )
+  }
+
+  function activeArmorEnchant() {
+    return (
+      !enchantWeapon &&
+      playerState === 'idle' &&
+      !riding &&
+      Date.now() < enchantPoseUntil
     )
   }
 
@@ -974,6 +993,7 @@
       ? weaponClips.get(weaponClipName)
       : undefined
     const enchantClip = activeEnchantClip()
+    const armorEnchant = activeArmorEnchant()
     if (playerState === 'idle') {
       clip =
         enchantClip ??
@@ -981,6 +1001,7 @@
         torchIdle ??
         pickClassIdleClip() ??
         pickRandom(DEFAULT_IDLE_INDICES.map((i) => validAnimations[i]))
+      if (armorEnchant && !enchantClip && clip) clip = getArmorEnchantHold(clip)
     } else if (playerState === 'moving') {
       const torchMoveClip = movementMode === 'run' ? torchRun : torchWalk
       clip =
@@ -1048,19 +1069,19 @@
 
     if (!clip) return
 
-    // The fishing idle, the music emote and the dances are stances held for
-    // the whole state, not one-shot gestures like pickup — they loop until it
-    // ends. Clamping instead would freeze the performance mid-strum.
     const playOnce =
       playerState !== 'moving' &&
       !(
         playerState === 'idle' &&
-        (clip === weaponClip || clip === enchantClip)
+        (clip === weaponClip || clip === enchantClip || armorEnchant)
       ) &&
       interactionAnim !== FishingAnimationName.IDLE &&
       !HELD_EMOTE_ANIMS.has(interactionAnim ?? '')
     startAction(clip, playOnce)
-    if (clip === enchantClip) enchantAction = currentAction
+    if (clip === enchantClip) {
+      if (armorEnchant) armorEnchantAction = currentAction
+      else enchantAction = currentAction
+    }
   }
 
   function startAction(clip: THREE.AnimationClip, playOnce: boolean) {
@@ -1072,9 +1093,6 @@
     newAction.paused = false
 
     if (currentAction && newAction !== currentAction) {
-      // warp=false: do NOT time-scale the incoming clip to match the outgoing
-      // clip's length — that made a long idle ("look around") whip past at
-      // several-times speed when blending in from a short walk/attack clip.
       newAction.crossFadeFrom(currentAction, 0.3, false)
     }
 
@@ -1127,6 +1145,7 @@
       console.log('Setting up real animation system')
       hitAction = null
       enchantAction = null
+      armorEnchantAction = null
       enchantPoseUntil = 0
       hitClipLoaded = false
 
@@ -1325,8 +1344,9 @@
     )
   }
 
-  export function setEnchantPoseUntil(until: number) {
+  export function setEnchantPoseUntil(until: number, weapon: boolean) {
     enchantPoseUntil = until
+    enchantWeapon = weapon
   }
 
   export function getHoverMeshGroup() {
@@ -1361,13 +1381,19 @@
       )
       horseReins?.update()
     }
+    const currentClip = currentAction?.getClip()
+    const weaponIdle = weaponClips.get(weaponAnimationProfile?.idle ?? '')
+    const armorEnchantWeight = armorEnchantAction?.getEffectiveWeight() ?? 0
     weaponGrip?.update(
       !riding &&
         !enchantAction?.getEffectiveWeight() &&
-        weaponClips.has(currentAction?.getClip().name ?? '')
+        !armorEnchantWeight &&
+        (weaponClips.has(currentClip?.name ?? '') ||
+          (!!weaponIdle && isArmorEnchantHold(currentClip, weaponIdle)))
     )
     const enchantWeight = enchantAction?.getEffectiveWeight() ?? 0
-    if (enchantWeight > 0) enchantGrip?.update(enchantWeight)
+    if (armorEnchantWeight > 0) enchantGrip?.update(armorEnchantWeight, true)
+    else if (enchantWeight > 0) enchantGrip?.update(enchantWeight)
     updateCape(deltaTime, wind)
   }
 
@@ -1577,9 +1603,11 @@
               ? `moving:${movementMode}`
               : playerState === 'attack'
                 ? `attack:${attackCounter}`
-                : activeEnchantClip()
-                  ? 'enchant'
-                  : playerState
+                : activeArmorEnchant()
+                  ? 'enchant-armor'
+                  : activeEnchantClip()
+                    ? 'enchant-weapon'
+                    : playerState
       const animKey = `${equippedMainHandItemId ?? ''}:${stateKey}`
       if (lastAnimKey !== animKey) {
         lastAnimKey = animKey

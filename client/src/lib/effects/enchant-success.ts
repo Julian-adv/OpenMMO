@@ -10,10 +10,8 @@ import {
   normalView,
   positionLocal,
   sin,
-  texture,
   uniform,
   uv,
-  vec2,
 } from 'three/tsl'
 import type { EnchantEffectAnchor } from '../utils/playerEffectAnchors'
 import { createWeaponGlowGeometry } from '../utils/weaponGlowGeometry'
@@ -23,6 +21,7 @@ import {
 } from '../utils/weaponEffectAxis'
 import {
   ENCHANT_LIGHT_INTENSITY,
+  ENCHANT_ARMOR_LIGHT_INTENSITY,
   type EnchantLight,
 } from '../utils/enchantLight'
 
@@ -30,6 +29,9 @@ export const ENCHANT_SUCCESS_DURATION = 5
 export const ENCHANT_SUCCESS_GATHER_DURATION = 0.3
 export const ENCHANT_SUCCESS_RELEASE_START = ENCHANT_SUCCESS_DURATION - 0.3
 const ENCHANT_RAY_CYCLE_SECONDS = 3.2
+const ENCHANT_ARMOR_RAYS = 60
+const ENCHANT_MAX_RAYS = Math.max(ENCHANT_WEAPON_RAYS, ENCHANT_ARMOR_RAYS)
+const ENCHANT_ARMOR_RAY_CYCLE_SECONDS = 2.1
 
 export class EnchantSuccessEffect {
   readonly group = new THREE.Group()
@@ -40,16 +42,21 @@ export class EnchantSuccessEffect {
   }
   private opacity = uniform(0)
   private phase = uniform(0)
-  private dissolve = uniform(-0.2)
+  private armorFlow = uniform(0)
+  private armorPulse = uniform(0)
   private geometry = new THREE.PlaneGeometry(1, 1)
   private glowMaterial = new MeshBasicNodeMaterial()
-  private threadMaterial = new MeshBasicNodeMaterial()
+  private armorMaterial = new MeshBasicNodeMaterial()
   private rayMaterial = new MeshBasicNodeMaterial()
   private axisMaterial = new MeshBasicNodeMaterial()
   private bladeMaterial = new MeshBasicNodeMaterial()
   private rayGeometry = new THREE.PlaneGeometry(1, 1).translate(0, 0.5, 0)
   private rayOpacity = new THREE.InstancedBufferAttribute(
-    new Float32Array(ENCHANT_WEAPON_RAYS),
+    new Float32Array(ENCHANT_MAX_RAYS),
+    1
+  )
+  private rayProgress = new THREE.InstancedBufferAttribute(
+    new Float32Array(ENCHANT_MAX_RAYS),
     1
   )
   private rays: THREE.InstancedMesh
@@ -58,7 +65,7 @@ export class EnchantSuccessEffect {
   private glowingWeaponId: string | null = null
   private bladeGeometry: THREE.BufferGeometry | null = null
   private core: THREE.Mesh
-  private threads: THREE.Mesh[]
+  private armorGlow: THREE.Mesh
   private dust: THREE.InstancedMesh
   private dummy = new THREE.Object3D()
   private cameraDirection = new THREE.Vector3()
@@ -67,14 +74,14 @@ export class EnchantSuccessEffect {
   private rayRotation = new THREE.Matrix4()
   private rayNormal = new THREE.Vector3()
   private weaponCenter = new THREE.Vector3()
-  private weaponAxis = new THREE.Vector3()
+  private effectAxis = new THREE.Vector3()
   private radialAxis = new THREE.Vector3()
   private radialSide = new THREE.Vector3()
 
-  constructor(map: THREE.Texture) {
+  constructor() {
     for (const material of [
       this.glowMaterial,
-      this.threadMaterial,
+      this.armorMaterial,
       this.rayMaterial,
       this.axisMaterial,
       this.bladeMaterial,
@@ -88,40 +95,46 @@ export class EnchantSuccessEffect {
     const radial = float(1).sub(uv().sub(0.5).length().mul(2)).max(0)
     this.glowMaterial.colorNode = color('#f5e6bf')
     this.glowMaterial.opacityNode = radial.pow(2.8).mul(this.opacity)
-    const flow = vec2(
-      sin(uv().y.mul(16).sub(this.phase.mul(5))).mul(0.018),
-      sin(uv().x.mul(13).add(this.phase.mul(4))).mul(0.012)
-    )
-    const sample = texture(map, uv().add(flow).clamp(0.001, 0.999))
-    const breakup = sin(uv().x.mul(23).add(uv().y.mul(17)))
-      .mul(sin(uv().y.mul(31).sub(this.phase.mul(2))))
-      .mul(0.25)
-      .add(uv().y.mul(0.5))
-      .add(0.25)
-    const erosion = breakup.smoothstep(this.dissolve, this.dissolve.add(0.25))
-    const border = uv().min(float(1).sub(uv()))
-    const feather = border.x
-      .smoothstep(0, 0.08)
-      .mul(border.y.smoothstep(0, 0.08))
-    this.threadMaterial.colorNode = sample.rgb
-    this.threadMaterial.opacityNode = sample.a
+    this.armorMaterial.colorNode = color('#f5e6bf')
+    this.armorMaterial.opacityNode = radial
+      .pow(1.8)
       .mul(this.opacity)
-      .mul(erosion)
-      .mul(feather)
-      .mul(0.45)
+      .mul(this.armorPulse.smoothstep(0, 0.12))
+      .mul(float(1).sub(this.armorPulse).pow(1.5))
     const spread = uv().y.pow(0.75).mul(0.35).add(0.05)
     const diffusion = exp(uv().x.sub(0.5).div(spread).pow(2).mul(-2))
     const filament = exp(uv().x.sub(0.5).div(0.035).pow(2).mul(-2))
     const outwardFade = exp(uv().y.mul(-1.6)).mul(float(1).sub(uv().y).pow(1.2))
+    const goldShaft = exp(uv().x.sub(0.5).div(0.18).pow(2).mul(-2))
+    const fineCore = exp(uv().x.sub(0.5).div(0.026).pow(2).mul(-2))
+    const companions = exp(
+      uv().x.sub(0.5).add(uv().y.mul(0.18)).div(0.02).pow(2).mul(-2)
+    ).add(exp(uv().x.sub(0.5).sub(uv().y.mul(0.18)).div(0.016).pow(2).mul(-2)))
+    const armorRay = goldShaft.mul(0.4).add(fineCore).add(companions.mul(0.3))
+    const armorFade = exp(uv().y.mul(-0.65)).mul(
+      float(1).sub(uv().y).smoothstep(0, 0.2)
+    )
+    const movingLight = exp(
+      uv()
+        .y.sub(attribute<'float'>('aEnchantRayProgress', 'float').mul(1.3))
+        .add(0.1)
+        .div(0.22)
+        .pow(2)
+        .mul(-2)
+    )
+      .mul(1.1)
+      .add(0.38)
     this.rayMaterial.colorNode = mix(
       color('#fff7dc'),
       color('#e5bf78'),
       uv().y.smoothstep(0, 0.7)
     )
-    this.rayMaterial.opacityNode = diffusion
-      .mul(0.24)
-      .add(filament.mul(0.8))
-      .mul(outwardFade)
+    this.rayMaterial.opacityNode = mix(
+      diffusion.mul(0.24).add(filament.mul(0.8)).mul(outwardFade),
+      armorRay.mul(armorFade),
+      this.armorFlow
+    )
+      .mul(mix(float(1), movingLight, this.armorFlow))
       .mul(attribute('aEnchantRayOpacity', 'float'))
       .mul(this.opacity)
     this.axisMaterial.colorNode = color('#fff2c6')
@@ -154,25 +167,26 @@ export class EnchantSuccessEffect {
     this.bladeGlow.name = 'enchant-weapon-blade-glow'
     this.bladeGlow.matrixAutoUpdate = false
     this.rayGeometry.setAttribute('aEnchantRayOpacity', this.rayOpacity)
+    this.rayGeometry.setAttribute('aEnchantRayProgress', this.rayProgress)
     this.rayOpacity.setUsage(THREE.DynamicDrawUsage)
+    this.rayProgress.setUsage(THREE.DynamicDrawUsage)
     this.rays = new THREE.InstancedMesh(
       this.rayGeometry,
       this.rayMaterial,
-      ENCHANT_WEAPON_RAYS
+      ENCHANT_MAX_RAYS
     )
-    this.rays.name = 'enchant-weapon-rays'
+    this.rays.name = 'enchant-rays'
     this.rays.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     this.core = new THREE.Mesh(this.geometry, this.glowMaterial)
-    this.threads = Array.from(
-      { length: 3 },
-      () => new THREE.Mesh(this.geometry, this.threadMaterial)
-    )
+    this.armorGlow = new THREE.Mesh(this.geometry, this.armorMaterial)
+    this.armorGlow.name = 'enchant-armor-glow'
     this.dust = new THREE.InstancedMesh(this.geometry, this.glowMaterial, 32)
+    this.dust.name = 'enchant-motes'
     this.dust.frustumCulled = false
     this.dust.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
     this.group.add(
       this.core,
-      ...this.threads,
+      this.armorGlow,
       this.dust,
       this.rays,
       this.axisGlow,
@@ -208,7 +222,6 @@ export class EnchantSuccessEffect {
     const fade =
       release === null ? THREE.MathUtils.smoothstep(p, 0, 0.2) : 1 - easedTail
     this.phase.value = elapsed * 2 + tail * 0.7
-    this.dissolve.value = -0.2 + easedTail * 1.4
     this.group.visible = fade > 0
     camera.getWorldDirection(this.cameraDirection)
     this.group.position
@@ -216,55 +229,47 @@ export class EnchantSuccessEffect {
       .addScaledVector(this.cameraDirection, -0.5)
     this.light.position.copy(this.group.position)
     this.opacity.value = fade * (0.35 + p * 0.65)
-    this.light.intensity = fade * p * ENCHANT_LIGHT_INTENSITY
-    this.rays.visible = anchor.weapon !== null
+    this.light.intensity =
+      fade *
+      p *
+      (anchor.weapon ? ENCHANT_LIGHT_INTENSITY : ENCHANT_ARMOR_LIGHT_INTENSITY)
+    this.armorGlow.visible = anchor.weapon === null
     this.axisGlow.visible = anchor.weapon !== null
     this.bladeGlow.visible = anchor.weapon !== null
+    this.armorFlow.value = anchor.weapon === null ? 1 : 0
     if (anchor.weapon) {
-      this.threads.forEach((thread) => {
-        thread.visible = false
-      })
       this.updateWeapon(anchor.weapon, elapsed, camera, reduced)
       return
     }
+    this.updateArmor(elapsed, camera, reduced)
+  }
+
+  private updateArmor(elapsed: number, camera: THREE.Camera, reduced: boolean) {
+    const gather = THREE.MathUtils.smoothstep(
+      elapsed,
+      0,
+      ENCHANT_SUCCESS_GATHER_DURATION
+    )
+    const release = THREE.MathUtils.smoothstep(
+      elapsed,
+      ENCHANT_SUCCESS_RELEASE_START,
+      ENCHANT_SUCCESS_DURATION
+    )
+    this.effectAxis.set(0, 1, 0).applyQuaternion(camera.quaternion)
+    this.radialAxis.set(1, 0, 0).applyQuaternion(camera.quaternion)
+    this.radialSide.crossVectors(this.effectAxis, this.radialAxis).normalize()
+    const emissionTime = Math.max(0, elapsed - ENCHANT_SUCCESS_GATHER_DURATION)
+    const pulse = (emissionTime / 1.2) % 1
+    this.armorPulse.value = pulse
     this.core.position.set(0, 0, 0)
     this.core.quaternion.copy(camera.quaternion)
     this.core.scale.setScalar(
-      release === null ? 0.18 + p * 0.38 : 0.56 + easedTail * 0.65
+      0.15 + gather * 0.15 + (1 - pulse) * 0.08 + release * 0.2
     )
-    for (let i = 0; i < this.threads.length; i++) {
-      const thread = this.threads[i]
-      thread.visible = !reduced || i === 0
-      const angle = i * 2.094 + p * 3 + tail * 0.65
-      const radius =
-        release === null ? 0.23 * (1 - p) + 0.06 : 0.06 + release * 0.5
-      thread.position.set(
-        Math.cos(angle) * radius,
-        Math.sin(angle) * radius + 0.1,
-        0
-      )
-      thread.quaternion.copy(camera.quaternion)
-      thread.rotateZ(angle)
-      thread.scale.setScalar(0.4 + p * 0.35 + easedTail * 0.18)
-    }
-    this.dust.count = reduced ? 8 : 20
-    for (let i = 0; i < this.dust.count; i++) {
-      const angle = i * 2.39996 + p * 2 + tail * 0.4
-      const radius =
-        release === null
-          ? (0.45 + (i % 4) * 0.13) * (1 - p) + 0.08
-          : 0.08 + release * (0.5 + (i % 4) * 0.2)
-      this.dummy.position.set(
-        Math.cos(angle) * radius,
-        Math.sin(angle) * radius * 0.7 + (release ?? 0) * 0.4,
-        Math.sin(i * 1.7) * radius * 0.4
-      )
-      this.dummy.quaternion.copy(camera.quaternion)
-      this.dummy.scale.setScalar((0.035 + (i % 3) * 0.015) * fade)
-      this.dummy.updateMatrix()
-      this.dust.setMatrixAt(i, this.dummy.matrix)
-    }
-    this.dust.instanceMatrix.needsUpdate = true
+    this.armorGlow.position.copy(this.core.position)
+    this.armorGlow.quaternion.copy(camera.quaternion)
+    this.armorGlow.scale.set(0.2 + pulse * 1.7, 0.3 + pulse * 2.2, 1)
+    this.updateRadiance(elapsed, camera, reduced, true, 1.5)
   }
 
   private updateWeapon(
@@ -286,21 +291,21 @@ export class EnchantSuccessEffect {
       this.glowingWeaponId = weapon.uuid
     }
     this.weaponCenter.copy(axis.center).applyMatrix4(weapon.matrixWorld)
-    this.weaponAxis.copy(axis.direction).transformDirection(weapon.matrixWorld)
+    this.effectAxis.copy(axis.direction).transformDirection(weapon.matrixWorld)
     const axisLength = this.dummy.position
       .copy(axis.center)
       .addScaledVector(axis.direction, axis.length)
       .applyMatrix4(weapon.matrixWorld)
       .distanceTo(this.weaponCenter)
-    this.radialAxis.crossVectors(this.weaponAxis, this.cameraDirection)
+    this.radialAxis.crossVectors(this.effectAxis, this.cameraDirection)
     if (this.radialAxis.lengthSq() < 0.001)
       this.radialAxis.set(1, 0, 0).applyQuaternion(camera.quaternion)
     this.radialAxis.normalize()
-    this.radialSide.crossVectors(this.weaponAxis, this.radialAxis).normalize()
+    this.radialSide.crossVectors(this.effectAxis, this.radialAxis).normalize()
     this.group.position
       .copy(this.weaponCenter)
       .addScaledVector(this.cameraDirection, -0.12)
-    this.core.position.copy(this.weaponAxis).multiplyScalar(axisLength * 0.12)
+    this.core.position.copy(this.effectAxis).multiplyScalar(axisLength * 0.12)
     this.core.quaternion.copy(camera.quaternion)
     this.core.scale.setScalar(0.65 + Math.sin(elapsed * 2.4) * 0.04)
     this.light.position
@@ -314,16 +319,34 @@ export class EnchantSuccessEffect {
         .sub(this.group.position)
         .addScaledVector(this.cameraDirection, -0.015)
     )
-    this.rayNormal.crossVectors(this.radialAxis, this.weaponAxis).normalize()
-    this.rayRotation.makeBasis(this.radialAxis, this.weaponAxis, this.rayNormal)
+    this.rayNormal.crossVectors(this.radialAxis, this.effectAxis).normalize()
+    this.rayRotation.makeBasis(this.radialAxis, this.effectAxis, this.rayNormal)
     this.axisGlow.quaternion.setFromRotationMatrix(this.rayRotation)
     this.axisGlow.scale.set(0.14, axisLength + 0.04, 1)
-    const count = reduced ? ENCHANT_WEAPON_RAYS / 2 : ENCHANT_WEAPON_RAYS
+    this.updateRadiance(elapsed, camera, reduced, false, axisLength)
+  }
+
+  private updateRadiance(
+    elapsed: number,
+    camera: THREE.Camera,
+    reduced: boolean,
+    armor: boolean,
+    radianceSize: number
+  ) {
+    const directions = armor ? ENCHANT_ARMOR_RAYS : ENCHANT_WEAPON_RAYS
+    const count = reduced ? directions / 2 : directions
     const maxActive = count / 3
+    const cycle = armor
+      ? ENCHANT_ARMOR_RAY_CYCLE_SECONDS
+      : ENCHANT_RAY_CYCLE_SECONDS
     let active = 0
     for (let i = 0; i < count; i++) {
-      const phase =
-        (elapsed / ENCHANT_RAY_CYCLE_SECONDS + ((i * 13) % count) / count) % 1
+      const stagger = ((i * 13) % count) / count
+      const age = armor
+        ? (elapsed - ENCHANT_SUCCESS_GATHER_DURATION) / cycle - stagger
+        : elapsed / cycle + stagger
+      if (age < 0) continue
+      const phase = age % 1
       const life = phase * 3
       if (life >= 1 || active >= maxActive) continue
       const pulse =
@@ -334,18 +357,20 @@ export class EnchantSuccessEffect {
       this.rayDirection
         .copy(this.radialAxis)
         .multiplyScalar(Math.cos(angle))
-        .addScaledVector(this.weaponAxis, Math.sin(angle))
+        .addScaledVector(this.effectAxis, Math.sin(angle))
       this.screenDirection.crossVectors(this.rayDirection, this.cameraDirection)
       if (this.screenDirection.lengthSq() < 0.001)
-        this.screenDirection.copy(this.weaponAxis)
+        this.screenDirection.copy(this.effectAxis)
       this.screenDirection.normalize()
       this.rayNormal
         .crossVectors(this.screenDirection, this.rayDirection)
         .normalize()
-      const length =
-        axisLength *
-        (0.9 + (i % 5) * 0.18) *
-        (0.65 + THREE.MathUtils.smoothstep(life, 0, 0.7) * 0.35)
+      const length = armor
+        ? (1 + (i % 5) * 0.125) *
+          (0.03 + THREE.MathUtils.smoothstep(life, 0, 0.8) * 0.97)
+        : radianceSize *
+          (0.9 + (i % 5) * 0.18) *
+          (0.65 + THREE.MathUtils.smoothstep(life, 0, 0.7) * 0.35)
       this.dummy.position.copy(this.core.position)
       this.rayRotation.makeBasis(
         this.screenDirection,
@@ -353,24 +378,35 @@ export class EnchantSuccessEffect {
         this.rayNormal
       )
       this.dummy.quaternion.setFromRotationMatrix(this.rayRotation)
-      this.dummy.scale.set(0.3 + (i % 3) * 0.12, length, 1)
+      this.dummy.scale.set(
+        (0.3 + (i % 3) * 0.12) * (armor ? 0.65 : 1),
+        length,
+        1
+      )
       this.dummy.updateMatrix()
       this.rays.setMatrixAt(active, this.dummy.matrix)
       this.rayOpacity.setX(active, pulse)
+      this.rayProgress.setX(active, life)
       active++
     }
     this.rays.count = active
     this.rays.instanceMatrix.needsUpdate = true
     this.rayOpacity.needsUpdate = true
-    this.dust.count = reduced ? 12 : 32
+    this.rayProgress.needsUpdate = true
+    this.dust.count = armor ? (reduced ? 8 : 32) : reduced ? 12 : 32
     for (let i = 0; i < this.dust.count; i++) {
-      const life = (elapsed * 0.3 + i * 0.61803398875) % 1
+      const age = armor
+        ? (elapsed - ENCHANT_SUCCESS_GATHER_DURATION) / 1.2 -
+          i / this.dust.count
+        : elapsed * 0.3 + i * 0.61803398875
+      const life = Math.max(0, age) % 1
       const angle = i * 2.399963229728653
-      const radius = axisLength * (0.15 + life * 1.2)
+      const radius =
+        radianceSize * (armor ? 0.02 + life * 0.95 : 0.15 + life * 1.2)
       this.dummy.position
         .copy(this.core.position)
         .addScaledVector(this.radialAxis, Math.cos(angle) * radius)
-        .addScaledVector(this.weaponAxis, Math.sin(angle) * radius)
+        .addScaledVector(this.effectAxis, Math.sin(angle) * radius)
         .addScaledVector(this.radialSide, Math.sin(i * 1.7) * 0.1)
       this.dummy.quaternion.copy(camera.quaternion)
       this.dummy.scale.setScalar(
@@ -394,7 +430,7 @@ export class EnchantSuccessEffect {
     this.geometry.dispose()
     this.rayGeometry.dispose()
     this.glowMaterial.dispose()
-    this.threadMaterial.dispose()
+    this.armorMaterial.dispose()
     this.rayMaterial.dispose()
     this.axisMaterial.dispose()
     this.bladeMaterial.dispose()

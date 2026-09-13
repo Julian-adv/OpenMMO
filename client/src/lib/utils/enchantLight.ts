@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { TORCH_BASE_DECAY, TORCH_BASE_DISTANCE } from './torchFlicker'
 
 export const ENCHANT_LIGHT_INTENSITY = 70
+export const ENCHANT_ARMOR_LIGHT_INTENSITY = 4
 export const ENCHANT_LIGHT_RANGE = 14
 
 export interface EnchantLight {

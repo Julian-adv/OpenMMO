@@ -28,7 +28,7 @@
   }: {
     currentPlayer: LocalPlayer | null
     getAnchor: (event: EnchantSuccess, target: EnchantEffectAnchor) => boolean
-    setPose: (playerId: number, until: number) => void
+    setPose: (playerId: number, until: number, weapon: boolean) => void
   } = $props()
   const group = new THREE.Group()
   const anchor: EnchantEffectAnchor = {
@@ -44,12 +44,11 @@
   }[] = []
   const lights: EnchantLight[] = []
   let prepared = false
-  let textureMap: THREE.Texture | null = null
 
   function clear() {
     takeEnchantSuccesses()
     slots.forEach((slot) => {
-      if (slot.event) setPose(slot.event.playerId, 0)
+      if (slot.event) setPose(slot.event.playerId, 0, slot.event.weapon)
       slot.event = null
       slot.system.clear()
     })
@@ -63,42 +62,28 @@
 
   onMount(() => {
     let cancelled = false
-    const map = new THREE.TextureLoader().load(
-      '/textures/vfx/enchant-filament.png',
-      async () => {
-        if (cancelled) return
-        map.colorSpace = THREE.SRGBColorSpace
-        textureMap = map
-        for (let i = 0; i < PREWARM_ENCHANT_EFFECTS; i++) {
-          const system = new EnchantSuccessEffect(map)
-          slots.push({ system, event: null })
-          lights.push(system.light)
-          group.add(system.group)
-          system.group.visible = true
+    for (let i = 0; i < PREWARM_ENCHANT_EFFECTS; i++) {
+      const system = new EnchantSuccessEffect()
+      slots.push({ system, event: null })
+      lights.push(system.light)
+      group.add(system.group)
+      system.group.visible = true
+    }
+    void (renderer as unknown as WebGPURenderer)
+      .compileAsync(group, $camera, scene)
+      .catch((error) =>
+        console.error('Enchant success shader warmup failed', error)
+      )
+      .finally(() => {
+        if (!cancelled) {
+          clear()
+          prepared = true
         }
-        try {
-          await (renderer as unknown as WebGPURenderer).compileAsync(
-            group,
-            $camera,
-            scene
-          )
-        } catch (error) {
-          console.error('Enchant success shader warmup failed', error)
-        } finally {
-          if (!cancelled) {
-            clear()
-            prepared = true
-          }
-        }
-      },
-      undefined,
-      (error) => console.error('Enchant success texture failed to load', error)
-    )
+      })
     return () => {
       cancelled = true
       clear()
       slots.forEach((slot) => slot.system.dispose())
-      map.dispose()
     }
   })
 
@@ -125,22 +110,21 @@
             (!entry.event ||
               now - entry.event.startedAt >= ENCHANT_SUCCESS_DURATION * 1000)
         )
-        if (!slot && textureMap) {
-          const system = new EnchantSuccessEffect(textureMap)
+        if (!slot) {
+          const system = new EnchantSuccessEffect()
           slot = { system, event: null }
           slots.push(slot)
           lights.push(system.light)
           group.add(system.group)
         }
       }
-      if (slot) {
-        slot.event = event
-        slot.system.light.playerId = event.playerId
-        setPose(
-          event.playerId,
-          event.weapon ? event.startedAt + ENCHANT_SUCCESS_DURATION * 1000 : 0
-        )
-      }
+      slot.event = event
+      slot.system.light.playerId = event.playerId
+      setPose(
+        event.playerId,
+        event.startedAt + ENCHANT_SUCCESS_DURATION * 1000,
+        event.weapon
+      )
     }
     matrix.multiplyMatrices(
       $camera.projectionMatrix,
@@ -162,6 +146,7 @@
         elapsed >= ENCHANT_SUCCESS_DURATION ||
         (local && player.health <= 0)
       ) {
+        setPose(event.playerId, 0, event.weapon)
         slot.event = null
         slot.system.clear()
         continue

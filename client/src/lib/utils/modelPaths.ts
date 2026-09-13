@@ -33,6 +33,7 @@ export const CHARACTER_ANIMATION_PACK_PATHS = {
   combatMelee: '/models/animations/combat_melee.glb',
   combatRanged: '/models/animations/combat_ranged.glb',
   social: '/models/animations/social.glb',
+  enchantArmor: '/models/animations/enchant_armor.glb',
   offhand: '/models/animations/offhand.glb',
   fishing: '/models/animations/fishing.glb',
 } as const

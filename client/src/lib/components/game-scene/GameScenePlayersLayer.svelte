@@ -220,12 +220,12 @@
     return model?.getEnchantAnchor(event.weapon, target) ?? false
   }
 
-  function setEnchantPose(playerId: number, until: number) {
+  function setEnchantPose(playerId: number, until: number, weapon: boolean) {
     const model =
       playerId === currentPlayer?.id
         ? currentPlayerModel
         : remoteModels.get(playerId)
-    model?.setEnchantPoseUntil(until)
+    model?.setEnchantPoseUntil(until, weapon)
   }
 
   let enchantLayer: GameSceneEnchantSuccessLayer | undefined

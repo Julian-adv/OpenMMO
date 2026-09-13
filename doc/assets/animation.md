@@ -257,6 +257,15 @@
 - 재생성: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_enchant_animation.py`.
 - Blender에서 편집한 파일을 재내보내기: 같은 명령 뒤에 `-- --export-only`를 붙인다. 원본 `all_animation.blend`는 수정하지 않는다.
 
+## Armor enchantment hold (2026-09-13)
+
+- 출력: `client/public/models/animations/enchant_armor.glb`. `enchant_armor`와 왼손 무기용 대칭 자세 `enchant_armor_left`가 담긴 30fps·4초 고정 자세 팩이다. 강화 중 반복하며 기존 mixer가 0.3초 동안 진입·해제한다.
+- 왼팔을 몸 옆에서 살짝 벌리고 팔꿈치를 굽혀 손바닥을 위로 연다. 검을 든 오른팔도 몸에서 살짝 벌리고 팔꿈치를 굽혀 받아들이는 느낌을 주며, 목과 머리는 열린 손 쪽으로 약간 기울인다. 이동·공격·상호작용·기승이 우선한다. 무기의 장착 회전은 내려든 자세에 맞춰 보정한다.
+- 출처: 기존 `assets/all_animation.blend`의 33본 `Armature`에 자체 제작한 키프레임. Blender 5.2.0 LTS에서 2026-09-13 KST 제작. 리그와 작업용 메시의 Mixamo 라이선스는 위 항목과 [characters.md](characters.md)를 따른다. 신규 AI 모션 생성·유료 도구 사용은 없다.
+- 참고: 사용자 제공 `codex-clipboard-0eb57ed9-770d-465f-bf89-80e3e7382b81.png`. 제작자·생성 도구·생성일·계정 등급·라이선스는 미제공이며, 자세 참고용으로만 사용하고 배포하지 않는다.
+- 편집 파일: `assets/enchant_armor/enchant_armor.blend`. 소스와 출력 GLB는 HF 관리 대상이다. 기존 `all_animation.blend`와 `social.glb`를 덮어쓰지 않는다.
+- 재생성: `blender -b --python-exit-code 1 -P tools/blender-scripts/build_armor_enchant_animation.py`. 편집한 blend를 재내보낼 때는 `-- --export-only`를 붙인다.
+
 ## Great Sword (2026-09-12)
 
 - 제공된 걷기 원본은 뒷걸음질 동작이므로 `great_sword_walk`의 키프레임 순서를 역전해 전진 걷기로 사용한다. 변환 스크립트에서 적용하며 원본 FBX는 보존한다.

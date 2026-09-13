@@ -9,29 +9,58 @@ import { getWeaponEffectAxis } from './weaponEffectAxis'
 
 export const ENCHANT_WEAPON_ANIMATION = 'enchant_weapon'
 export const ENCHANT_LEFT_WEAPON_ANIMATION = 'enchant_weapon_left'
+export const ENCHANT_ARMOR_ANIMATION = 'enchant_armor'
+export const ENCHANT_LEFT_ARMOR_ANIMATION = 'enchant_armor_left'
 const clipsByModel = new Map<
   string,
   Promise<Map<string, THREE.AnimationClip>>
 >()
+const armorHolds = new WeakMap<THREE.AnimationClip, THREE.AnimationClip>()
+
+export function getArmorEnchantHold(idle: THREE.AnimationClip) {
+  let hold = armorHolds.get(idle)
+  if (!hold) {
+    const tracks = idle.tracks.map((track) => {
+      const held = track.clone()
+      held.times = new Float32Array([0])
+      held.values = track.values.slice(0, track.getValueSize())
+      return held
+    })
+    hold = new THREE.AnimationClip(`enchant_armor:${idle.name}`, 1, tracks)
+    armorHolds.set(idle, hold)
+  }
+  return hold
+}
+
+export function isArmorEnchantHold(
+  clip: THREE.AnimationClip | undefined,
+  idle: THREE.AnimationClip
+) {
+  return clip !== undefined && armorHolds.get(idle) === clip
+}
 
 export function loadEnchantAnimations(modelPath: string, root: THREE.Object3D) {
   let pending = clipsByModel.get(modelPath)
   if (!pending) {
-    pending = loadGLB(CHARACTER_ANIMATION_PACK_PATHS.social)
-      .then(async (gltf) => {
-        const clips = gltf.animations.filter(
-          (clip) =>
-            clip.name === ENCHANT_WEAPON_ANIMATION ||
-            clip.name === ENCHANT_LEFT_WEAPON_ANIMATION
+    pending = Promise.all(
+      [
+        CHARACTER_ANIMATION_PACK_PATHS.social,
+        CHARACTER_ANIMATION_PACK_PATHS.enchantArmor,
+      ].map(async (path) => {
+        const gltf = await loadGLB(path)
+        const clips = gltf.animations.filter((clip) =>
+          [
+            ENCHANT_WEAPON_ANIMATION,
+            ENCHANT_LEFT_WEAPON_ANIMATION,
+            ENCHANT_ARMOR_ANIMATION,
+            ENCHANT_LEFT_ARMOR_ANIMATION,
+          ].includes(clip.name)
         )
-        const retargeted = await retargetAnimationsForCharacterModel(
-          root,
-          gltf.scene,
-          clips
-        )
-        const grounded = await groundRetargetedClips(root, retargeted)
-        return new Map(grounded.map((clip) => [clip.name, clip]))
+        return retargetAnimationsForCharacterModel(root, gltf.scene, clips)
       })
+    )
+      .then((packs) => groundRetargetedClips(root, packs.flat()))
+      .then((clips) => new Map(clips.map((clip) => [clip.name, clip])))
       .catch((error) => {
         clipsByModel.delete(modelPath)
         throw error
@@ -52,11 +81,11 @@ export class EnchantWeaponGrip {
     this.rotation = weapon.quaternion.clone()
   }
 
-  update(weight: number) {
+  update(weight: number, lowered = false) {
     this.weapon.quaternion.copy(this.rotation)
     if (weight <= 0 || !this.weapon.parent) return
     this.weapon.parent.getWorldQuaternion(this.inverseHand).invert()
-    this.up.set(0, 1, 0).applyQuaternion(this.inverseHand)
+    this.up.set(0, lowered ? -1 : 1, 0).applyQuaternion(this.inverseHand)
     this.direction
       .copy(getWeaponEffectAxis(this.weapon).direction)
       .applyQuaternion(this.rotation)
