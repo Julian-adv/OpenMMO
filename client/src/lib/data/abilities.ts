@@ -7,6 +7,7 @@ export const GUARDIAN_WARD = {
   name: 'Guardian Ward',
   icon: '/icons/skills/guardian-ward.png',
   description: 'Protect yourself and nearby party members.',
+  buffDescription: 'Guard +10%',
   stats: [
     { label: 'Guard', value: '+10%' },
     { label: 'Weapon', value: 'Sword or Mace' },
@@ -18,7 +19,39 @@ export const GUARDIAN_WARD = {
   details: ['Reapplying refreshes the duration. Does not stack.'],
 } as const
 
-export type AbilityId = typeof GUARDIAN_WARD.id
+export const RADIANCE = {
+  id: 'radiance',
+  name: 'Radiance',
+  icon: '/icons/skills/radiance.png',
+  description: 'Illuminate your surroundings with magical light.',
+  buffDescription: 'Illuminates nearby surroundings.',
+  stats: [
+    { label: 'Weapon', value: 'Any' },
+    { label: 'Light', value: 'Torch range' },
+    { label: 'Duration', value: '120 s' },
+    { label: 'Cooldown', value: '0.8 s' },
+    { label: 'Type', value: 'Toggle' },
+  ],
+  details: ['Use again to turn off.'],
+} as const
+
+export const TRUE_AIM = {
+  id: 'bow_mark',
+  name: 'True Aim',
+  icon: '/icons/skills/true-aim.png',
+  description: 'Your attacks against the marked target always hit.',
+  buffDescription: 'Your attacks against the marked target always hit.',
+  stats: [
+    { label: 'Weapon', value: 'Bow' },
+    { label: 'Range', value: '10 m' },
+    { label: 'Duration', value: '5 s' },
+    { label: 'Cooldown', value: '10 s' },
+  ],
+  details: ['Select a target, then use. Applies only to your attacks.'],
+} as const
+
+export const BUFF_ABILITIES = [GUARDIAN_WARD, RADIANCE, TRUE_AIM] as const
+export type AbilityId = (typeof BUFF_ABILITIES)[number]['id']
 export type AbilityTimer = { ability: AbilityId; remaining_ms: number }
 
 export const DOUBLE_SLASH = {
@@ -35,8 +68,21 @@ export const DOUBLE_SLASH = {
 
 export function getAbility(id: string) {
   if (id === GUARDIAN_WARD.id) return GUARDIAN_WARD
+  if (id === RADIANCE.id) return RADIANCE
+  if (id === TRUE_AIM.id) return TRUE_AIM
   if (id === DOUBLE_SLASH.id) return DOUBLE_SLASH
   return undefined
+}
+
+export function abilityEquipmentAllowed(
+  id: AbilityId,
+  equipped: PlayerInventory['equipped']
+) {
+  if (id === TRUE_AIM.id)
+    return (
+      getItemDef(equipped.main_hand?.item_def_id ?? '')?.weaponType === 'bow'
+    )
+  return id === RADIANCE.id || guardianWardEquipment(equipped)
 }
 
 export function abilityRequirementsNotMet(name: string) {

@@ -10,6 +10,7 @@ import {
   abilityCooldowns,
   abilityPending,
   activeBuffs,
+  updateBowMark,
   timerSnapshot,
   queueAbilityEffect,
   type AbilityEffectEvent,
@@ -271,6 +272,7 @@ function toLocalPlayer(sp: ServerPlayer): LocalPlayer {
     maxHealth: sp.max_health,
     characterClass: sp.class,
     gender: sp.gender,
+    radianceOn: sp.radiance_on ?? false,
   }
 }
 
@@ -285,6 +287,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     gender: sp.gender,
     mounted: sp.mounted ?? false,
     torchOn: sp.torch_on,
+    radianceOn: sp.radiance_on ?? false,
     wet: sp.wet ?? false,
     title: sp.title ?? null,
     mainHand: sp.main_hand ?? null,
@@ -1376,6 +1379,9 @@ export function handleServerMessage(
       updatePlayer(data.player_id, { torchOn: data.enabled })
       break
     }
+    case 'PlayerRadianceToggled':
+      updatePlayer(data.player_id, { radianceOn: data.enabled })
+      break
 
     case 'PlayerMountChanged': {
       updatePlayer(data.player_id, { mounted: data.mounted })
@@ -2170,18 +2176,39 @@ export function handleServerMessage(
       abilityCooldowns.set(timerSnapshot(data.cooldowns as AbilityTimer[]))
       abilityPending.set({})
       break
+    case 'BowMarkUpdate':
+      updateBowMark(data.monster_id, Number(data.remaining_ms))
+      break
     case 'BuffUpdate': {
       const before = get(activeBuffs)
       const next = timerSnapshot(data.buffs as AbilityTimer[])
       activeBuffs.set(next)
-      if (next.guardian_ward) {
+      if (
+        next.guardian_ward &&
+        (!before.guardian_ward ||
+          next.guardian_ward - before.guardian_ward > 1000)
+      ) {
         addCombatMessage({
           text: 'Guardian Ward: Guard +10% for 60 seconds.',
           sender: 'local',
         })
-      } else if (before.guardian_ward) {
+      } else if (!next.guardian_ward && before.guardian_ward) {
         addCombatMessage({ text: 'Guardian Ward ended.', sender: 'local' })
       }
+      if (next.radiance && !before.radiance)
+        addCombatMessage({
+          text: 'Radiance: illumination for 120 seconds.',
+          sender: 'local',
+        })
+      else if (!next.radiance && before.radiance)
+        addCombatMessage({ text: 'Radiance ended.', sender: 'local' })
+      if (next.bow_mark && !before.bow_mark)
+        addCombatMessage({
+          text: 'True Aim: attacks against the marked target always hit for 5 seconds.',
+          sender: 'local',
+        })
+      else if (!next.bow_mark && before.bow_mark)
+        addCombatMessage({ text: 'True Aim ended.', sender: 'local' })
       break
     }
     case 'AbilityRejected':
@@ -2193,13 +2220,15 @@ export function handleServerMessage(
                 getAbility(data.ability)?.name ?? data.ability
               )
             : data.reason === 'cooldown'
-              ? 'Guardian Ward is not ready yet.'
-              : 'Guardian Ward cannot be used right now.',
+              ? `${getAbility(data.ability)?.name ?? data.ability} is not ready yet.`
+              : abilityRequirementsNotMet(
+                  getAbility(data.ability)?.name ?? data.ability
+                ),
         sender: 'system',
       })
       break
     case 'AbilityUsed':
-      if (data.ability === GUARDIAN_WARD.id)
+      if (data.ability === GUARDIAN_WARD.id || data.ability === 'radiance')
         queueAbilityEffect(data as Omit<AbilityEffectEvent, 'startedAt'>)
       break
     case 'DebuffUpdate': {

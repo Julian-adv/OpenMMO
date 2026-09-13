@@ -2,6 +2,8 @@
   import ItemLockButton from './ItemLockButton.svelte'
   import GuardianWardEntry from './GuardianWardEntry.svelte'
   import DaggerSkillEntry from './DaggerSkillEntry.svelte'
+  import SkillIcon from './SkillIcon.svelte'
+  import { RADIANCE, TRUE_AIM } from '../data/abilities'
   import {
     inventoryStore,
     itemLockMode,
@@ -402,6 +404,8 @@
             <div class="skill-grid" role="group" aria-label="Abilities">
               <GuardianWardEntry />
               <DaggerSkillEntry />
+              <SkillIcon {...RADIANCE} quickslotSkill={RADIANCE.id} />
+              <SkillIcon {...TRUE_AIM} quickslotSkill={TRUE_AIM.id} />
             </div>
           </div>
         {/if}

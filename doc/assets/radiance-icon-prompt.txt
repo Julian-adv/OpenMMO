@@ -1,0 +1,10 @@
+Radiance skill icon, following doc/assets/skill-icon-prompts.md.
+
+Use the Double Slash icon as a style reference only: silver-white to pale ivory luminous hand-painted brush strokes on pure black, readable in a 36–40px quickslot, short soft edge bloom, slight tonal depth and generous black negative space.
+
+Create one central four-point light glyph representing peaceful illumination. The single light glyph fills about 80% of the square. Irregular brush edges and tapered ends, restrained monochrome glow.
+
+No circular orbit, slash, weapon, shield, explosion, extra symbols, starfield, broad haze, metallic bevel, 3D rendering, text, numbers, badge, frame, or watermark.
+
+Final edit prompt:
+Edit this Radiance skill icon. Remove the entire elliptical orbit / circular slash completely. Keep ONLY one central luminous four-point light star, silver-white / pale ivory hand-painted light brush strokes on pure black. This is peaceful illumination, not an attack: no slash, no ring, no orbit, no weapon, no explosion. Center the lone light glyph and enlarge it to occupy about 80% of the square, leaving black margins. Preserve the original short soft edge bloom, subtle brush texture, clean small-icon readability and restrained monochrome style. No text, numbers, border, extra symbols, or broad haze. One square skill icon.

@@ -100,7 +100,7 @@ pub(super) fn reachable_dist_sq(a: Position, a_floor: i8, b: Position, b_floor: 
 }
 
 /// Attack collision against a wire floor level.
-fn wall_between(
+pub(super) fn wall_between(
     cache: &onlinerpg_shared::pathfinding::PassabilityCache,
     from: Position,
     to: Position,
@@ -845,6 +845,11 @@ impl super::GameState {
         };
 
         let hit_mod = self.hunger_hit_mod(player_id).await;
+        let guaranteed = self
+            .abilities
+            .read()
+            .await
+            .marks_target(player_id, &monster_id);
 
         let (result_hit, result_roll, result_damage) = {
             let def = self.monster_defs.get(&monster_type);
@@ -854,12 +859,13 @@ impl super::GameState {
             // The round rolls its own die on top of the weapon's, as a
             // monster's wielded weapon does on top of its own damage. The bow
             // is deliberately a token 1d1: the arrow is what decides the hurt.
-            let result = combat::roll_attack_with_extra_damage_roll(
+            let result = combat::roll_attack_with_accuracy(
                 attack_bonus,
                 target_guard,
                 &weapon.dice,
                 ammo.as_ref().map(|round| round.dice.as_str()),
                 ability_mod + weapon.enchant,
+                guaranteed,
             );
             (result.hit, result.roll, result.damage)
         };

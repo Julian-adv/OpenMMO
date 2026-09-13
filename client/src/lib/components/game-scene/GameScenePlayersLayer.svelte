@@ -2,7 +2,7 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { get } from 'svelte/store'
-  import { SvelteMap } from 'svelte/reactivity'
+  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import PlayerModel from '../PlayerModel.svelte'
   import GameSceneAbilitiesLayer from './GameSceneAbilitiesLayer.svelte'
   import GameSceneEnchantSuccessLayer from './GameSceneEnchantSuccessLayer.svelte'
@@ -21,6 +21,7 @@
 
   import {
     applyTorchFlickerWorld,
+    TORCH_BASE_INTENSITY,
     TORCH_BASE_DISTANCE,
     TORCH_BASE_DECAY,
     TORCH_BASE_POSITION,
@@ -44,6 +45,7 @@
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import { torchLightEnabled } from '../../stores/debugStore'
   import { localTorchEquipped } from '../../stores/inventoryStore'
+  import { LIGHT_WAKE, LIGHT_FADE } from '../../effects/radiance'
 
   const TORCH_OFFSET = new THREE.Vector3(
     TORCH_BASE_POSITION.x,
@@ -237,15 +239,8 @@
     return model?.getEnchantAnchor(event.weapon, target) ?? false
   }
 
-  // Unified torch: exactly one PointLight for the entire scene.
-  // Priority: local player's torch (if ON) > closest visible remote player
-  // with torchOn. When no candidate, intensity drops to 0. Keeping the
-  // PointLight count at a constant 1 avoids WebGPU pipeline recompile stalls.
-  //
-  // Position/intensity are driven imperatively from the game loop (not a
-  // $derived) because currentPlayer.position is a mutated plain object that
-  // Svelte reactivity cannot track. The game loop runs every frame anyway,
-  // so recomputing the target here has no extra cost.
+  // Reuse one shadow light for fires, torches and Radiance to avoid pipeline stalls.
+  // Update it in the game loop because player positions mutate without reactivity.
   let unifiedTorchLight = $state<THREE.PointLight | undefined>(undefined)
 
   // mapSize is only read when the cube map is allocated, so a quality switch
@@ -259,6 +254,24 @@
   })
 
   let unifiedTorchFlickerTime = 0
+  const radianceStrengths = new SvelteMap<number, number>()
+  const radiancePlayerIds = new SvelteSet<number>()
+
+  function updateRadianceStrength(
+    player: LocalPlayer | RemotePlayer,
+    dt: number
+  ) {
+    radiancePlayerIds.add(player.id)
+    const previous = radianceStrengths.get(player.id) ?? 0
+    const next =
+      player.health <= 0
+        ? 0
+        : player.radianceOn
+          ? Math.min(1, previous + dt / LIGHT_WAKE)
+          : Math.max(0, previous - dt / LIGHT_FADE)
+    if (next > 0) radianceStrengths.set(player.id, next)
+    else radianceStrengths.delete(player.id)
+  }
   const _unifiedTorchTmp = new THREE.Vector3()
   const _torchOffsetTmp = new THREE.Vector3()
 
@@ -343,9 +356,12 @@
   /** Pick the unified shadow light's target. Returns the world position, the
    *  intensity it should burn at, and — when it landed on a wall torch — that
    *  torch's index (so the pool can skip it). */
-  function computeUnifiedTorchTarget(
-    wallPositions: THREE.Vector3[]
-  ): { target: THREE.Vector3; wallIdx: number; scale: number } | null {
+  function computeUnifiedTorchTarget(wallPositions: THREE.Vector3[]): {
+    target: THREE.Vector3
+    wallIdx: number
+    scale: number
+    radiance?: boolean
+  } | null {
     if (torchEffectsDisabled) return null
     if (!currentPlayer) return null
     // A campfire outshines any torch, held or not: the one light goes to the
@@ -362,12 +378,19 @@
         scale: CAMPFIRE_INTENSITY_SCALE,
       }
     }
-    if (get(localTorchEquipped) || get(torchLightEnabled)) {
+    const localTorch = get(localTorchEquipped) || get(torchLightEnabled)
+    const localRadiance = radianceStrengths.get(currentPlayer.id) ?? 0
+    if (localTorch || localRadiance > 0) {
       const p = currentPlayer.position
+      const radiance =
+        !!currentPlayer.radianceOn || (!localTorch && localRadiance > 0)
       return {
-        target: setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation),
+        target: radiance
+          ? _unifiedTorchTmp.set(p.x, p.y + TORCH_BASE_POSITION.y, p.z)
+          : setTorchTargetFromPose(p.x, p.z, p.y, currentPlayer.rotation),
         wallIdx: -1,
-        scale: 1,
+        scale: localTorch ? 1 : localRadiance,
+        radiance,
       }
     }
     // No lit player torch: the nearest lit source — remote torch or wall torch,
@@ -376,9 +399,17 @@
     let bestDist = Infinity
     let bestRp: PlayerState | null = null
     let bestWallIdx = -1
+    let bestRadiance = false
+    let bestScale = 1
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
-      if (!player.torchOn || !rp || !remoteVisibility.get(id)) continue
+      const radiance = radianceStrengths.get(id) ?? 0
+      if (
+        (!player.torchOn && radiance <= 0) ||
+        !rp ||
+        !remoteVisibility.get(id)
+      )
+        continue
       const dx = shortestWrappedDeltaX(playerPos.x, rp.position.x)
       const dz = rp.position.z - playerPos.z
       const dist = dx * dx + dz * dz
@@ -386,6 +417,8 @@
         bestDist = dist
         bestRp = rp
         bestWallIdx = -1
+        bestRadiance = !!player.radianceOn || (!player.torchOn && radiance > 0)
+        bestScale = player.torchOn ? 1 : radiance
       }
     }
     for (let i = 0; i < wallPositions.length; i++) {
@@ -409,14 +442,21 @@
     if (bestRp) {
       const displayX = unwrapWorldXNear(playerPos.x, bestRp.position.x)
       return {
-        target: setTorchTargetFromPose(
-          displayX,
-          bestRp.position.z,
-          bestRp.position.y,
-          bestRp.rotation
-        ),
+        target: bestRadiance
+          ? _unifiedTorchTmp.set(
+              displayX,
+              bestRp.position.y + TORCH_BASE_POSITION.y,
+              bestRp.position.z
+            )
+          : setTorchTargetFromPose(
+              displayX,
+              bestRp.position.z,
+              bestRp.position.y,
+              bestRp.rotation
+            ),
         wallIdx: -1,
-        scale: 1,
+        scale: bestScale,
+        radiance: bestRadiance,
       }
     }
     return null
@@ -468,6 +508,12 @@
   }
 
   export function updateUnifiedTorchFlicker(deltaTime: number) {
+    radiancePlayerIds.clear()
+    if (currentPlayer) updateRadianceStrength(currentPlayer, deltaTime)
+    for (const player of otherPlayers.values())
+      updateRadianceStrength(player, deltaTime)
+    for (const id of radianceStrengths.keys())
+      if (!radiancePlayerIds.has(id)) radianceStrengths.delete(id)
     const torchSource = isUnderground
       ? wallTorchPositions
       : localHouseId != null
@@ -478,6 +524,7 @@
     if (unifiedTorchLight) {
       const result = computeUnifiedTorchTarget(wallPositions)
       if (result) {
+        unifiedTorchLight.color.set(result.radiance ? '#fff2cd' : '#ffcc66')
         occupiedWallIdx = result.wallIdx
         unifiedTorchFlickerTime = applyTorchFlickerWorld(
           unifiedTorchLight,
@@ -488,6 +535,11 @@
           result.target.z,
           result.scale
         )
+        if (result.radiance)
+          unifiedTorchLight.intensity =
+            TORCH_BASE_INTENSITY *
+            result.scale *
+            (1 + Math.sin(unifiedTorchFlickerTime * 2.3) * 0.014)
       } else {
         unifiedTorchLight.intensity = 0
       }
@@ -505,6 +557,10 @@
   {currentPlayer}
   floorLevel={localFloorLevel}
   getAnchor={getAbilityAnchor}
+  getRotation={(id) =>
+    id === currentPlayer?.id
+      ? currentPlayer.rotation
+      : (remotePlayers.get(id)?.rotation ?? 0)}
 />
 
 {#if camera && currentPlayer}

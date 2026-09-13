@@ -1,7 +1,6 @@
 <script lang="ts">
   import { hungerState, grilling } from '../stores/hungerStore'
-  import { activeBuffs, abilityClock } from '../stores/abilityStore'
-  import { GUARDIAN_WARD } from '../data/abilities'
+  import { visibleAbilityBuffs } from '../stores/abilityStore'
   import { formatRemaining } from '../data/debuffPresentation'
   import { visibleDebuffs } from '../stores/debuffStore'
   import {
@@ -97,18 +96,16 @@
   <div class="status-empty">Status unavailable</div>
 {/if}
 
-{#if ($activeBuffs.guardian_ward ?? 0) > $abilityClock}
-  <section class="effect-card buff-card" aria-label="Guardian Ward buff">
-    <img src={GUARDIAN_WARD.icon} alt="" width="32" height="32" />
+{#each $visibleAbilityBuffs as buff (buff.id)}
+  <section class="effect-card buff-card" aria-label="{buff.name} buff">
+    <img src={buff.icon} alt="" width="32" height="32" />
     <div>
-      <strong>Guardian Ward</strong><small
-        >Guard +10% · {formatRemaining(
-          ($activeBuffs.guardian_ward ?? 0) - $abilityClock
-        )} remaining</small
+      <strong>{buff.name}</strong><small
+        >{buff.buffDescription} · {formatRemaining(buff.remaining)} remaining</small
       >
     </div>
   </section>
-{/if}
+{/each}
 
 <style>
   .buff-card {

@@ -100,6 +100,8 @@ pub struct Player {
     pub object_id: Option<u32>,
     #[serde(default)]
     pub mounted: bool,
+    #[serde(default)]
+    pub radiance_on: bool,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Which program drives this player, from the `ClientInfo` handshake.
@@ -334,6 +336,7 @@ mod tests {
             gender: Gender::default(),
             is_official_npc: false,
             torch_on: false,
+            radiance_on: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
@@ -379,6 +382,7 @@ mod tests {
             gender: Gender::default(),
             is_official_npc: false,
             torch_on: true,
+            radiance_on: true,
             floor_level: 0,
             object_type: None,
             main_hand: None,
@@ -397,6 +401,7 @@ mod tests {
         let decoded: Player = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(decoded.object_type, None);
         assert!(decoded.torch_on);
+        assert!(decoded.radiance_on);
         // The occupied bed must survive the wire: a `#[serde(skip)]` here
         // once silently broke the maid's bedside visits.
         assert_eq!(decoded.object_id, Some(52));

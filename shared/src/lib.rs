@@ -154,8 +154,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 ///      cells, doc/WEATHER_SYSTEM.md); an older client cannot decode it.
 /// v71: Guardian Ward ability, cooldowns, buff snapshots and VFX events.
 /// v72: per-strike damage rolls and skipped dagger strikes.
-/// v73: combined Guardian Ward and Double Slash protocol.
-pub const PROTOCOL_VERSION: u32 = 73;
+/// v74: Radiance toggle and visible-player lighting state.
+/// v75: targeted abilities and private True Aim mark updates.
+pub const PROTOCOL_VERSION: u32 = 75;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -404,6 +405,7 @@ mod tests {
             gender: Gender::default(),
             is_official_npc: false,
             torch_on: false,
+            radiance_on: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,

@@ -1,11 +1,13 @@
 <script lang="ts">
   import {
     DOUBLE_SLASH,
+    TRUE_AIM,
     abilityRequirementsNotMet,
     getAbility,
-    guardianWardEquipment,
+    abilityEquipmentAllowed,
   } from '../data/abilities'
   import { DAGGER_SKILL } from '../data/daggerSkill'
+  import { combatController } from '../managers/combatController'
   import {
     daggerSkillState,
     daggerSkillClock,
@@ -17,6 +19,7 @@
     abilityPending,
     abilityClock,
     beginAbility,
+    activeBuffs,
   } from '../stores/abilityStore'
   import { skillTooltip } from '../actions/skillTooltip'
   import { inventoryStore } from '../stores/inventoryStore'
@@ -96,15 +99,24 @@
         queueDaggerSkill()
         return
       }
-      if (!guardianWardEquipment($inventoryStore.equipped)) {
+      if (!abilityEquipmentAllowed(entry.skill.id, $inventoryStore.equipped)) {
         addChatMessage({
           text: abilityRequirementsNotMet(entry.skill.name),
           sender: 'system',
         })
         return
       }
+      const target =
+        entry.skill.id === TRUE_AIM.id ? combatController.targetMonsterId : null
+      if (entry.skill.id === TRUE_AIM.id && !target) {
+        addChatMessage({
+          text: 'Select a target for True Aim.',
+          sender: 'system',
+        })
+        return
+      }
       if (beginAbility(entry.skill.id))
-        networkManager.sendUseAbility(entry.skill.id)
+        networkManager.sendUseAbility(entry.skill.id, target)
       return
     }
     const action = quickslotAction(entry.def, entry)
@@ -156,6 +168,9 @@
       class:skill-queued={entry?.kind === 'ability' &&
         entry.skill.id === DOUBLE_SLASH.id &&
         $daggerSkillState.queued}
+      class:skill-active={entry?.kind === 'ability' &&
+        entry.skill.id !== DOUBLE_SLASH.id &&
+        ($activeBuffs[entry.skill.id] ?? 0) > $abilityClock}
       data-quickslot={i}
       use:skillTooltip={entry && entry.kind === 'ability' ? entry.skill : null}
       use:itemTooltip={entry && !(entry.kind === 'ability')
@@ -169,7 +184,6 @@
     >
       <span class="key-label">{keyLabel(i)}</span>
       {#if entry && entry.kind === 'ability'}
-        {@const isDagger = entry.skill.id === DOUBLE_SLASH.id}
         {@const remaining = Math.max(
           0,
           entry.skill.id === DOUBLE_SLASH.id
@@ -182,15 +196,20 @@
             : ($abilityPending[entry.skill.id] ?? 0) > $abilityClock}
         <img
           class="item-icon skill-icon"
-          class:depleted={!(isDagger
+          class:depleted={!(entry.skill.id === DOUBLE_SLASH.id
             ? daggerEquipped
-            : guardianWardEquipment($inventoryStore.equipped)) || remaining > 0}
+            : abilityEquipmentAllowed(
+                entry.skill.id,
+                $inventoryStore.equipped
+              )) || remaining > 0}
           src={entry.skill.icon}
           alt={entry.skill.name}
           draggable="false"
         />
         {#if remaining > 0}<span class="skill-cooldown"
-            >{Math.ceil(remaining / 1000)}</span
+            >{remaining < 1000
+              ? (Math.ceil(remaining / 100) / 10).toFixed(1)
+              : Math.ceil(remaining / 1000)}</span
           >
         {:else if pending}<span class="skill-cooldown">…</span>{/if}
       {:else if entry}
@@ -213,7 +232,8 @@
 </div>
 
 <style>
-  .quickslot.skill-queued {
+  .quickslot.skill-queued,
+  .quickslot.skill-active {
     border-color: #a3f0d2;
     box-shadow: 0 0 8px #89d8b960;
   }

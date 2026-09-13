@@ -39,6 +39,7 @@ export type ServerPlayer = {
   is_official_npc: boolean
   mounted?: boolean
   torch_on: boolean
+  radiance_on?: boolean
   floor_level: number
   object_type?: string
   /** Placement id of the occupied chair/bed (v47); absent for emotes. */
@@ -172,7 +173,7 @@ export type ClientMessage =
       }
     }
   | { PlayerAttack: { monster_id: string } }
-  | { UseAbility: { ability: AbilityId } }
+  | { UseAbility: { ability: AbilityId; monster_id: string | null } }
   | { DaggerDoubleSlash: { monster_id: string } }
   | { MonsterAttack: { monster_id: string; target_player_id: number } }
   | 'RequestRespawn'

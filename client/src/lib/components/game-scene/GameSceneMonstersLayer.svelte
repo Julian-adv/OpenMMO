@@ -1,4 +1,11 @@
 <script lang="ts">
+  import { T, useTask, useThrelte } from '@threlte/core'
+  import { onMount } from 'svelte'
+  import { Vector3 } from 'three'
+  import type { WebGPURenderer } from 'three/webgpu'
+  import { BowMarkEffect, MARK_FADE } from '../../effects/bow-mark'
+  import { bowMark } from '../../stores/abilityStore'
+  import { teleportLoading } from '../../stores/debugStore'
   import Monster from '../Monster.svelte'
   import { monsterManager } from '../../managers/monsterManager'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
@@ -21,6 +28,53 @@
     heightManager = null,
     monsterModels = $bindable<(Monster | undefined)[]>([]),
   }: Props = $props()
+
+  const { camera, renderer, scene } = useThrelte()
+  const markEffect = new BowMarkEffect()
+  const markAnchor = new Vector3()
+  markEffect.setColor('#ed9984')
+  let markPrepared = false
+
+  onMount(() => {
+    let disposed = false
+    void (renderer as unknown as WebGPURenderer)
+      .compileAsync(markEffect.group, $camera, scene)
+      .catch((error: unknown) =>
+        console.error('True Aim shader warmup failed', error)
+      )
+      .finally(() => {
+        if (!disposed) markPrepared = true
+      })
+    return () => {
+      disposed = true
+      markEffect.dispose()
+    }
+  })
+
+  useTask(() => {
+    markEffect.group.visible = false
+    const mark = $bowMark
+    if (
+      !markPrepared ||
+      !mark ||
+      $teleportLoading ||
+      !currentPlayer ||
+      currentPlayer.health <= 0
+    )
+      return
+    if (Date.now() >= mark.until + MARK_FADE * 1000) return
+    const target = monsters.get(mark.monsterId)
+    if (!target || target.state === 'dead' || !isOnViewerFloor(target)) return
+    const index = [...monsters.keys()].indexOf(mark.monsterId)
+    if (!monsterModels[index]?.getMarkAnchor(markAnchor)) return
+    markEffect.update(
+      (Date.now() - mark.startedAt) / 1000,
+      markAnchor,
+      $camera,
+      0.75,
+      (mark.until - mark.startedAt) / 1000
+    )
+  })
 
   // Floor filter: underground shows only same-depth monsters; on the
   // surface dungeon monsters are hidden. Mismatches are parked at
@@ -54,6 +108,8 @@
     }
   }
 </script>
+
+<T is={markEffect.group} />
 
 {#each [...monsters.values()] as monster, index (monster.id)}
   <Monster

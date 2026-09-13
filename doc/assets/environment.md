@@ -25,7 +25,7 @@ white-cloud.jpg도 같은 폴더의 원본(5964px)을 2048px q85로 줄인 것.
 - 절벽: https://polyhaven.com/a/rocky_trail
 - 강바닥: https://polyhaven.com/a/ganges_river_pebbles
 - 해안 모래: https://sketchfab.com/3d-models/fine-sand-material-6e54464d405a4c1e8bdb0f81e8d74db2 — **[미사용]** 참조 없음
-- https://polyhaven.com/a/cobblestone_color — **[미사용]** 참조 없음
+- https://polyhaven.com/a/cobblestone_color — Radiance / Bow 조준 표식 프리뷰의 바닥에 사용
 - https://polyhaven.com/a/grey_stone_path
 - https://polyhaven.com/a/stone_pathway
 - https://polyhaven.com/a/pavement_02 — **[미사용]** 참조 없음 (patterned_paving_02 사용)

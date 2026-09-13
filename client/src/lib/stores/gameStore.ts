@@ -47,6 +47,7 @@ interface PlayerBase {
   gender: Gender
   mounted?: boolean
   torchOn?: boolean
+  radianceOn?: boolean
   /** Soaked, so nearby clients draw wet footprints (doc/DEBUFF.md). */
   wet?: boolean
   /** Shown title id (doc/TITLES.md). */

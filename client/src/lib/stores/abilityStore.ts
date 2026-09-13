@@ -1,11 +1,41 @@
 import { derived, get, writable } from 'svelte/store'
-import type { AbilityId, AbilityTimer } from '../data/abilities'
+import {
+  BUFF_ABILITIES,
+  type AbilityId,
+  type AbilityTimer,
+} from '../data/abilities'
 import type { Position } from '../network/networkTypes'
 
 type Timers = Partial<Record<AbilityId, number>>
 export const abilityCooldowns = writable<Timers>({})
 export const activeBuffs = writable<Timers>({})
 export const abilityPending = writable<Timers>({})
+export const bowMark = writable<{
+  monsterId: string
+  startedAt: number
+  until: number
+} | null>(null)
+
+export function updateBowMark(
+  monsterId: string | null,
+  remainingMs: number,
+  now = Date.now()
+) {
+  if (monsterId && remainingMs > 0) {
+    bowMark.update((mark) => ({
+      monsterId,
+      startedAt:
+        mark?.monsterId === monsterId && mark.until > now
+          ? mark.startedAt
+          : now,
+      until: now + remainingMs,
+    }))
+  } else {
+    bowMark.update((mark) =>
+      mark ? { ...mark, until: Math.min(mark.until, now) } : null
+    )
+  }
+}
 
 export const abilityClock = derived(
   [abilityCooldowns, activeBuffs, abilityPending],
@@ -32,6 +62,15 @@ export const abilityClock = derived(
   Date.now()
 )
 
+export const visibleAbilityBuffs = derived(
+  [activeBuffs, abilityClock],
+  ([buffs, now]) =>
+    BUFF_ABILITIES.flatMap((ability) => {
+      const remaining = (buffs[ability.id] ?? 0) - now
+      return remaining > 0 ? [{ ...ability, remaining }] : []
+    })
+)
+
 export function timerSnapshot(
   timers: AbilityTimer[],
   now = Date.now()
@@ -55,7 +94,7 @@ export function beginAbility(id: AbilityId, now = Date.now()) {
 }
 
 export type AbilityEffectEvent = {
-  ability: AbilityId
+  ability: Exclude<AbilityId, 'bow_mark'>
   player_id: number
   position: Position
   floor_level: number
@@ -77,6 +116,7 @@ export function takeAbilityEffects() {
 }
 
 export function resetAbilities() {
+  bowMark.set(null)
   abilityCooldowns.set({})
   activeBuffs.set({})
   abilityPending.set({})

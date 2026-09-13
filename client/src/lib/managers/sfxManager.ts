@@ -68,7 +68,7 @@ const DUNGEON_SOUNDS = {
 } as const
 export type DungeonSound = keyof typeof DUNGEON_SOUNDS
 
-const ABILITY_SOUNDS: Record<AbilityId, SoundSpec> = {
+const ABILITY_SOUNDS: Partial<Record<AbilityId, SoundSpec>> = {
   guardian_ward: {
     url: '/sounds/guardian-ward.ogg',
     volume: 0.55,
@@ -294,7 +294,8 @@ export function preloadAbilitySounds() {
 }
 
 export function playAbilitySound(ability: AbilityId) {
-  playSound(ABILITY_SOUNDS[ability])
+  const sound = ABILITY_SOUNDS[ability]
+  if (sound) playSound(sound)
 }
 
 export function preloadBowSounds() {

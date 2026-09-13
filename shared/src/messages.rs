@@ -827,6 +827,7 @@ pub enum ClientMessage {
     EnvReport(ClientEnvReport),
     UseAbility {
         ability: crate::ability::AbilityId,
+        monster_id: Option<String>,
     },
 }
 
@@ -1761,6 +1762,14 @@ pub enum ServerMessage {
         position: Position,
         floor_level: i8,
         targets: Vec<PlayerId>,
+    },
+    PlayerRadianceToggled {
+        player_id: PlayerId,
+        enabled: bool,
+    },
+    BowMarkUpdate {
+        monster_id: Option<String>,
+        remaining_ms: u64,
     },
 }
 

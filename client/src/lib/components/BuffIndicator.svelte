@@ -1,18 +1,11 @@
 <script lang="ts">
   import { skillTooltip } from '../actions/skillTooltip'
-  import { GUARDIAN_WARD } from '../data/abilities'
   import { formatRemaining } from '../data/debuffPresentation'
-  import { activeBuffs, abilityClock } from '../stores/abilityStore'
+  import { visibleAbilityBuffs } from '../stores/abilityStore'
   import {
     characterPanelTab,
     characterPanelVisible,
   } from '../stores/debugStore'
-
-  const remaining = $derived(($activeBuffs.guardian_ward ?? 0) - $abilityClock)
-  const tooltip = {
-    name: GUARDIAN_WARD.name,
-    description: 'Guard +10%',
-  }
 
   function openStatus() {
     characterPanelTab.set('status')
@@ -20,19 +13,19 @@
   }
 </script>
 
-{#if remaining > 0}
+{#each $visibleAbilityBuffs as buff (buff.id)}
   <button
     class="buff-badge"
-    aria-label="Guardian Ward: Guard +10%, {formatRemaining(
-      remaining
+    aria-label="{buff.name}: {buff.buffDescription}, {formatRemaining(
+      buff.remaining
     )} remaining. Open character status."
-    use:skillTooltip={tooltip}
+    use:skillTooltip={{ name: buff.name, description: buff.buffDescription }}
     onclick={openStatus}
   >
-    <img src={GUARDIAN_WARD.icon} alt="" width="20" height="20" />
-    <span>{formatRemaining(remaining)}</span>
+    <img src={buff.icon} alt="" width="20" height="20" />
+    <span>{formatRemaining(buff.remaining)}</span>
   </button>
-{/if}
+{/each}
 
 <style>
   .buff-badge {

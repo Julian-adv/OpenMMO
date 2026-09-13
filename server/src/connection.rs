@@ -1434,9 +1434,14 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::UseAbility { ability } => {
+        ClientMessage::UseAbility {
+            ability,
+            monster_id,
+        } => {
             if let Some(id) = &state.player_id {
-                game_state.use_ability(id, ability).await;
+                game_state
+                    .use_targeted_ability(id, ability, monster_id.as_deref())
+                    .await;
             }
         }
         ClientMessage::PlayerAttack { monster_id } => {
