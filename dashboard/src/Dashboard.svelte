@@ -14,6 +14,8 @@
   import { parseWeaponEnchantFailures } from './lib/weaponEnchantFailures'
   import HeroicTalesPanel from './lib/HeroicTalesPanel.svelte'
   import { parseHeroicTales } from './lib/heroicTales'
+  import CombatAuditTargetsPanel from './lib/CombatAuditTargetsPanel.svelte'
+  import { parseCombatAuditTargets } from './lib/combatAuditTargets'
   import MetricsError from './lib/MetricsError.svelte'
   import PeriodFilter from './lib/PeriodFilter.svelte'
   import { createMetricsResource } from './lib/metricsResource.svelte'
@@ -52,8 +54,9 @@
   const landLeaderboard = createMetricsResource(() => landHours, 'land-leaderboard', parseLandLeaderboard, '영지 보유 현황')
   const serverStarts = createMetricsResource(() => 8760, 'server-starts', parseServerStarts, '배포 기록')
   const heroicTales = createMetricsResource(() => undefined, 'heroic-tales', parseHeroicTales, '영웅담 원장')
+  const combatAuditTargets = createMetricsResource(() => undefined, 'combat-audit-targets', parseCombatAuditTargets, '전투 기록 추적 대상', () => ({}), 60000)
   let markers = $derived(deployMarkers(serverStarts.history?.starts ?? []))
-  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, landLeaderboard, heroicTales]
+  const resources = [concurrent, unique, gold, perAccountGold, priceIndex, serverStarts, itemGoldSources, goldSinks, leaderboard, goldLeaderboard, weaponEnchantLeaderboard, weaponEnchantFailures, armorEnchantLeaderboard, landLeaderboard, heroicTales, combatAuditTargets]
   let history = $derived(concurrent.history)
   let refreshing = $derived(resources.some((resource) => resource.refreshing))
   let anyError = $derived(resources.some((resource) => resource.error))
@@ -93,7 +96,7 @@
     <div class="update-controls">
       <div class:unavailable={anyError} class="update-status" role="status">
         <span class="status-dot"></span>
-        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}현재 접속 1분 · 그 외 1시간마다 업데이트{/if}
+        {#if anyError}연결 확인 필요{:else if anyLoading}연결 중{:else}접속·추적 대상 1분 · 그 외 1시간마다 업데이트{/if}
       </div>
       <button class="refresh-button" onclick={() => refresh()} disabled={refreshing} aria-label="월드 현황 새로고침" title="새로고침">
         <svg viewBox="0 0 24 24" fill="none" class:spinning={refreshing} aria-hidden="true"><path d="M20 11a8 8 0 1 0-2 6M20 4v7h-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
@@ -207,6 +210,8 @@
   <LeaderboardSection metric="land_plots" bind:hours={landHours} resource={landLeaderboard} />
 
   <HeroicTalesPanel resource={heroicTales} />
+
+  <CombatAuditTargetsPanel resource={combatAuditTargets} />
 
   <section class="notes-grid" aria-label="지표 안내">
     <div class="metric-note">

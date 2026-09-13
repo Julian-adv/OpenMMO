@@ -161,21 +161,26 @@ async fn combat_audit_tracks_real_overkill_death_revive_and_unanswered_kill() {
 #[tokio::test(start_paused = true)]
 async fn combat_audit_invalid_or_missing_config_does_not_stop_active_monitoring() {
     let game = make_test_game_state("audit_reload");
+    assert!(game.combat_audit_character_ids().is_empty());
     let dir = crate::test_util::unique_temp_dir("audit_reload");
     config(&dir, &[6229]);
     game.tick_combat_audit(dir.clone(), 30, false).await;
+    assert_eq!(game.combat_audit_character_ids(), vec![6229]);
     let id = tracked_player(&game, "watched", 6229, 10).await;
     std::fs::write(dir.join("combat-audit.txt"), "{").unwrap();
     tokio::time::advance(std::time::Duration::from_secs(600)).await;
     game.tick_combat_audit(dir.clone(), 30, false).await;
+    assert_eq!(game.combat_audit_character_ids(), vec![6229]);
     game.monster_attack(None, "missing", &id).await;
     std::fs::remove_file(dir.join("combat-audit.txt")).unwrap();
     tokio::time::advance(std::time::Duration::from_secs(600)).await;
     game.tick_combat_audit(dir.clone(), 30, false).await;
+    assert_eq!(game.combat_audit_character_ids(), vec![6229]);
     game.monster_attack(None, "missing", &id).await;
     config(&dir, &[]);
     tokio::time::advance(std::time::Duration::from_secs(600)).await;
     game.tick_combat_audit(dir.clone(), 30, false).await;
+    assert!(game.combat_audit_character_ids().is_empty());
     let rows = rows(&dir);
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0]["monsters"]["unknown"]["server_attempts"], 2);

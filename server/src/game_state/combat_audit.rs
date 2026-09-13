@@ -595,6 +595,18 @@ fn prune(dir: &Path, now: u64, days: u16) -> io::Result<()> {
 }
 
 impl GameState {
+    pub(crate) fn combat_audit_character_ids(&self) -> Vec<i64> {
+        let state = self.combat_audit.state.lock().expect("audit state");
+        let mut ids: Vec<_> = state
+            .config
+            .as_ref()
+            .map(|config| config.character_ids.iter().copied().collect())
+            .unwrap_or_default();
+        drop(state);
+        ids.sort_unstable();
+        ids
+    }
+
     pub async fn tick_combat_audit(&self, state_dir: PathBuf, retention_days: u16, finish: bool) {
         let reload = !finish && {
             let now = tokio::time::Instant::now();

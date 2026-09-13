@@ -1560,9 +1560,25 @@ impl AuthService {
             .unwrap_or_default())
     }
 
-    /// Id and canonical name of an existing character, matched ignoring
-    /// ASCII case (the in-memory `match_name` rule in SQL — SQLite NOCASE is
-    /// ASCII-only, like `eq_ignore_ascii_case`).
+    pub fn character_names(
+        &self,
+        character_ids: &[i64],
+    ) -> Result<HashMap<i64, String>, AuthError> {
+        if character_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let conn = self.open_connection()?;
+        let placeholders = vec!["?"; character_ids.len()].join(",");
+        let mut statement = conn.prepare(&format!(
+            "SELECT id, character_name FROM characters WHERE id IN ({placeholders})"
+        ))?;
+        let rows = statement.query_map(params_from_iter(character_ids), |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    /// Match a character name ignoring ASCII case.
     pub fn resolve_character_brief(&self, name: &str) -> Result<Option<(i64, String)>, AuthError> {
         let conn = self.open_connection()?;
         let found = conn

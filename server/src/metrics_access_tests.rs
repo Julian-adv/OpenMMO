@@ -19,6 +19,7 @@ const ENDPOINTS: &[&str] = &[
     "armor-enchant-leaderboard",
     "gold-per-account",
     "heroic-tales",
+    "combat-audit-targets",
 ];
 
 fn claims() -> Value {

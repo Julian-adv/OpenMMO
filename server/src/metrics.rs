@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tracing::warn;
 
+#[path = "metrics_combat_audit.rs"]
+mod combat_audit;
 #[path = "metrics_heroic_tales.rs"]
 mod heroic_tales;
 
@@ -478,6 +480,10 @@ fn metrics_routes(game: Arc<GameState>, auth: Arc<AuthService>) -> Router {
         )
         .route("/api/metrics/price-index", get(price_index_history))
         .route("/api/metrics/server-starts", get(server_starts))
+        .route(
+            "/api/metrics/combat-audit-targets",
+            get(combat_audit::targets),
+        )
         .with_state(MetricsState { game, auth })
 }
 
