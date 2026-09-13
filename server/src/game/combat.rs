@@ -116,10 +116,28 @@ pub fn roll_attack_with_extra_damage_roll(
     extra_damage_roll: Option<&str>,
     damage_bonus: i32,
 ) -> AttackResult {
+    roll_attack_with_accuracy(
+        attack_bonus,
+        target_guard,
+        damage_roll,
+        extra_damage_roll,
+        damage_bonus,
+        false,
+    )
+}
+
+pub fn roll_attack_with_accuracy(
+    attack_bonus: i32,
+    target_guard: i32,
+    damage_roll: &str,
+    extra_damage_roll: Option<&str>,
+    damage_bonus: i32,
+    guaranteed: bool,
+) -> AttackResult {
     let mut rng = rand::thread_rng();
 
     let (roll, roll_total) = roll_exploding_d20(&mut rng);
-    let hit = resolves_as_hit(roll_total, attack_bonus, target_guard);
+    let hit = guaranteed || resolves_as_hit(roll_total, attack_bonus, target_guard);
     let mut damage = 0;
 
     if hit {
@@ -140,6 +158,17 @@ pub fn roll_attack_with_extra_damage_roll(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn guaranteed_hit_keeps_weapon_ammo_and_bonus_damage() {
+        let ordinary = roll_attack_with_accuracy(-1000, 1000, "1d1", Some("2d1"), 9, false);
+        assert!(!ordinary.hit);
+        assert_eq!(ordinary.damage, 0);
+        let marked = roll_attack_with_accuracy(-1000, 1000, "1d1", Some("2d1"), 9, true);
+        assert!(marked.hit);
+        assert_eq!(marked.damage, 12);
+        assert!((1..=20).contains(&marked.roll));
+    }
 
     #[test]
     fn extra_damage_roll_is_added_on_hit() {

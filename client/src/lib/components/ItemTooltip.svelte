@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    armorTypeLabel,
     compareStats,
     displayName,
     getItemDef,
@@ -90,6 +91,8 @@
     {/if}
     {#if def.weaponType}
       <span>Type: {weaponTypeLabel(def.weaponType)}</span>
+    {:else if def.armorType}
+      <span>Type: {armorTypeLabel(def.armorType)}</span>
     {/if}
     {#if def.category === 'weapon' && def.dice}
       <!-- A bow's own die is a token; the round it draws carries the rest, so

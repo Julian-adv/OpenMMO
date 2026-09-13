@@ -234,6 +234,7 @@ pub(crate) use deals::band_invariant_holds;
 /// Only the tests name the id from outside; the logic lives in debuff.rs.
 #[cfg(test)]
 pub(crate) use debuff::WET_DEBUFF_ID;
+mod abilities;
 mod dungeon;
 mod estate_return;
 mod estate_storage;
@@ -348,7 +349,9 @@ pub struct GameState {
     /// `players`.
     player_ids_by_name: Arc<RwLock<HashMap<String, PlayerId>>>,
     movement_intents: Arc<RwLock<HashMap<PlayerId, player::MoveQueue>>>,
+    player_movement_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
     last_player_attacks: Arc<RwLock<HashMap<PlayerId, u64>>>,
+    last_dagger_skills: Arc<RwLock<HashMap<i64, u64>>>,
     player_spatial_cells: Arc<RwLock<SpatialIndex<PlayerId>>>,
     monsters: Arc<RwLock<monster::MonsterRegistry>>,
     /// Server-driven brains (doc/SERVER_SIDE_MONSTER_AI.md); empty while
@@ -502,6 +505,7 @@ pub struct GameState {
     open_shops: Arc<RwLock<HashMap<PlayerId, HashMap<PlayerId, u8>>>>,
     /// Live parties and pending invites (in-memory; a disconnect is a leave).
     parties: Arc<RwLock<party::Parties>>,
+    abilities: Arc<RwLock<abilities::Abilities>>,
     /// (character_id, merchant npc name) → units that character sold to
     /// that merchant, repurchasable at the recorded payout. Keyed by
     /// character (not the per-session player id) so the list survives a
@@ -685,7 +689,9 @@ impl GameState {
             players: Arc::new(RwLock::new(HashMap::new())),
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
             movement_intents: Arc::new(RwLock::new(HashMap::new())),
+            player_movement_versions: Arc::new(RwLock::new(HashMap::new())),
             last_player_attacks: Arc::new(RwLock::new(HashMap::new())),
+            last_dagger_skills: Arc::new(RwLock::new(HashMap::new())),
             player_spatial_cells: Arc::new(RwLock::new(SpatialIndex::default())),
             monsters: Arc::new(RwLock::new(monster::MonsterRegistry::default())),
             music_performances: Arc::new(RwLock::new(HashMap::new())),
@@ -764,6 +770,7 @@ impl GameState {
             dungeon_monsters: Arc::new(RwLock::new(HashMap::new())),
             open_shops: Arc::new(RwLock::new(HashMap::new())),
             parties: Arc::new(RwLock::new(party::Parties::default())),
+            abilities: Arc::new(RwLock::new(abilities::Abilities::default())),
             buybacks: Arc::new(RwLock::new(HashMap::new())),
             blocked_names: Arc::new(RwLock::new(HashMap::new())),
             friends: Arc::new(RwLock::new(friends::Friends::default())),

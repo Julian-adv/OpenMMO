@@ -27,6 +27,14 @@
   import { groundItemManager } from '../managers/groundItemManager'
   import { combatController } from '../managers/combatController'
   import {
+    consumeDaggerSkill,
+    daggerSkillState,
+    daggerSkillCasts,
+    playDaggerSkill,
+    clearDaggerCast,
+  } from '../stores/daggerSkillStore'
+  import { DAGGER_SKILL } from '../data/daggerSkill'
+  import {
     playPropSound,
     preloadFishingSounds,
     preloadBowSounds,
@@ -927,6 +935,21 @@
     handleClickToMove(goal)
   }
 
+  function sendCombatAttack(monsterId: string) {
+    const isDagger =
+      getItemDef($inventoryStore.equipped.main_hand?.item_def_id ?? '')
+        ?.weaponType === DAGGER_SKILL.weaponType
+    if (isDagger && currentPlayer && consumeDaggerSkill()) {
+      playDaggerSkill(currentPlayer.id)
+      networkManager.sendDaggerDoubleSlash(monsterId)
+    } else {
+      if (!isDagger)
+        daggerSkillState.update((state) => ({ ...state, queued: false }))
+      if (currentPlayer) clearDaggerCast(currentPlayer.id)
+      networkManager.sendPlayerAttack(monsterId)
+    }
+  }
+
   // Initiate attack on a monster
   function initiateAttack(monsterId: string) {
     cancelAutoTravel()
@@ -971,7 +994,7 @@
       lastSentPosition,
       beginCombat: (id, inRange) => combatController.beginCombat(id, inRange),
       sendPlayerMove,
-      sendPlayerAttack: (id) => networkManager.sendPlayerAttack(id),
+      sendPlayerAttack: sendCombatAttack,
     })
 
     if (result.kind === 'ignored_unattackable_target') return
@@ -1112,7 +1135,7 @@
     },
     sendAttackCycle: (monsterId: string, nextRotation: number) => {
       playerRotation = nextRotation
-      networkManager.sendPlayerAttack(monsterId)
+      sendCombatAttack(monsterId)
       // Emit the attack state directly: the projection only knows idle/moving,
       // so it reported idle between swings.
       setPlayerState(
@@ -2332,6 +2355,26 @@
     options: PlayerControlUpdateOptions
   ) {
     if (options.editorMode) cancelAutoTravel()
+    const skillState = get(daggerSkillState)
+    const hasDagger =
+      getItemDef($inventoryStore.equipped.main_hand?.item_def_id ?? '')
+        ?.weaponType === DAGGER_SKILL.weaponType
+    if (
+      options.editorMode ||
+      !currentPlayer ||
+      currentPlayer.health <= 0 ||
+      !hasDagger ||
+      currentPlayer.mounted
+    ) {
+      if (skillState.queued)
+        daggerSkillState.update((state) => ({ ...state, queued: false }))
+      if (currentPlayer && get(daggerSkillCasts).has(currentPlayer.id))
+        clearDaggerCast(currentPlayer.id)
+    }
+    if (skillState.pending && Date.now() - skillState.requestAt > 4000) {
+      daggerSkillState.update((state) => ({ ...state, pending: false }))
+      if (currentPlayer) clearDaggerCast(currentPlayer.id)
+    }
     playerControlMachine.update(deltaTime, options)
   }
 

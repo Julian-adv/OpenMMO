@@ -90,6 +90,7 @@
     getGltfAnimations,
     retargetOrderedCharacterAnimationsForModel,
     retargetAnimationsForCharacterModel,
+    groundRetargetedClips,
     selectOrderedCharacterAnimations,
   } from '../utils/characterAnimationUtils'
   import {
@@ -108,6 +109,11 @@
     getWeaponModelPath,
   } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { createDaggerComboClip } from '../utils/daggerSkillAnimation'
+  import { DaggerBladeTrail } from '../effects/dagger-blade-trail'
+  import { DAGGER_SKILL } from '../data/daggerSkill'
+  import { daggerSkillCasts } from '../stores/daggerSkillStore'
+  import { gameStore } from '../stores/gameStore'
   import { pickRandom } from '../utils/randomUtils'
   import { inventoryStore, isTorchItemDefId } from '../stores/inventoryStore'
   import { capeColorOf, getItemDef, isRangedWeapon } from '../data/itemDefs'
@@ -538,6 +544,46 @@
   )
 
   let attachedWeaponItemId: string | null = null
+  let daggerClip: THREE.AnimationClip | undefined
+  let daggerTrail: DaggerBladeTrail | undefined
+  function daggerCastAt() {
+    const id = isCurrentPlayer
+      ? get(gameStore).currentPlayer?.id
+      : remotePlayerId
+    return id === undefined ? undefined : get(daggerSkillCasts).get(id)
+  }
+  $effect(() => {
+    const root = modelRoot
+    if (
+      !root ||
+      getItemDef(equippedMainHandItemId ?? '')?.weaponType !==
+        DAGGER_SKILL.weaponType
+    )
+      return
+    let cancelled = false
+    void loadGLB(DAGGER_SKILL.pack)
+      .then(async (pack) => {
+        const clips = await groundRetargetedClips(
+          root,
+          await retargetAnimationsForCharacterModel(
+            root,
+            pack.scene,
+            pack.animations
+          )
+        )
+        const inward = clips.find((clip) => clip.name === 'dagger_inward')
+        const outward = clips.find((clip) => clip.name === 'dagger_outward')
+        if (cancelled || !inward || !outward) return
+        daggerClip = createDaggerComboClip(inward, outward)
+        daggerTrail ??= new DaggerBladeTrail()
+        root.add(daggerTrail.group)
+        lastAnimKey = undefined
+      })
+      .catch((error) => console.error('Failed to load Double Slash', error))
+    return () => {
+      cancelled = true
+    }
+  })
   const weaponAnimationProfile = $derived(
     getWeaponAnimation(equippedMainHandItemId)
   )
@@ -947,8 +993,19 @@
   }
 
   function playAnimationForState() {
-    // Check if mixer and animations are available
     if (!mixer || validAnimations.length === 0) return
+    if (
+      playerState === 'idle' &&
+      daggerClip &&
+      currentAction?.getClip() === daggerClip &&
+      currentAction.time < daggerClip.duration - 0.001 &&
+      daggerCastAt() !== undefined &&
+      health > 0 &&
+      !riding &&
+      getItemDef(equippedMainHandItemId ?? '')?.weaponType ===
+        DAGGER_SKILL.weaponType
+    )
+      return
 
     // Hide weapons during interact animations — except fishing, where the
     // held rod IS the point of the stance.
@@ -1010,6 +1067,11 @@
         validAnimations[selectMovementAnimation(movementMode)]
     } else if (playerState === 'attack') {
       clip =
+        (daggerCastAt() !== undefined &&
+        getItemDef(equippedMainHandItemId ?? '')?.weaponType ===
+          DAGGER_SKILL.weaponType
+          ? daggerClip
+          : undefined) ??
         weaponClip ??
         (isRangedWeapon(equippedMainHandItemId)
           ? rangedClips.get(RangedAnimationName.SHOOT)
@@ -1082,6 +1144,12 @@
       if (armorEnchant) armorEnchantAction = currentAction
       else enchantAction = currentAction
     }
+    if (clip === daggerClip && currentAction) {
+      currentAction.time = Math.min(
+        clip.duration,
+        Math.max(0, (Date.now() - (daggerCastAt() ?? Date.now())) / 1000)
+      )
+    }
   }
 
   function startAction(clip: THREE.AnimationClip, playOnce: boolean) {
@@ -1093,7 +1161,11 @@
     newAction.paused = false
 
     if (currentAction && newAction !== currentAction) {
-      newAction.crossFadeFrom(currentAction, 0.3, false)
+      newAction.crossFadeFrom(
+        currentAction,
+        clip === daggerClip ? 0.065 : 0.3,
+        false
+      )
     }
 
     newAction.play()
@@ -1302,6 +1374,8 @@
 
     // Cleanup on unmount
     return () => {
+      daggerTrail?.dispose()
+      daggerTrail = undefined
       if (mixer) {
         mixer.stopAllAction()
         mixer = null
@@ -1327,6 +1401,10 @@
 
   export function getModelGroup() {
     return modelGroup
+  }
+
+  export function getShieldAnchor(target: THREE.Vector3) {
+    return effectAnchors?.getWorldPosition(true, 'LeftHand', target) ?? false
   }
 
   export function getEnchantAnchor(
@@ -1372,6 +1450,18 @@
     enchantGrip?.update(0)
     riderMotion?.restore()
     updatePose(deltaTime)
+    if (
+      daggerTrail &&
+      modelRoot &&
+      weaponObject &&
+      (playerState === 'attack' || playerState === 'idle') &&
+      currentAction &&
+      currentAction.getClip() === daggerClip &&
+      !riding
+    ) {
+      modelRoot.updateWorldMatrix(true, true)
+      daggerTrail.update(weaponObject, modelRoot, currentAction.time)
+    } else daggerTrail?.clear()
     if (riding && horseMount) {
       riderMotion?.apply(
         horseMount.riderHipLift,
@@ -1489,6 +1579,15 @@
       if (clip && clip.duration > 0) {
         // Calculate remaining time (without modulo)
         const remainingTime = clip.duration - currentAction.time
+        if (clip === daggerClip && remainingTime <= 0.001) {
+          if (playerState === 'idle') {
+            playAnimationForState()
+            return
+          } else if (playerState === 'attack' && combatIdleClipLoaded) {
+            startAction(validAnimations[AnimationIndex.COMBAT_IDLE], false)
+            return
+          }
+        }
 
         // Trigger next animation once when conditions are met (0.3 seconds remaining)
         if (
@@ -1602,7 +1701,7 @@
             : playerState === 'moving'
               ? `moving:${movementMode}`
               : playerState === 'attack'
-                ? `attack:${attackCounter}`
+                ? `attack:${attackCounter}:${daggerCastAt() ?? ''}`
                 : activeArmorEnchant()
                   ? 'enchant-armor'
                   : activeEnchantClip()

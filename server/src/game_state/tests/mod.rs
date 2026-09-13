@@ -13,6 +13,7 @@ use onlinerpg_shared::messages::DealKind;
 use tokio::sync::broadcast::error::TryRecvError;
 use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
+mod ability_tests;
 mod ambient_spawn_tests;
 mod cape_dye_tests;
 mod cape_texture_tests;
@@ -117,6 +118,7 @@ pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
         gender: Gender::default(),
         is_official_npc: false,
         torch_on: false,
+        radiance_on: false,
         wet: false,
         title: None,
         floor_level: 0,

@@ -242,3 +242,18 @@ Both were generated and processed exactly like the monster cries above.
   길이를 맞추려고 `atempo`로 늘여 봤지만
   0.55배는 시간축을 뭉개서 음이 둔해진다. 소리를 늘이지 말고 시작을 미룰 것.
   `sfxManager.ts`의 `BOW_SOUNDS`가 참조한다: draw는 스윙 시작, release는 화살이 떠나는 프레임.
+
+## Abilities
+
+- guardian-ward.ogg — Guardian Ward 방패 버프 발동음. 사용자가 제공한
+  `Heavy_shield_buff_ca_#4-1789246371152.mp3`를 사용한다. 출처·생성일·요금제는
+  사용자 확인: ElevenLabs Sound Effects, Starter, 2026-09-13.
+  라이선스는 생성 당시 ElevenLabs Starter 플랜의 생성물 이용 약관을 따른다.
+  원본은 사용자 PC의 Downloads에 보관한다.
+- 원본 48 kHz 스테레오 MP3의 전체 1.00초를 유지하고 모노 44.1 kHz, OGG Vorbis q5로 변환했다.
+  마지막 80 ms를 페이드아웃했다. float PCM 기준 디코딩 피크가 +3.674 dB여서,
+  정수 PCM으로 잘리기 전에 −6.674 dB를 적용해 약 −3 dB 피크로 정규화했다.
+- `sfxManager.ts`의 공용 오디오 풀·SFX 볼륨·음소거를 사용한다.
+  서버 `AbilityUsed` 이벤트로 게임 VFX가 시작될 때 시전당 한 번 재생한다.
+  같은 층에서 시전자 20 m 이내의 클라이언트가 듣는다. 파티원 수만큼 중복 재생하지 않으며,
+  장착 조건·쿨타임으로 거절된 사용 요청이나 버프 타이머 갱신만으로 재생하지 않는다.

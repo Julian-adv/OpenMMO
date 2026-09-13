@@ -6,6 +6,7 @@ import type { HoverTarget } from '../managers/inputHandler'
 import { resetInventoryStore } from './inventoryStore'
 import { resetLandClaimPreview } from './landClaimStore'
 import { resetSkillsStore } from './skillsStore'
+import { resetDaggerSkill } from './daggerSkillStore'
 import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
 import { clearArrows } from './arrowStore'
@@ -13,6 +14,7 @@ import { resetFishingStore } from './fishingStore'
 import { resetDiscoveredDungeons } from './dungeonStore'
 import { resetHungerStore } from './hungerStore'
 import { resetDebuffStore } from './debuffStore'
+import { resetAbilities } from './abilityStore'
 import { resetHousingStore } from './housingStore'
 import { resetInstrumentStore } from './instrumentStore'
 import { stopAllInstrumentAudio } from '../managers/instrumentAudio'
@@ -45,6 +47,7 @@ interface PlayerBase {
   gender: Gender
   mounted?: boolean
   torchOn?: boolean
+  radianceOn?: boolean
   /** Soaked, so nearby clients draw wet footprints (doc/DEBUFF.md). */
   wet?: boolean
   /** Shown title id (doc/TITLES.md). */
@@ -162,6 +165,7 @@ export const isAdminUser = writable(false)
 export const serverNotice = writable<string | null>(null)
 
 export const resetGameStore = () => {
+  resetDaggerSkill()
   resetLandClaimPreview()
   gameStore.set({
     ...initialGameState,
@@ -179,6 +183,7 @@ export const resetGameStore = () => {
   resetDiscoveredDungeons()
   resetHungerStore()
   resetDebuffStore()
+  resetAbilities()
   resetHousingStore()
   resetInstrumentStore()
   stopAllInstrumentAudio()

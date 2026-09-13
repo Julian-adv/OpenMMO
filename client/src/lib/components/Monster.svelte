@@ -573,6 +573,13 @@
     return group
   }
 
+  export function getMarkAnchor(target: THREE.Vector3) {
+    if (!group) return false
+    group.getWorldPosition(target)
+    target.y += nametagHeight + 0.15
+    return true
+  }
+
   export function getNametagGroup() {
     return nametagGroup
   }

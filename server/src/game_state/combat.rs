@@ -54,6 +54,12 @@ fn anim_delay_ms(id: &str) -> u64 {
         .unwrap_or_else(|| panic!("{id}.delayMs is a number"))
 }
 
+fn dagger_cooldown_remaining(last: Option<&u64>, now: u64) -> u64 {
+    last.map_or(0, |last| {
+        anim_delay_ms("dagger_skill_cooldown").saturating_sub(now.saturating_sub(*last))
+    })
+}
+
 // How long into the swing the blade lands.
 pub(super) static PLAYER_ATTACK_IMPACT_DELAY: LazyLock<Duration> =
     LazyLock::new(|| Duration::from_millis(anim_delay_ms("player_attack_impact")));
@@ -100,7 +106,7 @@ pub(super) fn reachable_dist_sq(a: Position, a_floor: i8, b: Position, b_floor: 
 }
 
 /// Attack collision against a wire floor level.
-fn wall_between(
+pub(super) fn wall_between(
     cache: &onlinerpg_shared::pathfinding::PassabilityCache,
     from: Position,
     to: Position,
@@ -151,6 +157,7 @@ struct PlayerAttackContext {
 /// The wielded main-hand weapon as combat reads it. Resolved once per request,
 /// under the one `inventories` read the range gate already needs.
 struct EquippedWeapon {
+    dagger_instance: Option<u64>,
     /// Unarmed falls back to D&D 5e improvised 1d2.
     dice: String,
     /// An enchanted weapon (+N) adds its enchant to attack and damage rolls.
@@ -175,6 +182,7 @@ struct LoadedAmmo {
 impl Default for EquippedWeapon {
     fn default() -> Self {
         Self {
+            dagger_instance: None,
             dice: "1d2".to_string(),
             enchant: 0,
             range: None,
@@ -315,8 +323,14 @@ impl super::GameState {
                 )
             })
             .unwrap_or((0, 0));
+        drop(inventories);
+        let guard = self
+            .abilities
+            .read()
+            .await
+            .guard(player_id, guard + guard_bonus);
         EffectiveStats {
-            guard: guard + guard_bonus,
+            guard,
             cha: cha + cha_bonus,
         }
     }
@@ -337,6 +351,9 @@ impl super::GameState {
             .and_then(|item| {
                 self.item_defs.get(&item.item_def_id).and_then(|def| {
                     def.damage_dice().map(|dice| EquippedWeapon {
+                        dagger_instance: (def.weapon_type
+                            == Some(crate::item_defs::WeaponType::Dagger))
+                        .then_some(item.instance_id),
                         dice: dice.to_string(),
                         enchant: item.enchant,
                         range: def.weapon_range(),
@@ -574,18 +591,7 @@ impl super::GameState {
         auth: Option<&crate::auth::AuthService>,
     ) {
         let audit = self.combat_audit.player_attack(*player_id, &monster_id);
-        let PlayerAttackContext {
-            monster_type,
-            monster_position,
-            monster_floor_level,
-            monster_level_override,
-            monster_owner_id,
-            player_name,
-            player_level,
-            from_range,
-            weapon,
-            ammo,
-        } = match self.validate_player_attack(player_id, &monster_id).await {
+        let context = match self.validate_player_attack(player_id, &monster_id).await {
             Ok(ctx) => ctx,
             Err((reason, detail)) => {
                 warn!(
@@ -615,6 +621,213 @@ impl super::GameState {
         if !accepted {
             return;
         }
+        self.resolve_player_attack(player_id, monster_id, context, auth, None)
+            .await;
+    }
+
+    pub(super) async fn dagger_skill_cooldown_ms(&self, character_id: i64) -> u64 {
+        let cooldowns = self.last_dagger_skills.read().await;
+        dagger_cooldown_remaining(cooldowns.get(&character_id), Self::now_ms())
+    }
+
+    async fn reject_dagger_skill(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        reason: &str,
+        cooldown_ms: u64,
+    ) {
+        self.send_direct_message(
+            player_id,
+            ServerMessage::DaggerDoubleSlashRejected {
+                monster_id,
+                reason: reason.to_string(),
+                cooldown_ms,
+            },
+        )
+        .await;
+    }
+
+    pub async fn dagger_double_slash(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        auth: Option<&crate::auth::AuthService>,
+    ) {
+        let character_id = self
+            .player_characters
+            .read()
+            .await
+            .get(player_id)
+            .map(|entry| entry.0);
+        let Some(character_id) = character_id else {
+            self.reject_dagger_skill(player_id, monster_id, "not_in_game", 0)
+                .await;
+            return;
+        };
+        let context = match self.validate_player_attack(player_id, &monster_id).await {
+            Ok(context) => context,
+            Err((reason, _)) => {
+                self.reject_dagger_skill(player_id, monster_id, &reason.to_string(), 0)
+                    .await;
+                return;
+            }
+        };
+        let Some(weapon_instance) = context.weapon.dagger_instance else {
+            self.reject_dagger_skill(player_id, monster_id, "dagger_required", 0)
+                .await;
+            return;
+        };
+        let origin = self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .filter(|p| !p.mounted && p.object_type.is_none())
+            .map(|p| (p.position, p.floor_level));
+        let Some((origin, floor)) = origin else {
+            self.reject_dagger_skill(player_id, monster_id, "busy", 0)
+                .await;
+            return;
+        };
+        let movement_version = self
+            .player_movement_versions
+            .read()
+            .await
+            .get(player_id)
+            .copied()
+            .unwrap_or(0);
+        let mut cooldowns = self.last_dagger_skills.write().await;
+        let now = Self::now_ms();
+        let cooldown_ms = anim_delay_ms("dagger_skill_cooldown");
+        let remaining = dagger_cooldown_remaining(cooldowns.get(&character_id), now);
+        if remaining > 0 {
+            drop(cooldowns);
+            self.reject_dagger_skill(player_id, monster_id, "cooldown", remaining)
+                .await;
+            return;
+        }
+        if !self.claim_player_attack_window(player_id).await.accepted {
+            drop(cooldowns);
+            self.reject_dagger_skill(player_id, monster_id, "attack_cooldown", 0)
+                .await;
+            return;
+        }
+        cooldowns.insert(character_id, now);
+        drop(cooldowns);
+        self.cancel_concentration_if_active(player_id).await;
+        self.send_direct_message_to_players_within_position(
+            &origin,
+            floor,
+            super::EVENT_DELIVERY_RADIUS,
+            ServerMessage::DaggerDoubleSlashStarted {
+                player_id: *player_id,
+                monster_id: monster_id.clone(),
+                cooldown_ms,
+            },
+            None,
+        )
+        .await;
+
+        let started = tokio::time::Instant::now();
+        let mut interrupted = false;
+        for (index, impact) in ["dagger_skill_first_hit", "dagger_skill_second_hit"]
+            .into_iter()
+            .enumerate()
+        {
+            let strike = index as u8 + 1;
+            tokio::time::sleep_until(started + Duration::from_millis(anim_delay_ms(impact))).await;
+            if self
+                .player_characters
+                .read()
+                .await
+                .get(player_id)
+                .map(|entry| entry.0)
+                != Some(character_id)
+            {
+                break;
+            }
+            let ready = self.players.read().await.get(player_id).is_some_and(|p| {
+                p.health > 0 && !p.mounted && p.object_type.is_none() && p.floor_level == floor
+            });
+            let moved = self
+                .player_movement_versions
+                .read()
+                .await
+                .get(player_id)
+                .copied()
+                .unwrap_or(0)
+                != movement_version;
+            interrupted |= !ready || moved;
+            let target_dead = self
+                .monsters
+                .read()
+                .await
+                .get(&monster_id)
+                .is_some_and(|m| m.state == MonsterState::Dead);
+            let skip = if interrupted {
+                Some("interrupted")
+            } else if self.equipped_weapon(player_id).await.dagger_instance != Some(weapon_instance)
+            {
+                interrupted = true;
+                Some("weapon_changed")
+            } else if target_dead {
+                Some("target_defeated")
+            } else {
+                match self.validate_player_attack(player_id, &monster_id).await {
+                    Ok(context) if context.weapon.dagger_instance == Some(weapon_instance) => {
+                        self.resolve_player_attack(
+                            player_id,
+                            monster_id.clone(),
+                            context,
+                            auth,
+                            Some(strike),
+                        )
+                        .await;
+                        None
+                    }
+                    Err((AttackRejectReason::OutOfRange, _)) => Some("out_of_range"),
+                    _ => Some("invalid_target"),
+                }
+            };
+            if let Some(reason) = skip {
+                self.send_direct_message_to_players_within_position(
+                    &origin,
+                    floor,
+                    super::EVENT_DELIVERY_RADIUS,
+                    ServerMessage::DaggerDoubleSlashSkipped {
+                        player_id: *player_id,
+                        monster_id: monster_id.clone(),
+                        strike,
+                        reason: reason.into(),
+                    },
+                    None,
+                )
+                .await;
+            }
+        }
+    }
+
+    async fn resolve_player_attack(
+        &self,
+        player_id: &PlayerId,
+        monster_id: String,
+        context: PlayerAttackContext,
+        auth: Option<&crate::auth::AuthService>,
+        dagger_strike: Option<u8>,
+    ) {
+        let PlayerAttackContext {
+            monster_type,
+            monster_position,
+            monster_floor_level,
+            monster_level_override,
+            monster_owner_id,
+            player_name,
+            player_level,
+            from_range,
+            weapon,
+            ammo,
+        } = context;
         // Spent once the swing is committed, so a shot refused by any gate
         // above — or one thrown inside the cooldown — costs nothing.
         if let Some(round) = &ammo {
@@ -641,6 +854,11 @@ impl super::GameState {
         };
 
         let hit_mod = self.hunger_hit_mod(player_id).await;
+        let guaranteed = self
+            .abilities
+            .read()
+            .await
+            .marks_target(player_id, &monster_id);
 
         let (result_hit, result_roll, result_damage) = {
             let def = self.monster_defs.get(&monster_type);
@@ -650,12 +868,13 @@ impl super::GameState {
             // The round rolls its own die on top of the weapon's, as a
             // monster's wielded weapon does on top of its own damage. The bow
             // is deliberately a token 1d1: the arrow is what decides the hurt.
-            let result = combat::roll_attack_with_extra_damage_roll(
+            let result = combat::roll_attack_with_accuracy(
                 attack_bonus,
                 target_guard,
                 &weapon.dice,
                 ammo.as_ref().map(|round| round.dice.as_str()),
                 ability_mod + weapon.enchant,
+                guaranteed,
             );
             (result.hit, result.roll, result.damage)
         };
@@ -685,6 +904,7 @@ impl super::GameState {
                 roll: result_roll,
                 damage: result_damage,
                 ammo_item_def_id: ammo.map(|round| round.item_def_id),
+                dagger_strike,
             },
             None,
         )
@@ -821,7 +1041,9 @@ impl super::GameState {
                     corpse_position,
                     monster_floor_level,
                     effective_level,
-                    if weapon.ability.is_some() {
+                    if dagger_strike.is_some() {
+                        Duration::ZERO
+                    } else if weapon.ability.is_some() {
                         *PLAYER_RANGED_IMPACT_DELAY
                     } else {
                         *PLAYER_ATTACK_IMPACT_DELAY
@@ -1367,6 +1589,7 @@ impl super::GameState {
         self.cancel_concentration_if_active(player_id).await;
         self.cancel_food_regeneration(player_id).await;
         self.clear_debuffs(player_id).await;
+        self.clear_buffs(player_id).await;
         self.drop_player_trade(player_id, "They were defeated.")
             .await;
         self.apply_player_death_penalty(player_id).await;

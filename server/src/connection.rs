@@ -1288,6 +1288,8 @@ async fn handle_client_message(
             }
 
             responses.push(game_state.effective_stats(&id).await.into());
+            responses.push(game_state.ability_cooldown_message(&id).await);
+            responses.push(ServerMessage::BuffUpdate { buffs: vec![] });
 
             responses.push(ServerMessage::GoldUpdate {
                 gold: selected_character.gold,
@@ -1447,6 +1449,16 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::UseAbility {
+            ability,
+            monster_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .use_targeted_ability(id, ability, monster_id.as_deref())
+                    .await;
+            }
+        }
         ClientMessage::PlayerAttack { monster_id } => {
             if let Some(id) = &state.player_id {
                 game_state
@@ -1454,6 +1466,16 @@ async fn handle_client_message(
                     .await;
             } else {
                 warn!("Received attack from client that is not in game");
+            }
+        }
+
+        ClientMessage::DaggerDoubleSlash { monster_id } => {
+            if let Some(id) = state.player_id {
+                let game = Arc::clone(game_state);
+                let auth = Arc::clone(auth_service);
+                tokio::spawn(async move {
+                    game.dagger_double_slash(&id, monster_id, Some(&auth)).await;
+                });
             }
         }
 

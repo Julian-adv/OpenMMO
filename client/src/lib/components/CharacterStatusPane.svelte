@@ -1,5 +1,7 @@
 <script lang="ts">
   import { hungerState, grilling } from '../stores/hungerStore'
+  import { visibleAbilityBuffs } from '../stores/abilityStore'
+  import { formatRemaining } from '../data/debuffPresentation'
   import { visibleDebuffs } from '../stores/debuffStore'
   import {
     HUNGER_BAND_INFO,
@@ -94,7 +96,24 @@
   <div class="status-empty">Status unavailable</div>
 {/if}
 
+{#each $visibleAbilityBuffs as buff (buff.id)}
+  <section class="effect-card buff-card" aria-label="{buff.name} buff">
+    <img src={buff.icon} alt="" width="32" height="32" />
+    <div>
+      <strong>{buff.name}</strong><small
+        >{buff.buffDescription} · {formatRemaining(buff.remaining)} remaining</small
+      >
+    </div>
+  </section>
+{/each}
+
 <style>
+  .buff-card {
+    margin-top: 10px;
+    font-family: system-ui, sans-serif;
+    border: 1px solid #e9d8a966;
+    color: #f3e4b9;
+  }
   .status-content {
     display: flex;
     flex-direction: column;

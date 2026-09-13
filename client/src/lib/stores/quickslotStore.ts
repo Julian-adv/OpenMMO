@@ -7,10 +7,12 @@ export const QUICKSLOT_COUNT = 10
 
 /** A binding is def + enchant level, never an instance id (reissued each
  *  login). `enchant: null` = any level (entries saved before levels existed). */
-export type QuickslotEntry = {
+export type QuickslotItemEntry = {
   defId: string
   enchant: number | null
 }
+
+export type QuickslotEntry = QuickslotItemEntry | { skill: string }
 
 /** Quickslot assignments; `null` means the slot is empty. */
 export const quickslots = writable<(QuickslotEntry | null)[]>(
@@ -52,7 +54,7 @@ export type ResolvedQuickslot = {
 /** A worn copy of the bound def always toggles off at its own level (enchant
  *  scrolls raise it in place); the bound level only picks which bag copy to equip. */
 export function resolveQuickslot(
-  entry: QuickslotEntry,
+  entry: QuickslotItemEntry,
   def: QuickslotDef,
   equipped: Partial<Record<EquipSlot, CarriedItem>>,
   bag: CarriedItem[]
@@ -109,7 +111,11 @@ function persist(slots: (QuickslotEntry | null)[]) {
 function parseEntry(raw: unknown): QuickslotEntry | null {
   if (typeof raw === 'string') return { defId: raw, enchant: null }
   if (typeof raw === 'object' && raw !== null) {
-    const { defId, enchant } = raw as QuickslotEntry
+    if ('skill' in raw)
+      return typeof raw.skill === 'string' && raw.skill.length > 0
+        ? { skill: raw.skill }
+        : null
+    const { defId, enchant } = raw as QuickslotItemEntry
     if (
       typeof defId === 'string' &&
       (typeof enchant === 'number' || enchant === null)
@@ -139,9 +145,11 @@ export function assignQuickslot(index: number, entry: QuickslotEntry) {
   if (index < 0 || index >= QUICKSLOT_COUNT) return
   quickslots.update((slots) => {
     const next = [...slots]
-    // One binding per item type; re-dragging a def moves it.
+    const key = (binding: QuickslotEntry) =>
+      'skill' in binding ? `skill:${binding.skill}` : `item:${binding.defId}`
     for (let i = 0; i < next.length; i++) {
-      if (next[i]?.defId === entry.defId) next[i] = null
+      const binding = next[i]
+      if (binding && key(binding) === key(entry)) next[i] = null
     }
     next[index] = entry
     persist(next)

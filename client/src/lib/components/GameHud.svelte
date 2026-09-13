@@ -14,6 +14,7 @@
   import EstateStorageWindow from './EstateStorageWindow.svelte'
   import QuickslotBar from './QuickslotBar.svelte'
   import HungerIndicator from './HungerIndicator.svelte'
+  import BuffIndicator from './BuffIndicator.svelte'
   import LevelBadge from './LevelBadge.svelte'
   import TradeWindow from './TradeWindow.svelte'
   import FishingPrompt from './FishingPrompt.svelte'
@@ -168,7 +169,10 @@
           maxHp={playerMaxHp}
           str={selectedCharacter.attributes.str}
         />
-        <HungerIndicator />
+        <div class="status-indicators">
+          <HungerIndicator />
+          <BuffIndicator />
+        </div>
       </div>
     {/if}
     <FPSCounter />
@@ -525,6 +529,15 @@
     display: flex;
     align-items: flex-start;
     gap: 6px;
+    pointer-events: none;
+  }
+
+  .status-indicators {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+    max-width: min(360px, calc(100vw - 90px));
     pointer-events: none;
   }
 

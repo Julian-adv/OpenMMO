@@ -98,6 +98,7 @@ pub(crate) fn test_player(x: f32, z: f32) -> Player {
         gender: Default::default(),
         is_official_npc: false,
         torch_on: false,
+        radiance_on: false,
         floor_level: 0,
         object_type: None,
         main_hand: None,

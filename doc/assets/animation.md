@@ -1,5 +1,41 @@
 # Animation Assets
 
+## Dagger Double Slash (2026-09-13)
+
+- Source: Adobe [Mixamo](https://www.mixamo.com/), confirmed by the contributor
+  on 2026-09-13 for `Stable Sword Inward Slash.fbx` and
+  `Stable Sword Outward Slash.fbx`. Originals are preserved in
+  `assets/dagger/animations/`; both contain a `mixamo.com` action and a 67-bone rig.
+  License: Adobe/Mixamo terms. Adobe's [Mixamo FAQ](https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html)
+  permits royalty-free use in personal, commercial, and nonprofit game projects.
+  Mixamo is free; no AI generation. The original download date was not recorded.
+- Derived pack: `client/public/models/animations/dagger_preview.glb`,
+  containing `dagger_inward` (53/24 seconds) and `dagger_outward` (49/24 seconds).
+  Built with `tools/blender-scripts/build_dagger_preview.py -- --source assets/dagger/animations`
+  through Blender, using the existing combat armature. Horizontal root motion is
+  removed; the existing animation packs and source blend are unchanged.
+- Runtime: `PlayerModel.svelte` loads this separate pack for dagger weapons,
+  retargets and grounds it for the active character, and builds the combined
+  `dagger_double_slash` clip with `daggerSkillAnimation.ts`.
+  Preview: `client/dagger-skill-preview.html` uses that same combined clip.
+  Inward frames 22–36 and outward
+  frames 16–29 (zero-based, 24 fps) are timed and blended into 0.82 seconds.
+  Server strike times are 0.190s and 0.425s, shared through
+  `data-src/player_anim_timing.csv`. The standalone preview emits no damage.
+- Character and weapon reuse the existing rogue and dagger assets. Both VFX
+  variants are procedural Three.js geometry/shaders authored in this repository
+  on 2026-09-13; no external texture or generated bitmap is used. They follow
+  the sampled blade path with different widths, lifetimes, and particles.
+  Selected variant A is implemented in-game by `dagger-blade-trail.ts`, using
+  a thin teal trail sampled from the equipped blade and a WebGPU-compatible
+  additive material. Variant B remains only in the comparison preview.
+- Distribution: the two FBXs and derived GLB are submitted through
+  [asset contribution PR #11](https://huggingface.co/datasets/jake-song-openmmo/onlinerpg-assets/discussions/11).
+  `assets.lock` pins the publicly downloadable contribution commit
+  `fb7731cf0899275486471696c55ea011d2641e2d`; all three downloads were verified
+  against their SHA-256 hashes. Dataset-owner review and merge are pending.
+  Rebuild the pack from the preserved FBX files when needed.
+
 - 애니메이션 파이프라인/매핑 규칙 문서: [ANIMATION.md](../ANIMATION.md)
 - 말의 애니메이션 출처·분할 구간: [Horse](animals.md#애니메이션-분할) (Sketchfab, CC BY 4.0).
 

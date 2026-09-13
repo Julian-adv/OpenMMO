@@ -1,6 +1,10 @@
 id,delayMs,comment
 player_attack_impact,540,slash1 blade lands - hit/miss sfx and monster flinch
 player_attack_interval,1380,slash1 cadence with server-arrival jitter allowance
+dagger_skill_first_hit,190,dagger double slash first strike
+dagger_skill_second_hit,425,dagger double slash second strike
+dagger_skill_duration,820,dagger double slash animation duration
+dagger_skill_cooldown,10000,dagger double slash cooldown from cast start
 player_attack_damage_text,750,damage number pops after a slash1 hit
 player_ranged_impact,780,bow_shoot arrow leaves - the bow arm starts its recoil at 0.767-0.800s
 player_ranged_flight,333,arrow flight at the bow's full 10m range - the server's fixed allowance before loot falls

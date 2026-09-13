@@ -1019,6 +1019,10 @@ impl super::GameState {
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
         self.movement_intents.write().await.remove(player_id);
+        self.player_movement_versions
+            .write()
+            .await
+            .remove(player_id);
         self.music_performances.write().await.remove(player_id);
         self.remove_live_instrument(player_id).await;
         self.remove_player_stall(player_id).await;
@@ -1079,6 +1083,7 @@ impl super::GameState {
         // players lock, so an in-flight accept lands before this sweep and
         // gets cleaned up instead of leaving a ghost member.
         self.clear_party_for_player(player_id).await;
+        self.clear_buffs(player_id).await;
 
         if let Some(player) = removed_player {
             self.remove_player_spatial_cell(player_id, &player.position)
@@ -1284,6 +1289,11 @@ impl super::GameState {
             check_collision: !is_official_npc,
             sprinting,
         });
+        {
+            let mut versions = self.player_movement_versions.write().await;
+            let version = versions.entry(*player_id).or_default();
+            *version = version.wrapping_add(1);
+        }
         drop(queues);
         if dropped.is_none() {
             return;

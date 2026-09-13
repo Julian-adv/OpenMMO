@@ -2,6 +2,12 @@
 
 NetHack/D&D 스타일의 스탯 기반 전투 시스템. 모든 전투 계산은 서버에서 처리한다.
 
+## 단검 스킬: Double Slash
+
+다음 기본 공격을 두 번의 독립적인 타격으로 대체한다. 장착 조건, 피해·애니메이션 타이밍과
+타격 취소 규칙은 [Double Slash](abilities/DOUBLE_SLASH.md)에 정리한다. 다른 어빌리티는
+[어빌리티 문서 목록](abilities/README.md)을 참고한다.
+
 ## 캐릭터 스탯 (Attributes)
 
 6개의 기본 능력치. 범위는 3~18.

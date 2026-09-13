@@ -5,7 +5,6 @@ import { PLAYER_ATTACK_RANGE_METERS } from './combatTiming'
 export const WEAPON_TYPE_LABELS = {
   sword: 'Sword',
   great_sword: 'Great Sword',
-  short_sword: 'Short Sword',
   dagger: 'Dagger',
   axe: 'Axe',
   staff: 'Staff',
@@ -18,6 +17,12 @@ export const WEAPON_TYPE_LABELS = {
 } as const
 
 export type WeaponType = keyof typeof WEAPON_TYPE_LABELS
+
+export const ARMOR_TYPE_LABELS = {
+  shield: 'Shield',
+} as const
+
+export type ArmorType = keyof typeof ARMOR_TYPE_LABELS
 
 export type AuthenticatedUseAction =
   | 'estate_storage'
@@ -38,6 +43,7 @@ export interface ItemDefinition {
   /** Item kind that decides how `dice` is read: "weapon" → damage, "consumable" → healing. */
   category?: string
   weaponType?: WeaponType
+  armorType?: ArmorType
   /** Dice notation (e.g. "1d8", "6d4") whose meaning depends on `category`. */
   dice?: string
   material?: string
@@ -81,6 +87,10 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
 
 export function weaponTypeLabel(weaponType: WeaponType): string {
   return WEAPON_TYPE_LABELS[weaponType]
+}
+
+export function armorTypeLabel(armorType: ArmorType): string {
+  return ARMOR_TYPE_LABELS[armorType]
 }
 
 /** Cloth colour to render the cape in, or undefined when the back-slot item

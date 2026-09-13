@@ -8,6 +8,7 @@ import {
 } from '../data/materialImpactSounds'
 import monsterDefs from '../data/monsterDefs'
 import type { Gender } from '../network/networkTypes'
+import type { AbilityId } from '../data/abilities'
 
 const MONSTER_DEATH_VOLUME = 0.5
 const MONSTER_DEATH_POOL_SIZE = 3
@@ -66,6 +67,14 @@ const DUNGEON_SOUNDS = {
   reset: { url: '/sounds/dungeon-roar.ogg', volume: 0.5, pool: 1 },
 } as const
 export type DungeonSound = keyof typeof DUNGEON_SOUNDS
+
+const ABILITY_SOUNDS: Partial<Record<AbilityId, SoundSpec>> = {
+  guardian_ward: {
+    url: '/sounds/guardian-ward.ogg',
+    volume: 0.55,
+    pool: 3,
+  },
+}
 
 const STORAGE_KEY_VOLUME = 'onlinerpg_sfxVolume'
 const STORAGE_KEY_MUTED = 'onlinerpg_sfxMuted'
@@ -278,6 +287,15 @@ export function preloadDungeonSounds() {
 
 export function playDungeonSound(kind: DungeonSound) {
   playSound(DUNGEON_SOUNDS[kind])
+}
+
+export function preloadAbilitySounds() {
+  preloadSounds(ABILITY_SOUNDS)
+}
+
+export function playAbilitySound(ability: AbilityId) {
+  const sound = ABILITY_SOUNDS[ability]
+  if (sound) playSound(sound)
 }
 
 export function preloadBowSounds() {
