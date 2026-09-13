@@ -1,7 +1,7 @@
 # Bow target mark VFX preview
 
 - Page: `/bow-mark-preview.html` on the local client development server.
-- Scope: standalone presentation; gameplay uses the same VFX class. See [True Aim](../TRUE_AIM.md) for the implemented ability.
+- Scope: standalone presentation; gameplay uses the same VFX class. See [True Aim](../abilities/TRUE_AIM.md) for the implemented ability.
 - Requested concept: Bow-only ability that marks a chosen target for 5 seconds with a 10-second cooldown; only the caster's attacks against that target are guaranteed to hit. Party members and other attackers receive no benefit. The mark VFX is visible only to the caster. Costs and acquisition remain undecided for gameplay implementation.
 - Default color: pale red (`#ed9984`), selected by the user. The preview applies this palette on initial load as well as on selection changes.
 - Four fine arc segments and cardinal sight ticks converge above the target's head in 0.42 seconds. A brief local glow acknowledges the lock; the center diamond and reticle then remain gently lit. No expanding area wave, projectile, damage flash, or attack demonstration.

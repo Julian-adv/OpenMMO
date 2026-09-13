@@ -32,8 +32,8 @@ Sword 또는 Mace를 주무기로, Shield를 보조 손에 장착하면 사용�
 - 옅은 금빛의 방패 문양이 시전자와 적용 대상 앞에 동시에 나타난다. 확산 파동과 거리별 도착 지연은 없다.
 - 1초 효과음의 시작 타격에 맞춰 즉시 나타나고, 약 0.14–0.15초에 작은 두 번째 크기 변화와 중심 섬광을 사용한다. 0.35초부터 잦아들어 1초에 사라진다. 방사형 빛 조각이나 머리 위로 이동하는 문양은 없다.
 - 발동 연출은 1초, 실제 버프는 60초다. 시전자는 이동할 수 있으며 대상 문양은 보이는 캐릭터를 따라간다. 기존 동작 애니메이션을 유지한다.
-- 프리뷰와 게임에서 같은 `SwordGuardEffect`를 사용한다. VFX 출처: [sword-guard-preview.md](assets/sword-guard-preview.md).
-- 게임에서는 서버 발동 이벤트에 맞춰 방패 버프 효과음을 한 번 재생한다. 같은 층의 시전자 20 m 이내에서 들리며, 파티에 속하지 않은 주변 유저도 들을 수 있다. 기존 효과음 볼륨·음소거 설정을 따른다. [효과음 출처](assets/sfx.md#abilities).
-- 아이콘은 기존 Double Slash 생성 프롬프트 및 기준 이미지의 빛나는 붓선 스타일을 사용한다. [실제 생성 프롬프트](assets/guardian-ward-icon-prompt.txt), [이미지 출처](assets/ui.md).
+- 프리뷰와 게임에서 같은 `SwordGuardEffect`를 사용한다. VFX 출처: [sword-guard-preview.md](../assets/sword-guard-preview.md).
+- 게임에서는 서버 발동 이벤트에 맞춰 방패 버프 효과음을 한 번 재생한다. 같은 층의 시전자 20 m 이내에서 들리며, 파티에 속하지 않은 주변 유저도 들을 수 있다. 기존 효과음 볼륨·음소거 설정을 따른다. [효과음 출처](../assets/sfx.md#abilities).
+- 아이콘은 기존 Double Slash 생성 프롬프트 및 기준 이미지의 빛나는 붓선 스타일을 사용한다. [실제 생성 프롬프트](../assets/guardian-ward-icon-prompt.txt), [이미지 출처](../assets/ui.md).
 
 통합 구현 범위와 시연 GIF는 [PR 정리 문서](PR_ABILITIES.md)를 참고한다.

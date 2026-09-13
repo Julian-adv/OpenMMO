@@ -16,4 +16,4 @@ Bow 전용 대상 지정 어빌리티. ABILITIES에서 아이콘을 기존 퀵�
 - `BowMarkUpdate`는 시전자에게만 전송한다. 대상 ID는 공개 Player/Monster 스냅샷과 주변 방송에 포함하지 않는다. 실제 공격 결과는 기존 전투 방송을 따른다.
 - VFX: `#ed9984` 옅은 붉은빛, 프리뷰 기준 크기 75%, 0.42초 조준 수렴, 1.2초 주기로 ±10% 크기 변화, 종료 시 0.4초 사라짐. 종료 잔상 동안 명중 효과는 없다.
 
-프리뷰와 게임은 `client/src/lib/effects/bow-mark.ts`의 같은 효과를 사용한다. 게임에서는 실제 모델 높이에 맞춰 머리 위 위치를 계산한다. [프리뷰](assets/bow-mark-preview.md), [아이콘 생성 프롬프트](assets/true-aim-icon-prompt.txt).
+프리뷰와 게임은 `client/src/lib/effects/bow-mark.ts`의 같은 효과를 사용한다. 게임에서는 실제 모델 높이에 맞춰 머리 위 위치를 계산한다. [프리뷰](../assets/bow-mark-preview.md), [아이콘 생성 프롬프트](../assets/true-aim-icon-prompt.txt).

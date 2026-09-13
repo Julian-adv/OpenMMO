@@ -83,18 +83,18 @@ Guardian Ward의 방패 조건을 장착 슬롯만으로 판단하지 않도록 
 
 ## VFX, 아이콘 및 시연 자료
 
-네 어빌리티의 전용 아이콘과 기존 스타일을 재사용할 수 있는 [아이콘 생성 프롬프트](assets/skill-icon-prompts.md)를 추가합니다. Guardian Ward 발동음은 제공된 ElevenLabs Starter 생성 효과음을 기존 SFX 경로에 맞춰 사용합니다. 출처와 생성 정보는 [UI 에셋](assets/ui.md), [애니메이션](assets/animation.md), [효과음](assets/sfx.md#abilities)에 기록합니다.
+네 어빌리티의 전용 아이콘과 기존 스타일을 재사용할 수 있는 [아이콘 생성 프롬프트](../assets/skill-icon-prompts.md)를 추가합니다. Guardian Ward 발동음은 제공된 ElevenLabs Starter 생성 효과음을 기존 SFX 경로에 맞춰 사용합니다. 출처와 생성 정보는 [UI 에셋](../assets/ui.md), [애니메이션](../assets/animation.md), [효과음](../assets/sfx.md#abilities)에 기록합니다.
 
 기존 프리뷰에서 생성한 GIF는 실제 속도의 연출 시연 자료입니다. 해상도는 768 × 560이며, 모두 반복 재생되고 파일별 10MB 미만입니다. 서버 피해 판정 검증은 아래 테스트 결과를 따릅니다.
 
 | 시연 | 내용 | 길이 |
 | --- | --- | --- |
-| [Guardian Ward GIF](assets/ability-previews/guardian-ward.gif) | 파티원에게 동시에 나타나는 금빛 방패 문양 | 2.8초 |
-| [Double Slash GIF](assets/ability-previews/double-slash.gif) | 두 번의 베기와 짧은 칼날 잔상 | 2.4초 |
-| [Radiance GIF](assets/ability-previews/radiance.gif) | 어둠 → 시전 → 조명 유지 → 수동 토글 해제 | 6.4초 |
-| [True Aim GIF](assets/ability-previews/true-aim.gif) | 표식 생성 → 맥동 → 해제 | 7.2초 |
+| [Guardian Ward GIF](../assets/ability-previews/guardian-ward.gif) | 파티원에게 동시에 나타나는 금빛 방패 문양 | 2.8초 |
+| [Double Slash GIF](../assets/ability-previews/double-slash.gif) | 두 번의 베기와 짧은 칼날 잔상 | 2.4초 |
+| [Radiance GIF](../assets/ability-previews/radiance.gif) | 어둠 → 시전 → 조명 유지 → 수동 토글 해제 | 6.4초 |
+| [True Aim GIF](../assets/ability-previews/true-aim.gif) | 표식 생성 → 맥동 → 해제 | 7.2초 |
 
-Radiance GIF에서 빛이 꺼지는 것은 수동 토글 시연이며, 실제 지속시간은 120초입니다. Guardian Ward 프리뷰는 파티와 문양을 가까이 보여주기 위한 축소 배치이며, 실제 적용 반경은 20 m입니다. [시연 모음과 출처](assets/ability-previews/README.md).
+Radiance GIF에서 빛이 꺼지는 것은 수동 토글 시연이며, 실제 지속시간은 120초입니다. Guardian Ward 프리뷰는 파티와 문양을 가까이 보여주기 위한 축소 배치이며, 실제 적용 반경은 20 m입니다. [시연 모음과 출처](../assets/ability-previews/README.md).
 
 ## 검증
 
@@ -112,20 +112,21 @@ Radiance GIF에서 빛이 꺼지는 것은 수동 토글 시연이며, 실제 �
 | 에이전트 클라이언트 전체 테스트 | 아래 Windows 테스트 조건에서 271개 통과 |
 | 로컬 게임 확인 | 대상 클릭 없이 True Aim 표식 적용, 일반 공격·추적 미시작 확인 |
 | GIF 출력 검증 | 4개 파일 재디코딩, 색상·재생 길이·무한 반복·파일 크기 확인 |
+| Ubuntu CI: 코드 커밋 `3d17717c` | [Rust·Client·Dashboard 검사 모두 통과](https://github.com/Julian-adv/OpenMMO/actions/runs/34731675646). CLA 통과 |
 
-기본 `cargo test --workspace --locked` 실행은 기존 NPC idle/chat 테스트 2개에서 5초 제한을 초과했습니다. 이 Windows 환경은 테스트용 빈 포트 `127.0.0.1:9`에 대한 연결 거절에 약 2초가 걸립니다. 테스트 동안만 해당 주소가 즉시 HTTP 503을 반환하도록 한 뒤, 동일한 워크스페이스 빌드의 에이전트 테스트 바이너리 271개를 모두 통과했습니다. API 불가 조건과 테스트 assertion은 유지했고 코드 수정은 없으며, 임시 서버는 종료했습니다. 나머지 워크스페이스는 `cargo test --workspace --exclude agent-client --locked`로 통과했습니다. 기본 환경에서 전체 워크스페이스 테스트가 통과했다고 해석해서는 안 되며, 저장소의 Ubuntu CI 결과를 별도로 확인해야 합니다.
+기본 `cargo test --workspace --locked` 실행은 기존 NPC idle/chat 테스트 2개에서 5초 제한을 초과했습니다. 이 Windows 환경은 테스트용 빈 포트 `127.0.0.1:9`에 대한 연결 거절에 약 2초가 걸립니다. 테스트 동안만 해당 주소가 즉시 HTTP 503을 반환하도록 한 뒤, 동일한 워크스페이스 빌드의 에이전트 테스트 바이너리 271개를 모두 통과했습니다. API 불가 조건과 테스트 assertion은 유지했고 코드 수정은 없으며, 임시 서버는 종료했습니다. 나머지 워크스페이스는 `cargo test --workspace --exclude agent-client --locked`로 통과했습니다. 기본 Windows 환경의 전체 워크스페이스 통과를 의미하지 않습니다. 이후 같은 코드 커밋 `3d17717c`의 Ubuntu CI에서는 별도 임시 서버 없이 표준 전체 워크스페이스 명령이 통과했습니다.
 
 ## 에셋 제출
 
 - 단검 원본 FBX 2개와 애니메이션 팩 `client/public/models/animations/dagger_preview.glb`를 [Hugging Face 에셋 PR #11](https://huggingface.co/datasets/jake-song-openmmo/onlinerpg-assets/discussions/11)로 제출했습니다. 제출자는 데이터셋 소유자가 아니며 직접 쓰기 권한이 없어 기여 PR 방식을 사용합니다. 소유자의 검토·병합은 대기 중입니다.
 - `assets.lock`은 공개 다운로드를 검증한 기여 커밋 `fb7731cf0899275486471696c55ea011d2641e2d`에 고정합니다. 새 파일 3개의 실제 다운로드 SHA-256과 기존 440개 에셋의 보존을 확인했습니다. 에셋 PR의 LFS 속성 병합 충돌도 해결했습니다.
-- 단검 원본 출처는 사용자 확인에 따라 **Adobe Mixamo**로 기록했습니다. 적용 라이선스와 재생성 방법은 [애니메이션 출처 문서](assets/animation.md)에 있습니다.
+- 단검 원본 출처는 사용자 확인에 따라 **Adobe Mixamo**로 기록했습니다. 적용 라이선스와 재생성 방법은 [애니메이션 출처 문서](../assets/animation.md)에 있습니다.
 - PNG 아이콘, OGG 효과음, GIF 시연 자료는 기존 저장소 규칙에 따라 게임 Git 저장소에 포함합니다. PR 본문에는 제출 커밋의 GIF URL을 사용합니다.
 - 로컬 테스트 로그인·테스트 DB·임시 캡처 도구·머신 전용 설정 스크립트는 제출 범위에서 제외합니다.
 
 ## 상세 문서
 
 - [Guardian Ward](GUARDIAN_WARD.md)
-- [Double Slash 및 전투 처리](COMBAT.md#단검-스킬-double-slash)
+- [Double Slash](DOUBLE_SLASH.md)
 - [Radiance](RADIANCE.md)
 - [True Aim](TRUE_AIM.md)

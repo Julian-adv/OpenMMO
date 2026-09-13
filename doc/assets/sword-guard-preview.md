@@ -1,7 +1,7 @@
 # Sword / Mace party guard VFX preview
 
 - Preview: `/sword-buff-preview.html` on the client Vite development server.
-- The standalone study now shares its VFX implementation with the game. Gameplay and timing rules are documented in [GUARDIAN_WARD.md](../GUARDIAN_WARD.md).
+- The standalone study now shares its VFX implementation with the game. Gameplay and timing rules are documented in [GUARDIAN_WARD.md](../abilities/GUARDIAN_WARD.md).
 - Requested concept: main-hand weapon with `weaponType` exactly `sword` or `mace`, plus an equipped shield in `off_hand`; +10% defense for party members within range. Goblin Sword and Small Sword now belong to `sword`; `dagger` and `great_sword` remain separate. The preview character currently demonstrates Sword + Shield.
 - Game configuration: caster included, 20 m radius, 60 s duration, 45 s cooldown. The preview keeps an adjustable 3–7 m staging radius so the characters and crest details fit the close camera; it is not the gameplay range. The cast effect lasts one second; the preview repeats every 2.5 seconds, including a quiet interval.
 - Sequence: all affected characters receive a shield crest at chest height immediately. No expanding wave or distance-based arrival delay. The crest stays at chest height, starts fading at 0.35 seconds, and disappears with the remaining glow at one second. No overhead mark or upward crest movement. An out-of-range party member receives no effect. Party state in the preview is local illustration data only.

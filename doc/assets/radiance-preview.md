@@ -1,6 +1,6 @@
 # Radiance lighting preview
 
-조명 스킬의 VFX와 토글 동작을 확인하는 독립 프리뷰다. 실제 게임 구현은 [Radiance](../RADIANCE.md)를 따른다.
+조명 스킬의 VFX와 토글 동작을 확인하는 독립 프리뷰다. 실제 게임 구현은 [Radiance](../abilities/RADIANCE.md)를 따른다.
 
 - 페이지: `client/radiance-skill-preview.html`.
 - 프리뷰 전용 코드: `client/src/previews/radiance-skill.ts`. `radiance-effect.ts`는 게임과 공통으로 사용하는 `client/src/lib/effects/radiance.ts`를 다시 내보낸다.

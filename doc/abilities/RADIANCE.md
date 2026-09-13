@@ -23,4 +23,4 @@ ABILITIES 아이콘을 기존 퀵슬롯으로 드래그해 등록한다. 활성 
 
 통합 프로토콜 v76: 서버·클라이언트 WASM·에이전트 클라이언트를 함께 빌드해야 한다. 영구 DB 스키마 변경은 없다.
 
-아이콘: [출처](assets/ui.md), [생성 프롬프트](assets/radiance-icon-prompt.txt).
+아이콘: [출처](../assets/ui.md), [생성 프롬프트](../assets/radiance-icon-prompt.txt).
