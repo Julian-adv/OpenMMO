@@ -25,7 +25,7 @@ description: Investigate OpenMMO production warnings, errors, suspicious behavio
 각 유의미한 항목에 **증상·영향, 대상, 첫/마지막 시각, 반복 횟수·빈도, 대표 근거, 원인 확실성, 후속 후보**를 적는다. 건수는 이상 판단에 필요한 범위에서만 쓴다.
 
 - 안정성: panic, OOM, 비정상 종료, DB 잠금·저장 실패, 디스크 부족, 로그 유실, 지연·큐 포화. 플레이어명이나 대화에 포함된 단어를 실제 장애와 혼동하지 않는다.
-- 이동: `Blocked move`, 울타리·집 충돌, 계단 밖 층 변경, `Waypoint queue full`, 강제 이동 종료. 같은 플레이어·위치의 연속성, 여러 플레이어의 동일 지점 실패, 분당 피크와 직후 이벤트를 본다. 큐 초과 뒤 사망만으로 스팸 클릭을 단정하지 않는다.
+- 이동: `Blocked move`, 울타리·집 충돌, 계단 밖 층 변경, `Waypoint queue full`, 강제 이동 종료. 같은 플레이어·위치의 연속성, 여러 플레이어의 동일 지점 실패, 분당 피크와 직후 이벤트를 본다. 큐 초과 뒤 사망만으로 스팸 클릭을 단정하지 않는다. `Waypoint queue full`이 반복되면 같은 플레이어의 `movement_audit` 타깃 WARN `Waypoint overflow trace`(30초당 1회)에서 요청 수신 간격·`raw.sprinting`·`received_pose.mounted`와 틱의 `speed`·`hunger_mult`·`sprint_allowed`를 대조해 클라이언트와 서버의 속도 불일치 원인을 확인한다.
 - 공격: `Rejected player attack`의 reason과 상세(대상 소멸·시체·층·거리), 동일 공격자/대상의 반복 기간과 허용 공격을 대조한다. 고정 빈도나 낮은 초당 요청 수만으로 정상·어뷰즈를 판정하지 않는다. 필요한 경우 `data/combat-audit/*.jsonl`의 HP 수지·요청 간격·허용/거절·`history_overflow`·`dropped_events`를 확인한다. 감사 대상 밖까지 결과를 일반화하지 않는다.
 - 접속: 프로토콜 거부, 세션 교체, heartbeat, reset, 인증 실패. 배포 전환 중 일시 실패와 정상화 후 지속 실패를 나눈다. `[+N more in the last 60s]`는 억제분이며 로그 줄 수와 요청 수를 구분한다. 같은 IP나 /24만으로 다중 계정·프록시·부정행위를 확정하지 않는다.
 - NPC: LLM 인증·용량·타임아웃, 응답 파싱 실패, 긴 대기, 행동 실패 루프, 상점/여관 고착, 원장 형식 오류. `llm turn ... error`와 `LLM prompt failed`처럼 한 사건의 중복 로그를 구분한다. 서비스 active나 NPC 입장만으로 LLM 정상이라고 판단하지 않는다.

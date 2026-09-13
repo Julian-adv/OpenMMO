@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 /// Most queued waypoints per player; legit smoothed paths stay well under.
-const MAX_QUEUED_WAYPOINTS: usize = 32;
+pub(super) const MAX_QUEUED_WAYPOINTS: usize = 32;
 
 /// Arrival ring radius (m) around a teleport's center (`arrival_beside`);
 /// golden-angle spacing keeps simultaneous arrivals apart.
@@ -1284,6 +1284,20 @@ impl super::GameState {
             check_collision: !is_official_npc,
             sprinting,
         });
+        drop(queues);
+        if dropped.is_none() {
+            return;
+        }
+        if let Some(history) = self
+            .movement_audit
+            .overflow(*player_id, std::time::Instant::now())
+        {
+            let detail = serde_json::json!({
+                "schema": 1, "player_id": player_id,
+                "name": self.player_name_of(player_id).await, "history": history,
+            });
+            warn!(target: "movement_audit", detail = %detail, "Waypoint overflow trace");
+        }
     }
 
     fn mount_recovery_update(
@@ -1702,7 +1716,7 @@ impl super::GameState {
                 }
                 self.movement_audit.tick(*player_id, movement_audit::Tick {
                     at_ms: tick_at_ms, first_request_id: tick_request_id, last_request_id, dt, speed,
-                    from: tick_from, to: Pose::from(&*player), outcome: tick_outcome,
+                    hunger_mult, sprint_allowed, from: tick_from, to: Pose::from(&*player), outcome: tick_outcome,
                     queue_remaining: waypoints.len(),
                 });
                 let position_changed = player.position.x != old_position.x

@@ -49,6 +49,8 @@ pub(super) struct Tick {
     pub last_request_id: Option<u64>,
     pub dt: f32,
     pub speed: f32,
+    pub hunger_mult: f32,
+    pub sprint_allowed: bool,
     pub from: Pose,
     pub to: Pose,
     pub outcome: &'static str,
@@ -69,14 +71,27 @@ struct History {
     requests_evicted: u64,
     ticks_evicted: u64,
     corrections: u64,
+    overflows: u64,
     last_correction: Option<Correction>,
     last_detail: Option<Instant>,
+    last_overflow_detail: Option<Instant>,
 }
 
 impl History {
-    fn detail_due(&self, now: Instant) -> bool {
-        self.last_detail
-            .is_none_or(|at| now.saturating_duration_since(at) >= DETAIL_INTERVAL)
+    fn due(last: Option<Instant>, now: Instant) -> bool {
+        last.is_none_or(|at| now.saturating_duration_since(at) >= DETAIL_INTERVAL)
+    }
+
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            requests: self.requests.iter().copied().collect(),
+            ticks: self.ticks.iter().cloned().collect(),
+            requests_evicted: self.requests_evicted,
+            ticks_evicted: self.ticks_evicted,
+            corrections: self.corrections,
+            overflows: self.overflows,
+            last_correction: self.last_correction,
+        }
     }
 }
 
@@ -87,6 +102,7 @@ pub(super) struct Snapshot {
     requests_evicted: u64,
     ticks_evicted: u64,
     corrections: u64,
+    overflows: u64,
     last_correction: Option<Correction>,
 }
 
@@ -148,24 +164,38 @@ impl MovementAudit {
             .lock()
             .expect("movement audit")
             .get(&id)
-            .is_some_and(|history| history.detail_due(now))
+            .is_some_and(|history| History::due(history.last_detail, now))
     }
 
     pub fn snapshot(&self, id: PlayerId, now: Instant) -> Option<Snapshot> {
+        self.due_snapshot(id, now, |h| &mut h.last_detail)
+    }
+
+    /// Count a dropped waypoint; a snapshot comes back once per
+    /// `DETAIL_INTERVAL`, on a budget separate from collision traces.
+    pub fn overflow(&self, id: PlayerId, now: Instant) -> Option<Snapshot> {
+        self.histories
+            .lock()
+            .expect("movement audit")
+            .get_mut(&id)?
+            .overflows += 1;
+        self.due_snapshot(id, now, |h| &mut h.last_overflow_detail)
+    }
+
+    fn due_snapshot(
+        &self,
+        id: PlayerId,
+        now: Instant,
+        budget: fn(&mut History) -> &mut Option<Instant>,
+    ) -> Option<Snapshot> {
         let mut histories = self.histories.lock().expect("movement audit");
         let history = histories.get_mut(&id)?;
-        if !history.detail_due(now) {
+        let last = budget(history);
+        if !History::due(*last, now) {
             return None;
         }
-        history.last_detail = Some(now);
-        Some(Snapshot {
-            requests: history.requests.iter().copied().collect(),
-            ticks: history.ticks.iter().cloned().collect(),
-            requests_evicted: history.requests_evicted,
-            ticks_evicted: history.ticks_evicted,
-            corrections: history.corrections,
-            last_correction: history.last_correction,
-        })
+        *last = Some(now);
+        Some(history.snapshot())
     }
 
     pub fn remove(&self, id: &PlayerId) {

@@ -292,3 +292,56 @@ async fn movement_audit_distinguishes_waypoints_consumed_in_one_tick() {
     assert_ne!(tick["from"]["position"], tick["to"]["position"]);
     assert_eq!(tick["queue_remaining"], 1);
 }
+
+#[tokio::test]
+async fn movement_audit_traces_waypoint_overflow_once_per_interval() {
+    let (game, id) = orc_player("trace_overflow").await;
+    let subscriber = trace_capture();
+    let buffer = subscriber.0.clone();
+    let sent = super::super::player::MAX_QUEUED_WAYPOINTS + 8;
+    async {
+        for _ in 0..sent {
+            game.update_player_position(&id, command(-1637.8, 4890.8, true), false)
+                .await;
+        }
+        game.tick_player_movement(0.2).await;
+    }
+    .with_subscriber(subscriber)
+    .await;
+    let traces: Vec<Value> = buffer
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|v| v["player_id"] == serde_json::to_value(id).unwrap())
+        .cloned()
+        .collect();
+    assert_eq!(traces.len(), 1);
+    let history = &traces[0]["history"];
+    assert_eq!(history["overflows"], 1);
+    let request = history["requests"].as_array().unwrap().last().unwrap();
+    assert_eq!(
+        request["queue_before"],
+        super::super::player::MAX_QUEUED_WAYPOINTS
+    );
+    assert!(request["dropped"].as_u64().is_some());
+    assert_eq!(request["raw"]["append"], true);
+    assert_eq!(request["received_pose"]["mounted"], false);
+    let now = Instant::now();
+    assert!(game.movement_audit.snapshot(id, now).is_some());
+    assert!(game
+        .movement_audit
+        .overflow(id, now + std::time::Duration::from_secs(29))
+        .is_none());
+    let later = game
+        .movement_audit
+        .overflow(id, now + std::time::Duration::from_secs(30))
+        .unwrap();
+    let later = serde_json::to_value(later).unwrap();
+    assert_eq!(
+        later["overflows"],
+        (sent - super::super::player::MAX_QUEUED_WAYPOINTS + 2) as u64
+    );
+    let tick = later["ticks"].as_array().unwrap().last().unwrap();
+    assert_eq!(tick["hunger_mult"], 1.0);
+    assert_eq!(tick["sprint_allowed"], true);
+}
