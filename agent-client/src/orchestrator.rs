@@ -261,6 +261,24 @@ impl Desired {
     }
 }
 
+/// A refused create needs a config change, not a retry: the name is taken
+/// server-wide, and the account's own characters are the usual fix.
+fn create_refused(wanted: &str, reason: &str, owned: &[Character]) -> ws::AuthRejected {
+    let hint = if owned.is_empty() {
+        String::new()
+    } else {
+        let names: Vec<&str> = owned.iter().map(|c| c.name.as_str()).collect();
+        format!(
+            " — this account already has {}; set character_name to one of them, \
+             or leave it empty to enter the first",
+            names.join(", ")
+        )
+    };
+    ws::AuthRejected(format!(
+        "Could not create character '{wanted}': {reason}{hint}"
+    ))
+}
+
 /// Run the orchestrator: spawn all NPC sessions in parallel.
 pub async fn run_orchestrator(
     server_url: String,
@@ -384,7 +402,7 @@ async fn run_npc_session(
     let may_delete = shared.auth.may_delete_mismatches();
     let (mut characters, others) = desired.partition(may_delete, characters);
 
-    if may_delete {
+    let others = if may_delete {
         for c in &others {
             info!(
                 "[{}] Deleting character '{}' (id={}, {:?}, {:?}) — mismatch (want name={:?}, class={:?}, gender={:?})",
@@ -403,6 +421,7 @@ async fn run_npc_session(
             })
             .await?;
         }
+        Vec::new()
     } else {
         if !others.is_empty() {
             info!(
@@ -420,7 +439,8 @@ async fn run_npc_session(
                 label, c.name, c.class, c.gender, desired.class, desired.gender
             );
         }
-    }
+        others
+    };
 
     // --- Auto-create character if needed ---
     if characters.is_empty() {
@@ -479,7 +499,7 @@ async fn run_npc_session(
                     characters.push(character);
                 }
                 ServerMessage::CharacterError { message } => {
-                    anyhow::bail!("[{}] Failed to create character: {message}", label);
+                    return Err(create_refused(char_name, &message, &others).into());
                 }
                 _ => unreachable!(),
             }
@@ -1119,6 +1139,21 @@ mod tests {
             );
             assert!(entry.condition.is_none());
         }
+    }
+
+    #[test]
+    fn create_refused_names_the_owned_characters_and_the_fix() {
+        let owned = [character("안녕", CharacterClass::Knight, Gender::default())];
+        let msg = create_refused("안녕2", "Character name already exists", &owned).to_string();
+        assert!(msg.contains("'안녕2'"));
+        assert!(msg.contains("already has 안녕;"));
+        assert!(msg.contains("character_name"));
+    }
+
+    #[test]
+    fn create_refused_stays_terse_without_owned_characters() {
+        let msg = create_refused("x", "reason", &[]).to_string();
+        assert_eq!(msg, "Could not create character 'x': reason");
     }
 
     fn character(name: &str, class: CharacterClass, gender: Gender) -> Character {

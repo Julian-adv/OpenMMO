@@ -57,9 +57,9 @@ pub async fn connect_ws(
     }
 }
 
-/// Server refused the connection (bad protocol version, bad token, unusable
-/// account). Retrying cannot fix any of those, so the session loop gives up
-/// instead of reconnecting forever.
+/// The server refused something only a config or client change can fix
+/// (protocol version, token, account, character name). The session loop
+/// gives up instead of reconnecting forever.
 #[derive(Debug)]
 pub struct AuthRejected(pub String);
 
