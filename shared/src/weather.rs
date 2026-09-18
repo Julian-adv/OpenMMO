@@ -93,6 +93,11 @@ pub const SCHEDULE: [ZoneSchedule; 5] = [
 /// guaranteed a dry gap between cells.
 pub const MAX_LIFE_SHARE: f64 = 0.9;
 
+/// Envelope ramp bounds as a share of a cell's life: rain builds up to
+/// `ENVELOPE_RISE_END` and fades after `ENVELOPE_FALL_START`.
+const ENVELOPE_RISE_END: f32 = 0.25;
+const ENVELOPE_FALL_START: f32 = 0.7;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Cell {
     pub sector: usize,
@@ -103,6 +108,28 @@ pub struct Cell {
     pub env: f32,
     /// 0..1 progress through the cell's life.
     pub progress: f32,
+    /// Game minutes left before the cell dies.
+    pub remain_min: f32,
+}
+
+/// Which part of the envelope a cell is in, for the debug radar.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CellStage {
+    Forming,
+    Raining,
+    Clearing,
+}
+
+impl Cell {
+    pub fn stage(&self) -> CellStage {
+        if self.progress < ENVELOPE_RISE_END {
+            CellStage::Forming
+        } else if self.progress > ENVELOPE_FALL_START {
+            CellStage::Clearing
+        } else {
+            CellStage::Raining
+        }
+    }
 }
 
 pub fn zone_schedule(zone: u8) -> ZoneSchedule {
@@ -172,7 +199,8 @@ pub fn sector_cell(
         return None;
     }
     let progress = (age / life) as f32;
-    let env = smoothstep(0.0, 0.25, progress) * (1.0 - smoothstep(0.7, 1.0, progress));
+    let env = smoothstep(0.0, ENVELOPE_RISE_END, progress)
+        * (1.0 - smoothstep(ENVELOPE_FALL_START, 1.0, progress));
     let radius_km = (sched.radius_min_km + sched.radius_var_km * hash01(seed, id, k, 5) as f32)
         * (0.6 + 0.4 * env);
     Some(Cell {
@@ -182,6 +210,7 @@ pub fn sector_cell(
         radius_m: radius_km * 1000.0,
         env,
         progress,
+        remain_min: (life - age) as f32,
     })
 }
 
@@ -391,6 +420,25 @@ mod tests {
     }
 
     #[test]
+    fn stage_follows_the_envelope_ramps() {
+        let at = |progress: f32| Cell {
+            sector: 0,
+            x: 0.0,
+            z: 0.0,
+            radius_m: 1.0,
+            env: 0.0,
+            progress,
+            remain_min: 0.0,
+        };
+        assert_eq!(at(0.0).stage(), CellStage::Forming);
+        assert_eq!(at(ENVELOPE_RISE_END - 0.01).stage(), CellStage::Forming);
+        assert_eq!(at(ENVELOPE_RISE_END).stage(), CellStage::Raining);
+        assert_eq!(at(ENVELOPE_FALL_START).stage(), CellStage::Raining);
+        assert_eq!(at(ENVELOPE_FALL_START + 0.01).stage(), CellStage::Clearing);
+        assert_eq!(at(1.0).stage(), CellStage::Clearing);
+    }
+
+    #[test]
     fn rain_falls_off_and_wraps_across_the_seam() {
         let cell = Cell {
             sector: 0,
@@ -399,6 +447,7 @@ mod tests {
             radius_m: 3_000.0,
             env: 1.0,
             progress: 0.5,
+            remain_min: 0.0,
         };
         let cells = [cell];
         assert!((rain_at(&cells, -16_400.0, 0.0) - 1.0).abs() < 1e-6);

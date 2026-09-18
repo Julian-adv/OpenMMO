@@ -439,6 +439,50 @@ pub fn weather_cloud_factor(rain: f32) -> f32 {
     crate::weather::cloud_factor(rain)
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WeatherCellJs {
+    sector: usize,
+    zone: u8,
+    x: f32,
+    z: f32,
+    radius_m: f32,
+    env: f32,
+    progress: f32,
+    /// Game minutes until the cell dies.
+    remain_min: f32,
+    stage: &'static str,
+}
+
+/// Every live cell at `t_min`, for the debug radar overlay. The per-frame
+/// sampling path uses `weather_rain_at`; this one allocates, so keep it off
+/// the render loop.
+#[wasm_bindgen]
+pub fn weather_cells_at(seed: f64, bias: f64, t_min: f64) -> Result<JsValue, JsError> {
+    let cells: Vec<WeatherCellJs> = WEATHER_SECTORS.with(|s| {
+        let sectors = s.borrow();
+        crate::weather::cells_at(&sectors, seed as u64, bias, t_min)
+            .into_iter()
+            .map(|c| WeatherCellJs {
+                sector: c.sector,
+                zone: sectors.get(c.sector).map_or(0, |s| s.zone),
+                x: c.x,
+                z: c.z,
+                radius_m: c.radius_m,
+                env: c.env,
+                progress: c.progress,
+                remain_min: c.remain_min,
+                stage: match c.stage() {
+                    crate::weather::CellStage::Forming => "forming",
+                    crate::weather::CellStage::Raining => "raining",
+                    crate::weather::CellStage::Clearing => "clearing",
+                },
+            })
+            .collect()
+    });
+    to_js(&cells)
+}
+
 // --- Dungeon (procedural, seed-deterministic) ---
 
 #[wasm_bindgen]
