@@ -1,4 +1,5 @@
 import { weather_cells_at, weather_rain_at } from '../wasm/onlinerpg_shared'
+import { shortestWrappedDeltaX } from '../terrain/world-wrap'
 
 /** One live rain cell, as `weather_cells_at` serialises it. */
 export interface RadarCell {
@@ -42,6 +43,29 @@ export const CONTINENT_VIEW: RadarView = {
   x1: 12500,
   z0: -4000,
   z1: 11500,
+}
+
+/**
+ * The copy of `x` that lies nearest the view on the cylindrical world. A cell
+ * just west of the seam rains into the east of the view, and `rain_at` sees it
+ * that way; drawing its canonical x would put the disc off the far side.
+ */
+export function viewWrappedX(x: number, view: RadarView): number {
+  const centre = (view.x0 + view.x1) / 2
+  return centre + shortestWrappedDeltaX(centre, x)
+}
+
+/** True when a cell's disc reaches into the drawn window. */
+export function cellInView(
+  cell: Pick<RadarCell, 'x' | 'z' | 'radiusM'>,
+  view: RadarView
+): boolean {
+  const x = viewWrappedX(cell.x, view)
+  const nearestX = Math.min(Math.max(x, view.x0), view.x1)
+  const nearestZ = Math.min(Math.max(cell.z, view.z0), view.z1)
+  const dx = x - nearestX
+  const dz = cell.z - nearestZ
+  return dx * dx + dz * dz <= cell.radiusM * cell.radiusM
 }
 
 /** World metres → canvas pixels. The canvas keeps the view's aspect, so one

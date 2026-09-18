@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte'
   import { get } from 'svelte/store'
   import { weatherRadarVisible } from '../stores/debugStore'
   import { playerDebugInfo } from '../stores/debugStore'
@@ -9,10 +10,13 @@
     CONTINENT_VIEW,
     canvasHeightFor,
     canvasToWorld,
+    cellInView,
     cellsAt,
     formatGameMinutes,
     formatRealMinutes,
     minutesUntilRain,
+    RAIN_SEARCH_HORIZON_MIN,
+    viewWrappedX,
     worldToCanvas,
     zoneName,
     type RadarCell,
@@ -30,10 +34,14 @@
   /** Cap on how far the forecast scrub reaches: half a game day. */
   const AHEAD_MAX = 720
   const FAST_FORWARD = 60
-  /** The panel runs on its own clock. The player's position changes every
-   *  frame, and re-sampling that often would put a whole-continent cell sweep
-   *  in the render loop. */
+  /** The panel runs on its own clock. The player's position and the game hour
+   *  both change every frame, so `tick` reads them untracked: an effect that
+   *  depends on them re-runs per frame and its interval never survives to
+   *  fire. */
   const SAMPLE_MS = 250
+  /** Past this point in the canvas the tooltip would run under the panel's
+   *  clipped edge, so it flips to the left of the cursor. */
+  const TIP_FLIP_X = 300
   /** Deep-sea colour past the baked tiles, as the world map uses. */
   const OCEAN = '#01294e'
   /** The next-rain search walks 720 game minutes a minute at a time, so it
@@ -59,8 +67,9 @@
     $weather !== null &&
       ($weatherSectorsReady || $weather.rainOverride !== null)
   )
-  const nowMin = $derived(gameMinutesAt(gameTimeState.date, gameTimeState.hour))
-  const viewMin = $derived(nowMin + ahead)
+  function viewMinutes() {
+    return gameMinutesAt(gameTimeState.date, gameTimeState.hour) + ahead
+  }
 
   /** Paint the region tiles onto the cached layer. Tiles arrive out of order
    *  as they load; each lands on the layer, never over the cells. */
@@ -75,6 +84,7 @@
     ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
     const size = Math.ceil(REGION_CELLS * SCALE)
+    const loads: Promise<unknown>[] = []
     const sourceSize = pickMinimapSourceSize(REGION_CELLS * SCALE)
     const minRx = Math.floor((CONTINENT_VIEW.x0 + TILE_DIM / 2) / REGION_CELLS)
     const maxRx = Math.floor((CONTINENT_VIEW.x1 + TILE_DIM / 2) / REGION_CELLS)
@@ -86,16 +96,29 @@
         const worldX = rx * REGION_CELLS - TILE_DIM / 2
         const worldZ = rz * REGION_CELLS - TILE_DIM / 2
         const at = worldToCanvas(worldX, worldZ, CONTINENT_VIEW, WIDTH)
-        void regionImages.load(rx, rz, version, sourceSize).then((img) => {
-          if (img && mapVersionDrawn === version)
-            ctx.drawImage(img, at.x, at.y, size, size)
-        })
+        loads.push(
+          regionImages.load(rx, rz, version, sourceSize).then((img) => {
+            if (img && mapVersionDrawn === version)
+              ctx.drawImage(img, at.x, at.y, size, size)
+          })
+        )
       }
     }
+    // The window covers hundreds of tiles and each is needed once; the layer
+    // keeps the pixels, so drop the decoded images rather than holding them
+    // for the life of the page.
+    void Promise.all(loads).then(() => {
+      if (mapVersionDrawn === version) regionImages.flush()
+    })
   }
 
   function drawCell(ctx: CanvasRenderingContext2D, cell: RadarCell) {
-    const at = worldToCanvas(cell.x, cell.z, CONTINENT_VIEW, WIDTH)
+    const at = worldToCanvas(
+      viewWrappedX(cell.x, CONTINENT_VIEW),
+      cell.z,
+      CONTINENT_VIEW,
+      WIDTH
+    )
     const r = cell.radiusM * SCALE
     if (r <= 0) return
     // Matches rain_falloff: flat to 70 % of the radius, then a short fade.
@@ -126,14 +149,28 @@
     pos: { x: number; z: number } | undefined
   ) {
     if (!pos) return
-    const at = worldToCanvas(pos.x, pos.z, CONTINENT_VIEW, WIDTH)
+    const at = worldToCanvas(
+      viewWrappedX(pos.x, CONTINENT_VIEW),
+      pos.z,
+      CONTINENT_VIEW,
+      WIDTH
+    )
+    const x = Math.min(Math.max(at.x, 6), WIDTH - 6)
+    const y = Math.min(Math.max(at.y, 6), HEIGHT - 6)
+    // Outside the drawn window the marker sits on the edge and is hollow, so
+    // it never silently disappears on the far side of the world.
+    const outside = x !== at.x || y !== at.y
     ctx.strokeStyle = '#f0c36b'
     ctx.lineWidth = 2
     ctx.beginPath()
-    ctx.moveTo(at.x - 5, at.y)
-    ctx.lineTo(at.x + 5, at.y)
-    ctx.moveTo(at.x, at.y - 5)
-    ctx.lineTo(at.x, at.y + 5)
+    if (outside) {
+      ctx.arc(x, y, 4, 0, Math.PI * 2)
+    } else {
+      ctx.moveTo(x - 5, y)
+      ctx.lineTo(x + 5, y)
+      ctx.moveTo(x, y - 5)
+      ctx.lineTo(x, y + 5)
+    }
     ctx.stroke()
   }
 
@@ -165,25 +202,31 @@
     const pos = get(playerDebugInfo)?.position
     const usable =
       w !== null && (get(weatherSectorsReady) || w.rainOverride !== null)
-    if (!w || !usable) {
+    if (!w || !usable || !pos) {
       cells = []
+      hereRain = 0
+      nextRain = null
       render([], pos)
       return
     }
 
-    const t = viewMin
-    const list = w.rainOverride !== null ? [] : cellsAt(w.seed, w.bias, t)
+    const t = viewMinutes()
+    // Only cells the map can show, so the count and the table agree with it.
+    const list =
+      w.rainOverride !== null
+        ? []
+        : cellsAt(w.seed, w.bias, t).filter((c) =>
+            cellInView(c, CONTINENT_VIEW)
+          )
     cells = list
-    if (pos) {
-      hereRain =
-        w.rainOverride ?? weather_rain_at(w.seed, w.bias, t, pos.x, pos.z)
-      const now = performance.now()
-      if (w.rainOverride !== null) {
-        nextRain = null
-      } else if (now >= nextRainDueAt) {
-        nextRainDueAt = now + NEXT_RAIN_MS
-        nextRain = minutesUntilRain(w.seed, w.bias, t, pos.x, pos.z)
-      }
+    hereRain =
+      w.rainOverride ?? weather_rain_at(w.seed, w.bias, t, pos.x, pos.z)
+    const now = performance.now()
+    if (w.rainOverride !== null) {
+      nextRain = null
+    } else if (now >= nextRainDueAt) {
+      nextRainDueAt = now + NEXT_RAIN_MS
+      nextRain = minutesUntilRain(w.seed, w.bias, t, pos.x, pos.z)
     }
     render(list, pos)
   }
@@ -191,7 +234,10 @@
   $effect(() => {
     if (!$weatherRadarVisible) return
     nextRainDueAt = 0
-    tick()
+    // Untracked: `tick` reads the game clock and the player position, both of
+    // which change every frame. Tracking either would tear this effect down
+    // before its interval could fire.
+    untrack(tick)
     const id = setInterval(tick, SAMPLE_MS)
     return () => clearInterval(id)
   })
@@ -199,11 +245,21 @@
   $effect(() => {
     if (!$weatherRadarVisible || !fastForward) return
     const id = setInterval(() => {
-      ahead = (ahead + FAST_FORWARD) % (AHEAD_MAX + 1)
+      // Wrap to 0 rather than modulo: AHEAD_MAX is not a multiple of the
+      // stride, so a modulo walks off the slider's step grid and never
+      // returns to now.
+      ahead = ahead + FAST_FORWARD > AHEAD_MAX ? 0 : ahead + FAST_FORWARD
       nextRainDueAt = 0
+      untrack(tick)
     }, 500)
     return () => clearInterval(id)
   })
+
+  /** Redraw at once while the scrub is dragged instead of waiting a tick. */
+  function onScrub() {
+    nextRainDueAt = 0
+    untrack(tick)
+  }
 
   function onPointerMove(event: PointerEvent) {
     if (!canvas) return
@@ -220,7 +276,7 @@
     )
     let found: RadarCell | null = null
     for (const cell of cells) {
-      const dx = world.x - cell.x
+      const dx = world.x - viewWrappedX(cell.x, CONTINENT_VIEW)
       const dz = world.z - cell.z
       if (dx * dx + dz * dz <= cell.radiusM * cell.radiusM) {
         found = cell
@@ -247,8 +303,8 @@
       <span class="sub">
         {#if !ready}
           waiting for sectors
-        {:else if $weather?.rainOverride !== null}
-          admin override {$weather?.rainOverride?.toFixed(2)}
+        {:else if $weather && $weather.rainOverride !== null}
+          admin override {$weather.rainOverride.toFixed(2)}
         {:else}
           seed {$weather?.seed} · bias {$weather?.bias}
         {/if}
@@ -266,7 +322,10 @@
       {#if hover}
         <div
           class="tip"
-          style="left:{hover.tipX + 12}px; top:{hover.tipY + 12}px"
+          style="left:{hover.tipX + 12}px; top:{hover.tipY +
+            12}px; transform:{hover.tipX > TIP_FLIP_X
+            ? 'translateX(calc(-100% - 24px))'
+            : 'none'}"
         >
           <b>{zoneName(hover.cell.zone)}</b> · sector {hover.cell.sector}<br />
           {hover.cell.stage} · r {(hover.cell.radiusM / 1000).toFixed(1)} km<br
@@ -283,6 +342,7 @@
         max={AHEAD_MAX}
         step="5"
         bind:value={ahead}
+        oninput={onScrub}
         aria-label="Game minutes ahead"
       />
       <span class="readout">
@@ -306,19 +366,22 @@
       <div class="row">
         <span class="label">Next rain</span>
         <span class="value">
-          {#if $weather?.rainOverride !== null}
+          {#if $weather && $weather.rainOverride !== null}
             held by /weather
           {:else if nextRain === null}
-            none within {formatGameMinutes(720)}
+            none within {formatGameMinutes(RAIN_SEARCH_HORIZON_MIN)}
           {:else if nextRain === 0}
-            raining now
+            {ahead === 0 ? 'raining now' : 'raining then'}
           {:else}
             {formatGameMinutes(nextRain)} ({formatRealMinutes(nextRain)})
+            {#if ahead > 0}<span class="from"
+                >from +{formatGameMinutes(ahead)}</span
+              >{/if}
           {/if}
         </span>
       </div>
       <div class="row">
-        <span class="label">Live cells</span>
+        <span class="label">Cells in view</span>
         <span class="value">{cells.length}</span>
       </div>
     </div>
@@ -452,6 +515,10 @@
     align-items: center;
     gap: 8px;
     padding: 2px 0;
+  }
+
+  .from {
+    color: #7aa07a;
   }
 
   .label {

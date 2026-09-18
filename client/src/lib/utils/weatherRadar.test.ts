@@ -15,9 +15,11 @@ import {
   CONTINENT_VIEW,
   canvasHeightFor,
   canvasToWorld,
+  cellInView,
   formatGameMinutes,
   formatRealMinutes,
   minutesUntilRain,
+  viewWrappedX,
   worldToCanvas,
   zoneName,
 } from './weatherRadar'
@@ -53,6 +55,42 @@ describe('weatherRadar projection', () => {
     const back = canvasToWorld(px.x, px.y, CONTINENT_VIEW, width)
     expect(back.x).toBeCloseTo(point.x, 6)
     expect(back.z).toBeCloseTo(point.z, 6)
+  })
+})
+
+describe('the world seam', () => {
+  it('leaves a position inside the view alone', () => {
+    expect(viewWrappedX(-1475, CONTINENT_VIEW)).toBeCloseTo(-1475, 6)
+    expect(viewWrappedX(12000, CONTINENT_VIEW)).toBeCloseTo(12000, 6)
+  })
+
+  it('brings a cell just west of the seam round to the east of the view', () => {
+    // Sector 63 in the shipped bake sits at x -15,728; its rain reaches the
+    // east edge of the window the short way round, as rain_at measures it.
+    expect(viewWrappedX(-15728, CONTINENT_VIEW)).toBeCloseTo(17040, 6)
+  })
+
+  it('counts a seam-crossing cell as in view when its disc reaches the window', () => {
+    const seamCell = { x: -15728, z: 1264, radiusM: 5000 }
+    expect(cellInView(seamCell, CONTINENT_VIEW)).toBe(true)
+    expect(cellInView({ ...seamCell, radiusM: 1000 }, CONTINENT_VIEW)).toBe(
+      false
+    )
+  })
+
+  it('drops a cell that rains nowhere near the window', () => {
+    expect(
+      cellInView({ x: -1475, z: 40000, radiusM: 5000 }, CONTINENT_VIEW)
+    ).toBe(false)
+  })
+
+  it('keeps a cell whose centre is outside but whose edge reaches in', () => {
+    expect(
+      cellInView(
+        { x: CONTINENT_VIEW.x0 - 2000, z: 5000, radiusM: 3000 },
+        CONTINENT_VIEW
+      )
+    ).toBe(true)
   })
 })
 

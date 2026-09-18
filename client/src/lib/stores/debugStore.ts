@@ -45,4 +45,8 @@ export function resetPrivilegedDebugFlags() {
   debugSpeedMode.set(false)
   mapEditorMode.set(false)
   housingEditorMode.set(false)
+  // Its toggle lives behind the admin check, and the panel takes pointer
+  // events, so leaving it set strands a non-admin with a window they cannot
+  // close.
+  weatherRadarVisible.set(false)
 }
