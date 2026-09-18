@@ -47,12 +47,23 @@
   /** The next-rain search walks 720 game minutes a minute at a time, so it
    *  runs far less often than the cell sweep. */
   const NEXT_RAIN_MS = 2000
+  /** A drag fires many input events; wait for it to settle before paying for
+   *  another next-rain scan. */
+  const SCRUB_SETTLE_MS = 250
 
   let ahead = $state(0)
   let fastForward = $state(false)
   let canvas: HTMLCanvasElement | null = $state(null)
   let hover: { cell: RadarCell; tipX: number; tipY: number } | null =
     $state(null)
+  /** Last pointer position, kept so the tooltip can be re-resolved against a
+   *  fresh cell list instead of freezing on the cell found when it moved. */
+  let pointer: {
+    worldX: number
+    worldZ: number
+    tipX: number
+    tipY: number
+  } | null = null
   let cells: RadarCell[] = $state([])
   let nextRain: number | null = $state(null)
   let hereRain = $state(0)
@@ -61,14 +72,20 @@
   /** The map is 350-odd region tiles; it is painted once and blitted after. */
   let mapLayer: HTMLCanvasElement | null = null
   let mapVersionDrawn: number | null = null
+  let mapRetryAt = 0
   let nextRainDueAt = 0
+  /** How long to wait before repainting a layer that lost tiles to a failed
+   *  request; the cache has its own per-tile backoff underneath. */
+  const MAP_RETRY_MS = 15000
 
   const ready = $derived(
     $weather !== null &&
       ($weatherSectorsReady || $weather.rainOverride !== null)
   )
+  /** Server game time, never the sun-debug display hour: the rain that falls
+   *  is evaluated on the server clock, so the radar has to be too. */
   function viewMinutes() {
-    return gameMinutesAt(gameTimeState.date, gameTimeState.hour) + ahead
+    return gameMinutesAt(gameTimeState.date, gameTimeState.serverHour) + ahead
   }
 
   /** Paint the region tiles onto the cached layer. Tiles arrive out of order
@@ -98,17 +115,26 @@
         const at = worldToCanvas(worldX, worldZ, CONTINENT_VIEW, WIDTH)
         loads.push(
           regionImages.load(rx, rz, version, sourceSize).then((img) => {
-            if (img && mapVersionDrawn === version)
+            if (!img) return false
+            if (mapVersionDrawn === version)
               ctx.drawImage(img, at.x, at.y, size, size)
+            return true
           })
         )
       }
     }
-    // The window covers hundreds of tiles and each is needed once; the layer
-    // keeps the pixels, so drop the decoded images rather than holding them
-    // for the life of the page.
-    void Promise.all(loads).then(() => {
-      if (mapVersionDrawn === version) regionImages.flush()
+    void Promise.all(loads).then((drawn) => {
+      if (mapVersionDrawn !== version) return
+      if (drawn.every(Boolean)) {
+        // Each tile is needed once and the layer keeps the pixels, so drop the
+        // decoded images rather than holding hundreds for the life of the page.
+        regionImages.flush()
+        mapRetryAt = 0
+      } else {
+        // A missing tile would otherwise be a hole for the session; keep the
+        // cache's backoff and repaint later.
+        mapRetryAt = performance.now() + MAP_RETRY_MS
+      }
     })
   }
 
@@ -155,11 +181,16 @@
       CONTINENT_VIEW,
       WIDTH
     )
+    const wrapped = viewWrappedX(pos.x, CONTINENT_VIEW)
+    const outside =
+      wrapped < CONTINENT_VIEW.x0 ||
+      wrapped > CONTINENT_VIEW.x1 ||
+      pos.z < CONTINENT_VIEW.z0 ||
+      pos.z > CONTINENT_VIEW.z1
+    // Outside the drawn window the marker sits on the edge as a ring, so it
+    // never silently disappears on the far side of the world.
     const x = Math.min(Math.max(at.x, 6), WIDTH - 6)
     const y = Math.min(Math.max(at.y, 6), HEIGHT - 6)
-    // Outside the drawn window the marker sits on the edge and is hollow, so
-    // it never silently disappears on the far side of the world.
-    const outside = x !== at.x || y !== at.y
     ctx.strokeStyle = '#f0c36b'
     ctx.lineWidth = 2
     ctx.beginPath()
@@ -190,11 +221,28 @@
     drawPlayer(ctx, pos)
   }
 
+  /** Which drawn cell covers the pointer, if any. */
+  function resolveHover(list: RadarCell[]) {
+    const at = pointer
+    if (!at) {
+      hover = null
+      return
+    }
+    const found = list.find((cell) => {
+      const dx = at.worldX - viewWrappedX(cell.x, CONTINENT_VIEW)
+      const dz = at.worldZ - cell.z
+      return dx * dx + dz * dz <= cell.radiusM * cell.radiusM
+    })
+    hover = found ? { cell: found, tipX: at.tipX, tipY: at.tipY } : null
+  }
+
   /** One tick: read the world without subscribing to it, then redraw. */
   function tick() {
     const version = get(minimapVersion)
-    if (version !== mapVersionDrawn) {
+    const retryDue = mapRetryAt !== 0 && performance.now() >= mapRetryAt
+    if (version !== mapVersionDrawn || retryDue) {
       mapVersionDrawn = version
+      mapRetryAt = 0
       buildMapLayer(version)
     }
 
@@ -206,6 +254,7 @@
       cells = []
       hereRain = 0
       nextRain = null
+      resolveHover([])
       render([], pos)
       return
     }
@@ -219,6 +268,7 @@
             cellInView(c, CONTINENT_VIEW)
           )
     cells = list
+    resolveHover(list)
     hereRain =
       w.rainOverride ?? weather_rain_at(w.seed, w.bias, t, pos.x, pos.z)
     const now = performance.now()
@@ -232,7 +282,12 @@
   }
 
   $effect(() => {
-    if (!$weatherRadarVisible) return
+    if (!$weatherRadarVisible) {
+      // The component stays mounted, so a tooltip left behind would come back
+      // under no pointer the next time the panel is shown.
+      stopHover()
+      return
+    }
     nextRainDueAt = 0
     // Untracked: `tick` reads the game clock and the player position, both of
     // which change every frame. Tracking either would tear this effect down
@@ -249,15 +304,15 @@
       // stride, so a modulo walks off the slider's step grid and never
       // returns to now.
       ahead = ahead + FAST_FORWARD > AHEAD_MAX ? 0 : ahead + FAST_FORWARD
-      nextRainDueAt = 0
-      untrack(tick)
+      retime()
     }, 500)
     return () => clearInterval(id)
   })
 
-  /** Redraw at once while the scrub is dragged instead of waiting a tick. */
-  function onScrub() {
-    nextRainDueAt = 0
+  /** The view time moved. Redraw now, and let the next-rain scan run once the
+   *  movement settles rather than on every event of a drag. */
+  function retime() {
+    nextRainDueAt = performance.now() + SCRUB_SETTLE_MS
     untrack(tick)
   }
 
@@ -274,25 +329,21 @@
       CONTINENT_VIEW,
       WIDTH
     )
-    let found: RadarCell | null = null
-    for (const cell of cells) {
-      const dx = world.x - viewWrappedX(cell.x, CONTINENT_VIEW)
-      const dz = world.z - cell.z
-      if (dx * dx + dz * dz <= cell.radiusM * cell.radiusM) {
-        found = cell
-        break
-      }
-    }
-    hover = found ? { cell: found, tipX, tipY } : null
+    pointer = { worldX: world.x, worldZ: world.z, tipX, tipY }
+    resolveHover(cells)
   }
 
   function stopHover() {
+    pointer = null
     hover = null
   }
 
   function toNow() {
     ahead = 0
     fastForward = false
+    // Without this the scrubbed forecast stays on screen for up to the
+    // throttle window, relabelled as if it were measured from now.
+    retime()
   }
 </script>
 
@@ -342,7 +393,7 @@
         max={AHEAD_MAX}
         step="5"
         bind:value={ahead}
-        oninput={onScrub}
+        oninput={retime}
         aria-label="Game minutes ahead"
       />
       <span class="readout">
@@ -415,7 +466,11 @@
   .dialog {
     position: fixed;
     top: 56px;
-    right: 10px;
+    /* Clear of the minimap (right: 9px, 180 px wide): unlike the celestial
+       dialog this panel takes pointer events, so overlapping it would swallow
+       the minimap's clicks. */
+    right: 200px;
+    max-width: calc(100vw - 210px);
     z-index: 999;
     width: 580px;
     max-height: calc(100vh - 66px);
