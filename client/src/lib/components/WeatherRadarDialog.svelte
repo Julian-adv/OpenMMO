@@ -39,9 +39,6 @@
    *  depends on them re-runs per frame and its interval never survives to
    *  fire. */
   const SAMPLE_MS = 250
-  /** Past this point in the canvas the tooltip would run under the panel's
-   *  clipped edge, so it flips to the left of the cursor. */
-  const TIP_FLIP_X = 300
   /** Deep-sea colour past the baked tiles, as the world map uses. */
   const OCEAN = '#01294e'
   /** The next-rain search walks 720 game minutes a minute at a time, so it
@@ -54,8 +51,12 @@
   let ahead = $state(0)
   let fastForward = $state(false)
   let canvas: HTMLCanvasElement | null = $state(null)
-  let hover: { cell: RadarCell; tipX: number; tipY: number } | null =
-    $state(null)
+  let hover: {
+    cell: RadarCell
+    tipX: number
+    tipY: number
+    flip: boolean
+  } | null = $state(null)
   /** Last pointer position, kept so the tooltip can be re-resolved against a
    *  fresh cell list instead of freezing on the cell found when it moved. */
   let pointer: {
@@ -63,9 +64,13 @@
     worldZ: number
     tipX: number
     tipY: number
+    flip: boolean
   } | null = null
   let cells: RadarCell[] = $state([])
   let nextRain: number | null = $state(null)
+  /** The scrub offset `nextRain` was measured from, so the row can never
+   *  present a forecast taken at one time as a wait from another. */
+  let nextRainAhead = $state(0)
   let hereRain = $state(0)
 
   const regionImages = new RegionImageCache()
@@ -73,10 +78,13 @@
   let mapLayer: HTMLCanvasElement | null = null
   let mapVersionDrawn: number | null = null
   let mapRetryAt = 0
+  let mapAttempts = 0
   let nextRainDueAt = 0
-  /** How long to wait before repainting a layer that lost tiles to a failed
-   *  request; the cache has its own per-tile backoff underneath. */
+  /** First wait before repainting a layer that lost tiles, doubling per
+   *  attempt to stay clear of the cache's own per-tile backoff. */
   const MAP_RETRY_MS = 15000
+  /** A region with no bake at all never resolves; stop asking. */
+  const MAP_MAX_ATTEMPTS = 3
 
   const ready = $derived(
     $weather !== null &&
@@ -90,15 +98,19 @@
 
   /** Paint the region tiles onto the cached layer. Tiles arrive out of order
    *  as they load; each lands on the layer, never over the cells. */
-  function buildMapLayer(version: number) {
+  function buildMapLayer(version: number, fresh: boolean) {
     const layer = mapLayer ?? document.createElement('canvas')
-    layer.width = WIDTH
-    layer.height = HEIGHT
-    mapLayer = layer
     const ctx = layer.getContext('2d')
     if (!ctx) return
-    ctx.fillStyle = OCEAN
-    ctx.fillRect(0, 0, WIDTH, HEIGHT)
+    if (fresh || layer.width !== WIDTH) {
+      // Only a new bake clears the layer. A retry paints the tiles it missed
+      // over what is already there, so the map never blinks to bare ocean.
+      layer.width = WIDTH
+      layer.height = HEIGHT
+      ctx.fillStyle = OCEAN
+      ctx.fillRect(0, 0, WIDTH, HEIGHT)
+    }
+    mapLayer = layer
 
     const size = Math.ceil(REGION_CELLS * SCALE)
     const loads: Promise<unknown>[] = []
@@ -125,15 +137,17 @@
     }
     void Promise.all(loads).then((drawn) => {
       if (mapVersionDrawn !== version) return
-      if (drawn.every(Boolean)) {
+      if (drawn.every(Boolean) || mapAttempts >= MAP_MAX_ATTEMPTS) {
         // Each tile is needed once and the layer keeps the pixels, so drop the
-        // decoded images rather than holding hundreds for the life of the page.
+        // decoded images rather than holding hundreds for the life of the
+        // page. After the last attempt, keep whatever arrived.
         regionImages.flush()
         mapRetryAt = 0
       } else {
         // A missing tile would otherwise be a hole for the session; keep the
         // cache's backoff and repaint later.
-        mapRetryAt = performance.now() + MAP_RETRY_MS
+        mapAttempts += 1
+        mapRetryAt = performance.now() + MAP_RETRY_MS * 2 ** (mapAttempts - 1)
       }
     })
   }
@@ -233,17 +247,21 @@
       const dz = at.worldZ - cell.z
       return dx * dx + dz * dz <= cell.radiusM * cell.radiusM
     })
-    hover = found ? { cell: found, tipX: at.tipX, tipY: at.tipY } : null
+    hover = found
+      ? { cell: found, tipX: at.tipX, tipY: at.tipY, flip: at.flip }
+      : null
   }
 
   /** One tick: read the world without subscribing to it, then redraw. */
   function tick() {
     const version = get(minimapVersion)
+    const rebaked = version !== mapVersionDrawn
     const retryDue = mapRetryAt !== 0 && performance.now() >= mapRetryAt
-    if (version !== mapVersionDrawn || retryDue) {
+    if (rebaked || retryDue) {
+      if (rebaked) mapAttempts = 0
       mapVersionDrawn = version
       mapRetryAt = 0
-      buildMapLayer(version)
+      buildMapLayer(version, rebaked)
     }
 
     const w = get(weather)
@@ -277,6 +295,7 @@
     } else if (now >= nextRainDueAt) {
       nextRainDueAt = now + NEXT_RAIN_MS
       nextRain = minutesUntilRain(w.seed, w.bias, t, pos.x, pos.z)
+      nextRainAhead = ahead
     }
     render(list, pos)
   }
@@ -329,7 +348,15 @@
       CONTINENT_VIEW,
       WIDTH
     )
-    pointer = { worldX: world.x, worldZ: world.z, tipX, tipY }
+    // The panel's width follows the viewport, so the flip point is half of
+    // whatever the canvas is actually showing.
+    pointer = {
+      worldX: world.x,
+      worldZ: world.z,
+      tipX,
+      tipY,
+      flip: tipX > rect.width / 2,
+    }
     resolveHover(cells)
   }
 
@@ -374,7 +401,7 @@
         <div
           class="tip"
           style="left:{hover.tipX + 12}px; top:{hover.tipY +
-            12}px; transform:{hover.tipX > TIP_FLIP_X
+            12}px; transform:{hover.flip
             ? 'translateX(calc(-100% - 24px))'
             : 'none'}"
         >
@@ -421,12 +448,15 @@
             held by /weather
           {:else if nextRain === null}
             none within {formatGameMinutes(RAIN_SEARCH_HORIZON_MIN)}
+            {#if nextRainAhead > 0}<span class="from"
+                >from +{formatGameMinutes(nextRainAhead)}</span
+              >{/if}
           {:else if nextRain === 0}
-            {ahead === 0 ? 'raining now' : 'raining then'}
+            {nextRainAhead === 0 ? 'raining now' : 'raining then'}
           {:else}
             {formatGameMinutes(nextRain)} ({formatRealMinutes(nextRain)})
-            {#if ahead > 0}<span class="from"
-                >from +{formatGameMinutes(ahead)}</span
+            {#if nextRainAhead > 0}<span class="from"
+                >from +{formatGameMinutes(nextRainAhead)}</span
               >{/if}
           {/if}
         </span>
@@ -473,7 +503,9 @@
     max-width: calc(100vw - 210px);
     z-index: 999;
     width: 580px;
-    max-height: calc(100vh - 66px);
+    /* Reserve the bottom strip: the quickslot bar lives there and this panel
+       takes pointer events, so reaching it would swallow its clicks. */
+    max-height: calc(100vh - 186px);
     display: flex;
     flex-direction: column;
     background: rgba(0, 0, 0, 0.9);
