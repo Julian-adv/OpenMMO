@@ -15,7 +15,6 @@
   interface Props {
     text: string
     fontSize?: number
-    fontFamily?: string
     color?: string
     outlineColor?: string
     outlineWidth?: number
@@ -34,7 +33,6 @@
   let {
     text,
     fontSize = 0.3,
-    fontFamily = 'sans-serif',
     color = '#ffffff',
     outlineColor,
     outlineWidth = 0,
@@ -51,7 +49,6 @@
   }: Props = $props()
 
   const PIXELS_PER_UNIT = 256
-  const font = $derived(`${fontSize * PIXELS_PER_UNIT}px ${fontFamily}`)
 
   let label: LabelCanvas | null = null
 
@@ -70,6 +67,7 @@
 
   function renderCanvas() {
     const pxFont = fontSize * PIXELS_PER_UNIT
+    const font = `${pxFont}px sans-serif`
     measureCtx.font = font
 
     const lines =
@@ -133,18 +131,6 @@
 
   $effect(() => {
     renderCanvas()
-    if (fontFamily === 'sans-serif' || document.fonts.check(font, text)) return
-
-    let cancelled = false
-    void document.fonts.load(font, text).then(
-      () => {
-        if (!cancelled) renderCanvas()
-      },
-      () => {}
-    )
-    return () => {
-      cancelled = true
-    }
   })
 
   $effect(() => {

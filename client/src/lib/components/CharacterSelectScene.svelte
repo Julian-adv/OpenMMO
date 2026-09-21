@@ -7,14 +7,15 @@
   import { interactivity, type IntersectionEvent } from '@threlte/extras'
   import type { AccountCharacter } from '../network/socket'
   import CharacterPreview from './CharacterPreview.svelte'
-  import CharacterSlotLabel from './CharacterSlotLabel.svelte'
+  import {
+    projectCharacterSlots,
+    type CharacterSlotLayout,
+  } from '../utils/characterSelectLayout'
   import { loadSplatLayers } from '../utils/splatLayerLoader'
   import { loadGLB } from '../utils/gltfCache'
   import { getWeaponModelPath } from '../utils/modelPaths'
 
-  /** Pointer travel that makes a gesture a drag, so spinning never selects.
-   *  Threlte enforces it on click and dblclick; only the press *before* a
-   *  double is ours to check. */
+  // Keep rotation drags from selecting or starting a character.
   const DRAG_CLICK_SLOP_PX = 5
 
   interactivity({ clickDistanceThreshold: DRAG_CLICK_SLOP_PX })
@@ -30,6 +31,7 @@
     selectedCharacterId: number | null
     onSlotClick: (slotIndex: number) => void
     onSlotDoubleClick: (slotIndex: number) => void
+    onSlotLayout: (layout: CharacterSlotLayout[]) => void
   }
 
   let {
@@ -37,6 +39,7 @@
     selectedCharacterId,
     onSlotClick,
     onSlotDoubleClick,
+    onSlotLayout,
   }: Props = $props()
 
   const SLOT_SPACING = 1.8
@@ -74,12 +77,9 @@
   const DRAG_RADIANS_PER_PIXEL = 0.01
 
   const { size, renderer: _renderer, scene } = useThrelte()
-  // Cast renderer — Threlte types it as WebGLRenderer but we use WebGPURenderer via createRenderer
+  // createRenderer supplies WebGPURenderer.
   const renderer = _renderer as unknown as WebGPURenderer
   let viewportSize = $state({ width: 1, height: 1 })
-  let useCompactSlotLabels = $derived(
-    viewportSize.width <= 600 || viewportSize.height <= 700
-  )
   let cameraPositionZ = $state(8)
 
   let cameraRef = $state<THREE.PerspectiveCamera | undefined>(undefined)
@@ -115,8 +115,7 @@
 
   let spotlightsAdded = false
 
-  // Drag-to-rotate, one angle per slot so a spun character keeps its pose
-  // while you look at another.
+  // Preserve each slot's rotation across selection changes.
   let slotRotations = $state([0, 0, 0])
   let dragSlot: number | null = null
   let dragLastX = 0
@@ -127,17 +126,14 @@
     slotIndex: number,
     event: IntersectionEvent<PointerEvent>
   ) {
-    // Left button only: a right-press whose release the context menu swallows
-    // would leave the slot stuck to the pointer.
+    // Ignore right-clicks, whose release can be swallowed by the context menu.
     if (event.nativeEvent.button !== 0 || !characters[slotIndex]) return
     dragSlot = slotIndex
-    // The floor lies behind every slot, so without this its handler would
-    // fire too and hand the drag to the selected character instead.
+    // Keep the floor from also handling this drag.
     event.stopPropagation()
   }
 
-  /** Dragging the floor spins whoever is selected — the character hitboxes are
-   *  narrow, and there is nothing else to grab out there. */
+  // Dragging the floor rotates the selected character.
   function startSelectedDrag(event: IntersectionEvent<PointerEvent>) {
     startSlotDrag(getSelectedSlotIndex(), event)
   }
@@ -160,10 +156,7 @@
     dragSlot = null
   }
 
-  /** The browser still counts a drag's release as the first click of a double,
-   *  and Threlte only measures the second press — so entering the game has to
-   *  check the first, or "rotate, then click to select" launches the
-   *  character. */
+  // A drag followed by a click must not start the character.
   function precededByDrag(): boolean {
     return previousDragTravel > DRAG_CLICK_SLOP_PX
   }
@@ -183,8 +176,7 @@
       viewportSize = nextSize
     })
 
-    // On window, not the canvas: a spin that runs off the character (or off
-    // the canvas entirely) should keep turning until the button comes up.
+    // Continue drags outside the canvas until release.
     window.addEventListener('pointerdown', handleWindowPointerDown)
     window.addEventListener('pointermove', handleWindowPointerMove)
     window.addEventListener('pointerup', endSlotDrag)
@@ -249,8 +241,20 @@
       viewportSize.height
     )
 
-    if (cameraRef) {
+    if (cameraRef && viewportSize.width > 0 && viewportSize.height > 0) {
+      cameraRef.position.z = cameraPositionZ
+      cameraRef.aspect = viewportSize.width / viewportSize.height
+      cameraRef.updateProjectionMatrix()
       cameraRef.lookAt(0, CAMERA_LOOK_AT_Y, SLOT_DEPTH)
+      cameraRef.updateMatrixWorld()
+      onSlotLayout(
+        projectCharacterSlots(
+          cameraRef,
+          SLOT_POSITIONS,
+          SLOT_DEPTH,
+          viewportSize
+        )
+      )
     }
   })
 
@@ -387,15 +391,4 @@
       />
     {/key}
   {/if}
-
-  <CharacterSlotLabel
-    {character}
-    selected={character?.id === selectedCharacterId}
-    positionX={SLOT_POSITIONS[slotIndex]}
-    positionZ={SLOT_DEPTH}
-    camera={cameraRef}
-    onclick={() => onSlotClick(slotIndex)}
-    ondblclick={() => !precededByDrag() && onSlotDoubleClick(slotIndex)}
-    compact={useCompactSlotLabels}
-  />
 {/each}

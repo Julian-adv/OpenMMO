@@ -1,12 +1,16 @@
 <script lang="ts">
   import type { AccountCharacter } from '../network/socket'
   import { t } from '../i18n'
-  import { character_max_mana } from '../wasm/onlinerpg_shared'
+  import type { CharacterSlotLayout } from '../utils/characterSelectLayout'
+  import CharacterSlotLabel from './CharacterSlotLabel.svelte'
+  import CharacterSummary from './CharacterSummary.svelte'
 
   interface Props {
     accountName: string
     characters: AccountCharacter[]
     selectedCharacterId: number | null
+    slotLayout: CharacterSlotLayout[]
+    onSlotClick: (slotIndex: number) => void
     onStartGame: (
       characterId: number
     ) => Promise<{ ok: boolean; message?: string; renameRequired?: boolean }>
@@ -20,6 +24,8 @@
     accountName,
     characters,
     selectedCharacterId,
+    slotLayout,
+    onSlotClick,
     onStartGame,
     onDeleteCharacter,
     onLogout,
@@ -31,15 +37,11 @@
   let selectedCharacter = $derived(
     characters.find((character) => character.id === selectedCharacterId)
   )
-  const maxMp = $derived(
-    selectedCharacter
-      ? character_max_mana(
-          selectedCharacter.class,
-          selectedCharacter.attributes.wis,
-          selectedCharacter.level
-        )
-      : 0
-  )
+  let viewportWidth = $state(0)
+  let viewportHeight = $state(0)
+  let cardsHeight = $state(0)
+  let detailsHeight = $state(0)
+  const compact = $derived(viewportWidth <= 600 || viewportHeight <= 700)
 
   function isBusy() {
     return isStarting || isDeleting
@@ -83,34 +85,36 @@
 </script>
 
 <!-- The shared Canvas renders the 3D scene. -->
-<div class="character-select-overlay">
+<div
+  class="character-select-overlay"
+  bind:clientWidth={viewportWidth}
+  bind:clientHeight={viewportHeight}
+  style:--details-height={`${selectedCharacter ? detailsHeight : 0}px`}
+>
   <div class="top-bar">
     <h1 class="title">{$t('characterSelect.title')}</h1>
     <p class="account-name">{$t('characterSelect.account')}: {accountName}</p>
   </div>
 
-  {#if selectedCharacter}
-    <div class="mobile-character-info">
-      <div class="info-main">
-        <span class="info-name">{selectedCharacter.name}</span>
-        <span class="info-meta">
-          {$t('stat.level')}
-          {selectedCharacter.level}
-          {$t(`class.${selectedCharacter.class}`)} · {$t('stat.maxHp')}
-          {selectedCharacter.max_hp}
-          · {$t('stat.maxMp')}
-          {maxMp}
-        </span>
-      </div>
+  <div class="character-slots" bind:clientHeight={cardsHeight}>
+    {#each slotLayout as layout, index (index)}
+      {@const character = characters[index]}
+      <CharacterSlotLabel
+        {character}
+        {layout}
+        {compact}
+        availableHeight={cardsHeight}
+        selected={character?.id === selectedCharacterId}
+        disabled={isBusy()}
+        onclick={() => onSlotClick(index)}
+        ondblclick={() => character && handleStart(character.id)}
+      />
+    {/each}
+  </div>
 
-      <div class="info-stats">
-        {#each [[$t('stat.str'), selectedCharacter.attributes.str], [$t('stat.dex'), selectedCharacter.attributes.dex], [$t('stat.con'), selectedCharacter.attributes.con], [$t('stat.int'), selectedCharacter.attributes.int], [$t('stat.wis'), selectedCharacter.attributes.wis], [$t('stat.cha'), selectedCharacter.attributes.cha]] as stat (stat[0])}
-          <div class="info-stat">
-            <span>{stat[0]}</span>
-            <strong>{stat[1]}</strong>
-          </div>
-        {/each}
-      </div>
+  {#if selectedCharacter}
+    <div class="mobile-character-info" bind:clientHeight={detailsHeight}>
+      <CharacterSummary character={selectedCharacter} />
     </div>
   {/if}
 
@@ -185,6 +189,12 @@
     color: #9fb0c6;
     font-size: 13px;
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  }
+
+  .character-slots {
+    position: absolute;
+    inset: 0 0 64px;
+    pointer-events: none;
   }
 
   .mobile-character-info {
@@ -280,6 +290,10 @@
       font-size: 13px;
     }
 
+    .character-slots {
+      bottom: calc(80px + var(--details-height));
+    }
+
     .mobile-character-info {
       position: fixed;
       left: 60px;
@@ -295,55 +309,6 @@
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
       pointer-events: auto;
       backdrop-filter: blur(4px);
-    }
-
-    .info-main {
-      min-width: 0;
-      display: grid;
-      gap: 2px;
-      text-align: center;
-    }
-
-    .info-name {
-      overflow: hidden;
-      color: #f7fafc;
-      font-size: 15px;
-      font-weight: 700;
-      line-height: 1.2;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .info-meta {
-      color: #f0c040;
-      font-size: 12px;
-      line-height: 1.25;
-    }
-
-    .info-stats {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 5px;
-    }
-
-    .info-stat {
-      min-width: 0;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 4px;
-      padding: 4px 6px;
-      border: 1px solid rgba(83, 101, 123, 0.75);
-      border-radius: 6px;
-      background: rgba(34, 53, 82, 0.72);
-      color: #a7b7ca;
-      font-size: 11px;
-      line-height: 1.2;
-    }
-
-    .info-stat strong {
-      color: #e4ecf5;
-      font-size: 12px;
     }
   }
 </style>

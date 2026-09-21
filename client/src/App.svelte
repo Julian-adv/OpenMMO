@@ -7,6 +7,7 @@
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
   import CharacterSelectScene from './lib/components/CharacterSelectScene.svelte'
+  import type { CharacterSlotLayout } from './lib/utils/characterSelectLayout'
   import CharacterCreateScreen from './lib/components/CharacterCreateScreen.svelte'
   import CharacterCreateScene from './lib/components/CharacterCreateScene.svelte'
   import RenameCharacterDialog from './lib/components/RenameCharacterDialog.svelte'
@@ -42,6 +43,7 @@
   let accountName = $state('')
   let accountCharacters = $state<AccountCharacter[]>([])
   let selectedCharacterId = $state<number | null>(null)
+  let characterSlotLayout = $state<CharacterSlotLayout[]>([])
   let selectedCharacter = $derived<AccountCharacter | null>(
     accountCharacters.find(
       (character) => character.id === selectedCharacterId
@@ -242,6 +244,12 @@
     selectedCharacterId = characterId
   }
 
+  function handleCharacterSlotClick(index: number) {
+    const character = accountCharacters[index]
+    if (character) handleSelectCharacter(character.id)
+    else handleOpenCreateCharacterScreen()
+  }
+
   async function handleBackToCharacterSelect() {
     screen = 'character-select'
     const result = await networkManager.requestReauthenticate()
@@ -358,14 +366,8 @@
           <CharacterSelectScene
             characters={accountCharacters}
             {selectedCharacterId}
-            onSlotClick={(i) => {
-              const c = accountCharacters[i]
-              if (c) {
-                handleSelectCharacter(c.id)
-              } else {
-                handleOpenCreateCharacterScreen()
-              }
-            }}
+            onSlotClick={handleCharacterSlotClick}
+            onSlotLayout={(layout) => (characterSlotLayout = layout)}
             onSlotDoubleClick={(i) => {
               const c = accountCharacters[i]
               if (c) {
@@ -414,6 +416,8 @@
       {accountName}
       characters={accountCharacters}
       {selectedCharacterId}
+      slotLayout={characterSlotLayout}
+      onSlotClick={handleCharacterSlotClick}
       onStartGame={handleStartGame}
       onDeleteCharacter={handleDeleteCharacter}
       onLogout={handleLogoutToLogin}

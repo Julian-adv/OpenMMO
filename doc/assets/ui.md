@@ -2,7 +2,7 @@
 
 ## Fonts
 
-- **Noto Sans KR** — [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Sans+KR), [SIL Open Font License 1.1](https://github.com/google/fonts/blob/main/ofl/notosanskr/OFL.txt); copyright 2014–2021 Adobe, reserved font name “Source”. Added 2026-09-22 for the character selection UI, 3D character cards, and rename dialog. Loaded through the Google Fonts CSS API at weights 400, 500, 600, and 700 with `display=swap`; font binaries are hosted by Google Fonts.
+- **Noto Sans KR** — [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Sans+KR), [SIL Open Font License 1.1](https://github.com/google/fonts/blob/main/ofl/notosanskr/OFL.txt); copyright 2014–2021 Adobe, reserved font name “Source”. Added 2026-09-22 for the character selection UI, HTML character cards, and rename dialog. Loaded through the Google Fonts CSS API at weights 400, 500, 600, and 700 with `display=swap`; font binaries are hosted by Google Fonts.
 
 ## Icon
 
