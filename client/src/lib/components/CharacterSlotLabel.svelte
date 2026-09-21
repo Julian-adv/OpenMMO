@@ -4,6 +4,7 @@
   import { titleName } from '../data/titleDefs'
   import * as THREE from 'three'
   import type { AccountCharacter } from '../network/socket'
+  import { t } from '../i18n'
   import { character_max_mana } from '../wasm/onlinerpg_shared'
 
   interface Props {
@@ -30,6 +31,7 @@
 
   const PANEL_Y = -0.9
   const CORNER_RADIUS = 0.08
+  const FONT_FAMILY = '"Noto Sans KR", sans-serif'
 
   let labelGroup = $state<THREE.Group | undefined>(undefined)
 
@@ -138,6 +140,7 @@
       text={character.name}
       position={[0, compact ? 0 : panelHeight / 2 - 0.12, 0.02]}
       fontSize={compact ? 0.19 : 0.13}
+      fontFamily={FONT_FAMILY}
       color="#f7fafc"
       anchorX="center"
       anchorY="middle"
@@ -150,6 +153,7 @@
           text={$titleName(character.active_title)}
           position={[0, panelHeight / 2 - 0.235, 0.02]}
           fontSize={0.07}
+          fontFamily={FONT_FAMILY}
           color="#d6bcfa"
           anchorX="center"
           anchorY="middle"
@@ -157,13 +161,14 @@
         />
       {/if}
       <TextLabel
-        text={`Lv. ${character.level}`}
+        text={`${$t('stat.level')} ${character.level}`}
         position={[
           0,
           panelHeight / 2 - (character.active_title ? 0.34 : 0.27),
           0.02,
         ]}
         fontSize={0.1}
+        fontFamily={FONT_FAMILY}
         color="#f0c040"
         anchorX="center"
         anchorY="middle"
@@ -171,26 +176,28 @@
       />
 
       <TextLabel
-        text={`Max HP ${character.max_hp}  Max MP ${maxMp}`}
+        text={`${$t('stat.maxHp')} ${character.max_hp}  ${$t('stat.maxMp')} ${maxMp}`}
         position={[
           0,
           panelHeight / 2 - (character.active_title ? 0.46 : 0.39),
           0.02,
         ]}
         fontSize={0.085}
+        fontFamily={FONT_FAMILY}
         color="#f0c040"
         anchorX="center"
         anchorY="middle"
         depthOffset={-1}
       />
 
-      {#each [{ label: 'STR', value: character.attributes.str, col: 0, row: 0 }, { label: 'DEX', value: character.attributes.dex, col: 1, row: 0 }, { label: 'CON', value: character.attributes.con, col: 0, row: 1 }, { label: 'INT', value: character.attributes.int, col: 1, row: 1 }, { label: 'WIS', value: character.attributes.wis, col: 0, row: 2 }, { label: 'CHA', value: character.attributes.cha, col: 1, row: 2 }] as stat (stat.label)}
+      {#each [{ label: $t('stat.str'), value: character.attributes.str, col: 0, row: 0 }, { label: $t('stat.dex'), value: character.attributes.dex, col: 1, row: 0 }, { label: $t('stat.con'), value: character.attributes.con, col: 0, row: 1 }, { label: $t('stat.int'), value: character.attributes.int, col: 1, row: 1 }, { label: $t('stat.wis'), value: character.attributes.wis, col: 0, row: 2 }, { label: $t('stat.cha'), value: character.attributes.cha, col: 1, row: 2 }] as stat (stat.label)}
         {@const colX = stat.col === 0 ? -STAT_COL_GAP : 0.02}
         {@const rowY = STATS_START_Y + (2 - stat.row) * STAT_ROW_GAP}
         <TextLabel
           text={stat.label}
           position={[colX, rowY, 0.02]}
           fontSize={STAT_FONT_SIZE}
+          fontFamily={FONT_FAMILY}
           color="#a7b7ca"
           anchorX="left"
           anchorY="middle"
@@ -200,6 +207,7 @@
           text={String(stat.value)}
           position={[colX + STAT_VALUE_OFFSET, rowY, 0.02]}
           fontSize={STAT_FONT_SIZE}
+          fontFamily={FONT_FAMILY}
           color="#a7b7ca"
           anchorX="left"
           anchorY="middle"
@@ -210,9 +218,10 @@
   {:else}
     <!-- Empty slot -->
     <TextLabel
-      text="+ Create"
+      text={$t('characterSelect.create')}
       position={[0, 0, 0.02]}
       fontSize={compact ? 0.19 : 0.12}
+      fontFamily={FONT_FAMILY}
       color="#9fb0c6"
       anchorX="center"
       anchorY="middle"

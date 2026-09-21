@@ -1,5 +1,9 @@
 # UI Assets
 
+## Fonts
+
+- **Noto Sans KR** — [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Sans+KR), [SIL Open Font License 1.1](https://github.com/google/fonts/blob/main/ofl/notosanskr/OFL.txt); copyright 2014–2021 Adobe, reserved font name “Source”. Added 2026-09-22 for the character selection UI, 3D character cards, and rename dialog. Loaded through the Google Fonts CSS API at weights 400, 500, 600, and 700 with `display=swap`; font binaries are hosted by Google Fonts.
+
 ## Icon
 
 - ORKEA cart remove icon — [Heroicons v2.2.0, 24px outline `trash`](https://github.com/tailwindlabs/heroicons/blob/v2.2.0/optimized/24/outline/trash.svg), Tailwind Labs, Inc.; MIT license, added 2026-09-19. Inline SVG in `FurnitureBasket.svelte`, white with a transparent background. License included at `client/public/licenses/heroicons-MIT.txt`.

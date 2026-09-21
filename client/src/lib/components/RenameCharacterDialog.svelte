@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../i18n'
+
   interface Props {
     onRename: (newName: string) => Promise<{ ok: boolean; message?: string }>
     onCancel: () => void
@@ -16,7 +18,7 @@
 
     const trimmed = newName.trim()
     if (!trimmed) {
-      errorMessage = 'Please enter a new name'
+      errorMessage = $t('characterRename.nameRequired')
       return
     }
 
@@ -26,21 +28,21 @@
     isRenaming = false
 
     if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to rename character'
+      errorMessage = result.message ?? $t('characterRename.failed')
     }
   }
 </script>
 
 <div class="backdrop">
   <form class="dialog" onsubmit={submit}>
-    <h2>New name required</h2>
-    <p>This name can no longer be used. Please choose a new one.</p>
+    <h2>{$t('characterRename.title')}</h2>
+    <p>{$t('characterRename.description')}</p>
     <!-- svelte-ignore a11y_autofocus -->
     <input
       type="text"
       bind:value={newName}
       maxlength="24"
-      placeholder="New character name"
+      placeholder={$t('characterRename.placeholder')}
       disabled={isRenaming}
       autofocus
     />
@@ -54,10 +56,12 @@
         onclick={onCancel}
         disabled={isRenaming}
       >
-        Cancel
+        {$t('common.cancel')}
       </button>
       <button type="submit" class="primary" disabled={isRenaming}>
-        {isRenaming ? 'Renaming...' : 'Rename'}
+        {isRenaming
+          ? $t('characterRename.renaming')
+          : $t('characterRename.rename')}
       </button>
     </div>
   </form>
@@ -65,6 +69,7 @@
 
 <style>
   .backdrop {
+    font-family: 'Noto Sans KR', sans-serif;
     position: fixed;
     inset: 0;
     z-index: 20;
@@ -99,6 +104,7 @@
   }
 
   input {
+    font-family: inherit;
     box-sizing: border-box;
     height: 36px;
     padding: 0 10px;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { AccountCharacter } from '../network/socket'
+  import { t } from '../i18n'
   import { character_max_mana } from '../wasm/onlinerpg_shared'
 
   interface Props {
@@ -55,7 +56,7 @@
 
     // A rename-required refusal opens App's dialog instead.
     if (!result.ok && !result.renameRequired) {
-      errorMessage = result.message ?? 'Failed to enter game'
+      errorMessage = result.message ?? $t('characterSelect.enterFailed')
     }
   }
 
@@ -66,7 +67,7 @@
     if (!character) return
 
     const confirmed = confirm(
-      `Are you sure you want to delete "${character.name}"? This cannot be undone.`
+      $t('characterSelect.deleteConfirm', { name: character.name })
     )
     if (!confirmed) return
 
@@ -76,20 +77,16 @@
     isDeleting = false
 
     if (!result.ok) {
-      errorMessage = result.message ?? 'Failed to delete character'
+      errorMessage = result.message ?? $t('characterSelect.deleteFailed')
     }
-  }
-
-  function formatCharacterClass(value: string) {
-    return value.charAt(0).toUpperCase() + value.slice(1)
   }
 </script>
 
-<!-- UI overlay only — the 3D scene is rendered in the shared Canvas in App.svelte -->
+<!-- The shared Canvas renders the 3D scene. -->
 <div class="character-select-overlay">
   <div class="top-bar">
-    <h1 class="title">Character Select</h1>
-    <p class="account-name">Account: {accountName}</p>
+    <h1 class="title">{$t('characterSelect.title')}</h1>
+    <p class="account-name">{$t('characterSelect.account')}: {accountName}</p>
   </div>
 
   {#if selectedCharacter}
@@ -97,14 +94,17 @@
       <div class="info-main">
         <span class="info-name">{selectedCharacter.name}</span>
         <span class="info-meta">
-          Lv. {selectedCharacter.level}
-          {formatCharacterClass(selectedCharacter.class)} · Max HP {selectedCharacter.max_hp}
-          · Max MP {maxMp}
+          {$t('stat.level')}
+          {selectedCharacter.level}
+          {$t(`class.${selectedCharacter.class}`)} · {$t('stat.maxHp')}
+          {selectedCharacter.max_hp}
+          · {$t('stat.maxMp')}
+          {maxMp}
         </span>
       </div>
 
       <div class="info-stats">
-        {#each [['STR', selectedCharacter.attributes.str], ['DEX', selectedCharacter.attributes.dex], ['CON', selectedCharacter.attributes.con], ['INT', selectedCharacter.attributes.int], ['WIS', selectedCharacter.attributes.wis], ['CHA', selectedCharacter.attributes.cha]] as stat (stat[0])}
+        {#each [[$t('stat.str'), selectedCharacter.attributes.str], [$t('stat.dex'), selectedCharacter.attributes.dex], [$t('stat.con'), selectedCharacter.attributes.con], [$t('stat.int'), selectedCharacter.attributes.int], [$t('stat.wis'), selectedCharacter.attributes.wis], [$t('stat.cha'), selectedCharacter.attributes.cha]] as stat (stat[0])}
           <div class="info-stat">
             <span>{stat[0]}</span>
             <strong>{stat[1]}</strong>
@@ -121,7 +121,7 @@
       onclick={onLogout}
       disabled={isBusy()}
     >
-      Back
+      {$t('characterSelect.back')}
     </button>
     <button
       type="button"
@@ -129,7 +129,9 @@
       onclick={() => handleStart()}
       disabled={!selectedCharacterId || isBusy()}
     >
-      {isStarting ? 'Starting...' : 'Start'}
+      {isStarting
+        ? $t('characterSelect.starting')
+        : $t('characterSelect.start')}
     </button>
     <button
       type="button"
@@ -137,7 +139,9 @@
       onclick={handleDelete}
       disabled={!selectedCharacterId || isBusy()}
     >
-      {isDeleting ? 'Deleting...' : 'Delete'}
+      {isDeleting
+        ? $t('characterSelect.deleting')
+        : $t('characterSelect.delete')}
     </button>
     {#if errorMessage}
       <div class="error-message">{errorMessage}</div>
@@ -147,6 +151,7 @@
 
 <style>
   .character-select-overlay {
+    font-family: 'Noto Sans KR', sans-serif;
     position: fixed;
     inset: 0;
     box-sizing: border-box;
@@ -161,7 +166,7 @@
     justify-content: space-between;
     pointer-events: none;
     color: #edf2f7;
-    /* No background — the gradient is rendered behind the shared Canvas in App.svelte */
+    /* The shared Canvas supplies the background. */
   }
 
   .top-bar {
