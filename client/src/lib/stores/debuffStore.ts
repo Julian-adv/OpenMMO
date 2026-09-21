@@ -1,12 +1,12 @@
 import { derived, writable } from 'svelte/store'
+import { locale } from '../i18n'
 import {
   debuffPresentation,
   formatRemaining,
   type PresentedDebuff,
 } from '../data/debuffPresentation'
 
-/** The local player's active debuffs (doc/DEBUFF.md), pushed by the server on
- *  apply/refresh/expiry. `until` is on the Date.now clock. */
+/** Server-supplied debuffs; `until` is a Date.now timestamp. */
 export interface ActiveDebuff {
   id: string
   until: number
@@ -14,20 +14,22 @@ export interface ActiveDebuff {
 
 export const activeDebuffs = writable<ActiveDebuff[]>([])
 
-/** Unexpired debuffs with their presentation and a live remaining-time label;
- *  ticks once a second only while something is active. */
-export const visibleDebuffs = derived<typeof activeDebuffs, PresentedDebuff[]>(
-  activeDebuffs,
-  ($active, set) => {
+/** Tick once a second while debuffs are active. */
+export const visibleDebuffs = derived<
+  [typeof activeDebuffs, typeof locale],
+  PresentedDebuff[]
+>(
+  [activeDebuffs, locale],
+  ([$active, language], set) => {
     const update = () => {
       const now = Date.now()
       set(
         $active
           .filter((d) => d.until > now)
           .map((d) => ({
-            ...debuffPresentation(d.id),
+            ...debuffPresentation(d.id, language),
             id: d.id,
-            remaining: formatRemaining(d.until - now),
+            remaining: formatRemaining(d.until - now, language),
           }))
       )
     }

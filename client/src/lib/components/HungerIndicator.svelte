@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import { hungerState, grilling } from '../stores/hungerStore'
   import { visibleDebuffs } from '../stores/debuffStore'
   import {
@@ -18,11 +19,11 @@
   const accessibleSummary = $derived.by(() => {
     const h = $hungerState
     if (!h) return ''
-    const lines = [`Open character status. Satiation ${h.satiation}/1000`]
-    if (h.band === 'Hungry')
-      lines.push('Sprinting disabled, natural healing takes twice as long')
-    if (h.band === 'Weak')
-      lines.push('Slowed, weaker carry, no natural healing — eat!')
+    const lines = [
+      $t('hunger.openStatus', { satiation: h.satiation, max: 1000 }),
+    ]
+    if (h.band === 'Hungry') lines.push($t('hunger.hungryNote'))
+    if (h.band === 'Weak') lines.push($t('hunger.weakWarning'))
     for (const d of $visibleDebuffs) lines.push(`${d.label}: ${d.note}`)
     return lines.join('\n')
   })
@@ -40,6 +41,7 @@
 </script>
 
 {#if $hungerState}
+  {@const noteKey = HUNGER_BAND_INFO[$hungerState.band].noteKey}
   <div
     class="hunger"
     class:hungry
@@ -54,13 +56,13 @@
   >
     <span class="badge primary-badge">
       {HUNGER_BAND_INFO[$hungerState.band].icon}
-      {HUNGER_BAND_INFO[$hungerState.band].label}
+      {$t(HUNGER_BAND_INFO[$hungerState.band].labelKey)}
     </span>
     {#each $visibleDebuffs as debuff (debuff.id)}
       <span class="badge debuff">{debuff.icon} {debuff.remaining}</span>
     {/each}
     {#if $grilling}
-      <span class="badge grilling">🐟 Grilling…</span>
+      <span class="badge grilling">🐟 {$t('hunger.grilling')}</span>
     {/if}
 
     <div id="hunger-tooltip" class="hunger-tooltip" role="tooltip">
@@ -70,16 +72,16 @@
         >
         <div>
           <div class="tooltip-title">
-            {HUNGER_BAND_INFO[$hungerState.band].label}
+            {$t(HUNGER_BAND_INFO[$hungerState.band].labelKey)}
           </div>
           <div class="tooltip-description">
-            {HUNGER_BAND_INFO[$hungerState.band].description}
+            {$t(HUNGER_BAND_INFO[$hungerState.band].descriptionKey)}
           </div>
         </div>
       </div>
 
       <div class="satiation-heading">
-        <span>Satiation</span>
+        <span>{$t('hunger.satiation')}</span>
         <strong>{$hungerState.satiation}<small>/1000</small></strong>
       </div>
       <div class="satiation-track">
@@ -87,9 +89,9 @@
       </div>
 
       <div class="modifier-grid">
-        {#each modifiers as modifier (modifier.label)}
+        {#each modifiers as modifier (modifier.labelKey)}
           <div class="modifier">
-            <span>{modifier.label}</span>
+            <span>{$t(modifier.labelKey)}</span>
             <strong
               class:positive={modifier.mult > 1}
               class:negative={modifier.mult < 1}
@@ -99,9 +101,9 @@
         {/each}
       </div>
 
-      {#if HUNGER_BAND_INFO[$hungerState.band].note}
+      {#if noteKey}
         <div class="tooltip-note">
-          {HUNGER_BAND_INFO[$hungerState.band].note}
+          {$t(noteKey)}
         </div>
       {/if}
       {#each $visibleDebuffs as debuff (debuff.id)}
@@ -110,13 +112,15 @@
           <div>
             <strong>{debuff.label}</strong>
             <small
-              >{debuff.note ? `${debuff.note} · ` : ''}{debuff.remaining} remaining</small
+              >{debuff.note ? `${debuff.note} · ` : ''}{$t('status.remaining', {
+                time: debuff.remaining,
+              })}</small
             >
           </div>
         </div>
       {/each}
       {#if $grilling}
-        <div class="grilling-note">🐟 Grilling in progress…</div>
+        <div class="grilling-note">🐟 {$t('hunger.grillingDescription')}</div>
       {/if}
     </div>
   </div>

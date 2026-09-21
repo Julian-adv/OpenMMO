@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from '../i18n'
   import { hungerState, grilling } from '../stores/hungerStore'
   import { visibleAbilityBuffs } from '../stores/abilityStore'
   import { formatRemaining } from '../data/debuffPresentation'
@@ -14,35 +15,36 @@
 </script>
 
 {#if $hungerState}
+  {@const noteKey = HUNGER_BAND_INFO[$hungerState.band].noteKey}
   <div
     class="status-content"
     class:hungry={$hungerState.band === 'Hungry'}
     class:weak={$hungerState.band === 'Weak'}
     class:debuffed={$visibleDebuffs.length > 0}
   >
-    <section class="status-card" aria-label="Hunger status">
+    <section class="status-card" aria-label={$t('hunger.status')}>
       <div class="status-header">
         <span class="status-icon"
           >{HUNGER_BAND_INFO[$hungerState.band].icon}</span
         >
         <div>
           <div class="status-title">
-            {HUNGER_BAND_INFO[$hungerState.band].label}
+            {$t(HUNGER_BAND_INFO[$hungerState.band].labelKey)}
           </div>
           <div class="status-description">
-            {HUNGER_BAND_INFO[$hungerState.band].description}
+            {$t(HUNGER_BAND_INFO[$hungerState.band].descriptionKey)}
           </div>
         </div>
       </div>
 
       <div class="satiation-heading">
-        <span>Satiation</span>
+        <span>{$t('hunger.satiation')}</span>
         <strong>{$hungerState.satiation}<small>/1000</small></strong>
       </div>
       <div
         class="satiation-track"
         role="progressbar"
-        aria-label="Satiation"
+        aria-label={$t('hunger.satiation')}
         aria-valuemin={0}
         aria-valuemax={1000}
         aria-valuenow={$hungerState.satiation}
@@ -51,9 +53,9 @@
       </div>
 
       <div class="modifier-grid">
-        {#each modifiers as modifier (modifier.label)}
+        {#each modifiers as modifier (modifier.labelKey)}
           <div class="modifier">
-            <span>{modifier.label}</span>
+            <span>{$t(modifier.labelKey)}</span>
             <strong
               class:positive={modifier.mult > 1}
               class:negative={modifier.mult < 1}
@@ -63,9 +65,9 @@
         {/each}
       </div>
 
-      {#if HUNGER_BAND_INFO[$hungerState.band].note}
+      {#if noteKey}
         <div class="status-note">
-          {HUNGER_BAND_INFO[$hungerState.band].note}
+          {$t(noteKey)}
         </div>
       {/if}
     </section>
@@ -76,32 +78,43 @@
         <div>
           <strong>{debuff.label}</strong>
           <small
-            >{debuff.note ? `${debuff.note} · ` : ''}{debuff.remaining} remaining</small
+            >{debuff.note ? `${debuff.note} · ` : ''}{$t('status.remaining', {
+              time: debuff.remaining,
+            })}</small
           >
         </div>
       </section>
     {/each}
 
     {#if $grilling}
-      <section class="effect-card grilling-card" aria-label="Grilling">
+      <section
+        class="effect-card grilling-card"
+        aria-label={$t('hunger.grilling')}
+      >
         <span class="effect-icon">🐟</span>
         <div>
-          <strong>Grilling</strong>
-          <small>Grilling in progress…</small>
+          <strong>{$t('hunger.grilling')}</strong>
+          <small>{$t('hunger.grillingDescription')}</small>
         </div>
       </section>
     {/if}
   </div>
 {:else}
-  <div class="status-empty">Status unavailable</div>
+  <div class="status-empty">{$t('status.unavailable')}</div>
 {/if}
 
 {#each $visibleAbilityBuffs as buff (buff.id)}
-  <section class="effect-card buff-card" aria-label="{buff.name} buff">
+  {@const name = $t(`ability.${buff.id}.name`)}
+  <section
+    class="effect-card buff-card"
+    aria-label={$t('status.buff', { name })}
+  >
     <img src={buff.icon} alt="" width="32" height="32" />
     <div>
-      <strong>{buff.name}</strong><small
-        >{buff.buffDescription} · {formatRemaining(buff.remaining)} remaining</small
+      <strong>{name}</strong><small
+        >{$t(`ability.${buff.id}.buffDescription`)} · {$t('status.remaining', {
+          time: formatRemaining(buff.remaining, $locale),
+        })}</small
       >
     </div>
   </section>

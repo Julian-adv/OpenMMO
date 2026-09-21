@@ -138,7 +138,7 @@
     padding: calc(round(8px * var(--s), 1px) + 1px)
       calc(round(16px * var(--s), 1px) + 1px);
     color: #fff;
-    font-family: sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: calc(16px * var(--s));
     line-height: round(19.2px * var(--s), 1px);
     text-align: center;

@@ -12,6 +12,12 @@ import { itemText } from './items'
 import { itemDescription, itemDisplayName, getItemDef } from '../data/itemDefs'
 import { catchMessage } from '../network/fishingMessages'
 import { attackLog } from '../network/combatLog'
+import { debuffPresentation, formatRemaining } from '../data/debuffPresentation'
+import {
+  activeDebuffs,
+  resetDebuffStore,
+  visibleDebuffs,
+} from '../stores/debuffStore'
 import en from './locales/en.json'
 import ko from './locales/ko.json'
 import ja from './locales/ja.json'
@@ -22,7 +28,9 @@ import zhItems from './locales/zh-Hans.items.json'
 import items from '../../../../data/items.json'
 
 afterEach(() => {
+  resetDebuffStore()
   languagePreference.set('en')
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -125,6 +133,56 @@ describe('catalog integrity', () => {
 })
 
 describe('message rendering', () => {
+  it('updates active status effects on language changes without resetting their duration', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    languagePreference.set('en')
+    activeDebuffs.set([{ id: 'food_poisoning', until: 62_000 }])
+    const unsubscribe = visibleDebuffs.subscribe(() => {})
+    try {
+      expect(get(visibleDebuffs)[0]).toMatchObject({
+        label: 'Food Poisoning',
+        remaining: '2m',
+      })
+      languagePreference.set('ko')
+      expect(get(visibleDebuffs)[0]).toMatchObject({
+        label: '식중독',
+        note: '능력치 크게 감소',
+        remaining: '2분',
+      })
+      vi.advanceTimersByTime(1_000)
+      expect(get(visibleDebuffs)[0].remaining).toBe('1분')
+      languagePreference.set('ja')
+      expect(get(visibleDebuffs)[0].label).toBe('食中毒')
+      languagePreference.set('zh-Hans')
+      expect(get(visibleDebuffs)[0]).toMatchObject({
+        label: '食物中毒',
+        remaining: '1分钟',
+      })
+      expect(get(activeDebuffs)).toEqual([
+        { id: 'food_poisoning', until: 62_000 },
+      ])
+      vi.advanceTimersByTime(60_000)
+      expect(get(visibleDebuffs)).toEqual([])
+    } finally {
+      unsubscribe()
+    }
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('preserves unknown status effects and rounds localized countdowns up', () => {
+    expect(debuffPresentation('future_effect', 'ko')).toMatchObject({
+      label: 'future_effect',
+      icon: '⚠️',
+      note: '',
+    })
+    expect(formatRemaining(-1, 'ko')).toBe('0초')
+    expect(formatRemaining(1, 'ko')).toBe('1초')
+    expect(formatRemaining(59_000, 'ja')).toBe('59秒')
+    expect(formatRemaining(60_000, 'zh-Hans')).toBe('1分钟')
+    expect(formatRemaining(60_001, 'en')).toBe('2m')
+  })
+
   it('falls back to the supplied English content for new items and message codes', () => {
     languagePreference.set('ko')
     expect(itemText('future_item', 'name', 'Future Item')).toBe('Future Item')

@@ -1,35 +1,41 @@
 import type { HungerBand, HungerSnapshot } from '../stores/hungerStore'
+import type { MessageKey } from '../i18n'
 
 export const HUNGER_BAND_INFO = {
   Normal: {
-    label: 'Normal',
+    labelKey: 'hunger.normal',
     icon: '🍞',
-    description: 'You have enough fuel to sprint and recover normally.',
-    note: undefined,
+    descriptionKey: 'hunger.normalDescription',
+    noteKey: undefined,
   },
   Hungry: {
-    label: 'Hungry',
+    labelKey: 'hunger.hungry',
     icon: '🍽️',
-    description: 'Sprinting is unavailable and natural healing is slower.',
-    note: 'Sprinting is disabled. Natural healing takes twice as long.',
+    descriptionKey: 'hunger.hungryDescription',
+    noteKey: 'hunger.hungryNote',
   },
   Weak: {
-    label: 'Weak',
+    labelKey: 'hunger.weak',
     icon: '🦴',
-    description: 'You need food before your strength returns.',
-    note: 'Natural healing is disabled.',
+    descriptionKey: 'hunger.weakDescription',
+    noteKey: 'hunger.weakNote',
   },
 } satisfies Record<
   HungerBand,
-  { label: string; icon: string; description: string; note: string | undefined }
+  {
+    labelKey: MessageKey
+    icon: string
+    descriptionKey: MessageKey
+    noteKey: MessageKey | undefined
+  }
 >
 
 export function hungerModifiers(hunger: HungerSnapshot) {
   return [
-    { label: 'Movement', mult: hunger.moveMult },
-    { label: 'Attack', mult: hunger.attackMult },
-    { label: 'Carry', mult: hunger.carryMult },
-  ]
+    { labelKey: 'hunger.movement', mult: hunger.moveMult },
+    { labelKey: 'hunger.attack', mult: hunger.attackMult },
+    { labelKey: 'hunger.carry', mult: hunger.carryMult },
+  ] satisfies { labelKey: MessageKey; mult: number }[]
 }
 
 export function formatHungerModifier(multiplier: number) {

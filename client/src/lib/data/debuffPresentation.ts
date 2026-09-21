@@ -1,4 +1,5 @@
 import debuffsJson from '../../../../data/debuffs.json'
+import { translate, type Locale, type MessageKey } from '../i18n'
 
 export interface DebuffPresentation {
   label: string
@@ -10,7 +11,7 @@ export interface DebuffPresentation {
 
 export interface PresentedDebuff extends DebuffPresentation {
   id: string
-  /** Compact remaining time, e.g. "8s" or "5m". */
+  /** Localized remaining time. */
   remaining: string
 }
 
@@ -24,54 +25,74 @@ const DEFS: Record<
   }
 > = debuffsJson
 
-const PRESENTATION: Record<string, Partial<DebuffPresentation>> = {
+const PRESENTATION: Record<
+  string,
+  {
+    labelKey: MessageKey
+    noteKey: MessageKey
+    icon: string
+    applied: string
+    expired: string
+  }
+> = {
   food_poisoning: {
+    labelKey: 'debuff.food_poisoning.name',
+    noteKey: 'debuff.food_poisoning.note',
     icon: '☠️',
-    note: 'Heavy penalties',
     applied: 'Your stomach churns — food poisoning! Cooked food next time.',
     expired: 'The sickness passes. You feel yourself again.',
   },
   bleed: {
+    labelKey: 'debuff.bleed.name',
+    noteKey: 'debuff.bleed.note',
     icon: '🩸',
-    note: 'Losing HP · no natural healing',
     applied: 'You are bleeding!',
     expired: 'The bleeding stops.',
   },
   wet: {
+    labelKey: 'debuff.wet.name',
+    noteKey: 'debuff.wet.note',
     icon: '💧',
-    note: 'Slowed · armour weighs more',
     applied: 'You are soaked through — heavy going until you dry off.',
     expired: 'Your clothes are dry again.',
   },
   tipsy: {
+    labelKey: 'debuff.tipsy.name',
+    noteKey: 'debuff.tipsy.note',
     icon: '🍺',
-    note: 'A little quicker on your feet',
     applied: 'A warm glow spreads through you. Just the one, mind.',
     expired: 'The glow fades.',
   },
   drunk: {
+    labelKey: 'debuff.drunk.name',
+    noteKey: 'debuff.drunk.note',
     icon: '🍻',
-    note: 'Slowed · swings miss more',
     applied: 'The room tilts a little. Maybe that was one too many.',
     expired: 'Your head clears.',
   },
   wasted: {
+    labelKey: 'debuff.wasted.name',
+    noteKey: 'debuff.wasted.note',
     icon: '🥴',
-    note: 'Heavy penalties · your feet go where they like',
     applied: 'The floor keeps moving. Walking is going to be an adventure.',
     expired: 'You sober up, more or less.',
   },
 }
 
-export function debuffPresentation(id: string): DebuffPresentation {
-  const label = DEFS[id]?.name ?? id
+export function debuffPresentation(
+  id: string,
+  language?: Locale
+): DebuffPresentation {
+  const presentation = PRESENTATION[id]
+  const label = presentation
+    ? translate(presentation.labelKey, {}, language)
+    : (DEFS[id]?.name ?? id)
   return {
     label,
-    icon: '⚠️',
-    note: '',
-    applied: `You are afflicted: ${label}.`,
-    expired: `${label} wears off.`,
-    ...PRESENTATION[id],
+    icon: presentation?.icon ?? '⚠️',
+    note: presentation ? translate(presentation.noteKey, {}, language) : '',
+    applied: presentation?.applied ?? `You are afflicted: ${label}.`,
+    expired: presentation?.expired ?? `${label} wears off.`,
   }
 }
 
@@ -90,7 +111,13 @@ export function armorWeightMult(ids: string[]) {
   return ids.reduce((mult, id) => mult * (DEFS[id]?.armorWeightMult ?? 1), 1)
 }
 
-export function formatRemaining(ms: number) {
+export function formatRemaining(ms: number, language?: Locale) {
   const seconds = Math.max(0, Math.ceil(ms / 1_000))
-  return seconds >= 60 ? `${Math.ceil(seconds / 60)}m` : `${seconds}s`
+  return seconds >= 60
+    ? translate(
+        'duration.minutes',
+        { count: Math.ceil(seconds / 60) },
+        language
+      )
+    : translate('duration.seconds', { count: seconds }, language)
 }

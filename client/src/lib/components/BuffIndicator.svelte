@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from '../i18n'
   import { skillTooltip } from '../actions/skillTooltip'
   import { formatRemaining } from '../data/debuffPresentation'
   import { visibleAbilityBuffs } from '../stores/abilityStore'
@@ -14,16 +15,17 @@
 </script>
 
 {#each $visibleAbilityBuffs as buff (buff.id)}
+  {@const name = $t(`ability.${buff.id}.name`)}
+  {@const description = $t(`ability.${buff.id}.buffDescription`)}
+  {@const time = formatRemaining(buff.remaining, $locale)}
   <button
     class="buff-badge"
-    aria-label="{buff.name}: {buff.buffDescription}, {formatRemaining(
-      buff.remaining
-    )} remaining. Open character status."
-    use:skillTooltip={{ name: buff.name, description: buff.buffDescription }}
+    aria-label={$t('status.openBuff', { name, description, time })}
+    use:skillTooltip={{ name, description }}
     onclick={openStatus}
   >
     <img src={buff.icon} alt="" width="20" height="20" />
-    <span>{formatRemaining(buff.remaining)}</span>
+    <span>{time}</span>
   </button>
 {/each}
 

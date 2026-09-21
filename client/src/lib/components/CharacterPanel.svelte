@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { locale } from '../i18n'
+  import { locale, t } from '../i18n'
   import { itemDisplayName } from '../data/itemDefs'
   import ItemLockButton from './ItemLockButton.svelte'
   import SkillListItem from './SkillListItem.svelte'
@@ -83,24 +83,12 @@
     return eff > base ? `${eff} (+${eff - base})` : `${eff}`
   }
 
-  const CLASS_LABELS: Record<CharacterClass, string> = {
-    knight: 'Knight',
-    barbarian: 'Barbarian',
-    rogue: 'Rogue',
-    caveman: 'Caveman',
-    valkyrie: 'Valkyrie',
-    ranger: 'Ranger',
-    priest: 'Priest',
-    bard: 'Bard',
-    merchant: 'Merchant',
-    guard: 'Guard',
-    maid: 'Maid',
-  }
-
   const classLabel = $derived(
-    characterClass === 'caveman' && gender === 'female'
-      ? 'Cavewoman'
-      : CLASS_LABELS[characterClass]
+    $t(
+      characterClass === 'caveman' && gender === 'female'
+        ? 'class.cavewoman'
+        : `class.${characterClass}`
+    )
   )
 
   const TABS: CharacterPanelTab[] = ['stats', 'skills', 'status', 'titles']
@@ -209,13 +197,17 @@
   <div
     class="character-panel"
     role="dialog"
-    aria-label="Character"
+    aria-label={$t('characterPanel.title')}
     use:draggablePanel={'character'}
   >
     <div class="panel-header" data-drag-handle>
       <span class="panel-title">{name}</span>
       <span class="panel-class">{classLabel}</span>
-      <button class="close-btn" onclick={onClose}>&times;</button>
+      <button
+        class="close-btn"
+        aria-label={$t('common.close')}
+        onclick={onClose}>&times;</button
+      >
     </div>
 
     <div class="panel-section">
@@ -225,11 +217,12 @@
             class="tab"
             class:active={$characterPanelTab === tab}
             aria-pressed={$characterPanelTab === tab}
-            onclick={() => characterPanelTab.set(tab)}>{tab}</button
+            onclick={() => characterPanelTab.set(tab)}
+            >{$t(`characterPanel.${tab}`)}</button
           >
         {/each}
       </div>
-      <!-- Stats pane stays laid out while hidden so the panel keeps its size -->
+      <!-- Keep the stats pane laid out to preserve panel size. -->
       <div class="tab-panes">
         <div
           class="pane-stats"
