@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t, locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import { mountOverlay } from '../stores/overlayStack'
   import { reviveItem } from '../stores/inventoryStore'
   import { networkManager } from '../network/socket'
@@ -21,20 +23,23 @@
 
 <div class="respawn-backdrop">
   <div class="respawn-dialog" role="dialog" aria-modal="true">
-    <h2>You Died</h2>
-    <p>Would you like to revive?</p>
+    <h2>{$t('respawn.title')}</h2>
+    <p>{$t('respawn.prompt')}</p>
     <div class="respawn-actions">
       {#if $reviveItem}
         <button
           class="talisman"
           onclick={() => useReviveItem($reviveItem.item.instance_id)}
         >
-          Use {$reviveItem.def.name} ({$reviveItem.def.reviveHpPercent}% HP, ×{$reviveItem
-            .item.quantity})
+          {$t('respawn.useItem', {
+            item: itemDisplayName($reviveItem.def.id, 0, $locale),
+            health: $reviveItem.def.reviveHpPercent ?? 0,
+            count: $reviveItem.item.quantity,
+          })}
         </button>
       {/if}
-      <button class="primary" onclick={onRespawn}>Revive in Town</button>
-      <button class="secondary" onclick={onLater}>Later</button>
+      <button class="primary" onclick={onRespawn}>{$t('respawn.town')}</button>
+      <button class="secondary" onclick={onLater}>{$t('respawn.later')}</button>
     </div>
   </div>
 </div>

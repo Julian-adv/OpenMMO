@@ -44,7 +44,7 @@ fn friend_names(msgs: &[ServerMessage]) -> Option<Vec<String>> {
 fn system_lines(msgs: &[ServerMessage]) -> Vec<String> {
     msgs.iter()
         .filter_map(|msg| match msg {
-            ServerMessage::SystemMessage { message } => Some(message.clone()),
+            ServerMessage::SystemMessage { message, .. } => Some(message.clone()),
             _ => None,
         })
         .collect()

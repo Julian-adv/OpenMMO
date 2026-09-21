@@ -1,6 +1,8 @@
 import itemsJson from '../../../../data/items.json'
 import type { EquipSlot } from '../network/networkTypes'
 import { PLAYER_ATTACK_RANGE_METERS } from './combatTiming'
+import { translate, type Locale } from '../i18n'
+import { itemText } from '../i18n/items'
 
 export const WEAPON_TYPE_LABELS = {
   sword: 'Sword',
@@ -85,12 +87,18 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
   return itemDefs[itemDefId]
 }
 
-export function weaponTypeLabel(weaponType: WeaponType): string {
-  return WEAPON_TYPE_LABELS[weaponType]
+export function weaponTypeLabel(
+  weaponType: WeaponType,
+  language?: Locale
+): string {
+  return translate(`weapon.${weaponType}`, {}, language)
 }
 
-export function armorTypeLabel(armorType: ArmorType): string {
-  return ARMOR_TYPE_LABELS[armorType]
+export function armorTypeLabel(
+  armorType: ArmorType,
+  language?: Locale
+): string {
+  return translate(`armor.${armorType}`, {}, language)
 }
 
 /** Cloth colour to render the cape in, or undefined when the back-slot item
@@ -106,16 +114,30 @@ export function capeColorOf(
   return cloth ? (dye ?? cloth) : undefined
 }
 
-/** Name as players must see it: the enchant is part of the name, never only a
- *  tooltip line — +0 and +7 are otherwise identical, the cheapest scam there
- *  is. */
-export function itemDisplayName(itemDefId: string, enchant = 0): string {
+/** Include enchantment in every displayed item name. */
+export function itemDisplayName(
+  itemDefId: string,
+  enchant = 0,
+  language?: Locale
+): string {
   const def = getItemDef(itemDefId)
-  return def ? displayName(def, enchant) : itemDefId
+  return def ? displayName(def, enchant, language) : itemDefId
 }
 
-export function displayName(def: ItemDefinition, enchant = 0): string {
-  return enchant !== 0 ? `+${enchant} ${def.name}` : def.name
+export function displayName(
+  def: ItemDefinition,
+  enchant = 0,
+  language?: Locale
+): string {
+  const name = itemText(def.id, 'name', def.name, language)
+  return enchant !== 0 ? `+${enchant} ${name}` : name
+}
+
+export function itemDescription(
+  def: ItemDefinition,
+  language?: Locale
+): string {
+  return itemText(def.id, 'description', def.description, language)
 }
 
 /** Guard while equipped, with the armor enchant folded in as combat resolves it. */
@@ -178,17 +200,23 @@ export function averageDamage(
   return meanRoll(def.dice) + meanRoll(round?.dice) + enchant
 }
 
-/** Tooltip lines for what an item does: `guard` (with any armor enchant folded
- *  in, as combat resolves it) then `effects`. */
-export function statLabels(def: ItemDefinition, enchant = 0): string[] {
+/** Tooltip effects, including armor enchantment. */
+export function statLabels(
+  def: ItemDefinition,
+  enchant = 0,
+  language?: Locale
+): string[] {
   const guard = effectiveGuard(def, enchant)
-  const lines = guard ? [`Guard: +${guard}`] : []
+  const lines = guard
+    ? [translate('item.guard', { value: guard }, language)]
+    : []
   for (const raw of def.effects?.split(';') ?? []) {
     const token = raw.trim()
     if (!token) continue
     const cha = token.match(/^cha([+-]\d+)$/)
-    if (cha) lines.push(`CHA: ${cha[1]}`)
-    else if (token === 'sustenance') lines.push('Slows hunger')
+    if (cha) lines.push(translate('item.charisma', { value: cha[1] }, language))
+    else if (token === 'sustenance')
+      lines.push(translate('item.sustenance', {}, language))
     else lines.push(token)
   }
   return lines
@@ -209,21 +237,26 @@ export function compareStats(
   equipped: ItemDefinition,
   equippedEnchant: number,
   /** The chosen round, so a bow is compared with what it actually fires. */
-  ammo?: ItemDefinition
+  ammo?: ItemDefinition,
+  language?: Locale
 ): StatDelta[] {
   const out: StatDelta[] = []
   const push = (label: string, delta: number, lowerIsBetter = false) => {
     if (Math.abs(delta) < 0.05) return
     out.push({ label, delta, better: lowerIsBetter ? delta < 0 : delta > 0 })
   }
-  push('Weight', def.weight - equipped.weight, true)
   push(
-    'Damage',
+    translate('stat.weight', {}, language),
+    def.weight - equipped.weight,
+    true
+  )
+  push(
+    translate('stat.damage', {}, language),
     averageDamage(def, enchant, ammo) -
       averageDamage(equipped, equippedEnchant, ammo)
   )
   push(
-    'Guard',
+    translate('stat.guard', {}, language),
     effectiveGuard(def, enchant) - effectiveGuard(equipped, equippedEnchant)
   )
   return out

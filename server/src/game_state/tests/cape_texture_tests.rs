@@ -123,7 +123,7 @@ async fn printing_without_a_cape_keeps_the_kit() {
     let refusals = drain(&mut rx)
         .into_iter()
         .filter(|msg| {
-            matches!(msg, ServerMessage::SystemMessage { message } if message.contains("not wearing a cape"))
+            matches!(msg, ServerMessage::SystemMessage { message, .. } if message.contains("not wearing a cape"))
         })
         .count();
     assert_eq!(refusals, 2, "both the prompt and the print should refuse");
@@ -248,7 +248,7 @@ async fn reporting_a_bare_cape_says_so() {
         .await;
 
     let told = drain(&mut rx).into_iter().any(|msg| {
-        matches!(msg, ServerMessage::SystemMessage { message } if message.contains("not wearing a printed cape"))
+        matches!(msg, ServerMessage::SystemMessage { message, .. } if message.contains("not wearing a printed cape"))
     });
     assert!(told, "there is nothing to report on a bare cape");
 }

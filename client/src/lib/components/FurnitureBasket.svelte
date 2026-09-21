@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import {
     furnitureBasket,
     furnitureBasketTotal,
@@ -17,12 +18,18 @@
       {@const product = displayProduct(line.displayId)!}
       <div class="line">
         <img src="/items/{getItemDef(product.itemDefId)?.icon}" alt="" />
-        <span>{itemDisplayName(product.itemDefId)} ×{line.quantity}</span>
+        <span
+          >{itemDisplayName(product.itemDefId, 0, $locale)} ×{line.quantity}</span
+        >
         <GoldAmount copper={product.price * line.quantity} />
         <button
           disabled={$furniturePurchasePending}
           onclick={() => removeFurnitureFromBasket(line.displayId)}
-          aria-label="Remove one {itemDisplayName(product.itemDefId)}"
+          aria-label="Remove one {itemDisplayName(
+            product.itemDefId,
+            0,
+            $locale
+          )}"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

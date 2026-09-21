@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import SkillTargetHint from './SkillTargetHint.svelte'
   import { AUSCULTATION, abilityEquipmentAllowed } from '../data/abilities'
   import { EQUIP_SLOT_LABELS } from '../data/equipSlots'
@@ -110,7 +112,7 @@
                   alt=""
                 />{/if}
               <span class="item-name"
-                >{def?.name ?? item.item_def_id}{item.enchant
+                >{itemDisplayName(item.item_def_id, 0, $locale)}{item.enchant
                   ? ` ${item.enchant > 0 ? '+' : ''}${item.enchant}`
                   : ''}</span
               >

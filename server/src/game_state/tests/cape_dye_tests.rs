@@ -79,7 +79,7 @@ async fn dyeing_without_a_cape_keeps_the_bottle() {
     let refusals = drain(&mut rx)
         .into_iter()
         .filter(
-            |msg| matches!(msg, ServerMessage::SystemMessage { message } if message.contains("not wearing a cape")),
+            |msg| matches!(msg, ServerMessage::SystemMessage { message, .. } if message.contains("not wearing a cape")),
         )
         .count();
     assert_eq!(refusals, 2, "both the prompt and the dye should refuse");

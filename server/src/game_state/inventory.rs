@@ -1,3 +1,4 @@
+use super::localization::localized;
 use crate::auth::{AuthService, ItemRow};
 use crate::item_defs::{AuthenticatedUseAction, UseEffect};
 use crate::types::{PlayerId, ServerMessage};
@@ -707,7 +708,11 @@ impl super::GameState {
                 .find(|item| item.instance_id == instance_id)
             else {
                 drop(inventories);
-                self.send_system_message(player_id, "Item not found").await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.itemMissing", "Item not found"),
+                )
+                .await;
                 return;
             };
             if item.locked == locked {
@@ -753,8 +758,11 @@ impl super::GameState {
                 Some(idx) => idx,
                 None => {
                     drop(inventories);
-                    self.send_system_message(player_id, "Item not found in bag")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.itemNotInBag", "Item not found in bag"),
+                    )
+                    .await;
                     return;
                 }
             };
@@ -764,8 +772,11 @@ impl super::GameState {
                 Some(slot) => slot,
                 None => {
                     drop(inventories);
-                    self.send_system_message(player_id, "This item cannot be equipped")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.cannotEquip", "This item cannot be equipped"),
+                    )
+                    .await;
                     return;
                 }
             };
@@ -777,8 +788,11 @@ impl super::GameState {
                     }
                 } else {
                     drop(inventories);
-                    self.send_system_message(player_id, "Both hands are on your weapon")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.bothHands", "Both hands are on your weapon"),
+                    )
+                    .await;
                     return;
                 }
             }
@@ -873,8 +887,11 @@ impl super::GameState {
                 }
                 None => {
                     drop(inventories);
-                    self.send_system_message(player_id, "No item in that slot")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.emptySlot", "No item in that slot"),
+                    )
+                    .await;
                     return;
                 }
             }
@@ -926,8 +943,11 @@ impl super::GameState {
                 Some(item) => item,
                 None => {
                     drop(inventories);
-                    self.send_system_message(player_id, "Item not found in bag")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.itemNotInBag", "Item not found in bag"),
+                    )
+                    .await;
                     return;
                 }
             };
@@ -939,8 +959,11 @@ impl super::GameState {
                 Some(effect) => effect,
                 None => {
                     drop(inventories);
-                    self.send_system_message(player_id, "This item cannot be used")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.cannotUse", "This item cannot be used"),
+                    )
+                    .await;
                     return;
                 }
             }
@@ -996,8 +1019,14 @@ impl super::GameState {
     /// using it alive — or twice — keeps it.
     async fn use_phoenix_talisman(&self, player_id: &PlayerId, instance_id: u64, hp_percent: u32) {
         if !self.revive_in_place(player_id, hp_percent).await {
-            self.send_system_message(player_id, "The talisman only stirs for the fallen")
-                .await;
+            self.send_system_message(
+                player_id,
+                localized(
+                    "server.talismanAlive",
+                    "The talisman only stirs for the fallen",
+                ),
+            )
+            .await;
             return;
         }
         self.consume_one_and_sync(player_id, instance_id).await;
@@ -1069,8 +1098,11 @@ impl super::GameState {
                 .is_some_and(|effect| (tool.recognize)(&effect));
             if !holds_tool {
                 drop(inventories);
-                self.send_system_message(player_id, "Item not found in bag")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.itemNotInBag", "Item not found in bag"),
+                )
+                .await;
                 return;
             }
             if !self.wears_cape(inv) {
@@ -1187,14 +1219,20 @@ impl super::GameState {
             };
             if player.health == 0 {
                 drop(players);
-                self.send_system_message(player_id, "You can't drink while defeated")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.drinkDefeated", "You can't drink while defeated"),
+                )
+                .await;
                 return;
             }
             if player.health >= player.max_health {
                 drop(players);
-                self.send_system_message(player_id, "You are already at full health")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.fullHealth", "You are already at full health"),
+                )
+                .await;
                 return;
             }
         }
@@ -1255,8 +1293,11 @@ impl super::GameState {
         // A meal that adds no satiation (already full) is refused outright —
         // nothing has been consumed yet.
         if gained == 0 {
-            self.send_system_message(player_id, "You are too full to eat another bite")
-                .await;
+            self.send_system_message(
+                player_id,
+                localized("server.tooFull", "You are too full to eat another bite"),
+            )
+            .await;
             return;
         }
         self.consume_one_and_sync(player_id, instance_id).await;
@@ -1290,8 +1331,11 @@ impl super::GameState {
             onlinerpg_shared::hunger::CAMPFIRE_DURATION_MS,
         )
         .await;
-        self.send_system_message(player_id, "You light a campfire.")
-            .await;
+        self.send_system_message(
+            player_id,
+            localized("server.campfire", "You light a campfire."),
+        )
+        .await;
     }
 
     pub(super) async fn campfire_placement(
@@ -1439,8 +1483,11 @@ impl super::GameState {
             players.get(player_id).is_some_and(Self::in_combat)
         };
         if in_combat {
-            self.send_system_message(player_id, "You can't read this while in combat")
-                .await;
+            self.send_system_message(
+                player_id,
+                localized("server.readCombat", "You can't read this while in combat"),
+            )
+            .await;
             return;
         }
 
@@ -1848,8 +1895,11 @@ impl super::GameState {
                     .any(|i| i.instance_id == instance_id && def.in_loadout(&i.item_def_id))
             }) {
                 drop(inventories);
-                self.send_system_message(player_id, "You never drop your issued gear")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.dropIssued", "You never drop your issued gear"),
+                )
+                .await;
                 return;
             }
 
@@ -1891,7 +1941,11 @@ impl super::GameState {
                     )
                 } else {
                     drop(inventories);
-                    self.send_system_message(player_id, "Item not found").await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.itemMissing", "Item not found"),
+                    )
+                    .await;
                     return;
                 };
 
@@ -1944,8 +1998,11 @@ impl super::GameState {
         let Some(quantities) =
             super::checked_batch_quantities(items.iter().map(|item| (item.instance_id, item.qty)))
         else {
-            self.send_system_message(player_id, "Invalid batch quantity")
-                .await;
+            self.send_system_message(
+                player_id,
+                localized("server.invalidQuantity", "Invalid batch quantity"),
+            )
+            .await;
             return;
         };
         let (player_position, rotation, floor_level) = {
@@ -1977,7 +2034,11 @@ impl super::GameState {
             for req in &items {
                 let Some(item) = inv.bag.iter().find(|i| i.instance_id == req.instance_id) else {
                     drop(inventories);
-                    self.send_system_message(player_id, "Item not found").await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.itemMissing", "Item not found"),
+                    )
+                    .await;
                     return;
                 };
                 if item.locked {
@@ -1988,14 +2049,20 @@ impl super::GameState {
                 }
                 if quantities[&req.instance_id] > item.quantity {
                     drop(inventories);
-                    self.send_system_message(player_id, "Not enough of that item")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.insufficientItems", "Not enough of that item"),
+                    )
+                    .await;
                     return;
                 }
                 if npc_def.is_some_and(|def| def.in_loadout(&item.item_def_id)) {
                     drop(inventories);
-                    self.send_system_message(player_id, "You never drop your issued gear")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.dropIssued", "You never drop your issued gear"),
+                    )
+                    .await;
                     return;
                 }
                 plans.push(Plan {
@@ -2114,8 +2181,11 @@ impl super::GameState {
             match ground_items.get(&instance_id) {
                 Some(sgi) => sgi.item.clone(),
                 None => {
-                    self.send_system_message(player_id, "Item no longer exists")
-                        .await;
+                    self.send_system_message(
+                        player_id,
+                        localized("server.itemGone", "Item no longer exists"),
+                    )
+                    .await;
                     return;
                 }
             }
@@ -2124,7 +2194,8 @@ impl super::GameState {
         let dx = onlinerpg_shared::shortest_world_delta_x(ground_item.position.x, player_pos.x);
         let dz = player_pos.z - ground_item.position.z;
         if dx * dx + dz * dz > MAX_PICKUP_DISTANCE * MAX_PICKUP_DISTANCE {
-            self.send_system_message(player_id, "Too far away").await;
+            self.send_system_message(player_id, localized("server.tooFar", "Too far away"))
+                .await;
             return;
         }
 
@@ -2132,8 +2203,11 @@ impl super::GameState {
         // the old "-1 matches any floor" wildcard is gone (outdoors and
         // house ground floors are both 0).
         if player_floor != ground_item.floor_level {
-            self.send_system_message(player_id, "Item is on a different floor")
-                .await;
+            self.send_system_message(
+                player_id,
+                localized("server.otherFloor", "Item is on a different floor"),
+            )
+            .await;
             return;
         }
 
@@ -2161,8 +2235,11 @@ impl super::GameState {
         let (take, remaining, snapshot, received_id) = {
             let mut ground_items = self.ground_items.write().await;
             let Some(entry) = ground_items.get_mut(&instance_id) else {
-                self.send_system_message(player_id, "Item no longer exists")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.itemGone", "Item no longer exists"),
+                )
+                .await;
                 return;
             };
             // Re-read under the lock: another picker may have thinned the pile
@@ -2188,8 +2265,11 @@ impl super::GameState {
             if take == 0 {
                 drop(inventories);
                 drop(ground_items);
-                self.send_system_message(player_id, "Too heavy to carry")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.tooHeavy", "Too heavy to carry"),
+                )
+                .await;
                 return;
             }
 
@@ -2329,8 +2409,11 @@ impl super::GameState {
         {
             let mut ground_items = self.ground_items.write().await;
             if ground_items.remove(&instance_id).is_none() {
-                self.send_system_message(player_id, "Item no longer exists")
-                    .await;
+                self.send_system_message(
+                    player_id,
+                    localized("server.itemGone", "Item no longer exists"),
+                )
+                .await;
                 return;
             }
         }
@@ -2339,8 +2422,15 @@ impl super::GameState {
         self.award_copper(player_id, copper).await;
         self.record_gold_source(crate::metrics::GoldSource::CoinPile, 1, copper)
             .await;
-        self.send_system_message(player_id, format!("You picked up {copper} copper."))
-            .await;
+        self.send_system_message(
+            player_id,
+            localized(
+                "server.goldPickedUp",
+                format!("You picked up {copper} copper."),
+            )
+            .with_param("amount", copper.to_string()),
+        )
+        .await;
         info!(
             "Player {} picked up a coin pile: +{} copper",
             self.player_name_of(player_id).await,

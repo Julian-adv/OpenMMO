@@ -93,7 +93,7 @@ async fn estate_return_scroll_rejects_nonowners_defeat_and_reserved_items() {
     game.use_estate_return_scroll(&id, 100, &auth).await;
     assert_eq!(estate_return_quantity(&game, "Settler").await, 2);
     let messages = drain(&mut rx);
-    assert!(messages.iter().any(|msg| matches!(msg, ServerMessage::SystemMessage { message } if message.contains("don't own an estate"))));
+    assert!(messages.iter().any(|msg| matches!(msg, ServerMessage::SystemMessage { message, .. } if message.contains("don't own an estate"))));
     assert!(messages.iter().any(|msg| matches!(
         msg,
         ServerMessage::PlayerTeleportEffect {
@@ -145,7 +145,7 @@ async fn estate_return_scroll_keeps_scroll_when_estate_is_underwater() {
     assert_eq!(game.players.read().await[&id].position, before);
     assert_eq!(estate_return_quantity(&game, "Settler").await, 2);
     let messages = drain(&mut rx);
-    assert!(messages.iter().any(|msg| matches!(msg, ServerMessage::SystemMessage { message } if message.contains("No safe outdoor"))));
+    assert!(messages.iter().any(|msg| matches!(msg, ServerMessage::SystemMessage { message, .. } if message.contains("No safe outdoor"))));
     assert!(messages.iter().any(|msg| matches!(
         msg,
         ServerMessage::PlayerTeleportEffect {
@@ -192,7 +192,7 @@ async fn estate_return_scroll_avoids_buildings_and_searches_other_owned_plots() 
     let id = pid("Settler");
     game.use_estate_return_scroll(&id, 100, &auth).await;
     assert_eq!(estate_return_quantity(&game, "Settler").await, 2);
-    assert!(drain(&mut rx).iter().any(|msg| matches!(msg, ServerMessage::SystemMessage { message } if message.contains("No safe outdoor"))));
+    assert!(drain(&mut rx).iter().any(|msg| matches!(msg, ServerMessage::SystemMessage { message, .. } if message.contains("No safe outdoor"))));
     claim_at(&game, &auth, "Settler", 2, 33.0, 1.0).await;
     game.use_estate_return_scroll(&id, 100, &auth).await;
     let player = game.players.read().await[&id].clone();

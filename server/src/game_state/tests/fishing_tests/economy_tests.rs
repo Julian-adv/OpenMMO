@@ -53,7 +53,7 @@ async fn opening_a_coin_pouch_pays_its_copper_and_spends_it() {
     assert!(
         msgs.iter().any(|m| matches!(
             m,
-            ServerMessage::SystemMessage { message }
+            ServerMessage::SystemMessage { message, .. }
                 if message.contains(&format!("{paid} copper"))
         )),
         "the combat log must say how much spilled out"

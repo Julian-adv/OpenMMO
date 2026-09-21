@@ -15,6 +15,26 @@ use crate::entity::{Monster, MonsterState, Player};
 use crate::world::{GameDateTime, Position};
 use crate::{fishing, housing, inventory, skills};
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LocalizedMessage {
+    pub code: String,
+    pub params: HashMap<String, String>,
+}
+
+impl LocalizedMessage {
+    pub fn new(code: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            params: HashMap::new(),
+        }
+    }
+
+    pub fn with_param(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.params.insert(key.into(), value.into());
+        self
+    }
+}
+
 /// Which side of a merchant trade a haggled deal applies to.
 /// `Buy` = the player buys from the merchant, `Sell` = the player sells to
 /// the merchant.
@@ -1067,6 +1087,8 @@ pub enum ServerMessage {
     /// line, not the player's own speech.
     SystemMessage {
         message: String,
+        #[serde(default)]
+        localization: Option<LocalizedMessage>,
     },
     /// A party-channel line, sent to every online member (the sender's echo
     /// included). Carries the name like `WhisperMessage`: party chat ignores
@@ -1646,6 +1668,8 @@ pub enum ServerMessage {
     /// agent-client reacts urgently to a failed trade.
     TradeError {
         message: String,
+        #[serde(default)]
+        localization: Option<LocalizedMessage>,
     },
     /// Direct to a player: a haggled price modifier changed on one item.
     /// `modifier_pct == 0` means the deal was consumed or cleared.

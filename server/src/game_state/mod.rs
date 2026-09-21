@@ -223,6 +223,7 @@ mod interest_subjects;
 mod inventory;
 mod land;
 mod landscaping;
+mod localization;
 mod mana;
 mod metrics;
 mod monster;

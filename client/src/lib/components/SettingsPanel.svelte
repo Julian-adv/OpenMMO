@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, languagePreference, languages } from '../i18n'
   import type { Writable } from 'svelte/store'
   import { bgmVolume, bgmMuted } from '../managers/bgmManager'
   import { sfxVolume, sfxMuted } from '../managers/sfxManager'
@@ -24,14 +25,9 @@
 
   let { onClose }: Props = $props()
 
-  // Escape closes via the overlay stack, same as the close button.
   $effect(() => mountOverlay('settings', onClose))
 
-  const qualityOptions: { value: QualityLevel; label: string }[] = [
-    { value: 'high', label: 'High' },
-    { value: 'medium', label: 'Medium' },
-    { value: 'low', label: 'Low' },
-  ]
+  const qualityOptions: QualityLevel[] = ['high', 'medium', 'low']
 </script>
 
 {#snippet toggleRow(label: string, checked: Writable<boolean>, hint?: string)}
@@ -49,75 +45,96 @@
 <div class="overlay" onclick={onClose}>
   <div class="panel" onclick={(e) => e.stopPropagation()}>
     <div class="header">
-      <h2>Settings</h2>
-      <button class="close-btn" onclick={onClose}>&times;</button>
+      <h2>{$t('settings.title')}</h2>
+      <button
+        class="close-btn"
+        aria-label={$t('common.close')}
+        onclick={onClose}>&times;</button
+      >
     </div>
 
-    {@render toggleRow('Minimap', minimapEnabled)}
+    <div class="setting-row">
+      <label class="setting-label" for="game-language"
+        >{$t('settings.language')}</label
+      >
+      <select id="game-language" bind:value={$languagePreference}>
+        <option value="auto">{$t('settings.languageAuto')}</option>
+        {#each languages as language (language.value)}
+          <option value={language.value}>{language.label}</option>
+        {/each}
+      </select>
+    </div>
+    {@render toggleRow($t('settings.minimap'), minimapEnabled)}
     {@render toggleRow(
-      'Always Run',
+      $t('settings.alwaysRun'),
       alwaysRun,
-      $alwaysRun ? 'Hold Shift to walk' : 'Hold Shift to run'
+      $alwaysRun ? $t('settings.shiftWalk') : $t('settings.shiftRun')
     )}
     <div class="setting-row">
       <span class="setting-label">
-        Keyboard Movement
-        <span class="setting-hint">Arrow keys / WASD</span>
+        {$t('settings.movement')}
+        <span class="setting-hint">{$t('settings.movementKeys')}</span>
       </span>
-      <div class="quality-row" role="group" aria-label="Keyboard movement mode">
+      <div
+        class="quality-row"
+        role="group"
+        aria-label={$t('settings.movementMode')}
+      >
         <button
           class="quality-btn"
           class:active={$keyboardMovementMode === 'world'}
           aria-pressed={$keyboardMovementMode === 'world'}
-          onclick={() => keyboardMovementMode.set('world')}>Fixed</button
+          onclick={() => keyboardMovementMode.set('world')}
+          >{$t('settings.fixed')}</button
         >
         <button
           class="quality-btn"
           class:active={$keyboardMovementMode === 'character'}
           aria-pressed={$keyboardMovementMode === 'character'}
-          onclick={() => keyboardMovementMode.set('character')}>Relative</button
+          onclick={() => keyboardMovementMode.set('character')}
+          >{$t('settings.relative')}</button
         >
       </div>
     </div>
     <p class="movement-hint setting-hint">
       {$keyboardMovementMode === 'world'
-        ? '↑ / W: north · ↓ / S: south · ← / A: west · → / D: east'
-        : 'Movement follows the direction your character faces.'}
+        ? $t('settings.worldHint')
+        : $t('settings.relativeHint')}
     </p>
-    {@render toggleRow('Friend Online Notice', friendOnlineNoticeEnabled)}
+    {@render toggleRow($t('settings.friendNotice'), friendOnlineNoticeEnabled)}
     {@render toggleRow(
-      'Lightning Flashes',
+      $t('settings.lightning'),
       lightningEnabled,
-      'Bright lighting flashes during storms'
+      $t('settings.lightningHint')
     )}
 
     <div class="setting-row">
-      <span class="setting-label">Graphics Quality</span>
+      <span class="setting-label">{$t('settings.graphics')}</span>
       <div class="quality-row">
-        {#each qualityOptions as opt (opt.value)}
+        {#each qualityOptions as opt (opt)}
           <button
             class="quality-btn"
-            class:active={$graphicsQuality === opt.value}
-            onclick={() => setQualityManual(opt.value)}
+            class:active={$graphicsQuality === opt}
+            onclick={() => setQualityManual(opt)}
           >
-            {opt.label}
+            {$t(`settings.${opt}`)}
           </button>
         {/each}
       </div>
     </div>
     {#if $reloadNeeded}
       <div class="reload-notice">
-        <span>Antialiasing changes require restart</span>
+        <span>{$t('settings.restartHint')}</span>
         <button class="action-btn" onclick={() => location.reload()}
-          >Restart</button
+          >{$t('settings.restart')}</button
         >
       </div>
     {/if}
 
     <div class="setting-row">
       <span class="setting-label">
-        Title Language
-        <span class="setting-hint">Auto follows the browser</span>
+        {$t('settings.titleLanguage')}
+        <span class="setting-hint">{$t('settings.titleLanguageHint')}</span>
       </span>
       <div class="quality-row">
         {#each TITLE_LANGUAGES as opt (opt.value)}
@@ -126,7 +143,7 @@
             class:active={$titleLanguage === opt.value}
             onclick={() => titleLanguage.set(opt.value)}
           >
-            {opt.label}
+            {opt.value === 'auto' ? $t('common.auto') : opt.label}
           </button>
         {/each}
       </div>
@@ -134,10 +151,12 @@
 
     <div class="setting-row">
       <span class="setting-label">
-        UI Layout
-        <span class="setting-hint">Panel positions</span>
+        {$t('settings.layout')}
+        <span class="setting-hint">{$t('settings.layoutHint')}</span>
       </span>
-      <button class="action-btn" onclick={resetPanelLayout}>Reset</button>
+      <button class="action-btn" onclick={resetPanelLayout}
+        >{$t('common.reset')}</button
+      >
     </div>
 
     <div class="divider"></div>
@@ -145,7 +164,7 @@
     <div class="volume-row">
       <VolumeControl
         id="bgm-volume"
-        label="BGM Volume"
+        label={$t('settings.bgm')}
         volume={bgmVolume}
         muted={bgmMuted}
         shortcut="Ctrl+M"
@@ -155,7 +174,7 @@
     <div class="volume-row sfx-row">
       <VolumeControl
         id="sfx-volume"
-        label="Sound Effects"
+        label={$t('settings.sfx')}
         volume={sfxVolume}
         muted={sfxMuted}
       />
@@ -179,7 +198,10 @@
     border: 1px solid #4a5568;
     border-radius: 10px;
     padding: 24px;
-    width: 320px;
+    width: min(420px, calc(100vw - 32px));
+    box-sizing: border-box;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   }
 
@@ -260,9 +282,21 @@
   .quality-row {
     display: flex;
     gap: 0;
+    flex-wrap: wrap;
     border-radius: 6px;
     overflow: hidden;
     border: 1px solid #4a5568;
+  }
+
+  select {
+    min-width: 0;
+    max-width: 65%;
+    padding: 6px;
+    background: #2d3748;
+    color: #edf2f7;
+    border: 1px solid #4a5568;
+    border-radius: 4px;
+    font: inherit;
   }
 
   .movement-hint {

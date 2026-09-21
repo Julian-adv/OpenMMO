@@ -109,7 +109,7 @@ async fn weather_commands_broadcast_overrides_and_preserve_the_automatic_schedul
         ));
         assert!(matches!(broadcast.try_recv(), Err(TryRecvError::Empty)));
         assert!(matches!(drain(&mut direct).as_slice(),
-            [ServerMessage::SystemMessage { message }] if message.starts_with("Weather:")
+            [ServerMessage::SystemMessage { message, .. }] if message.starts_with("Weather:")
         ));
         let sync = game_state.weather_sync_message().unwrap();
         assert_eq!(
@@ -162,7 +162,7 @@ async fn invalid_weather_commands_do_not_change_or_broadcast_weather() {
         );
         assert!(
             matches!(drain(&mut direct).as_slice(),
-                [ServerMessage::SystemMessage { message }] if message.starts_with("Weather:")
+                [ServerMessage::SystemMessage { message, .. }] if message.starts_with("Weather:")
             ),
             "{command}"
         );

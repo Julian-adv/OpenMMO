@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import { tick } from 'svelte'
 
   interface Props {
@@ -77,7 +78,7 @@
   <div
     class="quantity-overlay"
     role="dialog"
-    aria-label="Choose quantity"
+    aria-label={$t('quantity.title')}
     tabindex="-1"
     onkeydown={onKeydown}
   >
@@ -89,7 +90,7 @@
       <div class="qty-row" onwheel={onWheel}>
         <button
           class="step-btn"
-          aria-label="Decrease quantity by {stepSize}"
+          aria-label={$t('quantity.decrease', { step: stepSize })}
           onclick={() => step(-stepSize)}>−</button
         >
         <input
@@ -104,14 +105,18 @@
         />
         <button
           class="step-btn"
-          aria-label="Increase quantity by {stepSize}"
+          aria-label={$t('quantity.increase', { step: stepSize })}
           onclick={() => step(stepSize)}>+</button
         >
       </div>
-      <div class="max-note">of {max}</div>
+      <div class="max-note">{$t('quantity.maximum', { max })}</div>
       <div class="popup-actions">
-        <button class="cancel-btn" onclick={onCancel}>Cancel</button>
-        <button class="confirm-btn" onclick={confirm}>Confirm</button>
+        <button class="cancel-btn" onclick={onCancel}
+          >{$t('common.cancel')}</button
+        >
+        <button class="confirm-btn" onclick={confirm}
+          >{$t('common.confirm')}</button
+        >
       </div>
     </div>
   </div>

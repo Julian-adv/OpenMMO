@@ -62,7 +62,7 @@ async fn watching_tobin_unlocks_fishing_once_and_survives_reload() {
         ServerMessage::SkillsUpdate { skills } if skills.has(SkillId::Fishing)
     )));
     assert!(messages.iter().any(|m| matches!(m,
-        ServerMessage::SystemMessage { message } if message.contains("learned Fishing")
+        ServerMessage::SystemMessage { message, .. } if message.contains("learned Fishing")
     )));
     assert!(game.dirty_skills.read().await.contains(&student));
 

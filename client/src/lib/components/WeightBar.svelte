@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import { formatKg } from '../stores/inventoryStore'
 
   interface Props {
@@ -21,8 +22,13 @@
   class="weight-bar"
   class:heavy={ratio >= 0.9}
   class:full={ratio >= 1}
-  aria-label={`${label}: ${formatKg(value)} of ${formatKg(max)} kilograms, ${formatKg(remaining)} kilograms remaining`}
-  title={`${formatKg(remaining)} kg remaining`}
+  aria-label={$t('weight.description', {
+    label,
+    value: formatKg(value),
+    max: formatKg(max),
+    remaining: formatKg(remaining),
+  })}
+  title={$t('weight.remaining', { remaining: formatKg(remaining) })}
 >
   <div class="weight-fill" style={`width: ${Math.min(ratio, 1) * 100}%`}></div>
   <span class="weight-text">

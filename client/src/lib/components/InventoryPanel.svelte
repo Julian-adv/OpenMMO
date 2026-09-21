@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t, locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import {
     inventoryStore,
     itemLockMode,
@@ -114,9 +116,7 @@
     else selected.add(slot.instance_id)
   }
 
-  /** Splits a requested quantity across whichever real bag instances back
-   *  this (possibly merged-for-display) stack, since a merged slot's own
-   *  instance_id may not itself hold that many units. */
+  /** Split merged display stacks across their real bag instances. */
   function dropQty(slot: ItemInstance, qty: number) {
     if (slot.locked) return
     const key = inventoryGroupKey(slot)
@@ -154,21 +154,12 @@
     }
   }
 
-  /** Drags the current Select-mode selection as a group, adding the dragged
-   *  slot to it first if it wasn't already selected. A plain click (no drag)
-   *  toggles the slot instead — routed through `startDrag`'s own click
-   *  callback rather than a separate native `onclick`, since pointer capture
-   *  keeps the browser's click event targeted here even after a completed
-   *  drag, which would otherwise re-select the item this same gesture just
-   *  dropped. */
+  /** Use startDrag's click callback to avoid reselecting a dropped item. */
   function onGroupPointerDown(e: PointerEvent, slot: ItemInstance) {
     const def = getItemDef(slot.item_def_id)
     const groupIds = new SvelteSet(liveBagIds(selected))
     groupIds.add(slot.instance_id)
-    // Several selected instances can share the same item_def_id (e.g. two
-    // separately-caught, non-stackable old_boot entries) — consolidate them
-    // into one ghost icon with a summed quantity rather than one icon per
-    // instance.
+    // Merge matching items into one drag icon.
     const byDefId = new SvelteMap<string, { icon: string; quantity: number }>()
     for (const id of groupIds) {
       const item = $inventoryStore.bag.find((i) => i.instance_id === id)
@@ -286,35 +277,39 @@
     class="inventory-panel"
     class:drop-target={$dragMeta?.source.type === 'equipped'}
     role="dialog"
-    aria-label="Inventory"
+    aria-label={$t('inventory.title')}
     data-panel="inventory"
     bind:this={panelEl}
     use:draggablePanel={'inventory'}
   >
     <div class="panel-header" data-drag-handle>
-      <span class="panel-title">Inventory</span>
+      <span class="panel-title">{$t('inventory.title')}</span>
       <span class="gold-display"><GoldAmount copper={$playerGold} /></span>
       <div class="mode-buttons">
         <button
           class="mode-btn select-btn"
           class:active={selectMode}
           aria-pressed={selectMode}
-          title="Select multiple items to drop"
+          title={$t('inventory.selectHint')}
           onclick={toggleSelectMode}
         >
-          {selectMode ? 'Cancel' : 'Select'}
+          {selectMode ? $t('common.cancel') : $t('inventory.select')}
         </button>
         <button
           class="mode-btn lock-btn"
           class:active={$itemLockMode}
           aria-pressed={$itemLockMode}
           title={$itemLockMode
-            ? 'Finish editing item locks'
-            : 'Edit item locks'}
-          onclick={toggleLockMode}>Lock</button
+            ? $t('inventory.lockDone')
+            : $t('inventory.lockEdit')}
+          onclick={toggleLockMode}>{$t('common.lock')}</button
         >
       </div>
-      <button class="close-btn" onclick={onClose}>&times;</button>
+      <button
+        class="close-btn"
+        aria-label={$t('common.close')}
+        onclick={onClose}>&times;</button
+      >
     </div>
 
     <div class="bag-grid">
@@ -359,7 +354,7 @@
             <span class="item-qty">{slot.quantity}</span>
           {/if}
           {#if onTable > 0}
-            <span class="item-reserved" title="On the trade table"
+            <span class="item-reserved" title={$t('inventory.onTrade')}
               >{onTable}</span
             >
           {/if}
@@ -370,13 +365,19 @@
       {/each}
     </div>
 
-    <WeightBar current={$carryWeight} max={maxWeight} label="Bag weight" />
+    <WeightBar
+      current={$carryWeight}
+      max={maxWeight}
+      label={$t('inventory.weight')}
+    />
   </div>
 {/if}
 
 <QuantityPopup
   visible={pendingDrop !== null}
-  itemName={pendingDrop?.def.name ?? ''}
+  itemName={pendingDrop
+    ? itemDisplayName(pendingDrop.def.id, pendingDrop.slot.enchant, $locale)
+    : ''}
   icon={pendingDrop?.def.icon ?? ''}
   max={pendingDrop?.slot.quantity ?? 1}
   onConfirm={confirmPendingDrop}

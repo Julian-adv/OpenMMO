@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import { networkManager } from '../network/socket'
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
   import { getItemDef, itemDisplayName } from '../data/itemDefs'
@@ -22,7 +23,8 @@
   let goldText = $state('')
   let pendingAdd = $state<{
     instanceId: number
-    name: string
+    itemDefId: string
+    enchant: number
     icon: string
     max: number
   } | null>(null)
@@ -55,7 +57,7 @@
   )
 
   function displayName(entry: PlayerTradeItem): string {
-    return itemDisplayName(entry.item_def_id, entry.enchant)
+    return itemDisplayName(entry.item_def_id, entry.enchant, $locale)
   }
 
   /** Every request the player makes retires the last error: an update from
@@ -113,7 +115,8 @@
     }
     pendingAdd = {
       instanceId,
-      name: def?.name ?? item.item_def_id,
+      itemDefId: item.item_def_id,
+      enchant: item.enchant,
       icon: def?.icon ?? 'icon_frame.png',
       max: free,
     }
@@ -271,7 +274,7 @@
                   draggable="false"
                 />
                 <span class="item-name">
-                  {itemDisplayName(item.item_def_id, item.enchant)}
+                  {itemDisplayName(item.item_def_id, item.enchant, $locale)}
                 </span>
                 <span class="qty"
                   >{item.locked ? 'Locked' : `${free}/${item.quantity}`}</span
@@ -317,7 +320,9 @@
 
   <QuantityPopup
     visible={pendingAdd !== null}
-    itemName={pendingAdd?.name ?? ''}
+    itemName={pendingAdd
+      ? itemDisplayName(pendingAdd.itemDefId, pendingAdd.enchant, $locale)
+      : ''}
     icon={pendingAdd?.icon ?? ''}
     max={pendingAdd?.max ?? 1}
     onConfirm={(qty) => {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import { SvelteMap } from 'svelte/reactivity'
   import './tradePanel.css'
   import { get } from 'svelte/store'
@@ -24,7 +25,11 @@
   import { gameStore } from '../stores/gameStore'
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
-  import { getItemDef, type ItemDefinition } from '../data/itemDefs'
+  import {
+    displayName,
+    getItemDef,
+    type ItemDefinition,
+  } from '../data/itemDefs'
   import { getNpcCapabilities } from '../data/traderDefs'
   import { isStockedByAnyMerchant } from '../data/merchantDefs'
   import {
@@ -513,7 +518,7 @@
                   alt=""
                   draggable="false"
                 />
-                <span class="item-name">{def.name}</span>
+                <span class="item-name">{displayName(def, 0, $locale)}</span>
                 {#if pct !== 0}
                   <span class="deal-badge" class:markup={isMarkup('buy', pct)}
                     >{pct > 0 ? '+' : ''}{pct}%</span
@@ -546,7 +551,9 @@
                   draggable="false"
                 />
                 <span class="item-name">
-                  {def.name}{entry.quantity > 1 ? ` ×${entry.quantity}` : ''}
+                  {displayName(def, 0, $locale)}{entry.quantity > 1
+                    ? ` ×${entry.quantity}`
+                    : ''}
                 </span>
                 {#if pct !== 0}
                   <span class="deal-badge" class:markup={isMarkup('buy', pct)}
@@ -582,7 +589,11 @@
                     draggable="false"
                   />
                   <span class="item-name">
-                    {entry.enchant > 0 ? `+${entry.enchant} ` : ''}{def.name}
+                    {displayName(
+                      def,
+                      entry.enchant > 0 ? entry.enchant : 0,
+                      $locale
+                    )}
                   </span>
                   <span class="item-price"
                     ><GoldAmount copper={entry.price} /></span
@@ -637,7 +648,9 @@
                   draggable="false"
                 />
                 <span class="item-name">
-                  {def.name}{entry.qty > 1 ? ` ×${entry.qty}` : ''}
+                  {displayName(def, 0, $locale)}{entry.qty > 1
+                    ? ` ×${entry.qty}`
+                    : ''}
                 </span>
                 {#if entry.dealPct}
                   <span
@@ -721,7 +734,9 @@
                     draggable="false"
                   />
                   <span class="item-name">
-                    {def.name}{group.totalQty > 1 ? ` ×${group.totalQty}` : ''}
+                    {displayName(def, 0, $locale)}{group.totalQty > 1
+                      ? ` ×${group.totalQty}`
+                      : ''}
                   </span>
                   {#if pct !== 0}
                     <span
@@ -756,7 +771,7 @@
 
 <QuantityPopup
   visible={pendingAdd !== null}
-  itemName={pendingAdd?.def.name ?? ''}
+  itemName={pendingAdd ? displayName(pendingAdd.def, 0, $locale) : ''}
   icon={pendingAdd?.def.icon ?? ''}
   max={pendingAdd?.max ?? 1}
   defaultQty={pendingAdd?.defaultQty}

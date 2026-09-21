@@ -1320,6 +1320,7 @@ impl GameState {
         self.send_direct_message_to_players(
             &evicted,
             ServerMessage::SystemMessage {
+                localization: None,
                 message: "A roar wakes far below, the dark takes you, and you come to at the \
                           entrance."
                     .to_string(),

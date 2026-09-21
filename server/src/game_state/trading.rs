@@ -1,3 +1,4 @@
+use super::localization::{localized, PlayerMessage};
 use crate::merchant_defs::{merchant_defs, MerchantDefinition};
 use crate::npc_defs::{npc_defs, NpcDefinition};
 use crate::types::{PlayerId, ServerMessage};
@@ -121,11 +122,13 @@ pub(crate) fn trader_def_by_name(npc_name: &str) -> Option<TraderDef> {
 }
 
 impl super::GameState {
-    async fn send_trade_error(&self, player_id: &PlayerId, message: &str) {
+    async fn send_trade_error(&self, player_id: &PlayerId, message: impl Into<PlayerMessage>) {
+        let message = message.into();
         self.send_direct_message(
             player_id,
             ServerMessage::TradeError {
-                message: message.to_string(),
+                localization: message.localization,
+                message: message.message,
             },
         )
         .await;
@@ -141,7 +144,7 @@ impl super::GameState {
         item_def_id: &str,
         kind: DealKind,
         deal: Option<super::deals::DealEntry>,
-        message: Option<&'static str>,
+        message: Option<PlayerMessage>,
     ) {
         self.restore_deal(player_id, npc_name, item_def_id, kind, deal)
             .await;
@@ -619,14 +622,23 @@ impl super::GameState {
             TraderDef::Merchant(m) => {
                 if !m.sells(item_def_id) {
                     return self
-                        .send_trade_error(player_id, "The merchant does not sell that item")
+                        .send_trade_error(
+                            player_id,
+                            localized(
+                                "server.merchantNoItem",
+                                "The merchant does not sell that item",
+                            ),
+                        )
                         .await;
                 }
             }
             TraderDef::Resident(r) => {
                 if r.refuses_to_sell(item_def_id) {
                     return self
-                        .send_trade_error(player_id, "They won't part with that")
+                        .send_trade_error(
+                            player_id,
+                            localized("server.wontSell", "They won't part with that"),
+                        )
                         .await;
                 }
             }
@@ -635,7 +647,10 @@ impl super::GameState {
         let index_pct = self.price_index_percent().await;
         let Some(base_price) = self.trade_base_price(&def, item_def_id, index_pct) else {
             return self
-                .send_trade_error(player_id, "That item has no price")
+                .send_trade_error(
+                    player_id,
+                    localized("server.noPrice", "That item has no price"),
+                )
                 .await;
         };
 
@@ -650,7 +665,10 @@ impl super::GameState {
         // A keepsake sells only through the deal the NPC personally offered.
         if is_keepsake && deal.is_none() {
             return self
-                .send_trade_error(player_id, "They won't part with that")
+                .send_trade_error(
+                    player_id,
+                    localized("server.wontSell", "They won't part with that"),
+                )
                 .await;
         }
         let price = buy_price(base_price, deal.as_ref().map_or(0, |d| d.modifier_pct));
@@ -680,7 +698,7 @@ impl super::GameState {
                         item_def_id,
                         DealKind::Buy,
                         deal,
-                        Some("Not enough gold"),
+                        Some(localized("server.insufficientGold", "Not enough gold")),
                     )
                     .await;
             }
@@ -705,7 +723,7 @@ impl super::GameState {
                         item_def_id,
                         DealKind::Buy,
                         deal,
-                        Some("Too heavy to carry"),
+                        Some(localized("server.tooHeavy", "Too heavy to carry")),
                     )
                     .await;
             }
@@ -722,7 +740,10 @@ impl super::GameState {
                             item_def_id,
                             DealKind::Buy,
                             deal,
-                            Some("They have nothing to sell"),
+                            Some(localized(
+                                "server.nothingToSell",
+                                "They have nothing to sell",
+                            )),
                         )
                         .await;
                 };
@@ -739,7 +760,7 @@ impl super::GameState {
                             item_def_id,
                             DealKind::Buy,
                             deal,
-                            Some("They are out of that item"),
+                            Some(localized("server.outOfStock", "They are out of that item")),
                         )
                         .await;
                 };
@@ -849,7 +870,10 @@ impl super::GameState {
                 .map(|item| (item.item_def_id.as_str(), item.qty)),
         ) else {
             return self
-                .send_trade_error(player_id, "Invalid batch quantity")
+                .send_trade_error(
+                    player_id,
+                    localized("server.invalidQuantity", "Invalid batch quantity"),
+                )
                 .await;
         };
         let npc_name = def.npc_name().to_string();
@@ -878,14 +902,23 @@ impl super::GameState {
                 TraderDef::Merchant(m) => {
                     if !m.sells(&req.item_def_id) {
                         return self
-                            .send_trade_error(player_id, "The merchant does not sell that item")
+                            .send_trade_error(
+                                player_id,
+                                localized(
+                                    "server.merchantNoItem",
+                                    "The merchant does not sell that item",
+                                ),
+                            )
                             .await;
                     }
                 }
                 TraderDef::Resident(r) => {
                     if r.refuses_to_sell(&req.item_def_id) {
                         return self
-                            .send_trade_error(player_id, "They won't part with that")
+                            .send_trade_error(
+                                player_id,
+                                localized("server.wontSell", "They won't part with that"),
+                            )
                             .await;
                     }
                     // One personal offer covers one unit.
@@ -898,7 +931,10 @@ impl super::GameState {
             }
             let Some(base_price) = self.trade_base_price(&def, &req.item_def_id, index_pct) else {
                 return self
-                    .send_trade_error(player_id, "That item has no price")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.noPrice", "That item has no price"),
+                    )
                     .await;
             };
             plans.push(Plan {
@@ -931,7 +967,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "They have nothing to sell")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.nothingToSell", "They have nothing to sell"),
+                    )
                     .await;
             };
             for (item_def_id, qty) in quantities {
@@ -945,7 +984,10 @@ impl super::GameState {
                     drop(inventories);
                     drop(gold_map);
                     return self
-                        .send_trade_error(player_id, "They are out of that item")
+                        .send_trade_error(
+                            player_id,
+                            localized("server.outOfStock", "They are out of that item"),
+                        )
                         .await;
                 }
             }
@@ -958,7 +1000,12 @@ impl super::GameState {
         if self.calc_total_weight(&inventories[player_id], armor_mult) + added_weight > max_weight {
             drop(inventories);
             drop(gold_map);
-            return self.send_trade_error(player_id, "Too heavy to carry").await;
+            return self
+                .send_trade_error(
+                    player_id,
+                    localized("server.tooHeavy", "Too heavy to carry"),
+                )
+                .await;
         }
 
         let mut total_price: i64 = 0;
@@ -985,9 +1032,9 @@ impl super::GameState {
             .iter()
             .any(|p| r.keeps(&p.item_def_id) && p.deal_taken.is_none()))
         {
-            Some("They won't part with that")
+            Some(localized("server.wontSell", "They won't part with that"))
         } else if gold < total_price {
-            Some("Not enough gold")
+            Some(localized("server.insufficientGold", "Not enough gold"))
         } else {
             None
         };
@@ -1180,7 +1227,10 @@ impl super::GameState {
                 .and_then(|inv| inv.bag.iter().find(|i| i.instance_id == instance_id))
             else {
                 return self
-                    .send_trade_error(player_id, "Item not found in bag")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.itemNotInBag", "Item not found in bag"),
+                    )
                     .await;
             };
             item.item_def_id.clone()
@@ -1188,7 +1238,10 @@ impl super::GameState {
         if let Some(seller) = self.official_npc_def(player_id).await {
             if seller.in_loadout(&item_def_id) {
                 return self
-                    .send_trade_error(player_id, "You never sell your issued gear")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.sellIssued", "You never sell your issued gear"),
+                    )
                     .await;
             }
         }
@@ -1262,7 +1315,10 @@ impl super::GameState {
                             &item_def_id,
                             DealKind::Sell,
                             deal,
-                            Some("They cannot afford that right now"),
+                            Some(localized(
+                                "server.traderPoor",
+                                "They cannot afford that right now",
+                            )),
                         )
                         .await;
                 }
@@ -1293,7 +1349,10 @@ impl super::GameState {
                         &item_def_id,
                         DealKind::Sell,
                         deal,
-                        Some("Item is locked or no longer in your bag"),
+                        Some(localized(
+                            "server.itemLockedOrGone",
+                            "Item is locked or no longer in your bag",
+                        )),
                     )
                     .await;
             };
@@ -1325,7 +1384,7 @@ impl super::GameState {
                             &item_def_id,
                             DealKind::Sell,
                             deal,
-                            Some("They cannot carry any more"),
+                            Some(localized("server.traderFull", "They cannot carry any more")),
                         )
                         .await;
                 }
@@ -1475,7 +1534,10 @@ impl super::GameState {
             super::checked_batch_quantities(items.iter().map(|item| (item.instance_id, item.qty)))
         else {
             return self
-                .send_trade_error(player_id, "Invalid batch quantity")
+                .send_trade_error(
+                    player_id,
+                    localized("server.invalidQuantity", "Invalid batch quantity"),
+                )
                 .await;
         };
         let index_pct = self.price_index_percent().await;
@@ -1531,7 +1593,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "Item not found in bag")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.itemNotInBag", "Item not found in bag"),
+                    )
                     .await;
             };
             if item.locked {
@@ -1545,7 +1610,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "Not enough of that item")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.insufficientItems", "Not enough of that item"),
+                    )
                     .await;
             }
             let item_def_id = item.item_def_id.clone();
@@ -1556,7 +1624,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "You never sell your issued gear")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.sellIssued", "You never sell your issued gear"),
+                    )
                     .await;
             }
             let Some(base_price) = self.item_defs.get(&item_def_id).and_then(|d| d.base_price)
@@ -1604,7 +1675,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "They cannot carry any more")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.traderFull", "They cannot carry any more"),
+                    )
                     .await;
             }
         }
@@ -1645,7 +1719,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "They cannot afford that right now")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.traderPoor", "They cannot afford that right now"),
+                    )
                     .await;
             }
         }
@@ -1905,7 +1982,10 @@ impl super::GameState {
         };
         let Some(entry) = entry else {
             return self
-                .send_trade_error(player_id, "That item is no longer available")
+                .send_trade_error(
+                    player_id,
+                    localized("server.itemUnavailable", "That item is no longer available"),
+                )
                 .await;
         };
 
@@ -1921,7 +2001,12 @@ impl super::GameState {
             };
             if gold < entry.price {
                 drop(gold_map);
-                return self.send_trade_error(player_id, "Not enough gold").await;
+                return self
+                    .send_trade_error(
+                        player_id,
+                        localized("server.insufficientGold", "Not enough gold"),
+                    )
+                    .await;
             }
 
             let mut inventories = self.inventories.write().await;
@@ -1935,7 +2020,12 @@ impl super::GameState {
             {
                 drop(inventories);
                 drop(gold_map);
-                return self.send_trade_error(player_id, "Too heavy to carry").await;
+                return self
+                    .send_trade_error(
+                        player_id,
+                        localized("server.tooHeavy", "Too heavy to carry"),
+                    )
+                    .await;
             }
 
             // Consume the entry under the same critical section as the gold
@@ -1955,7 +2045,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "That item is no longer available")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.itemUnavailable", "That item is no longer available"),
+                    )
                     .await;
             };
 
@@ -2053,7 +2146,10 @@ impl super::GameState {
             let buybacks = self.buybacks.read().await;
             let Some(list) = buybacks.get(&(char_id, npc_name.clone())) else {
                 return self
-                    .send_trade_error(player_id, "That item is no longer available")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.itemUnavailable", "That item is no longer available"),
+                    )
                     .await;
             };
             let mut resolved = Vec::with_capacity(entry_ids.len());
@@ -2063,7 +2159,10 @@ impl super::GameState {
                     .find(|s| s.entry.entry_id == *id && s.is_live(now_ms))
                 else {
                     return self
-                        .send_trade_error(player_id, "That item is no longer available")
+                        .send_trade_error(
+                            player_id,
+                            localized("server.itemUnavailable", "That item is no longer available"),
+                        )
                         .await;
                 };
                 resolved.push(stored.entry.clone());
@@ -2087,7 +2186,12 @@ impl super::GameState {
             };
             if gold < total_price {
                 drop(gold_map);
-                return self.send_trade_error(player_id, "Not enough gold").await;
+                return self
+                    .send_trade_error(
+                        player_id,
+                        localized("server.insufficientGold", "Not enough gold"),
+                    )
+                    .await;
             }
 
             let mut inventories = self.inventories.write().await;
@@ -2101,7 +2205,12 @@ impl super::GameState {
             {
                 drop(inventories);
                 drop(gold_map);
-                return self.send_trade_error(player_id, "Too heavy to carry").await;
+                return self
+                    .send_trade_error(
+                        player_id,
+                        localized("server.tooHeavy", "Too heavy to carry"),
+                    )
+                    .await;
             }
 
             // Re-validate every entry is still present before removing any of
@@ -2113,7 +2222,10 @@ impl super::GameState {
                 drop(inventories);
                 drop(gold_map);
                 return self
-                    .send_trade_error(player_id, "That item is no longer available")
+                    .send_trade_error(
+                        player_id,
+                        localized("server.itemUnavailable", "That item is no longer available"),
+                    )
                     .await;
             };
             let mut indices = Vec::with_capacity(entry_ids.len());
@@ -2126,7 +2238,10 @@ impl super::GameState {
                     drop(inventories);
                     drop(gold_map);
                     return self
-                        .send_trade_error(player_id, "That item is no longer available")
+                        .send_trade_error(
+                            player_id,
+                            localized("server.itemUnavailable", "That item is no longer available"),
+                        )
                         .await;
                 };
                 indices.push(idx);

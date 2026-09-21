@@ -476,7 +476,7 @@ async fn buy_items_batch_totals_repeated_lines_against_resident_stock() {
         .await;
 
     match seller_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("out of that item"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -939,7 +939,7 @@ async fn drop_items_batch_rejects_quantity_accumulation_overflow() {
     assert!(game_state.ground_items.read().await.is_empty());
     assert_eq!(game_state.reserve_instance_ids(0).await, next_item_id);
     match owner_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("Invalid batch quantity"));
         }
         other => panic!("Expected SystemMessage, got {other:?}"),

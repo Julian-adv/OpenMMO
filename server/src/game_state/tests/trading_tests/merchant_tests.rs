@@ -367,7 +367,7 @@ async fn a_sleeping_merchant_refuses_to_open_shop() {
     assert!(
         drain(&mut buyer_rx).iter().any(|m| matches!(
             m,
-            ServerMessage::TradeError { message } if message.contains("asleep")
+            ServerMessage::TradeError { message, .. } if message.contains("asleep")
         )),
         "opening a sleeping merchant's shop must be refused"
     );
@@ -392,7 +392,7 @@ async fn falling_asleep_stops_an_open_shop_from_selling() {
     assert!(
         drain(&mut buyer_rx).iter().any(|m| matches!(
             m,
-            ServerMessage::TradeError { message } if message.contains("asleep")
+            ServerMessage::TradeError { message, .. } if message.contains("asleep")
         )),
         "buying from a sleeping merchant must be refused"
     );
@@ -474,7 +474,7 @@ async fn a_sleeping_merchant_cannot_push_a_trade_window() {
     );
     assert!(drain(&mut npc_rx).iter().any(|m| matches!(
         m,
-        ServerMessage::TradeError { message } if message.contains("asleep")
+        ServerMessage::TradeError { message, .. } if message.contains("asleep")
     )));
 }
 
@@ -796,7 +796,7 @@ async fn cross_floor_shop_actions_leave_economy_state_unchanged() {
     );
     for _ in 0..4 {
         match buyer_rx.try_recv() {
-            Ok(ServerMessage::TradeError { message }) => {
+            Ok(ServerMessage::TradeError { message, .. }) => {
                 assert!(message.contains("another floor"), "got: {message}")
             }
             other => panic!("Expected cross-floor TradeError, got {other:?}"),

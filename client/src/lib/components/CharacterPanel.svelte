@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import ItemLockButton from './ItemLockButton.svelte'
   import SkillListItem from './SkillListItem.svelte'
   import { EQUIP_SLOT_LABELS } from '../data/equipSlots'
@@ -368,7 +370,7 @@
                   <img
                     class="equip-icon"
                     src="/items/{def.icon}"
-                    alt={def.name}
+                    alt={itemDisplayName(def.id, 0, $locale)}
                     draggable="false"
                   />
                 {/if}

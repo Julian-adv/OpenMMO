@@ -848,6 +848,7 @@ async fn handle_client_message(
         );
         return Ok(match &state.player_id {
             Some(_) => vec![ServerMessage::SystemMessage {
+                localization: None,
                 message: "Admin only".to_string(),
             }],
             None => vec![],
@@ -1374,6 +1375,9 @@ async fn handle_client_message(
             responses.push(game_state.friend_list_message(&id).await);
             if dungeon_reset_on_login {
                 responses.push(ServerMessage::SystemMessage {
+                    localization: Some(onlinerpg_shared::messages::LocalizedMessage::new(
+                        "server.dungeonReset",
+                    )),
                     message: "The dungeon has reset. You return to its entrance.".to_string(),
                 });
             }
@@ -2585,7 +2589,7 @@ mod tests {
             assert_eq!(player.health, 7);
             assert_eq!(
                 responses.iter().any(|message| matches!(message,
-                    ServerMessage::SystemMessage { message } if message.contains("dungeon has reset")
+                    ServerMessage::SystemMessage { message, .. } if message.contains("dungeon has reset")
                 )),
                 expired
             );

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import type { Writable } from 'svelte/store'
 
   interface Props {
@@ -11,7 +12,8 @@
 
   let { id, label, volume, muted, shortcut }: Props = $props()
   const muteTitle = $derived(
-    ($muted ? 'Unmute' : 'Mute') + (shortcut ? ` (${shortcut})` : '')
+    ($muted ? $t('audio.unmute') : $t('audio.mute')) +
+      (shortcut ? ` (${shortcut})` : '')
   )
 
   function handleChange(e: Event) {
@@ -72,7 +74,7 @@
     disabled={$muted}
   />
   <span class="volume-value"
-    >{$muted ? 'MUTE' : `${Math.round($volume * 100)}%`}</span
+    >{$muted ? $t('audio.muted') : `${Math.round($volume * 100)}%`}</span
   >
 </div>
 

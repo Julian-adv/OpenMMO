@@ -622,7 +622,7 @@ async fn locked_door_needs_the_floor_key_and_keeps_it() {
     assert!(
         drain(&mut holder_rx).iter().any(|m| matches!(
             m,
-            ServerMessage::SystemMessage { message } if message.contains("unlock the door with your Crypt Key")
+            ServerMessage::SystemMessage { message, .. } if message.contains("unlock the door with your Crypt Key")
         )),
         "the opener is told which key they used"
     );

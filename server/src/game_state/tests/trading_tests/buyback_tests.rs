@@ -116,8 +116,15 @@ async fn buyback_rejects_without_enough_gold() {
     assert_eq!(buybacks[&(1, "Rica".to_string())].len(), 1);
     drop(buybacks);
     for msg in drain(&mut buyer_rx) {
-        if let ServerMessage::TradeError { message } = msg {
+        if let ServerMessage::TradeError {
+            message,
+            localization,
+        } = msg
+        {
             assert_eq!(message, "Not enough gold");
+            let localization = localization.expect("localized buyback failure");
+            assert_eq!(localization.code, "server.insufficientGold");
+            assert!(localization.params.is_empty());
             return;
         }
     }
@@ -390,7 +397,7 @@ async fn buyback_rejects_when_too_heavy_and_keeps_the_entry() {
     assert_eq!(buybacks[&(1, "Rica".to_string())].len(), 1);
     drop(buybacks);
     for msg in drain(&mut buyer_rx) {
-        if let ServerMessage::TradeError { message } = msg {
+        if let ServerMessage::TradeError { message, .. } = msg {
             assert_eq!(message, "Too heavy to carry");
             return;
         }
@@ -435,7 +442,7 @@ async fn buyback_is_scoped_to_the_selling_character() {
     assert_eq!(buybacks[&(1, "Rica".to_string())].len(), 1);
     drop(buybacks);
     for msg in drain(&mut other_rx) {
-        if let ServerMessage::TradeError { message } = msg {
+        if let ServerMessage::TradeError { message, .. } = msg {
             assert_eq!(message, "That item is no longer available");
             return;
         }

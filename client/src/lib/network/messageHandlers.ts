@@ -1,4 +1,5 @@
 import { manaState } from '../stores/manaStore'
+import { translate, translateServerMessage } from '../i18n'
 import {
   playTeleportEffect,
   finishTeleportArrival,
@@ -908,7 +909,10 @@ export function handleServerMessage(
         return state
       })
       if (leftName) {
-        addChatMessage({ text: `${leftName} left the game`, sender: 'system' })
+        addChatMessage({
+          text: translate('system.playerLeft', { name: leftName }),
+          sender: 'system',
+        })
       }
       break
     }
@@ -1062,7 +1066,7 @@ export function handleServerMessage(
       break
 
     case 'SystemMessage':
-      addChatMessage({ text: data.message, sender: 'system' })
+      addChatMessage({ text: translateServerMessage(data), sender: 'system' })
       break
 
     case 'PartyInviteReceived':
@@ -1565,7 +1569,7 @@ export function handleServerMessage(
           serverPlayer.position.z
         )
         requestCameraReset()
-        addChatMessage({ text: 'You have been revived.', sender: 'system' })
+        addChatMessage({ text: translate('system.revived'), sender: 'system' })
       } else {
         // Respawns now travel across floors (for NPCs tending the sick
         // room); a player this client doesn't render is not ours to move.
@@ -1575,7 +1579,7 @@ export function handleServerMessage(
           maxHealth: serverPlayer.max_health,
         })
         addChatMessage({
-          text: `${serverPlayer.name} has been revived.`,
+          text: translate('system.playerRevived', { name: serverPlayer.name }),
           sender: 'system',
         })
         remotePlayerManager.handleRespawn(
@@ -2222,7 +2226,7 @@ export function handleServerMessage(
     }
 
     case 'TradeError':
-      addChatMessage({ text: data.message, sender: 'system' })
+      addChatMessage({ text: translateServerMessage(data), sender: 'system' })
       break
 
     case 'DealUpdated':
@@ -2353,7 +2357,7 @@ export function handleServerMessage(
           'splash',
           FISHING_CAST_SWING_DELAY_MS + fishing_cast_ms()
         )
-        addCombatMessage({ text: 'You cast your line.', sender: 'local' })
+        addCombatMessage({ text: translate('fishing.cast'), sender: 'local' })
       } else {
         // Interact state ignores late moves; apply the server-computed facing.
         remotePlayerManager.handleInteraction(
@@ -2430,10 +2434,16 @@ export function handleServerMessage(
         const outcome = data.outcome
         if (outcome === 'Escaped') {
           playFishingSound('snap')
-          addCombatMessage({ text: 'The fish got away.', sender: 'local' })
-          addChatMessage({ text: 'The fish got away.', sender: 'system' })
+          addCombatMessage({
+            text: translate('fishing.escaped'),
+            sender: 'local',
+          })
+          addChatMessage({
+            text: translate('fishing.escaped'),
+            sender: 'system',
+          })
         } else if (outcome === 'Aborted') {
-          addCombatMessage({ text: 'You reel in your line.', sender: 'local' })
+          addCombatMessage({ text: translate('fishing.reel'), sender: 'local' })
         } else if (outcome?.Caught) {
           playFishingSound('catch')
           const { item_def_id, size_cm, trophy } = outcome.Caught

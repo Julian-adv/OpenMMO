@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import './tradePanel.css'
   import { closeStallPanel, openStall } from '../stores/stallStore'
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
@@ -236,7 +237,7 @@
                 {/if}
               </span>
               <span class="item-name">
-                {itemDisplayName(listing.item_def_id, listing.enchant)}
+                {itemDisplayName(listing.item_def_id, listing.enchant, $locale)}
               </span>
               <span class="figures">
                 <span class="stock">×{listing.quantity}</span>
@@ -284,7 +285,8 @@
                 <span class="item-name">
                   {itemDisplayName(
                     line.listing.item_def_id,
-                    line.listing.enchant
+                    line.listing.enchant,
+                    $locale
                   )}
                 </span>
                 <span class="figures">
@@ -342,7 +344,7 @@
                   {/if}
                 </span>
                 <span class="item-name">
-                  {itemDisplayName(item.item_def_id, item.enchant)}
+                  {itemDisplayName(item.item_def_id, item.enchant, $locale)}
                 </span>
                 <span class="figures">
                   <span class="stock">×{item.quantity}</span>
@@ -370,7 +372,7 @@
           {/if}
         </span>
         <span class="draft-name">
-          {itemDisplayName(draft.item.item_def_id, draft.item.enchant)}
+          {itemDisplayName(draft.item.item_def_id, draft.item.enchant, $locale)}
         </span>
         <label class="draft-field">
           <span class="draft-label">Sell</span>
@@ -417,7 +419,7 @@
 <QuantityPopup
   visible={pendingAdd !== null}
   itemName={pendingAdd
-    ? itemDisplayName(pendingAdd.item_def_id, pendingAdd.enchant)
+    ? itemDisplayName(pendingAdd.item_def_id, pendingAdd.enchant, $locale)
     : ''}
   icon={pendingAdd ? (getItemDef(pendingAdd.item_def_id)?.icon ?? '') : ''}
   max={addMax}

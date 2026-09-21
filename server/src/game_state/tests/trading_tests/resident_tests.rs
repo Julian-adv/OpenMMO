@@ -44,7 +44,7 @@ async fn resident_rejects_items_off_the_wishlist() {
 
     assert_eq!(game_state.get_player_gold(&pid("seller")).await, 0);
     match seller_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("no use"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -71,7 +71,7 @@ async fn resident_wallet_caps_purchases() {
     assert_eq!(game_state.get_player_gold(&pid("seller")).await, 0);
     assert_eq!(game_state.get_player_gold(&pid("npc_karl")).await, 59);
     match seller_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("afford"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -119,7 +119,7 @@ async fn resident_sells_stock_but_keeps_wishlist_items() {
         .await;
     assert_eq!(game_state.get_player_gold(&pid("seller")).await, 7_500);
     match seller_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("part with"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -367,7 +367,7 @@ async fn open_trade_pushes_shop_state_to_the_player() {
         .open_trade(&pid("npc_nobody"), &pid("seller"))
         .await;
     match nobody_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("nothing to trade"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -389,7 +389,7 @@ async fn cross_floor_open_trade_is_rejected_before_reaching_the_player() {
 
     assert!(matches!(seller_rx.try_recv(), Err(MpscTryRecvError::Empty)));
     match npc_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("another floor"), "got: {message}")
         }
         other => panic!("Expected cross-floor TradeError, got {other:?}"),
@@ -456,7 +456,7 @@ async fn keepsake_sells_only_through_a_personal_offer() {
         .buy_item(&pid("buyer"), &pid("npc_signe"), "mandolin")
         .await;
     match buyer_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("part with"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -502,7 +502,7 @@ async fn keepsake_batch_buy_is_one_unit_behind_the_offer() {
         )
         .await;
     match buyer_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("only part with one"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -519,7 +519,7 @@ async fn keepsake_batch_buy_is_one_unit_behind_the_offer() {
         )
         .await;
     match buyer_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("part with"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -682,7 +682,7 @@ async fn loadout_gear_is_not_for_sale_even_from_the_bag() {
         .buy_item(&pid("seller"), &pid("npc_karl"), "spear")
         .await;
     match seller_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("part with"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -717,7 +717,7 @@ async fn an_npc_never_sells_its_issued_gear_to_a_merchant() {
         .sell_item(&pid("npc_karl"), &pid("npc_rica"), 11)
         .await;
     match karl_rx.try_recv() {
-        Ok(ServerMessage::TradeError { message }) => {
+        Ok(ServerMessage::TradeError { message, .. }) => {
             assert!(message.contains("issued gear"), "got: {message}")
         }
         other => panic!("Expected TradeError, got {:?}", other),
@@ -748,7 +748,7 @@ async fn an_npc_never_drops_its_issued_gear() {
     for instance_id in [11, 13] {
         game_state.drop_item(&pid("npc_karl"), instance_id).await;
         match karl_rx.try_recv() {
-            Ok(ServerMessage::SystemMessage { message }) => {
+            Ok(ServerMessage::SystemMessage { message, .. }) => {
                 assert!(message.contains("issued gear"), "got: {message}")
             }
             other => panic!("Expected SystemMessage, got {:?}", other),
@@ -772,7 +772,7 @@ async fn an_npc_never_drops_its_issued_gear() {
         )
         .await;
     match karl_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("issued gear"), "got: {message}")
         }
         other => panic!("Expected SystemMessage, got {:?}", other),

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t, locale } from '../i18n'
   import { onMount } from 'svelte'
   import { getItemDef, itemDisplayName } from '../data/itemDefs'
   import type { ItemInstance } from '../stores/inventoryStore'
@@ -41,7 +42,7 @@
 
 <dialog
   bind:this={dialog}
-  aria-label="Unlock item"
+  aria-label={$t('inventory.unlockTitle')}
   aria-describedby="item-unlock-description"
   oncancel={(event) => {
     event.preventDefault()
@@ -53,22 +54,24 @@
   ondblclick={(event) => event.stopPropagation()}
 >
   <form onsubmit={submit}>
-    <h2>Unlock item?</h2>
+    <h2>{$t('inventory.unlockTitle')}</h2>
     <div class="item-details">
       {#if def}
         <img src="/items/{def.icon}" alt="" draggable="false" />
       {/if}
       <strong>
-        {itemDisplayName(item.item_def_id, item.enchant)}{item.quantity > 1
-          ? ` ×${item.quantity}`
-          : ''}
+        {itemDisplayName(
+          item.item_def_id,
+          item.enchant,
+          $locale
+        )}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
       </strong>
     </div>
     <p id="item-unlock-description">
-      Unlocking removes protection against dropping, trading and enchanting.
+      {$t('inventory.unlockDescription')}
     </p>
     <label>
-      <span>Type <b>{confirmationWord}</b> to confirm.</span>
+      <span>{$t('inventory.unlockConfirm', { word: confirmationWord })}</span>
       <input
         bind:this={input}
         bind:value={confirmation}
@@ -79,11 +82,14 @@
       />
     </label>
     <div class="actions">
-      <button type="button" class="secondary" onclick={onCancel}>Cancel</button>
+      <button type="button" class="secondary" onclick={onCancel}
+        >{$t('common.cancel')}</button
+      >
       <button
         type="submit"
         class="primary"
-        disabled={confirmation !== confirmationWord}>Unlock</button
+        disabled={confirmation !== confirmationWord}
+        >{$t('common.unlock')}</button
       >
     </div>
   </form>

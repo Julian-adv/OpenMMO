@@ -212,7 +212,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             }
             Some(format!("[Party] {from}: {message}"))
         }
-        ServerMessage::SystemMessage { message } => Some(format!("[System] {message}")),
+        ServerMessage::SystemMessage { message, .. } => Some(format!("[System] {message}")),
         ServerMessage::InteractionRejected { reason } => {
             Some(format!("[InteractionRejected] {reason}"))
         }
@@ -483,7 +483,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             crate::shop_info::format_price(*price),
             crate::shop_info::format_price(*npc_gold),
         )),
-        ServerMessage::TradeError { message } => Some(format!("[TradeError] {message}")),
+        ServerMessage::TradeError { message, .. } => Some(format!("[TradeError] {message}")),
         ServerMessage::TradeDeclined { player_name, .. } => Some(format!(
             "[TradeDeclined] {player_name} waved off your trade window — let \
              trading rest with them for a good while and just talk. Trade \

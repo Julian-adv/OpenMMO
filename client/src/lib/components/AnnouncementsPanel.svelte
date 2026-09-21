@@ -1,6 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { getTerrainApiUrl } from '../utils/networkUtils'
+  import {
+    t,
+    locale,
+    languagePreference,
+    languages as supportedLanguages,
+  } from '../i18n'
 
   interface Translation {
     title: string
@@ -13,35 +19,21 @@
     translations: Record<string, Translation>
   }
 
-  const DEFAULT_LANG = 'ko'
-  const LANG_LABELS: Record<string, string> = { ko: '한국어', en: 'English' }
-  // Preferred display order; anything else is appended alphabetically.
-  const LANG_ORDER = ['ko', 'en']
-
   let announcements = $state<Announcement[]>([])
-  let lang = $state(DEFAULT_LANG)
   let expandedId = $state<string | null>(null)
 
-  // Every locale present across all announcements, in display order.
   const languages = $derived.by(() => {
     const present = new Set(
       announcements.flatMap((a) => Object.keys(a.translations))
     )
-    return [...present].sort((a, b) => {
-      const ia = LANG_ORDER.indexOf(a)
-      const ib = LANG_ORDER.indexOf(b)
-      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) || a.localeCompare(b)
-    })
+    return supportedLanguages.filter(({ value }) => present.has(value))
   })
-
-  function labelFor(code: string): string {
-    return LANG_LABELS[code] ?? code.toUpperCase()
-  }
 
   function pick(item: Announcement): Translation {
     return (
-      item.translations[lang] ??
-      item.translations[DEFAULT_LANG] ??
+      item.translations[$locale] ??
+      item.translations.en ??
+      item.translations.ko ??
       Object.values(item.translations)[0] ?? { title: item.date, body: '' }
     )
   }
@@ -53,11 +45,6 @@
       const data = (await res.json()) as Announcement[]
       announcements = Array.isArray(data) ? data : []
       expandedId = announcements[0]?.id ?? null
-
-      const browser = navigator.language?.slice(0, 2).toLowerCase()
-      if (browser && languages.includes(browser)) lang = browser
-      else if (languages.includes(DEFAULT_LANG)) lang = DEFAULT_LANG
-      else lang = languages[0] ?? DEFAULT_LANG
     } catch {
       // Announcements are non-critical; failing here must not block login.
     }
@@ -71,16 +58,16 @@
 {#if announcements.length > 0}
   <section class="announcements">
     <div class="bar">
-      <h2 class="heading">Announcements</h2>
+      <h2 class="heading">{$t('announcements.title')}</h2>
       {#if languages.length > 1}
         <div class="langs">
-          {#each languages as code (code)}
+          {#each languages as language (language.value)}
             <button
               class="lang"
-              class:active={lang === code}
-              onclick={() => (lang = code)}
+              class:active={$locale === language.value}
+              onclick={() => languagePreference.set(language.value)}
             >
-              {labelFor(code)}
+              {language.label}
             </button>
           {/each}
         </div>

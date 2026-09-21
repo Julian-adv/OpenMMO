@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import './tradePanel.css'
   import { SvelteMap } from 'svelte/reactivity'
   import { activeDebuffs } from '../stores/debuffStore'
@@ -201,11 +202,11 @@
       if (!$openEstateChest?.can_deposit) return 'Tax overdue: withdrawal only'
       if (maxSelectable(direction, item) < 1)
         return 'No storage weight remains for this item'
-      return `Select ${itemDisplayName(item.item_def_id, item.enchant)} to store`
+      return `Select ${itemDisplayName(item.item_def_id, item.enchant, $locale)} to store`
     }
     if (maxSelectable(direction, item) < 1)
       return 'No bag weight remains for this item'
-    return `Select ${itemDisplayName(item.item_def_id, item.enchant)} to take`
+    return `Select ${itemDisplayName(item.item_def_id, item.enchant, $locale)} to take`
   }
 
   function requestLines(selection: ReadonlyMap<number, number>): BagLineItem[] {
@@ -257,7 +258,7 @@
   >
     <header class="panel-header" data-drag-handle>
       <span class="panel-title">
-        {itemDisplayName($openEstateChest.item_def_id)}
+        {itemDisplayName($openEstateChest.item_def_id, 0, $locale)}
       </span>
       <button class="close-btn" onclick={close} aria-label="Close">×</button>
     </header>
@@ -296,7 +297,8 @@
               <span class="item-name">
                 {itemDisplayName(
                   item.item_def_id,
-                  item.enchant
+                  item.enchant,
+                  $locale
                 )}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
               </span>
               {#if candidateLabel('withdraw', item)}
@@ -345,7 +347,8 @@
               <span class="item-name">
                 {itemDisplayName(
                   item.item_def_id,
-                  item.enchant
+                  item.enchant,
+                  $locale
                 )}{item.quantity > 1 ? ` ×${item.quantity}` : ''}
               </span>
               {#if candidateLabel('deposit', item)}
@@ -403,7 +406,8 @@
   itemName={quantityChoice
     ? itemDisplayName(
         quantityChoice.item.item_def_id,
-        quantityChoice.item.enchant
+        quantityChoice.item.enchant,
+        $locale
       )
     : ''}
   icon={quantityChoice

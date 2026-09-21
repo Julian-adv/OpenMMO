@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from './lib/i18n'
   import { onMount } from 'svelte'
   import { Canvas } from '@threlte/core'
   import GameScene from './lib/components/GameScene.svelte'
@@ -449,7 +450,7 @@
       class="settings-btn-corner"
       class:raised={screen === 'character-create'}
       onclick={() => (showSettings = true)}
-      title="Settings"
+      title={$t('settings.title')}
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

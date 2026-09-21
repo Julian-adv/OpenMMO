@@ -1,5 +1,6 @@
 use super::consent::{answer_consent, PendingConsent};
 use crate::types::{Player, PlayerId, ServerMessage};
+use onlinerpg_shared::messages::LocalizedMessage;
 use onlinerpg_shared::messages::{
     PartyMember, PartyMemberPosition, PartyMemberVitals, PARTY_INVITE_TTL, PARTY_SUMMON_TTL,
 };
@@ -930,6 +931,9 @@ impl super::GameState {
         self.send_direct_message_to_players(
             &remaining,
             ServerMessage::SystemMessage {
+                localization: Some(
+                    LocalizedMessage::new("server.partyRemoved").with_param("name", &target_name),
+                ),
                 message: format!("Party: {target_name} was removed."),
             },
         )
@@ -969,6 +973,10 @@ impl super::GameState {
                 self.send_direct_message_to_players(
                     &members,
                     ServerMessage::SystemMessage {
+                        localization: Some(
+                            LocalizedMessage::new("server.partyLeader")
+                                .with_param("name", &target_name),
+                        ),
                         message: format!("Party: {target_name} is now the party leader."),
                     },
                 )

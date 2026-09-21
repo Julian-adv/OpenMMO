@@ -143,7 +143,7 @@ async fn who_command_reports_online_counts_only_to_the_requester() {
         .await;
 
     match asker_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Online: 3 (1 web, 1 cli, 1 npc)");
         }
         other => panic!("Expected online count reply, got {:?}", other),
@@ -268,7 +268,7 @@ async fn bare_say_prefix_draws_a_usage_reply() {
         .send_chat_message(&speaker_id, "/s".to_string(), &auth)
         .await;
     match speaker_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("/s <message>"), "{message}")
         }
         other => panic!("Expected usage reply, got {:?}", other),
@@ -297,7 +297,7 @@ async fn reply_targets_the_last_whisper_partner() {
         .send_chat_message(&sender_id, "/r hi".to_string(), &auth)
         .await;
     match sender_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Reply: no one to reply to yet.")
         }
         other => panic!("Expected a no-partner reply, got {:?}", other),
@@ -403,7 +403,7 @@ async fn whisper_matches_names_ignoring_ascii_case() {
         .send_chat_message(&sender_id, "/w RICA psst".to_string(), &auth)
         .await;
     match sender_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Whisper: no one called RICA is here.")
         }
         other => panic!("Expected offline reply, got {:?}", other),
@@ -426,7 +426,7 @@ async fn whisper_errors_go_only_to_the_sender() {
 
     let expect_reply =
         |result: Result<ServerMessage, MpscTryRecvError>, expected: &str| match result {
-            Ok(ServerMessage::SystemMessage { message }) => {
+            Ok(ServerMessage::SystemMessage { message, .. }) => {
                 assert_eq!(message, expected);
             }
             other => panic!("Expected whisper error reply, got {:?}", other),
@@ -628,7 +628,7 @@ async fn block_command_persists_resolves_case_and_unblocks() {
 
     let expect_reply =
         |result: Result<ServerMessage, MpscTryRecvError>, expected: &str| match result {
-            Ok(ServerMessage::SystemMessage { message }) => assert_eq!(message, expected),
+            Ok(ServerMessage::SystemMessage { message, .. }) => assert_eq!(message, expected),
             other => panic!("Expected block reply, got {:?}", other),
         };
     let command = |text: &str| game_state.send_chat_message(&blocker_id, text.to_string(), &auth);
@@ -876,7 +876,7 @@ async fn give_command_supports_counts_and_defaults_to_one() {
         );
         assert!(messages.iter().any(|m| matches!(
             m,
-            ServerMessage::SystemMessage { message }
+            ServerMessage::SystemMessage { message, .. }
                 if message == &format!("Gave item: {item} x{quantity}")
         )));
     }
@@ -930,7 +930,7 @@ async fn give_command_rejects_bad_counts_and_unknown_items_without_granting() {
             .await;
         assert!(matches!(
             drain(&mut rx).as_slice(),
-            [ServerMessage::SystemMessage { message }] if message == error
+            [ServerMessage::SystemMessage { message, .. }] if message == error
         ));
     }
     assert!(game_state.inventories.read().await[&admin_id]
@@ -1068,7 +1068,7 @@ async fn ban_refuses_an_operators_own_alt() {
     assert!(
         drain(&mut admin_rx).iter().any(|m| matches!(
             m,
-            ServerMessage::SystemMessage { message } if message.contains("your own account")
+            ServerMessage::SystemMessage { message, .. } if message.contains("your own account")
         )),
         "banning an alt of your own account must be refused"
     );
@@ -1123,7 +1123,7 @@ async fn kick_command_disconnects_the_named_player() {
     assert!(
         drain(&mut admin_rx).iter().any(|m| matches!(
             m,
-            ServerMessage::SystemMessage { message } if message == "Kick: target was disconnected."
+            ServerMessage::SystemMessage { message, .. } if message == "Kick: target was disconnected."
         )),
         "the admin must get a confirmation"
     );
@@ -1136,7 +1136,7 @@ async fn kick_command_disconnects_the_named_player() {
         .send_chat_message(&admin_id, "/kick Nobody".to_string(), &auth)
         .await;
     match admin_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Kick: no one called Nobody is here.")
         }
         other => panic!("Expected a kick error, got {:?}", other),
@@ -1165,14 +1165,14 @@ async fn mute_command_silences_chat_and_whispers_until_unmute() {
         .send_chat_message(&admin_id, "/mute SPAMMER 5".to_string(), &auth)
         .await;
     match admin_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => assert_eq!(
+        Ok(ServerMessage::SystemMessage { message, .. }) => assert_eq!(
             message,
             "Mute: spammer cannot chat for 5m. /unmute spammer undoes this."
         ),
         other => panic!("Expected a mute reply, got {:?}", other),
     }
     match spammer_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "You are muted for 5m.")
         }
         other => panic!("Expected a mute notice, got {:?}", other),
@@ -1182,7 +1182,7 @@ async fn mute_command_silences_chat_and_whispers_until_unmute() {
         .send_chat_message(&spammer_id, "buy gold".to_string(), &auth)
         .await;
     match spammer_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Muted: you cannot chat for another 5m.")
         }
         other => panic!("Expected a muted reply, got {:?}", other),
@@ -1196,7 +1196,7 @@ async fn mute_command_silences_chat_and_whispers_until_unmute() {
         .send_chat_message(&spammer_id, "/w listener psst".to_string(), &auth)
         .await;
     match spammer_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Muted: you cannot whisper for another 5m.")
         }
         other => panic!("Expected a muted whisper reply, got {:?}", other),
@@ -1218,7 +1218,7 @@ async fn mute_command_silences_chat_and_whispers_until_unmute() {
         .send_chat_message(&spammer_id, "still here".to_string(), &auth)
         .await;
     match spammer_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Muted: you cannot chat for another 5m.")
         }
         other => panic!("Expected the mute to survive a relog, got {:?}", other),
@@ -1228,7 +1228,7 @@ async fn mute_command_silences_chat_and_whispers_until_unmute() {
         .send_chat_message(&admin_id, "/unmute spammer".to_string(), &auth)
         .await;
     match admin_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert_eq!(message, "Unmute: spammer can chat again.")
         }
         other => panic!("Expected an unmute reply, got {:?}", other),
@@ -1271,14 +1271,14 @@ async fn summon_and_goto_teleport_beside_the_target() {
     assert!(
         drain(&mut wanderer_rx).iter().any(|m| matches!(
             m,
-            ServerMessage::SystemMessage { message }
+            ServerMessage::SystemMessage { message, .. }
                 if message == "An operator summoned you to admin's side."
         )),
         "the summoned player must be told what happened"
     );
     assert!(drain(&mut admin_rx).iter().any(|m| matches!(
         m,
-        ServerMessage::SystemMessage { message } if message == "Summon: wanderer is at your side."
+        ServerMessage::SystemMessage { message, .. } if message == "Summon: wanderer is at your side."
     )));
 
     // Send the wanderer far away again, then walk the admin over instead.
@@ -1308,7 +1308,7 @@ async fn summon_and_goto_teleport_beside_the_target() {
     );
     assert!(drain(&mut admin_rx).iter().any(|m| matches!(
         m,
-        ServerMessage::SystemMessage { message } if message == "Goto: you are at wanderer's side."
+        ServerMessage::SystemMessage { message, .. } if message == "Goto: you are at wanderer's side."
     )));
 }
 
@@ -1356,7 +1356,7 @@ async fn spawnmob_spawns_aggressive_monsters_beside_the_admin() {
     }
     assert!(messages.iter().any(|m| matches!(
         m,
-        ServerMessage::SystemMessage { message } if message == "Spawnmob: 3 kobold spawned."
+        ServerMessage::SystemMessage { message, .. } if message == "Spawnmob: 3 kobold spawned."
     )));
 }
 
@@ -1369,7 +1369,7 @@ async fn spawnmob_refuses_unknown_types_and_bad_counts() {
     let mut admin_rx = game_state.register_direct_channel(&admin_id).await;
 
     let reply_to = |messages: Vec<ServerMessage>| match messages.into_iter().next() {
-        Some(ServerMessage::SystemMessage { message }) => message,
+        Some(ServerMessage::SystemMessage { message, .. }) => message,
         other => panic!("Expected a system reply, got {:?}", other),
     };
 
@@ -1630,7 +1630,7 @@ async fn an_unknown_emote_lists_the_available_ones() {
         .await;
 
     match cheerer_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("excited"), "the list names each emote");
             assert!(message.contains("twist"), "the list names looping emotes");
             assert!(!message.contains("idle"), "debug emotes stay unadvertised");
@@ -1695,7 +1695,7 @@ async fn play_music_without_an_instrument_is_refused() {
         .await;
 
     match bard_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("instrument"), "got: {message}")
         }
         other => panic!("Expected the refusal, got {other:?}"),

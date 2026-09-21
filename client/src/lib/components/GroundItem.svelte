@@ -22,6 +22,7 @@
 </script>
 
 <script lang="ts">
+  import { locale } from '../i18n'
   import { T } from '@threlte/core'
   import { onDestroy } from 'svelte'
   import { getItemDef } from '../data/itemDefs'
@@ -61,7 +62,7 @@
   }: Props = $props()
 
   const def = $derived(getItemDef(data.itemDefId))
-  const label = $derived(def?.name ?? data.itemDefId)
+  const label = $derived(itemDisplayName(data.itemDefId, data.enchant, $locale))
   const TERRAIN_NORMAL_SAMPLE_DISTANCE = 0.75
   const MAX_TERRAIN_Y_DELTA_FOR_TILT = 0.75
 
@@ -400,7 +401,7 @@
   const hoveredName = $derived.by(() => {
     if ($hoveredGroundItemId !== data.instanceId) return null
     if (data.inHand || displayMode === 'box') return null
-    return itemDisplayName(data.itemDefId, data.enchant)
+    return label
   })
   const nameBadge = $derived(
     hoveredName ? makeTextBadge(hoveredName, NAME_BADGE_STYLE) : null

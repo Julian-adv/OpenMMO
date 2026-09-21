@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import {
     furnitureBasket,
     furnitureShopHover,
@@ -15,7 +16,7 @@
   <div class="shop-panel">
     {#if $furnitureShopHover}
       <p>
-        {itemDisplayName($furnitureShopHover.product.itemDefId)} · <GoldAmount
+        {itemDisplayName($furnitureShopHover.product.itemDefId, 0, $locale)} · <GoldAmount
           copper={$furnitureShopHover.product.price}
         />
       </p>

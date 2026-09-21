@@ -1,5 +1,6 @@
-// Combat-log wording for a landed catch. Pure for unit tests; keep in sync
-// with agent-client/src/driver/prompt.rs caught_line.
+import { get } from 'svelte/store'
+import { locale, translate } from '../i18n'
+import { itemText } from '../i18n/items'
 
 export interface CatchDefLike {
   name: string
@@ -12,12 +13,15 @@ export function catchMessage(
   sizeCm: number,
   trophy: boolean
 ): string {
-  const name = def?.name ?? fallbackId
+  const language = get(locale)
+  const name = itemText(fallbackId, 'name', def?.name ?? fallbackId, language)
   const an = /^[aeiou]/i.test(name) ? 'an' : 'a'
-  if (trophy) return `Trophy catch! ${name}, ${sizeCm} cm!`
-  if (def?.category === 'coin_catch')
-    return `You haul up ${an} ${name}! Double-click it in your bag to open it.`
-  if (def?.category === 'fish')
-    return `You caught ${an} ${name} (${sizeCm} cm).`
-  return `You fished up ${an} ${name}.`
+  if (trophy) return translate('fishing.trophy', { name, size: sizeCm })
+  const values = {
+    name: language === 'en' ? `${an} ${name}` : name,
+    size: sizeCm,
+  }
+  if (def?.category === 'coin_catch') return translate('fishing.coin', values)
+  if (def?.category === 'fish') return translate('fishing.fish', values)
+  return translate('fishing.junk', values)
 }

@@ -1,9 +1,11 @@
 <script lang="ts">
+  import { t, locale } from '../i18n'
   import {
     armorTypeLabel,
     compareStats,
     displayName,
     getItemDef,
+    itemDescription,
     statLabels,
     type ItemDefinition,
     weaponTypeLabel,
@@ -12,12 +14,10 @@
 
   interface Props {
     def: ItemDefinition
-    /** Enchantment level; prefixes the name (e.g. "+2 Iron Sword"). */
     enchant?: number
     locked?: boolean
     side?: 'left' | 'right'
     anchor: DOMRect
-    /** The equipped item this one would replace. */
     compare?: { def: ItemDefinition; enchant: number }
   }
 
@@ -32,15 +32,11 @@
     compare,
   }: Props = $props()
 
-  // A bow's own die is a token: what it hurts for depends on the round it
-  // draws, so the comparison is made against that rather than the bow alone.
   const chosenAmmo = $derived(
     $inventoryStore.active_ammo
       ? getItemDef($inventoryStore.active_ammo)
       : undefined
   )
-  /** The round this weapon would actually draw, or undefined when it draws
-   *  none — either it is not a ranged weapon or the quiver is empty. */
   const drawnRound = $derived(
     def.ammoKind && chosenAmmo?.ammoKind === def.ammoKind
       ? chosenAmmo
@@ -48,7 +44,14 @@
   )
   const deltas = $derived(
     compare
-      ? compareStats(def, enchant, compare.def, compare.enchant, chosenAmmo)
+      ? compareStats(
+          def,
+          enchant,
+          compare.def,
+          compare.enchant,
+          chosenAmmo,
+          $locale
+        )
       : []
   )
   const fmt = (n: number) => String(+Math.abs(n).toFixed(1))
@@ -79,48 +82,53 @@
   style="top: {top}px; {horizontal}"
   bind:clientHeight={height}
 >
-  <div class="tooltip-name">{displayName(def, enchant)}</div>
+  <div class="tooltip-name">{displayName(def, enchant, $locale)}</div>
   {#if locked}
-    <div class="tooltip-lock">Locked</div>
+    <div class="tooltip-lock">{$t('item.locked')}</div>
   {/if}
-  <div class="tooltip-desc">{def.description}</div>
+  <div class="tooltip-desc">{itemDescription(def, $locale)}</div>
   <div class="tooltip-stats">
-    <span>Weight: {def.weight}</span>
+    <span>{$t('item.weight', { value: def.weight })}</span>
     {#if def.equipSlot}
-      <span>Slot: {def.equipSlot.replace(/_/g, ' ')}</span>
+      <span>{$t('item.slot', { slot: $t(`slot.${def.equipSlot}`) })}</span>
     {/if}
     {#if def.weaponType}
-      <span>Type: {weaponTypeLabel(def.weaponType)}</span>
+      <span
+        >{$t('item.type', {
+          type: weaponTypeLabel(def.weaponType, $locale),
+        })}</span
+      >
     {:else if def.armorType}
-      <span>Type: {armorTypeLabel(def.armorType)}</span>
+      <span
+        >{$t('item.type', {
+          type: armorTypeLabel(def.armorType, $locale),
+        })}</span
+      >
     {/if}
     {#if def.category === 'weapon' && def.dice}
-      <!-- A bow's own die is a token; the round it draws carries the rest, so
-           quoting the bow alone reads as worthless. Both are shown, and where
-           each comes from stays visible. -->
       <span>
-        Damage: {def.dice}{drawnRound ? `+${drawnRound.dice}` : ''}{enchant > 0
-          ? `+${enchant}`
-          : ''}
+        {$t('item.damage', {
+          value: `${def.dice}${drawnRound ? `+${drawnRound.dice}` : ''}${enchant > 0 ? `+${enchant}` : ''}`,
+        })}
       </span>
       {#if def.ammoKind && !drawnRound}
-        <span class="tooltip-warn">No {def.ammoKind}s</span>
+        <span class="tooltip-warn">{$t('item.noAmmo')}</span>
       {/if}
     {:else if def.ammoKind && def.dice}
-      <!-- Ammunition adds its die to the weapon's rather than replacing it,
-           so the sign says which. -->
-      <span>Damage: +{def.dice}</span>
+      <span>{$t('item.damage', { value: `+${def.dice}` })}</span>
     {:else if def.category === 'healing_potion' && def.dice}
-      <span>Heals: {def.dice}</span>
+      <span>{$t('item.heals', { value: def.dice })}</span>
     {/if}
-    {#each statLabels(def, enchant) as label (label)}
+    {#each statLabels(def, enchant, $locale) as label (label)}
       <span>{label}</span>
     {/each}
   </div>
   {#if compare && deltas.length}
     <div class="tooltip-compare">
       <div class="compare-title">
-        vs {displayName(compare.def, compare.enchant)}
+        {$t('item.compare', {
+          item: displayName(compare.def, compare.enchant, $locale),
+        })}
       </div>
       {#each deltas as d (d.label)}
         <span class={d.better ? 'up' : 'down'}>
@@ -146,6 +154,8 @@
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: 6px;
     pointer-events: none;
+    overflow-wrap: anywhere;
+    line-height: 1.4;
     user-select: none;
     -webkit-user-select: none;
     z-index: 100;

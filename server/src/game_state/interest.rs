@@ -866,6 +866,7 @@ mod tests {
 
     fn state(text: &str) -> Vec<ServerMessage> {
         vec![ServerMessage::SystemMessage {
+            localization: None,
             message: text.into(),
         }]
     }
@@ -955,7 +956,7 @@ mod tests {
         assert_eq!(events(&mut rx)[0].change, InterestChange::Leave);
         interest.reconcile(upstairs.id, upstairs.position, 2, false);
         assert!(
-            matches!(&events(&mut rx)[0].messages[0], ServerMessage::SystemMessage { message } if message == "closed")
+            matches!(&events(&mut rx)[0].messages[0], ServerMessage::SystemMessage { message, .. } if message == "closed")
         );
         interest.remove("house:a", state("deleted"));
         assert_eq!(events(&mut rx)[0].change, InterestChange::Delete);
@@ -1005,7 +1006,7 @@ mod tests {
         let departed = events(&mut edge_rx);
         assert_eq!(departed[0].change, InterestChange::Leave);
         assert!(
-            matches!(&departed[0].messages[..], [ServerMessage::SystemMessage { message: first }, ServerMessage::SystemMessage { message: last }] if first == "stop" && last == "leave")
+            matches!(&departed[0].messages[..], [ServerMessage::SystemMessage { message: first, .. }, ServerMessage::SystemMessage { message: last, .. }] if first == "stop" && last == "leave")
         );
     }
 

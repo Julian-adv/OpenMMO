@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale } from '../i18n'
   import { onMount } from 'svelte'
   import {
     landscapingMode,
@@ -286,7 +287,11 @@
                 <img src="/items/{selectedDefinition.icon}" alt="" />
               {/if}
               <strong
-                >{itemDisplayName($selectedEstateFurniture.item_def_id)}</strong
+                >{itemDisplayName(
+                  $selectedEstateFurniture.item_def_id,
+                  0,
+                  $locale
+                )}</strong
               >
             </div>
             {#if $estateChestMode?.kind === 'move'}
@@ -377,7 +382,7 @@
               {#if fenceDefinition}
                 <img src="/items/{fenceDefinition.icon}" alt="" />
               {/if}
-              <span>{itemDisplayName('wooden_fence')}</span>
+              <span>{itemDisplayName('wooden_fence', 0, $locale)}</span>
               <small>×{$fenceCount}</small>
             </button>
             {#each storageObjects as object (object.itemDefId)}
@@ -387,13 +392,13 @@
                   object.itemDefId}
                 disabled={object.instanceId === undefined ||
                   $estateChestPending}
-                title={`Place ${itemDisplayName(object.itemDefId)}`}
+                title={`Place ${itemDisplayName(object.itemDefId, 0, $locale)}`}
                 onclick={() => selectStorage(object.instanceId)}
               >
                 {#if object.definition}
                   <img src="/items/{object.definition.icon}" alt="" />
                 {/if}
-                <span>{itemDisplayName(object.itemDefId)}</span>
+                <span>{itemDisplayName(object.itemDefId, 0, $locale)}</span>
                 <small>×{object.quantity}</small>
               </button>
             {/each}

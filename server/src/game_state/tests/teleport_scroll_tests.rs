@@ -520,7 +520,7 @@ async fn teleport_scroll_preserves_item_when_defeated_or_trade_reserved() {
     assert_eq!(quantity(&game, &id).await, 2);
     assert_eq!(game.players.read().await[&id].position, origin);
     assert!(drain(&mut rx).iter().any(|msg| matches!(
-        msg, ServerMessage::SystemMessage { message } if message.contains("defeated")
+        msg, ServerMessage::SystemMessage { message, .. } if message.contains("defeated")
     )));
 
     game.players.write().await.get_mut(&id).unwrap().health = 10;
@@ -555,7 +555,7 @@ async fn teleport_scroll_preserves_item_when_surrounded_by_water() {
     assert_eq!(quantity(&game, &id).await, 1);
     assert_eq!(game.players.read().await[&id].position, origin);
     assert!(drain(&mut rx).iter().any(|msg| matches!(
-        msg, ServerMessage::SystemMessage { message } if message.contains("No safe place")
+        msg, ServerMessage::SystemMessage { message, .. } if message.contains("No safe place")
     )));
 }
 

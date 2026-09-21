@@ -107,7 +107,7 @@ async fn enchant_scroll_preserves_locked_weapons_and_materials() {
         assert_eq!(after.bag, before.bag);
         assert!(matches!(
             rx.try_recv(),
-            Ok(ServerMessage::SystemMessage { message }) if message.contains("unlocked")
+            Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("unlocked")
         ));
         if enchant == 0 {
             game.set_item_locked(&pid("reader"), 1, false).await;
@@ -145,7 +145,7 @@ async fn enchant_scroll_requires_wielded_weapon() {
         .unwrap();
     assert_eq!(inv.bag.len(), 2, "the scroll and the oil should be kept");
     match rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(
                 message.contains("no weapon"),
                 "unexpected message: {message}"
@@ -276,7 +276,7 @@ async fn enchant_armor_scroll_keeps_materials_when_all_armor_is_locked() {
     assert_eq!(after.bag, before.bag);
     assert!(matches!(
         rx.try_recv(),
-        Ok(ServerMessage::SystemMessage { message }) if message.contains("unlocked")
+        Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("unlocked")
     ));
 }
 
@@ -294,7 +294,7 @@ async fn enchant_armor_scroll_requires_worn_armor() {
         .unwrap();
     assert_eq!(inv.bag.len(), 2, "the scroll and the oil should be kept");
     match rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(
                 message.contains("no armor"),
                 "unexpected message: {message}"
@@ -370,7 +370,7 @@ async fn enchanting_needs_whetstone_oil() {
     assert_eq!(inv.equipped.get(&EquipSlot::MainHand).unwrap().enchant, 0);
     assert_eq!(inv.bag.len(), 1, "the scroll should be kept");
     match rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("Oil"), "unexpected message: {message}");
         }
         other => panic!("Expected a system reply, got {:?}", other),

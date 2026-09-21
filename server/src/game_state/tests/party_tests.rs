@@ -35,7 +35,7 @@ async fn invite_and_accept_forms_party() {
         other => panic!("Expected invite for bob, got {:?}", other),
     }
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("invited bob"), "{message}")
         }
         other => panic!("Expected ack for alice, got {:?}", other),
@@ -76,7 +76,7 @@ async fn invites_match_names_ignoring_ascii_case() {
     }
     // The ack echoes the canonical spelling, not the typed one.
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("invited Bob"), "{message}")
         }
         other => panic!("Expected ack, got {:?}", other),
@@ -110,7 +110,7 @@ async fn decline_reports_to_inviter_and_forms_nothing() {
         .respond_to_party_invite(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("expired"), "{message}")
         }
         other => panic!("Expected expired notice, got {:?}", other),
@@ -127,7 +127,7 @@ async fn respond_without_invite_is_expired() {
         .respond_to_party_invite(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("expired"), "{message}")
         }
         other => panic!("Expected expired notice, got {:?}", other),
@@ -152,7 +152,7 @@ async fn leader_leave_promotes_earliest_member() {
         other => panic!("Expected cleared state for alice, got {:?}", other),
     }
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("left"), "{message}")
         }
         other => panic!("Expected leave notice, got {:?}", other),
@@ -188,7 +188,7 @@ async fn party_of_two_disbands_on_leave() {
         other => panic!("Expected cleared state for alice, got {:?}", other),
     }
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("disbanded"), "{message}")
         }
         other => panic!("Expected disband notice, got {:?}", other),
@@ -259,7 +259,7 @@ async fn inviting_a_partied_player_gives_no_membership_oracle() {
     // on bob's membership would let anyone poll who is grouped with whom.
     game_state.invite_to_party(&pid("dave"), "bob").await;
     match dave_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("invited bob"), "{message}")
         }
         other => panic!("Expected plain ack, got {:?}", other),
@@ -274,7 +274,7 @@ async fn inviting_a_partied_player_gives_no_membership_oracle() {
         .respond_to_party_invite(&pid("bob"), &pid("dave"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("already in a party"), "{message}")
         }
         other => panic!("Expected already-in-party notice, got {:?}", other),
@@ -331,7 +331,7 @@ async fn decline_does_not_reset_the_spam_brake() {
     game_state.invite_to_party(&pid("alice"), "bob").await;
     assert!(matches!(bob_rx.try_recv(), Err(MpscTryRecvError::Empty)));
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("invited bob"), "{message}")
         }
         other => panic!("Expected plain ack, got {:?}", other),
@@ -402,7 +402,7 @@ async fn repeat_invite_is_acked_but_not_redelivered() {
     assert!(matches!(bob_rx.try_recv(), Err(MpscTryRecvError::Empty)));
     for _ in 0..2 {
         match alice_rx.try_recv() {
-            Ok(ServerMessage::SystemMessage { message }) => {
+            Ok(ServerMessage::SystemMessage { message, .. }) => {
                 assert!(message.contains("invited bob"), "{message}")
             }
             other => panic!("Expected ack, got {:?}", other),
@@ -496,7 +496,7 @@ async fn blocked_inviter_gets_a_silent_expiry() {
     game_state.invite_to_party(&pid("alice"), "bob").await;
     // The block is invisible: alice gets the normal ack, bob hears nothing.
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("invited bob"), "{message}")
         }
         other => panic!("Expected normal ack, got {:?}", other),
@@ -819,7 +819,7 @@ async fn party_chat_command_invites_and_reports() {
         .send_chat_message(&pid("alice"), "/party".to_string(), &auth)
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("not in a party"), "{message}")
         }
         other => panic!("Expected empty-party status, got {:?}", other),
@@ -842,7 +842,7 @@ async fn party_chat_command_invites_and_reports() {
         .send_chat_message(&pid("alice"), "/party".to_string(), &auth)
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("alice (leader)"), "{message}");
             assert!(message.contains("bob"), "{message}");
         }
@@ -916,7 +916,7 @@ async fn summon_scroll_kept_without_party() {
         .unwrap();
     assert_eq!(inv.bag.len(), 1, "the scroll should be kept");
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("no party members"), "{message}")
         }
         other => panic!("Expected a system reply, got {:?}", other),
@@ -1013,7 +1013,7 @@ async fn summon_scroll_kept_while_caster_in_combat() {
         .unwrap();
     assert_eq!(inv.bag.len(), 1, "the scroll should be kept");
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("in combat"), "{message}")
         }
         other => panic!("Expected a combat refusal, got {:?}", other),
@@ -1037,7 +1037,7 @@ async fn summon_recast_while_call_is_out_keeps_scroll() {
     game_state.use_item(&pid("alice"), 9).await;
     assert_eq!(summon_scrolls_left(&game_state, "alice").await, 1);
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("still out"), "{message}")
         }
         other => panic!("Expected still-out notice, got {:?}", other),
@@ -1062,7 +1062,7 @@ async fn summon_accept_waits_out_casters_combat() {
         .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("alice is in combat"), "{message}")
         }
         other => panic!("Expected caster-combat refusal, got {:?}", other),
@@ -1097,7 +1097,7 @@ async fn summon_accept_refused_while_caster_fallen() {
         .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("has fallen"), "{message}")
         }
         other => panic!("Expected fallen-caster refusal, got {:?}", other),
@@ -1121,7 +1121,7 @@ async fn summon_accept_waits_out_combat() {
         .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("not while in combat"), "{message}")
         }
         other => panic!("Expected combat refusal, got {:?}", other),
@@ -1159,7 +1159,7 @@ async fn summon_decline_reports_and_spends_the_ask() {
         .respond_to_party_summon(&pid("bob"), &pid("alice"), false)
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("bob declined"), "{message}")
         }
         other => panic!("Expected decline report, got {:?}", other),
@@ -1170,7 +1170,7 @@ async fn summon_decline_reports_and_spends_the_ask() {
         .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("expired"), "{message}")
         }
         other => panic!("Expected expired notice, got {:?}", other),
@@ -1195,7 +1195,7 @@ async fn summon_leave_voids_the_call() {
         .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("expired"), "{message}")
         }
         other => panic!("Expected expired notice, got {:?}", other),
@@ -1232,7 +1232,7 @@ async fn summon_teleport_voids_calls_aimed_at_the_mover() {
         .respond_to_party_summon(&pid("bob"), &pid("carol"), true)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("expired"), "{message}")
         }
         other => panic!("Expected expired notice for carol's call, got {:?}", other),
@@ -1251,7 +1251,7 @@ async fn summon_teleport_voids_calls_aimed_at_the_mover() {
     assert_eq!(summon_scrolls_left(&game_state, "carol").await, 0);
     let call_notice = std::iter::from_fn(|| carol_rx.try_recv().ok())
         .find_map(|msg| match msg {
-            ServerMessage::SystemMessage { message } => Some(message),
+            ServerMessage::SystemMessage { message, .. } => Some(message),
             _ => None,
         })
         .expect("carol should get a call notice");
@@ -1298,7 +1298,7 @@ async fn party_chat_outside_a_party_is_refused() {
         .send_party_chat(&pid("alice"), "anyone?".to_string())
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("not in a party"), "{message}")
         }
         other => panic!("Expected refusal, got {:?}", other),
@@ -1353,7 +1353,7 @@ async fn party_chat_from_muted_player_is_refused() {
         .send_party_chat(&pid("bob"), "psst".to_string())
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("Muted"), "{message}")
         }
         other => panic!("Expected mute refusal, got {:?}", other),
@@ -1421,7 +1421,7 @@ async fn bare_typed_party_chat_draws_a_usage_reply() {
         .send_chat_message(&pid("bob"), "/p".to_string(), &auth)
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("/p <message>"), "{message}")
         }
         other => panic!("Expected usage reply, got {:?}", other),
@@ -1449,7 +1449,7 @@ async fn leader_kicks_member_with_notices() {
         other => panic!("Expected cleared state for bob, got {:?}", other),
     }
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("you were removed"), "{message}")
         }
         other => panic!("Expected removal notice for bob, got {:?}", other),
@@ -1464,7 +1464,7 @@ async fn leader_kicks_member_with_notices() {
             other => panic!("Expected shrunk roster, got {:?}", other),
         }
         match rx.try_recv() {
-            Ok(ServerMessage::SystemMessage { message }) => {
+            Ok(ServerMessage::SystemMessage { message, .. }) => {
                 assert!(message.contains("bob was removed"), "{message}")
             }
             other => panic!("Expected removal line, got {:?}", other),
@@ -1486,7 +1486,7 @@ async fn only_the_leader_kicks() {
 
     game_state.kick_from_party(&pid("bob"), &pid("carol")).await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("only the party leader"), "{message}")
         }
         other => panic!("Expected refusal for bob, got {:?}", other),
@@ -1510,7 +1510,7 @@ async fn kick_rejects_self_outsiders_and_the_partyless() {
         .kick_from_party(&pid("alice"), &pid("alice"))
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("that's you"), "{message}")
         }
         other => panic!("Expected self-kick refusal, got {:?}", other),
@@ -1520,7 +1520,7 @@ async fn kick_rejects_self_outsiders_and_the_partyless() {
         .kick_from_party(&pid("alice"), &pid("dave"))
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("not in your party"), "{message}")
         }
         other => panic!("Expected outsider refusal, got {:?}", other),
@@ -1531,7 +1531,7 @@ async fn kick_rejects_self_outsiders_and_the_partyless() {
         .kick_from_party(&pid("dave"), &pid("alice"))
         .await;
     match dave_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("not in a party"), "{message}")
         }
         other => panic!("Expected partyless refusal, got {:?}", other),
@@ -1553,7 +1553,7 @@ async fn kick_to_one_disbands() {
         other => panic!("Expected cleared state for bob, got {:?}", other),
     }
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("you were removed"), "{message}")
         }
         other => panic!("Expected removal notice for bob, got {:?}", other),
@@ -1563,13 +1563,13 @@ async fn kick_to_one_disbands() {
         other => panic!("Expected cleared state for alice, got {:?}", other),
     }
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("disbanded"), "{message}")
         }
         other => panic!("Expected disband notice, got {:?}", other),
     }
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("bob was removed"), "{message}")
         }
         other => panic!("Expected removal line, got {:?}", other),
@@ -1602,7 +1602,7 @@ async fn promote_hands_over_leadership() {
             other => panic!("Expected handed-over roster, got {:?}", other),
         }
         match rx.try_recv() {
-            Ok(ServerMessage::SystemMessage { message }) => {
+            Ok(ServerMessage::SystemMessage { message, .. }) => {
                 assert!(message.contains("bob is now the party leader"), "{message}")
             }
             other => panic!("Expected handover line, got {:?}", other),
@@ -1632,7 +1632,7 @@ async fn promote_requires_leadership_and_membership() {
         .promote_party_leader(&pid("bob"), &pid("alice"))
         .await;
     match bob_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("only the party leader"), "{message}")
         }
         other => panic!("Expected refusal for bob, got {:?}", other),
@@ -1642,7 +1642,7 @@ async fn promote_requires_leadership_and_membership() {
         .promote_party_leader(&pid("alice"), &pid("alice"))
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("already lead"), "{message}")
         }
         other => panic!("Expected self-promote refusal, got {:?}", other),
@@ -1652,7 +1652,7 @@ async fn promote_requires_leadership_and_membership() {
         .promote_party_leader(&pid("alice"), &pid("dave"))
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("not in your party"), "{message}")
         }
         other => panic!("Expected outsider refusal, got {:?}", other),
@@ -1677,7 +1677,7 @@ async fn party_kick_and_leader_chat_commands() {
         .send_chat_message(&pid("alice"), "/party kick".to_string(), &auth)
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("/party kick <name>"), "{message}")
         }
         other => panic!("Expected usage reply, got {:?}", other),
@@ -1687,7 +1687,7 @@ async fn party_kick_and_leader_chat_commands() {
         .send_chat_message(&pid("alice"), "/party kick nobody".to_string(), &auth)
         .await;
     match alice_rx.try_recv() {
-        Ok(ServerMessage::SystemMessage { message }) => {
+        Ok(ServerMessage::SystemMessage { message, .. }) => {
             assert!(message.contains("no one called nobody"), "{message}")
         }
         other => panic!("Expected unknown-name reply, got {:?}", other),

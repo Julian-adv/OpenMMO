@@ -1,3 +1,4 @@
+use super::localization::PlayerMessage;
 use super::movement_audit::{self, Pose};
 use super::KickNotice;
 use crate::auth::{AuthError, AuthService, CharacterSaveData, ItemRow};
@@ -313,11 +314,17 @@ impl super::GameState {
 
     /// Private system chat line for one player (command replies, action
     /// feedback).
-    pub async fn send_system_message(&self, player_id: &PlayerId, message: impl Into<String>) {
+    pub async fn send_system_message(
+        &self,
+        player_id: &PlayerId,
+        message: impl Into<PlayerMessage>,
+    ) {
+        let message = message.into();
         self.send_direct_message(
             player_id,
             ServerMessage::SystemMessage {
-                message: message.into(),
+                localization: message.localization,
+                message: message.message,
             },
         )
         .await;

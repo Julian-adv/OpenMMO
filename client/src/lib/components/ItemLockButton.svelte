@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { getItemDef } from '../data/itemDefs'
+  import { t, locale } from '../i18n'
+  import { itemDisplayName } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import type { ItemInstance } from '../stores/inventoryStore'
   import ItemUnlockDialog from './ItemUnlockDialog.svelte'
@@ -9,7 +10,9 @@
     getInstanceIds,
   }: { item: ItemInstance; getInstanceIds?: () => number[] } = $props()
   const label = $derived(
-    `${item.locked ? 'Unlock' : 'Lock'} ${getItemDef(item.item_def_id)?.name ?? 'item'}`
+    $t(item.locked ? 'inventory.unlockItem' : 'inventory.lockItem', {
+      item: itemDisplayName(item.item_def_id, item.enchant, $locale),
+    })
   )
   let unlockTarget = $state<{
     item: ItemInstance

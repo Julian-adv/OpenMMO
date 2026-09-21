@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import type { Writable } from 'svelte/store'
   import ChatPanel from './ChatPanel.svelte'
   import FPSCounter from './FPSCounter.svelte'
@@ -394,7 +395,11 @@
           /></svg
         >
       </button>
-      <button class="corner-btn" onclick={onOpenSettings} title="Settings">
+      <button
+        class="corner-btn"
+        onclick={onOpenSettings}
+        title={$t('settings.title')}
+      >
         <svg
           xmlns="http://www.w3.org/2000/svg"
           width="512"
@@ -412,7 +417,7 @@
 
 {#if isSceneCompiling || isCurrentPlayerLoading || $teleportLoading}
   <LoadingDialog
-    message={isSceneCompiling ? 'Preparing world...' : 'Loading...'}
+    message={$t(isSceneCompiling ? 'loading.world' : 'loading.loading')}
   />
 {/if}
 
