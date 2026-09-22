@@ -69,7 +69,7 @@
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-radius: 999px;
     padding: 0 4px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 10px;
     font-weight: 700;
     color: #fff;

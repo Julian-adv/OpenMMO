@@ -159,7 +159,7 @@
     user-select: none;
     -webkit-user-select: none;
     z-index: 100;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     color: #e6edf3;
   }
 

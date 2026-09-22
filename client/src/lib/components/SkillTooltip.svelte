@@ -73,7 +73,7 @@
     border-radius: 6px;
     background: rgba(6, 10, 14, 0.9);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 13px;
     line-height: 1.4;
     pointer-events: none;

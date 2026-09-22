@@ -123,7 +123,6 @@
 <style>
   .buff-card {
     margin-top: 10px;
-    font-family: system-ui, sans-serif;
     border: 1px solid #e9d8a966;
     color: #f3e4b9;
   }
@@ -132,7 +131,6 @@
     flex-direction: column;
     gap: 10px;
     color: #d8d2c4;
-    font-family: system-ui, sans-serif;
   }
 
   .status-card {

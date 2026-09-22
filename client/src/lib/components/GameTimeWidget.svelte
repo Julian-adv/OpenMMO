@@ -22,7 +22,8 @@
 </script>
 
 <script lang="ts">
-  import { MONTH_NAMES } from '../data/gameCalendar'
+  import { t } from '../i18n'
+  import { MONTH_NAME_KEYS } from '../data/gameCalendar'
   import { calendarShown } from '../stores/inventoryStore'
   import { currentDungeonDepth, isUnderground } from '../stores/dungeonStore'
   import { getSolarDaylightWindow } from '../utils/celestialSimulation'
@@ -67,7 +68,6 @@
 
   interface MoonVisualState {
     id: MoonVisualDefinition['id']
-    displayName: string
     cycleDay: number
     periodDays: number
     phaseLabel: string
@@ -98,6 +98,11 @@
     },
   ] as const
 
+  const moonNames = $derived({
+    elder: $t('calendar.moon.elder'),
+    swift: $t('calendar.moon.swift'),
+  })
+
   function getMoonVisualState(
     moon: MoonVisualDefinition,
     hour: number,
@@ -127,8 +132,7 @@
     const isVisible = trackState.isVisible
     const visibilityScale = isDaylight ? MOON_DAYLIGHT_VISIBILITY_SCALE : 1
 
-    // Eclipse: use 3D angular separation to account for moon's orbital inclination.
-    // Eclipses only occur when new moon is near an orbital node (sun/moon declinations align).
+    // Eclipses require an aligned new moon near an orbital node.
     const phaseFactor = Math.max(
       0,
       1 - phaseState.illumination / ECLIPSE_NEW_MOON_THRESHOLD
@@ -172,7 +176,6 @@
 
     return {
       id: moon.id,
-      displayName: moon.displayName,
       cycleDay: phaseState.cycleDay,
       periodDays: moon.periodDays,
       phaseLabel,
@@ -207,11 +210,12 @@
   }
 
   function formatGameDate() {
-    const monthName =
-      MONTH_NAMES[gameTimeState.date.month - 1] ??
-      `Month ${gameTimeState.date.month}`
-    const day = gameTimeState.date.day.toString().padStart(2, '0')
-    return `${gameTimeState.date.year} Month ${gameTimeState.date.month} (${monthName}) ${day}`
+    const { year, month, day } = gameTimeState.date
+    const monthKey = MONTH_NAME_KEYS[month - 1]
+    const monthName = monthKey
+      ? $t(monthKey)
+      : $t('calendar.monthNumber', { month })
+    return $t('calendar.date', { year, monthName, day })
   }
 
   function formatGameTime() {
@@ -332,14 +336,14 @@
         <img
           class="sun"
           src="/icons/sun.png"
-          alt="Sun"
+          alt={$t('calendar.sun')}
           style={`--sun-x:${sunVisual.xPercent}%; --sun-y:${sunVisual.yPercent}%`}
         />
       {/if}
       {#each moonVisuals as moon (moon.id)}
         <canvas
           class="moon"
-          aria-label={`${moon.displayName} Moon`}
+          aria-label={moonNames[moon.id]}
           use:moonPhaseCanvasAction={{
             moonId: moon.id,
             illumination: moon.illumination,
@@ -384,7 +388,7 @@
     border-radius: 10px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
     padding: 5px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     display: flex;
     align-items: center;
     gap: 10px;
@@ -393,8 +397,7 @@
   .time-widget.compact {
     background: transparent;
     box-shadow: none;
-    /* No background box in compact mode, so drop the padding that would
-       otherwise push the visible sky-track past the 9px edge margin. */
+    /* Keep the sky aligned with the edge in compact mode. */
     padding: 0;
     border-radius: 0;
     width: auto;
@@ -459,7 +462,6 @@
     justify-content: flex-start;
     padding-left: 8px;
     z-index: 2;
-    font-family: system-ui, sans-serif;
     font-size: 15px;
     font-weight: bold;
     color: #f2e2b0;
@@ -513,6 +515,7 @@
   }
 
   .time {
+    font-variant-numeric: tabular-nums;
     font-size: 14px;
     font-weight: bold;
     opacity: 0.95;

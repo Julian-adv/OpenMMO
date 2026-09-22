@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
+  import { t } from '../i18n'
   import {
     skillTooltip,
     type SkillTooltipParams,
@@ -61,7 +62,9 @@
     <span class="skill-description">
       {description}
       {#if manaCost > 0}
-        <span class="skill-cost">(Cost: {manaCost} MP)</span>
+        <span class="skill-cost">
+          ({$t('skill.manaCost', { amount: manaCost })})
+        </span>
       {/if}
     </span>
   </span>

@@ -402,7 +402,7 @@
     border-radius: 10px;
     background: rgba(6, 10, 14, 0.88);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     pointer-events: auto;
     max-width: calc(100vw - 32px);

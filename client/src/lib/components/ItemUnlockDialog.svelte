@@ -105,8 +105,8 @@
     background: #101820;
     color: #e6edf3;
     font:
-      13px/1.5 'Courier New',
-      monospace;
+      13px/1.5 'Noto Sans KR',
+      sans-serif;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
     pointer-events: auto;
   }

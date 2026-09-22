@@ -3,7 +3,6 @@
   import { itemDisplayName } from '../data/itemDefs'
   import ItemLockButton from './ItemLockButton.svelte'
   import SkillListItem from './SkillListItem.svelte'
-  import { EQUIP_SLOT_LABELS } from '../data/equipSlots'
   import { ABILITIES, isAbilityAvailable } from '../data/abilities'
   import {
     inventoryStore,
@@ -230,53 +229,53 @@
         >
           <div class="stats-grid">
             <div class="stat-row">
-              <span class="stat-label">Lv</span>
+              <span class="stat-label">{$t('stat.level')}</span>
               <span class="stat-value level-value">{level}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">HP</span>
+              <span class="stat-label">{$t('stat.hp')}</span>
               <span class="stat-value hp-value">{currentHp}/{maxHp}</span>
             </div>
             {#if $visibleMana}
               <div class="stat-row">
-                <span class="stat-label">MP</span>
+                <span class="stat-label">{$t('stat.mp')}</span>
                 <span class="stat-value mana-value"
                   >{$visibleMana.mana}/{$visibleMana.max_mana}</span
                 >
               </div>
             {/if}
             <div class="stat-row">
-              <span class="stat-label">Guard</span>
+              <span class="stat-label">{$t('stat.guard')}</span>
               <span class="stat-value guard-value">{withBonus('guard')}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">Str</span>
+              <span class="stat-label">{$t('stat.str')}</span>
               <span class="stat-value">{attributes.str}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">Dex</span>
+              <span class="stat-label">{$t('stat.dex')}</span>
               <span class="stat-value">{attributes.dex}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">Con</span>
+              <span class="stat-label">{$t('stat.con')}</span>
               <span class="stat-value">{attributes.con}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">Int</span>
+              <span class="stat-label">{$t('stat.int')}</span>
               <span class="stat-value">{attributes.int}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">Wis</span>
+              <span class="stat-label">{$t('stat.wis')}</span>
               <span class="stat-value">{attributes.wis}</span>
             </div>
             <div class="stat-row">
-              <span class="stat-label">Cha</span>
+              <span class="stat-label">{$t('stat.cha')}</span>
               <span class="stat-value">{withBonus('cha')}</span>
             </div>
           </div>
           <div class="exp-block">
             <div class="exp-header">
-              <span class="stat-label exp-label">Exp</span>
+              <span class="stat-label exp-label">{$t('stat.exp')}</span>
               <span class="exp-text"
                 >{xpInfo.gainedXp}/{xpInfo.neededXp} ({xpInfo.percent}%)</span
               >
@@ -284,6 +283,7 @@
             <div
               class="exp-track"
               role="progressbar"
+              aria-label={$t('stat.exp')}
               aria-valuemin={0}
               aria-valuemax={xpInfo.neededXp}
               aria-valuenow={xpInfo.gainedXp}
@@ -334,14 +334,14 @@
                 class:drop-target={isDropTarget}
                 style="top:{top}%;left:{left}%"
                 title={torchSwapTarget
-                  ? 'Equip torch and put away weapon'
+                  ? $t('characterPanel.equipTorch')
                   : blocked
-                    ? 'Both hands are on your weapon'
+                    ? $t('characterPanel.bothHandsOccupied')
                     : item
                       ? undefined
                       : isQuiverCell
-                        ? 'No arrows'
-                        : EQUIP_SLOT_LABELS[slot]}
+                        ? $t('characterPanel.noArrows')
+                        : $t(`slot.${slot}`)}
                 data-equip-slot={torchSwapTarget
                   ? 'off_hand'
                   : isQuiverCell || blocked
@@ -382,11 +382,13 @@
         {#if $characterPanelTab === 'skills'}
           <div class="pane-skills">
             {#if availableAbilities.length > 0}
-              <ul class="ability-list" aria-label="Skills">
+              <ul class="ability-list" aria-label={$t('characterPanel.skills')}>
                 {#each availableAbilities as ability (ability.id)}
                   <li>
                     <SkillListItem
                       {...ability}
+                      name={$t(`ability.${ability.id}.name`)}
+                      description={$t(`ability.${ability.id}.description`)}
                       onUse={() => useAbility(ability.id)}
                     />
                   </li>
@@ -403,7 +405,11 @@
         {#if $characterPanelTab === 'titles'}
           <div class="pane-titles">
             {#if $earnedTitles.length > 0}
-              <div class="titles-list" role="radiogroup" aria-label="Title">
+              <div
+                class="titles-list"
+                role="radiogroup"
+                aria-label={$t('characterPanel.titles')}
+              >
                 <label class="title-row">
                   <input
                     type="radio"
@@ -411,7 +417,7 @@
                     checked={!$gameStore.currentPlayer?.title}
                     onchange={() => networkManager.sendSetActiveTitle(null)}
                   />
-                  <span class="title-none">None</span>
+                  <span class="title-none">{$t('characterPanel.noTitle')}</span>
                 </label>
                 {#each $earnedTitles as id (id)}
                   <label class="title-row">
@@ -426,7 +432,7 @@
                 {/each}
               </div>
             {:else}
-              <div class="skills-empty">No titles yet</div>
+              <div class="skills-empty">{$t('characterPanel.noTitlesYet')}</div>
             {/if}
           </div>
         {/if}
@@ -457,7 +463,7 @@
     border-radius: 10px;
     background: rgba(6, 10, 14, 0.88);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     pointer-events: auto;
   }
