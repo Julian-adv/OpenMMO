@@ -4,15 +4,42 @@ import {
   unreadChatCount,
   unreadPartyCount,
   whisperChatEntry,
+  chatEntryName,
+  chatEntryText,
+  shouldTranslateChatEntry,
 } from './chat-format'
 import type { ChatSender } from './stores/gameStore'
+
+describe('automatic chat translation', () => {
+  it('translates player chat and legacy server prose while leaving localized notices alone', () => {
+    expect(shouldTranslateChatEntry({ sender: 'remote', text: 'Hello' })).toBe(
+      true
+    )
+    expect(
+      shouldTranslateChatEntry({ sender: 'system', text: '/help — 도움말' })
+    ).toBe(false)
+    const legacy = {
+      sender: 'system' as const,
+      text: 'New server notice',
+      autoTranslate: true,
+    }
+    expect(shouldTranslateChatEntry(legacy)).toBe(true)
+    expect(
+      shouldTranslateChatEntry({
+        ...legacy,
+        localization: { code: 'server.partyNotInParty', params: {} },
+      })
+    ).toBe(false)
+  })
+})
 
 describe('whisperChatEntry', () => {
   it('labels the echo of an own whisper as outgoing', () => {
     expect(whisperChatEntry('Miru', 'Rica', 'psst', 'Miru')).toEqual({
       text: 'psst',
       sender: 'whisper',
-      name: 'To Rica',
+      name: 'Rica',
+      whisperDirection: 'outgoing',
     })
   })
 
@@ -20,14 +47,32 @@ describe('whisperChatEntry', () => {
     expect(whisperChatEntry('Miru', 'Rica', 'psst', 'Rica')).toEqual({
       text: 'psst',
       sender: 'whisper',
-      name: 'From Miru',
+      name: 'Miru',
+      whisperDirection: 'incoming',
     })
   })
 
   it('treats an unknown own name as incoming', () => {
-    expect(whisperChatEntry('Miru', 'Rica', 'psst', undefined).name).toBe(
-      'From Miru'
-    )
+    expect(
+      whisperChatEntry('Miru', 'Rica', 'psst', undefined).whisperDirection
+    ).toBe('incoming')
+  })
+
+  it('localizes direction without changing names, message text, or unread counts', () => {
+    const outgoing = {
+      ...whisperChatEntry('Miru', 'To <b>Rica</b>', 'hello', 'Miru'),
+      id: 1,
+    }
+    const incoming = {
+      ...whisperChatEntry('To <b>Rica</b>', 'Miru', 'hello', 'Miru'),
+      id: 2,
+    }
+    expect(chatEntryName(outgoing, 'en')).toBe('To To <b>Rica</b>')
+    expect(chatEntryName(outgoing, 'ko')).toBe('To <b>Rica</b>에게')
+    expect(chatEntryName(incoming, 'ja')).toBe('To <b>Rica</b>から')
+    expect(chatEntryName(incoming, 'zh-Hans')).toBe('来自To <b>Rica</b>')
+    expect(chatEntryText(incoming, 'ko')).toBe('hello')
+    expect(unreadChatCount([outgoing, incoming], 0, 'Miru')).toBe(1)
   })
 })
 
@@ -66,8 +111,18 @@ describe('unreadChatCount', () => {
     { sender: 'remote' as const, name: 'Rica', id: 1 },
     { sender: 'local' as const, name: 'Miru', id: 2 },
     { sender: 'party' as const, name: 'Miru', id: 3 },
-    { sender: 'whisper' as const, name: 'To Rica', id: 4 },
-    { sender: 'whisper' as const, name: 'From Rica', id: 5 },
+    {
+      sender: 'whisper' as const,
+      name: 'Rica',
+      whisperDirection: 'outgoing' as const,
+      id: 4,
+    },
+    {
+      sender: 'whisper' as const,
+      name: 'Rica',
+      whisperDirection: 'incoming' as const,
+      id: 5,
+    },
     { sender: 'system' as const, id: 6 },
   ]
 
@@ -89,6 +144,27 @@ describe('isPartyTabLine', () => {
     expect(isPartyTabLine(line('party', 'on my way'))).toBe(true)
     expect(isPartyTabLine(line('system', 'Party: Rica joined.'))).toBe(true)
     expect(isPartyTabLine(line('system', 'Summon: Rica calls you.'))).toBe(true)
+  })
+
+  it('keeps localized notices in the party tab across language changes', () => {
+    const entry = {
+      sender: 'system' as const,
+      text: 'Party: Rica was removed.',
+      localization: { code: 'server.partyRemoved', params: { name: 'Rica' } },
+    }
+    expect(chatEntryText(entry, 'en')).toBe(entry.text)
+    expect(chatEntryText(entry, 'ko')).toBe('파티: Rica 님이 추방되었습니다.')
+    expect(isPartyTabLine(entry)).toBe(true)
+    expect(isPartyTabLine({ ...entry, text: chatEntryText(entry, 'ja') })).toBe(
+      true
+    )
+    expect(entry.text).toBe('Party: Rica was removed.')
+    expect(
+      chatEntryText(
+        { ...entry, localization: { code: 'future.message', params: {} } },
+        'ko'
+      )
+    ).toBe(entry.text)
   })
 
   it('leaves every other line to the All tab', () => {

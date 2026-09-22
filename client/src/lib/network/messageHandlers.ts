@@ -1,5 +1,5 @@
 import { manaState } from '../stores/manaStore'
-import { translate, translateServerMessage } from '../i18n'
+import { translate, type MessageKey } from '../i18n'
 import {
   playTeleportEffect,
   finishTeleportArrival,
@@ -33,7 +33,7 @@ import {
   GUARDIAN_WARD,
   abilityRequirementsNotMet,
   abilityEquipmentNotMet,
-  getAbility,
+  abilityDisplayName,
   type AbilityTimer,
 } from '../data/abilities'
 import {
@@ -138,7 +138,7 @@ import {
   landFishingCatch,
   removeBobber,
 } from '../stores/fishingStore'
-import { getItemDef } from '../data/itemDefs'
+import { getItemDef, itemDisplayName } from '../data/itemDefs'
 import { getMonsterDef } from '../data/monsterDefs'
 import { getMaterialMissSoundUrl } from '../data/materialImpactSounds'
 import {
@@ -423,7 +423,7 @@ function logSpokenLine(playerId: number, text: string) {
   addChatMessage({
     text,
     sender: isLocal ? 'local' : 'remote',
-    name: speaker?.name ?? 'Unknown',
+    name: speaker?.name ?? translate('chat.unknown'),
   })
 }
 
@@ -544,8 +544,8 @@ function playRemoteInstrumentNotes(
 /// Who did it, for a chat line: "You" for us, their name for anyone else.
 function actorName(playerId: number): string {
   const state = get(gameStore)
-  if (state.currentPlayer?.id === playerId) return 'You'
-  return state.otherPlayers.get(playerId)?.name ?? 'Someone'
+  if (state.currentPlayer?.id === playerId) return translate('chat.you')
+  return state.otherPlayers.get(playerId)?.name ?? translate('chat.someone')
 }
 
 /// One chat line for a ground item changing hands. Silent unless a player
@@ -553,14 +553,18 @@ function actorName(playerId: number): string {
 function announceGroundItem(
   actorId: number | null | undefined,
   itemDefId: string | undefined,
-  verb: string,
+  action: 'droppedItem' | 'pickedUpItem',
   quantity = 1
 ) {
   if (actorId == null || !itemDefId) return
-  const name = getItemDef(itemDefId)?.name ?? itemDefId
+  const name = itemDisplayName(itemDefId)
   const amount = quantity > 1 ? ` x${quantity}` : ''
   addChatMessage({
-    text: `${actorName(actorId)} ${verb} ${name}${amount}.`,
+    text: translate(`system.${action}`, {
+      name: actorName(actorId),
+      item: name,
+      amount,
+    }),
     sender: 'system',
   })
 }
@@ -867,7 +871,7 @@ export function handleServerMessage(
       })
       if (joinedName) {
         addChatMessage({
-          text: `${joinedName} joined the game`,
+          text: translate('system.playerJoined', { name: joinedName }),
           sender: 'system',
         })
       }
@@ -1066,7 +1070,12 @@ export function handleServerMessage(
       break
 
     case 'SystemMessage':
-      addChatMessage({ text: translateServerMessage(data), sender: 'system' })
+      addChatMessage({
+        text: data.message,
+        localization: data.localization,
+        autoTranslate: true,
+        sender: 'system',
+      })
       break
 
     case 'PartyInviteReceived':
@@ -1083,7 +1092,11 @@ export function handleServerMessage(
       break
 
     case 'PartyInviteResult':
-      addChatMessage({ text: data.message, sender: 'system' })
+      addChatMessage({
+        text: data.message,
+        autoTranslate: true,
+        sender: 'system',
+      })
       break
 
     case 'PlayerTradeRequested':
@@ -1091,7 +1104,11 @@ export function handleServerMessage(
       break
 
     case 'PlayerTradeRequestResult':
-      addChatMessage({ text: data.message, sender: 'system' })
+      addChatMessage({
+        text: data.message,
+        autoTranslate: true,
+        sender: 'system',
+      })
       break
 
     case 'PlayerTradeUpdate':
@@ -1102,7 +1119,11 @@ export function handleServerMessage(
     case 'PlayerTradeEnded':
       playerTrade.set(null)
       playerTradeError.set(null)
-      addChatMessage({ text: data.message, sender: 'system' })
+      addChatMessage({
+        text: data.message,
+        autoTranslate: true,
+        sender: 'system',
+      })
       break
 
     case 'PlayerTradeError':
@@ -1176,7 +1197,7 @@ export function handleServerMessage(
       if (get(friendOnlineNoticeEnabled)) {
         for (const name of announced) {
           addChatMessage({
-            text: `Friend: ${name} is online.`,
+            text: translate('system.friendOnline', { name }),
             sender: 'system',
           })
         }
@@ -1333,8 +1354,9 @@ export function handleServerMessage(
       const gameState = get(gameStore)
       const isLocalAttacker = gameState.currentPlayer?.id === data.player_id
       const attackerName = isLocalAttacker
-        ? 'You'
-        : gameState.otherPlayers.get(data.player_id)?.name || 'Unknown'
+        ? translate('chat.you')
+        : gameState.otherPlayers.get(data.player_id)?.name ||
+          translate('chat.unknown')
 
       addCombatMessage({
         text: attackLog(data.roll, data.hit, data.damage, data.dagger_strike),
@@ -1372,8 +1394,9 @@ export function handleServerMessage(
         text: daggerSkippedLog(data.strike, data.reason),
         sender: local ? 'local' : 'remote',
         name: local
-          ? 'You'
-          : state.otherPlayers.get(data.player_id)?.name || 'Unknown',
+          ? translate('chat.you')
+          : state.otherPlayers.get(data.player_id)?.name ||
+            translate('chat.unknown'),
         hit: false,
       })
       break
@@ -1389,18 +1412,13 @@ export function handleServerMessage(
           pending: false,
           queued: false,
         }))
-      const reasons: Record<string, string> = {
-        cooldown: 'skill is cooling down',
-        attack_cooldown: 'wait for the next attack',
-        invalid_target: 'target is gone',
-        out_of_range: 'target is out of reach',
-        attacker_dead: 'you are dead',
-        busy: 'finish your current action',
-      }
+      const reasonKey = DAGGER_REJECTION_MESSAGES[data.reason]
       reportSkillFailure(
         data.reason === 'dagger_required' || data.reason === 'rogue_required'
-          ? abilityRequirementsNotMet(DOUBLE_SLASH.name)
-          : `Double Slash: ${reasons[data.reason] ?? data.reason}.`
+          ? abilityRequirementsNotMet(abilityDisplayName(DOUBLE_SLASH.id))
+          : translate('combat.doubleSlashRejected', {
+              reason: reasonKey ? translate(reasonKey) : data.reason,
+            })
       )
       break
     }
@@ -1419,16 +1437,13 @@ export function handleServerMessage(
       if (data.reason === 'out_of_ammo') {
         combatController.cancelCombat()
       }
-      const reasonText: Record<string, string> = {
-        invalid_target: 'target is gone',
-        out_of_range: 'too far away',
-        attacker_dead: 'you are dead',
-        out_of_ammo: 'out of arrows',
-      }
+      const reasonKey = ATTACK_REJECTION_MESSAGES[data.reason]
       addCombatMessage({
-        text: `attack rejected: ${reasonText[data.reason] ?? data.reason}`,
+        text: translate('combat.attackRejected', {
+          reason: reasonKey ? translate(reasonKey) : data.reason,
+        }),
         sender: 'local',
-        name: 'You',
+        name: translate('chat.you'),
         hit: false,
       })
       break
@@ -1487,14 +1502,18 @@ export function handleServerMessage(
       })
 
       const monsterTargetName = isCurrentPlayer
-        ? 'You'
-        : (target?.name ?? 'Unknown')
+        ? translate('chat.you')
+        : (target?.name ?? translate('chat.unknown'))
       addCombatMessage({
         text: data.hit
-          ? `rolled ${data.roll}: HIT ${monsterTargetName} for ${data.damage} damage!`
-          : `rolled ${data.roll}: MISSED!`,
+          ? translate('combat.monsterHit', {
+              roll: data.roll,
+              name: monsterTargetName,
+              damage: data.damage,
+            })
+          : translate('combat.miss', { roll: data.roll }),
         sender: 'system',
-        name: 'Monster',
+        name: translate('combat.monster'),
         hit: data.hit,
       })
       break
@@ -1510,13 +1529,15 @@ export function handleServerMessage(
         ? gameState.currentPlayer
         : gameState.otherPlayers.get(data.player_id)
       const deadPlayerName = isDeadCurrentPlayer
-        ? 'You'
-        : (deadPlayer?.name ?? 'Unknown')
+        ? translate('chat.you')
+        : (deadPlayer?.name ?? translate('chat.unknown'))
       if (deadPlayer && claimPlayerDeath(data.player_id)) {
         playPlayerDeathSound(deadPlayer.gender)
       }
       addCombatMessage({
-        text: `${deadPlayerName === 'You' ? 'You have' : deadPlayerName + ' has'} been slain!`,
+        text: isDeadCurrentPlayer
+          ? translate('combat.youSlain')
+          : translate('combat.playerSlain', { name: deadPlayerName }),
         sender: 'system',
       })
 
@@ -1673,7 +1694,9 @@ export function handleServerMessage(
 
     case 'TitleEarned': {
       addChatMessage({
-        text: `You earned the title "${titleNameNow(data.title)}"`,
+        text: translate('system.titleEarned', {
+          title: titleNameNow(data.title),
+        }),
         sender: 'system',
       })
       break
@@ -1810,7 +1833,7 @@ export function handleServerMessage(
         claim ? { ...claim, status: 'claimed' } : null
       )
       addChatMessage({
-        text: 'This plot is now part of your homestead. One Land Deed was consumed.',
+        text: translate('system.landClaimed'),
         sender: 'system',
       })
       break
@@ -1820,7 +1843,11 @@ export function handleServerMessage(
       landClaimDialog.update((claim) =>
         claim ? { ...claim, status: 'rejected', reason: data.reason } : null
       )
-      addChatMessage({ text: data.reason, sender: 'system' })
+      addChatMessage({
+        text: data.reason,
+        autoTranslate: true,
+        sender: 'system',
+      })
       break
     }
 
@@ -1848,11 +1875,15 @@ export function handleServerMessage(
       if (isMe) emoteRequest.set(MUSIC_EMOTE_ANIM)
       const who = isMe
         ? null
-        : (get(gameStore).otherPlayers.get(data.player_id)?.name ?? 'Someone')
+        : (get(gameStore).otherPlayers.get(data.player_id)?.name ??
+          translate('chat.someone'))
       addChatMessage({
         text: who
-          ? `${who} plays "${data.track}".`
-          : `You play "${data.track}".`,
+          ? translate('system.playerPlayMusic', {
+              name: who,
+              track: data.track,
+            })
+          : translate('system.playMusic', { track: data.track }),
         sender: 'system',
       })
       break
@@ -1918,10 +1949,11 @@ export function handleServerMessage(
       // refusal would otherwise be silent. Reasons are sentences except the
       // machine codes mapped here (same pattern as PlayerAttackRejected).
       const reasonText: Record<string, string> = {
-        occupied: 'Someone is already using it.',
+        occupied: translate('system.occupied'),
       }
       addChatMessage({
         text: reasonText[data.reason] ?? data.reason,
+        autoTranslate: !reasonText[data.reason],
         sender: 'system',
       })
       events.interactionRejected.emit(data.reason)
@@ -1936,8 +1968,11 @@ export function handleServerMessage(
       const empty = (data.item_def_ids as string[]).length === 0 && !data.gold
       addChatMessage({
         text: empty
-          ? 'The treasure chest is empty.'
-          : `${actorName(data.player_id)} opened the treasure chest! (+${data.gold} gold)`,
+          ? translate('system.chestEmpty')
+          : translate('system.chestOpened', {
+              name: actorName(data.player_id),
+              gold: data.gold,
+            }),
         sender: 'system',
       })
       break
@@ -2110,7 +2145,7 @@ export function handleServerMessage(
       announceGroundItem(
         item.dropped_by,
         item.item_def_id,
-        'dropped',
+        'droppedItem',
         item.quantity
       )
       break
@@ -2137,7 +2172,7 @@ export function handleServerMessage(
         announceGroundItem(
           data.picked_up_by,
           taken?.itemDefId,
-          'picked up',
+          'pickedUpItem',
           taken?.quantity
         )
       }
@@ -2152,7 +2187,7 @@ export function handleServerMessage(
         announceGroundItem(
           data.picked_up_by,
           pile.itemDefId,
-          'picked up',
+          'pickedUpItem',
           pile.quantity - data.quantity
         )
       }
@@ -2226,7 +2261,12 @@ export function handleServerMessage(
     }
 
     case 'TradeError':
-      addChatMessage({ text: translateServerMessage(data), sender: 'system' })
+      addChatMessage({
+        text: data.message,
+        localization: data.localization,
+        autoTranslate: true,
+        sender: 'system',
+      })
       break
 
     case 'DealUpdated':
@@ -2304,19 +2344,19 @@ export function handleServerMessage(
       // character panel and the chat all turn over on the same beat.
       const lines: string[] = []
       if (data.xp_amount > 0) {
-        lines.push(`You gained ${data.xp_amount} XP.`)
+        lines.push(translate('combat.xpGained', { amount: data.xp_amount }))
       } else if (previousLevel !== null) {
         lines.push(
           xpLost > 0
-            ? `Death penalty: You lost ${xpLost} XP.`
-            : 'Death penalty applied.'
+            ? translate('combat.xpLost', { amount: xpLost })
+            : translate('combat.deathPenalty')
         )
       }
       if (!isStaleGain) {
         if (data.leveled_up) {
-          lines.push(`Level up! You are now level ${data.new_level}.`)
+          lines.push(translate('combat.levelUp', { level: data.new_level }))
         } else if (previousLevel !== null && data.new_level < previousLevel) {
-          lines.push(`Level down. You are now level ${data.new_level}.`)
+          lines.push(translate('combat.levelDown', { level: data.new_level }))
         }
       }
       if (heldForKill) {
@@ -2377,7 +2417,7 @@ export function handleServerMessage(
         myFishing.set({ phase: 'bite' })
         playFishingSound('plop')
         addCombatMessage({
-          text: 'Something bites! Hook it!',
+          text: translate('fishing.bite'),
           sender: 'local',
         })
       }
@@ -2395,7 +2435,9 @@ export function handleServerMessage(
       if (isSelfPlayer(data.player_id)) {
         if (get(myFishing).phase === 'bite' && data.trophy) {
           addCombatMessage({
-            text: `A trophy fish! Keep tension above ${fishing_trophy_min_tension()} while it runs to tire it out.`,
+            text: translate('fishing.trophyFight', {
+              tension: fishing_trophy_min_tension(),
+            }),
             sender: 'local',
           })
         }
@@ -2422,9 +2464,13 @@ export function handleServerMessage(
       if (!isSelf && data.outcome?.Caught?.trophy) {
         const { item_def_id, size_cm } = data.outcome.Caught
         const who = actorName(data.player_id)
-        const fishName = getItemDef(item_def_id)?.name ?? item_def_id
+        const fishName = itemDisplayName(item_def_id)
         addCombatMessage({
-          text: `${who} landed a trophy ${fishName} — ${size_cm} cm!`,
+          text: translate('fishing.playerTrophy', {
+            name: who,
+            fish: fishName,
+            size: size_cm,
+          }),
           sender: 'local',
         })
       }
@@ -2478,7 +2524,10 @@ export function handleServerMessage(
         carryMult: data.carry_mult,
       })
       if (prev && prev.band !== band) {
-        addCombatMessage({ text: HUNGER_BAND_MESSAGES[band], sender: 'local' })
+        addCombatMessage({
+          text: translate(HUNGER_BAND_MESSAGES[band]),
+          sender: 'local',
+        })
       }
       break
     }
@@ -2500,26 +2549,35 @@ export function handleServerMessage(
           next.guardian_ward - before.guardian_ward > 1000)
       ) {
         addCombatMessage({
-          text: 'Guardian Ward: Guard +10% for 60 seconds.',
+          text: translate('buff.guardianWardApplied'),
           sender: 'local',
         })
       } else if (!next.guardian_ward && before.guardian_ward) {
-        addCombatMessage({ text: 'Guardian Ward ended.', sender: 'local' })
+        addCombatMessage({
+          text: translate('buff.guardianWardExpired'),
+          sender: 'local',
+        })
       }
       if (next.radiance && !before.radiance)
         addCombatMessage({
-          text: 'Radiance: illumination for 120 seconds.',
+          text: translate('buff.radianceApplied'),
           sender: 'local',
         })
       else if (!next.radiance && before.radiance)
-        addCombatMessage({ text: 'Radiance ended.', sender: 'local' })
+        addCombatMessage({
+          text: translate('buff.radianceExpired'),
+          sender: 'local',
+        })
       if (next.bow_mark && !before.bow_mark)
         addCombatMessage({
-          text: 'True Aim: attacks against the marked target always hit for 5 seconds.',
+          text: translate('buff.trueAimApplied'),
           sender: 'local',
         })
       else if (!next.bow_mark && before.bow_mark)
-        addCombatMessage({ text: 'True Aim ended.', sender: 'local' })
+        addCombatMessage({
+          text: translate('buff.trueAimExpired'),
+          sender: 'local',
+        })
       break
     }
     case 'InspectionResult':
@@ -2527,11 +2585,14 @@ export function handleServerMessage(
       break
     case 'AbilityRejected': {
       abilityPending.set({})
-      const name = getAbility(data.ability)?.name ?? data.ability
+      const name = abilityDisplayName(data.ability)
       let text: string
-      if (data.reason === 'not_enough_mana') text = 'Not enough mana.'
-      else if (data.reason === 'out_of_range') text = 'Target is too far away.'
-      else if (data.reason === 'cooldown') text = `${name} is not ready yet.`
+      if (data.reason === 'not_enough_mana')
+        text = translate('skillFailure.mana')
+      else if (data.reason === 'out_of_range')
+        text = translate('skillFailure.range')
+      else if (data.reason === 'cooldown')
+        text = translate('skillFailure.cooldown', { name })
       else if (data.reason === 'equipment')
         text = abilityEquipmentNotMet(data.ability)
       else text = abilityRequirementsNotMet(name)
@@ -2626,7 +2687,7 @@ export function handleServerMessage(
       grilling.set(false)
       if (data.grilled_item_def_id == null) {
         addCombatMessage({
-          text: 'Your grilling was interrupted.',
+          text: translate('system.grillInterrupted'),
           sender: 'local',
         })
       }
@@ -2638,8 +2699,24 @@ export function handleServerMessage(
   }
 }
 
-const HUNGER_BAND_MESSAGES: Record<HungerBand, string> = {
-  Normal: 'Your stomach settles. You can sprint and recover normally.',
-  Hungry: 'Your stomach growls. You can no longer sprint.',
-  Weak: 'You are weak with hunger. You need to eat.',
+const HUNGER_BAND_MESSAGES: Record<HungerBand, MessageKey> = {
+  Normal: 'hunger.normalMessage',
+  Hungry: 'hunger.hungryMessage',
+  Weak: 'hunger.weakMessage',
+}
+
+const DAGGER_REJECTION_MESSAGES: Record<string, MessageKey> = {
+  cooldown: 'combat.skillCoolingDown',
+  attack_cooldown: 'combat.attackCooldown',
+  invalid_target: 'combat.invalid_target',
+  out_of_range: 'combat.out_of_range',
+  attacker_dead: 'combat.attackerDead',
+  busy: 'combat.busy',
+}
+
+const ATTACK_REJECTION_MESSAGES: Record<string, MessageKey> = {
+  invalid_target: 'combat.invalid_target',
+  out_of_range: 'combat.out_of_range',
+  attacker_dead: 'combat.attackerDead',
+  out_of_ammo: 'combat.outOfAmmo',
 }

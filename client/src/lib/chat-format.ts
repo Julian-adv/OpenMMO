@@ -1,4 +1,5 @@
 import type { ChatEntry, StoredChatEntry } from './stores/gameStore'
+import { translate, translateServerMessage, type Locale } from './i18n'
 
 /** The sender gets the same whisper echoed back; direction decides the label. */
 export function whisperChatEntry(
@@ -11,8 +12,35 @@ export function whisperChatEntry(
   return {
     text: message,
     sender: 'whisper',
-    name: outgoing ? `To ${to}` : `From ${from}`,
+    name: outgoing ? to : from,
+    whisperDirection: outgoing ? 'outgoing' : 'incoming',
   }
+}
+
+export function chatEntryName(entry: ChatEntry, language: Locale): string {
+  const name = entry.name ?? ''
+  if (!entry.whisperDirection) return name
+  return translate(
+    entry.whisperDirection === 'outgoing'
+      ? 'chat.whisperTo'
+      : 'chat.whisperFrom',
+    { name },
+    language
+  )
+}
+
+export function chatEntryText(entry: ChatEntry, language: Locale): string {
+  return translateServerMessage(
+    { message: entry.text, localization: entry.localization },
+    language
+  )
+}
+
+export function shouldTranslateChatEntry(entry: ChatEntry): boolean {
+  return (
+    !entry.localization &&
+    (entry.sender !== 'system' || entry.autoTranslate === true)
+  )
 }
 
 /** Party lines carry the sender's name as-is; the panel adds the [Party] tag. */
@@ -20,9 +48,7 @@ export function partyChatEntry(from: string, message: string): ChatEntry {
   return { text: message, sender: 'party', name: from }
 }
 
-/** Party lines from other members newer than `seenId`. Id-keyed rather than a
- *  running count: the transcript is a bounded ring, so a count would shrink as
- *  it evicts, quietly clearing messages nobody read. */
+/** Count unread party lines by stable id, even after older rows are evicted. */
 export function unreadPartyCount(
   entries: Pick<StoredChatEntry, 'sender' | 'name' | 'id'>[],
   seenId: number,
@@ -34,7 +60,10 @@ export function unreadPartyCount(
 }
 
 export function unreadChatCount(
-  entries: Pick<StoredChatEntry, 'sender' | 'name' | 'id'>[],
+  entries: Pick<
+    StoredChatEntry,
+    'sender' | 'name' | 'id' | 'whisperDirection'
+  >[],
   seenId: number,
   ownName: string | undefined
 ): number {
@@ -43,18 +72,20 @@ export function unreadChatCount(
       entry.id > seenId &&
       entry.sender !== 'local' &&
       entry.name !== ownName &&
-      !(entry.sender === 'whisper' && entry.name?.startsWith('To '))
+      entry.whisperDirection !== 'outgoing'
   ).length
 }
 
-/** What the Party tab shows: the channel itself plus the party and summon
- *  notices, which reach the client as plain system lines. */
+/** Keep legacy server notices alongside structured party messages. */
 export function isPartyTabLine(
-  entry: Pick<ChatEntry, 'sender' | 'text'>
+  entry: Pick<ChatEntry, 'sender' | 'text' | 'localization'>
 ): boolean {
   return (
     entry.sender === 'party' ||
     (entry.sender === 'system' &&
-      (entry.text.startsWith('Party:') || entry.text.startsWith('Summon:')))
+      (entry.localization?.code.startsWith('server.party') ||
+        entry.localization?.code.startsWith('server.summon') ||
+        entry.text.startsWith('Party:') ||
+        entry.text.startsWith('Summon:')))
   )
 }

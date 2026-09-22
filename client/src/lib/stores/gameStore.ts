@@ -1,4 +1,5 @@
 import { manaState } from './manaStore'
+import type { LocalizedMessage } from '../i18n'
 import { resetTeleportEffects } from './teleportEffectStore'
 import { playerHealthDisplay } from './playerHealthDisplay'
 import { derived, get, writable } from 'svelte/store'
@@ -93,6 +94,9 @@ export interface ChatEntry {
   sender: ChatSender
   name?: string
   hit?: boolean
+  whisperDirection?: 'incoming' | 'outgoing'
+  localization?: LocalizedMessage | null
+  autoTranslate?: boolean
 }
 
 /** ChatEntry as stored: `id` is a stable key so the transcript's `{#each}`

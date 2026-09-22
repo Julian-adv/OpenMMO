@@ -5,6 +5,7 @@ import ko from './locales/ko.json'
 import ja from './locales/ja.json'
 import zhHans from './locales/zh-Hans.json'
 import { locale, type Locale } from './locale'
+import { resolveKoreanParticles } from './koreanParticles'
 
 export { languages, languagePreference, locale } from './locale'
 export type { Locale, LanguagePreference } from './locale'
@@ -32,7 +33,23 @@ export function translate(
   values: MessageValues = {},
   language: Locale = get(locale)
 ): string {
-  return i18n.t(key, { ...values, lng: language })
+  return renderMessage(key, values, language)
+}
+
+function renderMessage(
+  key: string,
+  values: MessageValues,
+  language: Locale,
+  fallback?: string
+): string {
+  const message = i18n.t(key, {
+    ...values,
+    lng: language,
+    defaultValue: fallback,
+  })
+  return language === 'ko' && i18n.exists(key, { lng: language })
+    ? resolveKoreanParticles(message)
+    : message
 }
 
 export const t = derived(
@@ -46,16 +63,20 @@ export interface LocalizedMessage {
   params: MessageValues
 }
 
-export function translateServerMessage(data: {
-  message: string
-  localization?: LocalizedMessage | null
-}): string {
+export function translateServerMessage(
+  data: {
+    message: string
+    localization?: LocalizedMessage | null
+  },
+  language: Locale = get(locale)
+): string {
   if (!data.localization) return data.message
-  return i18n.t(data.localization.code, {
-    ...data.localization.params,
-    lng: get(locale),
-    defaultValue: data.message,
-  })
+  return renderMessage(
+    data.localization.code,
+    data.localization.params,
+    language,
+    data.message
+  )
 }
 
 locale.subscribe((language) => {

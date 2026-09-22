@@ -2,6 +2,7 @@ import {
   ability_mana_cost,
   max_cast_distance_m,
 } from '../wasm/onlinerpg_shared'
+import { translate } from '../i18n'
 import { getItemDef } from './itemDefs'
 import { DAGGER_SKILL } from './daggerSkill'
 import type {
@@ -186,15 +187,21 @@ export function abilityEquipmentAllowed(
   return id === RADIANCE.id || guardianWardEquipment(equipped)
 }
 
+export function abilityDisplayName(id: string): string {
+  const ability = getAbility(id)
+  return ability ? translate(`ability.${ability.id}.name`) : id
+}
+
 export function abilityRequirementsNotMet(name: string) {
-  return `Cannot use ${name}.`
+  return translate('skillFailure.requirements', { name })
 }
 
 export function abilityEquipmentNotMet(id: string) {
-  if (id === FISHING.id) return 'Equip a fishing rod to use Fishing.'
-  if (id === AUSCULTATION.id) return 'Equip a stethoscope to use Auscultation.'
-  if (id === DOUBLE_SLASH.id) return 'Equip a dagger to use Double Slash.'
-  return abilityRequirementsNotMet(getAbility(id)?.name ?? id)
+  if (id === FISHING.id) return translate('skillFailure.fishingEquipment')
+  if (id === AUSCULTATION.id)
+    return translate('skillFailure.auscultationEquipment')
+  if (id === DOUBLE_SLASH.id) return translate('skillFailure.daggerEquipment')
+  return abilityRequirementsNotMet(abilityDisplayName(id))
 }
 
 export function guardianWardEquipment(equipped: PlayerInventory['equipped']) {

@@ -1,5 +1,6 @@
 import { MathUtils } from 'three'
 import { get } from 'svelte/store'
+import { translate, type MessageKey } from './i18n'
 import { gameStore, addChatMessage, isAdminUser } from './stores/gameStore'
 import { worldToTileCell } from './components/game-scene/terrain-utils'
 import { networkManager } from './network/socket'
@@ -30,15 +31,18 @@ import { DEBUG_ANIM_NAMES, emoteRequest } from './stores/emoteStore'
 function teleportTo(x: number, y: number, z: number) {
   const wrappedX = teleportLocalPlayer(x, y, z)
   addChatMessage({
-    text: `Teleport: moving to (${wrappedX.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)})`,
+    text: translate('command.teleport', {
+      x: wrappedX.toFixed(1),
+      y: y.toFixed(1),
+      z: z.toFixed(1),
+    }),
     sender: 'system',
   })
 }
 
-/** Every command lives here once: its `/help` line, whether it is admin-only,
- *  and who executes it. */
+/** Command help, permissions, and optional client handler. */
 type Command = {
-  desc: string
+  desc: MessageKey
   admin?: boolean
   /** Client-side handler. Omit it to let the text through to the server. */
   run?: (args: string) => void
@@ -46,7 +50,7 @@ type Command = {
 
 const COMMANDS: Record<string, Command> = {
   '/help': {
-    desc: 'List the available commands',
+    desc: 'command.help.help',
     run: () => {
       const regular: string[] = []
       const adminOnly: string[] = []
@@ -55,44 +59,45 @@ const COMMANDS: Record<string, Command> = {
       }
       const line = (name: string) =>
         addChatMessage({
-          text: `${name} — ${COMMANDS[name].desc}`,
+          text: `${name} — ${translate(COMMANDS[name].desc)}`,
           sender: 'system',
         })
 
-      addChatMessage({ text: 'Available commands:', sender: 'system' })
+      addChatMessage({ text: translate('command.available'), sender: 'system' })
       for (const name of regular) line(name)
 
       if (adminOnly.length > 0) {
-        addChatMessage({ text: 'Admin commands:', sender: 'system' })
+        addChatMessage({ text: translate('command.admin'), sender: 'system' })
         for (const name of adminOnly) line(name)
       }
     },
   },
 
-  '/who': { desc: 'Show how many players are online' },
+  '/who': { desc: 'command.help.who' },
   '/title': {
-    desc: 'Show a title above your name: /title, /title N, /title off',
+    desc: 'command.help.title',
   },
-  '/escape': { desc: 'Return to the starting point when you get stuck' },
-  '/w': { desc: 'Send a private message: /w <player> <message>' },
-  '/whisper': { desc: 'Send a private message: /whisper <player> <message>' },
-  '/r': { desc: 'Reply to the last whisper: /r <message>' },
-  '/reply': { desc: 'Reply to the last whisper: /reply <message>' },
-  '/block': { desc: 'Block whispers from a player: /block <player>' },
-  '/unblock': { desc: 'Unblock a player: /unblock <player>' },
+  '/escape': { desc: 'command.help.escape' },
+  '/w': { desc: 'command.help.w' },
+  '/whisper': { desc: 'command.help.whisper' },
+  '/r': { desc: 'command.help.r' },
+  '/reply': { desc: 'command.help.reply' },
+  '/block': { desc: 'command.help.block' },
+  '/unblock': { desc: 'command.help.unblock' },
   '/friend': {
-    desc: 'Friends: /friend add <player>, /friend remove <player>, or /friend',
+    desc: 'command.help.friend',
   },
-  '/f': { desc: 'Short form of /friend: /f add <player>' },
-  '/party': { desc: 'Invite a player to your party: /party <player>' },
-  '/trade': { desc: 'Ask a nearby player to trade: /trade <player>' },
+  '/f': { desc: 'command.help.f' },
+  '/party': { desc: 'command.help.party' },
+  '/trade': { desc: 'command.help.trade' },
   '/p': {
-    desc: 'Talk to your party and stay in party chat: /p [message]',
+    desc: 'command.help.p',
     run: (args) => {
       const message = args.trim()
       if (!get(partyRoster)) {
         addChatMessage({
-          text: 'Party: you are not in a party.',
+          text: translate('server.partyNotInParty'),
+          localization: { code: 'server.partyNotInParty', params: {} },
           sender: 'system',
         })
         return
@@ -102,25 +107,23 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   '/s': {
-    desc: 'Talk normally and leave party chat: /s [message]',
+    desc: 'command.help.s',
     run: (args) => {
       const message = args.trim()
       chatChannel.set('say')
       if (message) networkManager.sendChatMessage(message)
     },
   },
-  // No client-side handler: the server is the one resolver of song titles
-  // (a fragment or nothing both work), and its PlayerMusicStarted reply is
-  // what starts our emote and music together.
+  // The server resolves songs and synchronizes music with the emote.
   '/play_music': {
-    desc: 'Play a tune where you stand (needs an instrument): /play_music [song]',
+    desc: 'command.help.play_music',
   },
   '/play_instrument': {
-    desc: 'Open the live performance keyboard (needs an instrument)',
+    desc: 'command.help.play_instrument',
     run: () => networkManager.sendStartInstrument(),
   },
   '/emote': {
-    desc: 'Play an emote where you stand: /emote twist — bare /emote lists them',
+    desc: 'command.help.emote',
     run: (args) => {
       const name = args.trim()
       if (name) {
@@ -128,27 +131,29 @@ const COMMANDS: Record<string, Command> = {
         networkManager.sendChatMessage(`/emote ${name}`)
         return
       }
-      // Kept to the server's own compact shape (play_emote's reply): command
-      // tokens embedded in prose get mangled by chat translation.
       addChatMessage({
-        text: `Emotes: ${EMOTE_LIST.map((e) => e.anim).join(', ')}`,
+        text: translate('command.emotes', {
+          list: EMOTE_LIST.map((e) => e.anim).join(', '),
+        }),
         sender: 'system',
       })
       addChatMessage({
-        text: 'Dances loop until you move. Social menu: G',
+        text: translate('command.emoteHint'),
         sender: 'system',
       })
     },
   },
-  // Client-local on purpose: clip names live in the animation packs, which
-  // only the client can resolve, and a debug clip needs no broadcast.
+  // Debug clips are resolved locally from animation packs.
   '/anim': {
-    desc: 'Play any animation clip by name where you stand: /anim <clip>',
+    desc: 'command.help.anim',
     admin: true,
     run: (args) => {
       const name = args.trim()
       if (!name) {
-        addChatMessage({ text: 'Anim: /anim <clip>', sender: 'system' })
+        addChatMessage({
+          text: translate('command.animUsage'),
+          sender: 'system',
+        })
         return
       }
       DEBUG_ANIM_NAMES.add(name)
@@ -156,43 +161,43 @@ const COMMANDS: Record<string, Command> = {
     },
   },
   '/give': {
-    desc: 'Give yourself items: /give <item_id> [count] (default 1, max 10000)',
+    desc: 'command.help.give',
     admin: true,
   },
   '/weather': {
-    desc: 'Set weather server-wide: /weather rain [0..1] (default 1), /weather clear, /weather auto',
+    desc: 'command.help.weather',
     admin: true,
   },
   '/spawnmob': {
-    desc: 'Spawn monsters beside you: /spawnmob <type> [count]',
+    desc: 'command.help.spawnmob',
     admin: true,
   },
   '/notice': {
-    desc: 'Set the server banner, or clear it with a bare /notice',
+    desc: 'command.help.notice',
     admin: true,
   },
-  '/kick': { desc: 'Disconnect an online player: /kick <name>', admin: true },
+  '/kick': { desc: 'command.help.kick', admin: true },
   '/ban': {
-    desc: 'Ban an account, permanently unless timed: /ban <name> [minutes]',
+    desc: 'command.help.ban',
     admin: true,
   },
   '/unban': {
-    desc: 'Lift a ban by character or account name: /unban <name>',
+    desc: 'command.help.unban',
     admin: true,
   },
   '/mute': {
-    desc: 'Mute an online player, 10m unless timed: /mute <name> [minutes]',
+    desc: 'command.help.mute',
     admin: true,
   },
-  '/unmute': { desc: 'Unmute a player: /unmute <name>', admin: true },
+  '/unmute': { desc: 'command.help.unmute', admin: true },
   '/summon': {
-    desc: 'Teleport a player to your side: /summon <name>',
+    desc: 'command.help.summon',
     admin: true,
   },
-  '/goto': { desc: "Teleport to a player's side: /goto <name>", admin: true },
+  '/goto': { desc: 'command.help.goto', admin: true },
 
   '/pos': {
-    desc: 'Show your current position',
+    desc: 'command.help.pos',
     run: () => {
       const player = get(gameStore).currentPlayer
       if (player) {
@@ -200,23 +205,35 @@ const COMMANDS: Record<string, Command> = {
         const { tileX, tileZ, cellX, cellZ } = worldToTileCell(pos.x, pos.z)
         const deg = MathUtils.radToDeg(player.rotation).toFixed(1)
         addChatMessage({
-          text: `Position: world(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) tile(${tileX}, ${tileZ}) cell(${cellX}, ${cellZ}) rot(${deg}°)`,
+          text: translate('command.position', {
+            x: pos.x.toFixed(1),
+            y: pos.y.toFixed(1),
+            z: pos.z.toFixed(1),
+            tileX,
+            tileZ,
+            cellX,
+            cellZ,
+            degrees: deg,
+          }),
           sender: 'system',
         })
       } else {
-        addChatMessage({ text: 'Position: unknown', sender: 'system' })
+        addChatMessage({
+          text: translate('command.positionUnknown'),
+          sender: 'system',
+        })
       }
     },
   },
 
   '/tp': {
-    desc: 'Teleport: /tp <x> <z> [y] or /tp <name|number>; bare /tp lists destinations',
+    desc: 'command.help.tp',
     admin: true,
     run: (args) => {
       const trimmed = args.trim()
       if (!trimmed) {
         addChatMessage({
-          text: 'Teleport destinations — /tp <name|number>, or /tp <x> <z> [y]:',
+          text: translate('command.tpList'),
           sender: 'system',
         })
         for (const [i, d] of tpDestinations().entries()) {
@@ -232,7 +249,7 @@ const COMMANDS: Record<string, Command> = {
         const dest = resolveTpDestination(trimmed, tpDestinations())
         if (!dest) {
           addChatMessage({
-            text: `Teleport: unknown destination '${trimmed}' — bare /tp lists them`,
+            text: translate('command.tpUnknown', { name: trimmed }),
             sender: 'system',
           })
           return
@@ -244,7 +261,7 @@ const COMMANDS: Record<string, Command> = {
       const parsed = parseTpArgs(trimmed)
       if (!parsed) {
         addChatMessage({
-          text: 'Usage: /tp <x> <z> [y] — teleport to world coordinates (e.g. /tp -1450 4720)',
+          text: translate('command.tpUsage'),
           sender: 'system',
         })
         return
@@ -254,13 +271,13 @@ const COMMANDS: Record<string, Command> = {
   },
 
   '/drop': {
-    desc: 'Drop an item in front of you',
+    desc: 'command.help.drop',
     admin: true,
     run: (args) => {
       const player = get(gameStore).currentPlayer
       if (!player) {
         addChatMessage({
-          text: 'Drop: player position unknown',
+          text: translate('command.dropUnknown'),
           sender: 'system',
         })
         return
@@ -270,20 +287,20 @@ const COMMANDS: Record<string, Command> = {
       networkManager.sendDebugDropItem(itemDefId)
 
       addChatMessage({
-        text: `Drop: requested ${itemDefId} near 1m ahead`,
+        text: translate('command.drop', { item: itemDefId }),
         sender: 'system',
       })
     },
   },
 
   '/time': {
-    desc: 'Jump the game clock to HH[:MM]',
+    desc: 'command.help.time',
     admin: true,
     run: (args) => {
       const match = args.trim().match(/^(\d{1,2})(?::(\d{1,2}))?$/)
       if (!match) {
         addChatMessage({
-          text: 'Usage: /time HH[:MM] — jump the game clock forward to that time (e.g. /time 9:30)',
+          text: translate('command.timeUsage'),
           sender: 'system',
         })
         return
@@ -292,19 +309,25 @@ const COMMANDS: Record<string, Command> = {
       const minute = Math.min(match[2] ? parseInt(match[2], 10) : 0, 59)
       networkManager.sendDebugSetTime(hour, minute)
       addChatMessage({
-        text: `Time: requested jump to ${hour}:${String(minute).padStart(2, '0')}`,
+        text: translate('command.time', {
+          hour,
+          minute: String(minute).padStart(2, '0'),
+        }),
         sender: 'system',
       })
     },
   },
 
   '/dungeon': {
-    desc: 'Enter or adjust the debug dungeon',
+    desc: 'command.help.dungeon',
     admin: true,
     run: (args) => {
       const player = get(gameStore).currentPlayer
       if (!player) {
-        addChatMessage({ text: 'Dungeon: player unknown', sender: 'system' })
+        addChatMessage({
+          text: translate('command.dungeonUnknown'),
+          sender: 'system',
+        })
         return
       }
 
@@ -315,7 +338,10 @@ const COMMANDS: Record<string, Command> = {
           networkManager.sendDebugTeleport({ x: ent.x, y: ent.y, z: ent.z })
         }
         dungeonManager.exit()
-        addChatMessage({ text: 'Dungeon: exited to surface', sender: 'system' })
+        addChatMessage({
+          text: translate('command.dungeonExited'),
+          sender: 'system',
+        })
         return
       }
 
@@ -323,14 +349,14 @@ const COMMANDS: Record<string, Command> = {
         const entranceId = dungeonManager.dungeonId
         if (!entranceId) {
           addChatMessage({
-            text: 'Dungeon props: no active dungeon',
+            text: translate('command.dungeonInactive'),
             sender: 'system',
           })
           return
         }
         networkManager.sendDebugResetDungeonProps(entranceId)
         addChatMessage({
-          text: 'Dungeon props: reset requested',
+          text: translate('command.dungeonReset'),
           sender: 'system',
         })
         return
@@ -349,7 +375,10 @@ const COMMANDS: Record<string, Command> = {
       const depth = Math.min(requested, total)
       const layout = dungeonManager.layoutAt(depth)
       if (!layout) {
-        addChatMessage({ text: 'Dungeon: layout missing', sender: 'system' })
+        addChatMessage({
+          text: translate('command.dungeonMissing'),
+          sender: 'system',
+        })
         return
       }
       const target = dungeonManager.cellCenter(
@@ -359,56 +388,72 @@ const COMMANDS: Record<string, Command> = {
       dungeonManager.setDepth(depth)
       networkManager.sendDebugTeleport(target)
       addChatMessage({
-        text: `Dungeon: depth ${depth}/${total} (rooms=${layout.rooms.length}, spawns=${layout.spawns.length})`,
+        text: translate('command.dungeonDepth', {
+          depth,
+          total,
+          rooms: layout.rooms.length,
+          spawns: layout.spawns.length,
+        }),
         sender: 'system',
       })
     },
   },
 
   '/wireframe': {
-    desc: 'Toggle the river wireframe overlay',
+    desc: 'command.help.wireframe',
     run: () => {
       const next = !get(riverWireframeVisible)
       riverWireframeVisible.set(next)
       addChatMessage({
-        text: `River wireframe: ${next ? 'on' : 'off'}`,
+        text: translate('command.riverWireframe', {
+          state: translate(next ? 'command.on' : 'command.off'),
+        }),
         sender: 'system',
       })
     },
   },
 
   '/shore_wave': {
-    desc: 'Toggle the shore-wave debug overlay',
+    desc: 'command.help.shore_wave',
     run: () => {
       const next = !get(shoreWaveDebugVisible)
       shoreWaveDebugVisible.set(next)
       addChatMessage({
-        text: `Shore wave debug: ${next ? 'on' : 'off'}`,
+        text: translate('command.shoreWave', {
+          state: translate(next ? 'command.on' : 'command.off'),
+        }),
         sender: 'system',
       })
     },
   },
 
   '/cape': {
-    desc: 'Wear a cape with no item equipped, for fitting work',
+    desc: 'command.help.cape',
     run: () => {
       const next = !get(capeEnabled)
       capeEnabled.set(next)
       addChatMessage({
-        text: `Cape: ${next ? 'on' : 'off'}`,
+        text: translate('command.cape', {
+          state: translate(next ? 'command.on' : 'command.off'),
+        }),
         sender: 'system',
       })
     },
   },
 
   '/cape_depth': {
-    desc: 'Sink the cape collar into the back: /cape_depth <metres|auto>',
+    desc: 'command.help.cape_depth',
     run: (args) => {
       const trimmed = args.trim()
       if (!trimmed) {
         const override = get(capeCollarBiasOverride)
         addChatMessage({
-          text: `Cape collar depth: ${override === null ? 'auto (model default)' : `${override.toFixed(3)} m`}. /cape_depth <metres|auto>, + sinks it into the back.`,
+          text: translate('command.capeDepthHint', {
+            depth:
+              override === null
+                ? translate('command.capeDefault')
+                : `${override.toFixed(3)} m`,
+          }),
           sender: 'system',
         })
         return
@@ -416,7 +461,7 @@ const COMMANDS: Record<string, Command> = {
       if (trimmed === 'auto' || trimmed === 'reset') {
         capeCollarBiasOverride.set(null)
         addChatMessage({
-          text: 'Cape collar depth: auto (model default)',
+          text: translate('command.capeAuto'),
           sender: 'system',
         })
         return
@@ -424,7 +469,7 @@ const COMMANDS: Record<string, Command> = {
       const value = Number(trimmed)
       if (!Number.isFinite(value)) {
         addChatMessage({
-          text: 'Usage: /cape_depth <metres|auto> — e.g. /cape_depth 0.1',
+          text: translate('command.capeUsage'),
           sender: 'system',
         })
         return
@@ -436,32 +481,34 @@ const COMMANDS: Record<string, Command> = {
       )
       capeCollarBiasOverride.set(clamped)
       addChatMessage({
-        text: `Cape collar depth: ${clamped.toFixed(3)} m`,
+        text: translate('command.capeDepth', { depth: clamped.toFixed(3) }),
         sender: 'system',
       })
     },
   },
 
   '/passability': {
-    desc: 'Toggle the passability overlay',
+    desc: 'command.help.passability',
     run: () => {
       const next = !get(passabilityDebugVisible)
       passabilityDebugVisible.set(next)
       addChatMessage({
-        text: `Passability debug: ${next ? 'on' : 'off'} (walls red, furniture orange)`,
+        text: translate('command.passability', {
+          state: translate(next ? 'command.on' : 'command.off'),
+        }),
         sender: 'system',
       })
     },
   },
 
   '/regrow': {
-    desc: 'Regenerate grass on your current tile',
+    desc: 'command.help.regrow',
     admin: true,
     run: () => {
       const player = get(gameStore).currentPlayer
       if (!player) {
         addChatMessage({
-          text: 'Regrow: player position unknown',
+          text: translate('command.regrowUnknown'),
           sender: 'system',
         })
         return
@@ -472,7 +519,7 @@ const COMMANDS: Record<string, Command> = {
       const gMgr = get(editorGrassDataManager)
       if (!hMgr || !sMgr || !gMgr) {
         addChatMessage({
-          text: 'Regrow: terrain managers not ready',
+          text: translate('command.regrowNotReady'),
           sender: 'system',
         })
         return
@@ -485,14 +532,14 @@ const COMMANDS: Record<string, Command> = {
       const splatData = sMgr.getSplatData(tileX, tileZ)
       if (!splatData) {
         addChatMessage({
-          text: `Regrow: no splatmap for tile(${tileX}, ${tileZ})`,
+          text: translate('command.regrowNoSplat', { x: tileX, z: tileZ }),
           sender: 'system',
         })
         return
       }
 
       addChatMessage({
-        text: `Regrow: regenerating grass for tile(${tileX}, ${tileZ})...`,
+        text: translate('command.regrowStart', { x: tileX, z: tileZ }),
         sender: 'system',
       })
 
@@ -502,7 +549,7 @@ const COMMANDS: Record<string, Command> = {
       sMgr.markDirty(tileX, tileZ)
       sMgr.saveAllDirty().catch((err) => {
         addChatMessage({
-          text: `Regrow: splatmap save failed — ${err}`,
+          text: translate('command.regrowSplatFailed', { error: String(err) }),
           sender: 'system',
         })
       })
@@ -511,13 +558,19 @@ const COMMANDS: Record<string, Command> = {
       gMgr.saveGrassData(tileX, tileZ, data).then(
         () => {
           addChatMessage({
-            text: `Regrow: done — short=${data.shortCount} tall=${data.tallCount} flower=${data.flowerCount}`,
+            text: translate('command.regrowDone', {
+              short: data.shortCount,
+              tall: data.tallCount,
+              flower: data.flowerCount,
+            }),
             sender: 'system',
           })
         },
         (err) => {
           addChatMessage({
-            text: `Regrow: grass save failed — ${err}`,
+            text: translate('command.regrowGrassFailed', {
+              error: String(err),
+            }),
             sender: 'system',
           })
         }
@@ -547,7 +600,10 @@ export function handleCommand(input: string): boolean {
   const command = COMMANDS[name]
   if (!command?.run) return false
   if (command.admin && !get(isAdminUser)) {
-    addChatMessage({ text: `${name}: admin only`, sender: 'system' })
+    addChatMessage({
+      text: translate('command.adminOnly', { name }),
+      sender: 'system',
+    })
     return true
   }
   command.run(args)

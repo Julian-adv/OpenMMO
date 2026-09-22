@@ -1,9 +1,5 @@
-/**
- * Named /tp destinations for admins: hand-curated landmarks plus entries
- * derived from data (dungeon entrances and boss rooms from the registry +
- * shared layout generator, cities from the world-map labels), so the list
- * tracks content changes without hand-kept coordinates.
- */
+/** Named admin destinations, including generated dungeon and city locations. */
+import { translate } from '../i18n'
 import { dungeon_layout } from '../wasm/onlinerpg_shared'
 import {
   dungeonCellCenter,
@@ -25,14 +21,18 @@ export interface TpDestination {
 const STATIC_DESTINATIONS: TpDestination[] = [
   {
     name: 'spawn',
-    label: 'Aldermark village (start)',
+    get label() {
+      return translate('command.tpSpawn')
+    },
     x: worldJson.spawnPosition.x,
     y: 0,
     z: worldJson.spawnPosition.z,
   },
   {
     name: 'snowpeak',
-    label: 'Snow mountain summit (1438m)',
+    get label() {
+      return translate('command.tpSnowpeak')
+    },
     x: -1078,
     y: 0,
     z: 5067,
@@ -52,7 +52,9 @@ export function tpDestinations(): TpDestination[] {
     const short = e.id.split('_').pop() ?? e.id
     out.push({
       name: short,
-      label: `${e.name} entrance`,
+      get label() {
+        return translate('command.tpEntrance', { name: e.name })
+      },
       x: e.x,
       y: 0,
       z: e.z,
@@ -62,10 +64,13 @@ export function tpDestinations(): TpDestination[] {
     const last = layouts[layouts.length - 1]
     const boss = last?.spawns.find((s) => s.isBoss)
     if (!last || !boss) continue
+    const depth = last.depth
     out.push({
       name: `${short}-boss`,
-      label: `${e.name} floor ${last.depth} boss room`,
-      ...dungeonCellCenter(e, last.depth, boss),
+      get label() {
+        return translate('command.tpBoss', { name: e.name, depth })
+      },
+      ...dungeonCellCenter(e, depth, boss),
     })
   }
 
@@ -74,7 +79,17 @@ export function tpDestinations(): TpDestination[] {
     if (!CITY_KINDS.has(label.kind) || label.id === 'aldermark') continue
     out.push({
       name: label.id,
-      label: `${label.name} (${label.kind})`,
+      get label() {
+        return translate('command.tpCity', {
+          name: label.name,
+          kind:
+            label.kind === 'capital'
+              ? translate('command.tpKind.capital')
+              : label.kind === 'city'
+                ? translate('command.tpKind.city')
+                : translate('command.tpKind.town'),
+        })
+      },
       x: label.x,
       y: 0,
       z: label.z,

@@ -133,6 +133,61 @@ describe('catalog integrity', () => {
 })
 
 describe('message rendering', () => {
+  it.each([
+    ['검', '검을'],
+    ['도끼', '도끼를'],
+    ['수호의 결계', '수호의 결계를'],
+    ['정조준', '정조준을'],
+  ])(
+    'selects particles after interpolating %s in client and server messages',
+    (name, expected) => {
+      languagePreference.set('ko')
+      expect(get(t)('skillFailure.cooldown', { name })).toBe(
+        `${expected} 아직 사용할 수 없습니다.`
+      )
+      expect(
+        translateServerMessage({
+          message: `Cannot use ${name}.`,
+          localization: { code: 'skillFailure.requirements', params: { name } },
+        })
+      ).toBe(`${expected} 사용할 수 없습니다.`)
+    }
+  )
+
+  it('selects particles after all item, quantity, and XP values are interpolated', () => {
+    languagePreference.set('ko')
+    expect(
+      translate('system.pickedUpItem', { name: '미루', item: '검', amount: '' })
+    ).toBe('미루: 검을 주웠습니다.')
+    expect(
+      translate('system.pickedUpItem', {
+        name: '미루',
+        item: '검',
+        amount: ' x2',
+      })
+    ).toBe('미루: 검 x2를 주웠습니다.')
+    expect(translate('combat.xpGained', { amount: 10 })).toBe(
+      '경험치 10을 얻었습니다.'
+    )
+    expect(translate('combat.xpLost', { amount: 12 })).toBe(
+      '사망 페널티: 경험치 12를 잃었습니다.'
+    )
+  })
+
+  it('leaves other languages and unknown server messages untouched', () => {
+    expect(translate('skillFailure.cooldown', { name: '검$을' }, 'en')).toBe(
+      '검$을 is not ready yet.'
+    )
+    const message = '검$을 {{name}}'
+    expect(translateServerMessage({ message }, 'ko')).toBe(message)
+    expect(
+      translateServerMessage(
+        { message, localization: { code: 'future.message', params: {} } },
+        'ko'
+      )
+    ).toBe(message)
+  })
+
   it('updates active status effects on language changes without resetting their duration', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick, untrack } from 'svelte'
+  import { t, locale, translate } from '../i18n'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { addChatMessage, gameStore } from '../stores/gameStore'
   import { partyRoster } from '../stores/partyStore'
@@ -11,6 +12,9 @@
   } from '../stores/chatChannelStore'
   import { networkManager } from '../network/socket'
   import {
+    chatEntryName,
+    chatEntryText,
+    shouldTranslateChatEntry,
     isPartyTabLine,
     unreadChatCount,
     unreadPartyCount,
@@ -40,6 +44,9 @@
   type Tab = 'all' | 'party' | 'combat'
   const TRANSCRIPT_FADE_DELAY_MS = 20_000
 
+  const languageNames = $derived(
+    new Intl.DisplayNames([$locale], { type: 'language' })
+  )
   let activeTab = $state<Tab>('all')
   let collapsed = $state(false)
   let chatMessages = $derived($gameStore.chatMessages)
@@ -49,8 +56,7 @@
   let isConnected = $derived($gameStore.isConnected)
   let inParty = $derived($partyRoster !== null)
 
-  // Only the Party tab counts as reading the channel. Seeded from the
-  // transcript in hand so a remount does not badge what was already read.
+  // Seed read markers on mount; only opening the Party tab reads that channel.
   let seenChatId = $state($gameStore.chatMessages.at(-1)?.id ?? 0)
   let seenCollapsedChatId = $state($gameStore.chatMessages.at(-1)?.id ?? 0)
   let partyUnread = $derived(
@@ -76,9 +82,7 @@
     }
   })
 
-  // Party chat is sticky (a /p holds until /s). Losing the party reverts
-  // the input to say only once the draft is empty: silently retargeting a
-  // half-typed party line at public chat would leak it to everyone nearby.
+  // Keep party drafts private until sent or cleared, even after leaving the party.
   $effect(() => {
     if (shouldRevertToSay(inParty, $chatChannel, messageInput)) {
       chatChannel.set('say')
@@ -87,9 +91,7 @@
 
   let channelMenuOpen = $state(false)
 
-  // Escape is arbitrated through the overlay stack (FPSCounter's handler):
-  // with the menu registered, one press closes it and leaves the inventory,
-  // fishing session, etc. untouched.
+  // Let Escape close only the top overlay.
   $effect(() => {
     if (!channelMenuOpen) return
     return mountOverlay('chatChannelMenu', () => (channelMenuOpen = false))
@@ -100,24 +102,18 @@
     channelMenuOpen = false
   }
 
-  // Translated text per message id, for the active target language only —
-  // cleared and retranslated from scratch whenever the target changes. Source
-  // is auto-detected per message inside translateChatText.
+  // Translation caches belong to the active target language.
   let translations = new SvelteMap<number, string>()
-  // Ids currently awaiting a translation result — a first-time language pair
-  // can mean a model download, so this can stay true for a while.
+  // Initial translations may wait for a language model download.
   let pendingTranslation = new SvelteSet<number>()
   let translatedTarget = ''
 
   $effect(() => {
     const enabled = $translationEnabled
     const target = $translationTargetLanguage
-    // Combat log is server-generated fixed-format text — chat only. Read
-    // outside untrack so new messages rerun the effect.
+    // Track incoming messages, but not translation cache updates.
     const entries = chatMessages
 
-    // The template already tracks the caches for rendering; untrack them here
-    // so completed translations don't rerun this effect.
     untrack(() => {
       if (!enabled || !isTranslatorApiSupported()) {
         translations.clear()
@@ -141,11 +137,15 @@
       }
 
       for (const entry of entries) {
-        if (translations.has(entry.id) || !entry.text) continue
+        if (
+          !shouldTranslateChatEntry(entry) ||
+          translations.has(entry.id) ||
+          !entry.text
+        )
+          continue
         if (pendingTranslation.has(entry.id)) continue
         pendingTranslation.add(entry.id)
-        // translateChatText never rejects — failures resolve with the
-        // original text, which gets cached so the message isn't retried.
+        // Failures resolve with the original text and are cached.
         translateChatText(entry.text, target).then((translated) => {
           // Drop results from a stale target after a language switch.
           if (target !== translatedTarget) return
@@ -156,8 +156,8 @@
     })
   })
 
-  function displayText(entry: { id: number; text: string }): string {
-    return translations.get(entry.id) ?? entry.text
+  function displayText(entry: (typeof chatMessages)[number]): string {
+    return translations.get(entry.id) ?? chatEntryText(entry, $locale)
   }
 
   function isTranslating(entry: { id: number }): boolean {
@@ -279,8 +279,7 @@
   let tabCycle: { matches: string[]; index: number } | null = null
 
   function completeCommand() {
-    // An active cycle wins: once Tab lands on a command, the next Tab moves on
-    // instead of reading that command as complete and stopping.
+    // Keep cycling through the original matches after completing a command.
     if (tabCycle && tabCycle.matches[tabCycle.index] === messageInput) {
       tabCycle.index = (tabCycle.index + 1) % tabCycle.matches.length
       messageInput = tabCycle.matches[tabCycle.index]
@@ -313,8 +312,7 @@
     }
   }
 
-  // Typed lines are invisible on the Combat tab, so focusing the input hops
-  // off it; All and Party both show them and keep their place.
+  // Move to All when typing from the Combat tab.
   function leaveCombatTab() {
     if (activeTab === 'combat') activeTab = 'all'
   }
@@ -322,8 +320,7 @@
   function handleGlobalKeydown(event: KeyboardEvent) {
     if ($instrumentPanelVisible) return
     if (event.isComposing || event.keyCode === 229) return
-    // While typing, Escape is invisible to the overlay-stack handler
-    // (it skips input targets), so close the menu here; no double-close.
+    // The overlay handler skips input targets, so close this menu here.
     if (event.key === 'Escape') {
       if (channelMenuOpen && document.activeElement === chatInput) {
         channelMenuOpen = false
@@ -357,7 +354,7 @@
     channelMenuOpen = false
     if (shouldBlockNpcTalkForPartyDraft($chatChannel, messageInput)) {
       addChatMessage({
-        text: 'Talk: clear or send your party draft before talking.',
+        text: translate('chat.partyDraft'),
         sender: 'system',
       })
     } else {
@@ -375,9 +372,7 @@
     }
   })
 
-  // The friend panel's Whisper button prefills `/w <name> ` rather than
-  // sending: a slash line ignores the channel, so the draft is safe to leave
-  // sitting there, and the player still gets to type the message.
+  // Prefill whisper drafts without changing their send channel.
   let seenDraftRequest = $chatDraftRequest.seq
   $effect(() => {
     const request = $chatDraftRequest
@@ -408,10 +403,12 @@
   use:draggablePanel={'chat'}
 >
   <div class="tabs" data-drag-handle>
-    <span class="chat-title">Chat</span>
+    <span class="chat-title">{$t('chat.title')}</span>
     {#if collapsed}
       {#if collapsedUnread > 0}
-        <span class="collapsed-unread">{collapsedUnread} new</span>
+        <span class="collapsed-unread"
+          >{$t('chat.new', { count: collapsedUnread })}</span
+        >
       {/if}
     {:else}
       {#if isTranslatorApiSupported() && activeTab !== 'combat'}
@@ -421,11 +418,13 @@
             ? $translationTargetLanguage
             : TRANSLATE_OFF}
           onchange={handleTranslateLangChange}
-          title="Translate chat"
+          title={$t('chat.translate')}
         >
-          <option value={TRANSLATE_OFF}>Translate to…</option>
+          <option value={TRANSLATE_OFF}>{$t('chat.translateTo')}</option>
           {#each TRANSLATION_LANGUAGES as lang (lang.code)}
-            <option value={lang.code}>{lang.label}</option>
+            <option value={lang.code}
+              >{languageNames.of(lang.code) ?? lang.label}</option
+            >
           {/each}
         </select>
       {/if}
@@ -434,17 +433,17 @@
         class:active={activeTab === 'all'}
         onclick={() => (activeTab = 'all')}
       >
-        All
+        {$t('chat.all')}
       </button>
       <button
         class="tab"
         class:active={activeTab === 'party'}
         aria-label={partyUnread > 0
-          ? `Party, ${partyUnread} unread`
+          ? $t('chat.partyUnread', { count: partyUnread })
           : undefined}
         onclick={() => (activeTab = 'party')}
       >
-        Party
+        {$t('chat.party')}
         {#if partyUnread > 0}
           <span class="tab-badge" aria-hidden="true">{partyUnread}</span>
         {/if}
@@ -454,12 +453,12 @@
         class:active={activeTab === 'combat'}
         onclick={() => (activeTab = 'combat')}
       >
-        Combat
+        {$t('chat.combat')}
       </button>
     {/if}
     <button
       class="panel-toggle"
-      aria-label={collapsed ? 'Expand chat' : 'Minimize chat'}
+      aria-label={collapsed ? $t('chat.expand') : $t('chat.minimize')}
       aria-expanded={!collapsed}
       onclick={() => (collapsed ? expandChat() : collapseChat())}
     >
@@ -489,19 +488,20 @@
       >
         {#if entry.name}
           {#if entry.sender === 'party'}
-            <span class="party-tag">[Party]</span>
+            <span class="party-tag">[{$t('chat.party')}]</span>
           {/if}
           <span
             class="name"
             class:local={entry.sender === 'local'}
-            class:remote={entry.sender === 'remote'}>{entry.name}:</span
+            class:remote={entry.sender === 'remote'}
+            >{chatEntryName(entry, $locale)}:</span
           >
           {displayText(entry)}
         {:else}
           <span class="system">{displayText(entry)}</span>
         {/if}
         {#if isTranslating(entry)}
-          <span class="translating-hint">translating…</span>
+          <span class="translating-hint">{$t('chat.translating')}</span>
         {/if}
       </div>
     {/snippet}
@@ -522,14 +522,16 @@
               <span
                 class="name"
                 class:local={entry.sender === 'local'}
-                class:remote={entry.sender === 'remote'}>{entry.name}:</span
+                class:remote={entry.sender === 'remote'}
+                >{chatEntryName(entry, $locale)}:</span
               >
               <span
                 class:hit={entry.hit === true}
-                class:miss={entry.hit === false}>{entry.text}</span
+                class:miss={entry.hit === false}
+                >{chatEntryText(entry, $locale)}</span
               >
             {:else}
-              {entry.text}
+              {chatEntryText(entry, $locale)}
             {/if}
           </div>
         {/each}
@@ -547,7 +549,7 @@
             aria-checked={$chatChannel === 'say'}
             onclick={() => selectChannel('say')}
           >
-            Say
+            {$t('chat.say')}
             {#if $chatChannel === 'say'}<span class="check">✓</span>{/if}
           </button>
           <button
@@ -555,10 +557,10 @@
             role="menuitemradio"
             aria-checked={$chatChannel === 'party'}
             disabled={!inParty}
-            title={inParty ? undefined : 'Join a party to use party chat'}
+            title={inParty ? undefined : $t('chat.joinParty')}
             onclick={() => selectChannel('party')}
           >
-            Party
+            {$t('chat.party')}
             {#if $chatChannel === 'party'}<span class="check">✓</span>{/if}
           </button>
         </div>
@@ -567,13 +569,13 @@
         class="channel-btn"
         aria-haspopup="menu"
         aria-expanded={channelMenuOpen}
-        title="Choose where your messages go (/p and /s)"
+        title={$t('chat.chooseChannel')}
         onclick={(e) => {
           e.stopPropagation()
           channelMenuOpen = !channelMenuOpen
         }}
       >
-        {$chatChannel === 'party' ? 'Party' : 'Say'}
+        {$chatChannel === 'party' ? $t('chat.party') : $t('chat.say')}
         <span class="caret" aria-hidden="true">▴</span>
       </button>
     </div>
@@ -599,8 +601,8 @@
           restoreViewportAfterKeyboard()
         }}
         placeholder={$chatChannel === 'party'
-          ? 'Message your party...'
-          : 'Type a message... (/help for commands)'}
+          ? $t('chat.partyPlaceholder')
+          : $t('chat.placeholder')}
         disabled={!isConnected}
       />
     </div>
@@ -609,15 +611,14 @@
       onclick={sendMessage}
       disabled={!isConnected || !messageInput.trim()}
     >
-      Send
+      {$t('chat.send')}
     </button>
   </div>
 </div>
 
 <style>
   .chat-panel {
-    /* Bottom-left by default, shrinking to stay clear of the action cluster;
-       draggablePanel overrides inset once the panel has been moved. */
+    /* draggablePanel overrides the initial position after dragging. */
     position: fixed;
     left: var(--hud-edge-left);
     bottom: var(--hud-edge-bottom);

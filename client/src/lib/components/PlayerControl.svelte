@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { translate } from '../i18n'
   import { onMount } from 'svelte'
   import { localTeleportActive } from '../stores/teleportEffectStore'
   import {
@@ -402,7 +403,7 @@
     } else {
       pending.movement.approach = null
       stopMovement()
-      cancelAutoTravel('Travel stopped: no room to back up.')
+      cancelAutoTravel(translate('travel.noRoom'))
     }
   }
 
@@ -454,9 +455,7 @@
       travelStalledMs += Math.min(deltaTime, 100)
     }
     if (travelStalledMs > 15_000) {
-      cancelAutoTravel(
-        'Travel stopped: the route is blocked or terrain is unavailable.'
-      )
+      cancelAutoTravel(translate('travel.unavailable'))
       return
     }
     const moving = movingState()
@@ -479,11 +478,11 @@
     if (moving && leg.kind !== 'move') return
     if (leg.kind === 'waiting') return
     if (leg.kind === 'arrived') {
-      cancelAutoTravel('Destination reached.')
+      cancelAutoTravel(translate('travel.arrived'))
       return
     }
     if (leg.kind === 'blocked') {
-      cancelAutoTravel('Travel stopped: no walkable route ahead.')
+      cancelAutoTravel(translate('travel.noRoute'))
       return
     }
     const target = {
@@ -936,7 +935,7 @@
     if (sendStop && currentPlayer) {
       sendPlayerMove(currentPlayer.position, playerRotation)
     }
-    cancelAutoTravel('Travel stopped: the route is blocked.')
+    cancelAutoTravel(translate('travel.blocked'))
   }
 
   // Current player state
@@ -1374,7 +1373,7 @@
         const m = movingState()
         if (m) m.approach = null
         stopMovement()
-        cancelAutoTravel('Travel stopped during recovery.')
+        cancelAutoTravel(translate('travel.recovery'))
       }
       return
     }
@@ -2415,7 +2414,7 @@
       playerControlEvent.intent.type === 'none'
     ) {
       reportSkillFailure(
-        `Click water within ${max_cast_distance_m()} m to fish.`
+        translate('fishing.clickWater', { distance: max_cast_distance_m() })
       )
       return
     }
@@ -2519,7 +2518,7 @@
           )
         ) {
           addChatMessage({
-            text: 'Cast into the water behind the boat.',
+            text: translate('fishing.behindBoat'),
             sender: 'system',
           })
           return

@@ -1,8 +1,10 @@
 import { get } from 'svelte/store'
+import { translate } from '../i18n'
 import {
   AUSCULTATION,
   DOUBLE_SLASH,
   FISHING,
+  abilityDisplayName,
   abilityEquipmentAllowed,
   abilityEquipmentNotMet,
   getAbility,
@@ -43,11 +45,11 @@ export function useAbility(id: string) {
   if (id !== AUSCULTATION.id) cancelInspection()
   if (id !== FISHING.id) cancelFishingTargeting()
   if (player.health <= 0) {
-    reportSkillFailure('You cannot use skills while dead.')
+    reportSkillFailure(translate('skillFailure.dead'))
     return
   }
   if (isMounted(player) && !(id === FISHING.id && player.mount === 'rowboat')) {
-    reportSkillFailure('You cannot use skills while mounted.')
+    reportSkillFailure(translate('skillFailure.mounted'))
     return
   }
   const { equipped } = get(inventoryStore)
@@ -57,18 +59,18 @@ export function useAbility(id: string) {
   }
   if (ability.id === FISHING.id) {
     if (get(currentDungeonDepth) > 0 || get(playerVisualFloorLevel) !== 0) {
-      reportSkillFailure('You can only fish outdoors.')
+      reportSkillFailure(translate('fishing.outdoors'))
       return
     }
     if (get(myFishing).phase !== 'idle') {
-      reportSkillFailure('You are already fishing.')
+      reportSkillFailure(translate('fishing.already'))
       return
     }
     queueFishingTarget()
     return
   }
   if (ability.manaCost > (get(manaState)?.mana ?? 0)) {
-    reportSkillFailure('Not enough mana.')
+    reportSkillFailure(translate('skillFailure.mana'))
     return
   }
   const cooldownUntil =
@@ -76,7 +78,11 @@ export function useAbility(id: string) {
       ? get(daggerSkillState).cooldownUntil
       : (get(abilityCooldowns)[ability.id] ?? 0)
   if (cooldownUntil > Date.now()) {
-    reportSkillFailure(`${ability.name} is not ready yet.`)
+    reportSkillFailure(
+      translate('skillFailure.cooldown', {
+        name: abilityDisplayName(ability.id),
+      })
+    )
     return
   }
   if (ability.id === AUSCULTATION.id) {
@@ -94,7 +100,9 @@ export function useAbility(id: string) {
       )
     : null
   if (needsTarget && !target) {
-    reportSkillFailure(`Select or hover over a target for ${ability.name}.`)
+    reportSkillFailure(
+      translate('skillFailure.target', { name: abilityDisplayName(ability.id) })
+    )
     return
   }
   if (beginAbility(ability.id))

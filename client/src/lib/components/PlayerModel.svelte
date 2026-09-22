@@ -48,6 +48,7 @@
 </script>
 
 <script lang="ts">
+  import { translate } from '../i18n'
   import { visibleMana } from '../stores/gameStore'
   import { playerHealthDisplay } from '../stores/playerHealthDisplay'
   import { RiderMotion } from '../utils/riderMotion'
@@ -1164,7 +1165,7 @@
             // Every pack is loaded and none answers to the name: exit the
             // interact state instead of holding the pose forever.
             addChatMessage({
-              text: `Anim: no clip named "${clipName}"`,
+              text: translate('command.animMissing', { name: clipName }),
               sender: 'system',
             })
             interactionFinishedNotified = true

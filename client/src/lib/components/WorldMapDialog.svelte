@@ -63,6 +63,7 @@
 </script>
 
 <script lang="ts">
+  import { translate } from '../i18n'
   import { SvelteMap } from 'svelte/reactivity'
   import { assetUrl } from '../utils/assetUrl'
   import { gameStore, isAdminUser, addChatMessage } from '../stores/gameStore'
@@ -206,7 +207,7 @@
         if (!controller.signal.aborted && !reportedError) {
           reportedError = true
           addChatMessage({
-            text: 'Failed to load land ownership.',
+            text: translate('system.landLoadFailed'),
             sender: 'system',
           })
         }
@@ -820,7 +821,7 @@
       if (!point) return
       if (!isTravelDestinationValid(point)) {
         addChatMessage({
-          text: 'Choose a destination within the world map.',
+          text: translate('system.travelDestination'),
           sender: 'system',
         })
         return
@@ -850,7 +851,7 @@
     const next = nextGrade(grades[addr.index])
     setLandGrade(addr.rx, addr.rz, addr.index, next).catch((e: Error) => {
       addChatMessage({
-        text: `Land grade save failed: ${e.message}`,
+        text: translate('system.landSaveFailed', { error: e.message }),
         sender: 'system',
       })
     })
