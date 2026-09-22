@@ -6,6 +6,7 @@
   } from '../data/mapLabels'
   import { RegionImageCache } from '../terrain/regionImageCache'
   import {
+    estimateMapLabelTextSize,
     getMapFrameCornerReservedBounds,
     isFixedMapLabel,
     layoutMapLabels,
@@ -45,8 +46,7 @@
   const COS_R = Math.cos(MAP_ROTATE_ANGLE)
   const SIN_R = Math.sin(MAP_ROTATE_ANGLE)
 
-  /** Undo the canvas rotation: a screen-space offset in world units becomes a
-   *  world-space offset. */
+  // Undo the map rotation for a screen-space delta.
   function screenDeltaToWorld(dx: number, dz: number) {
     return { x: dx * COS_R + dz * SIN_R, z: -dx * SIN_R + dz * COS_R }
   }
@@ -63,7 +63,8 @@
 </script>
 
 <script lang="ts">
-  import { translate } from '../i18n'
+  import { locale, t, translate } from '../i18n'
+  import { placeName } from '../i18n/places'
   import { SvelteMap } from 'svelte/reactivity'
   import { assetUrl } from '../utils/assetUrl'
   import { gameStore, isAdminUser, addChatMessage } from '../stores/gameStore'
@@ -156,7 +157,7 @@
   )
   const travelTooltip = $derived.by(() => {
     if (selectingDestination) {
-      return 'Click the map to run there. Click again to cancel selection.'
+      return $t('map.travelSelectionHint')
     }
     if ($travelDestination) {
       const distance = travelDistance(
@@ -167,11 +168,9 @@
         distance >= 1000
           ? `${(distance / 1000).toFixed(1)} km`
           : `${Math.ceil(distance)} m`
-      return `${label} remaining. Click to stop, or move manually to cancel.`
+      return $t('map.travelRemainingHint', { distance: label })
     }
-    return canTravel
-      ? 'Destination: click here, then choose a point on the map to travel automatically.'
-      : 'Set a destination while outdoors.'
+    return canTravel ? $t('map.travelStartHint') : $t('map.travelOutdoorsHint')
   })
   let ownedPlots = $state<OwnedLandPlot[]>([])
   const landOwnerColors = $derived(buildLandOwnerColors(ownedPlots))
@@ -243,12 +242,10 @@
     zoomSpan = restored.zoomSpan
   })
 
-  // Party existence only: roster churn must not re-request (a membership
-  // change already triggers a server push).
+  // Membership changes already trigger server pushes.
   let inParty = $derived($partyRoster !== null)
 
-  // One snapshot when the dialog opens with a party, or a party forms while
-  // it is open; steady-state updates are pushed by the server.
+  // Request a snapshot on open or when joining a party.
   $effect(() => {
     if (!inParty) return
     networkManager.sendRequestPartyPositions()
@@ -257,8 +254,7 @@
   // --- Drag state ---
   let isDragging = $state(false)
   let suppressNextClick = false
-  // Squared pixel distance a pointer must travel before a drag suppresses the
-  // click that would otherwise fire on pointerup.
+  // Suppress clicks after dragging this squared pixel distance.
   const DRAG_THRESHOLD_PX2 = 9
   let dragStartMouseX = 0
   let dragStartMouseZ = 0
@@ -316,15 +312,13 @@
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = 'high'
 
-    // Scale: how many canvas pixels per world unit
-    // At current zoom, we show `span` regions across the shorter dimension
+    // Show `span` regions across the shorter dimension.
     const viewSize = span * REGION_PX // world units visible along shorter axis
     const canvasSize = Math.min(cw, ch)
     const scale = canvasSize / viewSize
     const projectedRegionPx = REGION_PX * scale * dpr
     const sourceSize = pickMinimapSourceSize(projectedRegionPx)
-    // Coarse tiles are ~64x cheaper per image, so the preset's image budget
-    // buys proportionally more of them.
+    // Coarse tiles allow a larger image cache.
     regionImages.limit = mobileMapBudget
       ? imageCacheLimit
       : Math.max(imageCacheLimit, COARSE_CACHE_LIMIT[sourceSize] ?? 0)
@@ -491,10 +485,7 @@
     textVisible: boolean
   }
 
-  // World → overlay coords: unwrap x toward the camera (a point just across
-  // the world seam renders near the edge instead of a full wrap away), scale
-  // around the view center, then the same -45° rotation the canvas applies
-  // (ctx.rotate(MAP_ROTATE_ANGLE)).
+  // Unwrap toward the camera, then apply the canvas scale and rotation.
   function worldToScreen(x: number, z: number, view: RenderedView) {
     x = unwrapWorldXNear(view.camX, x)
     const scale =
@@ -523,11 +514,10 @@
     )
   }
 
-  // Static place names plus the player's discovered dungeon entrances, so
-  // dungeons ride the same zoom/cull/label pipeline as every other kind.
+  // Localize before layout so collisions use the displayed names.
   let mapLabels = $derived.by<MapLabel[]>(() => {
     const known = $discoveredDungeonIds
-    if (known.size === 0) return MAP_LABELS
+    const language = $locale
     const dungeons = DUNGEON_ENTRANCES.filter((e) => known.has(e.id)).map(
       (e) => ({
         id: e.id,
@@ -538,7 +528,10 @@
         z: e.z,
       })
     )
-    return [...MAP_LABELS, ...dungeons]
+    return [...MAP_LABELS, ...dungeons].map((label) => ({
+      ...label,
+      name: placeName(label.id, label.name, language),
+    }))
   })
 
   // --- Party member markers (HTML layer, same transform as the labels) ---
@@ -547,7 +540,6 @@
     name: string
     left: number
     top: number
-    floor: number
   }
 
   let partyMarkers = $derived.by<PartyMarker[]>(() => {
@@ -556,8 +548,7 @@
     const view = renderedView
     if (!roster || !view) return []
 
-    // Join against the roster: a member who left since the last push (or an
-    // id the roster never knew) must not draw a ghost.
+    // Ignore positions for players who have left the party.
     const names = new Map(roster.members.map((m) => [m.id, m.name]))
     const out: PartyMarker[] = []
     for (const pos of positions) {
@@ -567,10 +558,12 @@
       if (!onScreen(p, view.width, view.height, 40)) continue
       out.push({
         id: pos.id,
-        name,
+        name:
+          pos.floor_level < 0
+            ? `${name} ${$t('map.undergroundFloor', { floor: -pos.floor_level })}`
+            : name,
         left: p.left,
         top: p.top,
-        floor: pos.floor_level,
       })
     }
     return out
@@ -610,7 +603,10 @@
       reservedBounds.push({
         left: marker.left - 9,
         top: marker.top - 13,
-        right: marker.left + 16 + marker.name.length * 7,
+        right:
+          marker.left +
+          16 +
+          estimateMapLabelTextSize(marker.name, 'dungeon').width,
         bottom: marker.top + 13,
       })
     }
@@ -857,8 +853,7 @@
     })
   }
 
-  // macOS turns Ctrl+click into a contextmenu event (no click fires at all),
-  // so the teleport shortcut must be caught here too.
+  // macOS sends Ctrl+click as a contextmenu event.
   function handleMapContextMenu(event: MouseEvent) {
     if (selectingDestination) {
       event.preventDefault()
@@ -870,9 +865,7 @@
     teleportAt(event.clientX, event.clientY)
   }
 
-  // Invert worldToScreen against the view actually on screen, so a click
-  // during an in-flight pan/zoom lands where the admin sees, not where the
-  // camera already moved.
+  // Resolve clicks against the rendered view while pan/zoom is loading.
   function screenToWorld(clientX: number, clientY: number) {
     const view = renderedView
     if (!containerEl || !view) return null
@@ -936,7 +929,7 @@
     tabindex="-1"
   >
     <div class="header">
-      <h2 id="world-map-title">World Map</h2>
+      <h2 id="world-map-title">{$t('map.title')}</h2>
       <div class="controls">
         <button
           type="button"
@@ -945,10 +938,10 @@
           disabled={!canTravel && !$travelDestination && !selectingDestination}
           title={travelTooltip}
           aria-label={selectingDestination
-            ? 'Cancel destination selection'
+            ? $t('map.cancelDestinationSelection')
             : $travelDestination
-              ? 'Stop travel'
-              : 'Set destination'}
+              ? $t('map.stopTravel')
+              : $t('map.setDestination')}
           aria-pressed={selectingDestination || $travelDestination !== null}
           onclick={() => {
             if ($travelDestination && !selectingDestination) {
@@ -970,29 +963,29 @@
           type="button"
           class="ctrl-btn symbol-btn"
           onclick={zoomIn}
-          title="Zoom In"
-          aria-label="Zoom in">+</button
+          title={$t('map.zoomIn')}
+          aria-label={$t('map.zoomIn')}>+</button
         >
         <button
           type="button"
           class="ctrl-btn symbol-btn"
           onclick={zoomOut}
-          title="Zoom Out"
-          aria-label="Zoom out">&minus;</button
+          title={$t('map.zoomOut')}
+          aria-label={$t('map.zoomOut')}>&minus;</button
         >
         <button
           type="button"
           class="ctrl-btn reset-btn"
           onclick={zoomReset}
-          title="Reset Zoom"
-          aria-label="Reset zoom">Reset</button
+          title={$t('map.resetZoom')}
+          aria-label={$t('map.resetZoom')}>{$t('common.reset')}</button
         >
         <button
           type="button"
           class="ctrl-btn center-btn"
           onclick={resetCamera}
-          title="Center on Player"
-          aria-label="Center on player"
+          title={$t('map.centerOnPlayer')}
+          aria-label={$t('map.centerOnPlayer')}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="6.5"></circle>
@@ -1005,8 +998,8 @@
           class="ctrl-btn center-btn"
           class:active={$landPlotsVisible}
           onclick={toggleLandPlots}
-          title="Toggle Land Plots"
-          aria-label="Toggle land plots"
+          title={$t('map.toggleLandPlots')}
+          aria-label={$t('map.toggleLandPlots')}
           aria-pressed={$landPlotsVisible}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1019,8 +1012,8 @@
         type="button"
         class="close-btn"
         onclick={close}
-        title="Close"
-        aria-label="Close world map">&times;</button
+        title={$t('common.close')}
+        aria-label={$t('map.close')}>&times;</button
       >
     </div>
     <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -1047,7 +1040,7 @@
             <svg viewBox="0 0 24 32" aria-hidden="true">
               <path d="M5 30V3M5 3h15l-4 6 4 6H5"></path>
             </svg>
-            <span>Destination</span>
+            <span>{$t('map.destination')}</span>
           </div>
         {/if}
         {#each visibleLabels as label (label.key)}
@@ -1085,9 +1078,7 @@
             style="left: {marker.left}px; top: {marker.top}px;"
           >
             <span class="dot"></span>
-            <span class="text"
-              >{marker.name}{marker.floor < 0 ? ` B${-marker.floor}` : ''}</span
-            >
+            <span class="text">{marker.name}</span>
           </div>
         {/each}
         {#if selfMarker}
@@ -1181,9 +1172,6 @@
     --wm-gold: #c49b4b;
     --wm-gold-hi: #f0ce78;
     --wm-brass: #76572b;
-    --wm-serif:
-      'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, 'Times New Roman',
-      'Noto Serif KR', AppleMyungjo, Batang, serif;
     position: relative;
     isolation: isolate;
     width: min(80vw, 80dvh, 800px);
@@ -1194,6 +1182,7 @@
     border-radius: 5px;
     background: var(--wm-night);
     color: var(--wm-paper);
+    font-family: 'Noto Sans KR', sans-serif;
     box-shadow:
       0 26px 80px rgba(0, 0, 0, 0.72),
       0 0 0 1px #160f07,
@@ -1231,8 +1220,7 @@
     column-gap: 8px;
     align-items: center;
     flex: 0 0 52px;
-    /* The ornate frame overlay hides the top 18/1254 of the square dialog, so
-       matching top padding keeps the content on the visible wood bar's center. */
+    /* Offset the header below the ornate frame. */
     padding: calc(18 / 1254 * 100%) max(30px, 8%) 0;
     border-bottom: 1px solid var(--wm-brass);
     background:
@@ -1255,7 +1243,6 @@
     margin: 0;
     overflow: hidden;
     color: var(--wm-paper);
-    font-family: var(--wm-serif);
     font-size: 20px;
     font-weight: 700;
     letter-spacing: 0.06em;
@@ -1284,7 +1271,7 @@
       inset 0 0 0 1px rgba(240, 206, 120, 0.12),
       0 2px 4px rgba(0, 0, 0, 0.36);
     color: #d8ccb0;
-    font-family: var(--wm-serif);
+    font-family: inherit;
     font-size: 15px;
     cursor: pointer;
     line-height: 1;
@@ -1339,7 +1326,7 @@
     background: none;
     border: none;
     color: #c7a866;
-    font-family: var(--wm-serif);
+    font-family: inherit;
     font-size: 27px;
     cursor: pointer;
     padding: 0 4px;
@@ -1437,7 +1424,6 @@
     left: 0;
     top: 0;
     white-space: nowrap;
-    font-family: var(--wm-serif);
     transform: translate(
       calc(-50% + var(--label-text-x)),
       calc(-50% + var(--label-text-y))

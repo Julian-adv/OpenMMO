@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { locale, t } from '../i18n'
   import {
     emotePanelVisible,
     emoteStopRequest,
@@ -8,6 +9,7 @@
   import {
     EMOTE_LIST,
     emoteClickCommand,
+    emoteLabel,
     type EmoteIntent,
     type EmoteMeta,
   } from '../emote-meta'
@@ -27,12 +29,10 @@
   const active = $derived($localEmoteAnim)
   const previewPlayer = $derived($gameStore.currentPlayer)
 
-  // Last pointed-at emote; kept playing after the pointer leaves so the
-  // preview never snaps back to an empty box.
+  // Keep the last preview playing after the pointer leaves.
   let previewed = $state<EmoteMeta | null>(null)
 
-  // Mount the preview stack once a fitting position has existed, then keep it
-  // warm for the rest of this open; fit churn only nulls the anim.
+  // Keep the preview mounted once it fits during this open.
   let everFit = $state(false)
   $effect(() => {
     if (!visible) {
@@ -40,21 +40,18 @@
       everFit = false
       return
     }
-    // Death/disconnect clears the hover so the box can't pop back open by
-    // itself on respawn.
+    // Clear the preview on death or disconnect.
     if (!usable) previewed = null
     if (placement.fits && affordable) everFit = true
   })
 
-  // A second WebGPU device costs more than the layers low already drops, so
-  // the preview is a full-budget-only extra.
+  // Only full render budgets can afford a second WebGPU device.
   const affordable = $derived(
     $graphicsQuality !== 'low' &&
       getEffectivePreset($graphicsQuality).renderBudget === 'full'
   )
 
-  // Which side of the panel has room for the box; neither side (narrow phone
-  // viewports) means the preview canvas never mounts.
+  // Find room for the preview beside the panel.
   const placement = $derived(
     previewPlacement(
       $panelPositions.emotes?.x ??
@@ -63,20 +60,15 @@
     )
   )
 
-  // The stored position only updates on drag release, so hide the box mid-drag
-  // instead of letting it ride off-screen on a stale side.
+  // Hide while dragging until the saved position updates.
   const dragging = $derived($draggingPanel === 'emotes')
 
-  // sendChatMessage is a silent no-op while disconnected; grey out like the
-  // chat input does instead of eating clicks. Dead players are greyed out
-  // too — the server accepts a corpse's /emote, so the client must not
-  // offer it as a two-click affordance.
+  // Disable emotes while dead or disconnected.
   const usable = $derived(
     $gameStore.isConnected && ($gameStore.currentPlayer?.health ?? 0) > 0
   )
 
-  // Last commanded emote, kept until the server echo confirms it (or a TTL
-  // assumes rejection). See emoteClickCommand.
+  // Retain pending intent until the server confirms it or it expires.
   let intent = $state<EmoteIntent | null>(null)
   $effect(() => {
     if (intent && active === intent.anim) intent = null
@@ -91,14 +83,12 @@
       intent = { anim: null, at: performance.now() }
       return
     }
-    // Same path as typing the command: the server validates and its
-    // broadcast starts our animation (see chat-commands `/emote`).
+    // The server validates the command and broadcasts the animation.
     networkManager.sendChatMessage(`/emote ${emote.anim}`)
     intent = { anim: emote.anim, at: performance.now() }
   }
 
-  // Rendered as one more row, but it opens the live performance panel
-  // rather than sending /emote; the preview reuses the strum pose.
+  // Preview the strum pose for the live instrument panel.
   const INSTRUMENT_ROW: EmoteMeta = {
     anim: MUSIC_EMOTE_ANIM,
     label: 'Play Instrument',
@@ -111,12 +101,17 @@
 </script>
 
 {#if visible}
-  <div class="emote-panel" aria-label="Emotes" use:draggablePanel={'emotes'}>
+  <div
+    class="emote-panel"
+    aria-label={$t('emotes.title')}
+    use:draggablePanel={'emotes'}
+  >
     <div class="panel-header" data-drag-handle>
-      <span class="panel-title">Emotes</span>
+      <span class="panel-title">{$t('emotes.title')}</span>
       <button
         class="close-btn"
-        title="Close"
+        title={$t('common.close')}
+        aria-label={$t('common.close')}
         onclick={() => emotePanelVisible.set(false)}>×</button
       >
     </div>
@@ -128,15 +123,15 @@
           class:active={active === emote.anim}
           disabled={!usable}
           title={emote.loops && active === emote.anim
-            ? 'Stop'
+            ? $t('common.stop')
             : `/emote ${emote.anim}`}
           onclick={() => play(emote)}
           onpointerenter={() => (previewed = emote)}
           onfocus={() => (previewed = emote)}
         >
-          <span class="emote-label">{emote.label}</span>
+          <span class="emote-label">{emoteLabel(emote, $locale)}</span>
           {#if emote.loops}
-            <span class="loop-badge" title="Loops until you move">↻</span>
+            <span class="loop-badge" title={$t('emotes.loopsHint')}>↻</span>
           {/if}
         </button>
       {/each}
@@ -151,18 +146,18 @@
         onfocus={() => (previewed = INSTRUMENT_ROW)}
       >
         <span class="instrument-mark" aria-hidden="true">♪</span>
-        <span class="emote-label">Play Instrument</span>
+        <span class="emote-label">{$t('emotes.playInstrument')}</span>
       </button>
     </div>
 
-    <div class="panel-hint">/emote &lt;name&gt; · dances stop on move</div>
+    <div class="panel-hint">{$t('emotes.commandHint')}</div>
 
     {#if previewPlayer && everFit && affordable}
       <EmotePreview
         anim={usable && placement.fits && !dragging
           ? (previewed?.anim ?? null)
           : null}
-        label={previewed?.label ?? null}
+        label={previewed ? emoteLabel(previewed, $locale) : null}
         characterClass={previewPlayer.characterClass}
         gender={previewPlayer.gender}
         side={placement.side}
@@ -175,8 +170,7 @@
   .emote-panel {
     position: fixed;
     right: 16px;
-    /* Above the HUD corner buttons, so it opens next to the social flyout
-       that summoned it. */
+    /* Open above the HUD corner buttons. */
     bottom: 64px;
     z-index: 40;
     width: 180px;
@@ -188,7 +182,7 @@
     border-radius: 10px;
     background: rgba(6, 10, 14, 0.88);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     pointer-events: auto;
   }

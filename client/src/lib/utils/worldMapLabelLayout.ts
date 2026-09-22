@@ -91,8 +91,7 @@ interface OccupiedRect {
   priority: number
 }
 
-/** Zoom span each label kind is drawn across. `textMax` narrows the range for
- *  the name itself, so a marker can outlive its text; it defaults to `max`. */
+/** `textMax` can hide names before their markers disappear. */
 export const MAP_LABEL_ZOOM_RANGE = {
   continent: { min: 8, max: Infinity },
   sea: { min: 4, max: Infinity },
@@ -162,13 +161,22 @@ export function isFixedMapLabel(kind: MapLabelKind): boolean {
   return FIXED_KINDS.has(kind)
 }
 
+const FULL_WIDTH_GLYPH =
+  /[\p{Script=Hangul}\p{Script=Han}\p{Script_Extensions=Hiragana}\p{Script_Extensions=Katakana}\u3000-\u303f\uff01-\uff60]/u
+
 export function estimateMapLabelTextSize(
   name: string,
   kind: MapLabelKind
 ): ScreenSize {
   const style = TEXT_STYLE[kind]
-  const glyphWidth = name.length * style.fontSize * style.widthFactor
-  const spacing = Math.max(0, name.length - 1) * style.letterSpacing
+  const glyphs = [...name]
+  const glyphWidth = glyphs.reduce(
+    (width, glyph) =>
+      width +
+      style.fontSize * (FULL_WIDTH_GLYPH.test(glyph) ? 1 : style.widthFactor),
+    0
+  )
+  const spacing = Math.max(0, glyphs.length - 1) * style.letterSpacing
   return {
     width: Math.ceil(glyphWidth + spacing),
     height: Math.ceil(style.fontSize * 1.3),

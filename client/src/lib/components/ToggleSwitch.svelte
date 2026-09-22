@@ -4,9 +4,10 @@
   interface Props {
     checked: Writable<boolean>
     label: string
+    describedBy?: string
   }
 
-  let { checked, label }: Props = $props()
+  let { checked, label, describedBy }: Props = $props()
 </script>
 
 <button
@@ -15,6 +16,7 @@
   role="switch"
   aria-checked={$checked}
   aria-label={label}
+  aria-describedby={describedBy}
   onclick={() => checked.update((v) => !v)}
 >
   <span class="knob"></span>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import {
     pendingFriendRequests,
     FRIEND_REQUEST_TTL_MS,
@@ -10,15 +11,15 @@
 <QueuedConsentToast
   queue={pendingFriendRequests}
   ttlMs={FRIEND_REQUEST_TTL_MS}
-  label="Friend request"
+  label={$t('friends.requestTitle')}
   top="32%"
   accent="#8fe08f"
-  acceptLabel="Accept"
-  declineLabel="Decline"
+  acceptLabel={$t('common.accept')}
+  declineLabel={$t('common.decline')}
   respond={(request, accept) =>
     networkManager.sendFriendRespond(request.requesterId, accept)}
 >
   {#snippet children(request)}
-    <strong>{request.requesterName}</strong> wants to be friends
+    {$t('friends.requestMessage', { name: request.requesterName })}
   {/snippet}
 </QueuedConsentToast>

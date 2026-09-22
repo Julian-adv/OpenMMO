@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import {
     friendList,
     friendPanelVisible,
@@ -22,9 +23,7 @@
   const levelOf = (friend: FriendEntry) =>
     $onlineFriends.get(friend.characterId) ?? friend.level
 
-  // There is no presence push: the panel being open is the only thing that
-  // changes how often we ask. A friendless roster asks nothing at all — the
-  // server would answer it with nothing.
+  // Poll more often while open; skip empty rosters.
   $effect(() => {
     if ($friendList.length === 0) return
     const period = visible ? FRIENDS_POLL_OPEN_MS : FRIENDS_POLL_CLOSED_MS
@@ -62,19 +61,24 @@
 </script>
 
 {#if visible}
-  <div class="friend-panel" aria-label="Friends" use:draggablePanel={'friends'}>
+  <div
+    class="friend-panel"
+    aria-label={$t('friends.title')}
+    use:draggablePanel={'friends'}
+  >
     <div class="panel-header" data-drag-handle>
-      <span class="panel-title">Friends</span>
+      <span class="panel-title">{$t('friends.title')}</span>
       <span class="friend-count">{friends.length}/{MAX_FRIENDS}</span>
       <button
         class="close-btn"
-        title="Close"
+        title={$t('common.close')}
+        aria-label={$t('common.close')}
         onclick={() => friendPanelVisible.set(false)}>×</button
       >
     </div>
 
     {#if friends.length === 0}
-      <div class="empty">No friends yet.</div>
+      <div class="empty">{$t('friends.empty')}</div>
     {:else}
       <div class="friend-rows">
         {#each friends as friend (friend.characterId)}
@@ -82,37 +86,45 @@
             <span
               class="status-dot"
               class:on={isOnline(friend)}
-              title={isOnline(friend) ? 'Online' : 'Offline'}
+              title={isOnline(friend)
+                ? $t('friends.online')
+                : $t('friends.offline')}
             ></span>
             {#if classIconPath(friend.class)}
               <img
                 class="class-icon"
                 src={classIconPath(friend.class)}
-                alt={friend.class}
-                title={friend.class}
+                alt={$t(`class.${friend.class}`)}
+                title={$t(`class.${friend.class}`)}
                 width="14"
                 height="14"
               />
             {/if}
             <span class="friend-name">{friend.name}</span>
-            <span class="friend-level">L{levelOf(friend)}</span>
+            <span class="friend-level"
+              >{$t('stat.level')} {levelOf(friend)}</span
+            >
             <span class="row-actions">
               <button
                 class="row-btn"
-                title="Whisper"
+                title={$t('friends.whisper')}
+                aria-label={$t('friends.whisper')}
                 disabled={!isOnline(friend)}
-                onclick={() => whisper(friend)}>W</button
+                onclick={() => whisper(friend)}
+                >{$t('friends.whisperShort')}</button
               >
               <button
                 class="row-btn"
-                title="Invite to party"
+                title={$t('friends.inviteParty')}
+                aria-label={$t('friends.inviteParty')}
                 disabled={!isOnline(friend)}
                 onclick={() => networkManager.sendPartyInvite(friend.name)}
-                >P</button
+                >{$t('friends.invitePartyShort')}</button
               >
               <button
                 class="row-btn danger"
-                title="Remove friend"
+                title={$t('friends.remove')}
+                aria-label={$t('friends.remove')}
                 onclick={() => networkManager.sendFriendRemove(friend.name)}
                 >×</button
               >
@@ -127,22 +139,26 @@
         <!-- svelte-ignore a11y_autofocus -->
         <input
           class="add-input"
-          placeholder="Player name"
+          placeholder={$t('friends.playerName')}
+          aria-label={$t('friends.playerName')}
           maxlength="32"
           autofocus
           bind:value={addName}
           onkeydown={onAddKeydown}
         />
-        <button class="row-btn" title="Send request" onclick={submitAdd}
-          >✓</button
+        <button
+          class="row-btn"
+          title={$t('friends.sendRequest')}
+          aria-label={$t('friends.sendRequest')}
+          onclick={submitAdd}>✓</button
         >
       </div>
     {:else}
       <div class="add-hint">
         <button class="add-btn" disabled={full} onclick={() => (adding = true)}
-          >+ Add</button
+          >+ {$t('friends.add')}</button
         >
-        <span class="hint">or /friend add &lt;name&gt;</span>
+        <span class="hint">{$t('friends.addHint')}</span>
       </div>
     {/if}
   </div>
@@ -165,7 +181,7 @@
     border-radius: 10px;
     background: rgba(6, 10, 14, 0.88);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     pointer-events: auto;
   }
@@ -206,6 +222,7 @@
   }
 
   .add-btn {
+    flex-shrink: 0;
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 3px;
@@ -232,6 +249,10 @@
     align-items: center;
     gap: 6px;
     margin-top: 8px;
+  }
+
+  .add-hint {
+    flex-wrap: wrap;
   }
 
   .add-input {
@@ -309,8 +330,6 @@
     gap: 2px;
   }
 
-  /* Flex-centred rather than left to the button's default padding: a fixed
-     width with the UA's asymmetric padding pushes the glyph off-centre. */
   .row-btn {
     display: flex;
     align-items: center;

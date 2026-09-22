@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import { gameStore } from '../stores/gameStore'
   import { worldMapVisible } from '../stores/debugStore'
   import { minimapVersion } from '../stores/editorStore'
@@ -30,10 +31,8 @@
   } from '../utils/map-structures'
   import SelfMarker from './SelfMarker.svelte'
 
-  /** Canvas size in CSS pixels. */
   const SIZE = 180
-  /** World meters shown across the widget — fixed zoom, sized so the region
-   *  bakes (1 px/m) only ever downscale. */
+  // Fixed view width in world meters.
   const VIEW_WORLD = 384
   /** Player movement below this step doesn't trigger a redraw. */
   const REDRAW_STEP_M = 2
@@ -44,8 +43,7 @@
 
   let canvasEl = $state<HTMLCanvasElement>()
 
-  /** The bakes are surface terrain: underground or upstairs there is nothing
-   *  truthful to draw, so the widget hides rather than showing the surface. */
+  // The baked map only represents surface terrain.
   let onSurface = $derived(
     $currentDungeonDepth === 0 && $playerVisualFloorLevel === 0
   )
@@ -53,8 +51,7 @@
   const regionImages = new RegionImageCache()
   regionImages.limit = IMAGE_CACHE_LIMIT
 
-  // Quantized player position: redraw on ~2 m moves, not per frame.
-  // Wrapped like the world map keeps its view center on the baked range.
+  // Wrap to the baked range and redraw after moving about 2 m.
   let playerX = $derived(wrapWorldX($gameStore.currentPlayer?.position.x ?? 0))
   let playerZ = $derived($gameStore.currentPlayer?.position.z ?? 0)
   let qx = $derived(Math.round(playerX / REDRAW_STEP_M))
@@ -160,8 +157,8 @@
   <button
     class="minimap"
     class:lowered={$calendarShown}
-    title="Open world map (M)"
-    aria-label="Open world map"
+    title={$t('map.openShortcut', { key: 'M' })}
+    aria-label={$t('map.open')}
     onclick={() => worldMapVisible.set(true)}
   >
     <canvas bind:this={canvasEl} style="width: {SIZE}px; height: {SIZE}px;"

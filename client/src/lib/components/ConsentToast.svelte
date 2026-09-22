@@ -1,11 +1,8 @@
 <script lang="ts">
+  import { t } from '../i18n'
   import type { Snippet } from 'svelte'
   import { PANEL_Z_CEILING } from '../stores/panelLayout'
 
-  /** Shared shell for the accept/decline consent toasts (party invite, trade
-   * offer, party summon): fixed top-center card, accent-colored name, button
-   * pair, optional queue count and TTL drain gauge. Behavior (stores, network,
-   * TTL dismissal) stays in each caller. */
   let {
     label,
     top,
@@ -43,15 +40,16 @@
   <div class="toast-row">
     <span class="toast-text">
       {@render children()}
-      {#if queued > 0}<span class="queued">(+{queued} waiting)</span>{/if}
+      {#if queued > 0}<span class="queued"
+          >{$t('consent.waiting', { count: queued })}</span
+        >{/if}
     </span>
     <button class="accept-btn" onclick={onaccept}>{acceptLabel}</button>
     <button class="decline-btn" onclick={ondecline}>{declineLabel}</button>
   </div>
   {#if gaugeDurationMs > 0}
     <div class="gauge">
-      <!-- CSS-driven drain: a negative delay skips the elapsed part, and
-           {#key} restarts the animation when the head entry changes. -->
+      <!-- Restart per request and skip elapsed time. -->
       {#key gaugeStartAt}
         <div
           class="gauge-fill"
@@ -74,7 +72,7 @@
     background: rgba(6, 10, 14, 0.88);
     backdrop-filter: blur(4px);
     color: #e6edf3;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
     font-size: 12px;
     pointer-events: auto;
   }

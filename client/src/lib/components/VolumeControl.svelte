@@ -83,8 +83,7 @@
     color: #a0aec0;
     font-size: 13px;
     font-weight: 500;
-    font-family:
-      -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: 'Noto Sans KR', sans-serif;
   }
 
   .slider-row {
@@ -128,7 +127,8 @@
   .volume-value {
     color: #edf2f7;
     font-size: 13px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-variant-numeric: tabular-nums;
     min-width: 36px;
     text-align: right;
   }

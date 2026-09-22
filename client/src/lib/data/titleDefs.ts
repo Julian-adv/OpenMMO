@@ -1,14 +1,6 @@
 import { derived, get } from 'svelte/store'
 import titlesJson from '../../../../data/titles.json'
-import { persistedString } from '../stores/persisted'
-import {
-  languages,
-  locale,
-  translate,
-  type Locale,
-  type MessageKey,
-} from '../i18n'
-import { isLanguagePreference } from '../i18n/locale'
+import { locale, translate, type Locale, type MessageKey } from '../i18n'
 
 interface TitleDef {
   id: string
@@ -18,18 +10,6 @@ interface TitleDef {
 }
 
 const defs = titlesJson as Record<string, TitleDef>
-
-export type TitleLanguage = 'auto' | Locale
-export const TITLE_LANGUAGES: { value: TitleLanguage; label: string }[] = [
-  { value: 'auto', label: 'Auto' },
-  ...languages,
-]
-
-export const titleLanguage = persistedString<TitleLanguage>(
-  'onlinerpg_titleLanguage',
-  'auto',
-  isLanguagePreference
-)
 
 function nameIn(id: string, language: Locale): string {
   const def = defs[id]
@@ -41,12 +21,10 @@ function nameIn(id: string, language: Locale): string {
   )
 }
 
-/** Reactive lookup: `$titleName(id)` re-renders when the setting changes. */
+/** Follow the game language for displayed titles. */
 export const titleName = derived(
-  [titleLanguage, locale],
-  ([preference, language]) =>
-    (id: string) =>
-      nameIn(id, preference === 'auto' ? language : preference)
+  locale,
+  (language) => (id: string) => nameIn(id, language)
 )
 
 /** Non-reactive lookup for one-off text (chat lines). */

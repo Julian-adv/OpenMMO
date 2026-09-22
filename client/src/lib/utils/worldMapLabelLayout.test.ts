@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MapLabelDef, MapLabelKind } from '../data/mapLabels'
 import {
+  estimateMapLabelTextSize,
   getMapFrameCornerReservedBounds,
   getMapLabelCandidateOffsets,
   isMapLabelTextVisibleAtZoom,
@@ -33,6 +34,25 @@ describe('world map label zoom hierarchy', () => {
     expect(isMapLabelVisibleAtZoom('dungeon', 9)).toBe(false)
     expect(isMapLabelTextVisibleAtZoom('dungeon', 3)).toBe(true)
     expect(isMapLabelTextVisibleAtZoom('dungeon', 4)).toBe(false)
+  })
+})
+
+describe('localized world map label sizes', () => {
+  it.each(['앨더마크', 'アルダーマーク', '奥尔德马克'])(
+    'reserves full-width glyphs for %s',
+    (name) => {
+      expect(
+        estimateMapLabelTextSize(name, 'town').width
+      ).toBeGreaterThanOrEqual([...name].length * 15)
+    }
+  )
+
+  it('hides a translated area label when its full width cannot fit', () => {
+    const [placed] = layoutMapLabels(
+      [{ label: label('미스트워드 해', 'sea'), anchor: { x: 60, y: 80 } }],
+      { zoomSpan: 8, viewport: { left: 0, top: 0, right: 120, bottom: 160 } }
+    )
+    expect(placed.textVisible).toBe(false)
   })
 })
 

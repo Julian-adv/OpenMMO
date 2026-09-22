@@ -1,16 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
   EMOTE_INTENT_TTL_MS,
   EMOTE_LIST,
   emoteClickCommand,
+  emoteLabel,
 } from './emote-meta'
-import { LOOPING_EMOTE_ANIMS, ONE_SHOT_EMOTE_ANIMS } from './stores/emoteStore'
+import {
+  LOOPING_EMOTE_ANIMS,
+  MUSIC_EMOTE_ANIM,
+  ONE_SHOT_EMOTE_ANIMS,
+} from './stores/emoteStore'
+import { languagePreference } from './i18n'
 
-// The wire contract lives in shared/src/messages.rs; emoteStore mirrors it by
-// hand. Parse the Rust source so drift fails here instead of shipping a panel
-// that silently omits a new emote (the panel itself derives from emoteStore).
+afterEach(() => languagePreference.set('en'))
+
+// Detect drift from the server's supported animations.
 function rustEmoteList(constName: string): string[] {
   const source = readFileSync(
     path.resolve(__dirname, '../../../shared/src/messages.rs'),
@@ -45,6 +51,46 @@ describe('emote panel metadata', () => {
       expect(emote.label.length).toBeGreaterThan(0)
       expect(emote.loops).toBe(LOOPING_EMOTE_ANIMS.has(emote.anim))
     }
+  })
+})
+
+describe('localized emote labels', () => {
+  const instrument = {
+    anim: MUSIC_EMOTE_ANIM,
+    label: 'Play Instrument',
+    loops: true,
+  }
+
+  it.each(['ko', 'ja', 'zh-Hans'] as const)(
+    '%s translates every supported emote and instrument preview',
+    (language) => {
+      for (const emote of [...EMOTE_LIST, instrument]) {
+        expect(emoteLabel(emote, 'en')).toBe(emote.label)
+        expect(emoteLabel(emote, language), emote.anim).not.toBe(emote.label)
+        expect(emoteLabel(emote, language).trim(), emote.anim).not.toBe('')
+      }
+    }
+  )
+
+  it('updates a retained preview when the language changes', () => {
+    const previewed = EMOTE_LIST.find((emote) => emote.anim === 'clap')!
+    languagePreference.set('ko')
+    expect(emoteLabel(previewed)).toBe('박수')
+    expect(emoteLabel(instrument)).toBe('악기 연주')
+    languagePreference.set('ja')
+    expect(emoteLabel(previewed)).toBe('拍手')
+    languagePreference.set('zh-Hans')
+    expect(emoteLabel(previewed)).toBe('鼓掌')
+    expect(previewed).toEqual({ anim: 'clap', label: 'Clap', loops: false })
+  })
+
+  it('keeps future emotes readable before translations are added', () => {
+    expect(
+      emoteLabel(
+        { anim: 'future_wave', label: 'Future Wave', loops: false },
+        'ko'
+      )
+    ).toBe('Future Wave')
   })
 })
 

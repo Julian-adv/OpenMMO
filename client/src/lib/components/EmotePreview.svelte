@@ -22,8 +22,7 @@
 
   let playing = $state(false)
 
-  // Reactive so browser zoom / DPI moves and quality changes reach the
-  // renderer; Threlte re-applies its dpr prop on every change.
+  // Update resolution when display density or graphics quality changes.
   const dpr = $derived(
     Math.min(
       devicePixelRatio.current ?? window.devicePixelRatio,
@@ -32,8 +31,7 @@
   )
 </script>
 
-<!-- Mounted (hidden) as soon as the panel opens so the WebGPU device, GLBs
-     and pipelines are warm before the box first shows. -->
+<!-- Warm the renderer before showing the preview. -->
 <div
   class="emote-preview"
   class:shown={anim !== null && playing}
@@ -66,9 +64,7 @@
     background: rgba(6, 10, 14, 0.88);
   }
 
-  /* !important: GameHud's `.game-hud :global(*) { pointer-events: auto }`
-   * would otherwise win and turn the (mostly invisible) box into a
-   * click-swallowing dead zone over the world. */
+  /* Override GameHud's pointer events, including while hidden. */
   .emote-preview,
   .emote-preview :global(*) {
     pointer-events: none !important;
@@ -91,7 +87,7 @@
   .preview-label {
     margin-top: 6px;
     color: #8fe08f;
-    font-family: 'Courier New', monospace;
+    font-family: inherit;
     font-size: 12px;
     font-weight: 700;
     text-align: center;

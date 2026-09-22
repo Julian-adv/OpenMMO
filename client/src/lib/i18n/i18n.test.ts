@@ -9,6 +9,7 @@ import {
   translateServerMessage,
 } from './index'
 import { itemText } from './items'
+import { titleName, titleNameNow } from '../data/titleDefs'
 import { itemDescription, itemDisplayName, getItemDef } from '../data/itemDefs'
 import { catchMessage } from '../network/fishingMessages'
 import { attackLog } from '../network/combatLog'
@@ -133,6 +134,30 @@ describe('catalog integrity', () => {
 })
 
 describe('message rendering', () => {
+  it('updates character titles and new chat messages with the game language', () => {
+    languagePreference.set('en')
+    const labels: string[] = []
+    const unsubscribe = titleName.subscribe((name) =>
+      labels.push(name('goblin_slayer'))
+    )
+    try {
+      for (const language of ['ko', 'ja', 'zh-Hans', 'en'] as const) {
+        languagePreference.set(language)
+        expect(titleNameNow('goblin_slayer')).toBe(labels.at(-1))
+        expect(titleNameNow('future_title')).toBe('future_title')
+      }
+      expect(labels).toEqual([
+        'Slayer of the Goblin Chief',
+        '고블린 족장을 쓰러뜨린 자',
+        'ゴブリンの族長を討ちし者',
+        '哥布林酋长讨伐者',
+        'Slayer of the Goblin Chief',
+      ])
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it.each([
     ['검', '검을'],
     ['도끼', '도끼를'],

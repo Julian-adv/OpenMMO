@@ -10,6 +10,9 @@
   }
 
   let { character, compact = false }: Props = $props()
+  const activeTitle = $derived(
+    character.active_title ? $titleName(character.active_title) : ''
+  )
   const attributes = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
   const maxMp = $derived(
     character_max_mana(
@@ -23,9 +26,7 @@
 <span class="character-summary" class:compact>
   <span class="name" title={character.name}>{character.name}</span>
   {#if !compact}
-    {#if character.active_title}
-      <span class="title">{$titleName(character.active_title)}</span>
-    {/if}
+    <span class="title" title={activeTitle || undefined}>{activeTitle}</span>
     <span class="meta">
       {$t('stat.level')}
       {character.level} · {$t(`class.${character.class}`)}
@@ -64,9 +65,15 @@
   }
 
   .title {
+    display: -webkit-box;
+    height: 2.6em;
+    overflow: hidden;
     color: #d6bcfa;
     font-size: 13px;
     overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .meta,

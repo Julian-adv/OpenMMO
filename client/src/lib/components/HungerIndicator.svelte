@@ -133,6 +133,7 @@
     align-items: center;
     gap: 6px;
     justify-content: flex-start;
+    font-family: 'Noto Sans KR', sans-serif;
     cursor: pointer;
     outline: none;
   }
@@ -193,7 +194,6 @@
       0 10px 28px rgba(0, 0, 0, 0.55),
       inset 0 1px rgba(255, 255, 255, 0.04);
     color: #d8d2c4;
-    font-family: system-ui, sans-serif;
     pointer-events: none;
     opacity: 0;
     visibility: hidden;

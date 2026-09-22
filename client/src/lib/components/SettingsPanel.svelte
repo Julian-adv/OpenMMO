@@ -17,7 +17,6 @@
   import { friendOnlineNoticeEnabled } from '../stores/friendStore'
   import { mountOverlay } from '../stores/overlayStack'
   import { resetPanelLayout } from '../stores/panelLayout'
-  import { titleLanguage, TITLE_LANGUAGES } from '../data/titleDefs'
 
   interface Props {
     onClose: () => void
@@ -30,13 +29,18 @@
   const qualityOptions: QualityLevel[] = ['high', 'medium', 'low']
 </script>
 
-{#snippet toggleRow(label: string, checked: Writable<boolean>, hint?: string)}
-  <div class="setting-row">
-    <span class="setting-label">
-      {label}
-      {#if hint}<span class="setting-hint">{hint}</span>{/if}
-    </span>
-    <ToggleSwitch {checked} {label} />
+{#snippet toggleRow(
+  label: string,
+  checked: Writable<boolean>,
+  hint?: string,
+  hintId?: string
+)}
+  <div class="setting-row" class:has-hint={!!hint}>
+    <span class="setting-label">{label}</span>
+    <ToggleSwitch {checked} {label} describedBy={hint ? hintId : undefined} />
+    {#if hint}
+      <span class="setting-tooltip" id={hintId} role="tooltip">{hint}</span>
+    {/if}
   </div>
 {/snippet}
 
@@ -68,13 +72,11 @@
     {@render toggleRow(
       $t('settings.alwaysRun'),
       alwaysRun,
-      $alwaysRun ? $t('settings.shiftWalk') : $t('settings.shiftRun')
+      $alwaysRun ? $t('settings.shiftWalk') : $t('settings.shiftRun'),
+      'settings-run-hint'
     )}
-    <div class="setting-row">
-      <span class="setting-label">
-        {$t('settings.movement')}
-        <span class="setting-hint">{$t('settings.movementKeys')}</span>
-      </span>
+    <div class="setting-row has-hint">
+      <span class="setting-label">{$t('settings.movement')}</span>
       <div
         class="quality-row"
         role="group"
@@ -84,6 +86,7 @@
           class="quality-btn"
           class:active={$keyboardMovementMode === 'world'}
           aria-pressed={$keyboardMovementMode === 'world'}
+          aria-describedby="settings-movement-hint"
           onclick={() => keyboardMovementMode.set('world')}
           >{$t('settings.fixed')}</button
         >
@@ -91,21 +94,24 @@
           class="quality-btn"
           class:active={$keyboardMovementMode === 'character'}
           aria-pressed={$keyboardMovementMode === 'character'}
+          aria-describedby="settings-movement-hint"
           onclick={() => keyboardMovementMode.set('character')}
           >{$t('settings.relative')}</button
         >
       </div>
+      <span class="setting-tooltip" id="settings-movement-hint" role="tooltip">
+        {$t('settings.movementKeys')}<br />
+        {$keyboardMovementMode === 'world'
+          ? $t('settings.worldHint')
+          : $t('settings.relativeHint')}
+      </span>
     </div>
-    <p class="movement-hint setting-hint">
-      {$keyboardMovementMode === 'world'
-        ? $t('settings.worldHint')
-        : $t('settings.relativeHint')}
-    </p>
     {@render toggleRow($t('settings.friendNotice'), friendOnlineNoticeEnabled)}
     {@render toggleRow(
       $t('settings.lightning'),
       lightningEnabled,
-      $t('settings.lightningHint')
+      $t('settings.lightningHint'),
+      'settings-lightning-hint'
     )}
 
     <div class="setting-row">
@@ -131,31 +137,15 @@
       </div>
     {/if}
 
-    <div class="setting-row">
-      <span class="setting-label">
-        {$t('settings.titleLanguage')}
-        <span class="setting-hint">{$t('settings.titleLanguageHint')}</span>
-      </span>
-      <div class="quality-row">
-        {#each TITLE_LANGUAGES as opt (opt.value)}
-          <button
-            class="quality-btn"
-            class:active={$titleLanguage === opt.value}
-            onclick={() => titleLanguage.set(opt.value)}
-          >
-            {opt.value === 'auto' ? $t('common.auto') : opt.label}
-          </button>
-        {/each}
-      </div>
-    </div>
-
-    <div class="setting-row">
-      <span class="setting-label">
-        {$t('settings.layout')}
-        <span class="setting-hint">{$t('settings.layoutHint')}</span>
-      </span>
-      <button class="action-btn" onclick={resetPanelLayout}
-        >{$t('common.reset')}</button
+    <div class="setting-row has-hint">
+      <span class="setting-label">{$t('settings.layout')}</span>
+      <button
+        class="action-btn"
+        aria-describedby="settings-layout-hint"
+        onclick={resetPanelLayout}>{$t('common.reset')}</button
+      >
+      <span class="setting-tooltip" id="settings-layout-hint" role="tooltip"
+        >{$t('settings.layoutHint')}</span
       >
     </div>
 
@@ -235,6 +225,7 @@
   }
 
   .setting-row {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -271,18 +262,44 @@
       -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
-  .setting-hint {
-    display: block;
-    color: #718096;
-    font-size: 11px;
-    font-weight: 400;
-    margin-top: 2px;
+  .has-hint .setting-label {
+    cursor: help;
+    text-decoration: underline dotted #718096;
+    text-underline-offset: 4px;
+  }
+
+  .setting-tooltip {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 1;
+    padding: 8px 10px;
+    border: 1px solid #4a5568;
+    border-radius: 6px;
+    background: #111827;
+    color: #edf2f7;
+    font:
+      12px/1.5 'Noto Sans KR',
+      sans-serif;
+    overflow-wrap: anywhere;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .has-hint:hover .setting-tooltip,
+  .has-hint:focus-within .setting-tooltip {
+    opacity: 1;
+    visibility: visible;
   }
 
   .quality-row {
-    display: flex;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
     gap: 0;
-    flex-wrap: wrap;
     border-radius: 6px;
     overflow: hidden;
     border: 1px solid #4a5568;
@@ -297,10 +314,8 @@
     border: 1px solid #4a5568;
     border-radius: 4px;
     font: inherit;
-  }
-
-  .movement-hint {
-    margin: 6px 0 12px;
+    font-family: 'Noto Sans KR', sans-serif;
+    font-size: 13px;
   }
 
   .quality-btn {
@@ -308,6 +323,7 @@
     background: #2d3748;
     color: #a0aec0;
     border: none;
+    border-radius: 0;
     font-size: 13px;
     font-weight: 500;
     font-family:
@@ -320,6 +336,15 @@
 
   .quality-btn:not(:last-child) {
     border-right: 1px solid #4a5568;
+  }
+
+  .quality-btn:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  .quality-btn:focus-visible {
+    outline: 2px solid #bee3f8;
+    outline-offset: -2px;
   }
 
   .quality-btn:hover {
