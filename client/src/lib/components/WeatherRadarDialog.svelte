@@ -483,7 +483,11 @@
        would swallow their clicks. */
     right: 270px;
     max-width: calc(100vw - 280px);
-    z-index: 999;
+    /* Same band as the other layer-0 panels (inventory, friends, character),
+       under the consent toasts and the layer-1 windows: an interactive box
+       lifted above them would cover an invite's Accept button and take the
+       Escape that should have closed a trade window drawn beneath it. */
+    z-index: 40;
     width: 460px;
     /* Reserve the bottom strip: the quickslot bar lives there and this panel
        takes pointer events, so reaching it would swallow its clicks. */
