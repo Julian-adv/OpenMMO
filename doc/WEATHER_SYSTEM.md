@@ -234,7 +234,8 @@ loaded; a reconnect with the same tag fetches nothing. The per-plot climate
 route has no client reader yet; a climate map layer can add one modelled on
 `landGradeStore.ts`. The rain function is called through wasm
 (`weather_set_sectors`, `weather_day_start_minutes`, `weather_rain_at`,
-`weather_cloud_factor`) — the client never re-implements
+`weather_cloud_factor`, and `weather_cells_at` for the debug radar) — the
+client never re-implements
 it, and even the game-minute conversion stays in Rust so `t` cannot drift a
 day from the server's. Per-frame local sample drives:
 
@@ -282,6 +283,19 @@ The world map is deliberately untouched. A forecast layer (cells as soft
 discs in the atlas pass, a slider that evaluates the same function at a later
 time) was prototyped and works, but it is held back until there is a
 gameplay reason for players to read the weather ahead.
+
+### Weather radar (debug overlay)
+
+RADAR in the debug panel opens the tool used while tuning the schedule: every
+live cell over the baked region minimaps, coloured by stage, with the radius
+and the time left; the rain at the player and when the next one reaches them;
+and a scrub that evaluates the same function up to half a game day ahead,
+with a fast-forward. It reads the server clock, never the sun-debug display
+hour, and samples on its own 250 ms timer rather than the render loop, so the
+whole-continent sweep and the next-rain scan stay out of the frame. Cells
+whose disc reaches the drawn window are listed even when their centre sits
+across the world seam, the way `rain_at` measures distance. Escape or the
+title-bar button closes it.
 
 ### Rain puddles
 

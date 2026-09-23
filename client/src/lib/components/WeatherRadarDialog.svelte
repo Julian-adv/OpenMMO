@@ -2,6 +2,7 @@
   import { untrack } from 'svelte'
   import { get } from 'svelte/store'
   import { weatherRadarVisible } from '../stores/debugStore'
+  import { mountOverlay } from '../stores/overlayStack'
   import { playerDebugInfo } from '../stores/debugStore'
   import { weather, weatherSectorsReady } from '../stores/weatherStore'
   import { gameTimeState } from './GameTimeWidget.svelte'
@@ -68,23 +69,16 @@
   } | null = null
   let cells: RadarCell[] = $state([])
   let nextRain: number | null = $state(null)
-  /** The scrub offset `nextRain` was measured from, so the row can never
-   *  present a forecast taken at one time as a wait from another. */
-  let nextRainAhead = $state(0)
   let hereRain = $state(0)
+  /** False until a scan has run for the current view time, so the row shows
+   *  nothing rather than a forecast measured at some other time. */
+  let hasForecast = $state(false)
 
   const regionImages = new RegionImageCache()
   /** The map is 350-odd region tiles; it is painted once and blitted after. */
   let mapLayer: HTMLCanvasElement | null = null
   let mapVersionDrawn: number | null = null
-  let mapRetryAt = 0
-  let mapAttempts = 0
   let nextRainDueAt = 0
-  /** First wait before repainting a layer that lost tiles, doubling per
-   *  attempt to stay clear of the cache's own per-tile backoff. */
-  const MAP_RETRY_MS = 15000
-  /** A region with no bake at all never resolves; stop asking. */
-  const MAP_MAX_ATTEMPTS = 3
 
   const ready = $derived(
     $weather !== null &&
@@ -96,25 +90,23 @@
     return gameMinutesAt(gameTimeState.date, gameTimeState.serverHour) + ahead
   }
 
-  /** Paint the region tiles onto the cached layer. Tiles arrive out of order
-   *  as they load; each lands on the layer, never over the cells. */
-  function buildMapLayer(version: number, fresh: boolean) {
-    const layer = mapLayer ?? document.createElement('canvas')
+  /** Paint the region tiles onto a fresh layer. Tiles arrive out of order as
+   *  they load; each lands on the layer, never over the cells. A tile the
+   *  server has no bake for stays ocean until the panel is reopened; the
+   *  cache's own backoff decides whether that reopening asks again. */
+  function buildMapLayer(version: number) {
+    const layer = document.createElement('canvas')
+    layer.width = WIDTH
+    layer.height = HEIGHT
     const ctx = layer.getContext('2d')
     if (!ctx) return
-    if (fresh || layer.width !== WIDTH) {
-      // Only a new bake clears the layer. A retry paints the tiles it missed
-      // over what is already there, so the map never blinks to bare ocean.
-      layer.width = WIDTH
-      layer.height = HEIGHT
-      ctx.fillStyle = OCEAN
-      ctx.fillRect(0, 0, WIDTH, HEIGHT)
-    }
+    ctx.fillStyle = OCEAN
+    ctx.fillRect(0, 0, WIDTH, HEIGHT)
     mapLayer = layer
 
     const size = Math.ceil(REGION_CELLS * SCALE)
-    const loads: Promise<unknown>[] = []
     const sourceSize = pickMinimapSourceSize(REGION_CELLS * SCALE)
+    const loads: Promise<void>[] = []
     const minRx = Math.floor((CONTINENT_VIEW.x0 + TILE_DIM / 2) / REGION_CELLS)
     const maxRx = Math.floor((CONTINENT_VIEW.x1 + TILE_DIM / 2) / REGION_CELLS)
     const minRz = Math.floor((CONTINENT_VIEW.z0 + TILE_DIM / 2) / REGION_CELLS)
@@ -127,29 +119,14 @@
         const at = worldToCanvas(worldX, worldZ, CONTINENT_VIEW, WIDTH)
         loads.push(
           regionImages.load(rx, rz, version, sourceSize).then((img) => {
-            if (!img) return false
-            if (mapVersionDrawn === version)
+            if (img && mapLayer === layer)
               ctx.drawImage(img, at.x, at.y, size, size)
-            return true
           })
         )
       }
     }
-    void Promise.all(loads).then((drawn) => {
-      if (mapVersionDrawn !== version) return
-      if (drawn.every(Boolean) || mapAttempts >= MAP_MAX_ATTEMPTS) {
-        // Each tile is needed once and the layer keeps the pixels, so drop the
-        // decoded images rather than holding hundreds for the life of the
-        // page. After the last attempt, keep whatever arrived.
-        regionImages.flush()
-        mapRetryAt = 0
-      } else {
-        // A missing tile would otherwise be a hole for the session; keep the
-        // cache's backoff and repaint later.
-        mapAttempts += 1
-        mapRetryAt = performance.now() + MAP_RETRY_MS * 2 ** (mapAttempts - 1)
-      }
-    })
+    // The layer keeps the pixels; the decoded images are done with.
+    void Promise.all(loads).then(() => regionImages.flush())
   }
 
   function drawCell(ctx: CanvasRenderingContext2D, cell: RadarCell) {
@@ -189,13 +166,8 @@
     pos: { x: number; z: number } | undefined
   ) {
     if (!pos) return
-    const at = worldToCanvas(
-      viewWrappedX(pos.x, CONTINENT_VIEW),
-      pos.z,
-      CONTINENT_VIEW,
-      WIDTH
-    )
     const wrapped = viewWrappedX(pos.x, CONTINENT_VIEW)
+    const at = worldToCanvas(wrapped, pos.z, CONTINENT_VIEW, WIDTH)
     const outside =
       wrapped < CONTINENT_VIEW.x0 ||
       wrapped > CONTINENT_VIEW.x1 ||
@@ -255,13 +227,9 @@
   /** One tick: read the world without subscribing to it, then redraw. */
   function tick() {
     const version = get(minimapVersion)
-    const rebaked = version !== mapVersionDrawn
-    const retryDue = mapRetryAt !== 0 && performance.now() >= mapRetryAt
-    if (rebaked || retryDue) {
-      if (rebaked) mapAttempts = 0
+    if (version !== mapVersionDrawn) {
       mapVersionDrawn = version
-      mapRetryAt = 0
-      buildMapLayer(version, rebaked)
+      buildMapLayer(version)
     }
 
     const w = get(weather)
@@ -272,6 +240,8 @@
       cells = []
       hereRain = 0
       nextRain = null
+      nextRainDueAt = 0
+      hasForecast = false
       resolveHover([])
       render([], pos)
       return
@@ -295,16 +265,26 @@
     } else if (now >= nextRainDueAt) {
       nextRainDueAt = now + NEXT_RAIN_MS
       nextRain = minutesUntilRain(w.seed, w.bias, t, pos.x, pos.z)
-      nextRainAhead = ahead
+      hasForecast = true
     }
     render(list, pos)
   }
 
+  // Escape closes it through the overlay stack, like every other panel.
+  $effect(() =>
+    $weatherRadarVisible
+      ? mountOverlay('weatherRadar', () => weatherRadarVisible.set(false))
+      : undefined
+  )
+
   $effect(() => {
     if (!$weatherRadarVisible) {
-      // The component stays mounted, so a tooltip left behind would come back
-      // under no pointer the next time the panel is shown.
+      // The component stays mounted. A tooltip left behind would come back
+      // under no pointer, and a map with a missing tile would keep the hole;
+      // both start over when the panel is next shown.
       stopHover()
+      mapLayer = null
+      mapVersionDrawn = null
       return
     }
     nextRainDueAt = 0
@@ -319,18 +299,20 @@
   $effect(() => {
     if (!$weatherRadarVisible || !fastForward) return
     const id = setInterval(() => {
-      // Wrap to 0 rather than modulo: AHEAD_MAX is not a multiple of the
-      // stride, so a modulo walks off the slider's step grid and never
-      // returns to now.
+      // Wrap to 0 explicitly. `% (AHEAD_MAX + 1)` reads as the obvious way
+      // to do this and is what this replaced, but 721 is not a multiple of
+      // the stride, so it walked off the slider's step grid for good.
       ahead = ahead + FAST_FORWARD > AHEAD_MAX ? 0 : ahead + FAST_FORWARD
       retime()
     }, 500)
     return () => clearInterval(id)
   })
 
-  /** The view time moved. Redraw now, and let the next-rain scan run once the
-   *  movement settles rather than on every event of a drag. */
+  /** The view time moved: the forecast no longer describes it, so drop it.
+   *  Redraw now, and let the scan run once the movement settles rather than
+   *  on every event of a drag. */
   function retime() {
+    hasForecast = false
     nextRainDueAt = performance.now() + SCRUB_SETTLE_MS
     untrack(tick)
   }
@@ -368,8 +350,6 @@
   function toNow() {
     ahead = 0
     fastForward = false
-    // Without this the scrubbed forecast stays on screen for up to the
-    // throttle window, relabelled as if it were measured from now.
     retime()
   }
 </script>
@@ -377,7 +357,7 @@
 {#if $weatherRadarVisible}
   <div class="dialog">
     <div class="dialog-title">
-      Weather Radar
+      <span>Weather Radar</span>
       <span class="sub">
         {#if !ready}
           waiting for sectors
@@ -387,6 +367,11 @@
           seed {$weather?.seed} · bias {$weather?.bias}
         {/if}
       </span>
+      <button
+        class="close"
+        onclick={() => weatherRadarVisible.set(false)}
+        aria-label="Close the weather radar">x</button
+      >
     </div>
 
     <div class="mapbox">
@@ -446,18 +431,14 @@
         <span class="value">
           {#if $weather && $weather.rainOverride !== null}
             held by /weather
+          {:else if !hasForecast}
+            …
           {:else if nextRain === null}
             none within {formatGameMinutes(RAIN_SEARCH_HORIZON_MIN)}
-            {#if nextRainAhead > 0}<span class="from"
-                >from +{formatGameMinutes(nextRainAhead)}</span
-              >{/if}
           {:else if nextRain === 0}
-            {nextRainAhead === 0 ? 'raining now' : 'raining then'}
+            {ahead === 0 ? 'raining now' : 'raining then'}
           {:else}
             {formatGameMinutes(nextRain)} ({formatRealMinutes(nextRain)})
-            {#if nextRainAhead > 0}<span class="from"
-                >from +{formatGameMinutes(nextRainAhead)}</span
-              >{/if}
           {/if}
         </span>
       </div>
@@ -496,16 +477,17 @@
   .dialog {
     position: fixed;
     top: 56px;
-    /* Clear of the minimap (right: 9px, 180 px wide): unlike the celestial
-       dialog this panel takes pointer events, so overlapping it would swallow
-       the minimap's clicks. */
-    right: 200px;
-    max-width: calc(100vw - 210px);
+    /* Clear of the right-hand band: the minimap (180 px) and the inventory and
+       friends panels (244 px) all live against the right edge. Unlike the
+       celestial dialog this panel takes pointer events, so overlapping them
+       would swallow their clicks. */
+    right: 270px;
+    max-width: calc(100vw - 280px);
     z-index: 999;
-    width: 580px;
+    width: 460px;
     /* Reserve the bottom strip: the quickslot bar lives there and this panel
        takes pointer events, so reaching it would swallow its clicks. */
-    max-height: calc(100vh - 186px);
+    max-height: calc(100vh - 150px);
     display: flex;
     flex-direction: column;
     background: rgba(0, 0, 0, 0.9);
@@ -524,7 +506,23 @@
     padding: 6px 12px 4px;
     border-bottom: 1px solid rgba(0, 255, 0, 0.15);
     display: flex;
+    align-items: center;
+    gap: 8px;
     justify-content: space-between;
+  }
+
+  .close {
+    background: none;
+    border: none;
+    color: #7aa07a;
+    cursor: pointer;
+    font: inherit;
+    line-height: 1;
+    padding: 0 2px;
+  }
+
+  .close:hover {
+    color: #00ff00;
   }
 
   .sub {
@@ -535,6 +533,7 @@
   .mapbox {
     position: relative;
     margin: 8px;
+    flex: 0 0 auto;
   }
 
   canvas {
@@ -604,10 +603,6 @@
     padding: 2px 0;
   }
 
-  .from {
-    color: #7aa07a;
-  }
-
   .label {
     color: #7aa07a;
     min-width: 9ch;
@@ -628,7 +623,8 @@
   }
 
   .tablewrap {
-    max-height: 190px;
+    flex: 1 1 auto;
+    min-height: 64px;
     overflow: auto;
     padding: 0 12px 10px;
   }
