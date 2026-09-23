@@ -593,6 +593,7 @@ impl SharedState {
                 return PathResult {
                     waypoints: Vec::new(),
                     found: false,
+                    termination: pathfinding::PathTermination::Unreachable,
                 }
             }
         };

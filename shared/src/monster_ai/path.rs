@@ -54,6 +54,7 @@ pub trait PathProvider {
             return PathResult {
                 waypoints: vec![],
                 found: false,
+                termination: crate::pathfinding::PathTermination::Unreachable,
             };
         }
         result

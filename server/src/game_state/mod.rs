@@ -232,6 +232,8 @@ mod mounts;
 mod movement_route;
 mod party;
 mod passability;
+mod passability_snapshot;
+mod path_search;
 mod player;
 mod player_trade;
 mod pricing;
@@ -332,6 +334,7 @@ pub struct GameState {
     player_ids_by_name: Arc<RwLock<HashMap<String, PlayerId>>>,
     movement_intents: Arc<RwLock<HashMap<PlayerId, player::MoveQueue>>>,
     player_movement_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
+    path_search: Arc<path_search::PathSearchPool>,
     last_player_attacks: Arc<RwLock<HashMap<PlayerId, u64>>>,
     last_dagger_skills: Arc<RwLock<HashMap<i64, u64>>>,
     player_spatial_cells: Arc<RwLock<SpatialIndex<PlayerId>>>,
@@ -428,7 +431,7 @@ pub struct GameState {
     /// Shared-crate passability cache mirroring what clients build (houses,
     /// solid furniture, dungeons), used to collision-check simulated player
     /// movement. std RwLock: accesses are sync and short.
-    passability: Arc<std::sync::RwLock<onlinerpg_shared::pathfinding::PassabilityCache>>,
+    passability: Arc<passability_snapshot::PassabilityStore>,
     /// Bridge decks by owning region, so wading checks can tell a crossing
     /// from a swim without trusting the client's Y.
     bridge_decks: Arc<std::sync::RwLock<passability::BridgeDeckIndex>>,
@@ -678,6 +681,7 @@ impl GameState {
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
             movement_intents: Arc::new(RwLock::new(HashMap::new())),
             player_movement_versions: Arc::new(RwLock::new(HashMap::new())),
+            path_search: Arc::new(path_search::PathSearchPool::default()),
             last_player_attacks: Arc::new(RwLock::new(HashMap::new())),
             last_dagger_skills: Arc::new(RwLock::new(HashMap::new())),
             player_spatial_cells: Arc::new(RwLock::new(SpatialIndex::default())),
@@ -732,9 +736,7 @@ impl GameState {
             last_position_correction: Arc::new(RwLock::new(HashMap::new())),
             stale_layout_grinds: Arc::new(RwLock::new(HashMap::new())),
             pending_layout_kicks: Arc::new(RwLock::new(Vec::new())),
-            passability: Arc::new(std::sync::RwLock::new(
-                onlinerpg_shared::pathfinding::PassabilityCache::new(),
-            )),
+            passability: Arc::new(passability_snapshot::PassabilityStore::default()),
             bridge_decks: Arc::new(std::sync::RwLock::new(HashMap::new())),
             rain_shelters: Arc::new(std::sync::RwLock::new(HashMap::new())),
             respawn_beds: Arc::new(std::sync::RwLock::new(Vec::new())),

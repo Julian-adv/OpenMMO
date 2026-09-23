@@ -133,6 +133,7 @@ pub fn find_path_avoiding(
                 floor: goal_floor,
             }],
             found: true,
+            termination: crate::pathfinding::PathTermination::Reached,
         };
     }
 
@@ -235,9 +236,11 @@ pub fn find_path_avoiding(
     let mut best_h = start_h;
     let mut best_key = start_key;
     let mut expanded = 0;
+    let mut termination = crate::pathfinding::PathTermination::Unreachable;
 
     while let Some(Reverse(cur)) = open.pop() {
         if expanded >= max_nodes {
+            termination = crate::pathfinding::PathTermination::NodeLimit;
             break;
         }
         expanded += 1;
@@ -251,6 +254,7 @@ pub fn find_path_avoiding(
             return PathResult {
                 waypoints: reconstruct_path_vf(&closed, start_key, cur_key, goal_x, goal_z),
                 found: true,
+                termination: crate::pathfinding::PathTermination::Reached,
             };
         }
 
@@ -372,12 +376,14 @@ pub fn find_path_avoiding(
                 bz as f32 + 0.5,
             ),
             found: false,
+            termination,
         };
     }
 
     PathResult {
         waypoints: Vec::new(),
         found: false,
+        termination,
     }
 }
 

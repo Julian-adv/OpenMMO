@@ -1129,9 +1129,9 @@ impl super::GameState {
                 .surface_ground_y(floor_level as u8, &new_position, ref_y, current_mount)
                 .await;
         }
-        let queue = queues.entry(*player_id).or_default();
-        let queue_before = queue.len();
+        let queue_before = queues.get(player_id).map_or(0, VecDeque::len);
         if append && !is_official_npc && queue_before >= super::movement_sync::RESYNC_QUEUE_LENGTH {
+            let queue = queues.entry(*player_id).or_default();
             if let Some(resync_id) = self.begin_movement_resync(*player_id) {
                 self.record_recovery_cancel(*player_id, queue, "queue_resync");
                 queue.clear();
@@ -1168,25 +1168,46 @@ impl super::GameState {
             }
             return;
         }
-        let connection = if !append
+        let needs_route = !append
             && queue_before > 0
             && !is_official_npc
             && keyboard_forward.is_none()
-            && current_mount.is_none()
-        {
-            match self
+            && current_mount.is_none();
+        let connection = if needs_route {
+            if let Some(queue) = queues.remove(player_id) {
+                self.record_recovery_cancel(*player_id, &queue, "new_move");
+            }
+            let version = {
+                let mut versions = self.player_movement_versions.write().await;
+                let version = versions.entry(*player_id).or_default();
+                *version = version.wrapping_add(1);
+                *version
+            };
+            drop(queues);
+            let route = self
                 .replacement_waypoints(authoritative_pose.position, new_position, floor_level)
-                .await
-            {
+                .await;
+            queues = self.movement_intents.write().await;
+            let still_current = self.player_movement_versions.read().await.get(player_id)
+                == Some(&version)
+                && self
+                    .players
+                    .read()
+                    .await
+                    .get(player_id)
+                    .is_some_and(|player| {
+                        player.position == authoritative_pose.position
+                            && player.floor_level == authoritative_pose.floor
+                            && player.mount == current_mount
+                            && player.health > 0
+                            && player.object_type.is_none()
+                    });
+            if !still_current || self.movement_resync_pending(player_id) {
+                return;
+            }
+            match route {
                 Ok(waypoints) => waypoints,
-                Err(()) => {
-                    self.record_recovery_cancel(*player_id, queue, "new_move");
-                    queues.remove(player_id);
-                    {
-                        let mut versions = self.player_movement_versions.write().await;
-                        let version = versions.entry(*player_id).or_default();
-                        *version = version.wrapping_add(1);
-                    }
+                Err(reason) => {
                     drop(queues);
                     if self.snap_refused_move_back(player_id).await {
                         self.log_movement_sync(
@@ -1194,6 +1215,7 @@ impl super::GameState {
                             "replacement_route_unavailable",
                             serde_json::json!({
                                 "authoritative_pose": authoritative_pose, "rejected_move": cmd,
+                                "reason": reason.to_string(),
                             }),
                             true,
                         );
@@ -1204,6 +1226,7 @@ impl super::GameState {
         } else {
             Vec::new()
         };
+        let queue = queues.entry(*player_id).or_default();
         let keyboard_speed = queue
             .front()
             .filter(|intent| keyboard_forward == Some(1) && intent.keyboard_forward == Some(1))
@@ -1268,7 +1291,7 @@ impl super::GameState {
             from = position;
         }
         queue.push_back(intent);
-        {
+        if !needs_route {
             let mut versions = self.player_movement_versions.write().await;
             let version = versions.entry(*player_id).or_default();
             *version = version.wrapping_add(1);
@@ -1321,6 +1344,9 @@ impl super::GameState {
         if let Some(queue) = queues.remove(id) {
             self.record_recovery_cancel(*id, &queue, reason);
         }
+        let mut versions = self.player_movement_versions.write().await;
+        let version = versions.entry(*id).or_default();
+        *version = version.wrapping_add(1);
     }
 
     pub async fn recover_horse(&self, player_id: &PlayerId, request_id: u32, goal: Position) {

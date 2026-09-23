@@ -18,6 +18,7 @@ impl PathProvider for DirectPath {
                 floor: gf,
             }],
             found: true,
+            termination: crate::pathfinding::PathTermination::Reached,
         }
     }
 
@@ -42,11 +43,13 @@ impl PathProvider for FnPath {
                     floor: gf,
                 }],
                 found: true,
+                termination: crate::pathfinding::PathTermination::Reached,
             }
         } else {
             PathResult {
                 waypoints: vec![],
                 found: false,
+                termination: crate::pathfinding::PathTermination::Unreachable,
             }
         }
     }
@@ -255,6 +258,7 @@ fn behavior_tree_holds_its_swing_through_a_wall() {
             PathResult {
                 waypoints: Vec::new(),
                 found: false,
+                termination: crate::pathfinding::PathTermination::Unreachable,
             }
         }
 
@@ -1032,6 +1036,7 @@ impl PathProvider for BentPath {
                 },
             ],
             found: true,
+            termination: crate::pathfinding::PathTermination::Reached,
         }
     }
 
@@ -1714,6 +1719,7 @@ fn door_closing_mid_chase_settles_the_pack() {
                         floor: gf,
                     }],
                     found: true,
+                    termination: crate::pathfinding::PathTermination::Reached,
                 }
             } else if lanes {
                 // Like the real A*: an unreachable goal answers with a
@@ -1725,11 +1731,13 @@ fn door_closing_mid_chase_settles_the_pack() {
                         floor: gf,
                     }],
                     found: false,
+                    termination: crate::pathfinding::PathTermination::Unreachable,
                 }
             } else {
                 PathResult {
                     waypoints: vec![],
                     found: false,
+                    termination: crate::pathfinding::PathTermination::Unreachable,
                 }
             }
         }
@@ -1813,6 +1821,7 @@ fn sidestep_rejects_a_leg_through_an_occupied_cell() {
                     },
                 ],
                 found: true,
+                termination: crate::pathfinding::PathTermination::Reached,
             }
         }
 
@@ -1881,6 +1890,7 @@ fn sidestep_rejects_a_euclidean_shortcut_that_is_route_farther() {
                         },
                     ],
                     found: true,
+                    termination: crate::pathfinding::PathTermination::Reached,
                 }
             } else {
                 PathResult {
@@ -1890,6 +1900,7 @@ fn sidestep_rejects_a_euclidean_shortcut_that_is_route_farther() {
                         floor: gf,
                     }],
                     found: true,
+                    termination: crate::pathfinding::PathTermination::Reached,
                 }
             }
         }
@@ -1996,6 +2007,7 @@ impl PathProvider for TwoLanes {
                     return PathResult {
                         waypoints: route,
                         found: true,
+                        termination: crate::pathfinding::PathTermination::Reached,
                     };
                 }
             }
@@ -2003,6 +2015,7 @@ impl PathProvider for TwoLanes {
         PathResult {
             waypoints: vec![],
             found: false,
+            termination: crate::pathfinding::PathTermination::Unreachable,
         }
     }
 }

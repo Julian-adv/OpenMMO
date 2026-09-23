@@ -104,6 +104,15 @@ pub struct PathWaypoint {
 pub struct PathResult {
     pub waypoints: Vec<PathWaypoint>,
     pub found: bool,
+    pub termination: PathTermination,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PathTermination {
+    Reached,
+    Unreachable,
+    NodeLimit,
 }
 
 /// Type alias for the passability cache used throughout the API.
@@ -166,6 +175,46 @@ mod tests {
 
     fn make_simple_house() -> (String, RuntimePassability) {
         make_rect_room(3, 3)
+    }
+
+    #[test]
+    fn node_limit_preserves_a_partial_path_and_its_reason_after_smoothing() {
+        let (id, room) = make_simple_house();
+        let cache = PassabilityCache::from([(id, room)]);
+        let path = find_and_smooth_path(11.5, 11.5, 0, 15.5, 11.5, 0, &cache, 1);
+        assert!(!path.found);
+        assert_eq!(path.termination, PathTermination::NodeLimit);
+        assert!(!path.waypoints.is_empty());
+        assert!(path.waypoints.iter().all(|p| p.x < 13.0));
+    }
+
+    #[test]
+    fn exhausted_search_differs_from_a_node_limit() {
+        let (id, room) = make_simple_house();
+        let cache = PassabilityCache::from([(id, room)]);
+        let path = find_and_smooth_path(11.5, 11.5, 0, 15.5, 11.5, 0, &cache, 100);
+        assert!(!path.found);
+        assert_eq!(path.termination, PathTermination::Unreachable);
+        assert!(!path.waypoints.is_empty());
+    }
+
+    #[test]
+    fn exhausting_the_last_allowed_node_is_not_a_limit_if_nothing_remains() {
+        let (id, room) = make_rect_room(1, 1);
+        let cache = PassabilityCache::from([(id, room)]);
+        let path = find_path(10.5, 10.5, 0, 12.5, 10.5, 0, &cache, 1);
+        assert_eq!(path.termination, PathTermination::Unreachable);
+        assert!(path.waypoints.is_empty());
+    }
+
+    #[test]
+    fn direct_paths_report_reached_without_spending_search_nodes() {
+        let path = find_and_smooth_path(0.5, 0.5, 0, 5.5, 0.5, 0, &PassabilityCache::new(), 0);
+        assert!(path.found);
+        assert_eq!(path.termination, PathTermination::Reached);
+        let serialized = serde_json::to_value(path).expect("serialize path");
+        assert_eq!(serialized["found"], true);
+        assert_eq!(serialized["termination"], "reached");
     }
 
     /// Two-storey house: the 2F grid matches the 1F one, 3.15m up.

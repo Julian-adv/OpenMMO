@@ -363,18 +363,12 @@ impl super::GameState {
             .unwrap_or(to.y)
     }
 
-    /// Cache guards recover from poisoning: a panic mid-update at worst
-    /// leaves one stale entry, which must not take down the movement tick.
-    pub(super) fn passability_read(
-        &self,
-    ) -> std::sync::RwLockReadGuard<'_, pathfinding::PassabilityCache> {
-        self.passability.read().unwrap_or_else(|e| e.into_inner())
+    pub(super) fn passability_read(&self) -> super::passability_snapshot::Read<'_> {
+        self.passability.read()
     }
 
-    pub(super) fn passability_write(
-        &self,
-    ) -> std::sync::RwLockWriteGuard<'_, pathfinding::PassabilityCache> {
-        self.passability.write().unwrap_or_else(|e| e.into_inner())
+    pub(super) fn passability_write(&self) -> super::passability_snapshot::Write<'_> {
+        self.passability.write()
     }
 
     /// Build the boot-time cache: every house, every region's solid

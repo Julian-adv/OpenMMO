@@ -1,6 +1,28 @@
-use super::{passability, player::MAX_QUEUED_WAYPOINTS, GameState};
+use super::{passability, path_search::SearchError, player::MAX_QUEUED_WAYPOINTS, GameState};
 use crate::types::Position;
 use onlinerpg_shared::{dungeon, pathfinding, shortest_world_delta_x};
+use std::sync::Arc;
+
+#[derive(Debug)]
+pub(super) enum RouteError {
+    Search(SearchError),
+    Incomplete(pathfinding::PathTermination),
+    InvalidPath,
+    MapChanged,
+    MissingFloor,
+}
+
+impl std::fmt::Display for RouteError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Search(reason) => write!(f, "search_{reason:?}"),
+            Self::Incomplete(reason) => write!(f, "path_{reason:?}"),
+            Self::InvalidPath => f.write_str("invalid_path"),
+            Self::MapChanged => f.write_str("map_changed"),
+            Self::MissingFloor => f.write_str("missing_floor"),
+        }
+    }
+}
 
 impl GameState {
     pub(super) async fn replacement_waypoints(
@@ -8,13 +30,15 @@ impl GameState {
         from: Position,
         target: Position,
         target_floor: i8,
-    ) -> Result<Vec<(Position, i8)>, ()> {
+    ) -> Result<Vec<(Position, i8)>, RouteError> {
+        let snapshot = self.passability.snapshot();
+        let snapshot_id = Arc::downgrade(&snapshot);
         let waypoints = {
-            let cache = self.passability_read();
-            let collision_floor = passability::authoritative_floor(&cache, &from);
+            let cache = &snapshot;
+            let collision_floor = passability::authoritative_floor(cache, &from);
             let target_x = from.x + shortest_world_delta_x(from.x, target.x);
             if passability::wrapped_block_info(
-                &cache,
+                cache,
                 from.x,
                 from.z,
                 target_x,
@@ -26,36 +50,44 @@ impl GameState {
             {
                 return Ok(Vec::new());
             }
-            let start_floor = pathfinding::start_floor_at(&cache, from.x, from.z, from.y);
-            let goal_floor = if pathfinding::in_stairwell_span(&cache, target.x, target.z, target.y)
+            let start_floor = pathfinding::start_floor_at(cache, from.x, from.z, from.y);
+            let goal_floor = if pathfinding::in_stairwell_span(cache, target.x, target.z, target.y)
             {
-                pathfinding::start_floor_at(&cache, target.x, target.z, target.y)
+                pathfinding::start_floor_at(cache, target.x, target.z, target.y)
             } else {
                 dungeon::passability_floor_for_level(target_floor)
             };
-            let mut path = pathfinding::find_and_smooth_path(
-                from.x,
-                from.z,
-                start_floor,
-                target.x,
-                target.z,
-                goal_floor,
-                &cache,
-                dungeon::path_max_nodes(start_floor, goal_floor),
-            );
-            if !path.found
-                || path.waypoints.len() < 2
-                || path.waypoints.len() > MAX_QUEUED_WAYPOINTS
-            {
-                return Err(());
+            let mut path = self
+                .path_search
+                .search(
+                    snapshot,
+                    pathfinding::PathWaypoint {
+                        x: from.x,
+                        z: from.z,
+                        floor: start_floor,
+                    },
+                    pathfinding::PathWaypoint {
+                        x: target.x,
+                        z: target.z,
+                        floor: goal_floor,
+                    },
+                    dungeon::path_max_nodes(start_floor, goal_floor),
+                )
+                .await
+                .map_err(RouteError::Search)?;
+            if !path.found {
+                return Err(RouteError::Incomplete(path.termination));
+            }
+            if path.waypoints.len() < 2 || path.waypoints.len() > MAX_QUEUED_WAYPOINTS {
+                return Err(RouteError::InvalidPath);
             }
             let Some(last) = path.waypoints.pop() else {
-                return Err(());
+                return Err(RouteError::InvalidPath);
             };
             if shortest_world_delta_x(last.x, target.x).abs() > 0.001
                 || (last.z - target.z).abs() > 0.001
             {
-                return Err(());
+                return Err(RouteError::InvalidPath);
             }
             path.waypoints
         };
@@ -72,10 +104,10 @@ impl GameState {
                 let entrance = self
                     .dungeon_defs
                     .entrance_at(position.x, position.z)
-                    .ok_or(())?;
+                    .ok_or(RouteError::MissingFloor)?;
                 self.ensure_dungeon_runtime(&entrance.id).await;
                 let dungeons = self.dungeons.read().await;
-                let runtime = dungeons.get(&entrance.id).ok_or(())?;
+                let runtime = dungeons.get(&entrance.id).ok_or(RouteError::MissingFloor)?;
                 dungeon::floor_height_at(
                     &entrance.position(),
                     &runtime.layouts,
@@ -83,13 +115,16 @@ impl GameState {
                     position.x,
                     position.z,
                 )
-                .ok_or(())?
+                .ok_or(RouteError::MissingFloor)?
             } else {
                 self.surface_ground_y(waypoint.floor, &position, previous_y, None)
                     .await
             };
             previous_y = position.y;
             result.push((position, floor));
+        }
+        if !self.passability.is_current(&snapshot_id) {
+            return Err(RouteError::MapChanged);
         }
         Ok(result)
     }

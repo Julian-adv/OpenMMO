@@ -271,6 +271,7 @@ pub fn find_and_smooth_path_avoiding(
                 floor: goal_floor,
             }],
             found: true,
+            termination: crate::pathfinding::PathTermination::Reached,
         };
     }
 
@@ -307,5 +308,6 @@ pub fn find_and_smooth_path_avoiding(
             smoothed
         },
         found: result.found,
+        termination: result.termination,
     }
 }

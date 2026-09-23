@@ -313,6 +313,147 @@ async fn unreachable_replacement_stops_instead_of_following_the_old_route() {
 }
 
 #[tokio::test]
+async fn waiting_for_a_route_does_not_lock_movement_or_replace_a_newer_goal() {
+    let game = make_test_game_state("replacement_concurrent_goal");
+    let id = pid("waiting_walker");
+    game.add_player(make_player("waiting_walker", 0.5, 4.5))
+        .await;
+    game.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    let first = Position {
+        x: 1.5,
+        y: 0.0,
+        z: 4.5,
+    };
+    game.update_player_position(&id, move_cmd(first, false), false)
+        .await;
+    let workers = game.path_search.reserve_workers().await;
+    let searching_game = game.clone();
+    let search = tokio::spawn(async move {
+        searching_game
+            .update_player_position(
+                &id,
+                move_cmd(
+                    Position {
+                        x: 0.5,
+                        y: 0.0,
+                        z: 6.5,
+                    },
+                    false,
+                ),
+                false,
+            )
+            .await;
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while game.movement_intents.read().await.contains_key(&id) {
+            tokio::task::yield_now().await;
+        }
+        assert!(!search.is_finished());
+        game.tick_player_movement(0.2).await;
+        assert_eq!(player_xz(&game, &id).await, (0.5, 4.5));
+        game.update_player_position(&id, move_cmd(first, false), false)
+            .await;
+    })
+    .await
+    .expect("a pending search must not hold movement locks");
+    drop(workers);
+    search.await.expect("search task");
+    game.tick_player_movement(1.0).await;
+    assert_eq!(player_xz(&game, &id).await, (first.x, first.z));
+}
+
+#[tokio::test]
+async fn clearing_movement_invalidates_a_pending_replacement() {
+    let game = make_test_game_state("replacement_concurrent_stop");
+    let id = pid("stopped_walker");
+    game.add_player(make_player("stopped_walker", 0.5, 4.5))
+        .await;
+    game.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    game.update_player_position(
+        &id,
+        move_cmd(
+            Position {
+                x: 1.5,
+                y: 0.0,
+                z: 4.5,
+            },
+            false,
+        ),
+        false,
+    )
+    .await;
+    let workers = game.path_search.reserve_workers().await;
+    let searching_game = game.clone();
+    let search = tokio::spawn(async move {
+        searching_game
+            .update_player_position(
+                &id,
+                move_cmd(
+                    Position {
+                        x: 0.5,
+                        y: 0.0,
+                        z: 6.5,
+                    },
+                    false,
+                ),
+                false,
+            )
+            .await;
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while game.movement_intents.read().await.contains_key(&id) {
+            tokio::task::yield_now().await;
+        }
+        assert!(!search.is_finished());
+        game.clear_player_movement(&id, "test_stop").await;
+    })
+    .await
+    .expect("stop must not wait for A*");
+    drop(workers);
+    search.await.expect("search task");
+    game.tick_player_movement(1.0).await;
+    assert_eq!(player_xz(&game, &id).await, (0.5, 4.5));
+    assert!(!game.movement_intents.read().await.contains_key(&id));
+}
+
+#[tokio::test]
+async fn geometry_changes_invalidate_a_route_built_from_an_old_snapshot() {
+    let game = make_test_game_state("replacement_concurrent_geometry");
+    game.sync_region_furniture(0, 0, &[table_placement(0.5, 5.5)]);
+    let workers = game.path_search.reserve_workers().await;
+    let searching_game = game.clone();
+    let search = tokio::spawn(async move {
+        searching_game
+            .replacement_waypoints(
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 4.5,
+                },
+                Position {
+                    x: 0.5,
+                    y: 0.0,
+                    z: 6.5,
+                },
+                0,
+            )
+            .await
+    });
+    tokio::task::yield_now().await;
+    assert!(!search.is_finished());
+    game.sync_region_furniture(
+        0,
+        0,
+        &[table_placement(0.5, 5.5), table_placement(1.5, 5.5)],
+    );
+    drop(workers);
+    assert!(matches!(
+        search.await.expect("search task"),
+        Err(super::super::movement_route::RouteError::MapChanged)
+    ));
+}
+
+#[tokio::test]
 async fn keyboard_replacement_does_not_add_a_detour() {
     let game = make_test_game_state("movement_keyboard_replace_direct");
     let id = pid("keyboard_replacement");
