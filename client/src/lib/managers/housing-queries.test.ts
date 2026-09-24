@@ -5,6 +5,7 @@ import {
   findClosedDoorOnPath,
   houseFloorHeightAt,
   isHouseWallBlockingSegment,
+  resolveHouseInterior,
   resolveStairFloor,
   shouldIgnoreImplicitHouseFloorChange,
   stairLandingTargetAt,
@@ -77,6 +78,97 @@ function houseWithNorthDoor(isOpen = false): ReadonlyMap<string, HouseData> {
 
 const at = (floor: number, x: number, z: number) =>
   houseFloorHeightAt(house(), floor, x, z)
+
+describe('house interior visibility', () => {
+  it.each([0, 64, -8])(
+    'keeps the upper landing visible while idle at house elevation %s',
+    (originY) => {
+      const h = house().get('h')!
+      h.origin.y = originY
+      const position = { x: 3.5, y: originY + 3.1, z: 3.75 }
+      let floor = 0
+      let onStairs = false
+      for (let frame = 0; frame < 720; frame++) {
+        const interior = resolveHouseInterior(h, position, floor, onStairs)
+        expect(interior).toEqual({ floorLevel: 1, onStairs: true })
+        floor = interior!.floorLevel
+        onStairs = interior!.onStairs
+      }
+    }
+  )
+
+  it('keeps the upper floor after leaving the landing', () => {
+    const h = house().get('h')!
+    for (const x of [3.5, 3.05, 2.9, 1]) {
+      expect(
+        resolveHouseInterior(h, { x, y: 3.1, z: 3.75 }, 1, true)
+      ).toMatchObject({ floorLevel: 1 })
+    }
+  })
+
+  it('acquires the upper room at the edge of the landing', () => {
+    expect(
+      resolveHouseInterior(
+        house().get('h')!,
+        { x: 3.05, y: 3.1, z: 3.75 },
+        0,
+        false
+      )
+    ).toEqual({ floorLevel: 1, onStairs: false })
+  })
+
+  it('keeps the upper floor while descending and switches at the bottom', () => {
+    const h = house().get('h')!
+    let floor = 1
+    for (const z of [3.75, 3, 2, 1, 0.75, 0.25]) {
+      const y = houseFloorHeightAt(house(), floor, 3.5, z)! - 0.05
+      const interior = resolveHouseInterior(h, { x: 3.5, y, z }, floor, true)!
+      expect(interior.floorLevel).toBe(z >= 1 ? 1 : 0)
+      floor = interior.floorLevel
+    }
+  })
+
+  it.each([false, true])(
+    'resolves stacked stairs by world height (reversed: %s)',
+    (reversed) => {
+      const h = house().get('h')!
+      h.origin.y = 64
+      h.rooms.push(room({ floorLevel: 2 }))
+      const stairs = h.rooms[2]
+      stairs.stairReversed = reversed
+      h.rooms.push({ ...stairs, floorLevel: 1 })
+      for (const floor of [1, 2]) {
+        expect(
+          resolveHouseInterior(
+            h,
+            { x: 3.5, y: 64 + floor * 3.1, z: reversed ? 0.25 : 3.75 },
+            floor,
+            true
+          )
+        ).toEqual({ floorLevel: floor, onStairs: true })
+      }
+    }
+  )
+
+  it('does not pick the upper landing for someone underneath it', () => {
+    expect(
+      resolveHouseInterior(
+        house().get('h')!,
+        { x: 3.5, y: 0, z: 3.75 },
+        0,
+        false
+      )
+    ).toEqual({ floorLevel: 0, onStairs: false })
+  })
+
+  it('excludes positions outside the house or underground', () => {
+    const h = house().get('h')!
+    expect(resolveHouseInterior(h, { x: 99, y: 0, z: 99 }, 0, false)).toBeNull()
+    expect(
+      resolveHouseInterior(h, { x: 3.5, y: -10, z: 3.75 }, 0, false)
+    ).toBeNull()
+  })
+})
 
 describe('houseFloorHeightAt', () => {
   it('rises along the ramp as a floor-0 climber advances', () => {

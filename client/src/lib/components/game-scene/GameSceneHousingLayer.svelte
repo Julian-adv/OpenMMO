@@ -10,12 +10,7 @@
     applyDoorGhostMaterials,
     resetDoorGhostMaterials,
     applyInteriorGhosts,
-    DEFAULT_WALL_HEIGHT,
-    FLOOR_THICKNESS,
-    MAX_FLOOR_LEVEL,
     OFFSCREEN_Y,
-    floorYBase,
-    getStairwellYOffset,
     type HouseGroupResult,
   } from '../../utils/house-geometry'
   import {
@@ -33,13 +28,9 @@
   } from '../../utils/house-geo-utils'
   import { getWallByDir } from '../../managers/housingManager'
   import { housingManager } from '../../managers/housingManager'
-  import {
-    resolveStairFloor,
-    roomContainsXZ,
-  } from '../../managers/housing-queries'
+  import { resolveHouseInterior } from '../../managers/housing-queries'
   import { furnitureManager } from '../../managers/furnitureManager'
   import {
-    playerFloorOffset,
     playerVisualFloorLevel,
     playerInsideHouseId,
   } from '../../stores/housingStore'
@@ -63,13 +54,8 @@
   const houses = new SvelteMap<string, HouseGroupResult>()
   let currentInsideHouseId: string | null = null
   let playerInsideFloor = 0
-  let lastFloorOffset = 0
-  /** Whether last frame resolved onto a stairwell (acquire/release hysteresis). */
+  let renderedInsideFloor = 0
   let wasOnStairs = false
-  // Preallocated for per-frame room detection (avoid GC)
-  const _allRooms: { house: HouseData; roomIndex: number }[] = []
-  // eslint-disable-next-line svelte/prefer-svelte-reactivity
-  const _seenRooms = new Set<string>()
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const occludedHouseIds = new Set<string>()
 
@@ -86,8 +72,7 @@
   })
   let debugPassDirty = false
 
-  // Server floor syncs (join/teleport/correction) also write the store; follow
-  // them so stacked rooms resolve to that storey.
+  // Server updates guide room selection; renderedInsideFloor tracks the meshes.
   const unsubFloor = playerVisualFloorLevel.subscribe((v) => {
     if (playerInsideFloor !== v && debugPassGroup.visible) {
       // The overlay draws only the player's floor; redraw on floor change.
@@ -253,6 +238,7 @@
       // Re-apply visibility if player is inside this house
       if (data.id === currentInsideHouseId) {
         applyFloorVisibility(result, playerInsideFloor)
+        renderedInsideFloor = playerInsideFloor
       }
     }
 
@@ -293,10 +279,6 @@
 
   const DOOR_SWING_SPEED = Math.PI // radians per second (~0.5s for 90°)
 
-  // How far inside the shaft footprint the player must be to acquire the
-  // stairs; release uses the full footprint.
-  const STAIR_ACQUIRE_MARGIN = 0.1
-
   /** Update indoor visibility once the destination's world data is ready. */
   export function update(_deltaTime: number) {
     if (!playerPosition) return
@@ -307,20 +289,11 @@
     if (!housingManager.isSynchronized(playerPosition.x, playerPosition.z))
       return
 
-    // Player-inside detection (per-room, floor-aware)
-    // Use ground-level Y for AABB check, then try multiple floor levels
-    // to detect both 1F and 2F rooms
-    const groundY = playerPosition.y - lastFloorOffset
     let insideId: string | null = null
-    let newOffset = 0
     let effectiveFloor = 0
     let onStairsNow = false
 
     for (const [id, result] of houses) {
-      // XZ-only broad-phase: player.y is forced to terrainY each frame
-      // (PlayerControl), which can sit below the house's min.y when terrain
-      // dips inside the footprint. findAllRoomsAtPoint does the Y check
-      // per floor with a ±1m tolerance, so we don't need Y here.
       if (
         playerPosition.x < result.aabb.min.x ||
         playerPosition.x > result.aabb.max.x ||
@@ -329,123 +302,27 @@
       )
         continue
 
-      // Try all floor levels to find matching rooms
-      _allRooms.length = 0
-      _seenRooms.clear()
-      for (let fl = MAX_FLOOR_LEVEL; fl >= 0; fl--) {
-        const testY = groundY + floorYBase(fl, DEFAULT_WALL_HEIGHT) + 1
-        for (const r of housingManager.findAllRoomsAtPoint(
-          playerPosition.x,
-          testY,
-          playerPosition.z
-        )) {
-          const key = `${r.house.id}:${r.roomIndex}`
-          if (!_seenRooms.has(key)) {
-            _seenRooms.add(key)
-            _allRooms.push(r)
-          }
-        }
-      }
-
-      // Pick the stairwell whose Y offset is closest to the player's
-      // current Y (lastFloorOffset). This correctly handles stacked
-      // stairwells at the same XZ — the player smoothly transitions
-      // onto the nearest one rather than jumping to a distant floor.
-      let stairResult: (typeof _allRooms)[0] | null = null
-      let bestStairDist = Infinity
-      let bestStairOffset = 0
-      let floorResult: (typeof _allRooms)[0] | null = null
-      for (const roomResult of _allRooms) {
-        if (roomResult.house.id !== id) continue
-        const room = roomResult.house.rooms[roomResult.roomIndex]
-        if (room.roomType === 'stairwell') {
-          // When already inside, only consider stairwells whose floor range
-          // includes the player's current floor — prevents adjacent/stacked
-          // stairwells on other floors from catching the player
-          if (
-            currentInsideHouseId !== null &&
-            (playerInsideFloor > room.floorLevel + 1 ||
-              playerInsideFloor < room.floorLevel)
-          )
-            continue
-          // Require an inset only when acquiring stairs to prevent edge snaps.
-          if (
-            !wasOnStairs &&
-            !roomContainsXZ(
-              roomResult.house,
-              room,
-              playerPosition.x,
-              playerPosition.z,
-              STAIR_ACQUIRE_MARGIN
-            )
-          )
-            continue
-          const offset = getStairwellYOffset(
-            room,
-            roomResult.house.origin.x,
-            roomResult.house.origin.z,
-            playerPosition.x,
-            playerPosition.z
-          )
-          const dist = Math.abs(offset - lastFloorOffset)
-          // Reject half-storey entry snaps while already inside a house.
-          const maxEntryRise = (room.wallHeight + FLOOR_THICKNESS) / 2
-          if (currentInsideHouseId !== null && dist > maxEntryRise) continue
-          if (dist < bestStairDist) {
-            bestStairDist = dist
-            bestStairOffset = offset
-            stairResult = roomResult
-          }
-        } else if (!floorResult || room.floorLevel === playerInsideFloor) {
-          floorResult = roomResult
-        }
-      }
-
-      // Compensate for terrain height difference under the house.
-      // The floor mesh is fixed at house.origin.y, but player Y uses
-      // terrainHeight(playerPos) + offset. When terrain varies within
-      // the house footprint, (origin.y - groundY) corrects the offset.
-      const matchedHouse = (stairResult ?? floorResult)?.house
-      const terrainComp = matchedHouse ? matchedHouse.origin.y - groundY : 0
-
-      if (stairResult) {
-        const room = stairResult.house.rooms[stairResult.roomIndex]
-        insideId = id
-        onStairsNow = true
-        newOffset = terrainComp + bestStairOffset
-        const entryFloor = room.floorLevel
-        const exitFloor = room.floorLevel + 1
-        const entryFloorY =
-          terrainComp +
-          floorYBase(entryFloor, room.wallHeight) +
-          FLOOR_THICKNESS / 2
-        const exitFloorY =
-          terrainComp +
-          floorYBase(exitFloor, room.wallHeight) +
-          FLOOR_THICKNESS / 2
-        const progress = (newOffset - entryFloorY) / (exitFloorY - entryFloorY)
-        effectiveFloor = resolveStairFloor(
-          entryFloor,
-          playerInsideFloor,
-          progress
-        )
-      } else if (floorResult) {
-        const room = floorResult.house.rooms[floorResult.roomIndex]
-        insideId = id
-        newOffset =
-          terrainComp +
-          floorYBase(room.floorLevel, room.wallHeight) +
-          FLOOR_THICKNESS / 2
-        effectiveFloor = room.floorLevel
-      }
-      if (insideId) break
+      const house = housingManager.getHouseById(id)
+      if (!house) continue
+      const interior = resolveHouseInterior(
+        house,
+        playerPosition,
+        playerInsideFloor,
+        currentInsideHouseId === id && wasOnStairs
+      )
+      if (!interior) continue
+      insideId = id
+      effectiveFloor = interior.floorLevel
+      onStairsNow = interior.onStairs
+      break
     }
     wasOnStairs = onStairsNow
 
     // Update visibility when house or floor changes
     if (
       insideId !== currentInsideHouseId ||
-      effectiveFloor !== playerInsideFloor
+      effectiveFloor !== playerInsideFloor ||
+      effectiveFloor !== renderedInsideFloor
     ) {
       // Restore previous house
       if (currentInsideHouseId) {
@@ -465,13 +342,9 @@
       }
       currentInsideHouseId = insideId
       playerInsideFloor = effectiveFloor
+      renderedInsideFloor = effectiveFloor
       playerVisualFloorLevel.set(effectiveFloor)
       playerInsideHouseId.set(insideId)
-    }
-
-    if (newOffset !== lastFloorOffset) {
-      lastFloorOffset = newOffset
-      playerFloorOffset.set(newOffset)
     }
 
     if (currentInsideHouseId) {

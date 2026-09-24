@@ -1,5 +1,4 @@
 import { networkManager } from '../../network/socket'
-import type { PositionCorrection } from '../../network/networkTypes'
 
 export interface PlayerNetworkEventActions {
   /** True if the local player exists, is currently dead, and the id matches. */
@@ -8,11 +7,9 @@ export interface PlayerNetworkEventActions {
   isInteracting: () => boolean
   onRespawned: () => void
   onInteractionRejected: () => void
-  onPositionCorrected: (correction: PositionCorrection) => void
 }
 
-/** Wires up respawn, interaction-rejected and position-correction listeners.
- *  Returns a cleanup. */
+/** Subscribe to player lifecycle events. */
 export function subscribePlayerNetworkEvents(
   actions: PlayerNetworkEventActions
 ): () => void {
@@ -37,12 +34,7 @@ export function subscribePlayerNetworkEvents(
     }
   )
 
-  const unsubscribePositionCorrected = networkManager.positionCorrected.on(
-    actions.onPositionCorrected
-  )
-
   return () => {
-    unsubscribePositionCorrected()
     unsubscribeRespawnRequested()
     unsubscribePlayerRespawned()
     unsubscribeInteractionRejected()

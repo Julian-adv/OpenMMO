@@ -47,8 +47,8 @@ impl SharedState {
 
 use crate::dungeon::Dungeon;
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_cache_key, floor_cells, floor_level_for_passability,
-    passability_floor_for_level, path_max_nodes, set_floor_cells, world_to_cell,
+    cell_center, dungeon_cache_key, floor_cells, passability_floor_for_level, path_max_nodes,
+    set_floor_cells, world_to_cell,
 };
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::housing::{HouseData, WallDirection};
@@ -228,10 +228,6 @@ pub struct SharedState {
     /// Our own hunger (satiation, band) from `HungerUpdate`; stays None for
     /// exempt NPCs.
     pub self_hunger: Option<(u32, onlinerpg_shared::hunger::HungerState)>,
-    /// Our effective move multiplier from `HungerUpdate` (band x debuffs);
-    /// 1.0 until one arrives. The server folds it into its step budget, so
-    /// walks are paced by it too.
-    pub self_move_mult: f32,
     /// Our own active debuff ids from `DebuffUpdate` (doc/DEBUFF.md).
     pub self_debuffs: Vec<String>,
     /// Burning campfires in our AOI, for the grill-your-catch decision.
@@ -406,14 +402,12 @@ pub struct SharedState {
     /// the passability cache's so it can be put straight into move packets;
     /// `passability_floor()` converts for path queries.
     pub self_floor_level: i8,
-    /// Bumped every time the server snaps us back with `PositionCorrected`.
+    /// Bumped on authoritative teleport or respawn.
     /// A path that produced a refused step will produce it again, so movers
     /// watch this and abandon the path instead of grinding the same wall.
-    pub position_corrections: u32,
-    pending_movement_ack: Option<u64>,
-    pub last_correction_at: Option<std::time::Instant>,
-    pub mount_recovery_id: u32,
-    pub mount_recovery_result: Option<bool>,
+    pub relocations: u32,
+    pub move_request_id: u32,
+    pub move_status: Option<onlinerpg_shared::messages::MoveStatus>,
     /// The chest we last asked the server to open, until it answers. Opening a
     /// clutter prop is recorded before the answer arrives (an already-claimed
     /// prop is a silent no-op, and without the record we would target it
@@ -457,7 +451,6 @@ impl SharedState {
             self_mana: None,
             self_titles: Vec::new(),
             self_hunger: None,
-            self_move_mult: 1.0,
             self_debuffs: Vec::new(),
             campfires: HashMap::new(),
             stalls: HashMap::new(),
@@ -528,11 +521,9 @@ impl SharedState {
             game_hour: None,
             game_minute: None,
             self_floor_level: 0,
-            position_corrections: 0,
-            pending_movement_ack: None,
-            last_correction_at: None,
-            mount_recovery_id: 0,
-            mount_recovery_result: None,
+            relocations: 0,
+            move_request_id: 0,
+            move_status: None,
             pending_chest_open: None,
             treasure_chests_spent: HashSet::new(),
             cmd_tx,

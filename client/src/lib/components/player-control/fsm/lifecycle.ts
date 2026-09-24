@@ -1,37 +1,16 @@
-import type {
-  MovementState,
-  PlayerState,
-  Position,
-} from '../../../utils/movementUtils'
-import {
-  buildDeadState,
-  buildJumpState,
-  buildRespawnedState,
-} from '../player-state-builders'
-import type { PathWaypoint } from './movement-substrate'
+import type { PlayerState, Position } from '../../../utils/movementUtils'
+import { buildDeadState, buildRespawnedState } from '../player-state-builders'
 
 // ───────────────────────────────────────────────────────────────────────────
 // Runtime state reset helpers
 // ───────────────────────────────────────────────────────────────────────────
 
 export interface ControlRuntimeState {
-  isMoving: boolean
-  movementTarget: Position | null
-  movementState: MovementState | null
   currentSpeed: number
-  pathWaypoints: PathWaypoint[]
-  currentWaypointIndex: number
 }
 
 export function resetMovementRuntimeState(): ControlRuntimeState {
-  return {
-    isMoving: false,
-    movementTarget: null,
-    movementState: null,
-    currentSpeed: 0,
-    pathWaypoints: [],
-    currentWaypointIndex: 0,
-  }
+  return { currentSpeed: 0 }
 }
 
 export function resetRespawnRuntimeState(): ControlRuntimeState & {
@@ -41,53 +20,6 @@ export function resetRespawnRuntimeState(): ControlRuntimeState & {
     ...resetMovementRuntimeState(),
     playerRotation: 0,
   }
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// Jump feedback (transient steep-slope jump animation with cooldown)
-// ───────────────────────────────────────────────────────────────────────────
-
-export interface JumpFeedbackRuntime {
-  lastJumpFeedbackAt: number
-}
-
-export type JumpFeedbackTransition =
-  | { kind: 'cooldown'; runtime: JumpFeedbackRuntime }
-  | {
-      kind: 'started'
-      runtime: JumpFeedbackRuntime
-      nextPlayerState: PlayerState
-    }
-
-interface BeginJumpFeedbackInput {
-  previousPlayerState: PlayerState
-  now: number
-  lastJumpFeedbackAt: number
-  cooldownMs: number
-}
-
-export function beginJumpFeedback({
-  previousPlayerState,
-  now,
-  lastJumpFeedbackAt,
-  cooldownMs,
-}: BeginJumpFeedbackInput): JumpFeedbackTransition {
-  if (now - lastJumpFeedbackAt < cooldownMs) {
-    return {
-      kind: 'cooldown',
-      runtime: { lastJumpFeedbackAt },
-    }
-  }
-
-  return {
-    kind: 'started',
-    runtime: { lastJumpFeedbackAt: now },
-    nextPlayerState: buildJumpState(previousPlayerState),
-  }
-}
-
-export function shouldFinishJumpFeedback(playerState: PlayerState): boolean {
-  return playerState.state === 'jump'
 }
 
 // ───────────────────────────────────────────────────────────────────────────

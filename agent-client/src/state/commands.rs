@@ -39,31 +39,11 @@ impl SharedState {
         self.dispatch_command(msg, !background).await
     }
 
-    pub(super) fn cancel_mount_recovery(&mut self) {
-        self.mount_recovery_id = self.mount_recovery_id.wrapping_add(1);
-        self.mount_recovery_result = Some(false);
-    }
-
     async fn dispatch_command(
         &mut self,
         msg: ClientMessage,
         from_action: bool,
     ) -> anyhow::Result<()> {
-        if let Some(resync_id) = self.pending_movement_ack {
-            self.cmd_tx
-                .send(ClientMessage::MovementResyncAck { resync_id })
-                .await?;
-            self.pending_movement_ack = None;
-        }
-        if matches!(
-            &msg,
-            ClientMessage::PlayerMove { .. }
-                | ClientMessage::PlayerKeyboardMove { .. }
-                | ClientMessage::PlayerMountTurn { .. }
-                | ClientMessage::PlayerAttack { .. }
-        ) {
-            self.cancel_mount_recovery();
-        }
         let player_attack = matches!(&msg, ClientMessage::PlayerAttack { .. });
         let fishing_cast = matches!(&msg, ClientMessage::FishingCast { .. });
         let fishing_stop = matches!(&msg, ClientMessage::FishingStop);
@@ -72,33 +52,28 @@ impl SharedState {
             return Ok(());
         }
         let msg = match msg {
-            ClientMessage::PlayerMove {
-                position,
-                rotation,
-                append,
+            ClientMessage::PlayerMoveGoal {
+                x,
+                z,
                 sprinting,
+                stop_at_entrance,
                 ..
             } => {
-                // On the entrance stairs the wire floor is still 0 while the Y
-                // already follows the ramp, so terrain height must not win there.
-                let position = if self.self_floor_level == 0
-                    && self.dungeon_ground_y(position.x, position.z, 0).is_none()
-                {
-                    self.snap_position_to_ground(position, "PlayerMove").await
-                } else {
-                    position
-                };
-                // Update local position immediately so subsequent reads don't use stale data
-                if let Some(ref mut p) = self.self_player {
-                    p.position = position;
-                    p.rotation = rotation;
-                }
-                ClientMessage::PlayerMove {
-                    position,
-                    rotation,
-                    floor_level: self.self_floor_level,
-                    append,
+                self.move_request_id = self.move_request_id.wrapping_add(1);
+                self.move_status = Some(onlinerpg_shared::messages::MoveStatus::Searching);
+                ClientMessage::PlayerMoveGoal {
+                    request_id: self.move_request_id,
+                    x,
+                    z,
                     sprinting,
+                    stop_at_entrance,
+                }
+            }
+            ClientMessage::PlayerMoveStop { .. } => {
+                self.move_request_id = self.move_request_id.wrapping_add(1);
+                self.move_status = Some(onlinerpg_shared::messages::MoveStatus::Searching);
+                ClientMessage::PlayerMoveStop {
+                    request_id: self.move_request_id,
                 }
             }
             ClientMessage::InteractObject {
@@ -154,10 +129,6 @@ impl SharedState {
 
     /// Drain pending commands (from monster AI reactions, spawn requests, etc.)
     pub fn drain_pending_commands(&mut self) -> Vec<ClientMessage> {
-        let mut commands = std::mem::take(&mut self.pending_commands);
-        if let Some(resync_id) = self.pending_movement_ack.take() {
-            commands.insert(0, ClientMessage::MovementResyncAck { resync_id });
-        }
-        commands
+        std::mem::take(&mut self.pending_commands)
     }
 }

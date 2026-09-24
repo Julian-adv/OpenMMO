@@ -212,30 +212,6 @@ fn in_the_chest_room(s: &mut SharedState, dungeon: &crate::dungeon::Dungeon) -> 
     depth
 }
 
-/// A point partway down the entrance ramp, low enough to read as floor 1.
-fn mid_shaft_point(dungeon: &crate::dungeon::Dungeon) -> (f32, f32, f32) {
-    let e = dungeon.entrance;
-    // Past the ramp's midpoint (so the nearest floor is the one below) but
-    // short of the bottom landing.
-    let low = dungeon.floor_y(1) + 0.5;
-    let high = (e.y + dungeon.floor_y(1)) / 2.0 - 0.2;
-    let mut step = 0;
-    while step < 80 * 80 {
-        let x = e.x - 20.0 + (step % 80) as f32 * 0.5;
-        let z = e.z - 20.0 + (step / 80) as f32 * 0.5;
-        step += 1;
-        if let Some(y) = dungeon.ground_y(0, x, z) {
-            if y > low && y < high {
-                return (x, z, y);
-            }
-        }
-    }
-    panic!("no mid-ramp point found on the entrance shaft");
-}
-
-/// The server overwrites Y; this only guards our own pose model.
-const FLOOR_Y_SANITY: f32 = 2.5;
-
 pub(crate) fn room(local_x: i32, floor_level: u8, room_type: RoomType) -> RoomData {
     RoomData {
         room_type,

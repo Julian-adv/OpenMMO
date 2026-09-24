@@ -391,7 +391,7 @@ async fn moving_aborts_the_session() {
     // Any real relocation funnels through finish_position_update, which
     // breaks the session.
     game_state
-        .update_player_position(
+        .request_test_move(
             &id,
             move_cmd(
                 Position {
@@ -404,7 +404,7 @@ async fn moving_aborts_the_session() {
             false,
         )
         .await;
-    game_state.tick_player_movement(1.0).await;
+    game_state.advance_test_movement(1.0).await;
     assert!(drain(&mut rx).iter().any(|m| matches!(
         m,
         ServerMessage::FishingEnded {

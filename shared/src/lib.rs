@@ -186,7 +186,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v95: teleport scroll requests follow the client's departure animation.
 /// v96: system and trade messages include optional localization metadata.
 /// v97: server-approved XZ click paths and movement progress.
-pub const PROTOCOL_VERSION: u32 = 97;
+pub const PROTOCOL_VERSION: u32 = 98;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -273,34 +273,25 @@ mod tests {
 
     #[test]
     fn roundtrip_client_message() {
-        let msg = ClientMessage::PlayerMove {
-            position: Position {
-                x: 1.0,
-                y: 2.0,
-                z: 3.0,
-            },
-            rotation: 1.5,
-            floor_level: 1,
-            append: false,
-            sprinting: false,
+        let msg = ClientMessage::PlayerMoveGoal {
+            request_id: 7,
+            x: 1.0,
+            z: 3.0,
+            sprinting: true,
+            stop_at_entrance: true,
         };
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
-        match decoded {
-            ClientMessage::PlayerMove {
-                position,
-                rotation,
-                floor_level,
-                ..
-            } => {
-                assert_eq!(position.x, 1.0);
-                assert_eq!(position.y, 2.0);
-                assert_eq!(position.z, 3.0);
-                assert_eq!(rotation, 1.5);
-                assert_eq!(floor_level, 1);
+        assert!(matches!(
+            decoded,
+            ClientMessage::PlayerMoveGoal {
+                request_id: 7,
+                x: 1.0,
+                z: 3.0,
+                sprinting: true,
+                stop_at_entrance: true
             }
-            _ => panic!("Wrong variant"),
-        }
+        ));
     }
 
     #[test]

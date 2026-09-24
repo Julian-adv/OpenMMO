@@ -18,6 +18,7 @@ struct Goal {
     x: f32,
     z: f32,
     sprinting: bool,
+    stop_at_entrance: bool,
 }
 
 pub(super) struct GoalMovement {
@@ -28,6 +29,9 @@ pub(super) struct GoalMovement {
     running: bool,
     next_search: Instant,
     plan: Option<Plan>,
+    direction: Option<direction::Direction>,
+    last_diagnostic: Option<Instant>,
+    invalid_requests: u32,
 }
 
 struct Plan {
@@ -36,6 +40,7 @@ struct Plan {
     next: usize,
     termination: PathTermination,
     advanced_at: Instant,
+    height_revision: u64,
 }
 
 impl GoalMovement {
@@ -48,18 +53,26 @@ impl GoalMovement {
             running: false,
             next_search: Instant::now(),
             plan: None,
+            direction: None,
+            last_diagnostic: None,
+            invalid_requests: 0,
         }
     }
 
-    fn accept(&mut self, id: u32) -> bool {
+    fn newer(&self, id: u32) -> bool {
         let delta = id.wrapping_sub(self.last_id);
-        if delta == 0 || delta >= 1 << 31 {
+        delta != 0 && delta < 1 << 31
+    }
+
+    fn accept(&mut self, id: u32) -> bool {
+        if !self.newer(id) {
             return false;
         }
         self.last_id = id;
         self.generation = self.generation.wrapping_add(1);
         self.pending = None;
         self.plan = None;
+        self.direction = None;
         self.owned = true;
         true
     }
@@ -85,7 +98,7 @@ fn progress(
 }
 
 fn eligible(player: &Player) -> bool {
-    player.health > 0 && player.mount.is_none() && player.object_type.is_none()
+    player.health > 0 && player.object_type.is_none()
 }
 
 fn move_speed(mult: f32, sprinting: bool) -> f32 {
@@ -93,6 +106,19 @@ fn move_speed(mult: f32, sprinting: bool) -> f32 {
 }
 
 impl GameState {
+    async fn leave_pose_for_move(&self, id: PlayerId, request_id: u32) {
+        let fresh = self
+            .goal_moves
+            .lock()
+            .await
+            .get(&id)
+            .is_none_or(|state| state.newer(request_id));
+        if fresh {
+            self.clear_pose_on_move(&id, "move").await;
+        }
+    }
+
+    #[cfg(test)]
     pub(crate) async fn request_move_goal(
         &self,
         id: PlayerId,
@@ -101,12 +127,36 @@ impl GameState {
         z: f32,
         sprinting: bool,
     ) {
+        self.request_move_goal_with_entrance(id, request_id, x, z, sprinting, false)
+            .await;
+    }
+
+    pub(crate) async fn request_move_goal_with_entrance(
+        &self,
+        id: PlayerId,
+        request_id: u32,
+        x: f32,
+        z: f32,
+        sprinting: bool,
+        stop_at_entrance: bool,
+    ) {
         if !x.is_finite() || !z.is_finite() {
+            self.reject_move_input(id, request_id, "coordinates").await;
             return;
         }
         self.advance_goal_players(&[id]).await;
         let x = wrap_world_x(x);
-        let mut queues = self.movement_intents.write().await;
+        let valid = self.players.read().await.get(&id).is_some_and(|player| {
+            player.health > 0
+                && shortest_world_delta_x(player.position.x, x).hypot(z - player.position.z)
+                    <= MAX_MOVE_TARGET_DISTANCE
+        });
+        if !valid {
+            self.reject_move_input(id, request_id, "state_or_distance")
+                .await;
+            return;
+        }
+        self.leave_pose_for_move(id, request_id).await;
         let mut goals = self.goal_moves.lock().await;
         let players = self.players.read().await;
         let Some(player) = players.get(&id) else {
@@ -129,7 +179,6 @@ impl GameState {
         if !state.accept(request_id) {
             return;
         }
-        queues.remove(&id);
         let mut versions = self.player_movement_versions.write().await;
         *versions.entry(id).or_default() += 1;
         state.pending = Some(Goal {
@@ -137,6 +186,7 @@ impl GameState {
             x,
             z,
             sprinting,
+            stop_at_entrance,
         });
         self.send_direct_message(
             &id,
@@ -154,7 +204,6 @@ impl GameState {
 
     pub(crate) async fn stop_move_goal(&self, id: PlayerId, request_id: u32) {
         self.advance_goal_players(&[id]).await;
-        let mut queues = self.movement_intents.write().await;
         let mut goals = self.goal_moves.lock().await;
         let state = goals
             .entry(id)
@@ -162,7 +211,6 @@ impl GameState {
         if !state.accept(request_id) {
             return;
         }
-        queues.remove(&id);
         let mut versions = self.player_movement_versions.write().await;
         *versions.entry(id).or_default() += 1;
         if let Some(player) = self.players.read().await.get(&id) {
@@ -180,6 +228,7 @@ impl GameState {
             state.generation = state.generation.wrapping_add(1);
             state.pending = None;
             state.plan = None;
+            state.direction = None;
             if state.owned {
                 state.owned = false;
                 if let Some(player) = self.players.read().await.get(id) {
@@ -191,14 +240,6 @@ impl GameState {
                 }
             }
         }
-    }
-
-    pub(super) async fn owns_goal_movement(&self, id: &PlayerId) -> bool {
-        self.goal_moves
-            .lock()
-            .await
-            .get(id)
-            .is_some_and(|s| s.owned)
     }
 
     async fn run_goal_search(&self, id: PlayerId) {
@@ -231,6 +272,7 @@ impl GameState {
                 state.next_search = Instant::now() + SEARCH_INTERVAL;
                 (goal, state.generation, player)
             };
+            let height_revision = self.height_sampler.revision().await;
             let route = self.find_goal_route(&player, goal).await;
             let profile = self.hunger_movement_profiles_for(&[id]).await;
             let (mult, sprint_allowed) = profile.get(&id).copied().unwrap_or((1.0, true));
@@ -259,9 +301,11 @@ impl GameState {
             }
             match route {
                 Ok((waypoints, termination, snapshot))
-                    if self.passability.is_current(&snapshot) =>
+                    if self.passability.is_current(&snapshot)
+                        && height_revision == self.height_sampler.revision().await =>
                 {
-                    let speed = move_speed(mult, goal.sprinting && sprint_allowed);
+                    let speed = move_speed(mult, goal.sprinting && sprint_allowed)
+                        * current.mount.map_or(1.0, |mount| mount.speed_mult());
                     self.send_direct_message(
                         &id,
                         ServerMessage::PlayerMovePath {
@@ -270,7 +314,7 @@ impl GameState {
                             position: current.position,
                             rotation: current.rotation,
                             floor_level: current.floor_level,
-                            waypoints: waypoints.clone(),
+                            waypoints: display_waypoints(&waypoints, current, speed),
                             speed,
                             termination,
                         },
@@ -282,6 +326,7 @@ impl GameState {
                         next: 0,
                         termination,
                         advanced_at: Instant::now(),
+                        height_revision,
                     });
                 }
                 result => {
@@ -376,7 +421,7 @@ impl GameState {
         } else {
             snapshot
         };
-        let path = self
+        let mut path = self
             .path_search
             .search(
                 snapshot,
@@ -394,6 +439,14 @@ impl GameState {
             )
             .await
             .map_err(|_| MoveStatus::Busy)?;
+        if goal.stop_at_entrance {
+            self.stop_route_at_entrance(player, &target, &mut path.waypoints)
+                .await;
+        }
+        if let Some(mount) = player.mount {
+            let (waypoints, termination) = self.mount_route(player, &path.waypoints, mount).await;
+            return Ok((waypoints, termination.unwrap_or(path.termination), token));
+        }
         let mut waypoints = Vec::new();
         let mut previous = player.position;
         for point in &path.waypoints {
@@ -418,6 +471,8 @@ impl GameState {
                 waypoints.push(MoveWaypoint {
                     position,
                     floor_level: dungeon::floor_level_for_passability(point.floor),
+                    rotation: None,
+                    travel_seconds: None,
                 });
                 previous = position;
             }
@@ -431,17 +486,80 @@ impl GameState {
             .lock()
             .await
             .iter()
-            .filter_map(|(id, s)| s.plan.as_ref().map(|_| *id))
+            .filter_map(|(id, s)| (s.plan.is_some() || s.direction.is_some()).then_some(*id))
             .collect();
         self.advance_goal_players(&ids).await;
     }
 
-    async fn advance_goal_players(&self, ids: &[PlayerId]) {
+    pub(crate) async fn advance_goal_players(&self, ids: &[PlayerId]) {
+        let _movement = self.movement_gate.lock().await;
+        self.advance_goal_players_unlocked(ids).await;
+    }
+
+    pub(super) async fn advance_goal_players_unlocked(&self, ids: &[PlayerId]) {
+        self.advance_direction_players(ids).await;
         if ids.is_empty() {
             return;
         }
         let profiles = self.hunger_movement_profiles_for(ids).await;
         let mut goals = self.goal_moves.lock().await;
+        let height_revision = self.height_sampler.revision().await;
+        for id in ids {
+            let Some(plan) = goals.get_mut(id).and_then(|s| s.plan.as_mut()) else {
+                continue;
+            };
+            if plan.height_revision == height_revision {
+                continue;
+            }
+            let Some(mut player) = self.players.read().await.get(id).cloned() else {
+                continue;
+            };
+            if player.floor_level >= 0 {
+                player.position.y = self
+                    .surface_ground_y(
+                        player.floor_level as u8,
+                        &player.position,
+                        player.position.y,
+                        player.mount,
+                    )
+                    .await;
+                if let Some(current) = self.players.write().await.get_mut(id) {
+                    current.position.y = player.position.y;
+                }
+            }
+            for point in plan.waypoints.iter_mut().skip(plan.next) {
+                if point.floor_level >= 0 {
+                    point.position.y = self
+                        .surface_ground_y(
+                            point.floor_level as u8,
+                            &point.position,
+                            point.position.y,
+                            player.mount,
+                        )
+                        .await;
+                }
+            }
+            plan.height_revision = height_revision;
+            plan.waypoints.drain(..plan.next);
+            plan.next = 0;
+            let (mult, allowed) = profiles.get(id).copied().unwrap_or((1.0, true));
+            let speed = move_speed(mult, plan.goal.sprinting && allowed)
+                * player.mount.map_or(1.0, |m| m.speed_mult());
+            self.send_direct_message(
+                id,
+                ServerMessage::PlayerMovePath {
+                    request_id: plan.goal.request_id,
+                    server_time_ms: Self::now_ms(),
+                    position: player.position,
+                    rotation: player.rotation,
+                    floor_level: player.floor_level,
+                    waypoints: display_waypoints(&plan.waypoints, &player, speed),
+                    speed,
+                    termination: plan.termination,
+                },
+            )
+            .await;
+        }
         let dungeons = self.dungeons.read().await;
         let mut players = self.players.write().await;
         let mut moved = Vec::new();
@@ -464,7 +582,8 @@ impl GameState {
             plan.advanced_at = now;
             let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
             let sprinting = plan.goal.sprinting && allowed;
-            let speed = move_speed(mult, sprinting);
+            let speed =
+                move_speed(mult, sprinting) * player.mount.map_or(1.0, |mount| mount.speed_mult());
             let old_position = player.position;
             let old_floor = player.floor_level;
             let (status, travelled) = if !eligible(player) {
@@ -497,8 +616,18 @@ impl GameState {
                     }
                 })
             };
-            updates.push((
-                id,
+            let update = if player.mount.is_some() && status == MoveStatus::Moving {
+                ServerMessage::PlayerMovePath {
+                    request_id: plan.goal.request_id,
+                    server_time_ms: Self::now_ms(),
+                    position: player.position,
+                    rotation: player.rotation,
+                    floor_level: player.floor_level,
+                    waypoints: display_waypoints(&plan.waypoints[plan.next..], player, speed),
+                    speed,
+                    termination: plan.termination,
+                }
+            } else {
                 progress(
                     player,
                     plan.goal.request_id,
@@ -509,8 +638,9 @@ impl GameState {
                         0.0
                     },
                     status,
-                ),
-            ));
+                )
+            };
+            updates.push((id, update));
             if player.position != old_position || player.floor_level != old_floor {
                 activities.push((id, travelled / speed.max(f32::EPSILON), sprinting));
                 steps.push(super::ambient_spawn::MoveStep {
@@ -519,7 +649,7 @@ impl GameState {
                     to: player.position,
                     floor_level: player.floor_level,
                     is_official_npc: player.is_official_npc,
-                    mount: None,
+                    mount: player.mount,
                 });
                 moved.push((id, old_position, old_floor, player.clone(), sprinting));
             }
@@ -590,6 +720,25 @@ fn dungeon_floor_after_step(
     current
 }
 
+fn display_waypoints(waypoints: &[MoveWaypoint], player: &Player, speed: f32) -> Vec<MoveWaypoint> {
+    let base = PLAYER_MOVE_SPEED * player.mount.map_or(1.0, |m| m.speed_mult());
+    waypoints
+        .iter()
+        .take(if player.mount.is_some() {
+            128
+        } else {
+            usize::MAX
+        })
+        .cloned()
+        .map(|mut point| {
+            if let Some(seconds) = &mut point.travel_seconds {
+                *seconds *= base / speed.max(0.01);
+            }
+            point
+        })
+        .collect()
+}
+
 fn advance_plan(
     player: &mut Player,
     plan: &mut Plan,
@@ -598,18 +747,21 @@ fn advance_plan(
     mut settle: impl FnMut(&mut Player),
 ) -> (MoveStatus, f32) {
     let mut travelled = 0.0;
-    while let Some(waypoint) = plan.waypoints.get(plan.next) {
+    while let Some(waypoint) = plan.waypoints.get_mut(plan.next) {
         let from = player.position;
         let dx = shortest_world_delta_x(from.x, waypoint.position.x);
         let dz = waypoint.position.z - from.z;
         let length = dx.hypot(dz);
-        if distance <= 0.0 && length > 1e-5 {
+        let cost = waypoint.travel_seconds.map_or(length, |seconds| {
+            seconds * PLAYER_MOVE_SPEED * player.mount.map_or(1.0, |m| m.speed_mult())
+        });
+        if distance <= 0.0 && cost > 1e-5 {
             return (MoveStatus::Moving, travelled);
         }
-        let fraction = if length < 1e-5 {
+        let fraction = if cost < 1e-5 {
             1.0
         } else {
-            (distance / length).min(1.0)
+            (distance / cost).min(1.0)
         };
         let floor = pathfinding::start_floor_at(cache, from.x, from.z, from.y);
         if floor == 0
@@ -640,7 +792,10 @@ fn advance_plan(
             y: from.y + (waypoint.position.y - from.y) * safe,
             z: from.z + dz * safe,
         };
-        if length > 1e-5 {
+        if let Some(rotation) = waypoint.rotation {
+            player.rotation +=
+                onlinerpg_shared::mount_movement::angle_delta(player.rotation, rotation) * safe;
+        } else if length > 1e-5 {
             player.rotation = dx.atan2(dz);
         }
         if player.floor_level >= 0 && waypoint.floor_level >= 0 {
@@ -656,7 +811,10 @@ fn advance_plan(
         if obstruction {
             return (MoveStatus::Blocked, travelled);
         }
-        distance -= length * fraction;
+        distance -= cost * fraction;
+        if let Some(seconds) = &mut waypoint.travel_seconds {
+            *seconds *= 1.0 - fraction;
+        }
         if fraction < 1.0 {
             return (MoveStatus::Moving, travelled);
         }
@@ -716,6 +874,10 @@ fn swept_blocked(cache: &PassabilityCache, from: Position, dx: f32, dz: f32, flo
         .is_some()
     })
 }
+
+mod direction;
+mod doors;
+mod route;
 
 #[cfg(test)]
 mod tests;

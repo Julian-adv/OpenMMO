@@ -127,16 +127,15 @@ async fn cross_floor_dungeon_door_toggle_is_rejected() {
     let (from, to) = door_side_positions(&entrance, depth, &door, false);
     let delver_id = add_delver(&game_state, "delver", from, depth).await;
     game_state
-        .update_player_position(
+        .request_test_move(
             &delver_id,
-            MoveCommand {
-                floor_level: -(depth as i8),
+            TestMove {
                 ..move_cmd(to, false)
             },
             false,
         )
         .await;
-    game_state.tick_player_movement(60.0).await;
+    game_state.advance_test_movement(60.0).await;
     assert_eq!(
         player_xz(&game_state, &delver_id).await,
         (from.x, from.z),
@@ -399,16 +398,15 @@ async fn dungeon_door_blocks_movement_until_opened() {
 
     let (from, to) = door_side_positions(&entrance, depth, &door, false);
     let player_id = add_delver(&game_state, "delver", from, depth).await;
-    let go = |p: Position| MoveCommand {
-        floor_level: -(depth as i8),
+    let go = |p: Position| TestMove {
         ..move_cmd(p, false)
     };
 
     // Shut (boot default): the crossing is sealed.
     game_state
-        .update_player_position(&player_id, go(to), false)
+        .request_test_move(&player_id, go(to), false)
         .await;
-    game_state.tick_player_movement(60.0).await;
+    game_state.advance_test_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (from.x, from.z));
 
     // Open: same move goes through.
@@ -419,9 +417,9 @@ async fn dungeon_door_blocks_movement_until_opened() {
         Some(true)
     );
     game_state
-        .update_player_position(&player_id, go(to), false)
+        .request_test_move(&player_id, go(to), false)
         .await;
-    game_state.tick_player_movement(60.0).await;
+    game_state.advance_test_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (to.x, to.z));
 
     // Shut again: the way back is sealed.
@@ -432,9 +430,9 @@ async fn dungeon_door_blocks_movement_until_opened() {
         Some(false)
     );
     game_state
-        .update_player_position(&player_id, go(from), false)
+        .request_test_move(&player_id, go(from), false)
         .await;
-    game_state.tick_player_movement(60.0).await;
+    game_state.advance_test_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (to.x, to.z));
 }
 
@@ -567,7 +565,7 @@ async fn furniture_removal_reopens_blocked_cells() {
     game_state.sync_region_furniture(0, 0, &[]);
 
     game_state
-        .update_player_position(
+        .request_test_move(
             &player_id,
             move_cmd(
                 Position {
@@ -580,7 +578,7 @@ async fn furniture_removal_reopens_blocked_cells() {
             false,
         )
         .await;
-    game_state.tick_player_movement(60.0).await;
+    game_state.advance_test_movement(60.0).await;
     assert_eq!(player_xz(&game_state, &player_id).await, (0.5, 6.5));
 }
 

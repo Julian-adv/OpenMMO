@@ -21,13 +21,6 @@ import {
   openInstrumentPanel,
 } from '../stores/instrumentStore'
 import { alwaysRun } from '../stores/movementSettings'
-import {
-  applyKeyboardMovement,
-  createKeyboardMoveSender,
-  createKeyboardSpeedRamp,
-} from '../components/player-control/fsm/keyboard'
-import { DEFAULT_MOVEMENT_CONFIG } from '../utils/movementUtils'
-import { angleDelta } from '../utils/horseMovement'
 import { estateFurnitureInteractionData } from '../utils/estateFurnitureModels'
 
 describe('movement keys', () => {
@@ -71,75 +64,6 @@ describe('movement keys', () => {
     ).toBeNull()
     expect(movementInput(new Set(['ShiftLeft']))).toBeNull()
   })
-
-  describe.each(['world', 'character'] as const)(
-    '%s movement',
-    (movementMode) => {
-      it.each([
-        ['ArrowUp', 'KeyW', 0],
-        ['ArrowDown', 'KeyS', Math.PI],
-        ['ArrowLeft', 'KeyA', Math.PI / 2],
-        ['ArrowRight', 'KeyD', -Math.PI / 2],
-      ] as const)(
-        'drives %s and %s through real key events',
-        (arrow, key, offset) => {
-          for (const initialRotation of [0, Math.PI / 2, Math.PI]) {
-            const paths = [arrow, key].map((code) => {
-              inputHandler.clearTransientInput()
-              const event = {
-                code,
-                target: null,
-                ctrlKey: false,
-                repeat: false,
-              } as KeyboardEvent
-              inputHandler.handleKeyDown(event)
-              let position = { x: 0, y: 0, z: 0 }
-              let rotation = initialRotation
-              const send = vi.fn()
-              const moveSender = createKeyboardMoveSender(send)
-              const speedRamp = createKeyboardSpeedRamp()
-              for (let frame = 0; frame < 120; frame++) {
-                inputHandler.handleKeyDown({
-                  ...event,
-                  repeat: true,
-                } as KeyboardEvent)
-                applyKeyboardMovement({
-                  currentPos: position,
-                  input: inputHandler.getMovementInput()!,
-                  movementMode,
-                  rotation,
-                  config: DEFAULT_MOVEMENT_CONFIG,
-                  deltaTimeSeconds: 1 / 60,
-                  speedRamp,
-                  sampleHeight: () => 0,
-                  isMovementBlocked: () => false,
-                  isUphillTooSteep: () => false,
-                  writePlayerPosition: (next, facing) => {
-                    position = next
-                    rotation = facing
-                  },
-                  moveSender,
-                })
-              }
-              inputHandler.handleKeyUp(event)
-              expect(inputHandler.hasKeysPressed).toBe(false)
-              const facing =
-                (movementMode === 'world' ? Math.PI : initialRotation) + offset
-              expect(angleDelta(facing, rotation)).toBeCloseTo(0)
-              expect(
-                position.x * Math.cos(facing) - position.z * Math.sin(facing)
-              ).toBeCloseTo(0)
-              expect(
-                position.x * Math.sin(facing) + position.z * Math.cos(facing)
-              ).toBeGreaterThan(5)
-              return { position, rotation, commands: send.mock.calls }
-            })
-            expect(paths[0]).toEqual(paths[1])
-          }
-        }
-      )
-    }
-  )
 })
 
 const RECT = { left: 0, top: 0, width: 100, height: 100 }

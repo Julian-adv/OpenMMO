@@ -12,12 +12,10 @@
 
 use std::collections::HashSet;
 
-#[cfg(test)]
-use onlinerpg_shared::dungeon::floor_world_y;
 use onlinerpg_shared::dungeon::{
     cell_center, dungeon_origin, dungeon_passability, entrances, generate_dungeon_for,
-    ground_y_for_floor, interior_doors, passability_floor_for_depth, world_to_cell,
-    DungeonEntranceDef, FloorLayout, InteriorDoorSpec, PropKind, Room,
+    interior_doors, passability_floor_for_depth, world_to_cell, DungeonEntranceDef, FloorLayout,
+    InteriorDoorSpec, PropKind, Room,
 };
 use onlinerpg_shared::pathfinding::RuntimePassability;
 use onlinerpg_shared::Position;
@@ -110,18 +108,6 @@ impl Dungeon {
 
     pub fn passability(&self) -> RuntimePassability {
         dungeon_passability(&self.entrance, &self.layouts)
-    }
-
-    /// World Y of a floor. Test-only: movers go through [`Self::ground_y`],
-    /// which also covers the stair ramps.
-    #[cfg(test)]
-    pub fn floor_y(&self, depth: u8) -> f32 {
-        floor_world_y(self.entrance.y, depth)
-    }
-
-    /// Ground height for a step keyed to the passability floor `floor`.
-    pub fn ground_y(&self, floor: u8, x: f32, z: f32) -> Option<f32> {
-        ground_y_for_floor(&self.entrance, &self.layouts, floor, x, z)
     }
 
     /// Where a descent to `depth` lands: the exit landing of the shaft that

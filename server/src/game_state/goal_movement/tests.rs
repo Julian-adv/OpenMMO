@@ -229,7 +229,7 @@ async fn latest_goal_wins_and_stop_invalidates_an_inflight_search() {
 }
 
 #[tokio::test]
-async fn invalid_goal_preserves_a_valid_plan_and_legacy_input_takes_over() {
+async fn invalid_goal_preserves_a_valid_plan_and_direction_takes_over() {
     let (game, id, mut rx) = walker("goal_legacy", false).await;
     game.request_move_goal(id, 1, 6.5, 1.5, false).await;
     next_path(&mut rx).await;
@@ -243,43 +243,21 @@ async fn invalid_goal_preserves_a_valid_plan_and_legacy_input_takes_over() {
             .request_id,
         1
     );
-    let command = super::super::MoveCommand {
-        position: Position {
-            x: 2.5,
-            y: 0.0,
-            z: 1.5,
-        },
-        rotation: 0.0,
-        floor_level: 0,
-        append: false,
-        sprinting: false,
-    };
-    game.update_keyboard_movement(&id, command, 1).await;
-    assert!(!game.owns_goal_movement(&id).await);
+    game.request_move_direction(id, 3, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
     assert!(game.goal_moves.lock().await[&id].plan.is_none());
-    assert!(game.movement_intents.read().await.contains_key(&id));
+    assert!(game.goal_moves.lock().await[&id].direction.is_some());
 }
 
-#[tokio::test]
-async fn client_floor_and_samples_cannot_override_an_approved_path() {
-    let (game, id, mut rx) = walker("goal_no_client_pose", false).await;
-    game.request_move_goal(id, 1, 6.5, 1.5, false).await;
-    next_path(&mut rx).await;
-    game.update_player_floor(&id, 1).await;
-    game.record_movement_sample(
-        &id,
-        Position {
-            x: 1000.0,
-            y: 99.0,
-            z: 1.5,
-        },
-        0.0,
-        1,
-    )
-    .await;
-    assert_eq!(game.players.read().await[&id].floor_level, 0);
-    assert!(game.goal_moves.lock().await[&id].plan.is_some());
-    assert!(!game.movement_resync_pending(&id));
+#[test]
+fn client_coordinates_and_floor_reports_are_not_in_the_protocol() {
+    for message in [
+        r#"{"PlayerMove":{"position":{"x":1,"y":99,"z":1},"rotation":0,"floor_level":1}}"#,
+        r#"{"PlayerFloorChanged":{"floor_level":1}}"#,
+        r#"{"PlayerMovementSample":{"position":{"x":1,"y":99,"z":1},"rotation":0,"floor_level":1}}"#,
+    ] {
+        assert!(serde_json::from_str::<onlinerpg_shared::ClientMessage>(message).is_err());
+    }
 }
 
 #[tokio::test]
@@ -413,4 +391,465 @@ fn request_order_accepts_wraparound_but_rejects_duplicates_and_old_packets() {
     assert!(state.accept(0));
     assert!(!state.accept(u32::MAX));
     assert!(!state.accept(0));
+}
+
+impl GameState {
+    pub(in crate::game_state) async fn request_test_move(
+        &self,
+        id: &PlayerId,
+        command: super::super::tests::TestMove,
+        _npc: bool,
+    ) {
+        let player = self.players.read().await[id].clone();
+        if player.floor_level == 0 && player.position.y == 0.0 {
+            if let Some(y) = self.goal_ground_y(0, player.position).await {
+                self.players.write().await.get_mut(id).unwrap().position.y = y;
+            }
+        }
+        let request_id = {
+            let mut states = self.goal_moves.lock().await;
+            if let Some(state) = states.get_mut(id) {
+                state.next_search = Instant::now();
+                state.last_id.wrapping_add(1)
+            } else {
+                1
+            }
+        };
+        self.request_move_goal(
+            *id,
+            request_id,
+            command.position.x,
+            command.position.z,
+            command.sprinting,
+        )
+        .await;
+        search_finished(self, *id).await;
+    }
+
+    pub(in crate::game_state) async fn advance_test_movement(&self, seconds: f32) {
+        let ids: Vec<_> = self.goal_moves.lock().await.keys().copied().collect();
+        for id in &ids {
+            search_finished(self, *id).await;
+        }
+        for state in self.goal_moves.lock().await.values_mut() {
+            if let Some(plan) = state.plan.as_mut() {
+                plan.advanced_at = Instant::now() - Duration::from_secs_f32(seconds);
+            }
+        }
+        self.tick_player_movement(seconds).await;
+    }
+}
+
+impl GameState {
+    pub(in crate::game_state) async fn has_test_movement(&self, id: &PlayerId) -> bool {
+        self.goal_moves
+            .lock()
+            .await
+            .get(id)
+            .is_some_and(|s| s.plan.is_some() || s.direction.is_some())
+    }
+}
+
+async fn advance_direction(game: &GameState, id: PlayerId, seconds: f32) {
+    {
+        let mut states = game.goal_moves.lock().await;
+        let direction = states.get_mut(&id).unwrap().direction.as_mut().unwrap();
+        direction.advanced_at -= Duration::from_secs_f32(seconds);
+        direction.expires_at = Instant::now() + Duration::from_millis(500);
+    }
+    game.advance_goal_players(&[id]).await;
+}
+
+#[tokio::test]
+async fn direction_is_server_driven_accelerates_and_stops_without_a_client_position() {
+    let (game, id, mut rx) = walker("direction_acceleration", false).await;
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    next_path(&mut rx).await;
+    assert_eq!(game.players.read().await[&id].position.x, 1.5);
+    advance_direction(&game, id, 0.1).await;
+    let first = game.players.read().await[&id].position.x;
+    assert!(first > 1.5 && first < 1.7, "{first}");
+    game.request_move_direction(id, 2, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    advance_direction(&game, id, 0.1).await;
+    let second = game.players.read().await[&id].position.x;
+    assert!(second - first > first - 1.5);
+    game.stop_move_goal(id, 3).await;
+    let stopped = game.players.read().await[&id].position;
+    game.tick_player_movement(60.0).await;
+    assert_eq!(game.players.read().await[&id].position, stopped);
+    game.request_move_direction(id, 2, 0.0, 1, 0, false).await;
+    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+}
+
+#[tokio::test]
+async fn direction_lease_and_collision_stop_without_automatic_restart() {
+    let (game, id, _) = walker("direction_blocked", true).await;
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    advance_direction(&game, id, 2.0).await;
+    assert!(game.players.read().await[&id].position.x < 3.71);
+    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    game.passability_write()
+        .insert("corridor".into(), corridor(false));
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    game.request_move_direction(id, 2, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    {
+        let mut states = game.goal_moves.lock().await;
+        let direction = states.get_mut(&id).unwrap().direction.as_mut().unwrap();
+        direction.advanced_at = Instant::now() - Duration::from_secs(2);
+        direction.expires_at = direction.advanced_at + Duration::from_millis(500);
+    }
+    let before = game.players.read().await[&id].position.x;
+    game.advance_goal_players(&[id]).await;
+    assert!(game.players.read().await[&id].position.x - before <= 1.51);
+    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+}
+
+#[tokio::test]
+async fn mounted_direction_turns_and_reverses_with_authoritative_facing() {
+    use onlinerpg_shared::mount::MountKind;
+    let game = make_test_game_state("mounted_direction");
+    let mut player = make_player("mounted_direction", 100.0, 0.0);
+    player.position.y = 5.0;
+    player.mount = Some(MountKind::Horse);
+    let id = player.id;
+    game.add_player(player).await;
+    game.request_move_direction(id, 1, 0.0, -1, 0, true).await;
+    advance_direction(&game, id, 0.4).await;
+    let reversed = game.players.read().await[&id].clone();
+    assert!(
+        reversed.position.z < 0.0 && reversed.position.z >= -0.61,
+        "{:?}",
+        reversed.position
+    );
+    assert!(reversed.rotation.abs() < 0.01);
+    game.request_move_direction(id, 2, 0.0, 0, 1, false).await;
+    let before = game.players.read().await[&id].position;
+    advance_direction(&game, id, 0.2).await;
+    let turned = game.players.read().await[&id].clone();
+    assert_eq!(turned.position, before);
+    assert!(turned.rotation < -0.4 && turned.rotation > -0.6);
+}
+
+#[tokio::test]
+async fn a_door_cannot_close_on_a_body_and_settles_crossing_before_closing() {
+    let game = make_test_game_state("goal_door_ordering");
+    let dungeon_id = "skeleton_crypt";
+    game.ensure_dungeon_runtime(dungeon_id).await;
+    let door = dungeon::interior_doors(&game.dungeons.read().await[dungeon_id].layouts[0])
+        .into_iter()
+        .find(|door| !door.locked)
+        .unwrap();
+    let [ax, az, bx, bz] = game
+        .dungeon_door_segment(dungeon_id, 1, door.door_id)
+        .await
+        .unwrap();
+    let center = Position {
+        x: (ax + bx) * 0.5,
+        y: dungeon::floor_world_y(game.dungeon_defs.get(dungeon_id).unwrap().y, 1),
+        z: (az + bz) * 0.5,
+    };
+    let mut player = make_player("door_body", center.x, center.z);
+    player.position = center;
+    player.floor_level = -1;
+    let id = player.id;
+    game.add_player(player).await;
+    assert_eq!(
+        game.toggle_dungeon_door(&id, dungeon_id, 1, door.door_id)
+            .await,
+        Some(true)
+    );
+    assert_eq!(
+        game.toggle_dungeon_door(&id, dungeon_id, 1, door.door_id)
+            .await,
+        Some(true)
+    );
+    let (dx, dz) = if ax == bx { (1.0, 0.0) } else { (0.0, 1.0) };
+    let before = Position {
+        x: center.x - dx,
+        z: center.z - dz,
+        ..center
+    };
+    game.teleport_player(&id, before, 0.0, -1).await;
+    let mut mover = make_player("door_crossing", before.x, before.z);
+    mover.position = before;
+    mover.floor_level = -1;
+    let mover_id = mover.id;
+    game.add_player(mover).await;
+    let mut rx = game.register_connection_channel(&mover_id).await;
+    game.request_move_goal(mover_id, 1, center.x + dx, center.z + dz, false)
+        .await;
+    next_path(&mut rx).await;
+    game.goal_moves
+        .lock()
+        .await
+        .get_mut(&mover_id)
+        .unwrap()
+        .plan
+        .as_mut()
+        .unwrap()
+        .advanced_at -= Duration::from_secs(1);
+    assert_eq!(
+        game.toggle_dungeon_door(&id, dungeon_id, 1, door.door_id)
+            .await,
+        Some(false)
+    );
+    let after = game.players.read().await[&mover_id].position;
+    assert!(
+        (after.x - center.x) * dx + (after.z - center.z) * dz > 0.31,
+        "{after:?}"
+    );
+    assert!(game.goal_moves.lock().await[&mover_id].plan.is_none());
+}
+
+fn two_storey_house() -> RuntimePassability {
+    let grid = |floor_level, y_base, cells| RuntimeFloorGrid {
+        floor_level,
+        origin_x: 0,
+        origin_z: 0,
+        width: 3,
+        depth: 4,
+        y_base,
+        wall_height: 3.0,
+        cells,
+    };
+    let mut ground = vec![0u8; 12];
+    ground[2 + 2 * 3] = 4;
+    ground[2 + 3 * 3] = 1;
+    RuntimePassability {
+        house_origin_x: 10.0,
+        house_origin_z: 10.0,
+        min_x: 10.0,
+        max_x: 13.0,
+        min_z: 10.0,
+        max_z: 14.0,
+        floors: vec![grid(0, 0.0, ground), grid(1, 3.1, vec![0u8; 12])],
+        stairwells: vec![onlinerpg_shared::pathfinding::StairwellInfo {
+            local_min_x: 0,
+            local_min_z: 0,
+            local_max_x: 1,
+            local_max_z: 4,
+            lower_floor: 0,
+            upper_floor: 1,
+            along_z: true,
+            reversed: false,
+        }],
+        yields_to_trapped_mover: false,
+        allows_projectiles: false,
+        is_ground: true,
+    }
+}
+
+#[tokio::test]
+async fn house_stairs_change_floor_only_as_the_approved_route_advances() {
+    let game = make_test_game_state("goal_house_stairs");
+    game.passability_write()
+        .insert("stairs".into(), two_storey_house());
+    let player = make_player("climber", 10.5, 10.5);
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    game.request_move_goal(id, 1, 10.5, 13.5, false).await;
+    next_path(&mut rx).await;
+    assert_eq!(game.players.read().await[&id].floor_level, 0);
+    advance(&game, id, 2.0).await;
+    let top = game.players.read().await[&id].clone();
+    assert_eq!(top.floor_level, 1, "{:?}", top.position);
+    assert!((top.position.y - 3.1).abs() < 0.01);
+    while rx.try_recv().is_ok() {}
+    game.request_move_goal(id, 2, 10.5, 10.5, false).await;
+    next_path(&mut rx).await;
+    advance(&game, id, 2.0).await;
+    assert_eq!(game.players.read().await[&id].floor_level, 0);
+}
+
+#[tokio::test]
+async fn terrain_edits_reheight_the_current_pose_and_remaining_route() {
+    let game = make_test_game_state("goal_terrain_edit");
+    let mut player = make_player("landscaper", 100.0, 10.0);
+    player.position.y = 5.0;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    game.request_move_goal(id, 1, 110.0, 10.0, false).await;
+    next_path(&mut rx).await;
+    let raw = onlinerpg_terrain::height::encode_height(7.0)
+        .to_le_bytes()
+        .repeat(onlinerpg_terrain::defaults::VERTS_PER_SIDE.pow(2));
+    game.height_sampler.update_tile(2, 0, &raw).await.unwrap();
+    advance(&game, id, 0.2).await;
+    let ServerMessage::PlayerMovePath {
+        position,
+        waypoints,
+        ..
+    } = next_path(&mut rx).await
+    else {
+        unreachable!()
+    };
+    assert!((position.y - 7.0).abs() < 0.01, "{position:?}");
+    assert!(waypoints.iter().all(|p| (p.position.y - 7.0).abs() < 0.01));
+    let current = game.players.read().await[&id].position;
+    assert!(
+        (current.y - 7.0).abs() < 0.01 && current.x > 100.0,
+        "{current:?}"
+    );
+}
+
+#[tokio::test]
+async fn mounted_goal_preserves_turn_time_and_honors_stop() {
+    let game = make_test_game_state("goal_mounted_turn");
+    let mut player = make_player("rider", 100.5, 10.5);
+    player.position.y = 5.0;
+    player.mount = Some(onlinerpg_shared::mount::MountKind::Horse);
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    game.request_move_goal(id, 1, 100.5, 1.5, false).await;
+    let ServerMessage::PlayerMovePath { waypoints, .. } = next_path(&mut rx).await else {
+        unreachable!()
+    };
+    assert!(waypoints
+        .iter()
+        .all(|point| point.rotation.is_some() && point.travel_seconds.is_some()));
+    advance(&game, id, 0.1).await;
+    let current = game.players.read().await[&id].clone();
+    assert!(current.rotation.abs() < 0.5, "{}", current.rotation);
+    assert!(
+        current.position.dist_xz_sq(&Position {
+            x: 100.5,
+            y: 5.0,
+            z: 10.5
+        }) < 0.9
+    );
+    game.stop_move_goal(id, 2).await;
+    let stopped = game.players.read().await[&id].position;
+    advance(&game, id, 3.0).await;
+    assert_eq!(game.players.read().await[&id].position, stopped);
+}
+
+#[tokio::test]
+async fn a_house_click_can_stop_inside_the_entrance_without_truncating_interaction_goals() {
+    use onlinerpg_shared::housing::{HouseData, RoomData};
+    let game = make_test_game_state("goal_house_entry");
+    let room: RoomData = serde_json::from_value(serde_json::json!({
+        "localX":0,"localZ":0,"sizeX":8,"sizeZ":6,"floorLevel":0,
+        "floorTexture":0,"roofTexture":0,"wallHeight":3,
+        "wallNorth":[],"wallSouth":[],"wallEast":[],"wallWest":[]
+    }))
+    .unwrap();
+    let house = HouseData {
+        id: "r0_0_1".into(),
+        owner_id: String::new(),
+        source_scroll_id: None,
+        origin: Position {
+            x: 10.0,
+            y: 5.0,
+            z: 10.0,
+        },
+        rooms: vec![room],
+        passability: vec![onlinerpg_shared::housing::PassabilityGrid {
+            floor_level: 0,
+            origin_x: 0,
+            origin_z: 0,
+            width: 8,
+            depth: 6,
+            cells: vec![0; 48],
+        }],
+    };
+    game.housing_io.write_house(&house).await.unwrap();
+    game.passability_add_house(&house).await;
+    let mut player = make_player("visitor", 8.5, 12.5);
+    player.position.y = 5.0;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    game.request_move_goal_with_entrance(id, 1, 16.5, 12.5, false, true)
+        .await;
+    next_path(&mut rx).await;
+    advance(&game, id, 5.0).await;
+    let entered = game.players.read().await[&id].position;
+    assert!((10.5..11.0).contains(&entered.x), "{entered:?}");
+    while rx.try_recv().is_ok() {}
+    game.request_move_goal(id, 2, 16.5, 12.5, false).await;
+    next_path(&mut rx).await;
+    advance(&game, id, 5.0).await;
+    assert!((game.players.read().await[&id].position.x - 16.5).abs() < 0.01);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "5000-player movement benchmark; run explicitly in release mode"]
+async fn movement_load_5000() {
+    let game = make_test_game_state("goal_load_5000");
+    let mut ids = Vec::new();
+    let mut channels = Vec::new();
+    for index in 0..5000 {
+        let mut player = make_player(
+            &format!("load_{index}"),
+            1000.5 + (index % 100) as f32 * 32.0,
+            1000.5 + (index / 100) as f32 * 32.0,
+        );
+        player.position.y = 5.0;
+        ids.push(player.id);
+        game.player_spatial_cells
+            .write()
+            .await
+            .insert(player.id, &player.position);
+        channels.push(game.register_connection_channel(&player.id).await);
+        game.players.write().await.insert(player.id, player);
+    }
+    let started = std::time::Instant::now();
+    let mut tasks = tokio::task::JoinSet::new();
+    for &id in &ids {
+        let game = game.clone();
+        tasks.spawn(async move {
+            let p = game.players.read().await[&id].position;
+            game.request_move_goal(id, 1, p.x + 12.0, p.z, false).await;
+            search_finished(&game, id).await;
+        });
+        if tasks.len() >= 64 {
+            tasks.join_next().await.unwrap().unwrap();
+        }
+    }
+    while let Some(result) = tasks.join_next().await {
+        result.unwrap();
+    }
+    let approval_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let approved = game
+        .goal_moves
+        .lock()
+        .await
+        .values()
+        .filter(|state| state.plan.is_some())
+        .count();
+    assert_eq!(approved, 5000);
+    for channel in &mut channels {
+        while channel.try_recv().is_ok() {}
+    }
+    let mut elapsed = Vec::new();
+    let mut packets = 0usize;
+    let mut bytes = 0usize;
+    for _ in 0..10 {
+        let now = Instant::now();
+        for state in game.goal_moves.lock().await.values_mut() {
+            if let Some(plan) = &mut state.plan {
+                plan.advanced_at = now - Duration::from_millis(200);
+            }
+        }
+        let tick = std::time::Instant::now();
+        game.tick_goal_movement().await;
+        elapsed.push(tick.elapsed().as_secs_f64() * 1000.0);
+        for channel in &mut channels {
+            while let Ok(packet) = channel.try_recv() {
+                packets += 1;
+                bytes += packet.len();
+            }
+        }
+    }
+    elapsed.sort_by(f64::total_cmp);
+    eprintln!("movement_load_5000 approved={approved} approval_ms={approval_ms:.2} tick_p50_ms={:.2} tick_max_ms={:.2} packets={packets} bytes={bytes}",elapsed[5],elapsed[9]);
 }

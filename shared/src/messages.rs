@@ -19,6 +19,8 @@ use crate::{fishing, housing, inventory, skills};
 pub struct MoveWaypoint {
     pub position: Position,
     pub floor_level: i8,
+    pub rotation: Option<f32>,
+    pub travel_seconds: Option<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -424,56 +426,25 @@ pub enum ClientMessage {
         x: f32,
         z: f32,
         sprinting: bool,
+        #[serde(default)]
+        stop_at_entrance: bool,
     },
     PlayerMoveStop {
         request_id: u32,
     },
-    PlayerMovementSample {
-        position: Position,
-        rotation: f32,
-        floor_level: i8,
-    },
-    MovementResyncAck {
-        resync_id: u64,
-    },
-    /// Start an arc turn from the authoritative position or cancel it.
-    PlayerMountTurn {
-        rotation: f32,
-        #[serde(default)]
-        stop: bool,
-        #[serde(default)]
-        sprinting: bool,
-    },
-    PlayerMountRecover {
+    PlayerMoveDirection {
         request_id: u32,
-        goal: Position,
-    },
-    PlayerKeyboardMove {
-        position: Position,
         rotation: f32,
-        floor_level: i8,
         forward: i8,
+        turn: i8,
         sprinting: bool,
     },
-    PlayerMove {
+    PlayerFace {
+        rotation: f32,
+    },
+    NpcRelocate {
         position: Position,
         rotation: f32,
-        #[serde(default)]
-        floor_level: i8,
-        /// Append to the server's waypoint queue instead of replacing it.
-        /// Path-following sends use this so the server walks the same
-        /// client-validated polyline; fresh paths (click, keyboard, combat)
-        /// replace.
-        #[serde(default)]
-        append: bool,
-        #[serde(default)]
-        sprinting: bool,
-    },
-    /// Floor change that happens *between* waypoints. `PlayerMove::floor_level`
-    /// only lands when its waypoint is reached, and a stairwell is a single leg
-    /// (A* omits intermediate stair cells), so without this a player descending
-    /// stairs stays in the upper floor's AOI until they hit the bottom landing.
-    PlayerFloorChanged {
         floor_level: i8,
     },
     ChatMessage {
@@ -918,19 +889,6 @@ pub enum ClientMessage {
         #[serde(default)]
         target_player_id: Option<PlayerId>,
     },
-}
-
-impl ClientMessage {
-    /// A queue-replacing PlayerMove (`append: false`), the common case.
-    pub fn player_move(position: Position, rotation: f32, floor_level: i8) -> Self {
-        Self::PlayerMove {
-            position,
-            rotation,
-            floor_level,
-            append: false,
-            sprinting: false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1778,28 +1736,6 @@ pub enum ServerMessage {
         applied_modifier_pct: i32,
         message: String,
     },
-    /// Authoritative progress for one mounted reverse recovery.
-    MountRecovery {
-        request_id: u32,
-        position: Position,
-        rotation: f32,
-        floor_level: i8,
-        done: bool,
-        success: bool,
-    },
-    /// Authoritative pose after a refused move, sent only to its owner.
-    PositionCorrected {
-        position: Position,
-        rotation: f32,
-        #[serde(default)]
-        floor_level: i8,
-    },
-    MovementResync {
-        resync_id: u64,
-        position: Position,
-        rotation: f32,
-        floor_level: i8,
-    },
     /// Direct to the owner only (exact satiation is private, doc/HUNGER.md).
     /// Sent on band transitions, eating and debuff changes — not on every
     /// decay tick. Carries the effective multipliers (hunger × debuffs) so
@@ -2115,9 +2051,6 @@ impl ServerMessage {
             | Self::DealResult { .. }
             | Self::PlayerMovePath { .. }
             | Self::PlayerMoveProgress { .. }
-            | Self::MountRecovery { .. }
-            | Self::PositionCorrected { .. }
-            | Self::MovementResync { .. }
             | Self::HungerUpdate { .. }
             | Self::DebuffUpdate { .. }
             | Self::StallState { .. }

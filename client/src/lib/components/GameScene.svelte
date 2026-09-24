@@ -58,10 +58,7 @@
   import GameSceneDungeonLayer from './game-scene/GameSceneDungeonLayer.svelte'
   import { isUnderground } from '../stores/dungeonStore'
   import { damageTextPool } from '../effects/damage-text-pool'
-  import {
-    playerFloorOffset,
-    playerInsideHouseId,
-  } from '../stores/housingStore'
+  import { playerInsideHouseId } from '../stores/housingStore'
   import { drainTileWork } from '../utils/tileWorkQueue'
   import { isMounted } from '../utils/mounts'
   import { FRAME_TIME_MS, FRAME_TOLERANCE_MS } from '../utils/frameTiming'
@@ -444,10 +441,8 @@
     const footprintsGroup = footprintsRef?.getGroup?.()
     if (footprintsGroup) footprintsGroup.visible = !underground
     if (underground) {
-      // The housing layer's per-frame detection is skipped underground;
-      // clear its state so stale floor offsets can't leak into physics.
+      // Housing detection is skipped underground.
       playerInsideHouseId.set(null)
-      playerFloorOffset.set(0)
     }
   })
 

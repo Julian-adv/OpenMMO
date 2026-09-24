@@ -344,16 +344,13 @@ async fn server_applies_sprint_speed_and_rejects_it_without_fuel() {
     for id in [runner, hungry] {
         let start = game_state.players.read().await[&id].position;
         game_state
-            .update_player_position(
+            .request_test_move(
                 &id,
-                MoveCommand {
+                TestMove {
                     position: Position {
                         x: start.x + 10.0,
                         ..start
                     },
-                    rotation: 0.0,
-                    floor_level: 0,
-                    append: false,
                     sprinting: true,
                 },
                 false,
@@ -361,7 +358,7 @@ async fn server_applies_sprint_speed_and_rejects_it_without_fuel() {
             .await;
     }
 
-    game_state.tick_player_movement(1.0).await;
+    game_state.advance_test_movement(1.0).await;
 
     let walk_step = onlinerpg_shared::PLAYER_MOVE_SPEED;
     let sprint_step = walk_step * onlinerpg_shared::hunger::SPRINT_MOVE_MULT;
@@ -617,7 +614,7 @@ async fn moving_cancels_the_grill_and_keeps_the_raw_fish() {
     drain(&mut rx);
 
     game_state
-        .update_player_position(
+        .request_test_move(
             &id,
             move_cmd(
                 Position {
@@ -630,7 +627,7 @@ async fn moving_cancels_the_grill_and_keeps_the_raw_fish() {
             false,
         )
         .await;
-    game_state.tick_player_movement(1.0).await;
+    game_state.advance_test_movement(1.0).await;
 
     advance(Duration::from_millis(GRILL_CAST_MS + 1)).await;
     game_state.tick_grills().await;

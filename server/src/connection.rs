@@ -855,20 +855,8 @@ async fn handle_client_message(
         });
     }
 
-    if matches!(
-        client_msg,
-        ClientMessage::PlayerMove { .. }
-            | ClientMessage::PlayerMoveGoal { .. }
-            | ClientMessage::PlayerKeyboardMove { .. }
-            | ClientMessage::PlayerMountTurn { .. }
-            | ClientMessage::PlayerMountRecover { .. }
-            | ClientMessage::PlayerFloorChanged { .. }
-            | ClientMessage::PlayerMovementSample { .. }
-    ) && state
-        .player_id
-        .is_some_and(|id| game_state.movement_resync_pending(&id))
-    {
-        return Ok(vec![]);
+    if let Some(id) = state.player_id {
+        game_state.advance_goal_players(&[id]).await;
     }
 
     match client_msg {
@@ -1361,7 +1349,7 @@ async fn handle_client_message(
 
             let rejoin_floor = player.floor_level;
             let rejoin_pos = player.position;
-            info!(target: "movement_audit",
+            info!(target: "player_session",
                 player_id = %id, character_id, account_session_id,
                 client_kind = ?state.client_kind,
                 reported_version = ?state.reported_client_version,
@@ -1409,10 +1397,18 @@ async fn handle_client_message(
             x,
             z,
             sprinting,
+            stop_at_entrance,
         } => {
             if let Some(id) = state.player_id {
                 game_state
-                    .request_move_goal(id, request_id, x, z, sprinting)
+                    .request_move_goal_with_entrance(
+                        id,
+                        request_id,
+                        x,
+                        z,
+                        sprinting,
+                        stop_at_entrance,
+                    )
                     .await;
             }
         }
@@ -1421,97 +1417,35 @@ async fn handle_client_message(
                 game_state.stop_move_goal(id, request_id).await;
             }
         }
-        ClientMessage::PlayerMovementSample {
-            position,
+        ClientMessage::PlayerMoveDirection {
+            request_id,
             rotation,
-            floor_level,
-        } => {
-            if let Some(id) = &state.player_id {
-                game_state
-                    .record_movement_sample(id, position, rotation, floor_level)
-                    .await;
-            }
-        }
-        ClientMessage::MovementResyncAck { resync_id } => {
-            if let Some(id) = &state.player_id {
-                game_state.acknowledge_movement_resync(id, resync_id);
-            }
-        }
-        ClientMessage::PlayerMountRecover { request_id, goal } => {
-            if let Some(id) = &state.player_id {
-                game_state.recover_horse(id, request_id, goal).await;
-            }
-        }
-
-        ClientMessage::PlayerMountTurn {
-            rotation,
-            stop,
-            sprinting,
-        } => {
-            if let Some(id) = &state.player_id {
-                if stop {
-                    game_state.stop_horse(id).await;
-                } else {
-                    game_state.turn_horse(id, rotation, sprinting).await;
-                }
-            }
-        }
-
-        ClientMessage::PlayerKeyboardMove {
-            position,
-            rotation,
-            floor_level,
             forward,
+            turn,
             sprinting,
         } => {
-            if let Some(id) = &state.player_id {
+            if let Some(id) = state.player_id {
                 game_state
-                    .update_keyboard_movement(
-                        id,
-                        crate::game_state::MoveCommand {
-                            position,
-                            rotation,
-                            floor_level,
-                            append: false,
-                            sprinting,
-                        },
-                        forward,
-                    )
+                    .request_move_direction(id, request_id, rotation, forward, turn, sprinting)
                     .await;
             }
         }
-
-        ClientMessage::PlayerMove {
+        ClientMessage::PlayerFace { rotation } => {
+            if let Some(id) = state.player_id {
+                game_state.face_player(id, rotation).await;
+            }
+        }
+        ClientMessage::NpcRelocate {
             position,
             rotation,
             floor_level,
-            append,
-            sprinting,
         } => {
-            if let Some(id) = &state.player_id {
-                game_state
-                    .update_player_position(
-                        id,
-                        crate::game_state::MoveCommand {
-                            position,
-                            rotation,
-                            floor_level,
-                            append,
-                            sprinting,
-                        },
-                        state.is_official_npc,
-                    )
-                    .await;
-            } else {
-                warn!("Received move from client that is not in game");
-            }
-        }
-
-        ClientMessage::PlayerFloorChanged { floor_level } => {
-            if let Some(id) = &state.player_id {
-                game_state.update_player_floor(id, floor_level).await;
-            } else {
-                warn!("Received floor change from client that is not in game");
+            if state.is_official_npc {
+                if let Some(id) = state.player_id {
+                    game_state
+                        .relocate_npc(id, position, rotation, floor_level)
+                        .await;
+                }
             }
         }
 

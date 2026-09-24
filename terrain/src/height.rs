@@ -365,6 +365,10 @@ impl HeightSampler {
         Ok(())
     }
 
+    pub async fn revision(&self) -> u64 {
+        *self.revision.read().await
+    }
+
     pub async fn clear(&self) {
         let mut revision = self.revision.write().await;
         *revision += 1;

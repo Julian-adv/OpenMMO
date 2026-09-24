@@ -473,56 +473,32 @@ impl SharedState {
                 // rehydrates it), so adopt the floor instead of assuming 0.
                 self.adopt_floor_level(player.floor_level);
             }
-            ServerMessage::MountRecovery {
+            ServerMessage::PlayerMovePath {
                 request_id,
                 position,
                 rotation,
                 floor_level,
-                done,
-                success,
+                ..
             } => {
-                if *request_id == self.mount_recovery_id {
-                    self.relocate_self(*position, *rotation, *floor_level);
-                    if *done {
-                        self.mount_recovery_result = Some(*success);
-                    }
+                if *request_id == self.move_request_id {
+                    self.apply_move_progress(*position, *rotation, *floor_level);
+                    self.move_status = Some(onlinerpg_shared::messages::MoveStatus::Moving);
                 }
                 return EventUrgency::Noise;
             }
-            ServerMessage::MovementResync {
-                resync_id,
+            ServerMessage::PlayerMoveProgress {
+                request_id,
                 position,
                 rotation,
                 floor_level,
+                status,
+                ..
             } => {
-                self.relocate_self(*position, *rotation, *floor_level);
-                self.cancel_mount_recovery();
-                self.pending_movement_ack = Some(*resync_id);
-                self.pending_commands.retain(|message| {
-                    !matches!(
-                        message,
-                        ClientMessage::PlayerMove { .. }
-                            | ClientMessage::PlayerKeyboardMove { .. }
-                            | ClientMessage::PlayerMountTurn { .. }
-                            | ClientMessage::PlayerMountRecover { .. }
-                            | ClientMessage::PlayerFloorChanged { .. }
-                    )
-                });
-            }
-            ServerMessage::PositionCorrected {
-                position,
-                rotation,
-                floor_level,
-            } => {
-                if self
-                    .last_correction_at
-                    .is_some_and(|at| at.elapsed().as_secs() < 3)
-                {
-                    self.world_view.synchronized = false;
-                    self.pending_commands.push(ClientMessage::ResyncWorld);
+                if *request_id == self.move_request_id {
+                    self.apply_move_progress(*position, *rotation, *floor_level);
+                    self.move_status = Some(*status);
                 }
-                self.last_correction_at = Some(std::time::Instant::now());
-                self.relocate_self(*position, *rotation, *floor_level);
+                return EventUrgency::Noise;
             }
             ServerMessage::PlayerTeleported {
                 player_id,
@@ -532,7 +508,7 @@ impl SharedState {
             } => {
                 if self.self_player_id.as_ref() == Some(player_id) {
                     self.relocate_self(*position, *rotation, *floor_level);
-                    self.cancel_mount_recovery();
+                    self.move_status = None;
                     // Any teleport settles the pending summons.
                     self.pending_party_summons.clear();
                 }
@@ -937,13 +913,9 @@ impl SharedState {
                 self.self_mana = Some((*mana, *max_mana));
             }
             ServerMessage::HungerUpdate {
-                satiation,
-                state,
-                move_mult,
-                ..
+                satiation, state, ..
             } => {
                 self.self_hunger = Some((*satiation, *state));
-                self.self_move_mult = *move_mult;
             }
             ServerMessage::DebuffUpdate { ref debuffs } => {
                 self.self_debuffs = debuffs.iter().map(|d| d.id.clone()).collect();
@@ -1228,9 +1200,7 @@ impl SharedState {
             | ServerMessage::MonsterSpawned { .. }
             | ServerMessage::MonsterMoved { .. }
             | ServerMessage::GroundItemSpawned { .. }
-            | ServerMessage::GroundItemAppeared { .. }
-            | ServerMessage::PositionCorrected { .. }
-            | ServerMessage::MovementResync { .. } => {
+            | ServerMessage::GroundItemAppeared { .. } => {
                 self.check_sightings();
             }
             ServerMessage::PlayerMoved { player_id, .. }

@@ -35,7 +35,7 @@ impl PlanarDelta {
     }
 
     /// Heading angle (radians) from `from` toward `to`. Matches the
-    /// client's `dx.atan2(dz)` convention used to set `PlayerMove.rotation`.
+    /// client's `dx.atan2(dz)` convention used to set movement facing.
     pub fn rotation(&self) -> f32 {
         self.dx.atan2(self.dz)
     }

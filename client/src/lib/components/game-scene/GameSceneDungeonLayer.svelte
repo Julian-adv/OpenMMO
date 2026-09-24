@@ -1018,7 +1018,7 @@
     playerZ: number,
     deltaMs = 0
   ) {
-    dungeonManager.updateFromPlayerPosition(playerX, playerZ)
+    dungeonManager.updateAutoRegister(playerX, playerZ)
     if (puddles) {
       const impacts = puddles.update(deltaMs / 1000, animatePuddles)
       if (

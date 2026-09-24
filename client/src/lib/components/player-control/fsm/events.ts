@@ -48,7 +48,11 @@ export function createCanvasIntentEvent({
 export interface PlayerControlEventActions extends CanvasClickActions {
   requestMove(
     position: Position,
-    options?: { approach?: PendingApproach | null }
+    options?: {
+      approach?: PendingApproach | null
+      sprinting?: boolean
+      stopAtHouseEntrance?: boolean
+    }
   ): void
   onInteractionFinished(): void
   onPickupGrab(): void
@@ -73,6 +77,12 @@ export function dispatchPlayerControlEvent(
     case 'delayed_request_move':
       actions.requestMove(event.position, {
         approach: event.approach ?? null,
+        ...(event.sprinting === undefined
+          ? {}
+          : { sprinting: event.sprinting }),
+        ...(event.stopAtHouseEntrance === undefined
+          ? {}
+          : { stopAtHouseEntrance: event.stopAtHouseEntrance }),
       })
       return
     case 'anim_interaction_finished':

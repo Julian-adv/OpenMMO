@@ -170,7 +170,7 @@ async fn stationary_bot_never_spawns() {
 
     for _ in 0..TWO_HOURS_TICKS {
         game_state
-            .tick_player_movement(f32::from(TICK_SECONDS as u16))
+            .advance_test_movement(f32::from(TICK_SECONDS as u16))
             .await;
         kill_monsters_in_reach(&game_state, &player_id).await;
     }

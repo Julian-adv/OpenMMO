@@ -145,14 +145,6 @@ const SHAFT_SNAP_MARGIN = 0.5
 const SHAFT_SNAP_INSET = 0.3
 const SHAFT_SNAP_Y_EPS = 0.2
 
-const SWITCH_HYSTERESIS = 0.3
-/** Fraction of the shaft run at which the rendered floor switches — well before
- *  the 0.5 midpoint, so a short descent already reveals (and adopts as logical)
- *  the floor below, and symmetrically a climb keeps the lower floor visible
- *  until near the top. Kept low so the shown floor and the logical floor (which
- *  drives click floor-resolution and pathfinding) agree early: a click then
- *  moves you within the room you see instead of routing back out the entrance. */
-const DEPTH_SWITCH_FRACTION = 0.2
 /** Player collision footprint radius (m) — matches player-physics. */
 const PLAYER_RADIUS = 0.3
 /** Least gap between door re-pulls triggered by position corrections. */
@@ -1071,7 +1063,7 @@ class DungeonManager {
   }
 
   /** Cache static entrance geometry by proximity. */
-  private updateAutoRegister(x: number, z: number) {
+  updateAutoRegister(x: number, z: number) {
     const r = constants().eventDeliveryRadius
     if (!this.active) {
       for (const e of DUNGEON_ENTRANCES) {
@@ -1113,41 +1105,6 @@ class DungeonManager {
     // Teleports can land in a different dungeon; enter() no-ops on the same id.
     this.enter(covering.id, { x: covering.x, y: covering.y, z: covering.z })
     currentDungeonDepth.set(-floorLevel)
-  }
-
-  /**
-   * Per-frame: switch the current depth when the player walks past the shaft
-   * switch point (DEPTH_SWITCH_FRACTION of the run, not the midpoint). Returns
-   * the new depth, or null when unchanged.
-   */
-  updateFromPlayerPosition(x: number, z: number): number | null {
-    this.updateAutoRegister(x, z)
-    if (!this.active) return null
-    const depth = get(currentDungeonDepth)
-    const switchPoint = constants().shaftLen * DEPTH_SWITCH_FRACTION
-
-    if (depth === 0) {
-      const t = this.shaftRunPos(1, false, x, z)
-      if (t !== null && t > switchPoint + SWITCH_HYSTERESIS) {
-        currentDungeonDepth.set(1)
-        return 1
-      }
-      return null
-    }
-
-    const tUp = this.shaftRunPos(depth, false, x, z)
-    if (tUp !== null && tUp < switchPoint - SWITCH_HYSTERESIS) {
-      const next = depth - 1
-      currentDungeonDepth.set(next)
-      return next
-    }
-    const tDown = this.shaftRunPos(depth, true, x, z)
-    if (tDown !== null && tDown > switchPoint + SWITCH_HYSTERESIS) {
-      const next = depth + 1
-      currentDungeonDepth.set(next)
-      return next
-    }
-    return null
   }
 }
 

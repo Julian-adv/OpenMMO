@@ -199,8 +199,6 @@ mod consent;
 mod deals;
 mod debuff;
 pub(crate) mod fishing;
-mod movement_audit;
-mod movement_sync;
 pub(crate) use deals::band_invariant_holds;
 /// Only the tests name the id from outside; the logic lives in debuff.rs.
 #[cfg(test)]
@@ -230,7 +228,6 @@ mod metrics;
 mod monster;
 mod monster_ai;
 mod mounts;
-mod movement_route;
 mod party;
 mod passability;
 mod passability_snapshot;
@@ -238,7 +235,7 @@ mod path_search;
 mod player;
 mod player_trade;
 mod pricing;
-pub(crate) use player::{restored_floor_level, MoveCommand};
+pub(crate) use player::restored_floor_level;
 mod salary;
 mod skills;
 mod teleport_scroll;
@@ -325,7 +322,6 @@ pub(crate) struct ServerGroundItem {
 pub struct GameState {
     interest: Arc<std::sync::Mutex<interest::Interest>>,
     combat_audit: Arc<combat_audit::CombatAudit>,
-    movement_audit: Arc<movement_audit::MovementAudit>,
     players: Arc<RwLock<HashMap<PlayerId, Player>>>,
     /// Lowercased name → online player id, updated by `add_player`/
     /// `remove_player` right after the roster under its own lock (never held
@@ -333,7 +329,7 @@ pub struct GameState {
     /// case-insensitive name lookups; callers re-validate the id against
     /// `players`.
     player_ids_by_name: Arc<RwLock<HashMap<String, PlayerId>>>,
-    movement_intents: Arc<RwLock<HashMap<PlayerId, player::MoveQueue>>>,
+    movement_gate: Arc<Mutex<()>>,
     goal_moves: Arc<Mutex<HashMap<PlayerId, goal_movement::GoalMovement>>>,
     player_movement_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
     path_search: Arc<path_search::PathSearchPool>,
@@ -444,17 +440,6 @@ pub struct GameState {
     bed_rest_started: Arc<RwLock<HashMap<PlayerId, tokio::time::Instant>>>,
     /// Chairs and tables by region, so a served plate lands on a table top.
     dining: Arc<std::sync::RwLock<meal::DiningIndex>>,
-    /// When each player was last sent a `PositionCorrected`. Only touched when
-    /// a correction is sent, and pruned on the refused-move path, so it needs
-    /// no disconnect cleanup and stays empty in the normal case.
-    last_position_correction: Arc<RwLock<HashMap<PlayerId, Instant>>>,
-    /// Players grinding the same dungeon wall correction after correction —
-    /// the signature of a build whose generated layout differs from ours. Only
-    /// touched when a correction is sent, and pruned on the same path.
-    stale_layout_grinds: Arc<RwLock<HashMap<PlayerId, player::LayoutGrind>>>,
-    /// Players the grind detector wants disconnected, drained by a path that
-    /// holds an `AuthService` (the movement tick does not).
-    pending_layout_kicks: Arc<RwLock<Vec<PlayerId>>>,
     /// No-spawn zones (towns, safe areas) from region zone files.
     no_spawn_zones: Vec<NoSpawnZone>,
     /// Player inventories (bag + equipment), keyed by player_id.
@@ -677,11 +662,10 @@ impl GameState {
         Self {
             terrain_io,
             combat_audit: Arc::new(combat_audit::CombatAudit::default()),
-            movement_audit: Arc::new(movement_audit::MovementAudit::default()),
             interest: Arc::new(std::sync::Mutex::new(interest::Interest::default())),
             players: Arc::new(RwLock::new(HashMap::new())),
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
-            movement_intents: Arc::new(RwLock::new(HashMap::new())),
+            movement_gate: Arc::new(Mutex::new(())),
             goal_moves: Arc::new(Mutex::new(HashMap::new())),
             player_movement_versions: Arc::new(RwLock::new(HashMap::new())),
             path_search: Arc::new(path_search::PathSearchPool::default()),
@@ -736,9 +720,6 @@ impl GameState {
             persistence_lock: Arc::new(Mutex::new(())),
             character_session_lock: Arc::new(Mutex::new(())),
             open_doors: Arc::new(RwLock::new(HashSet::new())),
-            last_position_correction: Arc::new(RwLock::new(HashMap::new())),
-            stale_layout_grinds: Arc::new(RwLock::new(HashMap::new())),
-            pending_layout_kicks: Arc::new(RwLock::new(Vec::new())),
             passability: Arc::new(passability_snapshot::PassabilityStore::default()),
             bridge_decks: Arc::new(std::sync::RwLock::new(HashMap::new())),
             rain_shelters: Arc::new(std::sync::RwLock::new(HashMap::new())),
@@ -845,12 +826,6 @@ impl GameState {
         segment_index: u32,
     ) -> Option<bool> {
         let _edit = self.world_edit_guard().await;
-        let (player_pos, player_floor) = {
-            let players = self.players.read().await;
-            let p = players.get(player_id)?;
-            (p.position, p.floor_level)
-        };
-
         let house = match self.housing_io.find_house(house_id).await {
             Ok(Some(h)) => h,
             _ => {
@@ -859,6 +834,8 @@ impl GameState {
             }
         };
 
+        let _movement = self.settle_movement_near(&house.origin).await;
+        let (player_pos, _, player_floor, _) = self.player_pose(player_id).await?;
         let room = house.rooms.get(room_index as usize)?;
 
         // Validate door exists
@@ -891,6 +868,32 @@ impl GameState {
             wall_dir,
             segment_index,
         };
+        if self.open_doors.read().await.contains(&key) {
+            let segments: Vec<_> = refs
+                .iter()
+                .flatten()
+                .map(|&(r, s)| {
+                    let room = &house.rooms[r];
+                    let ((x, z, _), (nx, nz, _)) =
+                        onlinerpg_shared::pathfinding::door_cells(room, wall_dir, s);
+                    let ox = house.origin.x.floor() + room.local_x as f32;
+                    let oz = house.origin.z.floor() + room.local_z as f32;
+                    if x != nx {
+                        let edge = ox + (x + nx) as f32 * 0.5 + 0.5;
+                        [edge, oz + z as f32, edge, oz + z as f32 + 1.0]
+                    } else {
+                        let edge = oz + (z + nz) as f32 * 0.5 + 0.5;
+                        [ox + x as f32, edge, ox + x as f32 + 1.0, edge]
+                    }
+                })
+                .collect();
+            if self
+                .doorway_occupied(room.floor_level as i8, &segments)
+                .await
+            {
+                return Some(true);
+            }
+        }
         let is_open = {
             let mut open_doors = self.open_doors.write().await;
             let was_open = open_doors.contains(&key);

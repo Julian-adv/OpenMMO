@@ -1,29 +1,5 @@
 use super::*;
 
-/// The floor we declare must follow our height: the server derives the
-/// floor it collides against from the Y we send and validates the
-/// declaration against it, so the two have to resolve identically.
-#[test]
-fn declared_floor_tracks_height() {
-    let (s, dungeon, _rx) = dungeon_state();
-    let (x, z) = (dungeon.entrance.x, dungeon.entrance.z);
-
-    assert_eq!(s.wire_floor_at(x, z, dungeon.entrance.y), 0);
-    assert_eq!(s.wire_floor_at(x, z, dungeon.floor_y(1)), -1);
-    assert_eq!(s.wire_floor_at(x, z, dungeon.floor_y(3)), -3);
-    // Mid-ramp resolves to whichever floor is nearer, never past the last.
-    assert_eq!(s.wire_floor_at(x, z, dungeon.entrance.y - 1.0), 0);
-    assert_eq!(s.wire_floor_at(x, z, dungeon.entrance.y - 3.0), -1);
-    let deepest = dungeon.max_depth();
-    assert_eq!(
-        s.wire_floor_at(x, z, dungeon.floor_y(deepest) - 50.0),
-        -(deepest as i8)
-    );
-}
-
-/// Chest sightings run off the live passability, so the cell they tell the
-/// mover to stand on must be one A* can actually route to — a clutter prop
-/// is a sealed pillar, and aiming at it strands the agent every time.
 #[test]
 fn a_sighted_chest_is_approached_from_a_cell_a_path_can_reach() {
     let (mut s, dungeon, _rx) = cluttered_dungeon_state();
@@ -243,75 +219,6 @@ fn a_path_leads_from_the_entrance_down_to_the_first_floor() {
     assert_eq!(path.waypoints.last().map(|w| w.floor), Some(floor));
 }
 
-/// Every step of that descent must declare a floor the server accepts and
-/// collides against identically — it derives the floor from the Y we send,
-/// so a step whose declaration and height disagree gets snapped back.
-#[test]
-fn descending_steps_declare_a_floor_the_server_accepts() {
-    let (mut s, dungeon, _rx) = dungeon_state();
-    let landing = dungeon.arrival_position(1).unwrap();
-    let path = s.find_path_to(landing.x, landing.z, dungeon.passability_floor(1));
-    assert!(path.found);
-
-    let mut seen_underground = false;
-    for wp in &path.waypoints {
-        // Mirror the mover: subdivide the leg and pose each step.
-        loop {
-            let position = s.self_player.as_ref().unwrap().position;
-            let to_wp = crate::geom::PlanarDelta::to_xz(&position, wp.x, wp.z);
-            if to_wp.dist < 0.1 {
-                break;
-            }
-            let (sx, sz) = if to_wp.dist <= 3.0 {
-                (wp.x, wp.z)
-            } else {
-                let r = 3.0 / to_wp.dist;
-                (position.x + to_wp.dx * r, position.z + to_wp.dz * r)
-            };
-            let (pose, floor_level) = s.step_pose(sx, sz, wp.floor, position.y);
-            if floor_level < 0 {
-                seen_underground = true;
-                let expected = dungeon.floor_y(floor_level.unsigned_abs());
-                assert!(
-                    (pose.y - expected).abs() <= FLOOR_Y_SANITY,
-                    "floor {floor_level} declared at y={} (floor sits at {expected})",
-                    pose.y
-                );
-            }
-            s.self_player.as_mut().unwrap().position = pose;
-            s.self_floor_level = floor_level;
-        }
-    }
-
-    assert!(seen_underground, "the walk never went underground");
-    assert_eq!(s.self_floor_level, -1);
-}
-
-/// Re-pathing from halfway down the stairs (after a fight or a correction)
-/// must still work: those cells are keyed to the floor above, so searching
-/// under the floor we are nearest would strand the agent on the steps.
-#[test]
-fn a_path_still_leads_on_from_halfway_down_the_stairs() {
-    let (mut s, dungeon, _rx) = dungeon_state();
-    let (x, z, y) = mid_shaft_point(&dungeon);
-    s.self_player.as_mut().unwrap().position = Position { x, y, z };
-    s.self_floor_level = s.wire_floor_at(x, z, y);
-
-    assert_eq!(s.self_floor_level, -1, "mid-ramp should read as floor 1");
-    assert_eq!(
-        s.passability_floor(),
-        0,
-        "stair cells are keyed one floor up"
-    );
-
-    let landing = dungeon.arrival_position(1).unwrap();
-    let path = s.find_path_to(landing.x, landing.z, dungeon.passability_floor(1));
-    assert!(path.found, "no route on from the middle of the stairs");
-}
-
-/// The stairs down sit behind shut doors on most floors, so opening one has
-/// to reopen the cells A* walks — otherwise the agent never gets past
-/// floor 1 no matter how many doors it toggles.
 #[test]
 fn opening_a_door_reopens_the_route_behind_it() {
     let (mut s, dungeon, _rx) = dungeon_state();

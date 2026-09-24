@@ -229,9 +229,9 @@ async fn stop_movement_and_instrument_loss_end_the_live_session() {
     game_state.start_live_instrument(&instrumentist).await;
     drain(&mut listener_rx);
     game_state
-        .update_player_position(&instrumentist, move_cmd(pos(1.0), false), false)
+        .request_test_move(&instrumentist, move_cmd(pos(1.0), false), false)
         .await;
-    game_state.tick_player_movement(1.0).await;
+    game_state.advance_test_movement(1.0).await;
     assert!(!game_state
         .live_instrument_players
         .read()
@@ -387,10 +387,10 @@ async fn starting_while_walking_drops_the_queued_walk() {
     hand_instrument(&game_state, "instrumentist").await;
 
     game_state
-        .update_player_position(&instrumentist, move_cmd(pos(1.0), false), false)
+        .request_test_move(&instrumentist, move_cmd(pos(1.0), false), false)
         .await;
     game_state.start_live_instrument(&instrumentist).await;
-    game_state.tick_player_movement(1.0).await;
+    game_state.advance_test_movement(1.0).await;
     assert!(game_state
         .live_instrument_players
         .read()

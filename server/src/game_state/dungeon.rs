@@ -5,11 +5,9 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use onlinerpg_shared::dungeon::{
-    cell_center, dungeon_origin, floor_height_at, floor_level_for_passability, floor_world_y,
-    generate_dungeon_for, interior_doors, key_depth_for, last_locked_depth, leg_touches_shaft,
-    locked_depths, locked_door_ids, monster_level_for_depth, on_stair_shaft, world_to_cell,
-    FloorLayout, PropKind, DUNGEON_FLOOR_HEIGHT, ENTRANCE_DOOR_ID, FLOOR_CHANGE_LEG_MAX, GRID,
-    SHAFT_CHANGE_MARGIN,
+    cell_center, dungeon_origin, floor_world_y, generate_dungeon_for, interior_doors,
+    key_depth_for, last_locked_depth, locked_depths, locked_door_ids, monster_level_for_depth,
+    world_to_cell, FloorLayout, PropKind, ENTRANCE_DOOR_ID, GRID,
 };
 use onlinerpg_shared::inventory::GroundItem;
 use onlinerpg_shared::{wrap_world_x, Position, ServerMessage};
@@ -63,14 +61,6 @@ const DOOR_INTERACT_RANGE: f32 = 2.5;
 const ENTRANCE_INTERACT_RANGE: f32 = 32.0;
 /// Chance that a freshly-broken barrel/crate spills a loose coin pile.
 const BROKEN_PROP_COIN_DROP_CHANCE: f64 = 0.20;
-
-/// What `validated_dungeon_floor` settled on: the floor to store, and the Y
-/// to store — the floor's own ground height underground, the reported one
-/// above ground where terrain owns Y.
-pub(super) struct DungeonFloorVerdict {
-    pub(super) floor: i8,
-    pub(super) y: f32,
-}
 
 /// A world-X range split at the wrap seam into canonical segments, so cell
 /// enumeration over it matches the cells wrapped player positions produce.
@@ -267,6 +257,20 @@ impl GameState {
     ) -> Option<bool> {
         let entrance = self.dungeon_defs.get(entrance_id)?;
         let expected_floor = -i8::try_from(depth).ok()?;
+        self.advance_goal_players(&[*player_id]).await;
+        if self.player_pose(player_id).await?.2 != expected_floor {
+            return None;
+        }
+        self.ensure_dungeon_runtime(entrance_id).await;
+        let segment = self
+            .dungeon_door_segment(entrance_id, depth, door_id)
+            .await?;
+        let center = Position {
+            x: (segment[0] + segment[2]) * 0.5,
+            z: (segment[1] + segment[3]) * 0.5,
+            y: entrance.y,
+        };
+        let _movement = self.settle_movement_near(&center).await;
         let (player_pos, _, player_floor, player_name) = self.player_pose(player_id).await?;
         if player_floor != expected_floor {
             warn!(
@@ -318,6 +322,21 @@ impl GameState {
             }
         }
 
+        let is_open = self
+            .dungeons
+            .read()
+            .await
+            .get(entrance_id)?
+            .open_doors
+            .get(&depth)
+            .is_some_and(|doors| doors.contains(&door_id));
+        if is_open {
+            if let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await {
+                if self.doorway_occupied(expected_floor, &[segment]).await {
+                    return Some(true);
+                }
+            }
+        }
         let (is_open, opening) = {
             let mut dungeons = self.dungeons.write().await;
             let rt = dungeons.get_mut(entrance_id)?;
@@ -380,32 +399,63 @@ impl GameState {
     /// floor's occupants. Anyone who slipped through without a key is now on
     /// the far side for good — that is the tailgater's own choice.
     async fn close_locked_door(&self, entrance_id: &str, depth: u8, door_id: u32, opening: u64) {
-        {
-            let mut dungeons = self.dungeons.write().await;
-            let Some(rt) = dungeons.get_mut(entrance_id) else {
+        let Some(entrance) = self.dungeon_defs.get(entrance_id) else {
+            return;
+        };
+        loop {
+            let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await else {
                 return;
             };
-            if rt.locked_door_opens.get(&(depth, door_id)) != Some(&opening) {
+            let center = Position {
+                x: (segment[0] + segment[2]) * 0.5,
+                z: (segment[1] + segment[3]) * 0.5,
+                y: entrance.y,
+            };
+            let movement = self.settle_movement_near(&center).await;
+            let current = self
+                .dungeons
+                .read()
+                .await
+                .get(entrance_id)
+                .and_then(|rt| rt.locked_door_opens.get(&(depth, door_id)).copied());
+            if current != Some(opening) {
                 return;
             }
-            rt.locked_door_opens.remove(&(depth, door_id));
-            if !rt
-                .open_doors
-                .get_mut(&depth)
-                .is_some_and(|set| set.remove(&door_id))
+            if let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await {
+                if self.doorway_occupied(-(depth as i8), &[segment]).await {
+                    drop(movement);
+                    tokio::time::sleep(Duration::from_millis(250)).await;
+                    continue;
+                }
+            }
             {
-                return;
-            }
-        };
-        self.rebuild_dungeon_floor_passability(entrance_id, depth)
-            .await;
-        info!("'{entrance_id}' depth {depth} door {door_id} locked itself again");
-        self.publish_subject_change(ServerMessage::DungeonDoorToggled {
-            entrance_id: entrance_id.to_string(),
-            depth,
-            door_id,
-            is_open: false,
-        });
+                let mut dungeons = self.dungeons.write().await;
+                let Some(rt) = dungeons.get_mut(entrance_id) else {
+                    return;
+                };
+                if rt.locked_door_opens.get(&(depth, door_id)) != Some(&opening) {
+                    return;
+                }
+                rt.locked_door_opens.remove(&(depth, door_id));
+                if !rt
+                    .open_doors
+                    .get_mut(&depth)
+                    .is_some_and(|set| set.remove(&door_id))
+                {
+                    return;
+                }
+            };
+            self.rebuild_dungeon_floor_passability(entrance_id, depth)
+                .await;
+            info!("'{entrance_id}' depth {depth} door {door_id} locked itself again");
+            self.publish_subject_change(ServerMessage::DungeonDoorToggled {
+                entrance_id: entrance_id.to_string(),
+                depth,
+                door_id,
+                is_open: false,
+            });
+            return;
+        }
     }
 
     /// The key gate: whether the player carries the key to `entrance`'s
@@ -1426,36 +1476,6 @@ impl GameState {
         layout.walkable_drop_position(&entrance.position(), &monster_position, &preferred)
     }
 
-    /// Where to put a player sealed into their own cell, or `None` when they
-    /// are not sealed in. Underground `stands_on` is the carved floor: rock is
-    /// sealed on every side too, and only a mover on the floor's own cells is
-    /// walked out. The depth comes from the passability floor, never from the
-    /// floor the client claims.
-    pub(super) async fn sealed_player_escape(
-        &self,
-        position: &Position,
-        floor: u8,
-    ) -> Option<Position> {
-        let depth = -floor_level_for_passability(floor);
-        let entrance = (depth > 0)
-            .then(|| self.dungeon_defs.entrance_at(position.x, position.z))
-            .flatten();
-        let dungeons = self.dungeons.read().await;
-        let carved = entrance.and_then(|e| {
-            let layout = dungeons
-                .get(&e.id)
-                .and_then(|rt| rt.layouts.get(depth as usize - 1))?;
-            Some((layout, e.position()))
-        });
-        let cache = self.passability_read();
-        super::passability::escape_from_sealed_cell(&cache, position, floor, |x, z| {
-            carved.is_none_or(|(layout, entrance)| {
-                let (cx, cz) = world_to_cell(&entrance, x, z);
-                layout.is_carved(cx, cz)
-            })
-        })
-    }
-
     /// Mark a dungeon monster's slot for respawn after it dies, and roll the
     /// floor key the monster may carry (returned for the killer's loot
     /// scatter). Called from the combat death path; `None` for non-dungeon
@@ -1576,122 +1596,6 @@ impl GameState {
             tonight,
         );
         (!opened_tonight).then_some(key)
-    }
-
-    /// Validate a client-declared floor for the move leg `from`→`to`
-    /// (`from == to` for a standalone floor change). A floor changes one
-    /// storey at a time, on a short leg touching the shaft joining the two;
-    /// anything else keeps the floor the leg started on. Y is never a reason
-    /// to refuse — the verdict carries the ground height derived from the
-    /// settled floor and `to`'s XZ.
-    pub(super) async fn validated_dungeon_floor(
-        &self,
-        player_id: &PlayerId,
-        current_floor: i8,
-        requested_floor: i8,
-        from: &Position,
-        to: &Position,
-    ) -> DungeonFloorVerdict {
-        let keep = DungeonFloorVerdict {
-            floor: current_floor,
-            y: to.y,
-        };
-        let entrance = self
-            .dungeon_defs
-            .entrance_at(to.x, to.z)
-            .or_else(|| self.dungeon_defs.entrance_at(from.x, from.z));
-        let Some(entrance) = entrance else {
-            if requested_floor < 0 {
-                warn!(
-                    "Player {} reported dungeon floor {} outside any dungeon footprint",
-                    self.player_name_of(player_id).await,
-                    requested_floor
-                );
-            }
-            // Nothing underground to hold a mover outside every footprint.
-            return DungeonFloorVerdict {
-                floor: requested_floor.max(0),
-                ..keep
-            };
-        };
-
-        self.ensure_dungeon_runtime(&entrance.id).await;
-        let dungeons = self.dungeons.read().await;
-        let layouts = dungeons
-            .get(&entrance.id)
-            .map(|d| &d.layouts[..])
-            .unwrap_or(&[]);
-
-        if requested_floor != current_floor {
-            let shallow = current_floor.max(requested_floor);
-            let on_stairs = shallow <= 0
-                && current_floor.min(requested_floor) == shallow - 1
-                && from.dist_xz_sq(to) <= FLOOR_CHANGE_LEG_MAX * FLOOR_CHANGE_LEG_MAX
-                && layouts
-                    .get(shallow.unsigned_abs() as usize)
-                    .is_some_and(|below| {
-                        leg_touches_shaft(
-                            &entrance.position(),
-                            &below.up_shaft,
-                            SHAFT_CHANGE_MARGIN,
-                            (from.x, from.z),
-                            (to.x, to.z),
-                        )
-                    });
-            if !on_stairs {
-                drop(dungeons);
-                warn!(
-                    "Player {} floor change {} -> {} off the stairs at ({:.1},{:.1}), kept floor {}",
-                    self.player_name_of(player_id).await,
-                    current_floor,
-                    requested_floor,
-                    to.x,
-                    to.z,
-                    current_floor
-                );
-                return keep;
-            }
-        }
-        if requested_floor >= 0 {
-            return DungeonFloorVerdict {
-                floor: requested_floor,
-                ..keep
-            };
-        }
-
-        let depth = requested_floor.unsigned_abs();
-        let expected_y = floor_height_at(&entrance.position(), layouts, depth, to.x, to.z);
-        // Shaft ramps are geometry both floors share, so no Y there tells them
-        // apart: Y is derived from (floor, XZ), never a veto. Off the ramps the
-        // ground is flat, and a stored Y a whole floor away means the server's
-        // own position drifted from the floor it holds — worth seeing.
-        let drifted = expected_y.is_some_and(|y| (to.y - y).abs() > DUNGEON_FLOOR_HEIGHT)
-            && !on_stair_shaft(&entrance.position(), layouts, depth, to.x, to.z);
-        let total = layouts.len();
-        drop(dungeons);
-        let Some(expected_y) = expected_y else {
-            warn!(
-                "Player {} reported invalid dungeon depth {} (dungeon '{}' has {} floors)",
-                player_id, depth, entrance.id, total
-            );
-            return keep;
-        };
-        if drifted {
-            warn!(
-                "Player {} floor {} Y drift: stored {:.1}, floor {:.1} at ({:.1},{:.1})",
-                self.player_name_of(player_id).await,
-                requested_floor,
-                to.y,
-                expected_y,
-                to.x,
-                to.z
-            );
-        }
-
-        DungeonFloorVerdict {
-            floor: requested_floor,
-            y: expected_y,
-        }
     }
 
     /// Infer the dungeon floor for an arbitrary position (used by debug

@@ -144,6 +144,72 @@ export function resolveStairFloor(
   return progress <= 0.12 ? entryFloor : entryFloor + 1
 }
 
+export interface HouseInterior {
+  floorLevel: number
+  onStairs: boolean
+}
+
+export function resolveHouseInterior(
+  house: HouseData,
+  position: { x: number; y: number; z: number },
+  currentFloor: number,
+  wasOnStairs: boolean
+): HouseInterior | null {
+  let stairFloor: number | null = null
+  let stairDist = Infinity
+  let flatFloor: number | null = null
+  let flatDist = Infinity
+
+  for (const room of house.rooms) {
+    if (!roomContainsXZ(house, room, position.x, position.z)) continue
+    const baseY = house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
+    if (position.y < baseY - 1 || position.y > baseY + room.wallHeight + 1)
+      continue
+
+    if (room.roomType !== 'stairwell') {
+      const dist = Math.abs(position.y - baseY)
+      if (
+        dist < flatDist ||
+        (dist === flatDist && room.floorLevel === currentFloor)
+      ) {
+        flatDist = dist
+        flatFloor = room.floorLevel
+      }
+      continue
+    }
+
+    if (currentFloor < room.floorLevel || currentFloor > room.floorLevel + 1)
+      continue
+    if (
+      !wasOnStairs &&
+      !roomContainsXZ(house, room, position.x, position.z, 0.1)
+    )
+      continue
+    const surfaceY =
+      house.origin.y +
+      getStairwellYOffset(
+        room,
+        house.origin.x,
+        house.origin.z,
+        position.x,
+        position.z
+      )
+    const dist = Math.abs(surfaceY - position.y)
+    const rise = room.wallHeight + FLOOR_THICKNESS
+    if (dist > rise / 2 || dist >= stairDist) continue
+    stairDist = dist
+    stairFloor = resolveStairFloor(
+      room.floorLevel,
+      currentFloor,
+      (surfaceY - baseY - FLOOR_THICKNESS / 2) / rise
+    )
+  }
+
+  if (stairFloor !== null) return { floorLevel: stairFloor, onStairs: true }
+  if (flatFloor !== null) return { floorLevel: flatFloor, onStairs: false }
+  return null
+}
+
 export function shouldIgnoreImplicitHouseFloorChange(
   insideHouseId: string | null,
   currentFloor: number,
@@ -455,31 +521,6 @@ export function collectRoomAABBsInRegion(
     }
   }
   return result
-}
-
-/** Find ALL rooms containing a world point (for overlapping stairwells etc). */
-export function findAllRoomsAtPoint(
-  housesById: ReadonlyMap<string, HouseData>,
-  x: number,
-  y: number,
-  z: number
-): { house: HouseData; roomIndex: number }[] {
-  const results: { house: HouseData; roomIndex: number }[] = []
-  for (const house of housesById.values()) {
-    for (let i = 0; i < house.rooms.length; i++) {
-      const room = house.rooms[i]
-      const ryBase =
-        house.origin.y + floorYBase(room.floorLevel, room.wallHeight)
-      if (
-        roomContainsXZ(house, room, x, z) &&
-        y >= ryBase - 1 &&
-        y <= ryBase + room.wallHeight + 1
-      ) {
-        results.push({ house, roomIndex: i })
-      }
-    }
-  }
-  return results
 }
 
 /** Find the house whose room contains a world point, or null. */

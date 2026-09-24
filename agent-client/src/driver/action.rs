@@ -1255,20 +1255,13 @@ pub(super) fn action_to_command(
                 return None;
             }
             let (gx, gz) = resolve_move_goal(x, z, direction, distance, player_pos).ok()?;
-            let rotation = if let Some(pp) = player_pos {
-                (gx - pp.x).atan2(gz - pp.z)
-            } else {
-                0.0
-            };
-            Some(ClientMessage::player_move(
-                onlinerpg_shared::Position {
-                    x: gx,
-                    y: player_pos.map(|p| p.y).unwrap_or(0.0),
-                    z: gz,
-                },
-                rotation,
-                0,
-            ))
+            Some(ClientMessage::PlayerMoveGoal {
+                request_id: 0,
+                x: gx,
+                z: gz,
+                sprinting: false,
+                stop_at_entrance: false,
+            })
         }
         AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
         AgentAction::Fish { x, z } => {

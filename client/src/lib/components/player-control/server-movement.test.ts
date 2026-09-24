@@ -2,13 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerMovement } from './server-movement'
 import type { MovePath, MoveProgress } from '../../network/networkTypes'
 import { WORLD_MAX_X, WORLD_MIN_X } from '../../terrain/world-wrap'
-import {
-  calculateMovementStep,
-  DEFAULT_MOVEMENT_CONFIG,
-  initMovementState,
-  scaleMovementConfig,
-  SPRINT_SPEED_MULT,
-} from '../../utils/movementUtils'
 
 function setup() {
   let id = 0
@@ -44,7 +37,7 @@ describe('server approved movement', () => {
     { sprinting: false, speed: 3 },
     { sprinting: true, speed: 4.5 },
   ])(
-    'preserves legacy cruising speed at $speed m/s',
+    'displays the approved cruising speed at $speed m/s',
     ({ sprinting, speed }) => {
       const { movement } = setup()
       movement.request(60, 0, sprinting)
@@ -55,16 +48,6 @@ describe('server approved movement', () => {
         floor_level: 0,
       }))
       movement.acceptPath(approved)
-      let legacyPosition = { x: 0, y: 0, z: 0 }
-      const legacy = initMovementState(
-        legacyPosition,
-        { x: 60, y: 0, z: 0 },
-        speed
-      )
-      const config = scaleMovementConfig(
-        DEFAULT_MOVEMENT_CONFIG,
-        sprinting ? SPRINT_SPEED_MULT : 1
-      )
       for (let frame = 1; frame <= 500; frame++) {
         vi.advanceTimersByTime(20)
         if (frame % 10 === 0) {
@@ -80,15 +63,15 @@ describe('server approved movement', () => {
             status: 'moving',
           })
         }
-        const step = calculateMovementStep(legacyPosition, legacy, config, 0.02)
-        legacyPosition = step.newPos
-        legacy.currentSpeed = step.newSpeed
         expect(movement.sample(() => false)?.position.x).toBeCloseTo(
-          legacyPosition.x,
+          speed * frame * 0.02,
           5
         )
       }
-      expect(legacyPosition.x).toBeCloseTo(speed * 10, 5)
+      expect(movement.sample(() => false)?.position.x).toBeCloseTo(
+        speed * 10,
+        5
+      )
     }
   )
 
@@ -236,4 +219,53 @@ describe('server approved movement', () => {
       WORLD_MIN_X + 0.5
     )
   })
+})
+
+it.each([20, 150, 250])(
+  'waits for approval at %ims RTT and ignores an approval overtaken by stop',
+  (rtt) => {
+    const { movement } = setup()
+    movement.request(3, 3, false)
+    vi.advanceTimersByTime(rtt)
+    expect(movement.sample(() => false)).toBeNull()
+    movement.acceptPath(path())
+    vi.advanceTimersByTime(100)
+    expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
+    movement.clear()
+    vi.advanceTimersByTime(rtt)
+    expect(movement.acceptPath(path())).toBe(false)
+    expect(movement.sample(() => false)).toBeNull()
+  }
+)
+
+it('holds a locally blocked pose until the next official update', () => {
+  const { movement } = setup()
+  movement.request(3, 3, false)
+  movement.acceptPath(path())
+  vi.advanceTimersByTime(100)
+  const stopped = movement.sample(() => true)
+  vi.advanceTimersByTime(100)
+  expect(movement.sample(() => false)).toEqual(stopped)
+  movement.acceptPath({ ...path(), server_time_ms: 1 })
+  vi.advanceTimersByTime(100)
+  expect(movement.sample(() => false)?.position.x).toBeCloseTo(0.3)
+})
+
+it('displays approved turn timing even when position does not change', () => {
+  const { movement } = setup()
+  movement.direction({ rotation: 0, forward: 0, turn: 1, sprinting: false })
+  const approved = path()
+  approved.waypoints = [
+    {
+      position: approved.position,
+      floor_level: 0,
+      rotation: Math.PI / 2,
+      travel_seconds: 0.4,
+    },
+  ]
+  movement.acceptPath(approved)
+  vi.advanceTimersByTime(200)
+  const pose = movement.sample(() => false)
+  expect(pose?.position).toEqual(approved.position)
+  expect(pose?.rotation).toBeCloseTo(Math.PI / 4)
 })

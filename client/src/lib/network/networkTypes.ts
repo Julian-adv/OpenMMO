@@ -125,27 +125,8 @@ export type RollCharacterStatsResult =
 export type ClientMessage =
   | { PlayerMoveGoal: MoveGoal }
   | { PlayerMoveStop: { request_id: number } }
-  | {
-      PlayerMovementSample: {
-        position: Position
-        rotation: number
-        floor_level: number
-      }
-    }
-  | { MovementResyncAck: { resync_id: number } }
-  | {
-      PlayerKeyboardMove: {
-        position: Position
-        rotation: number
-        floor_level: number
-        forward: number
-        sprinting: boolean
-      }
-    }
-  | { PlayerMountRecover: { request_id: number; goal: Position } }
-  | {
-      PlayerMountTurn: { rotation: number; stop?: boolean; sprinting?: boolean }
-    }
+  | { PlayerMoveDirection: MoveDirection }
+  | { PlayerFace: { rotation: number } }
   | {
       ClientInfo: {
         protocol_version: number
@@ -170,16 +151,6 @@ export type ClientMessage =
   | { RollCharacterStats: { character_class: CharacterClass; gender: Gender } }
   | { EnterGame: { character_id: number } }
   | 'WorldReady'
-  | {
-      PlayerMove: {
-        position: Position
-        rotation: number
-        floor_level: number
-        append: boolean
-        sprinting: boolean
-      }
-    }
-  | { PlayerFloorChanged: { floor_level: number } }
   | { ChatMessage: { message: string } }
   | { PlayerAttack: { monster_id: string } }
   | {
@@ -541,31 +512,26 @@ export type AuthSuccessPayload = {
   characters: AccountCharacter[]
 }
 
-/** Where the server actually has the local player after refusing a step. */
-export type PositionCorrection = {
-  x: number
-  y: number
-  z: number
-  rotation: number
-  resyncId?: number
-}
-
-export type MountRecovery = {
-  request_id: number
-  position: Position
-  rotation: number
-  floor_level: number
-  done: boolean
-  success: boolean
-}
-
 export type MoveGoal = {
   request_id: number
   x: number
   z: number
   sprinting: boolean
+  stop_at_entrance?: boolean
 }
-export type MoveWaypoint = { position: Position; floor_level: number }
+export type MoveDirection = {
+  request_id: number
+  rotation: number
+  forward: number
+  turn: number
+  sprinting: boolean
+}
+export type MoveWaypoint = {
+  position: Position
+  floor_level: number
+  rotation?: number | null
+  travel_seconds?: number | null
+}
 export type MoveStatus =
   | 'searching'
   | 'moving'

@@ -34,31 +34,6 @@ fn looks_like_monster_id(s: &str) -> bool {
 }
 
 impl SharedState {
-    pub fn mount_turn_delay_ms(&self, rotation: f32) -> u64 {
-        self.self_player
-            .as_ref()
-            .and_then(|p| p.mount.map(|kind| (p, kind)))
-            .map_or(0, |(p, kind)| {
-                let speed = onlinerpg_shared::PLAYER_MOVE_SPEED * self.movement_speed_mult();
-                (onlinerpg_shared::mount_movement::turn_delay(
-                    p.rotation,
-                    rotation,
-                    speed,
-                    kind.turn_radius(),
-                ) * 1000.0)
-                    .ceil() as u64
-            })
-    }
-
-    pub fn movement_speed_mult(&self) -> f32 {
-        self.self_move_mult
-            * self
-                .self_player
-                .as_ref()
-                .and_then(|p| p.mount)
-                .map_or(1.0, onlinerpg_shared::mount::MountKind::speed_mult)
-    }
-
     /// Resolve a visible `move` target by id shape, then by exact name.
     pub fn resolve_move_target(&self, raw: &str) -> Result<MoveTarget, MoveTargetError> {
         let asked = raw.trim();
@@ -257,35 +232,6 @@ impl SharedState {
         )
     }
 
-    /// Ground height at (x, z) for something standing on passability floor
-    /// `floor` — a dungeon floor, or the entrance ramp when `floor` is the
-    /// surface. `None` means the dungeons have no say and terrain height wins.
-    /// The single answer to "how high is the ground here", so the send path,
-    /// the mover and the monster relay cannot drift apart.
-    pub(super) fn dungeon_ground_y(&self, x: f32, z: f32, floor: u8) -> Option<f32> {
-        self.world_cache
-            .read()
-            .unwrap()
-            .dungeon_at(x, z)?
-            .ground_y(floor, x, z)
-    }
-
-    /// Position and wire floor for a step to (x, z) on passability floor
-    /// `floor`. Inside a dungeon the Y comes from that floor (or the stair
-    /// ramp we are walking), and the declared floor follows the Y — the server
-    /// derives collision from Y and validates the declaration against it, so
-    /// anything else is either refused or silently collided on the wrong
-    /// floor. Above ground the caller's Y stands and `send_command` snaps it.
-    pub fn step_pose(&self, x: f32, z: f32, floor: u8, current_y: f32) -> (Position, i8) {
-        match self.dungeon_ground_y(x, z, floor) {
-            Some(y) => (Position { x, y, z }, self.wire_floor_at(x, z, y)),
-            None => (
-                Position { x, y: current_y, z },
-                floor_level_for_passability(floor),
-            ),
-        }
-    }
-
     /// The action's opt-out over `always_sprint`, then the server's own hunger
     /// gate (shared `can_sprint`) so both sims agree on our speed. With no
     /// hunger data yet, let the server judge.
@@ -296,88 +242,42 @@ impl SharedState {
                 .is_none_or(|(satiation, _)| onlinerpg_shared::hunger::can_sprint(satiation))
     }
 
-    /// Send one movement step toward (x, z) on passability floor `floor`,
-    /// posed and floor-stamped by `step_pose`. The single way a mover puts a
-    /// step on the wire, so none of them can forget to update the floor we
-    /// declare — which the server checks our height against. `background` is
-    /// for steps no current action asked for (the follow task), which must
-    /// stay out of the action-progress count. Returns whether the step
-    /// actually sprints, which is what the caller paces the walk by.
-    pub async fn send_step(
+    pub async fn request_move(
         &mut self,
         x: f32,
         z: f32,
-        floor: u8,
-        rotation: f32,
         background: bool,
         sprint: Option<bool>,
-    ) -> anyhow::Result<bool> {
-        let current_y = self
-            .self_player
-            .as_ref()
-            .map(|p| p.position.y)
-            .unwrap_or(0.0);
-        let (position, floor_level) = self.step_pose(x, z, floor, current_y);
-        if !self.world_view.covers(&position) || !self.pending_terrain.is_empty() {
-            anyhow::bail!("Waiting for the server to synchronize the next movement segment");
+    ) -> anyhow::Result<u32> {
+        self.send_flagged_command(
+            ClientMessage::PlayerMoveGoal {
+                request_id: 0,
+                x,
+                z,
+                sprinting: self.sprint_allowed(sprint),
+                stop_at_entrance: false,
+            },
+            background,
+        )
+        .await?;
+        Ok(self.move_request_id)
+    }
+
+    pub(super) fn apply_move_progress(
+        &mut self,
+        position: Position,
+        rotation: f32,
+        floor_level: i8,
+    ) {
+        if let Some(player) = self.self_player.as_mut() {
+            player.position = position;
+            player.rotation = rotation;
+            player.floor_level = floor_level;
         }
         self.adopt_floor_level(floor_level);
-        let sprinting = self.sprint_allowed(sprint);
-        let cmd = ClientMessage::PlayerMove {
-            position,
-            rotation,
-            floor_level,
-            append: false,
-            sprinting,
-        };
-        self.send_flagged_command(cmd, background).await?;
-        Ok(sprinting)
-    }
-
-    /// The wire `floor_level` to declare while standing at (x, z, y): whichever
-    /// floor's grid sits nearest that Y. Deliberately the shared query the
-    /// server itself collides against (`authoritative_floor`), so our
-    /// declaration and its collision can never resolve differently.
-    pub(super) fn wire_floor_at(&self, x: f32, z: f32, y: f32) -> i8 {
-        let world = self.world_cache.read().unwrap();
-        floor_level_for_passability(pathfinding::get_floor_at_position(
-            world.passability_cache(),
-            x,
-            z,
-            y,
-        ))
-    }
-
-    pub(super) async fn snap_position_to_ground(
-        &self,
-        mut position: Position,
-        context: &str,
-    ) -> Position {
-        let original_y = position.y;
-        match self
-            .height_sampler
-            .sample_height(position.x, position.z)
-            .await
-        {
-            Ok(terrain_y) => {
-                tracing::debug!(
-                    "{context} height correction: ({:.1}, {:.1}) y: {:.2} -> {:.2}",
-                    position.x,
-                    position.z,
-                    original_y,
-                    terrain_y
-                );
-                position.y = terrain_y;
-            }
-            Err(e) => {
-                tracing::warn!(
-                    "Failed to sample terrain height for {context} at ({:.1}, {:.1}): {e}",
-                    position.x,
-                    position.z
-                );
-            }
+        if let Some(id) = self.self_player_id {
+            self.latest_player_moves.remove(&id);
         }
-        position
     }
 
     /// Apply the server's monster pose.
@@ -424,34 +324,10 @@ impl SharedState {
         self.sighted_pois.remove(&format!("m:{id}"));
     }
 
-    /// The server put us somewhere we did not walk to — a refused step, a
-    /// return scroll, a respawn. Adopting the pose is not enough: the mover
-    /// watches `position_corrections` to drop the path it was walking.
+    /// Relocation invalidates any active walk.
     pub(super) fn relocate_self(&mut self, position: Position, rotation: f32, floor_level: i8) {
-        if let Some(ref mut p) = self.self_player {
-            p.position = position;
-            p.rotation = rotation;
-            p.floor_level = floor_level;
-        }
-        self.adopt_floor_level(floor_level);
-        self.position_corrections = self.position_corrections.wrapping_add(1);
-        if let Some(id) = self.self_player_id {
-            self.latest_player_moves.remove(&id);
-        }
-    }
-
-    /// Snap to terrain after relocation without interrupting a furniture pose.
-    pub async fn sync_height(&mut self) -> anyhow::Result<()> {
-        let Some(ref p) = self.self_player else {
-            return Ok(());
-        };
-        if p.object_type.is_some() {
-            return Ok(());
-        }
-        let pos = p.position;
-        let rotation = p.rotation;
-        self.send_background_command(ClientMessage::player_move(pos, rotation, 0))
-            .await
+        self.apply_move_progress(position, rotation, floor_level);
+        self.relocations = self.relocations.wrapping_add(1);
     }
 
     /// Our own pose mirror. `send_command` writes it optimistically on
@@ -612,7 +488,7 @@ impl SharedState {
         )
     }
 
-    /// Build a `PlayerMove` command at the current position rotated to face
+    /// Build a facing request toward
     /// the monster. Mirrors the web client's pre-attack position-sync, so
     /// the swing animation orients toward the target. Returns `None` if
     /// either the agent or the monster isn't currently known.
@@ -633,10 +509,8 @@ impl SharedState {
     fn face_position_command(&self, target_pos: Position) -> Option<ClientMessage> {
         let self_player = self.self_player.as_ref()?;
         let to_target = crate::geom::PlanarDelta::between(&self_player.position, &target_pos);
-        Some(ClientMessage::player_move(
-            self_player.position,
-            to_target.rotation(),
-            self.self_floor_level,
-        ))
+        Some(ClientMessage::PlayerFace {
+            rotation: to_target.rotation(),
+        })
     }
 }

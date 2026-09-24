@@ -232,10 +232,9 @@ import type {
   CharacterAttributes,
   CharacterRollResult,
   ServerGroundItem,
-  PositionCorrection,
-  MountRecovery,
   MovePath,
   MoveProgress,
+  Position,
   ServerMonster,
   ServerPlayer,
   CharacterClass,
@@ -472,8 +471,7 @@ export type MessageEvents = {
   interactionRejected: NetworkEvent<(reason: string) => void>
   movePath: NetworkEvent<(path: MovePath) => void>
   moveProgress: NetworkEvent<(progress: MoveProgress) => void>
-  mountRecovery: NetworkEvent<(update: MountRecovery) => void>
-  positionCorrected: NetworkEvent<(c: PositionCorrection) => void>
+  playerRelocated: NetworkEvent<(position: Position, rotation: number) => void>
 }
 
 function isSelfPlayer(playerId: number): boolean {
@@ -605,7 +603,6 @@ export function resetTerrainDownloads() {
 }
 let requestResync = () => {}
 let resyncTimer: ReturnType<typeof setTimeout> | undefined
-let lastCorrection = -Infinity
 function scheduleResync() {
   if (resyncTimer !== undefined) return
   resyncTimer = setTimeout(() => {
@@ -971,28 +968,6 @@ export function handleServerMessage(
       events.moveProgress.emit(data)
       break
     }
-    case 'MountRecovery': {
-      events.mountRecovery.emit(data)
-      break
-    }
-
-    case 'MovementResync':
-    case 'PositionCorrected': {
-      if (type === 'PositionCorrected') {
-        if (performance.now() - lastCorrection < 3000) resyncWorld()
-        lastCorrection = performance.now()
-      }
-      syncOwnFloor(data.floor_level, data.position.x, data.position.z)
-      events.positionCorrected.emit({
-        x: data.position.x,
-        y: data.position.y,
-        z: data.position.z,
-        rotation: data.rotation,
-        resyncId: type === 'MovementResync' ? data.resync_id : undefined,
-      })
-      break
-    }
-
     case 'PlayerTeleportEffect': {
       const local = get(gameStore).currentPlayer?.id === data.player_id
       playTeleportEffect(
@@ -1032,6 +1007,7 @@ export function handleServerMessage(
           return s
         })
         syncOwnFloor(data.floor_level, data.position.x, data.position.z)
+        events.playerRelocated.emit(data.position, data.rotation)
         requestCameraReset()
         // Any teleport settles the summon toast — an accepted one succeeded,
         // and one surviving the player's own departure would mislead.
@@ -1603,6 +1579,10 @@ export function handleServerMessage(
         )
         requestCameraReset()
         addChatMessage({ text: translate('system.revived'), sender: 'system' })
+        events.playerRelocated.emit(
+          serverPlayer.position,
+          serverPlayer.rotation
+        )
       } else {
         // Respawns now travel across floors (for NPCs tending the sick
         // room); a player this client doesn't render is not ours to move.

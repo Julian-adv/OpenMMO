@@ -31,7 +31,6 @@ export function createPlayerControlStateDefinitions(
   return {
     idle: { name: 'idle', ...overrides.idle },
     moving: { name: 'moving', ...overrides.moving },
-    server_moving: { name: 'server_moving', ...overrides.server_moving },
     keyboard_moving: { name: 'keyboard_moving', ...overrides.keyboard_moving },
     attacking: { name: 'attacking', ...overrides.attacking },
     object_interacting: {
@@ -40,7 +39,6 @@ export function createPlayerControlStateDefinitions(
     },
     picking_up: { name: 'picking_up', ...overrides.picking_up },
     dead: { name: 'dead', ...overrides.dead },
-    jump_feedback: { name: 'jump_feedback', ...overrides.jump_feedback },
   }
 }
 
@@ -155,13 +153,11 @@ export interface FramePhaseStateActions {
 const framePhaseStateNames = [
   'idle',
   'moving',
-  'server_moving',
   'keyboard_moving',
   'attacking',
   'object_interacting',
   'picking_up',
   'dead',
-  'jump_feedback',
 ] as const satisfies readonly PlayerControlStateName[]
 
 export function createFramePhaseStateOverrides({
@@ -213,31 +209,12 @@ export function createNetworkEventStateOverrides({
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// Timer cleanup overrides (jump feedback timer on exit)
-// ───────────────────────────────────────────────────────────────────────────
-
-export interface TimerCleanupStateActions {
-  clearJumpFeedbackTimer: () => void
-}
-
-export function createTimerCleanupStateOverrides({
-  clearJumpFeedbackTimer,
-}: TimerCleanupStateActions): PlayerControlStateOverrides {
-  return {
-    jump_feedback: {
-      exit: clearJumpFeedbackTimer,
-    },
-  }
-}
-
-// ───────────────────────────────────────────────────────────────────────────
 // Local player control state table + machine factory
 // ───────────────────────────────────────────────────────────────────────────
 
 export interface LocalPlayerControlStateActions
   extends
     AnimationEventStateActions,
-    TimerCleanupStateActions,
     NetworkEventStateActions,
     FramePhaseStateActions {
   onServerMoveExit?: () => void
@@ -249,10 +226,12 @@ export function createLocalPlayerControlStateDefinitions(
   return createPlayerControlStateDefinitions(
     composePlayerControlStateOverrides(
       createAnimationEventStateOverrides(actions),
-      createTimerCleanupStateOverrides(actions),
       createNetworkEventStateOverrides(actions),
       createFramePhaseStateOverrides(actions),
-      { server_moving: { exit: actions.onServerMoveExit } }
+      {
+        moving: { exit: actions.onServerMoveExit },
+        keyboard_moving: { exit: actions.onServerMoveExit },
+      }
     )
   )
 }

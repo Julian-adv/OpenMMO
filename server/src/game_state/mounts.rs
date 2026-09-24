@@ -4,14 +4,6 @@ use super::GameState;
 use crate::types::{Player, PlayerId, ServerMessage};
 
 impl GameState {
-    /// State-only steering check; terrain validation runs outside the movement tick.
-    pub(super) fn can_steer_mount(player: &Player) -> bool {
-        let Some(kind) = player.mount else {
-            return false;
-        };
-        player.health > 0 && (!kind.dismounts_in_combat() || !Self::in_combat(player))
-    }
-
     pub(super) async fn can_ride_here(&self, player: &Player, kind: MountKind) -> bool {
         if player.health == 0
             || player.floor_level != 0
@@ -55,7 +47,7 @@ impl GameState {
     }
 
     pub(super) async fn set_mount(&self, player_id: &PlayerId, mount: Option<MountKind>) {
-        let mut queues = self.movement_intents.write().await;
+        self.clear_player_movement(player_id, "mount_changed").await;
         let Some((was, at, floor)) = self
             .players
             .read()
@@ -86,25 +78,6 @@ impl GameState {
             player.position.y = ground_y;
             (player.position, player.rotation)
         };
-        if was.is_some_and(MountKind::floats) != mount.is_some_and(MountKind::floats) {
-            if let Some(queue) = queues.get_mut(player_id) {
-                let mut ref_y = position.y;
-                for intent in queue {
-                    if intent.floor_level >= 0 {
-                        intent.target.y = self
-                            .surface_ground_y(
-                                intent.floor_level as u8,
-                                &intent.target,
-                                ref_y,
-                                mount,
-                            )
-                            .await;
-                    }
-                    ref_y = intent.target.y;
-                }
-            }
-        }
-        drop(queues);
         if (position.y - at.y).abs() > 1e-3 {
             self.publish_nearby(
                 &position,

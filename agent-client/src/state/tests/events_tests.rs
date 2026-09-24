@@ -1,67 +1,6 @@
 use super::*;
 
 #[test]
-fn movement_resync_relocates_and_acknowledges_the_server_barrier() {
-    let (mut state, _rx) = test_state();
-    let player = test_player(20.0, 30.0);
-    state.self_player_id = Some(player.id);
-    state.self_player = Some(player);
-    state.push_event(ServerMessage::MovementResync {
-        resync_id: 42,
-        position: Position {
-            x: 1.0,
-            y: -3.0,
-            z: 2.0,
-        },
-        rotation: 0.5,
-        floor_level: -1,
-    });
-    assert_eq!(state.self_player.as_ref().unwrap().position.x, 1.0);
-    assert_eq!(state.self_floor_level, -1);
-    assert_eq!(state.position_corrections, 1);
-    assert!(state
-        .drain_pending_commands()
-        .iter()
-        .any(|message| matches!(message, ClientMessage::MovementResyncAck { resync_id: 42 })));
-}
-
-#[tokio::test]
-async fn movement_resync_ack_precedes_any_new_movement() {
-    let (mut state, mut rx) = test_state();
-    state.self_player = Some(test_player(0.0, 0.0));
-    state.push_event(ServerMessage::MovementResync {
-        resync_id: 7,
-        position: Position {
-            x: 1.0,
-            y: 0.0,
-            z: 2.0,
-        },
-        rotation: 0.0,
-        floor_level: 0,
-    });
-    state
-        .send_command(ClientMessage::PlayerMountTurn {
-            rotation: 1.0,
-            stop: false,
-            sprinting: false,
-        })
-        .await
-        .unwrap();
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(ClientMessage::MovementResyncAck { resync_id: 7 })
-    ));
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(ClientMessage::PlayerMountTurn { .. })
-    ));
-    assert!(!state
-        .drain_pending_commands()
-        .iter()
-        .any(|m| matches!(m, ClientMessage::MovementResyncAck { .. })));
-}
-
-#[test]
 fn mana_updates_are_tracked_at_zero_and_cleared_on_character_change() {
     let (mut state, _rx) = test_state();
     state.push_event(ServerMessage::ManaUpdate {
@@ -109,8 +48,8 @@ fn a_self_teleport_resyncs_position_and_floor() {
     assert_eq!(now.rotation, 2.5);
     assert_eq!(now.floor_level, 0);
     assert_eq!(
-        s.position_corrections, 1,
-        "teleport must abandon any in-flight walk, like PositionCorrected"
+        s.relocations, 1,
+        "teleport must abandon any in-flight walk, without resuming its previous walk"
     );
 }
 
@@ -131,7 +70,7 @@ fn a_self_respawn_resyncs_position_and_floor() {
     let now = s.self_player.as_ref().unwrap();
     assert_eq!(now.position.x, -1475.0);
     assert_eq!(now.floor_level, 0);
-    assert_eq!(s.position_corrections, 1);
+    assert_eq!(s.relocations, 1);
 }
 
 /// Someone else's teleport moves their tracked entry, not ours: mixing the
@@ -160,7 +99,7 @@ fn a_neighbours_teleport_only_moves_their_entry() {
     assert_eq!(s.self_player.as_ref().unwrap().position.x, -1464.5);
     assert_eq!(s.self_floor_level, 0);
     assert_eq!(
-        s.position_corrections, 0,
+        s.relocations, 0,
         "a neighbour's teleport must not abandon our path"
     );
 }

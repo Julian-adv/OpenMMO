@@ -10,6 +10,8 @@ export type PlayerControlEvent =
       /** Re-armed on the deferred move so a stand-up doesn't drop the action
        *  the click asked for. */
       approach?: PendingApproach | null
+      sprinting?: boolean
+      stopAtHouseEntrance?: boolean
     }
   | { type: 'anim_interaction_finished' }
   | { type: 'anim_pickup_grab' }

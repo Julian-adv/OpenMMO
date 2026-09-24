@@ -1,236 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Position } from '../../../utils/movementUtils'
-import {
-  decideMoveRequest,
-  runMoveRequest,
-  startClickMovement,
-  type MoveRequestActions,
-} from './move-request'
+import { prepareMoveRequest } from './move-request'
 
-const baseInput = {
-  currentPlayerHealth: 10,
-  interactionExit: 'none' as const,
-  hasCurrentPlayer: true,
-  hasKeyboardInput: false,
-}
-
-describe('decideMoveRequest', () => {
-  it('ignores dead players before interaction exit handling', () => {
-    expect(
-      decideMoveRequest({
-        ...baseInput,
-        currentPlayerHealth: 0,
-        interactionExit: 'pickup',
-      })
-    ).toEqual({ kind: 'ignored' })
-  })
-
-  it('preserves pickup immediate retry and object delayed stand-up decisions', () => {
-    expect(
-      decideMoveRequest({
-        ...baseInput,
-        interactionExit: 'pickup',
-      }).kind
-    ).toBe('exit_pickup_and_retry')
-
-    expect(
-      decideMoveRequest({
-        ...baseInput,
-        interactionExit: 'object',
-      }).kind
-    ).toBe('exit_object_and_delay')
-  })
-
-  it('allows click movement but blocks keyboard contention', () => {
-    expect(decideMoveRequest(baseInput).kind).toBe('start')
-
-    expect(
-      decideMoveRequest({
-        ...baseInput,
-        hasKeyboardInput: true,
-      }).kind
-    ).toBe('ignored')
-  })
-
-  it('requires a current player to start movement', () => {
-    expect(
-      decideMoveRequest({
-        ...baseInput,
-        hasCurrentPlayer: false,
-        currentPlayerHealth: null,
-      }).kind
-    ).toBe('ignored')
-  })
-})
-
-const currentPos: Position = { x: 0, y: 0, z: 0 }
-const clickPosition: Position = { x: 4, y: 0, z: 5 }
-
-const deps = {
-  currentFloor: 0,
-  getFloorAt: () => 0,
-  findPath: () => ({ waypoints: [{ x: 4, z: 5, floor: 0 }] }),
-  waypointHeight: () => 0,
-  sendPlayerMove: vi.fn(),
-  startSpeed: 0,
-}
-
-describe('startClickMovement', () => {
-  it('uses pathfinding waypoints when available', () => {
-    const sendPlayerMove = vi.fn()
-
-    const started = startClickMovement({
-      currentPos,
-      clickPosition,
-      currentFloor: 0,
-      getFloorAt: vi.fn(() => 1),
-      findPath: vi.fn(() => ({
-        waypoints: [{ x: 2, z: 3, floor: 1 }],
-      })),
-      waypointHeight: vi.fn((_f: number, x: number, z: number) => x + z),
-      sendPlayerMove,
-      startSpeed: 0,
-    })
-
-    expect(started?.pathWaypoints).toEqual([{ x: 2, z: 3, floor: 1 }])
-    expect(started?.movementTarget).toEqual({ x: 2, y: 5, z: 3 })
-    expect(sendPlayerMove).toHaveBeenCalledWith(
-      { x: 2, y: 5, z: 3 },
-      expect.any(Number),
-      1
-    )
-  })
-
-  // Collision height must use the waypoint's floor.
-  it("resolves the waypoint's height on the waypoint's floor, not the walker's", () => {
-    const waypointHeight = vi.fn(() => 7)
-
-    startClickMovement({
-      currentPos,
-      clickPosition,
-      currentFloor: 0,
-      getFloorAt: vi.fn(() => 1),
-      findPath: vi.fn(() => ({ waypoints: [{ x: 2, z: 3, floor: 1 }] })),
-      waypointHeight,
-      sendPlayerMove: vi.fn(),
-      startSpeed: 0,
-    })
-
-    expect(waypointHeight).toHaveBeenCalledWith(1, 2, 3)
-  })
-
-  it('does not send an unreachable goal when pathfinding returns no path', () => {
-    const sendPlayerMove = vi.fn()
-
-    const started = startClickMovement({
-      currentPos,
-      clickPosition,
-      currentFloor: 0,
-      getFloorAt: vi.fn(() => 2),
-      findPath: vi.fn(() => ({ waypoints: [] })),
-      waypointHeight: vi.fn((_f: number, x: number, z: number) => x + z),
-      sendPlayerMove,
-      startSpeed: 0,
-    })
-
-    expect(started).toBeNull()
-    expect(sendPlayerMove).not.toHaveBeenCalled()
-  })
-
-  it('carries the running speed into the new leg instead of restarting at 0', () => {
-    const started = startClickMovement({
-      currentPos,
-      clickPosition,
-      ...deps,
-      startSpeed: 4.5,
-    })
-
-    expect(started?.movementState.currentSpeed).toBe(4.5)
-  })
-})
-
-function actions(): MoveRequestActions {
-  return {
-    exitPickupAndRetry: vi.fn(),
-    exitObjectAndDelay: vi.fn(),
-    cancelBlockedMovement: vi.fn(),
-    applyStartedMovement: vi.fn(),
-  }
-}
-
-describe('runMoveRequest', () => {
-  it('cancels the previous movement when its replacement has no path', () => {
-    const a = actions()
-    const sendPlayerMove = vi.fn()
-    runMoveRequest({
-      ...deps,
-      clickPosition,
-      currentPlayer: { health: 10, position: currentPos },
-      interactionExit: 'none',
+describe('move request preparation', () => {
+  it('waits for an object exit and refuses movement while dead or using the keyboard', () => {
+    const actions = { exitPickupAndRetry: vi.fn(), exitObjectAndDelay: vi.fn() }
+    const input = {
+      currentPlayerHealth: 100,
+      hasCurrentPlayer: true,
       hasKeyboardInput: false,
-      findPath: () => ({ waypoints: [] }),
-      sendPlayerMove,
-      actions: a,
-    })
-
-    expect(a.cancelBlockedMovement).toHaveBeenCalledOnce()
-    expect(a.applyStartedMovement).not.toHaveBeenCalled()
-    expect(sendPlayerMove).not.toHaveBeenCalled()
-  })
-
-  it('routes pickup and object interaction exits before starting movement', () => {
-    const pickupActions = actions()
-    runMoveRequest({
-      clickPosition: { x: 1, y: 0, z: 0 },
-      currentPlayer: { health: 10, position: { x: 0, y: 0, z: 0 } },
-      interactionExit: 'pickup',
-      hasKeyboardInput: false,
-      actions: pickupActions,
-      ...deps,
-    })
-
-    expect(pickupActions.exitPickupAndRetry).toHaveBeenCalledOnce()
-    expect(pickupActions.applyStartedMovement).not.toHaveBeenCalled()
-
-    const objectActions = actions()
-    runMoveRequest({
-      clickPosition: { x: 1, y: 0, z: 0 },
-      currentPlayer: { health: 10, position: { x: 0, y: 0, z: 0 } },
-      interactionExit: 'object',
-      hasKeyboardInput: false,
-      actions: objectActions,
-      ...deps,
-    })
-
-    expect(objectActions.exitObjectAndDelay).toHaveBeenCalledOnce()
-    expect(objectActions.applyStartedMovement).not.toHaveBeenCalled()
-  })
-
-  it('starts movement when the request is allowed', () => {
-    const a = actions()
-    runMoveRequest({
-      clickPosition: { x: 1, y: 0, z: 0 },
-      currentPlayer: { health: 10, position: { x: 0, y: 0, z: 0 } },
-      interactionExit: 'none',
-      hasKeyboardInput: false,
-      actions: a,
-      ...deps,
-    })
-
-    expect(a.applyStartedMovement).toHaveBeenCalledOnce()
-  })
-
-  it('ignores blocked requests', () => {
-    const a = actions()
-    runMoveRequest({
-      clickPosition: { x: 1, y: 0, z: 0 },
-      currentPlayer: { health: 0, position: { x: 0, y: 0, z: 0 } },
-      interactionExit: 'none',
-      hasKeyboardInput: false,
-      actions: a,
-      ...deps,
-    })
-
-    expect(a.applyStartedMovement).not.toHaveBeenCalled()
+      interactionExit: 'none' as const,
+    }
+    expect(prepareMoveRequest(input, actions)).toBe(true)
+    expect(
+      prepareMoveRequest({ ...input, currentPlayerHealth: 0 }, actions)
+    ).toBe(false)
+    expect(
+      prepareMoveRequest({ ...input, hasKeyboardInput: true }, actions)
+    ).toBe(false)
+    expect(
+      prepareMoveRequest({ ...input, interactionExit: 'object' }, actions)
+    ).toBe(false)
+    expect(actions.exitObjectAndDelay).toHaveBeenCalledOnce()
   })
 })

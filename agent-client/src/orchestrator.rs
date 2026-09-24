@@ -641,7 +641,7 @@ async fn run_npc_session(
 
 /// One server message into shared state. The entry handshake reads a few
 /// before the reader task starts, so both paths go through here.
-async fn handle_incoming(state: &Arc<Mutex<SharedState>>, label: &str, msg: ServerMessage) {
+async fn handle_incoming(state: &Arc<Mutex<SharedState>>, _label: &str, msg: ServerMessage) {
     let mut s = state.lock().await;
     if let ServerMessage::LandscapeChanged { tiles } = &msg {
         for tile in tiles {
@@ -663,32 +663,7 @@ async fn handle_incoming(state: &Arc<Mutex<SharedState>>, label: &str, msg: Serv
         return;
     }
 
-    // Relocations land on a configured Y, not the terrain's. Asked before
-    // `push_event`, which is where `JoinSuccess` sets `self_player_id`.
-    let needs_height_sync = match &msg {
-        ServerMessage::JoinSuccess { .. } => true,
-        ServerMessage::PlayerRespawned { player } => s.self_player_id == Some(player.id),
-        ServerMessage::PlayerTeleported { player_id, .. } => s.self_player_id == Some(*player_id),
-        ServerMessage::WorldUpdate { events, .. } => events
-            .iter()
-            .flat_map(|event| &event.messages)
-            .any(|message| match message {
-                ServerMessage::PlayerTeleported { player_id, .. } => {
-                    s.self_player_id == Some(*player_id)
-                }
-                ServerMessage::PlayerRespawned { player } => s.self_player_id == Some(player.id),
-                _ => false,
-            }),
-        _ => false,
-    };
-
     s.push_event(msg);
-
-    if needs_height_sync {
-        if let Err(e) = s.sync_height().await {
-            warn!("[{label}] Failed to sync height after relocation: {e}");
-        }
-    }
 }
 
 async fn apply_pending_terrain(

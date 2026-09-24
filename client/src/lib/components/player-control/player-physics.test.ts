@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { bridgeManager } from '../../managers/bridgeManager'
 import { dungeonManager } from '../../managers/dungeonManager'
+import { housingManager } from '../../managers/housingManager'
 import { TerrainHeightManager } from '../../managers/terrainHeightManager'
 import { floatingSurfaceY } from '../../utils/floatingSurface'
-import { syncPlayerTerrainHeight } from './fsm/movement-tick'
 import { createPlayerPhysics } from './player-physics'
 
 afterEach(() => {
@@ -11,7 +11,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function boatPhysics() {
+function boatPhysics(floor = 0) {
   const heightManager = new TerrainHeightManager()
   vi.spyOn(heightManager, 'groundYOrNull').mockReturnValue(-5)
   vi.spyOn(heightManager, 'hasHeightData').mockReturnValue(true)
@@ -20,8 +20,7 @@ function boatPhysics() {
   const physics = createPlayerPhysics({
     getHeightManager: () => heightManager,
     getCurrentPlayerY: () => player.position.y,
-    getFloorOffset: () => 0,
-    getPassabilityFloor: () => 0,
+    getPassabilityFloor: () => floor,
     getFloatSurfaceY: (x, z) =>
       floatingSurfaceY({
         x,
@@ -32,11 +31,11 @@ function boatPhysics() {
         hasWaterSurfaceData,
       }),
   })
-  return { physics, player, heightManager, hasWaterSurfaceData }
+  return { physics, player, hasWaterSurfaceData }
 }
 
 describe('floating player physics', () => {
-  it('keeps the rider and waypoints under a nearby bridge deck', () => {
+  it('keeps the rider under a nearby bridge deck', () => {
     bridgeManager.syncRegion(
       0,
       0,
@@ -74,24 +73,36 @@ describe('floating player physics', () => {
     expect(bridgeManager.findDeckYAt(0, 0, 0)).toBe(1)
     const { physics } = boatPhysics()
     expect(physics.sampleHeight(0, 0)).toBe(0)
-    expect(physics.waypointHeight(0, 0, 0)).toBe(0)
   })
 
   it('holds the rider above the bed while water data is loading', () => {
-    const { physics, player, heightManager, hasWaterSurfaceData } =
-      boatPhysics()
+    const { physics, player, hasWaterSurfaceData } = boatPhysics()
     hasWaterSurfaceData.mockReturnValue(false)
-    syncPlayerTerrainHeight({
-      player,
-      hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
-      sampleHeight: physics.sampleHeight,
-    })
+    expect(physics.sampleHeight(0, 0)).toBe(0)
     expect(player.position.y).toBe(0)
-    expect(physics.waypointHeight(0, 1, 0)).toBe(0)
+    expect(physics.sampleHeight(1, 0)).toBe(0)
   })
 
-  it('keeps underground waypoints on the dungeon floor', () => {
+  it('keeps underground interactions on the dungeon floor', () => {
     vi.spyOn(dungeonManager, 'sampleHeightAt').mockReturnValue(-10)
-    expect(boatPhysics().physics.waypointHeight(-1, 0, 0)).toBe(-10)
+    expect(boatPhysics(-1).physics.sampleHeight(0, 0)).toBe(-10)
+  })
+})
+
+describe('house interaction heights', () => {
+  it('samples the destination floor and falls back to terrain outside the house', () => {
+    const heightManager = new TerrainHeightManager()
+    vi.spyOn(heightManager, 'getHeightAtWorldPosition').mockReturnValue(-5)
+    const houseHeight = vi.spyOn(housingManager, 'floorHeightAt')
+    houseHeight.mockReturnValueOnce(67.15).mockReturnValueOnce(null)
+    const physics = createPlayerPhysics({
+      getHeightManager: () => heightManager,
+      getCurrentPlayerY: () => 67.1,
+      getPassabilityFloor: () => 1,
+    })
+
+    expect(physics.sampleHeight(3.5, 3.75)).toBe(67.15)
+    expect(houseHeight).toHaveBeenLastCalledWith(1, 3.5, 3.75)
+    expect(physics.sampleHeight(99, 99)).toBe(-5)
   })
 })

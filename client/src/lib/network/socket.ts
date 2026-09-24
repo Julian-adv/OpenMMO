@@ -4,9 +4,8 @@ import type {
   BagLineItem,
   FishingAction,
   Position,
-  PositionCorrection,
-  MountRecovery,
   MoveGoal,
+  MoveDirection,
   MovePath,
   MoveProgress,
   StallBuyLine,
@@ -158,8 +157,8 @@ class NetworkManager {
   private moveRequestId = 0
   readonly movePath = createEvent<(path: MovePath) => void>()
   readonly moveProgress = createEvent<(progress: MoveProgress) => void>()
-  readonly mountRecovery = createEvent<(update: MountRecovery) => void>()
-  readonly positionCorrected = createEvent<(c: PositionCorrection) => void>()
+  readonly playerRelocated =
+    createEvent<(position: Position, rotation: number) => void>()
 
   constructor() {
     // Only a fully authenticated connection clears the counter; a socket that
@@ -198,10 +197,9 @@ class NetworkManager {
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
-      positionCorrected: this.positionCorrected,
-      mountRecovery: this.mountRecovery,
       movePath: this.movePath,
       moveProgress: this.moveProgress,
+      playerRelocated: this.playerRelocated,
     }
   }
 
@@ -510,24 +508,6 @@ class NetworkManager {
     }
   }
 
-  sendPlayerMountRecover(requestId: number, goal: Position) {
-    this.sendMessage({ PlayerMountRecover: { request_id: requestId, goal } })
-  }
-
-  sendMovementSample(position: Position, rotation: number, floorLevel: number) {
-    this.sendMessage({
-      PlayerMovementSample: { position, rotation, floor_level: floorLevel },
-    })
-  }
-
-  acknowledgeMovementResync(resyncId: number) {
-    this.sendMessage({ MovementResyncAck: { resync_id: resyncId } })
-  }
-
-  sendPlayerMountTurn(rotation: number, stop = false, sprinting = false) {
-    this.sendMessage({ PlayerMountTurn: { rotation, stop, sprinting } })
-  }
-
   nextMoveRequestId() {
     this.moveRequestId = (this.moveRequestId + 1) >>> 0
     return this.moveRequestId
@@ -541,45 +521,12 @@ class NetworkManager {
     this.sendMessage({ PlayerMoveStop: { request_id: requestId } })
   }
 
-  sendPlayerMove(
-    position: { x: number; y: number; z: number },
-    rotation: number,
-    floorLevel: number,
-    append = false,
-    sprinting = false
-  ) {
-    this.sendMessage({
-      PlayerMove: {
-        position,
-        rotation,
-        floor_level: floorLevel,
-        append,
-        sprinting,
-      },
-    })
+  sendMoveDirection(input: MoveDirection) {
+    this.sendMessage({ PlayerMoveDirection: input })
   }
 
-  sendPlayerKeyboardMove(
-    position: Position,
-    rotation: number,
-    floorLevel: number,
-    forward: number,
-    sprinting: boolean
-  ) {
-    this.sendMessage({
-      PlayerKeyboardMove: {
-        position,
-        rotation,
-        floor_level: floorLevel,
-        forward,
-        sprinting,
-      },
-    })
-  }
-
-  /** Floor change between waypoints — see ClientMessage::PlayerFloorChanged. */
-  sendPlayerFloor(floorLevel: number) {
-    this.sendMessage({ PlayerFloorChanged: { floor_level: floorLevel } })
+  sendPlayerFace(rotation: number) {
+    this.sendMessage({ PlayerFace: { rotation } })
   }
 
   sendDebugTeleport(position: Position) {
@@ -807,7 +754,7 @@ class NetworkManager {
     const depth = get(currentDungeonDepth)
     const floorLevel =
       depth > 0 ? -depth : Math.max(0, get(playerVisualFloorLevel))
-    this.sendPlayerMove(position, player.rotation, floorLevel)
+    this.sendMoveStop(this.nextMoveRequestId())
     beginLocalTeleport({ playerId: player.id, position, floorLevel }, () => {
       const current = get(gameStore).currentPlayer
       if (

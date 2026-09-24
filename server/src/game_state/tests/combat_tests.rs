@@ -660,16 +660,13 @@ async fn dagger_skill_finishes_the_existing_approach_before_impact() {
     let mut rx = setup_dagger_skill(&game, "dagger").await;
     let player_id = pid("archer");
     let position = game.players.read().await[&player_id].position;
-    game.update_player_position(
+    game.request_test_move(
         &player_id,
-        super::player::MoveCommand {
+        TestMove {
             position: Position {
                 x: position.x + 0.3,
                 ..position
             },
-            rotation: 0.0,
-            floor_level: 0,
-            append: false,
             sprinting: false,
         },
         false,
@@ -679,7 +676,7 @@ async fn dagger_skill_finishes_the_existing_approach_before_impact() {
         game.dagger_double_slash(&player_id, "skill_target".into(), None),
         async {
             tokio::time::sleep(Duration::from_millis(100)).await;
-            game.tick_player_movement(0.1).await;
+            game.advance_test_movement(0.1).await;
         }
     );
     let damage: Vec<_> = drain(&mut rx)
@@ -955,16 +952,13 @@ async fn dagger_skill_new_movement_command_cancels_the_second_hit() {
         game.dagger_double_slash(&player_id, "skill_target".into(), None),
         async {
             tokio::time::sleep(Duration::from_millis(280)).await;
-            game.update_player_position(
+            game.request_test_move(
                 &player_id,
-                super::player::MoveCommand {
+                TestMove {
                     position: Position {
                         x: position.x + 1.0,
                         ..position
                     },
-                    rotation: 0.0,
-                    floor_level: 0,
-                    append: false,
                     sprinting: false,
                 },
                 false,

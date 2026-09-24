@@ -20,7 +20,7 @@ async fn walking_spawns_monsters_and_standing_still_does_not() {
     );
 
     for _ in 0..100 {
-        game_state.tick_player_movement(1.0).await;
+        game_state.advance_test_movement(1.0).await;
     }
     assert_eq!(
         nearby_monster_count(&game_state, &player_id).await,

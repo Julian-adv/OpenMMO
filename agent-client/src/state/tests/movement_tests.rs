@@ -1,25 +1,5 @@
 use super::*;
 
-#[test]
-fn mounted_movement_waits_for_turning_before_the_next_leg() {
-    let (mut s, _rx) = test_state();
-    let mut me = test_player(0.0, 0.0);
-    me.rotation = 0.0;
-    s.self_player = Some(me.clone());
-    assert_eq!(s.mount_turn_delay_ms(std::f32::consts::PI), 0);
-    me.mount = Some(onlinerpg_shared::mount::MountKind::Horse);
-    s.self_player = Some(me);
-    assert_eq!(s.mount_turn_delay_ms(0.0), 0);
-    assert_eq!(s.mount_turn_delay_ms(std::f32::consts::FRAC_PI_2), 714);
-    assert_eq!(s.mount_turn_delay_ms(std::f32::consts::PI), 1227);
-
-    s.self_move_mult = 0.5;
-    assert_eq!(s.mount_turn_delay_ms(std::f32::consts::FRAC_PI_2), 827);
-    assert_eq!(s.mount_turn_delay_ms(std::f32::consts::PI), 1454);
-}
-
-/// A state with one of everything a `move` target can name, so the ladder
-/// is exercised against a populated world rather than an empty one.
 fn targetable_state() -> (SharedState, mpsc::Receiver<ClientMessage>) {
     let (mut s, rx) = test_state();
     let me = test_player(0.0, 0.0);
@@ -252,9 +232,9 @@ async fn a_step_sprints_only_while_the_server_would_allow_it() {
         s.always_sprint = always;
         s.self_hunger = satiation.map(|sat| (sat, hunger_state(sat)));
         synchronize_view(&mut s);
-        s.send_step(1.0, 0.0, 0, 0.0, false, asked).await.unwrap();
+        s.request_move(1.0, 0.0, false, asked).await.unwrap();
         match rx.try_recv() {
-            Ok(ClientMessage::PlayerMove { sprinting, .. }) => sprinting,
+            Ok(ClientMessage::PlayerMoveGoal { sprinting, .. }) => sprinting,
             other => panic!("expected a PlayerMove, got {other:?}"),
         }
     };
@@ -269,4 +249,33 @@ async fn a_step_sprints_only_while_the_server_would_allow_it() {
     assert!(!sprinting_at(Some(0), true, Some(true)).await);
     // Nothing known yet: let the request stand and the server judge it.
     assert!(sprinting_at(None, true, None).await);
+}
+
+#[tokio::test]
+async fn movement_waits_for_current_server_progress_and_never_adopts_a_stale_goal() {
+    use onlinerpg_shared::messages::MoveStatus;
+    let (mut s, mut rx) = targetable_state();
+    let initial = s.self_player.as_ref().unwrap().position;
+    let first = s.request_move(3.0, 0.0, false, Some(false)).await.unwrap();
+    assert!(
+        matches!(rx.recv().await.unwrap(), ClientMessage::PlayerMoveGoal { request_id, .. } if request_id == first)
+    );
+    assert_eq!(s.self_player.as_ref().unwrap().position, initial);
+    let second = s.request_move(6.0, 0.0, false, Some(false)).await.unwrap();
+    let update = |request_id, x, floor_level| ServerMessage::PlayerMoveProgress {
+        request_id,
+        position: p(x, 3.1, 0.0),
+        rotation: 1.0,
+        floor_level,
+        server_time_ms: 1,
+        next_waypoint: 0,
+        speed: 3.0,
+        status: MoveStatus::Moving,
+    };
+    s.push_event(update(first, 3.0, 0));
+    assert_eq!(s.self_player.as_ref().unwrap().position, initial);
+    s.push_event(update(second, 2.0, 1));
+    assert_eq!(s.self_player.as_ref().unwrap().position.x, 2.0);
+    assert_eq!(s.self_floor_level, 1);
+    assert_eq!(s.move_status, Some(MoveStatus::Moving));
 }

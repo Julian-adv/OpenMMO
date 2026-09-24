@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ServerMovement } from './player-control/server-movement'
-  import { syncOwnFloor } from '../network/ownFloor'
+  import { syncOwnFloor, ownPlayerFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
   import { onMount } from 'svelte'
   import { localTeleportActive } from '../stores/teleportEffectStore'
@@ -32,14 +32,9 @@
   import {
     planTravelLeg,
     travelDistance,
-    TRAVEL_ARRIVAL_DISTANCE,
     type TravelDestination,
   } from '../utils/autoTravel'
   import { networkManager } from '../network/socket'
-  import type {
-    PositionCorrection,
-    MountRecovery,
-  } from '../network/networkTypes'
   import { monsterManager } from '../managers/monsterManager'
   import { remotePlayerManager } from '../managers/remotePlayerManager'
   import { groundItemManager } from '../managers/groundItemManager'
@@ -85,7 +80,6 @@
   import {
     mapEditorMode,
     housingEditorMode,
-    debugSpeedMode,
     torchLightEnabled,
     cameraRotationEnabled,
     teleportLoading,
@@ -93,25 +87,11 @@
   import { localTorchEquipped, inventoryStore } from '../stores/inventoryStore'
   import { hungerState, SPRINT_MIN_SATIATION } from '../stores/hungerStore'
   import { isRangedWeapon, weaponRangeMeters } from '../data/itemDefs'
-  import {
-    DEFAULT_MOVEMENT_CONFIG,
-    SPRINT_SPEED_MULT,
-    scaleMovementConfig,
-    type Position,
-    type MovementState,
-    type MovementConfig,
-    type PlayerState,
-  } from '../utils/movementUtils'
-  import {
-    isMounted,
-    mountFloats,
-    mountSpeedMult,
-    mountTurnRadius,
-  } from '../utils/mounts'
+  import { type Position, type PlayerState } from '../utils/movementUtils'
+  import { isMounted, mountFloats } from '../utils/mounts'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import { floatingSurfaceY } from '../utils/floatingSurface'
   import {
-    playerFloorOffset,
     playerInsideHouseId,
     playerVisualFloorLevel,
   } from '../stores/housingStore'
@@ -123,7 +103,6 @@
     wallApproachPositions,
     type ClosedHouseDoor,
   } from '../managers/housing-queries'
-  import { findPath } from '../managers/pathfinding'
   import { PROP_SWING_IMPACT_MS } from '../data/combatTiming'
   import {
     DUNGEON_DOOR_APPROACH,
@@ -155,27 +134,15 @@
     projectPlayerState,
     shouldEmitProjectedPlayerState,
   } from './player-control/fsm/projection'
-  import {
-    runMoveRequest,
-    prepareMoveRequest,
-    type MoveRequestActions,
-  } from './player-control/fsm/move-request'
-  import {
-    createKeyboardMoveSender,
-    createKeyboardSpeedRamp,
-    runKeyboardFrame,
-  } from './player-control/fsm/keyboard'
-  import { BACKWARD_SPEED } from '../utils/horseMovement'
+  import { prepareMoveRequest } from './player-control/fsm/move-request'
+  import { KeyboardDirectionSender } from './player-control/keyboard-direction'
   import {
     dispatchPlayerControlEvent as dispatchQueuedPlayerControlEvent,
     createCanvasIntentEvent,
     type PlayerControlEventActions,
   } from './player-control/fsm/events'
   import { worldView } from '../network/worldView'
-  import { runPlayerMovementTick } from './player-control/fsm/movement-tick'
   import {
-    beginJumpFeedback,
-    shouldFinishJumpFeedback,
     transitionToDeadState,
     transitionToRespawnedState,
   } from './player-control/fsm/lifecycle'
@@ -202,9 +169,7 @@
     beginAttack,
     ensureAttackState,
     transitionAttackToIdle,
-    type ChaseMovement,
   } from './player-control/fsm/combat'
-  import type { Pathing } from './player-control/fsm/movement-substrate'
   import {
     buildAttackState,
     buildInteractState,
@@ -276,45 +241,20 @@
     hasWaterSurfaceData,
   }: Props = $props()
 
-  let floorOffset = 0
-  playerFloorOffset.subscribe((v) => (floorOffset = v))
-
   let currentPlayer = $state<LocalPlayer | null>(null)
+  let officialPosition: Position | null = null
   const serverMovement = new ServerMovement(
     () => networkManager.nextMoveRequestId(),
     (goal) => networkManager.sendMoveGoal(goal),
-    (requestId) => networkManager.sendMoveStop(requestId)
+    (requestId) => networkManager.sendMoveStop(requestId),
+    (input) => networkManager.sendMoveDirection(input)
   )
-
-  /** Floor as broadcast to others. See `playerVisualFloorLevel`. */
-  function wireFloorLevel(passabilityFloor?: number): number {
-    if (passabilityFloor !== undefined) {
-      return dungeonManager.floorLevelForPassability(passabilityFloor)
-    }
-    const depth = get(currentDungeonDepth)
-    return depth >= 1 ? -depth : get(playerVisualFloorLevel)
-  }
-
-  let lastSentFloorLevel: number | null = null
-
-  /** Standalone floor send — move packets only land at waypoints. See
-   * `ClientMessage::PlayerFloorChanged`. */
-  function syncFloorLevel() {
-    if (!currentPlayer || serverMovement.active) return
-    const floorLevel = wireFloorLevel()
-    if (floorLevel === lastSentFloorLevel) return
-    lastSentFloorLevel = floorLevel
-    networkManager.sendPlayerFloor(floorLevel)
-  }
-  playerVisualFloorLevel.subscribe(syncFloorLevel)
-  currentDungeonDepth.subscribe(syncFloorLevel)
 
   const { renderer } = useThrelte()
 
   const physics = createPlayerPhysics({
     getHeightManager: () => heightManager,
     getCurrentPlayerY: () => currentPlayer?.position.y ?? null,
-    getFloorOffset: () => floorOffset,
     getPassabilityFloor: currentPassabilityFloor,
     getFloatSurfaceY: (x, z) => floatSurfaceY(x, z),
   })
@@ -330,101 +270,9 @@
       hasWaterSurfaceData,
     })
   }
-  const { sampleHeight, waypointHeight, isMovementBlocked, isUphillTooSteep } =
-    physics
+  const { sampleHeight, isMovementBlocked } = physics
 
-  // Movement data (target, integrator, A* waypoints, far-pickup target) lives
-  // inside the machine's `moving` state — see movingState(). Leaving the moving
-  // state drops that data, so there are no movement flags to reset here.
-  // lastSentPosition is kinematic (send dedup), not state-membership data.
-  let lastSentPosition = $state<Position | null>(null)
-  let lastMovementSampleAt = 0
-  let mountRecoveryId = 0
-  let mountRecoveryAttempted = false
-  let mountRecovery: {
-    id: number
-    movement: MovingControlState
-    goal: Position
-    approach: PendingApproach | null
-    startedAt: number
-  } | null = null
-
-  function cancelMountRecovery() {
-    if (!mountRecovery) return
-    mountRecovery = null
-    networkManager.sendPlayerMountTurn(playerRotation, true)
-  }
-
-  function startMountRecovery(): boolean {
-    const m = movingState()
-    const goal = m?.waypoints.at(-1)
-    if (
-      !isMounted(currentPlayer) ||
-      currentPlayer.health <= 0 ||
-      !m ||
-      !goal ||
-      mountRecoveryAttempted ||
-      combatController.isInCombat
-    )
-      return false
-    mountRecoveryAttempted = true
-    mountRecovery = {
-      id: ++mountRecoveryId,
-      movement: m,
-      goal: {
-        x: goal.x,
-        y: waypointHeight(goal.floor, goal.x, goal.z),
-        z: goal.z,
-      },
-      approach: m.approach,
-      startedAt: performance.now(),
-    }
-    currentSpeed = 0
-    networkManager.sendPlayerMountRecover(mountRecovery.id, mountRecovery.goal)
-    return true
-  }
-
-  function applyMountRecovery(update: MountRecovery) {
-    const pending = mountRecovery
-    if (!pending || pending.id !== update.request_id) return
-    if (
-      !isMounted(currentPlayer) ||
-      currentPlayer.health <= 0 ||
-      movingState() !== pending.movement
-    ) {
-      cancelMountRecovery()
-      return
-    }
-    playerRotation = update.rotation
-    writePlayerPosition(update.position, update.rotation)
-    currentSpeed = update.done ? 0 : 1.5 * ($hungerState?.moveMult ?? 1)
-    updatePlayerState()
-    if (!update.done) return
-    mountRecovery = null
-    if (update.success) {
-      lastSentPosition = null
-      handleClickToMove(pending.goal, {
-        approach: pending.approach,
-        sprinting: false,
-        recovering: true,
-      })
-    } else {
-      pending.movement.approach = null
-      stopMovement()
-      cancelAutoTravel(translate('travel.noRoom'))
-    }
-  }
-
-  // Use the same movement config as remote players, with debug speed multiplier.
-  // The hunger multiplier mirrors the server's own movement sim (doc/HUNGER.md)
-  // so prediction and authority agree.
-  let speedMult = $derived(
-    ($debugSpeedMode ? 10 : 1) *
-      ($hungerState?.moveMult ?? 1) *
-      mountSpeedMult(currentPlayer?.mount)
-  )
   let clickSprinting = false
-  let startingClickMovement = false
   let autoTravelTarget: TravelDestination | null = null
   let travelPlayerId: number | null = null
   let travelProgressPosition: TravelDestination | null = null
@@ -466,24 +314,11 @@
       cancelAutoTravel(translate('travel.unavailable'))
       return
     }
-    const moving = movingState()
-    if (
-      moving &&
-      (moving.waypointIndex < moving.waypoints.length - 1 ||
-        travelDistance(position, moving.target) > 12 ||
-        travelDistance(moving.target, autoTravelTarget) <=
-          TRAVEL_ARRIVAL_DISTANCE)
-    )
-      return
-    if (travelPlanCooldownMs > 0) return
+    if (serverMovement.active || travelPlanCooldownMs > 0) return
     travelPlanCooldownMs = 500
-    const leg = planTravelLeg(
-      position,
-      autoTravelTarget,
-      (x, z) => heightManager.hasHeightData(x, z),
-      (target) => findPath(position.x, position.z, 0, target.x, target.z, 0)
+    const leg = planTravelLeg(position, autoTravelTarget, (x, z) =>
+      heightManager.hasHeightData(x, z)
     )
-    if (moving && leg.kind !== 'move') return
     if (leg.kind === 'waiting') return
     if (leg.kind === 'arrived') {
       cancelAutoTravel(translate('travel.arrived'))
@@ -493,26 +328,7 @@
       cancelAutoTravel(translate('travel.noRoute'))
       return
     }
-    const target = {
-      ...leg.target,
-      y: sampleHeight(leg.target.x, leg.target.z),
-    }
-    clickSprinting = true
-    startingClickMovement = true
-    runMoveRequest({
-      clickPosition: target,
-      currentPlayer,
-      interactionExit: 'none',
-      hasKeyboardInput: false,
-      currentFloor: 0,
-      getFloorAt: () => 0,
-      findPath: () => ({ waypoints: leg.waypoints }),
-      waypointHeight,
-      sendPlayerMove,
-      startSpeed: currentSpeed,
-      actions: createMoveRequestActions(target, {}),
-    })
-    startingClickMovement = false
+    startServerMove({ ...leg.target, y: position.y }, null, true)
   }
 
   function sprintAvailable(): boolean {
@@ -522,11 +338,11 @@
   function isSprintingNow(): boolean {
     if (!sprintAvailable()) return false
     const state = playerControlMachine?.stateName
-    const moving = state === 'moving' || state === 'server_moving'
+    const moving = state === 'moving'
     // Combat chase runs (see getMovementMode) — at sprint speed, or a fleeing
     // monster outruns the player. Same satiation gate and cost as sprint.
     if (combatController.isInCombat && moving) return true
-    if (clickSprinting && (startingClickMovement || moving)) return true
+    if (clickSprinting && moving) return true
     const input = inputHandler.getMovementInput()
     return (
       inputHandler.isSprintRequested &&
@@ -535,26 +351,6 @@
         !isMounted(currentPlayer) ||
         input.forward === 1)
     )
-  }
-
-  // Called per frame — cache the scaled config so steady movement reuses one
-  // object instead of allocating twice a frame.
-  let cachedMoveMult = 1
-  let cachedMoveConfig: MovementConfig = DEFAULT_MOVEMENT_CONFIG
-
-  function movementConfig(): MovementConfig {
-    const mult = speedMult * (isSprintingNow() ? SPRINT_SPEED_MULT : 1)
-    if (mult !== cachedMoveMult) {
-      cachedMoveMult = mult
-      cachedMoveConfig = scaleMovementConfig(DEFAULT_MOVEMENT_CONFIG, mult)
-    }
-    return isMounted(currentPlayer)
-      ? {
-          ...cachedMoveConfig,
-          mountRotation: playerRotation,
-          mountTurnRadius: mountTurnRadius(currentPlayer.mount),
-        }
-      : cachedMoveConfig
   }
 
   // Character rotation and current speed
@@ -576,17 +372,6 @@
     toward: Position | null
     then: (() => void) | null
   } | null = null
-
-  const JUMP_FEEDBACK_DURATION_MS = 1500
-  const JUMP_FEEDBACK_COOLDOWN_MS = 1000
-  let jumpFeedbackTimer: ReturnType<typeof setTimeout> | null = null
-  let lastJumpFeedbackAt = 0
-
-  function clearJumpFeedbackTimer() {
-    if (!jumpFeedbackTimer) return
-    clearTimeout(jumpFeedbackTimer)
-    jumpFeedbackTimer = null
-  }
 
   // Prop-break swing: when the player reaches a clicked barrel/crate, swing the
   // sword once and break it at the contact frame, then drop back to idle after
@@ -616,35 +401,6 @@
 
   function enqueuePlayerControlEvent(event: PlayerControlEvent) {
     playerControlMachine.enqueueEvent(event)
-  }
-
-  /**
-   * Briefly switch the player to the 'jump' state to play the jump animation
-   * as a one-shot feedback that the terrain ahead is too steep. Cooldown
-   * prevents the animation from restarting every frame while the user keeps
-   * pushing into the slope.
-   */
-  function triggerJumpFeedback() {
-    const transition = beginJumpFeedback({
-      previousPlayerState: playerState,
-      now: Date.now(),
-      lastJumpFeedbackAt,
-      cooldownMs: JUMP_FEEDBACK_COOLDOWN_MS,
-    })
-    lastJumpFeedbackAt = transition.runtime.lastJumpFeedbackAt
-    if (transition.kind === 'cooldown') return
-
-    setPlayerState(transition.nextPlayerState)
-    transitionTo('jump_feedback')
-
-    clearJumpFeedbackTimer()
-    jumpFeedbackTimer = setTimeout(() => {
-      jumpFeedbackTimer = null
-      if (shouldFinishJumpFeedback(playerState)) {
-        updatePlayerState()
-        transitionTo('idle')
-      }
-    }, JUMP_FEEDBACK_DURATION_MS)
   }
 
   // Finish the in-flight pickup (settle the ground item) using the id owned by
@@ -766,18 +522,13 @@
 
   function stopMovement() {
     const approach = movingState()?.approach ?? null
+    serverMovement.clear()
     clearStandUpTimer()
     currentSpeed = 0
     clickSprinting = false
-    // Settle into idle BEFORE emitting: the projection derives 'moving' vs
-    // 'idle' from the machine's owned state, so the transition must precede the
-    // emit. Leaving the moving state also drops its target/movementState/path/
-    // approach — nothing to reset. The walk-up action (or arrive()'s attack)
-    // overrides idle right after.
+    // Resolve the walk-up action after entering idle.
     transitionTo('idle')
     updatePlayerState()
-    // Every way a click-walk ends — arrival, a wall, a slope — lands here, so
-    // this is the one place the walk-up action has to be resolved.
     if (
       approach &&
       currentPlayer &&
@@ -798,7 +549,6 @@
   function transitionTo(
     name: Exclude<PlayerControlStateName, 'moving' | 'picking_up'>
   ) {
-    cancelMountRecovery()
     playerControlMachine.transition({ name })
   }
 
@@ -806,11 +556,7 @@
   // moving/keyboard_moving state. Derive it from the machine's owned state.
   function isMovingNow(): boolean {
     const name = playerControlMachine.stateName
-    return (
-      name === 'moving' ||
-      name === 'keyboard_moving' ||
-      (name === 'server_moving' && currentSpeed > 0)
-    )
+    return (name === 'moving' || name === 'keyboard_moving') && currentSpeed > 0
   }
 
   // Narrowed views of the machine's owned state, for reading/mutating the data
@@ -824,57 +570,16 @@
     return s.name === 'picking_up' ? s : null
   }
 
-  // Wrapper for sending move packets to track last sent position.
-  // Wire format: dungeon depth d is floor_level -d; housing floors stay
-  // 0..3 (client-internal -1 "outdoors" is clamped to 0).
-  function sendPlayerMove(
-    position: Position,
-    rotation: number,
-    passabilityFloor?: number,
-    append = false,
-    keyboardForward?: number
-  ) {
+  function stopAndFace(rotation: number) {
     if ($localTeleportActive) return
     serverMovement.clear()
-    cancelMountRecovery()
-    const wrappedPosition = { ...position, x: wrapWorldX(position.x) }
-    const floorLevel = wireFloorLevel(passabilityFloor)
-    // The server checks the declared dungeon floor against Y: send the Y of
-    // the floor we claim, whatever the caller sampled.
-    if (floorLevel < 0) {
-      const y = dungeonManager.floorHeightAt(
-        -floorLevel,
-        wrappedPosition.x,
-        wrappedPosition.z
-      )
-      if (y !== null) wrappedPosition.y = y
-    }
-    lastSentPosition = wrappedPosition
-    lastSentFloorLevel = floorLevel
-    if (keyboardForward !== undefined) {
-      networkManager.sendPlayerKeyboardMove(
-        wrappedPosition,
-        rotation,
-        floorLevel,
-        keyboardForward,
-        isSprintingNow() && keyboardForward > 0
-      )
-      return
-    }
-    networkManager.sendPlayerMove(
-      wrappedPosition,
-      rotation,
-      floorLevel,
-      append,
-      isSprintingNow()
-    )
+    networkManager.sendPlayerFace(rotation)
   }
 
-  const keyboardMoveSender = createKeyboardMoveSender(
-    (position, rotation, forward) =>
-      sendPlayerMove(position, rotation, undefined, false, forward)
+  const keyboardSender = new KeyboardDirectionSender(
+    (input) => serverMovement.direction(input),
+    () => serverMovement.clear()
   )
-  const keyboardSpeedRamp = createKeyboardSpeedRamp()
 
   function writePlayerPosition(position: Position, rotation: number) {
     const wrappedX = wrapWorldX(position.x)
@@ -887,74 +592,6 @@
     })
   }
 
-  function applyPositionCorrection(correction: PositionCorrection) {
-    if (serverMovement.active) {
-      serverMovement.clear(false)
-      transitionTo('idle')
-    }
-    if (correction.resyncId !== undefined) {
-      const moving = movingState()
-      const goal = moving?.waypoints.at(-1)
-      const destination = goal
-        ? {
-            x: goal.x,
-            y: waypointHeight(goal.floor, goal.x, goal.z),
-            z: goal.z,
-          }
-        : null
-      const approach = moving?.approach
-      const sprinting = clickSprinting
-      mountRecovery = null
-      mountRecoveryAttempted = false
-      keyboardMoveSender.reset()
-      keyboardSpeedRamp.reset()
-      lastSentPosition = null
-      lastSentFloorLevel = null
-      lastMovementSampleAt = 0
-      currentSpeed = 0
-      clearStandUpTimer()
-      playerRotation = correction.rotation
-      writePlayerPosition(correction, correction.rotation)
-      transitionTo('idle')
-      updatePlayerState()
-      networkManager.acknowledgeMovementResync(correction.resyncId)
-      if (autoTravelTarget) {
-        travelPlanCooldownMs = 0
-        travelStalledMs = 0
-        travelProgressPosition = null
-      } else if (destination && !combatController.isInCombat) {
-        handleClickToMove(destination, {
-          approach,
-          sprinting,
-          recovering: true,
-        })
-      }
-      return
-    }
-    if (mountRecovery) return
-    keyboardMoveSender.reset()
-    keyboardSpeedRamp.reset()
-    lastSentPosition = null
-    playerRotation = correction.rotation
-    writePlayerPosition(correction, correction.rotation)
-    if (startMountRecovery()) return
-    cancelBlockedMovement()
-  }
-
-  function cancelBlockedMovement(sendStop = true) {
-    const m = movingState()
-    if (m) m.approach = null
-    combatController.cancelCombat()
-    clearDoorInteractionRetry()
-    dungeonManager.clearPendingBreak()
-    dungeonManager.clearPendingOpen()
-    stopMovement()
-    if (sendStop && currentPlayer) {
-      sendPlayerMove(currentPlayer.position, playerRotation)
-    }
-    cancelAutoTravel(translate('travel.blocked'))
-  }
-
   // Current player state
   let playerState = $state<PlayerState>({
     state: 'idle',
@@ -965,7 +602,6 @@
 
   /** Turn to face a world point (rotation only; nothing is emitted). */
   function faceTowards(x: number, z: number) {
-    cancelMountRecovery()
     if (!currentPlayer) return
     const dx = shortestWrappedDeltaX(currentPlayer.position.x, x)
     const dz = z - currentPlayer.position.z
@@ -1009,9 +645,9 @@
 
     if (previousPlayerId !== null) {
       serverMovement.clear(false)
-      if (playerControlMachine.stateName === 'server_moving')
-        transitionTo('idle')
+      if (playerControlMachine.stateName === 'moving') transitionTo('idle')
     }
+    officialPosition = { ...position }
     playerRotation = currentPlayer.rotation
     currentSpeed = 0
     setPlayerState({
@@ -1133,9 +769,8 @@
         : null,
       playerRotation,
       previousPlayerState: playerState,
-      lastSentPosition,
       beginCombat: (id, inRange) => combatController.beginCombat(id, inRange),
-      sendPlayerMove,
+      stopAndFace,
       sendPlayerAttack: sendCombatAttack,
     })
 
@@ -1184,7 +819,6 @@
     inputHandler.clearTransientInput()
     clearStandUpTimer()
     pendingExit = null
-    clearJumpFeedbackTimer()
     clearPropSwingTimers()
     currentSpeed = transition.runtime.currentSpeed
     playerRotation = transition.runtime.playerRotation
@@ -1215,320 +849,156 @@
     })
   }
 
-  // Stable action bags reused every frame by the movement/keyboard ticks.
-  // They only read live `$state` inside their closures, so building them once
-  // avoids reallocating ~20 closures per frame on the render hot path.
-  const combatTickActions = {
-    cancelBlockedMovement,
-    stopMovingToIdle: () => {
-      if (isMovingNow()) {
-        // Leaving the moving state drops its target/movementState. Transition
-        // before emit so the projection sees idle (chase -> idle).
-        transitionTo('idle')
-        updatePlayerState()
-      }
-      transitionToIdle()
-    },
-    prepareReachedAttackRange: () => {
-      currentSpeed = 0
-      // Reached range stops movement (leaving moving drops its data); settle to
-      // idle before the emit. beginAttack (next, same outcome) transitions to
-      // attacking; if the target just died and beginAttack is ignored, we
-      // correctly remain idle.
-      transitionTo('idle')
-      updatePlayerState()
-    },
-    beginAttack: initiateAttack,
-    setChasingMovement: (chase: ChaseMovement) => {
-      playerRotation = chase.playerRotation
-      // Chase reports as 'moving' (playerState stays 'moving' while pathing to
-      // the monster); 'attacking' is reserved for in-range swinging. Install the
-      // freshly routed path on the live moving state, or — when chase resumes
-      // from the attacking state — start a new moving state around it.
-      const m = movingState()
-      if (m) {
-        m.target = chase.movementTarget
-        m.movementState = chase.movementState
-        m.waypoints = chase.pathWaypoints
-        m.waypointIndex = 0
-        m.chaseGoal = chase.chaseGoal
-      } else {
-        playerControlMachine.transition({
-          name: 'moving',
-          floor: chase.pathWaypoints[0].floor,
-          target: chase.movementTarget,
-          movementState: chase.movementState,
-          waypoints: chase.pathWaypoints,
-          waypointIndex: 0,
-          chaseGoal: chase.chaseGoal,
-          approach: null,
-        })
-      }
-    },
-    showAttackState: (nextRotation: number) => {
-      playerRotation = nextRotation
-      const transition = ensureAttackState(
-        playerState,
-        nextRotation,
-        combatController.attackCounter
-      )
-      if (transition.kind === 'ignored') return
-      setPlayerState(transition.nextPlayerState)
-      transitionTo('attacking')
-    },
-    sendAttackCycle: (monsterId: string, nextRotation: number) => {
-      playerRotation = nextRotation
-      sendCombatAttack(monsterId)
-      // Emit the attack state directly: the projection only knows idle/moving,
-      // so it reported idle between swings.
-      setPlayerState(
-        buildAttackState(
-          playerState,
-          nextRotation,
-          combatController.attackCounter
-        )
-      )
-      transitionTo('attacking')
-    },
-  }
+  let chaseGoal: Position | null = null
 
-  // Hoisted like the action bags above: this is rebuilt every frame otherwise,
-  // and `currentFloor` is a store read chase consumes at most ~1Hz.
-  const chasePathing: Pathing = {
-    get currentFloor() {
-      return currentPassabilityFloor()
-    },
-    getFloorAt: getFloorAtForClick,
-    findPath,
-    waypointHeight,
-  }
-
-  const movementTickActions = {
-    stopMovement: () => {
-      if (startMountRecovery()) return
-      cancelBlockedMovement(false)
-    },
-    triggerJumpFeedback,
-    setNextWaypoint: (
-      nextCurrentSpeed: number,
-      nextPlayerRotation: number,
-      nextMovementTarget: Position,
-      nextMovementState: MovementState,
-      nextWaypointIndex: number
-    ) => {
-      currentSpeed = nextCurrentSpeed
-      playerRotation = nextPlayerRotation
-      const m = movingState()
-      if (m) {
-        m.target = nextMovementTarget
-        m.movementState = nextMovementState
-        m.waypointIndex = nextWaypointIndex
-      }
-    },
-    arrive: (nextCurrentSpeed: number, nextPlayerRotation: number) => {
-      currentSpeed = nextCurrentSpeed
-      playerRotation = nextPlayerRotation
-      // stopMovement() settles to idle (and emits) and runs any armed walk-up
-      // action; the chase branch below overrides idle when arrival hands off to
-      // an attack instead. A walk-up cancels combat, so only one can apply.
-      stopMovement()
-
-      if (combatController.isInCombat) {
-        initiateAttack(combatController.targetMonsterId!)
-      }
-    },
-    continueMovement: (
-      nextCurrentSpeed: number,
-      nextPlayerRotation: number,
-      totalDistance: number
-    ) => {
-      currentSpeed = nextCurrentSpeed
-      playerRotation = nextPlayerRotation
-      updatePlayerState(totalDistance)
-    },
-  }
-
-  const keyboardFrameActions = {
-    exitPickupInteraction,
-    exitObjectInteraction,
-    clearClickMovement: () => {
-      // Keyboard is taking the walk over, so the click's queued interaction is
-      // off. The rest of the moving state needs no reset: keyboard transitions
-      // to keyboard_moving (markMoving), idle (setKeyboardIdleRuntime), or via
-      // stopMovement this same frame, all of which leave the moving state.
-      const m = movingState()
-      if (m) m.approach = null
-    },
-    cancelCombat: () => combatController.cancelCombat(),
-    markMoving: () => {
-      transitionTo('keyboard_moving')
-    },
-    setKeyboardIdleRuntime: () => {
-      currentSpeed = 0
-      transitionTo('idle')
-    },
-    emitKeyboardPlayerState: () => {
-      updatePlayerState(
-        isMounted(currentPlayer) &&
-          $keyboardMovementMode === 'character' &&
-          inputHandler.getMovementInput()?.forward === -1
-          ? 0
-          : 100
-      )
-    },
-    stopMovement,
-    triggerJumpFeedback,
-    setMoved: (nextCurrentSpeed: number, nextPlayerRotation: number) => {
-      currentSpeed = nextCurrentSpeed
-      playerRotation = nextPlayerRotation
-    },
-  }
-
-  // Update player movement (click-to-move) with acceleration/deceleration
   function updatePlayerMovement(deltaTime: number) {
-    if (playerControlMachine.stateName === 'server_moving') {
-      if (
-        !currentPlayer ||
-        currentPlayer.health <= 0 ||
-        isMounted(currentPlayer)
-      ) {
-        stopMovement()
-        return
-      }
-      const pose = serverMovement.sample((from, to) =>
-        isMovementBlocked(from.x, from.z, to.x, to.z, from.y)
-      )
-      if (pose) {
-        playerRotation = pose.rotation
-        currentSpeed = pose.speed
-        writePlayerPosition(pose.position, pose.rotation)
-      }
-      updatePlayerState()
+    if (!currentPlayer) return
+    if (currentPlayer.health <= 0) {
+      transitionToDead()
       return
     }
-    if (mountRecovery) {
-      if (
-        performance.now() - mountRecovery.startedAt > 10000 ||
-        !isMounted(currentPlayer) ||
-        currentPlayer.health <= 0
-      ) {
-        const m = movingState()
-        if (m) m.approach = null
-        stopMovement()
-        cancelAutoTravel(translate('travel.recovery'))
-      }
+    if (playerState.state === 'dead') {
+      transitionToRespawned()
       return
     }
     updateAutoTravel(deltaTime)
-    const m = movingState()
-    runPlayerMovementTick({
-      canAdvance: () =>
-        !!currentPlayer &&
-        worldView.covers(currentPlayer.position.x, currentPlayer.position.z),
+    const pose = serverMovement.sample((from, to) =>
+      isMovementBlocked(from.x, from.z, to.x, to.z, from.y)
+    )
+    if (pose) {
+      playerRotation = pose.rotation
+      currentSpeed = pose.speed
+      writePlayerPosition(pose.position, pose.rotation)
+      updatePlayerState()
+    }
+    const targetId = combatController.targetMonsterId
+    if (!targetId || !officialPosition) return
+    const monster = monsterManager.monsters.get(targetId)
+    const target = monsterManager.findMeshPosition(targetId, monsterMeshes)
+    const blocked =
+      !!target &&
+      attackLineBlocked(officialPosition, target, currentPassabilityFloor())
+    const result = combatController.update(
       deltaTime,
-      currentPlayer,
-      playerStateName: playerState.state,
-      isMoving: isMovingNow(),
-      currentSpeed,
-      movementTarget: m?.target ?? null,
-      movementState: m?.movementState ?? null,
-      pathWaypoints: m?.waypoints ?? [],
-      currentWaypointIndex: m?.waypointIndex ?? 0,
-      chaseGoal: m?.chaseGoal ?? null,
-      config: movementConfig(),
-      isInCombat: combatController.isInCombat,
-      combatController,
-      cooldownMs:
-        (attackCooldown ? attackCooldown * 1000 : 1500) /
+      officialPosition,
+      monster,
+      target,
+      serverMovement.active,
+      (attackCooldown ? attackCooldown * 1000 : 1500) /
         ($hungerState?.attackMult ?? 1),
-      attackRange: equippedAttackRange(),
-      chasePathing,
-      getMonsterInfo: (monsterId) => {
-        const monsterData = monsterManager.monsters.get(monsterId)
-        return monsterData
-          ? {
-              state: monsterData.state,
-              isDeadPending: monsterData.isDeadPending,
-            }
-          : undefined
-      },
-      findMonsterPosition: (monsterId) =>
-        monsterManager.findMeshPosition(monsterId, monsterMeshes),
-      attackLineBlocked,
-      sampleHeight,
-      waypointHeight,
-      hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
-      isMovementBlocked,
-      isUphillTooSteep,
-      setFloorLevel: (floor) => {
-        const m = movingState()
-        if (m) m.floor = floor
-      },
-      writePlayerPosition,
-      sendPlayerMove,
-      actions: {
-        transitionToDead,
-        transitionToRespawned,
-        resetStoppedSpeed: () => {
-          currentSpeed = 0
-          // The projection can only say idle/moving: emitting it over a
-          // fresh interact/attack state would wipe that state.
-          if (playerState.state === 'idle' || playerState.state === 'moving') {
-            updatePlayerState()
-          }
-        },
-        combat: combatTickActions,
-        movement: movementTickActions,
-      },
-    })
+      playerState.state,
+      blocked,
+      equippedAttackRange()
+    )
+    switch (result.action) {
+      case 'idle':
+        chaseGoal = null
+        stopMovement()
+        transitionToIdle()
+        break
+      case 'reached_attack_range':
+        serverMovement.clear()
+        initiateAttack(targetId)
+        break
+      case 'chasing':
+        if (
+          result.newTarget &&
+          (!chaseGoal ||
+            travelDistance(chaseGoal, result.newTarget) > 1.5 ||
+            !serverMovement.active)
+        ) {
+          chaseGoal = { ...result.newTarget }
+          startServerMove(chaseGoal, null, true)
+        }
+        break
+      case 'attacking': {
+        playerRotation = result.rotation
+        const transition = ensureAttackState(
+          playerState,
+          result.rotation,
+          combatController.attackCounter
+        )
+        if (transition.kind === 'attack')
+          setPlayerState(transition.nextPlayerState)
+        transitionTo('attacking')
+        break
+      }
+      case 'attack_cycle':
+        playerRotation = result.rotation
+        networkManager.sendPlayerFace(playerRotation)
+        sendCombatAttack(result.monsterId)
+        setPlayerState(
+          buildAttackState(
+            playerState,
+            playerRotation,
+            combatController.attackCounter
+          )
+        )
+        transitionTo('attacking')
+        break
+    }
   }
 
-  function updateKeyboardMovement(deltaTime: number) {
+  function updateKeyboardMovement(_deltaTime: number) {
     const input = inputHandler.getMovementInput()
-    if (mountRecovery && !input) return
+    if (
+      !currentPlayer ||
+      currentPlayer.health <= 0 ||
+      !worldView.covers(currentPlayer.position.x, currentPlayer.position.z)
+    ) {
+      keyboardSender.clear()
+      return
+    }
     if (input) {
-      if (serverMovement.active) transitionTo('idle')
-      cancelMountRecovery()
       cancelAutoTravel()
       clearDoorInteractionRetry()
+      combatController.cancelCombat()
+      chaseGoal = null
+      const interaction = getInteractionExitKind(playerState)
+      if (interaction === 'pickup') exitPickupInteraction()
+      if (interaction === 'object') {
+        exitObjectInteraction()
+        return
+      }
+      if (playerControlMachine.stateName !== 'keyboard_moving')
+        transitionTo('keyboard_moving')
     }
-    if (!currentPlayer) {
-      keyboardMoveSender.reset()
-      return
-    }
-    if (!worldView.covers(currentPlayer.position.x, currentPlayer.position.z)) {
-      keyboardMoveSender.flush(currentPlayer.position, playerRotation)
-      if (!input) keyboardMoveSender.reset()
-      return
-    }
-    runKeyboardFrame({
-      currentPlayer,
-      isKeyboardMoving: playerControlMachine.stateName === 'keyboard_moving',
-      interactionExit: getInteractionExitKind(playerState),
-      hasMovementTarget: movingState() !== null,
-      isInCombat: combatController.isInCombat,
+    keyboardSender.update(
       input,
-      movementMode: $keyboardMovementMode,
-      rotation: playerRotation,
-      backwardSpeed: BACKWARD_SPEED * ($hungerState?.moveMult ?? 1),
-      config: movementConfig(),
-      deltaTimeSeconds: deltaTime / 1000,
-      sampleHeight,
-      isMovementBlocked,
-      isUphillTooSteep,
-      writePlayerPosition,
-      moveSender: keyboardMoveSender,
-      speedRamp: keyboardSpeedRamp,
-      actions: keyboardFrameActions,
-    })
+      playerRotation,
+      isMounted(currentPlayer),
+      $keyboardMovementMode,
+      isSprintingNow()
+    )
+    if (!input && playerControlMachine.stateName === 'keyboard_moving') {
+      currentSpeed = 0
+      transitionTo('idle')
+      updatePlayerState()
+    }
+  }
+
+  function startServerMove(
+    target: Position,
+    approach: PendingApproach | null,
+    sprinting: boolean,
+    stopAtEntrance = false
+  ) {
+    keyboardSender.reset()
+    clickSprinting = sprinting
+    playerControlMachine.transition({ name: 'moving', approach })
+    serverMovement.request(target.x, target.z, sprinting, stopAtEntrance)
+    updatePlayerState()
   }
 
   function createMoveRequestActions(
     clickPosition: Position,
-    options: { approach?: PendingApproach | null }
-  ): MoveRequestActions {
+    options: {
+      approach?: PendingApproach | null
+      sprinting?: boolean
+      stopAtHouseEntrance?: boolean
+    }
+  ) {
     return {
-      cancelBlockedMovement,
       exitPickupAndRetry: () => {
         exitPickupInteraction()
         handleClickToMove(clickPosition, options)
@@ -1544,105 +1014,20 @@
                 type: 'delayed_request_move',
                 position: { ...clickPosition },
                 approach: options.approach ?? null,
+                sprinting: options.sprinting,
+                stopAtHouseEntrance: options.stopAtHouseEntrance,
               })
             }, STAND_UP_DURATION)
           },
           clickPosition
         )
       },
-      applyStartedMovement: (started) => {
-        if (!isMounted(currentPlayer)) playerRotation = started.playerRotation
-        // The moving state OWNS the path data. Transition before emit: the
-        // projection derives 'moving' from the machine's owned state.
-        playerControlMachine.transition({
-          name: 'moving',
-          floor: started.pathWaypoints[0].floor,
-          target: started.movementTarget,
-          movementState: started.movementState,
-          waypoints: started.pathWaypoints,
-          waypointIndex: started.currentWaypointIndex,
-          chaseGoal: null,
-          // Armed only now: a refused request (dead, keyboard held) must not
-          // leave an action waiting to fire on some later, unrelated stop.
-          approach: options.approach ?? null,
-        })
-        updatePlayerState(started.movementState.totalDistance)
-      },
     }
   }
 
-  /** Passability floor for path queries: dungeon depths map to 4+. On the
-   * surface: the moving leg's floor, else the floor the player stands on.
-   * `moving.floor` may carry raw dungeon waypoint floors (4+) — clamped out
-   * here, the single read site, so they can't outlive a surfacing. */
   function currentPassabilityFloor(): number {
-    const depth = get(currentDungeonDepth)
-    if (depth >= 1) {
-      // On a stair shaft this resolves to the shaft's lower floor (see
-      // dungeonManager.startFloorAt) so a path to the surface climbs out
-      // instead of routing back down to the bottom landing.
-      return currentPlayer
-        ? dungeonManager.startFloorAt(
-            currentPlayer.position.x,
-            currentPlayer.position.z,
-            currentPlayer.position.y
-          )
-        : dungeonManager.passabilityFloor(depth)
-    }
-    const legFloor = movingState()?.floor
-    return legFloor !== undefined &&
-      legFloor < dungeonManager.consts.floorIndexBase
-      ? legFloor
-      : get(playerVisualFloorLevel)
-  }
-
-  /**
-   * Floor lookup for click targets. The dungeon grids cover the whole
-   * footprint at every depth, so a click that lands nearer a dungeon floor's Y
-   * than the surface resolves to that floor. Re-weigh the surface (floor 0 at
-   * the entrance Y) as a candidate: if the click sits at least as close to the
-   * surface, treat it as the surface. This is what lets an upper-landing click
-   * while standing mid-stairs (depth ≥ 1) target floor 0 so the path climbs
-   * out instead of routing down to the bottom landing first.
-   */
-  function getFloorAtForClick(x: number, z: number, y: number): number {
-    const depth = get(currentDungeonDepth)
-    // Stairwell clicks resolve via the shaft mapping, not the raw Y lookup:
-    // intermediate steps are keyed to the shallower connected floor, so the
-    // Y-based lookup returns the deeper floor and strands A* at the bottom
-    // landing — the player walks all the way down, then climbs back to the
-    // clicked step. Underground, query the current depth's shafts. On the
-    // surface (depth 0) the only clickable shaft is the entrance stairs
-    // (floor 1's up-shaft), so query it at depth 1: a mid-stair click then
-    // targets floor 0 and the player stops right at the clicked step.
-    if (depth >= 1 || dungeonManager.isOnEntranceShaft(x, z)) {
-      const shaftFloor = dungeonManager.shaftPathfindingFloorAt(
-        x,
-        z,
-        y,
-        Math.max(depth, 1)
-      )
-      if (shaftFloor !== null) return shaftFloor
-    }
-
-    const floor = passability_get_floor_at(x, z, y)
-    const fib = dungeonManager.consts.floorIndexBase
-    if (floor < fib) return floor
-    const ent = dungeonManager.entrancePos
-    if (!ent) return depth < 1 ? 0 : floor
-    // Target the floor that is currently SHOWN to the player, independent of
-    // logical depth: when underground (depth ≥ 1) the dungeon floor is what's
-    // rendered, so a click targets it. Otherwise, classify by the CLICK target,
-    // not the player: a click on the entrance shaft is a descent, but a click on
-    // the open surface — even while standing on the top landing, which still
-    // counts as "on the shaft" — must fall through to the surface-vs-floor Y
-    // heuristic so the player isn't routed back down into the dungeon.
-    const inDungeonView = depth >= 1 || dungeonManager.isOnEntranceShaft(x, z)
-    if (inDungeonView) return floor
-    const depthOfFloor = -dungeonManager.floorLevelForPassability(floor)
-    const surfaceDist = Math.abs(y - ent.y)
-    const floorDist = Math.abs(y - dungeonManager.floorY(depthOfFloor))
-    return surfaceDist <= floorDist ? 0 : floor
+    const floor = get(ownPlayerFloor)
+    return floor < 0 ? dungeonManager.passabilityFloor(-floor) : floor
   }
 
   function handleClickToMove(
@@ -1651,14 +1036,9 @@
       approach?: PendingApproach | null
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
-      recovering?: boolean
     } = {}
   ) {
-    if (!options.recovering) {
-      cancelMountRecovery()
-      mountRecoveryAttempted = false
-      cancelAutoTravel()
-    }
+    cancelAutoTravel()
     // Any fresh movement cancels a pending prop break/open (breakProp/openProp
     // re-arm it after their own walk-up call below).
     dungeonManager.clearPendingBreak()
@@ -1668,92 +1048,47 @@
       (options.sprinting ?? sprintRequested(false)) && sprintAvailable()
     // A drunk walker weaves on free moves only; a walk-up still has to
     // arrive where its target is.
-    if (!options.approach && !options.recovering) {
+    if (!options.approach) {
       const radius = staggerRadius(get(activeDebuffs), Date.now())
       if (radius > 0) clickPosition = staggerTarget(clickPosition, radius)
     }
     if (
-      currentPlayer &&
-      !isMounted(currentPlayer) &&
-      !options.approach &&
-      (!options.stopAtHouseEntrance ||
-        !housingManager.isPointUnderHouseXZ(
-          clickPosition.x,
-          clickPosition.z
-        )) &&
-      !options.recovering
-    ) {
-      if (
-        prepareMoveRequest(
-          {
-            currentPlayerHealth: currentPlayer.health,
-            interactionExit: getInteractionExitKind(playerState),
-            hasCurrentPlayer: true,
-            hasKeyboardInput: inputHandler.hasKeysPressed,
-          },
-          createMoveRequestActions(clickPosition, options)
-        )
-      ) {
-        combatController.cancelCombat()
-        keyboardMoveSender.reset()
-        keyboardSpeedRamp.reset()
-        currentSpeed = 0
-        serverMovement.request(clickPosition.x, clickPosition.z, clickSprinting)
-        playerControlMachine.transition({ name: 'server_moving' })
-        updatePlayerState()
-      }
+      !currentPlayer ||
+      !Number.isFinite(clickPosition.x) ||
+      !Number.isFinite(clickPosition.z)
+    )
       return
-    }
-    const routePath = options.stopAtHouseEntrance
-      ? (
-          startX: number,
-          startZ: number,
-          startFloor: number,
-          goalX: number,
-          goalZ: number,
-          goalFloor: number
-        ) => {
-          const result = findPath(
-            startX,
-            startZ,
-            startFloor,
-            goalX,
-            goalZ,
-            goalFloor
-          )
-          return {
-            ...result,
-            waypoints: currentPlayer
-              ? housingManager.stopPathAtHouseEntrance(
-                  currentPlayer.position,
-                  startFloor,
-                  clickPosition,
-                  result.waypoints
-                )
-              : result.waypoints,
-          }
-        }
-      : findPath
-    // Start A* from the player's current passability floor — on a stair shaft
-    // that is the shaft's keyed (lower) floor (see currentPassabilityFloor /
-    // dungeonManager.startFloorAt), which differs from the clicked room's floor, so
-    // the search traverses the stairs instead of being confined to one floor.
-    startingClickMovement = true
-    runMoveRequest({
+    if (
+      !(
+        options.stopAtHouseEntrance &&
+        housingManager.findHouseAtPoint(
+          clickPosition.x,
+          clickPosition.y,
+          clickPosition.z
+        )
+      ) &&
+      !options.approach &&
+      routeQuality(clickPosition) === 'none'
+    )
+      return
+    if (
+      !prepareMoveRequest(
+        {
+          currentPlayerHealth: currentPlayer.health,
+          interactionExit: getInteractionExitKind(playerState),
+          hasCurrentPlayer: true,
+          hasKeyboardInput: inputHandler.hasKeysPressed,
+        },
+        createMoveRequestActions(clickPosition, options)
+      )
+    )
+      return
+    startServerMove(
       clickPosition,
-      currentPlayer,
-      interactionExit: getInteractionExitKind(playerState),
-      hasKeyboardInput: inputHandler.hasKeysPressed,
-      currentFloor: currentPassabilityFloor(),
-      getFloorAt: getFloorAtForClick,
-      findPath: routePath,
-      waypointHeight,
-      sendPlayerMove,
-      startSpeed: currentSpeed,
-      actions: createMoveRequestActions(clickPosition, options),
-    })
-    startingClickMovement = false
-    if (playerControlMachine.stateName !== 'moving') clickSprinting = false
+      options.approach ?? null,
+      clickSprinting,
+      options.stopAtHouseEntrance
+    )
   }
 
   /** `claim` is false when the server already holds the object for us. */
@@ -1902,7 +1237,7 @@
     // The picking_up state OWNS the instance id being grabbed; entering it drops
     // any moving data (the far-pickup approach that led here).
     currentSpeed = 0
-    if (currentPlayer) sendPlayerMove(currentPlayer.position, playerRotation) // others see the facing
+    if (currentPlayer) stopAndFace(playerRotation) // others see the facing
     networkManager.sendPickupStarted()
     setPlayerState(result.nextPlayerState)
     playerControlMachine.transition({
@@ -1911,22 +1246,17 @@
     })
   }
 
-  /** How A* rates a walk-up goal, so the plan can pick a goal the player can
-   *  actually get to. Deliberately re-runs the search the move itself will make
-   *  — same start, same floors — so the two agree on what is reachable; a click
-   *  is a rare enough event to pay for it twice. */
   function routeQuality(target: Position): RouteQuality {
-    if (!currentPlayer) return 'none'
-    const result = findPath(
-      currentPlayer.position.x,
-      currentPlayer.position.z,
-      currentPassabilityFloor(),
+    if (!Number.isFinite(target.x) || !Number.isFinite(target.z)) return 'none'
+    return housingManager.isCircleBlocked(
       target.x,
       target.z,
-      getFloorAtForClick(target.x, target.z, target.y)
+      0.05,
+      currentPassabilityFloor(),
+      currentPlayer?.position.y ?? target.y
     )
-    if (result.found) return 'found'
-    return result.waypoints.length > 0 ? 'partial' : 'none'
+      ? 'none'
+      : 'found'
   }
 
   /** `canActNow` is false while an interaction animation still has to be
@@ -2047,48 +1377,7 @@
       !forceWalk && canAct(player.position),
       canAct
     )
-    if (approach !== 'unreachable') return
-
-    const openRoute = housingManager.withClosedDoorsOpen(floor, () => {
-      const routeWithOpenDoors = (target: Position) => {
-        const result = findPath(
-          player.position.x,
-          player.position.z,
-          floor,
-          target.x,
-          target.z,
-          floor
-        )
-        if (result.found) return 'found'
-        return result.waypoints.length > 0 ? 'partial' : 'none'
-      }
-      const plan = planApproach(
-        player.position,
-        spec,
-        routeWithOpenDoors,
-        false,
-        canAct
-      )
-      if (plan.kind !== 'walk') return []
-      const result = findPath(
-        player.position.x,
-        player.position.z,
-        floor,
-        plan.target.x,
-        plan.target.z,
-        floor
-      )
-      return result.found ? result.waypoints : []
-    })
-
-    const routeDoor = housingManager.findClosedDoorOnPath(
-      player.position.x,
-      player.position.z,
-      openRoute,
-      floor
-    )
-    if (!routeDoor) return
-    approachDoorThenRetry(routeDoor, () => interactObject(intent, true))
+    return approach
   }
 
   function toggleDoor(intent: Extract<ClickIntent, { type: 'toggle_door' }>) {
@@ -2130,29 +1419,6 @@
         return
       }
 
-      const openRoute = housingManager.withClosedDoorsOpen(floor, () => {
-        for (const target of targets) {
-          const result = findPath(
-            player.position.x,
-            player.position.z,
-            floor,
-            target.x,
-            target.z,
-            floor
-          )
-          if (result.found) return result.waypoints
-        }
-        return []
-      })
-      const routeDoor = housingManager.findClosedDoorOnPath(
-        player.position.x,
-        player.position.z,
-        openRoute,
-        floor
-      )
-      if (routeDoor) {
-        approachDoorThenRetry(routeDoor, () => toggleDoor(intent))
-      }
       return
     }
     approachAndAct(
@@ -2277,7 +1543,7 @@
       buildAttackState(playerState, playerRotation, propSwingCounter)
     )
     transitionTo('attacking')
-    sendPlayerMove(currentPlayer.position, playerRotation) // others see the facing
+    stopAndFace(playerRotation) // others see the facing
 
     propBreakTimer = setTimeout(() => {
       propBreakTimer = null
@@ -2564,7 +1830,11 @@
         )
         const target = snapped ?? position
         const currentFloor = currentPassabilityFloor()
-        const targetFloor = getFloorAtForClick(target.x, target.z, target.y)
+        const targetFloor = passability_get_floor_at(
+          target.x,
+          target.z,
+          target.y
+        )
         if (
           shouldIgnoreImplicitHouseFloorChange(
             get(playerInsideHouseId),
@@ -2604,7 +1874,7 @@
         if (!boating) faceTowards(intent.position.x, intent.position.z)
         setPlayerState({ ...playerState, rotation: playerRotation })
         // Sync heading before the server validates the cast direction.
-        sendPlayerMove(currentPlayer.position, playerRotation)
+        stopAndFace(playerRotation)
         networkManager.sendFishingCast(intent.position)
       },
       requestMove: handleClickToMove,
@@ -2639,7 +1909,6 @@
     stateActions: {
       onInteractionFinished,
       onPickupGrab,
-      clearJumpFeedbackTimer,
       onInteractionRejected: () => {
         if (playerState.state === 'interact') exitObjectInteraction(false)
       },
@@ -2658,10 +1927,7 @@
     if (options.editorMode) {
       if (serverMovement.active) stopMovement()
       cancelAutoTravel()
-      if (currentPlayer) {
-        keyboardMoveSender.flush(currentPlayer.position, playerRotation)
-      }
-      keyboardMoveSender.reset()
+      keyboardSender.clear()
     }
     const skillState = get(daggerSkillState)
     const hasDagger = abilityEquipmentAllowed(
@@ -2686,21 +1952,6 @@
       if (currentPlayer) clearDaggerCast(currentPlayer.id)
     }
     playerControlMachine.update(deltaTime, options)
-    const now = performance.now()
-    if (
-      !options.editorMode &&
-      currentPlayer &&
-      currentPlayer.health > 0 &&
-      !serverMovement.active &&
-      now - lastMovementSampleAt >= 200
-    ) {
-      lastMovementSampleAt = now
-      networkManager.sendMovementSample(
-        currentPlayer.position,
-        playerRotation,
-        wireFloorLevel()
-      )
-    }
   }
 
   // Hover overlays: signpost speech bubble, ground-item, prop and monster names.
@@ -2804,14 +2055,12 @@
     const unsubscribeTeleportEffect = localTeleportActive.subscribe(
       (active) => {
         if (!active) return
-        cancelMountRecovery()
         cancelAutoTravel()
         combatController.cancelCombat()
         clearStandUpTimer()
         clearPropSwingTimers()
         clearDoorInteractionRetry()
-        keyboardMoveSender.reset()
-        keyboardSpeedRamp.reset()
+        keyboardSender.clear()
         inputHandler.clearTransientInput()
         currentSpeed = 0
         clickSprinting = false
@@ -2832,7 +2081,7 @@
       const movement = movingState()
       if (movement) movement.approach = null
       stopMovement()
-      sendPlayerMove(currentPlayer.position, playerRotation)
+      stopAndFace(playerRotation)
     })
     const unsubscribeTravel = travelDestination.subscribe((destination) => {
       const wasTravelling = autoTravelTarget !== null
@@ -2846,7 +2095,7 @@
         if (m) m.approach = null
         stopMovement()
         if (currentPlayer && currentPlayer.health > 0 && !get(teleportLoading))
-          sendPlayerMove(currentPlayer.position, playerRotation)
+          stopAndFace(playerRotation)
       }
       if (!destination) return
       combatController.cancelCombat()
@@ -2862,9 +2111,7 @@
     const unsubscribeTeleport = teleportLoading.subscribe((loading) => {
       if (loading) {
         serverMovement.clear(false)
-        if (playerControlMachine.stateName === 'server_moving')
-          transitionTo('idle')
-        cancelMountRecovery()
+        if (playerControlMachine.stateName === 'moving') transitionTo('idle')
         cancelAutoTravel()
       }
     })
@@ -2924,6 +2171,7 @@
         return
       }
       if (!serverMovement.acceptPath(path)) return
+      officialPosition = { ...path.position }
       syncOwnFloor(path.floor_level, path.position.x, path.position.z)
       writePlayerPosition(path.position, path.rotation)
     })
@@ -2938,27 +2186,39 @@
           return
         }
         if (serverMovement.acceptStopped(progress)) {
-          if (playerControlMachine.stateName === 'idle') {
+          officialPosition = { ...progress.position }
+          if (
+            !serverMovement.active &&
+            playerControlMachine.stateName !== 'object_interacting'
+          ) {
             syncOwnFloor(
               progress.floor_level,
               progress.position.x,
               progress.position.z
             )
-            writePlayerPosition(progress.position, progress.rotation)
-            playerRotation = progress.rotation
+            if (playerControlMachine.stateName !== 'attacking')
+              playerRotation = progress.rotation
+            writePlayerPosition(progress.position, playerRotation)
             updatePlayerState()
           }
           return
         }
         if (!serverMovement.acceptProgress(progress)) return
+        officialPosition = { ...progress.position }
         syncOwnFloor(
           progress.floor_level,
           progress.position.x,
           progress.position.z
         )
         if (progress.status !== 'moving' && progress.status !== 'searching') {
+          if (!['arrived', 'partial', 'blocked'].includes(progress.status)) {
+            const movement = movingState()
+            if (movement) movement.approach = null
+          }
           writePlayerPosition(progress.position, progress.rotation)
           playerRotation = progress.rotation
+          if (progress.status !== 'arrived' && progress.status !== 'stopped')
+            cancelAutoTravel(translate('travel.blocked'))
           if (progress.status === 'rejected') serverMovement.clear()
           else serverMovement.finish()
           stopMovement()
@@ -2969,15 +2229,28 @@
       if (!state.isConnected || !state.currentPlayer)
         serverMovement.clear(false)
     })
-    const unsubscribeMountRecovery =
-      networkManager.mountRecovery.on(applyMountRecovery)
+    const unsubscribeRelocated = networkManager.playerRelocated.on(
+      (position, rotation) => {
+        serverMovement.clear(false)
+        keyboardSender.reset()
+        officialPosition = { ...position }
+        playerRotation = rotation
+        currentSpeed = 0
+        writePlayerPosition(position, rotation)
+        if (
+          playerControlMachine.stateName === 'moving' ||
+          playerControlMachine.stateName === 'keyboard_moving'
+        )
+          transitionTo('idle')
+        cancelAutoTravel()
+      }
+    )
     const unsubscribeNetworkEvents = subscribePlayerNetworkEvents({
       isCurrentPlayerEligibleForRespawn: () =>
         !!currentPlayer && currentPlayer.health <= 0,
       isCurrentPlayer: (id) => !!currentPlayer && currentPlayer.id === id,
       isInteracting: () => playerState.state === 'interact',
       onRespawned: transitionToRespawned,
-      onPositionCorrected: applyPositionCorrection,
       onInteractionRejected: () =>
         enqueuePlayerControlEvent({ type: 'network_interaction_rejected' }),
     })
@@ -2999,16 +2272,14 @@
       canvas.removeEventListener('pointermove', handlePointerHover)
       canvas.removeEventListener('pointerleave', handlePointerLeave)
       clearHover()
-      cancelMountRecovery()
-      unsubscribeMountRecovery()
       serverMovement.clear()
       unsubscribeMovePath()
       unsubscribeMoveProgress()
       unsubscribeMoveConnection()
+      unsubscribeRelocated()
       unsubscribeNetworkEvents()
       playerControlMachine.dispose()
       clearStandUpTimer()
-      clearJumpFeedbackTimer()
       clearPropSwingTimers()
       clearDoorInteractionRetry()
       // The store outlives this component (character select, logout).

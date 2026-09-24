@@ -19,10 +19,8 @@ mod bed_rest_tests;
 mod cape_dye_tests;
 mod cape_texture_tests;
 mod chat_tests;
-mod collision_tests;
 mod combat_audit_tests;
 mod combat_tests;
-mod dungeon_movement_tests;
 mod dungeon_tests;
 mod enchant_tests;
 mod estate_storage_tests;
@@ -30,7 +28,6 @@ mod fence_tests;
 mod fishing_tests;
 mod friend_tests;
 mod house_building_tests;
-mod house_floor_tests;
 mod hunger_tests;
 mod instrument_tests;
 mod inventory_tests;
@@ -42,7 +39,6 @@ mod metrics_tests;
 mod monster_ai_tests;
 mod monster_lifecycle_tests;
 mod mount_tests;
-mod movement_audit_tests;
 mod movement_tests;
 mod party_tests;
 mod persistence_tests;
@@ -168,13 +164,16 @@ fn pos(x: f32) -> Position {
     Position { x, y: 0.0, z: 0.0 }
 }
 
-fn move_cmd(position: Position, append: bool) -> MoveCommand {
-    MoveCommand {
+#[derive(Clone, Copy)]
+pub(in crate::game_state) struct TestMove {
+    pub(in crate::game_state) position: Position,
+    pub(in crate::game_state) sprinting: bool,
+}
+
+fn move_cmd(position: Position, sprinting: bool) -> TestMove {
+    TestMove {
         position,
-        rotation: 0.0,
-        floor_level: 0,
-        append,
-        sprinting: false,
+        sprinting,
     }
 }
 
@@ -301,7 +300,7 @@ async fn walk_player_to(game_state: &GameState, player_id: &PlayerId, x: f32, z:
         let dx = onlinerpg_shared::shortest_world_delta_x(from.x, x);
         let dz = z - from.z;
         let remaining = (dx * dx + dz * dz).sqrt();
-        if remaining < 0.001 {
+        if remaining < 0.8 {
             return;
         }
         let t = (LEG / remaining).min(1.0);
@@ -311,19 +310,21 @@ async fn walk_player_to(game_state: &GameState, player_id: &PlayerId, x: f32, z:
             z: from.z + dz * t,
         };
         game_state
-            .update_player_position(
+            .request_test_move(
                 player_id,
-                crate::game_state::MoveCommand {
+                TestMove {
                     position: target,
-                    rotation: 0.0,
-                    floor_level: 0,
-                    append: false,
                     sprinting: false,
                 },
                 false,
             )
             .await;
-        game_state.tick_player_movement(60.0).await;
+        game_state.advance_test_movement(60.0).await;
+        let after = game_state.players.read().await[player_id].position;
+        assert!(
+            after.dist_xz_sq(&from) > 0.000001,
+            "walk stalled from {from:?} toward {target:?}"
+        );
     }
 }
 
@@ -356,17 +357,6 @@ fn first_dungeon(game_state: &GameState) -> crate::dungeon_defs::DungeonEntrance
         .clone()
 }
 
-fn first_correction(rx: &mut DirectRx) -> Option<(Position, f32, i8)> {
-    std::iter::from_fn(|| rx.try_recv().ok()).find_map(|msg| match msg {
-        ServerMessage::PositionCorrected {
-            position,
-            rotation,
-            floor_level,
-        } => Some((position, rotation, floor_level)),
-        _ => None,
-    })
-}
-
 fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::Monster {
     crate::types::Monster {
         id: id.to_string(),
@@ -384,12 +374,6 @@ fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::
         last_attack_at: 0,
     }
 }
-
-const NON_FINITE: [(f32, &str); 3] = [
-    (f32::NAN, "NaN"),
-    (f32::INFINITY, "+infinity"),
-    (f32::NEG_INFINITY, "-infinity"),
-];
 
 /// Raw u16 heightmap buffer whose every vertex sits at `meters`.
 fn uniform_heightmap(meters: f32) -> Vec<u8> {

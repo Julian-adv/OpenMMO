@@ -8,7 +8,6 @@ import {
   createLocalPlayerControlStateDefinitions,
   createNetworkEventStateOverrides,
   createPlayerControlStateDefinitions,
-  createTimerCleanupStateOverrides,
 } from './state-definitions'
 
 describe('createPlayerControlStateDefinitions', () => {
@@ -19,12 +18,10 @@ describe('createPlayerControlStateDefinitions', () => {
       'attacking',
       'dead',
       'idle',
-      'jump_feedback',
       'keyboard_moving',
       'moving',
       'object_interacting',
       'picking_up',
-      'server_moving',
     ])
   })
 
@@ -131,12 +128,10 @@ describe('createFramePhaseStateOverrides', () => {
       'attacking',
       'dead',
       'idle',
-      'jump_feedback',
       'keyboard_moving',
       'moving',
       'object_interacting',
       'picking_up',
-      'server_moving',
     ])
   })
 
@@ -189,25 +184,11 @@ describe('createNetworkEventStateOverrides', () => {
   })
 })
 
-describe('createTimerCleanupStateOverrides', () => {
-  it('clears the jump feedback timer when leaving jump feedback', () => {
-    const clearJumpFeedbackTimer = vi.fn()
-    const overrides = createTimerCleanupStateOverrides({
-      clearJumpFeedbackTimer,
-    })
-
-    overrides.jump_feedback?.exit?.()
-
-    expect(clearJumpFeedbackTimer).toHaveBeenCalledOnce()
-  })
-})
-
 describe('createLocalPlayerControlStateDefinitions', () => {
   it('wires local player event, timer, network, and frame state behavior', () => {
     const actions = {
       onInteractionFinished: vi.fn(),
       onPickupGrab: vi.fn(),
-      clearJumpFeedbackTimer: vi.fn(),
       onInteractionRejected: vi.fn(),
       handleInteractKey: vi.fn(),
       handleKeyboard: vi.fn(),
@@ -223,7 +204,6 @@ describe('createLocalPlayerControlStateDefinitions', () => {
         type: 'network_interaction_rejected',
       })
     ).toBe(true)
-    expect(states.jump_feedback.exit).toBeDefined()
     expect(states.moving.tick?.(16)).toBe(true)
 
     expect(actions.onPickupGrab).toHaveBeenCalledOnce()
@@ -235,7 +215,6 @@ describe('createLocalPlayerControlStateDefinitions', () => {
     const actions = {
       onInteractionFinished: vi.fn(),
       onPickupGrab: vi.fn(),
-      clearJumpFeedbackTimer: vi.fn(),
       onInteractionRejected: vi.fn(),
       handleInteractKey: vi.fn(),
       handleKeyboard: vi.fn(),
@@ -260,7 +239,6 @@ describe('createLocalPlayerControlMachine', () => {
       stateActions: {
         onInteractionFinished: vi.fn(),
         onPickupGrab,
-        clearJumpFeedbackTimer: vi.fn(),
         onInteractionRejected: vi.fn(),
         handleInteractKey: vi.fn(),
         handleKeyboard: vi.fn(),

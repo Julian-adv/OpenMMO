@@ -1,153 +1,46 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
-  isTravelDestinationValid,
   planTravelLeg,
   travelDistance,
   TRAVEL_LEG_DISTANCE,
-  type TravelDestination,
 } from './autoTravel'
-import { WORLD_MAX_X, WORLD_MIN_X, wrapWorldX } from '../terrain/world-wrap'
+import { WORLD_MAX_X, WORLD_MIN_X } from '../terrain/world-wrap'
 
-const loaded = () => true
-const directPath = (target: TravelDestination) => ({
-  found: true,
-  waypoints: [{ ...target, floor: 0 }],
-})
-
-describe('automatic travel', () => {
-  it('continues over many local routes until a distant destination is reached', () => {
+describe('server travel goals', () => {
+  it('splits long journeys into bounded goals', () => {
     let position = { x: 0, z: 0 }
-    const destination = { x: 3000, z: 4000 }
-    let legs = 0
-    while (legs < 200) {
-      const plan = planTravelLeg(position, destination, loaded, directPath)
-      if (plan.kind === 'arrived') break
-      expect(plan.kind).toBe('move')
-      if (plan.kind !== 'move') throw new Error('Travel stopped early')
-      expect(travelDistance(position, plan.target)).toBeLessThanOrEqual(
-        TRAVEL_LEG_DISTANCE + 1e-8
+    const destination = { x: 800, z: 500 }
+    for (let step = 0; step < 50; step++) {
+      const leg = planTravelLeg(position, destination, () => true)
+      if (leg.kind === 'arrived') break
+      expect(leg.kind).toBe('move')
+      if (leg.kind !== 'move') throw Error('missing goal')
+      expect(travelDistance(position, leg.target)).toBeLessThanOrEqual(
+        TRAVEL_LEG_DISTANCE + 1e-6
       )
-      position = plan.waypoints.at(-1)!
-      legs++
+      position = leg.target
     }
-    expect(legs).toBeGreaterThan(100)
-    expect(travelDistance(position, destination)).toBeLessThanOrEqual(1)
+    expect(travelDistance(position, destination)).toBeLessThan(1)
   })
 
-  it.each([1, -1])(
-    'takes the short route across the world seam (%s)',
-    (direction) => {
-      const position = {
-        x: direction === 1 ? WORLD_MAX_X - 10 : WORLD_MIN_X + 10,
-        z: 0,
-      }
-      const destination = { x: wrapWorldX(position.x + direction * 100), z: 0 }
-      const findPath = vi.fn(directPath)
-      const plan = planTravelLeg(position, destination, loaded, findPath)
-      expect(plan.kind).toBe('move')
-      expect(findPath).toHaveBeenCalledWith({
-        x: position.x + direction * TRAVEL_LEG_DISTANCE,
-        z: 0,
-      })
-      if (plan.kind !== 'move') throw new Error('Missing route')
-      expect(plan.waypoints[0].x).toBe(
-        wrapWorldX(position.x + direction * TRAVEL_LEG_DISTANCE)
-      )
-    }
-  )
-
-  it('waits for terrain before querying a route, then resumes when loaded', () => {
-    const findPath = vi.fn(directPath)
-    const from = { x: 0, z: 0 }
-    const destination = { x: 100, z: 0 }
-    expect(planTravelLeg(from, destination, () => false, findPath).kind).toBe(
-      'waiting'
+  it('uses the short route across the world seam', () => {
+    const leg = planTravelLeg(
+      { x: WORLD_MAX_X - 2, z: 0 },
+      { x: WORLD_MIN_X + 2, z: 0 },
+      () => true
     )
-    expect(findPath).not.toHaveBeenCalled()
-    expect(planTravelLeg(from, destination, loaded, findPath).kind).toBe('move')
+    expect(leg).toEqual({ kind: 'move', target: { x: WORLD_MIN_X + 2, z: 0 } })
   })
 
-  it('waits when a detour crosses terrain that has not loaded', () => {
-    const plan = planTravelLeg(
-      { x: 0, z: 0 },
-      { x: 100, z: 0 },
-      (_x, z) => z < 16,
-      (target) => ({
-        found: true,
-        waypoints: [
-          { x: 0, z: 32, floor: 0 },
-          { ...target, floor: 0 },
-        ],
-      })
-    )
-    expect(plan.kind).toBe('waiting')
-  })
-
-  it('uses obstacle detours from the pathfinder', () => {
-    const waypoints = [
-      { x: 0, z: 12, floor: 0 },
-      { x: 48, z: 0, floor: 0 },
-    ]
-    const plan = planTravelLeg(
-      { x: 0, z: 0 },
-      { x: 100, z: 0 },
-      loaded,
-      () => ({ found: true, waypoints })
-    )
-    expect(plan).toMatchObject({ kind: 'move', waypoints })
-  })
-
-  it('continues a partial route only if it advances toward the destination', () => {
-    const from = { x: 0, z: 0 }
-    const destination = { x: 100, z: 0 }
-    for (const [x, kind] of [
-      [20, 'move'],
-      [0, 'blocked'],
-      [-10, 'blocked'],
-    ] as const) {
-      expect(
-        planTravelLeg(from, destination, loaded, () => ({
-          found: false,
-          waypoints: [{ x, z: 0, floor: 0 }],
-        })).kind
-      ).toBe(kind)
-    }
-  })
-
-  it('does not fall back to walking through a wall when no path exists', () => {
+  it('waits for terrain and refuses invalid destinations', () => {
     expect(
-      planTravelLeg({ x: 0, z: 0 }, { x: 100, z: 0 }, loaded, () => ({
-        found: false,
-        waypoints: [],
-      })).kind
+      planTravelLeg({ x: 0, z: 0 }, { x: 100, z: 0 }, () => false).kind
+    ).toBe('waiting')
+    expect(
+      planTravelLeg({ x: 0, z: 0 }, { x: NaN, z: 0 }, () => true).kind
     ).toBe('blocked')
-  })
-
-  it('stops a snapped route that cannot advance', () => {
     expect(
-      planTravelLeg({ x: 0, z: 0 }, { x: 10, z: 0 }, loaded, () =>
-        directPath({ x: 0, z: 0 })
-      ).kind
-    ).toBe('blocked')
-  })
-
-  it('does not send another move after arrival', () => {
-    const findPath = vi.fn(directPath)
-    expect(
-      planTravelLeg({ x: 99.5, z: 0 }, { x: 100, z: 0 }, loaded, findPath).kind
+      planTravelLeg({ x: 0, z: 0 }, { x: 0.5, z: 0 }, () => true).kind
     ).toBe('arrived')
-    expect(findPath).not.toHaveBeenCalled()
-  })
-
-  it('rejects invalid points and north/south world overflow', () => {
-    expect(isTravelDestinationValid({ x: WORLD_MAX_X + 100, z: 0 })).toBe(true)
-    for (const point of [
-      { x: NaN, z: 0 },
-      { x: 0, z: Infinity },
-      { x: 0, z: WORLD_MIN_X - 1 },
-      { x: 0, z: WORLD_MAX_X },
-    ]) {
-      expect(isTravelDestinationValid(point)).toBe(false)
-    }
   })
 })

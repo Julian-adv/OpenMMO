@@ -26,7 +26,6 @@ import {
   checkOverlap,
   collectRoomAABBsInRegion,
   findAdjacentHouse,
-  findAllRoomsAtPoint,
   findClosedDoorOnSegment,
   findClosedDoorOnPath,
   findHouseAtPoint,
@@ -351,11 +350,6 @@ export class HousingManager {
     maxZ: number
   ): RoomAABB[] {
     return collectRoomAABBsInRegion(this.housesById, minX, maxX, minZ, maxZ)
-  }
-
-  /** Find ALL rooms containing a world point (for overlapping stairwells etc). */
-  findAllRoomsAtPoint(x: number, y: number, z: number) {
-    return findAllRoomsAtPoint(this.housesById, x, y, z)
   }
 
   /** Ground Y on a given house floor at (x, z), stairwell ramps included. */

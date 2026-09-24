@@ -292,9 +292,9 @@ async fn teleport_scroll_moves_in_combat_spends_one_and_clears_movement() {
     let origin = player.position;
     let id = give_scrolls(&game, player, 2).await;
     let mut rx = game.register_direct_channel(&id).await;
-    game.update_player_position(&id, move_cmd(Position { x: 805.0, ..origin }, false), false)
+    game.request_test_move(&id, move_cmd(Position { x: 805.0, ..origin }, false), false)
         .await;
-    assert!(game.movement_intents.read().await.contains_key(&id));
+    assert!(game.has_test_movement(&id).await);
     drain(&mut rx);
 
     game.use_item(&id, 100).await;
@@ -305,7 +305,7 @@ async fn teleport_scroll_moves_in_combat_spends_one_and_clears_movement() {
     assert_eq!(player.floor_level, 0);
     assert_eq!(player.rotation, 1.25);
     assert_eq!(quantity(&game, &id).await, 1);
-    assert!(!game.movement_intents.read().await.contains_key(&id));
+    assert!(!game.has_test_movement(&id).await);
     assert!(game.dirty_inventories.read().await.contains(&id));
     let messages = drain(&mut rx);
     let effects: Vec<_> = messages

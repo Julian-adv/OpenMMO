@@ -1,15 +1,5 @@
 import type { Position, PlayerState } from '../../utils/movementUtils'
 
-export function buildJumpState(prev: PlayerState): PlayerState {
-  return {
-    ...prev,
-    state: 'jump',
-    speed: 0,
-    movementMode: undefined,
-    attackCounter: undefined,
-  }
-}
-
 /** Used after exiting both pickup and object interactions — same shape. */
 export function buildIdleAfterInteract(prev: PlayerState): PlayerState {
   return {
