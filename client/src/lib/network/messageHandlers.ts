@@ -234,6 +234,8 @@ import type {
   ServerGroundItem,
   PositionCorrection,
   MountRecovery,
+  MovePath,
+  MoveProgress,
   ServerMonster,
   ServerPlayer,
   CharacterClass,
@@ -468,6 +470,8 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
+  movePath: NetworkEvent<(path: MovePath) => void>
+  moveProgress: NetworkEvent<(progress: MoveProgress) => void>
   mountRecovery: NetworkEvent<(update: MountRecovery) => void>
   positionCorrected: NetworkEvent<(c: PositionCorrection) => void>
 }
@@ -959,6 +963,14 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerMovePath': {
+      events.movePath.emit(data)
+      break
+    }
+    case 'PlayerMoveProgress': {
+      events.moveProgress.emit(data)
+      break
+    }
     case 'MountRecovery': {
       events.mountRecovery.emit(data)
       break

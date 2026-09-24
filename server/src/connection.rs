@@ -858,6 +858,7 @@ async fn handle_client_message(
     if matches!(
         client_msg,
         ClientMessage::PlayerMove { .. }
+            | ClientMessage::PlayerMoveGoal { .. }
             | ClientMessage::PlayerKeyboardMove { .. }
             | ClientMessage::PlayerMountTurn { .. }
             | ClientMessage::PlayerMountRecover { .. }
@@ -1403,6 +1404,23 @@ async fn handle_client_message(
             return Ok(responses);
         }
 
+        ClientMessage::PlayerMoveGoal {
+            request_id,
+            x,
+            z,
+            sprinting,
+        } => {
+            if let Some(id) = state.player_id {
+                game_state
+                    .request_move_goal(id, request_id, x, z, sprinting)
+                    .await;
+            }
+        }
+        ClientMessage::PlayerMoveStop { request_id } => {
+            if let Some(id) = state.player_id {
+                game_state.stop_move_goal(id, request_id).await;
+            }
+        }
         ClientMessage::PlayerMovementSample {
             position,
             rotation,

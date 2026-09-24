@@ -5,6 +5,7 @@ import type { PathWaypoint } from './movement-substrate'
 export type PlayerControlStateName =
   | 'idle'
   | 'moving'
+  | 'server_moving'
   | 'keyboard_moving'
   | 'attacking'
   | 'object_interacting'
@@ -53,6 +54,7 @@ export interface PickingUpStateData {
 export type ControlState =
   | { name: 'idle' }
   | ({ name: 'moving' } & MovingStateData)
+  | { name: 'server_moving' }
   | { name: 'keyboard_moving' }
   | { name: 'attacking' }
   | { name: 'object_interacting' }

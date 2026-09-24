@@ -123,6 +123,8 @@ export type RollCharacterStatsResult =
 
 // Serde externally tagged enum shapes
 export type ClientMessage =
+  | { PlayerMoveGoal: MoveGoal }
+  | { PlayerMoveStop: { request_id: number } }
   | {
       PlayerMovementSample: {
         position: Position
@@ -555,4 +557,43 @@ export type MountRecovery = {
   floor_level: number
   done: boolean
   success: boolean
+}
+
+export type MoveGoal = {
+  request_id: number
+  x: number
+  z: number
+  sprinting: boolean
+}
+export type MoveWaypoint = { position: Position; floor_level: number }
+export type MoveStatus =
+  | 'searching'
+  | 'moving'
+  | 'arrived'
+  | 'partial'
+  | 'blocked'
+  | 'stopped'
+  | 'rejected'
+  | 'busy'
+  | 'map_changed'
+  | 'node_limit'
+export type MovePath = {
+  request_id: number
+  server_time_ms: number
+  position: Position
+  rotation: number
+  floor_level: number
+  waypoints: MoveWaypoint[]
+  speed: number
+  termination: 'reached' | 'unreachable' | 'node_limit'
+}
+export type MoveProgress = {
+  request_id: number
+  server_time_ms: number
+  position: Position
+  rotation: number
+  floor_level: number
+  next_waypoint: number
+  speed: number
+  status: MoveStatus
 }

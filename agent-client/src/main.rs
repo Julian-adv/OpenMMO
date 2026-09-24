@@ -458,6 +458,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerLeft { .. } => "PlayerLeft",
         ServerMessage::PlayerAppeared { .. } => "PlayerAppeared",
         ServerMessage::PlayerDisappeared { .. } => "PlayerDisappeared",
+        ServerMessage::PlayerMovePath { .. } => "PlayerMovePath",
+        ServerMessage::PlayerMoveProgress { .. } => "PlayerMoveProgress",
         ServerMessage::PlayerMoved { .. } => "PlayerMoved",
         ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
         ServerMessage::PlayerTeleportEffect { .. } => "PlayerTeleportEffect",

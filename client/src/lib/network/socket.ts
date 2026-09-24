@@ -6,6 +6,9 @@ import type {
   Position,
   PositionCorrection,
   MountRecovery,
+  MoveGoal,
+  MovePath,
+  MoveProgress,
   StallBuyLine,
   TradeLineItem,
 } from './networkTypes'
@@ -152,6 +155,9 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  private moveRequestId = 0
+  readonly movePath = createEvent<(path: MovePath) => void>()
+  readonly moveProgress = createEvent<(progress: MoveProgress) => void>()
   readonly mountRecovery = createEvent<(update: MountRecovery) => void>()
   readonly positionCorrected = createEvent<(c: PositionCorrection) => void>()
 
@@ -194,6 +200,8 @@ class NetworkManager {
       interactionRejected: this.interactionRejected,
       positionCorrected: this.positionCorrected,
       mountRecovery: this.mountRecovery,
+      movePath: this.movePath,
+      moveProgress: this.moveProgress,
     }
   }
 
@@ -518,6 +526,19 @@ class NetworkManager {
 
   sendPlayerMountTurn(rotation: number, stop = false, sprinting = false) {
     this.sendMessage({ PlayerMountTurn: { rotation, stop, sprinting } })
+  }
+
+  nextMoveRequestId() {
+    this.moveRequestId = (this.moveRequestId + 1) >>> 0
+    return this.moveRequestId
+  }
+
+  sendMoveGoal(goal: MoveGoal) {
+    this.sendMessage({ PlayerMoveGoal: goal })
+  }
+
+  sendMoveStop(requestId: number) {
+    this.sendMessage({ PlayerMoveStop: { request_id: requestId } })
   }
 
   sendPlayerMove(

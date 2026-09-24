@@ -149,6 +149,9 @@ impl GameState {
         rotation: f32,
         floor_level: i8,
     ) {
+        if self.owns_goal_movement(player_id).await {
+            return;
+        }
         if !position.is_finite() || !rotation.is_finite() {
             return;
         }

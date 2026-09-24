@@ -31,6 +31,7 @@ export function createPlayerControlStateDefinitions(
   return {
     idle: { name: 'idle', ...overrides.idle },
     moving: { name: 'moving', ...overrides.moving },
+    server_moving: { name: 'server_moving', ...overrides.server_moving },
     keyboard_moving: { name: 'keyboard_moving', ...overrides.keyboard_moving },
     attacking: { name: 'attacking', ...overrides.attacking },
     object_interacting: {
@@ -154,6 +155,7 @@ export interface FramePhaseStateActions {
 const framePhaseStateNames = [
   'idle',
   'moving',
+  'server_moving',
   'keyboard_moving',
   'attacking',
   'object_interacting',
@@ -237,7 +239,9 @@ export interface LocalPlayerControlStateActions
     AnimationEventStateActions,
     TimerCleanupStateActions,
     NetworkEventStateActions,
-    FramePhaseStateActions {}
+    FramePhaseStateActions {
+  onServerMoveExit?: () => void
+}
 
 export function createLocalPlayerControlStateDefinitions(
   actions: LocalPlayerControlStateActions
@@ -247,7 +251,8 @@ export function createLocalPlayerControlStateDefinitions(
       createAnimationEventStateOverrides(actions),
       createTimerCleanupStateOverrides(actions),
       createNetworkEventStateOverrides(actions),
-      createFramePhaseStateOverrides(actions)
+      createFramePhaseStateOverrides(actions),
+      { server_moving: { exit: actions.onServerMoveExit } }
     )
   )
 }

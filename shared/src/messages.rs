@@ -15,6 +15,27 @@ use crate::entity::{Monster, MonsterState, Player};
 use crate::world::{GameDateTime, Position};
 use crate::{fishing, housing, inventory, skills};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MoveWaypoint {
+    pub position: Position,
+    pub floor_level: i8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MoveStatus {
+    Searching,
+    Moving,
+    Arrived,
+    Partial,
+    Blocked,
+    Stopped,
+    Rejected,
+    Busy,
+    MapChanged,
+    NodeLimit,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LocalizedMessage {
     pub code: String,
@@ -398,6 +419,15 @@ pub enum ClientMessage {
     /// The scene has finished compiling, so the player can be hit again. See
     /// `entity::WORLD_LOADING_GRACE_MS`.
     WorldReady,
+    PlayerMoveGoal {
+        request_id: u32,
+        x: f32,
+        z: f32,
+        sprinting: bool,
+    },
+    PlayerMoveStop {
+        request_id: u32,
+    },
     PlayerMovementSample {
         position: Position,
         rotation: f32,
@@ -984,6 +1014,26 @@ pub enum ServerMessage {
     },
     PlayerDisappeared {
         player_id: PlayerId,
+    },
+    PlayerMovePath {
+        request_id: u32,
+        server_time_ms: u64,
+        position: Position,
+        rotation: f32,
+        floor_level: i8,
+        waypoints: Vec<MoveWaypoint>,
+        speed: f32,
+        termination: crate::pathfinding::PathTermination,
+    },
+    PlayerMoveProgress {
+        request_id: u32,
+        server_time_ms: u64,
+        position: Position,
+        rotation: f32,
+        floor_level: i8,
+        next_waypoint: u32,
+        speed: f32,
+        status: MoveStatus,
     },
     PlayerMoved {
         player_id: PlayerId,
@@ -2063,6 +2113,8 @@ impl ServerMessage {
             | Self::FurnitureSelectionNotice { .. }
             | Self::TradeDeclined { .. }
             | Self::DealResult { .. }
+            | Self::PlayerMovePath { .. }
+            | Self::PlayerMoveProgress { .. }
             | Self::MountRecovery { .. }
             | Self::PositionCorrected { .. }
             | Self::MovementResync { .. }

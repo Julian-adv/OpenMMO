@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { ServerMovement } from './player-control/server-movement'
+  import { syncOwnFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
   import { onMount } from 'svelte'
   import { localTeleportActive } from '../stores/teleportEffectStore'
@@ -155,6 +157,7 @@
   } from './player-control/fsm/projection'
   import {
     runMoveRequest,
+    prepareMoveRequest,
     type MoveRequestActions,
   } from './player-control/fsm/move-request'
   import {
@@ -277,6 +280,11 @@
   playerFloorOffset.subscribe((v) => (floorOffset = v))
 
   let currentPlayer = $state<LocalPlayer | null>(null)
+  const serverMovement = new ServerMovement(
+    () => networkManager.nextMoveRequestId(),
+    (goal) => networkManager.sendMoveGoal(goal),
+    (requestId) => networkManager.sendMoveStop(requestId)
+  )
 
   /** Floor as broadcast to others. See `playerVisualFloorLevel`. */
   function wireFloorLevel(passabilityFloor?: number): number {
@@ -292,7 +300,7 @@
   /** Standalone floor send — move packets only land at waypoints. See
    * `ClientMessage::PlayerFloorChanged`. */
   function syncFloorLevel() {
-    if (!currentPlayer) return
+    if (!currentPlayer || serverMovement.active) return
     const floorLevel = wireFloorLevel()
     if (floorLevel === lastSentFloorLevel) return
     lastSentFloorLevel = floorLevel
@@ -495,7 +503,6 @@
       clickPosition: target,
       currentPlayer,
       interactionExit: 'none',
-      isMoving: moving !== null,
       hasKeyboardInput: false,
       currentFloor: 0,
       getFloorAt: () => 0,
@@ -514,7 +521,8 @@
 
   function isSprintingNow(): boolean {
     if (!sprintAvailable()) return false
-    const moving = playerControlMachine?.stateName === 'moving'
+    const state = playerControlMachine?.stateName
+    const moving = state === 'moving' || state === 'server_moving'
     // Combat chase runs (see getMovementMode) — at sprint speed, or a fleeing
     // monster outruns the player. Same satiation gate and cost as sprint.
     if (combatController.isInCombat && moving) return true
@@ -798,7 +806,11 @@
   // moving/keyboard_moving state. Derive it from the machine's owned state.
   function isMovingNow(): boolean {
     const name = playerControlMachine.stateName
-    return name === 'moving' || name === 'keyboard_moving'
+    return (
+      name === 'moving' ||
+      name === 'keyboard_moving' ||
+      (name === 'server_moving' && currentSpeed > 0)
+    )
   }
 
   // Narrowed views of the machine's owned state, for reading/mutating the data
@@ -823,6 +835,7 @@
     keyboardForward?: number
   ) {
     if ($localTeleportActive) return
+    serverMovement.clear()
     cancelMountRecovery()
     const wrappedPosition = { ...position, x: wrapWorldX(position.x) }
     const floorLevel = wireFloorLevel(passabilityFloor)
@@ -875,6 +888,10 @@
   }
 
   function applyPositionCorrection(correction: PositionCorrection) {
+    if (serverMovement.active) {
+      serverMovement.clear(false)
+      transitionTo('idle')
+    }
     if (correction.resyncId !== undefined) {
       const moving = movingState()
       const goal = moving?.waypoints.at(-1)
@@ -990,6 +1007,11 @@
       return
     }
 
+    if (previousPlayerId !== null) {
+      serverMovement.clear(false)
+      if (playerControlMachine.stateName === 'server_moving')
+        transitionTo('idle')
+    }
     playerRotation = currentPlayer.rotation
     currentSpeed = 0
     setPlayerState({
@@ -1364,6 +1386,26 @@
 
   // Update player movement (click-to-move) with acceleration/deceleration
   function updatePlayerMovement(deltaTime: number) {
+    if (playerControlMachine.stateName === 'server_moving') {
+      if (
+        !currentPlayer ||
+        currentPlayer.health <= 0 ||
+        isMounted(currentPlayer)
+      ) {
+        stopMovement()
+        return
+      }
+      const pose = serverMovement.sample((from, to) =>
+        isMovementBlocked(from.x, from.z, to.x, to.z, from.y)
+      )
+      if (pose) {
+        playerRotation = pose.rotation
+        currentSpeed = pose.speed
+        writePlayerPosition(pose.position, pose.rotation)
+      }
+      updatePlayerState()
+      return
+    }
     if (mountRecovery) {
       if (
         performance.now() - mountRecovery.startedAt > 10000 ||
@@ -1445,6 +1487,7 @@
     const input = inputHandler.getMovementInput()
     if (mountRecovery && !input) return
     if (input) {
+      if (serverMovement.active) transitionTo('idle')
       cancelMountRecovery()
       cancelAutoTravel()
       clearDoorInteractionRetry()
@@ -1629,6 +1672,38 @@
       const radius = staggerRadius(get(activeDebuffs), Date.now())
       if (radius > 0) clickPosition = staggerTarget(clickPosition, radius)
     }
+    if (
+      currentPlayer &&
+      !isMounted(currentPlayer) &&
+      !options.approach &&
+      (!options.stopAtHouseEntrance ||
+        !housingManager.isPointUnderHouseXZ(
+          clickPosition.x,
+          clickPosition.z
+        )) &&
+      !options.recovering
+    ) {
+      if (
+        prepareMoveRequest(
+          {
+            currentPlayerHealth: currentPlayer.health,
+            interactionExit: getInteractionExitKind(playerState),
+            hasCurrentPlayer: true,
+            hasKeyboardInput: inputHandler.hasKeysPressed,
+          },
+          createMoveRequestActions(clickPosition, options)
+        )
+      ) {
+        combatController.cancelCombat()
+        keyboardMoveSender.reset()
+        keyboardSpeedRamp.reset()
+        currentSpeed = 0
+        serverMovement.request(clickPosition.x, clickPosition.z, clickSprinting)
+        playerControlMachine.transition({ name: 'server_moving' })
+        updatePlayerState()
+      }
+      return
+    }
     const routePath = options.stopAtHouseEntrance
       ? (
           startX: number,
@@ -1668,7 +1743,6 @@
       clickPosition,
       currentPlayer,
       interactionExit: getInteractionExitKind(playerState),
-      isMoving: isMovingNow(),
       hasKeyboardInput: inputHandler.hasKeysPressed,
       currentFloor: currentPassabilityFloor(),
       getFloorAt: getFloorAtForClick,
@@ -2572,6 +2646,7 @@
       handleInteractKey: checkInteraction,
       handleKeyboard: updateKeyboardMovement,
       tick: updatePlayerMovement,
+      onServerMoveExit: () => serverMovement.clear(),
     },
   })
 
@@ -2581,6 +2656,7 @@
   ) {
     if ($localTeleportActive) return
     if (options.editorMode) {
+      if (serverMovement.active) stopMovement()
       cancelAutoTravel()
       if (currentPlayer) {
         keyboardMoveSender.flush(currentPlayer.position, playerRotation)
@@ -2615,6 +2691,7 @@
       !options.editorMode &&
       currentPlayer &&
       currentPlayer.health > 0 &&
+      !serverMovement.active &&
       now - lastMovementSampleAt >= 200
     ) {
       lastMovementSampleAt = now
@@ -2784,6 +2861,9 @@
     })
     const unsubscribeTeleport = teleportLoading.subscribe((loading) => {
       if (loading) {
+        serverMovement.clear(false)
+        if (playerControlMachine.stateName === 'server_moving')
+          transitionTo('idle')
         cancelMountRecovery()
         cancelAutoTravel()
       }
@@ -2838,6 +2918,57 @@
     canvas.addEventListener('pointermove', handlePointerHover)
     canvas.addEventListener('pointerleave', handlePointerLeave)
 
+    const unsubscribeMovePath = networkManager.movePath.on((path) => {
+      if (!currentPlayer || currentPlayer.health <= 0 || $localTeleportActive) {
+        serverMovement.clear(false)
+        return
+      }
+      if (!serverMovement.acceptPath(path)) return
+      syncOwnFloor(path.floor_level, path.position.x, path.position.z)
+      writePlayerPosition(path.position, path.rotation)
+    })
+    const unsubscribeMoveProgress = networkManager.moveProgress.on(
+      (progress) => {
+        if (
+          !currentPlayer ||
+          currentPlayer.health <= 0 ||
+          $localTeleportActive
+        ) {
+          serverMovement.clear(false)
+          return
+        }
+        if (serverMovement.acceptStopped(progress)) {
+          if (playerControlMachine.stateName === 'idle') {
+            syncOwnFloor(
+              progress.floor_level,
+              progress.position.x,
+              progress.position.z
+            )
+            writePlayerPosition(progress.position, progress.rotation)
+            playerRotation = progress.rotation
+            updatePlayerState()
+          }
+          return
+        }
+        if (!serverMovement.acceptProgress(progress)) return
+        syncOwnFloor(
+          progress.floor_level,
+          progress.position.x,
+          progress.position.z
+        )
+        if (progress.status !== 'moving' && progress.status !== 'searching') {
+          writePlayerPosition(progress.position, progress.rotation)
+          playerRotation = progress.rotation
+          if (progress.status === 'rejected') serverMovement.clear()
+          else serverMovement.finish()
+          stopMovement()
+        }
+      }
+    )
+    const unsubscribeMoveConnection = gameStore.subscribe((state) => {
+      if (!state.isConnected || !state.currentPlayer)
+        serverMovement.clear(false)
+    })
     const unsubscribeMountRecovery =
       networkManager.mountRecovery.on(applyMountRecovery)
     const unsubscribeNetworkEvents = subscribePlayerNetworkEvents({
@@ -2870,6 +3001,10 @@
       clearHover()
       cancelMountRecovery()
       unsubscribeMountRecovery()
+      serverMovement.clear()
+      unsubscribeMovePath()
+      unsubscribeMoveProgress()
+      unsubscribeMoveConnection()
       unsubscribeNetworkEvents()
       playerControlMachine.dispose()
       clearStandUpTimer()

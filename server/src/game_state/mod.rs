@@ -214,6 +214,7 @@ mod bed_rest;
 mod fence;
 mod friends;
 mod furniture_shop;
+mod goal_movement;
 mod house_building;
 pub(crate) mod hunger;
 mod instrument;
@@ -333,6 +334,7 @@ pub struct GameState {
     /// `players`.
     player_ids_by_name: Arc<RwLock<HashMap<String, PlayerId>>>,
     movement_intents: Arc<RwLock<HashMap<PlayerId, player::MoveQueue>>>,
+    goal_moves: Arc<Mutex<HashMap<PlayerId, goal_movement::GoalMovement>>>,
     player_movement_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
     path_search: Arc<path_search::PathSearchPool>,
     last_player_attacks: Arc<RwLock<HashMap<PlayerId, u64>>>,
@@ -680,6 +682,7 @@ impl GameState {
             players: Arc::new(RwLock::new(HashMap::new())),
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
             movement_intents: Arc::new(RwLock::new(HashMap::new())),
+            goal_moves: Arc::new(Mutex::new(HashMap::new())),
             player_movement_versions: Arc::new(RwLock::new(HashMap::new())),
             path_search: Arc::new(path_search::PathSearchPool::default()),
             last_player_attacks: Arc::new(RwLock::new(HashMap::new())),

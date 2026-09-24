@@ -24,6 +24,7 @@ describe('createPlayerControlStateDefinitions', () => {
       'moving',
       'object_interacting',
       'picking_up',
+      'server_moving',
     ])
   })
 
@@ -135,6 +136,7 @@ describe('createFramePhaseStateOverrides', () => {
       'moving',
       'object_interacting',
       'picking_up',
+      'server_moving',
     ])
   })
 

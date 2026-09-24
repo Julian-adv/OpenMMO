@@ -11,10 +11,6 @@ import {
   type SendPlayerMove,
 } from './movement-substrate'
 
-// ───────────────────────────────────────────────────────────────────────────
-// Move-request decision (click → start / exit-interaction / ignore)
-// ───────────────────────────────────────────────────────────────────────────
-
 export type MoveRequestDecision =
   | { kind: 'ignored' }
   | { kind: 'exit_pickup_and_retry' }
@@ -25,7 +21,6 @@ interface DecideMoveRequestInput {
   currentPlayerHealth: number | null
   interactionExit: InteractionExitKind
   hasCurrentPlayer: boolean
-  isMoving: boolean
   hasKeyboardInput: boolean
 }
 
@@ -33,7 +28,6 @@ export function decideMoveRequest({
   currentPlayerHealth,
   interactionExit,
   hasCurrentPlayer,
-  isMoving,
   hasKeyboardInput,
 }: DecideMoveRequestInput): MoveRequestDecision {
   if (currentPlayerHealth !== null && currentPlayerHealth <= 0) {
@@ -43,19 +37,30 @@ export function decideMoveRequest({
   if (interactionExit === 'pickup') return { kind: 'exit_pickup_and_retry' }
   if (interactionExit === 'object') return { kind: 'exit_object_and_delay' }
 
-  if (!hasCurrentPlayer || isMoving || hasKeyboardInput) {
-    if (hasCurrentPlayer && isMoving && !hasKeyboardInput) {
-      return { kind: 'start' }
-    }
+  if (!hasCurrentPlayer || hasKeyboardInput) {
     return { kind: 'ignored' }
   }
 
   return { kind: 'start' }
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// Path-based click movement initialization
-// ───────────────────────────────────────────────────────────────────────────
+export function prepareMoveRequest(
+  input: DecideMoveRequestInput,
+  actions: Pick<MoveRequestActions, 'exitPickupAndRetry' | 'exitObjectAndDelay'>
+): boolean {
+  switch (decideMoveRequest(input).kind) {
+    case 'ignored':
+      return false
+    case 'exit_pickup_and_retry':
+      actions.exitPickupAndRetry()
+      return false
+    case 'exit_object_and_delay':
+      actions.exitObjectAndDelay()
+      return false
+    case 'start':
+      return true
+  }
+}
 
 interface StartClickMovementInput extends Pathing {
   currentPos: Position
@@ -93,10 +98,6 @@ export function startClickMovement({
   }
 }
 
-// ───────────────────────────────────────────────────────────────────────────
-// Full move-request flow (decision + click movement start)
-// ───────────────────────────────────────────────────────────────────────────
-
 interface MoveRequestPlayer {
   health: number
   position: Position
@@ -113,7 +114,6 @@ interface RunMoveRequestInput extends Pathing {
   clickPosition: Position
   currentPlayer: MoveRequestPlayer | null
   interactionExit: InteractionExitKind
-  isMoving: boolean
   hasKeyboardInput: boolean
   sendPlayerMove: SendPlayerMove
   startSpeed: number
@@ -124,7 +124,6 @@ export function runMoveRequest({
   clickPosition,
   currentPlayer,
   interactionExit,
-  isMoving,
   hasKeyboardInput,
   currentFloor,
   getFloorAt,
@@ -134,28 +133,19 @@ export function runMoveRequest({
   startSpeed,
   actions,
 }: RunMoveRequestInput) {
-  const decision = decideMoveRequest({
-    currentPlayerHealth: currentPlayer?.health ?? null,
-    interactionExit,
-    hasCurrentPlayer: currentPlayer !== null,
-    isMoving,
-    hasKeyboardInput,
-  })
-
-  switch (decision.kind) {
-    case 'ignored':
-      return
-    case 'exit_pickup_and_retry':
-      actions.exitPickupAndRetry()
-      return
-    case 'exit_object_and_delay':
-      actions.exitObjectAndDelay()
-      return
-    case 'start':
-      break
-  }
-
-  if (!currentPlayer) return
+  if (
+    !prepareMoveRequest(
+      {
+        currentPlayerHealth: currentPlayer?.health ?? null,
+        interactionExit,
+        hasCurrentPlayer: currentPlayer !== null,
+        hasKeyboardInput,
+      },
+      actions
+    ) ||
+    !currentPlayer
+  )
+    return
 
   const started = startClickMovement({
     currentPos: {

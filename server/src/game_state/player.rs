@@ -867,6 +867,7 @@ impl super::GameState {
     pub async fn remove_player(&self, player_id: &PlayerId) {
         self.bed_rest_started.write().await.remove(player_id);
         self.clear_player_movement(player_id, "disconnect").await;
+        self.goal_moves.lock().await.remove(player_id);
         self.player_movement_versions
             .write()
             .await
@@ -983,6 +984,7 @@ impl super::GameState {
         is_official_npc: bool,
         keyboard_forward: Option<i8>,
     ) {
+        self.cancel_goal_movement(player_id).await;
         let received_ms = Self::now_ms();
         if self.movement_resync_pending(player_id) {
             return;
@@ -1341,6 +1343,7 @@ impl super::GameState {
 
     pub(super) async fn clear_player_movement(&self, id: &PlayerId, reason: &'static str) {
         let mut queues = self.movement_intents.write().await;
+        self.cancel_goal_movement(id).await;
         if let Some(queue) = queues.remove(id) {
             self.record_recovery_cancel(*id, &queue, reason);
         }
@@ -1541,6 +1544,7 @@ impl super::GameState {
     /// consumed waypoints are popped in place, finished queues dropped.
     pub async fn tick_player_movement(&self, dt: f32) {
         self.validate_mounts().await;
+        self.tick_goal_movement().await;
         // Exactly the client's speed: headroom ran the sim to the leg end
         // ahead of the client, and monsters swung at that empty spot.
         let base_step = PLAYER_MOVE_SPEED * dt.max(0.0);
@@ -2232,7 +2236,7 @@ impl super::GameState {
     }
 
     /// Update spatial state, dungeon occupancy, and nearby clients after relocation.
-    async fn finish_position_update(
+    pub(super) async fn finish_position_update(
         &self,
         player_id: &PlayerId,
         old_position: Position,
@@ -2290,6 +2294,9 @@ impl super::GameState {
 
     /// Apply a floor report while preserving the server's connection waypoints.
     pub async fn update_player_floor(&self, player_id: &PlayerId, floor_level: i8) {
+        if self.owns_goal_movement(player_id).await {
+            return;
+        }
         if self.movement_resync_pending(player_id) {
             return;
         }

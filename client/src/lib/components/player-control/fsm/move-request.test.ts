@@ -11,7 +11,6 @@ const baseInput = {
   currentPlayerHealth: 10,
   interactionExit: 'none' as const,
   hasCurrentPlayer: true,
-  isMoving: false,
   hasKeyboardInput: false,
 }
 
@@ -42,18 +41,12 @@ describe('decideMoveRequest', () => {
     ).toBe('exit_object_and_delay')
   })
 
-  it('allows replacing click movement but blocks keyboard contention', () => {
-    expect(
-      decideMoveRequest({
-        ...baseInput,
-        isMoving: true,
-      }).kind
-    ).toBe('start')
+  it('allows click movement but blocks keyboard contention', () => {
+    expect(decideMoveRequest(baseInput).kind).toBe('start')
 
     expect(
       decideMoveRequest({
         ...baseInput,
-        isMoving: true,
         hasKeyboardInput: true,
       }).kind
     ).toBe('ignored')
@@ -174,7 +167,6 @@ describe('runMoveRequest', () => {
       clickPosition,
       currentPlayer: { health: 10, position: currentPos },
       interactionExit: 'none',
-      isMoving: true,
       hasKeyboardInput: false,
       findPath: () => ({ waypoints: [] }),
       sendPlayerMove,
@@ -192,7 +184,6 @@ describe('runMoveRequest', () => {
       clickPosition: { x: 1, y: 0, z: 0 },
       currentPlayer: { health: 10, position: { x: 0, y: 0, z: 0 } },
       interactionExit: 'pickup',
-      isMoving: false,
       hasKeyboardInput: false,
       actions: pickupActions,
       ...deps,
@@ -206,7 +197,6 @@ describe('runMoveRequest', () => {
       clickPosition: { x: 1, y: 0, z: 0 },
       currentPlayer: { health: 10, position: { x: 0, y: 0, z: 0 } },
       interactionExit: 'object',
-      isMoving: false,
       hasKeyboardInput: false,
       actions: objectActions,
       ...deps,
@@ -222,7 +212,6 @@ describe('runMoveRequest', () => {
       clickPosition: { x: 1, y: 0, z: 0 },
       currentPlayer: { health: 10, position: { x: 0, y: 0, z: 0 } },
       interactionExit: 'none',
-      isMoving: false,
       hasKeyboardInput: false,
       actions: a,
       ...deps,
@@ -237,7 +226,6 @@ describe('runMoveRequest', () => {
       clickPosition: { x: 1, y: 0, z: 0 },
       currentPlayer: { health: 0, position: { x: 0, y: 0, z: 0 } },
       interactionExit: 'none',
-      isMoving: false,
       hasKeyboardInput: false,
       actions: a,
       ...deps,
