@@ -279,3 +279,44 @@ async fn movement_waits_for_current_server_progress_and_never_adopts_a_stale_goa
     assert_eq!(s.self_floor_level, 1);
     assert_eq!(s.move_status, Some(MoveStatus::Moving));
 }
+
+#[tokio::test]
+async fn furniture_positions_change_only_on_server_approval_and_exit() {
+    let (mut s, _rx) = targetable_state();
+    let before = s.self_player.as_ref().unwrap().position;
+    s.send_command(ClientMessage::InteractObject {
+        object_type: "chair".into(),
+        object_id: 7,
+    })
+    .await
+    .unwrap();
+    assert_eq!(s.self_player.as_ref().unwrap().position, before);
+    let id = s.self_player_id.unwrap();
+    let seat = p(3.0, 8.1, 4.0);
+    s.push_event(ServerMessage::PlayerInteractionChanged {
+        player_id: id,
+        object_type: Some("chair".into()),
+        object_id: Some(7),
+        position: seat,
+        rotation: 1.2,
+        floor_level: 1,
+    });
+    assert_eq!(s.self_player.as_ref().unwrap().position, seat);
+    assert_eq!(s.self_player.as_ref().unwrap().rotation, 1.2);
+    assert_eq!(s.self_floor_level, 1);
+    s.send_command(ClientMessage::StopInteraction)
+        .await
+        .unwrap();
+    assert_eq!(s.self_player.as_ref().unwrap().position, seat);
+    let exit = p(4.0, 8.1, 4.0);
+    s.push_event(ServerMessage::PlayerInteractionChanged {
+        player_id: id,
+        object_type: None,
+        object_id: None,
+        position: exit,
+        rotation: 1.2,
+        floor_level: 1,
+    });
+    assert_eq!(s.self_player.as_ref().unwrap().position, exit);
+    assert!(s.self_player.as_ref().unwrap().object_id.is_none());
+}

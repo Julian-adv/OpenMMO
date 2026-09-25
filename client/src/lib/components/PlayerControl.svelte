@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { PlayerInteraction } from '../network/networkTypes'
   import { ServerMovement } from './player-control/server-movement'
   import { syncOwnFloor, ownPlayerFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
@@ -88,9 +89,8 @@
   import { hungerState, SPRINT_MIN_SATIATION } from '../stores/hungerStore'
   import { isRangedWeapon, weaponRangeMeters } from '../data/itemDefs'
   import { type Position, type PlayerState } from '../utils/movementUtils'
-  import { isMounted, mountFloats } from '../utils/mounts'
+  import { isMounted } from '../utils/mounts'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
-  import { floatingSurfaceY } from '../utils/floatingSurface'
   import {
     playerInsideHouseId,
     playerVisualFloorLevel,
@@ -149,8 +149,6 @@
   import {
     exitPickupInteraction as buildExitPickupInteraction,
     handlePickupGrab,
-    applyObjectInteractionPosition,
-    pickObjectExitPosition,
     beginPickupInteraction,
     beginObjectInteraction,
     exitObjectInteraction as buildExitObjectInteraction,
@@ -216,7 +214,6 @@
     attackCooldown?: number
     /** Baked water surface height at a world XZ (for fishing cast detection). */
     waterSurfaceAt?: (x: number, z: number) => number
-    hasWaterSurfaceData?: (x: number, z: number) => boolean
   }
 
   let {
@@ -238,7 +235,6 @@
     propMeshes,
     attackCooldown,
     waterSurfaceAt,
-    hasWaterSurfaceData,
   }: Props = $props()
 
   let currentPlayer = $state<LocalPlayer | null>(null)
@@ -252,25 +248,9 @@
 
   const { renderer } = useThrelte()
 
-  const physics = createPlayerPhysics({
-    getHeightManager: () => heightManager,
-    getCurrentPlayerY: () => currentPlayer?.position.y ?? null,
+  const { isMovementBlocked } = createPlayerPhysics({
     getPassabilityFloor: currentPassabilityFloor,
-    getFloatSurfaceY: (x, z) => floatSurfaceY(x, z),
   })
-
-  function floatSurfaceY(x: number, z: number): number | null {
-    if (!mountFloats(currentPlayer?.mount)) return null
-    return floatingSurfaceY({
-      x,
-      z,
-      fallbackY: currentPlayer?.position.y ?? 0,
-      heightManager,
-      waterSurfaceAt,
-      hasWaterSurfaceData,
-    })
-  }
-  const { sampleHeight, isMovementBlocked } = physics
 
   let clickSprinting = false
   let autoTravelTarget: TravelDestination | null = null
@@ -366,12 +346,8 @@
     standUpTimer = null
   }
 
-  /** A seat exit waiting on the stand-up clip: where the player is heading
-   *  (steers which side of the seat to step to) and what to do afterwards. */
-  let pendingExit: {
-    toward: Position | null
-    then: (() => void) | null
-  } | null = null
+  let pendingExit: (() => void) | null = null
+  let interactionRevision = 0
 
   // Prop-break swing: when the player reaches a clicked barrel/crate, swing the
   // sword once and break it at the contact frame, then drop back to idle after
@@ -434,8 +410,8 @@
     } else if (anim === SitAnimationName.SIT_TO_STAND) {
       const exit = pendingExit
       pendingExit = null
-      completeObjectExit(false, exit?.toward ?? undefined)
-      exit?.then?.()
+      completeObjectExit(true)
+      exit?.()
     } else {
       exitPickupInteraction()
     }
@@ -451,19 +427,12 @@
     })
   }
 
-  /** Leave the current object/emote. A seated player first plays the
-   *  stand-up clip; the real exit (and `then`) runs from
-   *  onInteractionFinished when it ends. A rejected sit (notify=false) never
-   *  sat, so it skips straight out. */
-  function exitObjectInteraction(
-    notify = true,
-    then?: () => void,
-    toward?: Position
-  ) {
+  function exitObjectInteraction(notify = true, then?: () => void) {
+    interactionRevision++
     const anim =
       playerState.state === 'interact' ? playerState.interactionAnim : undefined
     if (anim === SitAnimationName.SIT_TO_STAND) {
-      pendingExit = { toward: toward ?? null, then: then ?? null }
+      pendingExit = then ?? null
       return
     }
     if (notify && anim === SitAnimationName.SIT) {
@@ -476,48 +445,17 @@
           playerState.interactOffsetY ?? 0
         )
       )
-      networkManager.sendStopInteraction()
-      pendingExit = { toward: toward ?? null, then: then ?? null }
+      pendingExit = then ?? null
       return
     }
-    completeObjectExit(notify, toward)
+    completeObjectExit(notify)
     then?.()
   }
 
-  function completeObjectExit(notify: boolean, toward?: Position) {
-    // Stepping out walks the player off the seat they were using. An emote
-    // claims no object — it plays where the player stands — so every exit
-    // path leaves an emote in place.
-    const stepOut =
-      playerState.state !== 'interact' ||
-      !isEmoteAnim(playerState.interactionAnim ?? '')
-    if (stepOut && currentPlayer) {
-      const seat = {
-        x: currentPlayer.position.x,
-        y: currentPlayer.position.y,
-        z: currentPlayer.position.z,
-      }
-      applyObjectInteractionPosition(
-        currentPlayer,
-        pickObjectExitPosition(
-          seat,
-          playerRotation,
-          (x, z) => isMovementBlocked(seat.x, seat.z, x, z, seat.y),
-          toward
-        ),
-        {
-          hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
-          sampleHeight,
-        }
-      )
-    }
-
+  function completeObjectExit(notify: boolean) {
     setPlayerState(buildExitObjectInteraction(playerState))
     transitionTo('idle')
-
-    if (notify) {
-      networkManager.sendStopInteraction()
-    }
+    if (notify) networkManager.sendStopInteraction()
   }
 
   function stopMovement() {
@@ -983,6 +921,7 @@
     sprinting: boolean,
     stopAtEntrance = false
   ) {
+    interactionRevision++
     keyboardSender.reset()
     clickSprinting = sprinting
     playerControlMachine.transition({ name: 'moving', approach })
@@ -1004,23 +943,19 @@
         handleClickToMove(clickPosition, options)
       },
       exitObjectAndDelay: () => {
-        exitObjectInteraction(
-          true,
-          () => {
-            clearStandUpTimer()
-            standUpTimer = setTimeout(() => {
-              standUpTimer = null
-              enqueuePlayerControlEvent({
-                type: 'delayed_request_move',
-                position: { ...clickPosition },
-                approach: options.approach ?? null,
-                sprinting: options.sprinting,
-                stopAtHouseEntrance: options.stopAtHouseEntrance,
-              })
-            }, STAND_UP_DURATION)
-          },
-          clickPosition
-        )
+        exitObjectInteraction(true, () => {
+          clearStandUpTimer()
+          standUpTimer = setTimeout(() => {
+            standUpTimer = null
+            enqueuePlayerControlEvent({
+              type: 'delayed_request_move',
+              position: { ...clickPosition },
+              approach: options.approach ?? null,
+              sprinting: options.sprinting,
+              stopAtHouseEntrance: options.stopAtHouseEntrance,
+            })
+          }, STAND_UP_DURATION)
+        })
       },
     }
   }
@@ -1091,44 +1026,87 @@
     )
   }
 
-  /** `claim` is false when the server already holds the object for us. */
   function enterInteraction(
     intent: Extract<ClickIntent, { type: 'interact_object' }>,
     claim = true
   ) {
+    interactionRevision++
     cancelAutoTravel()
-    if (getInteractionExitKind(playerState) === 'pickup') {
-      finishPendingPickup()
-    }
-
-    // An in-range click mid-walk acts immediately; the pose starts from rest.
+    if (getInteractionExitKind(playerState) === 'pickup') finishPendingPickup()
     currentSpeed = 0
-    // Re-sitting mid stand-up must not let the old exit's continuation fire,
-    // and an armed stand-up move must not un-sit us right after.
     pendingExit = null
     clearStandUpTimer()
-
+    if (claim) {
+      combatController.cancelCombat()
+      serverMovement.clear()
+      keyboardSender.reset()
+      transitionTo('idle')
+      updatePlayerState()
+      networkManager.sendInteractObject(intent.objectType, intent.objectId)
+      return
+    }
     const result = beginObjectInteraction({
       intent,
       previousPlayerState: playerState,
       cancelCombat: () => combatController.cancelCombat(),
     })
-
-    // Entering object_interacting drops any moving data; just face the object.
     playerRotation = result.playerRotation
     setPlayerState(result.nextPlayerState)
     transitionTo('object_interacting')
+  }
 
-    if (currentPlayer) {
-      applyObjectInteractionPosition(currentPlayer, result.entryPosition, {
-        hasHeightData: (x, z) => heightManager.hasHeightData(x, z),
-        sampleHeight,
-      })
+  async function applyServerInteraction(interaction: PlayerInteraction) {
+    const revision = ++interactionRevision
+    if (!currentPlayer || currentPlayer.id !== interaction.player_id) return
+    officialPosition = { ...interaction.position }
+    syncOwnFloor(
+      interaction.floor_level,
+      interaction.position.x,
+      interaction.position.z
+    )
+    playerRotation = interaction.rotation
+    writePlayerPosition(interaction.position, interaction.rotation)
+    if (!interaction.object_type) {
+      if (
+        playerState.state === 'interact' &&
+        playerState.interactionAnim !== SitAnimationName.SIT_TO_STAND
+      )
+        completeObjectExit(false)
+      return
     }
-
-    if (claim) {
-      networkManager.sendInteractObject(intent.objectType, intent.objectId)
-    }
+    if (
+      interaction.object_id === null ||
+      serverMovement.active ||
+      inputHandler.hasKeysPressed
+    )
+      return
+    const { anim, interactOffset } = await objectManager.resolvePose(
+      interaction.object_type,
+      interaction.position.x,
+      interaction.position.z,
+      interaction.object_id
+    )
+    if (
+      revision !== interactionRevision ||
+      serverMovement.active ||
+      inputHandler.hasKeysPressed ||
+      currentPlayer?.id !== interaction.player_id ||
+      currentPlayer.health <= 0 ||
+      $localTeleportActive
+    )
+      return
+    enterInteraction(
+      {
+        type: 'interact_object',
+        objectId: interaction.object_id,
+        objectType: interaction.object_type,
+        interaction: anim,
+        position: interaction.position,
+        rotation: interaction.rotation,
+        interactOffset,
+      },
+      false
+    )
   }
 
   /** Lie down on the bed the server respawned us on. */
@@ -1145,8 +1123,8 @@
         objectId: placement.id,
         objectType,
         interaction: anim,
-        position: { x: placement.x, y: placement.y, z: placement.z },
-        rotation,
+        position: { ...currentPlayer.position },
+        rotation: currentPlayer.rotation,
         interactOffset,
       },
       false
@@ -2229,8 +2207,14 @@
       if (!state.isConnected || !state.currentPlayer)
         serverMovement.clear(false)
     })
+    const unsubscribeInteraction = networkManager.interactionChanged.on(
+      (interaction) => {
+        void applyServerInteraction(interaction)
+      }
+    )
     const unsubscribeRelocated = networkManager.playerRelocated.on(
       (position, rotation) => {
+        interactionRevision++
         serverMovement.clear(false)
         keyboardSender.reset()
         officialPosition = { ...position }
@@ -2276,6 +2260,8 @@
       unsubscribeMovePath()
       unsubscribeMoveProgress()
       unsubscribeMoveConnection()
+      interactionRevision++
+      unsubscribeInteraction()
       unsubscribeRelocated()
       unsubscribeNetworkEvents()
       playerControlMachine.dispose()

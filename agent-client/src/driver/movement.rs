@@ -687,6 +687,9 @@ mod tests {
         s.self_player = Some(me);
         s.in_game = true;
         s.push_event(ServerMessage::PlayerInteractionChanged {
+            position: s.self_player.as_ref().unwrap().position,
+            rotation: 0.0,
+            floor_level: 0,
             player_id: s.self_player_id.unwrap(),
             object_type: Some(crate::state::MUSIC_EMOTE.into()),
             object_id: None,

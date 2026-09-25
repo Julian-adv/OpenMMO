@@ -11,82 +11,6 @@ import {
   buildPickupState,
 } from '../player-state-builders'
 
-// ───────────────────────────────────────────────────────────────────────────
-// Object interaction position math
-// ───────────────────────────────────────────────────────────────────────────
-
-export interface InteractionOffset {
-  x?: number
-  y?: number
-  z?: number
-}
-
-export function getObjectInteractionEntryPosition(
-  position: Position,
-  offset?: InteractionOffset
-): Pick<Position, 'x' | 'z'> {
-  return {
-    x: position.x + (offset?.x ?? 0),
-    z: position.z + (offset?.z ?? 0),
-  }
-}
-
-export function getObjectInteractionExitPosition(
-  currentPosition: Position,
-  rotation: number,
-  footDistance = 0.7
-): Pick<Position, 'x' | 'z'> {
-  return {
-    x: currentPosition.x + Math.sin(rotation) * footDistance,
-    z: currentPosition.z + Math.cos(rotation) * footDistance,
-  }
-}
-
-/** Where to stand after leaving an object: one cell to the side (the side
- *  nearer `toward`, the click destination, first), then one cell ahead — a
- *  chair usually faces a table, and stepping out into its solid cell left
- *  the player wedged on the passability grid. Straight ahead when every
- *  candidate is blocked. */
-export function pickObjectExitPosition(
-  currentPosition: Position,
-  rotation: number,
-  isBlocked: (x: number, z: number) => boolean,
-  toward?: Pick<Position, 'x' | 'z'>
-): Pick<Position, 'x' | 'z'> {
-  const at = (r: number) =>
-    getObjectInteractionExitPosition(currentPosition, r, 1.0)
-  const left = at(rotation + Math.PI / 2)
-  const right = at(rotation - Math.PI / 2)
-  const forward = at(rotation)
-  const dist2 = (p: Pick<Position, 'x' | 'z'>) =>
-    toward ? (toward.x - p.x) ** 2 + (toward.z - p.z) ** 2 : 0
-  const sides = dist2(left) <= dist2(right) ? [left, right] : [right, left]
-  return [...sides, forward].find((c) => !isBlocked(c.x, c.z)) ?? forward
-}
-
-interface ObjectInteractionPlayer {
-  position: Position
-}
-
-export function applyObjectInteractionPosition(
-  player: ObjectInteractionPlayer,
-  position: Pick<Position, 'x' | 'z'>,
-  height: {
-    hasHeightData: (x: number, z: number) => boolean
-    sampleHeight: (x: number, z: number) => number
-  }
-) {
-  player.position.x = position.x
-  player.position.z = position.z
-  if (height.hasHeightData(position.x, position.z)) {
-    player.position.y = height.sampleHeight(position.x, position.z)
-  }
-}
-
-// ───────────────────────────────────────────────────────────────────────────
-// Object interaction enter/exit transitions
-// ───────────────────────────────────────────────────────────────────────────
-
 type InteractIntent = Extract<ClickIntent, { type: 'interact_object' }>
 
 interface BeginObjectInteractionInput {
@@ -96,11 +20,8 @@ interface BeginObjectInteractionInput {
 }
 
 export interface BeginObjectInteractionOutcome {
-  isMoving: false
-  movementTarget: Position | null
   playerRotation: number
   nextPlayerState: PlayerState
-  entryPosition: Pick<Position, 'x' | 'z'>
 }
 
 export function beginObjectInteraction({
@@ -111,8 +32,6 @@ export function beginObjectInteraction({
   cancelCombat()
 
   return {
-    isMoving: false,
-    movementTarget: null,
     playerRotation: intent.rotation,
     nextPlayerState: buildInteractState(
       previousPlayerState,
@@ -120,10 +39,6 @@ export function beginObjectInteraction({
       intent.rotation,
       intent.interaction,
       intent.interactOffset?.y ?? 0
-    ),
-    entryPosition: getObjectInteractionEntryPosition(
-      intent.position,
-      intent.interactOffset
     ),
   }
 }

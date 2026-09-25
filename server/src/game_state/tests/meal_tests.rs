@@ -11,7 +11,7 @@ fn placement(id: u32, type_id: &str, x: f32, z: f32, rotation_deg: f32) -> Furni
         id,
         type_id: type_id.to_string(),
         x,
-        y: 0.0,
+        y: 5.0,
         z,
         rotation_deg,
         floor_level: 0,
@@ -30,6 +30,7 @@ fn inn_table() -> Vec<FurniturePlacement> {
 
 async fn make_maid(game_state: &GameState, name: &str, x: f32, z: f32) -> PlayerId {
     let mut p = make_player(name, x, z);
+    p.position.y = 5.0;
     p.is_official_npc = true;
     let id = p.id;
     game_state.add_player(p).await;
@@ -44,7 +45,9 @@ async fn make_guest(
     satiation: u32,
 ) -> PlayerId {
     let id = pid(name);
-    game_state.add_player(make_player(name, x, z)).await;
+    let mut player = make_player(name, x, z);
+    player.position.y = 5.0;
+    game_state.add_player(player).await;
     game_state
         .inventories
         .write()
@@ -85,7 +88,7 @@ fn two_chairs_on_one_rotated_table_get_two_edge_spots() {
     assert!((west.x - 99.743).abs() < 0.01, "west plate x {}", west.x);
     assert!((east.z - 50.20).abs() < 0.01, "east plate z {}", east.z);
     assert!((west.z - 50.00).abs() < 0.01, "west plate z {}", west.z);
-    assert!((east.y - 0.761).abs() < 1e-5, "table-top height");
+    assert!((east.y - 5.761).abs() < 1e-5, "table-top height");
 
     // The cup goes to the guest's right, clear of the plate.
     let (cup, _) = plate_spot(&t[1], &t[0], MealSlot::Drink);

@@ -85,6 +85,13 @@ async fn check_failed_driver(successful_calls: usize) {
         guest.name = "Guest".into();
         s.nearby_players.insert(guest.id, guest);
         s.push_event(ServerMessage::PlayerInteractionChanged {
+            position: onlinerpg_shared::Position {
+                x: 2.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            rotation: 0.0,
+            floor_level: 0,
             player_id: PlayerId::from(8),
             object_type: Some(crate::state::SIT_OBJECT_TYPE.into()),
             object_id: Some(46),

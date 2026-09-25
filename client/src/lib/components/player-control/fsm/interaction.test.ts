@@ -2,119 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ClickIntent } from '../../../managers/inputHandler'
 import type { PlayerState } from '../../../utils/movementUtils'
 import {
-  applyObjectInteractionPosition,
   beginObjectInteraction,
   beginPickupInteraction,
   exitObjectInteraction,
   exitPickupInteraction,
   finishPendingPickup,
   getInteractionExitKind,
-  getObjectInteractionEntryPosition,
-  getObjectInteractionExitPosition,
-  pickObjectExitPosition,
   handleInteractKey,
   handlePickupGrab,
   shouldFinishPendingPickup,
 } from './interaction'
 import { buildInteractState, buildPickupState } from '../player-state-builders'
-
-describe('getObjectInteractionEntryPosition', () => {
-  it('applies x/z interaction offsets', () => {
-    expect(
-      getObjectInteractionEntryPosition(
-        { x: 1, y: 2, z: 3 },
-        { x: 0.5, y: 4, z: -1 }
-      )
-    ).toEqual({ x: 1.5, z: 2 })
-  })
-
-  it('defaults missing offsets to zero', () => {
-    expect(getObjectInteractionEntryPosition({ x: 1, y: 2, z: 3 })).toEqual({
-      x: 1,
-      z: 3,
-    })
-  })
-})
-
-describe('getObjectInteractionExitPosition', () => {
-  it('moves forward along player rotation', () => {
-    const result = getObjectInteractionExitPosition(
-      { x: 1, y: 0, z: 2 },
-      Math.PI / 2
-    )
-
-    expect(result.x).toBeCloseTo(1.7)
-    expect(result.z).toBeCloseTo(2)
-  })
-})
-
-describe('pickObjectExitPosition', () => {
-  const seat = { x: 0, y: 0, z: 0 }
-
-  it('prefers the cell beside the seat', () => {
-    const result = pickObjectExitPosition(seat, 0, () => false)
-
-    expect(result.x).toBeCloseTo(1)
-    expect(result.z).toBeCloseTo(0)
-  })
-
-  it('starts with the side nearer the click destination', () => {
-    const result = pickObjectExitPosition(seat, 0, () => false, {
-      x: -5,
-      z: 2,
-    })
-
-    expect(result.x).toBeCloseTo(-1)
-  })
-
-  it('tries the other side, then the front, skipping blocked cells', () => {
-    const blocked = (x: number) => x > 0.5
-    const result = pickObjectExitPosition(seat, 0, blocked)
-    expect(result.x).toBeCloseTo(-1)
-
-    const front = pickObjectExitPosition(seat, 0, (x) => Math.abs(x) > 0.5)
-    expect(front.z).toBeCloseTo(1)
-  })
-
-  it('falls back to the front when everything is blocked', () => {
-    const result = pickObjectExitPosition(seat, 0, () => true)
-
-    expect(result.x).toBeCloseTo(0)
-    expect(result.z).toBeCloseTo(1)
-  })
-})
-
-describe('applyObjectInteractionPosition', () => {
-  it('directly mutates x/z and samples terrain y when available', () => {
-    const player = { position: { x: 0, y: 1, z: 0 } }
-
-    applyObjectInteractionPosition(
-      player,
-      { x: 2, z: 3 },
-      {
-        hasHeightData: () => true,
-        sampleHeight: () => 4,
-      }
-    )
-
-    expect(player.position).toEqual({ x: 2, y: 4, z: 3 })
-  })
-
-  it('keeps existing y when terrain height is unavailable', () => {
-    const player = { position: { x: 0, y: 1, z: 0 } }
-
-    applyObjectInteractionPosition(
-      player,
-      { x: 2, z: 3 },
-      {
-        hasHeightData: () => false,
-        sampleHeight: () => 4,
-      }
-    )
-
-    expect(player.position).toEqual({ x: 2, y: 1, z: 3 })
-  })
-})
 
 const previousPlayerState: PlayerState = {
   state: 'idle',
@@ -134,7 +32,7 @@ const intent: Extract<ClickIntent, { type: 'interact_object' }> = {
 }
 
 describe('beginObjectInteraction', () => {
-  it('builds object interaction state and entry runtime updates', () => {
+  it('builds the animation from the approved pose', () => {
     const cancelCombat = vi.fn()
 
     const result = beginObjectInteraction({
@@ -144,10 +42,7 @@ describe('beginObjectInteraction', () => {
     })
 
     expect(cancelCombat).toHaveBeenCalledOnce()
-    expect(result.isMoving).toBe(false)
-    expect(result.movementTarget).toBeNull()
     expect(result.playerRotation).toBe(1.5)
-    expect(result.entryPosition).toEqual({ x: 10.25, z: 19.25 })
     expect(result.nextPlayerState).toEqual({
       ...previousPlayerState,
       state: 'interact',

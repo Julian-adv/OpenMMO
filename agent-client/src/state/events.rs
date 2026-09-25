@@ -830,8 +830,13 @@ impl SharedState {
                 player_id,
                 object_type,
                 object_id,
+                position,
+                rotation,
+                floor_level,
             } => {
+                self.apply_player_pose(player_id, *position, *rotation, *floor_level);
                 if self.self_player_id.as_ref() == Some(player_id) {
+                    self.apply_move_progress(*position, *rotation, *floor_level);
                     self.set_self_pose(object_type.clone(), *object_id);
                 } else if let Some(p) = self.nearby_players.get_mut(player_id) {
                     // Emotes ride this field too, so only the exact chair

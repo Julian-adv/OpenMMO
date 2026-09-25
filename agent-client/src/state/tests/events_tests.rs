@@ -377,9 +377,13 @@ fn an_npc_taking_a_seat_counts_as_a_guest() {
     let mut rica = test_player(-1450.0, 4750.0);
     rica.id = PlayerId::from(2);
     rica.is_official_npc = true;
+    let position = rica.position;
     s.nearby_players.insert(rica.id, rica);
 
     s.push_event(ServerMessage::PlayerInteractionChanged {
+        position,
+        rotation: 0.0,
+        floor_level: 0,
         player_id: PlayerId::from(2),
         object_type: Some(SIT_OBJECT_TYPE.to_string()),
         object_id: Some(39),
@@ -388,6 +392,9 @@ fn an_npc_taking_a_seat_counts_as_a_guest() {
 
     // A re-broadcast of the same pose must not summon her again.
     s.push_event(ServerMessage::PlayerInteractionChanged {
+        position,
+        rotation: 0.0,
+        floor_level: 0,
         player_id: PlayerId::from(2),
         object_type: Some(SIT_OBJECT_TYPE.to_string()),
         object_id: Some(39),

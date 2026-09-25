@@ -2342,10 +2342,10 @@ impl super::GameState {
     /// succeeding: the player performed the motion either way, and the
     /// animation carries no item.
     pub async fn broadcast_pickup_animation(&self, player_id: &PlayerId) {
-        let (position, floor_level) = {
+        let (position, rotation, floor_level) = {
             let players = self.players.read().await;
             match players.get(player_id) {
-                Some(p) => (p.position, p.floor_level),
+                Some(p) => (p.position, p.rotation, p.floor_level),
                 None => return,
             }
         };
@@ -2356,6 +2356,9 @@ impl super::GameState {
                 player_id: *player_id,
                 object_type: Some("pickup".to_string()),
                 object_id: None,
+                position,
+                rotation,
+                floor_level,
             },
             Some(player_id),
         )

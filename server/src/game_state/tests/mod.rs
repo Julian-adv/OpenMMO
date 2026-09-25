@@ -43,6 +43,7 @@ mod movement_tests;
 mod party_tests;
 mod persistence_tests;
 mod pickup_tests;
+mod player_interaction_tests;
 mod player_tests;
 mod player_trade_tests;
 mod skills_tests;

@@ -1881,8 +1881,12 @@ mod tests {
         guest.id = onlinerpg_shared::PlayerId::from(8);
         guest.name = "Jake".to_string();
         let guest_id = guest.id;
+        let guest_position = guest.position;
         s.nearby_players.insert(guest_id, guest);
         s.push_event(onlinerpg_shared::ServerMessage::PlayerInteractionChanged {
+            position: guest_position,
+            rotation: 0.0,
+            floor_level: 0,
             player_id: guest_id,
             object_type: Some(crate::state::SIT_OBJECT_TYPE.to_string()),
             object_id: Some(46),

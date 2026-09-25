@@ -1518,10 +1518,12 @@ pub enum ServerMessage {
     PlayerInteractionChanged {
         player_id: PlayerId,
         object_type: Option<String>,
-        /// Furniture placement id of the occupied object (None for emotes).
-        /// Lets consumers key on the exact chair/bed, not its coordinates.
+        /// Furniture placement ID; None for emotes.
         #[serde(default)]
         object_id: Option<u32>,
+        position: Position,
+        rotation: f32,
+        floor_level: i8,
     },
     /// A player started a `/play_music` performance; nearby clients play the
     /// named BGM track. `track` is the title the server resolved from its

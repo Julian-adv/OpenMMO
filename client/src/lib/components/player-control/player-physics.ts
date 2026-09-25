@@ -1,20 +1,12 @@
-import type { TerrainHeightManager } from '../../managers/terrainHeightManager'
 import { housingManager } from '../../managers/housingManager'
 import { bridgeManager } from '../../managers/bridgeManager'
 import { dungeonManager } from '../../managers/dungeonManager'
-import { wrapWorldX } from '../../terrain/world-wrap'
 
 export interface PlayerPhysicsDeps {
-  getHeightManager: () => TerrainHeightManager
-  /** Disambiguates stacked bridge decks. */
-  getCurrentPlayerY: () => number | null
   getPassabilityFloor: () => number
-  /** Surface Y while afloat, retaining the previous Y while tiles load. */
-  getFloatSurfaceY?: (x: number, z: number) => number | null
 }
 
 export interface PlayerPhysics {
-  sampleHeight(x: number, z: number): number
   isMovementBlocked(
     fromX: number,
     fromZ: number,
@@ -25,22 +17,6 @@ export interface PlayerPhysics {
 }
 
 export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
-  function sampleHeight(x: number, z: number): number {
-    x = wrapWorldX(x)
-    const floor = deps.getPassabilityFloor()
-    if (floor === 0) {
-      const floatY = deps.getFloatSurfaceY?.(x, z)
-      if (floatY != null) return floatY
-    }
-    const dungeonY = dungeonManager.sampleHeightAt(x, z)
-    if (dungeonY !== null) return dungeonY
-    const houseY = housingManager.floorHeightAt(floor, x, z)
-    if (houseY !== null) return houseY
-    const deckY = bridgeManager.findDeckYAt(x, z, deps.getCurrentPlayerY())
-    if (deckY !== null) return deckY
-    return deps.getHeightManager().getHeightAtWorldPosition(x, z)
-  }
-
   const PLAYER_RADIUS = 0.3
 
   function isMovementBlocked(
@@ -67,5 +43,5 @@ export function createPlayerPhysics(deps: PlayerPhysicsDeps): PlayerPhysics {
     return false
   }
 
-  return { sampleHeight, isMovementBlocked }
+  return { isMovementBlocked }
 }

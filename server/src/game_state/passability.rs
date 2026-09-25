@@ -352,6 +352,17 @@ impl super::GameState {
         rz: i32,
         placements: &[FurniturePlacement],
     ) -> bool {
+        {
+            let mut index = self
+                .interaction_furniture
+                .write()
+                .unwrap_or_else(|e| e.into_inner());
+            if placements.is_empty() {
+                index.remove(&(rx, rz));
+            } else {
+                index.insert((rx, rz), placements.to_vec());
+            }
+        }
         self.sync_region_bridges(rx, rz, placements);
         self.sync_respawn_beds(rx, rz, placements);
         self.sync_beds(rx, rz, placements);

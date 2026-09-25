@@ -206,6 +206,15 @@ impl Interest {
                     .current_snapshot()
                     .into_iter()
                     .skip(1)
+                    .filter(|message| {
+                        player.object_type.as_deref()
+                            == Some(onlinerpg_shared::messages::MUSIC_EMOTE)
+                            || !matches!(
+                                message,
+                                ServerMessage::PlayerMusicStarted { .. }
+                                    | ServerMessage::PlayerInstrumentStarted { .. }
+                            )
+                    })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();

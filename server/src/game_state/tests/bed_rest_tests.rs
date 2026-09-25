@@ -3,7 +3,8 @@ use onlinerpg_shared::furniture::FurniturePlacement;
 use tokio::time::{advance, Duration};
 
 async fn sleeper(game: &GameState, kind: &str) -> PlayerId {
-    let player = make_player("sleeper", 100.0, 50.0);
+    let mut player = make_player("sleeper", 100.0, 50.0);
+    player.position.y = 5.0;
     let id = player.id;
     game.register_mana(&player, 10, Some(0)).await;
     game.add_player(player).await;
@@ -17,7 +18,7 @@ async fn sleeper(game: &GameState, kind: &str) -> PlayerId {
             id: 7,
             type_id: kind.into(),
             x: 100.0,
-            y: 0.0,
+            y: 5.0,
             z: 50.0,
             rotation_deg: 0.0,
             floor_level: 0,

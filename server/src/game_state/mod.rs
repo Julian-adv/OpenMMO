@@ -233,6 +233,7 @@ mod passability;
 mod passability_snapshot;
 mod path_search;
 mod player;
+mod player_interaction;
 mod player_trade;
 mod pricing;
 pub(crate) use player::restored_floor_level;
@@ -437,6 +438,7 @@ pub struct GameState {
     /// The configured respawn beds, refreshed with their region's objects.
     respawn_beds: Arc<std::sync::RwLock<Vec<onlinerpg_shared::furniture::FurniturePlacement>>>,
     beds: Arc<std::sync::RwLock<bed_rest::BedIndex>>,
+    interaction_furniture: Arc<std::sync::RwLock<player_interaction::FurnitureIndex>>,
     bed_rest_started: Arc<RwLock<HashMap<PlayerId, tokio::time::Instant>>>,
     /// Chairs and tables by region, so a served plate lands on a table top.
     dining: Arc<std::sync::RwLock<meal::DiningIndex>>,
@@ -725,6 +727,7 @@ impl GameState {
             rain_shelters: Arc::new(std::sync::RwLock::new(HashMap::new())),
             respawn_beds: Arc::new(std::sync::RwLock::new(Vec::new())),
             beds: Arc::new(std::sync::RwLock::new(HashMap::new())),
+            interaction_furniture: Arc::new(std::sync::RwLock::new(HashMap::new())),
             bed_rest_started: Arc::new(RwLock::new(HashMap::new())),
             dining: Arc::new(std::sync::RwLock::new(HashMap::new())),
             no_spawn_zones,

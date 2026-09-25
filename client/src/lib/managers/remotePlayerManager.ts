@@ -387,7 +387,6 @@ class PlayerStateManager {
     playerId: number,
     anim: string,
     offsetY: number,
-    position?: Position,
     rotation?: number
   ) {
     const player = this.players.get(playerId)
@@ -401,15 +400,25 @@ class PlayerStateManager {
       interactionCounter: (player.interactionCounter ?? 0) + 1,
       interactOffsetY: offsetY,
     }
-    if (position) {
-      newState.position = { ...position }
-      this.targetPositions.set(playerId, { ...position })
-    }
     if (rotation !== undefined) {
       newState.rotation = rotation
       this.targetRotations.set(playerId, rotation)
     }
     this.players.set(playerId, newState)
+  }
+
+  setAuthoritativePose(playerId: number, position: Position, rotation: number) {
+    const player = this.players.get(playerId)
+    if (!player) return
+    this.movementData.delete(playerId)
+    this.targetPositions.set(playerId, { ...position })
+    this.targetRotations.set(playerId, rotation)
+    this.players.set(playerId, {
+      ...player,
+      position: { ...position },
+      rotation,
+      speed: 0,
+    })
   }
 
   /** A remote's one-shot interact clip ended. A finished fishing cast hands

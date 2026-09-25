@@ -1129,6 +1129,27 @@ async fn auscultation_preserves_seated_and_resting_player_poses() {
     let _target_rx = add_ward_player(&gs, "target", 1.0, 2).await;
     let target = pid("target");
     for kind in ["chair", "bed"] {
+        let player = gs.players.read().await[&target].clone();
+        gs.sync_region_furniture(
+            0,
+            0,
+            &[onlinerpg_shared::furniture::FurniturePlacement {
+                id: 39,
+                type_id: kind.into(),
+                x: player.position.x,
+                y: 5.0,
+                z: player.position.z,
+                rotation_deg: 0.0,
+                floor_level: player.floor_level as u8,
+            }],
+        );
+        gs.players
+            .write()
+            .await
+            .get_mut(&target)
+            .unwrap()
+            .position
+            .y = 5.0;
         gs.set_player_interaction(&target, Some(kind.to_owned()), Some(39))
             .await;
         messages(&mut rx);

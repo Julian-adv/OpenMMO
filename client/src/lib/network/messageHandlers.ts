@@ -234,6 +234,7 @@ import type {
   ServerGroundItem,
   MovePath,
   MoveProgress,
+  PlayerInteraction,
   Position,
   ServerMonster,
   ServerPlayer,
@@ -371,7 +372,7 @@ function emitPlayerHit(
   }
 }
 
-const remoteEstateInteractions = new Map<
+const remoteObjectInteractions = new Map<
   number,
   { objectType: string; objectId: number | null | undefined }
 >()
@@ -384,34 +385,22 @@ async function applyObjectInteraction(
   wz: number,
   objectId?: number | null
 ) {
-  const estateInteraction = getEstateStorageDef(objectType)
-    ? { objectType, objectId }
-    : null
-  if (estateInteraction)
-    remoteEstateInteractions.set(playerId, estateInteraction)
-  else remoteEstateInteractions.delete(playerId)
   if (objectType === 'pickup' || isEmoteAnim(objectType)) {
+    remoteObjectInteractions.delete(playerId)
     remotePlayerManager.handleInteraction(playerId, objectType, 0)
     return
   }
 
-  const { anim, interactOffset, placement, rotation } =
-    await objectManager.resolvePose(objectType, wx, wz, objectId)
-  if (
-    estateInteraction &&
-    (remoteEstateInteractions.get(playerId) !== estateInteraction || !placement)
+  const interaction = { objectType, objectId }
+  remoteObjectInteractions.set(playerId, interaction)
+  const { anim, interactOffset } = await objectManager.resolvePose(
+    objectType,
+    wx,
+    wz,
+    objectId
   )
-    return
-  const pos = placement
-    ? { x: placement.x, y: placement.y, z: placement.z }
-    : undefined
-  remotePlayerManager.handleInteraction(
-    playerId,
-    anim,
-    interactOffset?.y ?? 0,
-    pos,
-    rotation
-  )
+  if (remoteObjectInteractions.get(playerId) !== interaction) return
+  remotePlayerManager.handleInteraction(playerId, anim, interactOffset?.y ?? 0)
 }
 
 /** A player's spoken line into the chat log, under their name. */
@@ -446,7 +435,7 @@ function addRemotePlayerToState(state: GameState, sp: ServerPlayer) {
 
 /** Remove a remote player's visual and store entry. */
 function removeRemotePlayerFromState(state: GameState, playerId: number) {
-  remoteEstateInteractions.delete(playerId)
+  remoteObjectInteractions.delete(playerId)
   remotePlayerManager.removePlayer(playerId)
   state.otherPlayers.delete(playerId)
   refreshBardZone(state.otherPlayers)
@@ -469,6 +458,7 @@ export type MessageEvents = {
   kicked: NetworkEvent<(reason: string) => void>
   playerRespawned: NetworkEvent<(playerId: number) => void>
   interactionRejected: NetworkEvent<(reason: string) => void>
+  interactionChanged: NetworkEvent<(interaction: PlayerInteraction) => void>
   movePath: NetworkEvent<(path: MovePath) => void>
   moveProgress: NetworkEvent<(progress: MoveProgress) => void>
   playerRelocated: NetworkEvent<(position: Position, rotation: number) => void>
@@ -577,7 +567,6 @@ import {
   startEstateFurniturePlacement,
   applyEstateFurnitureEditResult,
 } from '../stores/estateFurniturePlacementStore'
-import { getEstateStorageDef } from '../data/estateFurnitureDefs'
 import type { EstateChest } from './networkTypes'
 import { TerrainSnapshots, type TerrainSnapshot } from './terrainSnapshots'
 import {
@@ -713,7 +702,7 @@ export function handleServerMessage(
           state.otherPlayers.clear()
           return state
         })
-        remoteEstateInteractions.clear()
+        remoteObjectInteractions.clear()
         remotePlayerManager.reset()
         monsterManager.reset()
         groundItemManager.reset()
@@ -792,7 +781,7 @@ export function handleServerMessage(
 
     case 'JoinSuccess': {
       resetTeleportEffects()
-      remoteEstateInteractions.clear()
+      remoteObjectInteractions.clear()
       worldView.synchronized = false
       housingManager.resetView()
       scheduleResync()
@@ -1224,7 +1213,7 @@ export function handleServerMessage(
       resetFriendStores()
       gameStore.update((state) => {
         state.otherPlayers.clear()
-        remoteEstateInteractions.clear()
+        remoteObjectInteractions.clear()
         remotePlayerManager.reset()
         // A list, not a map: player ids are numeric and the wasm serializer
         // rejects non-string map keys (see ServerMessage::GameState).
@@ -1508,7 +1497,7 @@ export function handleServerMessage(
     }
 
     case 'PlayerDead': {
-      remoteEstateInteractions.delete(data.player_id)
+      remoteObjectInteractions.delete(data.player_id)
       console.log('Player dead:', data.player_id)
       stopPlayerInstrument(data.player_id)
       const gameState = get(gameStore)
@@ -1540,7 +1529,7 @@ export function handleServerMessage(
       events.kicked.emit(data.reason)
       resetGameStore()
       monsterManager.reset()
-      remoteEstateInteractions.clear()
+      remoteObjectInteractions.clear()
       remotePlayerManager.reset()
       disconnect()
       break
@@ -1553,7 +1542,7 @@ export function handleServerMessage(
 
     case 'PlayerRespawned': {
       const serverPlayer: ServerPlayer = data.player
-      remoteEstateInteractions.delete(serverPlayer.id)
+      remoteObjectInteractions.delete(serverPlayer.id)
       stopPlayerInstrument(serverPlayer.id)
       console.log('Player respawned:', serverPlayer.id)
       const gameState = get(gameStore)
@@ -1783,7 +1772,7 @@ export function handleServerMessage(
       break
     case 'EstateChestVisibility':
       applyEstateChestVisibility(data.added, data.removed)
-      for (const [playerId, interaction] of remoteEstateInteractions) {
+      for (const [playerId, interaction] of remoteObjectInteractions) {
         if (
           !(data.added as EstateChest[]).some(
             (chest) =>
@@ -1915,6 +1904,7 @@ export function handleServerMessage(
       }
       const state = get(gameStore)
       if (state.currentPlayer?.id === data.player_id) {
+        events.interactionChanged.emit(data)
         if (!data.object_type) emoteStopRequest.set(true)
         // Our own /emote went to the server unresolved; this broadcast is
         // its reply, the way PlayerMusicStarted starts /play_music.
@@ -1924,13 +1914,22 @@ export function handleServerMessage(
         break
       }
       const ft: string | null = data.object_type ?? null
+      remotePlayerManager.setAuthoritativePose(
+        data.player_id,
+        data.position,
+        data.rotation
+      )
+      updatePlayer(data.player_id, { floorLevel: data.floor_level })
       if (ft) {
-        const rp = remotePlayerManager.players.get(data.player_id)
-        const wx = rp?.position.x ?? 0
-        const wz = rp?.position.z ?? 0
-        applyObjectInteraction(data.player_id, ft, wx, wz, data.object_id)
+        applyObjectInteraction(
+          data.player_id,
+          ft,
+          data.position.x,
+          data.position.z,
+          data.object_id
+        )
       } else {
-        remoteEstateInteractions.delete(data.player_id)
+        remoteObjectInteractions.delete(data.player_id)
         remotePlayerManager.handleStopInteraction(data.player_id)
       }
       break
@@ -2396,7 +2395,6 @@ export function handleServerMessage(
           data.player_id,
           FishingAnimationName.CAST,
           0,
-          undefined,
           data.rotation
         )
       }

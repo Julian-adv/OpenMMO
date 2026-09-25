@@ -8,6 +8,7 @@ import type {
   MoveDirection,
   MovePath,
   MoveProgress,
+  PlayerInteraction,
   StallBuyLine,
   TradeLineItem,
 } from './networkTypes'
@@ -154,6 +155,8 @@ class NetworkManager {
   readonly characterError = createEvent<(message: string) => void>()
   readonly kicked = createEvent<(reason: string) => void>()
   readonly interactionRejected = createEvent<(reason: string) => void>()
+  readonly interactionChanged =
+    createEvent<(interaction: PlayerInteraction) => void>()
   private moveRequestId = 0
   readonly movePath = createEvent<(path: MovePath) => void>()
   readonly moveProgress = createEvent<(progress: MoveProgress) => void>()
@@ -197,6 +200,7 @@ class NetworkManager {
       kicked: this.kicked,
       playerRespawned: this.playerRespawned,
       interactionRejected: this.interactionRejected,
+      interactionChanged: this.interactionChanged,
       movePath: this.movePath,
       moveProgress: this.moveProgress,
       playerRelocated: this.playerRelocated,

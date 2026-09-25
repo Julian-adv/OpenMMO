@@ -37,4 +37,15 @@ describe('remote sit', () => {
     expect(player()?.state).toBe('interact')
     expect(player()?.interactionAnim).toBe(SitAnimationName.SIT)
   })
+
+  it('uses the server exit position throughout the stand-up animation', () => {
+    const position = { x: 3, y: 8.1, z: 4 }
+    remotePlayerManager.setAuthoritativePose(ID, position, 1.2)
+    remotePlayerManager.handleStopInteraction(ID)
+    expect(player()?.position).toEqual(position)
+    expect(player()?.rotation).toBe(1.2)
+    remotePlayerManager.handleInteractionFinished(ID)
+    expect(player()?.position).toEqual(position)
+    expect(player()?.state).toBe('idle')
+  })
 })

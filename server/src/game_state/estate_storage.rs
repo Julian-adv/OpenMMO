@@ -33,7 +33,7 @@ pub(super) struct EstateChestIndex {
 }
 
 impl EstateChestIndex {
-    fn bucket(position: &Position) -> (i32, i32) {
+    pub(super) fn bucket(position: &Position) -> (i32, i32) {
         (
             (onlinerpg_shared::wrap_world_x(position.x) / 32.0).floor() as i32,
             (position.z / 32.0).floor() as i32,
@@ -69,7 +69,7 @@ impl EstateChestIndex {
         self.by_id.get(&id)
     }
 
-    fn group(&self, key: (i32, i32)) -> Vec<EstateChest> {
+    pub(super) fn group(&self, key: (i32, i32)) -> Vec<EstateChest> {
         self.buckets
             .get(&key)
             .into_iter()
@@ -116,11 +116,11 @@ impl EstateChestIndex {
     }
 }
 
-fn cache_key(key: (i32, i32)) -> String {
+pub(super) fn cache_key(key: (i32, i32)) -> String {
     format!("furniture:estate-storage:{},{}", key.0, key.1)
 }
 
-fn placement(chest: &EstateChest) -> FurniturePlacement {
+pub(super) fn placement(chest: &EstateChest) -> FurniturePlacement {
     let definition = estate_storage_def(&chest.item_def_id)
         .expect("loaded estate chest definition was validated");
     FurniturePlacement {

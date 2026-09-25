@@ -1498,7 +1498,6 @@
     ]}
     heightManager={terrainHeightManager}
     {waterSurfaceAt}
-    {hasWaterSurfaceData}
     waterFoamMap={graphicsPreset.enableWaterEffects ? waterFoamMap : null}
     waterSunDirection={waterSunDir}
     onStateChange={handlePlayerStateChange}

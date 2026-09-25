@@ -186,7 +186,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v95: teleport scroll requests follow the client's departure animation.
 /// v96: system and trade messages include optional localization metadata.
 /// v97: server-approved XZ click paths and movement progress.
-pub const PROTOCOL_VERSION: u32 = 98;
+/// v98: server-driven keyboard and mounted movement.
+/// v99: authoritative furniture interaction positions.
+pub const PROTOCOL_VERSION: u32 = 99;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

@@ -516,7 +516,9 @@ async fn estate_beds_support_exclusive_sleep_and_cannot_be_recovered_while_occup
         assert_eq!(game.mana.read().await[&owner].mana, 4);
 
         let guest = pid("Guest");
-        game.add_player(make_player("Guest", 3.0, 3.0)).await;
+        let mut guest_player = make_player("Guest", 3.0, 3.0);
+        guest_player.position.y = 5.0;
+        game.add_player(guest_player).await;
         let mut guest_rx = game.register_direct_channel(&guest).await;
         game.set_player_interaction(&guest, Some(item_id.into()), Some(object_id))
             .await;

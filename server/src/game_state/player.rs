@@ -4,9 +4,7 @@ use crate::auth::{AuthError, AuthService, CharacterSaveData, ItemRow};
 use crate::types::{CharacterAttributes, Player, PlayerId, Position, ServerMessage};
 use crate::world_config::world_config;
 use bytes::Bytes;
-use onlinerpg_shared::estate_storage::{
-    estate_storage_def, is_estate_storage_item, INTERACTION_RANGE,
-};
+use onlinerpg_shared::estate_storage::is_estate_storage_item;
 use onlinerpg_shared::housing::MAX_FLOOR_LEVEL;
 use onlinerpg_shared::inventory::{EquipSlot, PlayerInventory};
 use onlinerpg_shared::wrap_world_x;
@@ -812,7 +810,13 @@ impl super::GameState {
         update_msg: ServerMessage,
     ) {
         if old_position != moved_player.position || old_floor != moved_player.floor_level {
-            self.cancel_concentration_if_active(player_id).await;
+            if moved_player.object_type.as_deref() == Some(onlinerpg_shared::messages::MUSIC_EMOTE)
+            {
+                self.cancel_fishing_if_active(player_id).await;
+                self.cancel_grill_if_active(player_id).await;
+            } else {
+                self.cancel_concentration_if_active(player_id).await;
+            }
         }
         let new_position = moved_player.position;
         let floor_level = moved_player.floor_level;
@@ -1123,10 +1127,7 @@ impl super::GameState {
         }
     }
 
-    /// Clients send StopInteraction before moving; a third-party one that
-    /// skips it would leave late joiners seeing the mover frozen in the pose.
-    /// Not in the position funnel: respawn writes pose and position together,
-    /// and the tick walks the residual leg after InteractObject arrives.
+    /// Movement also ends a pose when StopInteraction was omitted.
     pub(super) async fn clear_pose_on_move(&self, player_id: &PlayerId, source: &str) {
         let posed = {
             let players = self.players.read().await;
@@ -1139,93 +1140,6 @@ impl super::GameState {
         };
         info!("Player {name} ({client_kind:?}) left pose {object_type} on {source}");
         self.set_player_interaction(player_id, None, None).await;
-    }
-
-    pub async fn set_player_interaction(
-        &self,
-        player_id: &PlayerId,
-        object_type: Option<String>,
-        object_id: Option<u32>,
-    ) {
-        let rejected_or_position = {
-            let mut players = self.players.write().await;
-            let estate_definition = object_type.as_deref().and_then(estate_storage_def);
-            let invalid_estate = if let Some(definition) = estate_definition {
-                let chests = self.estate_chests.read().await;
-                match (
-                    players.get(player_id),
-                    object_id.and_then(|id| chests.get(i64::from(id))),
-                ) {
-                    (Some(player), Some(chest))
-                        if chest.item_def_id == definition.id
-                            && matches!(
-                                definition.model_id.as_str(),
-                                "bed" | "rustic_bed" | "chair"
-                            ) =>
-                    {
-                        if player.health == 0 || player.is_mounted() {
-                            Some("You cannot use furniture right now.")
-                        } else if chest.floor_level != player.floor_level
-                            || chest.position.dist_xz_sq(&player.position)
-                                > (INTERACTION_RANGE + 0.5).powi(2)
-                        {
-                            Some("Move closer to the furniture.")
-                        } else {
-                            None
-                        }
-                    }
-                    _ => Some("That furniture is no longer available."),
-                }
-            } else {
-                None
-            };
-
-            if let Some(reason) = invalid_estate {
-                Err(reason)
-            } else if object_id.is_some_and(|fid| {
-                players.values().any(|p| {
-                    p.id != *player_id
-                        && p.object_id == Some(fid)
-                        && p.object_type.as_deref().is_some_and(is_estate_storage_item)
-                            == estate_definition.is_some()
-                })
-            }) {
-                Err("occupied")
-            } else if let Some(player) = players.get_mut(player_id) {
-                player.object_type = object_type.clone();
-                player.object_id = object_id;
-                self.update_bed_rest(player).await;
-                Ok(Some((player.position, player.floor_level)))
-            } else {
-                Ok(None)
-            }
-        };
-
-        if let Err(reason) = rejected_or_position {
-            self.send_direct_message(
-                player_id,
-                ServerMessage::InteractionRejected {
-                    reason: reason.to_string(),
-                },
-            )
-            .await;
-        } else if let Ok(Some((position, floor_level))) = rejected_or_position {
-            if object_type.as_deref() != Some(onlinerpg_shared::messages::MUSIC_EMOTE) {
-                self.music_performances.write().await.remove(player_id);
-                self.remove_live_instrument(player_id).await;
-            }
-            self.publish_nearby(
-                &position,
-                floor_level,
-                ServerMessage::PlayerInteractionChanged {
-                    player_id: *player_id,
-                    object_type,
-                    object_id,
-                },
-                None,
-            )
-            .await;
-        }
     }
 
     pub async fn mark_dirty(&self, player_id: &PlayerId) {

@@ -331,13 +331,29 @@ impl GameState {
         if distance > AUSCULTATION_RANGE.powi(2) {
             return Err(AbilityRejectReason::OutOfRange);
         }
-        if wall_between(
-            &self.passability_read(),
-            caster.position,
-            position,
-            floor,
-            true,
-        ) {
+        let furniture_cache = if let InspectionTarget::Player { player_id: id } = &target {
+            let player = &players[id];
+            match (player.object_type.as_deref(), player.object_id) {
+                (Some(kind), Some(id)) => self
+                    .interaction_placement(player, kind, id)
+                    .await
+                    .map(|(_, cache)| cache),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let blocked = {
+            let passability = self.passability_read();
+            wall_between(
+                furniture_cache.as_ref().unwrap_or(&passability),
+                caster.position,
+                position,
+                floor,
+                true,
+            )
+        };
+        if blocked {
             return Err(AbilityRejectReason::Unavailable);
         }
         let mut state = self.abilities.write().await;

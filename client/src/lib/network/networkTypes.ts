@@ -448,6 +448,15 @@ export type ServerGroundItem = {
   dropped_by: number | null
 }
 
+export type PlayerInteraction = {
+  player_id: number
+  object_type: string | null
+  object_id: number | null
+  position: Position
+  rotation: number
+  floor_level: number
+}
+
 export type ServerCampfire = {
   id: number
   position: Position

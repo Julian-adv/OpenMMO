@@ -87,7 +87,6 @@
     waterSurfaceAt?: (x: number, z: number) => number
     waterFoamMap?: THREE.Texture | null
     waterSunDirection?: THREE.Vector3 | null
-    hasWaterSurfaceData?: (x: number, z: number) => boolean
     onStateChange: (newState: PlayerState) => void
     onPlayerControlEvent?: (event: PlayerControlEvent) => void
     onAttackDuration: (duration: number) => void
@@ -133,7 +132,6 @@
     waterSurfaceAt,
     waterFoamMap = null,
     waterSunDirection = null,
-    hasWaterSurfaceData,
     onStateChange,
     onPlayerControlEvent,
     onAttackDuration,
@@ -618,7 +616,6 @@
   <PlayerControl
     bind:this={playerControl}
     {waterSurfaceAt}
-    {hasWaterSurfaceData}
     {onStateChange}
     {camera}
     {heightManager}
