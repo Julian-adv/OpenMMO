@@ -460,6 +460,120 @@ async fn advance_direction(game: &GameState, id: PlayerId, seconds: f32) {
     game.advance_goal_players(&[id]).await;
 }
 
+struct PausedHeightTiles(Arc<tokio::sync::RwLock<()>>);
+
+#[async_trait::async_trait]
+impl onlinerpg_terrain::height::HeightTiles for PausedHeightTiles {
+    async fn read_heightmap(&self, _tx: i32, _tz: i32) -> std::io::Result<Vec<u8>> {
+        let _guard = self.0.read().await;
+        Ok(onlinerpg_terrain::height::encode_height(5.0)
+            .to_le_bytes()
+            .repeat(onlinerpg_terrain::defaults::VERTS_PER_SIDE.pow(2)))
+    }
+}
+
+async fn paused_direction_walker(
+    name: &str,
+) -> (
+    GameState,
+    PlayerId,
+    tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+    tokio::sync::OwnedRwLockWriteGuard<()>,
+) {
+    let mut game = make_test_game_state(name);
+    let mut player = make_player(name, 100.0, 10.0);
+    player.position.y = 5.0;
+    player.health = 5;
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    next_path(&mut rx).await;
+    let sampling = Arc::new(tokio::sync::RwLock::new(()));
+    game.height_sampler = Arc::new(onlinerpg_terrain::height::HeightSampler::new(
+        PausedHeightTiles(sampling.clone()),
+    ));
+    (game, id, rx, sampling.write_owned().await)
+}
+
+#[tokio::test]
+async fn direction_preserves_food_healing_during_simulation() {
+    let (game, id, mut rx, sampling) = paused_direction_walker("direction_healing").await;
+    game.start_food_regeneration(&id, 20).await;
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.1));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    game.tick_food_regeneration().await;
+    assert_eq!(game.players.read().await[&id].health, 7);
+    drop(sampling);
+    tick.await;
+    let player = game.players.read().await[&id].clone();
+    assert_eq!(player.health, 7);
+    assert!(player.position.x > 100.0);
+    assert!((player.rotation - std::f32::consts::FRAC_PI_2).abs() < 0.01);
+    let ServerMessage::PlayerMovePath { position, .. } = next_path(&mut rx).await else {
+        unreachable!()
+    };
+    assert_eq!(position, player.position);
+}
+
+#[tokio::test]
+async fn direction_preserves_damage_and_stops_if_killed_during_simulation() {
+    for health in [3, 0] {
+        let (game, id, mut rx, sampling) =
+            paused_direction_walker(&format!("direction_damage_{health}")).await;
+        let before = game.players.read().await[&id].clone();
+        let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.1));
+        tokio::pin!(tick);
+        assert!(futures_util::poll!(tick.as_mut()).is_pending());
+        {
+            let mut players = game.players.write().await;
+            let player = players.get_mut(&id).unwrap();
+            player.health = health;
+            player.last_combat_at = 123;
+            player.torch_on = true;
+        }
+        drop(sampling);
+        tick.await;
+        let player = game.players.read().await[&id].clone();
+        assert_eq!(player.health, health);
+        assert_eq!(player.last_combat_at, 123);
+        assert!(player.torch_on);
+        if health == 0 {
+            assert_eq!(player.position, before.position);
+            assert_eq!(player.rotation, before.rotation);
+            assert_eq!(player.floor_level, before.floor_level);
+            assert!(game.goal_moves.lock().await[&id].direction.is_none());
+            assert!(matches!(
+                onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
+                ServerMessage::PlayerMoveProgress {
+                    request_id: 1,
+                    status: MoveStatus::Stopped,
+                    position,
+                    ..
+                } if position == before.position
+            ));
+        } else {
+            assert!(player.position.x > before.position.x);
+            assert!(game.goal_moves.lock().await[&id].direction.is_some());
+        }
+    }
+}
+
+#[tokio::test]
+async fn direction_does_not_restore_a_player_removed_during_simulation() {
+    let (game, id, _, sampling) = paused_direction_walker("direction_removed").await;
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.1));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    game.players.write().await.remove(&id);
+    drop(sampling);
+    tick.await;
+    assert!(!game.players.read().await.contains_key(&id));
+    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+}
+
 #[tokio::test]
 async fn direction_is_server_driven_accelerates_and_stops_without_a_client_position() {
     let (game, id, mut rx) = walker("direction_acceleration", false).await;

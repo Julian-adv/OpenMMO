@@ -234,6 +234,23 @@ impl GameState {
                     Some(distance)
                 })
                 .sum();
+            let (player, changed) = {
+                let mut players = self.players.write().await;
+                let Some(current) = players.get_mut(&id) else {
+                    state.direction = None;
+                    continue;
+                };
+                let changed = eligible(current)
+                    && (player.position != old_position
+                        || player.rotation != old_rotation
+                        || player.floor_level != old_floor);
+                if changed {
+                    current.position = player.position;
+                    current.rotation = player.rotation;
+                    current.floor_level = player.floor_level;
+                }
+                (current.clone(), changed)
+            };
             let status = if !eligible(&player) || now >= direction.expires_at {
                 MoveStatus::Stopped
             } else if blocked {
@@ -241,10 +258,6 @@ impl GameState {
             } else {
                 MoveStatus::Moving
             };
-            self.players.write().await.insert(id, player.clone());
-            let changed = player.position != old_position
-                || player.rotation != old_rotation
-                || player.floor_level != old_floor;
             if changed {
                 steps.push(super::super::ambient_spawn::MoveStep {
                     player_id: id,
