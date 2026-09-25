@@ -615,7 +615,9 @@
       hasTorch: $localTorchEquipped || $torchLightEnabled,
       isInCombat: combatController.isInCombat,
       attackCounter: combatController.attackCounter,
-      isSprinting: isSprintingNow(),
+      isSprinting: serverMovement.stopping
+        ? playerState.movementMode === 'run'
+        : isSprintingNow(),
     })
 
     // Only update if state actually changed
@@ -807,6 +809,12 @@
       playerRotation = pose.rotation
       currentSpeed = pose.speed
       writePlayerPosition(pose.position, pose.rotation)
+      if (
+        !serverMovement.active &&
+        !serverMovement.stopping &&
+        playerControlMachine.stateName === 'keyboard_moving'
+      )
+        transitionTo('idle')
       updatePlayerState()
     }
     const targetId = combatController.targetMonsterId
@@ -885,6 +893,7 @@
       !worldView.covers(currentPlayer.position.x, currentPlayer.position.z)
     ) {
       keyboardSender.clear()
+      if (serverMovement.stopping) serverMovement.clear()
       return
     }
     if (input) {
@@ -901,6 +910,16 @@
       if (playerControlMachine.stateName !== 'keyboard_moving')
         transitionTo('keyboard_moving')
     }
+    if (!input && playerControlMachine.stateName === 'keyboard_moving') {
+      keyboardSender.reset()
+      serverMovement.stopDirection()
+      if (!serverMovement.stopping) {
+        currentSpeed = 0
+        transitionTo('idle')
+        updatePlayerState()
+      }
+      return
+    }
     keyboardSender.update(
       input,
       playerRotation,
@@ -908,11 +927,6 @@
       $keyboardMovementMode,
       isSprintingNow()
     )
-    if (!input && playerControlMachine.stateName === 'keyboard_moving') {
-      currentSpeed = 0
-      transitionTo('idle')
-      updatePlayerState()
-    }
   }
 
   function startServerMove(
@@ -1903,7 +1917,7 @@
   ) {
     if ($localTeleportActive) return
     if (options.editorMode) {
-      if (serverMovement.active) stopMovement()
+      if (serverMovement.active || serverMovement.stopping) stopMovement()
       cancelAutoTravel()
       keyboardSender.clear()
     }
@@ -2151,7 +2165,6 @@
       if (!serverMovement.acceptPath(path)) return
       officialPosition = { ...path.position }
       syncOwnFloor(path.floor_level, path.position.x, path.position.z)
-      writePlayerPosition(path.position, path.rotation)
     })
     const unsubscribeMoveProgress = networkManager.moveProgress.on(
       (progress) => {
@@ -2163,7 +2176,13 @@
           serverMovement.clear(false)
           return
         }
-        if (serverMovement.acceptStopped(progress)) {
+        if (
+          serverMovement.acceptStopped(progress, {
+            position: currentPlayer.position,
+            rotation: playerRotation,
+            speed: currentSpeed,
+          })
+        ) {
           officialPosition = { ...progress.position }
           if (
             !serverMovement.active &&
@@ -2174,6 +2193,7 @@
               progress.position.x,
               progress.position.z
             )
+            if (serverMovement.stopping) return
             if (playerControlMachine.stateName !== 'attacking')
               playerRotation = progress.rotation
             writePlayerPosition(progress.position, playerRotation)

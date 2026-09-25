@@ -10,6 +10,7 @@ import { shortestWrappedDeltaX, wrapWorldX } from '../../terrain/world-wrap'
 
 const SEND_INTERVAL_MS = 100
 const MAX_EXTRAPOLATION_MS = 500
+const STOP_BLEND_MS = 120
 
 type Pose = {
   position: Position
@@ -21,9 +22,12 @@ export class ServerMovement {
   private directionInput: MoveDirection | null = null
   private requestId: number | null = null
   private stopId: number | null = null
+  private lastPose: Pose | null = null
+  private stopBlend: { from: Pose; target: Pose; at: number } | null = null
   private waypoints: MoveWaypoint[] = []
   private anchor: MoveProgress | null = null
   private anchorAt = 0
+  private queuedPaths: { path: MovePath; at: number }[] = []
   private blockedPose: Pose | null = null
   private nextSendAt = 0
   private pending: MoveGoal | null = null
@@ -40,14 +44,17 @@ export class ServerMovement {
     return this.requestId !== null
   }
 
+  get stopping() {
+    return (
+      this.stopBlend !== null ||
+      (this.directionInput !== null && this.stopId !== null)
+    )
+  }
+
   request(x: number, z: number, sprinting: boolean, stopAtEntrance = false) {
     if (!Number.isFinite(x) || !Number.isFinite(z)) return
-    this.directionInput = null
-    this.stopId = null
+    this.clear(false)
     this.requestId = this.nextId()
-    this.anchor = null
-    this.blockedPose = null
-    this.waypoints = []
     this.pending = {
       request_id: this.requestId,
       x: wrapWorldX(x),
@@ -57,13 +64,13 @@ export class ServerMovement {
     }
     const delay = this.nextSendAt - performance.now()
     if (delay <= 0) this.flush()
-    else if (this.timer === null)
-      this.timer = setTimeout(() => this.flush(), delay)
+    else this.timer = setTimeout(() => this.flush(), delay)
   }
 
   direction(input: Omit<MoveDirection, 'request_id'>) {
     const previous = this.directionInput
     if (
+      this.stopping ||
       !previous ||
       previous.rotation !== input.rotation ||
       previous.forward !== input.forward ||
@@ -75,6 +82,12 @@ export class ServerMovement {
       this.directionInput = { ...input, request_id: this.requestId }
     }
     this.sendDirection(this.directionInput!)
+  }
+
+  stopDirection() {
+    if (!this.directionInput || this.stopping) return
+    this.stopId = this.nextId()
+    this.sendStop(this.stopId)
   }
 
   private flush() {
@@ -89,43 +102,131 @@ export class ServerMovement {
   acceptPath(path: MovePath): boolean {
     if (
       path.request_id !== this.requestId ||
-      path.server_time_ms < (this.anchor?.server_time_ms ?? 0)
+      path.server_time_ms < this.latestServerTime
     )
       return false
-    this.waypoints = path.waypoints
-    this.blockedPose = null
-    this.anchor = { ...path, next_waypoint: 0, status: 'moving' }
-    this.anchorAt = performance.now()
+    const now = performance.now()
+    // Renewed keyboard paths share a playback clock despite arrival jitter.
+    const at =
+      this.directionInput && this.anchor
+        ? this.anchorAt + (path.server_time_ms - this.anchor.server_time_ms)
+        : now
+    if (at > now) this.queuedPaths.push({ path, at })
+    else {
+      this.queuedPaths = []
+      this.applyPath(path, at)
+    }
     return true
   }
 
-  acceptStopped(progress: MoveProgress): boolean {
+  private get latestServerTime() {
+    return (
+      this.queuedPaths.at(-1)?.path.server_time_ms ??
+      this.anchor?.server_time_ms ??
+      0
+    )
+  }
+
+  private applyPath(path: MovePath, at: number) {
+    this.waypoints = path.waypoints
+    this.blockedPose = null
+    this.anchor = { ...path, next_waypoint: 0, status: 'moving' }
+    this.anchorAt = at
+  }
+
+  acceptStopped(progress: MoveProgress, displayed = this.lastPose): boolean {
     if (progress.request_id !== this.stopId || progress.status !== 'stopped')
       return false
     this.stopId = null
+    if (this.directionInput) {
+      this.clear(false)
+      if (displayed) {
+        this.stopBlend = {
+          from: { ...displayed, position: { ...displayed.position } },
+          target: {
+            position: { ...progress.position },
+            rotation: progress.rotation,
+            speed: 0,
+          },
+          at: performance.now(),
+        }
+        this.lastPose = this.stopBlend.from
+      }
+    }
     return true
   }
 
   acceptProgress(progress: MoveProgress): boolean {
     if (
       progress.request_id !== this.requestId ||
-      progress.server_time_ms < (this.anchor?.server_time_ms ?? 0)
+      progress.server_time_ms < this.latestServerTime
     )
       return false
     this.anchor = progress
+    this.queuedPaths = []
     this.blockedPose = null
     this.anchorAt = performance.now()
     return true
   }
 
   sample(blocked: (from: Position, to: Position) => boolean): Pose | null {
+    const pose = this.stopBlend
+      ? this.sampleStop(blocked)
+      : this.samplePath(blocked)
+    if (pose) this.lastPose = pose
+    return pose
+  }
+
+  private sampleStop(blocked: (from: Position, to: Position) => boolean): Pose {
+    const { from, target, at } = this.stopBlend!
+    const elapsed = Math.min((performance.now() - at) / STOP_BLEND_MS, 1)
+    const fraction = 1 - (1 - elapsed) ** 2
+    const dx = shortestWrappedDeltaX(from.position.x, target.position.x)
+    const rotationDelta = Math.atan2(
+      Math.sin(target.rotation - from.rotation),
+      Math.cos(target.rotation - from.rotation)
+    )
+    const position = {
+      x: wrapWorldX(from.position.x + dx * fraction),
+      y: from.position.y + (target.position.y - from.position.y) * fraction,
+      z: from.position.z + (target.position.z - from.position.z) * fraction,
+    }
+    const settled =
+      Math.hypot(
+        dx,
+        target.position.y - from.position.y,
+        target.position.z - from.position.z
+      ) < 1e-5 && Math.abs(rotationDelta) < 1e-5
+    if (
+      elapsed >= 1 ||
+      settled ||
+      blocked(this.lastPose?.position ?? from.position, position)
+    ) {
+      this.stopBlend = null
+      return target
+    }
+    return {
+      position,
+      rotation: from.rotation + rotationDelta * fraction,
+      speed: from.speed * (1 - elapsed),
+    }
+  }
+
+  private samplePath(
+    blocked: (from: Position, to: Position) => boolean
+  ): Pose | null {
+    const now = performance.now()
+    while (this.queuedPaths.length && this.queuedPaths[0].at <= now) {
+      const { path, at } = this.queuedPaths.shift()!
+      this.applyPath(path, at)
+    }
     if (this.blockedPose) return this.blockedPose
     const anchor = this.anchor
     if (!anchor) return null
     let position = { ...anchor.position }
     let rotation = anchor.rotation
     let speed = this.waypoints.length > anchor.next_waypoint ? anchor.speed : 0
-    const elapsedMs = performance.now() - this.anchorAt
+    const elapsedMs = now - this.anchorAt
     let elapsed = Math.min(elapsedMs, MAX_EXTRAPOLATION_MS) / 1000
     let budget = speed * elapsed
     if (anchor.status === 'moving') {
@@ -185,8 +286,11 @@ export class ServerMovement {
     this.timer = null
     this.pending = null
     this.directionInput = null
+    this.lastPose = null
+    this.stopBlend = null
     this.requestId = null
     this.anchor = null
+    this.queuedPaths = []
     this.waypoints = []
     this.blockedPose = null
     if (!notify) this.stopId = null
