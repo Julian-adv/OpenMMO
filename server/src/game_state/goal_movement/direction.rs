@@ -1,7 +1,7 @@
 use super::*;
 use onlinerpg_shared::mount_movement::{self, STEP_SECONDS};
 
-const INPUT_LEASE: Duration = Duration::from_millis(500);
+const INPUT_LEASE: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub(super) struct Direction {
@@ -30,6 +30,19 @@ impl GameState {
             self.reject_move_input(id, request_id, "direction").await;
             return;
         }
+        {
+            let mut goals = self.goal_moves.lock().await;
+            if let Some(direction) = goals
+                .get_mut(&id)
+                .and_then(|state| state.direction.as_mut())
+            {
+                let now = Instant::now();
+                if direction.request_id == request_id && now < direction.expires_at {
+                    direction.expires_at = now + INPUT_LEASE;
+                    return;
+                }
+            }
+        }
         self.advance_goal_players(&[id]).await;
         if self
             .players
@@ -50,12 +63,6 @@ impl GameState {
         let state = goals
             .entry(id)
             .or_insert_with(|| GoalMovement::new(request_id));
-        if let Some(direction) = state.direction.as_mut() {
-            if direction.request_id == request_id {
-                direction.expires_at = Instant::now() + INPUT_LEASE;
-                return;
-            }
-        }
         let speed = state.direction.as_ref().map_or(0.0, |d| d.speed);
         if !state.accept(request_id) {
             return;

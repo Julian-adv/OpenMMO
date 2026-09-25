@@ -3,6 +3,8 @@ import type { KeyboardMovementMode } from '../../stores/movementSettings'
 
 type Input = { forward: number; turn: number }
 
+const INPUT_RENEWAL_MS = 1000
+
 export class KeyboardDirectionSender {
   private key: string | null = null
   private input: Omit<MoveDirection, 'request_id'> | null = null
@@ -42,7 +44,7 @@ export class KeyboardDirectionSender {
     }
     if (performance.now() < this.nextSendAt || !this.input) return
     this.send(this.input)
-    this.nextSendAt = performance.now() + 100
+    this.nextSendAt = performance.now() + INPUT_RENEWAL_MS
   }
 
   clear() {

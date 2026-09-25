@@ -909,7 +909,8 @@ class InputHandler {
   setupEventListeners(
     canvas: HTMLCanvasElement,
     onCanvasClick: (event: MouseEvent) => boolean | void,
-    onCanvasDragMove: (event: MouseEvent) => void
+    onCanvasDragMove: (event: MouseEvent) => void,
+    onInputReset: () => void
   ): () => void {
     const onKeyDown = (event: KeyboardEvent) => {
       if (this.handleKeyDown(event)) {
@@ -922,13 +923,18 @@ class InputHandler {
       }
     }
 
-    // OS shortcuts (e.g. Win+Shift+S) can swallow keyup of held modifiers,
-    // leaving keys "stuck" and blocking click-to-move via hasKeysPressed.
-    const onWindowBlur = () => this.clearTransientInput()
+    const onWindowBlur = () => {
+      this.clearTransientInput()
+      onInputReset()
+    }
+    const onVisibilityChange = () => {
+      if (document.hidden) onWindowBlur()
+    }
 
     document.addEventListener('keydown', onKeyDown)
     document.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', onWindowBlur)
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     const onContextMenu = (event: MouseEvent) => {
       const canvasTarget = event.target instanceof HTMLCanvasElement
@@ -956,6 +962,7 @@ class InputHandler {
       document.removeEventListener('keydown', onKeyDown)
       document.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', onWindowBlur)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       removeCanvasListeners()
       document.removeEventListener('contextmenu', onContextMenu, true)
     }

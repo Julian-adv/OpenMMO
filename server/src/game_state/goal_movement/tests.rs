@@ -598,6 +598,99 @@ async fn direction_is_server_driven_accelerates_and_stops_without_a_client_posit
 }
 
 #[tokio::test]
+async fn direction_renewal_only_extends_the_lease_without_waiting_for_movement() {
+    let (game, id, mut rx) = walker("direction_renewal", false).await;
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    next_path(&mut rx).await;
+    tokio::time::pause();
+    let before = game.players.read().await[&id].clone();
+    let advanced_at = game.goal_moves.lock().await[&id]
+        .direction
+        .as_ref()
+        .unwrap()
+        .advanced_at;
+    let version = game.player_movement_versions.read().await[&id];
+    tokio::time::advance(Duration::from_secs(1)).await;
+    let gate = game.movement_gate.lock().await;
+    let renewal = game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false);
+    tokio::pin!(renewal);
+    assert!(futures_util::poll!(renewal.as_mut()).is_ready());
+    drop(gate);
+    assert_eq!(game.players.read().await[&id].position, before.position);
+    assert_eq!(game.player_movement_versions.read().await[&id], version);
+    assert!(rx.try_recv().is_err());
+    {
+        let goals = game.goal_moves.lock().await;
+        let direction = goals[&id].direction.as_ref().unwrap();
+        assert_eq!(direction.advanced_at, advanced_at);
+        assert_eq!(
+            direction.expires_at - Instant::now(),
+            Duration::from_secs(3)
+        );
+    }
+    game.tick_goal_movement().await;
+    assert!(game.players.read().await[&id].position.x > before.position.x);
+    next_path(&mut rx).await;
+}
+
+#[tokio::test]
+async fn direction_keeps_sending_paths_between_one_second_renewals_and_expires_after_three() {
+    let (game, id, mut rx) = walker("direction_renewal_clock", false).await;
+    game.request_move_direction(id, 1, 0.0, 0, 1, false).await;
+    next_path(&mut rx).await;
+    tokio::time::pause();
+    for tick in 1..=20 {
+        tokio::time::advance(Duration::from_millis(200)).await;
+        if tick % 5 == 0 {
+            game.request_move_direction(id, 1, 0.0, 0, 1, false).await;
+            assert!(rx.try_recv().is_err());
+        }
+        game.tick_goal_movement().await;
+        next_path(&mut rx).await;
+        assert!(game.has_test_movement(&id).await);
+    }
+    for _ in 0..14 {
+        tokio::time::advance(Duration::from_millis(200)).await;
+        game.tick_goal_movement().await;
+        next_path(&mut rx).await;
+        assert!(game.has_test_movement(&id).await);
+    }
+    tokio::time::advance(Duration::from_millis(200)).await;
+    game.tick_goal_movement().await;
+    assert!(!game.has_test_movement(&id).await);
+    assert!(matches!(
+        onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
+        ServerMessage::PlayerMoveProgress {
+            request_id: 1,
+            status: MoveStatus::Stopped,
+            ..
+        }
+    ));
+    game.request_move_direction(id, 1, 0.0, 0, 1, false).await;
+    assert!(!game.has_test_movement(&id).await);
+}
+
+#[tokio::test]
+async fn direction_renewal_cannot_revive_an_expired_input_before_the_next_tick() {
+    let (game, id, mut rx) = walker("direction_expired_renewal", false).await;
+    game.request_move_direction(id, 1, 0.0, 0, 1, false).await;
+    next_path(&mut rx).await;
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_secs(3)).await;
+    game.request_move_direction(id, 1, 0.0, 0, 1, false).await;
+    assert!(!game.has_test_movement(&id).await);
+    assert!(matches!(
+        onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
+        ServerMessage::PlayerMoveProgress {
+            request_id: 1,
+            status: MoveStatus::Stopped,
+            ..
+        }
+    ));
+}
+
+#[tokio::test]
 async fn direction_lease_and_collision_stop_without_automatic_restart() {
     let (game, id, _) = walker("direction_blocked", true).await;
     game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)

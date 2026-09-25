@@ -2142,7 +2142,8 @@
     const removeInputListeners = inputHandler.setupEventListeners(
       renderer.domElement,
       handleCanvasClickIntent,
-      handleCanvasDragMove
+      handleCanvasDragMove,
+      () => keyboardSender.clear()
     )
 
     const canvas = renderer.domElement
@@ -2227,8 +2228,11 @@
       }
     )
     const unsubscribeMoveConnection = gameStore.subscribe((state) => {
-      if (!state.isConnected || !state.currentPlayer)
+      if (!state.isConnected || !state.currentPlayer) {
         serverMovement.clear(false)
+        keyboardSender.reset()
+        inputHandler.clearTransientInput()
+      }
     })
     const unsubscribeInteraction = networkManager.interactionChanged.on(
       (interaction) => {

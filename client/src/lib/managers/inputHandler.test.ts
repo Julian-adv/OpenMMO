@@ -22,6 +22,7 @@ import {
 } from '../stores/instrumentStore'
 import { alwaysRun } from '../stores/movementSettings'
 import { estateFurnitureInteractionData } from '../utils/estateFurnitureModels'
+import { KeyboardDirectionSender } from '../components/player-control/keyboard-direction'
 
 describe('movement keys', () => {
   beforeEach(() => {
@@ -64,6 +65,49 @@ describe('movement keys', () => {
     ).toBeNull()
     expect(movementInput(new Set(['ShiftLeft']))).toBeNull()
   })
+
+  it.each(['blur', 'hidden'])(
+    'stops keyboard movement on %s without another frame',
+    (reason) => {
+      vi.stubGlobal('window', new EventTarget())
+      vi.stubGlobal(
+        'document',
+        Object.assign(new EventTarget(), { hidden: false })
+      )
+      const send = vi.fn()
+      const stop = vi.fn()
+      const sender = new KeyboardDirectionSender(send, stop)
+      const cleanup = inputHandler.setupEventListeners(
+        new EventTarget() as HTMLCanvasElement,
+        vi.fn(),
+        vi.fn(),
+        () => sender.clear()
+      )
+      try {
+        document.dispatchEvent(
+          Object.assign(new Event('keydown'), { code: 'KeyW' })
+        )
+        sender.update(inputHandler.getMovementInput(), 0, false, 'world', false)
+        expect(send).toHaveBeenCalledTimes(1)
+        document.dispatchEvent(new Event('visibilitychange'))
+        expect(stop).not.toHaveBeenCalled()
+
+        if (reason === 'hidden') {
+          Object.assign(document, { hidden: true })
+          document.dispatchEvent(new Event('visibilitychange'))
+        } else {
+          window.dispatchEvent(new Event('blur'))
+        }
+        expect(stop).toHaveBeenCalledTimes(1)
+        expect(inputHandler.getMovementInput()).toBeNull()
+        sender.update(inputHandler.getMovementInput(), 0, false, 'world', false)
+        expect(send).toHaveBeenCalledTimes(1)
+        expect(stop).toHaveBeenCalledTimes(1)
+      } finally {
+        cleanup()
+      }
+    }
+  )
 })
 
 const RECT = { left: 0, top: 0, width: 100, height: 100 }
