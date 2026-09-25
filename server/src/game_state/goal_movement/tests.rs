@@ -75,9 +75,9 @@ async fn next_path(rx: &mut tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>) 
 async fn advance(game: &GameState, id: PlayerId, seconds: f32) {
     if let Some(plan) = game
         .goal_moves
-        .lock()
+        .lock(id)
         .await
-        .get_mut(&id)
+        .as_mut()
         .and_then(|s| s.plan.as_mut())
     {
         plan.advanced_at -= Duration::from_secs_f32(seconds);
@@ -85,13 +85,13 @@ async fn advance(game: &GameState, id: PlayerId, seconds: f32) {
     game.tick_goal_movement().await;
 }
 
-async fn search_finished(game: &GameState, id: PlayerId) {
+pub(super) async fn search_finished(game: &GameState, id: PlayerId) {
     tokio::time::timeout(Duration::from_secs(5), async {
         while game
             .goal_moves
-            .lock()
+            .lock(id)
             .await
-            .get(&id)
+            .as_ref()
             .is_some_and(|s| s.running)
         {
             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -140,7 +140,7 @@ async fn progress_delivery_releases_world_locks_but_preserves_goal_ordering() {
     assert!(futures_util::poll!(tick.as_mut()).is_pending());
     assert!(game.players.try_write().is_ok());
     assert!(game.dungeons.try_write().is_ok());
-    assert!(game.goal_moves.try_lock().is_err());
+    assert!(game.goal_moves.entry(id).try_lock().is_err());
     drop(channels);
     tick.await;
 }
@@ -155,7 +155,14 @@ async fn a_door_closed_after_approval_stops_the_body_before_the_edge() {
     advance(&game, id, 3.0).await;
     let stopped = game.players.read().await[&id].position;
     assert!(stopped.x > 3.69 && stopped.x <= 3.701, "{stopped:?}");
-    assert!(game.goal_moves.lock().await[&id].plan.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .plan
+        .is_none());
     game.passability_write()
         .insert("corridor".into(), corridor(false));
     advance(&game, id, 30.0).await;
@@ -194,14 +201,26 @@ async fn latest_goal_wins_and_stop_invalidates_an_inflight_search() {
     let (game, id, mut rx) = walker("goal_replace", false).await;
     let workers = game.path_search.reserve_workers().await;
     game.request_move_goal(id, 1, 6.5, 1.5, false).await;
-    while game.goal_moves.lock().await[&id].pending.is_some() {
+    while game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .pending
+        .is_some()
+    {
         tokio::task::yield_now().await;
     }
     for request in 2..=20 {
         game.request_move_goal(id, request, 5.5, 1.5, false).await;
     }
     assert_eq!(
-        game.goal_moves.lock().await[&id]
+        game.goal_moves
+            .lock(id)
+            .await
+            .as_ref()
+            .unwrap()
             .pending
             .unwrap()
             .request_id,
@@ -218,8 +237,22 @@ async fn latest_goal_wins_and_stop_invalidates_an_inflight_search() {
     game.stop_move_goal(id, 22).await;
     drop(workers);
     search_finished(&game, id).await;
-    assert!(game.goal_moves.lock().await[&id].plan.is_none());
-    assert!(game.goal_moves.lock().await[&id].pending.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .plan
+        .is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .pending
+        .is_none());
     while let Ok(bytes) = rx.try_recv() {
         assert!(!matches!(
             onlinerpg_shared::deserialize_server_msg(&bytes).unwrap(),
@@ -235,7 +268,11 @@ async fn invalid_goal_preserves_a_valid_plan_and_direction_takes_over() {
     next_path(&mut rx).await;
     game.request_move_goal(id, 2, 1000.0, 1.5, false).await;
     assert_eq!(
-        game.goal_moves.lock().await[&id]
+        game.goal_moves
+            .lock(id)
+            .await
+            .as_ref()
+            .unwrap()
             .plan
             .as_ref()
             .unwrap()
@@ -245,8 +282,22 @@ async fn invalid_goal_preserves_a_valid_plan_and_direction_takes_over() {
     );
     game.request_move_direction(id, 3, std::f32::consts::FRAC_PI_2, 1, 0, false)
         .await;
-    assert!(game.goal_moves.lock().await[&id].plan.is_none());
-    assert!(game.goal_moves.lock().await[&id].direction.is_some());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .plan
+        .is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_some());
 }
 
 #[test]
@@ -323,7 +374,15 @@ async fn map_edits_and_teleports_discard_search_results() {
     let workers = game.path_search.reserve_workers().await;
     let snapshot = game.passability.snapshot();
     game.request_move_goal(id, 1, 6.5, 1.5, false).await;
-    while game.goal_moves.lock().await[&id].pending.is_some() {
+    while game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .pending
+        .is_some()
+    {
         tokio::task::yield_now().await;
     }
     while Arc::strong_count(&snapshot) < 3 {
@@ -342,7 +401,14 @@ async fn map_edits_and_teleports_discard_search_results() {
         }
     }
     assert_eq!(reason, Some(MoveStatus::MapChanged));
-    assert!(game.goal_moves.lock().await[&id].plan.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .plan
+        .is_none());
     game.request_move_goal(id, 2, 2.5, 1.5, false).await;
     game.teleport_player(
         &id,
@@ -356,7 +422,14 @@ async fn map_edits_and_teleports_discard_search_results() {
     )
     .await;
     search_finished(&game, id).await;
-    assert!(game.goal_moves.lock().await[&id].plan.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .plan
+        .is_none());
     assert_eq!(game.players.read().await[&id].position.x, 20.0);
 }
 
@@ -407,8 +480,8 @@ impl GameState {
             }
         }
         let request_id = {
-            let mut states = self.goal_moves.lock().await;
-            if let Some(state) = states.get_mut(id) {
+            let mut states = self.goal_moves.lock(*id).await;
+            if let Some(state) = states.as_mut() {
                 state.next_search = Instant::now();
                 state.last_id.wrapping_add(1)
             } else {
@@ -427,11 +500,15 @@ impl GameState {
     }
 
     pub(in crate::game_state) async fn advance_test_movement(&self, seconds: f32) {
-        let ids: Vec<_> = self.goal_moves.lock().await.keys().copied().collect();
+        let ids: Vec<_> = self.goal_moves.ids();
         for id in &ids {
             search_finished(self, *id).await;
         }
-        for state in self.goal_moves.lock().await.values_mut() {
+        for id in &ids {
+            let mut slot = self.goal_moves.lock(*id).await;
+            let Some(state) = slot.as_mut() else {
+                continue;
+            };
             if let Some(plan) = state.plan.as_mut() {
                 plan.advanced_at = Instant::now() - Duration::from_secs_f32(seconds);
             }
@@ -443,17 +520,17 @@ impl GameState {
 impl GameState {
     pub(in crate::game_state) async fn has_test_movement(&self, id: &PlayerId) -> bool {
         self.goal_moves
-            .lock()
+            .lock(*id)
             .await
-            .get(id)
+            .as_ref()
             .is_some_and(|s| s.plan.is_some() || s.direction.is_some())
     }
 }
 
 async fn advance_direction(game: &GameState, id: PlayerId, seconds: f32) {
     {
-        let mut states = game.goal_moves.lock().await;
-        let direction = states.get_mut(&id).unwrap().direction.as_mut().unwrap();
+        let mut states = game.goal_moves.lock(id).await;
+        let direction = states.as_mut().unwrap().direction.as_mut().unwrap();
         direction.advanced_at -= Duration::from_secs_f32(seconds);
         direction.expires_at = Instant::now() + Duration::from_millis(500);
     }
@@ -495,6 +572,255 @@ async fn paused_direction_walker(
         PausedHeightTiles(sampling.clone()),
     ));
     (game, id, rx, sampling.write_owned().await)
+}
+
+async fn paused_prediction_walker(
+    name: &str,
+) -> (
+    GameState,
+    PlayerId,
+    tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+    tokio::sync::OwnedRwLockWriteGuard<()>,
+) {
+    let mut game = make_test_game_state(name);
+    let sampling = Arc::new(tokio::sync::RwLock::new(()));
+    game.height_sampler = Arc::new(onlinerpg_terrain::height::HeightSampler::new(
+        PausedHeightTiles(sampling.clone()),
+    ));
+    let mut player = make_player(name, 31.5, 1000.5);
+    player.position.y = game
+        .height_sampler
+        .sample_height(31.5, 1000.5)
+        .await
+        .unwrap();
+    let id = player.id;
+    game.add_player(player).await;
+    let mut rx = game.register_connection_channel(&id).await;
+    while rx.try_recv().is_ok() {}
+    (game, id, rx, sampling.write_owned().await)
+}
+
+#[tokio::test]
+async fn prediction_releases_player_and_region_locks_and_cannot_follow_a_stop() {
+    let (game, id, mut rx, sampling) = paused_prediction_walker("prediction_stop").await;
+    tokio::time::pause();
+    let request = tokio::task::unconstrained(game.request_move_direction(
+        id,
+        1,
+        std::f32::consts::FRAC_PI_2,
+        1,
+        0,
+        false,
+    ));
+    tokio::pin!(request);
+    assert!(futures_util::poll!(request.as_mut()).is_pending());
+    let position = game.players.read().await[&id].position;
+    let keys = game.movement_region_keys(position, position, 2.0);
+    let lock = game.movement_regions.lock(&keys, true);
+    tokio::pin!(lock);
+    assert!(futures_util::poll!(lock.as_mut()).is_ready());
+    assert!(game.goal_moves.entry(id).try_lock().is_ok());
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    let stop = tokio::task::unconstrained(game.stop_move_goal(id, 2));
+    tokio::pin!(stop);
+    assert!(futures_util::poll!(stop.as_mut()).is_ready());
+    assert!(matches!(
+        onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
+        ServerMessage::PlayerMoveProgress {
+            request_id: 2,
+            status: MoveStatus::Stopped,
+            ..
+        }
+    ));
+    drop(sampling);
+    request.await;
+    assert!(rx.try_recv().is_err());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
+}
+
+#[tokio::test]
+async fn tick_prediction_allows_a_stop_while_waiting_for_height() {
+    let (game, id, mut rx, sampling) = paused_prediction_walker("tick_prediction_stop").await;
+    tokio::time::pause();
+    {
+        let request = tokio::task::unconstrained(game.request_move_direction(
+            id,
+            1,
+            std::f32::consts::FRAC_PI_2,
+            1,
+            0,
+            false,
+        ));
+        tokio::pin!(request);
+        assert!(futures_util::poll!(request.as_mut()).is_pending());
+    }
+    tokio::time::advance(Duration::from_millis(100)).await;
+    let tick = tokio::task::unconstrained(game.tick_goal_movement());
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    let position = game.players.read().await[&id].position;
+    let keys = game.movement_region_keys(position, position, 2.0);
+    let lock = game.movement_regions.lock(&keys, true);
+    tokio::pin!(lock);
+    assert!(futures_util::poll!(lock.as_mut()).is_ready());
+    assert!(game.goal_moves.entry(id).try_lock().is_ok());
+    while let Ok(packet) = rx.try_recv() {
+        assert!(!matches!(
+            onlinerpg_shared::deserialize_server_msg(&packet).unwrap(),
+            ServerMessage::PlayerMovePath { .. } | ServerMessage::PlayerMoveProgress { .. }
+        ));
+    }
+    let stop = tokio::task::unconstrained(game.stop_move_goal(id, 2));
+    tokio::pin!(stop);
+    assert!(futures_util::poll!(stop.as_mut()).is_ready());
+    assert!(matches!(
+        onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
+        ServerMessage::PlayerMoveProgress {
+            request_id: 2,
+            status: MoveStatus::Stopped,
+            ..
+        }
+    ));
+    drop(sampling);
+    tick.await;
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn prediction_cannot_follow_a_new_direction() {
+    let (game, id, mut rx, sampling) = paused_prediction_walker("prediction_replace").await;
+    tokio::time::pause();
+    let request = tokio::task::unconstrained(game.request_move_direction(
+        id,
+        1,
+        std::f32::consts::FRAC_PI_2,
+        1,
+        0,
+        false,
+    ));
+    tokio::pin!(request);
+    assert!(futures_util::poll!(request.as_mut()).is_pending());
+    let replacement =
+        tokio::task::unconstrained(game.request_move_direction(id, 2, 0.0, 1, 0, false));
+    tokio::pin!(replacement);
+    assert!(futures_util::poll!(replacement.as_mut()).is_ready());
+    assert!(matches!(
+        next_path(&mut rx).await,
+        ServerMessage::PlayerMovePath { request_id: 2, .. }
+    ));
+    drop(sampling);
+    request.await;
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn prediction_cannot_delay_or_follow_a_click_goal() {
+    let (game, id, mut rx, sampling) = paused_prediction_walker("prediction_click").await;
+    let request = tokio::task::unconstrained(game.request_move_direction(
+        id,
+        1,
+        std::f32::consts::FRAC_PI_2,
+        1,
+        0,
+        false,
+    ));
+    tokio::pin!(request);
+    assert!(futures_util::poll!(request.as_mut()).is_pending());
+    let goal = tokio::task::unconstrained(game.request_move_goal(id, 2, 31.5, 1005.5, false));
+    tokio::pin!(goal);
+    assert!(futures_util::poll!(goal.as_mut()).is_ready());
+    assert!(matches!(
+        next_path(&mut rx).await,
+        ServerMessage::PlayerMovePath { request_id: 2, .. }
+    ));
+    drop(sampling);
+    request.await;
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn prediction_cannot_follow_newer_progress_for_the_same_request() {
+    let (game, id, mut rx, sampling) = paused_prediction_walker("prediction_progress").await;
+    tokio::time::pause();
+    let request = tokio::task::unconstrained(game.request_move_direction(
+        id,
+        1,
+        std::f32::consts::FRAC_PI_2,
+        1,
+        0,
+        false,
+    ));
+    tokio::pin!(request);
+    assert!(futures_util::poll!(request.as_mut()).is_pending());
+    tokio::time::advance(Duration::from_millis(100)).await;
+    let predictions = game.settle_goal_players(&[id]).await;
+    let position = game.players.read().await[&id].position;
+    assert!(position.x > 31.5);
+    drop(sampling);
+    game.send_direction_predictions(predictions).await;
+    assert!(matches!(
+        next_path(&mut rx).await,
+        ServerMessage::PlayerMovePath { request_id: 1, position: current, .. } if current == position
+    ));
+    request.await;
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn prediction_discards_changed_world_or_player_state() {
+    for change in [
+        "passability",
+        "height",
+        "position",
+        "mount",
+        "death",
+        "removed",
+    ] {
+        let (game, id, mut rx, sampling) =
+            paused_prediction_walker(&format!("prediction_{change}")).await;
+        tokio::time::pause();
+        let request = tokio::task::unconstrained(game.request_move_direction(
+            id,
+            1,
+            std::f32::consts::FRAC_PI_2,
+            1,
+            0,
+            false,
+        ));
+        tokio::pin!(request);
+        assert!(futures_util::poll!(request.as_mut()).is_pending());
+        match change {
+            "passability" => game.passability_write().clear(),
+            "height" => {
+                let raw = onlinerpg_terrain::height::encode_height(5.0)
+                    .to_le_bytes()
+                    .repeat(onlinerpg_terrain::defaults::VERTS_PER_SIDE.pow(2));
+                game.height_sampler.update_tile(0, 16, &raw).await.unwrap();
+            }
+            "position" => game.players.write().await.get_mut(&id).unwrap().position.x -= 1.0,
+            "mount" => {
+                game.players.write().await.get_mut(&id).unwrap().mount =
+                    Some(onlinerpg_shared::mount::MountKind::Horse)
+            }
+            "death" => game.players.write().await.get_mut(&id).unwrap().health = 0,
+            "removed" => {
+                game.players.write().await.remove(&id);
+            }
+            _ => unreachable!(),
+        }
+        drop(sampling);
+        request.await;
+        assert!(rx.try_recv().is_err(), "stale prediction after {change}");
+        tokio::time::resume();
+    }
 }
 
 #[tokio::test]
@@ -544,7 +870,14 @@ async fn direction_preserves_damage_and_stops_if_killed_during_simulation() {
             assert_eq!(player.position, before.position);
             assert_eq!(player.rotation, before.rotation);
             assert_eq!(player.floor_level, before.floor_level);
-            assert!(game.goal_moves.lock().await[&id].direction.is_none());
+            assert!(game
+                .goal_moves
+                .lock(id)
+                .await
+                .as_ref()
+                .unwrap()
+                .direction
+                .is_none());
             assert!(matches!(
                 onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
                 ServerMessage::PlayerMoveProgress {
@@ -556,7 +889,14 @@ async fn direction_preserves_damage_and_stops_if_killed_during_simulation() {
             ));
         } else {
             assert!(player.position.x > before.position.x);
-            assert!(game.goal_moves.lock().await[&id].direction.is_some());
+            assert!(game
+                .goal_moves
+                .lock(id)
+                .await
+                .as_ref()
+                .unwrap()
+                .direction
+                .is_some());
         }
     }
 }
@@ -571,7 +911,14 @@ async fn direction_does_not_restore_a_player_removed_during_simulation() {
     drop(sampling);
     tick.await;
     assert!(!game.players.read().await.contains_key(&id));
-    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
 }
 
 #[tokio::test]
@@ -594,7 +941,14 @@ async fn direction_is_server_driven_accelerates_and_stops_without_a_client_posit
     game.tick_player_movement(60.0).await;
     assert_eq!(game.players.read().await[&id].position, stopped);
     game.request_move_direction(id, 2, 0.0, 1, 0, false).await;
-    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
 }
 
 #[tokio::test]
@@ -605,14 +959,20 @@ async fn direction_renewal_only_extends_the_lease_without_waiting_for_movement()
     next_path(&mut rx).await;
     tokio::time::pause();
     let before = game.players.read().await[&id].clone();
-    let advanced_at = game.goal_moves.lock().await[&id]
+    let advanced_at = game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
         .direction
         .as_ref()
         .unwrap()
         .advanced_at;
     let version = game.player_movement_versions.read().await[&id];
     tokio::time::advance(Duration::from_secs(1)).await;
-    let gate = game.movement_gate.lock().await;
+    let keys = game.movement_region_keys(before.position, before.position, 2.0);
+    let gate = game.movement_regions.lock(&keys, true).await;
     let renewal = game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false);
     tokio::pin!(renewal);
     assert!(futures_util::poll!(renewal.as_mut()).is_ready());
@@ -621,8 +981,8 @@ async fn direction_renewal_only_extends_the_lease_without_waiting_for_movement()
     assert_eq!(game.player_movement_versions.read().await[&id], version);
     assert!(rx.try_recv().is_err());
     {
-        let goals = game.goal_moves.lock().await;
-        let direction = goals[&id].direction.as_ref().unwrap();
+        let goals = game.goal_moves.lock(id).await;
+        let direction = goals.as_ref().unwrap().direction.as_ref().unwrap();
         assert_eq!(direction.advanced_at, advanced_at);
         assert_eq!(
             direction.expires_at - Instant::now(),
@@ -697,24 +1057,45 @@ async fn direction_lease_and_collision_stop_without_automatic_restart() {
         .await;
     advance_direction(&game, id, 2.0).await;
     assert!(game.players.read().await[&id].position.x < 3.71);
-    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
     game.passability_write()
         .insert("corridor".into(), corridor(false));
     game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
         .await;
-    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
     game.request_move_direction(id, 2, std::f32::consts::FRAC_PI_2, 1, 0, false)
         .await;
     {
-        let mut states = game.goal_moves.lock().await;
-        let direction = states.get_mut(&id).unwrap().direction.as_mut().unwrap();
+        let mut states = game.goal_moves.lock(id).await;
+        let direction = states.as_mut().unwrap().direction.as_mut().unwrap();
         direction.advanced_at = Instant::now() - Duration::from_secs(2);
         direction.expires_at = direction.advanced_at + Duration::from_millis(500);
     }
     let before = game.players.read().await[&id].position.x;
     game.advance_goal_players(&[id]).await;
     assert!(game.players.read().await[&id].position.x - before <= 1.51);
-    assert!(game.goal_moves.lock().await[&id].direction.is_none());
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
 }
 
 #[tokio::test]
@@ -793,9 +1174,9 @@ async fn a_door_cannot_close_on_a_body_and_settles_crossing_before_closing() {
         .await;
     next_path(&mut rx).await;
     game.goal_moves
-        .lock()
+        .lock(mover_id)
         .await
-        .get_mut(&mover_id)
+        .as_mut()
         .unwrap()
         .plan
         .as_mut()
@@ -811,7 +1192,14 @@ async fn a_door_cannot_close_on_a_body_and_settles_crossing_before_closing() {
         (after.x - center.x) * dx + (after.z - center.z) * dz > 0.31,
         "{after:?}"
     );
-    assert!(game.goal_moves.lock().await[&mover_id].plan.is_none());
+    assert!(game
+        .goal_moves
+        .lock(mover_id)
+        .await
+        .as_ref()
+        .unwrap()
+        .plan
+        .is_none());
 }
 
 fn two_storey_house() -> RuntimePassability {
@@ -1007,6 +1395,7 @@ async fn movement_load_5000() {
             .await
             .insert(player.id, &player.position);
         channels.push(game.register_connection_channel(&player.id).await);
+        game.goal_moves.register(player.id);
         game.players.write().await.insert(player.id, player);
     }
     let started = std::time::Instant::now();
@@ -1026,13 +1415,16 @@ async fn movement_load_5000() {
         result.unwrap();
     }
     let approval_ms = started.elapsed().as_secs_f64() * 1000.0;
-    let approved = game
-        .goal_moves
-        .lock()
-        .await
-        .values()
-        .filter(|state| state.plan.is_some())
-        .count();
+    let mut approved = 0;
+    for &id in &ids {
+        approved += usize::from(
+            game.goal_moves
+                .lock(id)
+                .await
+                .as_ref()
+                .is_some_and(|s| s.plan.is_some()),
+        );
+    }
     assert_eq!(approved, 5000);
     for channel in &mut channels {
         while channel.try_recv().is_ok() {}
@@ -1042,7 +1434,11 @@ async fn movement_load_5000() {
     let mut bytes = 0usize;
     for _ in 0..10 {
         let now = Instant::now();
-        for state in game.goal_moves.lock().await.values_mut() {
+        for &id in &ids {
+            let mut slot = game.goal_moves.lock(id).await;
+            let Some(state) = slot.as_mut() else {
+                continue;
+            };
             if let Some(plan) = &mut state.plan {
                 plan.advanced_at = now - Duration::from_millis(200);
             }
@@ -1059,4 +1455,259 @@ async fn movement_load_5000() {
     }
     elapsed.sort_by(f64::total_cmp);
     eprintln!("movement_load_5000 approved={approved} approval_ms={approval_ms:.2} tick_p50_ms={:.2} tick_max_ms={:.2} packets={packets} bytes={bytes}",elapsed[5],elapsed[9]);
+}
+
+#[tokio::test]
+async fn a_slow_player_does_not_block_another_player_in_the_same_region() {
+    let (game, id, _, sampling) = paused_direction_walker("independent_players").await;
+    let mut other = make_player("independent_neighbor", 101.0, 10.0);
+    other.position.y = 5.0;
+    let other_id = other.id;
+    game.add_player(other).await;
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.2));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    assert!(game.goal_moves.entry(id).try_lock().is_err());
+    tokio::time::timeout(Duration::from_millis(100), game.stop_move_goal(other_id, 1))
+        .await
+        .expect("another player's stop is independent of the slow player");
+    let destination = Position {
+        x: 103.0,
+        y: 5.0,
+        z: 10.0,
+    };
+    tokio::time::timeout(
+        Duration::from_millis(100),
+        game.teleport_player(&other_id, destination, 0.0, 0),
+    )
+    .await
+    .expect("readers in the same region can relocate independently");
+    assert_eq!(game.players.read().await[&other_id].position, destination);
+    drop(sampling);
+    tick.await;
+}
+
+#[tokio::test]
+async fn teleport_waits_for_its_own_simulation_and_invalidates_its_forecast() {
+    let (game, id, mut rx, sampling) = paused_direction_walker("serialized_teleport").await;
+    game.reset_world_view(&id).await;
+    while rx.try_recv().is_ok() {}
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.2));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    let destination = Position {
+        x: 1000.0,
+        y: 5.0,
+        z: 1000.0,
+    };
+    let teleport = tokio::task::unconstrained(game.teleport_player(&id, destination, 1.0, 0));
+    tokio::pin!(teleport);
+    assert!(futures_util::poll!(teleport.as_mut()).is_pending());
+    drop(sampling);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(tick, teleport);
+    })
+    .await
+    .expect("movement and teleport complete without deadlock");
+    assert_eq!(game.players.read().await[&id].position, destination);
+    assert!(game
+        .goal_moves
+        .lock(id)
+        .await
+        .as_ref()
+        .unwrap()
+        .direction
+        .is_none());
+    let ids = game
+        .player_spatial_cells
+        .read()
+        .await
+        .keys_near(&destination, 1.0)
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&id));
+    let mut teleported = false;
+    while let Ok(bytes) = rx.try_recv() {
+        let messages = match onlinerpg_shared::deserialize_server_msg(&bytes).unwrap() {
+            ServerMessage::WorldUpdate { events, .. } => events
+                .into_iter()
+                .flat_map(|event| event.messages)
+                .collect(),
+            message => vec![message],
+        };
+        for message in messages {
+            match message {
+                ServerMessage::PlayerTeleported { .. } => teleported = true,
+                ServerMessage::PlayerMovePath { .. } => {
+                    assert!(!teleported, "old forecast followed teleport")
+                }
+                _ => {}
+            }
+        }
+    }
+    assert!(teleported);
+}
+
+#[tokio::test]
+async fn regional_writer_waits_for_local_movement_only() {
+    let (game, id, _, sampling) = paused_direction_walker("regional_writer").await;
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.2));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    let at = game.players.read().await[&id].position;
+    let keys = game.movement_region_keys(at, at, 0.31);
+    let local = game.movement_regions.lock(&keys, true);
+    tokio::pin!(local);
+    assert!(futures_util::poll!(local.as_mut()).is_pending());
+    let far = Position {
+        x: at.x + 512.0,
+        ..at
+    };
+    let far_keys = game.movement_region_keys(far, far, 0.31);
+    let other = tokio::time::timeout(
+        Duration::from_millis(100),
+        game.movement_regions.lock(&far_keys, true),
+    )
+    .await
+    .expect("unrelated region is writable");
+    drop(other);
+    drop(sampling);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(tick, async {
+            drop(local.await);
+        });
+    })
+    .await
+    .expect("writer completes when local movement releases its region");
+}
+
+#[tokio::test]
+async fn movement_rechecks_its_region_after_a_teleport_while_waiting_at_a_boundary() {
+    let game = make_test_game_state("region_revalidation");
+    let mut player = make_player("region_revalidation", 95.0, 1000.5);
+    player.position.y = 5.0;
+    let id = player.id;
+    game.add_player(player).await;
+    game.request_move_direction(id, 1, std::f32::consts::FRAC_PI_2, 1, 0, false)
+        .await;
+    let boundary = Position {
+        x: 97.0,
+        y: 5.0,
+        z: 1000.5,
+    };
+    let keys = game.movement_region_keys(boundary, boundary, 0.31);
+    let writer = game.movement_regions.lock(&keys, true).await;
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.5));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    assert!(game.goal_moves.entry(id).try_lock().is_ok());
+    let destination = Position {
+        x: 2000.0,
+        ..boundary
+    };
+    tokio::time::timeout(
+        Duration::from_secs(1),
+        game.teleport_player(&id, destination, 0.0, 0),
+    )
+    .await
+    .expect("region wait does not hold the player's lock");
+    drop(writer);
+    tick.await;
+    assert_eq!(game.players.read().await[&id].position, destination);
+}
+
+#[tokio::test]
+async fn regional_readers_share_cells_and_writers_respect_the_world_seam() {
+    use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X};
+    let game = make_test_game_state("region_seam");
+    let from = Position {
+        x: WORLD_MAX_X - 0.5,
+        y: 5.0,
+        z: 1000.0,
+    };
+    let to = Position {
+        x: WORLD_MIN_X + 0.5,
+        ..from
+    };
+    let keys = game.movement_region_keys(from, to, 0.31);
+    let first = game.movement_regions.lock(&keys, false).await;
+    let second = game.movement_regions.lock(&keys, false).await;
+    for point in [from, to] {
+        let keys = game.movement_region_keys(point, point, 0.31);
+        let write = game.movement_regions.lock(&keys, true);
+        tokio::pin!(write);
+        assert!(futures_util::poll!(write.as_mut()).is_pending());
+    }
+    drop(first);
+    drop(second);
+    let write = game.movement_regions.lock(&keys, true).await;
+    drop(write);
+}
+
+#[tokio::test]
+async fn dungeon_entrances_and_all_floors_share_the_dungeon_lock() {
+    let game = make_test_game_state("region_dungeon");
+    let entrance = game.dungeon_defs.all().next().unwrap();
+    let from = entrance.position();
+    let (ox, oz) = dungeon::dungeon_origin(from.x, from.z);
+    let below = Position {
+        x: ox + 2.0,
+        z: oz + 2.0,
+        y: from.y - 100.0,
+    };
+    let entrance_keys = game.movement_region_keys(from, from, 0.31);
+    let below_keys = game.movement_region_keys(below, below, 0.31);
+    let reader = game.movement_regions.lock(&entrance_keys, false).await;
+    let writer = game.movement_regions.lock(&below_keys, true);
+    tokio::pin!(writer);
+    assert!(futures_util::poll!(writer.as_mut()).is_pending());
+    let remote = Position {
+        x: from.x + 1024.0,
+        ..from
+    };
+    let remote_keys = game.movement_region_keys(remote, remote, 0.31);
+    let remote_writer = game.movement_regions.lock(&remote_keys, true).await;
+    drop(remote_writer);
+    drop(reader);
+    drop(writer.await);
+}
+
+#[tokio::test]
+async fn disconnect_waits_for_movement_and_stale_work_cannot_restore_its_lock() {
+    let (game, id, _, sampling) = paused_direction_walker("serialized_disconnect").await;
+    let tick = tokio::task::unconstrained(advance_direction(&game, id, 0.2));
+    tokio::pin!(tick);
+    assert!(futures_util::poll!(tick.as_mut()).is_pending());
+    let disconnect = tokio::task::unconstrained(game.remove_player(&id));
+    tokio::pin!(disconnect);
+    assert!(futures_util::poll!(disconnect.as_mut()).is_pending());
+    drop(sampling);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(tick, disconnect);
+    })
+    .await
+    .expect("disconnect serializes with its in-flight movement");
+    assert!(!game.players.read().await.contains_key(&id));
+    assert!(!game.goal_moves.ids().contains(&id));
+    game.advance_goal_players(&[id]).await;
+    assert!(!game.goal_moves.ids().contains(&id));
+}
+
+#[tokio::test]
+async fn a_dead_click_mover_receives_stopped_without_changing_position() {
+    let (game, id, mut rx) = walker("dead_click_progress", false).await;
+    game.request_move_goal(id, 1, 6.5, 1.5, false).await;
+    next_path(&mut rx).await;
+    search_finished(&game, id).await;
+    game.players.write().await.get_mut(&id).unwrap().health = 0;
+    let before = game.players.read().await[&id].position;
+    advance(&game, id, 1.0).await;
+    assert_eq!(game.players.read().await[&id].position, before);
+    assert!(matches!(
+        onlinerpg_shared::deserialize_server_msg(&rx.try_recv().unwrap()).unwrap(),
+        ServerMessage::PlayerMoveProgress {
+            status: MoveStatus::Stopped,
+            ..
+        }
+    ));
 }

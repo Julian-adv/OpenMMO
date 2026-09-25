@@ -21,6 +21,7 @@ struct Goal {
     stop_at_entrance: bool,
 }
 
+#[cfg_attr(test, derive(Clone))]
 pub(super) struct GoalMovement {
     last_id: u32,
     generation: u64,
@@ -34,6 +35,7 @@ pub(super) struct GoalMovement {
     invalid_requests: u32,
 }
 
+#[cfg_attr(test, derive(Clone))]
 struct Plan {
     goal: Goal,
     waypoints: Vec<MoveWaypoint>,
@@ -109,9 +111,9 @@ impl GameState {
     async fn leave_pose_for_move(&self, id: PlayerId, request_id: u32) {
         let fresh = self
             .goal_moves
-            .lock()
+            .lock(id)
             .await
-            .get(&id)
+            .as_ref()
             .is_none_or(|state| state.newer(request_id));
         if fresh {
             self.clear_pose_on_move(&id, "move").await;
@@ -144,7 +146,7 @@ impl GameState {
             self.reject_move_input(id, request_id, "coordinates").await;
             return;
         }
-        self.advance_goal_players(&[id]).await;
+        self.settle_goal_players(&[id]).await;
         let x = wrap_world_x(x);
         let valid = self.players.read().await.get(&id).is_some_and(|player| {
             player.health > 0
@@ -157,30 +159,31 @@ impl GameState {
             return;
         }
         self.leave_pose_for_move(id, request_id).await;
-        let mut goals = self.goal_moves.lock().await;
-        let players = self.players.read().await;
-        let Some(player) = players.get(&id) else {
+        let mut goals = self.goal_moves.lock(id).await;
+        let Some(player) = self.players.read().await.get(&id).cloned() else {
             return;
         };
-        if !eligible(player)
+        if !eligible(&player)
             || shortest_world_delta_x(player.position.x, x).hypot(z - player.position.z)
                 > MAX_MOVE_TARGET_DISTANCE
         {
             self.send_direct_message(
                 &id,
-                progress(player, request_id, 0, 0.0, MoveStatus::Rejected),
+                progress(&player, request_id, 0, 0.0, MoveStatus::Rejected),
             )
             .await;
             return;
         }
-        let state = goals
-            .entry(id)
-            .or_insert_with(|| GoalMovement::new(request_id));
+        let state = goals.get_or_insert_with(|| GoalMovement::new(request_id));
         if !state.accept(request_id) {
             return;
         }
-        let mut versions = self.player_movement_versions.write().await;
-        *versions.entry(id).or_default() += 1;
+        *self
+            .player_movement_versions
+            .write()
+            .await
+            .entry(id)
+            .or_default() += 1;
         state.pending = Some(Goal {
             request_id,
             x,
@@ -190,7 +193,7 @@ impl GameState {
         });
         self.send_direct_message(
             &id,
-            progress(player, request_id, 0, 0.0, MoveStatus::Searching),
+            progress(&player, request_id, 0, 0.0, MoveStatus::Searching),
         )
         .await;
         if !state.running {
@@ -203,28 +206,44 @@ impl GameState {
     }
 
     pub(crate) async fn stop_move_goal(&self, id: PlayerId, request_id: u32) {
-        self.advance_goal_players(&[id]).await;
-        let mut goals = self.goal_moves.lock().await;
-        let state = goals
-            .entry(id)
-            .or_insert_with(|| GoalMovement::new(request_id));
+        self.settle_goal_players(&[id]).await;
+        let mut goals = self.goal_moves.lock(id).await;
+        let Some(player) = self.players.read().await.get(&id).cloned() else {
+            return;
+        };
+        let state = goals.get_or_insert_with(|| GoalMovement::new(request_id));
         if !state.accept(request_id) {
             return;
         }
-        let mut versions = self.player_movement_versions.write().await;
-        *versions.entry(id).or_default() += 1;
-        if let Some(player) = self.players.read().await.get(&id) {
-            self.send_direct_message(
-                &id,
-                progress(player, request_id, 0, 0.0, MoveStatus::Stopped),
-            )
-            .await;
-        }
+        *self
+            .player_movement_versions
+            .write()
+            .await
+            .entry(id)
+            .or_default() += 1;
+        self.send_direct_message(
+            &id,
+            progress(&player, request_id, 0, 0.0, MoveStatus::Stopped),
+        )
+        .await;
     }
 
     pub(super) async fn cancel_goal_movement(&self, id: &PlayerId) {
-        let mut goals = self.goal_moves.lock().await;
-        if let Some(state) = goals.get_mut(id) {
+        let mut goals = self.goal_moves.lock(*id).await;
+        self.cancel_goal_movement_locked(id, &mut goals).await;
+    }
+
+    pub(super) async fn cancel_goal_movement_locked(
+        &self,
+        id: &PlayerId,
+        goals: &mut Option<GoalMovement>,
+    ) {
+        {
+            let mut versions = self.player_movement_versions.write().await;
+            let version = versions.entry(*id).or_default();
+            *version = version.wrapping_add(1);
+        }
+        if let Some(state) = goals.as_mut() {
             state.generation = state.generation.wrapping_add(1);
             state.pending = None;
             state.plan = None;
@@ -243,10 +262,11 @@ impl GameState {
     }
 
     async fn run_goal_search(&self, id: PlayerId) {
+        let entry = self.goal_moves.entry(id);
         loop {
             let deadline = {
-                let mut goals = self.goal_moves.lock().await;
-                let Some(state) = goals.get_mut(&id) else {
+                let mut goals = entry.clone().lock_owned().await;
+                let Some(state) = goals.as_mut() else {
                     return;
                 };
                 if state.pending.is_none() {
@@ -257,8 +277,8 @@ impl GameState {
             };
             tokio::time::sleep_until(deadline).await;
             let (goal, generation, player) = {
-                let mut goals = self.goal_moves.lock().await;
-                let Some(state) = goals.get_mut(&id) else {
+                let mut goals = entry.clone().lock_owned().await;
+                let Some(state) = goals.as_mut() else {
                     return;
                 };
                 let Some(goal) = state.pending.take() else {
@@ -266,7 +286,7 @@ impl GameState {
                     return;
                 };
                 let Some(player) = self.players.read().await.get(&id).cloned() else {
-                    goals.remove(&id);
+                    *goals = None;
                     return;
                 };
                 state.next_search = Instant::now() + SEARCH_INTERVAL;
@@ -276,8 +296,8 @@ impl GameState {
             let route = self.find_goal_route(&player, goal).await;
             let profile = self.hunger_movement_profiles_for(&[id]).await;
             let (mult, sprint_allowed) = profile.get(&id).copied().unwrap_or((1.0, true));
-            let mut goals = self.goal_moves.lock().await;
-            let Some(state) = goals.get_mut(&id) else {
+            let mut goals = entry.clone().lock_owned().await;
+            let Some(state) = goals.as_mut() else {
                 return;
             };
             if state.generation != generation {
@@ -285,7 +305,7 @@ impl GameState {
             }
             let players = self.players.read().await;
             let Some(current) = players.get(&id) else {
-                goals.remove(&id);
+                *goals = None;
                 return;
             };
             if !eligible(current)
@@ -481,116 +501,106 @@ impl GameState {
     }
 
     pub(super) async fn tick_goal_movement(&self) {
-        let ids: Vec<_> = self
-            .goal_moves
-            .lock()
-            .await
-            .iter()
-            .filter_map(|(id, s)| (s.plan.is_some() || s.direction.is_some()).then_some(*id))
-            .collect();
-        self.advance_goal_players(&ids).await;
+        self.advance_goal_players(&self.goal_moves.ids()).await;
     }
 
     pub(crate) async fn advance_goal_players(&self, ids: &[PlayerId]) {
-        let _movement = self.movement_gate.lock().await;
-        self.advance_goal_players_unlocked(ids).await;
+        let predictions = self.settle_goal_players(ids).await;
+        self.send_direction_predictions(predictions).await;
     }
 
-    pub(super) async fn advance_goal_players_unlocked(&self, ids: &[PlayerId]) {
-        self.advance_direction_players(ids).await;
-        if ids.is_empty() {
-            return;
-        }
+    async fn settle_goal_players(&self, ids: &[PlayerId]) -> Vec<direction::DirectionPrediction> {
+        let predictions = self.advance_direction_players(ids).await;
         let profiles = self.hunger_movement_profiles_for(ids).await;
-        let mut goals = self.goal_moves.lock().await;
-        let height_revision = self.height_sampler.revision().await;
-        for id in ids {
-            let Some(plan) = goals.get_mut(id).and_then(|s| s.plan.as_mut()) else {
-                continue;
-            };
-            if plan.height_revision == height_revision {
-                continue;
-            }
-            let Some(mut player) = self.players.read().await.get(id).cloned() else {
-                continue;
-            };
-            if player.floor_level >= 0 {
-                player.position.y = self
-                    .surface_ground_y(
-                        player.floor_level as u8,
-                        &player.position,
-                        player.position.y,
-                        player.mount,
-                    )
-                    .await;
-                if let Some(current) = self.players.write().await.get_mut(id) {
-                    current.position.y = player.position.y;
-                }
-            }
-            for point in plan.waypoints.iter_mut().skip(plan.next) {
-                if point.floor_level >= 0 {
-                    point.position.y = self
-                        .surface_ground_y(
-                            point.floor_level as u8,
-                            &point.position,
-                            point.position.y,
-                            player.mount,
-                        )
-                        .await;
-                }
-            }
-            plan.height_revision = height_revision;
-            plan.waypoints.drain(..plan.next);
-            plan.next = 0;
-            let (mult, allowed) = profiles.get(id).copied().unwrap_or((1.0, true));
-            let speed = move_speed(mult, plan.goal.sprinting && allowed)
-                * player.mount.map_or(1.0, |m| m.speed_mult());
-            self.send_direct_message(
-                id,
-                ServerMessage::PlayerMovePath {
-                    request_id: plan.goal.request_id,
-                    server_time_ms: Self::now_ms(),
-                    position: player.position,
-                    rotation: player.rotation,
-                    floor_level: player.floor_level,
-                    waypoints: display_waypoints(&plan.waypoints, &player, speed),
-                    speed,
-                    termination: plan.termination,
-                },
-            )
-            .await;
-        }
-        let dungeons = self.dungeons.read().await;
-        let mut players = self.players.write().await;
-        let mut moved = Vec::new();
         let mut activities = Vec::new();
         let mut steps = Vec::new();
-        let mut updates = Vec::new();
         for &id in ids {
-            let Some(state) = goals.get_mut(&id) else {
+            if self
+                .goal_moves
+                .lock(id)
+                .await
+                .as_ref()
+                .is_none_or(|s| s.plan.is_none())
+            {
+                continue;
+            }
+            let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
+            let Some(synchronization::LockedMovement {
+                mut state,
+                regions,
+                mut player,
+                at,
+            }) = self
+                .lock_player_movement(id, &[], 0.0, false, Some(mult))
+                .await
+            else {
+                continue;
+            };
+            let Some(state) = state.as_mut() else {
                 continue;
             };
             let Some(plan) = state.plan.as_mut() else {
                 continue;
             };
-            let Some(player) = players.get_mut(&id) else {
-                state.plan = None;
-                continue;
-            };
-            let now = Instant::now();
-            let dt = now.duration_since(plan.advanced_at).as_secs_f32();
-            plan.advanced_at = now;
-            let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
             let sprinting = plan.goal.sprinting && allowed;
             let speed =
                 move_speed(mult, sprinting) * player.mount.map_or(1.0, |mount| mount.speed_mult());
             let old_position = player.position;
             let old_floor = player.floor_level;
-            let (status, travelled) = if !eligible(player) {
+            let height_revision = self.height_sampler.revision().await;
+            if plan.height_revision != height_revision {
+                if player.floor_level >= 0 {
+                    player.position.y = self
+                        .surface_ground_y(
+                            player.floor_level as u8,
+                            &player.position,
+                            player.position.y,
+                            player.mount,
+                        )
+                        .await;
+                }
+                for point in plan.waypoints.iter_mut().skip(plan.next) {
+                    if point.floor_level >= 0 {
+                        point.position.y = self
+                            .surface_ground_y(
+                                point.floor_level as u8,
+                                &point.position,
+                                point.position.y,
+                                player.mount,
+                            )
+                            .await;
+                    }
+                }
+                plan.height_revision = height_revision;
+                plan.waypoints.drain(..plan.next);
+                plan.next = 0;
+                self.send_direct_message(
+                    &id,
+                    ServerMessage::PlayerMovePath {
+                        request_id: plan.goal.request_id,
+                        server_time_ms: Self::now_ms(),
+                        position: player.position,
+                        rotation: player.rotation,
+                        floor_level: player.floor_level,
+                        waypoints: display_waypoints(&plan.waypoints, &player, speed),
+                        speed,
+                        termination: plan.termination,
+                    },
+                )
+                .await;
+            }
+
+            let dungeons = self.dungeons.read().await;
+            let now = at;
+            let dt = now
+                .saturating_duration_since(plan.advanced_at)
+                .as_secs_f32();
+            plan.advanced_at = now;
+            let (mut status, travelled) = if !eligible(&player) {
                 (MoveStatus::Stopped, 0.0)
             } else {
                 let cache = self.passability_read();
-                advance_plan(player, plan, &cache, speed * dt, |player| {
+                advance_plan(&mut player, plan, &cache, speed * dt, |player| {
                     if let Some(entrance) = self
                         .dungeon_defs
                         .entrance_at(player.position.x, player.position.z)
@@ -616,6 +626,22 @@ impl GameState {
                     }
                 })
             };
+            {
+                let mut players = self.players.write().await;
+                let Some(current) = players.get_mut(&id) else {
+                    continue;
+                };
+                if eligible(current) {
+                    current.position = player.position;
+                    current.rotation = player.rotation;
+                    current.floor_level = player.floor_level;
+                } else {
+                    status = MoveStatus::Stopped;
+                }
+                player = current.clone();
+            }
+            drop(dungeons);
+            drop(regions);
             let update = if player.mount.is_some() && status == MoveStatus::Moving {
                 ServerMessage::PlayerMovePath {
                     request_id: plan.goal.request_id,
@@ -623,13 +649,13 @@ impl GameState {
                     position: player.position,
                     rotation: player.rotation,
                     floor_level: player.floor_level,
-                    waypoints: display_waypoints(&plan.waypoints[plan.next..], player, speed),
+                    waypoints: display_waypoints(&plan.waypoints[plan.next..], &player, speed),
                     speed,
                     termination: plan.termination,
                 }
             } else {
                 progress(
-                    player,
+                    &player,
                     plan.goal.request_id,
                     plan.next,
                     if status == MoveStatus::Moving {
@@ -640,7 +666,7 @@ impl GameState {
                     status,
                 )
             };
-            updates.push((id, update));
+            self.send_direct_message(&id, update).await;
             if player.position != old_position || player.floor_level != old_floor {
                 activities.push((id, travelled / speed.max(f32::EPSILON), sprinting));
                 steps.push(super::ambient_spawn::MoveStep {
@@ -651,32 +677,25 @@ impl GameState {
                     is_official_npc: player.is_official_npc,
                     mount: player.mount,
                 });
-                moved.push((id, old_position, old_floor, player.clone(), sprinting));
+                let message = ServerMessage::PlayerMoved {
+                    player_id: id,
+                    position: player.position,
+                    rotation: player.rotation,
+                    floor_level: player.floor_level,
+                    sprinting,
+                };
+                self.finish_position_update(&id, old_position, old_floor, player, message)
+                    .await;
             }
             if status != MoveStatus::Moving {
                 state.plan = None;
             }
         }
-        drop(players);
-        drop(dungeons);
-        for (id, message) in updates {
-            self.send_direct_message(&id, message).await;
-        }
-        drop(goals);
+
         self.record_movement_activity(&activities).await;
-        for (id, old_position, old_floor, player, sprinting) in moved {
-            let message = ServerMessage::PlayerMoved {
-                player_id: id,
-                position: player.position,
-                rotation: player.rotation,
-                floor_level: player.floor_level,
-                sprinting,
-            };
-            self.finish_position_update(&id, old_position, old_floor, player, message)
-                .await;
-        }
         self.spawn_along_movement(&steps).await;
         self.soak_movers(&steps).await;
+        predictions
     }
 }
 
@@ -878,6 +897,16 @@ fn swept_blocked(cache: &PassabilityCache, from: Position, dx: f32, dz: f32, flo
 mod direction;
 mod doors;
 mod route;
+pub(super) mod synchronization;
 
+#[cfg(test)]
+pub(super) use lock_measurement::MovementMutex;
+#[cfg(not(test))]
+pub(super) use tokio::sync::Mutex as MovementMutex;
+
+#[cfg(test)]
+mod load_tests;
+#[cfg(test)]
+mod lock_measurement;
 #[cfg(test)]
 mod tests;

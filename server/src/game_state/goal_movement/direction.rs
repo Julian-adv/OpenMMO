@@ -16,6 +16,32 @@ pub(super) struct Direction {
     pub(super) expires_at: Instant,
 }
 
+pub(in crate::game_state) struct DirectionPrediction {
+    player: Player,
+    direction: Direction,
+    generation: u64,
+    mult: f32,
+    sprinting: bool,
+    server_time_ms: u64,
+}
+
+impl DirectionPrediction {
+    fn new(player: Player, state: &GoalMovement, mult: f32, sprinting: bool) -> Self {
+        Self {
+            player,
+            direction: state
+                .direction
+                .as_ref()
+                .expect("prediction requires active direction input")
+                .clone(),
+            generation: state.generation,
+            mult,
+            sprinting,
+            server_time_ms: GameState::now_ms(),
+        }
+    }
+}
+
 impl GameState {
     pub(crate) async fn request_move_direction(
         &self,
@@ -31,11 +57,8 @@ impl GameState {
             return;
         }
         {
-            let mut goals = self.goal_moves.lock().await;
-            if let Some(direction) = goals
-                .get_mut(&id)
-                .and_then(|state| state.direction.as_mut())
-            {
+            let mut goals = self.goal_moves.lock(id).await;
+            if let Some(direction) = goals.as_mut().and_then(|state| state.direction.as_mut()) {
                 let now = Instant::now();
                 if direction.request_id == request_id && now < direction.expires_at {
                     direction.expires_at = now + INPUT_LEASE;
@@ -43,7 +66,7 @@ impl GameState {
                 }
             }
         }
-        self.advance_goal_players(&[id]).await;
+        self.settle_goal_players(&[id]).await;
         if self
             .players
             .read()
@@ -53,16 +76,17 @@ impl GameState {
         {
             self.leave_pose_for_move(id, request_id).await;
         }
-        let mut goals = self.goal_moves.lock().await;
+        let profiles = self.hunger_movement_profiles_for(&[id]).await;
+        let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
+        let height_revision = self.height_sampler.revision().await;
+        let mut goals = self.goal_moves.lock(id).await;
         let Some(player) = self.players.read().await.get(&id).cloned() else {
             return;
         };
         if !eligible(&player) {
             return;
         }
-        let state = goals
-            .entry(id)
-            .or_insert_with(|| GoalMovement::new(request_id));
+        let state = goals.get_or_insert_with(|| GoalMovement::new(request_id));
         let speed = state.direction.as_ref().map_or(0.0, |d| d.speed);
         if !state.accept(request_id) {
             return;
@@ -75,27 +99,21 @@ impl GameState {
             turn,
             sprinting: sprinting && forward > 0,
             speed,
-            height_revision: self.height_sampler.revision().await,
+            height_revision,
             advanced_at: now,
             expires_at: now + INPUT_LEASE,
         };
-        let profiles = self.hunger_movement_profiles_for(&[id]).await;
-        let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
-        self.send_direction_path(
-            id,
-            &player,
-            &direction,
-            mult,
-            direction.sprinting && allowed,
-        )
-        .await;
+        let sprinting = direction.sprinting && allowed;
         state.direction = Some(direction);
+        let prediction = DirectionPrediction::new(player, state, mult, sprinting);
         *self
             .player_movement_versions
             .write()
             .await
             .entry(id)
             .or_default() += 1;
+        drop(goals);
+        self.send_direction_prediction(prediction).await;
     }
 
     pub(crate) async fn face_player(&self, id: PlayerId, rotation: f32) {
@@ -103,9 +121,9 @@ impl GameState {
             return;
         }
         self.advance_goal_players(&[id]).await;
-        let goals = self.goal_moves.lock().await;
+        let goals = self.goal_moves.lock(id).await;
         if goals
-            .get(&id)
+            .as_ref()
             .is_some_and(|s| s.plan.is_some() || s.direction.is_some())
         {
             return;
@@ -119,7 +137,6 @@ impl GameState {
         }) else {
             return;
         };
-        drop(goals);
         self.publish_nearby(
             &player.position,
             player.floor_level,
@@ -168,10 +185,8 @@ impl GameState {
         request_id: u32,
         reason: &'static str,
     ) {
-        let mut goals = self.goal_moves.lock().await;
-        let state = goals
-            .entry(id)
-            .or_insert_with(|| GoalMovement::new(request_id));
+        let mut goals = self.goal_moves.lock(id).await;
+        let state = goals.get_or_insert_with(|| GoalMovement::new(request_id));
         state.invalid_requests = state.invalid_requests.saturating_add(1);
         let now = Instant::now();
         if state
@@ -191,23 +206,45 @@ impl GameState {
         }
     }
 
-    pub(super) async fn advance_direction_players(&self, ids: &[PlayerId]) {
+    pub(super) async fn advance_direction_players(
+        &self,
+        ids: &[PlayerId],
+    ) -> Vec<DirectionPrediction> {
         let profiles = self.hunger_movement_profiles_for(ids).await;
-        let mut goals = self.goal_moves.lock().await;
-        let mut moved = Vec::new();
+
         let mut steps = Vec::new();
         let mut activities = Vec::new();
+        let mut predictions = Vec::new();
         for &id in ids {
-            let Some(state) = goals.get_mut(&id) else {
+            if self
+                .goal_moves
+                .lock(id)
+                .await
+                .as_ref()
+                .is_none_or(|s| s.direction.is_none())
+            {
+                continue;
+            }
+            let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
+            let Some(synchronization::LockedMovement {
+                state: mut goals,
+                regions,
+                mut player,
+                at,
+            }) = self
+                .lock_player_movement(id, &[], 0.0, false, Some(mult))
+                .await
+            else {
+                continue;
+            };
+            let Some(state) = goals.as_mut() else {
                 continue;
             };
             let Some(direction) = state.direction.as_mut() else {
                 continue;
             };
-            let Some(mut player) = self.players.read().await.get(&id).cloned() else {
-                state.direction = None;
-                continue;
-            };
+            state.generation = state.generation.wrapping_add(1);
+
             let (old_position, old_rotation, old_floor) =
                 (player.position, player.rotation, player.floor_level);
             let revision = self.height_sampler.revision().await;
@@ -222,13 +259,12 @@ impl GameState {
                     .await;
             }
             direction.height_revision = revision;
-            let now = Instant::now();
+            let now = at;
             let dt = now
                 .min(direction.expires_at)
                 .saturating_duration_since(direction.advanced_at)
                 .as_secs_f32();
             direction.advanced_at = now;
-            let (mult, allowed) = profiles.get(&id).copied().unwrap_or((1.0, true));
             let sprinting = direction.sprinting && allowed;
             let (points, blocked) = self
                 .simulate_direction(&mut player, direction, dt, mult, sprinting)
@@ -258,6 +294,7 @@ impl GameState {
                 }
                 (current.clone(), changed)
             };
+            drop(regions);
             let status = if !eligible(&player) || now >= direction.expires_at {
                 MoveStatus::Stopped
             } else if blocked {
@@ -281,8 +318,12 @@ impl GameState {
                 ));
             }
             if status == MoveStatus::Moving {
-                self.send_direction_path(id, &player, direction, mult, sprinting)
-                    .await;
+                predictions.push(DirectionPrediction::new(
+                    player.clone(),
+                    state,
+                    mult,
+                    sprinting,
+                ));
             } else {
                 self.send_direct_message(
                     &id,
@@ -292,58 +333,92 @@ impl GameState {
                 state.direction = None;
             }
             if changed {
-                moved.push((id, old_position, old_floor, player, sprinting));
+                let message = ServerMessage::PlayerMoved {
+                    player_id: id,
+                    position: player.position,
+                    rotation: player.rotation,
+                    floor_level: player.floor_level,
+                    sprinting,
+                };
+                self.finish_position_update(&id, old_position, old_floor, player, message)
+                    .await;
             }
         }
-        drop(goals);
         self.record_movement_activity(&activities).await;
-        for (id, old_position, old_floor, player, sprinting) in moved {
-            let message = ServerMessage::PlayerMoved {
-                player_id: player.id,
-                position: player.position,
-                rotation: player.rotation,
-                floor_level: player.floor_level,
-                sprinting,
-            };
-            self.finish_position_update(&id, old_position, old_floor, player, message)
-                .await;
-        }
         self.spawn_along_movement(&steps).await;
         self.soak_movers(&steps).await;
+        predictions
     }
 
-    async fn send_direction_path(
+    pub(in crate::game_state) async fn send_direction_predictions(
         &self,
-        id: PlayerId,
-        player: &Player,
-        direction: &Direction,
-        mult: f32,
-        sprinting: bool,
+        predictions: Vec<DirectionPrediction>,
     ) {
+        for prediction in predictions {
+            self.send_direction_prediction(prediction).await;
+        }
+    }
+
+    async fn send_direction_prediction(&self, prediction: DirectionPrediction) {
+        let DirectionPrediction {
+            player,
+            direction,
+            generation,
+            mult,
+            sprinting,
+            server_time_ms,
+        } = prediction;
+        let snapshot = Arc::downgrade(&self.passability.snapshot());
         let mut forecast = player.clone();
         let mut input = direction.clone();
         let dt = direction
             .expires_at
-            .saturating_duration_since(Instant::now())
+            .saturating_duration_since(direction.advanced_at)
             .as_secs_f32()
             .min(0.4);
         let (waypoints, _) = self
             .simulate_direction(&mut forecast, &mut input, dt, mult, sprinting)
             .await;
-        self.send_direct_message(
-            &id,
-            ServerMessage::PlayerMovePath {
-                request_id: direction.request_id,
-                server_time_ms: Self::now_ms(),
-                position: player.position,
-                rotation: player.rotation,
-                floor_level: player.floor_level,
-                waypoints,
-                speed: input.speed,
-                termination: PathTermination::Reached,
-            },
-        )
-        .await;
+        let keys = self.movement_path_regions(player.position, &waypoints);
+        let Some(bytes) = super::super::encode_server_msg(&ServerMessage::PlayerMovePath {
+            request_id: direction.request_id,
+            server_time_ms,
+            position: player.position,
+            rotation: player.rotation,
+            floor_level: player.floor_level,
+            waypoints,
+            speed: input.speed,
+            termination: PathTermination::Reached,
+        }) else {
+            return;
+        };
+        let channel = self.direct_channels.read().await.get(&player.id).cloned();
+        let _regions = self.movement_regions.lock(&keys, false).await;
+        let goals = self.goal_moves.lock(player.id).await;
+        let Some(state) = goals.as_ref() else {
+            return;
+        };
+        if state.generation != generation || state.direction.is_none() {
+            return;
+        }
+        let players = self.players.read().await;
+        let Some(current) = players.get(&player.id) else {
+            return;
+        };
+        if !eligible(current)
+            || current.position != player.position
+            || current.rotation != player.rotation
+            || current.floor_level != player.floor_level
+            || current.mount != player.mount
+            || Instant::now() >= direction.expires_at
+            || self.height_sampler.revision().await != direction.height_revision
+            || !self.passability.is_current(&snapshot)
+        {
+            return;
+        }
+        if let Some(channel) = channel {
+            let _ = channel.send(bytes);
+        }
     }
 
     async fn simulate_direction(

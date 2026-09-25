@@ -21,6 +21,7 @@ impl StoredBuyback {
         self.expires_at_ms > now_ms
     }
 }
+use self::goal_movement::synchronization::{MovementRegions, MovementStates};
 use onlinerpg_shared::serialize_server_msg;
 use onlinerpg_shared::NoSpawnZone;
 use onlinerpg_shared::Position;
@@ -330,8 +331,8 @@ pub struct GameState {
     /// case-insensitive name lookups; callers re-validate the id against
     /// `players`.
     player_ids_by_name: Arc<RwLock<HashMap<String, PlayerId>>>,
-    movement_gate: Arc<Mutex<()>>,
-    goal_moves: Arc<Mutex<HashMap<PlayerId, goal_movement::GoalMovement>>>,
+    movement_regions: Arc<MovementRegions>,
+    goal_moves: Arc<MovementStates>,
     player_movement_versions: Arc<RwLock<HashMap<PlayerId, u64>>>,
     path_search: Arc<path_search::PathSearchPool>,
     last_player_attacks: Arc<RwLock<HashMap<PlayerId, u64>>>,
@@ -667,8 +668,8 @@ impl GameState {
             interest: Arc::new(std::sync::Mutex::new(interest::Interest::default())),
             players: Arc::new(RwLock::new(HashMap::new())),
             player_ids_by_name: Arc::new(RwLock::new(HashMap::new())),
-            movement_gate: Arc::new(Mutex::new(())),
-            goal_moves: Arc::new(Mutex::new(HashMap::new())),
+            movement_regions: Arc::default(),
+            goal_moves: Arc::default(),
             player_movement_versions: Arc::new(RwLock::new(HashMap::new())),
             path_search: Arc::new(path_search::PathSearchPool::default()),
             last_player_attacks: Arc::new(RwLock::new(HashMap::new())),
@@ -828,7 +829,6 @@ impl GameState {
         wall_dir: WallDirection,
         segment_index: u32,
     ) -> Option<bool> {
-        let _edit = self.world_edit_guard().await;
         let house = match self.housing_io.find_house(house_id).await {
             Ok(Some(h)) => h,
             _ => {
@@ -837,99 +837,112 @@ impl GameState {
             }
         };
 
-        let _movement = self.settle_movement_near(&house.origin).await;
-        let (player_pos, _, player_floor, _) = self.player_pose(player_id).await?;
-        let room = house.rooms.get(room_index as usize)?;
-
-        // Validate door exists
-        let seg = room.wall(wall_dir).get(segment_index as usize)?;
-        if !seg.variant.is_openable() {
+        let keys = self.house_movement_regions(&house);
+        let (movement, predictions) = self.settle_movement_near(&house.origin, &keys).await;
+        let _edit = self.world_edit_guard().await;
+        let house = self.housing_io.find_house(house_id).await.ok()??;
+        if !self.house_movement_regions(&house).is_subset(&keys) {
             return None;
         }
+        let result = async {
+            let (player_pos, _, player_floor, _) = self.player_pose(player_id).await?;
+            let room = house.rooms.get(room_index as usize)?;
 
-        // Validate distance and floor
-        if !is_player_near_door(
-            room,
-            &house.origin,
-            wall_dir,
-            segment_index,
-            &player_pos,
-            player_floor,
-        ) {
-            return None;
-        }
-
-        // Toggle in-memory state; both halves of a double door move together
-        // (the partner may sit in the adjacent room's wall)
-        let ri = room_index as usize;
-        let si = segment_index as usize;
-        let partner = onlinerpg_shared::housing::door_partner(&house.rooms, ri, wall_dir, si);
-        let refs = [Some((ri, si)), partner];
-        let mut key = DoorKey {
-            house_id: house_id.to_string(),
-            room_index,
-            wall_dir,
-            segment_index,
-        };
-        if self.open_doors.read().await.contains(&key) {
-            let segments: Vec<_> = refs
-                .iter()
-                .flatten()
-                .map(|&(r, s)| {
-                    let room = &house.rooms[r];
-                    let ((x, z, _), (nx, nz, _)) =
-                        onlinerpg_shared::pathfinding::door_cells(room, wall_dir, s);
-                    let ox = house.origin.x.floor() + room.local_x as f32;
-                    let oz = house.origin.z.floor() + room.local_z as f32;
-                    if x != nx {
-                        let edge = ox + (x + nx) as f32 * 0.5 + 0.5;
-                        [edge, oz + z as f32, edge, oz + z as f32 + 1.0]
-                    } else {
-                        let edge = oz + (z + nz) as f32 * 0.5 + 0.5;
-                        [ox + x as f32, edge, ox + x as f32 + 1.0, edge]
-                    }
-                })
-                .collect();
-            if self
-                .doorway_occupied(room.floor_level as i8, &segments)
-                .await
-            {
-                return Some(true);
+            // Validate door exists
+            let seg = room.wall(wall_dir).get(segment_index as usize)?;
+            if !seg.variant.is_openable() {
+                return None;
             }
-        }
-        let is_open = {
-            let mut open_doors = self.open_doors.write().await;
-            let was_open = open_doors.contains(&key);
-            for (r, s) in refs.into_iter().flatten() {
-                key.room_index = r as u32;
-                key.segment_index = s as u32;
-                if was_open {
-                    open_doors.remove(&key);
-                } else {
-                    open_doors.insert(key.clone());
+
+            // Validate distance and floor
+            if !is_player_near_door(
+                room,
+                &house.origin,
+                wall_dir,
+                segment_index,
+                &player_pos,
+                player_floor,
+            ) {
+                return None;
+            }
+
+            // Toggle in-memory state; both halves of a double door move together
+            // (the partner may sit in the adjacent room's wall)
+            let ri = room_index as usize;
+            let si = segment_index as usize;
+            let partner = onlinerpg_shared::housing::door_partner(&house.rooms, ri, wall_dir, si);
+            let refs = [Some((ri, si)), partner];
+            let mut key = DoorKey {
+                house_id: house_id.to_string(),
+                room_index,
+                wall_dir,
+                segment_index,
+            };
+            if self.open_doors.read().await.contains(&key) {
+                let segments: Vec<_> = refs
+                    .iter()
+                    .flatten()
+                    .map(|&(r, s)| {
+                        let room = &house.rooms[r];
+                        let ((x, z, _), (nx, nz, _)) =
+                            onlinerpg_shared::pathfinding::door_cells(room, wall_dir, s);
+                        let ox = house.origin.x.floor() + room.local_x as f32;
+                        let oz = house.origin.z.floor() + room.local_z as f32;
+                        if x != nx {
+                            let edge = ox + (x + nx) as f32 * 0.5 + 0.5;
+                            [edge, oz + z as f32, edge, oz + z as f32 + 1.0]
+                        } else {
+                            let edge = oz + (z + nz) as f32 * 0.5 + 0.5;
+                            [ox + x as f32, edge, ox + x as f32 + 1.0, edge]
+                        }
+                    })
+                    .collect();
+                if self
+                    .doorway_occupied(room.floor_level as i8, &segments)
+                    .await
+                {
+                    return Some(true);
                 }
             }
-            !was_open
-        };
+            let is_open = {
+                let mut open_doors = self.open_doors.write().await;
+                let was_open = open_doors.contains(&key);
+                for (r, s) in refs.into_iter().flatten() {
+                    key.room_index = r as u32;
+                    key.segment_index = s as u32;
+                    if was_open {
+                        open_doors.remove(&key);
+                    } else {
+                        open_doors.insert(key.clone());
+                    }
+                }
+                !was_open
+            };
 
-        {
-            let mut cache = self.passability_write();
-            for (r, s) in refs.into_iter().flatten() {
-                onlinerpg_shared::pathfinding::update_door_edge(
-                    &mut cache,
-                    house_id,
-                    &house.rooms[r],
-                    wall_dir,
-                    s,
-                    is_open,
-                );
+            {
+                let mut cache = self.passability_write();
+                for (r, s) in refs.into_iter().flatten() {
+                    onlinerpg_shared::pathfinding::update_door_edge(
+                        &mut cache,
+                        house_id,
+                        &house.rooms[r],
+                        wall_dir,
+                        s,
+                        is_open,
+                    );
+                }
             }
-        }
 
-        let mut houses = vec![house];
-        self.apply_open_door_state(&mut houses).await;
-        self.publish_house(&houses[0]);
-        Some(is_open)
+            let mut houses = vec![house];
+            self.apply_open_door_state(&mut houses).await;
+            self.publish_house(&houses[0]);
+            Some(is_open)
+        }
+        .await;
+        drop(movement);
+        drop(_edit);
+        self.send_direction_predictions(predictions).await;
+        result
     }
 
     /// Served house data carries the live door state, not the file's.

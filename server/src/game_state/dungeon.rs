@@ -270,134 +270,148 @@ impl GameState {
             z: (segment[1] + segment[3]) * 0.5,
             y: entrance.y,
         };
-        let _movement = self.settle_movement_near(&center).await;
-        let (player_pos, _, player_floor, player_name) = self.player_pose(player_id).await?;
-        if player_floor != expected_floor {
-            warn!(
-                "Door toggle refused: {player_name} on floor {player_floor} asked for '{entrance_id}' depth {depth} door {door_id}"
-            );
-            return None;
-        }
-
-        if depth == 0 {
-            // The entrance shed is client-side geometry — the server has the
-            // shaft but not the doorway within it — so the entrance marker's
-            // delivery circle stands in for reach. Loose next to the 2.5m
-            // interior gate, but the toggle still drives collision on every
-            // client nearby, so it is not left open to the whole world.
-            if door_id != ENTRANCE_DOOR_ID {
-                return None;
-            }
-            if player_pos.dist_xz_sq(&entrance.position()) > ENTRANCE_INTERACT_RANGE.powi(2) {
-                return None;
-            }
-        }
-        self.ensure_dungeon_runtime(entrance_id).await;
-        let mut locked = false;
-        if depth > 0 {
-            // Needs the cached layouts, so this gate runs after the ensure;
-            // layouts are immutable, so the scan holds only the read lock.
-            let door = {
-                let dungeons = self.dungeons.read().await;
-                let layout = dungeons
-                    .get(entrance_id)?
-                    .layouts
-                    .get((depth - 1) as usize)?;
-                interior_doors(layout)
-                    .into_iter()
-                    .find(|d| d.door_id == door_id)?
-            };
-            let reach = DOOR_INTERACT_RANGE + door.len as f32 * 0.5;
-            let dist_sq = door_line_dist_sq(&entrance.position(), door.seg(), &player_pos);
-            if dist_sq > reach * reach {
-                warn!(
-                    "Door toggle refused: {player_name} is {:.1}m from '{entrance_id}' depth {depth} door {door_id} (reach {reach:.1})",
-                    dist_sq.sqrt()
-                );
-                return None;
-            }
-            locked = door.locked;
-            if locked && !self.require_key(player_id, entrance, depth, "door").await {
-                return None;
-            }
-        }
-
-        let is_open = self
-            .dungeons
-            .read()
-            .await
-            .get(entrance_id)?
-            .open_doors
-            .get(&depth)
-            .is_some_and(|doors| doors.contains(&door_id));
-        if is_open {
-            if let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await {
-                if self.doorway_occupied(expected_floor, &[segment]).await {
-                    return Some(true);
-                }
-            }
-        }
-        let (is_open, opening) = {
-            let mut dungeons = self.dungeons.write().await;
-            let rt = dungeons.get_mut(entrance_id)?;
-            let set = rt.open_doors.entry(depth).or_default();
-            let is_open = if set.remove(&door_id) {
-                false
-            } else {
-                set.insert(door_id);
-                true
-            };
-            let opening = (locked && is_open).then(|| {
-                rt.locked_door_generation += 1;
-                rt.locked_door_opens
-                    .insert((depth, door_id), rt.locked_door_generation);
-                rt.locked_door_generation
-            });
-            if locked && !is_open {
-                rt.locked_door_opens.remove(&(depth, door_id));
-            }
-            self.publish_subject_change(ServerMessage::DungeonDoorToggled {
-                entrance_id: entrance_id.to_owned(),
-                depth,
-                door_id,
-                is_open,
-            });
-            (is_open, opening)
-        };
-        if let Some(opening) = opening {
-            self.send_system_message(
-                player_id,
-                format!(
-                    "You unlock the door with your {}. It will lock again in {} seconds.",
-                    self.item_name(&entrance.key_item_id(depth)),
-                    LOCKED_DOOR_OPEN_DURATION.as_secs()
+        let (movement, predictions) = self
+            .settle_movement_near(
+                &center,
+                &self.movement_region_keys(
+                    Position {
+                        x: segment[0],
+                        z: segment[1],
+                        ..center
+                    },
+                    Position {
+                        x: segment[2],
+                        z: segment[3],
+                        ..center
+                    },
+                    0.31,
                 ),
             )
             .await;
-            let game_state = self.clone();
-            let entrance_id = entrance_id.to_string();
-            tokio::spawn(async move {
-                tokio::time::sleep(LOCKED_DOOR_OPEN_DURATION).await;
-                game_state
-                    .close_locked_door(&entrance_id, depth, door_id, opening)
-                    .await;
-            });
+        let result = async {
+            let (player_pos, _, player_floor, player_name) = self.player_pose(player_id).await?;
+            if player_floor != expected_floor {
+                warn!(
+                    "Door toggle refused: {player_name} on floor {player_floor} asked for '{entrance_id}' depth {depth} door {door_id}"
+                );
+                return None;
+            }
+
+            if depth == 0 {
+                // The entrance shed has no server geometry; use marker reach.
+                if door_id != ENTRANCE_DOOR_ID {
+                    return None;
+                }
+                if player_pos.dist_xz_sq(&entrance.position()) > ENTRANCE_INTERACT_RANGE.powi(2) {
+                    return None;
+                }
+            }
+            self.ensure_dungeon_runtime(entrance_id).await;
+            let mut locked = false;
+            if depth > 0 {
+                let door = {
+                    let dungeons = self.dungeons.read().await;
+                    let layout = dungeons
+                        .get(entrance_id)?
+                        .layouts
+                        .get((depth - 1) as usize)?;
+                    interior_doors(layout)
+                        .into_iter()
+                        .find(|d| d.door_id == door_id)?
+                };
+                let reach = DOOR_INTERACT_RANGE + door.len as f32 * 0.5;
+                let dist_sq = door_line_dist_sq(&entrance.position(), door.seg(), &player_pos);
+                if dist_sq > reach * reach {
+                    warn!(
+                        "Door toggle refused: {player_name} is {:.1}m from '{entrance_id}' depth {depth} door {door_id} (reach {reach:.1})",
+                        dist_sq.sqrt()
+                    );
+                    return None;
+                }
+                locked = door.locked;
+                if locked && !self.require_key(player_id, entrance, depth, "door").await {
+                    return None;
+                }
+            }
+
+            let is_open = self
+                .dungeons
+                .read()
+                .await
+                .get(entrance_id)?
+                .open_doors
+                .get(&depth)
+                .is_some_and(|doors| doors.contains(&door_id));
+            if is_open {
+                if let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await {
+                    if self.doorway_occupied(expected_floor, &[segment]).await {
+                        return Some(true);
+                    }
+                }
+            }
+            let (is_open, opening) = {
+                let mut dungeons = self.dungeons.write().await;
+                let rt = dungeons.get_mut(entrance_id)?;
+                let set = rt.open_doors.entry(depth).or_default();
+                let is_open = if set.remove(&door_id) {
+                    false
+                } else {
+                    set.insert(door_id);
+                    true
+                };
+                let opening = (locked && is_open).then(|| {
+                    rt.locked_door_generation += 1;
+                    rt.locked_door_opens
+                        .insert((depth, door_id), rt.locked_door_generation);
+                    rt.locked_door_generation
+                });
+                if locked && !is_open {
+                    rt.locked_door_opens.remove(&(depth, door_id));
+                }
+                self.publish_subject_change(ServerMessage::DungeonDoorToggled {
+                    entrance_id: entrance_id.to_owned(),
+                    depth,
+                    door_id,
+                    is_open,
+                });
+                (is_open, opening)
+            };
+            if let Some(opening) = opening {
+                self.send_system_message(
+                    player_id,
+                    format!(
+                        "You unlock the door with your {}. It will lock again in {} seconds.",
+                        self.item_name(&entrance.key_item_id(depth)),
+                        LOCKED_DOOR_OPEN_DURATION.as_secs()
+                    ),
+                )
+                .await;
+                let game_state = self.clone();
+                let entrance_id = entrance_id.to_string();
+                tokio::spawn(async move {
+                    tokio::time::sleep(LOCKED_DOOR_OPEN_DURATION).await;
+                    game_state
+                        .close_locked_door(&entrance_id, depth, door_id, opening)
+                        .await;
+                });
+            }
+            self.rebuild_dungeon_floor_passability(entrance_id, depth)
+                .await;
+            info!(
+                "Player {player_name} {} '{entrance_id}' depth {depth} door {door_id} at ({:.1},{:.1})",
+                if is_open { "opened" } else { "closed" },
+                player_pos.x,
+                player_pos.z
+            );
+            Some(is_open)
         }
-        self.rebuild_dungeon_floor_passability(entrance_id, depth)
-            .await;
-        info!(
-            "Player {player_name} {} '{entrance_id}' depth {depth} door {door_id} at ({:.1},{:.1})",
-            if is_open { "opened" } else { "closed" },
-            player_pos.x,
-            player_pos.z
-        );
-        Some(is_open)
+        .await;
+        drop(movement);
+        self.send_direction_predictions(predictions).await;
+        result
     }
 
-    /// Shut a locked door `LOCKED_DOOR_OPEN_DURATION` after `opening`, unless
-    /// it was closed and reopened since (a later opening), and tell the
-    /// floor's occupants. Anyone who slipped through without a key is now on
-    /// the far side for good — that is the tailgater's own choice.
+    /// Close this opening after the timeout, once the doorway is clear.
     async fn close_locked_door(&self, entrance_id: &str, depth: u8, door_id: u32, opening: u64) {
         let Some(entrance) = self.dungeon_defs.get(entrance_id) else {
             return;
@@ -411,50 +425,75 @@ impl GameState {
                 z: (segment[1] + segment[3]) * 0.5,
                 y: entrance.y,
             };
-            let movement = self.settle_movement_near(&center).await;
-            let current = self
-                .dungeons
-                .read()
-                .await
-                .get(entrance_id)
-                .and_then(|rt| rt.locked_door_opens.get(&(depth, door_id)).copied());
-            if current != Some(opening) {
+            let (movement, predictions) = self
+                .settle_movement_near(
+                    &center,
+                    &self.movement_region_keys(
+                        Position {
+                            x: segment[0],
+                            z: segment[1],
+                            ..center
+                        },
+                        Position {
+                            x: segment[2],
+                            z: segment[3],
+                            ..center
+                        },
+                        0.31,
+                    ),
+                )
+                .await;
+            let finished = async {
+                let current = self
+                    .dungeons
+                    .read()
+                    .await
+                    .get(entrance_id)
+                    .and_then(|rt| rt.locked_door_opens.get(&(depth, door_id)).copied());
+                if current != Some(opening) {
+                    return true;
+                }
+                if let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await
+                {
+                    if self.doorway_occupied(-(depth as i8), &[segment]).await {
+                        return false;
+                    }
+                }
+                {
+                    let mut dungeons = self.dungeons.write().await;
+                    let Some(rt) = dungeons.get_mut(entrance_id) else {
+                        return true;
+                    };
+                    if rt.locked_door_opens.get(&(depth, door_id)) != Some(&opening) {
+                        return true;
+                    }
+                    rt.locked_door_opens.remove(&(depth, door_id));
+                    if !rt
+                        .open_doors
+                        .get_mut(&depth)
+                        .is_some_and(|set| set.remove(&door_id))
+                    {
+                        return true;
+                    }
+                };
+                self.rebuild_dungeon_floor_passability(entrance_id, depth)
+                    .await;
+                info!("'{entrance_id}' depth {depth} door {door_id} locked itself again");
+                self.publish_subject_change(ServerMessage::DungeonDoorToggled {
+                    entrance_id: entrance_id.to_string(),
+                    depth,
+                    door_id,
+                    is_open: false,
+                });
+                true
+            }
+            .await;
+            drop(movement);
+            self.send_direction_predictions(predictions).await;
+            if finished {
                 return;
             }
-            if let Some(segment) = self.dungeon_door_segment(entrance_id, depth, door_id).await {
-                if self.doorway_occupied(-(depth as i8), &[segment]).await {
-                    drop(movement);
-                    tokio::time::sleep(Duration::from_millis(250)).await;
-                    continue;
-                }
-            }
-            {
-                let mut dungeons = self.dungeons.write().await;
-                let Some(rt) = dungeons.get_mut(entrance_id) else {
-                    return;
-                };
-                if rt.locked_door_opens.get(&(depth, door_id)) != Some(&opening) {
-                    return;
-                }
-                rt.locked_door_opens.remove(&(depth, door_id));
-                if !rt
-                    .open_doors
-                    .get_mut(&depth)
-                    .is_some_and(|set| set.remove(&door_id))
-                {
-                    return;
-                }
-            };
-            self.rebuild_dungeon_floor_passability(entrance_id, depth)
-                .await;
-            info!("'{entrance_id}' depth {depth} door {door_id} locked itself again");
-            self.publish_subject_change(ServerMessage::DungeonDoorToggled {
-                entrance_id: entrance_id.to_string(),
-                depth,
-                door_id,
-                is_open: false,
-            });
-            return;
+            tokio::time::sleep(Duration::from_millis(250)).await;
         }
     }
 

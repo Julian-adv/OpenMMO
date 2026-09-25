@@ -47,16 +47,19 @@ impl GameState {
     }
 
     pub(super) async fn set_mount(&self, player_id: &PlayerId, mount: Option<MountKind>) {
-        self.clear_player_movement(player_id, "mount_changed").await;
-        let Some((was, at, floor)) = self
-            .players
-            .read()
+        let Some(mut movement) = self
+            .lock_player_movement(*player_id, &[], 0.0, false, None)
             .await
-            .get(player_id)
-            .map(|p| (p.mount, p.position, p.floor_level))
         else {
             return;
         };
+        self.cancel_goal_movement_locked(player_id, &mut movement.state)
+            .await;
+        let (was, at, floor) = (
+            movement.player.mount,
+            movement.player.position,
+            movement.player.floor_level,
+        );
         if was == mount {
             return;
         }
@@ -78,6 +81,7 @@ impl GameState {
             player.position.y = ground_y;
             (player.position, player.rotation)
         };
+        drop(movement.regions);
         if (position.y - at.y).abs() > 1e-3 {
             self.publish_nearby(
                 &position,

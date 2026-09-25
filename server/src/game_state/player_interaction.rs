@@ -17,7 +17,7 @@ fn placement_position(placement: &FurniturePlacement) -> Position {
     }
 }
 
-fn interaction_message(player: &Player) -> ServerMessage {
+pub(super) fn interaction_message(player: &Player) -> ServerMessage {
     ServerMessage::PlayerInteractionChanged {
         player_id: player.id,
         object_type: player.object_type.clone(),
@@ -179,18 +179,14 @@ impl GameState {
         object_type: Option<String>,
         object_id: Option<u32>,
     ) {
-        let furniture_change = match self.players.read().await.get(player_id) {
-            Some(player) => object_id.is_some() || player.object_id.is_some(),
-            None => return,
-        };
-        let _movement = if furniture_change {
-            Some(self.movement_gate.lock().await)
-        } else {
-            None
-        };
-        let Some(previous) = self.players.read().await.get(player_id).cloned() else {
+        let Some(mut movement) = self
+            .lock_player_movement(*player_id, &[], INTERACTION_RANGE + 0.5, true, None)
+            .await
+        else {
             return;
         };
+        let previous = movement.player;
+        let furniture_change = object_id.is_some() || previous.object_id.is_some();
         let mut position = previous.position;
         let mut rotation = previous.rotation;
         let mut rejection = None;
@@ -243,7 +239,8 @@ impl GameState {
             return;
         }
         if object_type.is_some() || previous.object_id.is_some() {
-            self.clear_player_movement(player_id, "interaction").await;
+            self.cancel_goal_movement_locked(player_id, &mut movement.state)
+                .await;
         }
         let player = {
             let mut players = self.players.write().await;
@@ -259,19 +256,20 @@ impl GameState {
             self.update_bed_rest(player).await;
             player.clone()
         };
+        drop(movement.regions);
         if object_type.as_deref() != Some(onlinerpg_shared::messages::MUSIC_EMOTE) {
             self.music_performances.write().await.remove(player_id);
             self.remove_live_instrument(player_id).await;
         }
         let message = interaction_message(&player);
         if furniture_change {
-            Box::pin(self.finish_position_update(
+            self.finish_position_update(
                 player_id,
                 previous.position,
                 previous.floor_level,
                 player,
                 message,
-            ))
+            )
             .await;
         } else {
             self.publish_nearby(&player.position, player.floor_level, message, None)

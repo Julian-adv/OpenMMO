@@ -4,8 +4,11 @@ impl GameState {
     pub(in crate::game_state) async fn settle_movement_near(
         &self,
         position: &Position,
-    ) -> tokio::sync::MutexGuard<'_, ()> {
-        let guard = self.movement_gate.lock().await;
+        keys: &std::collections::BTreeSet<synchronization::MovementRegion>,
+    ) -> (
+        synchronization::MovementRegionGuard,
+        Vec<direction::DirectionPrediction>,
+    ) {
         let ids = self
             .player_spatial_cells
             .read()
@@ -13,8 +16,9 @@ impl GameState {
             .keys_near(position, MAX_MOVE_TARGET_DISTANCE * 2.0)
             .copied()
             .collect::<Vec<_>>();
-        self.advance_goal_players_unlocked(&ids).await;
-        guard
+        let predictions = self.settle_goal_players(&ids).await;
+        let guard = self.movement_regions.lock(keys, true).await;
+        (guard, predictions)
     }
 
     pub(in crate::game_state) async fn doorway_occupied(

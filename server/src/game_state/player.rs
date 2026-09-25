@@ -656,6 +656,7 @@ impl super::GameState {
         {
             let mut players = self.players.write().await;
             self.combat_audit.observe(&player);
+            self.goal_moves.register(player_id);
             players.insert(player_id, player.clone());
         }
         {
@@ -677,8 +678,10 @@ impl super::GameState {
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
         self.bed_rest_started.write().await.remove(player_id);
-        self.clear_player_movement(player_id, "disconnect").await;
-        self.goal_moves.lock().await.remove(player_id);
+        let mut movement = self.goal_moves.lock(*player_id).await;
+        self.cancel_goal_movement_locked(player_id, &mut movement)
+            .await;
+        *movement = None;
         self.player_movement_versions
             .write()
             .await
@@ -715,7 +718,9 @@ impl super::GameState {
         let removed_player = {
             let mut players = self.players.write().await;
             self.combat_audit.logout(player_id);
-            players.remove(player_id)
+            let removed = players.remove(player_id);
+            self.goal_moves.remove(player_id);
+            removed
         };
         if let Some(player) = &removed_player {
             let key = player.name.to_ascii_lowercase();
@@ -761,9 +766,6 @@ impl super::GameState {
 
     pub(super) async fn clear_player_movement(&self, id: &PlayerId, _reason: &'static str) {
         self.cancel_goal_movement(id).await;
-        let mut versions = self.player_movement_versions.write().await;
-        let version = versions.entry(*id).or_default();
-        *version = version.wrapping_add(1);
     }
 
     pub async fn tick_player_movement(&self, _dt: f32) {
@@ -771,8 +773,7 @@ impl super::GameState {
         self.tick_goal_movement().await;
     }
 
-    /// Store a position immediately (trusted server-side path) and run the
-    /// shared bookkeeping/fanout.
+    /// Serialize trusted relocations with movement.
     async fn apply_player_position(
         &self,
         player_id: &PlayerId,
@@ -781,8 +782,14 @@ impl super::GameState {
         floor_level: i8,
         update_msg: ServerMessage,
     ) {
-        self.clear_player_movement(player_id, "teleport").await;
-        self.clear_pose_on_move(player_id, "teleport").await;
+        let Some(mut movement) = self
+            .lock_player_movement(*player_id, &[new_position], 0.0, false, None)
+            .await
+        else {
+            return;
+        };
+        self.cancel_goal_movement_locked(player_id, &mut movement.state)
+            .await;
         let (old_position, old_floor, moved_player) = {
             let mut players = self.players.write().await;
             let Some(player) = players.get_mut(player_id) else {
@@ -794,8 +801,25 @@ impl super::GameState {
             player.position = new_position;
             player.rotation = new_rotation;
             player.floor_level = floor_level;
+            player.object_type = None;
+            player.object_id = None;
             (old_position, old_floor, player.clone())
         };
+        drop(movement.regions);
+        self.update_bed_rest(&moved_player).await;
+        self.music_performances.write().await.remove(player_id);
+        if movement.player.object_type.is_some() {
+            let mut standing = movement.player;
+            standing.object_type = None;
+            standing.object_id = None;
+            self.publish_nearby(
+                &old_position,
+                old_floor,
+                super::player_interaction::interaction_message(&standing),
+                None,
+            )
+            .await;
+        }
         self.finish_position_update(player_id, old_position, old_floor, moved_player, update_msg)
             .await;
     }
@@ -810,12 +834,11 @@ impl super::GameState {
         update_msg: ServerMessage,
     ) {
         if old_position != moved_player.position || old_floor != moved_player.floor_level {
-            if moved_player.object_type.as_deref() == Some(onlinerpg_shared::messages::MUSIC_EMOTE)
+            self.cancel_fishing_if_active(player_id).await;
+            self.cancel_grill_if_active(player_id).await;
+            if moved_player.object_type.as_deref() != Some(onlinerpg_shared::messages::MUSIC_EMOTE)
             {
-                self.cancel_fishing_if_active(player_id).await;
-                self.cancel_grill_if_active(player_id).await;
-            } else {
-                self.cancel_concentration_if_active(player_id).await;
+                self.remove_live_instrument(player_id).await;
             }
         }
         let new_position = moved_player.position;
@@ -941,8 +964,21 @@ impl super::GameState {
     /// Wake the dead in the inn's sick room: lying in the first free bed, or
     /// standing beside them when every bed is taken.
     pub async fn respawn_player(&self, player_id: &PlayerId) {
-        self.clear_player_movement(player_id, "respawn").await;
         let respawn = &world_config().respawn;
+        let mut destinations = vec![respawn.position()];
+        destinations.extend(self.respawn_beds().iter().map(|bed| Position {
+            x: bed.x,
+            y: bed.y,
+            z: bed.z,
+        }));
+        let Some(mut movement) = self
+            .lock_player_movement(*player_id, &destinations, 0.0, true, None)
+            .await
+        else {
+            return;
+        };
+        self.cancel_goal_movement_locked(player_id, &mut movement.state)
+            .await;
         let (old_floor, old_position, player) = {
             let mut players = self.players.write().await;
             let Some(player) = players.get(player_id) else {
@@ -994,6 +1030,7 @@ impl super::GameState {
             (old_floor, old_position, player.clone())
         };
 
+        drop(movement.regions);
         info!("Player {} ({}) respawned", player.name, player.id);
         let update_msg = ServerMessage::PlayerRespawned {
             player: player.clone(),
