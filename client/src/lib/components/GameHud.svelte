@@ -7,6 +7,7 @@
   import GameTimeWidget from './GameTimeWidget.svelte'
   import Minimap from './Minimap.svelte'
   import CelestialDebugDialog from './CelestialDebugDialog.svelte'
+  import WeatherRadarDialog from './WeatherRadarDialog.svelte'
   import MapEditorPanel from './map-editor/MapEditorPanel.svelte'
   import HousingEditorPanel from './map-editor/HousingEditorPanel.svelte'
   import CharacterPanel from './CharacterPanel.svelte'
@@ -195,6 +196,7 @@
   ></div>
   <DragGhost />
   <CelestialDebugDialog />
+  <WeatherRadarDialog />
   {#if $mapEditorMode}
     <MapEditorPanel />
   {/if}
