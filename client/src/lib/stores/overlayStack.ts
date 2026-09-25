@@ -1,5 +1,9 @@
 import { get, writable, type Readable } from 'svelte/store'
-import { characterPanelVisible, inventoryVisible } from './debugStore'
+import {
+  characterPanelVisible,
+  inventoryVisible,
+  weatherRadarVisible,
+} from './debugStore'
 import { friendPanelVisible } from './friendStore'
 import { emotePanelVisible } from './emoteStore'
 import { shopSession } from './tradeStore'
@@ -30,6 +34,7 @@ export type OverlayId =
   | 'inspection'
   | 'inspectionTarget'
   | 'fishingTarget'
+  | 'weatherRadar'
 
 /** `layer` is paint order, not raw z-index: `.game-hud`'s z-index:1 stacking
  *  context traps the panel band (see panelLayout) below the root-level dialogs
@@ -38,6 +43,7 @@ export type OverlayId =
  *  mountOverlay, and one that registers none (loading) blocks Escape. */
 const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   character: { layer: 0, close: () => characterPanelVisible.set(false) },
+  weatherRadar: { layer: 0, close: () => weatherRadarVisible.set(false) },
   inventory: { layer: 0, close: () => inventoryVisible.set(false) },
   friends: { layer: 0, close: () => friendPanelVisible.set(false) },
   emotes: { layer: 0, close: () => emotePanelVisible.set(false) },

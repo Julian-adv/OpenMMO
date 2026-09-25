@@ -47,6 +47,7 @@
     cameraRotationEnabled,
     calendarVisible,
     celestialDebugVisible,
+    weatherRadarVisible,
     playerDebugInfo,
     mapEditorMode,
     housingEditorMode,
@@ -158,6 +159,10 @@
 
   function toggleCelestialDebug() {
     celestialDebugVisible.update((v: boolean) => !v)
+  }
+
+  function toggleWeatherRadar() {
+    weatherRadarVisible.update((v: boolean) => !v)
   }
 
   function toggleGrid() {
@@ -326,6 +331,15 @@
             title="Toggle Celestial Orbits Debug"
           >
             ORBITS
+          </button>
+
+          <button
+            class="action-btn radar-btn"
+            class:active={$weatherRadarVisible}
+            onclick={toggleWeatherRadar}
+            title="Toggle Weather Radar Debug"
+          >
+            RADAR
           </button>
 
           {#if !$mapEditorMode}

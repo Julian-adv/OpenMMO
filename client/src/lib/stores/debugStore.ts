@@ -18,6 +18,7 @@ export const reflectionEnabled = writable(true)
 export const teleportLoading = writable(false)
 export const torchLightEnabled = writable(false)
 export const windDebugVisible = writable(false)
+export const weatherRadarVisible = writable(false)
 export const housingEditorMode = writable(false)
 export const passabilityDebugVisible = writable(false)
 export const riverWireframeVisible = writable(false)
@@ -44,4 +45,8 @@ export function resetPrivilegedDebugFlags() {
   debugSpeedMode.set(false)
   mapEditorMode.set(false)
   housingEditorMode.set(false)
+  // Its toggle lives behind the admin check, and the panel takes pointer
+  // events, so leaving it set strands a non-admin with a window they cannot
+  // close.
+  weatherRadarVisible.set(false)
 }
