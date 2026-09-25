@@ -2182,6 +2182,38 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::SetStallBuyOrder {
+            item_def_id,
+            quantity,
+            enchant,
+            unit_price,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .set_stall_buy_order(id, item_def_id, quantity, enchant, unit_price)
+                    .await;
+            }
+        }
+
+        ClientMessage::RemoveStallBuyOrder { order_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.remove_stall_buy_order(id, order_id).await;
+            }
+        }
+
+        ClientMessage::SellToStall {
+            stall_id,
+            order_id,
+            instance_id,
+            quantity,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .sell_to_stall(id, stall_id, order_id, instance_id, quantity, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::PlayerTradeRespond {
             requester_id,
             accept,

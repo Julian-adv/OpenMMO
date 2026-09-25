@@ -5,6 +5,7 @@ mod inventory_tests;
 mod movement_tests;
 mod music_tests;
 mod social_tests;
+mod stall_tests;
 mod world_tests;
 
 use super::*;

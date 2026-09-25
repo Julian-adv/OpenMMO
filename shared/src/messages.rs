@@ -702,6 +702,21 @@ pub enum ClientMessage {
         stall_id: u64,
         lines: Vec<StallBuyLine>,
     },
+    SetStallBuyOrder {
+        item_def_id: String,
+        quantity: u32,
+        enchant: i32,
+        unit_price: i64,
+    },
+    RemoveStallBuyOrder {
+        order_id: u64,
+    },
+    SellToStall {
+        stall_id: u64,
+        order_id: u64,
+        instance_id: u64,
+        quantity: u32,
+    },
     /// Official NPC only: set `item_def_id` on the table in front of the
     /// occupied chair `chair_object_id`. The server resolves the table top.
     ServeMeal {
@@ -1788,6 +1803,7 @@ pub enum ServerMessage {
         listings: Vec<crate::stall::StallListing>,
         /// The receiver owns this stall, so the panel manages instead of buys.
         owned: bool,
+        buy_orders: Vec<crate::stall::StallBuyOrder>,
     },
     /// A stall in the receiver's AOI changed its sign board.
     StallSignChanged {

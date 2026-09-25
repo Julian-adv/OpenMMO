@@ -188,7 +188,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v97: server-approved XZ click paths and movement progress.
 /// v98: server-driven keyboard and mounted movement.
 /// v99: authoritative furniture interaction positions.
-pub const PROTOCOL_VERSION: u32 = 99;
+/// v100: player stalls accept buy orders alongside sale listings.
+pub const PROTOCOL_VERSION: u32 = 100;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -302,6 +303,52 @@ mod tests {
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
         assert!(matches!(decoded, ClientMessage::RequestRespawn));
+    }
+
+    #[test]
+    fn roundtrip_stall_buy_orders() {
+        for message in [
+            ClientMessage::SetStallBuyOrder {
+                item_def_id: "scroll_of_enchant_weapon".into(),
+                quantity: 3,
+                enchant: 0,
+                unit_price: 500,
+            },
+            ClientMessage::RemoveStallBuyOrder { order_id: 82 },
+            ClientMessage::SellToStall {
+                stall_id: 42,
+                order_id: 82,
+                instance_id: 91,
+                quantity: 2,
+            },
+        ] {
+            let bytes = serialize_client_msg(&message).unwrap();
+            let decoded = deserialize_client_msg(&bytes).unwrap();
+            assert_eq!(
+                serde_json::to_value(message).unwrap(),
+                serde_json::to_value(decoded).unwrap()
+            );
+        }
+        let message = ServerMessage::StallState {
+            stall_id: 42,
+            owner_name: "Sella".into(),
+            sign: "Scrolls wanted".into(),
+            owned: false,
+            listings: vec![],
+            buy_orders: vec![crate::stall::StallBuyOrder {
+                order_id: 82,
+                item_def_id: "scroll_of_enchant_weapon".into(),
+                quantity: 3,
+                enchant: 0,
+                unit_price: 500,
+            }],
+        };
+        let bytes = serialize_server_msg(&message).unwrap();
+        let decoded = deserialize_server_msg(&bytes).unwrap();
+        assert_eq!(
+            serde_json::to_value(message).unwrap(),
+            serde_json::to_value(decoded).unwrap()
+        );
     }
 
     #[test]

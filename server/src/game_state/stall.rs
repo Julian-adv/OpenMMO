@@ -1,12 +1,14 @@
-//! Temporary stalls sell reserved bag items while their owners stay nearby.
+//! Temporary stalls trade goods while their owners stay nearby.
+
+mod buy_orders;
 
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::messages::StallBuyLine;
 use onlinerpg_shared::stall::{
-    stall_tax, Stall, StallListing, STALL_MAX_LISTINGS, STALL_MAX_SIGN_CHARS,
+    stall_tax, Stall, StallBuyOrder, StallListing, STALL_MAX_LISTINGS, STALL_MAX_SIGN_CHARS,
 };
 use onlinerpg_shared::{PlayerId, ServerMessage};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tracing::{error, info};
 
 use super::combat::reachable_dist_sq;
@@ -28,6 +30,8 @@ pub(super) struct StallEntry {
     /// Deployed bag instance, locked against transfers. Zero for NPC stalls.
     pub placed_with: u64,
     pub listings: Vec<StallListing>,
+    pub buy_orders: Vec<StallBuyOrder>,
+    pub pending_buy_orders: HashMap<u64, u32>,
     /// Who has the panel open. All of them get the whole state on any change.
     pub viewers: HashSet<PlayerId>,
 }
@@ -114,6 +118,8 @@ impl GameState {
                 stall: stall.clone(),
                 placed_with,
                 listings: Vec::new(),
+                buy_orders: Vec::new(),
+                pending_buy_orders: HashMap::new(),
                 viewers: HashSet::new(),
             },
         );
@@ -386,7 +392,7 @@ impl GameState {
                 }
                 Some(entry)
                     if entry.listing(instance_id).is_none()
-                        && entry.listings.len() >= STALL_MAX_LISTINGS =>
+                        && entry.listings.len() + entry.buy_orders.len() >= STALL_MAX_LISTINGS =>
                 {
                     Some(format!(
                         "A stall holds {STALL_MAX_LISTINGS} kinds of goods."
@@ -555,14 +561,16 @@ impl GameState {
             }
         };
 
-        let tax = stall_tax(total);
         if let Err(reason) = self
-            .settle_stall_sale(player_id, &owner, &sold, total, tax, auth)
+            .settle_stall_sale(player_id, &owner, &sold, total, auth)
             .await
         {
             // The units never left the bag; hand them back to the table.
             let mut stalls = self.stalls.write().await;
-            if let Some(entry) = stalls.get_mut(&owner) {
+            if let Some(entry) = stalls
+                .get_mut(&owner)
+                .filter(|entry| entry.stall.id == stall_id)
+            {
                 for (listing, qty) in &sold {
                     match entry
                         .listings
@@ -590,9 +598,9 @@ impl GameState {
         seller: &PlayerId,
         sold: &[(StallListing, u32)],
         total: i64,
-        tax: i64,
         auth: &AuthService,
     ) -> Result<(), &'static str> {
+        let tax = stall_tax(total);
         let units: u64 = sold
             .iter()
             .map(|(listing, qty)| {
@@ -634,11 +642,11 @@ impl GameState {
             let buyer_gold_before = gold.get(buyer).copied().unwrap_or(0);
             let seller_gold_before = gold.get(seller).copied().unwrap_or(0);
             if buyer_gold_before < total {
-                break 'swap Err("You can't afford that.");
+                break 'swap Err("The buyer can't afford that.");
             }
             let buyer_gold_after = buyer_gold_before - total;
             let Some(seller_gold_after) = seller_gold_before.checked_add(total - tax) else {
-                break 'swap Err("The stallholder can't hold that much gold.");
+                break 'swap Err("The seller can't hold that much gold.");
             };
             let items: Option<Vec<_>> = sold
                 .iter()
@@ -658,13 +666,13 @@ impl GameState {
                 })
                 .collect();
             let Some(items) = items else {
-                break 'swap Err("The stallholder no longer has that.");
+                break 'swap Err("The seller no longer has that.");
             };
             let Some(buyer_inv) = inventories.get(buyer) else {
                 break 'swap Err("The sale could not be completed.");
             };
             if self.calc_total_weight(buyer_inv, armor_mult) + incoming_weight > capacity {
-                break 'swap Err("You can't carry that much.");
+                break 'swap Err("The buyer can't carry that much.");
             }
 
             let mut next_id = reserved_ids;
@@ -859,7 +867,7 @@ impl GameState {
         self.send_system_message(
             buyer,
             format!(
-                "You buy {goods} from {seller_name}'s stall for {}.",
+                "You buy {goods} from {seller_name} for {}.",
                 format_copper(total)
             ),
         )
@@ -918,12 +926,13 @@ impl GameState {
 
     /// Send a listing snapshot to one viewer or the whole audience.
     async fn push_stall_state(&self, owner: &PlayerId, only: Option<&PlayerId>) {
-        let Some((stall, listings, viewers)) = ({
+        let Some((stall, listings, buy_orders, viewers)) = ({
             let stalls = self.stalls.read().await;
             stalls.get(owner).map(|entry| {
                 (
                     entry.stall.clone(),
                     entry.listings.clone(),
+                    entry.buy_orders.clone(),
                     match only {
                         Some(one) => vec![*one],
                         None => entry.viewers.iter().copied().collect(),
@@ -943,6 +952,7 @@ impl GameState {
                     sign,
                     listings: listings.clone(),
                     owned: viewer == *owner,
+                    buy_orders: buy_orders.clone(),
                 },
             )
             .await;

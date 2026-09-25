@@ -356,6 +356,7 @@ impl SharedState {
                     self.ground_items.clear();
                     self.campfires.clear();
                     self.stalls.clear();
+                    self.open_stall = None;
                     self.tip_hats.clear();
                     self.meals.clear();
                     self.sighted_pois.clear();
@@ -710,6 +711,7 @@ impl SharedState {
                     self.campfires.insert(campfire.id, campfire.clone());
                 }
                 self.stalls.clear();
+                self.open_stall = None;
                 for stall in stalls {
                     self.stalls.insert(stall.id, stall.clone());
                 }
@@ -938,6 +940,38 @@ impl SharedState {
             }
             ServerMessage::StallRemoved { stall_id } => {
                 self.stalls.remove(stall_id);
+                if self
+                    .open_stall
+                    .as_ref()
+                    .is_some_and(|panel| panel.stall_id == *stall_id)
+                {
+                    self.open_stall = None;
+                }
+            }
+            ServerMessage::StallSignChanged { stall_id, sign } => {
+                if let Some(stall) = self.stalls.get_mut(stall_id) {
+                    stall.sign.clone_from(sign);
+                }
+            }
+            ServerMessage::StallState {
+                stall_id,
+                owner_name,
+                listings,
+                owned,
+                buy_orders,
+                ..
+            } => {
+                self.open_stall = Some(super::stall::StallPanel {
+                    stall_id: *stall_id,
+                    owner_name: owner_name.clone(),
+                    owned: *owned,
+                    listings: listings.clone(),
+                    buy_orders: buy_orders.clone(),
+                });
+                self.push_agent_event(format!(
+                    "[Stall] Updated offers at {}'s stall [id {}].",
+                    owner_name, stall_id
+                ));
             }
             ServerMessage::FenceVisibility { added, removed } => {
                 if let Some(id) = self.self_player_id {

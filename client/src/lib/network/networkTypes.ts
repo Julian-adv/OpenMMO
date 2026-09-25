@@ -180,6 +180,23 @@ export type ClientMessage =
     }
   | { UnlistStallItem: { instance_id: number } }
   | { BuyFromStall: { stall_id: number; lines: StallBuyLine[] } }
+  | {
+      SetStallBuyOrder: {
+        item_def_id: string
+        quantity: number
+        enchant: number
+        unit_price: number
+      }
+    }
+  | { RemoveStallBuyOrder: { order_id: number } }
+  | {
+      SellToStall: {
+        stall_id: number
+        order_id: number
+        instance_id: number
+        quantity: number
+      }
+    }
   | { PlayerTradeRespond: { requester_id: number; accept: boolean } }
   | {
       PlayerTradeSetOffer: {
@@ -487,12 +504,21 @@ export type StallBuyLine = {
   quantity: number
 }
 
+export type StallBuyOrder = {
+  order_id: number
+  item_def_id: string
+  quantity: number
+  enchant: number
+  unit_price: number
+}
+
 export type StallState = {
   stall_id: number
   owner_name: string
   sign: string
   listings: StallListing[]
   owned: boolean
+  buy_orders: StallBuyOrder[]
 }
 
 export type ServerTipHat = {

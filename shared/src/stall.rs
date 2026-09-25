@@ -1,7 +1,4 @@
-//! Stalls: the table a trader lays out to sell from. NPC merchants spread one
-//! for free with `/lay_stall`; players buy a `peddler_stall` and toggle it.
-//! Either way it lives only in server memory, one per owner, and folds up when
-//! its owner strays, changes floor or logs out (doc/ECONOMY.md, doc/TRADE.md).
+//! Temporary tables for player sales and buy orders.
 
 use serde::{Deserialize, Serialize};
 
@@ -59,5 +56,14 @@ pub struct StallListing {
     pub quantity: u32,
     pub enchant: i32,
     /// Copper per unit. Unbounded on purpose — pricing is the player's.
+    pub unit_price: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StallBuyOrder {
+    pub order_id: u64,
+    pub item_def_id: String,
+    pub quantity: u32,
+    pub enchant: i32,
     pub unit_price: i64,
 }

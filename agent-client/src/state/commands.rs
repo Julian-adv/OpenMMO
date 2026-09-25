@@ -52,6 +52,10 @@ impl SharedState {
             return Ok(());
         }
         let msg = match msg {
+            ClientMessage::CloseStall => {
+                self.open_stall = None;
+                ClientMessage::CloseStall
+            }
             ClientMessage::PlayerMoveGoal {
                 x,
                 z,

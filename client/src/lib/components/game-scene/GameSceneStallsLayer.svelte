@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T } from '@threlte/core'
   import { onMount } from 'svelte'
+  import { t } from '../../i18n'
   import * as THREE from 'three'
   import { stallManager } from '../../managers/stallManager'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
@@ -50,7 +51,7 @@
         rotation={[0, stall.rotation, 0]}
         userData={{
           stallId: id,
-          hoverName: 'Stall',
+          hoverName: $t('stall.title'),
           hoverOwnerId: stall.owner,
           hoverLabelY: stallHover.topY,
           hoverRingRadius: stallHover.ringRadius,

@@ -999,6 +999,42 @@ class NetworkManager {
     this.sendMessage({ BuyFromStall: { stall_id: stallId, lines } })
   }
 
+  sendSetStallBuyOrder(
+    itemDefId: string,
+    quantity: number,
+    enchant: number,
+    unitPrice: number
+  ) {
+    this.sendMessage({
+      SetStallBuyOrder: {
+        item_def_id: itemDefId,
+        quantity,
+        enchant,
+        unit_price: unitPrice,
+      },
+    })
+  }
+
+  sendRemoveStallBuyOrder(orderId: number) {
+    this.sendMessage({ RemoveStallBuyOrder: { order_id: orderId } })
+  }
+
+  sendSellToStall(
+    stallId: number,
+    orderId: number,
+    instanceId: number,
+    quantity: number
+  ) {
+    this.sendMessage({
+      SellToStall: {
+        stall_id: stallId,
+        order_id: orderId,
+        instance_id: instanceId,
+        quantity,
+      },
+    })
+  }
+
   sendPlayerTradeRespond(requesterId: number, accept: boolean) {
     this.sendMessage({
       PlayerTradeRespond: { requester_id: requesterId, accept },

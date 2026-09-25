@@ -87,6 +87,10 @@ export function getItemDef(itemDefId: string): ItemDefinition | undefined {
   return itemDefs[itemDefId]
 }
 
+export function getTradeableItemDefs(): ItemDefinition[] {
+  return Object.values(itemDefs).filter((def) => !def.untradeable)
+}
+
 export function weaponTypeLabel(
   weaponType: WeaponType,
   language?: Locale

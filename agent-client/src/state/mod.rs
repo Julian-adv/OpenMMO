@@ -177,6 +177,7 @@ mod movement;
 mod music;
 mod perception;
 mod social;
+mod stall;
 mod terrain_summary;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -234,6 +235,7 @@ pub struct SharedState {
     pub campfires: HashMap<u64, onlinerpg_shared::hunger::Campfire>,
     /// Laid-out stalls in our AOI, so a merchant knows its own is out.
     pub stalls: HashMap<u64, onlinerpg_shared::stall::Stall>,
+    pub open_stall: Option<stall::StallPanel>,
     /// Our own bag (from InventoryState/InventoryUpdated), so a trading
     /// NPC knows what it carries.
     pub self_bag: Vec<onlinerpg_shared::inventory::ItemInstance>,
@@ -454,6 +456,7 @@ impl SharedState {
             self_debuffs: Vec::new(),
             campfires: HashMap::new(),
             stalls: HashMap::new(),
+            open_stall: None,
             self_bag: Vec::new(),
             self_equipped: HashMap::new(),
             trade_satiated_until: None,

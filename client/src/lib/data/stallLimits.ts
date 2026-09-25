@@ -1,3 +1,10 @@
-/** Mirrors `STALL_MAX_LISTINGS` in shared/src/stall.rs — the server refuses
- *  anything past it, this only keeps the panel honest. */
+/** Mirrors shared/src/stall.rs. */
 export const STALL_MAX_LISTINGS = 12
+export const STALL_TAX_PERCENT = 5
+
+export function stallTax(total: number): number {
+  return (
+    Math.floor(total / 100) * STALL_TAX_PERCENT +
+    Math.floor(((total % 100) * STALL_TAX_PERCENT) / 100)
+  )
+}

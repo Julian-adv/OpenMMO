@@ -104,6 +104,7 @@ impl SharedState {
                 crate::shop_info::format_price(gold)
             ));
         }
+        self.format_stalls(&mut lines);
         if !self.self_bag.is_empty() {
             let items: Vec<String> = self
                 .self_bag

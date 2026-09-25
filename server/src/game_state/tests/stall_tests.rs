@@ -5,6 +5,8 @@ use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::messages::StallBuyLine;
 use onlinerpg_shared::stall::STALL_LEASH_M;
 
+mod buy_orders;
+
 #[tokio::test]
 async fn only_a_merchant_lays_a_stall_and_only_one_at_a_time() {
     let game_state = make_test_game_state("stall_lay");

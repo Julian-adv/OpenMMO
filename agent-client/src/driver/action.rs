@@ -95,6 +95,42 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    #[serde(rename = "open_stall")]
+    OpenStall { stall_id: u64 },
+    #[serde(rename = "close_stall")]
+    CloseStall,
+    #[serde(rename = "buy_from_stall")]
+    BuyFromStall {
+        stall_id: u64,
+        lines: Vec<onlinerpg_shared::messages::StallBuyLine>,
+    },
+    #[serde(rename = "sell_to_stall")]
+    SellToStall {
+        stall_id: u64,
+        order_id: u64,
+        instance_id: u64,
+        quantity: u32,
+    },
+    #[serde(rename = "set_stall_buy_order")]
+    SetStallBuyOrder {
+        item_def_id: String,
+        quantity: u32,
+        #[serde(default)]
+        enchant: i32,
+        unit_price: i64,
+    },
+    #[serde(rename = "remove_stall_buy_order")]
+    RemoveStallBuyOrder { order_id: u64 },
+    #[serde(rename = "list_stall_item")]
+    ListStallItem {
+        instance_id: u64,
+        quantity: u32,
+        unit_price: i64,
+    },
+    #[serde(rename = "unlist_stall_item")]
+    UnlistStallItem { instance_id: u64 },
+    #[serde(rename = "set_stall_sign")]
+    SetStallSign { sign: String },
     /// Invite a player to your party by name. Works at any distance, like a
     /// whisper.
     #[serde(rename = "party_invite", alias = "invite_party", alias = "invite")]
@@ -574,6 +610,39 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "open_trade", "target": "darkcocoa"}"#,
     },
     ActionSpec {
+        names: &[
+            "open_stall",
+            "close_stall",
+            "buy_from_stall",
+            "sell_to_stall",
+            "set_stall_buy_order",
+            "remove_stall_buy_order",
+            "list_stall_item",
+            "unlist_stall_item",
+            "set_stall_sign",
+        ],
+        aliases: &[],
+        doc: r#"- Player stalls sell goods and buy requested items. Move near the table
+  coordinates in the world state, then open it to see current prices and ids:
+  {"type": "open_stall", "stall_id": 42}
+  Wait for the opened stall state before trading. Use its exact listing,
+  order and bag instance ids; enchant levels must match. Prices are copper.
+  The seller receives the total minus 5% tax; neither side creates gold:
+  {"type": "buy_from_stall", "stall_id": 42, "lines": [{"instance_id": 81, "quantity": 1}]}
+  {"type": "sell_to_stall", "stall_id": 42, "order_id": 82, "instance_id": 91, "quantity": 2}
+  {"type": "close_stall"}
+  To manage your own stall, use a peddler_stall from your bag, stay nearby,
+  and open it. Sales and buy orders share 12 slots. Keep enough gold and
+  carrying capacity for your buy orders; the server checks both at sale time:
+  {"type": "set_stall_sign", "sign": "Buying scrolls"}
+  {"type": "list_stall_item", "instance_id": 91, "quantity": 1, "unit_price": 100}
+  {"type": "unlist_stall_item", "instance_id": 91}
+  {"type": "set_stall_buy_order", "item_def_id": "scroll_of_enchant_weapon", "quantity": 3, "enchant": 0, "unit_price": 500}
+  {"type": "remove_stall_buy_order", "order_id": 82}
+  Setting the same item and enchant again replaces that order. Official
+  NPCs cannot trade with player stalls."#,
+    },
+    ActionSpec {
         names: &["break_prop"],
         aliases: &["smash", "break"],
         doc: r#"- Smash a breakable dungeon prop (barrel or crate). You have to be in the
@@ -723,6 +792,15 @@ impl AgentAction {
             | Self::Fish { .. }
             | Self::Respawn => true,
             Self::Say { .. }
+            | Self::OpenStall { .. }
+            | Self::CloseStall
+            | Self::BuyFromStall { .. }
+            | Self::SellToStall { .. }
+            | Self::SetStallBuyOrder { .. }
+            | Self::RemoveStallBuyOrder { .. }
+            | Self::ListStallItem { .. }
+            | Self::UnlistStallItem { .. }
+            | Self::SetStallSign { .. }
             | Self::Recite { .. }
             | Self::StopFishing
             | Self::OfferDeal { .. }
@@ -766,6 +844,9 @@ impl AgentAction {
             || matches!(
                 self,
                 Self::OpenTrade { .. }
+                    | Self::OpenStall { .. }
+                    | Self::BuyFromStall { .. }
+                    | Self::SellToStall { .. }
                     | Self::OfferDeal { .. }
                     | Self::Use { .. }
                     | Self::Drop { .. }
@@ -779,6 +860,15 @@ impl AgentAction {
         match self {
             Self::Say { .. } | Self::Recite { .. } | Self::PartySay { .. } | Self::Wait => true,
             Self::Move { .. }
+            | Self::OpenStall { .. }
+            | Self::CloseStall
+            | Self::BuyFromStall { .. }
+            | Self::SellToStall { .. }
+            | Self::SetStallBuyOrder { .. }
+            | Self::RemoveStallBuyOrder { .. }
+            | Self::ListStallItem { .. }
+            | Self::UnlistStallItem { .. }
+            | Self::SetStallSign { .. }
             | Self::Attack { .. }
             | Self::Follow { .. }
             | Self::Pickup { .. }
@@ -826,6 +916,15 @@ impl AgentAction {
             Self::StopFishing => "stop_fishing",
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
+            Self::OpenStall { .. } => "open_stall",
+            Self::CloseStall => "close_stall",
+            Self::BuyFromStall { .. } => "buy_from_stall",
+            Self::SellToStall { .. } => "sell_to_stall",
+            Self::SetStallBuyOrder { .. } => "set_stall_buy_order",
+            Self::RemoveStallBuyOrder { .. } => "remove_stall_buy_order",
+            Self::ListStallItem { .. } => "list_stall_item",
+            Self::UnlistStallItem { .. } => "unlist_stall_item",
+            Self::SetStallSign { .. } => "set_stall_sign",
             Self::PartyInvite { .. } => "party_invite",
             Self::PartyAccept { .. } => "party_accept",
             Self::PartyDecline { .. } => "party_decline",
@@ -1227,6 +1326,54 @@ pub(super) fn action_to_command(
     player_pos: Option<&onlinerpg_shared::Position>,
 ) -> Option<ClientMessage> {
     match action {
+        AgentAction::OpenStall { stall_id } => Some(ClientMessage::OpenStall {
+            stall_id: *stall_id,
+        }),
+        AgentAction::CloseStall => Some(ClientMessage::CloseStall),
+        AgentAction::BuyFromStall { stall_id, lines } => Some(ClientMessage::BuyFromStall {
+            stall_id: *stall_id,
+            lines: lines.clone(),
+        }),
+        AgentAction::SellToStall {
+            stall_id,
+            order_id,
+            instance_id,
+            quantity,
+        } => Some(ClientMessage::SellToStall {
+            stall_id: *stall_id,
+            order_id: *order_id,
+            instance_id: *instance_id,
+            quantity: *quantity,
+        }),
+        AgentAction::SetStallBuyOrder {
+            item_def_id,
+            quantity,
+            enchant,
+            unit_price,
+        } => Some(ClientMessage::SetStallBuyOrder {
+            item_def_id: item_def_id.clone(),
+            quantity: *quantity,
+            enchant: *enchant,
+            unit_price: *unit_price,
+        }),
+        AgentAction::RemoveStallBuyOrder { order_id } => Some(ClientMessage::RemoveStallBuyOrder {
+            order_id: *order_id,
+        }),
+        AgentAction::ListStallItem {
+            instance_id,
+            quantity,
+            unit_price,
+        } => Some(ClientMessage::ListStallItem {
+            instance_id: *instance_id,
+            quantity: *quantity,
+            unit_price: *unit_price,
+        }),
+        AgentAction::UnlistStallItem { instance_id } => Some(ClientMessage::UnlistStallItem {
+            instance_id: *instance_id,
+        }),
+        AgentAction::SetStallSign { sign } => {
+            Some(ClientMessage::SetStallSign { sign: sign.clone() })
+        }
         // Handled in `execute::handle_response` (needs name resolution and a
         // background chase task).
         AgentAction::Follow { .. } => None,

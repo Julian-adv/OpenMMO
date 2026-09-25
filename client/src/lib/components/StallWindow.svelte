@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { locale } from '../i18n'
+  import { locale, t, type MessageKey } from '../i18n'
   import './tradePanel.css'
   import { closeStallPanel, openStall } from '../stores/stallStore'
   import { inventoryStore, playerGold } from '../stores/inventoryStore'
@@ -13,6 +13,7 @@
   import { sortBag } from './inventorySort'
   import GoldAmount from './GoldAmount.svelte'
   import QuantityPopup from './QuantityPopup.svelte'
+  import StallBuyOrders from './StallBuyOrders.svelte'
   import type { ItemInstance, StallListing } from '../network/networkTypes'
 
   type CartLine = { listing: StallListing; qty: number }
@@ -31,18 +32,27 @@
   let cart = $state<CartLine[]>([])
   let pendingAdd = $state<StallListing | null>(null)
   let signText = $state('')
-  let error = $state<string | null>(null)
+  let error = $state<MessageKey | null>(null)
+  let mode = $state<'sales' | 'orders'>('sales')
 
   // Adopt the server's sign whenever the panel lands on a different stall.
   let signedStall = $state<number | null>(null)
   $effect(() => {
-    if (!stall || stall.stall_id === signedStall) return
+    if (!stall) {
+      signedStall = null
+      return
+    }
+    if (stall.stall_id === signedStall) return
     signedStall = stall.stall_id
     signText = stall.sign
     draft = null
     cart = []
     pendingAdd = null
     error = null
+    mode =
+      stall.listings.length === 0 && stall.buy_orders.length > 0
+        ? 'orders'
+        : 'sales'
   })
 
   $effect(() => {
@@ -99,8 +109,11 @@
   )
 
   function startDraft(item: ItemInstance) {
-    if (listings.length >= STALL_MAX_LISTINGS) {
-      error = `A stall holds ${STALL_MAX_LISTINGS} kinds of goods.`
+    if (
+      listings.length + (stall?.buy_orders.length ?? 0) >=
+      STALL_MAX_LISTINGS
+    ) {
+      error = 'stall.listingLimit'
       return
     }
     error = null
@@ -126,11 +139,11 @@
     }
     const left = listing.quantity - inCart(listing.instance_id)
     if (left < 1) {
-      error = "That's all of them."
+      error = 'stall.cartFull'
       return
     }
     if (listing.unit_price > $playerGold - cartTotal) {
-      error = "That's more than you're carrying."
+      error = 'stall.insufficientGold'
       return
     }
     error = null
@@ -175,7 +188,9 @@
   }
 
   const title = $derived(
-    !stall ? '' : stall.sign || `${stall.owner_name}'s stall`
+    !stall
+      ? ''
+      : stall.sign || $t('stall.ownerTitle', { name: stall.owner_name })
   )
 </script>
 
@@ -183,12 +198,16 @@
   <div
     class="trade-window stall-window"
     role="dialog"
-    aria-label="Stall"
+    aria-label={$t('stall.title')}
     use:draggablePanel={'stall'}
   >
     <header class="panel-header" data-drag-handle>
       <span class="panel-title">{title}</span>
-      <button class="close-btn" onclick={closeStallPanel} aria-label="Close">
+      <button
+        class="close-btn"
+        onclick={closeStallPanel}
+        aria-label={$t('common.close')}
+      >
         ×
       </button>
     </header>
@@ -198,7 +217,7 @@
         <input
           class="text-field"
           maxlength="32"
-          placeholder="Sign board (optional)"
+          placeholder={$t('stall.signPlaceholder')}
           bind:value={signText}
           onblur={saveSign}
           onkeydown={(e) => e.key === 'Enter' && saveSign()}
@@ -206,70 +225,49 @@
       </div>
     {/if}
 
-    {#if error}<p class="error">{error}</p>{/if}
+    <nav class="stall-tabs" aria-label={$t('stall.offers')}>
+      <button
+        class:active={mode === 'sales'}
+        onclick={() => {
+          mode = 'sales'
+          pendingAdd = null
+        }}>{$t('stall.forSale', { count: listings.length })}</button
+      >
+      <button
+        class:active={mode === 'orders'}
+        onclick={() => {
+          mode = 'orders'
+          pendingAdd = null
+        }}>{$t('stall.wanted', { count: stall.buy_orders.length })}</button
+      >
+    </nav>
 
-    <div class="trade-columns">
-      <section class="trade-column">
-        {#if stall.owned}
-          <div class="column-title">
-            On the stall ({listings.length}/{STALL_MAX_LISTINGS})
-          </div>
-        {/if}
-        <div class="item-list">
-          {#each listings as listing (listing.instance_id)}
-            {@const def = getItemDef(listing.item_def_id)}
-            <button
-              class="item-row listing-row"
-              title={stall.owned ? 'Take it back off the stall' : 'Buy'}
-              onclick={() => chooseListing(listing)}
-              use:itemTooltip={def
-                ? { def, enchant: listing.enchant, side: 'right' }
-                : null}
-            >
-              <span class="icon-cell">
-                {#if def}
-                  <img
-                    class="item-icon"
-                    src="/items/{def.icon}"
-                    alt=""
-                    draggable="false"
-                  />
-                {/if}
-              </span>
-              <span class="item-name">
-                {itemDisplayName(listing.item_def_id, listing.enchant, $locale)}
-              </span>
-              <span class="figures">
-                <span class="stock">×{listing.quantity}</span>
-                <span class="price"
-                  ><GoldAmount copper={listing.unit_price} /></span
-                >
-              </span>
-            </button>
-          {:else}
-            <div class="empty-note">
-              {stall.owned ? 'Put something out to sell' : 'Nothing for sale'}
+    {#if mode === 'orders'}
+      {#key stall.stall_id}<StallBuyOrders {stall} />{/key}
+    {:else}
+      {#if error}<p class="error">
+          {$t(error, { max: STALL_MAX_LISTINGS })}
+        </p>{/if}
+
+      <div class="trade-columns">
+        <section class="trade-column">
+          {#if stall.owned}
+            <div class="column-title">
+              {$t('stall.slotsUsed', {
+                used: listings.length + stall.buy_orders.length,
+                max: STALL_MAX_LISTINGS,
+              })}
             </div>
-          {/each}
-        </div>
-      </section>
-
-      {#if !stall.owned}
-        <section class="trade-column cart-column">
-          <div class="cart-line cart-current">
-            <span class="cart-label">Current</span>
-            <GoldAmount copper={$playerGold} />
-          </div>
-          <div class="column-title">Cart</div>
+          {/if}
           <div class="item-list">
-            {#each cart as line (line.listing.instance_id)}
-              {@const def = getItemDef(line.listing.item_def_id)}
+            {#each listings as listing (listing.instance_id)}
+              {@const def = getItemDef(listing.item_def_id)}
               <button
                 class="item-row listing-row"
-                title="Take one back off"
-                onclick={() => removeOne(line)}
+                title={$t(stall.owned ? 'stall.removeListing' : 'stall.buy')}
+                onclick={() => chooseListing(listing)}
                 use:itemTooltip={def
-                  ? { def, enchant: line.listing.enchant, side: 'left' }
+                  ? { def, enchant: listing.enchant, side: 'right' }
                   : null}
               >
                 <span class="icon-cell">
@@ -284,132 +282,186 @@
                 </span>
                 <span class="item-name">
                   {itemDisplayName(
-                    line.listing.item_def_id,
-                    line.listing.enchant,
+                    listing.item_def_id,
+                    listing.enchant,
                     $locale
                   )}
                 </span>
                 <span class="figures">
-                  <span class="stock">×{line.qty}</span>
-                  <span class="price cost"
-                    >−<GoldAmount
-                      copper={line.listing.unit_price * line.qty}
-                    /></span
+                  <span class="stock">×{listing.quantity}</span>
+                  <span class="price"
+                    ><GoldAmount copper={listing.unit_price} /></span
                   >
                 </span>
               </button>
             {:else}
-              <div class="empty-note">Click items to add</div>
+              <div class="empty-note">
+                {$t(stall.owned ? 'stall.selectSale' : 'stall.emptySales')}
+              </div>
             {/each}
           </div>
-          <div class="cart-footer">
-            <div class="cart-line">
-              <span class="cart-label">Total</span>
-              <span class="price cost"
-                >{cartTotal === 0 ? '' : '−'}<GoldAmount
-                  copper={cartTotal}
-                /></span
-              >
-            </div>
-            <div class="cart-line">
-              <span class="cart-label">After</span>
-              <GoldAmount copper={$playerGold - cartTotal} />
-            </div>
-            <button class="confirm-btn" disabled={!canConfirm} onclick={buy}>
-              Confirm
-            </button>
-          </div>
         </section>
-      {:else}
-        <section class="trade-column bag-column">
-          <div class="column-title">Your bag</div>
-          <div class="item-list">
-            {#each bag as item (item.instance_id)}
-              {@const def = getItemDef(item.item_def_id)}
-              <button
-                class="item-row bag-row"
-                class:selected={draft?.item.instance_id === item.instance_id}
-                title="Put it on the stall"
-                onclick={() => startDraft(item)}
-                use:itemTooltip={def ? { def, item, side: 'left' } : null}
-              >
-                <span class="icon-cell">
-                  {#if def}
-                    <img
-                      class="item-icon"
-                      src="/items/{def.icon}"
-                      alt=""
-                      draggable="false"
-                    />
-                  {/if}
-                </span>
-                <span class="item-name">
-                  {itemDisplayName(item.item_def_id, item.enchant, $locale)}
-                </span>
-                <span class="figures">
-                  <span class="stock">×{item.quantity}</span>
-                </span>
+
+        {#if !stall.owned}
+          <section class="trade-column cart-column">
+            <div class="cart-line cart-current">
+              <span class="cart-label">{$t('stall.purse')}</span>
+              <GoldAmount copper={$playerGold} />
+            </div>
+            <div class="column-title">{$t('stall.cart')}</div>
+            <div class="item-list">
+              {#each cart as line (line.listing.instance_id)}
+                {@const def = getItemDef(line.listing.item_def_id)}
+                <button
+                  class="item-row listing-row"
+                  title={$t('stall.removeFromCart')}
+                  onclick={() => removeOne(line)}
+                  use:itemTooltip={def
+                    ? { def, enchant: line.listing.enchant, side: 'left' }
+                    : null}
+                >
+                  <span class="icon-cell">
+                    {#if def}
+                      <img
+                        class="item-icon"
+                        src="/items/{def.icon}"
+                        alt=""
+                        draggable="false"
+                      />
+                    {/if}
+                  </span>
+                  <span class="item-name">
+                    {itemDisplayName(
+                      line.listing.item_def_id,
+                      line.listing.enchant,
+                      $locale
+                    )}
+                  </span>
+                  <span class="figures">
+                    <span class="stock">×{line.qty}</span>
+                    <span class="price cost"
+                      >−<GoldAmount
+                        copper={line.listing.unit_price * line.qty}
+                      /></span
+                    >
+                  </span>
+                </button>
+              {:else}
+                <div class="empty-note">{$t('stall.emptyCart')}</div>
+              {/each}
+            </div>
+            <div class="cart-footer">
+              <div class="cart-line">
+                <span class="cart-label">{$t('stall.total')}</span>
+                <span class="price cost"
+                  >{cartTotal === 0 ? '' : '−'}<GoldAmount
+                    copper={cartTotal}
+                  /></span
+                >
+              </div>
+              <div class="cart-line">
+                <span class="cart-label">{$t('stall.balanceAfter')}</span>
+                <GoldAmount copper={$playerGold - cartTotal} />
+              </div>
+              <button class="confirm-btn" disabled={!canConfirm} onclick={buy}>
+                {$t('common.confirm')}
               </button>
-            {:else}
-              <div class="empty-note">Your bag is empty</div>
-            {/each}
-          </div>
-        </section>
-      {/if}
-    </div>
-
-    {#if draft}
-      {@const draftDef = getItemDef(draft.item.item_def_id)}
-      <div class="draft">
-        <span class="icon-cell">
-          {#if draftDef}
-            <img
-              class="item-icon"
-              src="/items/{draftDef.icon}"
-              alt=""
-              draggable="false"
-            />
-          {/if}
-        </span>
-        <span class="draft-name">
-          {itemDisplayName(draft.item.item_def_id, draft.item.enchant, $locale)}
-        </span>
-        <label class="draft-field">
-          <span class="draft-label">Sell</span>
-          <input
-            class="text-field qty"
-            type="number"
-            min="1"
-            max={draft.item.quantity}
-            bind:value={draft.quantity}
-          />
-        </label>
-        <label class="draft-field draft-price">
-          <span class="draft-label">at</span>
-          <input
-            class="text-field"
-            placeholder="1g 20s, 350"
-            bind:value={priceText}
-          />
-        </label>
-        <button
-          class="confirm-btn"
-          disabled={!draftValid}
-          onclick={submitDraft}
-        >
-          List
-        </button>
-        <button
-          class="close-btn"
-          onclick={() => (draft = null)}
-          aria-label="Cancel">×</button
-        >
+            </div>
+          </section>
+        {:else}
+          <section class="trade-column bag-column">
+            <div class="column-title">{$t('stall.bag')}</div>
+            <div class="item-list">
+              {#each bag as item (item.instance_id)}
+                {@const def = getItemDef(item.item_def_id)}
+                <button
+                  class="item-row bag-row"
+                  class:selected={draft?.item.instance_id === item.instance_id}
+                  title={$t('stall.addSale')}
+                  onclick={() => startDraft(item)}
+                  use:itemTooltip={def ? { def, item, side: 'left' } : null}
+                >
+                  <span class="icon-cell">
+                    {#if def}
+                      <img
+                        class="item-icon"
+                        src="/items/{def.icon}"
+                        alt=""
+                        draggable="false"
+                      />
+                    {/if}
+                  </span>
+                  <span class="item-name">
+                    {itemDisplayName(item.item_def_id, item.enchant, $locale)}
+                  </span>
+                  <span class="figures">
+                    <span class="stock">×{item.quantity}</span>
+                  </span>
+                </button>
+              {:else}
+                <div class="empty-note">{$t('stall.emptyBag')}</div>
+              {/each}
+            </div>
+          </section>
+        {/if}
       </div>
-    {/if}
 
+      {#if draft}
+        {@const draftDef = getItemDef(draft.item.item_def_id)}
+        <div class="draft">
+          <span class="icon-cell">
+            {#if draftDef}
+              <img
+                class="item-icon"
+                src="/items/{draftDef.icon}"
+                alt=""
+                draggable="false"
+              />
+            {/if}
+          </span>
+          <span class="draft-name">
+            {itemDisplayName(
+              draft.item.item_def_id,
+              draft.item.enchant,
+              $locale
+            )}
+          </span>
+          <label class="draft-field">
+            <span class="draft-label">{$t('stall.sellQuantity')}</span>
+            <input
+              class="text-field qty"
+              type="number"
+              min="1"
+              max={draft.item.quantity}
+              bind:value={draft.quantity}
+            />
+          </label>
+          <label class="draft-field draft-price">
+            <span class="draft-label">{$t('stall.unitPrice')}</span>
+            <input
+              class="text-field"
+              placeholder="1g 20s, 350"
+              bind:value={priceText}
+            />
+          </label>
+          <button
+            class="confirm-btn"
+            disabled={!draftValid}
+            onclick={submitDraft}
+          >
+            {$t('stall.list')}
+          </button>
+          <button
+            class="close-btn"
+            onclick={() => (draft = null)}
+            aria-label={$t('common.cancel')}>×</button
+          >
+        </div>
+      {/if}
+    {/if}
     {#if stall.owned}
       <footer>
-        <span class="purse-label">Purse</span>
+        <span class="purse-label">{$t('stall.purse')}</span>
         <span class="price"><GoldAmount copper={$playerGold} /></span>
       </footer>
     {/if}
@@ -431,6 +483,28 @@
 <style>
   .stall-window {
     z-index: 45;
+    font-family: 'Noto Sans KR', sans-serif;
+  }
+
+  .stall-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .stall-tabs button {
+    flex: 1;
+    padding: 6px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 4px;
+    background: transparent;
+    color: #9fb2c3;
+    font: inherit;
+    cursor: pointer;
+  }
+  .stall-tabs button.active {
+    border-color: #f0c040;
+    color: #f0c040;
+    background: rgba(240, 192, 64, 0.12);
   }
 
   .field-row {
@@ -438,6 +512,7 @@
   }
 
   .text-field {
+    box-sizing: border-box;
     width: 100%;
     padding: 3px 6px;
     border: 1px solid rgba(255, 255, 255, 0.18);
@@ -453,10 +528,6 @@
     outline: none;
   }
 
-  /* Name, stock and price cannot share one 230px line without something
-     truncating, so the row stacks: the name takes the full width and the
-     figures keep their own line under it. Scoped under .trade-window so it
-     outranks tradePanel.css's `.item-row` flex. */
   .trade-window .listing-row,
   .trade-window .bag-row {
     display: grid;
@@ -471,8 +542,6 @@
     grid-row: span 2;
   }
 
-  /* tradePanel.css clips this to one ellipsised line; here a name must never
-     be cut, so it wraps instead. */
   .trade-window .item-row .item-name {
     flex: none;
     overflow: visible;
@@ -481,8 +550,6 @@
     line-height: 1.25;
   }
 
-  /* Same width on every row, so the price lands on one right edge down the
-     list — which is the whole point of a price list. */
   .figures {
     display: flex;
     align-items: baseline;
@@ -513,7 +580,9 @@
   }
 
   .draft {
+    position: relative;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
     padding-top: 8px;
@@ -529,20 +598,31 @@
 
   .draft-price {
     flex: 1;
+    min-width: 150px;
+  }
+
+  .draft-price .text-field {
+    min-width: 0;
   }
 
   .draft-label {
     color: #9fb2c3;
+    white-space: nowrap;
   }
 
-  /* An echo of the highlighted bag row, not list data: this one may shorten
-     so the price field keeps a usable width. */
   .draft-name {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 calc(100% - 60px);
+    margin-right: 24px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .draft .close-btn {
+    position: absolute;
+    top: 8px;
+    right: 0;
   }
 
   .qty {
@@ -558,8 +638,6 @@
     border-top: 1px solid rgba(255, 255, 255, 0.15);
   }
 
-  /* The purse lands on the same right edge as the prices, so what you have
-     and what things cost read as one column. */
   .purse-label {
     color: #9fb2c3;
   }
@@ -568,8 +646,6 @@
     flex: 1;
   }
 
-  /* Borrowed wholesale from the merchant shop's cart so the two purchases
-     read as the same act (TradeWindow.svelte). */
   .cart-column {
     display: flex;
     flex-direction: column;
