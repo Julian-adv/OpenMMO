@@ -94,8 +94,8 @@
 cargo test --release -p onlinerpg-server movement_lock_contention_5000 -- --ignored --nocapture
 ```
 
-소스는 `goal_movement/load_tests.rs`, 실행별 JSON 결과는
-[MOVEMENT_LOCK_MEASUREMENTS.json](MOVEMENT_LOCK_MEASUREMENTS.json)에 보관했다.
+소스는 `goal_movement/load_tests.rs`, 실행별 JSON 결과는 저장소 루트 기준
+`../notes/MOVEMENT_LOCK_MEASUREMENTS.json`에 로컬 보관했다. 측정 JSON은 Git에서 제외한다.
 기준 커밋은 `316c7a45`이며 이 변경의 테스트 계측을 추가한 작업 트리에서 실행했다.
 AMD Ryzen 9 9950X3D, Rust 1.97.1, release, Tokio worker 4개인 로컬 개발 환경에서
 동일 명령을 세 번 실행했다. 각 실행은 조건별 20틱과 종류별 입력 200건을 측정한다.
@@ -166,7 +166,7 @@ AMD Ryzen 9 9950X3D, Rust 1.97.1, release, Tokio worker 4개인 로컬 개발 �
 
 위와 같은 명령·장비·조건으로 세 번 재측정했다. 값은 각 실행의 p95 세 개의 중앙값이며,
 단위는 ms, 화살표는 변경 전 → 후다. 결과는
-[MOVEMENT_PREDICTION_MEASUREMENTS.json](MOVEMENT_PREDICTION_MEASUREMENTS.json)에 보관했다.
+`../notes/MOVEMENT_PREDICTION_MEASUREMENTS.json`에 로컬 보관했다.
 
 | 조건 | 틱 p95 | 갱신 p95 | 방향 변경 p95 | 정지 p95 |
 |---|---:|---:|---:|---:|
@@ -243,7 +243,7 @@ AOI·지형 전송 준비의 I/O까지 같은 지역의 이동을 막지 않는�
 
 같은 장비·명령·조건으로 3회 측정했다. 아래는 각 실행의 p95 중앙값이며 단위는 ms다.
 화살표는 예측 분리 단계 → 캐릭터·지역 분리 단계다. 원본은
-[MOVEMENT_REGION_MEASUREMENTS.json](MOVEMENT_REGION_MEASUREMENTS.json)에 보관했다.
+`../notes/MOVEMENT_REGION_MEASUREMENTS.json`에 로컬 보관했다.
 
 | 조건 | 틱 p95 | 갱신 p95 | 방향 변경 p95 | 정지 p95 |
 |---|---:|---:|---:|---:|

@@ -42,6 +42,9 @@ logs/
 # Operator deployment notes live in ~/work/notes/
 /doc/DEPLOY_NOTES.md
 
+# Local movement measurements live in ../notes/
+/doc/MOVEMENT_*_MEASUREMENTS.json
+
 # Runtime
 *.pid
 *.seed
