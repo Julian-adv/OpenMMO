@@ -42,6 +42,22 @@ export function projectPlayerState({
   }
 }
 
+export function projectStoppedPlayerState(
+  previousState: PlayerState,
+  position: Position,
+  rotation: number
+): PlayerState {
+  return {
+    ...previousState,
+    state: previousState.state === 'moving' ? 'idle' : previousState.state,
+    position,
+    rotation:
+      previousState.state === 'attack' ? previousState.rotation : rotation,
+    speed: 0,
+    movementMode: undefined,
+  }
+}
+
 export function shouldEmitProjectedPlayerState(
   previousState: PlayerState,
   nextState: PlayerState

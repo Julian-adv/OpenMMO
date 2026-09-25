@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PlayerState } from '../../../utils/movementUtils'
 import {
   projectPlayerState,
+  projectStoppedPlayerState,
   shouldEmitProjectedPlayerState,
 } from './projection'
 
@@ -109,6 +110,40 @@ describe('projectPlayerState', () => {
 
     expect(walking.movementMode).toBe('walk')
     expect(sprinting.movementMode).toBe('run')
+  })
+})
+
+describe('projectStoppedPlayerState', () => {
+  it('ends movement at the server pose', () => {
+    expect(
+      projectStoppedPlayerState(
+        { ...idleState, state: 'moving', speed: 3, movementMode: 'jog' },
+        { x: 1, y: 2, z: 3 },
+        0.5
+      )
+    ).toEqual({
+      ...idleState,
+      position: { x: 1, y: 2, z: 3 },
+      rotation: 0.5,
+      movementMode: undefined,
+    })
+  })
+
+  it('keeps a pickup animation running when its approach stop is acknowledged', () => {
+    const pickupState: PlayerState = {
+      ...idleState,
+      state: 'interact',
+      interactionAnim: 'pickup',
+      interactionCounter: 2,
+    }
+    expect(
+      projectStoppedPlayerState(pickupState, { x: 1, y: 0, z: 0 }, 0.5)
+    ).toEqual({
+      ...pickupState,
+      position: { x: 1, y: 0, z: 0 },
+      rotation: 0.5,
+      movementMode: undefined,
+    })
   })
 })
 

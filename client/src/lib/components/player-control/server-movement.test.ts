@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerMovement } from './server-movement'
 import type { MovePath, MoveProgress } from '../../network/networkTypes'
 import { WORLD_MAX_X, WORLD_MIN_X } from '../../terrain/world-wrap'
-import { projectPlayerState } from './fsm/projection'
+import { projectPlayerState, projectStoppedPlayerState } from './fsm/projection'
+import { buildAttackState } from './player-state-builders'
+import { transitionAttackToIdle } from './fsm/combat'
 
 function setup() {
   let id = 0
@@ -520,6 +522,44 @@ describe('server approved movement', () => {
     movement.request(5, 5, false)
     expect(movement.acceptStopped({ ...stopped, request_id: 4 })).toBe(false)
   })
+
+  it.each([20, 150, 500])(
+    'keeps a prop swing playing after a stop acknowledgement delayed by %ims',
+    (delay) => {
+      const { movement, stop } = setup()
+      movement.request(3, 3, false)
+      movement.acceptPath(path())
+      vi.advanceTimersByTime(100)
+      const pose = movement.sample(() => false)!
+      const attackState = buildAttackState(
+        { ...pose, state: 'moving', movementMode: 'jog' },
+        1,
+        3
+      )
+      movement.clear()
+      expect(stop).toHaveBeenCalledExactlyOnceWith(2)
+
+      vi.advanceTimersByTime(delay)
+      const progress = stopped(2, 100 + delay)
+      expect(movement.acceptStopped(progress)).toBe(true)
+      const state = projectStoppedPlayerState(
+        attackState,
+        progress.position,
+        progress.rotation
+      )
+      expect(state).toEqual({
+        ...attackState,
+        position: progress.position,
+        speed: 0,
+        movementMode: undefined,
+      })
+      expect(movement.sample(() => false)).toBeNull()
+      expect(transitionAttackToIdle(state)).toMatchObject({
+        kind: 'idle',
+        nextPlayerState: { state: 'idle', attackCounter: 0 },
+      })
+    }
+  )
 
   it('does not rewind to an older server sample or accept a completed request again', () => {
     const { movement } = setup()

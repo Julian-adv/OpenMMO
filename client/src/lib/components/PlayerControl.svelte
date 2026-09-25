@@ -132,6 +132,7 @@
   } from './player-control/events'
   import {
     projectPlayerState,
+    projectStoppedPlayerState,
     shouldEmitProjectedPlayerState,
   } from './player-control/fsm/projection'
   import { prepareMoveRequest } from './player-control/fsm/move-request'
@@ -1524,10 +1525,7 @@
     combatController.cancelCombat()
     clearPropSwingTimers()
 
-    // Face the prop, stop, and play one slash. State 'attack' selects the slash
-    // clip; a changed attackCounter re-triggers it (our own counter since this
-    // swing isn't combat-driven). currentSpeed 0 keeps the movement tick from
-    // projecting the state back to idle while we hold the swing.
+    // Use a separate counter to replay each prop swing outside monster combat.
     faceTowards(x, z)
     currentSpeed = 0
     propSwingCounter += 1
@@ -2194,10 +2192,15 @@
               progress.position.z
             )
             if (serverMovement.stopping) return
-            if (playerControlMachine.stateName !== 'attacking')
-              playerRotation = progress.rotation
+            const stoppedState = projectStoppedPlayerState(
+              playerState,
+              progress.position,
+              progress.rotation
+            )
+            playerRotation = stoppedState.rotation
+            currentSpeed = 0
             writePlayerPosition(progress.position, playerRotation)
-            updatePlayerState()
+            setPlayerState(stoppedState)
           }
           return
         }
