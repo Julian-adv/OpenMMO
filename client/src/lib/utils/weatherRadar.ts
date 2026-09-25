@@ -1,5 +1,6 @@
 import { weather_cells_at, weather_rain_at } from '../wasm/onlinerpg_shared'
-import { shortestWrappedDeltaX } from '../terrain/world-wrap'
+import { unwrapWorldXNear } from '../terrain/world-wrap'
+import { HOURS_PER_DAY, SUN_DAY_DURATION_SECONDS } from './celestialSimulation'
 
 /** One live rain cell, as `weather_cells_at` serialises it. */
 export interface RadarCell {
@@ -45,14 +46,9 @@ export const CONTINENT_VIEW: RadarView = {
   z1: 11500,
 }
 
-/**
- * The copy of `x` that lies nearest the view on the cylindrical world. A cell
- * just west of the seam rains into the east of the view, and `rain_at` sees it
- * that way; drawing its canonical x would put the disc off the far side.
- */
+/** World-X copy nearest the view centre, including seam-crossing cells. */
 export function viewWrappedX(x: number, view: RadarView): number {
-  const centre = (view.x0 + view.x1) / 2
-  return centre + shortestWrappedDeltaX(centre, x)
+  return unwrapWorldXNear((view.x0 + view.x1) / 2, x)
 }
 
 /** True when a cell's disc reaches into the drawn window. */
@@ -98,15 +94,8 @@ export function canvasToWorld(
 /** Game minutes the next-rain search looks ahead: half a game day. */
 export const RAIN_SEARCH_HORIZON_MIN = 720
 
-/**
- * Minutes until rain next reaches `threshold` at a position, or null if it
- * stays dry through the horizon.
- *
- * A plain scan, deliberately: a cell's rim can pass over a point in a couple
- * of minutes, so a coarse stride with a refine step would skip whole showers
- * rather than merely round them. One game minute is 7.5 real seconds, which
- * is below anything worth announcing.
- */
+/** Minutes until rain reaches the threshold, or null within the horizon.
+ *  A one-minute stride catches brief showers at a cell's rim. */
 export function minutesUntilRain(
   seed: number,
   bias: number,
@@ -134,8 +123,8 @@ export function formatGameMinutes(minutes: number): string {
   return `${Math.floor(hours / 24)}d ${String(hours % 24).padStart(2, '0')}h`
 }
 
-/** A game day is 3 real hours, so a game minute is 7.5 real seconds. */
-export const REAL_SECONDS_PER_GAME_MINUTE = 7.5
+export const REAL_SECONDS_PER_GAME_MINUTE =
+  SUN_DAY_DURATION_SECONDS / (HOURS_PER_DAY * 60)
 
 export function formatRealMinutes(gameMinutes: number): string {
   const real = (gameMinutes * REAL_SECONDS_PER_GAME_MINUTE) / 60
